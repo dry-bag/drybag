@@ -223,6 +223,10 @@ PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
     # `git [-c core.excludesFile=…] --git-dir=… --work-tree=<empty> check-ignore --no-index
     # --stdin -z`, assembled in `asked`: the owner's own exclude files, asked about.
     ("src/stayfixed/attach/exclude.py", "unhidden_by_owner", "*asked"): NO_ROWS,
+    # The overlay's own pinned gitleaks build, found through pre-commit's database and run on
+    # `git --pre-commit --staged`, `git --log-opts` or `stdin`: it reads the repository and its
+    # input and reaches no network, and a path that is not an executable build is never run.
+    ("src/stayfixed/sync/scan.py", "_scan", "str(binary)"): NO_ROWS,
     # `hooks/run-hook.sh --version` under the plugin root this process derived: stayfixed's
     # own hook wrapper, asked for its version.
     ("src/stayfixed/doctor/checks.py", "_wrapper", "str(root / WRAPPER)"): NO_ROWS,
@@ -274,6 +278,9 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/assess/probes.py", "_commit_types", "f'-n{context.window}'"): (
         "`-n` and the probe's window, an integer"
     ),
+    ("src/stayfixed/sync/scan.py", "_committed", "f'HEAD:{name}'"): (
+        "`HEAD:` and one of this module's two file names: a revision spec, never an option"
+    ),
     ("src/stayfixed/sync/git.py", "guard", "*_MARKER_PATHS"): (
         "the module's own constant: `--git-path` and the name of each in-progress marker"
     ),
@@ -311,6 +318,11 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/sync/git.py", "run", "env=full"): _JOB_ENVIRONMENT,
     ("src/stayfixed/sync/git.py", "git", "env=env"): _JOB_ENVIRONMENT,
     ("src/stayfixed/sync/git.py", "ask", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/scan.py", "_committed", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/scan.py", "_scan", "env={**(env or {}), **NO_SIGNATURES}"): (
+        "the job's git environment, plus one `git -c`-style entry that keeps signature checks "
+        "out of the log gitleaks parses; the scanner's own `GITLEAKS_` variables are dropped"
+    ),
     ("src/stayfixed/sync/rules.py", "dirty_memory", "env=env"): _JOB_ENVIRONMENT,
     ("src/stayfixed/sync/rules.py", "commit_entries", "env=env"): _JOB_ENVIRONMENT,
     ("src/stayfixed/sync/rules.py", "offending_paths", "env=env"): _JOB_ENVIRONMENT,

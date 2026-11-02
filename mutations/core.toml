@@ -6625,3 +6625,134 @@ after = '''    deadline = time.monotonic() + 100 * timeout
 reddens = [
   "tests/sync/test_git.py::test_the_helpers_of_one_step_share_its_whole_budget",
 ]
+
+# The secret scan: each entry breaks one rule of the lookup or of a scan, and the tests named watch it.
+
+[[mutation]]
+name = "a row of another rev is the scanner"
+file = "src/stayfixed/sync/scan.py"
+before = 'row = db.execute("SELECT path FROM repos WHERE repo = ? AND ref = ?", (repo, rev))'
+after = 'row = db.execute("SELECT path FROM repos WHERE repo = ? AND ? = ?", (repo, rev, rev))'
+reddens = [
+  "tests/sync/test_scan.py::test_no_row_for_the_pinned_rev_is_no_scanner",
+  "tests/sync/test_scan.py::test_the_pinned_rev_row_is_the_one_chosen",
+]
+
+[[mutation]]
+name = "an explicit version has a substitute"
+file = "src/stayfixed/sync/scan.py"
+before = '    for name in [version] if version else ["default", "system"]:'
+after = '    for name in [version, "default", "system"] if version else ["default", "system"]:'
+reddens = [
+  "tests/sync/test_scan.py::test_an_explicit_version_has_no_substitute",
+]
+
+[[mutation]]
+name = "system is tried before default"
+file = "src/stayfixed/sync/scan.py"
+before = '    for name in [version] if version else ["default", "system"]:'
+after = '    for name in [version] if version else ["system", "default"]:'
+reddens = [
+  "tests/sync/test_scan.py::test_default_then_system",
+]
+
+[[mutation]]
+name = "a build linking out of its row is the scanner"
+file = "src/stayfixed/sync/scan.py"
+before = '''            and os.path.commonpath((os.path.realpath(binary), row_path)) == row_path
+'''
+after = ""
+reddens = [
+  "tests/sync/test_scan.py::test_a_build_linking_out_of_its_row_is_not_it",
+]
+
+[[mutation]]
+name = "a failed scan is a pass"
+file = "src/stayfixed/sync/scan.py"
+before = '        return CheckResult(False, "gitleaks", detail, False, None), []'
+after = '        return CheckResult(True, "gitleaks", detail, False, None), []'
+reddens = [
+  "tests/sync/test_scan.py::test_a_failed_scan_is_not_a_finding",
+]
+
+[[mutation]]
+name = "a timed-out scan is a failure like any other"
+file = "src/stayfixed/sync/scan.py"
+before = "    if result.timed_out:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_scan.py::test_a_scan_that_outlives_its_bound_is_timed_out",
+]
+
+[[mutation]]
+name = "the scan reads the rules from the working tree"
+file = "src/stayfixed/sync/scan.py"
+before = '    return ["--config", str(config), "--gitleaks-ignore-path", str(ignores)], None'
+after = '    return ["--gitleaks-ignore-path", str(ignores)], None'
+reddens = [
+  "tests/sync/test_scan.py::test_rules_and_ignores_come_from_head",
+]
+
+[[mutation]]
+name = "a GITLEAKS_ variable reaches the scan"
+file = "src/stayfixed/sync/scan.py"
+before = '            unset_prefixes=("GITLEAKS_",),'
+after = "            unset_prefixes=(),"
+reddens = [
+  "tests/sync/test_scan.py::test_gitleaks_variables_are_dropped",
+  "tests/sync/test_scan.py::test_rules_and_ignores_come_from_head",
+]
+
+[[mutation]]
+name = "gitleaks reads a log with signature lines"
+file = "src/stayfixed/sync/scan.py"
+before = "            env={**(env or {}), **NO_SIGNATURES},"
+after = "            env=env,"
+reddens = [
+  "tests/sync/test_scan.py::test_gitleaks_reads_a_log_without_signature_lines",
+]
+
+[[mutation]]
+name = "an uncommitted ignore list at the root does not stop a scan"
+file = "src/stayfixed/sync/scan.py"
+before = "        if present is not None and present != committed:"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_scan.py::test_an_uncommitted_gitleaksignore_at_the_root_stops_the_scan",
+]
+
+[[mutation]]
+name = "a scan's report is written in TMPDIR"
+file = "src/stayfixed/sync/scan.py"
+before = '    with tempfile.TemporaryDirectory(prefix="scan-", dir=scratch) as name:'
+after = '    with tempfile.TemporaryDirectory(prefix="scan-") as name:'
+reddens = [
+  "tests/sync/test_scan.py::test_the_report_is_written_under_the_scratch_directory_and_removed",
+]
+
+[[mutation]]
+name = "a metadata scan runs at the overlay's root"
+file = "src/stayfixed/sync/scan.py"
+before = "            cwd=repo if stdin is None else directory,"
+after = "            cwd=repo,"
+reddens = [
+  "tests/sync/test_scan.py::test_a_metadata_scan_reads_nothing_at_the_overlays_root",
+]
+
+[[mutation]]
+name = "the metadata scan reads nothing"
+file = "src/stayfixed/sync/scan.py"
+before = '    whole = "".join(text for _, text in commits).encode("utf-8", "surrogateescape")'
+after = '    whole = b""'
+reddens = [
+  "tests/sync/test_scan.py::test_the_metadata_scan_names_the_commit",
+]
+
+[[mutation]]
+name = "the metadata scan names no commit"
+file = "src/stayfixed/sync/scan.py"
+before = "        if found:"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_scan.py::test_the_metadata_scan_names_the_commit",
+]
