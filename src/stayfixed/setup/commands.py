@@ -233,26 +233,28 @@ def run_setup(args: argparse.Namespace) -> Result:
         "overlay": str(report.overlay) if report.overlay is not None else None,
         "notes": list(report.notes),
     }
-    summary = "; ".join(
-        (
-            f"machine configuration written to {machine}",
-            f"{len(report.plugins_installed)} plugin(s) installed",
-            "deny rules merged" if report.deny_written else "deny rules unchanged",
-            "stayfixed is on PATH" if report.cli_on_path else "stayfixed is not on PATH",
-            f"overlay recorded at {quoted(str(report.overlay))}"
-            if report.overlay
-            else "no overlay recorded",
-            *report.notes,
-        )
-    )
     if not args.restore:
-        return Result(summary, data)
+        return Result(_summary(machine, data), data)
     # The overlay `setup` recorded, which is the one a run that rendered or created it made.
     # Never `None`: `_restore_input` refused a run with no overlay in view, and `setup` records one
     # whenever `--overlay` names a path.
     overlay = cast(Path, report.overlay or chosen)
-    return _restored(
-        overlay, listed, summary, data, home=home, machine=machine, runner=runner, yes=args.yes
+    return _restored(overlay, listed, data, home=home, machine=machine, runner=runner, yes=args.yes)
+
+
+def _summary(machine: Path, data: dict[str, Any]) -> str:
+    """Machine setup's one line, from its `--json` data."""
+    return "; ".join(
+        (
+            f"machine configuration written to {machine}",
+            f"{len(data['plugins_installed'])} plugin(s) installed",
+            "deny rules merged" if data["deny_written"] else "deny rules unchanged",
+            "stayfixed is on PATH" if data["cli_on_path"] else "stayfixed is not on PATH",
+            f"overlay recorded at {quoted(data['overlay'])}"
+            if data["overlay"]
+            else "no overlay recorded",
+            *data["notes"],
+        )
     )
 
 
@@ -275,7 +277,6 @@ def _restore_input(
 def _restored(
     overlay: Path,
     listed: tuple[Listed, ...],
-    summary: str,
     data: dict[str, Any],
     *,
     home: Path,
@@ -283,11 +284,13 @@ def _restored(
     runner: Runner,
     yes: bool,
 ) -> Result:
-    """`setup --restore`'s result: setup's summary, then one line per listed project, and exit 1
-    when one was refused or failed."""
+    """`setup --restore`'s result: setup's summary, holding the plugins restore installed and its
+    notes too, then one line per listed project, and exit 1 when one was refused or failed."""
     from stayfixed.setup.restore import line, restore
 
     done = restore(overlay, listed, home=home, machine=machine, runner=runner, yes=yes)
+    data["plugins_installed"] += done.plugins
+    data["notes"] += done.notes
     data["missing"] = list(done.missing)
     data["projects"] = [
         {
@@ -300,7 +303,7 @@ def _restored(
         for o in done.projects
     ]
     lines = [f"missing tools: {', '.join(done.missing)}"] if done.missing else []
-    lines += [summary, *(line(outcome) for outcome in done.projects)]
+    lines += [_summary(machine, data), *(line(outcome) for outcome in done.projects)]
     bad = any(outcome.state in ("refused", "failed") for outcome in done.projects)
     return Result("\n".join(lines), data, exit_code=1 if bad else 0)
 

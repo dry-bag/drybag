@@ -2968,7 +2968,9 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
    list --json` does not name it at user scope. A non-zero exit is a note naming the argv, never a
    refusal; without `claude` on `PATH` there is one note and nothing is launched. The list is Claude
    Code's: where `codex` is on `PATH`, one note says nothing was installed for it. A second run
-   asks the two listings and installs nothing;
+   asks the two listings and installs nothing. The ids installed count among machine setup's
+   `plugin(s) installed` and `--json`'s `plugins_installed`, and each note is printed among its
+   notes, in its summary line and in `--json`'s `notes`;
 3. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
    that is not there is reported `absent` and skipped; a checkout `attach` refuses (one whose
    `stayfixed.toml` names another project than its table key) is `refused`, and one whose attach

@@ -565,6 +565,27 @@ def test_a_failed_install_is_a_note_and_the_projects_still_attach(tmp_path: Path
     assert _states(report) == {"alpha": "attached"}
 
 
+@pytest.mark.parametrize("json_flag", [[], ["--json"]], ids=["text", "json"])
+def test_a_failed_install_is_printed_by_the_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, json_flag: list[str]
+) -> None:
+    overlay = _overlay(tmp_path)
+    _machine_settings(overlay, _enabling(f"need@{OFFICIAL}"))
+    install = f"claude plugin install need@{OFFICIAL}"
+    runner = Recorder(
+        answers={
+            MARKETPLACE_LIST: _registered(OFFICIAL),
+            PLUGIN_LIST: _installed(),
+            install: Completed(1, "", "no such plugin\n"),
+        }
+    )
+    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: runner)
+    code, out, _ = invoke(_restoring(tmp_path, overlay, *json_flag))
+    assert code == 0
+    said = json.loads(out)["notes"] if json_flag else [out]
+    assert any(install in note for note in said)
+
+
 def test_an_unreadable_listing_is_one_note_and_nothing_is_installed(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path)
     _machine_settings(overlay, _enabling(f"need@{OFFICIAL}"))
