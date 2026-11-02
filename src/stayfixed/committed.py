@@ -52,9 +52,6 @@ def repository_prefix(root: Path) -> str:
     """The project root's path inside its repository, `""` at the top or `"a/b/"` below it: git's
     spelling, which is refused unless it is also the caller's."""
     lexical = root.absolute()
-    # Also the reusable workflow's `path:` bound: `../stayfixed` would point the gates at the
-    # workflow's own checkout and its configuration, and the check is lexical, so the value
-    # cannot move it.
     if ".." in lexical.parts:
         raise Refusal(ROOT_DOT_DOT)
     code, out = git_run(lexical, "rev-parse", "--show-toplevel", "--show-prefix")

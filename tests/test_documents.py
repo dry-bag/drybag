@@ -795,32 +795,6 @@ def test_shared_flags_names_every_command_that_takes_neither_root_nor_machine() 
     assert {name for name in rest if not options[name] >= _PROJECT_FLAGS} == set()
 
 
-_REUSABLE_WORKFLOW_SECTION = re.compile(
-    r"^## The reusable workflow\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL
-)
-# The repository settings the reusable workflow's verdict binds under. The caller file is
-# pull-request content, so without them the gates still run and report but a pull request can
-# edit its own caller; a section that lost one would read as if the verdict held without it.
-SETTINGS = (
-    "CODEOWNERS covering `/.github/`",
-    "Dismiss stale pull request approvals when new commits are pushed",
-    "the `check / gates` status check required",
-    "expected source set to GitHub Actions",
-    "branches required to be up to date before merging, or a merge queue",
-    "a `v*` tag ruleset on the stayfixed repository",
-)
-
-
-def test_the_reusable_workflow_names_every_setting_the_verdict_binds_under() -> None:
-    # No oracle entry: this holds a document, not a guard. Checked by hand when it was
-    # written: the "Dismiss stale" bullet deleted from the section reddens this case naming it.
-    section = _REUSABLE_WORKFLOW_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md has no `## The reusable workflow` section"
-    # Whitespace folded, so a setting wrapped across two lines is still found as one phrase.
-    text = " ".join(section.group(1).split())
-    assert [setting for setting in SETTINGS if setting not in text] == []
-
-
 # The configuration block in `docs/cli.md` is introduced as the grammar, and the loader
 # *refuses* an unknown section — so a section the block leaves out reads to a reader as a key
 # that is invalid. Three of the nine were missing (`[artifacts]`, `[ci]`, `[commit_messages]`),

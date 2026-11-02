@@ -69,7 +69,6 @@ Three things hold everywhere:
 - [`stayfixed setup --git-hooks [--uninstall] [--root PATH]`](#stayfixed-setup---git-hooks---uninstall---root-path)
 - [`stayfixed setup --approval-boundary [--home PATH] [--machine PATH]`](#stayfixed-setup---approval-boundary---home-path---machine-path)
 - [`stayfixed doctor [--json] [--root PATH] [--home PATH] [--machine PATH]`](#stayfixed-doctor---json---root-path---home-path---machine-path)
-- [The reusable workflow](#the-reusable-workflow)
 - [Shared flags](#shared-flags)
 - [Terms](#terms)
 - [Configuration](#configuration)
@@ -507,8 +506,8 @@ the report says how many messages it read. Exits `1` naming up to eight offences
 never the text, which is the repository's; `--json`'s `violations` carries every one — and `2`
 when git cannot read the range or the range looks like an option.
 
-**Writes** nothing. `stayfixed gate`'s `commit` gate, which the reusable workflow runs, reads the
-range from the base to `HEAD` through this same check.
+**Writes** nothing. `stayfixed gate`'s `commit` gate reads the range from the base to `HEAD`
+through this same check.
 
 Exit `1` has two meanings here and a gate should know both: messages were read and some carry a
 trailer (`FAIL: …`), and *no `stayfixed.toml` was found under `--root`*, which the configuration
@@ -1254,7 +1253,7 @@ judges nothing. Each narrows the bare run, or `--only`'s names, to its kind, and
 the other kind rather than refuse it. `--builtin` runs the configuration check whatever `--only`
 names: it is the run that judges, and a caller that names one gate — a matrix leg, a person
 reproducing CI — still judges the change's `stayfixed.toml`, so a loosening fails every such
-run. The reusable workflow runs them as two steps, the second only when the first passed. A
+run. A
 custom gate's command is fixed by the base, but the files it executes — a `conftest.py`, a
 `Makefile`, a script — are the change under review, so for a custom gate the guarantee is "this
 command runs and must exit 0", and nothing about what it runs. An owner who wants those files
@@ -1262,8 +1261,8 @@ pinned puts them under CODEOWNERS. Run bare on your own checkout, everything run
 process. Narrowed to nothing — `--custom` on a project with no gate of its own — the run prints
 `nothing to run`, appends no summary and exits `0`.
 
-**The platform's base, and `--path`.** [The reusable workflow](#the-reusable-workflow) hands the
-run what the platform and the caller file said, raw, and the run checks them itself. The base is
+**The platform's base, and `--path`.** A CI workflow hands the
+run what the platform and its caller file said, raw, and the run checks them itself. The base is
 either `--base` or three flags together, never both: `--pr-base` is the pull request's base as
 the platform reports it (empty on any other event), `--base-input` the caller's `base:`, and
 `--default-branch` the repository's default branch. Each takes one argument as `--name=value`, so
@@ -1307,8 +1306,7 @@ background in that group runs on into the next gate. A descendant that leaves th
 process group (a new session, or a job-control shell's own group) is not ended, and nor is one
 stayfixed may not signal (a sudo or setuid descendant). Enforced gates that themselves run files
 the change can edit — two test runners, say — still share that one checkout, and one could
-rewrite what the other runs; one leg per gate isolates them (see "One row per gate" under
-[the reusable workflow](#the-reusable-workflow)).
+rewrite what the other runs.
 
 **What a pull request may change in `stayfixed.toml`.** Both copies go through the loader and are
 compared by what it derives — each key by its dotted name, each budget by its effective value,
@@ -1343,8 +1341,8 @@ If you want that push to need you, and not an agent working with your credential
 base branch at the repository level so that only you can push to it. Many projects do not need
 that, and it is an option, not a requirement.
 
-**What each input rests on.** The verdict holds where the repository has the settings
-[the reusable workflow](#the-reusable-workflow) names, and not otherwise.
+**What each input rests on.** The verdict holds where a pull request cannot edit the CI workflow
+that runs it without a review, and not otherwise.
 
 - *The base's commit.* `--base` takes a full 40-character commit id or a full `refs/…` name, and
   nothing shorter: git resolves a short name through rules in which a tag called `origin/main`
@@ -1458,9 +1456,7 @@ project as it was or makes the promotion whole.
 
 `--base` is what `plan` and `commit` judge a range against, and what `bugs` compares the ledger
 with where `HEAD` forked from it, as for `stayfixed gate`: a 40-hex commit or a `refs/…` name,
-`refs/remotes/origin/<project.base_branch>` by default. The reusable workflow judges against `[ci]
-gate_branch`, which is that branch unless the file sets it; where the two differ, pass `--base` to
-judge as CI will. Run on the base branch itself, that range is empty and those two gates pass
+`refs/remotes/origin/<project.base_branch>` by default. Run on the base branch itself, that range is empty and those two gates pass
 having judged nothing; the pull request that carries a promotion faces every gate it promotes in
 its own run. A custom gate runs its command here, as it does under `stayfixed gate`, and only
 when that command is the one the base's `stayfixed.toml` gives it: a gate the base does not have,
@@ -1662,7 +1658,7 @@ A `stayfixed.toml` you write may still list any id but `config`, `gitignore` and
 own. `--local` offers only these four.
 
 **The workflow pins what `[ci] ref` says, and nothing else.** The rendered file calls
-[the reusable workflow](#the-reusable-workflow) at the ref `stayfixed.toml` carries *after this
+stayfixed's gate workflow at the ref `stayfixed.toml` carries *after this
 run*, and those two are one value by construction — which is the invariant `stayfixed doctor`'s
 `ci-ref` row enforces from the other side ("the workflow pins a different ref from `[ci] ref`,
 so the gate that runs is not the one recorded"). On a repository this run creates the document
@@ -3126,236 +3122,6 @@ called the result green, would be worse than one that says it could not vouch fo
 
 ---
 
-## The reusable workflow
-
-`.github/workflows/check.yml` is a `workflow_call` workflow a project runs its stayfixed gates
-through. `stayfixed init` writes the caller —
-[`.github/workflows/stayfixed.yml`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----profile-name---memory-mode-mode---attribution-check---commit-type-type----local-id----no-ci---root-path---machine-path)
-— so most projects never type these lines; what follows is what that file contains, and what to
-write by hand if you would rather:
-
-```yaml
-on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, edited]
-  merge_group:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  check:
-    uses: stayfixed/stayfixed/.github/workflows/check.yml@<40-hex sha>
-    with:
-      base: main
-```
-
-The branch is named four times, and each one is load-bearing. A pull request into any other
-branch runs nothing, so it cannot collect a green check against a looser base and then be
-retargeted. `edited` re-runs the check when a pull request is retargeted, and on every title
-edit too, because a job filtered out with `if:` reports as skipped, which a required check
-counts as passing. `base:` is a literal, so a pull request whose base is not this branch is
-refused even where the trigger has been widened by hand. `merge_group` makes the check report
-for the gate branch's merge queue and no other: a merge group reports no base the workflow reads,
-so with the literal `base:` another branch's queue would be judged against the gate branch's
-configuration, and it gets no run, as a pull request into that branch gets none. Each
-`edited` run is a job, billed by the whole minute like any other. A pull request into another
-branch — one stacked on a feature branch, say — gets no run at all, which blocks nothing as long
-as the check is required on the gate branch only.
-
-| Input | Default | Meaning |
-|---|---|---|
-| `base` | `""` | the branch the gates' configuration is read from; empty means the pull request's base, and on any other event the repository's default branch. On a pull request a value that disagrees with the pull request's own base is refused |
-| `path` | `"."` | the project root inside the caller's checkout, for a monorepo or a fixture: a relative path with no `..` component, refused otherwise before a gate runs, so it cannot point the gates at another checkout's configuration. Any other character is admitted, a space or a name outside ASCII included: the value is handed to `stayfixed gate` as one argument and no longer reaches the run's outputs. A root any component of which is a symbolic link in the checkout is refused too |
-| `python-version` | `"3.13"` | the interpreter stayfixed runs on; 3.11 is the floor |
-| `only` | `""` | the checks to run, space-separated: `config` and any configured gate name. Empty runs the configuration check and every configured gate, and the configuration check runs whatever this names |
-| `timeout-minutes` | `15` | the job's time limit in minutes, handed to the runner as given |
-
-The caller's job needs `contents: read`. That is the default, so the lines above are enough —
-but a caller that sets `permissions:` at workflow level replaces the default rather than adding
-to it, and a called workflow cannot grant itself a scope the caller did not have.
-`permissions: {}` at the top of the calling file therefore fails this workflow at its first
-checkout, with an error that names neither the cause nor the remedy. Give the calling job
-`permissions: { contents: read }` if the file sets any permissions at all.
-
-**One job, and what it runs.** The job, `gates`, checks out the caller, checks out stayfixed **at
-the commit the `uses:` line pins** — read off the platform's own record of which reusable
-workflow is running, never off the caller's inputs, and asserted against `git rev-parse HEAD`
-before anything else runs — and runs `stayfixed gate` in two steps, each of which resolves the
-base to one commit in the same checkout, which nothing fetches into between them. The first, "The configuration and the built-in gates", judges the configuration and
-runs the built-in gates, and executes nothing your repository wrote. The second, "The project's
-own gates", runs the commands `[gates.custom]` names, and only if the first passed. Each gate is
-advisory or enforcing, with every finding as an annotation, and each step that runs a check
-appends its results to the job summary. No resolver and no build backend; the network is the two
-checkouts, whatever `setup-python` fetches when the runner has no matching interpreter cached,
-and, on a pull request that moves `[ci] ref`, one listing of stayfixed's public release tags.
-It is one job because a job is billed by the whole minute: a push costs one runner-minute, not
-one per gate. Its check, in the caller `init` writes, is `check / gates`.
-
-**The time limit is the caller's, and running out still fails.** The job is cancelled after
-`timeout-minutes`, 15 unless the caller passes another. The caller `init` writes passes none; a
-project whose own gates need longer adds one line under its `with:`:
-
-```yaml
-    with:
-      base: main
-      timeout-minutes: 30
-```
-
-The value is handed to the runner as given, and the platform's own job limit bounds it: 360 minutes
-on the GitHub-hosted runner this job runs on. The caller file is pull-request content, so that line is one a pull request
-can edit, and a bound here would stop nobody while refusing a legitimate long caller. What a pull
-request cannot do through the input is turn running out into a pass: a job that runs out of time is
-cancelled, and a required check that was cancelled has not passed.
-
-**What the input does not bound.** The rest of the caller file is pull-request content as well, and
-runs as the pull request wrote it: a matrix around the call runs this job once per leg, each leg
-with a limit of its own, and a `uses:` pointed at another workflow runs none of this file, under
-whatever limit that workflow sets, up to the runner's own. That is a change to
-`.github/`, and under the settings below a code owner reviews it before it merges — not before it
-runs, since a pull request's run starts before any review.
-
-**Your own gates run on a bare runner.** The second step has the runner image and the
-interpreter `python-version` names, and nothing of your project's: a custom gate that needs
-your toolchain installs it in its own command, for example `run = ["sh", "-c", "pip install -e
-.[test] && pytest -q"]`, and that installation is billed in the same job. Why it is a step of
-its own: a custom gate executes files the pull request can change with the runner's privileges,
-which on a GitHub-hosted runner include passwordless `sudo`. In the process that decides the
-verdict those files could rewrite it; in a later step, only its own results are left to them.
-Within that step the base's enforced gates run first, and once one of them has failed no other
-custom gate starts, enforced or not, so the process that holds a failing verdict runs nothing
-more that the change can edit.
-What it guarantees, and how to pin those files, is in the `stayfixed gate` section.
-
-**One row per gate, if you want one.** Each leg of a matrix in your own caller is its own check
-row and its own billed job:
-
-```yaml
-jobs:
-  check:
-    strategy:
-      fail-fast: false
-      matrix:
-        only: [docs, bugs, plan, commit, trail]
-    uses: stayfixed/stayfixed/.github/workflows/check.yml@<40-hex sha>
-    with:
-      base: main
-      only: ${{ matrix.only }}
-```
-
-The list is yours to keep: a gate it leaves out never runs, and a custom gate added to
-`stayfixed.toml` needs a leg of its own. Every leg runs the configuration check as well as the
-gate it names, because `only:` sits in a file a pull request can edit: a change that loosens
-what the base enforces fails every leg. Require every leg's check, not only one.
-
-A leg is also the one real isolation between custom gates. Within one job they share a
-checkout, and the base's enforced gates run before every other custom gate for that reason; but
-two enforced gates that each run files the change can edit — a test suite and its
-`conftest.py`, a `Makefile` — still run one after the other in that checkout, and the first can
-rewrite what the second executes. A leg per such gate gives each a checkout no other gate has
-touched.
-
-**Where the configuration comes from.** `stayfixed gate` reads `stayfixed.toml` from the base
-commit and judges the tree's copy against it key by key; the `stayfixed gate` section has the
-table, what each input rests on, and how an owner lands a change it refuses. What this workflow
-adds: the base's **name** is the pull request's base as the platform reports it, held against
-the caller's `branches:` filter and its literal `base:`; its **commit** is
-`refs/remotes/origin/<base>` in the caller's own checkout, which each gate step resolves once to
-a full sha that every gate in it reads, the same commit in both since nothing fetches between
-them; its **copy** is read at `path:`; the **stayfixed that runs** is the one the
-caller's `uses:` line pins, whose commit the judging step passes as `--workflow-sha`; and the
-**verdict** is the exit status of the first step.
-
-On a pull request, the tree is the merge commit the platform built from the base as it was when
-the event fired, while the base commit is read when the job checks out. A base that tightened
-in between makes the change appear to undo that tightening, and the configuration check refuses
-it. That fails closed; re-run the job, or update the branch. On a push to the gate branch the
-base is the branch's tip when the job checks out, which is usually the pushed commit itself: that
-run judges the configuration against itself, it proves the gates run, and the pull request's run
-is the one that decided. If a later push has moved the branch by then, the run judges the pushed
-commit against that later tip, and fails closed in the same way when the tip tightened.
-
-**What makes the verdict binding.** The caller workflow is part of every pull request: a pull
-request can edit its `uses:` line, its `on:` filter and its `base:`, or add a job of its own
-named like the required check. A ruleset that requires a workflow can close that where your
-plan offers one. Everywhere else the verdict binds under six settings, and without them the
-gates still run and still report but cannot stop a pull request that edits its own caller:
-- **CODEOWNERS covering `/.github/`, with review from code owners required**, so a change to
-  the caller needs someone other than its author. GitHub reads the rules from the base
-  branch's copy; keep the file at `.github/CODEOWNERS`, where its own `/.github/` rule covers it
-  (`stayfixed assess` advises, `codeowners`, when no line names `.github`);
-- **"Dismiss stale pull request approvals when new commits are pushed"**, or **"Require
-  approval of the most recent reviewable push"**, so an approval of an innocuous `.github/` edit
-  does not carry over to a later commit that repoints `uses:`;
-- **the `check / gates` status check required** (`check` is the caller job `init` writes; a
-  caller of your own names its own job), or every leg's check under a matrix;
-- **that check's expected source set to GitHub Actions**, not "any source": otherwise anyone
-  with write access can post a `success` status of that name through the API, and no file
-  changes for a code owner to see;
-- **branches required to be up to date before merging, or a merge queue**: a verdict is judged
-  against the base as it was when the run started, and a base that tightened since would not be
-  seen. The caller subscribes to `merge_group` for the gate branch's queue;
-- and one that is stayfixed's, not yours: **a `v*` tag ruleset on the stayfixed repository**,
-  because an upgrade is admitted only at a released tag's commit, and a tag that could move
-  would move that anchor for every caller.
-
-Whoever may bypass branch protection holds the gate: "Do not allow bypassing the above settings"
-decides who that is, and a change the gate refuses lands by the direct push the `stayfixed gate`
-section describes.
-
-**Advisory or enforcing, per gate.** A gate is advisory until it enforces: its findings are
-warning annotations and the job stays green. An enforcing gate's findings are errors and fail
-the job. What enforces is what the base's `[stayfixed] enforced` names, with any gate the change
-itself adds there; a gate no list names is advisory, however the project configures it.
-`stayfixed adopt promote` moves a gate across. Within a step, every gate runs whatever the one
-before it said, so a project fixing its documents does not pay a round trip per finding; the one
-exception is a custom gate, which is not started once the run has failed. A custom gate runs
-in the second step, and only with the command the base gives it ("Which custom gates run" under
-`stayfixed gate`). The job's token is `contents: read` and neither checkout
-keeps it, and the judging step's verdict was decided before any command started.
-
-**Pin it by SHA.** A reusable workflow's ref is resolved when the run is created, so `@v1` and
-`@dev` are a moving stayfixed running against your repository. `stayfixed init` writes that pin,
-and writes it from `[ci] ref` in `stayfixed.toml` so that the file and the configuration cannot
-come apart: on a repository it initialises from scratch that value is the commit of the released
-stayfixed running, read off the public repository's own `v*` tags rather than off anything the
-project says; on one that already had a `stayfixed.toml`, it is the ref that file records.
-`stayfixed upgrade` moves it, with `[stayfixed] version`, and the file says so in its own first
-lines. **A project with no release to pin gets no workflow at all**: before the first stayfixed
-tag there is no commit to name, so `init` reports the workflow skipped with the reason and writes
-nothing into `.github/`, and `stayfixed upgrade` renders it once a release matches. `@v1` is the
-documented opt-in for a project that would rather track the major, written by hand;
-`stayfixed upgrade` then moves `[stayfixed] version` alone and leaves the ref and that file as they
-are. The alias exists from `1.0.0` on: a `0.x` minor may break what the one before it did, so
-there is no `v0` to track, a `0.x` project pins the commit, and until the first `1.x` release
-`stayfixed doctor` reports `v1` red, as a tag the public repository does not carry.
-`smoke-release.yml` in this repository runs the `owner/repo/…@ref` form on demand, at `@dev` and
-at the latest release's tag, so that the branch and tag forms are known to work — it is not a form
-this reference tells you to write.
-
-**What proves it.** `tests/test_check_workflow.py` runs the job's scripts, extracted from this
-file, against real clones: a change that loosens what the base enforces, a custom gate that must
-not run in the judging step, and `only:`; and holds that each gate step hands over the platform's
-values and reads no base from another step. `tests/assess/test_read_base.py` holds what
-`stayfixed gate` checks in them, against real clones: a `base:` naming a branch the author pushed,
-a tag named like the base, the order the base is chosen in, a `path:` that leaves the checkout,
-a root below it, and the refusal of a root reached through a symbolic link, which both gate steps
-run first. `.github/workflows/smoke.yml` installs this plugin from the checkout with the real
-harness CLI under a temporary configuration directory, feeds every `hooks/hooks.json` entry the
-event it is filed under through the *installed* wrapper, runs `doctor` over the result, runs the
-clone-to-exfiltration scenario — a hostile clone attempting to reach the model through committed
-memory — and calls this workflow against the committed fixture project, so the reference above
-is checked by a run and not only by this page.
-
-**Checked out with `fetch-depth: 0`.** The base commit, the merge bases `plan` and `bugs` read
-and the range `commit` reads all come out of that checkout; a shallow one can lack them or show
-an older commit in their place, and the run says so rather than passing over a history it cannot
-see. `persist-credentials: false` on both
-checkouts, so nothing a gate reads can reach a token.
-
----
-
 ## Shared flags
 
 Six flags mean the same thing wherever they appear, and each has exactly one sentence. Both
@@ -3510,7 +3276,7 @@ set `[ci] gate_branch = "main"` to keep the old one — and `ref` is written by 
 `doctor`'s `ci-ref` row. `[commit_messages] attribution_check` is read by
 `commit check`, `[commit_messages] types` by `stayfixed assess`'s commit-vocabulary probe,
 `[artifacts] local` by the scaffold engine, and `[gates]` and `[stayfixed] enforced` by
-`stayfixed assess`, `stayfixed gate` and the reusable workflow. `[guards]` is the guards' default
+`stayfixed assess` and `stayfixed gate`. `[guards]` is the guards' default
 for a session in this repository, which the overlay's files and the machine file override (below);
 no command reads it.
 
@@ -3545,8 +3311,8 @@ stayfixed's own five the project runs, all of them by default, and each
 project root, never through a shell, given `custom_timeout_seconds` to finish, and a non-zero
 exit is its one finding. Past that limit its process group gets SIGTERM and, once the command
 has exited or 5 seconds have passed, SIGKILL, so what it started can end its own children. A custom gate's name is one lowercase path segment, neither a
-built-in gate's name nor `config`, which names the configuration check. `stayfixed assess`,
-`stayfixed gate` and [the reusable workflow](#the-reusable-workflow) run exactly the configured
+built-in gate's name nor `config`, which names the configuration check. `stayfixed assess`
+and `stayfixed gate` run exactly the configured
 gates. A custom gate runs only from a command a person or a workflow runs on purpose, never
 from a hook or `doctor`, so running such a command in a clone runs the commands that clone
 configured, as running its test suite would. The `docs` and `trail` gates judge tracked files,
@@ -3566,24 +3332,8 @@ run = ["stayfixed", "bugs", "regressions"]
 
 and each regression's runner must be on `PATH` there too: a project whose runner lives in an
 environment of its own writes each `regression` wrapped in the command that provides it, such as
-`["uv", "run", "pytest", "tests/test_total.py"]`, which `prove` reads past to the runner. Neither
-holds in [the reusable workflow](#the-reusable-workflow). Its step "The project's own gates" has
-the runner image and the interpreter `python-version` names and nothing more, so no `stayfixed`,
-`uv` or `pytest` is on `PATH`, and the workflow's own stayfixed is reached through `PYTHONPATH`
-alone. There the gate's own `run` provides the runner, for example in a scratch virtual environment put first on
-`PATH`, which a system interpreter marked externally managed allows where it refuses a bare
-`pip install`:
-
-```toml
-[gates.custom.regressions]
-run = ["sh", "-c", 'v="$(mktemp -d)" && python3 -m venv "$v" && "$v/bin/pip" install -q pytest==9.1.1 && PATH="$v/bin:$PATH" exec python3 -P -m stayfixed bugs regressions']
-```
-
-Each `regression` then names the runner itself, `["pytest", "tests/test_total.py"]`, and what its
-tests import is added to the install, pinned as pytest is. `-P` keeps the project root off the
-module path, as the step's own `python3 -P -s -m stayfixed` does. This `run` reaches stayfixed only
-where `PYTHONPATH` names it, so on a machine `stayfixed bugs regressions` is run directly. The
-installation, every regression and the gate itself are bounded by the same `custom_timeout_seconds`,
+`["uv", "run", "pytest", "tests/test_total.py"]`, which `prove` reads past to the runner. Every
+regression and the gate itself are bounded by the same `custom_timeout_seconds`,
 so a project with many slow regressions raises it; a set that runs past it ends as a gate that could
 not run, never as a pass. Named in `[stayfixed] enforced`, the gate makes a regression that is not
 proved fail the run; otherwise it is advisory, like any other gate.
@@ -3597,7 +3347,6 @@ gate it adds later is advisory until the list names it. `[stayfixed] state`, whi
 lifecycle beside the list, is gone: the loader refuses it as any key it does not have. A gate
 enforces when the base branch's list names it or the change under review adds it there, so a
 change that lists a gate is held to it in its own run; every other gate is advisory.
-[The reusable workflow](#the-reusable-workflow) says what each means for a run.
 
 **Which command reads which path.** `agents_md` and `roadmap` are the two documents `docs check`
 budgets, and the roadmap is also what `docs trail` writes into; `specs` and `plans` are the two

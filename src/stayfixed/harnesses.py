@@ -113,7 +113,7 @@ class Surface(StrEnum):
     # A hook that adds context and refuses nothing: the background-cleanup hints, the
     # test-hygiene note, the standing rules, the volatile notes.
     NOTICES = "session notices"
-    # The bug, documentation, plan, commit and trail checks, run by the reusable workflow.
+    # The bug, documentation, plan, commit and trail checks, run in a project's CI.
     GATES = "repository gates"
     # The skills and the `AGENTS.md` region.
     METHOD = "methodology"
@@ -223,12 +223,9 @@ def _claude_rule(profile: Profile, rules: str) -> Rendition:
     )
 
 
-# The gates are the reusable workflow's, which runs the same under every agent: this repository's
-# smoke workflow runs it against a fixture project, and no agent takes part.
+# The gates run in a project's own CI, which runs the same under every agent: no agent takes part.
 _IN_CI = Reach(
-    Tier.CI,
-    "the reusable workflow, run on a fixture project by `.github/workflows/smoke.yml` on every "
-    "change to this repository and weekly",
+    Tier.CI, "unmeasured: the checks run in a project's own CI, where no agent takes part"
 )
 # The records the measurements below are kept in. The delivery spike's plan is not named by its
 # path, which carries words this repository keeps out of its code.

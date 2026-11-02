@@ -206,22 +206,11 @@ def test_the_hostile_fixture_carries_the_three_properties_the_scenario_depends_o
 # from the shipped file — never retyped here, or the test would hold a copy and the file would be
 # free to drift — and a case that runs it runs it with `bash`.
 
-CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
 needs_bash = pytest.mark.skipif(shutil.which("bash") is None, reason="bash is not installed")
 # `.github/` is outside `source-include`: it is this repository's own continuous integration
 # and not source a downstream packager needs, and `scripts/check_artifacts.py` states that the
 # sdist exists so such a packager can run the suite. So the cases below skip where the file
 # they are about is not there, rather than the tree gaining a line to ship CI configuration.
-# `tests/test_check_workflow.py` imports this marker for its cases, which run `check.yml`'s steps.
-needs_workflow = pytest.mark.skipif(
-    not CHECK_WORKFLOW.is_file(), reason="check.yml is not in the sdist"
-)
-# And its own marker for the one guard that is not about `check.yml` at all. The tree-wide
-# `${{ }}`-in-`run:` scan is the only assertion covering `ci.yml`, `release.yml` and
-# `smoke.yml`, and it carried `needs_workflow` — so renaming or deleting `check.yml` would
-# have switched off the guard over the other four, silently and green. A guard whose predicate
-# is unrelated to what it guards is a guard that will eventually be off without anyone
-# deciding it should be.
 needs_workflows_dir = pytest.mark.skipif(
     not (ROOT / ".github" / "workflows").is_dir(), reason="the workflows are not in the sdist"
 )
@@ -463,8 +452,8 @@ def test_the_mutation_oracle_has_a_job_of_its_own_with_a_budget_that_fits() -> N
 
 WORKFLOWS = ROOT / ".github" / "workflows"
 # The workflows that run a shell, so the walk below cannot pass by reading nothing: each holds a
-# script. `smoke-release.yml` is two reusable-workflow calls and legitimately runs none.
-SCRIPTED = {"ci.yml", "check.yml", "release.yml", "smoke.yml"}
+# script.
+SCRIPTED = {"ci.yml", "release.yml", "smoke.yml"}
 
 
 def scripts(text: str) -> list[str]:
@@ -488,7 +477,7 @@ def test_no_workflow_splices_an_expression_into_a_shell() -> None:
     # so a ref name, a branch name or a pull-request title that carries shell metacharacters
     # runs as the workflow's own code. Every value in these files reaches a shell through
     # `env:` instead. Mutation (oracle): `mutations/`'s "a workflow splices an expression into a
-    # shell" puts one into `check.yml`'s checkout assertion.
+    # shell" puts one into `smoke.yml`'s comparison of the installed hooks.
     #
     # `*.y*ml`: the platform reads `.yaml` too, and a workflow added with the other spelling
     # would never be read while the `>=` assertion below went on passing.
@@ -501,8 +490,7 @@ def test_no_workflow_splices_an_expression_into_a_shell() -> None:
 
 
 # An action a step uses, by a full commit sha: a tag or a branch can be moved to other code after
-# the pin was reviewed. A step's `./` action is this repository's own; a job's `uses:` is a call of
-# a reusable workflow, whose ref `smoke-release.yml` names on purpose (`@dev`, a release tag).
+# the pin was reviewed. A step's `./` action is this repository's own.
 _PINNED_ACTION = re.compile(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}")
 
 
@@ -588,7 +576,7 @@ def step_script(workflow: Path, step_name: str) -> str:
 
 
 def test_a_step_s_script_is_never_read_from_the_step_after_it(tmp_path: Path) -> None:
-    # The cases that run `check.yml`'s steps name a step and get its script. A reader that
+    # The cases that run a workflow's steps name a step and get its script. A reader that
     # searched onward for `run: |` handed back the next step's script for a step spelled with a
     # one-line `run:`, so a case about the first step ran the second. The strict reader gives
     # each step its own.
@@ -606,35 +594,6 @@ def test_a_step_s_script_is_never_read_from_the_step_after_it(tmp_path: Path) ->
     )
     assert step_script(workflow, "first") == "echo first\n"
     assert step_script(workflow, "second") == "echo second\n"
-
-
-SMOKE_RELEASE = WORKFLOWS / "smoke-release.yml"
-CALLED = "stayfixed/stayfixed/.github/workflows/check.yml"
-
-
-@pytest.mark.skipif(not SMOKE_RELEASE.is_file(), reason="smoke-release.yml is not in the sdist")
-def test_the_release_smoke_calls_the_release_this_tree_carries() -> None:
-    """RELEASING.md's last step dispatches this workflow at every release, and `uses:` takes no
-    expression, so the tag it calls is written out and moved by hand in the release commit.
-
-    Held to the version the tree carries, which the release workflow's own suite run checks at
-    the tag: a stale tag smokes the release before, and one past the tree names a tag that does
-    not exist yet, so the dispatch fails at creation for want of a ref. The alias a `1.x`
-    release moves is not called here: a `0.x` release has none, and a job naming a tag that
-    does not exist fails the whole dispatch before any job runs. Mutation (declared): the
-    release job calls `@v1` again.
-    """
-    import stayfixed
-
-    document = load(SMOKE_RELEASE.read_text(encoding="utf-8"))
-    assert isinstance(document, dict) and isinstance(document["jobs"], dict), document
-    uses = {
-        name: job.get("uses") for name, job in document["jobs"].items() if isinstance(job, dict)
-    }
-    assert uses == {
-        "at-the-development-branch": f"{CALLED}@dev",
-        "at-the-release": f"{CALLED}@v{stayfixed.__version__}",
-    }, uses
 
 
 RELEASE_WORKFLOW = WORKFLOWS / "release.yml"

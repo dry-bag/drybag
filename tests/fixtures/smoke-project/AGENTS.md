@@ -1,6 +1,6 @@
 # Smoke
 
-A fixture project. Every gate the reusable workflow runs passes on it, which is what makes a
+A fixture project. Every gate passes on it, which is what makes a
 red gate in the smoke workflow a statement about stayfixed rather than about this directory.
 
 ## Current status

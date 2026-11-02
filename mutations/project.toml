@@ -161,8 +161,7 @@ reddens = [
 ]
 
 # `actions/checkout` persists the token it was given into the repository's git configuration for
-# every later step, and this job never pushes. The same line is in `.github/workflows/check.yml`
-# in this repository.
+# every later step, and this job never pushes.
 [[mutation]]
 name = "the overlay's secret scan checks out with a persisted token"
 file = "src/stayfixed/templates/overlay/.github/workflows/scan.yml"
@@ -1520,8 +1519,7 @@ reddens = [
   "tests/project/test_templates.py::test_the_rendered_trigger_runs_only_for_the_gate_branch_and_re_runs_on_a_retarget",
 ]
 
-# In the block led by `mutations/`'s "the reusable workflow's token may write the repository": the
-# caller's grant is the ceiling for every step of the reusable workflow.
+# The caller's grant is the ceiling for every step of the workflow it calls.
 [[mutation]]
 name = "the caller init writes grants its token write access to the repository"
 file = "src/stayfixed/templates/project/stayfixed.yml"

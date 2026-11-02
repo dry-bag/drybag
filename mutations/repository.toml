@@ -1497,20 +1497,20 @@ reddens = [
 # hide it from all of them.
 [[mutation]]
 name = "the workflow line reader continues a line whose comment ends in a backslash"
-file = "tests/test_check_workflow.py"
+file = "tests/test_workflows.py"
 before = '        if _code(raw).endswith("\\"):'
 after = '        if raw.endswith("\\"):'
 reddens = [
-  "tests/test_check_workflow.py::test_the_line_reader_reads_commands_as_bash_does[trailing-comment]",
+  "tests/test_workflows.py::test_the_line_reader_reads_commands_as_bash_does[trailing-comment]",
 ]
 
 [[mutation]]
 name = "the workflow line reader ends a quote at an escaped quote"
-file = "tests/test_check_workflow.py"
+file = "tests/test_workflows.py"
 before = """        elif char == "\\\\" and quote != "'":"""
 after = """        elif False:"""
 reddens = [
-  "tests/test_check_workflow.py::test_the_line_reader_reads_commands_as_bash_does[escaped-quote]",
+  "tests/test_workflows.py::test_the_line_reader_reads_commands_as_bash_does[escaped-quote]",
 ]
 
 # A step spelled as a flow mapping puts its script inside braces on one line; the reader refuses
@@ -2695,21 +2695,21 @@ name = "RELEASING lists another plugin repository's main"
 file = "RELEASING.md"
 before = "   git ls-remote https://github.com/stayfixed/stayfixed-plugin.git refs/heads/main\n"
 after = "   git ls-remote https://github.com/stayfixed/stayfixed-plugins.git refs/heads/main\n"
-reddens = ["tests/test_check_workflow.py::test_one_plugin_repository_everywhere"]
+reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]
 
 [[mutation]]
 name = "RELEASING sets the rulesets of another plugin repository"
 file = "RELEASING.md"
 before = '  id=$(gh api repos/stayfixed/stayfixed-plugin/rulesets --jq ".[]'
 after = '  id=$(gh api repos/stayfixed/stayfixed-plugins/rulesets --jq ".[]'
-reddens = ["tests/test_check_workflow.py::test_one_plugin_repository_everywhere"]
+reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]
 
 [[mutation]]
 name = "RELEASING creates another plugin repository"
 file = "RELEASING.md"
 before = "gh repo create stayfixed/stayfixed-plugin --public"
 after = "gh repo create stayfixed/stayfixed-plugins --public"
-reddens = ["tests/test_check_workflow.py::test_one_plugin_repository_everywhere"]
+reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]
 
 # The same test finds each of the document's three commands before it compares them: a set that
 # read none of them would hold the document to nothing.
@@ -2720,21 +2720,21 @@ before = '''gh repo create stayfixed/stayfixed-plugin --public \
   --description "The stayfixed plugin, generated from stayfixed/stayfixed at each release"
 '''
 after = ""
-reddens = ["tests/test_check_workflow.py::test_one_plugin_repository_everywhere"]
+reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]
 
 [[mutation]]
 name = "the plugin repository test reads no git ls-remote from RELEASING"
-file = "tests/test_check_workflow.py"
+file = "tests/test_workflows.py"
 before = 'r"\bgit ls-remote\s+((?:https://github\.com/|git@github\.com:)\S+)", releasing'
 after = 'r"\bgit ls-remotes\s+((?:https://github\.com/|git@github\.com:)\S+)", releasing'
-reddens = ["tests/test_check_workflow.py::test_one_plugin_repository_everywhere"]
+reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]
 
 [[mutation]]
 name = "the plugin repository test reads no gh api path from RELEASING"
-file = "tests/test_check_workflow.py"
+file = "tests/test_workflows.py"
 before = 'for name in re.findall(r"\brepos/([a-z0-9._-]+/[a-z0-9._-]+)/", releasing)'
 after = 'for name in re.findall(r"\brepos:/([a-z0-9._-]+/[a-z0-9._-]+)/", releasing)'
-reddens = ["tests/test_check_workflow.py::test_one_plugin_repository_everywhere"]
+reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]
 
 # Step 7 names the oldest `gh` the publisher accepts, and `GH_FLOOR` is the one the publisher
 # enforces; one test holds every floor the document names to that constant, and finds at least one

@@ -1,7 +1,7 @@
-# A project every gate passes on: the smoke workflow's caller, and `check.yml`'s
-# same-repository and cross-repository forms both run against it. Hand-written on purpose:
-# `init` writes no `enforced`, and a gate enforces only when that list names it, so the list
-# below names every configured gate, which is what makes each one enforce against this fixture.
+# A project every gate passes on, which the smoke workflow's `doctor` step runs against.
+# Hand-written on purpose: `init` writes no `enforced`, and a gate enforces only when that list
+# names it, so the list below names every configured gate, which is what makes each one enforce
+# against this fixture.
 # Its version is written by hand; `doctor` warns when it drifts from the stayfixed running, and
 # nothing fails.
 [stayfixed]

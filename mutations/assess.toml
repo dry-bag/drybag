@@ -588,7 +588,6 @@ before = "        only = tuple(dict.fromkeys((CONFIG_CHECK, *only)))"
 after = "        pass"
 reddens = [
   "tests/assess/test_gate_command.py::test_builtin_judges_the_configuration_whatever_only_names",
-  "tests/test_check_workflow.py::test_the_judging_step_judges_the_configuration_whatever_only_names",
 ]
 
 # `stayfixed adopt promote`: its one write is `stayfixed.toml`'s `enforced`, and each guard below

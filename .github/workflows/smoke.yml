@@ -2,9 +2,7 @@
 # tagged in a scratch repository, and installed from there through a `url` source pinned by `ref`
 # and `sha` with the real harness CLI under a temporary configuration directory; the installed
 # tree held to a render of this commit, every hook entry fed a sample event through the
-# INSTALLED wrapper, the reusable workflow called in the same-repository form — the two
-# `owner/repo/…@ref` forms are `smoke-release.yml`'s, for the reason `same-repository-form`
-# below states — and the clone-to-exfiltration scenario. Weekly as well as on every
+# INSTALLED wrapper, and the clone-to-exfiltration scenario. Weekly as well as on every
 # change, because the harness CLI
 # moves under this repository and only a run can say whether an install still works.
 #
@@ -17,8 +15,6 @@ name: smoke
 on:
   pull_request:
   push:
-    # Not `next`: a push names no base, so `same-repository-form` judges the fixture against
-    # `main`'s copy, which `next` has moved past.
     branches: [main]
   workflow_dispatch:
   schedule:
@@ -32,9 +28,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # What a change reaches: `ci.yml`'s job of the same name, byte for byte, which says why. Neither
-  # leg below has anything of its own to judge in a change to documents or Python comments alone,
-  # so on one both legs start, skip every step and report.
+  # What a change reaches: `ci.yml`'s job of the same name, byte for byte, which says why. The
+  # leg below has nothing of its own to judge in a change to documents or Python comments alone,
+  # so on one it starts, skips every step and reports.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -78,10 +74,9 @@ jobs:
           node-version: "22"
       - name: The interpreter every step below runs on
         if: env.FULL == 'true'
-        # stayfixed's floor is 3.11 and `check.yml` pins with this action for the same reason:
-        # the two smoke scripts and `python3 -m stayfixed doctor` all run the runner's bare
-        # `python3`, and which interpreter that is on `macos-latest` is the image's business
-        # rather than a contract. One step removes the question from every step after it.
+        # stayfixed's floor is 3.11: the two smoke scripts and `python3 -m stayfixed doctor` all
+        # run the runner's bare `python3`, and which interpreter that is on `macos-latest` is the
+        # image's business rather than a contract. One step removes the question from every step after it.
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
@@ -124,7 +119,7 @@ jobs:
           version="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["version"])' "$RUNNER_TEMP/plugin-commit.json")"
           commit="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["commit"])' "$RUNNER_TEMP/plugin-commit.json")"
           test -n "$version"
-          # The script prints no other shape, so no test reaches this; `tests/test_check_workflow.py`
+          # The script prints no other shape, so no test reaches this; `tests/test_workflows.py`
           # holds its pattern to the scripts'.
           if ! [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::plugin_tree.py commit named no plugin commit: '$commit'"
@@ -203,7 +198,7 @@ jobs:
             | tee "$RUNNER_TEMP/hooks.out"
           # The script carries the same floor in its own constants; this is the CI side of it,
           # because a run that executed one row exits 0 and prints a summary that reads green.
-          # `tests/test_check_workflow.py` derives this line from those constants.
+          # `tests/test_workflows.py` derives this line from those constants.
           grep -qx "10 entries, 11 row(s), 0 failure(s)" "$RUNNER_TEMP/hooks.out"
       - name: doctor on the installed plugin reports no red row
         if: env.FULL == 'true'
@@ -247,23 +242,5 @@ jobs:
             | tee "$RUNNER_TEMP/hostile.out"
           # Four of this scenario's five rows assert an ABSENCE, which is also what a run of
           # one row prints. The count is the difference between those two runs, and
-          # `tests/test_check_workflow.py` derives it from the script's own constant.
+          # `tests/test_workflows.py` derives it from the script's own constant.
           grep -qx "5 row(s), 0 failure(s)" "$RUNNER_TEMP/hostile.out"
-
-  same-repository-form:
-    # The same guard `installed-plugin` carries: a fork inherits the schedule, and only this
-    # repository runs either job weekly.
-    if: github.event_name != 'schedule' || github.repository == 'stayfixed/stayfixed'
-    # The `./` call form. What this exercises against the FIXTURE is `stayfixed gate`'s
-    # configuration check — the fixture's `stayfixed.toml` judged against the base branch's copy —
-    # and the `docs` and `bugs` gates; `commit`, `plan` and `trail` read git, and the fixture is a
-    # directory inside stayfixed's own repository here, so those three answer for stayfixed's
-    # commits and plans — which is a real check of the workflow's plumbing and not a check of the
-    # fixture. The fixture-as-repository run is `installed-plugin`'s `doctor` step and
-    # `tests/test_fixtures.py`. The `owner/repo@ref` forms live in smoke-release.yml: a
-    # reusable-workflow ref is resolved when the run is created, `uses:` takes no expression, and
-    # neither `@dev` nor a release tag names the commit a pull request is testing.
-    uses: ./.github/workflows/check.yml
-    with:
-      path: tests/fixtures/smoke-project
-      base: ${{ github.base_ref || 'main' }}

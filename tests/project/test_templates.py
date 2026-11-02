@@ -45,8 +45,6 @@ from tests.workflow_yaml import load
 
 SHA = "a" * 40
 DOCUMENT = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
-ROOT = Path(__file__).resolve().parents[2]
-CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
 NO_PIN = Resolution(None, True)
 PINNED = Resolution(Pin("v0.1.0", SHA), True)
 
@@ -338,20 +336,6 @@ def test_the_workflow_is_the_same_bytes_whatever_the_remote_answered() -> None:
     (body,) = bodies
     assert f"/.github/workflows/check.yml@{other}\n" in body
     assert "v0.1.0" not in body and SHA not in body
-
-
-def test_the_rendered_workflow_passes_only_inputs_the_reusable_workflow_declares() -> None:
-    # Held to the code, not a second spelling: if `check.yml` renames an input, every adopting
-    # project's CI breaks and nothing here would notice. Both files are read as text — the
-    # runtime and this suite are stdlib-only, so there is no YAML parser to reach for — with the
-    # same indentation the two files actually use.
-    declared = set(
-        re.findall(r"^      ([a-z-]+):$", CHECK_WORKFLOW.read_text(encoding="utf-8"), re.MULTILINE)
-    )
-    prepared = _prepared(_recording(preset_defaults("widget")), resolution=PINNED)
-    body = {t.id: t for t in prepared.footprint}["ci-workflow"].render()
-    passed = set(re.findall(r"^      ([a-z-]+): ", body, re.MULTILINE))
-    assert passed and passed <= declared, (passed, declared)
 
 
 def test_the_rendered_trigger_runs_only_for_the_gate_branch_and_re_runs_on_a_retarget() -> None:

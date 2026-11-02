@@ -91,7 +91,7 @@ its last step, brainstorms the adoption through superpowers where it is present.
 stayfixed reaches an agent in three ways, and they do not hold alike on every agent. The
 **session notices** add context and refuse nothing (the background-cleanup hints, the test-hygiene
 note, the standing rules, the volatile notes); the **repository gates** — the bug, documentation,
-plan, commit and trail checks — run in CI through the reusable workflow; and the **methodology** is
+plan, commit and trail checks — run in CI; and the **methodology** is
 the skills and the `AGENTS.md` region. Each column is an agent under the name `[stayfixed] agents`
 lists it by: `claude` is Claude Code and `codex` is Codex.
 
@@ -144,9 +144,6 @@ As a command-line tool:
 ```bash
 uv tool install stayfixed
 ```
-
-In CI, a project calls the reusable workflow at a commit SHA;
-[docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#the-reusable-workflow) shows the caller `stayfixed init` writes.
 
 **Requirements: Python 3.11 or newer, and a POSIX system.** Linux and macOS are supported and
 tested; Windows is not. The containment this project is built on uses `openat` with
