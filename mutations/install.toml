@@ -985,8 +985,8 @@ reddens = [
 [[mutation]]
 name = "setup reports the recorded overlay's path raw"
 file = "src/stayfixed/setup/commands.py"
-before = '            f"overlay recorded at {quoted(str(report.overlay))}"'
-after = '            f"overlay recorded at {report.overlay}"'
+before = "            f\"overlay recorded at {quoted(data['overlay'])}\""
+after = "            f\"overlay recorded at {data['overlay']}\""
 reddens = [
   "tests/setup/test_setup.py::test_an_overlay_path_a_repository_spells_is_printed_quoted[the-summary]",
 ]
