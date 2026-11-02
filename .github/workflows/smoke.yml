@@ -17,7 +17,7 @@ name: smoke
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, next]
   workflow_dispatch:
   schedule:
     - cron: "17 6 * * 1"
