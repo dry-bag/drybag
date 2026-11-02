@@ -14,7 +14,6 @@ import pytest
 
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.schema import Config
-from stayfixed.guards.hygiene import dirty_count, notice, red_exit, simple_commands
 from stayfixed.guards.roots import (
     NOT_A_DIRECTORY,
     NOT_CONTAINED,
@@ -22,6 +21,7 @@ from stayfixed.guards.roots import (
     contained_roots,
     dropped_roots,
 )
+from stayfixed.hints.hygiene import dirty_count, notice, red_exit, simple_commands
 from tests.gitfixture import git
 
 # Per test: `red_exit`, `notice` and `simple_commands` are pure, and a module-level skip would

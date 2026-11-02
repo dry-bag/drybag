@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.guards import bashscan, uvrun
+from stayfixed.hints import bashscan, uvrun
 from stayfixed.profiles.adapters import shipped_adapters
 
 

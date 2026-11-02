@@ -616,7 +616,7 @@ after = """    "PostToolUse",
 )"""
 reddens = [
   "tests/hooks/test_registry.py::test_the_vocabulary_is_the_six_events_the_design_table_carries",
-  "tests/guards/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[bare]",
+  "tests/hints/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[bare]",
 ]
 
 # The sink writes under the data root and `doctor` counts what it wrote there, and the hook reads

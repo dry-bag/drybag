@@ -340,11 +340,11 @@ def test_the_exfiltration_scenario_reports_a_row_that_went_the_wrong_way(
 
 
 def test_the_hook_smoke_asks_for_the_red_run_note_in_the_words_the_note_opens_with() -> None:
-    # `RED_RUN_NOTE` is copied from `stayfixed.guards.hygiene.LEAD` rather than imported, as
+    # `RED_RUN_NOTE` is copied from `stayfixed.hints.hygiene.LEAD` rather than imported, as
     # `FLOOR_VARIABLE` is, and held equal here: a lead reworded in the guard would otherwise turn
     # the `PostToolUseFailure` row red in CI for a note that still speaks. Mutation (oracle):
     # `mutations/`'s "the hook smoke asks for a red-run note the guard does not open with".
-    from stayfixed.guards.hygiene import LEAD
+    from stayfixed.hints.hygiene import LEAD
 
     assert _load("smoke_hooks").RED_RUN_NOTE == LEAD
 

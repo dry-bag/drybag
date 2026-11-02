@@ -100,7 +100,7 @@ from itertools import dropwhile
 from pathlib import Path
 from typing import NamedTuple
 
-from stayfixed.guards import bashscan
+from stayfixed.hints import bashscan
 
 # A named cap (CONTRIBUTING.md#named-caps), and no shipped file changes with it. Above it the guard
 # does not read the command at all. 64 KiB is far past any command a person or a model types and far

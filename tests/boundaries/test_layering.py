@@ -134,7 +134,7 @@ def test_the_packages_import_one_another_without_a_cycle_at_module_level() -> No
         edges |= _package_imports(relative, path.read_text(encoding="utf-8"), packages)
     # The walk reads the edges the two cycles were made of, so a reader that stopped finding
     # imports cannot pass by finding no cycle.
-    assert {("config", "findings"), ("findings", "printed"), ("guards", "profiles")} <= edges
+    assert {("config", "findings"), ("findings", "printed"), ("hints", "profiles")} <= edges
     assert _cycles(edges) == []
 
 

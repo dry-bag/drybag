@@ -17,8 +17,8 @@ import pytest
 from stayfixed import fsops
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.schema import Config
-from stayfixed.guards.hygiene import simple_commands
 from stayfixed.guards.roots import contained_roots
+from stayfixed.hints.hygiene import simple_commands
 from stayfixed.profiles.python import hygiene as python_hygiene
 from stayfixed.profiles.python.hygiene import HINT
 from tests.gitfixture import git, needs_git
@@ -46,7 +46,7 @@ code_roots = ["src", "tests"]
 
 def repo(tmp_path: Path) -> Path:
     # No git repository: the walk reads files and nothing else, and the dirty count that needs
-    # git belongs to the core (`tests/guards/test_hygiene.py`).
+    # git belongs to the core (`tests/hints/test_hygiene.py`).
     root = tmp_path / "repo"
     (root / "src").mkdir(parents=True)
     (root / "src" / "mod.py").write_text("x = 1\n", encoding="utf-8")

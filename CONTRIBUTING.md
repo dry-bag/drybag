@@ -162,7 +162,7 @@ report discover by name — there is no shared registry to edit. One table does 
 ("Tests" gives it): it groups their mutation entries into files, and a new area needs no row there:
 its entries go in the group its path falls into.
 
-Today the discovered ones are `assess`, `attach`, `docs`, `doctor`, `guards`, `hooks`, `ledger`,
+Today the discovered ones are `assess`, `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`, `ledger`,
 `memory`, `overlay`, `project`, `prove`, `setup` and `trust`, and they fall on two sides of one line. Three of them
 are **delivery**: `overlay`, `attach` and `memory`, the private layer's code — the overlay, binding
 a repository to it, and the note store — named in `DELIVERY_AREAS` in `src/stayfixed/areas.py`.
@@ -171,8 +171,9 @@ a repository to it, and the note store — named in `DELIVERY_AREAS` in `src/sta
 `memory` keeps the notes. Every other module under `src/stayfixed/`, `cli.py`
 and the subpackages that are not areas included, is the **core**: what stayfixed does without its
 private layer — the gates, the records they check and a machine's setup. `ledger` keeps the bug
-ledger, `docs` the documentation and plan lints, `guards` the session guard, the commit-message
-rules and the test-run checks, `hooks` the dispatcher every hook event goes through, `prove` the
+ledger, `docs` the documentation and plan lints, `guards` the commit-message rules and the test-run
+checks, `hints` the session hints, which moved out of `guards` (the background-cleanup hint, the
+red-run note and the command scanner they share), `hooks` the dispatcher every hook event goes through, `prove` the
 run of a test command and the verdict its runner's own report supports, and `setup` a
 machine's configuration, and `trust` every approval a person gave on the machine, in one record,
 with the `stayfixed trust` commands over it. `project` holds the shipped project templates and `init`, the command that
