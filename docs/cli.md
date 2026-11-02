@@ -2389,7 +2389,11 @@ overlay's project file sets applies from the first attach.
 and writes its settings file, its `.codex/rules/` copies and its ledger. Nothing is placed in a
 linked worktree, and a worktree created later needs no step of its own.
 
-**`--check` writes nothing.** It reports the binding state — `unbound` or `bound` — with the
+**`--check` writes nothing.** It opens with the project it would bind and where the name came from —
+`project NAME (named by --project)`, `(this machine's binding record)`, `(the overlay's record of the
+remote)`, `(the remote's name)` or, for a checkout that has one, `(its stayfixed.toml)` — the name
+escaped as every name the repository chose is; `--json` carries them as `project` and
+`project_source`. It then reports the binding state — `unbound` or `bound` — with the
 `origin` note the run would print (below), the permission diff
 (which allow rules would be added, how many of the overlay's rules this
 repository already has, and, when there are any, how many the ledger names that the overlay no

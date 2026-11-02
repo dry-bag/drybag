@@ -1466,8 +1466,8 @@ reddens = [
 [[mutation]]
 name = "check skips the reads the run makes before its first write"
 file = "src/stayfixed/attach/check.py"
-before = "    planned = plan_writes(root, config, binding, diff)\n    return _report(binding, planned.diff)\n"
-after = "    return _report(binding, diff)\n"
+before = "    planned = plan_writes(root, config, binding, diff)\n    return _report(binding, planned.diff, source)\n"
+after = "    return _report(binding, diff, source)\n"
 reddens = [
   "tests/attach/test_commands.py::test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words[not-json]",
   "tests/attach/test_commands.py::test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words[a-link]",
@@ -1703,8 +1703,8 @@ reddens = ["tests/attach/test_doctor.py::test_a_composed_store_whose_link_dangle
 [[mutation]]
 name = "attach ignores --project"
 file = "src/stayfixed/attach/binding.py"
-before = "    if named is not None:\n        return named\n"
-after = "    if False:\n        return named\n"
+before = "    if named is not None:\n        return Chosen(named, BY_FLAG)\n"
+after = "    if False:\n        return Chosen(named, BY_FLAG)\n"
 reddens = [
   "tests/attach/test_project_choice.py::test_project_names_the_project_of_a_repository_with_no_stayfixed_toml",
 ]
@@ -1713,8 +1713,8 @@ reddens = [
 [[mutation]]
 name = "attach forgets this machine's binding"
 file = "src/stayfixed/attach/binding.py"
-before = "    found = bound_project(root)\n    if found is not None:\n        return found.project\n"
-after = "    found = None\n    if found is not None:\n        return found.project\n"
+before = "    found = bound_project(root)\n    if found is not None:\n        return Chosen(found.project, BY_RECORD)\n"
+after = "    found = None\n    if found is not None:\n        return Chosen(found.project, BY_RECORD)\n"
 reddens = [
   "tests/attach/test_project_choice.py::test_a_later_attach_takes_the_project_this_machines_binding_records",
 ]
@@ -1754,7 +1754,7 @@ reddens = [
 name = "attach takes the directory's name where nothing names the project"
 file = "src/stayfixed/attach/binding.py"
 before = "    if origin is None:\n        raise Refusal(NO_PROJECT)"
-after = "    if origin is None:\n        return root.name"
+after = "    if origin is None:\n        return Chosen(root.name, BY_REMOTE)"
 reddens = [
   "tests/attach/test_project_choice.py::test_no_origin_and_no_binding_is_refused_naming_project",
 ]

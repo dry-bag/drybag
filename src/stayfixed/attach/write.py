@@ -58,8 +58,10 @@ from typing import Any
 from stayfixed import fsops, tomlout
 from stayfixed.attach import exclude
 from stayfixed.attach.binding import (
+    BY_FILE,
     NAMED_BY_FILE,
     Binding,
+    Chosen,
     choose_project,
     read_binding,
     refuse_unless_share_can_exist,
@@ -881,20 +883,21 @@ def gates(root: Path, config: Config, binding: Binding) -> PermissionDiff:
 
 def configured(
     root: Path, project: str | None, *, machine: Path | None, owner: Owner | None
-) -> Config:
+) -> tuple[Config, str]:
     """The run's one `Config`, its project chosen where the repository has no `stayfixed.toml`
-    (`binding.choose_project`, asked only then). `project` is `--project`, refused beside the
-    file, which names the project already."""
-    chosen: list[str] = []
+    (`binding.choose_project`, asked only then), and where the project's name came from
+    (`binding.BY_FILE` or the phrase of the way it was chosen). `project` is `--project`, refused
+    beside the file, which names the project already."""
+    chosen: list[Chosen] = []
 
     def unnamed() -> str:
         chosen.append(choose_project(root, project, machine=machine))
-        return chosen[0]
+        return chosen[0].name
 
     config = command_config(root, machine=machine, owner=owner, unnamed=unnamed)
     if project is not None and not chosen:
         raise Refusal(NAMED_BY_FILE)
-    return config
+    return config, chosen[0].source if chosen else BY_FILE
 
 
 def _plan(
@@ -912,7 +915,7 @@ def _plan(
     # One load for the whole run, handed to `read_binding` rather than left for it to make a
     # second of: a `--check` that read two documents reports the wrong thing, while an `attach`
     # that reads two writes under the wrong one.
-    config = configured(root, project, machine=machine, owner=owner)
+    config, _ = configured(root, project, machine=machine, owner=owner)
     binding = read_binding(root, store=store, machine=machine, config=config)
     diff = gates(root, config, binding)
     return plan_writes(root, config, binding, diff)

@@ -17,6 +17,7 @@ from stayfixed.attach.binding import Binding, read_binding
 from stayfixed.attach.permissions import PermissionDiff, codex_rules
 from stayfixed.attach.write import configured, gates, main_checkout_of, plan_writes
 from stayfixed.config.owner import Owner
+from stayfixed.printed import printable, quoted
 from stayfixed.result import Result
 
 
@@ -44,21 +45,24 @@ def check(
     project of a repository with no `stayfixed.toml` as the run's does (`write.configured`).
     """
     root = main_checkout_of(root)
-    config = configured(root, project, machine=machine, owner=owner)
+    config, source = configured(root, project, machine=machine, owner=owner)
     binding = read_binding(root, store=store, machine=machine, config=config)
     diff = gates(root, config, binding)
     planned = plan_writes(root, config, binding, diff)
-    return _report(binding, planned.diff)
+    return _report(binding, planned.diff, source)
 
 
-def _report(binding: Binding, diff: PermissionDiff) -> Result:
-    """The report of a check that met no refusal: the binding, the diff and the rule files."""
+def _report(binding: Binding, diff: PermissionDiff, source: str) -> Result:
+    """The report of a check that met no refusal: the project and where its name came from, the
+    binding, the diff and the rule files. The project is a name the repository or the overlay
+    chose, so it prints quoted on the line and through `printable` in `--json`."""
     # Named and not merely counted, and on this result rather than in `PermissionDiff`: the
     # diff's fields say what `attach` would add, what is already there and what it would take
     # back, and a file list of another kind would blur what they mean. These names come out of the
     # overlay, so they are the owner's own and may be printed.
     rules = tuple(target for target, _ in codex_rules(binding))
     summary = (
+        f"project {quoted(binding.project)} ({source}); "
         f"{binding.state}; "
         f"{len(diff.added_allow)} allow rule(s) would be added, "
         f"{len(diff.already_present)} already present; "
@@ -73,8 +77,10 @@ def _report(binding: Binding, diff: PermissionDiff) -> Result:
     if rules:
         summary += "\n" + "\n".join(f"  {target}" for target in rules)
     data = {
-        # The state and the counts, this command's own; the project is named on the screen
-        # `attach` prints, through `printed.quoted`.
+        # The state and the counts, this command's own, and the project with where its name came
+        # from (a phrase of `binding`'s own).
+        "project": printable(binding.project),
+        "project_source": source,
         "state": binding.state,
         "added_allow": list(diff.added_allow),
         # A count and not the strings: this list comes out of the project's own

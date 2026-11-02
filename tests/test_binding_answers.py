@@ -51,7 +51,7 @@ def test_a_checkout_whose_origin_was_removed_stays_bound_on_every_surface(
     assert not attached.binding_recorded
 
     checked = check(root, store=store, machine=machine)
-    assert checked.exit_code == 0 and checked.summary.startswith("bound;")
+    assert checked.exit_code == 0 and "; bound; " in checked.summary
 
     doctor = next(
         row
