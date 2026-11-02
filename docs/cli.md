@@ -2877,7 +2877,9 @@ it, once for the preset and again for the overlay root `--overlay` records;
 `<home>/.claude/settings.json`, where its links lead; and, through the plugin
 commands it runs for each plugin `--plugin` names, on each harness with a declared marketplace (`claude plugin marketplace add` and
 `claude plugin install`, `codex plugin marketplace add` and `codex plugin add`), the marketplace
-registrations and installed plugins those commands write into each harness's own configuration.
+registrations and installed plugins those commands write into each harness's own configuration;
+with `--restore`, the same `claude plugin marketplace add` and `claude plugin install` for what the
+overlay's `machine/claude/settings.json` lists.
 `--overlay <path>` naming an overlay writes nothing in its tree: it is recorded, and its
 `pre-commit` git hook is installed through `pre-commit install`. Naming nothing or an
 empty directory, it writes the directory with every file of the template plus `.stayfixed/manifest.json`, the
@@ -2947,14 +2949,26 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
 (escaped, and cut to its first 120 characters and its length).
 
 **`--restore`** brings a machine back from the private overlay its machine file records, or the one
-`--overlay` names, in five steps, each reported and none undone by the next:
+`--overlay` names, in these steps, each reported and none undone by the next:
 
 1. it checks the tools and prints what is missing, first in the output, and refuses nothing: `git`,
    one of `claude` and `codex`, and a `python3` or a `uv` for the hooks. A missing `git` makes each
    attach fail in attach's own words;
 2. machine setup, as above (`--preset`, `--plugin` and `--overlay` are taken as they are without
    it);
-3. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
+3. the plugins the overlay's machine settings enable: `<overlay>/machine/claude/settings.json` is
+   the overlay's copy of Claude Code's user settings, and restore reads two keys of it and writes
+   nothing from it. Each `extraKnownMarketplaces.<name>.source` that is `{"source": "github",
+   "repo": "owner/name"}` (with an optional `ref`) or `{"source": "git", "url": …}` with an `https://`
+   or `git@` URL is added with `claude plugin marketplace add <owner/name[@ref] or URL>` when
+   `claude plugin marketplace list --json` does not name it; any other shape, or a value that could
+   read as an option, is a note and is not added. Each `enabledPlugins` entry that is `true` and
+   reads `<name>@<marketplace>` is installed with `claude plugin install <id>` when `claude plugin
+   list --json` does not name it at user scope. A non-zero exit is a note naming the argv, never a
+   refusal; without `claude` on `PATH` there is one note and nothing is launched. The list is Claude
+   Code's: where `codex` is on `PATH`, one note says nothing was installed for it. A second run
+   asks the two listings and installs nothing;
+4. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
    that is not there is reported `absent` and skipped; a checkout `attach` refuses (a plain
    directory, or one whose `stayfixed.toml` names another project than its table key) is `refused`,
    and one whose attach fails part-way is `failed`, each with attach's own message, and the rest go

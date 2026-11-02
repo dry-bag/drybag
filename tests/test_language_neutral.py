@@ -110,6 +110,10 @@ STACK_NAMED = {
     # The git hook stayfixed installs runs stayfixed itself, under the `python3` that can import it:
     # stayfixed's own interpreter in its own hook, not the interpreter of a project's stack.
     ("src/stayfixed/guards/githooks.py", "python3"),
+    # `setup --restore` says when the machine has neither `python3` nor `uv`: the two programs the
+    # hook wrapper looks for to run stayfixed itself, not the stack of any project.
+    ("src/stayfixed/setup/restore.py", "python3"),
+    ("src/stayfixed/setup/restore.py", "uv"),
 }
 
 
