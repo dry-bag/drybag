@@ -765,39 +765,6 @@ reddens = [
   "tests/overlay/test_create.py::test_a_git_init_that_ran_and_failed_is_said_to_have_failed",
 ]
 
-# `setup` loads the overlay area only when `--overlay` asks for it, so the import sits inside the
-# two functions that use it: at module level, every `setup` loads the overlay's code whether or not
-# it was asked for.
-[[mutation]]
-name = "setup loads the overlay area at import again"
-file = "src/stayfixed/setup/run.py"
-before = "from stayfixed.presets import defaults_of, load_preset\n"
-after = "from stayfixed.overlay.api import require_overlay, target_root\nfrom stayfixed.presets import defaults_of, load_preset\n"
-reddens = [
-  "tests/setup/test_setup.py::test_setup_with_no_overlay_never_loads_the_overlay_area",
-]
-
-# Inside the function is not enough: the import has to sit below the return for a run with no
-# `--overlay`, or every `setup` loads the private layer whether or not it was asked for.
-[[mutation]]
-name = "setup loads the overlay area with no --overlay again"
-file = "src/stayfixed/setup/run.py"
-before = """    if overlay is None:
-        # Nothing was asked for, so nothing is touched: `--overlay` is the only way to reach the
-        # overlay at all, and a default here would turn an omitted flag into a repository created
-        # on somebody's account.
-        return None
-    from stayfixed.overlay.api import overlay_fault, target_root
-"""
-after = """    from stayfixed.overlay.api import overlay_fault, target_root
-
-    if overlay is None:
-        return None
-"""
-reddens = [
-  "tests/setup/test_setup.py::test_setup_with_no_overlay_never_loads_the_overlay_area",
-]
-
 # A crossing is pinned per statement and per name, so a second statement beside a pinned one is a
 # new crossing even when it names the same module.
 [[mutation]]

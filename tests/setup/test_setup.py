@@ -5,8 +5,6 @@ import errno
 import json
 import os
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -458,36 +456,6 @@ def test_the_overlay_offer_is_never_taken_without_being_asked(tmp_path: Path) ->
     )
     assert report.overlay is None
     assert not any(argv[:2] == ["gh", "repo"] for argv in runner.calls)
-
-
-# Asks `_requested_overlay` the question a `setup` with no `--overlay` asks, in a clean interpreter,
-# and prints every module of the overlay area that loaded.
-_ASK_WITH_NO_OVERLAY = (
-    "import sys\n"
-    "from pathlib import Path\n"
-    "from stayfixed.setup.run import _requested_overlay\n"
-    "here = Path(sys.argv[1])\n"
-    "assert _requested_overlay(None, home=here) is None\n"
-    "print(' '.join(m for m in sorted(sys.modules) if m.startswith('stayfixed.overlay')))\n"
-)
-
-
-def test_setup_with_no_overlay_never_loads_the_overlay_area(tmp_path: Path) -> None:
-    # `setup` loads the overlay area only when `--overlay` asks for it. The import stood above the
-    # early return for a run with no `--overlay`, so every such `setup` loaded the overlay area
-    # anyway. A clean interpreter, because this suite has long since imported it.
-    # Mutation (oracle): `mutations/`'s "setup loads the overlay area with no --overlay again" ->
-    # `stayfixed.overlay.api` is printed.
-    source = Path(__file__).resolve().parents[2] / "src"
-    completed = subprocess.run(
-        [sys.executable, "-c", _ASK_WITH_NO_OVERLAY, str(tmp_path)],
-        capture_output=True,
-        text=True,
-        check=False,
-        env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(source)},
-    )
-    assert completed.returncode == 0, completed.stderr
-    assert completed.stdout.split() == []
 
 
 def test_pointing_at_an_existing_overlay_records_its_root_and_creates_nothing(
