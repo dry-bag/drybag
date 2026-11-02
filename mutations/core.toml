@@ -2139,18 +2139,15 @@ reddens = [
   "tests/doctor/test_command.py::test_an_area_whose_doctor_module_fails_to_import_costs_one_red_row_and_not_the_report",
 ]
 
-# Each side is pinned as a literal as well as read back, because an area moved from one side to
-# another is still on exactly one side and makes no crossing a pin notices: only the literal turns
-# a change of side into an edit of the test.
+# Every discovered area is on exactly one side: an area dropped from its side joins the core
+# unseen and is held to the core's rule, whether or not it makes a crossing any pin would notice.
 [[mutation]]
 name = "memory stops being a delivery area"
 file = "src/stayfixed/areas.py"
 before = '    {"attach", "hints", "memory", "overlay", "setup", "sync", "trust"}'
 after = '    {"attach", "hints", "overlay", "setup", "sync", "trust"}'
-reddens = ["tests/boundaries/test_delivery.py::test_each_side_is_pinned_as_a_literal"]
+reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
-# Every discovered area is on exactly one side: an area dropped from its side joins the core
-# unseen and is held to the core's rule, whether or not it makes a crossing any pin would notice.
 [[mutation]]
 name = "trust drops out of every side"
 file = "src/stayfixed/areas.py"

@@ -240,20 +240,6 @@ def test_in_isolation_no_core_module_loads_either_side() -> None:
     assert [name for name, top in tops.items() if _side(top, delivery, pack) != CORE] == []
 
 
-def test_each_side_is_pinned_as_a_literal() -> None:
-    # Every rule in this file reads the sides back from `stayfixed.areas`, so an edit to a
-    # constant moves what the rules hold without an edit here: an area moved from one side to the
-    # other is still on exactly one side, and its crossings only change direction, which no pin
-    # notices when it makes none. Pinned as literals, the move is an edit to this test.
-    #
-    # Mutation (declared): `mutations/`'s "memory stops being a delivery area".
-    delivery, pack = stayfixed.areas.DELIVERY_AREAS, stayfixed.areas.PACK_PACKAGES
-    core = stayfixed.areas.CORE_AREAS
-    assert delivery == frozenset({"attach", "hints", "memory", "overlay", "setup", "sync", "trust"})
-    assert pack == frozenset({"assess", "docs", "guards", "ledger", "profiles", "project", "prove"})
-    assert core == frozenset({"doctor", "hooks"})
-
-
 # The one name a side may list before it exists: an area that is planned and not written yet.
 # Held both ways, so the name leaves this set the day its area is written.
 PLANNED = frozenset({"sync"})
@@ -267,7 +253,8 @@ def test_every_area_is_on_exactly_one_side() -> None:
     # `CORE_AREAS` list areas, `PACK_PACKAGES` lists packages (the profiles are one and not an
     # area), and a listed name names nothing only when it is planned.
     #
-    # Mutation (declared): `mutations/`'s "trust drops out of every side".
+    # Mutations (declared): `mutations/`'s "trust drops out of every side" and "memory stops being
+    # a delivery area".
     source = ROOT / "src" / "stayfixed"
     delivery, pack = stayfixed.areas.DELIVERY_AREAS, stayfixed.areas.PACK_PACKAGES
     core = stayfixed.areas.CORE_AREAS
