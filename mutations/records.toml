@@ -3329,3 +3329,15 @@ after = "        *(_tag_notes(overlay, tag) for tag in ()),"
 reddens = [
   "tests/memory/test_store.py::test_a_tags_memory_is_linked_under_its_tag_name",
 ]
+
+# Every reader of the store walks one group list, the configured groups and the tags' notes after
+# the common ones, so the index lists and the bundles deliver a tag's notes.
+[[mutation]]
+name = "walked groups leave out the tags"
+file = "src/stayfixed/memory/store.py"
+before = "    return [*walked[:at], *tagged, *walked[at:]]"
+after = "    return walked"
+reddens = [
+  "tests/memory/test_bundles.py::test_a_standing_rule_in_a_tags_notes_is_in_the_standing_rules_bundle",
+  "tests/memory/test_index.py::test_the_index_has_a_section_per_tag_after_the_common_notes",
+]

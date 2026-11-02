@@ -34,7 +34,14 @@ from stayfixed.memory.notes import (
     write_note,
 )
 from stayfixed.memory.reviewed import UNREVIEWED, UNREVIEWED_LABEL, record, status
-from stayfixed.memory.store import Store, in_repository, permitted_roots, shown, stores_holding
+from stayfixed.memory.store import (
+    Store,
+    in_repository,
+    permitted_roots,
+    shown,
+    stores_holding,
+    walked_groups,
+)
 
 INDEX_NAME = "MEMORY.md"
 EXTRA_TITLE = "Elsewhere"
@@ -277,8 +284,7 @@ def reconcile(store: Store, config: Config, *, write: bool) -> Reconciliation:
     outside = _outside(source)
     appended = {target: title for title, target in entries_in("\n".join(outside))}
     to_machine = _to_machine(store, config)
-    groups = config.memory.groups
-    found = walk(store.path, [g for g in groups if g in store.groups])
+    found = walk(store.path, walked_groups(store, config))
     notes: list[Note] = []
     harvested: list[str] = []
     provisional: list[str] = []
@@ -415,7 +421,7 @@ def render_index(reconciled: Reconciliation, config: Config, store: Store) -> st
     if stores_holding(_destination(store, config)) is not None:
         held = record(store)
         unreviewed = {n.path for n in reconciled.notes if status(store, n, held) == UNREVIEWED}
-    for group in config.memory.groups:
+    for group in walked_groups(store, config):
         if by_group.get(group):
             lines += _section(group, by_group[group], unreviewed)
     extra = [] if to_machine else _extra(config, store)

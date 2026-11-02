@@ -128,6 +128,58 @@ def test_sections_follow_the_declared_order(tmp_path: Path) -> None:
     assert headings[:3] == ["## Project — volatile", "## Project — stable", "## Developer"]
 
 
+def test_the_index_has_a_section_per_tag_after_the_common_notes(tmp_path: Path) -> None:
+    # The store holds a tag's notes as a `tag-<tag>` group the configuration does not list, and
+    # the one walk puts it after `developer`, the common notes, so the index names the notes the
+    # agent reads. Mutation (oracle): `mutations/`'s "walked groups leave out the tags".
+    store, config = a_store(tmp_path)
+    tagged = store.path / "tag-a"
+    tagged.mkdir()
+    (tagged / "t.md").write_text(note("t", index="T trigger → T"), encoding="utf-8")
+    store.groups["tag-a"] = tagged
+    text = render_index(reconcile(store, config, write=False), config, store)
+    headings = [line for line in text.splitlines() if line.startswith("## ")]
+    assert headings[:4] == [
+        "## Project — volatile",
+        "## Project — stable",
+        "## Developer",
+        f"## {section_title('tag-a')}",
+    ]
+    assert "(tag-a/t.md)" in text
+
+
+def test_walked_groups_follows_the_tag_list_order(tmp_path: Path) -> None:
+    # The tags' links are made in the order the project lists them (`b`, then `a`), whatever the
+    # directory listing or the alphabet says, and the walk keeps it.
+    from stayfixed import binding
+    from stayfixed.memory.composed import build
+    from stayfixed.memory.store import resolve, walked_groups
+    from tests.memory.test_store import (
+        REMOTE,
+        a_config,
+        a_machine_file,
+        a_repo,
+        a_tagged_overlay,
+    )
+
+    root = tmp_path / "project"
+    a_repo(root)
+    overlay = a_tagged_overlay(tmp_path, "b", "a")
+    binding.record(root, "widget", REMOTE)
+    id = binding.read_id(root)
+    assert id is not None
+    build(overlay, "widget", id)
+    config = a_config(root, "overlay", '["project-stable", "developer"]')
+    store = resolve(root, config, machine=a_machine_file(tmp_path, overlay))
+    assert store is not None
+    assert walked_groups(store, config) == ["project-stable", "developer", "tag-b", "tag-a"]
+    # A configuration that lists no `developer` puts the tags first.
+    bare = a_config(root, "overlay", '["project-stable"]')
+    again = resolve(root, bare, machine=a_machine_file(tmp_path, overlay))
+    assert again is not None
+    assert walked_groups(again, bare) == ["tag-b", "tag-a", "project-stable"]
+
+
 def test_a_startup_ranked_note_sorts_before_an_unranked_one(tmp_path: Path) -> None:
     text = rendered(tmp_path)
     assert text.index("B trigger") < text.index("A trigger")

@@ -145,7 +145,9 @@ project's own share of the recorded overlay is honoured).
 `~/.local/share/stayfixed/stores/<id>/`, named by the checkout's binding id and holding one link per
 group into the overlay, and `--store` is not read. In every other mode `--store` is resolved at the
 path it names, under the same rules as the configured store. The groups include the notes of each tag
-the project lists, as `tag-<tag>` (`groups/<tag>/memory/` in the overlay). A note's review is
+the project lists, as `tag-<tag>` (`groups/<tag>/memory/` in the overlay), which every `memory`
+command, the index and the bundles read after the common notes and in the order the project lists
+its tags, whether or not `memory.groups` names them. A note's review is
 recorded by its path, so renaming a tag, which moves its notes' path in the store, makes them
 unreviewed once.
 

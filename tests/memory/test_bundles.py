@@ -130,6 +130,21 @@ def test_standing_rules_are_never_truncated_only_flagged(tmp_path: Path) -> None
     assert "has grown" in text
 
 
+def test_a_standing_rule_in_a_tags_notes_is_in_the_standing_rules_bundle(tmp_path: Path) -> None:
+    # A tag's notes are a group of the store the configuration does not list; the bundles read the
+    # one walk, so a rule the owner promoted there reaches the session. Mutation (oracle):
+    # `mutations/`'s "walked groups leave out the tags".
+    store, config = a_store(tmp_path)
+    tagged = store.path / "tag-a"
+    tagged.mkdir()
+    (tagged / "tagged.md").write_text(note("tagged", startup="9"), encoding="utf-8")
+    store.groups["tag-a"] = tagged
+    review(store)
+    text = "\n".join(blocks(Bundle.STANDING_RULES, store, config))
+    assert "tagged" in text
+    assert text.index("first") < text.index("second") < text.index("tagged")
+
+
 def test_a_volatile_note_is_not_a_standing_rule_even_when_it_is_flagged(tmp_path: Path) -> None:
     store, config = a_store(tmp_path)
     (store.groups["project-volatile"] / "loud.md").write_text(

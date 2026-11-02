@@ -662,6 +662,17 @@ def refusal_reason(
     return None if reason is None else str(reason)
 
 
+def walked_groups(store: Store, config: Config) -> list[str]:
+    """The groups every reader of the store walks, in the order they are read: `memory.groups` as
+    configured, each only where the store holds it, and the tags' notes (`tag-<t>`, in the
+    project's list order, which the store holds them in) after the common notes, or first where
+    the configuration lists none. The one spelling of the walk: no reader keeps its own."""
+    tagged = [g for g in store.groups if g.startswith(TAG_LINK_PREFIX)]
+    walked = [g for g in config.memory.groups if g in store.groups and g not in tagged]
+    at = walked.index(COMMON_GROUP) + 1 if COMMON_GROUP in walked else 0
+    return [*walked[:at], *tagged, *walked[at:]]
+
+
 def in_repository(store: Store, path: Path) -> bool:
     """Whether one particular file this store yields sits in the repository itself: the index
     asks it of `MEMORY.md`, whose destination decides whether `memory.index_extra` is published."""

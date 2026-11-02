@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from stayfixed.findings import Finding
 from stayfixed.ledger.api import bug_register
+from stayfixed.memory.store import walked_groups
 from stayfixed.prose import blank_code_spans, blank_fences
 
 if TYPE_CHECKING:
@@ -60,7 +61,7 @@ def repeated_links(text: str) -> Iterator[str]:
 
 def check_memory_graph(store: Store, config: Config, walked: Walk) -> list[Finding]:
     """The graph's notices over `walked`, the walk of `store`'s configured groups."""
-    groups = [g for g in config.memory.groups if g in store.groups]
+    groups = walked_groups(store, config)
     linkable = {p.stem for p in store.path.glob("*.md")}
     for group in groups:
         linkable |= {p.stem for p in (store.path / group).glob("*.md")}

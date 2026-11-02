@@ -48,13 +48,12 @@ def _unreviewed(event: HookEvent, session: SessionConfig) -> HookResult:
         from stayfixed.config.paths import data_directory
         from stayfixed.memory.notes import walk
         from stayfixed.memory.reviewed import subject, unreviewed
-        from stayfixed.memory.store import resolved
+        from stayfixed.memory.store import resolved, walked_groups
 
         store = resolved(event.project_root, config, machine=None)[0]
         if store is None:
             return HookResult()
-        groups = [g for g in config.memory.groups if g in store.groups]
-        pending = unreviewed(store, walk(store.path, groups).notes)
+        pending = unreviewed(store, walk(store.path, walked_groups(store, config)).notes)
         now = _segment("\n".join(sorted(subject(note.path) for note in pending)))
         base, name = data_directory() / SEEN, _segment(str(store.path.resolve()))
         try:

@@ -47,6 +47,7 @@ from stayfixed.memory.store import (
     Unresolved,
     resolved,
     shown,
+    walked_groups,
 )
 from stayfixed.printed import printable, quoted
 from stayfixed.result import Result
@@ -400,7 +401,7 @@ def run_promote(args: argparse.Namespace) -> Result:
     if bool(args.notes) == args.changed:
         raise Refusal(NOTHING_NAMED)
     store, config = _store(args)
-    notes = walk(store.path, [g for g in config.memory.groups if g in store.groups]).notes
+    notes = walk(store.path, walked_groups(store, config)).notes
     chosen = unreviewed(store, notes) if args.changed else _named(notes, args.notes)
     recorded = promote(store, chosen) if chosen else {}
     rows = [{"path": _relative(note), "digest": recorded[note.path]} for note in chosen]

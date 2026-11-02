@@ -161,6 +161,7 @@ def _memory(context: Context, answers: Answers) -> Row:
     from stayfixed.doctor.api import OK, Row
     from stayfixed.memory.notes import walk
     from stayfixed.memory.reviewed import unreviewed
+    from stayfixed.memory.store import walked_groups
     from stayfixed.printed import printable
 
     resolution = context.session.resolution
@@ -184,9 +185,7 @@ def _memory(context: Context, answers: Answers) -> Row:
             where = printable(store.path.relative_to(context.root).as_posix())
         except ValueError:
             where = "the composed store under the data directory"
-        groups = (
-            [g for g in context.config.memory.groups if g in store.groups] if context.config else []
-        )
+        groups = walked_groups(store, context.config) if context.config else []
         pending = len(unreviewed(store, walk(store.path, groups).notes))
         parts.append(f"store {where}, {pending} unreviewed note(s)")
         debris = _debris(store)

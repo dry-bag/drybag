@@ -28,7 +28,7 @@ from stayfixed.memory import trust
 from stayfixed.memory.index import is_volatile
 from stayfixed.memory.notes import Note, walk
 from stayfixed.memory.reviewed import REVIEWED, UNREVIEWED_LABEL, record, status
-from stayfixed.memory.store import Store
+from stayfixed.memory.store import Store, walked_groups
 
 
 class Bundle(StrEnum):
@@ -99,7 +99,7 @@ def _cap(config: Config) -> int:
 
 
 def _notes(store: Store, config: Config) -> list[Note]:
-    return walk(store.path, [g for g in config.memory.groups if g in store.groups]).notes
+    return walk(store.path, walked_groups(store, config)).notes
 
 
 def _flag(note: Note, today: date, ttl: int) -> str:

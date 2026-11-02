@@ -29,7 +29,7 @@ from stayfixed.fsops import read_regular_text, resolved, said
 from stayfixed.gitenv import git_run
 from stayfixed.memory.graph import check_memory_graph, wiki_links
 from stayfixed.memory.notes import Note, Walk, walk
-from stayfixed.memory.store import Store, permitted_roots
+from stayfixed.memory.store import Store, permitted_roots, walked_groups
 from stayfixed.printed import quoted
 from stayfixed.prose import blank_fences, path_references, present_within
 from stayfixed.roots import contained_roots
@@ -178,7 +178,7 @@ def audience_violations(store: Store, config: Config, walked: Walk) -> list[Find
 def check_refs(root: Path, config: Config, store: Store) -> RefsReport:
     # One walk for every report below: the link graph reads the notes this walk found, rather
     # than walking the store again for the same groups.
-    walked = walk(store.path, [g for g in config.memory.groups if g in store.groups])
+    walked = walk(store.path, walked_groups(store, config))
     return RefsReport(
         unresolved(root, config, store, walked) + audience_violations(store, config, walked),
         dict(store.unavailable),
