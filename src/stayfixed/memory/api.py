@@ -14,7 +14,8 @@ area and why — it does not import a private module of this area.
 
 The names imported from outside this area today, by the `attach` and `overlay` areas and by this
 repository's tests: the resolver (`resolve` and `permitted_roots`), the overlay layout `attach`
-writes and `overlay` renders (`PROJECTS`, `PROJECT_RECORD`, `STORE_DIR`, `COMMON_GROUP`), the one
+writes and `overlay` renders (`PROJECTS`, `PROJECT_RECORD`, `STORE_DIR`, `COMMON_GROUP`), the
+three note roots `sync`'s pathspecs are built from (`COMMON`, `GROUPS`, `PROJECTS`), the one
 reader of the overlay's project record, which `attach` reads it with and answers its own way when
 it cannot (`read_binding_record`), the binding's one classifier and the states it answers in
 (`binding_state`, `UNBOUND` and `BOUND`, which `attach`'s own doctor row reads), which `attach`
@@ -80,7 +81,9 @@ from stayfixed.memory.composed import withdraw as withdraw_composed
 from stayfixed.memory.store import (
     BINDING_STATES,
     BOUND,
+    COMMON,
     COMMON_GROUP,
+    GROUPS,
     PROJECT_RECORD,
     PROJECTS,
     STORE_DIR,
@@ -98,8 +101,10 @@ from stayfixed.memory.trust import DELIMITER, markers, wrap
 __all__ = [
     "BINDING_STATES",
     "BOUND",
+    "COMMON",
     "COMMON_GROUP",
     "DELIMITER",
+    "GROUPS",
     "PROJECTS",
     "PROJECT_RECORD",
     "SLOTS",

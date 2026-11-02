@@ -3307,3 +3307,14 @@ after = "from stayfixed.config.reading import MachineConfigError\nfrom stayfixed
 reddens = [
   "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
 ]
+
+# The overlay's group directory is named `groups`: `sync`'s pathspecs are derived from the name.
+[[mutation]]
+name = "a group's directory is not named groups"
+file = "src/stayfixed/memory/store.py"
+before = 'GROUPS = "groups"'
+after = 'GROUPS = "group"'
+reddens = [
+  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
+]

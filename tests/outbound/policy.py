@@ -105,9 +105,12 @@ LOCAL = frozenset(
         ("git", "cat-file"),
         ("git", "check-ignore"),
         ("git", "check-ref-format", "--branch"),
+        ("git", "config", "--get"),
         ("git", "config", "--type=path", "--get"),
         ("git", "diff"),
         ("git", "grep"),
+        # Without `-w` it writes nothing: the empty tree's id, from an empty standard input.
+        ("git", "hash-object", "-t", "tree", "--stdin"),
         ("git", "init"),
         ("git", "log"),
         ("git", "ls-files"),
@@ -119,6 +122,7 @@ LOCAL = frozenset(
         ("git", "show-ref"),
         ("git", "status"),
         ("git", "symbolic-ref"),
+        ("git", "version"),
         ("git", "worktree", "list"),
         ("tar", "-xf"),
     }
@@ -130,7 +134,8 @@ LOCAL_WHOLE = frozenset({("git", "remote")})
 # argument as its value. None of them changes which program git runs or where it reaches, except
 # `-c`, whose value is configuration: it is held to `GIT_CONFIG_KEYS`. Any other option there is a
 # finding, because the subcommand the tables match would then follow something unread.
-GIT_GLOBAL_OPTIONS = {"-c": True, "--literal-pathspecs": False}
+# `--no-optional-locks` keeps a `status` from writing the index it refreshes.
+GIT_GLOBAL_OPTIONS = {"-c": True, "--literal-pathspecs": False, "--no-optional-locks": False}
 # The configuration a launch may set with `git -c`: each changes how git prints a name, and never
 # what it runs or where it reaches, as `core.sshCommand`, `core.fsmonitor` or
 # `url.<base>.insteadOf` would.
@@ -222,6 +227,11 @@ PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
     # own hook wrapper, asked for its version.
     ("src/stayfixed/doctor/checks.py", "_wrapper", "str(root / WRAPPER)"): NO_ROWS,
 }
+# What the sync's revisions are: built by its own callers, never from repository text.
+_REVISIONS = (
+    "a sha git printed or a ref the job names (`HEAD`, `origin/main`), joined by `..` where it is "
+    "a range, or `--cached`: never a string a repository chose"
+)
 # Each element a launch hands before its options end that the walk cannot read, keyed and held as
 # `PASS_THROUGH` is, and the reason it cannot be an option that changes what the launch reaches:
 # an option's value, an option the code builds, or an operand its callers have refused when it
@@ -264,11 +274,26 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/assess/probes.py", "_commit_types", "f'-n{context.window}'"): (
         "`-n` and the probe's window, an integer"
     ),
+    ("src/stayfixed/sync/git.py", "guard", "*_MARKER_PATHS"): (
+        "the module's own constant: `--git-path` and the name of each in-progress marker"
+    ),
+    ("src/stayfixed/sync/rules.py", "commit_entries", "rev_range"): _REVISIONS,
+    ("src/stayfixed/sync/rules.py", "offending_paths", "*revisions"): _REVISIONS,
+    ("src/stayfixed/sync/rules.py", "range_is_memory_only", "base"): _REVISIONS,
+    ("src/stayfixed/sync/rules.py", "range_is_memory_only", "tip"): _REVISIONS,
 }
 
 # The package function whose environment every git launch is given, `git` with only the variables
 # it keeps: an `env=` that calls it overrides nothing worth declaring.
 SCRUBBED_ENVIRONMENT = ("src/stayfixed/gitenv.py", "scrubbed_env")
+# The sync job's git environment: the owner's own, less git's repository variables, plus the four
+# variables `sync.git.job_env` names (no prompt, a non-interactive ssh command the owner's own
+# configuration chose, no replace refs, attributes from `HEAD`). The ssh agent has to reach a push,
+# which `scrubbed_env` would drop.
+_JOB_ENVIRONMENT = (
+    "the owner's own environment, less the variables that point git at another repository, plus "
+    "`job_env`'s four: the job's git launches are the owner's, signed in as the owner"
+)
 # Each other `env=` or `executable=` a launch passes, by `(file, function, keyword's source text)`,
 # and why it changes nothing the launch's row does not already say. An `executable=` replaces the
 # program the argv names, and an `env=` can carry `GIT_CONFIG_COUNT` and its keys and values,
@@ -283,6 +308,13 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
         "the environment doctor was handed, less every `CLAUDE_`, `PLUGIN_` and `STAYFIXED_` "
         "variable, plus the plugin root and project directory the wrapper needs"
     ),
+    ("src/stayfixed/sync/git.py", "run", "env=full"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/git.py", "git", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/git.py", "ask", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/rules.py", "dirty_memory", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/rules.py", "commit_entries", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/rules.py", "offending_paths", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/rules.py", "range_is_memory_only", "env=env"): _JOB_ENVIRONMENT,
     ("src/stayfixed/prove/run.py", "_launch", "env=dict(env)"): (
         "the caller's own environment, less each variable whose value the runner adapter names "
         "as forging, then the assignments the command itself typed: the test command is the "

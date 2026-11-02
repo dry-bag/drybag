@@ -29,6 +29,9 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         "PROJECT_RECORD",
         "STORE_DIR",
         "COMMON_GROUP",
+        # the three roots of the overlay's notes, which `sync` builds its pathspecs from
+        "COMMON",
+        "GROUPS",
         # the one reader of the overlay's project record, which attach reads with a policy of its
         # own
         "read_binding_record",

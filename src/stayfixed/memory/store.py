@@ -70,6 +70,8 @@ LOCAL_STORE = Path(".stayfixed") / "local" / "memory"
 # module is the one that resolves the overlay layout for the hook path; `overlay` imports it from
 # the surface.
 PROJECTS = "projects"
+# A group's notes, beside `common/memory` and each project's: `groups/<tag>/memory`.
+GROUPS = "groups"
 PROJECT_RECORD = "project.toml"
 # The one directory under `projects/<name>/` that holds notes, named once: `permitted_roots`
 # builds the path with it, and `attach` states the path's shape with it where it may not print

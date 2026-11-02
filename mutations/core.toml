@@ -6344,3 +6344,284 @@ file = "src/stayfixed/sync/state.py"
 before = "    return age is not None and age < timedelta(minutes=BACK_OFF_MINUTES)"
 after = "    return age is not None"
 reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_and_the_same_upstream"]
+
+# The sync's git layer and the rules of what may move: each entry breaks one rule, and the
+# tests named are the ones that watch it. A multi-line `before` is one exact substring.
+
+[[mutation]]
+name = "the memory pathspecs drop glob magic"
+file = "src/stayfixed/sync/rules.py"
+before = '    (f":(top,glob){glob}", directory) for directory, glob in _SCOPES'
+after = '    (f":(top){glob}", directory) for directory, glob in _SCOPES'
+reddens = [
+  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
+]
+
+[[mutation]]
+name = "a group's notes are not memory"
+file = "src/stayfixed/sync/rules.py"
+before = '''    (GROUPS, f"{GROUPS}/*/{STORE_DIR}/**"),
+'''
+after = ""
+reddens = [
+  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
+]
+
+[[mutation]]
+name = "the parse stops reading a group's notes as memory"
+file = "src/stayfixed/sync/rules.py"
+before = '_NAMED_TOPS = {"group": GROUPS, "project": PROJECTS}'
+after = '_NAMED_TOPS = {"project": PROJECTS}'
+reddens = [
+  "tests/sync/test_rules.py::test_the_layout_takes_a_path_apart",
+  "tests/sync/test_rules.py::test_a_range_of_notes_in_every_scope_is_memory_only",
+]
+
+[[mutation]]
+name = "a rename stops listing both of its sides"
+file = "src/stayfixed/sync/rules.py"
+before = '_RAW = ("--raw", "--numstat", "--no-abbrev", "-z", "--no-renames", "--no-color")'
+after = '_RAW = ("--raw", "--numstat", "--no-abbrev", "-z", "--no-color")'
+reddens = [
+  "tests/sync/test_rules.py::test_a_rename_into_memory_lists_its_source",
+]
+
+[[mutation]]
+name = "a commit that lists no path is memory-only"
+file = "src/stayfixed/sync/rules.py"
+before = "        if not entries:"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_rules.py::test_a_commit_that_lists_no_path_is_not_memory_only",
+  "tests/sync/test_rules.py::test_a_clean_merge_of_notes_is_still_not_memory_only",
+]
+
+[[mutation]]
+name = "the tree bound diffs nothing"
+file = "src/stayfixed/sync/rules.py"
+before = "    for path in offending_paths(repo, bound, tip, timeout=left(deadline, what), env=env):"
+after = "    for path in ():"
+reddens = [
+  "tests/sync/test_rules.py::test_the_tree_bound_catches_what_commits_hide",
+]
+
+[[mutation]]
+name = "a range with no common history is not measured from the empty tree"
+file = "src/stayfixed/sync/rules.py"
+before = "    if merge_base.code == 1 and not merge_base.timed_out:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_rules.py::test_a_range_with_no_common_history_is_measured_from_the_empty_tree",
+]
+
+[[mutation]]
+name = "the range check's budget is a hundred times what it was given"
+file = "src/stayfixed/sync/rules.py"
+before = '''    deadline = time.monotonic() + timeout
+    what = f"the range check of {base}..{tip}"'''
+after = '''    deadline = time.monotonic() + 100 * timeout
+    what = f"the range check of {base}..{tip}"'''
+reddens = [
+  "tests/sync/test_rules.py::test_the_range_check_keeps_to_its_whole_budget",
+]
+
+[[mutation]]
+name = "a component starting with a dot is judged a note"
+file = "src/stayfixed/sync/rules.py"
+before = '        plain = all(name and not name.startswith(".") for name in names)'
+after = "        plain = all(names)"
+reddens = [
+  "tests/sync/test_rules.py::test_a_dot_component_or_a_non_md_name_under_memory_is_not_memory_only",
+]
+
+[[mutation]]
+name = "a name not ending in .md is judged a note"
+file = "src/stayfixed/sync/rules.py"
+before = '        return plain and self.below[-1].endswith(".md")'
+after = "        return plain"
+reddens = [
+  "tests/sync/test_rules.py::test_a_dot_component_or_a_non_md_name_under_memory_is_not_memory_only",
+]
+
+[[mutation]]
+name = "the note rule stops reaching the group's or project's own name"
+file = "src/stayfixed/sync/rules.py"
+before = "        names = ((self.name,) if self.name is not None else ()) + self.below"
+after = "        names = self.below"
+reddens = [
+  "tests/sync/test_rules.py::test_a_project_or_group_name_that_is_not_a_plain_name_never_moves",
+  "tests/sync/test_rules.py::test_a_crafted_tree_with_such_a_name_is_not_memory_only",
+]
+
+[[mutation]]
+name = "a note git calls binary moves"
+file = "src/stayfixed/sync/rules.py"
+before = "    return entry.binary"
+after = "    return False"
+reddens = [
+  "tests/sync/test_rules.py::test_a_binary_note_is_not_memory_only_per_commit_and_by_the_bound",
+]
+
+[[mutation]]
+name = "a link under a memory name may move"
+file = "src/stayfixed/sync/rules.py"
+before = 'ALLOWED_MODES = frozenset({"100644", "000000"})'
+after = 'ALLOWED_MODES = frozenset({"100644", "000000", "120000"})'
+reddens = [
+  "tests/sync/test_rules.py::test_a_symlink_under_memory_is_not_memory_only",
+]
+
+[[mutation]]
+name = "an embedded repository under a memory name may move"
+file = "src/stayfixed/sync/rules.py"
+before = 'ALLOWED_MODES = frozenset({"100644", "000000"})'
+after = 'ALLOWED_MODES = frozenset({"100644", "000000", "160000"})'
+reddens = [
+  "tests/sync/test_rules.py::test_a_gitlink_under_memory_is_not_memory_only",
+]
+
+[[mutation]]
+name = "an executable under a memory name may move"
+file = "src/stayfixed/sync/rules.py"
+before = 'ALLOWED_MODES = frozenset({"100644", "000000"})'
+after = 'ALLOWED_MODES = frozenset({"100644", "000000", "100755"})'
+reddens = [
+  "tests/sync/test_rules.py::test_an_executable_note_is_not_memory_only",
+]
+
+[[mutation]]
+name = "a deletion mode is allowed to end any change"
+file = "src/stayfixed/sync/rules.py"
+before = '        return entry.status != "D"'
+after = "        return False"
+reddens = [
+  "tests/sync/test_rules.py::test_mode_000000_is_allowed_only_for_a_deletion",
+]
+
+[[mutation]]
+name = "a git older than 2.43 is accepted"
+file = "src/stayfixed/sync/git.py"
+before = "MIN_GIT = (2, 43)"
+after = "MIN_GIT = (2, 40)"
+reddens = [
+  "tests/sync/test_git.py::test_the_git_version_floor_is_2_43",
+  "tests/sync/test_git.py::test_the_guard_skips_a_git_older_than_2_43_with_the_reason",
+]
+
+[[mutation]]
+name = "the guard accepts unmerged paths"
+file = "src/stayfixed/sync/git.py"
+before = "    if unmerged.code != 0 or unmerged.out:"
+after = "    if unmerged.code != 0:"
+reddens = [
+  "tests/sync/test_git.py::test_the_guard_refuses_unmerged_paths_a_stash_pop_left_without_a_marker",
+]
+
+[[mutation]]
+name = "the guard accepts an operation in progress"
+file = "src/stayfixed/sync/git.py"
+before = "        if fsops.exists(repo / marker):"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_git.py::test_the_guard_refuses_a_merge_and_a_cherry_pick_on_main",
+  "tests/sync/test_git.py::test_the_guard_refuses_another_branch_a_detached_head_and_a_rebase",
+]
+
+[[mutation]]
+name = "the guard accepts any upstream"
+file = "src/stayfixed/sync/git.py"
+before = '    if (remote, merge) != ("origin", "refs/heads/main"):'
+after = "    if False:"
+reddens = [
+  "tests/sync/test_git.py::test_the_guard_refuses_main_not_tracking_origin_main",
+  "tests/sync/test_git.py::test_the_guard_refuses_main_tracking_another_upstream",
+]
+
+[[mutation]]
+name = "attributes come from the working tree again"
+file = "src/stayfixed/sync/git.py"
+before = '''        "GIT_ATTR_SOURCE": "HEAD",
+'''
+after = ""
+reddens = [
+  "tests/sync/test_git.py::test_job_env_pins_attributes_and_replace_refs_and_keeps_core_sshcommand",
+]
+
+[[mutation]]
+name = "a replace ref can disguise a commit again"
+file = "src/stayfixed/sync/git.py"
+before = '''        "GIT_NO_REPLACE_OBJECTS": "1",
+'''
+after = ""
+reddens = [
+  "tests/sync/test_git.py::test_job_env_pins_attributes_and_replace_refs_and_keeps_core_sshcommand",
+]
+
+[[mutation]]
+name = "a wrapper around ssh is given ssh's options"
+file = "src/stayfixed/sync/git.py"
+before = '        "GIT_SSH_COMMAND": command + (SSH_OPTIONS if _is_ssh(command) else ""),'
+after = '        "GIT_SSH_COMMAND": command + SSH_OPTIONS,'
+reddens = [
+  "tests/sync/test_git.py::test_job_env_leaves_a_wrapper_as_is",
+]
+
+[[mutation]]
+name = "a timed-out git call is read as an answer"
+file = "src/stayfixed/sync/git.py"
+before = "    if result.timed_out:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_git.py::test_a_checked_call_names_a_failure_and_a_timeout",
+  "tests/sync/test_git.py::test_job_env_and_the_guard_time_out_instead_of_answering",
+]
+
+[[mutation]]
+name = "a timeout ends the child and not its group"
+file = "src/stayfixed/sync/git.py"
+before = "        kill_group(process)"
+after = "        process.kill()"
+reddens = [
+  "tests/sync/test_git.py::test_the_runner_kills_the_group_of_a_child_that_outlives_its_timeout",
+]
+
+[[mutation]]
+name = "the child shares the caller's session"
+file = "src/stayfixed/sync/git.py"
+before = "            start_new_session=True,"
+after = "            start_new_session=False,"
+reddens = [
+  "tests/sync/test_git.py::test_the_runner_kills_the_group_of_a_child_that_outlives_its_timeout",
+]
+
+[[mutation]]
+name = "an inherited repository variable reaches the child"
+file = "src/stayfixed/sync/git.py"
+before = "        if key not in REPOSITORY_VARIABLES and not key.startswith(unset_prefixes)"
+after = "        if not key.startswith(unset_prefixes)"
+reddens = [
+  "tests/sync/test_git.py::test_git_ignores_inherited_repository_variables",
+  "tests/sync/test_git.py::test_the_runner_hands_on_the_environment_less_what_redirects_git",
+]
+
+[[mutation]]
+name = "a variable the caller asked to drop reaches the child"
+file = "src/stayfixed/sync/git.py"
+before = "        if key not in REPOSITORY_VARIABLES and not key.startswith(unset_prefixes)"
+after = "        if key not in REPOSITORY_VARIABLES"
+reddens = [
+  "tests/sync/test_git.py::test_the_runner_hands_on_the_environment_less_what_redirects_git",
+]
+
+[[mutation]]
+name = "the guard's budget is a hundred times what it was given"
+file = "src/stayfixed/sync/git.py"
+before = '''    deadline = time.monotonic() + timeout
+    version = ask('''
+after = '''    deadline = time.monotonic() + 100 * timeout
+    version = ask('''
+reddens = [
+  "tests/sync/test_git.py::test_the_helpers_of_one_step_share_its_whole_budget",
+]

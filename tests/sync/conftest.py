@@ -1,0 +1,314 @@
+"""Real git repositories for the note sync's tests: a bare remote and two clones of it.
+
+git is never mocked here: the rules under test are about what git lists (renames, merges, the
+pathspec magic), so a fake would only test the fake. Every repository lives under the test's
+`tmp_path`, and `_sealed_git` closes what the root `conftest.py` leaves open (git's system
+configuration, an identity, the variables a hook run would hand on), so the developer's own
+settings cannot reach a test. The scanner is a stand-in script that answers as the real build
+does, and pre-commit's database a SQLite file written here: no test runs `pre-commit` or
+`gitleaks`.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import os
+import shutil
+import sqlite3
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+from tests import gitfixture as fx
+
+# A bound no test's own git call should reach under the load other sessions put on the machine;
+# the tests about a bound running out pass a small one of their own.
+SLOW = 120.0
+GITLEAKS_REPO = "https://github.com/gitleaks/gitleaks"
+GITLEAKS_REV = "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"
+LEAK = "FAKESECRET-0123456789abcdef"
+DEFAULT_RULES = "# the build's own default rules\n"
+# The variables a job started from inside a git hook would inherit, and the ones a test that
+# reads the ssh command or the attributes must find unset.
+_AMBIENT = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_COMMON_DIR",
+    "GIT_SSH_COMMAND",
+    "GIT_SSH",
+    "GIT_ATTR_SOURCE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+)
+
+
+@pytest.fixture(autouse=True)
+def _sealed_git(monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own: Path) -> None:
+    """The sealed environment of `tests.gitfixture` for the `git` the product's runner starts
+    too, in the per-test `HOME` of the root `conftest.py`, with none of the variables a hook run
+    would hand on."""
+    for name in _AMBIENT:
+        monkeypatch.delenv(name, raising=False)
+    for name, value in fx.env(_a_home_of_its_own).items():
+        monkeypatch.setenv(name, value)
+
+
+def git(repo: Path, *args: str) -> str:
+    return fx.git(repo, *args)
+
+
+def init(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    fx.git(path, "init", "-q", "-b", "main")
+    return path
+
+
+def write(repo: Path, relative: str, text: str = "note\n") -> Path:
+    path = repo / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def head(repo: Path, ref: str = "HEAD") -> str:
+    return git(repo, "rev-parse", ref).strip()
+
+
+def commit_all(repo: Path, message: str = "change") -> str:
+    """Stage everything and commit, an empty commit included; the new sha."""
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "--allow-empty", "-m", message)
+    return head(repo)
+
+
+def rename(repo: Path, source: str, destination: str) -> None:
+    """`git mv`: staged, committed by `commit_all`."""
+    (repo / destination).parent.mkdir(parents=True, exist_ok=True)
+    git(repo, "mv", source, destination)
+
+
+def symlink(repo: Path, relative: str, target: str) -> None:
+    path = repo / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.symlink_to(target)
+
+
+def merge_with_resolution(
+    repo: Path, branch: str, edits: dict[str, str], message: str = "merge"
+) -> str:
+    """Merge `branch` into the current branch with `edits` written into the merge itself.
+
+    An evil merge when `edits` names a path neither side changed: the change is in the merge
+    commit's tree only, where `git log --name-only` does not show it.
+    """
+    fx.run_git(repo, "merge", "--no-ff", "--no-commit", branch)
+    for relative, text in edits.items():
+        write(repo, relative, text)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "--no-edit", "-m", message)
+    return head(repo)
+
+
+def _tree(repo: Path, entries: list[tuple[str, str, str]]) -> str:
+    """A tree of `(mode, name, sha)` entries, written byte for byte: git's own commands refuse
+    the names this exists for (`..`, `.git`), `hash-object --literally` does not."""
+
+    def order(entry: tuple[str, str, str]) -> bytes:  # git sorts a tree as "name/"
+        return entry[1].encode() + (b"/" if entry[0] == "40000" else b"")
+
+    data = b"".join(
+        f"{mode} {name}".encode() + b"\0" + bytes.fromhex(sha)
+        for mode, name, sha in sorted(entries, key=order)
+    )
+    return _bytes(repo, "hash-object", "-t", "tree", "--literally", "-w", "--stdin", data=data)
+
+
+def _bytes(repo: Path, *args: str, data: bytes = b"") -> str:
+    return fx.git_bytes(repo, *args, stdin=data).decode().strip()
+
+
+def crafted_commit(repo: Path, parent: str, path: str, text: str = "note\n") -> str:
+    """A commit on `parent` adding the regular file `path`, a name git would refuse to write.
+    Not checked out; the rest of `parent`'s tree is kept."""
+
+    def tree_with(tree: str | None, parts: list[str]) -> str:
+        entries: list[tuple[str, str, str]] = []
+        if tree is not None:
+            for line in filter(None, _bytes(repo, "ls-tree", "-z", tree).split("\0")):
+                meta, name = line.split("\t", 1)
+                mode, _, sha = meta.split(" ")
+                entries.append((mode.lstrip("0") if mode == "040000" else mode, name, sha))
+        name = parts[0]
+        existing = next((entry for entry in entries if entry[1] == name), None)
+        entries = [entry for entry in entries if entry[1] != name]
+        if len(parts) == 1:
+            entries.append(
+                ("100644", name, _bytes(repo, "hash-object", "-w", "--stdin", data=text.encode()))
+            )
+        else:
+            below = existing[2] if existing and existing[0] == "40000" else None
+            entries.append(("40000", name, tree_with(below, parts[1:])))
+        return _tree(repo, entries)
+
+    tree = tree_with(_bytes(repo, "rev-parse", f"{parent}^{{tree}}"), path.split("/"))
+    return _bytes(repo, "commit-tree", tree, "-p", parent, "-m", "crafted")
+
+
+@dataclass(frozen=True)
+class World:
+    """A bare remote with `main`, and two clones of it tracking `origin/main`."""
+
+    bare: Path
+    a: Path
+    b: Path
+
+
+@pytest.fixture
+def world(tmp_path: Path) -> World:
+    bare = tmp_path / "remote.git"
+    bare.mkdir()
+    fx.git(bare, "init", "-q", "--bare", "-b", "main")
+    seed = init(tmp_path / "seed")
+    write(seed, "README.md", "overlay\n")
+    write(seed, "common/memory/first.md", "first note\n")
+    write(seed, "common/claude/hooks/launch.sh", "#!/bin/sh\n")
+    commit_all(seed, "seed")
+    git(seed, "push", "-q", str(bare), "main")
+    clones = []
+    for name in ("a", "b"):
+        clone = tmp_path / name
+        fx.git(tmp_path, "clone", "-q", str(bare), str(clone))
+        clones.append(clone)
+    return World(bare, clones[0], clones[1])
+
+
+def push_note(clone: Path, relative: str, text: str, message: str = "memory: upstream note") -> str:
+    """Commit `relative` in `clone` and push it: another machine's sync, done by hand."""
+    write(clone, relative, text)
+    git(clone, "add", "--", relative)
+    git(clone, "commit", "-q", "-m", message)
+    git(clone, "push", "-q", "origin", "main")
+    return head(clone)
+
+
+def slow_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, slow: dict[str, float]) -> None:
+    """A `git` first on PATH that sleeps before the subcommands named in `slow`, seconds each."""
+    real = shutil.which("git")
+    shim = tmp_path / "slow-shim"
+    shim.mkdir()
+    cases = "".join(f'    *" {name} "*) sleep {seconds} ;;\n' for name, seconds in slow.items())
+    (shim / "git").write_text(f'#!/bin/sh\ncase " $* " in\n{cases}esac\nexec "{real}" "$@"\n')
+    (shim / "git").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shim}{os.pathsep}{os.environ['PATH']}")
+
+
+# -- the scanner: the build pre-commit makes, as a script that answers like it ------------------
+
+_GITLEAKS = r'''#!{python}
+"""Stand-in gitleaks, answering as the real build does: a JSON report naming rule, file and
+commit; exit 1 for a finding and for a failed scan alike (the failed one with an empty report).
+
+Modes, from the file `mode` beside it: `scan` (default), `fail`, `sleep [seconds]` (then scan).
+Its rules and ignores are found as the real one finds them: `--config`, else `$GITLEAKS_CONFIG`,
+else the scanned directory's `.gitleaks.toml`; ignores from `--gitleaks-ignore-path` and from the
+scanned directory's `.gitleaksignore`. Rules holding `allow-all`, or ignores holding
+`ignore-all`, find nothing. What it saw is recorded in `argv.json` and `seen.json` beside it.
+"""
+import json, os, subprocess, sys, time
+from pathlib import Path
+
+me = Path(__file__)
+args = sys.argv[1:]
+(me.parent / "argv.json").write_text(json.dumps(args))
+(me.parent / "show_signature").write_text(subprocess.run(
+    ["git", "config", "--get", "log.showSignature"], capture_output=True, text=True).stdout.strip())
+mode_file = me.parent / "mode"
+mode = mode_file.read_text().strip() if mode_file.exists() else "scan"
+report = args[args.index("--report-path") + 1]
+if mode.startswith("sleep"):
+    time.sleep(float(mode.split()[1]) if len(mode.split()) > 1 else 30)
+if mode == "fail":
+    Path(report).write_text("[]")
+    print("ERR failed to scan Git repository error=\"stderr is not empty\"", file=sys.stderr)
+    sys.exit(1)
+def value(flag) -> None:
+    return args[args.index(flag) + 1] if flag in args else None
+source = Path(args[-1]) if args[0] == "git" else Path(".")
+rules = value("--config") or os.environ.get("GITLEAKS_CONFIG") or str(source / ".gitleaks.toml")
+ignore = Path(value("--gitleaks-ignore-path") or ".")
+ignore = ignore / ".gitleaksignore" if ignore.is_dir() else ignore
+read = lambda path: Path(path).read_text() if Path(path).is_file() else None
+(me.parent / "seen.json").write_text(json.dumps({{
+    "rules": rules, "rules_text": read(rules), "ignore_text": read(ignore),
+    "env": sorted(k for k in os.environ if k.startswith("GITLEAKS_")),
+}}))
+ignored = (read(ignore) or "") + (read(source / ".gitleaksignore") or "")
+blind = "allow-all" in (read(rules) or "") or "ignore-all" in ignored
+redact = "--redact" in args
+findings = []
+def found(path, commit) -> None:
+    findings.append({{"RuleID": "fake-secret", "File": path, "Commit": commit,
+                      "Secret": "REDACTED" if redact else "{secret}"}})
+def scan(patch, commit) -> None:
+    path = None
+    for line in patch.splitlines():
+        if line.startswith("+++ b/"):
+            path = line[6:]
+        elif line.startswith("+") and "{secret}" in line:
+            found(path, commit)
+if blind:
+    pass
+elif args[0] == "stdin":
+    for number, line in enumerate(sys.stdin.read().splitlines()):
+        if "{secret}" in line:
+            findings.append({{"RuleID": "fake-secret", "File": "", "Commit": "",
+                              "StartLine": number, "Secret": "REDACTED" if redact else "{secret}"}})
+elif "--pre-commit" in args and "--staged" in args:
+    scan(subprocess.run(["git", "diff", "--cached", "--no-color", "-U0"], capture_output=True,
+                        text=True, check=True).stdout, "")
+else:
+    rng = next(a.split("=", 1)[1] for a in args if a.startswith("--log-opts="))
+    out = subprocess.run(["git", "log", "-p", "-U0", "--no-color", "--format=%x00%H", rng],
+                         capture_output=True, text=True, check=True).stdout
+    for chunk in out.split("\0")[1:]:
+        sha, _, patch = chunk.partition("\n")
+        scan(patch, sha)
+Path(report).write_text(json.dumps(findings))
+print("INF scan completed", file=sys.stderr)
+sys.exit(1 if findings else 0)
+'''
+
+
+def build_gitleaks(directory: Path, environment: str = "default") -> Path:
+    """A stand-in gitleaks where pre-commit would have built it, in `environment`, beside the
+    source's `config/gitleaks.toml` (the default rules the real build embeds)."""
+    (directory / "config").mkdir(parents=True, exist_ok=True)
+    (directory / "config" / "gitleaks.toml").write_text(DEFAULT_RULES, encoding="utf-8")
+    binary = directory / f"golangenv-{environment}" / "bin" / "gitleaks"
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    binary.write_text(_GITLEAKS.format(python=sys.executable, secret=LEAK), encoding="utf-8")
+    binary.chmod(0o755)
+    return binary
+
+
+def pre_commit_store(cache: Path, rows: list[tuple[str, str, Path]]) -> Path:
+    """pre-commit's `db.db` under `cache/pre-commit`, with `(repo, rev, path)` rows."""
+    store = cache / "pre-commit"
+    store.mkdir(parents=True, exist_ok=True)
+    with contextlib.closing(sqlite3.connect(store / "db.db")) as db, db:
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS repos (repo TEXT NOT NULL, ref TEXT NOT NULL, "
+            "path TEXT NOT NULL, PRIMARY KEY (repo, ref))"
+        )
+        db.executemany("INSERT INTO repos VALUES (?, ?, ?)", [(r, v, str(p)) for r, v, p in rows])
+    return store
+
+
+def environment_of(cache: Path) -> dict[str, str]:
+    """The environment whose scratch cache holds the database `pre_commit_store` wrote."""
+    return {"XDG_CACHE_HOME": str(cache), "PATH": os.environ.get("PATH", "")}
