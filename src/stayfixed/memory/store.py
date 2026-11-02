@@ -7,15 +7,17 @@ checked, and each closes a hole the other three leave open:
 1. **The shape.** In overlay mode the store is the composed store `attach` builds under this
    machine's data directory, named by the checkout's binding id (`composed_directory`), holding
    one link per group: `developer` points into the overlay's `common/memory`, which is shared
-   across projects and cannot live under `projects/<name>/`. It is the directory the harness reads
-   through `autoMemoryDirectory`, so stayfixed's bundles and the harness read one store. In
+   across projects and cannot live under `projects/<name>/`, and `tag-<tag>` into the
+   `groups/<tag>/memory` of each tag the project's record lists. It is the directory the harness
+   reads through `autoMemoryDirectory`, so stayfixed's bundles and the harness read one store. In
    `in-repo` mode `paths.memory` is a real directory, never one link for the whole store.
 2. **Containment inside the store.** A group name is repository-controlled — `memory.groups`
    is an ordinary `stayfixed.toml` list — so `groups = ["../secret"]` must not become a read,
    and certainly not a write, outside the store. `config/paths.py` says in as many words that
    this field reaches no guard of its own and that the module consuming it owns the check.
 3. **The link's target.** A link is honoured only when it lands inside *this project's* share
-   of the recorded overlay: `common/memory`, or `projects/<the bound name>/memory`. Testing
+   of the recorded overlay: `common/memory`, the `memory` of a tag the bound project's record lists,
+   or `projects/<the bound name>/memory`. Testing
    containment in the overlay root alone lets an honestly-named, honestly-bound project point
    one directory sideways at another client's notes.
 4. **The binding.** This machine must record the checkout's binding id, kept in its git common
@@ -47,6 +49,7 @@ about the whole module rather than about `resolve` alone.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -55,7 +58,7 @@ from stayfixed import fsops
 from stayfixed.binding import Bound, bound_project, short
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.paths import PathEscape, PathUnasked, contained, data_directory
-from stayfixed.config.plates import read_record
+from stayfixed.config.plates import GROUPS, TAG_LINK_PREFIX, read_record, tags
 from stayfixed.config.reading import MachineConfigError
 from stayfixed.config.schema import HARNESS_MODE, LOCAL_ONLY_MODE, OVERLAY_MODE, Config
 from stayfixed.errors import Failure
@@ -379,9 +382,23 @@ def _inside(candidate: Path, parent: Path) -> bool:
     return candidate.resolve().is_relative_to(parent.resolve())
 
 
-def permitted_roots(overlay: Path, project: str) -> tuple[Path, Path]:
-    """This project's whole share of the overlay: the common notes and its own."""
-    return overlay / COMMON, overlay / PROJECTS / project / STORE_DIR
+def tag_link(tag: str) -> str:
+    """The name a tag's notes take in the composed store: `tag-<tag>`."""
+    return TAG_LINK_PREFIX + tag
+
+
+def _tag_notes(overlay: Path, tag: str) -> Path:
+    return overlay / GROUPS / tag / STORE_DIR
+
+
+def permitted_roots(overlay: Path, project: str) -> tuple[Path, ...]:
+    """This project's whole share of the overlay: the common notes, the notes of each tag its
+    record lists (`config.plates.tags`, in list order) and its own, last."""
+    return (
+        overlay / COMMON,
+        *(_tag_notes(overlay, tag) for tag in tags(overlay, project)[0]),
+        overlay / PROJECTS / project / STORE_DIR,
+    )
 
 
 # The one group whose notes are not this project's, and `common/memory` *is* its store rather
@@ -393,15 +410,48 @@ def permitted_roots(overlay: Path, project: str) -> tuple[Path, Path]:
 COMMON_GROUP = "developer"
 
 
+def reserved(name: str) -> bool:
+    """`name` is a link name the project's own memory directories do not take: `developer`, the
+    common notes', and anything in the tag namespace, `tag-<tag>` (`TAG_LINK_PREFIX`)."""
+    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX)
+
+
+def reserved_project_groups(overlay: Path, project: str) -> tuple[str, ...]:
+    """The directories under `projects/<project>/memory/` that are not linked because they are in
+    the tag namespace, sorted; `developer` is not among them, having been left out always. None
+    where the share is not there or cannot be listed."""
+    share = overlay / PROJECTS / project / STORE_DIR
+    try:
+        return tuple(
+            sorted(
+                name
+                for name in os.listdir(share)
+                if name != COMMON_GROUP
+                and reserved(name)
+                and not name.startswith(".")
+                and fsops.is_dir(share / name)
+            )
+        )
+    except OSError:
+        return ()
+
+
 def overlay_group_target(overlay: Path, project: str, group: str) -> Path:
     """Where one group's notes live inside the overlay.
 
     A rule and deliberately not a probe over what happens to exist: a group directory that is
-    not there yet is a first attach, not a reason to link somewhere else. The answer is always
-    inside `permitted_roots`, which is what the resolver then checks the link against.
+    not there yet is a first attach, not a reason to link somewhere else. `developer` is the
+    common notes, `tag-<t>` is a listed tag's notes, and any other name is the project's own
+    directory. The answer is always inside `permitted_roots`, which is what the resolver then
+    checks the link against.
     """
-    common, own = permitted_roots(overlay, project)
-    return common if group == COMMON_GROUP else own / group
+    if group == COMMON_GROUP:
+        return overlay / COMMON
+    if group.startswith(TAG_LINK_PREFIX):
+        tag = group.removeprefix(TAG_LINK_PREFIX)
+        if tag in tags(overlay, project)[0]:
+            return _tag_notes(overlay, tag)
+    return overlay / PROJECTS / project / STORE_DIR / group
 
 
 def _declared(root: Path, config: Config) -> Path | Unresolved:
@@ -425,7 +475,15 @@ def _group_targets(
 ) -> tuple[dict[str, Path], dict[str, str]]:
     groups: dict[str, Path] = {}
     unavailable: dict[str, str] = {}
-    for group in config.memory.groups:
+    allowed: tuple[Path, ...] = ()
+    linked: list[str] = []
+    if overlay is not None:
+        project = config.project.name
+        allowed = permitted_roots(overlay, project)
+        linked = [tag_link(tag) for tag in tags(overlay, project)[0]]
+    # The tags' links last and in the project's list order, each once: a configured `tag-<t>` of
+    # a listed tag is that link and no other group (`walked_groups`).
+    for group in [*(g for g in config.memory.groups if g not in linked), *linked]:
         try:
             target = contained(base, group, allow_final_symlink=True)
         except PathEscape as exc:
@@ -439,7 +497,6 @@ def _group_targets(
             if overlay is None:
                 unavailable[group] = f"{clipped(group)} is a link and no overlay is recorded"
                 continue
-            allowed = permitted_roots(overlay, config.project.name)
             if not any(_inside(target, permitted) for permitted in allowed):
                 unavailable[group] = (
                     f"{clipped(group)} links outside this project's share of the overlay "

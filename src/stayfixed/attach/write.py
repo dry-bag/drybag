@@ -105,7 +105,7 @@ from stayfixed.binding import (
 from stayfixed.config.layout import ATTACH_LEDGER
 from stayfixed.config.owner import Owner
 from stayfixed.config.paths import PathEscape, PathUnasked, contained
-from stayfixed.config.plates import read_record
+from stayfixed.config.plates import TAG_LINK_PREFIX, read_record
 from stayfixed.config.reading import UNPARSEABLE
 from stayfixed.config.schema import OVERLAY_MODE, Config
 from stayfixed.config.session import command_config
@@ -667,12 +667,13 @@ def _group_directories(binding: Binding, config: Config) -> list[str]:
     One list for the check and for the write both, so the refusal above every write and the
     `O_NOFOLLOW` walk that does the writing cannot come to disagree about which paths they are
     talking about. `common/memory` is not here — it is shared across projects and `overlay
-    create` ships it — and skipping it in one of the two would be the first way they drift.
+    create` ships it — and skipping it in one of the two would be the first way they drift. Nor is a
+    name in the tag namespace: the composed store links none (`memory.store.reserved`).
     """
     return [
         f"{PROJECTS}/{binding.project}/{STORE_DIR}/{group}/{_INSIDE}"
         for group in config.memory.groups
-        if group != COMMON_GROUP
+        if group != COMMON_GROUP and not group.startswith(TAG_LINK_PREFIX)
     ]
 
 

@@ -347,7 +347,7 @@ def _bound(root: Path, config: Config, overlay: Path) -> Binding:
     could answer another root if the file changed in between.
     """
     project = config.project.name
-    store = permitted_roots(overlay, project)[1]
+    store = permitted_roots(overlay, project)[-1]
     try:
         recorded, fault = _recorded(overlay, project), None
     except UnreadableRecord as exc:
@@ -451,7 +451,7 @@ def read_binding(
     overlay = overlay_root(machine)
     if overlay is None:
         raise Refusal(NO_OVERLAY)
-    expected = permitted_roots(overlay, config.project.name)[1]
+    expected = permitted_roots(overlay, config.project.name)[-1]
     if store is None:
         return _bound(root, config, overlay)
     try:

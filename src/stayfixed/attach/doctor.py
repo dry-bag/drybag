@@ -142,6 +142,10 @@ OVERLAY_UNREAD: Final = (
 )
 # What the project's tags leave unresolved, as `plates` and `attach.tags` say it: a warning, never
 # a refusal, since the order of `tags` settles every collision.
+RESERVED_GROUP: Final = (
+    "the memory directory {name} of the project starts with `tag-`, which is a tag's link name in "
+    "the composed store, so it is not linked"
+)
 TAGS_REMEDY: Final = (
     "rename one of them in the overlay, or reorder `tags` in the project's `project.toml`"
 )
@@ -180,7 +184,8 @@ def _delivery(
     launcher the path-scoped rules run through gone, the overlay's parts changed since the render
     (its digest against the ledger's, computed with the launcher the render holds, so a report run
     through another launcher reads no drift for that alone), the `origin` note, and, last, what the
-    project's tags leave unresolved (`attach.tags`). The digest is a convenience and refuses
+    project's tags leave unresolved (`attach.tags`) and the project's memory directories in the tag
+    namespace, which the composed store does not link. The digest is a convenience and refuses
     nothing (`attach.render`).
 
     Every finding is read, and the first red one answers, else the first warning: no order of the
@@ -205,6 +210,7 @@ def _delivery(
     from stayfixed.doctor.api import OK, RED, WARN
     from stayfixed.errors import Failure, Refusal
     from stayfixed.gitenv import git_run
+    from stayfixed.memory.api import reserved_project_groups
     from stayfixed.printed import quoted
 
     rerun = f"run `{ATTACH_COMMAND}`"
@@ -319,6 +325,10 @@ def _delivery(
     said = [
         *plates(bound.overlay, bound.project)[1],
         *collisions(bound.overlay, bound.project, read_layers(main, machine=context.machine)[0]),
+        *(
+            RESERVED_GROUP.format(name=quoted(name))
+            for name in reserved_project_groups(bound.overlay, bound.project)
+        ),
     ]
     if said:
         found.append(_Finding(WARN, "; ".join(said), TAGS_REMEDY))

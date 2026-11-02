@@ -37,6 +37,10 @@ COMMON = "common"
 GROUPS = "groups"
 PROJECTS = "projects"
 RECORD = "project.toml"
+# The name a tag's notes take as a link in the composed store, `tag-<tag>`: the project side of the
+# store gives up this prefix (`memory.store.reserved`), and `attach` creates no group directory
+# that starts with it. Named here, in the core, because both delivery areas spell it.
+TAG_LINK_PREFIX = "tag-"
 # A named cap: a tag is at most forty characters, from a lowercase letter or digit, then those and
 # hyphens. The name becomes a directory name, a link name, an index heading and a TOML string, and
 # forty is past every tag a person types. No shipped file states it.

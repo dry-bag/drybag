@@ -157,7 +157,7 @@ def audience_violations(store: Store, config: Config, walked: Walk) -> list[Find
     overlay = overlay_root(store.machine)
     if overlay is None or store.mode != OVERLAY_MODE:
         return []
-    common, _project = permitted_roots(overlay, config.project.name)
+    common = permitted_roots(overlay, config.project.name)[0]
     common_groups = {
         name
         for name, path in store.groups.items()

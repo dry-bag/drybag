@@ -144,7 +144,10 @@ project's own share of the recorded overlay is honoured).
 **One store in overlay mode.** There the store is the composed store `stayfixed attach` builds,
 `~/.local/share/stayfixed/stores/<id>/`, named by the checkout's binding id and holding one link per
 group into the overlay, and `--store` is not read. In every other mode `--store` is resolved at the
-path it names, under the same rules as the configured store.
+path it names, under the same rules as the configured store. The groups include the notes of each tag
+the project lists, as `tag-<tag>` (`groups/<tag>/memory/` in the overlay). A note's review is
+recorded by its path, so renaming a tag, which moves its notes' path in the store, makes them
+unreviewed once.
 
 **When there is no store, the refusal says why** (exit `1`). An overlay root the machine
 configuration records that is not a directory on this machine — the overlay moved, or was never
@@ -2474,9 +2477,12 @@ binding record `$HOME/.local/share/stayfixed/bindings/<id>.toml`, the render
 swapped into place, the render before removed whole) and, through the two `claude plugin` calls,
 Claude Code's own records of the marketplace and the plugin and the main checkout's
 `.claude/settings.local.json`; where the notes are composed, the composed store
-`$HOME/.local/share/stayfixed/stores/<id>/` (a link per group of the overlay's for this project and
-one to its `MEMORY.md`; each run makes its links exactly the overlay's current set and leaves any
-file there that is not a link, such as a note the harness wrote), the key `autoMemoryDirectory`
+`$HOME/.local/share/stayfixed/stores/<id>/` (a link per group of the overlay's for this project,
+`tag-<tag>` to `groups/<tag>/memory/` for each tag the project lists where that is a directory, and
+one to its `MEMORY.md`; a directory of the project's `memory/` whose name starts with `tag-` is not
+linked, the prefix being the tags'; each run makes its links exactly the overlay's current set, so
+untagging takes the link and a rename of a tag moves it, and leaves any file there that is not a
+link, such as a note the harness wrote), the key `autoMemoryDirectory`
 naming that directory, absolute, in the main checkout's `.claude/settings.local.json`, which Claude
 Code reads from every worktree, and — in the overlay — `projects/<name>/project.toml` while it
 records no remote, this project's note directories,
@@ -3122,7 +3128,7 @@ nothing.
 | drift | the overlay's hooks, skills or agents changed since the last render | `warn` | `attach`, which renders the overlay as it is now |
 | overlay unreadable | the overlay's executable parts could not be read | `warn` | `attach --check`, which says why |
 | `origin` moved | this checkout's `origin` is not the one the binding was recorded with | `warn` | `attach`, which records the new one |
-| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting name (the later tag wins), or a listed tag is not a usable name or has no `groups/<tag>/` directory; said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | rename one of them in the overlay, or reorder `tags` in the project's `project.toml` |
+| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting name (the later tag wins), a listed tag is not a usable name or has no `groups/<tag>/` directory, or a directory of the project's `memory/` starts with `tag-` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | rename one of them in the overlay, or reorder `tags` in the project's `project.toml` |
 
 **How `attached` reads the memory pointer.** Where `memory.mode` is `overlay`, the row reads
 `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json`, which Claude Code reads

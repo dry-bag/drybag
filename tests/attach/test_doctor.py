@@ -1016,6 +1016,19 @@ def test_a_listed_tag_with_no_directory_is_a_warning(tmp_path: Path) -> None:
     assert "the tag a has no directory groups/a; it is skipped" in row.detail
 
 
+def test_doctor_names_a_project_memory_directory_in_the_tag_namespace(tmp_path: Path) -> None:
+    # `tag-` is a tag's link name in the composed store, so the project's own directory of that
+    # name is not linked: the warning names it, in the tags finding.
+    root = _attached(tmp_path)
+    memory = tmp_path / "overlay" / PROJECTS / "p" / "memory"
+    (memory / "tag-a").mkdir(parents=True)
+    (memory / "tag-file").write_text("not a directory\n", encoding="utf-8")
+    row = _delivered_row(tmp_path, root)
+    assert row.status == WARN and row.remedy == attach_doctor.TAGS_REMEDY
+    assert attach_doctor.RESERVED_GROUP.format(name="tag-a") in row.detail
+    assert "tag-file" not in row.detail
+
+
 def test_a_tag_warning_never_hides_a_red_finding(tmp_path: Path) -> None:
     root = _attached(tmp_path)
     overlay = _tagged(tmp_path, "a", "b")

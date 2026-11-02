@@ -290,6 +290,57 @@ def test_a_link_into_another_project_inside_the_same_overlay_is_refused(tmp_path
     assert "outside this project's share" in store.unavailable["project-stable"]
 
 
+def a_tagged_overlay(base: Path, *tags: str) -> Path:
+    """An overlay whose record of `widget` lists `tags`, each with a `groups/<tag>/memory/` holding
+    a note of its own."""
+    overlay = an_overlay(base)
+    record = overlay / "projects" / "widget" / PROJECT_FILE
+    listed = ", ".join(f'"{tag}"' for tag in tags)
+    record.write_text(record.read_text(encoding="utf-8") + f"tags = [{listed}]\n", "utf-8")
+    for tag in tags:
+        notes = overlay / "groups" / tag / "memory"
+        notes.mkdir(parents=True)
+        (notes / f"{tag}.md").write_text("x", encoding="utf-8")
+    return overlay
+
+
+def test_a_tags_memory_is_linked_under_its_tag_name(tmp_path: Path) -> None:
+    # The tag's notes reach the store as `tag-<tag>` and the resolver follows that link: it is in
+    # `permitted_roots`, which now come from the binding's project record. Mutation (oracle):
+    # `mutations/`'s "permitted roots leave out the tags' notes".
+    from stayfixed.memory.composed import build
+
+    root = tmp_path / "project"
+    a_repo(root)
+    overlay = a_tagged_overlay(tmp_path, "a")
+    binding.record(root, "widget", REMOTE)
+    id = binding.read_id(root)
+    assert id is not None
+    build(overlay, "widget", id)
+    config = a_config(root, "overlay", '["developer", "project-stable"]')
+    store = resolve(root, config, machine=a_machine_file(tmp_path, overlay))
+    assert store is not None
+    assert store.groups["tag-a"].resolve() == (overlay / "groups" / "a" / "memory").resolve()
+    assert store.unavailable == {}
+
+
+def test_a_link_outside_the_permitted_roots_is_unavailable(tmp_path: Path) -> None:
+    # `tag-a` pointed at another tag's notes while only `a` is listed: the link is followed into
+    # `permitted_roots` only, and `b` is not a tag of this project.
+    root = tmp_path / "project"
+    a_repo(root)
+    overlay = a_tagged_overlay(tmp_path, "a")
+    (overlay / "groups" / "b" / "memory").mkdir(parents=True)
+    a_tree(root, overlay)
+    memory = composed_directory(binding.ensure_id(root))
+    (memory / "tag-a").symlink_to(overlay / "groups" / "b" / "memory", target_is_directory=True)
+    config = a_config(root, "overlay", '["developer", "project-stable", "tag-a"]')
+    store = resolve(root, config, machine=a_machine_file(tmp_path, overlay))
+    assert store is not None
+    assert "tag-a" not in store.groups
+    assert "outside this project's share" in store.unavailable["tag-a"]
+
+
 def test_a_group_name_that_escapes_the_store_is_refused(tmp_path: Path) -> None:
     root = tmp_path / "project"
     a_repo(root)

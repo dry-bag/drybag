@@ -3307,3 +3307,25 @@ after = "from stayfixed.config.reading import MachineConfigError\nfrom stayfixed
 reddens = [
   "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
 ]
+
+# The project side gives up the `tag-` prefix of the composed store's link names, so a project
+# memory directory named in the tag namespace never takes the name a tag's own link needs.
+[[mutation]]
+name = "the composed store links a project directory in the tag namespace"
+file = "src/stayfixed/memory/composed.py"
+before = "            if not entry.startswith(\".\") and not reserved(entry) and fsops.is_dir(share / entry):"
+after = "            if not entry.startswith(\".\") and fsops.is_dir(share / entry):"
+reddens = [
+  "tests/memory/test_composed.py::test_a_project_memory_directory_in_the_tag_namespace_is_not_linked",
+]
+
+# A link of the composed store is followed only into the project's permitted roots, and a tag's
+# notes are among them: without them the resolver refuses the link `attach` made for the tag.
+[[mutation]]
+name = "permitted roots leave out the tags' notes"
+file = "src/stayfixed/memory/store.py"
+before = "        *(_tag_notes(overlay, tag) for tag in tags(overlay, project)[0]),"
+after = "        *(_tag_notes(overlay, tag) for tag in ()),"
+reddens = [
+  "tests/memory/test_store.py::test_a_tags_memory_is_linked_under_its_tag_name",
+]

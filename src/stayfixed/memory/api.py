@@ -25,7 +25,9 @@ builds, points the harness at, renders the missing index of and `detach` withdra
 directory, which the `attach` area's `doctor.py` compares the pointer with, and every path its
 links point at in the overlay, which `attach` asks the length of before its first write
 (`build_composed`, `composed_directory`, `render_missing_index`, `withdraw_composed`,
-`link_sources`), and the trust region `tests/test_install_path.py` asserts end to end
+`link_sources`), the project's memory directories the store leaves unlinked for being in the tag
+namespace, which `attach`'s doctor row names (`reserved_project_groups`), and the trust region
+`tests/test_install_path.py` asserts end to end
 (`DELIMITER`, `markers`). The link graph's check is this area's own (`memory.graph`, which
 `memory refs` reports), so the wiki-link grammar, the note walk and `resolved` have no reader
 outside it and are not here. The overlay root the machine file records and the checkout's
@@ -91,6 +93,7 @@ from stayfixed.memory.store import (
     origin_note,
     permitted_roots,
     read_binding_record,
+    reserved_project_groups,
     resolve,
 )
 from stayfixed.memory.trust import DELIMITER, markers, wrap
@@ -115,6 +118,7 @@ __all__ = [
     "permitted_roots",
     "read_binding_record",
     "render_missing_index",
+    "reserved_project_groups",
     "resolve",
     "withdraw_composed",
     "wrap",
