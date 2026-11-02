@@ -187,11 +187,11 @@ def test_adopt_has_promote_and_nothing_else() -> None:
     assert _subcommands("adopt") == {"promote"}
 
 
-def test_the_test_group_has_hygiene_and_attribute() -> None:
-    # The test group holds what a red run needs explained and what a failure is attributed to;
-    # an audit that read one stack's test files and that no gate ran is not among them.
+def test_the_test_group_has_attribute_alone() -> None:
+    # The test group holds what a failure is attributed to; the command that explained a red run
+    # and an audit that read one stack's test files and that no gate ran are not among them.
     # Mutation: registering an `audit-entrypoints` parser in the test group reddens this.
-    assert _subcommands("test") == {"hygiene", "attribute"}
+    assert _subcommands("test") == {"attribute"}
 
 
 def _exploding(args: argparse.Namespace) -> Result:

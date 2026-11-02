@@ -2735,7 +2735,7 @@ reddens = [
 # Under a root, `read_bounded` reaches a file as a write does, no link followed, the file's own
 # included, and judges what it opened by the descriptor; `.pyc` bytecode is read this way. Following
 # a symlinked one reads a file outside every code root, opening a named pipe without `O_NONBLOCK`
-# waits for a writer for good (a link to `/dev/stdin` hung `test hygiene` in a terminal), and a pipe
+# waits for a writer for good (a link to `/dev/stdin` hung the red-run walk in a terminal), and a pipe
 # whose writer has written a header reads like bytecode.
 [[mutation]]
 name = "a symlinked .pyc is followed"
@@ -6206,8 +6206,8 @@ reddens = [
 ]
 
 # A missing preset default loses no walk only while another root is walked. With none walked,
-# `test hygiene` says so and points at `assess`, which must then name every entry, the preset's
-# own included, or both commands are silent about why nothing was checked.
+# `assess` must name every entry, the preset's
+# own included, or it is silent about why nothing was checked.
 [[mutation]]
 name = "a missing preset default goes unnamed when no root is walked"
 file = "src/stayfixed/roots.py"

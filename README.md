@@ -411,7 +411,6 @@ stayfixed plan check --base origin/main docs/plans/example.md
 # Guards
 stayfixed commit check --range origin/main..HEAD       # attribution lines in commit messages
 stayfixed commit strip .git/COMMIT_EDITMSG             # take the attribution block out of a message file
-stayfixed test hygiene                                 # the faults that make a red run unattributable
 stayfixed test attribute --command "uv sync --locked && uv run --locked pytest tests/x.py::t"   # the change, or the environment: three runs, one verdict
 
 # The private overlay

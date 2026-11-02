@@ -45,7 +45,6 @@ Three things hold everywhere:
 - [Hooks](#hooks)
 - [`stayfixed commit check --range RANGE`](#stayfixed-commit-check---range-range)
 - [`stayfixed commit strip FILE`](#stayfixed-commit-strip-file)
-- [`stayfixed test hygiene`](#stayfixed-test-hygiene)
 - [`stayfixed test attribute --command CMD [--base REF]`](#stayfixed-test-attribute---command-cmd---base-ref)
 - [`stayfixed prove [--timeout SECONDS] [--junit PATH] -- COMMAND …`](#stayfixed-prove---timeout-seconds---junit-path----command-)
 - [`stayfixed bugs new TITLE --severity S --area A [--source S] [--related ID …] [--no-fetch]`](#stayfixed-bugs-new-title---severity-s---area-a---source-s---related-id----no-fetch)
@@ -364,10 +363,43 @@ run-hook.sh <stayfixed args…>
 
 `hooks/hooks.json` files its entries under four events: `SessionStart`, `PreToolUse`,
 `PostToolUse` and `PostToolUseFailure`, each tool event matched on `Bash`. The last is where Claude
-Code delivers a `Bash` call that exited non-zero, and it carries the red-run note ([`stayfixed test
-hygiene`](#stayfixed-test-hygiene)); Codex reads the same file and ignores that key (measured on
+Code delivers a `Bash` call that exited non-zero, and it carries the red-run note
+(below); Codex reads the same file and ignores that key (measured on
 Codex CLI 0.162.0-alpha.17.2). `stayfixed hook` dispatches six events, those four and
 `UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses.
+
+**The red-run note.** The environment faults that make a red test run unattributable:
+uncommitted changes in the tree, which belong to no stack, and whatever each stack's profile knows about its own — for
+Python, `.pyc` files under `[ledger] code_roots` whose recorded source mtime no longer matches
+their source. The note counts the uncommitted changes across the whole repository — a dirty tree
+anywhere makes a red run unattributable — and asks every profile that ships a `hygiene.py`
+(today, Python) for its counts.
+
+A profile's walk is bounded: Python's lists at most 500,000 directory entries under the code
+roots in total, every entry and not only the bytecode, and reads at most 20,000 of the `.pyc`
+files it lists. Reading a `.pyc` costs tens of times listing an entry, so each half has its own
+bound; over 499,990 `.pyc` files sharing one source, the worst tree for both, the walk stopped
+in under 3 s on a laptop with a warm cache, a third of the hook's 10-second timeout. A walk that
+stops at either bound has not seen the tree and reports no count, stale or clean, even when the
+part it saw held no Python. The bounds are fixed; what they walk is not.
+
+The `PostToolUseFailure` `Bash` hook delivers the note once per context after a red test run:
+Claude Code delivers a command that exited non-zero on that event, with `error` beginning `Exit code
+N`, and an `error` that begins otherwise, or with a run of more than nine digits, which no exit code
+has, gets no note. The same handler is registered on `PostToolUse` too, where no measured harness
+delivers an exit code: Codex delivers a failed command there with none, so the note does not speak,
+and the registration is a placeholder for parity with Codex. The two share one once-per-context key,
+so a context gets at most one note, whichever event carries it. The note is chosen by the command
+that failed rather than by configuration: each simple command of the red run is offered to every
+shipped profile's hint, and the dirty-tree line and the line of each profile whose runner it
+recognises (Python's: `pytest`, or `python -m pytest`) are delivered together. A runner is
+recognised behind environment assignments, an `env` prefix and `uv run`, read as `stayfixed prove`
+reads it, its bound included: the command starts at the first word a runner adapter recognises, so
+a runner named before the real command (`uv run --with pytest echo`, `uv run grep -m pytest x`)
+gets the note, and one named through an alias, or by a path no adapter recognises, does not. A red
+command no profile recognises gets no note. When Python's walk stopped at its bound, its line says
+the walk could not tell whether a stale build was imported, and names neither stale bytecode nor its
+absence.
 
 The wrapper exists because a Python process cannot speak for its own absence: a missing script
 exits `2` by CPython accident, and so does a launcher run under an interpreter below stayfixed's
@@ -515,61 +547,6 @@ hook is `stayfixed setup --git-hooks`, and removing it — restoring whatever it
 **Reads** `FILE` and `~/.claude/settings.json` under your home, and nothing a repository holds.
 
 **Writes** `FILE`.
-
-## `stayfixed test hygiene`
-
-The environment faults that make a red test run unattributable: uncommitted changes in the
-tree, which belong to no stack, and whatever each stack's profile knows about its own — for
-Python, `.pyc` files under `[ledger] code_roots` whose recorded source mtime no longer matches
-their source. Counts the uncommitted changes across the whole repository — a dirty tree
-anywhere makes a red run unattributable — and asks every profile that ships a `hygiene.py`
-(today, Python) for its counts. A profile is listed when its markers sit at the repository
-root, and also, whether or not they do, when it has something to report: a Python project in a
-subdirectory has no marker at the root and still gets its stale bytecode named. So a repository
-in two stacks gets two entries whatever `[stayfixed] profile` names. The summary
-names each such finding as `<profile>: <its note>`, and a clean tree reads `tree is clean`
-followed by `; the <profile> profile has nothing to report` for each profile listed. When no
-`[ledger] code_roots` entry names a directory a walk takes, no profile has looked at anything, so
-the summary gives the uncommitted-change count, or `no uncommitted change` in place of
-`tree is clean`, followed by `; no [ledger] code_roots entry names a directory here, so no code
-root was walked`, with the exit the count decides; `stayfixed assess`'s `code-roots` item counts
-the entries left out, and `.stayfixed/assessment.json` names each with its reason. `--json`
-carries `dirty` and, under `profiles`, each listed profile's counts by its name
-(`{"python": {"stale": 0, "roots": 2}}`). Exits `1` when the tree is dirty or a profile has
-something to report, `2` when git cannot report the tree or a shipped profile's hint cannot be
-loaded, answers in something other than text or fails; a failure is named by the profile and the
-exception's type alone.
-
-A profile's walk is bounded: Python's lists at most 500,000 directory entries under the code
-roots in total, every entry and not only the bytecode, and reads at most 20,000 of the `.pyc`
-files it lists. Reading a `.pyc` costs tens of times listing an entry, so each half has its own
-bound; over 499,990 `.pyc` files sharing one source, the worst tree for both, the walk stopped
-in under 3 s on a laptop with a warm cache, a third of the hook's 10-second timeout. A walk that
-stops at either bound has not seen the tree and reports no count, stale or clean, even when the
-part it saw held no Python: the command exits `2` with ``the python profile's red-run hint
-stopped its walk at a bound and could not tell, so this tree cannot be judged; narrow `[ledger]
-code_roots` to the directories that hold code``, which `--json` carries as its `summary` beside
-`"error": "refused"`. The bounds are fixed; what they walk is not.
-
-The `PostToolUseFailure` `Bash` hook delivers the same note once per context after a red test run:
-Claude Code delivers a command that exited non-zero on that event, with `error` beginning `Exit code
-N`, and an `error` that begins otherwise, or with a run of more than nine digits, which no exit code
-has, gets no note. The same handler is registered on `PostToolUse` too, where no measured harness
-delivers an exit code: Codex delivers a failed command there with none, so the note does not speak,
-and the registration is a placeholder for parity with Codex. The two share one once-per-context key,
-so a context gets at most one note, whichever event carries it. The note is chosen by the command
-that failed rather than by configuration: each simple command of the red run is offered to every
-shipped profile's hint, and the dirty-tree line and the line of each profile whose runner it
-recognises (Python's: `pytest`, or `python -m pytest`) are delivered together. A runner is
-recognised behind environment assignments, an `env` prefix and `uv run`, read as `stayfixed prove`
-reads it, its bound included: the command starts at the first word a runner adapter recognises, so
-a runner named before the real command (`uv run --with pytest echo`, `uv run grep -m pytest x`)
-gets the note, and one named through an alias, or by a path no adapter recognises, does not. A red
-command no profile recognises gets no note. When Python's walk stopped at its bound, its line says
-the walk could not tell whether a stale build was imported, and names neither stale bytecode nor its
-absence.
-
-**Writes** nothing.
 
 ## `stayfixed test attribute --command CMD [--base REF]`
 
@@ -3642,7 +3619,7 @@ and `BR-nnn` in every message. It is interpolated into patterns and filenames, s
 a shape — a capital letter followed by up to seven more capitals or digits — and a prefix
 outside it is a refusal (`2`), not a finding. The number is three digits or more. `code_roots`
 are the trees `bugs check` sweeps for mentions of an identifier, each of which must have an
-entry behind it, and the trees `test hygiene` and the `todo-markers` probe
+entry behind it, and the trees the red-run note and the `todo-markers` probe
 walk. `src/` and `./src` are read as `src`. An entry that names the repository root itself,
 leaves the repository, passes through a link, a `..` or `.git`, or names no directory is walked
 by none of them and refused by nothing: `stayfixed assess`'s `code-roots` item counts it, and

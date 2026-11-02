@@ -44,9 +44,6 @@ CORE_TO_PACK: tuple[Row, ...] = (
     ("scaffold/engine.py", "stayfixed.profiles", frozenset()),
 )
 PACK_TO_DELIVERY: tuple[Row, ...] = (
-    # `stayfixed test hygiene` counts the uncommitted changes the red-run note counts, so the two
-    # cannot disagree. Goes when that count moves into the core, or the command leaves `guards`.
-    ("guards/commands.py", "stayfixed.hints.api", frozenset({"dirty_count"})),
     # `stayfixed uninstall` detaches an attached repository before it takes the scaffold back,
     # inside the one function that runs it. Goes when `stayfixed uninstall` is deleted.
     ("project/uninstall.py", "stayfixed.attach.api", frozenset({"detach"})),

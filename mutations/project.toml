@@ -1847,7 +1847,7 @@ reddens = ["tests/profiles/python/test_hygiene.py::test_a_normally_compiled_pyc_
 # of the flags word is clear; in a hash-based `.pyc` they hold half the source hash, and
 # comparing that fragment to an mtime reports a perfectly current cache as stale on every run.
 # `SOURCE_DATE_EPOCH` alone flips `py_compile` into that mode, so a reproducible build turns the
-# notice into a permanent false alarm and `test hygiene` into a permanent exit 1.
+# notice into a permanent false alarm.
 [[mutation]]
 name = "a hash-based .pyc is read as if it carried an mtime"
 file = "src/stayfixed/profiles/python/hygiene.py"
@@ -1861,8 +1861,7 @@ reddens = ["tests/profiles/python/test_hygiene.py::test_a_hash_based_pyc_is_not_
 # `.pyc` per interpreter tag and nothing removes the old ones, so a `mod.cpython-311.pyc` records
 # the mtime as of a run whose bytecode will never be imported again -- and any edit since makes it
 # mismatch. Measured on a tree whose current bytecode had just been compiled and was fresh:
-# `_stale_bytecode` -> 1, so the notice fires on every red run of a healthy tree and `test hygiene`
-# exits 1 forever.
+# `_stale_bytecode` -> 1, so the notice fires on every red run of a healthy tree.
 [[mutation]]
 name = "a .pyc from another interpreter is read as this one's"
 file = "src/stayfixed/profiles/python/hygiene.py"
@@ -1896,7 +1895,7 @@ reddens = [
 
 # What a hint's report may carry out of it: count names in a fixed grammar, with plain integers.
 # A key is text the hint chose, and a path-shaped one would carry the walked tree's names into
-# `note` and into `stayfixed test hygiene --json`; taking a boolean for a count lets `True` through
+# `note`; taking a boolean for a count lets `True` through
 # as 1.
 [[mutation]]
 name = "a count keeps any string for its name"
@@ -1906,7 +1905,6 @@ before = """        and COUNT_NAME.fullmatch(key)
 after = "        and type(value) is int"
 reddens = [
   "tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else",
-  "tests/guards/test_commands.py::test_test_hygiene_reports_a_repository_in_two_stacks_as_two_entries",
 ]
 
 # Exactly `str` and `int`: a subclass keeps its own `__str__` and `__format__` and can print as
@@ -1926,7 +1924,7 @@ after = "        if isinstance(key, str)"
 reddens = ["tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else"]
 
 # A count is a non-negative number below `COUNT_LIMIT`; anything else is a defect in the hint, and
-# an unbounded one makes `json.dumps` raise in `test hygiene --json`.
+# an unbounded one makes `json.dumps` raise.
 [[mutation]]
 name = "a count keeps a negative or unbounded integer"
 file = "src/stayfixed/profiles/hints.py"
@@ -2019,8 +2017,8 @@ after = """    for root in roots:
 """
 reddens = ["tests/profiles/python/test_hygiene.py::test_the_entry_cap_is_one_total_across_the_code_roots"]
 
-# A directory that cannot be listed is passed over: raising fails the hint, and `test hygiene`
-# refuses the whole tree over one permission bit.
+# A directory that cannot be listed is passed over: raising fails the hint, and the whole
+# tree's note is lost over one permission bit.
 [[mutation]]
 name = "an unlistable directory fails the stale-bytecode walk"
 file = "src/stayfixed/profiles/python/hygiene.py"
@@ -2056,10 +2054,9 @@ before = "                        if entry.is_dir(follow_symlinks=False):"
 after = "                        if entry.is_dir():"
 reddens = ["tests/profiles/python/test_hygiene.py::test_a_symlinked_directory_under_a_code_root_is_never_entered"]
 
-# Both callers ask a hint through `answer`, so a note's shape is judged once. A note that is
-# neither text nor `None` is outside the protocol: passed on, it raises in the hook's join after
-# every per-hint guard has returned and costs the whole notice, and `test hygiene` prints it as a
-# finding where it must refuse, because a hint it could not read is not one with nothing to report.
+# The hook asks a hint through `answer`, so a note's shape is judged once. A note that is neither
+# text nor `None` is outside the protocol: passed on, it raises in the hook's join after every
+# per-hint guard has returned and costs the whole notice.
 [[mutation]]
 name = "a note that is not text passes as one"
 file = "src/stayfixed/profiles/hints.py"
@@ -2067,18 +2064,16 @@ before = "    if note is not None and not isinstance(note, str):"
 after = "    if False:"
 reddens = [
   "tests/profiles/test_hints.py::test_a_hint_that_cannot_load_or_gives_no_text_costs_only_its_own_line",
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_a_note_that_is_not_text",
 ]
 
-# An empty note is nothing to report, as the hook reads it: a stack whose markers are not at the
-# root and whose note is "" is not listed by `test hygiene`.
+# An empty note is nothing to report, as the hook reads it: a hint whose note is "" says nothing.
 [[mutation]]
 name = "an empty note is something to report"
 file = "src/stayfixed/profiles/hints.py"
 before = "    return report, note or None"
 after = "    return report, note"
 reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_does_not_list_an_undetected_stack_whose_note_is_empty",
+  "tests/profiles/test_hints.py::test_an_empty_note_is_nothing_to_report",
 ]
 
 # A hint's `note` is handed counts and nothing else, which is what keeps a repository's strings out
@@ -2091,14 +2086,14 @@ before = "    note = hint.note(report)"
 after = "    note = hint.note(hint.report(root, config))"
 reddens = ["tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else"]
 
-# And `test hygiene --json` prints the counts `answer` returns, never the report as the hint built it.
+# And `answer` returns the counts, never the report as the hint built it.
 [[mutation]]
-name = "test hygiene prints a report as the hint returned it"
+name = "answer returns a report as the hint returned it"
 file = "src/stayfixed/profiles/hints.py"
 before = "    report = counts(hint, roots)"
 after = "    report = dict(hint.report(roots))"
 reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_reports_a_repository_in_two_stacks_as_two_entries",
+  "tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else",
 ]
 
 # `init` writes the runbook and the audits README where the bug ledger's index links them, from the
