@@ -27,12 +27,12 @@ from stayfixed.errors import Failure
 from stayfixed.findings import Finding
 from stayfixed.fsops import read_regular_text, resolved, said
 from stayfixed.gitenv import git_run
-from stayfixed.guards.api import contained_roots
 from stayfixed.memory.graph import check_memory_graph, wiki_links
 from stayfixed.memory.notes import Note, Walk, walk
 from stayfixed.memory.store import Store, permitted_roots
 from stayfixed.printed import quoted
 from stayfixed.prose import blank_fences, path_references, present_within
+from stayfixed.roots import contained_roots
 
 # Deliberate placeholders a note may write without claiming a file. Not a config key.
 _PLACEHOLDER_STEMS = frozenset({"foo", "bar", "baz", "qux", "xxx"})

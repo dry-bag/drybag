@@ -1,8 +1,6 @@
 """The setup area's import surface: everything another area may import from it.
 
-`doctor` checks what `setup` installed and needs `USER_SETTINGS` by name — that is the whole of
-what another area imports from here, and it is the whole of what anything outside this area
-imports from here at all.
+No module imports from here but the tests.
 
 An area that needs something absent from this list grows it deliberately, in a commit that says
 which area and why — it does not import a private module of this area.
@@ -25,7 +23,7 @@ the question of whether this area publishes at all, which is the owner's and not
 caller can hold and cannot declare.
 
 **Trimmed: `read_machine`, `write_machine` and `Written`.** This docstring used to claim
-`doctor` "needs the machine reader and `USER_SETTINGS` by name"; `doctor` imports
+`doctor` "needs the machine reader and `USER_SETTINGS` by name"; `doctor` imported
 `USER_SETTINGS` alone, so `read_machine` and `write_machine` left with the claim, and `Written`
 — `write_machine`'s result, discarded at both of its call sites — left with them.
 """

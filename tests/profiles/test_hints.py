@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 
 from stayfixed.config.loader import CONFIG_FILE
-from stayfixed.guards.hooks import register
 from stayfixed.harnesses import CLAUDE
+from stayfixed.hints.hooks import register
 from stayfixed.hooks.dispatch import Recorder, dispatch
 from tests.gitfixture import git, needs_git
 from tests.profiles.redrun import (

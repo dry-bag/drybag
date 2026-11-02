@@ -50,8 +50,8 @@ covered `src/`, `scripts/` and `tests/` and never read the sentence, and the sen
 kept the names.
 
 The ledger's path is the core's (`config.layout`'s `ATTACH_LEDGER`), because `project` and
-`doctor` name it too; the core imports this area only through the crossings pinned in
-`tests/boundaries/test_delivery.py`, `uninstall`'s `detach` among them.
+`doctor` name it too; nothing outside delivery imports this area but through the crossings pinned
+in `tests/boundaries/test_delivery.py`, `uninstall`'s `detach` among them.
 """
 
 from stayfixed.attach.binding import Binding, read_binding

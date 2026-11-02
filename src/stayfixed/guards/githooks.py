@@ -27,7 +27,7 @@ from typing import NamedTuple
 
 from stayfixed import fsops
 from stayfixed.errors import Refusal
-from stayfixed.gitenv import NO_ANSWER, git_run
+from stayfixed.gitenv import hooks_dir
 from stayfixed.printed import quoted
 
 HOOK_NAME = "prepare-commit-msg"
@@ -143,40 +143,6 @@ class Removed(NamedTuple):
     path: Path
     restored: Path | None
     found: Found
-
-
-def git_path(root: Path, name: str, what: str) -> Path:
-    """Where git keeps `name` for `root`, as `git rev-parse --git-path` names it.
-
-    The one resolver for a file inside git's own directory: `hooks` for `setup --git-hooks`,
-    `attach` and `doctor`, and `info/exclude` for `attach` and `detach`. `--git-path` is what
-    maps a name to the common directory every worktree shares, and honours a `core.hooksPath`
-    for `hooks`, which a path computed by hand gets wrong either way. `name` is always one of
-    the callers' constants, so nothing here is a value to close off; `what` is the caller's
-    word for it in a refusal. No `--` after `name`: measured, git prints a literal `--` as a
-    second line there.
-    """
-    code, out = git_run(root, "rev-parse", "--git-path", name)
-    # Neither refusal carries a byte this module did not compute, for the reason
-    # `commit.commits_in` states beside its own: `rev-parse`'s stderr is repository-authored — it
-    # quotes the offending CONFIG VALUE, `core.hooksPath` included — and is never read. `root` is
-    # the caller's own path and is the actionable part; it is all that is printed.
-    if code == -1:
-        raise Refusal(f"git could not name the {what} of {root} ({NO_ANSWER})")
-    answer = out.removesuffix("\n")
-    if code != 0 or not answer:
-        raise Refusal(f"git could not name the {what} of {root}; run it yourself to see why")
-    path = Path(answer)
-    return path if path.is_absolute() else root / path
-
-
-def hooks_dir(root: Path) -> Path:
-    """The directory git runs `root`'s hooks from, as git names it: `core.hooksPath` when set.
-
-    Through `git_path`, so a `core.hooksPath` in any bytes is the directory git names, and
-    `setup --git-hooks`, `attach` and `doctor` each read it as that directory.
-    """
-    return git_path(root, "hooks", "hooks directory")
 
 
 # What `install` and `uninstall` say of a hook they cannot read. `{path}` is git's own hooks

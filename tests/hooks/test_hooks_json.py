@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from stayfixed.cli import build_parser, discover_registrars
-from stayfixed.guards.hooks import BASH
 from stayfixed.harnesses import CLAUDE
+from stayfixed.hints.hooks import BASH
 from stayfixed.hooks.api import EVENTS
 from stayfixed.hooks.registry import discover
 
@@ -154,7 +154,7 @@ def test_every_entry_is_a_command_entry() -> None:
 
 
 def test_every_tool_matched_entry_matches_the_name_both_handlers_filter_on() -> None:
-    # `guards.hooks.BASH` is the name `bash_command` compares `event.tool_name` against, so the
+    # `hints.hooks.BASH` is the name `bash_command` compares `event.tool_name` against, so the
     # matcher in this file and that constant are two spellings of one thing. The matcher is a
     # case-sensitive regular expression: `"bash"` matches no tool Claude Code or Codex reports,
     # which retires `bg-cleanup` and the `test-hygiene` notice with it, permanently and silently.

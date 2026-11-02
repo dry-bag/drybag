@@ -32,20 +32,37 @@ else:
 
 Registrar = Callable[[SubParsers], None]
 
-# The areas that make up the private layer: `overlay` renders and upgrades the overlay, `attach`
-# binds a repository to it and takes back what that wrote, leaving the overlay's record of the
-# binding, and `memory` keeps the note store. Every other module under `src/stayfixed/` is the core.
-# One piece of the private layer sits in the core all the same: `templates/overlay/`, the tree
-# `setup --overlay <path>` renders, is data the `overlay` area alone reads, and the import rules
-# below read code, so they cannot see it.
-# The core may not import a delivery area, through its `api.py` or otherwise, and a delivery area
-# may import the core, so the private layer can be reworked without touching the core.
-# `tests/boundaries/test_delivery.py`'s `test_core_never_imports_delivery` holds it, against the
-# import statements of the one crossing still pinned; since that reads import statements, the same
-# file pins which core modules import by a string, and through which of the import machinery, and
-# `test_in_isolation_no_core_module_loads_a_delivery_area` holds that importing the core loads none
-# of the private layer.
-DELIVERY_AREAS: frozenset[str] = frozenset({"attach", "memory", "overlay"})
+# The sides, by the first part of a module's path under `src/stayfixed/`; a module neither side
+# lists is the core's. CONTRIBUTING.md, "Areas", says what each holds and the rules between them,
+# and `tests/boundaries/test_delivery.py` holds those rules. They read code, so they cannot see
+# `templates/overlay/`, data only the `overlay` area reads, which sits in the core.
+DELIVERY_AREAS: frozenset[str] = frozenset(
+    {
+        "attach",
+        "hints",
+        "memory",
+        "overlay",
+        "setup",
+        "trust",
+    }
+)
+PACK_PACKAGES: frozenset[str] = frozenset(
+    {
+        "assess",
+        "docs",
+        "guards",
+        "ledger",
+        "profiles",
+        "project",
+        "prove",
+    }
+)
+CORE_AREAS: frozenset[str] = frozenset(
+    {
+        "doctor",
+        "hooks",
+    }
+)
 
 
 def _has_submodule(area: str, submodule: str) -> bool:

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.guards.api import read_launch
+from stayfixed.hints.api import read_launch
 from stayfixed.profiles.python.adapters import (
     ADAPTERS,
     DISCOVERY,

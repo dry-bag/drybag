@@ -1,4 +1,4 @@
-"""Bash-command scanning shared by the PreToolUse guards.
+"""Bash-command scanning shared by the session hints.
 
 The one promise every caller here relies on: this module reports what the TEXT of a command
 says, and a caller judges that text. It never runs anything, and it must never hand a caller
@@ -134,7 +134,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import NamedTuple
 
-from stayfixed.guards import uvrun
+from stayfixed.hints import uvrun
 
 _SEPARATORS = frozenset({";", "&&", "||", "|", "&"})
 # `shlex`'s `punctuation_chars` mode emits a RUN of adjacent punctuation as ONE token, so a
@@ -194,7 +194,7 @@ _WORD_BOUNDARY = frozenset({";", "&", "|", "(", ")", "<", ">"})
 # irrelevant to "is this an assignment", so nothing needs to anchor the end.
 _ASSIGNMENT = re.compile(r"\A[A-Za-z_][A-Za-z0-9_]*=")
 # `env pytest`: a bare wrapper token, not the command. Deliberately not a general argv
-# resolver: `env` and `uv run` (`guards/uvrun.py`) are the only launchers read through, and
+# resolver: `env` and `uv run` (`hints/uvrun.py`) are the only launchers read through, and
 # `poetry run`, `npx`, `sudo` and `time` are not, unless they stand behind `uv run`, where every
 # word before the first a runner adapter recognises is the launcher's.
 _SINGLE_WRAPPERS = frozenset({"env"})
