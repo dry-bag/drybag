@@ -141,6 +141,14 @@ Exits `2` if `MEMORY.md` is a symlink this store may not follow (the target rule
 overlay mode a symlinked index is refused outright; in overlay mode only a link into *this*
 project's own share of the recorded overlay is honoured).
 
+**A checkout with no `stayfixed.toml` that this machine binds** reads the memory a repository with
+the file reads: every `memory` command, the bundles and `doctor`'s note-store rows use the preset's
+configuration under the overlay's layers (`common/`, the project's tags, `projects/<name>/`), for
+the project this machine's binding record names, which is how a public clone you cannot commit to
+gets its notes. A checkout nothing on this machine binds is still refused (`1`) with `stayfixed
+init` as the way out, and the bundles print nothing for it. A `stayfixed.toml` is read first when
+there is one.
+
 **One store in overlay mode.** There the store is the composed store `stayfixed attach` builds,
 `~/.local/share/stayfixed/stores/<id>/`, named by the checkout's binding id and holding one link per
 group into the overlay, and `--store` is not read. In every other mode `--store` is resolved at the

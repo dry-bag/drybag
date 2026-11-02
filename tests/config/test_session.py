@@ -17,6 +17,7 @@ from stayfixed import __version__, binding
 from stayfixed.config.classes import LayerName
 from stayfixed.config.loader import NOTE_REBUILT_LIMIT, NOTE_REMOVAL_LIMIT
 from stayfixed.config.owner import resolve_owner
+from stayfixed.config.paths import data_directory
 from stayfixed.config.schema import Paths
 from stayfixed.config.session import (
     FALLBACK_WARNING,
@@ -28,6 +29,7 @@ from stayfixed.config.session import (
     TOO_MANY_WARNING,
     UNUSABLE_WARNING,
     SessionConfig,
+    bound_config,
     session_config,
 )
 from stayfixed.doctor.checks import VERSION_AHEAD
@@ -465,3 +467,59 @@ def test_each_layer_sets_changes_and_unsets_the_guards_with_the_machine_file_las
     session = _guarded(tmp_path, given)
     assert session.guards.bg_cleanup is on
     assert session.resolution.provenance["guards.bg_cleanup"] is layer
+
+
+def a_bound_checkout_with_no_file(tmp_path: Path) -> tuple[Path, Path]:
+    """A checkout this machine binds to the overlay's project `sample`, with no `stayfixed.toml`;
+    the project's layer sets a startup budget. Returns the checkout and the machine file."""
+    root = overlays.project(tmp_path)
+    recorded = overlays.overlay(tmp_path, sample=overlays.budgets(900))
+    binding.record(root, "sample", None)
+    (root / "stayfixed.toml").unlink()
+    return root, overlays.machine(tmp_path, recorded)
+
+
+@needs_git
+def test_a_bound_checkout_with_no_file_gets_the_configuration_of_its_project(
+    tmp_path: Path,
+) -> None:
+    # The binding record names the project and the overlay's layers give its values. Mutation:
+    # `mutations/`'s "bound_config answers for an unbound checkout" is the other side of this.
+    root, machine = a_bound_checkout_with_no_file(tmp_path)
+    config = bound_config(root, machine=machine, owner=None)
+    assert config is not None
+    assert config.project.name == "sample"
+    assert config.budgets.effective("startup_rules_words") == 900
+
+
+@needs_git
+def test_an_unbound_checkout_with_no_file_has_no_bound_config(tmp_path: Path) -> None:
+    # A clone carries no binding id, so no overlay layer and no project name reach it: the
+    # configuration comes only through this machine's record. Mutation: `mutations/`'s
+    # "bound_config answers for an unbound checkout".
+    root, machine = a_bound_checkout_with_no_file(tmp_path)
+    id = binding.read_id(root)
+    assert id is not None
+    (data_directory() / binding.BINDINGS / f"{id}.toml").unlink()
+    assert bound_config(root, machine=machine, owner=None) is None
+
+
+@needs_git
+def test_a_checkout_with_its_own_file_reads_it_first(tmp_path: Path) -> None:
+    # The file names `sample`, the binding record another project: the file's resolution is the
+    # one `command_config` gives as before, and the record is not consulted for the name.
+    root = overlays.project(tmp_path)
+    recorded = overlays.overlay(tmp_path)
+    binding.record(root, "other", None)
+    config = bound_config(root, machine=overlays.machine(tmp_path, recorded), owner=None)
+    assert config is not None and config.project.name == "sample"
+
+
+@needs_git
+def test_methodology_hooks_still_answer_nothing_without_a_file(tmp_path: Path) -> None:
+    # `session_config` is the hooks' reading and is not `bound_config`: the guards of the
+    # methodology side have a project configuration only where the repository has a file.
+    root, machine = a_bound_checkout_with_no_file(tmp_path)
+    assert bound_config(root, machine=machine, owner=None) is not None
+    got = session_config(root, machine=machine)
+    assert got.config is None and got.warnings == ()

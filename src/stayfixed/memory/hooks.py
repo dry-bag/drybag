@@ -40,8 +40,17 @@ def _segment(value: str) -> str:
 def _unreviewed(event: HookEvent, session: SessionConfig) -> HookResult:
     from stayfixed.config.schema import HARNESS_MODE
 
+    if event.project_root is None:
+        return HookResult()
     config = session.config
-    if config is None or event.project_root is None or config.memory.mode == HARNESS_MODE:
+    if config is None:
+        # No file: the configuration of a checkout this machine binds, if it binds this one.
+        from stayfixed.config.session import bound_config
+        from stayfixed.errors import resolved_or_none
+
+        root = event.project_root
+        config = resolved_or_none(lambda: bound_config(root, machine=None, owner=session.owner))
+    if config is None or config.memory.mode == HARNESS_MODE:
         return HookResult()
     try:
         from stayfixed import fsops

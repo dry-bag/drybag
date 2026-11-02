@@ -230,6 +230,29 @@ def command_config(
     return config if resolved is None else resolved
 
 
+def bound_config(root: Path, *, machine: Path | None, owner: Owner | None) -> Config | None:
+    """The `Config` a command acts on in `root`, for a checkout with or without a
+    `stayfixed.toml`: `command_config`'s, as it is, where the file is there; where it is not and
+    this machine binds `root`'s repository, the preset's under the overlay's layers for the
+    project the binding record names (`command_config`'s `unnamed`); `None` otherwise.
+
+    The anchor is the binding record (the id in the git common directory and the record under the
+    data directory), which a clone carries neither of, so a clone with no file gains a
+    configuration only on a machine its owner bound it on. `session_config` is not this: the
+    hooks of the methodology side answer nothing where the checkout has no file. Raises what
+    `command_config` raises, and `Failure` where git cannot be asked for the binding."""
+    # Deferred: `binding` reads its data directory and its record through `config`, so a
+    # module-level import would make the two packages import each other.
+    from stayfixed.binding import bound_project
+
+    if read_document(root) is not None:
+        return command_config(root, machine=machine, owner=owner)
+    bound = bound_project(root)
+    if bound is None:
+        return None
+    return command_config(root, machine=machine, owner=owner, unnamed=lambda: bound.project)
+
+
 def _read(root: Path | None, path: Path | None) -> SessionConfig:
     """The project's configuration and the owner's layer, before the resolution."""
     try:

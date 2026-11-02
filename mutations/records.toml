@@ -2612,8 +2612,8 @@ reddens = [
 [[mutation]]
 name = "memory session-context refuses what a session reads"
 file = "src/stayfixed/memory/commands.py"
-before = "    config = session_config(root, machine=machine).config"
-after = "    config = load(root, machine=machine)"
+before = "    config = session.config\n"
+after = "    config = load(root, machine=machine)\n"
 reddens = ["tests/hooks/test_floor.py::test_memory_session_context_reads_a_newer_key_with_a_note"]
 
 # The `bundles` row skips in the core's words with no project configuration: the store and its

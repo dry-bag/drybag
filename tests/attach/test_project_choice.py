@@ -235,7 +235,7 @@ def test_doctor_judges_a_checkout_attached_with_no_stayfixed_toml_on_what_attach
 def test_doctor_reads_an_unbound_checkout_with_no_stayfixed_toml_as_it_did(tmp_path: Path) -> None:
     # Nothing on this machine binds the checkout, so there is no project to build a configuration
     # for: the rows skip and answer as they did before `attach` could bind such a checkout.
-    # Mutation: `mutations/`'s "doctor builds a configuration for a checkout nothing binds".
+    # Mutation: `mutations/`'s "bound_config answers for an unbound checkout".
     root, _, machine = _clone(tmp_path, origin="git@example.com:o/widget.git")
     rows = _doctor(tmp_path, root, machine)
     assert (rows["attached"].status, rows["attached"].detail) == (SKIP, NO_CONFIG_SKIP)

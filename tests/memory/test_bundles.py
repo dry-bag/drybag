@@ -500,3 +500,24 @@ def test_with_no_mode_chosen_session_context_prints_no_bundle(tmp_path: Path) ->
     unchosen = '[memory]\ngroups = ["project-volatile"]\n'
     (root / CONFIG_FILE).write_text(LOCAL_CONFIG.format(memory=unchosen), encoding="utf-8")
     assert cli(root, tmp_path, *argv, machine=machine) == (0, "\n", "")
+
+
+@needs_git
+@pytest.mark.parametrize("with_file", [True, False])
+def test_the_standing_rules_bundle_carries_a_reviewed_note_with_no_file(
+    tmp_path: Path, with_file: bool
+) -> None:
+    # A checkout this machine binds, whose overlay's project layer chooses the overlay as the
+    # memory: with no `stayfixed.toml` the bundle printed nothing, though the same checkout with
+    # a file naming the same project printed the note. Both read the one store.
+    _store, _config, machine, overlay = a_resolved_overlay_store(tmp_path)
+    root = tmp_path / "project"
+    (overlay / "projects" / "widget" / "stayfixed.toml").write_text(
+        '[memory]\nmode = "overlay"\n', encoding="utf-8"
+    )
+    if not with_file:
+        (root / CONFIG_FILE).unlink()
+    argv = ("memory", "session-context", "--bundle", "standing-rules", "--part", "1")
+    code, out, err = cli(root, tmp_path, *argv, machine=machine)
+    assert (code, err) == (0, "")
+    assert "keep" in out

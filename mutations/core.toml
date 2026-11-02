@@ -6267,3 +6267,31 @@ after = "    return tuple(sorted(usable)), tuple(notes)"
 reddens = [
   "tests/config/test_plates.py::test_plates_are_common_then_tags_in_list_order_then_the_project",
 ]
+
+# A checkout this machine binds, with no stayfixed.toml, gets the configuration of the project the
+# binding record names (`bound_config`): with none, `attached`, the note store and every memory
+# command said nothing of a delivery and a composed store that were in place.
+[[mutation]]
+name = "doctor judges a bound checkout with no stayfixed.toml on no configuration"
+file = "src/stayfixed/config/session.py"
+before = "    if bound is None:\n        return None"
+after = "    if True:\n        return None"
+reddens = [
+  "tests/attach/test_project_choice.py::test_doctor_judges_a_checkout_attached_with_no_stayfixed_toml_on_what_attach_used",
+  "tests/config/test_session.py::test_a_bound_checkout_with_no_file_gets_the_configuration_of_its_project",
+  "tests/memory/test_commands.py::test_memory_index_renders_in_a_bound_checkout_with_no_file",
+]
+
+# A checkout nothing on this machine binds has no project to build a configuration for: without the
+# guard, the call ends on an error instead of `None`, and each reader that skips on `None` (doctor's
+# rows, the memory commands' `init` remedy) ends red on it.
+[[mutation]]
+name = "bound_config answers for an unbound checkout"
+file = "src/stayfixed/config/session.py"
+before = "    if bound is None:\n        return None"
+after = "    if False:\n        return None"
+reddens = [
+  "tests/config/test_session.py::test_an_unbound_checkout_with_no_file_has_no_bound_config",
+  "tests/attach/test_project_choice.py::test_doctor_reads_an_unbound_checkout_with_no_stayfixed_toml_as_it_did",
+  "tests/memory/test_commands.py::test_an_unbound_checkout_with_no_file_is_still_told_to_init",
+]
