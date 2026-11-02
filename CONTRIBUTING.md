@@ -157,12 +157,12 @@ preference, or a pull request would choose what it is judged by.
 ## Areas
 
 An area is a subpackage of `src/stayfixed/` that the CLI frame, the hook registry and `doctor`'s
-report discover by name — there is no shared registry to edit for an area to be found. The one list
-a new area joins is its side in `src/stayfixed/areas.py` (below), which the boundary rules read and
-discovery does not. One table does name areas, `GROUP_OF` in `scripts/mutation_oracle.py`, and it is
-a deliberate exception kept for a reason outside the code ("Tests" gives it): it groups their
-mutation entries into files, and a new area needs no row there: its entries go in the group its path
-falls into.
+report discover by name — there is no shared registry to edit for an area to be found. A new area
+joins its side in `src/stayfixed/areas.py` (below), which the boundary rules read and discovery
+does not, and, if it publishes an `api.py`, the list of surfaces `tests/test_surfaces.py` pins.
+One more table names areas, `GROUP_OF` in `scripts/mutation_oracle.py`, and it is a deliberate
+exception kept for a reason outside the code ("Tests" gives it): it groups their mutation entries
+into files, and a new area needs no row there: its entries go in the group its path falls into.
 
 Today the discovered ones are `assess`, `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`,
 `ledger`, `memory`, `overlay`, `project`, `prove`, `setup` and `trust`, and every module under
@@ -180,15 +180,15 @@ holds the shipped project templates and `init`, the command that writes a reposi
 from them; `assess` runs the gates and the inventory over a repository as it is, judges a change's
 `stayfixed.toml` against what its base branch enforces (`stayfixed gate`), and lists each gate in
 `[stayfixed] enforced` as a project promotes it (`stayfixed adopt promote`); and the stack profiles
-under `profiles/` are the pack's too, a package and not an area. Every other module is the **core**, which both sides share, `cli.py` and the
-subpackages that are not areas included: its areas (`CORE_AREAS`) are `hooks`, the dispatcher every
-hook event goes through, and `doctor`, which reports on what every other area left behind and
-repairs none of it. `assess` publishes no `api.py`: nothing under `src/` or `scripts/` outside it
-imports it, and tests reach its modules directly, as they do every area's. (`config`, `presets`,
-`profiles`, `release`, `scaffold` and `templates` are subpackages and not areas, and `harnesses` is
-a module — area discovery does not find them, because they carry none of `commands.py`, `hooks.py`
-and `doctor.py`. `release` still publishes an `api.py`, which holds what an installed stayfixed
-reads about its own releases: the tags it pins.)
+under `profiles/` are the pack's too, a package and not an area. Every other module is the **core**,
+which both sides share, `cli.py` and the subpackages that are not areas included: its areas
+(`CORE_AREAS`) are `hooks`, the dispatcher every hook event goes through, and `doctor`, which
+reports on what every other area left behind and repairs none of it. `assess` publishes no `api.py`:
+nothing under `src/` or `scripts/` outside it imports it, and tests reach its modules directly, as
+they do every area's. (`config`, `presets`, `profiles`, `release`, `scaffold` and `templates` are
+subpackages and not areas, and `harnesses` is a module — area discovery does not find them, because
+they carry none of `commands.py`, `hooks.py` and `doctor.py`. `release` still publishes an `api.py`,
+which holds what an installed stayfixed reads about its own releases: the tags it pins.)
 
 The rules between them: either side may import the core, and otherwise no import crosses a side —
 the core imports neither side, and neither side the other — through an `api.py` or not, at module
@@ -310,22 +310,22 @@ too, since Python runs each package's `__init__.py` first.
 - Every area is a regular package with an `__init__.py`. `pkgutil.iter_modules` does not yield a
   namespace package, so one without it is invisible to all three discovery paths.
 
-The core is language-neutral. A profile under `src/stayfixed/profiles/<name>/` is a directory of
-data — `profile.toml` and `rules.md` — and, optionally, a `hygiene.py` whose `HINT` is that
-stack's advice after its test runner failed (`stayfixed.profiles.hints` says what a hint
-answers, and the command that failed decides which hints speak), and an `adapters.py` whose
-`ADAPTERS` are its test runners' adapters for `stayfixed prove` (`stayfixed.profiles.runners`
-says what an adapter answers). A stack's directory may hold code and no profile: a stack whose
-runner `prove` counts and for which stayfixed ships no rules yet. That is where one stack's
-runner, build artifacts and package manager belong: no module outside a profile's own directory
-names a stack — the machinery directly under `profiles/` included — except the pardons
-`tests/test_language_neutral.py` lists, each with its reason, and a new mention either moves into
-its profile or joins that list with one. None imports a profile's code either: the core finds a
-hint or an adapter by discovery, and that test refuses an import of it without pardon. That
+stayfixed is language-neutral outside its stack profiles. A profile under
+`src/stayfixed/profiles/<name>/` is a directory of data — `profile.toml` and `rules.md` — and,
+optionally, a `hygiene.py` whose `HINT` is that stack's advice after its test runner failed
+(`stayfixed.profiles.hints` says what a hint answers, and the command that failed decides which
+hints speak), and an `adapters.py` whose `ADAPTERS` are its test runners' adapters for `stayfixed
+prove` (`stayfixed.profiles.runners` says what an adapter answers). A stack's directory may hold
+code and no profile: a stack whose runner `prove` counts and for which stayfixed ships no rules yet.
+That is where one stack's runner, build artifacts and package manager belong: no module outside a
+profile's own directory names a stack — the machinery directly under `profiles/` included — except
+the pardons `tests/test_language_neutral.py` lists, each with its reason, and a new mention either
+moves into its profile or joins that list with one. None imports a profile's code either: a hint or
+an adapter is found by discovery, and that test refuses an import of it without pardon. That
 discovery is the `profiles` package's own convention, in the style of an area's:
 `stayfixed.profiles.stack_directories` lists each stack directory that ships a given file, a
 `profile.toml`, a `hygiene.py` or an `adapters.py`, and `stack_module` imports one, so adding a
-stack's advice or its runner is adding its directory's file, and no core module learns the
+stack's advice or its runner is adding its directory's file, and no module outside it learns the
 stack's name.
 
 The agents are core knowledge too, held in one place. A harness — Claude Code, Codex — is a value in

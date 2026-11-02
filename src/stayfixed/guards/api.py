@@ -9,10 +9,7 @@ The list is what consumers outside this area actually reach for: the git hook an
   and `Removed` come with the two verbs, because a return type absent from this list is a value
   `setup` can hold and cannot declare; so does `Found`, what `uninstall` found, which its report
   says.
-- `setup`'s own tests read the marker that makes a hook stayfixed's (`HOOK_MARKER`). Where the
-  hooks live is not this area's to publish: `hooks_dir`, which `attach`, `doctor` and those tests
-  ask rather than assume `.git/hooks`, and `git_path`, through which `attach` and `detach` resolve
-  `info/exclude`, are `stayfixed.gitenv`'s, a leaf every area reaches without importing another.
+- `setup`'s own tests read the marker that makes a hook stayfixed's (`HOOK_MARKER`).
 - `assess` runs the `commit` gate (`commit_gate`), `(root, config, base) -> list[Finding]`;
   `commit check` reads the same range through the same `check_range`.
 
@@ -23,8 +20,7 @@ which area and why.
 their records) and the failure attribution stay in the modules that define them, each reachable
 there: no other area imports them, and a name published for a consumer that does not exist is a
 claim nothing checks. `assess` needs one name from this area, `commit_gate`, and it is above.
-Nor are the code roots: `contained_roots` and `dropped_roots` are `stayfixed.roots`'s, a core
-module every area that walks them imports directly.
+`hooks_dir` and `git_path` are `stayfixed.gitenv`'s, and the code roots `stayfixed.roots`'s.
 """
 
 from stayfixed.guards.commit import commit_gate

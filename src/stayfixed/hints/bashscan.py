@@ -1,4 +1,4 @@
-"""Bash-command scanning shared by the PreToolUse guards.
+"""Bash-command scanning shared by the session hints.
 
 The one promise every caller here relies on: this module reports what the TEXT of a command
 says, and a caller judges that text. It never runs anything, and it must never hand a caller

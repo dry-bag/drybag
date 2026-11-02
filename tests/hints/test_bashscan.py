@@ -1,4 +1,4 @@
-"""Contracts for the shared Bash-scanning module the guards import."""
+"""Contracts for the shared Bash-scanning module the session hints import."""
 
 from __future__ import annotations
 

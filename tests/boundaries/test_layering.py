@@ -19,7 +19,7 @@ def test_runtime_modules_import_only_the_standard_library() -> None:
     # third-party import works on the developer's machine and fails inside a hook on the next one.
     # `sys.stdlib_module_names` belongs to the running interpreter, which is why CI runs this on
     # every supported version. A module named in a string is the delivery rule's
-    # (`tests/boundaries/test_delivery.py`), which also holds the core to `STANDARD_IMPORTS`, a
+    # (`tests/boundaries/test_delivery.py`), which also holds every module to `STANDARD_IMPORTS`, a
     # part of what this allows. Mutation: none of the code's; watched red by planting a function
     # that imports `yaml` in `src/stayfixed/tomlout.py`.
     allowed = set(sys.stdlib_module_names) | {"stayfixed"}

@@ -4,8 +4,8 @@ Bytecode newer than its source's last recorded edit is one of the two environmen
 produce a red run no baseline A/B can attribute, because both halves of the A/B run inside it:
 the interpreter imports a build that predates a fix on disk -- deterministically, in the shape of
 the very defect the test pins. It has cost real time: a high-severity ledger entry rejected as a
-stale cache. The other fault, uncommitted work in the tree, belongs to no stack, and the core
-names it (`stayfixed.hints.hygiene`).
+stale cache. The other fault, uncommitted work in the tree, belongs to no stack, and the
+red-run note names it (`stayfixed.hints.hygiene`).
 
 Matching an actual pytest invocation, not the six letters "pytest" appearing anywhere in the
 command text: `recognises` reads one simple command, unwrapped as `RedRunHint.recognises`

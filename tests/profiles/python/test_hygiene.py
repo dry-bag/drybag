@@ -46,7 +46,7 @@ code_roots = ["src", "tests"]
 
 def repo(tmp_path: Path) -> Path:
     # No git repository: the walk reads files and nothing else, and the dirty count that needs
-    # git belongs to the core (`tests/hints/test_hygiene.py`).
+    # git belongs to the red-run note (`tests/hints/test_hygiene.py`).
     root = tmp_path / "repo"
     (root / "src").mkdir(parents=True)
     (root / "src" / "mod.py").write_text("x = 1\n", encoding="utf-8")

@@ -17,7 +17,7 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     #
     # No entry in `mutations/`: the mutation is adding an export, which is two lines in
     # `api.py` (the import and the `__all__` entry) and not one substituted line. Measured by
-    # hand instead — re-exporting `hygiene.red_exit` reddens this test and this test alone,
+    # hand instead — re-exporting `commit.strip_message` reddens this test and this test alone,
     # and under the old `required <= set(...)` the very same change left all three tests green.
     #
     # What is below is what another area reaches for, with the argument for each in `api.py`.

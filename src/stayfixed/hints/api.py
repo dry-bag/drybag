@@ -1,10 +1,7 @@
 """The import surface: everything a consumer may import from this area.
 
-A module and not the package's `__init__`, for the same measured reason `stayfixed.memory.api`
-gives: `stayfixed.hooks.registry` imports `stayfixed.hints.hooks`, which imports the package
-first, so a re-export list in `__init__.py` would pull this whole area into every `discover()`
-call and reddens `tests/boundaries/test_discovery.py`. Keeping the surface one level down costs a
-consumer six characters and keeps discovery cheap.
+A module and not the package's `__init__`, for the reason every area's surface is one: area
+discovery imports a package before the submodule it wants, and the package stays empty of imports.
 
 The list is what consumers outside this area actually reach for: the command reader and the
 dirty count:

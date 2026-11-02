@@ -333,8 +333,8 @@ def checkout_root(cwd: Path) -> Path | None:
 def git_path(root: Path, name: str, what: str) -> Path:
     """Where git keeps `name` for `root`, as `git rev-parse --git-path` names it.
 
-    The one resolver for a file inside git's own directory: `hooks` for `setup --git-hooks`,
-    `attach` and `doctor`, and `info/exclude` for `attach` and `detach`. `--git-path` is what
+    The one resolver for a file inside git's own directory: `hooks` for `setup --git-hooks`
+    and `doctor`, and `info/exclude` for `attach` and `detach`. `--git-path` is what
     maps a name to the common directory every worktree shares, and honours a `core.hooksPath`
     for `hooks`, which a path computed by hand gets wrong either way. `name` is always one of
     the callers' constants, so nothing here is a value to close off; `what` is the caller's
@@ -360,7 +360,7 @@ def hooks_dir(root: Path) -> Path:
     """The directory git runs `root`'s hooks from, as git names it: `core.hooksPath` when set.
 
     Through `git_path`, so a `core.hooksPath` in any bytes is the directory git names, and
-    `setup --git-hooks`, `attach` and `doctor` each read it as that directory.
+    `setup --git-hooks` and `doctor` each read it as that directory.
     """
     return git_path(root, "hooks", "hooks directory")
 
