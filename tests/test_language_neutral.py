@@ -84,6 +84,22 @@ STACK_NAMED = {
     # stack itself. `uv run` is a Python launcher, and it stays beside the shared scanner rather
     # than in the Python profile because every stack's runner may stand behind it.
     ("src/stayfixed/hints/uvrun.py", "uv"),
+    # The table of test-runner program names (`hints/runners.py`) names runners only to say that a
+    # command is a test run, never to run, plan or advise one, and it is the one place the hints
+    # look this up, so no other hint names a stack to recognise a run.
+    ("src/stayfixed/hints/runners.py", "cargo"),
+    ("src/stayfixed/hints/runners.py", "gradle"),
+    ("src/stayfixed/hints/runners.py", "jest"),
+    ("src/stayfixed/hints/runners.py", "mvn"),
+    ("src/stayfixed/hints/runners.py", "npm"),
+    ("src/stayfixed/hints/runners.py", "npx"),
+    ("src/stayfixed/hints/runners.py", "pnpm"),
+    ("src/stayfixed/hints/runners.py", "pytest"),
+    ("src/stayfixed/hints/runners.py", "python"),
+    ("src/stayfixed/hints/runners.py", "python3"),
+    ("src/stayfixed/hints/runners.py", "tox"),
+    ("src/stayfixed/hints/runners.py", "vitest"),
+    ("src/stayfixed/hints/runners.py", "yarn"),
     # stayfixed's own installer, `uv tool install`, named in two of `doctor`'s remedies
     # (`cli-path` in the core's checks, `overlay-requires` in the overlay area's) and in `setup`'s
     # pinned install command: the tool stayfixed itself is installed with, not a stack a project
