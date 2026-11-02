@@ -17,7 +17,6 @@ from stayfixed.roots import (
     contained_roots,
     dropped_roots,
 )
-from tests.gitfixture import git, needs_git
 
 CONFIG = """
 [stayfixed]
@@ -42,9 +41,6 @@ def repo(tmp_path: Path) -> Path:
     (root / "src").mkdir(parents=True)
     (root / "src" / "mod.py").write_text("x = 1\n", encoding="utf-8")
     (root / CONFIG_FILE).write_text(CONFIG, encoding="utf-8")
-    git(root, "init", "-q", "-b", "main")
-    git(root, "add", "-A")
-    git(root, "commit", "-q", "-m", "chore: seed")
     return root
 
 
@@ -52,7 +48,6 @@ def config(root: Path) -> Config:
     return load(root, machine=root.parent / "absent.toml")
 
 
-@needs_git
 def test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked(
     tmp_path: Path,
 ) -> None:
@@ -75,7 +70,6 @@ def test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked(
     assert contained_roots(root, config(root)) == [root / "src", root / "tests"]
 
 
-@needs_git
 @pytest.mark.parametrize(
     ("roots", "dropped"),
     [
