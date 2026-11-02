@@ -22,6 +22,7 @@ from stayfixed.config.session import (
 )
 from stayfixed.doctor.api import NO_CONFIG_SKIP, OK, RED, SKIP, WARN, Check, run_checks
 from stayfixed.doctor.checks import (
+    BOUND_WITHOUT_FILE,
     FALLBACK_REMEDY,
     NAMES_SHOWN,
     NOT_INITIALISED,
@@ -65,6 +66,38 @@ def test_no_stayfixed_toml_is_a_warning_and_no_row_is_red(tmp_path: Path) -> Non
         NOT_INITIALISED,
     )
     assert not [check.name for check in report if check.status == RED]
+
+
+def test_a_bound_checkout_without_a_file_is_ok_and_names_the_overlay(tmp_path: Path) -> None:
+    # The warning told such a checkout to run `init`, though this machine binds it and its
+    # configuration is the overlay's layers: nothing is missing, so the row is ok with no remedy.
+    from tests.memory.test_commands import _bound_without_file
+
+    root = _bound_without_file(tmp_path)
+    report = run_checks_for(tmp_path, root, machine=tmp_path / "machine.toml")
+    checked = row(report, "not-initialised")
+    assert (checked.status, checked.detail, checked.remedy) == (OK, BOUND_WITHOUT_FILE, "")
+    assert not [check.name for check in report if check.status == RED]
+
+
+def test_an_unbound_checkout_without_a_file_still_warns_with_the_init_remedy(
+    tmp_path: Path,
+) -> None:
+    # Nothing on this machine binds a clone, so the layers of an overlay it never attached to
+    # are not its configuration: it still lacks a file, and `init` is what adds one.
+    from stayfixed.binding import read_id
+    from stayfixed.config.paths import data_directory
+    from tests.memory.test_commands import _bound_without_file
+
+    root = _bound_without_file(tmp_path)
+    id = read_id(root)
+    assert id is not None
+    (data_directory() / "bindings" / f"{id}.toml").unlink()
+    checked = row(
+        run_checks_for(tmp_path, root, machine=tmp_path / "machine.toml"), "not-initialised"
+    )
+    assert (checked.status, checked.detail) == (WARN, NOT_INITIALISED)
+    assert "stayfixed init" in checked.remedy
 
 
 @pytest.mark.parametrize(

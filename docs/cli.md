@@ -3098,7 +3098,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 
 | Check | What it answers | What it reads |
 |---|---|---|
-| `not-initialised` | whether there is a `stayfixed.toml` here, and how much of it a session can use: with none, a warning that the session guards and `doctor` work without one and memory stays the coding agent's own, and that `stayfixed init` adds the rest; with one that loaded with settings ignored or put back to the preset's, a warning naming at most three of their keys and counting the rest, never their values; red only for one a session drops whole, in the words of the session's warning | `stayfixed.toml` |
+| `not-initialised` | whether there is a `stayfixed.toml` here, and how much of it a session can use: with none, a warning that the session guards and `doctor` work without one and memory stays the coding agent's own, and that `stayfixed init` adds the rest, except in a checkout this machine binds, where it is ok and says the configuration comes from the overlay's layers; with one that loaded with settings ignored or put back to the preset's, a warning naming at most three of their keys and counting the rest, never their values; red only for one a session drops whole, in the words of the session's warning | `stayfixed.toml` |
 | `versions` | whether the project's `[stayfixed] version` is the stayfixed running; with no project configuration, which stayfixed runs | `stayfixed.toml`, the package |
 | `wrapper` | whether the wrapper can actually reach stayfixed on this machine: red when it writes a fault to stderr or cannot be run; under a root the environment named, which it never runs, red when the wrapper is not executable and a skip otherwise; a stale `hooks/hooks.json`, an edited wrapper that still runs or a changed `scripts/stayfixed` is not reported | one `run-hook.sh --version`, and only under the plugin root this stayfixed is part of; under a named root, `hooks/run-hook.sh`'s mode |
 | `budgets` | every budget set above the preset, named raised, and every one set below it, named lowered | `stayfixed.toml`, the machine file, the preset |
@@ -3215,7 +3215,9 @@ which lets `wrapper` read the wrapper's executable bit even though it still will
 ([`stayfixed hook <event>`](#stayfixed-hook-event)), so every row is asked whatever `--root`
 holds. With no `stayfixed.toml`, `not-initialised` **warns**, the four rows above that read the
 project configuration skip, and no row is red for it: a default install, where the guards and
-this report already work, exits `0`. A `stayfixed.toml` that loads with settings ignored or put
+this report already work, exits `0`. In a checkout this machine binds, `not-initialised` is **ok**
+instead and says the configuration comes from the overlay's layers, with no remedy, since `init` is
+not what that checkout lacks. A `stayfixed.toml` that loads with settings ignored or put
 back to the preset's warns, naming at most three of their keys and counting the rest. Only one a session drops whole is **red**: a
 symbolic link, whatever it points at, a file that is not UTF-8, cannot be read or is not TOML, or
 one holding a key nothing can stand in for; the row says which in the session's own words and
