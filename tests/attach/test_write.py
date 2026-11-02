@@ -2691,3 +2691,68 @@ def test_an_unreadable_tag_file_stops_attach_with_nothing_written(
     assert_snapshot_unchanged(root, before)
     # No render was made either: the delivery directory is as it was, which is to say absent.
     assert not (Path(os.environ["HOME"]) / ".local" / "share" / "stayfixed" / "delivery").exists()
+
+
+def _untag(store: Path) -> None:
+    """The project's record listing no tag any more; the `groups/` directories stay."""
+    (store.parent / PROJECT_RECORD).write_text("tags = []\n", encoding="utf-8")
+
+
+def _allowed(root: Path) -> list[str]:
+    document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+    return list(document.get("permissions", {}).get("allow", []))
+
+
+def test_untagging_takes_back_the_tags_allow_rule(tmp_path: Path) -> None:
+    # The ledger recorded `Bash(x)` as attach's own; with the tag gone the overlay no longer grants
+    # it, and left in the settings file it would stay until `detach`. Mutation (oracle):
+    # `mutations/`'s "re-attach keeps an allow rule the overlay no longer grants".
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE, "Bash(x)"]
+    _untag(store)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE]
+    assert ledger(root).allow == (RULE,)
+
+
+def test_a_hand_added_rule_the_ledger_does_not_name_stays(tmp_path: Path) -> None:
+    # The ledger is the only witness of which rules are attach's: a rule the owner typed, even one
+    # the overlay once granted under the same text elsewhere, is theirs.
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+    document["permissions"]["allow"].append("Bash(mine)")
+    (root / SETTINGS).write_text(json.dumps(document), encoding="utf-8")
+    _untag(store)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE, "Bash(mine)"]
+    assert "Bash(mine)" not in ledger(root).allow
+
+
+def test_a_recorded_rule_removed_by_hand_is_not_an_error(tmp_path: Path) -> None:
+    # An owner who deleted a rule from the settings file and then untagged: nothing to take.
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+    document["permissions"]["allow"].remove("Bash(x)")
+    (root / SETTINGS).write_text(json.dumps(document), encoding="utf-8")
+    _untag(store)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE]
+
+
+def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)", "Bash(y)")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    before = (root / SETTINGS).read_bytes()
+    assert "taken back" not in check(root, store=store, machine=machine).summary
+    _untag(store)
+    summary = check(root, store=store, machine=machine).summary
+    assert "2 allow rule(s) would be taken back" in summary
+    # A preview writes nothing.
+    assert (root / SETTINGS).read_bytes() == before

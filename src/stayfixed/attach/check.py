@@ -47,16 +47,16 @@ def check(
     config = configured(root, project, machine=machine, owner=owner)
     binding = read_binding(root, store=store, machine=machine, config=config)
     diff = gates(root, config, binding)
-    plan_writes(root, config, binding, diff)
-    return _report(binding, diff)
+    planned = plan_writes(root, config, binding, diff)
+    return _report(binding, planned.diff)
 
 
 def _report(binding: Binding, diff: PermissionDiff) -> Result:
     """The report of a check that met no refusal: the binding, the diff and the rule files."""
     # Named and not merely counted, and on this result rather than in `PermissionDiff`: the
-    # diff's two fields say what `attach` would add and what is already there, and a third of
-    # another kind would blur what it means. These names come out of the overlay, so they are the
-    # owner's own and may be printed.
+    # diff's fields say what `attach` would add, what is already there and what it would take
+    # back, and a file list of another kind would blur what they mean. These names come out of the
+    # overlay, so they are the owner's own and may be printed.
     rules = tuple(target for target, _ in codex_rules(binding))
     summary = (
         f"{binding.state}; "
@@ -64,6 +64,8 @@ def _report(binding: Binding, diff: PermissionDiff) -> Result:
         f"{len(diff.already_present)} already present; "
         f"{len(rules)} Codex standing-rule file(s) would be placed"
     )
+    if diff.withdrawn_allow:
+        summary += f"; {len(diff.withdrawn_allow)} allow rule(s) would be taken back"
     if binding.note is not None:
         summary += f"; {binding.note}"
     if binding.fault is not None:

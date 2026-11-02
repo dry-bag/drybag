@@ -23,7 +23,8 @@ and `attach.check` reports only how many there were.
 from __future__ import annotations
 
 import stat
-from dataclasses import dataclass
+from collections.abc import Collection, Iterable
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -57,10 +58,13 @@ CODEX_RULES = ".codex/rules"
 
 @dataclass(frozen=True)
 class PermissionDiff:
-    """What `attach` would add to the allow rules, and what is already there."""
+    """What `attach` would add to the allow rules, what is already there, and what it would take
+    back: `withdrawn_allow`, filled by `withdrawing`, is a rule the previous ledger recorded that
+    the overlay no longer grants and the settings file still holds."""
 
     added_allow: tuple[str, ...]
     already_present: tuple[str, ...]
+    withdrawn_allow: tuple[str, ...] = ()
 
 
 def settings_document(text: str) -> dict[str, Any]:
@@ -295,3 +299,18 @@ def diff_permissions(root: Path, binding: Binding) -> PermissionDiff:
     added_allow = tuple(dict.fromkeys(rule for rule in granted if rule not in held))
     already = tuple(dict.fromkeys(rule for rule in granted if rule in held))
     return PermissionDiff(added_allow, already)
+
+
+def withdrawing(
+    diff: PermissionDiff, recorded: Iterable[str], held: Collection[str]
+) -> PermissionDiff:
+    """`diff` with the rules to take back: those `recorded` (the previous attach ledger's `allow`,
+    the one witness of which rules are `attach`'s) that the overlay no longer grants and the
+    settings file still `held`. A rule the owner added by hand is not recorded and stays; a
+    recorded rule the owner removed by hand is not held and is nothing to take back.
+
+    What the overlay grants is `diff`'s own: every rule is in `added_allow` or `already_present`,
+    by whether the file held it."""
+    granted = {*diff.added_allow, *diff.already_present}
+    taken = tuple(dict.fromkeys(rule for rule in recorded if rule in held and rule not in granted))
+    return replace(diff, withdrawn_allow=taken)

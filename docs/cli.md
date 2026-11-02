@@ -2378,8 +2378,9 @@ linked worktree, and a worktree created later needs no step of its own.
 
 **`--check` writes nothing.** It reports the binding state — `unbound` or `bound` — with the
 `origin` note the run would print (below), the permission diff
-(which allow rules would be added, and how many of the overlay's rules this
-repository already has), and the Codex standing-rule files it would place under `.codex/rules/`.
+(which allow rules would be added, how many of the overlay's rules this
+repository already has, and, when there are any, how many the ledger names that the overlay no
+longer grants and the run would take back), and the Codex standing-rule files it would place under `.codex/rules/`.
 Read it before the real run: everything under **Writes** below that carries content from the
 overlay is named here first. It asks what the real run asks before its first write, through the
 run's own code, so where the run fails or refuses there, in any case the two lists below give before
@@ -2487,7 +2488,10 @@ It runs no program in the overlay: its commit-time secret scan is `setup --overl
 or records the overlay, and where that scan is missing `doctor`'s `pre-commit` row says it is not
 installed. The ledger is the only record
 of which allow rules are stayfixed's, because an allow rule cannot carry a marker the way a hook
-entry can; `detach` reads it and nothing else. **`.gitignore` is never written**: it is tracked, so
+entry can; `detach` reads it and nothing else. **A re-attach takes back an allow rule the overlay
+no longer grants**, where the ledger names it and the settings file still holds it: a rule dropped
+from `common/`, from `projects/<name>/` or from a tag you took off the project leaves with the
+next run, and a rule you added by hand, which the ledger does not name, stays. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
 release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
 `init`'s.

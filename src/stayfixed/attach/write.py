@@ -73,6 +73,7 @@ from stayfixed.attach.permissions import (
     diff_permissions,
     local_document,
     settings_document,
+    withdrawing,
 )
 from stayfixed.attach.render import (
     COPIED,
@@ -456,25 +457,30 @@ def _allow_list(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
 
 
 def _merged_settings(document: str, diff: PermissionDiff, previous: AttachLedger | None) -> str:
-    """The local settings document with the overlay's allow rules appended in order and the hook
-    entries an earlier attach recorded taken back out (`scaffold.withdraw_entries`).
+    """The local settings document with the overlay's allow rules appended in order, the rules it
+    no longer grants (`diff.withdrawn_allow`) taken out, and the hook entries an earlier attach
+    recorded taken back out (`scaffold.withdraw_entries`).
 
-    Only the entries the earlier ledger names, under the event it names, and only where the file
-    still holds them: the ledger and never the marker alone says which entries are stayfixed's.
+    Only the entries and rules the earlier ledger names, and only where the file still holds them:
+    the ledger and never the marker alone says which are stayfixed's.
     """
     recorded = previous.entries if previous is not None else {}
     held = owned_ids(document) if recorded else {}
     withdrawn = {id: event for id, event in recorded.items() if held.get(id) == event}
-    if not diff.added_allow and not withdrawn:
+    if not diff.added_allow and not diff.withdrawn_allow and not withdrawn:
         # Nothing to add or take back, so nothing is touched. A rewrite here would reformat a file
         # the owner owns, on a run that changed nothing, and report itself as a write.
         return document
     raw = settings_document(document)
     permissions, allow = _allow_list(raw)
+    allow = [rule for rule in allow if rule not in diff.withdrawn_allow]
     allow += [rule for rule in diff.added_allow if rule not in allow]
     if allow or permissions:
         permissions["allow"] = allow
         raw["permissions"] = permissions
+    if diff.withdrawn_allow:
+        # As `detach` leaves it: an allow list the take-back emptied is not what the file held.
+        raw = _emptied(raw)
     text = settings_text(raw, LOCAL_SETTINGS) + "\n"
     return withdraw_entries(text, withdrawn) if withdrawn else text
 
@@ -622,7 +628,8 @@ def _write_ledger(
     """
     previous, binding = planned.previous, planned.binding
     rules = tuple(target for target, _ in planned.rules)
-    allow = list(previous.allow) if previous is not None else []
+    withdrawn = planned.diff.withdrawn_allow
+    allow = [rule for rule in previous.allow if rule not in withdrawn] if previous else []
     allow += [rule for rule in planned.diff.added_allow if rule not in allow]
     # The same union for the rule files, and for a sharper reason than the one above. A file
     # deleted from the overlay between two attaches is not written this time and so drops out of
@@ -937,6 +944,8 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     # The settings merge is computed here, before any write, so a file it cannot read stops the
     # run while nothing is written.
     document = local_document(root)
+    if previous is not None:
+        diff = withdrawing(diff, previous.allow, _allow_list(settings_document(document))[1])
     merged = _merged_settings(document, diff, previous)
     written = merged != document
     placed = placed_paths(target for target, _ in codex_rules(binding))

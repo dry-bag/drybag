@@ -1,0 +1,1 @@
+`stayfixed attach` now takes back an allow rule it merged earlier when your overlay no longer grants it, for example after you remove a tag from a project; before, such a rule stayed in `.claude/settings.local.json` until `stayfixed detach`. Rules you added by hand are never taken.
