@@ -2886,10 +2886,18 @@ repository `git init` makes there, and, through `pre-commit install`, its `pre-c
 --template <template> --clone`, a new private repository on GitHub under `<owner>` and its clone
 at `<home>/<name>` — or, when that clone leaves nothing there, a clone from the retried `git clone`
 — then its `pre-commit` git hook. Run again over the overlay it made, it generates nothing.
+`--restore` writes, beyond the above, for each checkout it attaches what
+[`stayfixed attach`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
+writes, listed in its **Writes**, and nothing else; into a checkout it reports `absent` or
+`refused` it writes nothing, and a `failed` one keeps what the failed attach had written, which a
+re-run finishes.
 
 **Exits** `0` on success, and `2` on each of these refusals:
 
 - `--uninstall`, which is taken only with `--git-hooks` (below), before anything is written;
+- `--restore` with no overlay recorded and none named, or with a projects file it cannot read (see
+  `--restore` above), before anything is written; and `--restore` beside `--git-hooks` or
+  `--approval-boundary`;
 - `--root`, which names the repository `--git-hooks` installs into, before anything is written;
 - a refused `--overlay`: a path that names nothing under a directory that is missing or that you
   cannot create it in, a path holding something that is not an overlay, a `create:` destination
@@ -2935,8 +2943,45 @@ malformed spec, a name that is not one path segment, a destination that holds so
 `gh` is run at all.
 
 A plugin that fails to install or a harness that is absent is a note in the report, not a
-nonzero exit. What the failing plugin command printed is quoted as the overlay's notes quote it
+nonzero exit (`--restore` exits `1` when an attach was refused or failed, below). What the failing plugin command printed is quoted as the overlay's notes quote it
 (escaped, and cut to its first 120 characters and its length).
+
+**`--restore`** brings a machine back from the private overlay its machine file records, or the one
+`--overlay` names, in five steps, each reported and none undone by the next:
+
+1. it checks the tools and prints what is missing, first in the output, and refuses nothing: `git`,
+   one of `claude` and `codex`, and a `python3` or a `uv` for the hooks. A missing `git` makes each
+   attach fail in attach's own words;
+2. machine setup, as above (`--preset`, `--plugin` and `--overlay` are taken as they are without
+   it);
+3. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
+   that is not there is reported `absent` and skipped; a checkout `attach` refuses (a plain
+   directory, or one whose `stayfixed.toml` names another project than its table key) is `refused`,
+   and one whose attach fails part-way is `failed`, each with attach's own message, and the rest go
+   on. The exit code is `1` when a project was refused or failed, and `0` otherwise, `absent`
+   included. A run twice attaches nothing new, and a project removed from the file stays attached
+   until `stayfixed detach` there.
+
+**The input, `<overlay>/machine/projects.toml`**, is the owner's, one `[projects.<name>]` table per
+project: `<name>` is the overlay project the checkout belongs to (the directory under the overlay's
+`projects/`), and `dir` is where its main checkout lives, absolute or led by `~/`, which is read
+under `--home`. Every other key is ignored by stayfixed; an overlay's own scripts may read them.
+`dir` missing, not a string or relative, a file that cannot be read or is not TOML, and a
+`projects` that is not a table, are refused (`2`) naming the table, before anything is written. No
+file lists nothing. The store `attach` is handed is the one the table key names, and `attach`
+refuses a store that is not the checkout's own project's, so a clone that claims another of your
+projects in its tracked `stayfixed.toml` is refused rather than given that project's notes, rules
+and delivery.
+
+With `--restore`, `--overlay` names the overlay to restore from when it holds one; `--overlay
+create:…` and a path that names nothing make an overlay and list no project. With no `--overlay`
+and no overlay recorded, `--restore` is refused (`2`) naming `--overlay PATH`, before anything is
+written. It is refused beside `--git-hooks` and `--approval-boundary`. `--json` adds `missing` and
+`projects`, each project's `name`, `dir`, `state` (`attached`, `absent`, `refused` or `failed`) and
+`detail`, the last attach's own words.
+
+What stays an overlay's own script and is not done here: cloning the checkouts, owner-held files,
+excludes, links, commit hooks and the merge of the overlay's settings.
 
 ---
 
@@ -2972,7 +3017,7 @@ file, is not refused there, because on a case-sensitive volume it names another 
 would refuse a chain that cannot loop. A hook past the 64 MiB read cap is not read, so it is not
 judged either: it is kept and chained, as below.
 
-**Refuses (`2`) together with `--preset`, `--overlay` or `--plugin`.** Each asks machine setup to
+**Refuses (`2`) together with `--preset`, `--overlay`, `--plugin` or `--restore`.** Each asks machine setup to
 do something, which this form does not do, so it names `--git-hooks` and writes nothing, where
 `--overlay` used to be dropped and the hook installed. `--home` and `--machine` say
 only where machine setup would write, and are ignored.
@@ -2992,7 +3037,7 @@ was: it is not stayfixed's hook; nothing was removed`; `--json` carries it as `f
 is neither stayfixed's nor foreign: either form refuses (`2`) naming it and the reason, and leaves
 it. A regular file past the 64 MiB read cap is foreign, since stayfixed's own hook is a couple of
 kilobytes: it is kept and chained, and `--uninstall` leaves it. Exits `0`; `2` when `--preset`,
-`--overlay` or `--plugin` is also given, `--uninstall` is given without `--git-hooks`, the hook
+`--overlay`, `--plugin` or `--restore` is also given, `--uninstall` is given without `--git-hooks`, the hook
 cannot be read, or a hook names `prepare-commit-msg.local`.
 
 ---
@@ -3031,8 +3076,8 @@ and `managed`.
 
 **Writes** nothing.
 
-**Exits** `0`; `2` beside `--preset`, `--overlay`, `--plugin`, `--git-hooks` or `--uninstall`,
-which name a write this run does not make; `1` for a `HOME` that is empty with no `--home` or no
+**Exits** `0`; `2` beside `--preset`, `--overlay`, `--plugin`, `--restore`, `--git-hooks` or
+`--uninstall`, which name a write this run does not make; `1` for a `HOME` that is empty with no `--home` or no
 `--machine`.
 
 ---

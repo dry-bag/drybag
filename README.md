@@ -438,6 +438,7 @@ stayfixed detach                                       # remove what attach adde
 stayfixed setup --preset recommended                   # the machine configuration and deny rules; no plugin unless --plugin names one
 stayfixed setup --preset recommended --overlay ../stayfixed-private   # record an existing overlay, or render one there if nothing is; no network call
 stayfixed setup --preset recommended --overlay create:you/stayfixed-private  # create one on GitHub from your <owner>/stayfixed-overlay-template if you published one, else stayfixed's
+stayfixed setup --restore --overlay ../stayfixed-private   # restore a machine: machine setup, then attach every checkout the overlay's machine/projects.toml lists
 stayfixed setup --git-hooks                            # install the commit-message hook into this repository
 stayfixed setup --git-hooks --uninstall                # remove it; restore the hook it chained to
 stayfixed setup --approval-boundary                    # print the deny rule and sandbox settings that keep an agent out of the trust record; writes nothing

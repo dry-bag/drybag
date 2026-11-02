@@ -72,6 +72,7 @@ def _args(**over: object) -> argparse.Namespace:
         "plugin": None,
         "git_hooks": True,
         "approval_boundary": False,
+        "restore": False,
         "uninstall": False,
         "root": ".",
     }

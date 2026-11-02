@@ -523,6 +523,51 @@ def test_detach_returns_the_project_to_where_it_started(tmp_path: Path) -> None:
     assert_snapshot_unchanged(root, before)
 
 
+def test_restore_attaches_every_listed_checkout_and_detach_undoes_it(tmp_path: Path) -> None:
+    # `setup --restore` through the launcher, over an overlay `setup` rendered and the owner's
+    # projects file listing one checkout that is there and one that is not: the present one is
+    # attached (`doctor`'s `attached` row reads it so), the absent one is reported and skipped,
+    # and `detach` there returns the checkout to the bytes it had before the restore.
+    home = tmp_path / "home"
+    machine = tmp_path / "config" / "stayfixed" / "config.toml"
+    machine.parent.mkdir(parents=True)
+    bin_dir = tmp_path / "bin"
+    _fake_binaries(bin_dir)
+    root = _project(tmp_path, mode="overlay")
+    (tmp_path / "overlays").mkdir()
+    overlay = tmp_path / "overlays" / "stayfixed-private"
+    walk = Walkthrough(
+        root,
+        overlay,
+        machine,
+        home,
+        tmp_path / "plugin-data",
+        overlay / PROJECTS / PROJECT,
+        bin_dir,
+    )
+
+    def step(*argv: str) -> subprocess.CompletedProcess[str]:
+        done = _cli(walk, *argv)
+        assert done.returncode == 0, f"`{' '.join(argv)}`: {done.stdout}{done.stderr}"
+        return done
+
+    flags = ("--home", str(home), "--machine", str(machine))
+    step("setup", "--preset", "recommended", "--overlay", str(overlay), *flags)
+    (overlay / "machine").mkdir(exist_ok=True)
+    (overlay / "machine" / "projects.toml").write_text(
+        f'[projects.{PROJECT}]\ndir = "{root}"\n[projects.ghost]\ndir = "{tmp_path / "nowhere"}"\n',
+        encoding="utf-8",
+    )
+    before = snapshot(root)
+    done = step("setup", "--restore", "--overlay", str(overlay), *flags)
+    assert f"{PROJECT} at" in done.stdout and "ghost" in done.stdout and "absent" in done.stdout
+    assert_snapshot_changed(root, before)
+    rows = {row["name"]: row["status"] for row in _doctor(walk)}
+    assert rows["attached"] == OK, rows
+    step("detach")
+    assert_snapshot_unchanged(root, before)
+
+
 def test_doctor_is_green_on_the_attached_fixture(tmp_path: Path) -> None:
     # Green meaning: no `red`, and the only `skip` is `ci-ref`, which skips on a state this
     # fixture is in rather than on a limit of the build: it records no `[ci] ref`, because no

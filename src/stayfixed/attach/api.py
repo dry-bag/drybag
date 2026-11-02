@@ -21,19 +21,23 @@ reads from outside the area:
 - the file an earlier release merged the overlay's hook entries into (`LOCAL_SETTINGS`), which
   the doctor area's tests write those entries into;
 - `detach`, which `project`'s `uninstall` runs on an attached repository before it takes the
-  scaffold back, and `Detached`, the type it returns.
+  scaffold back, and `Detached`, the type it returns;
+- `attach` and `Attached`, which `setup --restore` runs on each checkout the overlay's projects
+  file lists (`setup.restore`), and the type it returns, with `Carried`, the type of two of its
+  fields (`added` and `removed`), which `tests/test_surfaces.py` derives that a surface carries.
 
 **Trimmed when the `attached` row moved into this area: `overlay_entries`.** It was published for
 `doctor`'s provenance column, and went once `attach` merged no hook entry.
 
-**`setup` is not a consumer.** This docstring used to say "`setup` runs `attach --check` and
-reads the same `Result`"; `src/stayfixed/setup/` imports nothing from `stayfixed.attach`, and
-`attach --check` is this area's own command module calling its own `attach.check`. The
+**`setup` was not a consumer of `check`, and still is not.** This docstring used to say "`setup`
+runs `attach --check` and reads the same `Result`"; `setup` imports nothing of `check`, and
+`attach --check` is this area's own command module calling its own `attach.check`. (`setup
+--restore` does import `attach` itself, which is the bullet above.) The
 permission-diff half of the area — `check`, `diff_permissions` and the `PermissionDiff` it
 returns — was published on the strength of that sentence and left when the sentence did.
 
-**Trimmed: `attach` and `Attached`, and `detach` and `Detached` until `uninstall` ran it.** They
-were published against a
+**Trimmed once, and back for `setup --restore`: `attach` and `Attached`, and `detach` and
+`Detached` until `uninstall` ran it.** They were published against a
 second sentence of the same kind — "`tests/test_install_path.py`, the walkthrough that runs the
 four packages in the order a person does, is the other consumer, and it drives `attach` and
 `detach`, whose returns are `Attached` and `Detached`". That walkthrough drives the argument
@@ -57,14 +61,25 @@ in `tests/boundaries/test_delivery.py`, `uninstall`'s `detach` among them.
 from stayfixed.attach.binding import Binding, read_binding
 from stayfixed.attach.permissions import LOCAL_SETTINGS
 from stayfixed.attach.render import Rendered
-from stayfixed.attach.write import AttachLedger, Detached, detach, ledger
+from stayfixed.attach.write import (
+    Attached,
+    AttachLedger,
+    Carried,
+    Detached,
+    attach,
+    detach,
+    ledger,
+)
 
 __all__ = [
     "LOCAL_SETTINGS",
     "AttachLedger",
+    "Attached",
     "Binding",
+    "Carried",
     "Detached",
     "Rendered",
+    "attach",
     "detach",
     "ledger",
     "read_binding",
