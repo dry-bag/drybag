@@ -1223,6 +1223,55 @@ def test_a_record_with_no_remote_is_given_one_and_keeps_its_first_attach_date(
     assert record["first_attach"] == "2020-02-02"
 
 
+def test_attach_keeps_every_key_and_byte_of_the_record_it_did_not_write(tmp_path: Path) -> None:
+    # The owner lists `tags` in the record by hand, with comments around them; the record is the
+    # owner's, and `attach` adds the two keys it owns above everything and rewrites nothing else.
+    # Mutation (`mutations/`'s "attach rewrites the whole project record"): the file is written
+    # from the parsed keys, and the comment, the tag list and the table are gone.
+    import datetime
+    import tomllib
+
+    root, store, machine = _attachable(tmp_path)
+    original = '# who is on what\ntags = ["a"]\n\n[notes]\nowner = "me"  # kept\n'
+    (store.parent / PROJECT_RECORD).write_text(original, encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    text = (store.parent / PROJECT_RECORD).read_text(encoding="utf-8")
+    today = datetime.date.today().isoformat()
+    assert text == f'remote = "git@example.com:o/p.git"\nfirst_attach = "{today}"\n' + original
+    assert tomllib.loads(text)["tags"] == ["a"]
+
+
+def test_attach_keeps_the_line_endings_of_the_record_it_did_not_write(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    original = b'tags = ["a"]\r\n'
+    (store.parent / PROJECT_RECORD).write_bytes(original)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (store.parent / PROJECT_RECORD).read_bytes().endswith(original)
+
+
+def test_attach_writes_no_key_the_record_holds_unusable(tmp_path: Path) -> None:
+    # A second `remote` beside an empty one would make the file invalid TOML, and a file the
+    # owner wrote stays theirs: only `first_attach`, which is absent, goes in.
+    import datetime
+    import tomllib
+
+    root, store, machine = _attachable(tmp_path)
+    (store.parent / PROJECT_RECORD).write_text('remote = ""\n', encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    text = (store.parent / PROJECT_RECORD).read_text(encoding="utf-8")
+    today = datetime.date.today().isoformat()
+    assert text == f'first_attach = "{today}"\nremote = ""\n'
+    assert tomllib.loads(text)["remote"] == ""
+
+
+def test_a_record_that_holds_both_keys_is_not_written(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    original = 'first_attach = "2020-02-02"\nremote = "git@example.com:o/p.git"\ntags = []\n'
+    (store.parent / PROJECT_RECORD).write_text(original, encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (store.parent / PROJECT_RECORD).read_text(encoding="utf-8") == original
+
+
 def test_a_repository_with_no_origin_remote_attaches_and_records_none(tmp_path: Path) -> None:
     # A checkout with no `origin` was refused, above every write. The binding is the id now, so it
     # attaches like any other, says so, and the records carry no remote.

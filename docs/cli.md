@@ -2444,7 +2444,8 @@ repository is one remote whichever of git's three spellings names it — `git@ho
 in any case and, on github.com alone, the path too — so a clone made over https of a repository
 recorded over ssh hears nothing. The overlay's `projects/<name>/project.toml` keeps the remote it
 was first written with and the first attach's date, and is written only while it records no
-remote; an `origin` git prints in bytes that are not UTF-8 is recorded as none. An `origin`'s
+remote, and then only with the keys it lacks, put above everything the owner wrote there, which
+stays byte for byte; an `origin` git prints in bytes that are not UTF-8 is recorded as none. An `origin`'s
 userinfo — a token in `https://user:token@host/…` — is taken out before it is printed, on the
 screen or in the note naming both remotes, and before it is recorded; an ssh URL keeps its user
 (`ssh://git@host/…`) and loses only a password.

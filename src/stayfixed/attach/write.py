@@ -104,6 +104,7 @@ from stayfixed.binding import (
 from stayfixed.config.layout import ATTACH_LEDGER
 from stayfixed.config.owner import Owner
 from stayfixed.config.paths import PathEscape, PathUnasked, contained
+from stayfixed.config.plates import read_record
 from stayfixed.config.reading import UNPARSEABLE
 from stayfixed.config.schema import OVERLAY_MODE, Config
 from stayfixed.config.session import command_config
@@ -118,7 +119,6 @@ from stayfixed.memory.api import (
     PROJECTS,
     STORE_DIR,
     build_composed,
-    read_binding_record,
     render_missing_index,
     withdraw_composed,
 )
@@ -507,34 +507,49 @@ def _nothing_written(sentence: str) -> Failure:
 
 
 def _record_project(binding: Binding, remote: str | None) -> None:
-    """Write `projects/<name>/project.toml` where it records no remote yet, keeping the
-    first-attach date it already carries.
+    """Put `remote` and the first-attach date into `projects/<name>/project.toml` where the record
+    holds no such key at all, and write nothing else; a record that already names a remote is not
+    written.
 
-    The record is what the overlay keeps for the owner to read — the remote the project was first
-    bound with and the first attach's date — and binds nothing: the binding is this machine's
-    (`stayfixed.binding`). So a record that names a remote is left alone, whatever this checkout's
-    `origin` says, and two machines attaching one project each keep their own binding without
-    rewriting it. Re-stamping the date on every attach would turn a fact into a timestamp of the
-    last run. `remote` is the `origin` as the machine's record kept it: none where a UTF-8 file
-    cannot hold it.
+    The record is what the overlay keeps for the owner to read -- the remote the project was first
+    bound with, the first attach's date, the `tags` the owner lists, whatever else they wrote --
+    and binds nothing: the binding is this machine's (`stayfixed.binding`). So a key the record
+    holds is left alone, whatever this checkout's `origin` says, and two machines attaching one
+    project each keep their own binding without rewriting it; re-stamping the date on every attach
+    would turn a fact into a timestamp of the last run. A key present with a value no one can use
+    (an empty `remote`) is left too, since a second spelling of it would make the file invalid.
+    The missing keys are prepended to the text as it stands, ahead of any table, so every byte the
+    owner wrote stays. A record that cannot be read is never written over. `remote` is the `origin`
+    as the machine's record kept it: none where a UTF-8 file cannot hold it.
     """
     if binding.recorded is not None or binding.fault is not None:
         return
     relative = f"{PROJECTS}/{binding.project}/{PROJECT_RECORD}"
-    first = _first_attach(binding.overlay / relative) or datetime.date.today().isoformat()
-    fields: dict[str, object] = {"first_attach": first}
-    if remote is not None:
-        fields = {"remote": remote, **fields}
+    record = binding.overlay / relative
+    held = _record_table(record)
+    if held is None:
+        return
+    missing: dict[str, object] = {}
+    if remote is not None and "remote" not in held:
+        missing["remote"] = remote
+    if "first_attach" not in held:
+        missing["first_attach"] = datetime.date.today().isoformat()
+    if not missing:
+        return
     # `tomlout` and not an f-string: the value is a git remote URL, which is repository-authored
     # (principle 5), and one carrying a quote and a newline would write further keys into it.
-    fsops.write_within(binding.overlay, relative, tomlout.dumps({"": fields}))
+    # Read with the file's own line endings, which `read_text` would translate.
+    text = fsops.read_regular_text(record, newline="") if fsops.is_file(record) else ""
+    fsops.write_within(binding.overlay, relative, tomlout.dumps({"": missing}) + text)
 
 
-def _first_attach(record: Path) -> str | None:
+def _record_table(record: Path) -> dict[str, Any] | None:
+    """The record's keys, `{}` where there is no record, and `None` where it cannot be read: that
+    is `attach`'s `fault` already, so reaching here with one is a record swapped since."""
     if not fsops.is_file(record):
-        return None
+        return {}
     try:
-        return read_binding_record(record).get("first_attach")
+        return read_record(record)
     except (OSError, UnicodeDecodeError, *UNPARSEABLE):
         return None
 

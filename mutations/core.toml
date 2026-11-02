@@ -6244,3 +6244,14 @@ after = "    walked = True"
 reddens = [
   "tests/assess/test_probes.py::test_a_code_root_no_walk_takes_is_named_with_its_reason[preset-defaults-none-walked]",
 ]
+
+# One precedence for values and item names: a later plate wins, and the tags sit in the order the
+# owner listed them.
+[[mutation]]
+name = "plates keeps the tags in sorted order instead of list order"
+file = "src/stayfixed/config/plates.py"
+before = "    return tuple(usable), tuple(notes)"
+after = "    return tuple(sorted(usable)), tuple(notes)"
+reddens = [
+  "tests/config/test_plates.py::test_plates_are_common_then_tags_in_list_order_then_the_project",
+]

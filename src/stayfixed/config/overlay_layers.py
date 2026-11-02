@@ -28,6 +28,7 @@ from stayfixed import fsops
 from stayfixed.config.classes import ALLOWED, Layer, LayerName, class_of
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.owner import Guards
+from stayfixed.config.plates import COMMON, PROJECTS
 from stayfixed.config.reading import (
     UNPARSEABLE,
     ConfigError,
@@ -53,8 +54,6 @@ from stayfixed.config.schema import (
 from stayfixed.gitenv import GitUnavailable
 from stayfixed.printed import clipped, quoted
 
-COMMON = "common"
-PROJECTS = "projects"
 CONFIG_FILE = "stayfixed.toml"
 # A named cap: the most bytes of an overlay file a session reads, the bound it reads the
 # repository's `stayfixed.toml` to (`session.SESSION_READ_LIMIT`, which says why), for the same

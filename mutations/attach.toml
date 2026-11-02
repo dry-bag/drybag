@@ -332,13 +332,24 @@ reddens = [
 ]
 
 [[mutation]]
-name = "attach's first-attach date meets an overlay record nested past the parser as an internal error"
+name = "attach's record table meets an overlay record nested past the parser as an internal error"
 file = "src/stayfixed/attach/write.py"
 before = "    except (OSError, UnicodeDecodeError, *UNPARSEABLE):"
 after = "    except (OSError, UnicodeDecodeError, UNPARSEABLE[0]):"
 reddens = [
-  "tests/config/test_deep_toml.py::test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_deep_one[first-attach]",
-  "tests/config/test_deep_toml.py::test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_long_number[first-attach]",
+  "tests/config/test_deep_toml.py::test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_deep_one[record-table]",
+  "tests/config/test_deep_toml.py::test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_long_number[record-table]",
+]
+
+# The record is the owner's: `tags`, comments and tables they wrote stay byte for byte, and attach
+# adds only the keys it owns above them.
+[[mutation]]
+name = "attach rewrites the whole project record"
+file = "src/stayfixed/attach/write.py"
+before = '''    fsops.write_within(binding.overlay, relative, tomlout.dumps({"": missing}) + text)'''
+after = '''    fsops.write_within(binding.overlay, relative, tomlout.dumps({"": {**held, **missing}}))'''
+reddens = [
+  "tests/attach/test_write.py::test_attach_keeps_every_key_and_byte_of_the_record_it_did_not_write",
 ]
 
 # A `.gitignore` that re-includes a placed path with a `!` line outranks the exclude block, so git

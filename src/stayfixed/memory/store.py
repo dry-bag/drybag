@@ -47,7 +47,6 @@ about the whole module rather than about `resolve` alone.
 
 from __future__ import annotations
 
-import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -56,10 +55,10 @@ from stayfixed import fsops
 from stayfixed.binding import Bound, bound_project, short
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.paths import PathEscape, PathUnasked, contained, data_directory
+from stayfixed.config.plates import read_record
 from stayfixed.config.reading import MachineConfigError
 from stayfixed.config.schema import HARNESS_MODE, LOCAL_ONLY_MODE, OVERLAY_MODE, Config
 from stayfixed.errors import Failure
-from stayfixed.fsops import read_regular_text
 from stayfixed.gitenv import git_answer, without_userinfo
 from stayfixed.printed import clipped, quoted
 
@@ -346,20 +345,17 @@ def read_binding_record(record: Path) -> dict[str, str]:
     """The binding record at `record`, `projects/<name>/project.toml`: each key whose value is a
     non-empty string, mapped to it.
 
-    The one reader of that file, and no failure policy: an `OSError`, a `UnicodeDecodeError` and
-    each of `UNPARSEABLE` are raised as met, because what a record that cannot be read means is
-    each caller's to say, and its two callers say two things, each at its own `except`.
-    `attach`'s `_recorded` stops the run, so a broken record is never written over; and
-    `attach`'s `_first_attach` keeps today's date, which is a note and binds nothing. The record
-    binds nothing either: the binding is the machine's (`stayfixed.binding`), and the record keeps
-    the remote and the first attach's date for the owner to read. Whether there is a record at all
+    A filter over `config.plates.read_record`, the one reader of that file, and no failure policy:
+    an `OSError`, a `UnicodeDecodeError` and each of `UNPARSEABLE` are raised as met, because what
+    a record that cannot be read means is each caller's to say. `attach`'s `_recorded` stops the
+    run, so a broken record is never written over. The record binds nothing either: the binding is
+    the machine's (`stayfixed.binding`), and the record keeps the remote and the first attach's
+    date for the owner to read, beside the `tags` the owner lists. Whether there is a record at all
     is the caller's question too, asked before this.
-
-    Read through `fsops.read_regular_text`, so a record swapped for a FIFO or a device after that
-    question is refused unread, an `OSError` like any other, and one past the cap is refused too.
     """
-    raw = tomllib.loads(read_regular_text(record))
-    return {key: value for key, value in raw.items() if isinstance(value, str) and value}
+    return {
+        key: value for key, value in read_record(record).items() if isinstance(value, str) and value
+    }
 
 
 def _composed(project: str, root: Path) -> Path | Unresolved:

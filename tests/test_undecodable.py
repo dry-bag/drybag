@@ -175,8 +175,8 @@ ABSENT: list[tuple[str, Callable[[Path], Callable[[], object]], object]] = [
         [],
     ),
     (
-        "the attach record's first-attach date",
-        lambda t: lambda: write._first_attach(_plant(t / "project.toml")),
+        "the attach record's keys",
+        lambda t: lambda: write._record_table(_plant(t / "project.toml")),
         None,
     ),
 ]
