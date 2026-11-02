@@ -13,13 +13,10 @@ one gate and the command reader:
   and `Removed` come with the two verbs, because a return type absent from this list is a value
   `setup` can hold and cannot declare; so does `Found`, what `uninstall` found, which its report
   says.
-- `attach`, `doctor` and `setup`'s own tests ask where an overlay's hooks really live rather
-  than assume `.git/hooks` (`hooks_dir`, `HOOK_MARKER`) — an overlay with `core.hooksPath` set,
-  or one that is a worktree or a submodule, keeps them somewhere else, and both areas had the
-  same wrong spelling hardcoded.
-- `attach` and `detach` resolve the repository's `info/exclude` through the same resolver
-  (`git_path`), so the block they keep there is the one file every worktree shares, found the
-  way `setup --git-hooks` finds its hooks directory rather than by a second spelling.
+- `setup`'s own tests read the marker that makes a hook stayfixed's (`HOOK_MARKER`). Where the
+  hooks live is not this area's to publish: `hooks_dir`, which `attach`, `doctor` and those tests
+  ask rather than assume `.git/hooks`, and `git_path`, through which `attach` and `detach` resolve
+  `info/exclude`, are `stayfixed.gitenv`'s, a leaf every area reaches without importing another.
 - `ledger.scan`, `memory.refs` and `assess`'s probes all ask which roots a configuration's paths
   may reach (`contained_roots`), and two spellings of that would be two answers. A profile's
   red-run hint walks the same roots, handed to it by this area's guard rather than imported.
@@ -56,8 +53,6 @@ from stayfixed.guards.githooks import (
     Found,
     Installed,
     Removed,
-    git_path,
-    hooks_dir,
     install,
     uninstall,
 )
@@ -74,8 +69,6 @@ __all__ = [
     "commit_gate",
     "contained_roots",
     "dropped_roots",
-    "git_path",
-    "hooks_dir",
     "install",
     "read_launch",
     "run_directory",

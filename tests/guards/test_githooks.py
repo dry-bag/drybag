@@ -12,13 +12,13 @@ from pathlib import Path
 import pytest
 
 from stayfixed.errors import Refusal
+from stayfixed.gitenv import hooks_dir
 from stayfixed.guards.commands import GIVES_WAY
 from stayfixed.guards.commit import offending_lines
 from stayfixed.guards.githooks import (
     HOOK_MARKER,
     HOOK_NAME,
     Found,
-    hooks_dir,
     install,
     uninstall,
 )

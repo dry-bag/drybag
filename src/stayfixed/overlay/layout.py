@@ -26,7 +26,7 @@ COMMON_CODEX = f"{COMMON}/codex"
 IDENTITY_RECORD = "stayfixed-overlay.toml"
 # The overlay's commit-time secret scan, and the hook `pre-commit install` writes for it: `setup
 # --overlay` installs the hook when it makes or records the overlay, and `doctor`'s `pre-commit` row
-# asks whether it is there. The hook's *name* only: where it lives is `guards.hooks_dir`'s answer
+# asks whether it is there. The hook's *name* only: where it lives is `gitenv.hooks_dir`'s answer
 # and never `.git/hooks`, because an overlay with `core.hooksPath` set -- a common global dotfiles
 # setting -- or one that is a worktree or a submodule, where `.git` is a file, keeps its hooks
 # somewhere else entirely. A hardcoded path would find the scan missing and warn in `doctor` with a

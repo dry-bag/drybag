@@ -23,9 +23,8 @@ import pytest
 
 from stayfixed.attach.write import attach, main_checkout_of
 from stayfixed.errors import Refusal
-from stayfixed.gitenv import GitUnavailable, Unasked, _git_toplevel, origin_remote
+from stayfixed.gitenv import GitUnavailable, Unasked, _git_toplevel, hooks_dir, origin_remote
 from stayfixed.guards.commit import commits_in
-from stayfixed.guards.githooks import hooks_dir
 from stayfixed.guards.hygiene import dirty_count
 from stayfixed.ledger.scan import TOP_LEVEL, _committed_files
 from stayfixed.overlay.sync import overlay_sync
