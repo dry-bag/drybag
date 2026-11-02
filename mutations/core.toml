@@ -2144,15 +2144,15 @@ reddens = [
 [[mutation]]
 name = "memory stops being a delivery area"
 file = "src/stayfixed/areas.py"
-before = '    {"attach", "hints", "memory", "overlay", "setup", "sync", "trust"}'
-after = '    {"attach", "hints", "overlay", "setup", "sync", "trust"}'
+before = '        "memory",'
+after = ""
 reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
 [[mutation]]
 name = "trust drops out of every side"
 file = "src/stayfixed/areas.py"
-before = '    {"attach", "hints", "memory", "overlay", "setup", "sync", "trust"}'
-after = '    {"attach", "hints", "memory", "overlay", "setup", "sync"}'
+before = '        "trust",'
+after = ""
 reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
 # The core imports neither side: the bug ledger imported by a core module, inside a function where

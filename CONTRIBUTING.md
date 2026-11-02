@@ -172,16 +172,15 @@ Today the discovered ones are `assess`, `attach`, `docs`, `doctor`, `guards`, `h
 `detach` takes back what `attach` wrote while the overlay keeps its record of the binding; `memory`
 keeps the notes; `setup` a machine's configuration; `trust` every approval a person gave on the
 machine, in one record, with the `stayfixed trust` commands over it; and `hints` the session hints
-(the background-cleanup hint, the red-run note and the command scanner they share). It also lists
-`sync`, which is not written yet. The **pack** (`PACK_PACKAGES`) is the methodology's records and
-checks: `ledger` keeps the bug ledger, `docs` the documentation and plan lints, `guards` the
-commit-message rules and the test-run checks, and `prove` the run of a test command and the verdict
-its runner's own report supports; `project` holds the shipped project templates and `init`, the
-command that writes a repository's scaffold from them; `assess` runs the gates and the inventory
-over a repository as it is, judges a change's `stayfixed.toml` against what its base branch enforces
-(`stayfixed gate`), and lists each gate in `[stayfixed] enforced` as a project promotes it
-(`stayfixed adopt promote`); and the stack profiles under `profiles/` are the pack's too, a package
-and not an area. Every other module is the **core**, which both sides share, `cli.py` and the
+(the background-cleanup hint, the red-run note and the command scanner they share). The **pack**
+(`PACK_PACKAGES`) is the methodology's records and checks: `ledger` keeps the bug ledger, `docs`
+the documentation and plan lints, `guards` the commit-message rules and the test-run checks, and
+`prove` the run of a test command and the verdict its runner's own report supports; `project`
+holds the shipped project templates and `init`, the command that writes a repository's scaffold
+from them; `assess` runs the gates and the inventory over a repository as it is, judges a change's
+`stayfixed.toml` against what its base branch enforces (`stayfixed gate`), and lists each gate in
+`[stayfixed] enforced` as a project promotes it (`stayfixed adopt promote`); and the stack profiles
+under `profiles/` are the pack's too, a package and not an area. Every other module is the **core**, which both sides share, `cli.py` and the
 subpackages that are not areas included: its areas (`CORE_AREAS`) are `hooks`, the dispatcher every
 hook event goes through, and `doctor`, which reports on what every other area left behind and
 repairs none of it. `assess` publishes no `api.py`: nothing under `src/` or `scripts/` outside it
@@ -206,7 +205,7 @@ import statement and the names it takes, held as a multiset in both directions, 
 `test_delivery_and_the_pack_import_each_other_only_where_pinned` refuse a new crossing, a second
 statement beside a pinned one, a pinned statement that takes one more name and a pinned row whose
 import has gone alike. `test_every_area_is_on_exactly_one_side` puts every discovered area on
-exactly one side and refuses a listed name that names nothing, unless its area is planned.
+exactly one side and refuses a listed name that names nothing.
 `scripts/` is repository tooling and stays under the `api.py` rule alone. The rules this section
 names live under `tests/boundaries/`, a file for each (discovery, the `api.py` surface, delivery and
 the import layers), and share one reading of the syntax tree, `astscan.py`, which has cases of its

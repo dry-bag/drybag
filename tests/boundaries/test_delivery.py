@@ -240,18 +240,13 @@ def test_in_isolation_no_core_module_loads_either_side() -> None:
     assert [name for name, top in tops.items() if _side(top, delivery, pack) != CORE] == []
 
 
-# The one name a side may list before it exists: an area that is planned and not written yet.
-# Held both ways, so the name leaves this set the day its area is written.
-PLANNED = frozenset({"sync"})
-
-
 def test_every_area_is_on_exactly_one_side() -> None:
     # The import rules judge a module by the side its first path part is listed on, and a module
     # listed on neither is the core's, so an area dropped from its side would join the core
     # unseen and be held to the core's rule, and one listed on two sides would be read as the
     # first. So every area discovery finds is listed on exactly one side, `DELIVERY_AREAS` and
     # `CORE_AREAS` list areas, `PACK_PACKAGES` lists packages (the profiles are one and not an
-    # area), and a listed name names nothing only when it is planned.
+    # area), and every listed name names one: an area joins its side in the change that writes it.
     #
     # Mutations (declared): `mutations/`'s "trust drops out of every side" and "memory stops being
     # a delivery area".
@@ -263,7 +258,7 @@ def test_every_area_is_on_exactly_one_side() -> None:
     areas = set(area_names(source))
     assert areas - set(listed) == set()
     packages = {path.name for path in source.iterdir() if (path / "__init__.py").is_file()}
-    assert (delivery | core) - areas | pack - packages == PLANNED
+    assert (delivery | core) - areas | pack - packages == set()
 
 
 def test_the_delivery_rule_judges_the_importer_and_the_imported() -> None:
