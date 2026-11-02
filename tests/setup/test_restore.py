@@ -209,7 +209,7 @@ def test_a_listed_dir_that_is_no_checkout_is_reported_and_the_rest_attach(tmp_pa
     )
     states = _states(report)
     assert states["gamma"] == "attached"
-    assert states["alpha"] in ("refused", "failed") and states["beta"] in ("refused", "failed")
+    assert states["alpha"] == states["beta"] == "failed"
     assert all(o.detail for o in report.projects if o.name != "gamma")
     assert not fsops.exists(plain / ".stayfixed")
 
@@ -695,6 +695,35 @@ def test_yes_records_every_unreviewed_note_of_each_attached_project(tmp_path: Pa
     recorded = _reviewed(_machine(tmp_path, overlay))
     # Three notes, and none of the refused checkout's.
     assert sorted(Path(subject).name for subject in recorded) == ["one.md", "three.md", "two.md"]
+
+
+def test_yes_records_the_overlays_notes_for_the_key_and_never_the_checkouts(
+    tmp_path: Path,
+) -> None:
+    # An in-repo checkout commits a note ranked `startup: 1`; `--yes` records the overlay's share
+    # for the table key and reads nothing the checkout holds.
+    overlay = _overlay(tmp_path)
+    alpha = _checkout(tmp_path, "alpha")
+    config = (alpha / "stayfixed.toml").read_text(encoding="utf-8")
+    in_repo = config.replace('mode = "overlay"', 'mode = "in-repo"') + '[paths]\nmemory = "n"\n'
+    (alpha / "stayfixed.toml").write_text(in_repo, encoding="utf-8")
+    committed = alpha / "n" / "project-stable" / "planted.md"
+    committed.parent.mkdir(parents=True)
+    committed.write_text(_note("planted"), encoding="utf-8")
+    _notes(overlay, "alpha", "one")
+    report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha), yes=True)
+    assert [(o.state, o.promoted) for o in report.projects] == [("attached", 1)]
+    assert [Path(s).name for s in _reviewed(_machine(tmp_path, overlay))] == ["one.md"]
+
+
+def test_yes_records_the_overlays_notes_for_a_checkout_with_no_config(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    alpha = _checkout(tmp_path, "alpha")
+    (alpha / "stayfixed.toml").unlink()
+    _notes(overlay, "alpha", "one")
+    report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha), yes=True)
+    assert [(o.state, o.promoted) for o in report.projects] == [("attached", 1)]
+    assert [Path(s).name for s in _reviewed(_machine(tmp_path, overlay))] == ["one.md"]
 
 
 def test_a_second_restore_with_yes_promotes_nothing(tmp_path: Path) -> None:

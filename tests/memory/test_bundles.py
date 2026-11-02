@@ -107,7 +107,7 @@ def review(store: Store) -> None:
     """Promote every note the store holds now, as `memory promote --changed` does: a note counts
     as a standing rule only once promoted (`memory.reviewed`), and these cases are about what the
     bundles do with the owner's notes."""
-    promote(store, walk(store.path, list(store.groups)).notes)
+    promote(store.machine, walk(store.path, list(store.groups)).notes)
 
 
 def a_machine(tmp_path: Path) -> Path:

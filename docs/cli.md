@@ -310,7 +310,7 @@ outside every tree, so repository bytes cannot write it; an agent whose shell ca
 can, and against it the record is a label, not a gate ([`trust list`](#stayfixed-trust-list---root-path---machine-path)
 says what the record holds against). `trust revoke reviewed --subject PATH` withdraws one.
 [`stayfixed setup --restore --yes`](#stayfixed-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
-runs `--changed` in every checkout it attaches.
+records the notes of the overlay's share for each project it attaches.
 
 Prints each note's path in the store and the digest recorded, one per line. `--json` keys:
 `promoted`, one object per note with its `path` and `digest`.
@@ -2882,7 +2882,8 @@ commands it runs for each plugin `--plugin` names, on each harness with a declar
 registrations and installed plugins those commands write into each harness's own configuration;
 with `--restore`, the same `claude plugin marketplace add` and `claude plugin install` for what the
 overlay's `machine/claude/settings.json` lists, and, with `--yes`, the trust record's `reviewed`
-approvals (`trust.json`, beside the machine file) for the notes of each attached checkout.
+approvals (`trust.json`, beside the machine file) for the notes of the overlay's share for each
+attached project.
 `--overlay <path>` naming an overlay writes nothing in its tree: it is recorded, and its
 `pre-commit` git hook is installed through `pre-commit install`. Naming nothing or an
 empty directory, it writes the directory with every file of the template plus `.stayfixed/manifest.json`, the
@@ -2954,12 +2955,9 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
 **`--restore`** brings a machine back from the private overlay its machine file records, or the one
 `--overlay` names, in these steps, each reported and none undone by the next:
 
-1. it checks the tools and prints what is missing, first in the output, and refuses nothing: `git`,
-   one of `claude` and `codex`, and a `python3` or a `uv` for the hooks. A missing `git` makes each
-   attach fail in attach's own words;
-2. machine setup, as above (`--preset`, `--plugin` and `--overlay` are taken as they are without
+1. machine setup, as above (`--preset`, `--plugin` and `--overlay` are taken as they are without
    it);
-3. the plugins the overlay's machine settings enable: `<overlay>/machine/claude/settings.json` is
+2. the plugins the overlay's machine settings enable: `<overlay>/machine/claude/settings.json` is
    the overlay's copy of Claude Code's user settings, and restore reads two keys of it and writes
    nothing from it. Each `extraKnownMarketplaces.<name>.source` that is `{"source": "github",
    "repo": "owner/name"}` (with an optional `ref`) or `{"source": "git", "url": …}` with an `https://`
@@ -2971,24 +2969,28 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
    refusal; without `claude` on `PATH` there is one note and nothing is launched. The list is Claude
    Code's: where `codex` is on `PATH`, one note says nothing was installed for it. A second run
    asks the two listings and installs nothing;
-4. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
-   that is not there is reported `absent` and skipped; a checkout `attach` refuses (a plain
-   directory, or one whose `stayfixed.toml` names another project than its table key) is `refused`,
-   and one whose attach fails part-way is `failed`, each with attach's own message, and the rest go
+3. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
+   that is not there is reported `absent` and skipped; a checkout `attach` refuses (one whose
+   `stayfixed.toml` names another project than its table key) is `refused`, and one whose attach
+   fails (a plain directory, or a failure part-way) is `failed`, each with attach's own message, and the rest go
    on. The exit code is `1` when a project was refused or failed, and `0` otherwise, `absent`
    included. A run twice attaches nothing new, and a project removed from the file stays attached
    until `stayfixed detach` there.
 
-5. with `--yes` only, the overlay's notes recorded as reviewed on this machine: after each project
-   it attached, the same act as `stayfixed memory promote --changed` in that checkout, so every
-   note of its store not already reviewed at its current bytes is recorded in the trust record
-   beside the machine file (`stayfixed trust list` shows it). `--yes` is your word on your own
-   command line; it adds no control and removes none, and without it nothing is recorded as
-   reviewed, whatever the overlay holds. A project whose notes cannot be recorded (an unreadable
+4. with `--yes` only, the overlay's notes recorded as reviewed on this machine: after each project
+   it attached, every note of the overlay's share for its table key (each group under
+   `projects/<name>/memory/`, and `common/memory`) not already reviewed at its current bytes is
+   recorded in the trust record beside the machine file (`stayfixed trust list` shows it). Nothing
+   a checkout holds is read, whatever its memory mode, and a note is reviewed wherever the same
+   bytes are read. Without `--yes` nothing is recorded as reviewed, whatever the overlay holds. A project whose notes cannot be recorded (an unreadable
    trust record, which is never overwritten) is reported `failed`, attached all the same. A second
    run with `--yes` records nothing new; a note you recorded is withdrawn by editing or deleting
    it, or with `stayfixed trust revoke reviewed --subject PATH`. `--yes` without `--restore` is refused (`2`),
    naming `--restore`, before anything is written.
+
+Last, it checks the tools and prints what is missing on the first line of its output, above machine
+setup's summary, and refuses nothing: `git`, one of `claude` and `codex`, and a `python3` or a `uv`
+for the hooks. A missing `git` makes each attach fail in attach's own words.
 
 **The input, `<overlay>/machine/projects.toml`**, is the owner's, one `[projects.<name>]` table per
 project: `<name>` is the overlay project the checkout belongs to (the directory under the overlay's

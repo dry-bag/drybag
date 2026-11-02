@@ -37,7 +37,7 @@ from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.errors import Failure, Refusal
 from stayfixed.harnesses import HARNESSES, lenient_settings
 from stayfixed.jsonobject import json_object
-from stayfixed.memory.api import permitted_roots, promote_changed
+from stayfixed.memory.api import permitted_roots, promote_share
 from stayfixed.printed import answered, clipped, quoted
 from stayfixed.runner import Completed, Runner
 
@@ -312,10 +312,10 @@ def restore(
     and its `Failure` `failed`, each with the message as `detail`, and the next project goes on.
 
     With `yes`, each attached project's unreviewed notes are then recorded as reviewed on this
-    machine (`promote_changed`), counted in the outcome's `promoted`; a project whose notes cannot
-    be recorded is `failed`, attached all the same. **`yes` is the owner's word
-    on their own command line:** the same act as `memory promote --changed` in each attached
-    checkout, so it adds no control and removes none.
+    machine (`promote_share`), counted in the outcome's `promoted`; a project whose notes cannot be
+    recorded is `failed`, attached all the same. **The notes recorded come from the overlay's share
+    for the table key of the owner's projects file, which no repository writes; nothing a checkout
+    holds is read.** Without `yes` nothing is recorded as reviewed, whatever the overlay holds.
     """
     marketplaces, ids, listing_notes = listed_plugins(overlay)
     installed, install_notes = install_listed(marketplaces, ids, home=home, runner=runner)
@@ -346,12 +346,9 @@ def restore(
             continue
         recorded = "recorded" if attached.binding_recorded else "already recorded"
         detail = "; ".join((f"binding {attached.binding} {recorded}", *attached.notes))
-        # `--yes` is the owner's word on their own command line, the same act as `memory promote
-        # --changed` in each attached checkout; it adds no control and removes none. Without it
-        # nothing is recorded as reviewed, whatever the overlay holds.
         if yes:
             try:
-                promoted = len(promote_changed(item.dir, machine=machine))
+                promoted = len(promote_share(overlay, item.name, machine=machine))
             except (Failure, Refusal) as exc:
                 said = f"{detail}; its notes were not recorded as reviewed: {exc}"
                 outcomes.append(Outcome(item.name, item.dir, "failed", said, 0))

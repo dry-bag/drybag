@@ -37,8 +37,8 @@ from stayfixed.memory.index import (
     write_index,
 )
 from stayfixed.memory.inventory import inventory, totals
-from stayfixed.memory.notes import Note
-from stayfixed.memory.reviewed import promote, promote_unreviewed, stored
+from stayfixed.memory.notes import Note, walk
+from stayfixed.memory.reviewed import promote, unreviewed
 from stayfixed.memory.store import (
     BUILT_BY_ATTACH,
     NO_RECORD,
@@ -400,11 +400,9 @@ def run_promote(args: argparse.Namespace) -> Result:
     if bool(args.notes) == args.changed:
         raise Refusal(NOTHING_NAMED)
     store, config = _store(args)
-    if args.changed:
-        chosen, recorded = promote_unreviewed(store, config)
-    else:
-        chosen = _named(stored(store, config), args.notes)
-        recorded = promote(store, chosen) if chosen else {}
+    notes = walk(store.path, [g for g in config.memory.groups if g in store.groups]).notes
+    chosen = unreviewed(store.machine, notes) if args.changed else _named(notes, args.notes)
+    recorded = promote(store.machine, chosen) if chosen else {}
     rows = [{"path": _relative(note), "digest": recorded[note.path]} for note in chosen]
     lines = [f"promoted {printable(row['path'])} {row['digest']}" for row in rows]
     return Result(

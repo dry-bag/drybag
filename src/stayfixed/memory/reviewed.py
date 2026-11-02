@@ -25,16 +25,11 @@ import hashlib
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from stayfixed import fsops
-from stayfixed.errors import Failure
-from stayfixed.memory.notes import Note, walk
-from stayfixed.memory.store import Store, resolved
+from stayfixed.memory.notes import Note
 from stayfixed.trust.api import UnreadableTrust, approve_all, recorded
-
-if TYPE_CHECKING:
-    from stayfixed.config.schema import Config
 
 KIND = "reviewed"
 REVIEWED: Literal["reviewed"] = "reviewed"
@@ -58,19 +53,19 @@ def subject(note: Path) -> str:
     return str(fsops.resolved(note))
 
 
-def record(store: Store) -> Record:
+def record(machine: Path | None) -> Record:
     """Every digest the machine's trust record holds as reviewed, read once for a caller asking of
     many notes, or none where the record cannot be read."""
     try:
-        approvals = recorded(store.machine)
+        approvals = recorded(machine)
     except UnreadableTrust:
         return frozenset()
     return frozenset(approval.digest for (kind, _), approval in approvals.items() if kind == KIND)
 
 
-def status(store: Store, note: Note, digests: Record | None = None) -> Status:
+def status(machine: Path | None, note: Note, digests: Record | None = None) -> Status:
     """`reviewed` iff the note's current digest is one the record holds as reviewed."""
-    held = record(store) if digests is None else digests
+    held = record(machine) if digests is None else digests
     try:
         current = digest(note.path)
     except OSError:
@@ -78,57 +73,21 @@ def status(store: Store, note: Note, digests: Record | None = None) -> Status:
     return REVIEWED if current in held else UNREVIEWED
 
 
-def unreviewed(store: Store, notes: Iterable[Note]) -> list[Note]:
+def unreviewed(machine: Path | None, notes: Iterable[Note]) -> list[Note]:
     """The notes of `notes` the record does not hold at their current bytes, in their order."""
-    held = record(store)
-    return [note for note in notes if status(store, note, held) == UNREVIEWED]
+    held = record(machine)
+    return [note for note in notes if status(machine, note, held) == UNREVIEWED]
 
 
-def promote(store: Store, notes: Iterable[Note]) -> dict[Path, str]:
+def promote(machine: Path | None, notes: Iterable[Note]) -> dict[Path, str]:
     """Record each note at its current digest in one write of the record, and answer each note's
     path and the digest recorded. A record that cannot be read refuses (`UnreadableTrust`) rather
     than being replaced."""
     found = {note.path: digest(note.path) for note in notes}
     approve_all(
-        store.machine,
+        machine,
         KIND,
         {subject(path): value for path, value in found.items()},
         now=datetime.now(UTC),
     )
     return found
-
-
-def stored(store: Store, config: Config) -> list[Note]:
-    """The notes of the store's configured groups: what `memory promote` chooses among."""
-    return walk(store.path, [g for g in config.memory.groups if g in store.groups]).notes
-
-
-def promote_unreviewed(store: Store, config: Config) -> tuple[list[Note], dict[Path, str]]:
-    """Promote every unreviewed note of the store (`memory promote --changed`): the notes chosen
-    and each one's path and digest recorded, in one write of the record. Nothing is written when
-    every note is reviewed."""
-    chosen = unreviewed(store, stored(store, config))
-    return chosen, promote(store, chosen) if chosen else {}
-
-
-def promote_changed(root: Path, *, machine: Path | None) -> list[Path]:
-    """The notes `memory promote --changed --root root` would promote, promoted, by the code that
-    command runs: the path of each note recorded as reviewed on this machine, none when every note
-    of `root`'s store is already.
-
-    The consumer is `setup --restore --yes`, which is the owner's word on their own command line,
-    the same act as `memory promote --changed` in each attached checkout; it adds no control and
-    removes none. A `root` with no store is a `Failure`, and a trust record that cannot be read a
-    `Refusal` (`UnreadableTrust`), as the command meets them.
-    """
-    from stayfixed.command import command_owner
-    from stayfixed.config.session import command_config
-
-    resolved_root = root.resolve()
-    config = command_config(resolved_root, machine=machine, owner=command_owner(machine))
-    found = resolved(resolved_root, config, machine=machine)
-    if found[0] is None:
-        # The reason's detail is repository-authored text and is not repeated; `memory promote`
-        # prints it wrapped.
-        raise Failure(f"no memory store: {found[1].said}")
-    return list(promote_unreviewed(found[0], config)[1])

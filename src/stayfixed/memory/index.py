@@ -413,8 +413,10 @@ def render_index(reconciled: Reconciliation, config: Config, store: Store) -> st
         by_group.setdefault(note.group_name, []).append(note)
     unreviewed: set[Path] = set()
     if stores_holding(_destination(store, config)) is not None:
-        held = record(store)
-        unreviewed = {n.path for n in reconciled.notes if status(store, n, held) == UNREVIEWED}
+        held = record(store.machine)
+        unreviewed = {
+            n.path for n in reconciled.notes if status(store.machine, n, held) == UNREVIEWED
+        }
     for group in config.memory.groups:
         if by_group.get(group):
             lines += _section(group, by_group[group], unreviewed)

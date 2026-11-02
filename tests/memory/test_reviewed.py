@@ -66,7 +66,7 @@ def _store(root: Path, tmp_path: Path) -> Store:
 def _status_of(root: Path, tmp_path: Path, name: str) -> str:
     store = _store(root, tmp_path)
     notes = {n.name: n for n in walk(store.path, list(store.groups)).notes}
-    return status(store, notes[name])
+    return status(store.machine, notes[name])
 
 
 def _bundle(root: Path, tmp_path: Path, bundle: str) -> str:

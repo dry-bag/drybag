@@ -406,7 +406,7 @@ def register(groups: SubParsers) -> None:
     setup.add_argument(
         "--yes",
         action="store_true",
-        help="with --restore, record the overlay's notes in each attached checkout as reviewed",
+        help="with --restore, record the overlay's notes for each attached project as reviewed",
     )
     setup.add_argument(
         "--git-hooks",
