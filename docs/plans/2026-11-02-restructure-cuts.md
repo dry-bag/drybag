@@ -278,6 +278,15 @@ Expected dispatches: six implementers, two correctness seats, at most two re-rev
 - [ ] **Step 4:** check the lifecycle matrix rows against the tree, amend this plan where the
   numbers or rows moved, commit `docs(plans): restructure cuts re-measured after the hints move`.
 
+**Re-measured after #158 (2026-11-02, `next` at its merge of #158):** the importers, the mutation
+counts and the pinned rows above hold as written (2,498 entries; 243 on pull request 1's deleted
+files; 51 surviving-code entries lose every reddening test, one of them now on `roots.py`, the core
+module `guards/roots.py` moved to). `areas.py` lists one name per line, and
+`test_every_area_is_on_exactly_one_side` holds `(DELIVERY_AREAS | CORE_AREAS) - discovered areas`
+to the empty set, so Task 2 removes the line `"trust",` from `DELIVERY_AREAS`; the entry "trust
+drops out of every side", whose `before` is that line, is renamed "setup drops out of every side"
+and re-anchored on the line `"setup",` with the same test.
+
 ---
 
 ## Wave A — Tasks 1–3: dead commands
