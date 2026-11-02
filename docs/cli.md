@@ -332,8 +332,8 @@ cost you a tool call, and on `UserPromptSubmit` an exit `2` would erase what you
 
 On `PreToolUse` for a `Bash` call two handlers hint and neither refuses: `bg-cleanup` names a
 backgrounded command that leaves a job behind, and `pipe-status` names a test run piped into `tail`,
-`head` or `grep` with no `pipefail` in the command, where the run's exit status is lost. Each reads
-the command alone, so each speaks in a repository with no `stayfixed.toml`; `pipe-status` has no
+`head` or `grep` whose text names no `pipefail` or `PIPESTATUS` and is a flat list of pipelines, where
+the run's exit status is lost. Each reads the command alone, so each speaks in a repository with no `stayfixed.toml`; `pipe-status` has no
 switch and speaks once per context.
 
 **A session never dies of its configuration.** The guards run in every repository, whatever

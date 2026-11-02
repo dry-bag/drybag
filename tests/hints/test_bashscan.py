@@ -91,10 +91,12 @@ def test_pipelines_group_the_commands_a_pipe_joins() -> None:
     assert bashscan.pipelines(tokens) == [[["a"], ["b"]], [["c"]], [["d"], ["e"]]]
 
 
-def test_a_fused_pipe_and_separator_still_ends_the_pipeline() -> None:
-    tokens = bashscan.tokenize("a |; b | c")
+def test_a_line_break_after_a_pipe_continues_the_pipeline() -> None:
+    # `prepare` rewrites the newline to `;`, and bash and zsh read the next line as the pipe's
+    # right-hand side.
+    tokens = bashscan.tokenize("a |\n  b; c")
     assert tokens is not None
-    assert bashscan.pipelines(tokens) == [[["a"]], [["b"], ["c"]]]
+    assert bashscan.pipelines(tokens) == [[["a"], ["b"]], [["c"]]]
 
 
 def test_arithmetic_shift_with_spaces_is_not_a_heredoc() -> None:

@@ -111,10 +111,11 @@ last ([`docs/cli.md`](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.
 names the key).
 
 The pipe-status hint, from the `pipe-status` handler that runs beside it, names a test run piped into
-`tail`, `head` or `grep` in a command that does not set `pipefail`, where the pipeline's exit status
+`tail`, `head` or `grep` in a command whose text keeps no `pipefail` or `PIPESTATUS` (or zsh's spelling of either), where the pipeline's exit status
 is the reader's and a red run reads as green, and the remedy; it says so once per session context
-and never refuses the command. It reads the command alone, so it has no switch and runs in every
-repository too.
+and never refuses the command. It reads a flat list of pipelines and nothing else: a command with a substitution, a
+parenthesis, a brace or a heredoc gets no hint. It reads the command alone, so it has no switch and
+runs in every repository too.
 
 Where a surface does not reach an agent in the session, the repository gates
 still hold in CI, which every agent's changes pass through. What was measured of Codex

@@ -102,9 +102,9 @@ from typing import NamedTuple
 
 from stayfixed.hints import bashscan
 
-# A named cap (CONTRIBUTING.md#named-caps), and no shipped file changes with it. Above it the guard
-# does not read the command at all. 64 KiB is far past any command a person or a model types and far
-# below where tokenizing costs seconds.
+# A named cap (CONTRIBUTING.md#named-caps), and no shipped file changes with it. Above it neither
+# this guard nor `pipes` reads the command at all. 64 KiB is far past any command a person or a
+# model types and far below where tokenizing costs seconds.
 MAX_COMMAND_CHARS = 65_536
 
 # The backgrounding operator, as an operator PIECE. `bashscan.tokenize` emits `&&`, `>&`,

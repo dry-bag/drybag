@@ -24,6 +24,7 @@ from tests.sessions import NO_CONFIG
         "npm test | grep -i fail",
         "go test ./... | tee log | tail",
         "cd a && pytest | tail",
+        "pytest -x 2>&1 |\n  tail -20",
     ],
 )
 def test_a_test_run_piped_into_a_reader_gets_the_hint(command: str) -> None:
@@ -47,6 +48,14 @@ def test_a_piped_run_behind_uv_or_an_assignment_gets_the_hint(command: str) -> N
         "grep x log | tail",
         "tail -f log | grep pytest",
         "pytest 'a | tail",
+        "setopt PIPE_FAIL; pytest | tail",
+        "setopt pipe_fail; pytest | tail",
+        "pytest | tail; echo $pipestatus[1]",
+        "pytest $(git ls-files | head -3)",
+        "pytest `git ls-files | head -3`",
+        "(pytest | tail)",
+        "{ pytest | tail; }",
+        "cat <<EOF\npytest | tail\nEOF",
     ],
 )
 def test_no_hint_where_the_status_is_kept_or_no_test_run_is_piped(command: str) -> None:
@@ -64,7 +73,8 @@ def test_a_command_past_the_scan_cap_is_not_read() -> None:
 
 
 def test_the_hint_names_nothing_of_the_command() -> None:
-    assert notice_for("pytest tests/secret_name.py | tail") == notice_for("pytest | tail")
+    assert notice_for("pytest tests/secret_name.py | tail") == NOTICE
+    assert notice_for("pytest | tail") == NOTICE
 
 
 def test_a_fused_pipe_and_ampersand_is_a_bound_not_a_pipe() -> None:
