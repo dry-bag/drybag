@@ -36,9 +36,9 @@ jobs:
   # change to code, so this job failing, or answering nothing, runs everything: it can only narrow a
   # run when it says, in so many words, that no code changed.
   #
-  # A push (to `main`) runs everything. A pull request's checkout is the merge commit the platform
-  # makes, so its first parent is the base the change is judged against. `smoke.yml` carries the
-  # same job, byte for byte.
+  # A push (to `main` or `next`) runs everything. A pull request's checkout is the merge commit the
+  # platform makes, so its first parent is the base the change is judged against. `smoke.yml`
+  # carries the same job, byte for byte.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
