@@ -165,8 +165,12 @@ def _memory(context: Context, answers: Answers) -> Row:
 
     resolution = context.session.resolution
     mode = str(resolution.values.get("memory.mode", HARNESS_MODE))
-    layer = resolution.provenance.get("memory.mode")
-    parts = [f"mode {mode}, " + ("which no layer sets" if layer is None else f"set by {layer}")]
+    setter = (
+        f"set by {resolution.said('memory.mode')}"
+        if "memory.mode" in resolution.provenance
+        else "which no layer sets"
+    )
+    parts = [f"mode {mode}, {setter}"]
     store = answers.store(context)
     debris = None
     if store is None:

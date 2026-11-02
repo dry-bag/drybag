@@ -3252,8 +3252,8 @@ reddens = ["tests/config/test_classes.py::test_a_key_with_no_class_is_a_key_erro
 [[mutation]]
 name = "a refused layer's note prints its key raw"
 file = "src/stayfixed/config/classes.py"
-before = "                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.name))"
-after = "                notes.append(REFUSED_LAYER_NOTE.format(key=key, layer=layer.name))"
+before = "                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))"
+after = "                notes.append(REFUSED_LAYER_NOTE.format(key=key, layer=layer.said))"
 reddens = [
   "tests/config/test_classes.py::test_a_refused_layer_note_carries_neither_its_value_nor_a_raw_key",
 ]
@@ -3283,9 +3283,21 @@ reddens = ["tests/config/test_classes.py::test_the_budget_split_is_total_and_dis
 [[mutation]]
 name = "the overlay's common and project layers swap places"
 file = "src/stayfixed/config/classes.py"
-before = "    LayerName.OVERLAY_COMMON,\n    LayerName.OVERLAY_PROJECT,"
-after = "    LayerName.OVERLAY_PROJECT,\n    LayerName.OVERLAY_COMMON,"
+before = "    LayerName.OVERLAY_COMMON,\n    LayerName.OVERLAY_TAG,\n    LayerName.OVERLAY_PROJECT,"
+after = "    LayerName.OVERLAY_PROJECT,\n    LayerName.OVERLAY_TAG,\n    LayerName.OVERLAY_COMMON,"
 reddens = ["tests/config/test_classes.py::test_the_layers_run_lowest_first"]
+
+# A project's tags set values between the common file and the project's own: the project wins over
+# every tag, and a later tag over an earlier one.
+[[mutation]]
+name = "tag layers rank above the project layer"
+file = "src/stayfixed/config/classes.py"
+before = "    LayerName.OVERLAY_TAG,\n    LayerName.OVERLAY_PROJECT,"
+after = "    LayerName.OVERLAY_PROJECT,\n    LayerName.OVERLAY_TAG,"
+reddens = [
+  "tests/config/test_overlay_layers.py::test_a_later_tag_wins_a_value_and_the_project_wins_over_every_tag",
+  "tests/config/test_classes.py::test_the_layers_run_lowest_first",
+]
 
 # A limit of the platform is the shipped preset's alone: a repository raising it would raise what
 # a hook may print.
@@ -3301,9 +3313,9 @@ reddens = ["tests/config/test_classes.py::test_which_layers_may_set_each_class"]
 [[mutation]]
 name = "a refused layer's value stands where nothing beneath it is set"
 file = "src/stayfixed/config/classes.py"
-before = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.name))
+before = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))
                 continue"""
-after = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.name))
+after = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))
                 if key in values:
                     continue"""
 reddens = ["tests/config/test_classes.py::test_a_key_only_a_refused_layer_sets_has_no_value"]
@@ -6081,8 +6093,8 @@ reddens = [
 [[mutation]]
 name = "the overlay project file is read as the overlay common layer"
 file = "src/stayfixed/config/overlay_layers.py"
-before = "        own = _layer(path, LayerName.OVERLAY_PROJECT, notes)"
-after = "        own = _layer(path, LayerName.OVERLAY_COMMON, notes)"
+before = "    PlateKind.PROJECT: LayerName.OVERLAY_PROJECT,"
+after = "    PlateKind.PROJECT: LayerName.OVERLAY_COMMON,"
 reddens = [
   "tests/config/test_overlay_layers.py::test_the_project_file_wins_over_the_common_file_for_a_bound_checkout",
   "tests/doctor/test_checks.py::test_the_preferences_row_names_the_overlay_project_layer_of_a_budget",
