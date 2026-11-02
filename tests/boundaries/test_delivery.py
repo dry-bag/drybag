@@ -245,7 +245,7 @@ def test_every_area_is_on_exactly_one_side() -> None:
     # `CORE_AREAS` list areas, `PACK_PACKAGES` lists packages (the profiles are one and not an
     # area), and every listed name names one: an area joins its side in the change that writes it.
     #
-    # Mutations (declared): `mutations/`'s "trust drops out of every side" and "memory stops being
+    # Mutations (declared): `mutations/`'s "setup drops out of every side" and "memory stops being
     # a delivery area".
     source = ROOT / "src" / "stayfixed"
     delivery, pack = stayfixed.areas.DELIVERY_AREAS, stayfixed.areas.PACK_PACKAGES

@@ -2163,9 +2163,9 @@ after = ""
 reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
 [[mutation]]
-name = "trust drops out of every side"
+name = "setup drops out of every side"
 file = "src/stayfixed/areas.py"
-before = '        "trust",'
+before = '        "setup",'
 after = ""
 reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
@@ -4148,7 +4148,7 @@ file = "src/stayfixed/trust/record.py"
 before = "    revoked = list(dict.fromkeys([*named, *same]))"
 after = "    revoked = named"
 reddens = [
-  "tests/memory/test_reviewed.py::test_revoking_one_entry_unreviews_every_note_holding_its_bytes",
+  "tests/memory/test_reviewed.py::test_withdrawing_one_entry_unreviews_every_note_holding_its_bytes",
 ]
 
 # The record is beside the machine file, and with no home there is none.
@@ -4158,47 +4158,6 @@ file = "src/stayfixed/trust/record.py"
 before = "    base = machine_config_path() if machine is None else machine"
 after = "    base = Path.home() / \".config\" / \"stayfixed\" / \"config.toml\" if machine is None else machine"
 reddens = ["tests/trust/test_record.py::test_the_record_ignores_xdg"]
-
-# Withdrawing needs no terminal, and a revoke that matches nothing says so with exit 1.
-[[mutation]]
-name = "trust revoke revokes nothing"
-file = "src/stayfixed/trust/commands.py"
-before = "    revoked = record.revoke_all(machine, args.kind, [_unshown(args.subject)])"
-after = "    revoked: list[str] = []"
-reddens = ["tests/trust/test_commands.py::test_revoke_needs_no_terminal"]
-
-[[mutation]]
-name = "a revoke of nothing exits 0"
-file = "src/stayfixed/trust/commands.py"
-before = "        exit_code=1,\n    )"
-after = "        exit_code=0,\n    )"
-reddens = ["tests/trust/test_commands.py::test_revoke_of_nothing_lists_what_is_recorded"]
-
-# A recorded subject prints on a line, from `~` under the home, and always
-# escaped and bounded, never withheld and never raw.
-[[mutation]]
-name = "a recorded subject under the home prints whole"
-file = "src/stayfixed/trust/commands.py"
-before = "    if home is not None:"
-after = "    if False:"
-reddens = [
-  "tests/trust/test_commands.py::test_list_names_each_subject_from_the_home",
-  "tests/trust/test_commands.py::test_revoke_of_nothing_lists_what_is_recorded",
-]
-
-[[mutation]]
-name = "a recorded subject prints raw"
-file = "src/stayfixed/trust/commands.py"
-before = "    return clipped(subject)"
-after = "    return subject"
-reddens = ["tests/trust/test_commands.py::test_a_hostile_subject_prints_escaped_and_bounded"]
-
-[[mutation]]
-name = "revoke's recorded list prints a subject raw"
-file = "src/stayfixed/trust/commands.py"
-before = '    shown = ", ".join(_shown(subject) for subject in recorded) or "none"'
-after = '    shown = ", ".join(recorded) or "none"'
-reddens = ["tests/trust/test_commands.py::test_a_hostile_subject_prints_escaped_and_bounded"]
 
 # A trust record that is there and does not parse says why, and that nothing will overwrite it.
 [[mutation]]
@@ -4256,7 +4215,7 @@ before = "        if sandbox_refused(exc):\n            raise SandboxedWrite(SAN
 after = "        if False:\n            raise SandboxedWrite(SANDBOXED) from None"
 reddens = [
   "tests/trust/test_record.py::test_a_write_refused_as_a_sandbox_refuses_one_is_said_so[eperm]",
-  "tests/trust/test_commands.py::test_a_record_write_a_sandbox_refused_says_a_person_must_run_it",
+  "tests/memory/test_reviewed.py::test_a_record_write_a_sandbox_refused_says_a_person_must_run_it",
 ]
 
 [[mutation]]

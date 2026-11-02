@@ -38,8 +38,6 @@ Three things hold everywhere:
 ## Contents
 
 - [`stayfixed memory index`](#stayfixed-memory-index)
-- [`stayfixed trust list [--root PATH] [--machine PATH]`](#stayfixed-trust-list---root-path---machine-path)
-- [`stayfixed trust revoke KIND --subject KEY [--root PATH] [--machine PATH]`](#stayfixed-trust-revoke-kind---subject-key---root-path---machine-path)
 - [`stayfixed memory session-context --bundle <name> [--part N]`](#stayfixed-memory-session-context---bundle-name---part-n)
 - [`stayfixed memory inventory`](#stayfixed-memory-inventory)
 - [`stayfixed memory promote NOTE… | --changed`](#stayfixed-memory-promote-note----changed)
@@ -154,75 +152,6 @@ none this machine records for that project — is said in stayfixed's own words 
 that carries the repository's, with `stayfixed attach` as the way out. The checkout's `origin`
 plays no part in it.
 
-## `stayfixed trust list [--root PATH] [--machine PATH]`
-
-Every approval recorded on the machine, one line each with its kind, its subject and when it was
-approved. It names each subject — for `reviewed`, the resolved absolute path the note was
-promoted at, a label only, since its digest is what is matched — escaped where it leaves the path grammar and, past 120 characters, by its start and
-its length; a subject under `HOME` is named from `~/`. `--json` carries every subject whole.
-
-One command records an approval in this release: [`stayfixed memory
-promote`](#stayfixed-memory-promote-note----changed), of kind `reviewed`, one per note.
-
-`--json` keys: `approvals`, one object per approval with its `kind`, `subject`, `digest` and
-`approved_at`.
-
-**The record** is the machine's one record of approvals, of every kind. It is versioned: a JSON
-object holding `version` (`1`) and `approvals`, each with its `kind`, `subject`, `digest` and
-`approved_at`. Every write replaces the whole file in one atomic step, and no lock is taken: two
-commands writing at once each replace it whole, the last one wins, and neither leaves it torn.
-
-**What an approval holds against.** Repository bytes: stayfixed never writes `trust.json` from
-what a repository holds, and a clone, a pull or a pull request does not reach it, since it lies
-under `HOME` and outside every repository. A repository whose hooks your harness runs — a committed
-`.claude/settings.json` hook in a folder you trusted — is code running as you, and can write any
-file you can, this one included. Not the session's own agent: an agent whose shell can write any
-file you can may write the record as well, and stayfixed neither stops nor checks that. That
-boundary is the harness's sandbox, which is yours to set; `stayfixed setup --approval-boundary`
-prints what to set under Claude Code. Even a sandbox that keeps the record out of reach leaves an
-agent a way to instruct the next session: Claude Code's documentation does not list a project's
-`CLAUDE.md` or `AGENTS.md` among the paths its sandbox keeps from the agent's own writes, and Claude
-Code loads the first as instructions and can load the second, through an import or its project
-instructions setting (read in the documentation, not measured). [SECURITY.md](../SECURITY.md)
-lists an agent with an unsandboxed shell as out of scope.
-
-Exits `2` if `trust.json` exists and is not a record this stayfixed reads — not JSON, not UTF-8, a
-later version, no `version`, a `version` that is neither `1` nor later (`0`, `"1"`, `true`), or a
-version-1 record that is not whole: a key besides `version` and `approvals`, an approval that is not
-an object of four text fields, or one approval named twice. Nothing will overwrite a file it
-could not read: one that does not parse may hold every project's approval, so repair or delete it;
-repair any other that holds approvals you want to keep, or delete it to start a new record; for a record of a later version, which a later
-stayfixed wrote and is met after a downgrade, update stayfixed instead, since deleting it would
-destroy that release's approvals.
-
-**Reads** the machine's trust record.
-
-**Writes** nothing.
-
-## `stayfixed trust revoke KIND --subject KEY [--root PATH] [--machine PATH]`
-
-Withdraw the approval of kind `KIND` recorded for `KEY`, as `trust list` spells the two (a subject
-under `HOME` from `~/`, or whole as `--json` gives it),
-and every other approval of that kind holding the same digest: a digest is what an approval is
-matched on, so a note promoted from two worktrees, or a copy of it, is unreviewed once either is
-revoked. It needs no terminal: withdrawing is the direction that fails safe. A revoke that matches nothing
-exits `1`, writes nothing, and lists what the kind has recorded, each subject named as `trust list`
-names it.
-
-`--json` keys: `kind`, and `revoked`, every subject withdrawn; a revoke that matched nothing adds
-`recorded`, every subject the kind has recorded, whole.
-
-**Reads** the machine's trust record.
-
-**Writes** `~/.config/stayfixed/trust.json` (or the file beside `--machine`), only when an approval
-was withdrawn, through a link a dotfiles manager put there: the file the link leads to gets the
-record, and the link stays. A write refused as an agent's sandbox refuses one (`EPERM` on macOS and
-`EROFS` on Linux and WSL2, as Claude Code's sandboxing reference gives them) exits `2`, withdraws
-nothing, and says that a person must run the command in their own terminal, outside the agent's
-sandbox, and that met in their own terminal it is the directory itself refusing writes, as a
-read-only mount or an immutable flag does. A directory you may not write for its mode exits `1`,
-naming it.
-
 ## `stayfixed memory session-context --bundle <name> [--part N]`
 
 Render one injection bundle. This is what a `SessionStart` hook entry invokes; you will rarely
@@ -290,26 +219,59 @@ stayfixed memory promote --changed    # after reading what changed
 ```
 
 A note is reviewed while the sha256 of its current bytes is a `reviewed` approval in `trust.json`.
-The digest alone decides, and the approval keeps the note's resolved path only as the subject
-`trust list` prints: the same bytes are reviewed in every worktree, after the store moves and
+The digest alone decides, and the approval keeps the note's resolved path only as a label: the same bytes are reviewed in every worktree, after the store moves and
 under another name, and an edit — yours, an agent's, the harness's writer's — makes the note
 unreviewed again and moves no other note. The record is this machine's, so another machine
 promotes for itself. Only a reviewed note is a standing rule
 ([`session-context`](#stayfixed-memory-session-context---bundle-name---part-n)). The record lies
 outside every tree, so repository bytes cannot write it; an agent whose shell can run this command
-can, and against it the record is a label, not a gate ([`trust list`](#stayfixed-trust-list---root-path---machine-path)
-says what the record holds against). `trust revoke reviewed --subject PATH` withdraws one.
+can, and against it the record is a label, not a gate (what the record holds against is below). No
+command withdraws an approval: a promoted note is withdrawn by editing it, which changes its
+digest, or by deleting it.
 
 Prints each note's path in the store and the digest recorded, one per line. `--json` keys:
 `promoted`, one object per note with its `path` and `digest`.
 
-Exits `2` if `trust.json` cannot be read, as `trust list` does, and for a write refused as an
-agent's sandbox refuses one, as `trust revoke` does.
+**The record** is the machine's one record of approvals, of every kind. It is versioned: a JSON
+object holding `version` (`1`) and `approvals`, each with its `kind`, `subject`, `digest` and
+`approved_at`. Every write replaces the whole file in one atomic step, and no lock is taken: two
+commands writing at once each replace it whole, the last one wins, and neither leaves it torn.
+
+**What an approval holds against.** Repository bytes: stayfixed never writes `trust.json` from
+what a repository holds, and a clone, a pull or a pull request does not reach it, since it lies
+under `HOME` and outside every repository. A repository whose hooks your harness runs — a committed
+`.claude/settings.json` hook in a folder you trusted — is code running as you, and can write any
+file you can, this one included. Not the session's own agent: an agent whose shell can write any
+file you can may write the record as well, and stayfixed neither stops nor checks that. That
+boundary is the harness's sandbox, which is yours to set; `stayfixed setup --approval-boundary`
+prints what to set under Claude Code. Even a sandbox that keeps the record out of reach leaves an
+agent a way to instruct the next session: Claude Code's documentation does not list a project's
+`CLAUDE.md` or `AGENTS.md` among the paths its sandbox keeps from the agent's own writes, and Claude
+Code loads the first as instructions and can load the second, through an import or its project
+instructions setting (read in the documentation, not measured). [SECURITY.md](../SECURITY.md)
+lists an agent with an unsandboxed shell as out of scope.
+
+Exits `2` if `trust.json` exists and is not a record this stayfixed reads — not JSON, not UTF-8, a
+later version, no `version`, a `version` that is neither `1` nor later (`0`, `"1"`, `true`), or a
+version-1 record that is not whole: a key besides `version` and `approvals`, an approval that is not
+an object of four text fields, or one approval named twice. Nothing will overwrite a file it
+could not read: one that does not parse may hold every project's approval, so repair or delete it;
+repair any other that holds approvals you want to keep, or delete it to start a new record; for a record of a later version, which a later
+stayfixed wrote and is met after a downgrade, update stayfixed instead, since deleting it would
+destroy that release's approvals.
+
+Exits `2` for a write refused as an agent's sandbox refuses one, as **Writes** below says.
 
 **Reads** the store's notes and the machine's trust record.
 
 **Writes** `~/.config/stayfixed/trust.json` (or the file beside `--machine`), only when a note was
-promoted, as `trust revoke` writes it.
+promoted, through a link a dotfiles manager put there: the file the link leads to gets the record,
+and the link stays. A write refused as an agent's sandbox refuses one (`EPERM` on macOS and
+`EROFS` on Linux and WSL2, as Claude Code's sandboxing reference gives them) exits `2`, records
+nothing, and says that a person must run the command in their own terminal, outside the agent's
+sandbox, and that met in their own terminal it is the directory itself refusing writes, as a
+read-only mount or an immutable flag does. A directory you may not write for its mode exits `1`,
+naming it.
 
 ## `stayfixed hook <event>`
 
@@ -2184,8 +2146,7 @@ other. Run it on a checkout you trust.
 
 **What stays on the machine.** `uninstall` takes back one repository's scaffold, and what is the
 machine's stays: the deny rules `stayfixed setup` added to the user settings file, and every
-approval in `~/.config/stayfixed/trust.json`. `stayfixed trust revoke reviewed --subject KEY`, with a
-key `stayfixed trust list --json` prints, withdraws one.
+approval in `~/.config/stayfixed/trust.json`, which no command withdraws.
 
 **Reads** `stayfixed.toml`, `.stayfixed/manifest.json`, `.stayfixed/local/artifacts.json`, every file
 an artifact targets, `git check-ignore` for each existing file a removal targets at a place a
@@ -2714,7 +2675,7 @@ another tree gets the file the link leads to, and the link stays. The machine co
 is written through a link at it the same way.
 
 `setup` is not the only command that writes outside a repository, and two others say so in their
-own sections: `stayfixed trust revoke` withdraws an approval from `~/.config/stayfixed/trust.json`,
+own sections: `stayfixed memory promote` records an approval in `~/.config/stayfixed/trust.json`,
 and `stayfixed attach` keeps its binding record, render and composed store under
 `~/.local/share/stayfixed/`. It is the only
 one that writes the machine configuration file and `<home>/.claude/settings.json`. `--root` names
@@ -2951,7 +2912,7 @@ cannot be read, or a hook names `prepare-commit-msg.local`.
 
 Prints what keeps an agent's shell out of the trust record's directory under Claude Code, for you
 to set, and sets none of it: an approval holds against an agent only while the harness's sandbox
-holds ([`stayfixed trust list`](#stayfixed-trust-list---root-path---machine-path) says why), and
+holds ([`stayfixed memory promote`](#stayfixed-memory-promote-note----changed) says why), and
 stayfixed neither enforces nor checks that boundary. The line names:
 
 - the deny rule `Edit(//<the trust record's directory>/**)` for `permissions.deny` in

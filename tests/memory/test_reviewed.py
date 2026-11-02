@@ -19,7 +19,9 @@ from stayfixed.memory.notes import walk
 from stayfixed.memory.reviewed import REVIEWED, UNREVIEWED, status
 from stayfixed.memory.store import Store, resolve
 from stayfixed.memory.trust import DELIMITER
+from stayfixed.trust.record import RECORD, SANDBOXED, recorded, revoke_all
 from tests.cli import cli
+from tests.sandboxed import refuse_writes_under
 from tests.sessions import session_of
 
 CONFIG = """
@@ -155,7 +157,7 @@ def test_a_note_promoted_in_the_main_checkout_is_reviewed_in_a_linked_worktree(
 
 
 def test_a_promoted_note_is_still_reviewed_after_its_store_moves(tmp_path: Path) -> None:
-    # The path is the record's label for `trust list`, never what it matches on: the bytes the
+    # The path is only the record's label, never what it matches on: the bytes the
     # owner promoted are the bytes reviewed wherever the store now sits.
     import shutil
 
@@ -197,20 +199,20 @@ def test_promote_refuses_what_is_no_note_of_the_store_and_records_nothing(
     assert not (tmp_path / "trust.json").exists()
 
 
-def test_a_revoked_record_makes_the_note_unreviewed_again(tmp_path: Path) -> None:
-    # `trust list` and `trust revoke` read the record kind `reviewed` as any other kind.
+def test_a_withdrawn_record_makes_the_note_unreviewed_again(tmp_path: Path) -> None:
+    # The record kind `reviewed` is withdrawn as any other kind is.
     root = _project(tmp_path)
     assert cli(root, tmp_path, "memory", "promote", "developer/rule.md")[0] == 0
-    code, out, _ = cli(root, tmp_path, "trust", "list", "--json")
-    rows = json.loads(out)["approvals"]
-    assert code == 0 and [row["kind"] for row in rows] == ["reviewed"]
-    subject = rows[0]["subject"]
-    assert cli(root, tmp_path, "trust", "revoke", "reviewed", "--subject", subject)[0] == 0
+    machine = tmp_path / "absent.toml"
+    rows = recorded(machine)
+    assert [kind for kind, _ in rows] == ["reviewed"]
+    subject = next(iter(rows))[1]
+    assert revoke_all(machine, "reviewed", [subject]) == [subject]
     assert _status_of(root, tmp_path, "rule") == UNREVIEWED
 
 
-def test_revoking_one_entry_unreviews_every_note_holding_its_bytes(tmp_path: Path) -> None:
-    # The record matches on the digest alone, so a revocation follows the same rule: withdrawn by
+def test_withdrawing_one_entry_unreviews_every_note_holding_its_bytes(tmp_path: Path) -> None:
+    # The record matches on the digest alone, so a withdrawal follows the same rule: withdrawn by
     # one subject, the bytes are no longer reviewed through another entry holding them — the
     # same note promoted from a second worktree, or a copy of it. Mutation (oracle):
     # `mutations/`'s "a revoke leaves another entry holding the same digest".
@@ -218,12 +220,30 @@ def test_revoking_one_entry_unreviews_every_note_holding_its_bytes(tmp_path: Pat
     base = root / ".stayfixed" / "local" / "memory" / "developer"
     (base / "copy.md").write_bytes((base / "rule.md").read_bytes())
     assert cli(root, tmp_path, "memory", "promote", "--changed")[0] == 0
-    rows = json.loads(cli(root, tmp_path, "trust", "list", "--json")[1])["approvals"]
-    subject = next(row["subject"] for row in rows if row["subject"].endswith("rule.md"))
-    assert cli(root, tmp_path, "trust", "revoke", "reviewed", "--subject", subject)[0] == 0
+    machine = tmp_path / "absent.toml"
+    subject = next(s for _, s in recorded(machine) if s.endswith("rule.md"))
+    assert revoke_all(machine, "reviewed", [subject])
     assert _status_of(root, tmp_path, "rule") == UNREVIEWED
     assert "RULE-BODY" not in _bundle(root, tmp_path, "standing-rules")
     assert _status_of(root, tmp_path, "other") == REVIEWED
+
+
+def test_a_record_write_a_sandbox_refused_says_a_person_must_run_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # From an agent's sandboxed shell the machine directory cannot be written (`EPERM`, as macOS's
+    # sandbox answers), so a promote there ends in exit 2 and the record's constant sentence,
+    # nothing written, never a traceback. Mutation (`mutations/`'s "the trust record says nothing
+    # of the sandbox that refused its write"): exit 1 and the sentence about a directory that
+    # cannot be written.
+    root = _project(tmp_path)
+    refused = refuse_writes_under(monkeypatch, tmp_path / RECORD)
+    code, out, err = cli(root, tmp_path, "memory", "promote", "developer/rule.md")
+    assert (code, out) == (2, "")
+    assert refused == [tmp_path / RECORD]
+    assert err == f"stayfixed: refused: {SANDBOXED}\n"
+    assert recorded(tmp_path / "absent.toml") == {}
+    capsys.readouterr()
 
 
 def test_a_trust_record_that_cannot_be_read_leaves_every_note_unreviewed(tmp_path: Path) -> None:

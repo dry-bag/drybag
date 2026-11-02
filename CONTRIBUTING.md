@@ -165,13 +165,12 @@ exception kept for a reason outside the code ("Tests" gives it): it groups their
 into files, and a new area needs no row there: its entries go in the group its path falls into.
 
 Today the discovered ones are `assess`, `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`,
-`ledger`, `memory`, `overlay`, `project`, `prove`, `setup` and `trust`, and every module under
+`ledger`, `memory`, `overlay`, `project`, `prove` and `setup`, and every module under
 `src/stayfixed/` sits on one of three sides, which `src/stayfixed/areas.py` names. **Delivery**
-(`DELIVERY_AREAS`) is the private layer, a machine's setup, the trust record and the session hints:
+(`DELIVERY_AREAS`) is the private layer, a machine's setup and the session hints:
 `overlay` renders and upgrades the private overlay; `attach` binds a repository to one, and its
 `detach` takes back what `attach` wrote while the overlay keeps its record of the binding; `memory`
-keeps the notes; `setup` a machine's configuration; `trust` every approval a person gave on the
-machine, in one record, with the `stayfixed trust` commands over it; and `hints` the session hints
+keeps the notes; `setup` a machine's configuration; and `hints` the session hints
 (the background-cleanup hint, the red-run note and the command scanner they share). The **pack**
 (`PACK_PACKAGES`) is the methodology's records and checks: `ledger` keeps the bug ledger, `docs`
 the documentation and plan lints, `guards` the commit-message rules and the test-run checks, and
@@ -185,10 +184,12 @@ which both sides share, `cli.py` and the subpackages that are not areas included
 (`CORE_AREAS`) are `hooks`, the dispatcher every hook event goes through, and `doctor`, which
 reports on what every other area left behind and repairs none of it. `assess` publishes no `api.py`:
 nothing under `src/` or `scripts/` outside it imports it, and tests reach its modules directly, as
-they do every area's. (`config`, `presets`, `profiles`, `release`, `scaffold` and `templates` are
-subpackages and not areas, and `harnesses` is a module — area discovery does not find them, because
-they carry none of `commands.py`, `hooks.py` and `doctor.py`. `release` still publishes an `api.py`,
-which holds what an installed stayfixed reads about its own releases: the tags it pins.)
+they do every area's. (`config`, `presets`, `profiles`, `release`, `scaffold`, `templates` and
+`trust` are subpackages and not areas, and `harnesses` is a module — area discovery does not find
+them, because they carry none of `commands.py`, `hooks.py` and `doctor.py`. `release` still
+publishes an `api.py`, which holds what an installed stayfixed reads about its own releases: the
+tags it pins; `trust` publishes one too, over every approval a person gave on the machine, kept in
+one record that `memory promote` writes.)
 
 The rules between them: either side may import the core, and otherwise no import crosses a side —
 the core imports neither side, and neither side the other — through an `api.py` or not, at module
