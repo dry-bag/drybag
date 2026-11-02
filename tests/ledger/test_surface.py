@@ -14,7 +14,7 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     #
     # Outside this area, `stayfixed.assess.gates` imports `bugs_gate`,
     # `stayfixed.project.templates` imports `render_index`, `bug_register`, `BUG_RUNBOOK`,
-    # `BUG_AUDITS` and `ledger_path`, and `stayfixed.docs.plans` and `stayfixed.memory.graph` import
+    # `BUG_AUDITS` and `ledger_path`, and `stayfixed.docs.plans` imports
     # `bug_register`; the other names stay on the argument written beside them in `api.py`: the
     # two artifacts this area leaves on a project's disk, and the register they are read and
     # written against.

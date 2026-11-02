@@ -1071,8 +1071,6 @@ STORE_COMMANDS = [
     ("memory", "index"),
     ("memory", "promote", "--changed"),
     ("memory", "inventory"),
-    ("memory", "fit"),
-    ("memory", "refs"),
 ]
 
 

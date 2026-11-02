@@ -330,12 +330,12 @@ LAUNCH_SHAPES: dict[str, tuple[str, str, tuple[str | None, ...]]] = {
     ),
     "re-export": (
         TOP,
-        "from stayfixed.memory.refs import git_run as g\ng(r, 'push', 'origin', 'HEAD')",
+        "from stayfixed.docs.trail import git_run as g\ng(r, 'push', 'origin', 'HEAD')",
         ("git", "push", "origin", "HEAD"),
     ),
     "re-export-module": (
         TOP,
-        "from stayfixed.memory import refs\nrefs.git_run(r, 'push')",
+        "from stayfixed.docs import trail\ntrail.git_run(r, 'push')",
         ("git", "push"),
     ),
     "derived": (

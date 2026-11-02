@@ -54,7 +54,7 @@ def test_docs_check_passes_a_compliant_project_and_names_the_enforced_set_only(
 
 def test_docs_check_takes_no_store(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # `--store` named the note store whose link graph `docs check` used to report, and that graph
-    # is `memory refs`'s now. Accepted and never read, the option would answer a person who passes
+    # is gone. Accepted and never read, the option would answer a person who passes
     # it exactly as if it had done something, so it is a usage error instead. Mutation (declared):
     # `mutations/`'s "docs check accepts a store it never reads".
     root, common = project(tmp_path)

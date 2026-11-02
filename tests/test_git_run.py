@@ -153,7 +153,7 @@ def test_a_stdin_this_process_cannot_encode_is_minus_one(tmp_path: Path) -> None
     # A lone surrogate outside the escape range has no bytes under any codec, so git cannot be
     # asked the question at all: `(-1, "")`, the runner's own "git could not be given its
     # input", which every stdin caller already answers conservatively — `project.ignored`
-    # refuses inside a work tree, `memory.refs` keeps the reference as unresolved. Reachable in
+    # refuses inside a work tree. Reachable in
     # practice under a non-UTF-8 locale, where a note's text holds characters that locale has
     # no byte for. Mutation (declared): drop `UnicodeEncodeError` from the `except` -> this
     # reddens. `needs_git`, because where no `git` can be launched the `OSError` answers

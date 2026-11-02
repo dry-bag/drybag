@@ -542,10 +542,10 @@ def test_a_relocated_worktree_private_dir_with_a_matching_back_pointer_is_still_
 # stdout under `--json`. A documentation lint passing next to a live instance of the defect it
 # describes is worse than no test, because it reads like coverage.
 #
-# The behaviour is pinned where it happens, in
-# `tests/memory/test_commands.py::test_a_refusal_reason_reaching_stdout_is_wrapped_as_data` and
-# its forged-marker sibling. What stays here is the one thing those cannot say: that the value
-# really is repository-authored, which is why the wrapping is needed at all.
+# The behaviour is pinned where it happens, in `test_commands.py`'s
+# `test_a_missing_store_directory_is_said_in_the_resolvers_own_words`. What stays here is the one
+# thing that cannot say: that the value really is repository-authored, which is why the wrapping
+# is needed at all.
 
 
 def test_store_unavailable_carries_the_repositorys_own_text(tmp_path: Path) -> None:

@@ -451,9 +451,9 @@ def test_every_readme_row_parses() -> None:
 
 
 # `--json`'s one cross-command promise, in the README's Exit-codes paragraph. The sentence
-# named four commands while five emit the key — `memory refs` was missing — so a reader
-# scripting against it would have treated a `findings` list as "this command does not report
-# findings". Bound to the real parser's functions rather than to a second hand-written list.
+# once named four commands while five emitted the key, so a reader scripting against it would have
+# treated a `findings` list as "this command does not report findings". Bound to the real parser's
+# functions rather than to a second hand-written list.
 _FINDINGS_SENTENCE = re.compile(
     r"The commands that report a list of\s+findings — (.+?) —\s+all spell it `findings`", re.DOTALL
 )
@@ -485,10 +485,10 @@ def command_functions() -> dict[str, object]:
 
 
 def test_the_readme_names_every_command_whose_json_carries_findings() -> None:
-    # Mutation: drop `memory refs` from the README sentence -> reddens naming it.
+    # Mutation: drop `docs check` from the README sentence -> reddens naming it.
     # The floor first: a walk that resolved no functions would make the comparison below
-    # vacuously true, and a regex that stopped matching would look the same. Four emit the key
-    # today: `bugs check`, `docs check`, `memory refs` and `plan check`.
+    # vacuously true, and a regex that stopped matching would look the same. Three emit the key
+    # today: `bugs check`, `docs check` and `plan check`.
     functions = command_functions()
     assert len(functions) >= REGISTERED_COMMANDS_FLOOR, sorted(functions)
     emitting = {
@@ -496,7 +496,7 @@ def test_the_readme_names_every_command_whose_json_carries_findings() -> None:
         for name, func in functions.items()
         if '"findings":' in inspect.getsource(func)  # type: ignore[arg-type]
     }
-    assert len(emitting) >= 4, sorted(emitting)
+    assert len(emitting) >= 3, sorted(emitting)
     match = _FINDINGS_SENTENCE.search(README.read_text(encoding="utf-8"))
     assert match is not None, "README's --json paragraph no longer names the findings commands"
     named = set(re.findall(r"`([^`]+)`", match.group(1)))
@@ -1027,14 +1027,14 @@ def test_the_cli_reference_contents_lists_every_section_in_order() -> None:
     # Every `## ` heading after the Contents, in order, each linked by GitHub's anchor: a command
     # section added without its Contents line, or a heading renamed under a stale link, is
     # a reference a reader cannot navigate. The floor is today's count of sections after the
-    # Contents, 39, so a walk that found nothing, or half, cannot pass.
-    # Mutation (declared): drop the `memory fit` Contents line -> the lists differ.
+    # Contents, 37, so a walk that found nothing, or half, cannot pass.
+    # Mutation (declared): drop the `memory inventory` Contents line -> the lists differ.
     text = (ROOT / "docs" / "cli.md").read_text(encoding="utf-8")
     _, _, after = text.partition("## Contents\n")
     contents, _, rest = after.partition("\n## ")
     listed = re.findall(r"^- \[(.+)\]\(#([^)]+)\)$", contents, re.MULTILINE)
     headings = re.findall(r"^## (.+)$", "## " + rest, re.MULTILINE)
-    assert len(headings) >= 39, len(headings)
+    assert len(headings) >= 37, len(headings)
     assert listed == [(heading, _anchor(heading)) for heading in headings]
 
 

@@ -11,9 +11,9 @@ Three things hold everywhere:
   COMMAND --json` hands `--json` to `COMMAND` and prints the line. A command
   whose result is a list of findings carries it under **`findings`**, named after what the
   values are and spelled the same way by every command, whatever its summary line calls them.
-  Four commands do: `bugs check`, `docs check`, `memory refs` and `plan check`. Every other
-  command's keys are its own and are listed with it below — `doctor`'s `checks`, `memory refs`'s
-  advisory `notices`, `docs trail`'s `undeclared`, and the two of `docs trail`'s keys that are
+  Three commands do: `bugs check`, `docs check` and `plan check`. Every other
+  command's keys are its own and are listed with it below — `doctor`'s `checks`, `docs trail`'s
+  `undeclared`, and the two of `docs trail`'s keys that are
   not lists at all, `written` and `stale`. `--json` escapes every non-ASCII character as
   `\uXXXX`, and a name git or the disk gave in bytes that are not UTF-8 appears as one lone
   surrogate escape per byte (`\udcXX`), which a strict JSON reader may refuse.
@@ -42,7 +42,6 @@ Three things hold everywhere:
 - [`stayfixed trust revoke KIND --subject KEY [--root PATH] [--machine PATH]`](#stayfixed-trust-revoke-kind---subject-key---root-path---machine-path)
 - [`stayfixed memory session-context --bundle <name> [--part N]`](#stayfixed-memory-session-context---bundle-name---part-n)
 - [`stayfixed memory inventory`](#stayfixed-memory-inventory)
-- [`stayfixed memory fit`](#stayfixed-memory-fit)
 - [`stayfixed memory promote NOTE… | --changed`](#stayfixed-memory-promote-note----changed)
 - [`stayfixed hook <event>`](#stayfixed-hook-event)
 - [Hooks](#hooks)
@@ -62,7 +61,6 @@ Three things hold everywhere:
 - [`stayfixed assess [--base REF] [--builtin] [--root PATH] [--machine PATH]`](#stayfixed-assess---base-ref---builtin---root-path---machine-path)
 - [`stayfixed gate [--only NAME]… [--base REF | --pr-base=BRANCH --base-input=BRANCH --default-branch=BRANCH] [--path=PATH] [--builtin | --custom] [--workflow-sha SHA] [--annotate] [--summary FILE] [--root PATH] [--machine PATH]`](#stayfixed-gate---only-name---base-ref----pr-basebranch---base-inputbranch---default-branchbranch---pathpath---builtin----custom---workflow-sha-sha---annotate---summary-file---root-path---machine-path)
 - [`stayfixed adopt promote [GATE …] [--base REF] [--builtin] [--root PATH] [--machine PATH]`](#stayfixed-adopt-promote-gate----base-ref---builtin---root-path---machine-path)
-- [`stayfixed memory refs`](#stayfixed-memory-refs)
 - [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--commit-type TYPE …] [--local ID …] [--no-ci] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----profile-name---memory-mode-mode---attribution-check---commit-type-type----local-id----no-ci---root-path---machine-path)
 - [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
 - [`stayfixed upgrade [--dry-run] [--force PATH]… [--root PATH] [--machine PATH]`](#stayfixed-upgrade---dry-run---force-path---root-path---machine-path)
@@ -132,7 +130,7 @@ curated `index:` would replace.
 the harness's line or byte caps, or when a file in the store cannot be parsed as a note — one
 whose name is not UTF-8 on disk included, since the index names every note by its file's name.
 Such a file is named by its path inside the store, on the line and in `--json`'s `unreadable`
-alike, as `memory refs` names it. Every list of names on the line names up to eight and says
+alike. Every list of names on the line names up to eight and says
 how many more there are; `--json` carries every one.
 The same findings are printed on the write path too — they just do not fail it, because `--check`
 is the mode that fails a build.
@@ -239,7 +237,7 @@ Each bundle is emitted across numbered parts, because the harness caps each hook
 independently. `--part N` selects one; a part past the end prints nothing and exits `0`. A part
 that is a single block too large for one slot is withheld — the command prints a short notice
 saying so instead, because the harness would otherwise truncate it and a truncated region loses
-the marker that says where repository content ends. `stayfixed memory fit` names the block.
+the marker that says where repository content ends. `stayfixed doctor`'s `bundles` row reports it.
 
 Output is deliberately **raw**, not JSON: the margin that keeps a bundle inside the platform cap
 is additive only because there is no envelope and no escaping. Do not pass `--json` from a hook
@@ -276,14 +274,6 @@ promoted elsewhere. A group directory that is a link, as each of the composed st
 followed.
 
 **Reads** the store's notes and the machine's trust record.
-
-**Writes** nothing.
-
-## `stayfixed memory fit`
-
-Whether each bundle fits the numbered hook entries declared for it. Exits `1` when one does not
-— either it needs more parts than there are slots, or a single block is larger than one part
-and would be truncated by the platform.
 
 **Writes** nothing.
 
@@ -1099,8 +1089,7 @@ finding); every relative local link in the agents file resolves to a file — re
 document's own directory, and only when it lands inside the project root, since a link that
 walks out through `..` would be settled against the machine rather than the repository (an
 absolute link is not read at all, nor is an anchor, a URL or a `mailto:`). Budgets are the
-effective ones — the preset's, or the value `[budgets]` sets in its place. The memory
-store's link graph is `stayfixed memory refs`'s, as advice.
+effective ones — the preset's, or the value `[budgets]` sets in its place.
 
 **Writes** nothing.
 
@@ -1589,34 +1578,6 @@ and nothing when no gate is promoted. A custom gate writes whatever its command 
 | 0 | every gate it ran passed and now enforces |
 | 1 | a gate failed, could not run, is a custom gate whose command the base does not have, or is a custom gate `--builtin` did not run: with names, nothing was written; without, the others were enforced; or `stayfixed.toml` is missing or does not load |
 | 2 | a name that is not a configured gate, a named gate that already enforces, nothing left to promote (every configured gate listed), a project that configures no gate, a `--base` outside its grammar (from the parser), a manifest that cannot be read, or `stayfixed.toml` refused |
-
-## `stayfixed memory refs`
-
-Every backticked repository path a note names still exists. Notes are read as authoritative and
-age silently, so a path to a deleted module sends the next session after it. A candidate is
-dropped when the tree explains it: shorthand that resolves under the root, a code root or the
-directory a `[paths]` value lives in; an absolute path outside the repository; a placeholder
-(`scripts/foo.py`); a path the repository's ignore rules cover — except a path into the store
-itself, which those rules cover wholesale and which is settled on disk. Fenced code and bare
-filenames are skipped. In an overlay store, a note in a cross-project group that `[[links]]`
-into a project-scoped note is an `audience` finding. Exits `1` listing `note:line [rule]`; the
-targets are in `--json`. A note that exists and would not parse is counted on the line and
-named in `--json`, and is exit `1` too: an unread note is not a clean note. Beside those, the
-store's link graph is reported as advice: every `[[wiki-link]]` names a document in the store,
-no link is immediately repeated, and no ledger identifier is bracketed. Each miss is a notice,
-counted on the line and listed under `notices` in `--json`, and never changes the exit code: the
-store is shared by every session on the machine, so a link a sibling session left dangling is a
-hint, while a stale path is a finding. Refuses (`2`) when a
-configured group could not be resolved — it leaves the store, or is a link the store refuses — counting them on a line that names none, then naming
-every group with the resolver's own reason for it, one per line, inside the delimited region that
-marks repository-authored text as data — the one list of names not capped at eight, since the
-region is data rather than a line, and on the path a model reads the harness keeps at most
-`[native_caps] hook_output_chars` of it — because a walk over a subset that reports nothing stale
-is worse than no guard. A group whose directory the store does not hold is no such group: it is
-empty, and the walk reads what is there. Where no store resolves at all, the exit is `1`, with
-the resolver's reason. Write a path that deliberately does not resolve in *italics*.
-
-**Writes** nothing.
 
 ---
 
@@ -3706,7 +3667,7 @@ trees `docs trail` lists, and `plans` is where `plan check` looks for the plans 
 `bugs` is the ledger's entry directory and `bug_index` its generated index — `bugs new`,
 `bugs index`, `bugs check` and `bugs renumber` all read both — and `runbooks` supplies the
 `<runbooks>/bug-reports.md` link that index's generated header writes. `memory` is the note
-store, which `memory refs` walks. `stayfixed` is the directory stayfixed's own project files go
+store. `stayfixed` is the directory stayfixed's own project files go
 under, so that `uninstall` can account for them and a reader can find them; a stack profile's
 rules are the first, at `<stayfixed>/rules/<profile>.md`. The remaining three are read for their
 location alone, and so is every one of the others: `bugs check` treats the first component of
@@ -3720,7 +3681,7 @@ and `BR-nnn` in every message. It is interpolated into patterns and filenames, s
 a shape — a capital letter followed by up to seven more capitals or digits — and a prefix
 outside it is a refusal (`2`), not a finding. The number is three digits or more. `code_roots`
 are the trees `bugs check` sweeps for mentions of an identifier, each of which must have an
-entry behind it, and the trees `memory refs`, `test hygiene` and the `todo-markers` probe
+entry behind it, and the trees `test hygiene` and the `todo-markers` probe
 walk. `src/` and `./src` are read as `src`. An entry that names the repository root itself,
 leaves the repository, passes through a link, a `..` or `.git`, or names no directory is walked
 by none of them and refused by nothing: `stayfixed assess`'s `code-roots` item counts it, and
@@ -3730,7 +3691,7 @@ default lists while another entry is walked, which then loses no walk.
 `**What this evidence does not establish:**` line, the template's placeholder not counting. Widening it is how a project asks the same of `medium`. Each value must be one of the
 severities, `high`, `medium` and `low`, spelled as the table below spells it. A value that names
 none would require the line of no entry, so it is a refusal (`2`), counted and not quoted, of
-every command that reads the ledger — `bugs`, `plan check`, `memory refs`, `init` and `upgrade`
+every command that reads the ledger — `bugs`, `plan check`, `init` and `upgrade`
 among them — and never of `uninstall`. An empty list is the project asking it of no severity.
 
 **The two ledger vocabularies**, neither of them configurable — they are the entry contract, and
@@ -3782,7 +3743,7 @@ what a session loads; the five a gate judges a pull request by (`agents_md_lines
 `agents_md_words`, `status_lines`, `roadmap_prose_lines`, `roadmap_prose_words`) are the
 repository's alone: one written here is ignored, with a note. Every key you leave out is the
 preset's. A command that loads `stayfixed.toml` reads this file's `[personal]`, `[guards]` and
-`[budgets]` too, as a session reads them, so `memory fit`, `memory index` and `memory inventory`
+`[budgets]` too, as a session reads them, so `memory index` and `memory inventory`
 measure the session budgets a session runs on. What you write here is honoured, and what this
 stayfixed cannot use is said and never refused: a key in those three tables it does not know, a
 value it cannot use or a table that is not one costs that key or table alone — an unknown key is

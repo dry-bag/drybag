@@ -766,7 +766,8 @@ def test_no_module_but_fsops_catches_the_runtime_error_a_symlink_loop_raised() -
     # answer was one hand-written `except (OSError, RuntimeError)` per site, while a site without
     # one ended in `internal error`. `fsops.resolved` is the one answer, so the walk refuses every
     # other `except` that names `RuntimeError` but the ones `OTHER_RUNTIME_ERRORS` gives a reason
-    # for. Mutation (`mutations/`'s "refs catches the RuntimeError of a loop by hand again").
+    # for. Mutation (`mutations/`'s "the prose path check catches the RuntimeError of a loop by
+    # hand again").
     source = Path(fsops.__file__).parent
     found: dict[tuple[str, str], int] = {}
     for path in sorted(source.rglob("*.py")):

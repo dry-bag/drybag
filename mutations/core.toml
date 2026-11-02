@@ -519,7 +519,22 @@ after = "        if False:"
 reddens = [
   "tests/docs/test_plans.py::test_a_reference_through_a_symlink_out_of_the_tree_is_not_asked_of_the_filesystem",
   "tests/docs/test_hygiene.py::test_a_link_through_a_symlink_out_of_the_tree_is_not_asked_of_the_filesystem",
-  "tests/memory/test_refs.py::test_a_reference_through_a_symlink_out_of_the_tree_is_not_asked_of_the_filesystem",
+]
+
+# In the block led by `mutations/`'s "fsops.resolved answers a loop with a path where the
+# interpreter does": a hand-written `except (OSError, RuntimeError)` is the answer
+# `fsops.resolved` replaced, and a walk of `src/` refuses one outside `fsops`.
+[[mutation]]
+name = "the prose path check catches the RuntimeError of a loop by hand again"
+file = "src/stayfixed/prose.py"
+before = """    except OSError:
+        return False
+"""
+after = """    except (OSError, RuntimeError):
+        return False
+"""
+reddens = [
+  "tests/test_fsops.py::test_no_module_but_fsops_catches_the_runtime_error_a_symlink_loop_raised",
 ]
 
 # A claim the filesystem cannot answer for -- a directory on its way that cannot be searched -- is
@@ -533,7 +548,6 @@ after = "    except NotImplementedError:\n        return False\n"
 reddens = [
   "tests/docs/test_plans.py::test_a_reference_below_a_directory_that_cannot_be_searched_is_not_found_rather_than_a_crash",
   "tests/docs/test_hygiene.py::test_a_link_below_a_directory_that_cannot_be_searched_is_missing_rather_than_a_crash",
-  "tests/memory/test_refs.py::test_a_reference_below_a_directory_that_cannot_be_searched_is_a_finding_rather_than_a_crash",
 ]
 
 # One digit rule, and every reader takes it from the constant. The allocator's `git log` source
@@ -4256,7 +4270,7 @@ reddens = [
 ]
 
 # One reader of the machine file for every load (`loader._built`): a load no command handed a layer
-# folds the owner's layer a session folds, read `strict`, so `memory fit`, `memory index` and
+# folds the owner's layer a session folds, read `strict`, so `memory index` and
 # `doctor` measure one set of session budgets, and a load refuses a machine file that does not load.
 [[mutation]]
 name = "a command's load reads no machine file for the owner's layer"
@@ -4295,7 +4309,6 @@ before = "        resolve_owner(machine_config_path() if machine is None else ma
 after = "        resolve_owner(None, strict=True)"
 reddens = [
   "tests/memory/test_owner_budgets.py::test_memory_index_judges_by_the_owners_budget[owner-budget]",
-  "tests/memory/test_owner_budgets.py::test_memory_fit_and_doctor_answer_alike_under_the_owners_budget[owner-raised-budget]",
 ]
 
 [[mutation]]

@@ -60,9 +60,6 @@ DELIVERY_TO_PACK: tuple[Row, ...] = (
     ("hints/hygiene.py", "stayfixed.profiles.adapters", frozenset({"shipped_adapters"})),
     ("hints/hygiene.py", "stayfixed.profiles.hints", frozenset({"answer", "shipped_hints"})),
     ("hints/hygiene.py", "stayfixed.profiles.hints", frozenset({"RedRunHint"})),
-    # The note graph flags a bug id written as a link, and asks the bug register which words are
-    # ids. Goes when the note graph takes the id rule from the core.
-    ("memory/graph.py", "stayfixed.ledger.api", frozenset({"bug_register"})),
     # `stayfixed setup --git-hooks` installs and removes the commit-message hook, inside the one
     # function that runs it. Goes when the commit-hook installer leaves `setup`.
     ("setup/commands.py", "stayfixed.guards.api", frozenset({"Found", "install", "uninstall"})),

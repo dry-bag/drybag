@@ -37,7 +37,7 @@ through `scaffold.printable`, the bound every report prints targets through.
 
 **Ignored means what git would hide.** `check-ignore` consults the index, so a tracked file that
 happens to match an ignore pattern is not ignored here: git shows every change to it. That is why
-this is not `--no-index`, which `docs.trail` and `memory.refs` use to ask about patterns alone.
+this is not `--no-index`, which `docs.trail` uses to ask about patterns alone.
 
 **`LOCAL_ARTIFACTS` is exempt**: `[artifacts] local` asks for exactly that directory, which the
 footprint's ignore block keeps out of git on purpose.

@@ -243,7 +243,7 @@ before = "    except BaseUnresolvable as exc:"
 after = "    except ():"
 reddens = ["tests/docs/test_plans.py::test_a_base_that_will_not_resolve_is_raised_never_an_ok"]
 
-# `docs check` reads no note store since the link graph moved to `memory refs`, so a `--store` it
+# `docs check` reads no note store since the link graph left it, so a `--store` it
 # accepted would be read by nothing: a person who passed it would get the answer they got without
 # it and no word that the option had done nothing.
 [[mutation]]
@@ -340,93 +340,6 @@ before = "    for since in (*_forks(root, base), base):"
 after = "    for since in (base,):"
 reddens = [
   "tests/docs/test_plans.py::test_a_line_the_base_rewrote_since_the_fork_is_not_the_change_s_to_answer_for",
-]
-
-# The ignore rules cover the whole store, so a note→note reference must be settled on disk.
-[[mutation]]
-name = "a reference into the store is asked of the ignore rules and disappears"
-file = "src/stayfixed/memory/refs.py"
-before = '    ignored = _ignored(root, {t for _, _, t in candidates if not _inside_store(root, store, t)})'
-after = '    ignored = _ignored(root, {t for _, _, t in candidates})'
-reddens = ["tests/memory/test_refs.py::test_a_reference_into_the_store_is_settled_against_the_filesystem_not_the_ignore_rules"]
-
-# Advice must never gate. The link graph is reported as notices because the store is shared by
-# every session on the machine, so a sibling's half-finished sweep is not this tree's fault to
-# fail on — and an exit code is the one part of that promise a caller acts on silently.
-[[mutation]]
-name = "an advisory memory-graph notice gates the exit code"
-file = "src/stayfixed/memory/commands.py"
-before = "    if report.findings:"
-after = "    if report.findings or report.notices:"
-reddens = ["tests/memory/test_graph.py::test_refs_reports_graph_notices_without_changing_its_exit"]
-
-# Nor does advice excuse: a stale path fails `memory refs` whatever notices sit beside it, and the
-# failing line still counts them.
-[[mutation]]
-name = "an advisory memory-graph notice clears a stale path's failure"
-file = "src/stayfixed/memory/commands.py"
-before = '    return Result("; ".join([*parts, *advice]), data, exit_code=1)'
-after = '    return Result("; ".join([*parts, *advice]), data, exit_code=0 if report.notices else 1)'
-reddens = ["tests/memory/test_refs.py::test_a_stale_path_fails_beside_a_graph_notice_and_the_line_counts_both"]
-
-[[mutation]]
-name = "the failing memory refs line stops counting the graph's notices"
-file = "src/stayfixed/memory/commands.py"
-before = '    return Result("; ".join([*parts, *advice]), data, exit_code=1)'
-after = '    return Result("; ".join(parts), data, exit_code=1)'
-reddens = ["tests/memory/test_refs.py::test_a_stale_path_fails_beside_a_graph_notice_and_the_line_counts_both"]
-
-# `memory refs` reads the store once: the graph's notices come from the walk made for the stale
-# paths. A second walk reached through the note module's own name, rather than through the name
-# `memory.refs` binds, is a second read of every note all the same.
-[[mutation]]
-name = "the memory graph walks the store a second time"
-file = "src/stayfixed/memory/graph.py"
-before = "    for note in walked.notes:"
-after = '    for note in __import__("stayfixed.memory.notes").memory.notes.walk(store.path, groups).notes:'
-reddens = ["tests/memory/test_graph.py::test_refs_walks_the_store_once_for_its_findings_and_the_graph"]
-
-# The same read without a second walk: each note re-read from disk through `read_note`.
-[[mutation]]
-name = "the memory graph reads every note a second time"
-file = "src/stayfixed/memory/graph.py"
-before = "        text = blank_code_spans(blank_fences(note.body))"
-after = '''        text = blank_code_spans(
-            blank_fences(__import__("stayfixed.memory.notes").memory.notes.read_note(note.path).body)
-        )'''
-reddens = ["tests/memory/test_graph.py::test_refs_walks_the_store_once_for_its_findings_and_the_graph"]
-
-# A link is read once: where none is found from an opening `[[`, none is from any `[[` before the
-# next `]`, so that stretch is taken whole. Found from every `[[`, 16,000 `[` took half a second,
-# four times as long at each doubling.
-[[mutation]]
-name = "a wiki link is read for again from every opening bracket"
-file = "src/stayfixed/memory/graph.py"
-before = "    return (link for link in _LINK.finditer(text) if link.group(1) is not None)"
-after = '    return re.finditer(r"\[\[([^\]]+)\]\]", text)'
-reddens = [
-  "tests/memory/test_graph.py::test_a_long_note_s_links_are_read_in_time_linear_in_its_length[opening brackets]",
-  "tests/memory/test_graph.py::test_a_long_note_s_links_are_read_in_time_linear_in_its_length[unclosed links]",
-]
-
-# The separators are possessive, so `re` keeps no record per separator: greedy, a mebibyte of
-# blanks between two links took 154 MiB more to read.
-[[mutation]]
-name = "the separators between two links are given back"
-file = "src/stayfixed/memory/graph.py"
-before = '_SEPARATORS = re.compile(r"(?:[,\s]|\band\b|\bor\b)*+")'
-after = '_SEPARATORS = re.compile(r"(?:[,\s]|\band\b|\bor\b)*")'
-reddens = ["tests/memory/test_graph.py::test_a_long_gap_between_two_links_is_read_in_memory_linear_in_its_length"]
-
-# Two links repeat only when separators fill the whole gap between them: code between them is not a
-# list of the same note.
-[[mutation]]
-name = "a repeat is noted across code between two links"
-file = "src/stayfixed/memory/graph.py"
-before = "            and _SEPARATORS.fullmatch(text, before.end(), link.start())"
-after = "            and _SEPARATORS.match(text, before.end(), link.start())"
-reddens = [
-  "tests/memory/test_graph.py::test_a_link_inside_a_code_span_or_fence_is_not_a_link_and_code_between_links_is_not_a_repeat",
 ]
 
 # `--` closes the pathspec but sits behind the slot the base interpolates into, so a `--base` of
@@ -1041,15 +954,6 @@ reddens = [
   "tests/docs/test_hygiene.py::test_a_link_through_a_symlink_out_of_the_tree_is_not_asked_of_the_filesystem",
 ]
 
-[[mutation]]
-name = "memory refs follows a symlink out of the tree"
-file = "src/stayfixed/memory/refs.py"
-before = "    return present_within(root, path) is not False"
-after = "    return path.exists()"
-reddens = [
-  "tests/memory/test_refs.py::test_a_reference_through_a_symlink_out_of_the_tree_is_not_asked_of_the_filesystem",
-]
-
 # 2 is reserved for a refusal or an internal error, and a caller is told never to read it as
 # permission. One latin-1 byte in AGENTS.md, the roadmap, a plan or trail.toml reached the frame
 # as `internal error: UnicodeDecodeError` — a repository's malformed input reading as this tool
@@ -1079,18 +983,6 @@ after = '''    except RecursionError as exc:
         raise NoteError(f"{path} is not valid UTF-8 ({exc})") from None'''
 reddens = [
   "tests/memory/test_notes.py::test_a_note_that_is_not_utf8_is_quarantined_rather_than_an_internal_error",
-  "tests/memory/test_refs.py::test_a_note_that_is_not_utf8_is_a_finding_not_an_internal_error",
-]
-
-[[mutation]]
-name = "a note that stops decoding after the walk is an internal error"
-file = "src/stayfixed/memory/refs.py"
-before = '''    except UnicodeDecodeError as exc:
-        raise Failure(f"{quoted(note.path.name)} is not valid UTF-8 ({exc.reason})") from None'''
-after = '''    except RecursionError as exc:
-        raise Failure(f"{quoted(note.path.name)} is not valid UTF-8 ({exc})") from None'''
-reddens = [
-  "tests/memory/test_refs.py::test_a_note_that_stops_decoding_after_the_walk_is_a_failure_not_an_internal_error",
 ]
 
 # `check-ignore` C-quotes a non-ASCII path on output, so the answer never equals the path that
@@ -1105,17 +997,6 @@ before = '''    stdin = "\0".join(p.relative_to(root).as_posix() for p in paths)
 after = '''    stdin = "\n".join(p.relative_to(root).as_posix() for p in paths)
     code, out = git_run(root, "check-ignore", "--no-index", "--stdin", stdin=stdin)'''
 reddens = ["tests/docs/test_trail.py::test_an_ignored_document_whose_name_is_not_ascii_is_not_listed"]
-
-# The memory half of this is not reachable through a note today: the shared `prose` grammar
-# admits only `[A-Za-z0-9_./-]`, which git never quotes. The query is fixed and pinned anyway
-# because that class is the kind that widens — it already widened once, to `.ts`/`.tsx` — and a
-# widened grammar would arrive with the defect already in place. The test is at `_ignored`.
-[[mutation]]
-name = "the note reference guard's ignore check cannot match a non-ASCII path"
-file = "src/stayfixed/memory/refs.py"
-before = '''        root, "check-ignore", "--no-index", "--stdin", "-z", stdin="\0".join(sorted(targets))'''
-after = '''        root, "check-ignore", "--no-index", "--stdin", stdin="\n".join(sorted(targets))'''
-reddens = ["tests/memory/test_refs.py::test_the_ignore_query_matches_a_non_ascii_path_it_asked_about"]
 
 # A markdown link is read from its own document's directory; only the boundary is the root.
 # Containing against the document's directory instead refuses a link from `docs/` into `src/`.
@@ -1720,53 +1601,6 @@ reddens = [
   "tests/ledger/test_check.py::test_a_duplicate_identifier_names_its_own_file_first_whatever_the_sort",
 ]
 
-# In the block led by `mutations/`'s "printable passes a name outside the grammar through": a name
-# the repository chose is printed through `printed.printable` or `printed.quoted`.
-[[mutation]]
-name = "memory refs names a note that stopped decoding unescaped"
-file = "src/stayfixed/memory/refs.py"
-before = "{quoted(note.path.name)} is not valid UTF-8"
-after = "{note.path.name} is not valid UTF-8"
-reddens = [
-  "tests/memory/test_refs.py::test_a_note_that_stops_decoding_is_named_escaped_never_raw",
-]
-
-[[mutation]]
-name = "the unresolved-groups line names the groups outside the data region"
-file = "src/stayfixed/memory/commands.py"
-before = "    \"{count} configured group(s) could not be resolved, so the walk read a subset and \""
-after = "    \"{count} configured group(s) could not be resolved ({names}), so the walk read a subset and \""
-reddens = [
-  "tests/memory/test_refs.py::test_the_unresolved_groups_line_names_no_group_outside_the_data_region",
-]
-
-[[mutation]]
-name = "the unresolved-groups reasons name each group unescaped"
-file = "src/stayfixed/memory/commands.py"
-before = "f\"{quoted(group)}: {unavailable[group]}\""
-after = "f\"{group}: {unavailable[group]}\""
-reddens = [
-  "tests/memory/test_refs.py::test_a_linked_group_with_no_overlay_is_named_escaped_never_raw",
-]
-
-[[mutation]]
-name = "the store names a linked group with no overlay unescaped"
-file = "src/stayfixed/memory/store.py"
-before = "f\"{clipped(group)} is a link and no overlay is recorded\""
-after = "f\"{group} is a link and no overlay is recorded\""
-reddens = [
-  "tests/memory/test_refs.py::test_a_linked_group_with_no_overlay_is_named_escaped_never_raw",
-]
-
-[[mutation]]
-name = "the store names a group linking outside the share unescaped"
-file = "src/stayfixed/memory/store.py"
-before = "f\"{clipped(group)} links outside this project's share of the overlay \""
-after = "f\"{group} links outside this project's share of the overlay \""
-reddens = [
-  "tests/memory/test_commands.py::test_a_group_linking_outside_the_share_is_named_escaped_never_raw",
-]
-
 # A gate that cannot answer must say so in its exit code; this one ran green for its whole
 # life on a checkout that had no base ref. It raises, so the `plan` gate could not run, as
 # `commit` could not, and `plan check` prints the cause as its own finding.
@@ -1933,7 +1767,7 @@ file = "src/stayfixed/memory/store.py"
 before = "        return None, Unresolved(said, shown(base))"
 after = '        return None, Unresolved("", shown(base))'
 reddens = [
-  "tests/memory/test_refs.py::test_a_missing_store_directory_is_said_in_the_resolvers_own_words",
+  "tests/memory/test_commands.py::test_a_missing_store_directory_is_said_in_the_resolvers_own_words",
 ]
 
 # The resolver's detail carries the store's path, `paths.memory` or a group's name, all of them the
@@ -1945,7 +1779,7 @@ file = "src/stayfixed/memory/commands.py"
 before = "    lead = _SAID.format(said=reason.said)"
 after = "    lead = _SAID.format(said=str(reason))"
 reddens = [
-  "tests/memory/test_refs.py::test_a_missing_store_directory_is_said_in_the_resolvers_own_words",
+  "tests/memory/test_commands.py::test_a_missing_store_directory_is_said_in_the_resolvers_own_words",
 ]
 
 # A machine record naming an overlay root that is no longer there read as "no record of this
@@ -2016,18 +1850,6 @@ before = "            if listed > fsops.WALK_ENTRIES:"
 after = "            if False:"
 reddens = [
   "tests/memory/test_doctor.py::test_a_note_store_past_the_walk_cap_is_one_the_row_cannot_tell_about[4]",
-]
-
-# A note's backticked path is resolved to ask whether it lies inside the store, and Python 3.11 and
-# 3.12 raise `RuntimeError` resolving a path through a symlink loop; the note and the loop are both
-# bytes a clone can commit, so the answer is a finding and never an internal error.
-[[mutation]]
-name = "refs lets a path it cannot resolve raise"
-file = "src/stayfixed/memory/refs.py"
-before = "        return resolved(root / target).is_relative_to(resolved(store.path))"
-after = "        return (root / target).resolve().is_relative_to(store.path.resolve())"
-reddens = [
-  "tests/memory/test_refs.py::test_a_reference_through_a_symlink_loop_is_a_finding_and_never_an_internal_error",
 ]
 
 # A second register a project has not started reads its own directory, never the bug ledger's live one.
@@ -2176,8 +1998,8 @@ reddens = [
   "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[no-related-key]",
 ]
 
-# The plan lint and the memory graph read the bug ledger's identifiers through its register, as the
-# project configures them.
+# The plan lint reads the bug ledger's identifiers through its register, as the project
+# configures them.
 [[mutation]]
 name = "the Fixes claim reads the default prefix whatever the project configures"
 file = "src/stayfixed/docs/plans.py"
@@ -2185,15 +2007,6 @@ before = "    fixes = bug_register(config).ids.fixes"
 after = '    fixes = type(bug_register(config).ids)("BR").fixes'
 reddens = [
   "tests/docs/test_plans.py::test_a_fixes_claim_names_the_bug_ledgers_configured_prefix",
-]
-
-[[mutation]]
-name = "the bracketed-identifier notice reads the default prefix whatever the project configures"
-file = "src/stayfixed/memory/graph.py"
-before = "    ids = bug_register(config).ids"
-after = '    ids = type(bug_register(config).ids)("BR")'
-reddens = [
-  "tests/memory/test_graph.py::test_a_bracketed_identifier_is_the_bug_ledgers_as_the_project_configures_it",
 ]
 
 # The base's entries were listed at the tree's `[paths]`, so a change that moved the ledger found
@@ -2349,7 +2162,7 @@ before = "    if unknown:\n        raise Refusal(BOUNDARY_LEVELS_UNKNOWN"
 after = "    if False:\n        raise Refusal(BOUNDARY_LEVELS_UNKNOWN"
 reddens = [
   "tests/ledger/test_register.py::test_a_boundary_level_that_names_no_severity_is_refused_and_never_quoted[levels0-1]",
-  "tests/ledger/test_commands.py::test_a_boundary_level_that_names_no_severity_is_a_refusal_in_every_command_that_reads_it[memory-refs]",
+  "tests/ledger/test_commands.py::test_a_boundary_level_that_names_no_severity_is_a_refusal_in_every_command_that_reads_it[bugs-check]",
 ]
 
 [[mutation]]
@@ -2391,17 +2204,6 @@ before = "        lines = read_regular_text(path).splitlines()"
 after = "        lines = path.read_text(encoding=\"utf-8\").splitlines()"
 reddens = [
   "tests/memory/test_index.py::test_an_index_past_the_read_cap_hands_the_harvest_nothing",
-]
-
-# The reference check reads each note a second time for its line numbers, to the cap the walk read
-# it to, and a note past it by then is a failure naming it.
-[[mutation]]
-name = "the reference check reads a note again with no bound"
-file = "src/stayfixed/memory/refs.py"
-before = "        text = read_regular_text(note.path)"
-after = '        text = note.path.read_text(encoding="utf-8")'
-reddens = [
-  "tests/memory/test_refs.py::test_a_note_that_grew_past_the_read_cap_after_the_walk_is_a_failure_naming_it",
 ]
 
 # The reference scan reads files a clone commits: to the read cap, and a file past it is one the
@@ -2555,20 +2357,6 @@ before = '            "a directory on the way to paths.memory cannot be checked 
 after = '            "paths.memory does not stay inside the project",'
 reddens = [
   "tests/memory/test_store.py::test_a_paths_memory_that_cannot_be_asked_about_is_refused_for_that",
-]
-
-# In the block led by `mutations/`'s "fsops.resolved answers a loop with a path where the
-# interpreter does": a hand-written `except (OSError, RuntimeError)` is the answer
-# `fsops.resolved` replaced, and a walk of `src/` refuses one outside `fsops`.
-[[mutation]]
-name = "refs catches the RuntimeError of a loop by hand again"
-file = "src/stayfixed/memory/refs.py"
-before = """    except OSError:
-        return False"""
-after = """    except (OSError, RuntimeError):
-        return False"""
-reddens = [
-  "tests/test_fsops.py::test_no_module_but_fsops_catches_the_runtime_error_a_symlink_loop_raised",
 ]
 
 # A note may carry its short index line under `metadata:`; `memory index` passed it over and wrote

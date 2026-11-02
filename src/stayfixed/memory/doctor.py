@@ -63,13 +63,13 @@ def _bundles(context: Context, config: Config, answers: Answers) -> Row:
         return Row(
             RED,
             f"{len(over)} bundle(s) do not fit their session-start slots: {listed(over)}",
-            "run `stayfixed memory fit`, then shorten or unflag the notes it names",
+            "run `stayfixed memory inventory`, then shorten or unflag the notes it lists by size",
         )
     if full:
         return Row(
             WARN,
             f"{len(full)} bundle(s) have a part at the platform cap: {listed(full)}",
-            "run `stayfixed memory fit`",
+            "run `stayfixed memory inventory` to see the notes by size",
         )
     return Row(OK, "every bundle fits its slots")
 

@@ -1,6 +1,6 @@
 """`ledger.code_roots`, contained. `config.paths` guards `[paths]` and names this field as one
 the consuming module must check itself, and this module is that check for every consumer:
-`ledger.scan`, `memory.refs`, `assess`'s probes, `guards`' `test hygiene` and the `hints` area's
+`ledger.scan`, `assess`'s probes, `guards`' `test hygiene` and the `hints` area's
 red-run note each import it here, because two spellings of which roots a configuration reaches
 would be two answers. `dropped_roots` names the entries the walks leave out from the same loop, so
 the entries named and the entries walked cannot disagree. A profile's red-run hint is handed what

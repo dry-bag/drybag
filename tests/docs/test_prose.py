@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from stayfixed.prose import (
-    blank_code_spans,
     blank_fences,
     path_references,
     resolves_within,
@@ -226,13 +225,6 @@ def test_fences_are_read_in_time_linear_in_the_text(shape: str) -> None:
     except subprocess.TimeoutExpired:
         pytest.fail(f"blanking the fences ran past {_LONG_TEXT_SECONDS} s on one text")
     assert done.stdout == "True\n", done.stderr
-
-
-def test_code_spans_are_replaced_by_a_placeholder_that_keeps_neighbours_apart() -> None:
-    # Removing a span would leave `[[a]] [[a]]` where the text had `[[a]] `x` [[a]]`; the
-    # graph check reads that as a repeated link. Mutation: replace with "" — this reddens.
-    assert blank_code_spans("[[a]] `x` [[a]]") == "[[a]] \x00 [[a]]"
-    assert blank_code_spans("no code") == "no code"
 
 
 def test_a_claim_that_lands_outside_the_root_resolves_nowhere(tmp_path: Path) -> None:

@@ -1016,7 +1016,7 @@ reddens = [
 [[mutation]]
 name = "the README's --json paragraph drops a command that really emits `findings`"
 file = "README.md"
-before = "`memory refs`, "
+before = "`docs check`, "
 after = ""
 reddens = [
   "tests/test_documents.py::test_the_readme_names_every_command_whose_json_carries_findings",
@@ -1383,7 +1383,7 @@ reddens = ["tests/project/test_planning_seam.py::test_the_checker_sees_a_planner
 [[mutation]]
 name = "a docs/cli.md section drops out of the Contents"
 file = "docs/cli.md"
-before = "- [`stayfixed memory fit`](#stayfixed-memory-fit)"
+before = "- [`stayfixed memory inventory`](#stayfixed-memory-inventory)"
 after = ""
 reddens = ["tests/test_documents.py::test_the_cli_reference_contents_lists_every_section_in_order"]
 

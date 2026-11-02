@@ -388,9 +388,7 @@ stayfixed uninstall --dry-run                          # what would go; what you
 stayfixed memory index                                 # render MEMORY.md from the notes
 stayfixed memory index --check                         # report drift, write nothing
 stayfixed memory inventory                             # what a memory sweep reads
-stayfixed memory fit                                   # whether each injection bundle fits its hook slots
 stayfixed memory session-context --bundle standing-rules --part 1
-stayfixed memory refs                                  # backticked paths in notes that no longer resolve, and the link graph as advice
 stayfixed memory promote developer/prefer-uv.md        # count a note as yours, at the bytes it holds now
 stayfixed memory promote --changed                     # every unreviewed note, after you have read them
 stayfixed trust list                                   # every approval recorded on this machine, reviewed notes among them
@@ -459,7 +457,7 @@ a machine configuration file other than the default); `memory` commands and `att
 `--store` as well. The commands that take neither, and the ones that mean something else by
 either, are listed in [Shared flags](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#shared-flags). `--json` is accepted anywhere before `--` and
 prints one machine-readable object instead of one line; the words after `--` are the command's own. The commands that report a list of
-findings — `bugs check`, `docs check`, `memory refs`, `plan check` — all spell it `findings`,
+findings — `bugs check`, `docs check`, `plan check` — all spell it `findings`,
 whatever their summary line calls them; every other command's keys are its own and are listed
 with it in [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md).
 
