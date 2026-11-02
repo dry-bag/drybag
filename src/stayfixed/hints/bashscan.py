@@ -705,6 +705,43 @@ def segments(tokens: list[str]) -> list[list[str]]:
     return result
 
 
+def pipelines(tokens: list[str]) -> list[list[list[str]]]:
+    """Each pipeline of a token stream as its simple commands: the commands a `|` joins. `;`,
+    `&&`, `||` and `&` end one, and a fused run of punctuation is decomposed first
+    (`operator_pieces`), as `segments` does. A `;` straight after a `|` does not end the
+    pipeline: `prepare` rewrites a line break to `;`, and a line break after `|` continues the
+    pipeline in bash and zsh (a literal `|;` is a syntax error, so no valid command differs).
+
+    THE BOUND IS DOCUMENTED: `|&` reaches this as the pieces `|` and `&`, and the `&` ends the
+    pipeline, so the two commands it joins are read as two pipelines.
+    """
+
+    result: list[list[list[str]]] = []
+    pipeline: list[list[str]] = []
+    current: list[str] = []
+    after_pipe = False
+    for token in tokens:
+        for piece in operator_pieces(token):
+            if piece not in _SEPARATORS:
+                current.append(piece)
+                after_pipe = False
+                continue
+            if piece == ";" and after_pipe and not current:
+                continue
+            after_pipe = piece == "|"
+            if current:
+                pipeline.append(current)
+                current = []
+            if piece != "|" and pipeline:
+                result.append(pipeline)
+                pipeline = []
+    if current:
+        pipeline.append(current)
+    if pipeline:
+        result.append(pipeline)
+    return result
+
+
 class Launch(NamedTuple):
     """A segment read the way `read_launch` reads it, every word in one part.
 

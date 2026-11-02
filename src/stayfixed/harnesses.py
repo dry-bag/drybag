@@ -111,7 +111,7 @@ class Surface(StrEnum):
     """Where stayfixed enforces something, by how it reaches a session."""
 
     # A hook that adds context and refuses nothing: the background-cleanup hints, the
-    # test-hygiene note, the standing rules, the volatile notes.
+    # pipe-status hint, the test-hygiene note, the standing rules, the volatile notes.
     NOTICES = "session notices"
     # The bug, documentation, plan, commit and trail checks, run by the reusable workflow.
     GATES = "repository gates"
