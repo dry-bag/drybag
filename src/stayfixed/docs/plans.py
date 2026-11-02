@@ -489,14 +489,3 @@ def lint(root: Path, config: Config, *, plans: list[Path], base: str | None = No
         where = path.relative_to(root).as_posix()
         findings.extend(_lint_one(path, where, root, fixes=fixes, judged=judged))
     return Lint(findings, sorted(selected), sorted(unlinted))
-
-
-def plan_gate(root: Path, config: Config, base: str) -> list[Finding]:
-    """The `plan` gate's whole composition: `lint`'s findings over the plans the change since
-    `base` touches.
-
-    `plan check` calls `lint` itself rather than this function, because it reports more than
-    findings — which plans it linted, and the uncommitted ones it did not. A base git cannot
-    resolve raises `BaseUnresolvable`, so the gate could not run; it is never a finding here.
-    """
-    return lint(root, config, plans=[], base=base).findings

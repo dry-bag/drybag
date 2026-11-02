@@ -763,17 +763,7 @@ reddens = [
   "tests/guards/test_attribute.py::test_the_tree_listing_is_not_bounded_by_the_argument_free_cap",
 ]
 
-# In the block led by `mutations/`'s "a gate that could not judge counts as passing": every
-# configured gate is a value CI reads, and each built-in finds what its area's command finds.
-[[mutation]]
-name = "the commit gate maps no violation to a finding"
-file = "src/stayfixed/guards/commit.py"
-before = "        for violation in report.violations"
-after = "        for violation in ()"
-reddens = ["tests/assess/test_gates.py::test_the_commit_gate_finds_an_attribution_trailer_after_the_base"]
-
-# In the block led by `mutations/`'s "init's custom-gate note keeps a limit of its own": every list
-# of names nothing bounds in number takes `findings.listed`.
+# Every list of names nothing bounds in number takes `findings.listed`.
 [[mutation]]
 name = "commit check names every offence"
 file = "src/stayfixed/guards/commands.py"

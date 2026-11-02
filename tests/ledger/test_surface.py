@@ -12,12 +12,11 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     # Measured by hand instead — re-exporting `write.file_entry` reddens this test and this
     # test alone.
     #
-    # Outside this area, `stayfixed.assess.gates` imports `bugs_gate`,
-    # `stayfixed.project.templates` imports `render_index`, `bug_register`, `BUG_RUNBOOK`,
-    # `BUG_AUDITS` and `ledger_path`, and `stayfixed.docs.plans` imports
-    # `bug_register`; the other names stay on the argument written beside them in `api.py`: the
-    # two artifacts this area leaves on a project's disk, and the register they are read and
-    # written against.
+    # Outside this area, `stayfixed.project.templates` imports `render_index`, `bug_register`,
+    # `BUG_RUNBOOK`, `BUG_AUDITS` and `ledger_path`, and `stayfixed.docs.plans` imports
+    # `bug_register`; the other names stay on the argument written beside them in `api.py`: the two
+    # artifacts this area leaves on a project's disk, and the register they are read and written
+    # against.
     required = {
         # the entry file's grammar, and the error a file that will not parse raises
         "Entry",
@@ -39,7 +38,5 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
         "BUG_RUNBOOK",
         "BUG_AUDITS",
         "ledger_path",
-        # the bugs gate stayfixed.assess.gates runs, bugs check's own function
-        "bugs_gate",
     }
     assert required == set(ledger.__all__)

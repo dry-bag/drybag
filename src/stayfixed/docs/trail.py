@@ -110,14 +110,6 @@ def trail_path(root: Path, config: Config) -> Path:
     return contained(root, trail_target(config))
 
 
-def trail_reads(root: Path, config: Config) -> list[Path]:
-    """The files the `trail` gate reads by path, there or not: the roadmap, and the `trail.toml`
-    whose states the listing is rebuilt from. A CI checkout that lacks the roadmap fails the gate
-    (it could not run), and one that lacks `trail.toml` rebuilds the listing without the states.
-    """
-    return [contained(root, config.paths.roadmap), trail_path(root, config)]
-
-
 def _interpolable(value: str) -> bool:
     """Whether a repository-authored value may be written into the listing unchanged.
 
@@ -389,12 +381,11 @@ def rebuild(text: str, root: Path, config: Config, trail: Trail) -> str:
     return head + _PREAMBLE + render_listing(root, config, trail) + tail.lstrip("\n")
 
 
-def trail_gate(root: Path, config: Config, _base: str = "") -> list[Finding]:
+def trail_gate(root: Path, config: Config) -> list[Finding]:
     """The `trail` gate's whole composition: the roadmap's listing, as `rebuild` would write it.
 
-    `docs trail --check` answers with this function. `_base` is unread: every gate is a
-    `stayfixed.assess.gates.GateFn`, so that module holds each one as a value. A missing roadmap
-    is a gate that cannot judge the tree, and raises as every such gate does.
+    `docs trail --check` answers with this function. A missing roadmap is a gate that cannot
+    judge the tree, and raises as every such gate does.
     """
     roadmap = contained(root, config.paths.roadmap)
     if not fsops.is_file(roadmap):

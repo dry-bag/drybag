@@ -39,7 +39,6 @@ from typing import TYPE_CHECKING
 from stayfixed.areas import SubParsers
 from stayfixed.command import DRY_RUN_HELP, command_owner, common_flags, grammar
 from stayfixed.errors import Refusal
-from stayfixed.findings import listed
 from stayfixed.result import Result
 from stayfixed.scaffold import Plan, Verb, printable, render_report, unlinks
 
@@ -80,15 +79,6 @@ YES_HELP = (
 STAMPED = (
     "note: stayfixed.toml carried no [stayfixed] version, the one key stayfixed owns that the "
     "loader requires; this run {verb} it and leaves every other line as it was"
-)
-# Names and a count, never a command: each name is a custom gate's, which the loader holds to
-# `PROJECT_NAME`, and past `findings.LISTED_LIMIT` the rest are counted. Said before anything runs
-# them, so the dry run a person approves carries it. The `adopt` skill asks before any runs, keyed
-# on `assess --builtin`'s own output and never on this note.
-CUSTOM_GATES = (
-    "note: stayfixed.toml configures {count} custom gate(s), {names}; `stayfixed assess`, "
-    "`stayfixed gate` and `stayfixed adopt promote` run each one's command from [gates.custom], "
-    "so read those commands before running any of the three; each takes --builtin to run none"
 )
 # Heads the list of what the run took for each question, which the skip path took unasked. Said
 # of the run, as every other line of the report is, and never in the first person.
@@ -218,9 +208,6 @@ def run_init(args: argparse.Namespace) -> Result:
         lines.append(UNKNOWN_HARNESSES.format(count=report.unknown_harnesses))
     if report.head_note:
         lines.append(f"note: {report.head_note}")
-    if report.custom_gates:
-        names = listed(list(report.custom_gates))
-        lines.append(CUSTOM_GATES.format(count=len(report.custom_gates), names=names))
     if report.stamped:
         # Nothing is written by a dry run or a refused one, the stamp included.
         verb = "would write" if report.dry_run or report.refused else "wrote"
@@ -239,7 +226,6 @@ def run_init(args: argparse.Namespace) -> Result:
         "unknown_harnesses": report.unknown_harnesses,
         "head_note": report.head_note,
         "stamped": report.stamped,
-        "custom_gates": list(report.custom_gates),
     }
     return Result("\n".join(lines), data, exit_code=1 if refused else 0)
 

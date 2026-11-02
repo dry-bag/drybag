@@ -1,12 +1,12 @@
 """Every harness stayfixed serves, as values in one registry.
 
-A harness is served first by the `AGENTS.md` region, which `project.templates` renders and
-every harness that reads the standard sees. Where a harness reads something better natively,
-its `render_profile` renders a profile into that form. `settings` names the committed files in
-which it reads hook entries, for `stayfixed assess`'s foreign-hooks probe to inventory;
-`marker_dir` is the directory whose presence says a repository uses it. A harness is a value,
-not a class: what this module states about a harness is one more value in `HARNESSES`, and
-nothing that reads the registry changes. What it does not state yet is the list below.
+A harness is served first by the `AGENTS.md` region, which `project.templates` renders and every
+harness that reads the standard sees. Where a harness reads something better natively, its
+`render_profile` renders a profile into that form. `settings` names the committed files in which it
+reads hook entries; `marker_dir` is the directory whose presence says a repository uses it. A
+harness is a value, not a class: what this module states about a harness is one more value in
+`HARNESSES`, and nothing that reads the registry changes. What it does not state yet is the list
+below.
 
 The registry is also the adapter the `hooks` area answers through. `stayfixed hook` asks `detect`
 which value it is running under and shapes its stdout with that value's `render`, and nothing
@@ -75,10 +75,9 @@ package that names a harness is pardoned there, each pardon by one of these item
   `hooks.api`, `hooks.sink`), in `guards` and in the areas' hook handlers, so a
   harness whose payload differs is an edit to each.
 
-Elsewhere, code that needs a harness fact asks this registry: `assess` reads every selected
-value's `settings` for hook entries; `doctor` reads the plugin-root variables off every value;
-`setup` reads the machine's settings file off `CLAUDE.settings`; and `attach` merges into the one
-file `CLAUDE.local_settings` names.
+Elsewhere, code that needs a harness fact asks this registry: `doctor` reads the plugin-root
+variables off every value; `setup` reads the machine's settings file off `CLAUDE.settings`; and
+`attach` merges into the one file `CLAUDE.local_settings` names.
 
 A name `[stayfixed] agents` lists and no harness answers to is counted, never refused and never
 printed: the list is repository-authored, and a project may name a harness a later stayfixed
@@ -149,7 +148,7 @@ class Harness:
     marker_dir: str
     settings: tuple[str, ...]
     # Settings files this harness reads that a repository keeps out of git, which `doctor`
-    # walks beside `settings` and `stayfixed assess` does not: they are this machine's.
+    # walks beside `settings`: they are this machine's.
     local_settings: tuple[str, ...]
     # The variable this harness names the project root in, if any. Every registered value's is
     # asked, in `project_root_variables`' order, whichever harness was detected (`detect`).

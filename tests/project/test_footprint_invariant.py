@@ -1,5 +1,4 @@
-"""One invariant for `init`, `upgrade`, `uninstall`, `assess` and `adopt promote`, asked of every
-hostile input at once.
+"""One invariant for `init`, `upgrade` and `uninstall`, asked of every hostile input at once.
 
 A write or removal must never land on a file whose bytes the committer does not control and git
 does not show. The inputs that could aim one are repository-authored: the committed
@@ -17,7 +16,7 @@ artifact there.
 - **I2, the legitimate user is not refused.** The legitimate cases run their commands to the
   end: no `Refusal` raised, and no refusal returned in the report's plans, which is the other
   way a command refuses.
-- **I3, the end state is consistent.** After a finished `init`, `assess` or `upgrade`, a
+- **I3, the end state is consistent.** After a finished `init` or `upgrade`, a
   dry-run `upgrade` of the same tree plans nothing and refuses nothing: every artifact the
   configuration builds is at its own place with its own bytes. After a finished `uninstall`, a
   second one says there is nothing to uninstall, and stayfixed's own directory is gone.
@@ -27,21 +26,6 @@ shared `.git` predicate and its case folding, the `.stayfixed` reservation, the 
 collision rule's ownership checks — and guards made to refuse more than they should, which the
 legitimate cases catch. An entry names every row it reddens; a row no single line can redden
 says so where it is declared.
-
-**Why `assess` joins the legitimate rows only.** The hostile inputs above are the ones that can
-aim a write — `[paths]`, `[artifacts] local`, a manifest record, the local ledger — and
-`assess`'s one write is a constant path under stayfixed's reserved directory, which none of them
-reaches: the loader refuses a `[paths]` value naming it. What can reach that path is its shape
-in a clone, a committed symlink or directory there, which `tests/assess/test_command.py` holds.
-Its I2 and I3 lines have no mutation of their own: `assess` has no guard whose removal makes it
-raise a refusal or plan work for `upgrade`.
-
-**`adopt promote` writes one place, `stayfixed.toml`,** through the editor `upgrade` uses, with
-the manifest's record of it re-stamped beside it. No repository value aims that write, and it
-does not ask the ignore guard, which exempts the fixed names so that a person may keep
-`stayfixed.toml` out of git: the legitimate rows run it to the end, once with the file in the
-clone's excludes. What can aim it is the file's own shape, a committed
-`stayfixed.toml` that is a symlink to a hidden file, which the one hostile row holds.
 
 What this module does not cover: guards that decide nothing about a hidden file's bytes, such
 as the attach refusal and the refusals over files `uninstall` would leave under
@@ -58,10 +42,8 @@ from typing import Literal
 
 import pytest
 
-from stayfixed.assess.assessment import assess, write
-from stayfixed.assess.state import promote
-from stayfixed.config.layout import ATTACH_LEDGER, local_base
-from stayfixed.config.loader import CONFIG_FILE, load
+from stayfixed.config.layout import ATTACH_LEDGER
+from stayfixed.config.loader import CONFIG_FILE
 from stayfixed.config.paths import STAYFIXED_DIRECTORY
 from stayfixed.errors import Refusal
 from stayfixed.project.init import ANSWER_SHEET, NO_ANSWERS, Given, InitReport, init
@@ -74,7 +56,7 @@ from tests.gitfixture import git, needs_git
 from tests.project.repos import DOCUMENT, MOVED_OFF_DOCS, forge_record, repository
 from tests.runners import LsRemote, Recorder
 
-Command = Literal["init", "upgrade", "uninstall", "assess", "adopt-promote"]
+Command = Literal["init", "upgrade", "uninstall"]
 Report = InitReport | UpgradeReport | UninstallReport
 
 # Bytes no stayfixed build renders: a person's file, or a tool's.
@@ -91,12 +73,6 @@ def _forge_roadmap_at(target: str, text: str) -> Callable[[Path], None]:
         forge_record(root, "roadmap", target=target, sha256=digest(text))
 
     return forge
-
-
-def _config_through_a_symlink(root: Path) -> None:
-    """`stayfixed.toml` replaced by a committed symlink to a file under `.git/`."""
-    (root / CONFIG_FILE).unlink()
-    (root / CONFIG_FILE).symlink_to(".git/stayfixed.toml")
 
 
 def _forge_ledger_entry(target: str) -> Callable[[Path], None]:
@@ -249,15 +225,6 @@ HOSTILE = (
         paths={"roadmap": "claude.md"},
         plant={"claude.md": FOREIGN},
     ),
-    # The loader follows the link; `read_document` refuses it through `contained()`, and the
-    # write walk would replace the link rather than write through it. Two layers, so no single
-    # line reddens this row: it pins that the two never go at once.
-    Case(
-        "config-a-symlink-to-a-hidden-file",
-        ("adopt-promote",),
-        plant={".git/stayfixed.toml": DOCUMENT},
-        forge=_config_through_a_symlink,
-    ),
     # Answers over a document the clone committed would rewrite what the committer chose; they
     # are refused before anything is read beyond the root.
     Case(
@@ -274,7 +241,7 @@ HOSTILE = (
 LEGITIMATE = (
     Case(
         "fixed-names-in-the-clone-s-excludes",
-        ("init", "assess", "upgrade", "uninstall"),
+        ("init", "upgrade", "uninstall"),
         exclude=("CLAUDE.md", "AGENTS.md"),
     ),
     # Not `uninstall`: it refuses to remove a file at an ignored place a `[paths]` value chose,
@@ -287,7 +254,7 @@ LEGITIMATE = (
     ),
     Case(
         "artifacts-kept-out-of-git",
-        ("init", "assess", "upgrade", "uninstall"),
+        ("init", "upgrade", "uninstall"),
         local=("claude-md", "roadmap"),
     ),
     # Its own guard is that planning reads no disk for a place this configuration never uses;
@@ -309,13 +276,13 @@ LEGITIMATE = (
     ),
     Case(
         "an-adopted-project",
-        ("init", "adopt-promote", "upgrade", "uninstall"),
+        ("init", "upgrade", "uninstall"),
     ),
-    # The user the ignore guard exempts on purpose: `adopt` writes `stayfixed.toml` without asking
-    # it, so a person who keeps the file out of git is not refused.
+    # The user the ignore guard exempts on purpose: a person who keeps `stayfixed.toml` out of git
+    # is not refused.
     Case(
         "an-adopted-project-with-its-config-in-the-clone-s-excludes",
-        ("init", "adopt-promote", "upgrade", "uninstall"),
+        ("init", "upgrade", "uninstall"),
         exclude=(CONFIG_FILE,),
     ),
     # Every answer given, on a clone with no `stayfixed.toml`: the document `init` writes from
@@ -379,26 +346,11 @@ def _refusals(report: Report) -> list[str]:
     return [f"{r.artifact_id} {r.target}: {r.reason}" for p in plans for r in p.refusals]
 
 
-def _promote(root: Path, tmp_path: Path) -> None:
-    """`promote` of `docs`, straight from the state `init` left."""
-    config = load(root, machine=tmp_path / "absent.toml")
-    base = local_base(config)
-    transition = promote(root, config, ["docs"], base=base, machine=tmp_path / "absent.toml")
-    # The row's non-vacuity: a promotion that wrote nothing never reached the write path.
-    assert transition.promoted == ("docs",), transition
-
-
 def _outcome(
     command: Command, root: Path, tmp_path: Path, given: Given = NO_ANSWERS
 ) -> list[str] | None:
     """`None` when the command finished; its refusals, raised or returned, otherwise."""
     try:
-        if command == "assess":
-            write(root, assess(root, machine=tmp_path / "absent.toml", base=None))
-            return None
-        if command == "adopt-promote":
-            _promote(root, tmp_path)
-            return None
         report = _run(command, root, tmp_path, given=given)
     except Refusal as refused:
         return [str(refused)]
@@ -538,13 +490,6 @@ def test_the_legitimate_user_runs_every_command_to_the_end(
         (root / CONFIG_FILE).write_text(case.document(with_paths=True))
     _surround(root, case)
     for command in case.commands:
-        if command == "adopt-promote":
-            # The `docs` gate judges tracked files, since CI checks out nothing else, so the
-            # person stages the document `init` wrote before promoting the gate that reads it, as
-            # the adoption skill asks; untracked, `promote` would rightly leave it advisory. Before
-            # the snapshot below, so the objects this `git add` writes are not the command's.
-            agents_md = load(root, machine=tmp_path / "absent.toml").paths.agents_md
-            git(root, "add", "--", agents_md)
         hidden = _hidden(root, case, command)
         git_before = _git_files(root)
         refused = _outcome(command, root, tmp_path, case.given)

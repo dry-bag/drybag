@@ -157,7 +157,7 @@ def test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_long_number(
 
 
 def test_a_profile_document_holding_a_number_past_the_parser_resolves_to_nothing() -> None:
-    # A repository's `pyproject.toml`, read by a profile's locator: before, `stayfixed assess`
+    # A repository's `pyproject.toml`, read by a profile's locator: before, the `assess` command
     # ended in an internal error. Mutation (declared): `ValueError` dropped from `UNPARSEABLE`.
     assert _toml_document(LONG) is None
 

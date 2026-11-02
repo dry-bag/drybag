@@ -701,7 +701,7 @@ def test_a_symlinked_document_is_refused_even_when_it_carries_its_version(
 ) -> None:
     # A document with its version needs no stamp, and `init` read it by following the link: a
     # clone's `stayfixed.toml -> /dev/zero` ended the run by exhausting memory. It is read
-    # through `read_document` now, as `stayfixed gate` reads it, once. Mutation (declared):
+    # through `read_document` now, as the loader reads it, once. Mutation (declared):
     # `_existing` reading the file by following the link -> the dry run reports a plan.
     root = _repo(tmp_path)
     elsewhere = tmp_path / "elsewhere.toml"

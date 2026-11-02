@@ -1,5 +1,5 @@
 """`stayfixed init --yes`'s answers: each reaches the document this run creates, a fresh
-repository gates the branch it chose, and every file `--local` offers leaves every gate green.
+repository gates the branch it chose, and every file `--local` offers leaves every check green.
 
 The answers are given here as `Given` straight to `init`; `tests/project/test_command.py` gives
 them as flags through the real parser, built from `init --questions --json`.
@@ -12,8 +12,12 @@ from pathlib import Path
 import pytest
 
 import stayfixed
-from stayfixed.assess.gates import GateContext, run_gates
 from stayfixed.config.loader import CONFIG_FILE, load, preset_defaults
+from stayfixed.docs.hygiene import docs_gate
+from stayfixed.docs.plans import lint
+from stayfixed.docs.trail import trail_gate
+from stayfixed.guards.commit import check_range
+from stayfixed.ledger.check import bugs_gate
 from stayfixed.project.init import Given, InitReport, init
 from stayfixed.project.templates import LOCAL_ELIGIBLE
 from stayfixed.scaffold import Verb
@@ -61,8 +65,8 @@ def _commit(root: Path, message: str) -> str:
 def test_every_file_offered_as_local_leaves_every_gate_green(
     tmp_path: Path, artifact_id: str
 ) -> None:
-    # `--local` offers a file only if a project may keep it out of git with every gate still
-    # passing. Two commits, as `tests/project/test_gates.py` makes them, so the commit gate reads
+    # `--local` offers a file only if a project may keep it out of git with every check still
+    # passing. Two commits, as `tests/project/test_gates.py` makes them, so the commit check reads
     # one message rather than an empty range. Mutation (oracle): `mutations/`'s "a file a gate reads
     # at its committed path is offered as local" adds `bug-index`, whose case is then red here: the
     # index is kept out of git and `bugs check` reads it at its committed path.
@@ -74,10 +78,14 @@ def test_every_file_offered_as_local_leaves_every_gate_green(
     (root / "README.md").write_text("# widget\n\nA line the second commit adds.\n")
     _commit(root, "docs: say what widget is")
     config = load(root, machine=tmp_path / "absent.toml")
-    results = run_gates(GateContext(root, config, base), config.gate_names)
-    assert [(r.name, r.answered, r.findings) for r in results] == [
-        (name, True, ()) for name in config.gate_names
-    ]
+    found = {
+        "docs": docs_gate(root, config),
+        "trail": trail_gate(root, config),
+        "bugs": bugs_gate(root, config, base),
+        "plan": lint(root, config, plans=[], base=base).findings,
+        "commit": list(check_range(root, f"{base}..HEAD", config).violations),
+    }
+    assert found == {name: [] for name in found}
 
 
 @needs_git
@@ -161,7 +169,7 @@ def test_an_adopted_document_s_workflow_gates_the_branch_its_file_names(
 ) -> None:
     # A `stayfixed.toml` a person wrote, whose base branch is `develop`. Left out, `[ci]
     # gate_branch` is that base branch: a fixed `main` rendered a caller that never ran for a
-    # pull request into `develop`, while `assess` and `adopt promote` judged against `develop`,
+    # pull request into `develop`, while `plan check` judged against `develop`,
     # and nothing said so. Written out, it is the person's choice and is kept. The file comes
     # back byte for byte either way. Mutation (oracle): `mutations/`'s "a document that leaves [ci]
     # gate_branch out gates main, not its base branch" -> the `left-out` case reddens.

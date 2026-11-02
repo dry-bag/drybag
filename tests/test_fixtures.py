@@ -79,8 +79,7 @@ def test_every_gate_the_workflow_runs_passes_on_the_smoke_fixture(
     # `--base HEAD~1` and not the default: `plan check` defaults to
     # `refs/remotes/origin/<base_branch>`, and this copy is a fresh repository with no remote,
     # where an unresolvable base is a finding (`docs/cli.md`: "A base that does not resolve is a
-    # finding (1), never an OK"). CI's `stayfixed gate` passes the base as the commit it
-    # resolved; the fixture's own two commits are the equivalent here.
+    # finding (1), never an OK"). The fixture's own two commits stand in for a base here.
     root = _copy_as_repository(tmp_path)
     code, printed = _invoke(root, tmp_path, argv)
     assert code == 0, printed

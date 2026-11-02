@@ -102,7 +102,6 @@ after = '    answer = completed.stdout.decode(codec)'
 reddens = [
   "tests/test_git_run.py::test_a_path_the_locale_cannot_decode_is_answered_and_not_raised",
   "tests/guards/test_attribute.py::test_a_tracked_name_that_is_not_utf_8_does_not_switch_off_the_export_rule_check",
-  "tests/assess/test_probes.py::test_a_path_git_prints_raw_hides_no_committed_env_file",
   "tests/docs/test_plans.py::test_a_touched_plan_named_in_bytes_that_are_not_utf_8_is_listed_and_linted",
   "tests/test_git_answers.py::test_the_hook_path_reads_a_checkout_path_that_is_not_utf_8_as_that_path",
   "tests/test_git_answers.py::test_an_origin_url_that_is_not_utf_8_is_answered_as_itself",
@@ -130,7 +129,6 @@ after = """    try:
 reddens = [
   "tests/test_git_run.py::test_a_path_the_locale_cannot_decode_is_answered_and_not_raised",
   "tests/guards/test_attribute.py::test_a_tracked_name_that_is_not_utf_8_does_not_switch_off_the_export_rule_check",
-  "tests/assess/test_probes.py::test_a_path_git_prints_raw_hides_no_committed_env_file",
   "tests/docs/test_plans.py::test_a_touched_plan_named_in_bytes_that_are_not_utf_8_is_listed_and_linted",
 ]
 
@@ -1486,7 +1484,9 @@ name = "the local default base is a short name a tag can answer for"
 file = "src/stayfixed/config/layout.py"
 before = '    return f"refs/remotes/origin/{config.project.base_branch}"'
 after = '    return f"origin/{config.project.base_branch}"'
-reddens = ["tests/assess/test_read_base.py::test_the_default_base_is_the_remote_tracking_ref_whatever_a_tag_is_called"]
+reddens = [
+  "tests/docs/test_plans.py::test_a_tag_named_like_the_tracking_branch_does_not_choose_the_default_base",
+]
 
 # A flag with a grammar refuses a value outside it at the parser: `gate --base` a short name a tag
 # could answer for, and `init` an answer outside its set.
@@ -1496,7 +1496,6 @@ file = "src/stayfixed/command.py"
 before = '        if not pattern.match(value):'
 after = '        if False:'
 reddens = [
-  "tests/assess/test_gate_command.py::test_a_short_base_name_is_refused_at_the_parser",
   "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
 ]
 
@@ -1558,7 +1557,6 @@ after = "        if False:"
 reddens = [
   "tests/config/test_loader.py::test_a_project_branch_outside_the_branch_grammar_is_refused_by_name[spaced-base_branch]",
   "tests/config/test_loader.py::test_a_project_branch_outside_the_branch_grammar_is_refused_by_name[range-release_branch]",
-  "tests/assess/test_gate_command.py::test_a_base_branch_outside_its_grammar_is_named_and_never_blamed_on_base",
 ]
 
 # `tomllib` reads nested arrays by recursion, so a document nested a few thousand levels deep
@@ -1572,7 +1570,6 @@ before = "UNPARSEABLE = (tomllib.TOMLDecodeError, RecursionError, ValueError)"
 after = "UNPARSEABLE = (tomllib.TOMLDecodeError, ValueError)"
 reddens = [
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_document_nested_past_the_parser_as_one_that_does_not_parse[loads]",
-  "tests/assess/test_gate_command.py::test_a_stayfixed_toml_nested_past_the_parser_does_not_load_naming_the_side[tree]",
 ]
 
 # An integer literal longer than the interpreter converts is valid TOML that `tomllib` answers
@@ -1587,9 +1584,6 @@ after = "UNPARSEABLE = (tomllib.TOMLDecodeError, RecursionError)"
 reddens = [
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[loads]",
   "tests/config/test_deep_toml.py::test_a_profile_document_holding_a_number_past_the_parser_resolves_to_nothing",
-  "tests/assess/test_gate_command.py::test_a_stayfixed_toml_holding_a_number_past_the_parser_does_not_load_naming_the_side[tree]",
-  "tests/assess/test_gate_command.py::test_a_stayfixed_toml_holding_a_number_past_the_parser_does_not_load_naming_the_side[base]",
-  "tests/assess/test_gate_command.py::test_a_trail_toml_holding_a_number_past_the_parser_is_one_gate_that_could_not_run",
   "tests/doctor/test_checks.py::test_a_configuration_holding_a_number_past_the_parser_does_not_load",
   "tests/hooks/test_hook_command.py::test_a_config_that_does_not_load_whole_never_refuses_a_tool_call[long-number]",
   "tests/hooks/test_hook_command.py::test_a_config_that_does_not_load_whole_is_named_once_at_session_start[long-number]",
@@ -1611,7 +1605,6 @@ after = """
 """
 reddens = [
   "tests/config/test_deep_toml.py::test_a_number_past_the_parser_is_refused_in_stayfixeds_words_not_the_interpreters",
-  "tests/assess/test_gate_command.py::test_a_stayfixed_toml_holding_a_number_past_the_parser_does_not_load_naming_the_side[tree]",
 ]
 
 [[mutation]]
@@ -1627,8 +1620,6 @@ after = """
         raise ConfigError("""
 reddens = [
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_document_nested_past_the_parser_as_one_that_does_not_parse[loads]",
-  "tests/assess/test_gate_command.py::test_a_stayfixed_toml_nested_past_the_parser_does_not_load_naming_the_side[tree]",
-  "tests/assess/test_gate_command.py::test_a_stayfixed_toml_nested_past_the_parser_does_not_load_naming_the_side[base]",
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[loads]",
 ]
 
@@ -1689,7 +1680,6 @@ after = """
 reddens = [
   "tests/config/test_symlinked_document.py::test_load_refuses_a_symlinked_stayfixed_toml",
   "tests/config/test_symlinked_document.py::test_every_command_family_refuses_a_symlinked_stayfixed_toml[bugs-check]",
-  "tests/assess/test_command.py::test_a_symlinked_stayfixed_toml_is_refused_and_never_followed",
 ]
 
 # Every integer the schema holds is a count or a bound, so the loader refuses zero, a negative and
@@ -1797,7 +1787,6 @@ before = "        where = printable(self.path, withheld) if self.path else \"-\"
 after = "        where = printable(self.path) if self.path else \"-\""
 reddens = [
   "tests/test_findings.py::test_a_caller_without_json_names_its_own_stand_in",
-  "tests/assess/test_assessment.py::test_a_gate_finding_outside_the_path_grammar_is_withheld_without_pointing_at_json",
 ]
 
 # In the block led by `mutations/`'s "the stale-key refusal says a re-run names the rest at exactly
@@ -1840,8 +1829,7 @@ reddens = [
   "tests/test_fsops.py::test_an_error_is_said_in_its_words_never_with_the_path_it_was_opened_by",
 ]
 
-# In the block led by `mutations/`'s "init's custom-gate note keeps a limit of its own": every list
-# of names nothing bounds in number takes `findings.listed`.
+# Every list of names nothing bounds in number takes `findings.listed`.
 [[mutation]]
 name = "the enforced-gate refusal names every gate the project runs"
 file = "src/stayfixed/config/loader.py"
@@ -2020,7 +2008,6 @@ reddens = [
   "tests/ledger/test_check.py::test_a_base_git_cannot_list_never_reads_as_a_base_with_no_ledger",
   "tests/docs/test_plans.py::test_a_base_that_will_not_resolve_is_raised_never_an_ok",
   "tests/guards/test_attribute.py::test_a_base_git_names_in_bytes_that_are_not_text_keeps_git_s_own_exit_code",
-  "tests/assess/test_gates.py::test_a_base_the_bugs_gate_cannot_list_is_a_gate_that_could_not_run",
 ]
 
 # A git a signal ended answered nothing, whatever negative number `subprocess` gives it: read as a
@@ -2687,8 +2674,6 @@ before = "    if value >= INTEGER_LIMIT:"
 after = "    if False:"
 reddens = [
   "tests/config/test_loader.py::test_an_integer_key_at_or_past_its_bound_is_refused_without_printing_it[hex]",
-  "tests/assess/test_command.py::test_a_timeout_too_large_for_its_reader_is_the_configurations_own_error[hex]",
-  "tests/assess/test_gate_command.py::test_a_timeout_too_large_for_its_reader_fails_the_gate_with_the_configurations_error[decimal]",
 ]
 
 [[mutation]]
@@ -2922,7 +2907,6 @@ before = """    if code != 0:
 after = """    if not listed:
         return None"""
 reddens = [
-  "tests/assess/test_read_base.py::test_git_failing_to_list_the_base_is_a_failure_and_never_the_bootstrap",
   "tests/ledger/test_check.py::test_a_listing_of_the_base_s_configuration_git_refuses_is_a_failure_never_the_bootstrap",
 ]
 
@@ -2932,76 +2916,7 @@ file = "src/stayfixed/committed.py"
 before = '    return answer_bytes(text)'
 after = '    return text.encode("utf-8")'
 reddens = [
-  "tests/assess/test_read_base.py::test_the_base_copy_is_read_as_utf_8_whatever_the_locale_decodes_git_s_answers_with[utf-8]",
-  "tests/assess/test_read_base.py::test_the_base_copy_is_read_as_utf_8_whatever_the_locale_decodes_git_s_answers_with[not-utf-8]",
-]
-
-[[mutation]]
-name = "a project root reached through a symlink reads the base at a path it never had"
-file = "src/stayfixed/committed.py"
-before = '    if linked or spelled != prefix.rstrip("\n"):'
-after = "    if False:"
-reddens = [
-  "tests/assess/test_read_base.py::test_a_project_root_moved_behind_a_symlink_is_refused",
-  "tests/assess/test_read_base.py::test_a_component_linked_back_to_the_repository_s_top_is_refused",
-  "tests/assess/test_gate_command.py::test_a_project_root_a_change_made_a_symlink_is_refused_by_the_gate_and_by_bugs_check",
-]
-
-[[mutation]]
-name = "the ancestor that resolves to the top is looked for from the nearest end"
-file = "src/stayfixed/committed.py"
-before = "    chain = (*reversed(lexical.parents), lexical)"
-after = "    chain = (lexical, *lexical.parents)"
-reddens = ["tests/assess/test_read_base.py::test_a_component_linked_back_to_the_repository_s_top_is_refused"]
-
-[[mutation]]
-name = "a project in a subdirectory reads the base's copy at the repository's top"
-file = "src/stayfixed/committed.py"
-before = '    path = f"{prefix}{name}"'
-after = "    path = name"
-reddens = ["tests/assess/test_read_base.py::test_a_project_in_a_subdirectory_reads_the_base_s_copy_at_its_own_path"]
-
-[[mutation]]
-name = "a root outside any repository is judged as if git had answered"
-file = "src/stayfixed/committed.py"
-before = """    code, out = git_run(lexical, "rev-parse", "--show-toplevel", "--show-prefix")
-    if code != 0:"""
-after = """    code, out = git_run(lexical, "rev-parse", "--show-toplevel", "--show-prefix")
-    if False:"""
-reddens = ["tests/assess/test_read_base.py::test_a_root_outside_any_repository_is_a_failure"]
-
-[[mutation]]
-name = "a project under a directory named like pathspec magic reads no copy on the base"
-file = "src/stayfixed/committed.py"
-before = '        "--literal-pathspecs",'
-after = '        "--no-pager",'
-reddens = ["tests/assess/test_read_base.py::test_a_project_under_a_directory_named_like_pathspec_magic_reads_its_own_copy"]
-
-[[mutation]]
-name = "the base's copy is listed relative to the project root rather than the repository's top"
-file = "src/stayfixed/committed.py"
-before = '        "--full-tree",'
-after = '        "--name-only",'
-reddens = [
-  "tests/assess/test_read_base.py::test_a_project_in_a_subdirectory_reads_the_base_s_copy_at_its_own_path",
-  "tests/assess/test_read_base.py::test_a_project_under_a_directory_named_like_pathspec_magic_reads_its_own_copy",
-]
-
-[[mutation]]
-name = "a prefix git spells otherwise than the caller is read at the caller's spelling"
-file = "src/stayfixed/committed.py"
-before = '    if linked or spelled != prefix.rstrip("\n"):'
-after = "    if linked:"
-reddens = ["tests/assess/test_read_base.py::test_a_prefix_git_spells_otherwise_than_the_caller_is_refused"]
-
-[[mutation]]
-name = "a root spelled with '..' is refused as a symlink"
-file = "src/stayfixed/committed.py"
-before = '    if ".." in lexical.parts:'
-after = "    if False:"
-reddens = [
-  "tests/assess/test_gate_command.py::test_a_root_spelled_with_dot_dot_is_refused_for_what_it_is",
-  "tests/assess/test_read_base.py::test_a_dotdot_path_is_refused_unechoed",
+  "tests/ledger/test_check.py::test_a_base_copy_that_will_not_load_fails_the_check_and_never_reads_as_no_ledger[not-utf8]",
 ]
 
 [[mutation]]
@@ -3406,7 +3321,6 @@ before = '        print(f"stayfixed: {note}", file=sys.stderr)'
 after = "        pass"
 reddens = [
   "tests/memory/test_owner_budgets.py::test_a_command_reads_past_a_machine_file_key_it_cannot_use_and_says_so[gate-budget]",
-  "tests/test_command.py::test_a_command_says_a_machine_file_note_once_however_many_documents_it_loads[gate]",
 ]
 
 # A guard is on until the owner switches it off: off by default, it would be off on every machine
@@ -3944,7 +3858,6 @@ after = "        if name in self.configured:\n            return min(self.preset
 reddens = [
   "tests/config/test_budgets_raise.py::test_the_base_branch_raises_a_gate_budget",
   "tests/config/test_budgets_raise.py::test_the_owner_raises_a_session_budget",
-  "tests/assess/test_rule_classes.py::test_a_pull_request_still_only_lowers_a_gate_budget",
 ]
 
 # The machine's one trust record (`stayfixed.trust`). A record that does not parse refuses and is
@@ -4941,7 +4854,9 @@ name = "a timed-out custom gate's children run on after it reported"
 file = "src/stayfixed/processes.py"
 before = "        os.killpg(process.pid, signum)"
 after = "        process.kill()"
-reddens = ["tests/assess/test_gates.py::test_a_custom_gate_past_its_time_limit_leaves_nothing_running"]
+reddens = [
+  "tests/prove/test_run.py::test_an_ended_run_is_not_proven_and_leaves_no_scratch[terminate]",
+]
 
 # A group the gate may not signal answers `PermissionError`: on macOS a group left with only the
 # exited, unreaped command, anywhere a sudo or setuid descendant. The command's exit still
@@ -4952,26 +4867,8 @@ file = "src/stayfixed/processes.py"
 before = "    with contextlib.suppress(ProcessLookupError, PermissionError):"
 after = "    with contextlib.suppress(ProcessLookupError):"
 reddens = [
-  "tests/assess/test_gates.py::test_a_group_the_gate_may_not_signal_still_leaves_the_exit_status[pass]",
-  "tests/assess/test_gates.py::test_a_group_the_gate_may_not_signal_still_leaves_the_exit_status[raise SystemExit(3)]",
+  "tests/prove/test_run.py::test_a_closed_caller_stream_stops_the_copy_to_it_and_the_report_still_fills",
 ]
-
-# Where `os.waitid` is missing (macOS before Python 3.13), the exit is waited for with
-# `Popen.wait`; without the fallback the gate raises AttributeError out of the run.
-[[mutation]]
-name = "a custom gate asks for os.waitid where the platform has none"
-file = "src/stayfixed/processes.py"
-before = '''    if not hasattr(os, "waitid"):
-        process.wait(timeout=seconds)
-        return'''
-after = '''    if False:
-        process.wait(timeout=seconds)
-        return'''
-reddens = [
-  "tests/assess/test_gates.py::test_without_waitid_a_custom_gate_still_answers_and_ends_its_group",
-]
-
-# --- `stayfixed prove`: the run, its verdict cascade, the receipt and the tree's state ---
 
 # A run that ran no test proved nothing whatever it exited with: the zero-tests row stands before
 # the exit code's, so a runner's own "no tests" exit (5, 1) is `failed`, never `not proven`.
@@ -5956,28 +5853,6 @@ reddens = [
   "tests/prove/test_junit_flag.py::test_the_path_is_read_from_the_directory_the_launcher_runs_the_command_in",
 ]
 
-# A timeout or an interrupt sends the group SIGTERM before SIGKILL, so a command that ends a
-# descendant outside its group on SIGTERM (`stayfixed prove`, whose runner is in a session of its
-# own) does; and a group that ignores SIGTERM is still ended.
-[[mutation]]
-name = "a timed-out gate's group is sent SIGKILL alone"
-file = "src/stayfixed/processes.py"
-before = "        kill_group(process, signal.SIGTERM)"
-after = "        pass"
-reddens = ["tests/assess/test_gates.py::test_a_gate_past_its_time_limit_lets_its_command_end_what_it_started"]
-
-[[mutation]]
-name = "a timed-out gate's group that ignores SIGTERM is never sent SIGKILL"
-file = "src/stayfixed/processes.py"
-before = """    finally:
-        kill_group(process)"""
-after = """    finally:
-        pass"""
-reddens = [
-  "tests/assess/test_gates.py::test_a_gate_past_its_time_limit_ends_a_command_that_ignores_sigterm",
-  "tests/assess/test_gates.py::test_an_interrupt_in_the_grace_still_ends_a_group_that_ignores_sigterm",
-]
-
 # A `--junit` path is followed to the file it reaches: a `latest.xml` link the run points at the
 # report it just wrote is that report, rewritten.
 [[mutation]]
@@ -6205,14 +6080,3 @@ reddens = [
   "tests/test_roots.py::test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked",
 ]
 
-# A missing preset default loses no walk only while another root is walked. With none walked,
-# `assess` must name every entry, the preset's
-# own included, or it is silent about why nothing was checked.
-[[mutation]]
-name = "a missing preset default goes unnamed when no root is walked"
-file = "src/stayfixed/roots.py"
-before = "    walked = any(isinstance(found, Path) for _, found in judged)"
-after = "    walked = True"
-reddens = [
-  "tests/assess/test_probes.py::test_a_code_root_no_walk_takes_is_named_with_its_reason[preset-defaults-none-walked]",
-]

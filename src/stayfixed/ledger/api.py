@@ -6,7 +6,7 @@ submodule it wants, so a re-export list in `__init__.py` would pull this whole a
 it the configuration layer — into every `discover()` call. `tests/ledger/test_surface.py`
 asserts the `__init__` imports nothing at all.
 
-**Outside this area, `stayfixed.assess.gates` imports `bugs_gate`; `stayfixed.project.templates`
+**Outside this area, `stayfixed.project.templates`
 (with its tests) imports `render_index` and `bug_register` to write a new project's first index,
 and `BUG_RUNBOOK` and `BUG_AUDITS`, joined by `ledger_path`, to write the runbook and audits
 README where that index links them; and `stayfixed.docs.plans`
@@ -51,13 +51,8 @@ The identifier grammar and the finding shape are **not** here: they are leaves
 area's own modules, so re-exporting a leaf would redden it. An area that reads the bug ledger's
 identifiers takes them from its register, `bug_register(config).ids`, as the `Fixes` claim does: the
 prefix is read one way, the way the ledger reads it.
-
-**`bugs_gate` is `stayfixed assess`'s.** It is `(root, config, base) -> list[Finding]`, the
-shape every gate shares, and `bugs check` answers with the same function. It builds the bug
-ledger's register and runs `register_gate`, which stays behind it in `stayfixed.ledger.check`.
 """
 
-from stayfixed.ledger.check import bugs_gate
 from stayfixed.ledger.entries import Entry, LedgerError, load_entries, parse_entry
 from stayfixed.ledger.index import is_generated_index, render_index
 from stayfixed.ledger.register import (
@@ -79,7 +74,6 @@ __all__ = [
     "Schema",
     "Section",
     "bug_register",
-    "bugs_gate",
     "is_generated_index",
     "ledger_path",
     "load_entries",

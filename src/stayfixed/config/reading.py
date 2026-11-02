@@ -52,14 +52,14 @@ UNPARSEABLE = (tomllib.TOMLDecodeError, RecursionError, ValueError)
 TOO_DEEP = "(nested deeper than the parser reads)"
 TOO_LONG = "(holds a number longer than the parser converts)"
 
-# A named cap: every integer a configuration key holds is below it. `tomllib` converts a hex,
-# octal or binary literal of any length (a power-of-two base is exempt from the interpreter's
-# 4,300-digit limit), and a decimal of 401 digits is inside that limit, so a key checked only for
-# `<= 0` handed its reader a number no `str` could print or no `float` could hold: `[gates]
-# custom_timeout_seconds` ended `assess` and `gate` in an internal error. 2**31 is what a signed
-# 32-bit count holds, far above any budget, cap or timeout a project writes (the preset's largest
-# integer is `memory_index_bytes = 25600`), and below what every reader of one handles: `str`,
-# `float`, a comparison. No shipped file states it.
+# A named cap: every integer a configuration key holds is below it. `tomllib` converts a hex, octal
+# or binary literal of any length (a power-of-two base is exempt from the interpreter's 4,300-digit
+# limit), and a decimal of 401 digits is inside that limit, so a key checked only for `<= 0` handed
+# its reader a number no `str` could print or no `float` could hold: `[gates]
+# custom_timeout_seconds` ended the command that read it in an internal error. 2**31 is what a
+# signed 32-bit count holds, far above any budget, cap or timeout a project writes (the preset's
+# largest integer is `memory_index_bytes = 25600`), and below what every reader of one handles:
+# `str`, `float`, a comparison. No shipped file states it.
 INTEGER_LIMIT = 2**31
 
 

@@ -170,14 +170,11 @@ not take. A gate should run advisory until the repository has been brought to th
 where it would pass, and only then enforce — and the decision to enforce should be read from
 the base branch, never from the change under review.
 
-**What stayfixed does today.** Adoption ships per gate. `stayfixed assess` inventories
-what stands between a repository and enforcement, and `stayfixed adopt promote` enforces every
-gate that passes now and names the rest, or enforces the gates it is given only if all of them
-pass; its first promotion is what starts the adoption. The gate a pull request faces
-reads the base branch's configuration and admits only a change that tightens it, under the
-repository settings `docs/cli.md` names. What it does not do yet is hold the line inside a gate
-— fail new findings while grandfathering old ones — which current linters do [S33] and which is
-recorded as the next step.
+**What stayfixed does today.** It enforces no gate itself: its checks — `bugs check`, `docs
+check`, `plan check`, `commit check` and `docs trail --check` — are commands a project runs in its
+own CI, and which of them may fail a change is that CI's decision. What it does not do is hold the
+line inside a check — fail new findings while grandfathering old ones — which current linters do
+[S33].
 
 **Why.** The alternative in the field is a constitution declared before the first commit
 [S11] or a process layer that tells the agent how to work without asking whether the

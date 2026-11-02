@@ -675,11 +675,11 @@ def test_the_name_grammar_is_spelled_once() -> None:
 def test_a_project_branch_outside_the_branch_grammar_is_refused_by_name(
     tmp_path: Path, key: str, value: str
 ) -> None:
-    # `[project] base_branch` becomes `refs/remotes/origin/<it>`, `test attribute`'s refusal
-    # and `plan check`'s messages print it, and `stayfixed gate` blamed `--base`, which nobody
-    # passed, for it. Held here, at the one place both keys are read, to the grammar the rendered
-    # workflow holds `[ci] gate_branch` to, and refused naming the key and never the value.
-    # Mutation (declared): the check dropped -> nothing is raised.
+    # `[project] base_branch` becomes `refs/remotes/origin/<it>`, `test attribute`'s refusal and
+    # `plan check`'s messages print it, and the `gate` command blamed `--base`, which nobody passed,
+    # for it. Held here, at the one place both keys are read, to the grammar the rendered workflow
+    # holds `[ci] gate_branch` to, and refused naming the key and never the value. Mutation
+    # (declared): the check dropped -> nothing is raised.
     text = MINIMAL + f"{key} = {json.dumps(value)}\n"
     with pytest.raises(ConfigError, match=rf"project\.{key} is not a plain branch name") as caught:
         loads(text, tmp_path, machine=tmp_path / "absent.toml")

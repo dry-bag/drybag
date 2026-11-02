@@ -2,8 +2,8 @@
 matched without backtracking.
 
 A theme's `pattern` is repository-authored, and `re`'s backtracking turns a pattern such as
-`(a+)+$` exponential on a name of forty characters, so under `re` `stayfixed docs trail`, the
-`trail` gate and `stayfixed assess` would never finish. The language kept here is a subset of
+`(a+)+$` exponential on a name of forty characters, so under `re` `stayfixed docs trail` would
+never finish. The language kept here is a subset of
 the regular expressions such files already hold, with the meaning `re.search` gives them on a
 name of one line: literal text, `.` for any one character, `.*` for any run of them, `|`
 between alternatives, `^` and `$` at an alternative's two ends, and `\\` before a punctuation

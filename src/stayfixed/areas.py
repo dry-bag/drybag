@@ -47,7 +47,6 @@ DELIVERY_AREAS: frozenset[str] = frozenset(
 )
 PACK_PACKAGES: frozenset[str] = frozenset(
     {
-        "assess",
         "docs",
         "guards",
         "ledger",

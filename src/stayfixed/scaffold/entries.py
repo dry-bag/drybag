@@ -282,8 +282,7 @@ def judged_entries(document: str, *, lenient: bool) -> Walked:
 
     `lenient` for a file a harness was measured running partly malformed (`harnesses.
     LENIENT_SETTINGS`): `live_entries`, past a leading byte-order mark. Otherwise the strict
-    `entry_count`, which refuses every shape the merge would, so it skips nothing. `assess`'s
-    `foreign-hooks` reads by it.
+    `entry_count`, which refuses every shape the merge would, so it skips nothing.
     """
     if lenient:
         return live_entries(lenient_settings(document))

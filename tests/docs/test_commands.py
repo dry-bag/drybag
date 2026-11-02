@@ -334,8 +334,8 @@ def test_a_non_utf8_roadmap_or_plan_exits_1_through_the_frame_and_never_2(
 def test_the_command_answers_with_its_gate_s_own_function(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: list[str], module: str, gate: str
 ) -> None:
-    # The gate `stayfixed assess` runs and the command a person runs are one function, so the
-    # two cannot drift apart. Mutations (advisory): `problems = docs_gate(root, config)` becomes
+    # The gate function and the command a person runs are one function, so the two cannot drift
+    # apart. Mutations (advisory): `problems = docs_gate(root, config)` becomes
     # `problems = check_budgets(root, config) + check_links(root, config)` in `run_docs_check`
     # (first case); `trail_gate(root, config)` replaced by an inline comparison in
     # `run_docs_trail` (second case) — each makes the patch unseen and reddens.

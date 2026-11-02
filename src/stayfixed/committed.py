@@ -1,10 +1,9 @@
 """A document as one commit holds it at the project's own path, read the one way every reader
 of a commit's copy reads it.
 
-Two readers ask: `stayfixed gate` for the base's `stayfixed.toml`, which governs the run, and the
-ledger's base comparison for the `stayfixed.toml` of each commit a change forked from, which says
-where that commit kept its ledger. Each answer decides what a pull request is judged against, so
-each is read at the project root's path inside the repository as git spells it, with the
+The ledger's base comparison asks, for the `stayfixed.toml` of each commit a change forked from,
+which says where that commit kept its ledger. The answer decides what a pull request is judged
+against, so it is read at the project root's path inside the repository as git spells it, with the
 pathspec literal and from the repository's top, and a root whose path git and the caller spell
 differently is refused rather than guessed at (`repository_prefix`). Read any other way, a
 change could make the path empty — a symlinked root, a directory named like pathspec magic —

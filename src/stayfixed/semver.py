@@ -1,11 +1,10 @@
 """How one version orders against another, read the one way every reader of a version does.
 
-`upgrade` refuses to move a project backward, `doctor`'s `versions` row points by direction, and
-`stayfixed gate` admits an upgrade only where `upgrade` would move to it: one comparison, so the
-three cannot disagree about which way a recorded version lies. The overlay's `requires` reader
-reads a floor through the same component grammar and decides the floor's own triple by
-`pre_release`, the reading `later` orders a release after, so a pre-release does not meet the
-floor of the release it comes before.
+`upgrade` refuses to move a project backward and `doctor`'s `versions` row points by direction: one
+comparison, so the two cannot disagree about which way a recorded version lies. The overlay's
+`requires` reader reads a floor through the same component grammar and decides the floor's own
+triple by `pre_release`, the reading `later` orders a release after, so a pre-release does not meet
+the floor of the release it comes before.
 
 A leaf module: it imports nothing from `stayfixed`.
 """

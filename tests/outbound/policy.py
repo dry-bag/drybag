@@ -104,7 +104,6 @@ LOCAL = frozenset(
         ("git", "archive"),
         ("git", "cat-file"),
         ("git", "check-ignore"),
-        ("git", "check-ref-format", "--branch"),
         ("git", "config", "--type=path", "--get"),
         ("git", "diff"),
         ("git", "grep"),
@@ -116,7 +115,6 @@ LOCAL = frozenset(
         ("git", "remote", "get-url"),
         ("git", "rev-list"),
         ("git", "rev-parse"),
-        ("git", "show-ref"),
         ("git", "status"),
         ("git", "symbolic-ref"),
         ("git", "worktree", "list"),
@@ -174,8 +172,6 @@ NO_ROWS: frozenset[str] = frozenset()
 # in it is bound once in its function and never mutated, so the same expression handed again after
 # a rebinding is a finding too. The comment says what each runs; a reviewer reads it.
 PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
-    # A project's own `[gates.custom.<name>] run`, launched as configured.
-    ("src/stayfixed/assess/gates.py", "_custom.run", "list(argv)"): frozenset({"[gates.custom]"}),
     # The test command typed after `stayfixed prove --`, as the runner adapter that recognised it
     # planned it: the command's own words, with the runner's report put where `prove` reads it.
     ("src/stayfixed/prove/run.py", "_launch", "list(plan.argv)"): frozenset({"stayfixed prove --"}),
@@ -241,10 +237,6 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
         "which `lint` runs before it asks for any plan's lines"
     ),
     ("src/stayfixed/ledger/check.py", "_base_ledger", "fork"): "a merge base git printed",
-    ("src/stayfixed/assess/base.py", "platform_base", "branch"): (
-        "the one operand of `check-ref-format --branch`, which reads no option after `--branch`: "
-        "a name shaped like an option is refused as a branch name, never read as an option"
-    ),
     ("src/stayfixed/guards/attribute.py", "_extract", "str(archive)"): (
         "the value of `git archive -o` and of `tar -f`, a path under the temporary directory "
         "this run made"
@@ -260,9 +252,6 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
     ),
     ("src/stayfixed/project/detect.py", "_symbolic", "ref"): (
         "`HEAD` or `refs/remotes/origin/HEAD`, its callers' constants"
-    ),
-    ("src/stayfixed/assess/probes.py", "_commit_types", "f'-n{context.window}'"): (
-        "`-n` and the probe's window, an integer"
     ),
 }
 

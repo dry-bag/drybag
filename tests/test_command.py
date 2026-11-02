@@ -22,7 +22,6 @@ from stayfixed.command import (
     root_and_config,
 )
 from stayfixed.config.owner import IGNORED_NOTE, MACHINE_FILE_NOTE, UNKNOWN_KEY
-from tests.assess.baserepo import clone
 from tests.cli import cli, subparsers
 from tests.gitfixture import needs_git
 from tests.project.repos import initialised, repository
@@ -140,24 +139,22 @@ DOCUMENT = f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname
 
 def _two_documents(tmp_path: Path, command: str) -> tuple[Path, tuple[str, ...]]:
     """A repository where `command` loads more than one `stayfixed.toml`, and its argv: `init`
-    adopting a file it loads as merged and as on disk, `upgrade` the document before and after,
-    and `gate` the tree's copy once for its base and twice for the verdict, with the base's."""
+    adopting a file it loads as merged and as on disk, and `upgrade` the document before and
+    after."""
     if command == "init":
         root = repository(tmp_path)
         (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
         return root, ("init", "--yes", "--no-ci", "--json")
-    if command == "upgrade":
-        return initialised(tmp_path), ("upgrade", "--dry-run", "--json")
-    return clone(tmp_path, DOCUMENT), ("gate", "--only", "config", "--json")
+    return initialised(tmp_path), ("upgrade", "--dry-run", "--json")
 
 
 @needs_git
-@pytest.mark.parametrize("command", ["init", "upgrade", "gate"])
+@pytest.mark.parametrize("command", ["init", "upgrade"])
 def test_a_command_says_a_machine_file_note_once_however_many_documents_it_loads(
     tmp_path: Path, command: str
 ) -> None:
     # The note was said by every load, so once a document: twice in `init --yes` and `upgrade
-    # --dry-run`, and three times in `gate --json`, one per copy it read. The command resolves the
+    # --dry-run`, one per copy it read. The command resolves the
     # owner's layer once (`command.command_owner`) and every load takes it. Mutation (`mutations/`'s
     # "a command keeps quiet about what it read past in the machine file"): none; no one-line edit
     # puts the side effect back into the load, and with it there each case is said again.

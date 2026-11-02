@@ -1125,35 +1125,33 @@ reddens = [
   "tests/test_command.py::test_every_shared_flag_carries_the_one_help_string_or_a_named_exception",
 ]
 
-# In the block led by `mutations/`'s "a gate that could not judge counts as passing": every
-# configured gate is a value CI reads, and each built-in finds what its area's command finds.
+# Each gate function finds what its area's command finds.
 [[mutation]]
 name = "the docs gate drops the budget checks"
 file = "src/stayfixed/docs/hygiene.py"
 before = "    return check_budgets(root, config) + check_links(root, config)"
 after = "    return check_links(root, config)"
-reddens = ["tests/assess/test_gates.py::test_the_docs_gate_finds_an_over_budget_agents_file"]
+reddens = [
+  "tests/docs/test_commands.py::test_a_non_utf8_roadmap_or_plan_exits_1_through_the_frame_and_never_2",
+]
 
 [[mutation]]
 name = "the bugs gate finds nothing"
 file = "src/stayfixed/ledger/check.py"
 before = "    return register_gate(root, config, bug_register(config), base, locate=located_bug_register)"
 after = "    return []"
-reddens = ["tests/assess/test_gates.py::test_the_bugs_gate_finds_a_broken_entry"]
-
-[[mutation]]
-name = "the plan gate finds nothing"
-file = "src/stayfixed/docs/plans.py"
-before = "    return lint(root, config, plans=[], base=base).findings"
-after = "    return []"
-reddens = ["tests/assess/test_gates.py::test_the_plan_gate_finds_a_plan_the_change_touches"]
+reddens = [
+  "tests/ledger/test_commands.py::test_check_reports_problems_on_one_line_and_lists_them_in_json",
+]
 
 [[mutation]]
 name = "the trail gate reports a stale listing as current"
 file = "src/stayfixed/docs/trail.py"
 before = '    return [Finding(TRAIL_STALE, config.paths.roadmap, None, "")]'
 after = "    return []"
-reddens = ["tests/assess/test_gates.py::test_a_stale_trail_is_a_failing_gate"]
+reddens = [
+  "tests/docs/test_trail.py::test_the_trail_gate_passes_a_current_listing_and_names_a_stale_one",
+]
 
 # A missing roadmap is the trail gate not judging the tree: it raises, as every gate that cannot
 # judge does, and is read as could not run, which fails an enforced gate.
@@ -1164,7 +1162,6 @@ before = '        raise Failure(f"{config.paths.roadmap} does not exist")'
 after = "        return []"
 reddens = [
   "tests/docs/test_trail.py::test_a_missing_roadmap_is_a_gate_that_cannot_judge",
-  "tests/assess/test_gates.py::test_a_missing_roadmap_makes_the_trail_gate_unanswered",
 ]
 
 # "No ledger yet" is read off the tree, which a pull request writes: with the arm answering
@@ -1178,7 +1175,6 @@ after = "        return []"
 reddens = [
   "tests/ledger/test_check.py::test_with_no_ledger_every_citation_of_an_entry_file_dangles",
   "tests/ledger/test_commands.py::test_check_reports_a_citation_when_there_is_no_ledger",
-  "tests/assess/test_gate_command.py::test_deleting_the_ledger_does_not_switch_an_enforced_bugs_gate_off",
 ]
 
 # Inside a work tree, a filter git gave no answer for — it could not be run, ran past its time
@@ -1294,7 +1290,6 @@ after = "    if False:"
 reddens = [
   "tests/ledger/test_check.py::test_a_tree_that_deleted_the_base_s_ledger_is_one_ledger_removed_finding",
   "tests/ledger/test_commands.py::test_check_with_a_base_answers_for_a_ledger_the_base_carries",
-  "tests/assess/test_gate_command.py::test_deleting_the_ledger_and_its_index_fails_an_enforced_bugs_gate",
 ]
 
 # Ledger entries are append-only: `bugs renumber` leaves a `void` entry at the number it moves
@@ -1311,7 +1306,6 @@ reddens = [
   "tests/ledger/test_check.py::test_an_entry_the_base_carries_and_the_tree_lacks_is_entry_removed",
   "tests/ledger/test_check.py::test_one_entry_removed_of_several_is_named_and_the_rest_are_not",
   "tests/ledger/test_check.py::test_a_ledger_whose_directory_went_and_index_stayed_names_each_removed_entry",
-  "tests/assess/test_gate_command.py::test_deleting_every_entry_but_keeping_the_directory_fails_an_enforced_bugs_gate",
 ]
 
 # The ledger loads its entries by exact name, so the tree is asked for exact names too: looked up
@@ -1344,7 +1338,6 @@ before = '            root, "ls-tree", "-r", "-z", "--name-only", fork, "--", he
 after = '            root, "ls-tree", "-z", "--name-only", fork, "--", held.directory, held.index'
 reddens = [
   "tests/ledger/test_check.py::test_an_entry_the_base_carries_and_the_tree_lacks_is_entry_removed",
-  "tests/assess/test_gate_command.py::test_deleting_every_entry_but_keeping_the_directory_fails_an_enforced_bugs_gate",
 ]
 
 # The bugs gate against a base: a base shaped like an option is refused before git sees it, a bare
@@ -1365,7 +1358,6 @@ before = "    found.extend(_dangling_mentions(root, config, register, empty))"
 after = "    pass"
 reddens = [
   "tests/ledger/test_check.py::test_with_no_ledger_a_bare_mention_dangles_too",
-  "tests/assess/test_gate_command.py::test_deleting_the_ledger_and_its_index_fails_an_enforced_bugs_gate[mentioned]",
 ]
 
 [[mutation]]
@@ -1581,8 +1573,7 @@ reddens = [
   "tests/ledger/test_commands.py::test_renumber_names_a_file_it_could_not_read_without_this_machine_s_paths",
 ]
 
-# In the block led by `mutations/`'s "init's custom-gate note keeps a limit of its own": every list
-# of names nothing bounds in number takes `findings.listed`.
+# Every list of names nothing bounds in number takes `findings.listed`.
 [[mutation]]
 name = "a duplicate identifier names every file that claims it"
 file = "src/stayfixed/ledger/check.py"
@@ -1615,7 +1606,6 @@ reddens = [
   "tests/docs/test_plans.py::test_a_base_that_will_not_resolve_is_raised_never_an_ok",
   "tests/docs/test_plans.py::test_a_shallow_clone_is_a_base_that_will_not_resolve_never_an_older_fork_point",
   "tests/docs/test_plans.py::test_a_base_that_shares_no_history_with_the_tree_will_not_resolve",
-  "tests/assess/test_command.py::test_assess_after_init_with_no_origin_fetched_names_the_gates_that_cannot_judge",
 ]
 
 # A git that gave no answer is not a base that will not resolve: that finding's remedy is a deeper
@@ -1680,7 +1670,6 @@ reddens = [
   "tests/ledger/test_check.py::test_a_branch_forked_before_the_base_filed_an_entry_deleted_nothing",
   "tests/ledger/test_check.py::test_a_branch_forked_before_the_base_had_a_ledger_deleted_none",
   "tests/ledger/test_check.py::test_a_deletion_is_named_on_a_stale_branch_and_on_a_merge_commit",
-  "tests/assess/test_gate_command.py::test_a_branch_behind_its_base_is_not_blamed_for_an_entry_the_base_filed_since",
 ]
 
 # Every merge base is listed and their entries united: the one git picks alone can predate an
@@ -1709,7 +1698,6 @@ reddens = [
   "tests/ledger/test_check.py::test_a_shallow_clone_is_a_failure_never_an_older_fork_point",
   "tests/ledger/test_check.py::test_a_base_that_shares_no_history_with_the_tree_is_a_failure",
   "tests/ledger/test_check.py::test_a_base_git_cannot_list_never_reads_as_a_base_with_no_ledger",
-  "tests/assess/test_gates.py::test_a_base_the_bugs_gate_cannot_list_is_a_gate_that_could_not_run",
 ]
 
 # A listing git refuses at a fork point is no listing, and an empty one reads as no ledger.
@@ -1722,29 +1710,6 @@ after = """        if False:
             raise _unread(register, base, root, ForkUnknown.of(code).cause, _paths(held))"""
 reddens = [
   "tests/ledger/test_check.py::test_a_listing_git_refuses_at_a_merge_base_is_a_failure_never_an_empty_ledger",
-]
-
-# In the block led by `mutations/`'s "every file a gate reads reads as tracked": a gate's verdict is
-# taken over files git tracks, as CI's is.
-[[mutation]]
-name = "the trail gate's trail.toml is not asked about"
-file = "src/stayfixed/docs/trail.py"
-before = "    return [contained(root, config.paths.roadmap), trail_path(root, config)]"
-after = "    return [contained(root, config.paths.roadmap)]"
-reddens = [
-  "tests/assess/test_tracked.py::test_assess_reports_a_gate_that_reads_an_untracked_file_as_unable_to_judge_it[trail-toml]",
-]
-
-# `check_links` asks whether a target exists, and CI answers for the tracked tree: a link to a file
-# git does not track passes here and is `missing-link` there.
-[[mutation]]
-name = "the docs gate's link targets are not asked about"
-file = "src/stayfixed/docs/hygiene.py"
-before = "    return [contained(root, config.paths.agents_md), *linked]"
-after = "    return [contained(root, config.paths.agents_md)]"
-reddens = [
-  "tests/assess/test_tracked.py::test_a_file_the_always_loaded_document_links_to_is_read_by_the_docs_gate",
-  "tests/assess/test_tracked.py::test_a_linked_roadmap_git_does_not_track_is_read_by_both_gates",
 ]
 
 # Overlay mode reads the composed store the binding names and nothing else: a `--store` naming a
@@ -2020,7 +1985,6 @@ before = "        held = register if locate is None else locate(fork)"
 after = "        held = register"
 reddens = [
   "tests/ledger/test_check.py::test_a_ledger_moved_by_paths_is_read_on_the_base_where_the_base_kept_it",
-  "tests/assess/test_gate_command.py::test_a_ledger_moved_by_paths_takes_no_entry_past_the_run_that_enforces_bugs",
 ]
 
 [[mutation]]
@@ -2094,15 +2058,6 @@ before = "        directory, index = base.place"
 after = "        directory, index = register.directory, register.index"
 reddens = [
   "tests/ledger/test_check.py::test_a_ledger_deleted_with_its_paths_moved_is_named_where_the_base_kept_it",
-]
-
-[[mutation]]
-name = "bugs check --base judges a root reached through a symlink at the link's target"
-file = "src/stayfixed/ledger/commands.py"
-before = "        repository_prefix(Path(args.root).absolute())"
-after = "        pass"
-reddens = [
-  "tests/assess/test_gate_command.py::test_a_project_root_a_change_made_a_symlink_is_refused_by_the_gate_and_by_bugs_check",
 ]
 
 # What a base refusal prints is the caller's base through `printed.quoted`, the base's own prefix

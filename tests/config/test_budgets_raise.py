@@ -1,7 +1,6 @@
 """A budget is what the layer that may set it says (`Budgets.effective`): the base branch's
 `stayfixed.toml` may raise a gate's budget above the preset, and the owner's machine file a
-session's. What a pull request may do to either is `assess.rule`'s, and
-`tests/assess/test_rule_classes.py` holds it."""
+session's."""
 
 from __future__ import annotations
 

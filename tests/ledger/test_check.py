@@ -286,7 +286,7 @@ def test_a_ledger_moved_by_paths_is_read_on_the_base_where_the_base_kept_it(
 ) -> None:
     # The base's entries were listed at the tree's `[paths]`, so a change that moved the ledger
     # found none there on the base, and deleting an entry in the same change passed `bugs check
-    # --base` — and `stayfixed gate`, whenever the base enforces nothing and so refuses no
+    # --base` — and the `gate` command, whenever the base enforces nothing and so refuses no
     # `[paths]` change. The base's ledger is read where the base's own `stayfixed.toml` kept it.
     # Mutation: `mutations/`'s "the base's entries are listed at the tree's paths again".
     root, _, base = _committed_ledger(tmp_path, ("BR-001", "BR-002", "BR-003"))
@@ -483,8 +483,8 @@ def test_the_base_s_copy_reads_no_machine_file_but_the_one_the_command_was_given
 
 @needs_git
 def test_a_base_with_no_stayfixed_toml_is_read_at_the_tree_s_paths(tmp_path: Path) -> None:
-    # The change that adds `stayfixed.toml` is the bootstrap, where the tree decides, as it
-    # does for `stayfixed gate`: its entries are compared at the tree's own paths.
+    # The change that adds `stayfixed.toml` is the bootstrap, where the tree decides: its entries
+    # are compared at the tree's own paths.
     root, config, _ = _committed_ledger(tmp_path, ("BR-001", "BR-002"))
     git(root, "rm", "-q", "--cached", "stayfixed.toml")
     git(root, "commit", "-qm", "no configuration yet")

@@ -1,7 +1,7 @@
 """The scaffold engine: manifest, regions, keyed entries, plan and apply.
 
 Everything a consumer needs is re-exported here, including the primitives other areas reach for
-directly: `judged_entries` for `assess`'s foreign-hook probe; `owned_ids` for the ids an
+directly: `judged_entries` for a settings file's hook entries; `owned_ids` for the ids an
 earlier `attach` recorded in its ledger, `mark` for any caller that builds `Template.entries`,
 `drop` / `apply_entries` for
 `uninstall`, and `withdraw_entries` for `attach` and `detach`, which take back the entries an

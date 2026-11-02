@@ -55,7 +55,7 @@ TEMPLATES = SRC / "templates"
 WALK = Walk(ROOT_LAUNCHERS)
 # Vacuity floors, not coverage: well under what the walk finds today, so that churn never trips
 # one and a walk that stopped seeing the package does.
-LAUNCHES_FLOOR = 70
+LAUNCHES_FLOOR = 60
 MODULES_FLOOR = 120
 # What ends the options in an argv, after which every element is an operand, read or not.
 END_OF_OPTIONS = ("--", "--end-of-options")

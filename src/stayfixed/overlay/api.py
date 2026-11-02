@@ -40,8 +40,8 @@ session-start handler. The floor is one grammar and two readers, and the other i
 overlay's question, asked where the overlay is owned.
 
 `later` and `RELEASE`, the order of two versions and the `X.Y.Z` grammar whole, are the core's
-`stayfixed.semver`, which the floor's reader builds on; `upgrade`, `doctor` and `stayfixed gate`
-import them from there.
+`stayfixed.semver`, which the floor's reader builds on; `upgrade` and `doctor` import them from
+there.
 """
 
 from stayfixed.overlay.create import (

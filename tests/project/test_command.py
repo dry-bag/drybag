@@ -25,8 +25,7 @@ from stayfixed import __version__
 from stayfixed.cli import build_parser, discover_registrars, run
 from stayfixed.config.loader import load, loads
 from stayfixed.config.schema import NAME_RULE, Config
-from stayfixed.findings import LISTED_LIMIT
-from stayfixed.project.commands import CUSTOM_GATES, STAMPED, run_init
+from stayfixed.project.commands import STAMPED, run_init
 from stayfixed.project.init import (
     HEAD_CURRENT,
     HEAD_DEFAULTED,
@@ -635,29 +634,6 @@ def test_a_refused_adoption_says_its_version_would_be_written(tmp_path: Path) ->
     assert not (root / ".stayfixed" / "manifest.json").exists()
 
 
-def _gates(*names: str) -> str:
-    return "".join(f'\n[gates.custom.{name}]\nrun = ["true"]\n' for name in names)
-
-
-@needs_git
-def test_an_adopted_document_s_custom_gates_are_named_in_a_note_before_anything_runs_them(
-    tmp_path: Path,
-) -> None:
-    # A clone's `stayfixed.toml` configures commands, and `stayfixed assess`, the next step of
-    # the adoption, runs them: the dry run the person approves has to say so, naming each gate
-    # (the loader holds names to a grammar) and never a command. Mutation (declared): the note
-    # left out -> the dry run says nothing about the commands.
-    root = repository(tmp_path)
-    (root / "stayfixed.toml").write_text(DOCUMENT + _gates("tests", "lint"), encoding="utf-8")
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--json")
-    assert json.loads(printed)["custom_gates"] == ["lint", "tests"]
-    for argv in (("--yes", "--dry-run"), ("--yes",)):
-        code, printed = _invoke(root, tmp_path, *argv)
-        assert code == 0, printed
-        assert CUSTOM_GATES.format(count=2, names="lint, tests") in printed.splitlines()
-        assert '"true"' not in printed
-
-
 @needs_git
 def test_uninstall_says_it_keeps_a_stayfixed_toml_you_wrote(tmp_path: Path) -> None:
     # An adopted file is recorded nowhere, so no report line named it, and it stays with the
@@ -673,32 +649,6 @@ def test_uninstall_says_it_keeps_a_stayfixed_toml_you_wrote(tmp_path: Path) -> N
     assert code == 0, err
     assert json.loads(out)["kept_config"] is True
     assert (root / "stayfixed.toml").is_file()
-
-
-@needs_git
-@pytest.mark.parametrize("extra", [0, 3], ids=["exactly-the-limit", "past-the-limit"])
-def test_past_the_listed_limit_the_custom_gate_note_counts_the_rest(
-    tmp_path: Path, extra: int
-) -> None:
-    # Bounded by the one cap every list of names on a line takes, `LISTED_LIMIT`, and not by a
-    # second limit of its own: a file with many gates prints the first names and a count, never a
-    # list as long as the repository makes it. Mutation (oracle): `mutations/`'s "init's custom-gate
-    # note keeps a limit of its own" -> the exactly-the-limit case reddens.
-    root = repository(tmp_path)
-    names = [f"g{n:02}" for n in range(LISTED_LIMIT + extra)]
-    (root / "stayfixed.toml").write_text(DOCUMENT + _gates(*names), encoding="utf-8")
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run")
-    assert code == 0, printed
-    shown = ", ".join(names[:LISTED_LIMIT]) + (f", and {extra} more" if extra else "")
-    assert CUSTOM_GATES.format(count=len(names), names=shown) in printed.splitlines()
-
-
-@needs_git
-def test_a_document_init_writes_names_no_custom_gate(tmp_path: Path) -> None:
-    root = repository(tmp_path)
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--json")
-    assert code == 0, printed
-    assert json.loads(printed)["custom_gates"] == []
 
 
 @needs_git

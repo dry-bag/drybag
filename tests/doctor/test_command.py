@@ -140,11 +140,11 @@ def test_a_skip_is_not_a_finding(tmp_path: Path, capsys: pytest.CaptureFixture[s
 
 
 def test_any_red_check_exits_one(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    # Exit 1 is "findings". A doctor that always exits 0 is a doctor nothing can gate on: a
-    # script or a CI step that runs it reads the exit code, since `stayfixed assess` runs no
-    # doctor check. A `stayfixed.toml` that is not TOML is the cheapest red there is, and the
-    # report's own first row; a directory with none at all is a warning, which exits 0. Mutation
-    # (`mutations/`'s "not-initialised is red with no stayfixed.toml"): the second run exits 1.
+    # Exit 1 is "findings". A doctor that always exits 0 is a doctor nothing can gate on: a script
+    # or a CI step that runs it reads the exit code. A `stayfixed.toml` that is not TOML is the
+    # cheapest red there is, and the report's own first row; a directory with none at all is a
+    # warning, which exits 0. Mutation (`mutations/`'s "not-initialised is red with no
+    # stayfixed.toml"): the second run exits 1.
     (tmp_path / "stayfixed.toml").write_text("[[[", encoding="utf-8")
     code = invoke(["doctor", "--root", str(tmp_path), "--home", str(tmp_path / "home")])
     assert code == 1

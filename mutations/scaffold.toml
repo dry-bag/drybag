@@ -508,93 +508,6 @@ reddens = [
   "tests/scaffold/test_engine.py::test_a_retired_record_whose_file_is_already_gone_is_dropped[directory-gone]",
 ]
 
-# The entries a harness runs out of a settings file, for `assess`'s `foreign-hooks`: Claude Code
-# 2.1.288 (measured on macOS, 2026-10-05) still ran the valid hooks of a file whose `hooks` section
-# held a scalar where an event's list, a group, a group's `hooks` or an entry belongs. Read with
-# the engine's strict walk, one such scalar made the file one the probe could not look at, and the
-# entry beside it went unnamed. `_admitted` states the rule once, for every place.
-[[mutation]]
-name = "the live-entry walk refuses a scalar where a list or an object belongs"
-file = "src/stayfixed/scaffold/entries.py"
-before = """
-    if isinstance(value, dict | list):
-        skipped.append(value)
-    return False
-"""
-after = """
-    if isinstance(value, dict | list):
-        skipped.append(value)
-        return False
-    raise EntriesError("not the kind this place holds")
-"""
-reddens = [
-  "tests/assess/test_probes.py::test_a_foreign_entry_in_a_file_claude_code_runs_is_named[scalar-event]",
-  "tests/assess/test_probes.py::test_a_foreign_entry_in_a_file_claude_code_runs_is_named[group-not-an-object]",
-  "tests/assess/test_probes.py::test_a_foreign_entry_in_a_file_claude_code_runs_is_named[group-hooks-not-a-list]",
-  "tests/assess/test_probes.py::test_a_foreign_entry_in_a_file_claude_code_runs_is_named[entry-not-an-object]",
-]
-
-# A container in one of those places was not measured, and may hold a command a harness runs: the
-# walk keeps it, so the probe still names the file as one it could not look at.
-[[mutation]]
-name = "the live-entry walk skips a container without saying so"
-file = "src/stayfixed/scaffold/entries.py"
-before = """
-    if isinstance(value, dict | list):
-        skipped.append(value)
-"""
-after = """
-    if isinstance(value, dict | list):
-        pass
-"""
-reddens = [
-  "tests/assess/test_probes.py::test_a_part_of_a_settings_file_the_walk_skipped_is_could_not_look_beside_what_it_found[event-an-object]",
-  "tests/assess/test_probes.py::test_a_part_of_a_settings_file_the_walk_skipped_is_could_not_look_beside_what_it_found[group-a-list]",
-  "tests/assess/test_probes.py::test_a_part_of_a_settings_file_the_walk_skipped_is_could_not_look_beside_what_it_found[hooks-an-object]",
-  "tests/assess/test_probes.py::test_a_part_of_a_settings_file_the_walk_skipped_is_could_not_look_beside_what_it_found[entry-a-list]",
-]
-
-# Each level asks `_admitted`, which keeps what it skips: a level that asked `isinstance` alone
-# would skip a container there and say nothing of it.
-[[mutation]]
-name = "the live-entry walk skips a container where a group goes without saying so"
-file = "src/stayfixed/scaffold/entries.py"
-before = "            if not _admitted(group, dict, skipped):"
-after = "            if not isinstance(group, dict):"
-reddens = [
-  "tests/assess/test_probes.py::test_a_part_of_a_settings_file_the_walk_skipped_is_could_not_look_beside_what_it_found[group-a-list]",
-]
-
-[[mutation]]
-name = "the live-entry walk skips a container where a group's hooks list goes without saying so"
-file = "src/stayfixed/scaffold/entries.py"
-before = "            if not _admitted(entries, list, skipped):"
-after = "            if not isinstance(entries, list):"
-reddens = [
-  "tests/assess/test_probes.py::test_a_part_of_a_settings_file_the_walk_skipped_is_could_not_look_beside_what_it_found[hooks-an-object]",
-]
-
-[[mutation]]
-name = "the live-entry walk skips a container where an entry goes without saying so"
-file = "src/stayfixed/scaffold/entries.py"
-before = "                if _admitted(entry, dict, skipped):"
-after = "                if isinstance(entry, dict):"
-reddens = [
-  "tests/assess/test_probes.py::test_a_part_of_a_settings_file_the_walk_skipped_is_could_not_look_beside_what_it_found[entry-a-list]",
-]
-
-# Not measured, and read conservatively: an object where a group goes that carries an entry's
-# `command` or `type` and no `hooks` list is kept with the skipped parts, so the probe names the
-# file as one it could not look at.
-[[mutation]]
-name = "the live-entry walk reads an entry where a group goes as no entry"
-file = "src/stayfixed/scaffold/entries.py"
-before = '            if "command" in group or "type" in group:'
-after = "            if False:"
-reddens = [
-  "tests/assess/test_probes.py::test_a_part_of_a_settings_file_the_walk_skipped_is_could_not_look_beside_what_it_found[entry-where-a-group-goes]",
-]
-
 # In the block led by `mutations/`'s "the JSON writer lets an encode past the interpreter's
 # recursion escape": the settings engine writes back through that one writer.
 [[mutation]]
@@ -613,17 +526,6 @@ before = "    return settings_text(claimed, sort_keys=True)"
 after = "    return json.dumps(claimed, indent=2, sort_keys=True)"
 reddens = [
   "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested[owned]",
-]
-
-# In the block led by `mutations/`'s "the live-entry walk refuses a scalar where a list or an object
-# belongs": a file a harness was measured running is read past a leading byte-order mark too.
-[[mutation]]
-name = "the lenient walk is blind to a settings file opening with a byte-order mark"
-file = "src/stayfixed/scaffold/entries.py"
-before = 'return live_entries(lenient_settings(document))'
-after = 'return live_entries(document)'
-reddens = [
-  "tests/assess/test_probes.py::test_a_foreign_entry_in_a_file_claude_code_runs_is_named[byte-order-mark]",
 ]
 
 # An artifact the engine cannot read is named relative to the project, its reason in words: the

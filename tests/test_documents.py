@@ -392,7 +392,7 @@ def test_the_command_name_walk_discriminates() -> None:
         assert unregistered(named_commands("x.py", text)), text
     assert unregistered(named_commands("x.md", "```bash\nstayfixed release check\n```\n"))
     fine = [
-        f"{tick}stayfixed adopt promote{tick}, {tick}stayfixed hook <event>{tick}",
+        f"{tick}stayfixed plan check{tick}, {tick}stayfixed hook <event>{tick}",
         f"{tick}stayfixed <group>{tick}, {tick}stayfixed …{tick}, {tick}stayfixed {{name}}{tick}",
         f'"{tick}stayfixed memory "\n    "index --check{tick}"',
         f"{tick}stayfixed --version{tick}, {run} stayfixed init --yes",
@@ -1001,14 +1001,14 @@ def test_the_cli_reference_contents_lists_every_section_in_order() -> None:
     # Every `## ` heading after the Contents, in order, each linked by GitHub's anchor: a command
     # section added without its Contents line, or a heading renamed under a stale link, is
     # a reference a reader cannot navigate. The floor is today's count of sections after the
-    # Contents, 34, so a walk that found nothing, or half, cannot pass.
+    # Contents, 32, so a walk that found nothing, or half, cannot pass.
     # Mutation (declared): drop the `memory inventory` Contents line -> the lists differ.
     text = (ROOT / "docs" / "cli.md").read_text(encoding="utf-8")
     _, _, after = text.partition("## Contents\n")
     contents, _, rest = after.partition("\n## ")
     listed = re.findall(r"^- \[(.+)\]\(#([^)]+)\)$", contents, re.MULTILINE)
     headings = re.findall(r"^## (.+)$", "## " + rest, re.MULTILINE)
-    assert len(headings) >= 34, len(headings)
+    assert len(headings) >= 32, len(headings)
     assert listed == [(heading, _anchor(heading)) for heading in headings]
 
 

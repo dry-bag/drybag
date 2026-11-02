@@ -170,7 +170,7 @@ def contained(
 
 
 # stayfixed's own directory in a project: the manifest, `.stayfixed/local/` (attach's ledger, the
-# local-only note store, `[artifacts] local` artifacts) and the assessment. Spelled here, beside
+# local-only note store, `[artifacts] local` artifacts). Spelled here, beside
 # the loop that reserves it, because `config` imports no area and the scaffold engine, `attach`
 # and `memory` all import `config`; `tests/config/test_paths.py` holds each of their paths to lie
 # under it, so the two spellings cannot drift apart.

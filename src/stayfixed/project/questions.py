@@ -98,17 +98,17 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "have not edited it",
     ),
     "commit_messages.attribution_check": (
-        "the commit gate fails a pull request whose commit messages end in an AI tool's "
+        "`stayfixed commit check` fails a range whose commit messages end in an AI tool's "
         "attribution trailer or footer",
         "every such trailer has to come out before a merge; the git hook `stayfixed setup "
         "--git-hooks` installs strips it as you commit, except where your own harness settings "
-        "set attribution.commit to text, which the hook then leaves for the gate to fail",
+        "set attribution.commit to text, which the hook then leaves for `commit check` to fail",
         "[commit_messages] attribution_check in stayfixed.toml",
         "set it to false in stayfixed.toml",
     ),
     "commit_messages.types": (
-        "`stayfixed assess` names the recent commits whose subject's type is not in this list",
-        "nothing is refused: the probe only advises",
+        "the list records the commit types this project uses; no command reads it",
+        "nothing is refused",
         "[commit_messages] types in stayfixed.toml",
         "edit the list in stayfixed.toml",
     ),

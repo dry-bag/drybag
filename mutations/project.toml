@@ -1468,17 +1468,6 @@ before = "    text = read_document(root)"
 after = '    text = (root / CONFIG_FILE).read_text(encoding="utf-8") if (root / CONFIG_FILE).is_file() else None'
 reddens = ["tests/project/test_init.py::test_a_symlinked_document_is_refused_even_when_it_carries_its_version"]
 
-# A clone's `stayfixed.toml` configures commands, and the adoption's next step runs them: the
-# dry run the person approves says so, naming the gates, so the `init` skill can ask first.
-[[mutation]]
-name = "init adopts a file's custom gates without a word"
-file = "src/stayfixed/project/commands.py"
-before = "    if report.custom_gates:"
-after = "    if False:"
-reddens = [
-  "tests/project/test_command.py::test_an_adopted_document_s_custom_gates_are_named_in_a_note_before_anything_runs_them",
-]
-
 # `uninstall` removes the inventory `assess` wrote, beside the manifest.
 [[mutation]]
 name = "uninstall leaves the inventory assess wrote"
@@ -1812,15 +1801,6 @@ reddens = [
 # `LISTED_LIMIT` on the rest of the class: every list of names the repository or its history
 # bounds in number by nothing, on a summary line or in a refusal, takes `findings.listed`.
 
-[[mutation]]
-name = "init's custom-gate note keeps a limit of its own"
-file = "src/stayfixed/project/commands.py"
-before = "        names = listed(list(report.custom_gates))"
-after = "        names = listed(list(report.custom_gates[:5]))"
-reddens = [
-  "tests/project/test_command.py::test_past_the_listed_limit_the_custom_gate_note_counts_the_rest[exactly-the-limit]",
-]
-
 # The Python profile's red-run hint. Its bytecode reads moved here with it from the core, and the
 # entries with them.
 # The stale-bytecode predicate, both directions: `!=` against the header's recorded mtime is
@@ -2145,7 +2125,6 @@ after = """
 """
 reddens = [
   "tests/profiles/test_evaluate.py::test_a_file_that_does_not_parse_resolves_to_nothing[hex-past-str]",
-  "tests/assess/test_command.py::test_a_pyproject_number_past_the_conversion_limit_is_one_the_profile_cannot_read",
 ]
 
 # A stack's red-run hint is handed the contained code roots by the guard that asks it, so the

@@ -55,9 +55,6 @@ Three things hold everywhere:
 - [`stayfixed docs check [--budgets] [--links]`](#stayfixed-docs-check---budgets---links)
 - [`stayfixed docs trail [--check]`](#stayfixed-docs-trail---check)
 - [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
-- [`stayfixed assess [--base REF] [--builtin] [--root PATH] [--machine PATH]`](#stayfixed-assess---base-ref---builtin---root-path---machine-path)
-- [`stayfixed gate [--only NAME]… [--base REF | --pr-base=BRANCH --base-input=BRANCH --default-branch=BRANCH] [--path=PATH] [--builtin | --custom] [--workflow-sha SHA] [--annotate] [--summary FILE] [--root PATH] [--machine PATH]`](#stayfixed-gate---only-name---base-ref----pr-basebranch---base-inputbranch---default-branchbranch---pathpath---builtin----custom---workflow-sha-sha---annotate---summary-file---root-path---machine-path)
-- [`stayfixed adopt promote [GATE …] [--base REF] [--builtin] [--root PATH] [--machine PATH]`](#stayfixed-adopt-promote-gate----base-ref---builtin---root-path---machine-path)
 - [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--commit-type TYPE …] [--local ID …] [--no-ci] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----profile-name---memory-mode-mode---attribution-check---commit-type-type----local-id----no-ci---root-path---machine-path)
 - [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
 - [`stayfixed upgrade [--dry-run] [--force PATH]… [--root PATH] [--machine PATH]`](#stayfixed-upgrade---dry-run---force-path---root-path---machine-path)
@@ -506,8 +503,7 @@ the report says how many messages it read. Exits `1` naming up to eight offences
 never the text, which is the repository's; `--json`'s `violations` carries every one — and `2`
 when git cannot read the range or the range looks like an option.
 
-**Writes** nothing. `stayfixed gate`'s `commit` gate reads the range from the base to `HEAD`
-through this same check.
+**Writes** nothing.
 
 Exit `1` has two meanings here and a gate should know both: messages were read and some carry a
 trailer (`FAIL: …`), and *no `stayfixed.toml` was found under `--root`*, which the configuration
@@ -914,16 +910,15 @@ merge bases include one from before the removal: restore it on the base.
 Each of those commits' ledger is read where that commit's own `stayfixed.toml` put it: its
 `[paths] bugs`, `bug_index` and `[ledger] id_prefix`, and nothing of how it judges an entry, so a
 base carrying an `evidence_boundary_required_for` level the ledger now refuses does not stop the
-change that corrects it. The copy is found and loaded as `stayfixed gate` finds and loads the
-base's: at the project root's path inside the repository, through the loader, against the tree's
-disk. So a root reached through a symlink, or spelled otherwise than git spells it, is refused
-(`2`) here as it is there. The entries are compared by file name with the tree's directory. A
+change that corrects it. The copy is found at the project root's path inside the repository and
+loaded through the loader, against the tree's disk. So a root reached through a symlink, or
+spelled otherwise than git spells it, is refused (`2`). The entries are compared by file name with the tree's directory. A
 change that moves the ledger by `[paths]` answers for every entry it did not carry along, one that
 changes `id_prefix` answers for every entry under the old prefix, and a deleted ledger is named at
 the paths the base kept it at. A commit with no `stayfixed.toml` at the project's path is read at
-the tree's paths, as the change that adds the configuration decides for itself under `stayfixed
-gate`. A copy that does not load fails (`1`); one whose load meets a refusal, or whose `id_prefix`
-the identifiers refuse, refuses (`2`); neither is read as a base with no ledger. A refusal prints
+the tree's paths, as the change that adds the configuration decides for itself. A copy that does not
+load fails (`1`); one whose load meets a refusal, or whose `id_prefix` the identifiers refuse,
+refuses (`2`); neither is read as a base with no ledger. A refusal prints
 the base as data, and a refused prefix clipped to its first 120 characters and its length.
 
 `--base` is what the `bugs` gate passes, the base it judges against. A base git cannot list, one
@@ -963,14 +958,13 @@ The line names each run, `<id>: ` and then the receipt's line as `prove` prints 
 `<n> regression(s), <m> not proved`; with nothing to run, it is `nothing to run: no fixed entry
 carries a regression`. `--json` carries `regressions`, one `{"id", "path", "verdict", "line"}`
 object a run, `path` being the entry file's from the project root, and `not_proved`. The runner's
-standard output goes to standard error in both forms, as a custom gate's does, so under `--json`
+standard output goes to standard error in both forms, so under `--json`
 standard output holds the one object. Exits `0` when every run is `proved` or there is none, and
 `1` otherwise, as `prove` does. A Ctrl-C, or a SIGTERM or SIGHUP, during a run ends that run `not
 proven`, and nothing after it starts. A ledger that does not parse fails (`1`).
 
 The run catches an honest regression and is no control against a hostile one: the argv is read from
-the tree the change wrote, which can rewrite it as easily as the test. Who runs it is decided as for
-any custom gate, by the base branch's `run` and the person's yes before a clone's commands run.
+the tree the change wrote, which can rewrite it as easily as the test.
 
 **Reads** the ledger's entry files, and what `prove` reads. **Writes** nothing in the project, as
 `prove` writes nothing there; what each runner writes, it writes. **Runs** each argv, as the
@@ -1075,8 +1069,7 @@ listing every document on disk; outside one, every document is listed.
 
 With `PATH` arguments, lint exactly those plans; without, the plans under `[paths] plans` that
 merging the change could alter on `REF`, `REF` defaulting to
-`refs/remotes/origin/<project.base_branch>`, the fully qualified name, as for `stayfixed assess`
-and `stayfixed gate`, so a tag called `origin/<branch>` cannot stand in for it. Those are the plans
+`refs/remotes/origin/<project.base_branch>`, the fully qualified name, so a tag called `origin/<branch>` cannot stand in for it. Those are the plans
 whose copy in `HEAD` differs from `REF`'s and from that of any commit `git merge-base --all REF
 HEAD` names: a copy equal to every merge base's leaves the merge taking `REF`'s, and one equal to
 `REF`'s leaves it as it is. Every merge base, not the one `REF...HEAD` diffs against, which can
@@ -1102,417 +1095,12 @@ where the commits `HEAD` forked from can be cut off and an older commit stand in
 any base in a clone git refuses to say is shallow or not, are this command's `base-unresolvable`
 finding (`1`), never an OK: fetch the whole history (`fetch-depth: 0`). A git that could not be
 run or ran past its time limit, on any of these questions, fails (`1`) with that cause in
-words. The `plan` gate that
-`stayfixed assess`, `stayfixed gate` and `stayfixed adopt promote` run reads the same cause as a
-gate that could not run, as `commit` does, because it says nothing about any plan. A `REF`
+words. A `REF`
 shaped like an option is refused (`2`) before git sees it. Uncommitted plans
 are not in the diff; the line counts them and `--json` names them, and naming one as `PATH`
 lints it.
 
 **Writes** nothing.
-
-## `stayfixed assess [--base REF] [--builtin] [--root PATH] [--machine PATH]`
-
-What stands between this repository, as it is, and enforcement. It reads the tree's own
-`stayfixed.toml` — not the base branch's: the question is about this tree, so this command is
-not a trust boundary — and runs every configured gate (see [Configuration](#configuration)): the
-built-ins `[gates] builtin` keeps, in their fixed order, then each `[gates.custom.<name>]`. A
-custom gate's output goes to standard error as it ran and nowhere else, so running `assess` in a
-clone runs the commands that clone configured, as running its test suite would. Then it runs the
-probes below, which read files and the git index and never run a tool or reach the network.
-
-`--builtin` runs the built-in gates and the probes and no custom gate: for a clone whose
-commands you have not agreed to run. The summary names up to eight of the custom gates it left
-out and counts the rest, which count toward no total, and the inventory lists every one under
-`skipped`.
-
-`REF` is the revision `plan` and `commit` compare against, and the one `bugs` compares the ledger
-with where `HEAD` forked from it (whether it carried one when the tree has none, and which entries
-the tree lacks), default
-`refs/remotes/origin/<project.base_branch>` — the fully qualified name, so a tag cannot stand in
-for it. Where that ref does not exist (no `origin`, or not fetched), `plan`, `commit` and `bugs`
-could not run, and each counts as failing; a `note:` after the summary says the base is missing
-and suggests `--base refs/heads/<project.base_branch>`, as `adopt promote` does.
-
-A gate that could not judge the tree — a base that is not there, an unreadable plan, a range git
-cannot read, a custom gate that could not start or ran past `custom_timeout_seconds`, a file it
-reads that CI's checkout will not have (below) — is failing: a gate that could not look has not
-passed. A gate never reports that as a finding; it is the one outcome every command that runs
-gates spells `could not run`, and `--json` carries it as `answered: false` with a fixed `reason`
-naming the command that shows why.
-
-**The `docs` and `trail` gates judge tracked files.** That is the contract: CI checks out what git
-tracks and nothing else, so a file that is on disk here and that git does not track — never added,
-or ignored — is one those gates read here and CI never sees, and there the gate's own finding for
-an absent file fails every pull request. So `assess` reports such a gate as could not run, its
-`reason` saying it could not judge the tree as CI will, and counts it as one that would fail, and
-`stayfixed adopt promote` never enforces it. To keep one of those files out of git, take its gate out
-of `[gates] builtin`.
-
-- **The files.** `[paths] agents_md` and every file or directory its links name, for `docs`, and
-  `[paths] roadmap` and the `trail.toml` beside it, for `trail`. The roadmap the `docs` gate reads
-  for its prose budget is not asked about: an absent roadmap adds no finding, so one CI cannot see
-  can only make the verdict here stricter than CI's.
-- **Tracked** means in git's index, as `git ls-files` lists it, so a file staged and not yet
-  committed counts — CI checks out commits, so commit it with the change that promotes the gate.
-- **Symlinks.** A symlink is tracked as the link alone, and a checkout writes the link whether or
-  not what it names is there, so each path is walked as the filesystem walks it, one component at
-  a time, and every symlink on the way is followed, a symlinked directory's included: every step
-  and the file it lands on must be tracked. Where a link leads is judged against the work tree's
-  top, since a project below it may link to a tracked file beside it, which every checkout has; a
-  link whose target is absolute or climbs out of the repository counts as untracked, since no other
-  checkout has what it names, and so does a link that differs on disk from the one git has — one
-  retargeted and not staged — since a checkout writes git's, which may lead elsewhere.
-- **The items.** An `untracked` item names the files: the first untracked step on a path, a link
-  that differs on disk from git's, or a link that leads out of the repository, a directory's
-  included, and when that step or link is outside the project, the last link inside it that led
-  there. A name that differs from the one git tracks only in case — a link to `Notes.md` where git
-  tracks `notes.md` — reads the committed file on a filesystem that folds case, as macOS's does by
-  default, and nothing in a Linux checkout, so it goes to a `case-differs` item instead, whose
-  remedy is to spell it as `git ls-files` does; where case is kept apart and the two names are two
-  files, the one read is simply untracked. Each name is inside the path grammar or withheld.
-- **No answer.** Inside a git work tree, a git that gives no answer is never read as tracked: the
-  gate could not run the same way, and its item is `could-not-look`. Outside a work tree nothing is
-  asked, since there is no index to ask and no checkout for CI to take, and both gates judge the
-  files as they are, as `docs trail` lists every document there.
-- **`stayfixed gate`** asks nothing about tracking: it runs on the checkout CI took, where such a
-  file is simply absent and the gate's own finding says so.
-
-**A gate's row.** `stayfixed assess`, `stayfixed gate` and `stayfixed adopt promote` each give every
-gate they ran one `--json` row in one shape: `name`; `enforcing`; `answered`, false when the gate
-could not run; `reason`, that fixed text, else empty; `count`, its findings; and `failing`, true
-when it has a finding or could not run. A custom gate `stayfixed gate` did not start because the
-run had already failed has a row too, `answered` false and `reason` `not run: the run had already
-failed`, and `failing` true, since it judged nothing and a gate that did not look has not passed.
-A row names no finding: `assess` lists them as items.
-
-| Probe | Reads | Severity | Principle | Reported when |
-|---|---|---|---|---|
-| `code-roots` | `[ledger] code_roots` | advice | — | an entry no walk takes, each named in config order, quoted when it lies outside the path grammar, with its reason: it names the repository root itself (`.`, `./`), it is no readable path inside the repository free of links, `..` and `.git`, or it names no directory here, unless the preset's default `code_roots` lists it, in any spelling the fold reads alike, and another entry is walked, since then a missing directory loses no walk |
-| `todo-markers` | tracked files under `[ledger] code_roots` | advice | 1 | a `TODO`, `FIXME` or `XXX` word; `where` names files |
-| `tracked-env` | the git index | warning | — | a tracked file named `.env` or `.env.<x>`, except `.example`, `.sample` and `.template` |
-| `memory-history` | the history of `[paths] memory` | warning | 8 | the store has history and `memory.mode` is not `in-repo` |
-| `foreign-hooks` | the committed hook settings of each harness `[stayfixed] agents` selects | advice | 5 | any hook entry, one claiming stayfixed's marker included: stayfixed writes none into a committed file |
-| `foreign-workflows` | `.github/workflows/*.yml` and `*.yaml` | advice | — | any workflow but stayfixed's own caller |
-| `codeowners` | the first of `.github/CODEOWNERS`, `CODEOWNERS` and `docs/CODEOWNERS` | advice | 7 | there is no file, or no line that does not start with `#` holds `.github`: a plain substring, not GitHub's pattern matching, so a line such as `* @owner` still reports; not judged under `[ci] mode = "none"` |
-| `commit-types` | the subjects of the last 100 commits, merges excluded | advice | — | a subject whose type is not in `[commit_messages] types`; `where` names commits |
-| `profile` | the configured profile's checks | the check's own | — | each failed check, counted once; a profile this stayfixed does not ship is one `profile-not-shipped` warning |
-
-A probe that could not look — a git query that failed or timed out, a settings file stayfixed
-cannot read, a path through a symlink — reports a `could-not-look` warning naming where, and
-never reads as "nothing found". Two things are deliberately not inventoried: another tool's
-design-document directories, because stayfixed names no other tool's convention; and whether a
-test exercises what its name says, which only reading one stack's test files could judge.
-
-**Writes** `.stayfixed/assessment.json`, which the `stayfixed:ignore` region keeps out of git,
-overwritten on every run that gets that far and never read back: format `2`, with `format`,
-`stayfixed` (the version that wrote it), `base`, `enforcing` (the gates
-`[stayfixed] enforced` names), `skipped` (the
-custom gates `--builtin` left out, else empty), `gates` (a gate's row each, above) and `items`
-(per item: `probe`, the gate or probe that found it; `rule`; `principle`, a number in
-[the principles](methodology/principles.md) or `null`; `severity`, `warning` or `advice`;
-`remedy`; `where`, at most 200 labels; and `count`, how many there were, never capped). A gate's
-findings become one item per rule, at `warning`. `--json` prints the same object with `summary`
-beside it. When git does not ignore the file where it is written, the summary ends with a note
-saying so. A `.stayfixed` that is a symlink or not a directory, or a directory at the inventory's
-place, is a refusal and the inventory is not written. Anything else at that place, a symlink
-included, is replaced by the file, and what a symlink pointed at is left as it was. Without
-`--builtin`, a custom gate writes whatever its command writes, and every gate runs before the
-inventory is written, so that refusal comes after the custom gates have run.
-
-The summary prints counts and stayfixed's own words — gate names, probe and rule ids,
-severities, remedies — and never a path the repository chose: one table with a row per gate
-(`gate`, `enforcing`, `findings`, `would fail`) and one with a row per item (`from`, `rule`,
-`severity`, `count`, `remedy`).
-
-Exit codes: `0` when no gate would fail, whatever the probes found, so `0` means every gate
-could enforce now; `1` when a gate would fail, enforced or not, or when `stayfixed.toml` is
-missing or invalid (`failed:`, as for every command that reads it); `2` on a refusal, a
-`stayfixed.toml` that is a symlink among them: it is never followed, as no command follows it.
-
-## `stayfixed gate [--only NAME]… [--base REF | --pr-base=BRANCH --base-input=BRANCH --default-branch=BRANCH] [--path=PATH] [--builtin | --custom] [--workflow-sha SHA] [--annotate] [--summary FILE] [--root PATH] [--machine PATH]`
-
-The gate a pull request faces, runnable on your own checkout. One run:
-
-1. refuses a project root reached through a symbolic link, spelled otherwise than git spells it,
-   or given with a `..` component, which after a linked component is not the directory it names;
-2. reads the base's `stayfixed.toml` at one exact commit, at the project's own path in the repository;
-3. judges this tree's `stayfixed.toml` against it, key by key (below);
-4. runs the configuration check and the configured gates under the configuration that judgement
-   chose, each enforcing or advisory as it says.
-
-Without `--only` it runs the configuration check and every configured gate: the built-in gates
-`[gates] builtin` keeps and the project's own `[gates.custom]`. `--only NAME` runs just the names
-given, each once; `config` is the configuration check. A name this run's configuration does not
-have is refused, counted and not quoted. Running it in a clone runs that clone's own gate
-commands, as [Configuration](#configuration) says.
-
-**`--builtin` and `--custom`.** `--builtin` runs the configuration check and the built-in gates
-and executes no command from `stayfixed.toml`; `--custom` runs the project's own gates alone and
-judges nothing. Each narrows the bare run, or `--only`'s names, to its kind, and skips a name of
-the other kind rather than refuse it. `--builtin` runs the configuration check whatever `--only`
-names: it is the run that judges, and a caller that names one gate — a matrix leg, a person
-reproducing CI — still judges the change's `stayfixed.toml`, so a loosening fails every such
-run. A
-custom gate's command is fixed by the base, but the files it executes — a `conftest.py`, a
-`Makefile`, a script — are the change under review, so for a custom gate the guarantee is "this
-command runs and must exit 0", and nothing about what it runs. An owner who wants those files
-pinned puts them under CODEOWNERS. Run bare on your own checkout, everything runs in one
-process. Narrowed to nothing — `--custom` on a project with no gate of its own — the run prints
-`nothing to run`, appends no summary and exits `0`.
-
-**The platform's base, and `--path`.** A CI workflow hands the
-run what the platform and its caller file said, raw, and the run checks them itself. The base is
-either `--base` or three flags together, never both: `--pr-base` is the pull request's base as
-the platform reports it (empty on any other event), `--base-input` the caller's `base:`, and
-`--default-branch` the repository's default branch. Each takes one argument as `--name=value`, so
-a value that begins with `-` is still that flag's, and each may be empty. The branch is the first
-of `--base-input`, `--pr-base` and `--default-branch` that is not empty; a `--base-input` that
-disagrees with a non-empty `--pr-base` is refused, naming the pull request's base and never the
-input's value, since on a pull request the caller file is the author's; and the base commit is
-`refs/remotes/origin/<branch>`, resolved once in `--root`'s repository, which the verdict and every
-gate then read. `--path=PATH` is the project root inside `--root`, with either form of the base:
-`""`, `.` and `./` are `--root` itself, one leading `./` and one trailing `/` are dropped, and a
-`..` component or an absolute path is refused without echoing the value. Any other character is
-admitted, a space or a name outside ASCII included. With the platform's base, git is asked once at
-`--root` for the top of its checkout, every other `git` the run asks names that checkout's
-repository rather than finding one from the project root, so the project is always that directory
-of the checkout, and the release tags a moved `ci.ref` is checked against are listed from its top.
-
-**Which custom gates run, and in what order.** A custom gate runs only with the command the
-base's `stayfixed.toml` gives it. One the change adds, or re-commands while the base does not
-enforce it, is not run: it prints `<name>: advisory, not run until the base has this command`
-(or `enforcing`, when the change enforces it), and runs from the first pull request after it
-lands on the base. It fails nothing meanwhile, since the base enforces no command it lacks, and
-under the bootstrap, where the base has no `stayfixed.toml`, no custom gate runs. The reason is
-that the custom gates share one checkout: a gate the change wrote, run before the base's
-enforced ones, could rewrite the script they are about to execute. For the same reason the
-built-in gates run first, then the custom gates the base enforces, then every other custom gate.
-And once the run has failed — a refused key, or an enforcing gate among those that failed or
-could not run — no custom gate starts, one the base enforces included: each prints `<name>:
-advisory, not run: the run had already failed` (or `enforcing`), and its `--json` row says the
-same, `answered` false with that `reason`. A custom gate can run files the change can edit, and
-it runs in the process that holds the verdict, on a GitHub-hosted runner with passwordless
-`sudo`, which could rewrite that process and turn its failure into a pass. An enforced gate is
-no exception: a test runner the base enforces beside a pinned policy runs the change's code, and
-started after the policy failed it would run after the verdict was decided. So once the verdict
-is a failure no custom gate runs, and a pinned gate named to sort first among the enforced ones
-has passed before any other custom gate starts. While the run has not failed (an advisory gate's
-findings do not fail it), a custom gate runs as always; one that was not started is judged on the
-next run, once the failure is fixed.
-Each custom gate runs in a session of its own, and the command's process group is ended when
-the command exits, passes or not, as on a timeout or an interrupt, so nothing it started in the
-background in that group runs on into the next gate. A descendant that leaves the command's
-process group (a new session, or a job-control shell's own group) is not ended, and nor is one
-stayfixed may not signal (a sudo or setuid descendant). Enforced gates that themselves run files
-the change can edit — two test runners, say — still share that one checkout, and one could
-rewrite what the other runs.
-
-**What a pull request may change in `stayfixed.toml`.** Both copies go through the loader and are
-compared by what it derives — each key by its dotted name, each budget by its effective value,
-each custom gate's `run` on its own — never by byte. A comment, a key written out at its default,
-and a reordered `enforced` or `[gates] builtin` list are no change at all. Each changed key gets one verdict:
-
-| Key | Admitted when | Verdict | Otherwise |
-|---|---|---|---|
-| `stayfixed.enforced` | it lists every gate the base lists | `tightened` when it lists more, else `neutral` | `refused` |
-| `gates.builtin` | a gate added, or one removed that the base does not enforce | `tightened` when one was added, else `neutral` | `refused` |
-| `gates.custom.<name>.run` | the gate is new, or the base does not enforce it | `tightened` when new, else `neutral` | `refused` |
-| `budgets.<name>`, a gate's budget (`agents_md_lines`, `agents_md_words`, `status_lines`, `roadmap_prose_lines`, `roadmap_prose_words`) or a session's (`memory_index_words`, `startup_rules_words`, `volatile_notes_words`, `volatile_ttl_days`) | the effective value is at most the base's | `tightened` | `refused` |
-| `ledger.code_roots` and `ledger.evidence_boundary_required_for` | every entry the base lists is still listed | `tightened` when one was added, else `neutral` | as any other key |
-| `stayfixed.preset`, `stayfixed.agents`, `project.name`, and every key whose class is a preference (`stayfixed.profile`, `memory.mode`, `memory.groups`, `memory.index_extra`), the machine owner's or the plugin's | always: no gate judges a pull request by them | `neutral` | — |
-| `stayfixed.version` and `ci.ref`, judged as one upgrade | the version is exactly the running stayfixed's and not earlier than the base's, and a moved `ci.ref` is the commit `--workflow-sha` names and one of stayfixed's release tags names | `upgrade` | as any other key |
-| any other key | — | — | `refused` while the base enforces any gate, `noted` while it enforces none |
-
-A preset switch is judged by what it moves: its own name is `neutral`, a budget it lowers
-`tightened`, and anything else it moves falls to "any other key". "Not earlier" is read the way
-`stayfixed upgrade` reads it — by the leading `X.Y.Z`, and a release after its own pre-release — and
-a pair stayfixed does not order is judged as any other key: refused while the base enforces a gate,
-noted while it enforces none. The run uses this tree's configuration unless a key was
-refused, and then the base's; it enforces the gates either side enforces. So a pull request that
-promotes a gate is held to that gate in its own run.
-
-**How a refused change lands.** While any gate enforces, a pull request cannot make a change the
-table refuses, and that includes routine upkeep: a `[paths]` value,
-`[artifacts] local`, a `[ledger] code_roots` entry removed, a `[commit_messages] types` entry, a custom
-gate's `run`, `[gates] custom_timeout_seconds`, `[project] base_branch`. The owner makes such a
-change by pushing it directly to the base branch; every later pull request is judged against it.
-If you want that push to need you, and not an agent working with your credentials, protect the
-base branch at the repository level so that only you can push to it. Many projects do not need
-that, and it is an option, not a requirement.
-
-**What each input rests on.** The verdict holds where a pull request cannot edit the CI workflow
-that runs it without a review, and not otherwise.
-
-- *The base's commit.* `--base` takes a full 40-character commit id or a full `refs/…` name, and
-  nothing shorter: git resolves a short name through rules in which a tag called `origin/main`
-  wins over the remote-tracking branch of that name, and a full name that does not exist falls
-  through to a tag of the same spelling, so the name must also exist as itself. In CI the workflow
-  passes the platform's base instead, and the run resolves its branch's fully qualified
-  remote-tracking ref once, to a commit. Run locally, the default is
-  `refs/remotes/origin/<project.base_branch>`, read from this tree's own configuration, which is
-  why a local run is advice and never the authority. A clone without an `origin` remote names its
-  base with `--base`, such as `--base refs/heads/<project.base_branch>`: a run whose base is not
-  in the checkout fails with that suggestion, spelled with the branch the file configures.
-- *The base's copy.* It is read at the project root's own path in the repository. A root reached
-  through a symbolic link below the repository's top, or spelled otherwise than git spells it, is
-  refused: either would look for the copy where the base has none, and a missing copy is the
-  bootstrap, where this tree decides. A link above the repository's top — `/tmp` on macOS, a linked
-  home directory — belongs to the machine and is admitted.
-- *The running stayfixed and `--workflow-sha`.* In CI both are whatever the caller workflow's
-  `uses:` line selects. A pull request can edit that line; a required code-owner review of
-  `/.github/` is what keeps it out of the pull request's reach.
-- *Release tags.* A moved `[ci] ref` is admitted only at a commit one of stayfixed's own `v*` tags
-  names, asked of the public repository.
-- *The verdict itself* is worth what the process that computed it is worth. It must execute
-  nothing the repository wrote: run it with `--builtin`, and start it as
-  `python3 -P -s -m stayfixed`, so that no module in the checkout is imported in place of
-  stayfixed's own, and no `.pth` file in a user site directory is processed at start-up, even one
-  the environment has pointed into the checkout.
-
-Run locally on a branch `stayfixed upgrade` made, a moved `[ci] ref` is refused unless you pass
-`--workflow-sha` with the commit the new `uses:` line names; with it, the run answers what CI will.
-
-**Printed.** `config: …` first when the configuration check runs: how many keys changed, how many
-were refused and up to eight of their names, or that the base has no `stayfixed.toml` at this
-path. Then one line per gate: `<name>: enforcing, N finding(s)`, `<name>: advisory, N finding(s)`, or `could not run`
-in place of the count, or `not run: the run had already failed` for a custom gate not started
-once the run had failed; and, after the gates that ran, `<name>: advisory, not run until the base
-has this command` (or `enforcing`) for each custom gate whose command the base does not have. A run
-that fails with a gate failing ends with one `details:` line saying
-where the findings are: `stayfixed assess --json` (`stayfixed assess --builtin --json` under
-`--builtin`), or the gate's own command. Key names and gate
-names print; values from `stayfixed.toml` and a finding's detail never do.
-
-**`--annotate`** also prints GitHub workflow commands, which the platform shows as annotations:
-one `error` per refused key, and one per finding or gate that could not run or was not started —
-`error` for an enforcing gate, `warning` for an advisory one — and a `warning` per custom gate not
-run until the base has its command. The message is `<gate>: <rule>`. `file=` is written
-from the repository's root and only for a path of letters, digits, `.`, `_`, `-` and `/`; any
-other path is annotated without a location, and a `commit` finding, which names a commit, has
-none. At most ten per level; past that one `notice` counts the rest, because the platform shows
-ten per level per step and drops the others without a word.
-
-**`--summary FILE`** appends a markdown table — each gate's mode, count and outcome, and each
-changed key's verdict — to `FILE`; the workflow names the job summary. **`--json`** carries
-`config` (`judged`, `changes` as `{key, verdict}`, `refused`, `enforcing`),
-`not_on_base`, the custom gates not run until the base has their command, and `gates`, a gate's
-row each as [`stayfixed assess`](#stayfixed-assess---base-ref---builtin---root-path---machine-path)
-defines it, `enforcing` as this run enforces it. It lists no finding: `stayfixed assess --json` is
-where findings are serialised.
-
-**Reads** `stayfixed.toml`, the base's copy through git, every file a gate reads, and — only when
-`--workflow-sha` matches a moved `[ci] ref` — the public repository's tags.
-
-**Writes** nothing but the file `--summary` names; a custom gate writes whatever its command writes.
-
-A pull request that removes `stayfixed.toml` — `stayfixed uninstall` among them — fails the run:
-nothing says which gates run, and a run that cannot judge a change does not pass it. Such a
-change lands the way a refused key does, by a direct push to the base branch.
-
-A gate that could not run fails the run only when it enforces, whatever stopped it — a refusal
-raised inside the gate included, such as a path its own configuration names that turns out to be
-a symbolic link. An advisory gate stopped that way prints `could not run` and is a warning
-annotation, and the run can still exit `0`; the gate's own command, which the remedy names,
-shows the refusal itself.
-
-Exits `0` when no enforcing gate failed or could not run and, when the configuration check ran,
-nothing was refused; a custom gate not run until the base has its command changes neither. `1`
-when an enforcing gate failed or could not run; when the configuration check refused a key; when
-the base is not in the checkout or git could not read its copy, the platform's base branch
-included (the message names `fetch-depth: 0`); when the root is not inside a git repository, or git refuses the one it is
-in; when this tree has no `stayfixed.toml`; or when either side's `stayfixed.toml` is not UTF-8
-text or does not load, the message naming which (a base's copy is fixed on the base branch, and
-is never read as the base having none). `2` on a refusal: a `--base` outside its grammar (before
-anything runs); some but not all of the platform's three base flags, or them beside `--base`; a
-`--base-input` that disagrees with `--pr-base`; none of the three naming a branch, or one `git
-check-ref-format --branch` refuses; a `--path` with a `..` component or an absolute one; a root reached through a symbolic link, spelled otherwise than git spells it, or
-given with a `..` component; an `--only` name this run's configuration does not have; a
-`stayfixed.toml` that is itself a symbolic link; or a `[paths]` value on either side that leaves
-the root, passes through a symbolic link, or names `.git` or `.stayfixed`. Both copies are loaded
-against this tree's disk, so a change that turns a directory the base names into a symbolic link
-refuses the base's own load, in a message that says it is the base's, and a base written for an
-older stayfixed that this one no longer loads fails every pull request until the owner fixes it
-on the base branch.
-
-## `stayfixed adopt promote [GATE …] [--base REF] [--builtin] [--root PATH] [--machine PATH]`
-
-Runs gates strictly on the tree as it is, and enforces those that pass by adding them to
-`[stayfixed] enforced`, the one adoption key: a gate enforces when that list names it, and
-nothing else says so. It is the one adoption command. With no `GATE`, it runs every configured
-gate that does not enforce yet, enforces each one that passes, names the rest with their finding
-counts, and exits 1 if any failed; the line names up to eight gates in each of its two lists and
-counts the rest, and `--json` carries every one. With names, they pass together or nothing is
-written, and a named gate that already enforces is refused rather than skipped. The list is
-written in configured order, and once every configured gate passed it names every one: a gate
-the project adds later is advisory until it is promoted in turn, or listed by hand in the pull
-request that adds it, which `stayfixed gate` admits as a tightening. A project whose every
-configured gate is already listed is refused, as is one that configures no gate. A name, a gate
-already enforcing, nothing left to promote, a `stayfixed.toml` the editor cannot rewrite in place
-and a manifest it cannot read are each refused before the first gate runs; a refusal from the
-editor names `enforced` on one line: as it stands when the check before the gates finds it, and
-as the command would write it when the write itself refuses, so following it either leaves the
-project as it was or makes the promotion whole.
-
-`--base` is what `plan` and `commit` judge a range against, and what `bugs` compares the ledger
-with where `HEAD` forked from it, as for `stayfixed gate`: a 40-hex commit or a `refs/…` name,
-`refs/remotes/origin/<project.base_branch>` by default. Run on the base branch itself, that range is empty and those two gates pass
-having judged nothing; the pull request that carries a promotion faces every gate it promotes in
-its own run. A custom gate runs its command here, as it does under `stayfixed gate`, and only
-when that command is the one the base's `stayfixed.toml` gives it: a gate the base does not have,
-or has with another command, is not run and not promoted, and is named `(not on the base)` with
-a `note:` saying to land it on the base branch first, because `stayfixed gate` would not run it
-in the pull request that carries the promotion. A base that cannot be read, or has no
-`stayfixed.toml`, has no command, so every custom gate waits.
-
-A `docs` or `trail` gate that reads a file CI's checkout will not have is never promoted, since CI
-would fail the gate on every pull request (*The `docs` and `trail` gates judge tracked files*,
-under `stayfixed assess`). It could not run, is named `(could not run)`, and a `note:` for it names
-up to eight of the files and counts the rest, each inside the path grammar or withheld, and says
-to commit them — an ignored one needs
-its ignore rule removed, or `git add -f` — and to point a symlink it names at a tracked file in the
-repository, or to keep them out of git and take the gate out of `[gates] builtin`. A file git
-tracks only under a name that differs in case gets a `note:` of its own, saying to spell it as
-`git ls-files` does; one git gave no answer about is named with a `note:` saying so.
-
-`--builtin` runs the built-in gates and no custom gate, as `stayfixed assess --builtin` does: for
-a clone whose commands you have not agreed to run, where the base is the clone author's and its
-having a command is no brake. A custom gate is promoted only by a run that ran its command, so
-each one is not run and not promoted, is named `(not run, as --builtin asked)` with a `note:`
-saying that without `--builtin` the command runs them, and, named beside other gates, holds them
-back as a gate not on the base does.
-
-`--json` carries, on exit 0 or 1, `gates` (a gate's row for each gate it ran,
-as `stayfixed assess` defines it, `enforcing` when this run promoted it), `promoted`, `failing`,
-which maps each gate that ran and did not pass to its finding count, `unanswered`, the gates that
-could not run, `not_on_base`, the custom gates not run because the base does not have their
-command, `skipped`, the custom gates `--builtin` did not run, `untracked`, which maps each gate
-not promoted because it reads files CI's checkout will not have to those files, other than the
-ones below, and `case_differs`, which maps each gate not promoted because git tracks a file it
-reads only under a name that differs in case to those files, as read; a gate whose only such files
-differ in case is under `case_differs` alone. When a gate stays
-advisory, the summary ends with a line saying where its findings are
-(`stayfixed assess --json`, or `stayfixed assess --builtin --json` under `--builtin`, or the
-gate's own command), and, when `plan`, `commit` or `bugs`
-could not run and the base is not in the checkout, a `note:` saying so and naming `--base` with
-the project's base branch, since a gate that could not run for want of the base says nothing
-about the tree.
-
-**There is no demotion.** Loosening is an edit to `stayfixed.toml`, and `stayfixed gate` refuses
-it to any pull request while anything enforces. It lands only through a push that bypasses
-branch protection, which is an owner's act and not a command. Removing or renaming a gate that
-`[stayfixed] enforced` lists is such an edit, and the same push must take the name out of that
-list, or `stayfixed.toml` no longer loads.
-
-**Writes** `stayfixed.toml`'s `[stayfixed] enforced` through the same editor as
-`stayfixed upgrade`, and the manifest's record of it when that record still describes the file —
-and nothing when no gate is promoted. A custom gate writes whatever its command writes.
-
-| Exit | Meaning |
-|---|---|
-| 0 | every gate it ran passed and now enforces |
-| 1 | a gate failed, could not run, is a custom gate whose command the base does not have, or is a custom gate `--builtin` did not run: with names, nothing was written; without, the others were enforced; or `stayfixed.toml` is missing or does not load |
-| 2 | a name that is not a configured gate, a named gate that already enforces, nothing left to promote (every configured gate listed), a project that configures no gate, a `--base` outside its grammar (from the parser), a manifest that cannot be read, or `stayfixed.toml` refused |
 
 ---
 
@@ -1602,11 +1190,7 @@ one written from the detected values and your answers, headed by a comment namin
 keys that are stayfixed's to rewrite: `[stayfixed] version` and `enforced`, and `[ci] ref`. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
 (`1`) naming the file. A repository that already carries `.stayfixed/manifest.json` is refused
 (`2`): re-running `init` is `stayfixed upgrade`. `stayfixed uninstall` later keeps a
-`stayfixed.toml` you wrote, the version line included. When that file configures
-`[gates.custom]`, a `note:` names those gates, up to eight and then a count, and says that
-`stayfixed assess`, `stayfixed gate` and `stayfixed adopt promote` run their commands: in a clone,
-those are commands the clone wrote, and the dry run you read before `--yes` says so. The
-commands themselves never print.
+`stayfixed.toml` you wrote, the version line included.
 
 **Two passes, both planned before either is applied.** The three write-once files are one pass
 and the rest of the scaffold is the other, because two artifacts cannot target one file in one
@@ -1746,8 +1330,6 @@ harness answers to, and `head_note`, the `note:` line that says `main` replaced 
 not list the remotes, or that, with no remote, the branch checked out other than `main` became
 the base branch; empty otherwise. An answered `--base-branch` replaced nothing, so it leaves
 `head_note` empty.
-`custom_gates` lists the custom gates a `stayfixed.toml` you wrote configures, by name, and is empty
-when this run writes the file.
 
 ---
 
@@ -3274,9 +2856,9 @@ base_branch`, so a file that names `develop` as its base gates `develop`, and `s
 re-renders a caller you have not edited for that branch where an earlier release gated `main`;
 set `[ci] gate_branch = "main"` to keep the old one — and `ref` is written by `init` and judged by
 `doctor`'s `ci-ref` row. `[commit_messages] attribution_check` is read by
-`commit check`, `[commit_messages] types` by `stayfixed assess`'s commit-vocabulary probe,
-`[artifacts] local` by the scaffold engine, and `[gates]` and `[stayfixed] enforced` by
-`stayfixed assess` and `stayfixed gate`. `[guards]` is the guards' default
+`commit check`, `[artifacts] local` by the scaffold engine, and `[gates] custom_timeout_seconds`
+by `bugs regressions`; `[commit_messages] types`, the rest of `[gates]` and `[stayfixed] enforced`
+are read by no command. `[guards]` is the guards' default
 for a session in this repository, which the overlay's files and the machine file override (below);
 no command reads it.
 
@@ -3311,15 +2893,7 @@ stayfixed's own five the project runs, all of them by default, and each
 project root, never through a shell, given `custom_timeout_seconds` to finish, and a non-zero
 exit is its one finding. Past that limit its process group gets SIGTERM and, once the command
 has exited or 5 seconds have passed, SIGKILL, so what it started can end its own children. A custom gate's name is one lowercase path segment, neither a
-built-in gate's name nor `config`, which names the configuration check. `stayfixed assess`
-and `stayfixed gate` run exactly the configured
-gates. A custom gate runs only from a command a person or a workflow runs on purpose, never
-from a hook or `doctor`, so running such a command in a clone runs the commands that clone
-configured, as running its test suite would. The `docs` and `trail` gates judge tracked files,
-so a project that keeps its roadmap or its `AGENTS.md` out of git — ignored, never added, or
-written under `[artifacts] local` — drops `trail` or `docs` from `[gates] builtin`: those gates
-read the committed place, where in CI the file is not, and `stayfixed assess` reports such a gate
-and `stayfixed adopt promote` never enforces it.
+built-in gate's name nor `config`, which names the configuration check.
 
 **A fixed bug's regression as a gate.** [`stayfixed bugs regressions`](#stayfixed-bugs-regressions)
 runs as a custom gate. Where an installed `stayfixed` is on `PATH`, as on a machine stayfixed was
@@ -3340,8 +2914,7 @@ proved fail the run; otherwise it is advisory, like any other gate.
 
 **Enforcement is per gate.** `[stayfixed] enforced` is the one adoption key: it lists the gates
 that enforce, configured gates each named once, and nothing else makes a gate enforce. It is
-stayfixed's to write (`stayfixed adopt promote` adds each gate as it passes), and a person may
-write it too; the loader refuses a name the project does not run and a name given twice. Left
+a person's to write; the loader refuses a name the project does not run and a name given twice. Left
 out, or empty, nothing enforces. A project that has promoted every gate lists every gate, and a
 gate it adds later is advisory until the list names it. `[stayfixed] state`, which once stated a
 lifecycle beside the list, is gone: the loader refuses it as any key it does not have. A gate
@@ -3368,12 +2941,10 @@ and `BR-nnn` in every message. It is interpolated into patterns and filenames, s
 a shape — a capital letter followed by up to seven more capitals or digits — and a prefix
 outside it is a refusal (`2`), not a finding. The number is three digits or more. `code_roots`
 are the trees `bugs check` sweeps for mentions of an identifier, each of which must have an
-entry behind it, and the trees the red-run note and the `todo-markers` probe
-walk. `src/` and `./src` are read as `src`. An entry that names the repository root itself,
+entry behind it, and the trees the red-run note
+walks. `src/` and `./src` are read as `src`. An entry that names the repository root itself,
 leaves the repository, passes through a link, a `..` or `.git`, or names no directory is walked
-by none of them and refused by nothing: `stayfixed assess`'s `code-roots` item counts it, and
-`.stayfixed/assessment.json` names it with the reason, except a missing directory the preset's
-default lists while another entry is walked, which then loses no walk.
+by none of them and refused by nothing.
 `evidence_boundary_required_for` names the severities whose entries must carry a filled
 `**What this evidence does not establish:**` line, the template's placeholder not counting. Widening it is how a project asks the same of `medium`. Each value must be one of the
 severities, `high`, `medium` and `low`, spelled as the table below spells it. A value that names
@@ -3399,9 +2970,7 @@ status that needs neither `severity:` nor `area:`. `severity` is `bugs new`'s re
 `## Current status` section, `roadmap_prose_lines` and `roadmap_prose_words` over the roadmap
 above its trail marker. The last four bound the memory store. The base branch and the machine
 owner raise or lower a budget — the base branch's `stayfixed.toml` any of the nine, the machine
-file a session's four — and the value set is the value in force. A pull request lowers a gate's
-budget only (`stayfixed gate` refuses a raise), and may move a session's,
-which no gate reads.
+file a session's four — and the value set is the value in force.
 
 `~/.config/stayfixed/config.toml` is yours, not the project's:
 

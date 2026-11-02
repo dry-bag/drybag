@@ -180,13 +180,6 @@ def _subcommands(group: str) -> set[str]:
     return set(nested.choices)
 
 
-def test_adopt_has_promote_and_nothing_else() -> None:
-    # `adopt promote` writes the one adoption key itself, so a second adoption command would be a
-    # ritual step every project pays for. Mutation: registering a `begin` parser in
-    # the adopt group reddens this.
-    assert _subcommands("adopt") == {"promote"}
-
-
 def test_the_test_group_has_attribute_alone() -> None:
     # The test group holds what a failure is attributed to; the command that explained a red run
     # and an audit that read one stack's test files and that no gate ran are not among them.

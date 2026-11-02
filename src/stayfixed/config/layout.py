@@ -20,7 +20,7 @@ from stayfixed.config.schema import Config
 # presence and detaches it first, and `doctor` reports on it.
 ATTACH_LEDGER = ".stayfixed/local/attach.json"
 # The `.gitignore` block `init` writes as a scaffold artifact, spelled once. Its region name, the
-# paths it keeps out of git — the local state, and the inventory `stayfixed assess` writes — and
+# paths it keeps out of git — the local state, and the inventory an earlier stayfixed wrote — and
 # the note above them.
 IGNORE_REGION = "ignore"
 LOCAL_STATE_PATHS = (".stayfixed/local/", ".stayfixed/assessment.json")
@@ -41,10 +41,9 @@ def local_base(config: Config) -> str:
     """The base a local run compares against when none is given: the remote-tracking ref of
     `[project] base_branch`, named in full.
 
-    One spelling for every command that defaults one — `plan check`, `test attribute`,
-    `assess`, `adopt promote` and `stayfixed gate` — because git resolves a short `origin/<b>`
-    through `refs/tags/` first, so a tag of that spelling would stand in for the branch, and two
-    spellings of one default would let a command and the gate it composes judge different
+    One spelling for every command that defaults one — `plan check` and `test attribute` — because
+    git resolves a short `origin/<b>` through `refs/tags/` first, so a tag of that spelling would
+    stand in for the branch, and two spellings of one default would let two commands judge different
     commits. The loader holds the branch to `BRANCH_NAME`, so the name is one git can have.
     """
     return f"refs/remotes/origin/{config.project.base_branch}"

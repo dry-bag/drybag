@@ -19,7 +19,7 @@ def _ruled_packages(source: Path) -> list[str]:
 
     Discovery is how the CLI finds a command; the rule is about the surface. A package with an
     `api.py` and no `commands.py` (`release`) is held to that surface all the same, and an area
-    with no `api.py` (`assess`) publishes nothing, so nothing outside it may import any of its
+    with no `api.py` would publish nothing, so nothing outside it could import any of its
     modules."""
     surfaces = {path.parent.name for path in source.glob("*/api.py")}
     return sorted(set(area_names(source)) | surfaces)

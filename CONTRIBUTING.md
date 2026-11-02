@@ -164,7 +164,7 @@ One more table names areas, `GROUP_OF` in `scripts/mutation_oracle.py`, and it i
 exception kept for a reason outside the code ("Tests" gives it): it groups their mutation entries
 into files, and a new area needs no row there: its entries go in the group its path falls into.
 
-Today the discovered ones are `assess`, `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`,
+Today the discovered ones are `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`,
 `ledger`, `memory`, `overlay`, `project`, `prove` and `setup`, and every module under
 `src/stayfixed/` sits on one of three sides, which `src/stayfixed/areas.py` names. **Delivery**
 (`DELIVERY_AREAS`) is the private layer, a machine's setup and the session hints:
@@ -176,15 +176,11 @@ keeps the notes; `setup` a machine's configuration; and `hints` the session hint
 the documentation and plan lints, `guards` the commit-message rules and the test-run checks, and
 `prove` the run of a test command and the verdict its runner's own report supports; `project`
 holds the shipped project templates and `init`, the command that writes a repository's scaffold
-from them; `assess` runs the gates and the inventory over a repository as it is, judges a change's
-`stayfixed.toml` against what its base branch enforces (`stayfixed gate`), and lists each gate in
-`[stayfixed] enforced` as a project promotes it (`stayfixed adopt promote`); and the stack profiles
-under `profiles/` are the pack's too, a package and not an area. Every other module is the **core**,
+from them; and the stack profiles under `profiles/` are the pack's too, a package and not an
+area. Every other module is the **core**,
 which both sides share, `cli.py` and the subpackages that are not areas included: its areas
 (`CORE_AREAS`) are `hooks`, the dispatcher every hook event goes through, and `doctor`, which
-reports on what every other area left behind and repairs none of it. `assess` publishes no `api.py`:
-nothing under `src/` or `scripts/` outside it imports it, and tests reach its modules directly, as
-they do every area's. (`config`, `presets`, `profiles`, `release`, `scaffold`, `templates` and
+reports on what every other area left behind and repairs none of it. (`config`, `presets`, `profiles`, `release`, `scaffold`, `templates` and
 `trust` are subpackages and not areas, and `harnesses` is a module — area discovery does not find
 them, because they carry none of `commands.py`, `hooks.py` and `doctor.py`. `release` still
 publishes an `api.py`, which holds what an installed stayfixed reads about its own releases: the
@@ -295,8 +291,7 @@ too, since Python runs each package's `__init__.py` first.
   `__all__` must equal exactly what it imports — a test parses the file and checks, and
   `tests/boundaries/test_api_surface.py` walks every module under `src/stayfixed/` and `scripts/`
   and fails on an import that reaches past one. The rule holds every package that publishes an
-  `api.py`, an area or not (`release` is held to its surface like any area), and every area without
-  one (`assess`), none of whose modules anything outside it may import. The list is what consumers
+  `api.py`, an area or not (`release` is held to its surface like any area). The list is what consumers
   actually reach for, not what the area finds tidy: a consumer that needs something absent from it
   grows it deliberately, in a commit that says which consumer and why.
 - **`stayfixed.hooks.api` is the one exception, and it is structural rather than drift.** That
@@ -336,8 +331,8 @@ the event a handler reads does not say which value that was. That is all detecti
 `detect`'s docstring says why. Adding a harness is adding a value — a positive `detects`, its
 project-root and plugin-root variables, its `render`, its settings files, its memory directory if it
 keeps one, and its `reach`, the tier each enforcement surface holds at under it — and nothing that
-reads those needs an edit: `assess` reads the settings files every value names, and the README's
-table of what each agent enforces is held equal to every value's `reach` by a test. It is not only a value: what a new
+reads those needs an edit: the README's table of what each agent enforces is held equal to every
+value's `reach` by a test. It is not only a value: what a new
 harness still touches outside the registry is listed in the module docstring of
 `src/stayfixed/harnesses.py`, and `tests/test_harnesses.py` holds that list to every string in the
 package that names a harness.
@@ -416,7 +411,7 @@ The set is one file per group of the tree, and an entry goes in the group file i
 winning and the empty prefix's group taking anything no other prefix matches. The groups are coarse
 because they were sized for the 512 files past which the plugin directory holds the version for a
 reviewer, while this repository's root was the plugin and every tracked file counted against them:
-one file per area would need no table, and would have spent about twenty of those 512 where twelve
+one file per area would need no table, and would have spent about twenty of those 512 where eleven
 do. The plugin is now published from a repository of its own, whose root is the tree
 `scripts/plugin_tree.py` generates from the paths its `PLUGIN_PATHS` names, and `mutations/` is not
 among them, so that limit no longer reaches these files, and there is no size cap on a group file.

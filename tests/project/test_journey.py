@@ -1,6 +1,6 @@
 """The whole path a person takes onto stayfixed, run as one scenario through the real parser: the
-questions, `init --yes` with an answer, `assess`, an adoption design and plan with an accurate
-trail, `adopt promote`, and an `upgrade` that keeps a hand edit.
+questions, `init --yes` with an answer, an adoption design and plan with an accurate trail, and an
+`upgrade` that keeps a hand edit.
 
 Each command's own tests hold one guard each. What none of them holds is the composition: that
 the repository one command leaves is one every later command accepts, on a base branch that is
@@ -24,11 +24,10 @@ import pytest
 
 import stayfixed
 from stayfixed.config.loader import CONFIG_FILE, load, preset_defaults
-from stayfixed.config.schema import BUILTIN_GATES
 from stayfixed.project.templates import CI_WORKFLOW, CONFIG_ARTIFACT
 from stayfixed.scaffold import Manifest, digest
 from tests.cli import cli
-from tests.gitfixture import git, needs_git, run_git
+from tests.gitfixture import git, needs_git
 from tests.project.repos import repository
 from tests.runners import LsRemote
 from tests.snapshot import assert_snapshot_unchanged, snapshot
@@ -90,16 +89,8 @@ def test_a_fresh_non_main_repository_goes_from_its_answers_to_an_upgrade_that_ke
     assert f"CI: v{stayfixed.__version__}@{SHA}" in out, out
     git(root, "add", "-A")
     git(root, "commit", "-qm", "chore: stayfixed init")
-    initialised = git(root, "rev-parse", "HEAD").strip()
 
-    # 4. The inventory: a fresh tree fails no gate against its own commit, and the file is
-    # written where the ignore region keeps it out of git.
-    code, out, err = cli(root, tmp_path, "assess", "--base", initialised)
-    assert code == 0, out + err
-    assert "0 of 5 gate(s) would fail" in out, out
-    assert run_git(root, "check-ignore", "-q", ".stayfixed/assessment.json").returncode == 0
-
-    # 5. The adoption's design and plan, with a state each in the trail, staged before the trail
+    # 4. The adoption's design and plan, with a state each in the trail, staged before the trail
     # is rewritten because it lists tracked files only.
     _write(root, DESIGN, "# stayfixed adoption\n\nWhat the project adopts, and why.\n")
     _write(root, PLAN, "# stayfixed adoption\n\n**Scope:** the gates.\n\n**Premise:** none.\n")
@@ -121,15 +112,7 @@ def test_a_fresh_non_main_repository_goes_from_its_answers_to_an_upgrade_that_ke
     git(root, "add", "-A")
     git(root, "commit", "-qm", "docs: the stayfixed adoption design and plan")
 
-    # 6. `adopt promote`, judged against the `init` commit, straight from what `init` wrote. The
-    # fresh tree passes all five built-ins over that range, so every one is promoted and listed.
-    code, out, err = cli(root, tmp_path, "adopt", "promote", "--base", initialised, "--json")
-    assert code == 0, out + err
-    promoted = json.loads(out)
-    assert promoted["promoted"] == list(BUILTIN_GATES), promoted
-    assert promoted["failing"] == {}, promoted
-
-    # 7. A hand edit to a whole-file template survives an upgrade, planned and real.
+    # 5. A hand edit to a whole-file template survives an upgrade, planned and real.
     record = Manifest.read(root).get(POLICY)
     assert record is not None
     policy = root / record.target
@@ -151,8 +134,6 @@ def test_a_fresh_non_main_repository_goes_from_its_answers_to_an_upgrade_that_ke
     assert config.project.base_branch == "develop"
     assert config.project.release_branch == "develop"
     assert config.ci.gate_branch == "develop"
-    # Every gate the promotion earned, listed in the file: nothing reads a shorter list as more.
-    assert config.stayfixed.enforced == BUILTIN_GATES
     workflow = (root / CI_WORKFLOW).read_text(encoding="utf-8")
     assert workflow.count('branches: ["develop"]') == 3 and 'base: "develop"' in workflow
     assert f"@{SHA}" in workflow
@@ -201,10 +182,5 @@ def test_a_versionless_answer_sheet_goes_through_the_same_confirmation(
     assert added == [f'version = "{stayfixed.__version__}"'], added
     kept = [line for line in written.splitlines() if line not in added]
     assert kept == sheet.splitlines(), kept
-    # `assess` loads the stamped file. It exits 1 because this repository has no
-    # `origin/main` to judge a range against, so `plan` and `commit` could not look; that is
-    # the inventory working, not the file failing to load, which would be a `failed:` line.
-    code, out, err = cli(root, tmp_path, "assess")
-    assert code == 1 and err == "", out + err
-    assert out.startswith("assessment: "), out
-    assert "state" not in out.splitlines()[0], out
+    # The stamped file loads.
+    assert load(root, machine=tmp_path / "absent.toml").stayfixed.version == stayfixed.__version__

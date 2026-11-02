@@ -239,8 +239,8 @@ def _merged(raw: dict[str, Any], defaults: dict[str, Any], name: str) -> dict[st
 def _gate_branch(ci: dict[str, Any], project: Project) -> dict[str, Any]:
     """`[ci]` with `gate_branch` taken from `[project] base_branch` when the file leaves it out.
 
-    The rendered workflow runs only for pull requests into `gate_branch`, and `assess`, `plan
-    check` and `adopt promote` judge against `base_branch`. A fixed default of `main` would make
+    The rendered workflow runs only for pull requests into `gate_branch`, and `plan check` judges
+    against `base_branch`. A fixed default of `main` would make
     a hand-written file that names `develop` as its base, and says nothing about `[ci]`, render a
     workflow that never runs for a pull request into `develop` — local runs and CI judging two
     different branches, with nothing printed. So the preset carries no `gate_branch`: left out,
@@ -465,9 +465,9 @@ def load(root: Path, *, machine: Path | None = None, owner: Owner | None = None)
     a session does. A command hands in the layer it resolved and said once (`loads`' `owner`).
 
     **One reader of the file.** Through `read_document`, which goes through `contained()`: a
-    `stayfixed.toml` that is a symlink is refused by every command, as `stayfixed gate` refuses
-    it. Read with a plain `read_text`, a clone's link to `/dev/zero` would keep `adopt`, `bugs
-    check` and `plan check` reading until the machine ran out of memory.
+    `stayfixed.toml` that is a symlink is refused by every command. Read with a plain `read_text`, a
+    clone's link to `/dev/zero` would keep `bugs check` and `plan check` reading until the machine
+    ran out of memory.
     """
     text = read_document(root)
     if text is None:
@@ -510,8 +510,8 @@ def loads(
 
     `load` is "read the file, then `loads`"; `init --yes` needs a `Config` for a document it
     has not written to disk yet, so the parse-and-validate half is this function on its own.
-    `label` is what a refusal calls the document when it is not the file at `root`: the base's
-    copy `stayfixed gate` reads out of git is validated against the tree's disk, and a refusal
+    `label` is what a refusal calls the document when it is not the file at `root`: a commit's
+    copy `bugs check --base` reads out of git is validated against the tree's disk, and a refusal
     naming `<root>/stayfixed.toml` would send its owner to a file with nothing wrong in it.
     `personal` is the `[personal]` a load earlier in the same command already read, taken in
     place of reading the machine file again: a caller that holds a `Config` and not the path

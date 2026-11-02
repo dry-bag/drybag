@@ -75,8 +75,8 @@ def run_bugs_check(args: argparse.Namespace) -> Result:
 
     if args.base:
         # The root as it was given, before `root_and_config` resolves it: against a base, a root
-        # reached through a symlink is refused as `stayfixed gate` refuses it, since resolved it
-        # is the link's target, where the base's copy can be made to be missing.
+        # reached through a symlink is refused, since resolved it is the link's target, where the
+        # base's copy can be made to be missing.
         repository_prefix(Path(args.root).absolute())
     root, config = root_and_config(args)
     # The `bugs` gate itself, so this command and a gate run cannot disagree.

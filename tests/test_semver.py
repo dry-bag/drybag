@@ -1,5 +1,5 @@
-"""How one version orders against another: the reader `upgrade`, `doctor` and `stayfixed gate`
-share, so the three cannot disagree about which way a recorded version lies."""
+"""How one version orders against another: the reader `upgrade` and `doctor` share, so the two
+cannot disagree about which way a recorded version lies."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ from stayfixed.semver import RELEASE, later
 
 
 def test_a_component_past_nine_digits_is_no_version_and_never_an_exception() -> None:
-    # `int()` refuses a string past 4300 digits, so an unbounded component turned a recorded
-    # version into a `ValueError` out of `later`, which `upgrade`, `doctor` and `stayfixed gate`
-    # call on a version a repository wrote. The value is asserted rather than the crash, because
-    # the crash is the thing being removed. Mutation (declared): `mutations/`'s "the version
-    # grammar stops bounding its components".
+    # `int()` refuses a string past 4300 digits, so an unbounded component turned a recorded version
+    # into a `ValueError` out of `later`, which `upgrade` and `doctor` call on a version a
+    # repository wrote. The value is asserted rather than the crash, because the crash is the thing
+    # being removed. Mutation (declared): `mutations/`'s "the version grammar stops bounding its
+    # components".
     long = "1" * 5000
     assert later(f"{long}.0.0", "0.1.0") is None
     assert later("0.1.0", f"{long}.0.0") is None

@@ -23,7 +23,6 @@ from stayfixed.docs.plans import (
     BaseUnresolvable,
     asserted_outcomes,
     lint,
-    plan_gate,
     touched_plans,
 )
 from stayfixed.errors import Failure, Refusal
@@ -504,19 +503,16 @@ def test_a_touched_plan_whose_name_holds_a_space_is_linted_and_does_not_vanish(
 
 @needs_git
 def test_a_base_that_will_not_resolve_is_raised_never_an_ok(tmp_path: Path) -> None:
-    # This gate ran green for its whole life on a shallow checkout that had no base ref. The
-    # cause is the checkout's, not a plan's, so the lint raises it and the `plan` gate could not
-    # run, as `commit` could not; `plan check` alone prints it as its `base-unresolvable`
-    # finding, exit 1. Mutation (oracle): `mutations/`'s "an unresolvable base reads as a clean run"
-    # -> nothing is raised and this reddens.
+    # This gate ran green for its whole life on a shallow checkout that had no base ref. The cause
+    # is the checkout's, not a plan's, so the lint raises it; `plan check` alone prints it as its
+    # `base-unresolvable` finding, exit 1. Mutation (oracle): `mutations/`'s "an unresolvable base
+    # reads as a clean run" -> nothing is raised and this reddens.
     root, config = project(tmp_path)
     git(root, "init", "-q", "-b", "main")
     git(root, "add", "-A")
     git(root, "commit", "-qm", "seed")
     with pytest.raises(BaseUnresolvable, match="fetch-depth: 0"):
         lint(root, config, plans=[])
-    with pytest.raises(BaseUnresolvable):
-        plan_gate(root, config, "refs/remotes/origin/main")
     code, out, _ = cli(root, tmp_path, "plan", "check", "--json")
     assert code == 1
     printed = json.loads(out)

@@ -67,8 +67,7 @@ LOCAL_ONLY_MODE = "local-only"
 MEMORY_MODES = (HARNESS_MODE, OVERLAY_MODE, IN_REPO_MODE, LOCAL_ONLY_MODE)
 CI_MODES = ("reusable", "uvx", "none")
 # A commit type, the word a conventional subject starts with (`feat` in `feat(scope): …`), spelled
-# once for `init`'s `--commit-type` grammar and `assess`'s commit-vocabulary probe, so the type a
-# project lists is the type the probe reads off a subject; and the same rule in words for the
+# once for `init`'s `--commit-type` grammar and the loader; and the same rule in words for the
 # parser's refusal.
 COMMIT_TYPE_WORD = "[a-z]+"
 COMMIT_TYPE = re.compile(rf"\A{COMMIT_TYPE_WORD}\Z")
@@ -88,8 +87,7 @@ class Stayfixed:
         """The gates that fail a run rather than annotate it: exactly the ones `enforced` names.
 
         Nothing fills the list, so a gate the list does not name never enforces, however the
-        project configures it. The one reading of "which gates enforce": `stayfixed assess` asks it
-        to report each gate's column and `stayfixed gate` asks it per gate.
+        project configures it.
         """
         return frozenset(self.enforced)
 
@@ -134,8 +132,7 @@ class Memory:
 class Budgets:
     """The preset's budgets and the ones a layer set (`configured`): the base branch's
     `stayfixed.toml` sets a gate's budget and the owner's machine file a session's, either way
-    above the preset or below it. What a pull request may do to a gate's budget is
-    `assess.rule`'s to judge, against the base's effective value."""
+    above the preset or below it."""
 
     NAMES: ClassVar[tuple[str, ...]] = (
         "agents_md_lines",

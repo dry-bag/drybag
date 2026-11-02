@@ -183,9 +183,6 @@ class InitReport:
     # Whether this run's plan adds `[stayfixed] version` to a `stayfixed.toml` a person wrote. It
     # is written only by a run that is neither a dry run nor refused.
     stamped: bool = False
-    # The custom gates the adopted `stayfixed.toml` configures, by name: `assess`, `gate` and
-    # `adopt promote` run their commands. Names only, each held to the loader's grammar.
-    custom_gates: tuple[str, ...] = ()
     # The configuration the run wrote or adopted, from which the command says what it picked.
     config: Config | None = None
 
@@ -199,7 +196,7 @@ class InitReport:
 def _existing(root: Path) -> tuple[str, dict[str, object]] | None:
     """The `stayfixed.toml` already in the repository, as its text and parsed, or `None`.
 
-    Read through `read_document`, the reader `stayfixed gate` uses, so a symlinked file is a
+    Read through `read_document`, the loader's reader, so a symlinked file is a
     refusal and is never followed: a clone's link to `/dev/zero` would end the run by exhausting
     memory. Its refusals for a file that is not UTF-8 text or cannot be read are the loader's.
     A file that will not parse is a `Failure` naming the file and the position `tomllib`
@@ -435,7 +432,6 @@ def init(
         passes.unknown_harnesses,
         head_note,
         stamped,
-        tuple(sorted(config.gates.custom)) if existing is not None else (),
         config,
     )
     if dry_run or report.refused:

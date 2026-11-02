@@ -5,7 +5,7 @@ A module and not the package's `__init__`, for the reason `stayfixed.docs.api`,
 before it imports the submodule it wants, so a re-export list in `__init__.py` would pull this
 whole area into every `discover()` call.
 
-Six names, each with the consumer that reaches for it:
+Three names, each with the consumer that reaches for it:
 
 - `PROJECT_FILES`, for `scripts/check_artifacts.py`. It asks the built wheel whether the
   twelve shipped template files are actually in it, and before this list existed the only
@@ -21,15 +21,6 @@ Six names, each with the consumer that reaches for it:
   differ from the templates. That module's docstring states the measurement. A return type
   absent from this list is a value a consumer can hold and cannot declare, and
   `tests/test_surfaces.py` derives that rule rather than restating it.
-- `rewrite_owned`, for `stayfixed adopt promote`, which writes `[stayfixed] enforced` as a
-  project's gates are promoted. It is the one operation that rewrites a tool-owned
-  key: a second copy in `adopt` would skip the `config` record's re-stamp, and `uninstall` would
-  then keep every promoted project's `stayfixed.toml` as hand-edited.
-- `CI_WORKFLOW`, for `stayfixed assess`'s workflow probe, which must name
-  stayfixed's own caller workflow and would otherwise spell it a third time beside `doctor`'s
-  `WORKFLOW`.
-- `ASSESSMENT`, for `stayfixed assess`, which writes the inventory `uninstall` takes back: one
-  spelling of the path, so the file one writes is the file the other removes.
 
 `read`, `fill` and `HARNESS_REGION` are **not** here: they are this area's own, reached by
 `stayfixed.project.templates` and by nothing outside it. The branch grammar a rendered workflow
@@ -38,15 +29,10 @@ that needs one grows this list deliberately, in a commit that says which area an
 """
 
 from stayfixed.project.layout import PROJECT_FILES
-from stayfixed.project.rewrite import rewrite_owned
-from stayfixed.project.templates import CI_WORKFLOW, Prepared, project_templates
-from stayfixed.project.uninstall import ASSESSMENT
+from stayfixed.project.templates import Prepared, project_templates
 
 __all__ = [
-    "ASSESSMENT",
-    "CI_WORKFLOW",
     "PROJECT_FILES",
     "Prepared",
     "project_templates",
-    "rewrite_owned",
 ]

@@ -1,9 +1,8 @@
 # stayfixed
 
 A methodology harness for coding agents: a bug ledger that lives in the repository, a
-working memory whose index is rendered rather than written, guards that fail closed where
-the platform lets them, and an adoption state machine that runs each gate advisory until the
-repository has earned it. One plugin for Claude Code and Codex, one Python package with
+working memory whose index is rendered rather than written, and guards that fail closed where
+the platform lets them. One plugin for Claude Code and Codex, one Python package with
 **no runtime dependencies**.
 
 > **Pre-1.0.** What ships is a core and three delivery areas. The **core** is what stayfixed does
@@ -12,9 +11,7 @@ repository has earned it. One plugin for Claude Code and Codex, one Python packa
 > message and a test run; the scaffolding engine that writes files into a repository;
 > `stayfixed init`, which writes a repository's scaffold from the shipped project templates,
 > `stayfixed upgrade`, which refreshes it, and `stayfixed uninstall`, which takes it back;
-> `stayfixed assess`, which inventories what stands between a repository and enforcement;
-> `stayfixed gate`, which judges a change against what its base branch enforces; `stayfixed adopt`,
-> which enforces a repository's gates as each one passes; `stayfixed setup`, which configures a
+> `stayfixed setup`, which configures a
 > machine from a preset; and `stayfixed doctor`, which reports on the result. The **delivery** areas
 > are the private layer: `memory`, the note store; `overlay`, the private overlay
 > — `overlay upgrade`, with `setup --overlay` making it; and `attach`,
@@ -24,7 +21,7 @@ repository has earned it. One plugin for Claude Code and Codex, one Python packa
 > one stack's test runner, build artifacts and package manager belong to its profile — data, and
 > optionally the advice to give after that stack's test runner fails — so a repository in several
 > languages gets each stack's advice with no configuration. The first profile, `python`, ships:
-> every agent is handed its rules, `stayfixed assess` runs its checks, and the stale-bytecode line
+> every agent is handed its rules, and the stale-bytecode line
 > of the note after a failing pytest run is its own. The hooks file that wires all of it into a
 > session ships too, so on Claude Code installing the plugin is enough to make the guards fire and
 > the memory bundles arrive ([what each agent enforces](#what-each-agent-enforces)). The first
@@ -51,15 +48,12 @@ them.
 This project looked through the community plugin marketplace on 2026-09-05 and counted about
 2,300 plugins listed that day. That is one project's dated count rather than a survey with a
 method — no row in [sources.md](https://github.com/stayfixed/stayfixed/blob/main/docs/methodology/sources.md) backs it, and it says what that
-look found, not what exists. What it did not find anywhere else is the three things stayfixed
+look found, not what exists. What it did not find anywhere else is the two things stayfixed
 adds:
 
 - **A bug ledger as a first-class repository artifact** — one file per bug, a generated
   index, a "what this evidence does not establish" line the tooling insists on, and skills
   that teach the agent how to read an entry.
-- **Enforcement earned per gate**, in which each gate runs advisory until the repository has
-  earned it. `stayfixed assess` says what stands in the way, and `stayfixed adopt promote`
-  enforces a gate once it passes, by listing it in `[stayfixed] enforced`.
 - **A personal overlay that is a versioned repository of its own**, named by its identity record
   and with its own upgrade manifest, rather than a dotfiles sync. `stayfixed setup --overlay` renders or generates one and `stayfixed attach`
   binds a repository to it: the hooks, skills, agents and allow rules you keep there reach that
@@ -83,8 +77,7 @@ unless you name it: each runs in every session, and neither is pinned. **Codex h
 against this project's own spike record and each plugin's own published install instructions,
 2026-09-18): install `superpowers` and `context7` by hand there if you use Codex, the same way
 you would install any other Codex plugin — `setup` reports this as a note rather than guessing a
-marketplace name (nothing is vendored on a guess). The `adopt` skill, which `init` offers as
-its last step, brainstorms the adoption through superpowers where it is present.
+marketplace name (nothing is vendored on a guess).
 
 ## What each agent enforces
 
@@ -214,8 +207,6 @@ stayfixed writes files. Being specific about which is the point of this section.
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | `stayfixed init`, once; you after |
 | `AGENTS.md`, `CLAUDE.md`, `docs/architecture/`, `docs/adr/`, `docs/runbooks/`, `docs/specs/`, `docs/plans/`, `.github/workflows/stayfixed.yml` | The project scaffold: the documents every other command reads, plus the pinned CI caller. Written by `stayfixed init`, recorded in the manifest; `stayfixed upgrade` refreshes what you have not touched, and `stayfixed uninstall` takes it back | `stayfixed init` |
 | `docs/stayfixed/rules/<profile>.md` (configurable) and `.claude/rules/stayfixed-<profile>.md` | The stack profile's rules, the one copy a project edits, and a path-scoped pointer at it for Claude Code (only when `[stayfixed] agents` lists `claude`) | `stayfixed init`, when `[stayfixed] profile` is set |
-| `.stayfixed/assessment.json` | The inventory `stayfixed assess` last wrote, format 1 — git-ignored | `stayfixed assess`; `stayfixed uninstall` removes it |
-| the file `--summary FILE` names | The gate's summary, appended; in CI the platform's job summary | `stayfixed gate --summary FILE` |
 | `.stayfixed/manifest.json` | The ledger of every scaffolded artifact | the scaffold engine |
 | `.stayfixed/local/artifacts/` | The artifacts `[artifacts] local` keeps out of git, at the path each would have in the repository — git-ignored, never recorded in the manifest | `stayfixed init` and `stayfixed upgrade`, when `[artifacts] local` lists them; `stayfixed uninstall` takes them back |
 | `.stayfixed/local/artifacts.json` | The record of the bytes stayfixed last wrote under `.stayfixed/local/artifacts/`, so an unedited copy is refreshed or retired and an edited one is left. Git-ignored and never committed. Deleted, later runs judge a copy at its artifact's own place by what they render, and no longer find a copy left at an earlier place at all | the scaffold engine; `stayfixed uninstall` removes it |
@@ -265,14 +256,13 @@ to find the project root, and reaches no network.
 | Program | Run by | Talks to | When |
 |---|---|---|---|
 | `git fetch` | `stayfixed bugs new` | the project's `origin` (note 1) | unless `--no-fetch` |
-| `git ls-remote` | `stayfixed init`, `stayfixed upgrade`, `stayfixed doctor`, `stayfixed gate` | `https://github.com/stayfixed/stayfixed`, for its release tags | note 2 |
+| `git ls-remote` | `stayfixed init`, `stayfixed upgrade`, `stayfixed doctor` | `https://github.com/stayfixed/stayfixed`, for its release tags | note 2 |
 | `gh` | `stayfixed setup --overlay create:<owner>/<name>` | GitHub's API, as the account `gh` acts for, and the clones it makes over git (note 3) | note 3 |
 | `git clone` | `stayfixed setup --overlay create:<owner>/<name>` | `git@github.com:<owner>/<name>.git`, the overlay just created | when `gh repo create --clone` reported success and left nothing at the destination |
 | `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed attach`, `stayfixed detach`, and `stayfixed uninstall` on an attached repository, which runs `detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `attach` and `detach`, nothing past this machine (note 4) | `setup` when `--plugin` names a plugin, the preset's agents include `claude` and it names a marketplace for it; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
 | `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 4) | when `--plugin` names a plugin, the preset's agents include `codex` and it names a marketplace for it |
 | `pre-commit install` | `stayfixed setup --overlay` | nothing as it installs; GitHub and Go's servers on the first commit after it (note 5) | when it renders an overlay at a path, records an existing one, or with `create:` |
 | `sh -c` | `stayfixed test attribute --command CMD` | wherever `CMD` reaches; stayfixed does not choose | every run: `CMD` in the working tree, then in extracts of `HEAD` and of the merge base |
-| the commands `[gates.custom]` names | `stayfixed assess`, `stayfixed gate`, `stayfixed adopt promote` | wherever those commands reach; stayfixed does not choose | when `[gates.custom]` names one, unless `--builtin` is passed |
 | the test command after `stayfixed prove --` | `stayfixed prove -- COMMAND`; `stayfixed bugs regressions`, with each fixed bug entry's `regression` as `COMMAND`, run from the project root | wherever `COMMAND` reaches; stayfixed does not choose: `uv run` may sync the project's environment from its index, `go test` may download the modules `go.mod` names, and `npx` installs a runner no `node_modules` holds, from the registry the project's `.npmrc` names, without asking, since under `prove` its standard input is no terminal; each as outside `prove` | every run, in the directory `prove` is typed in or the one its launcher is told to run `COMMAND` in, once a runner adapter recognises `COMMAND`, or with `--junit` |
 | `.github/workflows/stayfixed.yml` | your CI, from the workflow `stayfixed init` writes in `reusable` mode | GitHub, through stayfixed's reusable workflow (note 6) | on the events the workflow names |
 | `.github/workflows/scan.yml` | the overlay's CI on GitHub (note 7) | GitHub, through `gitleaks/gitleaks-action` (note 7) | on every push, pull request and manual run, unless the repository is marked a template |
@@ -291,8 +281,7 @@ to find the project root, and reaches no network.
    elsewhere, and the credential helpers it names, are not read, while the helpers the configuration
    git does read names are used.
 2. **`git ls-remote`** runs in `init` and `upgrade` in `reusable` mode, to pin the CI workflow they
-   write to a release's commit; in `doctor` when `[ci] ref` is recorded; and in `gate` when a
-   change moves `[ci] ref` to the commit `--workflow-sha` names.
+   write to a release's commit; and in `doctor` when `[ci] ref` is recorded.
 3. **`gh`**: `setup --overlay create:` looks up the template, creates the private overlay from it
    with its clone, and asks whether it exists when that clone left nothing. It is asked nothing
    until `setup` has looked at `<home>/<name>`: a file there, or a directory that is not an
@@ -426,15 +415,6 @@ stayfixed setup --git-hooks                            # install the commit-mess
 stayfixed setup --git-hooks --uninstall                # remove it; restore the hook it chained to
 stayfixed setup --approval-boundary                    # print the deny rule and sandbox settings that keep an agent out of the trust record; writes nothing
 
-# Assessing a repository
-stayfixed assess                                       # every gate and probe; the whole inventory in .stayfixed/assessment.json
-stayfixed assess --builtin                             # the same, running none of the repository's own gate commands
-stayfixed gate                                         # judge stayfixed.toml against the base, then run every configured gate
-stayfixed gate --only docs --only config               # a few of them; config is the configuration check
-stayfixed adopt promote docs                           # enforce one gate, if it passes now
-stayfixed adopt promote                                # enforce every gate that passes now; name the rest
-stayfixed adopt promote --builtin                      # the same, running none of the repository's own gate commands
-
 # Proving a fix
 stayfixed prove -- uv run --locked pytest tests/test_x.py   # run it here; proved, failed, not proven or refused, from the runner's own report
 
@@ -516,8 +496,8 @@ key. The `close-bug` skill walks the closing of an entry through these commands.
 
 ## Skills and agents
 
-`skills/` ships two ported skills (`close-bug`, `memory-sweep`), seven authored ones
-(`adopt`, `file-bug`, `sweep-defect-class`, `review-plan-three-lenses`, `attribute-failure`,
+`skills/` ships two ported skills (`close-bug`, `memory-sweep`), six authored ones
+(`file-bug`, `sweep-defect-class`, `review-plan-three-lenses`, `attribute-failure`,
 `run-correctness-audit`, `retro-to-guard`), and thin wrappers for the commands the CLI
 registers; `agents/` ships a read-only `code-navigator`. Every skill is written in action
 language — never a harness tool's name — with the per-harness mapping in
