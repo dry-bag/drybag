@@ -642,3 +642,123 @@ def test_codex_gets_one_note(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     report = _restore(tmp_path, overlay, (), runner=runner)
     assert not any(c[0] == "codex" for c in runner.calls)
     assert sum("Codex" in note for note in report.notes) == 1
+
+
+# --- `--yes`: the overlay's notes, recorded as reviewed -----------------------------------------
+
+
+def _note(name: str) -> str:
+    return (
+        f"---\nname: {name}\ndescription: {name} description\nmetadata:\n  type: rule\n"
+        f"  startup: 1\n---\n\nBody of {name}.\n"
+    )
+
+
+def _notes(overlay: Path, project: str, *names: str) -> None:
+    """Notes in the project's own `project-stable` group, which the attach fixture's
+    `stayfixed.toml` lists among `memory.groups`."""
+    group = overlay / "projects" / project / "memory" / "project-stable"
+    group.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (group / f"{name}.md").write_text(_note(name), encoding="utf-8")
+
+
+def _reviewed(machine: Path) -> list[str]:
+    """The notes the machine's trust record holds as reviewed."""
+    from stayfixed.trust.api import recorded
+
+    return sorted(subject for kind, subject in recorded(machine) if kind == "reviewed")
+
+
+def test_without_yes_no_note_is_recorded_as_reviewed(tmp_path: Path) -> None:
+    # Mutation: `mutations/`'s "restore records notes as reviewed without --yes".
+    overlay = _overlay(tmp_path)
+    alpha = _checkout(tmp_path, "alpha")
+    _notes(overlay, "alpha", "one", "two")
+    report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha), yes=False)
+    assert _states(report) == {"alpha": "attached"}
+    assert [o.promoted for o in report.projects] == [0]
+    assert _reviewed(_machine(tmp_path, overlay)) == []
+
+
+def test_yes_records_every_unreviewed_note_of_each_attached_project(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    alpha, beta = _checkout(tmp_path, "alpha"), _checkout(tmp_path, "beta")
+    claiming = _checkout(tmp_path, "gamma", claims="alpha")
+    _notes(overlay, "alpha", "one", "two")
+    _notes(overlay, "beta", "three")
+    _notes(overlay, "gamma", "four")
+    listed = _listing(overlay, tmp_path, alpha=alpha, beta=beta, gamma=claiming)
+    report = _restore(tmp_path, overlay, listed, yes=True)
+    assert _states(report) == {"alpha": "attached", "beta": "attached", "gamma": "refused"}
+    assert {o.name: o.promoted for o in report.projects} == {"alpha": 2, "beta": 1, "gamma": 0}
+    recorded = _reviewed(_machine(tmp_path, overlay))
+    # Three notes, and none of the refused checkout's.
+    assert sorted(Path(subject).name for subject in recorded) == ["one.md", "three.md", "two.md"]
+
+
+def test_a_second_restore_with_yes_promotes_nothing(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    alpha = _checkout(tmp_path, "alpha")
+    _notes(overlay, "alpha", "one")
+    listed = _listing(overlay, tmp_path, alpha=alpha)
+    assert _restore(tmp_path, overlay, listed, yes=True).projects[0].promoted == 1
+    trust = (tmp_path / "trust.json").read_bytes()
+    second = _restore(tmp_path, overlay, listed, yes=True)
+    assert [o.promoted for o in second.projects] == [0]
+    assert (tmp_path / "trust.json").read_bytes() == trust
+
+
+def test_a_note_edited_after_a_restore_is_promoted_again_by_the_next_with_yes(
+    tmp_path: Path,
+) -> None:
+    # The record is by digest: `--yes` is the owner's word on the bytes as they are now.
+    overlay = _overlay(tmp_path)
+    alpha = _checkout(tmp_path, "alpha")
+    _notes(overlay, "alpha", "one")
+    listed = _listing(overlay, tmp_path, alpha=alpha)
+    _restore(tmp_path, overlay, listed, yes=True)
+    note = overlay / "projects" / "alpha" / "memory" / "project-stable" / "one.md"
+    note.write_text(_note("one") + "More.\n", encoding="utf-8")
+    assert _restore(tmp_path, overlay, listed, yes=True).projects[0].promoted == 1
+
+
+def test_a_project_whose_notes_cannot_be_recorded_is_failed_and_the_rest_go_on(
+    tmp_path: Path,
+) -> None:
+    overlay = _overlay(tmp_path)
+    alpha, beta = _checkout(tmp_path, "alpha"), _checkout(tmp_path, "beta")
+    _notes(overlay, "alpha", "one")
+    _notes(overlay, "beta", "two")
+    # A record that is there and cannot be read: promote refuses it rather than replace it.
+    (tmp_path / "trust.json").write_text("not json", encoding="utf-8")
+    report = _restore(
+        tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha, beta=beta), yes=True
+    )
+    assert _states(report) == {"alpha": "failed", "beta": "failed"}
+    assert (tmp_path / "trust.json").read_text(encoding="utf-8") == "not json"
+
+
+def test_yes_through_the_command_records_the_notes_and_the_json_counts_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overlay = _overlay(tmp_path)
+    alpha = _checkout(tmp_path, "alpha")
+    _notes(overlay, "alpha", "one", "two")
+    _list(overlay, {"alpha": f'dir = "{alpha}"'})
+    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
+    code, out, _ = invoke(_restoring(tmp_path, overlay, "--yes", "--json"))
+    assert code == 0
+    assert [row["promoted"] for row in json.loads(out)["projects"]] == [2]
+    assert len(_reviewed(tmp_path / "config.toml")) == 2
+
+
+@pytest.mark.parametrize("beside", [[], ["--git-hooks"], ["--approval-boundary"]])
+def test_yes_is_refused_without_restore(tmp_path: Path, beside: list[str]) -> None:
+    home, machine = tmp_path / "home", tmp_path / "config.toml"
+    code, _, err = invoke(
+        ["setup", "--yes", *beside, "--home", str(home), "--machine", str(machine)]
+    )
+    assert code == 2
+    assert "--yes" in err and "--restore" in err
+    assert not machine.exists() and not home.exists()

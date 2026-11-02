@@ -154,6 +154,12 @@ _ADVICE_ALONE = (
     "--overlay, --plugin, --restore, --git-hooks or --uninstall; run `stayfixed setup` with those "
     "separately"
 )
+# `--yes` records the overlay's notes as reviewed while restoring, and means nothing to any other
+# form of this command: refused before anything is written, naming the flag that gives it a meaning.
+_YES_ALONE = (
+    "--yes records the overlay's notes as reviewed and is taken only with --restore; run "
+    "`stayfixed setup --restore --yes` for that, and nothing was written"
+)
 # `--restore` restores from an overlay, and with none recorded and none named there is nothing to
 # restore from: refused above the first write, naming the flag that gives it one.
 _RESTORE_NEEDS_AN_OVERLAY = (
@@ -173,6 +179,8 @@ BOUNDARY_ADVICE = (
 
 
 def run_setup(args: argparse.Namespace) -> Result:
+    if args.yes and not args.restore:
+        raise Refusal(_YES_ALONE)
     if args.approval_boundary:
         named = (args.preset, args.overlay, args.plugin)
         switched = (args.git_hooks, args.uninstall)
@@ -243,7 +251,9 @@ def run_setup(args: argparse.Namespace) -> Result:
     # Never `None`: `_restore_input` refused a run with no overlay in view, and `setup` records one
     # whenever `--overlay` names a path.
     overlay = cast(Path, report.overlay or chosen)
-    return _restored(overlay, listed, summary, data, home=home, machine=machine, runner=runner)
+    return _restored(
+        overlay, listed, summary, data, home=home, machine=machine, runner=runner, yes=args.yes
+    )
 
 
 def _restore_input(
@@ -271,15 +281,22 @@ def _restored(
     home: Path,
     machine: Path,
     runner: Runner,
+    yes: bool,
 ) -> Result:
     """`setup --restore`'s result: setup's summary, then one line per listed project, and exit 1
     when one was refused or failed."""
     from stayfixed.setup.restore import line, restore
 
-    done = restore(overlay, listed, home=home, machine=machine, runner=runner, yes=False)
+    done = restore(overlay, listed, home=home, machine=machine, runner=runner, yes=yes)
     data["missing"] = list(done.missing)
     data["projects"] = [
-        {"name": o.name, "dir": str(o.dir), "state": o.state, "detail": o.detail}
+        {
+            "name": o.name,
+            "dir": str(o.dir),
+            "state": o.state,
+            "detail": o.detail,
+            "promoted": o.promoted,
+        }
         for o in done.projects
     ]
     lines = [f"missing tools: {', '.join(done.missing)}"] if done.missing else []
@@ -385,6 +402,11 @@ def register(groups: SubParsers) -> None:
             "restore this machine from the overlay its machine file records (or --overlay names): "
             "machine setup, then attach every checkout its machine/projects.toml lists"
         ),
+    )
+    setup.add_argument(
+        "--yes",
+        action="store_true",
+        help="with --restore, record the overlay's notes in each attached checkout as reviewed",
     )
     setup.add_argument(
         "--git-hooks",

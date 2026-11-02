@@ -33,6 +33,9 @@ outside it and are not here. The overlay root the machine file records and the c
 `gitenv.GitUnavailable`), because `init` asks them too and may not import this area; the
 crossings still pinned are listed in `tests/boundaries/test_delivery.py`.
 
+**`promote_changed`** is imported by `setup --restore --yes` (`setup.restore`), which records the
+notes of each checkout it attaches as reviewed by the code `memory promote --changed` runs.
+
 **Three more have no importer and stay, each for a reason written here**, because a name
 kept in silence is what made this pass necessary:
 
@@ -77,6 +80,7 @@ from stayfixed.memory.bundles import SLOTS
 from stayfixed.memory.composed import build as build_composed
 from stayfixed.memory.composed import link_sources, render_missing_index
 from stayfixed.memory.composed import withdraw as withdraw_composed
+from stayfixed.memory.reviewed import promote_changed
 from stayfixed.memory.store import (
     BINDING_STATES,
     BOUND,
@@ -113,6 +117,7 @@ __all__ = [
     "markers",
     "origin_note",
     "permitted_roots",
+    "promote_changed",
     "read_binding_record",
     "render_missing_index",
     "resolve",

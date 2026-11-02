@@ -37,7 +37,7 @@ from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.errors import Failure, Refusal
 from stayfixed.harnesses import lenient_settings
 from stayfixed.jsonobject import json_object
-from stayfixed.memory.api import permitted_roots
+from stayfixed.memory.api import permitted_roots, promote_changed
 from stayfixed.printed import answered, clipped, quoted
 from stayfixed.runner import Completed, Runner
 
@@ -309,6 +309,12 @@ def restore(
 
     A `dir` that is not there is `absent`, reported and skipped; attach's `Refusal` is `refused`
     and its `Failure` `failed`, each with the message as `detail`, and the next project goes on.
+
+    With `yes`, each attached project's unreviewed notes are then recorded as reviewed on this
+    machine (`promote_changed`), counted in the outcome's `promoted`; a project whose notes cannot
+    be recorded is `failed`, attached all the same. **`yes` is the owner's word
+    on their own command line:** the same act as `memory promote --changed` in each attached
+    checkout, so it adds no control and removes none.
     """
     marketplaces, ids, listing_notes = listed_plugins(overlay)
     installed, install_notes = install_listed(marketplaces, ids, home=home, runner=runner)
@@ -330,13 +336,27 @@ def restore(
             )
         except Refusal as exc:
             outcomes.append(Outcome(item.name, item.dir, "refused", str(exc), 0))
+            continue
         except Failure as exc:
             outcomes.append(Outcome(item.name, item.dir, "failed", str(exc), 0))
+            continue
         except OSError as exc:
             outcomes.append(Outcome(item.name, item.dir, "failed", fsops.said(exc), 0))
+            continue
+        recorded = "recorded" if attached.binding_recorded else "already recorded"
+        detail = "; ".join((f"binding {attached.binding} {recorded}", *attached.notes))
+        # `--yes` is the owner's word on their own command line, the same act as `memory promote
+        # --changed` in each attached checkout; it adds no control and removes none. Without it
+        # nothing is recorded as reviewed, whatever the overlay holds.
+        if yes:
+            try:
+                promoted = len(promote_changed(item.dir, machine=machine))
+            except (Failure, Refusal) as exc:
+                said = f"{detail}; its notes were not recorded as reviewed: {exc}"
+                outcomes.append(Outcome(item.name, item.dir, "failed", said, 0))
+                continue
+            outcomes.append(Outcome(item.name, item.dir, "attached", detail, promoted))
         else:
-            recorded = "recorded" if attached.binding_recorded else "already recorded"
-            detail = "; ".join((f"binding {attached.binding} {recorded}", *attached.notes))
             outcomes.append(Outcome(item.name, item.dir, "attached", detail, 0))
     notes = (*listing_notes, *install_notes)
     return RestoreReport(missing_tools(), installed, notes, tuple(outcomes))
@@ -345,7 +365,8 @@ def restore(
 def line(outcome: Outcome) -> str:
     """One project's line of the summary."""
     said = f"{quoted(outcome.name)} at {quoted(str(outcome.dir))}: {outcome.state}"
-    return f"{said} ({outcome.detail})" if outcome.detail else said
+    said = f"{said} ({outcome.detail})" if outcome.detail else said
+    return f"{said}; {outcome.promoted} note(s) recorded as reviewed" if outcome.promoted else said
 
 
 def overlay_to_restore(overlay: str | None, *, machine: Path) -> Path | None:

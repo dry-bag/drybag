@@ -1252,3 +1252,12 @@ after = "                store=None,"
 reddens = [
   "tests/setup/test_restore.py::test_a_checkout_whose_project_is_not_its_table_key_is_refused_and_the_rest_attach",
 ]
+
+# `--yes` is the owner's word on their own command line that the overlay's notes are theirs;
+# without it `setup --restore` records nothing as reviewed, however many notes the overlay holds.
+[[mutation]]
+name = "restore records notes as reviewed without --yes"
+file = "src/stayfixed/setup/restore.py"
+before = "        if yes:"
+after = "        if True:"
+reddens = ["tests/setup/test_restore.py::test_without_yes_no_note_is_recorded_as_reviewed"]

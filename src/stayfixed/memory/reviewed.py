@@ -25,12 +25,16 @@ import hashlib
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from stayfixed import fsops
-from stayfixed.memory.notes import Note
-from stayfixed.memory.store import Store
+from stayfixed.errors import Failure
+from stayfixed.memory.notes import Note, walk
+from stayfixed.memory.store import Store, resolved
 from stayfixed.trust.api import UnreadableTrust, approve_all, recorded
+
+if TYPE_CHECKING:
+    from stayfixed.config.schema import Config
 
 KIND = "reviewed"
 REVIEWED: Literal["reviewed"] = "reviewed"
@@ -92,3 +96,39 @@ def promote(store: Store, notes: Iterable[Note]) -> dict[Path, str]:
         now=datetime.now(UTC),
     )
     return found
+
+
+def stored(store: Store, config: Config) -> list[Note]:
+    """The notes of the store's configured groups: what `memory promote` chooses among."""
+    return walk(store.path, [g for g in config.memory.groups if g in store.groups]).notes
+
+
+def promote_unreviewed(store: Store, config: Config) -> tuple[list[Note], dict[Path, str]]:
+    """Promote every unreviewed note of the store (`memory promote --changed`): the notes chosen
+    and each one's path and digest recorded, in one write of the record. Nothing is written when
+    every note is reviewed."""
+    chosen = unreviewed(store, stored(store, config))
+    return chosen, promote(store, chosen) if chosen else {}
+
+
+def promote_changed(root: Path, *, machine: Path | None) -> list[Path]:
+    """The notes `memory promote --changed --root root` would promote, promoted, by the code that
+    command runs: the path of each note recorded as reviewed on this machine, none when every note
+    of `root`'s store is already.
+
+    The consumer is `setup --restore --yes`, which is the owner's word on their own command line,
+    the same act as `memory promote --changed` in each attached checkout; it adds no control and
+    removes none. A `root` with no store is a `Failure`, and a trust record that cannot be read a
+    `Refusal` (`UnreadableTrust`), as the command meets them.
+    """
+    from stayfixed.command import command_owner
+    from stayfixed.config.session import command_config
+
+    resolved_root = root.resolve()
+    config = command_config(resolved_root, machine=machine, owner=command_owner(machine))
+    found = resolved(resolved_root, config, machine=machine)
+    if found[0] is None:
+        # The reason's detail is repository-authored text and is not repeated; `memory promote`
+        # prints it wrapped.
+        raise Failure(f"no memory store: {found[1].said}")
+    return list(promote_unreviewed(found[0], config)[1])

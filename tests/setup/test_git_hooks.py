@@ -73,6 +73,7 @@ def _args(**over: object) -> argparse.Namespace:
         "git_hooks": True,
         "approval_boundary": False,
         "restore": False,
+        "yes": False,
         "uninstall": False,
         "root": ".",
     }
