@@ -628,6 +628,7 @@ STANDARD_IMPORTS = frozenset(
         "datetime",
         "enum",
         "errno",
+        "fcntl",
         "functools",
         "hashlib",
         "io",

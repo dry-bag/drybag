@@ -6253,3 +6253,94 @@ file = "src/stayfixed/sync/switch.py"
 before = "    return isinstance(table, dict) and table.get(KEY) is True"
 after = "    return isinstance(table, dict) and bool(table.get(KEY))"
 reddens = ["tests/sync/test_switch.py::test_enabled_only_for_a_true_bool"]
+
+# The sync job's state is a file `doctor` and every hook read. A file that is there and cannot be
+# used is not "never ran", and an outcome the job does not have is not one it wrote.
+[[mutation]]
+name = "an unreadable state reads as absent"
+file = "src/stayfixed/sync/state.py"
+before = '        raise StateUnreadable(f"{STATE_FILE} cannot be read ({fsops.said(exc)})") from None'
+after = "        return None"
+reddens = [
+  "tests/sync/test_state.py::test_a_state_that_is_not_text_or_not_a_file_is_unreadable",
+  "tests/sync/test_state.py::test_a_state_past_the_cap_is_unreadable",
+]
+
+[[mutation]]
+name = "a state naming an outcome the job lacks is accepted"
+file = "src/stayfixed/sync/state.py"
+before = "    if state not in OUTCOMES:"
+after = "    if False:"
+reddens = ["tests/sync/test_state.py::test_a_corrupt_state_is_unreadable_not_absent"]
+
+[[mutation]]
+name = "the state writer accepts an outcome the job lacks"
+file = "src/stayfixed/sync/state.py"
+before = "    if s.outcome.state not in OUTCOMES:"
+after = "    if False:"
+reddens = ["tests/sync/test_state.py::test_a_write_names_only_an_outcome_the_job_has"]
+
+# The job lock is the single-job guarantee. Waiting for its holder would stack a session's every
+# trigger behind a running job; a descriptor a git child inherited would keep it past the job's death.
+[[mutation]]
+name = "the job lock waits for its holder instead of reporting busy"
+file = "src/stayfixed/sync/state.py"
+before = "            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)"
+after = "            fcntl.flock(fd, fcntl.LOCK_EX)"
+reddens = [
+  "tests/sync/test_state.py::test_a_lock_held_elsewhere_is_busy_and_released_on_close",
+  "tests/sync/test_state.py::test_a_lock_dies_with_its_holder",
+]
+
+[[mutation]]
+name = "the job lock descriptor is inherited by its children"
+file = "src/stayfixed/sync/state.py"
+before = "        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)"
+after = "        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600); os.set_inheritable(fd, True)"
+reddens = ["tests/sync/test_state.py::test_a_child_of_a_killed_job_does_not_keep_the_lock"]
+
+# Pacing: the throttle and the back-off decide whether a trigger starts a job at all. A clock that
+# jumped back must not stall the sync for as long as the jump.
+[[mutation]]
+name = "the throttle holds a job two minutes old"
+file = "src/stayfixed/sync/state.py"
+before = "    return age is not None and age < timedelta(seconds=THROTTLE_SECONDS)"
+after = "    return age is not None and age <= timedelta(seconds=THROTTLE_SECONDS)"
+reddens = ["tests/sync/test_state.py::test_throttle_covers_the_interval_and_not_a_second_more"]
+
+[[mutation]]
+name = "a future last-job time still throttles"
+file = "src/stayfixed/sync/state.py"
+before = "    return age if age >= timedelta(0) else None"
+after = "    return age"
+reddens = [
+  "tests/sync/test_state.py::test_throttle_and_back_off_treat_a_future_time_as_long_past",
+]
+
+[[mutation]]
+name = "the back-off ignores a moved HEAD"
+file = "src/stayfixed/sync/state.py"
+before = "    if state.head is None or state.head != head:"
+after = "    if state.head is None:"
+reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_and_the_same_upstream"]
+
+[[mutation]]
+name = "the back-off ignores a moved upstream"
+file = "src/stayfixed/sync/state.py"
+before = "    if upstream is not None and upstream != state.fetched_sha:"
+after = "    if False:"
+reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_and_the_same_upstream"]
+
+[[mutation]]
+name = "the back-off ignores an absent hold"
+file = "src/stayfixed/sync/state.py"
+before = "    if not state.holds.any:"
+after = "    if False:"
+reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_and_the_same_upstream"]
+
+[[mutation]]
+name = "the back-off outlasts its window"
+file = "src/stayfixed/sync/state.py"
+before = "    return age is not None and age < timedelta(minutes=BACK_OFF_MINUTES)"
+after = "    return age is not None"
+reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_and_the_same_upstream"]
