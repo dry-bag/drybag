@@ -41,15 +41,20 @@ The behaviour ported is an existing, field-tested job that ran outside this repo
 implementer's brief carries where its source and its tests are. This plan names what changes against
 it (see "Decisions"); everything else is ported as it behaves, with its tests.
 
-**Scope:** restructure lane 5; one pull request into `next`. Consumes lane 0 (#158: the `hints` area,
-`roots` in the core, `sync` pre-registered in `DELIVERY_AREAS`). Out of scope: the overlay's own hook
+**Scope:** restructure lane 5; one pull request into `next`. Consumes lane 0 (#158, merged into `next`:
+the `hints` area, `roots` in the core, three sides in `src/stayfixed/areas.py`, one name per line). Out of scope: the overlay's own hook
 yielding to the switch (another lane, in the overlay), `setup --restore --sync` (lane 6, which calls
 the writer Task 1 extends), a cloud mode, `[sync] paths`, Codex triggers.
 
 ## Premise
 
-Measured on `dev` at `d00b726` and on #158's diff, by reading the tree. Each wave re-measures its part
-after `git merge origin/next` and stops on a mismatch.
+Measured on `dev` at `d00b726` and on #158's diff, by reading the tree; re-read after merging `next`
+at `ae716db`. Each wave re-measures its part and stops on a mismatch.
+
+- `src/stayfixed/areas.py` lists `DELIVERY_AREAS`, `PACK_PACKAGES` and `CORE_AREAS` one name per
+  line, and `sync` is on no side: Task 1 adds the line `"sync",` to `DELIVERY_AREAS`.
+  `tests/boundaries/test_delivery.py` refuses any unpinned import between delivery and the pack, or
+  from the core into either, so `sync` imports only the core and delivery areas (`memory`).
 
 - `src/stayfixed/processes.py` has no `run`: it ends process groups (`kill_group`, `exited`, `end`);
   the two callers `Popen(..., start_new_session=True)` themselves. `runner.Runner.launch` and
@@ -253,8 +258,8 @@ A and B import nothing from each other but write one worktree, so they run in or
 
 **Files:**
 - Create: `src/stayfixed/sync/__init__.py`, `src/stayfixed/sync/switch.py`
-- Modify: `src/stayfixed/config/classes.py`, `src/stayfixed/setup/machine.py`, `src/stayfixed/setup/run.py`
-- Test: `tests/sync/__init__.py`, `tests/sync/test_switch.py`, `tests/config/test_classes.py`, `tests/setup/test_setup.py`
+- Modify: `src/stayfixed/areas.py`, `src/stayfixed/config/classes.py`, `src/stayfixed/setup/machine.py`, `src/stayfixed/setup/run.py`
+- Test: `tests/sync/__init__.py`, `tests/sync/test_switch.py`, `tests/boundaries/test_delivery.py`, `tests/config/test_classes.py`, `tests/setup/test_setup.py`
 
 **Interfaces:**
 - Produces: `sync.switch.enabled(machine: Path | None = None) -> bool` (the default machine file when
@@ -278,7 +283,9 @@ A and B import nothing from each other but write one worktree, so they run in or
 - [ ] **Step 3:** add `"sync.*": KeyClass.MACHINE_ONLY` to `CLASSES`; `switch.py` reads through
   `read_machine_toml` and `machine_config_path`; `write_machine` gains the `sync` owned table;
   `_apply_overlay` (or its caller) passes `sync={"enabled": True}` for `render` and `create` only, in
-  the write that records `[overlay] root`. the package's `__init__.py` holds the area's docstring.
+  the write that records `[overlay] root`. The package's `__init__.py` holds the area's docstring.
+  `DELIVERY_AREAS` gains the line `"sync",`; its mutation entry "sync drops out of every side"
+  (the line deleted) is declared by Task 8, once `hooks.py` makes the area discovered.
 - [ ] **Step 4:** the focused run passes; then `uv run pytest tests/config tests/setup -q`.
 - [ ] **Step 5: mutations** (`mutations/core.toml` or the group `GROUP_OF` routes to; the oracle with
   pattern `sync/` and `setup/`): "a string 'true' switches sync on" (`is True` → truthy test);
@@ -613,7 +620,7 @@ A and B import nothing from each other but write one worktree, so they run in or
   to take one; the floor; Claude Code only, Codex sessions do not trigger it; what is left when the
   plugin goes), the `hook <event>` and "Hooks" sections gaining `Stop` and `SessionEnd`, the doctor
   table its `sync` row, and `setup --overlay`'s **Writes** paragraph the `[sync]` key. CONTRIBUTING:
-  the areas list gains `sync` and drops "which is not written yet". The fragment: one release note.
+  the discovered areas list and the delivery side's description gain `sync`. The fragment: one release note.
 - [ ] **Step 4:** `uv run pytest tests/sync tests/doctor tests/test_outbound.py tests/test_documents.py tests/boundaries tests/test_install_path.py -q`
   passes; then the full gates, once: `uv run pytest -n auto --cov --cov-fail-under=92`,
   `uv run ruff check . && uv run ruff format --check .`, `uv run mypy`,
