@@ -2616,3 +2616,78 @@ def test_attach_from_a_linked_worktree_writes_the_main_checkout_only(tmp_path: P
     assert RULE in json.loads((root / SETTINGS).read_text(encoding="utf-8"))["permissions"]["allow"]
     assert not (side / LEDGER).exists() and not (side / SETTINGS).exists()
     assert _status(side) == []
+
+
+def _tagged(store: Path, *tags: str) -> Path:
+    """The overlay of `_attachable`, its project listing `tags`, each with a `groups/<tag>/`
+    directory; the overlay's root."""
+    overlay = store.parents[2]
+    listed = ", ".join(f'"{tag}"' for tag in tags)
+    (store.parent / PROJECT_RECORD).write_text(f"tags = [{listed}]\n", encoding="utf-8")
+    for tag in tags:
+        (overlay / "groups" / tag / "claude").mkdir(parents=True)
+        (overlay / "groups" / tag / "codex").mkdir(parents=True)
+    return overlay
+
+
+def _tag_grants(overlay: Path, tag: str, *allow: str) -> None:
+    (overlay / "groups" / tag / "claude" / "permissions.json").write_text(
+        json.dumps({"permissions": {"allow": list(allow)}}), encoding="utf-8"
+    )
+
+
+def test_a_tag_codex_rule_is_placed_and_a_later_plate_wins_its_name(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, codex="# common\n")
+    overlay = _tagged(store, "a", "b")
+    (store.parent / "codex").mkdir()
+    (store.parent / "codex" / "project.rules").write_text("# project\n", encoding="utf-8")
+    for tag in ("a", "b"):
+        (overlay / "groups" / tag / "codex" / "common.rules").write_text(
+            f"# from {tag}\n", encoding="utf-8"
+        )
+        (overlay / "groups" / tag / "codex" / f"{tag}.rules").write_text(
+            "# tag\n", encoding="utf-8"
+        )
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    rules = root / ".codex" / "rules"
+    assert (rules / "common.rules").read_text(encoding="utf-8") == "# from b\n"
+    assert {path.name for path in rules.iterdir()} == {
+        "common.rules",
+        "project.rules",
+        "a.rules",
+        "b.rules",
+    }
+    assert set(attached.rules_written) == {f".codex/rules/{name}" for name in os.listdir(rules)}
+
+
+def test_a_tag_allow_rule_is_added(tmp_path: Path) -> None:
+    from stayfixed.attach.binding import read_binding
+    from stayfixed.attach.permissions import diff_permissions
+
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    diff = diff_permissions(root, read_binding(root, store=store, machine=machine))
+    assert diff.added_allow == (RULE, "Bash(x)")
+
+
+def test_an_unreadable_tag_file_stops_attach_with_nothing_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if os.geteuid() == 0:
+        pytest.skip("root reads every file")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    hooks = _tagged(store, "a") / "groups" / "a" / "claude" / "hooks.json"
+    hooks.write_text("{}", encoding="utf-8")
+    hooks.chmod(0o000)
+    flags = ("--store", str(store))
+    before = snapshot(root)
+    try:
+        attached = cli(root, tmp_path, "attach", *flags, machine=machine)
+    finally:
+        hooks.chmod(0o644)
+    assert attached[0] == 1
+    assert_snapshot_unchanged(root, before)
+    # No render was made either: the delivery directory is as it was, which is to say absent.
+    assert not (Path(os.environ["HOME"]) / ".local" / "share" / "stayfixed" / "delivery").exists()

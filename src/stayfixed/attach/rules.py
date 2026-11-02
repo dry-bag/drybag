@@ -1,10 +1,11 @@
 """The overlay's rules: standing ones for every session, path-scoped ones once per file per session.
 
-**Where they live.** `<overlay>/common/claude/rules/*.md` and
-`<overlay>/projects/<project>/claude/rules/*.md`, beside the overlay's `permissions.json` and
-`hooks.json`. A rule whose frontmatter has a `paths:` key is path-scoped; any other is a standing
-rule. Common rules come first and the project's second, each in name order, and a project rule
-replaces the common rule of the same file name, as a project's skill does in the render.
+**Where they live.** `claude/rules/*.md` in each plate of the overlay (`config.plates`):
+`common/`, each tag of the project (`groups/<tag>/`), then `projects/<project>/`, beside the
+overlay's `permissions.json` and `hooks.json`. A rule whose frontmatter has a `paths:` key is
+path-scoped; any other is a standing rule. The plates come in that order, each in name order, and
+a later plate's rule replaces the earlier plate's rule of the same file name, as a later plate's
+skill does in the render.
 
 **For the bound project only.** `<project>` is the one this machine's binding record names for the
 checkout's id (`stayfixed.binding.bound_project`), never a name the repository supplies, so a clone
@@ -42,9 +43,8 @@ from stayfixed.attach.permissions import PROJECT_CLAUDE
 from stayfixed.binding import bound_project
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.paths import data_directory
+from stayfixed.config.plates import plates
 from stayfixed.errors import Failure
-from stayfixed.memory.api import PROJECTS
-from stayfixed.overlay.api import COMMON_CLAUDE
 from stayfixed.printed import printable, quoted
 
 RULES = "rules"
@@ -152,12 +152,13 @@ def _directory(directory: Path) -> dict[str, Rule]:
 
 
 def read(overlay: Path, project: str) -> list[Rule]:
-    """The overlay's rules for `project`: common first and the project's second, each in name
-    order, a project rule replacing the common rule of its name."""
-    rules = _directory(overlay / COMMON_CLAUDE / RULES)
-    for name, rule in _directory(overlay / PROJECTS / project / PROJECT_CLAUDE / RULES).items():
-        rules.pop(name, None)
-        rules[name] = rule
+    """The overlay's rules for `project`: each plate's in turn (`config.plates`), each in name
+    order, a rule replacing the earlier plate's rule of its name."""
+    rules: dict[str, Rule] = {}
+    for plate in plates(overlay, project)[0]:
+        for name, rule in _directory(plate.directory / PROJECT_CLAUDE / RULES).items():
+            rules.pop(name, None)
+            rules[name] = rule
     return list(rules.values())
 
 

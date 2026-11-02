@@ -1091,8 +1091,8 @@ reddens = [
 [[mutation]]
 name = "a common source the overlay cannot hold reads as no source"
 file = "src/stayfixed/attach/permissions.py"
-before = "        (binding.overlay / COMMON_CLAUDE / name, None),"
-after = "        (binding.overlay / COMMON_CLAUDE / name, binding.overlay / COMMON_CLAUDE),"
+before = "            plate.directory if plate.kind is PlateKind.PROJECT else None,"
+after = "            plate.directory / PROJECT_CLAUDE,"
 reddens = [
   "tests/attach/test_write.py::test_an_overlay_whose_common_claude_is_a_file_stops_attach_before_it_writes[attach]",
   "tests/attach/test_write.py::test_an_overlay_whose_common_claude_is_a_file_stops_attach_before_it_writes[check]",
@@ -1766,3 +1766,12 @@ file = "src/stayfixed/attach/write.py"
 before = "    if project is not None and not chosen:"
 after = "    if False:"
 reddens = ["tests/attach/test_project_choice.py::test_project_beside_a_stayfixed_toml_is_refused"]
+
+# A later plate wins a rule's name, and the project is the last plate: a tag read after it would
+# replace the project's own rule.
+[[mutation]]
+name = "a tag's rule replaces the project's rule of its name"
+file = "src/stayfixed/attach/rules.py"
+before = "    for plate in plates(overlay, project)[0]:"
+after = "    for plate in sorted(plates(overlay, project)[0], key=lambda p: p.kind.value == 'tag'):"
+reddens = ["tests/attach/test_rules.py::test_a_tag_rule_arrives_and_a_later_plate_wins_its_name"]

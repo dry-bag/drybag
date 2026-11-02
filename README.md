@@ -63,8 +63,8 @@ adds:
 - **A personal overlay that is a versioned repository of its own**, named by its identity record
   and with its own upgrade manifest, rather than a dotfiles sync. `stayfixed setup --overlay` renders or generates one and `stayfixed attach`
   binds a repository to it: the hooks, skills, agents and allow rules you keep there reach that
-  repository's sessions, and so do your rules — `common/claude/rules/*.md` and
-  `projects/<name>/claude/rules/*.md`, a standing rule at every session's start and one with
+  repository's sessions, and so do your rules — `claude/rules/*.md` in `common/`, in each
+  tag your project lists (`groups/<tag>/`) and in `projects/<name>/`, a standing rule at every session's start and one with
   `paths:` frontmatter the first time a session reads or edits a file its globs match. It also *declares* the stayfixed it needs, in its identity record;
   `stayfixed doctor` reads it and reports it when the stayfixed running is too old — red when
   this project keeps its notes in that overlay, a warning when it does not — and a session in a

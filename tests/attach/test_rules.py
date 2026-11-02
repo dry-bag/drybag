@@ -148,3 +148,63 @@ def test_whether_a_scoped_rule_exists_decides_the_rendered_entry(tmp_path: Path)
     assert not scoped_exist(overlay, "p")
     (rules / "scoped.md").write_text('---\npaths: ["a/**"]\n---\nScoped.\n', encoding="utf-8")
     assert scoped_exist(overlay, "p")
+
+
+def _tagged(overlay: Path, **rules: str) -> None:
+    """Project `p` listing the tags named by the keywords (in order), each `groups/<tag>/` holding
+    the rule file `x.md` with the body given."""
+    record = overlay / "projects" / "p" / "project.toml"
+    record.write_text(f"tags = {list(rules)!r}\n".replace("'", '"'), encoding="utf-8")
+    for tag, body in rules.items():
+        directory = overlay / "groups" / tag / "claude" / "rules"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "x.md").write_text(f"{body}\n", encoding="utf-8")
+
+
+@needs_git
+def test_a_tag_rule_arrives_and_a_later_plate_wins_its_name(tmp_path: Path) -> None:
+    # Mutation (oracle): `mutations/`'s "a tag's rule replaces the project's rule of its name" ->
+    # the tags are read after the project, and the second assertion reddens.
+    overlay = _overlay(tmp_path)
+    rules = overlay / "common" / "claude" / "rules"
+    project = overlay / "projects" / "p" / "claude" / "rules"
+    (rules / "x.md").write_text("Common x.\n", encoding="utf-8")
+    (rules / "only-common.md").write_text("Only common.\n", encoding="utf-8")
+    (project / "only-project.md").write_text("Only project.\n", encoding="utf-8")
+    _tagged(overlay, a="Tag x.")
+    (overlay / "groups" / "a" / "claude" / "rules" / "only-tag.md").write_text(
+        "Only tag.\n", encoding="utf-8"
+    )
+    root = _checkout(tmp_path)
+    # Every distinct name arrives in plate order, and the tag's body replaces the common one.
+    assert standing(root) == (
+        f"{STANDING_LEAD}\n\nOnly common.\n\n{STANDING}\n\nOnly tag.\n\nTag x.\n\nOnly project."
+    )
+    # The project's file of the same name wins over the tag's.
+    (project / "x.md").write_text("Project x.\n", encoding="utf-8")
+    said = standing(root)
+    assert "Project x." in said and "Tag x." not in said and "Common x." not in said
+    assert said.index("Only tag.") < said.index("Project x.")
+
+
+@needs_git
+def test_two_tags_hold_one_rule_name_and_the_later_wins(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    _tagged(overlay, a="From a.", b="From b.")
+    root = _checkout(tmp_path)
+    said = standing(root)
+    assert "From b." in said and "From a." not in said
+    # List order is the precedence: reversed, the other wins.
+    _tagged(overlay, b="From b.", a="From a.")
+    said = standing(root)
+    assert "From a." in said and "From b." not in said
+
+
+@needs_git
+def test_a_clone_naming_the_project_hears_no_tag_rule(tmp_path: Path) -> None:
+    # The tags are the overlay's record of the project the machine's binding names; a clone whose
+    # `stayfixed.toml` names the project, with no binding, hears nothing from any plate.
+    overlay = _overlay(tmp_path)
+    _tagged(overlay, a="From a.")
+    root = _checkout(tmp_path, bound=False)
+    assert standing(root) == ""

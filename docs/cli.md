@@ -366,9 +366,10 @@ runs without some of its configuration (`config-fallback`).
 
 **The overlay's rules.** In a checkout this machine binds to an overlay project
 ([`attach`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)), `SessionStart`
-carries the overlay's standing rules — every `*.md` file in `common/claude/rules/` and
-`projects/<name>/claude/rules/` whose frontmatter has no `paths:` key, common first and the
-project's second, each in name order, a project file replacing the common file of its name —
+carries the overlay's standing rules — every `*.md` file in `claude/rules/` of `common/`, of each
+tag the project lists (`groups/<tag>/`) and of `projects/<name>/` whose frontmatter has no `paths:`
+key, in that order and each in name order, a later plate's file replacing the earlier plate's file of
+its name —
 under one fixed lead line, on every event the matcher covers, since a compacted or cleared context
 has lost them. A rule with `paths:` is path-scoped: the plugin `attach` renders carries a
 `PostToolUse` entry for it, matching `Read|Edit|Write`, that runs `hook PostToolUse` through
@@ -502,8 +503,8 @@ place in a context is treated as a new one rather than as one already answered. 
 an overlay which becomes unpushed *during* a session that started clean is not reported at that
 session's compactions, only at its next resume or startup; `stayfixed doctor` answers on demand. And the overlay is never a plugin stayfixed
 executes anything from: it carries no plugin manifest and no
-`hooks/hooks.json`, and hook entries the owner keeps in *common/claude/hooks.json* and
-`projects/<name>/claude/hooks.json` reach a session only through the plugin `attach` renders from
+`hooks/hooks.json`, and hook entries the owner keeps in the `claude/hooks.json` of *common/*, of a tag and of
+`projects/<name>/` reach a session only through the plugin `attach` renders from
 them, named by this machine's binding id.
 
 ## `stayfixed commit check --range RANGE`
@@ -2405,10 +2406,10 @@ renamed in a pulled commit moves every worktree's binding — says so on one lin
 **The overlay's hooks, skills and agents are delivered as a plugin.** Every run renders them into
 `$HOME/.local/share/stayfixed/delivery/<id>/`, named by the binding id below: a marketplace
 `stayfixed-delivery-<id>` holding one plugin, `overlay-<id>`, whose `hooks/hooks.json` is the union
-of `common/claude/hooks.json` and `projects/<name>/claude/hooks.json` — each event's entry groups in
-that order, as the overlay wrote them — and whose `skills/` and `agents/` are copied from the same
-two directories, this project's copy of a file winning over the common one and each copy keeping its
-source's permission bits, so a skill's script stays executable. A session runs the plugin from that
+of the `claude/hooks.json` of `common/`, of each tag the project lists in list order, and of
+`projects/<name>/` — each event's entry groups in that order, as the overlay wrote them — and whose
+`skills/` and `agents/` are copied from the same directories, a later plate's copy of a file
+winning over an earlier one's and each copy keeping its source's permission bits, so a skill's script stays executable. A session runs the plugin from that
 directory in place, so a later `attach` re-renders it there and an edit reaches the next session
 with no reinstall. Each render is written whole into a new directory beside it and swapped into
 place, so a file the overlay no longer holds is gone, whatever an earlier run recorded; the ledger
@@ -2451,9 +2452,12 @@ screen or in the note naming both remotes, and before it is recorded; an ssh URL
 (`ssh://git@host/…`) and loses only a password.
 
 **Reads** the overlay's `common/claude/permissions.json`, `common/claude/hooks.json` and the files
-under `common/claude/skills/` and `common/claude/agents/` (dot-named ones left out), this
-project's `projects/<name>/claude/` equivalents, the overlay's `common/codex/` and
-`projects/<name>/codex/` rules, and this repository's existing `.claude/settings.local.json`; for a
+under `common/claude/skills/` and `common/claude/agents/` (dot-named ones left out), the same
+`claude/` files of each tag the project lists in `projects/<name>/project.toml` (`groups/<tag>/`,
+in list order), this project's `projects/<name>/claude/` equivalents, the `codex/` rules of
+`common/`, of each tag and of `projects/<name>/`, a later plate winning a name over an earlier one
+(the order is `common`, the tags, the project), and this repository's existing
+`.claude/settings.local.json`; for a
 repository with no `stayfixed.toml` whose project neither `--project` nor this machine's binding
 names, every `projects/<name>/project.toml` in the overlay.
 `.claude/settings.json` — the committed one — is read for **nothing**: it is repository-controlled,

@@ -235,3 +235,50 @@ def test_a_fault_under_the_rendered_entry_is_exit_0(tmp_path: Path) -> None:
     )
     assert (done.returncode, done.stdout) == (0, "")
     assert done.stderr == "stayfixed: stayfixed exited 3; continuing open\n"
+
+
+def _tagged(overlay: Path, *tags: str) -> None:
+    """Project `p` listing `tags`, each with its `groups/<tag>/claude` directory."""
+    listed = ", ".join(f'"{tag}"' for tag in tags)
+    (overlay / "projects" / "p" / "project.toml").write_text(
+        f"tags = [{listed}]\n", encoding="utf-8"
+    )
+    for tag in tags:
+        (overlay / "groups" / tag / "claude").mkdir(parents=True)
+
+
+def test_a_tag_hook_group_is_rendered_between_common_and_the_project(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    _tagged(overlay, "a")
+    tagged = {"type": "command", "command": "tag.sh"}
+    (overlay / "groups" / "a" / "claude" / "hooks.json").write_text(
+        json.dumps({"hooks": {"SessionStart": [{"hooks": [tagged]}]}}), encoding="utf-8"
+    )
+    render(overlay, "p", ID)
+    hooks = _json(_delivery() / "plugin" / "hooks" / "hooks.json")
+    assert isinstance(hooks, dict)
+    assert hooks["hooks"]["SessionStart"] == [
+        {"hooks": [COMMON]},
+        {"hooks": [tagged]},
+        {"hooks": [PROJECT]},
+    ]
+
+
+def test_a_tag_skill_is_rendered_and_a_later_plate_wins_its_path(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    _tagged(overlay, "a", "b")
+    for tag in ("a", "b"):
+        (overlay / "groups" / tag / "claude" / "skills" / "review").mkdir(parents=True)
+        (overlay / "groups" / tag / "claude" / "skills" / "review" / "SKILL.md").write_text(
+            f"review from {tag}\n", encoding="utf-8"
+        )
+        (overlay / "groups" / tag / "claude" / "skills" / f"only-{tag}.md").write_text(
+            f"{tag}\n", encoding="utf-8"
+        )
+    render(overlay, "p", ID)
+    skills = _delivery() / "plugin" / "skills"
+    # The later tag replaces the common skill's file of the same path; a file only a tag holds
+    # arrives beside it.
+    assert (skills / "review" / "SKILL.md").read_text() == "review from b\n"
+    assert (skills / "review" / "check.sh").is_file()
+    assert (skills / "only-a.md").read_text() == "a\n" and (skills / "only-b.md").is_file()
