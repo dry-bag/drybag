@@ -24,7 +24,7 @@ from stayfixed.config.session import (
     SessionConfig,
     session_config,
 )
-from stayfixed.guards.hooks import register as guards_handlers
+from stayfixed.hints.hooks import register as hints_handlers
 from stayfixed.hooks.api import DIAGNOSTICS, DIRECTORY, Handler, HookEvent, HookResult
 from stayfixed.hooks.commands import CONFIG_FALLBACK
 from tests.config.test_session import densest_file, long_file_of_gates_that_run
@@ -273,7 +273,7 @@ def _overlay_status(root: Path) -> tuple[Handler, HookEvent]:
 def _test_hygiene(root: Path) -> tuple[Handler, HookEvent]:
     (root / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
     git(root, "init", "-q")
-    handler = next(h for h in guards_handlers() if h.event == "PostToolUseFailure")
+    handler = next(h for h in hints_handlers() if h.event == "PostToolUseFailure")
     event = _event("PostToolUseFailure", root, {"command": "uv run pytest -q"})
     event.raw["error"] = "Exit code 1"
     return handler, event

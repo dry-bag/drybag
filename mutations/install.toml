@@ -765,48 +765,26 @@ reddens = [
   "tests/overlay/test_create.py::test_a_git_init_that_ran_and_failed_is_said_to_have_failed",
 ]
 
-# `setup --overlay` is the one crossing from the core into delivery, and it is imported inside the
-# two functions that use it: `setup/api.py` re-exports from this module and `doctor` imports that,
-# so a module-level import here loads the private layer into every `doctor` run.
-[[mutation]]
-name = "setup loads the overlay area at import again"
-file = "src/stayfixed/setup/run.py"
-before = "from stayfixed.presets import defaults_of, load_preset\n"
-after = "from stayfixed.overlay.api import require_overlay, target_root\nfrom stayfixed.presets import defaults_of, load_preset\n"
-reddens = [
-  "tests/boundaries/test_delivery.py::test_in_isolation_no_core_module_loads_a_delivery_area",
-]
-
-# Inside the function is not enough: the import has to sit below the return for a run with no
-# `--overlay`, or every `setup` loads the private layer whether or not it was asked for.
-[[mutation]]
-name = "setup loads the overlay area with no --overlay again"
-file = "src/stayfixed/setup/run.py"
-before = """    if overlay is None:
-        # Nothing was asked for, so nothing is touched: `--overlay` is the only way to reach the
-        # overlay at all, and a default here would turn an omitted flag into a repository created
-        # on somebody's account.
-        return None
-    from stayfixed.overlay.api import overlay_fault, target_root
-"""
-after = """    from stayfixed.overlay.api import overlay_fault, target_root
-
-    if overlay is None:
-        return None
-"""
-reddens = [
-  "tests/setup/test_setup.py::test_setup_with_no_overlay_never_loads_the_overlay_area",
-]
-
-# The crossing is pinned per statement and per name, so a second statement beside a pinned one is a
+# A crossing is pinned per statement and per name, so a second statement beside a pinned one is a
 # new crossing even when it names the same module.
 [[mutation]]
-name = "setup imports one more name from the overlay area in a statement of its own"
-file = "src/stayfixed/setup/run.py"
-before = "    from stayfixed.overlay.api import overlay_fault, target_root\n"
-after = "    from stayfixed.overlay.api import overlay_fault, target_root\n    from stayfixed.overlay.api import finish\n"
+name = "setup imports one more name from the guards area in a statement of its own"
+file = "src/stayfixed/setup/commands.py"
+before = "    from stayfixed.guards.api import Found, install, uninstall\n"
+after = "    from stayfixed.guards.api import Found, install, uninstall\n    from stayfixed.guards.api import HOOK_NAME\n"
 reddens = [
-  "tests/boundaries/test_delivery.py::test_core_never_imports_delivery",
+  "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
+]
+
+# A pinned crossing is held in both directions: a row whose import statement has gone is a finding,
+# so a pardon cannot outlive the crossing it was written for.
+[[mutation]]
+name = "a pinned crossing's import goes while its row stays"
+file = "src/stayfixed/setup/commands.py"
+before = "    from stayfixed.guards.api import Found, install, uninstall\n\n"
+after = ""
+reddens = [
+  "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
 ]
 
 # `gh`'s answers are read by `setup --overlay create:` and `scripts/publish_template.py`. Each reader caught the

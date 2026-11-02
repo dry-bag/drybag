@@ -189,7 +189,7 @@ def _overlay(tmp_path: Path) -> Path:
     overlay = tmp_path / "overlay"
     for relative in (COMMON_CLAUDE, COMMON_CODEX, COMMON_MEMORY):
         (overlay / relative).mkdir(parents=True, exist_ok=True)
-    # An overlay is a git repository, and the `pre-commit` row asks `guards.hooks_dir` where
+    # An overlay is a git repository, and the `pre-commit` row asks `gitenv.hooks_dir` where
     # its hooks live rather than assuming `.git/hooks`. A fixture that is not a repository has
     # no answer to that question, so the layout says here what it is.
     if not (overlay / ".git").exists():

@@ -1,6 +1,6 @@
 """Handlers this area contributes; the `hook <event>` entries in `hooks/hooks.json` invoke them.
 
-Every import of `stayfixed.guards.*` and of the configuration layer happens **inside** a
+Every import of `stayfixed.hints.*` and of the configuration layer happens **inside** a
 handler body. `tests/boundaries/test_discovery.py` asserts that `discover()` in a clean
 interpreter imports neither the configuration layer nor the presets, and discovery imports every
 area's `hooks` module — so a module-level import here reddens a test that belongs to no area at
@@ -60,7 +60,7 @@ def _bg_cleanup(event: HookEvent, session: SessionConfig) -> HookResult:
     command = bash_command(event)
     if command is None:
         return HookResult()
-    from stayfixed.guards.bgcleanup import judge
+    from stayfixed.hints.bgcleanup import judge
 
     background = event.tool_input.get("run_in_background") is True
     return HookResult(context=judge(command, background=background))
@@ -76,7 +76,7 @@ def _test_hygiene(event: HookEvent, session: SessionConfig) -> HookResult:
     command = bash_command(event)
     if command is None:
         return HookResult()
-    from stayfixed.guards.hygiene import context_for, red_exit
+    from stayfixed.hints.hygiene import context_for, red_exit
 
     if red_exit(event.raw) is None:
         return HookResult()

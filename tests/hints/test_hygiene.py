@@ -12,16 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.config.schema import Config
-from stayfixed.guards.hygiene import dirty_count, notice, red_exit, simple_commands
-from stayfixed.guards.roots import (
-    NOT_A_DIRECTORY,
-    NOT_CONTAINED,
-    ROOT_ITSELF,
-    contained_roots,
-    dropped_roots,
-)
+from stayfixed.config.loader import CONFIG_FILE
+from stayfixed.hints.hygiene import dirty_count, notice, red_exit, simple_commands
 from tests.gitfixture import git
 
 # Per test: `red_exit`, `notice` and `simple_commands` are pure, and a module-level skip would
@@ -57,10 +49,6 @@ def repo(tmp_path: Path) -> Path:
     return root
 
 
-def config(root: Path) -> Config:
-    return load(root, machine=root.parent / "absent.toml")
-
-
 @needs_git
 def test_a_dirty_tree_is_counted(tmp_path: Path) -> None:
     # A TRACKED file modified after its commit, never merely an untracked one: `dirty_count`
@@ -71,56 +59,6 @@ def test_a_dirty_tree_is_counted(tmp_path: Path) -> None:
     root = repo(tmp_path)
     (root / "src" / "mod.py").write_text("x = 2\n", encoding="utf-8")
     assert dirty_count(root) == 1
-
-
-@needs_git
-def test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked(
-    tmp_path: Path,
-) -> None:
-    """`"src/"` and `"./tests"` are how many people write a directory, and they were dropped.
-
-    `contained()` took on the write's component rule, which refuses a trailing `/`, a doubled
-    `/` and a leading `./` because the engine cannot write through them. A code root is only
-    walked, and `contained_roots` caught the refusal and moved on — so both entries left the
-    hygiene counts and the citation roots with nothing saying so. They are folded before the
-    question now.
-
-    Oracle: `mutations/`'s "a code root spelled with a slash is dropped again".
-    """
-    root = repo(tmp_path)
-    (root / "tests").mkdir()
-    (root / CONFIG_FILE).write_text(
-        CONFIG.replace('code_roots = ["src", "tests"]', 'code_roots = ["src/", ".//tests"]'),
-        encoding="utf-8",
-    )
-    assert contained_roots(root, config(root)) == [root / "src", root / "tests"]
-
-
-@needs_git
-@pytest.mark.parametrize(
-    ("roots", "dropped"),
-    [
-        ('["."]', [(".", ROOT_ITSELF)]),
-        ('["./"]', [("./", ROOT_ITSELF)]),
-        ('["src", "lib"]', [("lib", NOT_A_DIRECTORY)]),
-        ('["../shared"]', [("../shared", NOT_CONTAINED)]),
-        ('["src/", "./src"]', []),
-    ],
-    ids=["dot", "dot-slash", "missing", "outside", "folded"],
-)
-def test_each_code_root_no_walk_takes_is_named_with_its_reason(
-    tmp_path: Path, roots: str, dropped: list[tuple[str, str]]
-) -> None:
-    """Every entry `contained_roots` leaves out, in config order, with why; a spelling the fold
-    takes in is walked and not named. `../shared` exists, so it is the containment that drops
-    it and not the directory check."""
-    root = repo(tmp_path)
-    (root.parent / "shared").mkdir()
-    (root / CONFIG_FILE).write_text(
-        CONFIG.replace('code_roots = ["src", "tests"]', f"code_roots = {roots}"),
-        encoding="utf-8",
-    )
-    assert dropped_roots(root, config(root)) == dropped
 
 
 @needs_git

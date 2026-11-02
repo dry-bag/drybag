@@ -122,7 +122,7 @@ class RunnerAdapter(Protocol):
 
     def recognises(self, command: Sequence[str]) -> bool:
         """Whether `command` runs this runner. `command` is what is left once the assignments,
-        `env` and `uv run …` are read past (`guards.api.read_launch`)."""
+        `env` and `uv run …` are read past (`hints.api.read_launch`)."""
         ...
 
     def plan(

@@ -1,4 +1,4 @@
-"""Contracts for the shared Bash-scanning module the guards import."""
+"""Contracts for the shared Bash-scanning module the session hints import."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.guards import bashscan, uvrun
+from stayfixed.hints import bashscan, uvrun
 from stayfixed.profiles.adapters import shipped_adapters
 
 
