@@ -41,7 +41,7 @@ FLOOR_VARIABLE = "STAYFIXED_GIT_FLOOR_SECONDS"
 # and nothing closed for rows.
 EXPECTED_ENTRIES = 10
 EXPECTED_ROWS = 11
-# What the red-run note opens with, `stayfixed.guards.hygiene.LEAD`, spelled out for the reason
+# What the red-run note opens with, `stayfixed.hints.hygiene.LEAD`, spelled out for the reason
 # `FLOOR_VARIABLE` is. The note is all a `PostToolUseFailure` entry is for, so its row asks for it
 # by its words and not only for an envelope naming the event, which an entry whose handler said
 # nothing also prints.

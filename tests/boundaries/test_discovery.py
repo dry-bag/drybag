@@ -166,7 +166,7 @@ def test_an_areas_doctor_module_imports_only_inside_its_functions() -> None:
     # inside a try".
     source = ROOT / "src" / "stayfixed"
     found = sorted(source.glob("*/doctor.py"))
-    # The three delivery areas carry one each, and the walk says so before it judges them.
+    # Three areas carry one each, and the walk says so before it judges them.
     assert [path.parent.name for path in found] == ["attach", "memory", "overlay"]
     offences: list[str] = []
     for path in found:

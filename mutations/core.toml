@@ -616,7 +616,7 @@ after = """    "PostToolUse",
 )"""
 reddens = [
   "tests/hooks/test_registry.py::test_the_vocabulary_is_the_six_events_the_design_table_carries",
-  "tests/guards/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[bare]",
+  "tests/hints/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[bare]",
 ]
 
 # The sink writes under the data root and `doctor` counts what it wrote there, and the hook reads
@@ -2139,14 +2139,48 @@ reddens = [
   "tests/doctor/test_command.py::test_an_area_whose_doctor_module_fails_to_import_costs_one_red_row_and_not_the_report",
 ]
 
-# The delivery areas are pinned as a literal, because the one crossing meant to stay exercises only
-# `overlay`: a constant that lost `memory` would let a new crossing into it through.
+# Every discovered area is on exactly one side: an area dropped from its side joins the core
+# unseen and is held to the core's rule, whether or not it makes a crossing any pin would notice.
 [[mutation]]
 name = "memory stops being a delivery area"
 file = "src/stayfixed/areas.py"
-before = 'DELIVERY_AREAS: frozenset[str] = frozenset({"attach", "memory", "overlay"})'
-after = 'DELIVERY_AREAS: frozenset[str] = frozenset({"attach", "overlay"})'
-reddens = ["tests/boundaries/test_delivery.py::test_the_delivery_areas_are_attach_memory_and_overlay"]
+before = '        "memory",'
+after = ""
+reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
+
+[[mutation]]
+name = "trust drops out of every side"
+file = "src/stayfixed/areas.py"
+before = '        "trust",'
+after = ""
+reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
+
+# The core imports neither side: the bug ledger imported by a core module, inside a function where
+# nothing loads it until a command asks, is a crossing no row pins.
+[[mutation]]
+name = "a core module imports the bug ledger"
+file = "src/stayfixed/fsops.py"
+before = "    return error.strerror or type(error).__name__"
+after = """    from stayfixed.ledger.api import bug_register
+
+    return error.strerror or type(error).__name__"""
+reddens = [
+  "tests/boundaries/test_delivery.py::test_the_core_imports_neither_side_but_where_pinned",
+]
+
+# Importing the core loads neither side. The harness registry names a profile's type under
+# `if TYPE_CHECKING:`, a pinned row that never runs; run at import, the same statement loads the
+# profiles into every command, and only the import-time probe can tell the two apart.
+[[mutation]]
+name = "the harness registry loads the profiles at import"
+file = "src/stayfixed/harnesses.py"
+before = """if TYPE_CHECKING:
+    from stayfixed.profiles import Profile"""
+after = """if True:
+    from stayfixed.profiles import Profile"""
+reddens = [
+  "tests/boundaries/test_delivery.py::test_in_isolation_no_core_module_loads_either_side",
+]
 
 # The delivery rule reads import statements, so the core reaching the private layer by a string —
 # inside a function, where no import-time probe sees it run — crossed with every boundary test
@@ -6158,4 +6192,55 @@ before = "    return segment.lower().removesuffix(\".git\")"
 after = "    return segment.removesuffix(\".git\")"
 reddens = [
   "tests/attach/test_project_choice.py::test_with_nothing_recorded_the_project_is_the_last_segment_of_origin_lower_cased",
+]
+
+# The containment check on `ledger.code_roots`. `config.paths` guards `[paths]` and leaves this
+# field to whoever consumes it, so this call is the only thing between a committed
+# `code_roots = ["../.."]` and a walk of the tree above the project root. Declared rather than
+# only covered because the fixture had to be built for it: an escaping entry that names nothing
+# on disk is dropped by the `is_dir()` filter, and the containment call could then be deleted
+# with every test still green — the test creates the escaping directory so it cannot.
+[[mutation]]
+name = "an escaping code root is followed"
+file = "src/stayfixed/roots.py"
+before = "            candidate = contained(root, folded, resolved_root=resolved_root)"
+after = "            candidate = root / entry"
+reddens = ["tests/profiles/python/test_hygiene.py::test_only_contained_code_roots_are_scanned"]
+
+# `contained_roots` is what every consumer of `ledger.code_roots` walks, one `rglob` per entry
+# with the results added up, so a repeated or nested entry multiplies a count rather than
+# widening a scan. Measured with `code_roots = ["src", "src", "src/pkg"]` over two stale `.pyc`
+# files: `stale == 5` with no pruning at all, `stale == 3` with the mutation below, `2` as
+# shipped. A wrong number in a notice whose entire purpose is to be believed about a number.
+[[mutation]]
+name = "a code root listed twice is walked twice"
+file = "src/stayfixed/roots.py"
+before = '        if any(_covers(kept, candidate) for kept in found):'
+after = '        if False:'
+reddens = [
+  "tests/profiles/python/test_hygiene.py::test_a_repeated_or_nested_code_root_is_walked_once",
+]
+
+# `contained()` took on the write's component rule, and `contained_roots` catches its refusal and
+# moves on — so `code_roots = ["src/"]` was silently dropped from every count the field feeds. The
+# fold is what keeps a read-only walk from inheriting a rule that exists for writes.
+[[mutation]]
+name = "a code root spelled with a slash is dropped again"
+file = "src/stayfixed/roots.py"
+before = "            candidate = contained(root, folded, resolved_root=resolved_root)"
+after = "            candidate = contained(root, entry, resolved_root=resolved_root)"
+reddens = [
+  "tests/test_roots.py::test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked",
+]
+
+# A missing preset default loses no walk only while another root is walked. With none walked,
+# `test hygiene` says so and points at `assess`, which must then name every entry, the preset's
+# own included, or both commands are silent about why nothing was checked.
+[[mutation]]
+name = "a missing preset default goes unnamed when no root is walked"
+file = "src/stayfixed/roots.py"
+before = "    walked = any(isinstance(found, Path) for _, found in judged)"
+after = "    walked = True"
+reddens = [
+  "tests/assess/test_probes.py::test_a_code_root_no_walk_takes_is_named_with_its_reason[preset-defaults-none-walked]",
 ]

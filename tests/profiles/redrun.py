@@ -12,7 +12,7 @@ import pytest
 
 from stayfixed.config.loader import load
 from stayfixed.config.schema import Config
-from stayfixed.guards.hooks import register
+from stayfixed.hints.hooks import register
 from stayfixed.hooks.api import Handler, HookEvent
 from stayfixed.profiles.hints import COUNT_LIMIT
 

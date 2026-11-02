@@ -68,8 +68,8 @@ class RedRunHint(Protocol):
     def report(self, roots: Sequence[Path]) -> Mapping[str, int] | None:
         """The one walk: counts of what could have falsified the run, under `roots`, each under a
         name `COUNT_NAME` matches; `counts` drops anything else. `roots` is `ledger.code_roots`
-        contained (`stayfixed.guards.api.contained_roots`), which the caller computes and hands
-        over, so a stack's code never imports the session guard. `None` when the walk stopped at a
+        contained (`stayfixed.roots.contained_roots`), which the caller computes and hands
+        over, so a stack's code never imports it. `None` when the walk stopped at a
         bound before it had seen the tree, so no count it reached is an answer either way: not a
         key among the counts, since every key a hint returns is a count name it chose.
         `stayfixed test hygiene` refuses on `None` rather than read the tree as judged."""

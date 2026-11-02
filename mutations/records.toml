@@ -3295,3 +3295,15 @@ after = "        return _standing(notes, config)"
 reddens = [
   "tests/memory/test_reviewed.py::test_a_note_with_no_record_is_unreviewed_and_no_standing_rule_whatever_it_ranks",
 ]
+
+# Delivery and the pack import each other only through pinned statements. The note graph's import
+# of the bug register is one; the note store's own import of the same register is a crossing no row
+# pins.
+[[mutation]]
+name = "the note store imports the bug ledger"
+file = "src/stayfixed/memory/store.py"
+before = "from stayfixed.config.reading import MachineConfigError\n"
+after = "from stayfixed.config.reading import MachineConfigError\nfrom stayfixed.ledger.api import bug_register\n"
+reddens = [
+  "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
+]

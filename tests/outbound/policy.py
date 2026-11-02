@@ -255,7 +255,7 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/guards/commit.py", "commits_in", "rev_range"): (
         "refused when it starts with `-`, and closed by the `--` after it"
     ),
-    ("src/stayfixed/guards/githooks.py", "git_path", "name"): (
+    ("src/stayfixed/gitenv.py", "git_path", "name"): (
         "the value of `--git-path`, always one of its callers' constants"
     ),
     ("src/stayfixed/project/detect.py", "_symbolic", "ref"): (

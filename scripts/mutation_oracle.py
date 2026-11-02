@@ -85,6 +85,7 @@ GROUP_OF: tuple[tuple[str, str], ...] = (
     ("src/stayfixed/presets/", "project"),
     ("src/stayfixed/scaffold/", "scaffold"),
     ("src/stayfixed/guards/", "guards"),
+    ("src/stayfixed/hints/", "guards"),
     ("src/stayfixed/setup/", "install"),
     ("src/stayfixed/overlay/", "install"),
     ("src/stayfixed/doctor/", "doctor"),

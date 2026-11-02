@@ -17,6 +17,8 @@ name: smoke
 on:
   pull_request:
   push:
+    # Not `next`: a push names no base, so `same-repository-form` judges the fixture against
+    # `main`'s copy, which `next` has moved past.
     branches: [main]
   workflow_dispatch:
   schedule:

@@ -32,7 +32,7 @@ from stayfixed import fsops
 from stayfixed.config.paths import PathEscape, contained
 from stayfixed.fsops import read_regular_bytes, said
 from stayfixed.gitenv import QUERY_TIMEOUT_SECONDS, git_run
-from stayfixed.guards.api import contained_roots
+from stayfixed.roots import contained_roots
 
 if TYPE_CHECKING:
     from stayfixed.config.schema import Config
