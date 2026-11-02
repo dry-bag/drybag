@@ -347,7 +347,8 @@ Wave 0 ──┬──> A ──> B ──[PR 1]──┬──> C ──> D ─
 - Modify: `CONTRIBUTING.md` ("Areas")
 
 **Interfaces:**
-- Produces: `areas.DELIVERY_AREAS: frozenset[str] = frozenset({"attach", "memory", "overlay"})`.
+- Produces: `areas.DELIVERY_AREAS: frozenset[str]`, the delivery side: `attach`, `hints`,
+  `memory`, `overlay`, `setup` and `trust`, beside `PACK_PACKAGES` and `CORE_AREAS`.
 - Produces: in `tests/test_areas.py`, `_delivery_offences(where: str, text: str, areas: frozenset[str]) -> list[tuple[str, str]]`
   and `CORE_TO_DELIVERY: frozenset[tuple[str, str]]`. A row is one import statement: the importing
   file relative to `src/stayfixed` and the imported module cut to its first three dotted parts —
