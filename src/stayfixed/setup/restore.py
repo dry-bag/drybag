@@ -35,7 +35,7 @@ from stayfixed.attach.api import attach
 from stayfixed.command import command_owner
 from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.errors import Failure, Refusal
-from stayfixed.harnesses import lenient_settings
+from stayfixed.harnesses import HARNESSES, lenient_settings
 from stayfixed.jsonobject import json_object
 from stayfixed.memory.api import permitted_roots, promote_changed
 from stayfixed.printed import answered, clipped, quoted
@@ -102,14 +102,15 @@ def listed_projects(overlay: Path, *, home: Path) -> tuple[Listed, ...]:
 
 
 def missing_tools(which: Callable[[str], str | None] = shutil.which) -> tuple[str, ...]:
-    """What a restored machine needs and `PATH` lacks: `git`, one of `claude` and `codex`, and a
-    `python3` or a `uv` for the hooks. Said, never refused: a missing `git` makes each attach fail
-    in attach's own words."""
+    """What a restored machine needs and `PATH` lacks: `git`, one of the harnesses' programs
+    (`claude` and `codex`, as `harnesses.HARNESSES` names them), and a `python3` or a `uv` for the
+    hooks. Said, never refused: a missing `git` makes each attach fail in attach's own words."""
     missing: list[str] = []
     if which("git") is None:
         missing.append("git")
-    if which("claude") is None and which("codex") is None:
-        missing.append("claude or codex")
+    harnesses = [harness.name for harness in HARNESSES]
+    if all(which(name) is None for name in harnesses):
+        missing.append(" or ".join(harnesses))
     if which("python3") is None and which("uv") is None:
         missing.append("python3 or uv")
     return tuple(missing)
