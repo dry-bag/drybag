@@ -42,8 +42,8 @@ from stayfixed.config.schema import COMMIT_TYPE_WORD, IN_REPO_MODE
 from stayfixed.findings import Severity
 from stayfixed.fsops import read_bounded, read_regular_text
 from stayfixed.gitenv import QUERY_TIMEOUT_SECONDS, git_run
-from stayfixed.guards.api import contained_roots, dropped_roots
 from stayfixed.printed import clipped
+from stayfixed.roots import contained_roots, dropped_roots
 from stayfixed.scaffold import EntriesError, judged_entries
 
 if TYPE_CHECKING:

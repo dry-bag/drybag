@@ -162,7 +162,7 @@ def test_discovery_imports_no_guards_module_but_hooks(tmp_path: Path) -> None:
     # the line above too — but only by accident of what it happens to import. The hints it asks
     # live in the profiles, which read configuration and data files.
     assert "stayfixed.hints.hygiene" not in imported
-    assert "stayfixed.guards.roots" not in imported
+    assert "stayfixed.roots" not in imported
     assert "stayfixed.profiles" not in imported
     assert "stayfixed.config" not in imported
 

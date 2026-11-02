@@ -17,10 +17,10 @@ import pytest
 from stayfixed import fsops
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.schema import Config
-from stayfixed.guards.roots import contained_roots
 from stayfixed.hints.hygiene import simple_commands
 from stayfixed.profiles.python import hygiene as python_hygiene
 from stayfixed.profiles.python.hygiene import HINT
+from stayfixed.roots import contained_roots
 from tests.gitfixture import git, needs_git
 from tests.profiles.python.bytecode import compile_module, make_stale
 from tests.profiles.redrun import DIRTY_ONE, LEAD, hygiene, red_event

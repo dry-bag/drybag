@@ -321,19 +321,6 @@ reddens = [
   "tests/guards/test_githooks.py::test_a_hook_an_earlier_release_wrote_is_still_ours",
 ]
 
-# The containment check on `ledger.code_roots`. `config.paths` guards `[paths]` and leaves this
-# field to whoever consumes it, so this call is the only thing between a committed
-# `code_roots = ["../.."]` and a walk of the tree above the project root. Declared rather than
-# only covered because the fixture had to be built for it: an escaping entry that names nothing
-# on disk is dropped by the `is_dir()` filter, and the containment call could then be deleted
-# with every test still green — the test creates the escaping directory so it cannot.
-[[mutation]]
-name = "an escaping code root is followed"
-file = "src/stayfixed/guards/roots.py"
-before = "            candidate = contained(root, folded, resolved_root=resolved_root)"
-after = "            candidate = root / entry"
-reddens = ["tests/profiles/python/test_hygiene.py::test_only_contained_code_roots_are_scanned"]
-
 # The two-paragraph attribution block, and the reason the paragraph rule needed a walk rather
 # than a wider net. The canonical harness attribution is a `Generated with` footer, a blank
 # line, then a `Co-Authored-By:` trailer; judging the final paragraph alone removed the trailer
@@ -437,20 +424,6 @@ before = '    _, bracket, tail = address.rpartition(">")'
 after = '    _, bracket, tail = address.partition(">")'
 reddens = [
   "tests/guards/test_commit.py::test_punctuation_after_the_address_does_not_disarm_the_trailer_rule",
-]
-
-# `contained_roots` is what every consumer of `ledger.code_roots` walks, one `rglob` per entry
-# with the results added up, so a repeated or nested entry multiplies a count rather than
-# widening a scan. Measured with `code_roots = ["src", "src", "src/pkg"]` over two stale `.pyc`
-# files: `stale == 5` with no pruning at all, `stale == 3` with the mutation below, `2` as
-# shipped. A wrong number in a notice whose entire purpose is to be believed about a number.
-[[mutation]]
-name = "a code root listed twice is walked twice"
-file = "src/stayfixed/guards/roots.py"
-before = '        if any(_covers(kept, candidate) for kept in found):'
-after = '        if False:'
-reddens = [
-  "tests/profiles/python/test_hygiene.py::test_a_repeated_or_nested_code_root_is_walked_once",
 ]
 
 # ---------------------------------------------------------------------------------------------
@@ -800,30 +773,6 @@ before = '    code, listing = git_run(root, "ls-tree", "-r", "--name-only", "-z"
 after = '    code, listing = git_run(root, "ls-tree", "-r", "--name-only", "-z", ref)'
 reddens = [
   "tests/guards/test_attribute.py::test_the_tree_listing_is_not_bounded_by_the_argument_free_cap",
-]
-
-# `contained()` took on the write's component rule, and `contained_roots` catches its refusal and
-# moves on — so `code_roots = ["src/"]` was silently dropped from every count the field feeds. The
-# fold is what keeps a read-only walk from inheriting a rule that exists for writes.
-[[mutation]]
-name = "a code root spelled with a slash is dropped again"
-file = "src/stayfixed/guards/roots.py"
-before = "            candidate = contained(root, folded, resolved_root=resolved_root)"
-after = "            candidate = contained(root, entry, resolved_root=resolved_root)"
-reddens = [
-  "tests/hints/test_hygiene.py::test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked",
-]
-
-# A missing preset default loses no walk only while another root is walked. With none walked,
-# `test hygiene` says so and points at `assess`, which must then name every entry, the preset's
-# own included, or both commands are silent about why nothing was checked.
-[[mutation]]
-name = "a missing preset default goes unnamed when no root is walked"
-file = "src/stayfixed/guards/roots.py"
-before = "    walked = any(isinstance(found, Path) for _, found in judged)"
-after = "    walked = True"
-reddens = [
-  "tests/assess/test_probes.py::test_a_code_root_no_walk_takes_is_named_with_its_reason[preset-defaults-none-walked]",
 ]
 
 # In the block led by `mutations/`'s "a gate that could not judge counts as passing": every
