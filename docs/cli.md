@@ -3055,11 +3055,12 @@ file each ask for themselves, which checkout is the main one (`git worktree list
 and settings file the binding's row reads, whether this checkout is a registered worktree (its
 common and its own git directory), which the `memory` row asks to read the main checkout's settings
 file a linked worktree reads too, whether a path `attach` placed is tracked (`git ls-files`) or ignored (`git check-ignore`) and whether a
-tracked file names the delivery (`git grep`), which the binding's row asks of a bound checkout.
-Thirteen of those are measured on a green attached installation — the wrapper probe and twelve
+tracked file names the delivery (`git grep`), which the binding's row asks of a bound checkout, and the
+binding's common directory once more, which the binding's row asks to read the overlay's tag layers.
+Fourteen of those are measured on a green attached installation — the wrapper probe and thirteen
 `git` questions — and not one of them leaves this machine. The `ci-ref` row's `git ls-remote` is one more on a repository that records a
 `[ci] ref` at all, and it is the only one that does leave: it goes through the `Runner` seam,
-which is what lets the case that pins the thirteen answer it in process instead of launching it.
+which is what lets the case that pins the fourteen answer it in process instead of launching it.
 That one is bounded at **30 seconds**, not at the seam's own five minutes (the bound for
 `gh repo create --clone`), so a peer that does not answer cannot turn a one-line diagnostic into a
 five-minute block. The `git` questions are `gitenv`'s five seconds each, and the wrapper probe is
@@ -3121,6 +3122,7 @@ nothing.
 | drift | the overlay's hooks, skills or agents changed since the last render | `warn` | `attach`, which renders the overlay as it is now |
 | overlay unreadable | the overlay's executable parts could not be read | `warn` | `attach --check`, which says why |
 | `origin` moved | this checkout's `origin` is not the one the binding was recorded with | `warn` | `attach`, which records the new one |
+| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting name (the later tag wins), or a listed tag is not a usable name or has no `groups/<tag>/` directory; said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | rename one of them in the overlay, or reorder `tags` in the project's `project.toml` |
 
 **How `attached` reads the memory pointer.** Where `memory.mode` is `overlay`, the row reads
 `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json`, which Claude Code reads

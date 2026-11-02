@@ -539,9 +539,9 @@ def test_doctor_is_green_on_the_attached_fixture(tmp_path: Path) -> None:
 # Written as a number rather than as a set of argv lists so the failure reads as "the count
 # moved", which is the claim.
 #
-# Thirteen: the wrapper probe and the twelve `git` questions the `attached`, note-store, `memory`
+# Fourteen: the wrapper probe and the thirteen `git` questions the `attached`, note-store, `memory`
 # and `preferences` rows ask of a bound checkout, as `docs/cli.md`'s doctor section lists them.
-DOCTOR_LAUNCHES = 13
+DOCTOR_LAUNCHES = 14
 
 
 def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
@@ -598,11 +598,11 @@ def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
         True,
     ), attached
     assert len(launched) == DOCTOR_LAUNCHES, launched
-    # And they are the thirteen the paragraph names, not thirteen of something else: one wrapper
-    # probe, and twelve `git` questions. Asserted by shape rather than by full argv, because
+    # And they are the fourteen the paragraph names, not fourteen of something else: one wrapper
+    # probe, and thirteen `git` questions. Asserted by shape rather than by full argv, because
     # each `git` call carries the temporary checkout or overlay it asks about.
     assert sum(1 for argv in launched if argv[0] == str(WRAPPER)) == 1
-    assert sum(1 for argv in launched if argv[0] == "git") == 12
+    assert sum(1 for argv in launched if argv[0] == "git") == 13
 
 
 def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Path) -> None:

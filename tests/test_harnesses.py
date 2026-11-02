@@ -309,6 +309,8 @@ LISTED = {
 PROSE = {
     # Messages naming the Codex rule files `attach` places, and `--check` would place.
     ("src/stayfixed/attach/check.py", "codex"): 1,
+    # The sentence `doctor` warns with where two tags hold one Codex rule file.
+    ("src/stayfixed/attach/tags.py", "codex"): 1,
     ("src/stayfixed/attach/commands.py", "codex"): 2,
     # The advice `setup --approval-boundary` prints, which names the harness whose settings it is.
     ("src/stayfixed/setup/commands.py", "claude"): 1,
