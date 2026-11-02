@@ -106,11 +106,14 @@ LOCAL = frozenset(
         ("git", "check-ignore"),
         ("git", "check-ref-format", "--branch"),
         ("git", "config", "--get"),
+        ("git", "config", "--type=bool", "--get"),
         ("git", "config", "--type=path", "--get"),
         ("git", "diff"),
         ("git", "grep"),
-        # Without `-w` it writes nothing: the empty tree's id, from an empty standard input.
+        # Without `-w` it writes nothing: the empty tree's id, from an empty standard input, and a
+        # working-tree file's id.
         ("git", "hash-object", "-t", "tree", "--stdin"),
+        ("git", "hash-object", "--"),
         ("git", "init"),
         ("git", "log"),
         ("git", "ls-files"),
@@ -125,6 +128,17 @@ LOCAL = frozenset(
         ("git", "version"),
         ("git", "worktree", "list"),
         ("tar", "-xf"),
+        # The note sync's commit and its moves of `main`, all in the overlay: a temporary index
+        # filled (`read-tree`, `add`, `reset`), written (`write-tree`), committed (`commit-tree`),
+        # `main` moved (`update-ref`), and the real index's memory entries reset to `HEAD`; and
+        # the notes a move brought in written from a temporary index (`checkout-index`).
+        ("git", "add"),
+        ("git", "checkout-index"),
+        ("git", "commit-tree"),
+        ("git", "read-tree"),
+        ("git", "reset"),
+        ("git", "update-ref"),
+        ("git", "write-tree"),
     }
 )
 # Local only as the whole argv: `git remote` alone lists the remotes' names, and anything after it
@@ -284,6 +298,13 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/sync/git.py", "guard", "*_MARKER_PATHS"): (
         "the module's own constant: `--git-path` and the name of each in-progress marker"
     ),
+    ("src/stayfixed/sync/job.py", "_staged", "*filters"): (
+        "`--diff-filter=` and the status letters its callers name, or nothing"
+    ),
+    ("src/stayfixed/sync/job.py", "_commit_tree", "*parented"): (
+        "`-p` before each parent, a sha git printed"
+    ),
+    ("src/stayfixed/sync/job.py", "_commit_tree", "*signed"): "`-S`, or nothing",
     ("src/stayfixed/sync/rules.py", "commit_entries", "rev_range"): _REVISIONS,
     ("src/stayfixed/sync/rules.py", "offending_paths", "*revisions"): _REVISIONS,
     ("src/stayfixed/sync/rules.py", "range_is_memory_only", "base"): _REVISIONS,
@@ -322,6 +343,12 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/sync/scan.py", "_scan", "env={**(env or {}), **NO_SIGNATURES}"): (
         "the job's git environment, plus one `git -c`-style entry that keeps signature checks "
         "out of the log gitleaks parses; the scanner's own `GITLEAKS_` variables are dropped"
+    ),
+    ("src/stayfixed/sync/job.py", "_git", "env={**ctx.env, **(env or {})}"): (
+        _JOB_ENVIRONMENT + ", and for a replayed commit its author and its encoding"
+    ),
+    ("src/stayfixed/sync/job.py", "_commit_tree", "env=env"): (
+        "a replayed commit's own author, and its encoding as one `git -c`-style entry"
     ),
     ("src/stayfixed/sync/rules.py", "dirty_memory", "env=env"): _JOB_ENVIRONMENT,
     ("src/stayfixed/sync/rules.py", "commit_entries", "env=env"): _JOB_ENVIRONMENT,

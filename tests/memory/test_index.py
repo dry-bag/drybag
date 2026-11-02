@@ -5,10 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import fsops
+from stayfixed import binding, fsops
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.schema import Config
 from stayfixed.errors import Refusal
+from stayfixed.memory.api import build_composed, rerender_overlay_index
 from stayfixed.memory.index import (
     EXTRA_TITLE,
     INDEX_NAME,
@@ -25,8 +26,9 @@ from stayfixed.memory.index import (
     write_index,
 )
 from stayfixed.memory.notes import Provenance, read_note
-from stayfixed.memory.store import Store
+from stayfixed.memory.store import NO_RECORD, Store
 from tests.cli import cli
+from tests.memory.test_store import REMOTE, a_config, a_machine_file, a_repo, an_overlay
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
 CONFIG = """
@@ -1104,3 +1106,54 @@ def test_a_store_with_no_group_directory_is_an_empty_store_not_a_refusal(
     if native:
         lines = (base / INDEX_NAME).read_text(encoding="utf-8").splitlines()
         assert all(line in lines for line in NATIVE_LINES), lines
+
+
+def _an_attached_checkout(tmp_path: Path, *, bound: bool = True) -> tuple[Path, Path, Path]:
+    """`(checkout, overlay, machine file)`: an overlay-mode checkout, bound to `widget` and its
+    composed store built as `attach` builds it, where `bound`."""
+    overlay = an_overlay(tmp_path)
+    machine = a_machine_file(tmp_path, overlay)
+    root = tmp_path / "widget"
+    a_repo(root)
+    a_config(root, "overlay")
+    if bound:
+        binding.record(root, "widget", REMOTE)
+        build_composed(overlay, "widget", binding.ensure_id(root))
+    return root, overlay, machine
+
+
+def test_rerender_writes_the_overlays_index_from_a_bound_checkout(tmp_path: Path) -> None:
+    # The note sync renders in process what `stayfixed memory index` renders from the checkout:
+    # into the overlay's copy, harvesting a line a session appended into its note.
+    root, overlay, machine = _an_attached_checkout(tmp_path)
+    share = overlay / "projects" / "widget" / "memory"
+    (share / "project-stable" / "n.md").write_text(note("n", index="N trigger"), encoding="utf-8")
+    (share / "project-stable" / "m.md").write_text(note("m"), encoding="utf-8")
+    (share / INDEX_NAME).write_text("- [Harvested](project-stable/m.md)\n", encoding="utf-8")
+
+    done = rerender_overlay_index(root, machine=machine)
+
+    assert (done.project, done.reason) == ("widget", None)
+    assert done.overlay_store == share.resolve()
+    text = (share / INDEX_NAME).read_text(encoding="utf-8")
+    assert "- [N trigger](project-stable/n.md)" in text and REGION_BEGIN in text
+    assert read_note(share / "project-stable" / "m.md").index == "Harvested"
+    assert not (root / INDEX_NAME).exists()
+
+
+def test_an_unbound_checkout_has_a_reason(tmp_path: Path) -> None:
+    root, overlay, machine = _an_attached_checkout(tmp_path, bound=False)
+
+    done = rerender_overlay_index(root, machine=machine)
+
+    assert done == type(done)("widget", None, NO_RECORD)
+    assert not (overlay / "projects" / "widget" / "memory" / INDEX_NAME).exists()
+
+
+def test_a_machine_file_that_does_not_load_is_a_reason_not_a_raise(tmp_path: Path) -> None:
+    root, _, machine = _an_attached_checkout(tmp_path)
+    machine.write_text("[overlay\n", encoding="utf-8")
+
+    done = rerender_overlay_index(root, machine=machine)
+
+    assert done.overlay_store is None and done.reason

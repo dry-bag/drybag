@@ -6756,3 +6756,128 @@ after = "        if False:"
 reddens = [
   "tests/sync/test_scan.py::test_the_metadata_scan_names_the_commit",
 ]
+
+# The note sync's commit: built in a temporary index from `HEAD` with the memory pathspecs only,
+# `main` moved by compare-and-swap after the move is recorded, and the real index aligned after.
+[[mutation]]
+name = "the sync commit stages the whole tree"
+file = "src/stayfixed/sync/job.py"
+before = '            added = _git(ctx, "add", "-A", "--", spec, index_file=index)'
+after = '            added = _git(ctx, "add", "-A", index_file=index)'
+reddens = ["tests/sync/test_commit.py::test_non_notes_are_never_staged_so_nothing_is_refused"]
+
+[[mutation]]
+name = "the sync commit is built in the real index"
+file = "src/stayfixed/sync/job.py"
+before = '''        index = scratch / "index"
+        _ok(ctx, "read-tree", "--end-of-options", old, index_file=index)'''
+after = '''        index = ctx.overlay / ".git" / "index"
+        _ok(ctx, "read-tree", "--end-of-options", old, index_file=index)'''
+reddens = ["tests/sync/test_commit.py::test_staged_non_memory_stays_staged_and_out"]
+
+[[mutation]]
+name = "main moves without a compare-and-swap"
+file = "src/stayfixed/sync/job.py"
+before = '"refs/heads/main", new, old'
+after = '"refs/heads/main", new'
+reddens = ["tests/sync/test_commit.py::test_main_moved_before_update_ref_is_raced"]
+
+[[mutation]]
+name = "the swap compares against a HEAD read later"
+file = "src/stayfixed/sync/job.py"
+before = "    if _swap(ctx, pending.to_sha, pending.from_sha):"
+after = '    if _swap(ctx, pending.to_sha, _rev(ctx, "HEAD")):'
+reddens = ["tests/sync/test_commit.py::test_main_moved_before_update_ref_is_raced"]
+
+[[mutation]]
+name = "the pending alignment is not recorded before the swap"
+file = "src/stayfixed/sync/job.py"
+before = '''    _record_pending(ctx, pending)
+    ctx.pending = pending'''
+after = '''    ctx.pending = pending'''
+reddens = [
+  "tests/sync/test_commit.py::test_the_pending_alignment_is_on_disk_before_the_commit_swap",
+]
+
+[[mutation]]
+name = "the real index is not aligned after a move"
+file = "src/stayfixed/sync/job.py"
+before = "    stale = align(ctx, pending)"
+after = "    stale = None"
+reddens = [
+  "tests/sync/test_commit.py::test_the_real_indexs_memory_entries_are_aligned",
+  "tests/sync/test_commit.py::test_the_owners_commit_after_the_alignment_carries_no_memory_path",
+]
+
+[[mutation]]
+name = "a record whose move never happened is aligned"
+file = "src/stayfixed/sync/job.py"
+before = "    if pending is not None and not _moved_to(ctx, pending.to_sha):"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_commit.py::test_a_kill_before_the_commit_swap_leaves_the_owners_staging_alone",
+]
+
+[[mutation]]
+name = "the unmerged entries are not asked again before main moves"
+file = "src/stayfixed/sync/job.py"
+before = "    if found.code != 0 or found.out:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_commit.py::test_a_stash_pop_conflicting_while_the_job_runs_is_never_committed",
+  "tests/sync/test_commit.py::test_an_unmerged_note_from_a_stash_pop_is_never_committed",
+]
+
+[[mutation]]
+name = "the sync's commits are never signed"
+file = "src/stayfixed/sync/job.py"
+before = '    signed = ("-S",) if _signing(ctx) else ()'
+after = "    signed = ()"
+reddens = ["tests/sync/test_commit.py::test_signing_asked_for_is_honoured"]
+
+[[mutation]]
+name = "no scanner, and the commit goes on"
+file = "src/stayfixed/sync/job.py"
+before = '        return _outcome(ctx, "scan_unavailable", detail, paths=paths)'
+after = "        return None"
+reddens = [
+  "tests/sync/test_commit.py::test_no_scanner_commits_nothing_and_says_how_to_build_one",
+]
+
+[[mutation]]
+name = "a link at a pathspec's root fails the whole commit"
+file = "src/stayfixed/sync/job.py"
+before = '            link = unsafe_parent(ctx.overlay, f"{root}/-")'
+after = "            link = None"
+reddens = [
+  "tests/sync/test_commit.py::test_a_link_in_place_of_common_memory_is_named_and_the_projects_still_travel",
+]
+
+[[mutation]]
+name = "a link in place of a project directory deletes its notes"
+file = "src/stayfixed/sync/job.py"
+before = "        beyond = list(dict.fromkeys(link for link in deleted if link is not None))"
+after = "        beyond: list[str] = []"
+reddens = [
+  "tests/sync/test_commit.py::test_a_link_in_place_of_a_project_directory_deletes_nothing",
+]
+
+[[mutation]]
+name = "the temporary index keeps what is not a note"
+file = "src/stayfixed/sync/job.py"
+before = "        _reset_paths(ctx, index, old, refused)"
+after = "        _reset_paths(ctx, index, old, [])"
+reddens = [
+  "tests/sync/test_commit.py::test_link_and_nested_repository_under_memory_are_not_committed",
+  "tests/sync/test_commit.py::test_dot_paths_non_md_and_binary_under_memory_are_refused_and_named",
+]
+
+# The pre-render: a group note re-renders every recorded project, as a shared one does.
+[[mutation]]
+name = "a group note does not re-render the recorded projects"
+file = "src/stayfixed/sync/render.py"
+before = '    shared = any(entry.scope != "project" for entry in parsed)'
+after = '    shared = any(entry.scope == "common" for entry in parsed)'
+reddens = [
+  "tests/sync/test_render.py::test_a_dirty_common_or_group_note_renders_every_recorded_project[group]",
+]

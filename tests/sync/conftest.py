@@ -15,12 +15,20 @@ import contextlib
 import os
 import shutil
 import sqlite3
+import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from stayfixed import binding
+from stayfixed.config.machine import machine_config_path
+from stayfixed.memory.api import build_composed, rerender_overlay_index
+from stayfixed.sync.job import JobContext, Limits
+from stayfixed.sync.render import remember_checkout
+from stayfixed.sync.state import state_directory
 from tests import gitfixture as fx
 
 # A bound no test's own git call should reach under the load other sessions put on the machine;
@@ -225,6 +233,7 @@ from pathlib import Path
 me = Path(__file__)
 args = sys.argv[1:]
 (me.parent / "argv.json").write_text(json.dumps(args))
+(me.parent / "pid").write_text(str(os.getpid()))
 (me.parent / "show_signature").write_text(subprocess.run(
     ["git", "config", "--get", "log.showSignature"], capture_output=True, text=True).stdout.strip())
 mode_file = me.parent / "mode"
@@ -312,3 +321,186 @@ def pre_commit_store(cache: Path, rows: list[tuple[str, str, Path]]) -> Path:
 def environment_of(cache: Path) -> dict[str, str]:
     """The environment whose scratch cache holds the database `pre_commit_store` wrote."""
     return {"XDG_CACHE_HOME": str(cache), "PATH": os.environ.get("PATH", "")}
+
+
+# -- an overlay the job runs on: notes, two bound checkouts, the scanner ------------------------
+
+NOW = datetime(2026, 10, 12, 12, 0, 0, tzinfo=UTC)
+HOST = "testhost"
+TAG = "team"
+PRE_COMMIT_CONFIG = (
+    f"repos:\n  - repo: {GITLEAKS_REPO}\n    rev: {GITLEAKS_REV}\n"
+    "    hooks:\n      - id: gitleaks\n"
+)
+PROJECT_CONFIG = """[stayfixed]
+version = "0.1.0"
+enforced = ["docs", "bugs", "plan", "commit", "trail"]
+preset = "recommended"
+profile = ""
+agents = ["claude"]
+
+[project]
+name = "{name}"
+base_branch = "main"
+release_branch = "main"
+
+[memory]
+mode = "overlay"
+groups = ["developer", "project-stable"]
+index_extra = []
+"""
+# The projects with a checkout this machine's sessions opened, bound into the overlay; `gamma`
+# has notes in the overlay and no checkout.
+BOUND_PROJECTS = ("alpha", "beta")
+PATHSPEC = [
+    ":(top,glob)common/memory/**",
+    ":(top,glob)groups/*/memory/**",
+    ":(top,glob)projects/*/memory/**",
+]
+
+
+def note_text(name: str, *, index: str | None = None, body: str = "") -> str:
+    """A note with frontmatter, as the store writes one."""
+    lines = ["---", f"name: {name}", f'description: "the {name} note"']
+    if index:
+        lines.append(f'index: "{index}"')
+    lines += ["metadata:", "  type: project", "---", "", body or f"Body of {name}.", ""]
+    return "\n".join(lines)
+
+
+@dataclass
+class Overlays:
+    """Two machines' clones of one overlay remote, `a` and `b`, with what the job reads: the
+    checkouts bound into `a` and recorded as opened (`checkouts`), the scanner's stand-in
+    (`gitleaks`) where pre-commit's database finds it, and the state directory."""
+
+    bare: Path
+    a: Path
+    b: Path
+    home: Path
+    checkouts: dict[str, Path]
+    gitleaks: Path
+    state_dir: Path = field(default_factory=state_directory)
+
+    def mode(self, mode: str | None) -> None:
+        """Set the scanner stand-in's mode (`None`: scan)."""
+        target = self.gitleaks.parent / "mode"
+        if mode is None:
+            target.unlink(missing_ok=True)
+        else:
+            target.write_text(mode, encoding="utf-8")
+
+    def use(self, clone: Path) -> None:
+        """Make `clone` the overlay this machine records, and bind the checkouts into it."""
+        machine = machine_config_path()
+        assert machine is not None
+        machine.parent.mkdir(parents=True, exist_ok=True)
+        machine.write_text(f'[overlay]\nroot = "{clone}"\n', encoding="utf-8")
+        for name, root in self.checkouts.items():
+            build_composed(clone, name, binding.ensure_id(root))
+
+    def render(self, clone: Path, project: str) -> None:
+        """`stayfixed memory index` from `project`'s checkout into `clone`, as its machine would."""
+        self.use(clone)
+        done = rerender_overlay_index(self.checkouts[project], machine=None)
+        assert done.reason is None, done.reason
+        self.use(self.a)
+
+
+def a_checkout(root: Path, name: str) -> Path:
+    """A repository whose `stayfixed.toml` keeps its notes in the overlay, bound to `name`."""
+    init(root)
+    remote = f"git@example.com:acme/{name}.git"
+    git(root, "remote", "add", "origin", remote)
+    write(root, "stayfixed.toml", PROJECT_CONFIG.format(name=name))
+    binding.record(root, name, remote)
+    return root
+
+
+@pytest.fixture
+def overlays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own: Path) -> Overlays:
+    home = _a_home_of_its_own
+    monkeypatch.delenv("PRE_COMMIT_HOME", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    scanner = build_gitleaks(tmp_path / "pre-commit" / "repo")
+    pre_commit_store(
+        home / ".cache", [(GITLEAKS_REPO, GITLEAKS_REV, tmp_path / "pre-commit" / "repo")]
+    )
+    bare = tmp_path / "remote.git"
+    bare.mkdir()
+    fx.git(bare, "init", "-q", "--bare", "-b", "main")
+    seed = init(tmp_path / "seed")
+    write(seed, "README.md", "overlay\n")
+    write(seed, ".pre-commit-config.yaml", PRE_COMMIT_CONFIG)
+    write(seed, "common/claude/hooks/launch.sh", "#!/bin/sh\n")
+    write(seed, "common/claude/hooks/x.py", "print('x')\n")
+    write(seed, "common/memory/first.md", note_text("first", index="First trigger"))
+    write(seed, f"groups/{TAG}/memory/{TAG}-one.md", note_text(f"{TAG}-one", index="Team trigger"))
+    for project in ("alpha", "beta", "gamma"):
+        relative = f"projects/{project}/memory/project-stable/{project}-one.md"
+        write(seed, relative, note_text(f"{project}-one", index=f"{project} trigger"))
+    write(seed, "projects/gamma/memory/MEMORY.md", "# gamma's index, rendered elsewhere\n")
+    commit_all(seed, "seed")
+    git(seed, "push", "-q", str(bare), "main")
+    clones = []
+    for name in ("a", "b"):
+        fx.git(tmp_path, "clone", "-q", str(bare), str(tmp_path / name))
+        clones.append(tmp_path / name)
+    checkouts = {name: a_checkout(tmp_path / "checkouts" / name, name) for name in BOUND_PROJECTS}
+    world = Overlays(bare, clones[0], clones[1], home, checkouts, scanner)
+    world.use(world.a)
+    for name in reversed(BOUND_PROJECTS):
+        remember_checkout(checkouts[name], world.state_dir)
+        assert rerender_overlay_index(checkouts[name], machine=None).reason is None
+    commit_all(world.a, "memory: the first render")
+    git(world.a, "push", "-q", "origin", "main")
+    git(world.b, "pull", "-q", "--ff-only")
+    return world
+
+
+def context(world: Overlays, clone: Path, *, pending: object = None, **limits: float) -> JobContext:
+    """A `JobContext` for `clone`, owing `pending`, with any step limit overridden."""
+    return JobContext(
+        overlay=clone,
+        state_dir=world.state_dir,
+        home=world.home,
+        host=HOST,
+        now=lambda: NOW,
+        pending=pending,  # type: ignore[arg-type]
+        limits=Limits(**limits),
+    )
+
+
+def committed(repo: Path, rev: str = "HEAD") -> list[tuple[str, str]]:
+    """`[(status, path)]` the commit `rev` made, renames off."""
+    out = git(repo, "show", "--no-renames", "--name-status", "-z", "--format=", rev)
+    fields = [item for item in out.strip("\n").split("\0") if item]
+    return sorted(zip(fields[0::2], fields[1::2], strict=True))
+
+
+def memory_status(repo: Path) -> str:
+    return git(repo, "status", "--porcelain", "--no-renames", "--", *PATHSPEC)
+
+
+def staged(repo: Path, *pathspec: str) -> str:
+    return git(repo, "diff", "--cached", "--name-only", "--", *pathspec)
+
+
+def ssh_signing(tmp_path: Path, clone: Path) -> None:
+    """Sign every commit in `clone` with an ssh key, and make `git log` show signatures."""
+    key = tmp_path / "signing-key"
+    subprocess.run(
+        ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "sync", "-f", str(key)],
+        check=True,
+        capture_output=True,
+    )
+    allowed = tmp_path / "allowed_signers"
+    allowed.write_text(f"t@example.com {(tmp_path / 'signing-key.pub').read_text()}")
+    for name, value in (
+        ("gpg.format", "ssh"),
+        ("user.signingkey", str(key)),
+        ("gpg.ssh.allowedSignersFile", str(allowed)),
+        ("commit.gpgsign", "true"),
+        ("log.showSignature", "true"),
+    ):
+        git(clone, "config", name, value)

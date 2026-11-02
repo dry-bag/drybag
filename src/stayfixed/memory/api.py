@@ -15,7 +15,9 @@ area and why — it does not import a private module of this area.
 The names imported from outside this area today, by the `attach` and `overlay` areas and by this
 repository's tests: the resolver (`resolve` and `permitted_roots`), the overlay layout `attach`
 writes and `overlay` renders (`PROJECTS`, `PROJECT_RECORD`, `STORE_DIR`, `COMMON_GROUP`), the
-three note roots `sync`'s pathspecs are built from (`COMMON`, `GROUPS`, `PROJECTS`), the one
+three note roots `sync`'s pathspecs are built from (`COMMON`, `GROUPS`, `PROJECTS`), the index
+render `sync` runs in process from a bound checkout and what it answers
+(`rerender_overlay_index`, `Rerendered`), the one
 reader of the overlay's project record, which `attach` reads it with and answers its own way when
 it cannot (`read_binding_record`), the binding's one classifier and the states it answers in
 (`binding_state`, `UNBOUND` and `BOUND`, which `attach`'s own doctor row reads), which `attach`
@@ -78,6 +80,7 @@ from stayfixed.memory.bundles import SLOTS
 from stayfixed.memory.composed import build as build_composed
 from stayfixed.memory.composed import link_sources, render_missing_index
 from stayfixed.memory.composed import withdraw as withdraw_composed
+from stayfixed.memory.index import Rerendered, rerender_overlay_index
 from stayfixed.memory.store import (
     BINDING_STATES,
     BOUND,
@@ -110,6 +113,7 @@ __all__ = [
     "SLOTS",
     "STORE_DIR",
     "UNBOUND",
+    "Rerendered",
     "Store",
     "binding_state",
     "build_composed",
@@ -120,6 +124,7 @@ __all__ = [
     "permitted_roots",
     "read_binding_record",
     "render_missing_index",
+    "rerender_overlay_index",
     "resolve",
     "withdraw_composed",
     "wrap",
