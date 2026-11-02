@@ -21,6 +21,12 @@ from stayfixed.hints.runners import names_a_test_run
         "go test ./...",
         "cargo test",
         "cargo nextest run",
+        "python -m unittest",
+        "python3 -m unittest",
+        "./mvnw test",
+        "pnpm run test",
+        "yarn run test",
+        "bun run test",
         "npm test",
         "npm t",
         "npm run test",
@@ -63,6 +69,7 @@ def test_a_common_runner_is_named_by_its_program(command: str) -> None:
         "python -m pip install pytest",
         "make",
         "git test",
+        "cargo nextest list",
     ],
 )
 def test_a_command_that_runs_no_tests_is_not_named(command: str) -> None:
