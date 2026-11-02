@@ -424,16 +424,21 @@ three things before stayfixed runs: it unsets an inherited `GIT_DIR` and `GIT_WO
 would make every `git` answer about another repository, and changes into the project root
 (`CLAUDE_PROJECT_DIR`, else `git`'s toplevel) so every command's `--root` default is correct; it
 then takes the `python3` on `PATH` there, where a pyenv, asdf or mise shim chooses by the project's
-own pin, and asks it, by running code, to be 3.11 or newer; and it maps exit codes.
+own pin, and asks it, by running code, to be 3.11 or newer; and it maps exit codes. Where that
+`python3` is missing or older, and uv is on `PATH`, it takes the interpreter `uv python find --no-config
+--no-python-downloads '>=3.11'` names, asked from `/` and not from the project root: uv reads
+`.python-version`, `pyproject.toml` and `uv.toml` from its working directory and its parents, and
+runs the `.venv/bin/python` it finds there to ask its version (measured with uv 0.12.19), so a
+repository could choose the program every hook starts, and in `/` it does not.
 
 No handler refuses a call, so stayfixed's non-zero exit is always a fault. `0` passes through
 untouched. Every non-zero exit, and every fault the wrapper finds before `stayfixed` runs — no
-`python3` of 3.11 or newer on `PATH`, no readable `scripts/stayfixed` beside the wrapper, a project
-root it cannot enter — ends in exit `0` with one line on stderr that names the fault and ends
+`python3` of 3.11 or newer on `PATH` and no uv that names one, no readable `scripts/stayfixed`
+beside the wrapper, a project root it cannot enter — ends in exit `0` with one line on stderr that names the fault and ends
 `continuing open`: **a session never dies of stayfixed's own fault.** `stayfixed hook` exits `0` on
 an internal error of its own for the same reason, so no shipped entry ever blocks a call. Claude
 Code discards stderr on a `0`, so `stayfixed doctor`'s `wrapper` row runs the wrapper and goes red
-on such a line. Without a usable `python3` neither `doctor` nor any hook can run, so the one entry
+on such a line. Without a usable interpreter neither `doctor` nor any hook can run, so the one entry
 that dispatches `SessionStart` (`hook SessionStart`) also prints, on stdout, the hook answer Claude
 Code shows the person (`systemMessage`) and adds to the model's context (`additionalContext`):
 that stayfixed's hooks are off in this session, because there is no `python3` on `PATH` or the one

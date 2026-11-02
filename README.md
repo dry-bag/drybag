@@ -148,8 +148,9 @@ uv tool install stayfixed
 In CI, a project calls the reusable workflow at a commit SHA;
 [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#the-reusable-workflow) shows the caller `stayfixed init` writes.
 
-**Requirements: Python 3.11 or newer, and a POSIX system.** Linux and macOS are supported and
-tested; Windows is not. The containment this project is built on uses `openat` with
+**Requirements: Python 3.11 or newer, and a POSIX system.** The hooks take the `python3` on `PATH`,
+or else uv, which is asked from `/` with `--no-config` so that no repository file chooses the
+interpreter. Linux and macOS are supported and tested; Windows is not. The containment this project is built on uses `openat` with
 `O_NOFOLLOW` and `O_DIRECTORY`, which have no Windows equivalent.
 
 ## Quickstart
@@ -262,8 +263,8 @@ dynamic dispatch, aliasing, a value computed at run time, a connection the stand
 on the package's behalf — is beyond it; the docstring of
 [`tests/outbound/walk.py`](https://github.com/stayfixed/stayfixed/blob/main/tests/outbound/walk.py) says what it sees and names each such case.
 The **Run by**, **Talks to** and **When** columns are kept by hand. The hook wrapper,
-`hooks/run-hook.sh`, is not Python and is not walked: it starts `python3` and `git`, the last
-to find the project root, and reaches no network.
+`hooks/run-hook.sh`, is not Python and is not walked: it starts `python3` or uv and `git`, the
+last to find the project root, and reaches no network.
 
 | Program | Run by | Talks to | When |
 |---|---|---|---|
