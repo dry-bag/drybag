@@ -26,9 +26,12 @@ the binding.
 **Design:** the design this implements is not public (`CONTRIBUTING.md`, "Plans"); this plan
 restates every requirement it relies on, under "Global constraints" and "Decisions this plan takes".
 
-**Base:** the integration branch `next`, after the PR that splits the hints out of `guards` and adds
-the three-sided ownership test merged into it. This plan names the post-merge tree; pre-flight (below)
-checks it.
+**Base:** the integration branch `next`, after the change that moved the session hints into the
+`hints` area, `git_path`/`hooks_dir` into `gitenv`, the roots helpers into the core module
+`stayfixed.roots`, and made `areas.py` name three sides (`DELIVERY_AREAS`: `attach`, `hints`,
+`memory`, `overlay`, `setup`, `trust`; `PACK_PACKAGES`; `CORE_AREAS`: `doctor`, `hooks`; every other
+module is core). Every area this plan edits is on the delivery side but `config` and `doctor`, which
+are core and import neither side.
 
 ## Global constraints
 
@@ -36,8 +39,9 @@ checks it.
   path questions through `fsops.is_file/is_dir/exists/is_symlink`; repository bytes are data and a
   name a repository chose prints through `stayfixed.printed`; a control names its adversary and its
   anchor; each declared mutation reddens; `docs/cli.md`'s **Writes** paragraphs enumerate every path.
-- `attach`, `memory` and `overlay` are delivery areas; `config` is core. Core imports no delivery
-  area (`tests/boundaries/test_delivery.py`). Everything this plan adds that core needs lives in core.
+- `attach`, `memory` and `overlay` are delivery areas; `config` and `doctor` are core. Core imports
+  neither side and the delivery side imports no pack package unless a row pins it
+  (`tests/boundaries/test_delivery.py`). Everything this plan adds that core needs lives in core.
 - `attach/api.py` and `memory/api.py` gain nothing unless a task says so: another lane edits them.
 - Never copy a `.env*` file or `settings.local.json` into a worktree.
 - A tag is read from `projects/<name>/project.toml` of the project this machine's binding record
@@ -125,8 +129,9 @@ tests +1.5–2.5k.
 - [ ] `tests/boundaries/test_delivery.py` puts `attach`, `memory`, `overlay` on the delivery side and
   `config` in the core; a new core module `config/plates.py` needs no pinned row.
 - [ ] `grep -rn "config.memory.groups if g in store.groups" src/` lists the walk sites Task 7 folds
-  (expected: `memory/commands.py`, `memory/doctor.py`, `memory/hooks.py`, `memory/bundles.py`,
-  `memory/index.py`, and `memory/refs.py` unless it was deleted).
+  (measured after the merge: `memory/commands.py`, `memory/doctor.py`, `memory/hooks.py`,
+  `memory/bundles.py`, `memory/graph.py`, `memory/index.py`, `memory/refs.py`; a site deleted by
+  other work meanwhile is one fewer).
 - [ ] `doctor`'s row count is unchanged by this plan (no task adds a row).
 - [ ] The lifecycle matrix rows name a test or a check each.
 
@@ -456,7 +461,7 @@ reach anything outside those roots.
 **Files:**
 - Modify: `src/stayfixed/memory/store.py` (`walked_groups`), and each walk site from pre-flight
   (`memory/commands.py`, `memory/doctor.py`, `memory/hooks.py`, `memory/bundles.py`,
-  `memory/index.py` (the walk and the section loop), `memory/refs.py` if present)
+  `memory/graph.py`, `memory/index.py` (the walk and the section loop), `memory/refs.py` if present)
 - Test: `tests/memory/test_index.py`, `tests/memory/test_bundles.py`
 
 **Interfaces:**
