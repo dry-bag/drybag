@@ -128,8 +128,12 @@ def _unpinned_or_gone(*directions: Direction) -> dict[str, dict[str, Counter[Row
     `PINNED` has them: the rows found and not pinned (`unpinned`) and pinned and not found
     (`gone`). Empty when every one is held."""
     source = ROOT / "src" / "stayfixed"
+    paths = sorted(source.rglob("*.py"))
+    # A walk that stopped walking finds no crossing, which an empty table holds, so the walk is
+    # held first: a floor well under the package's size, not kept current.
+    assert len(paths) >= 100, len(paths)
     found: Counter[tuple[Direction, Row]] = Counter()
-    for path in sorted(source.rglob("*.py")):
+    for path in paths:
         found.update(
             _crossings(
                 path.relative_to(source).as_posix(),
@@ -153,26 +157,22 @@ def _unpinned_or_gone(*directions: Direction) -> dict[str, dict[str, Counter[Row
 def test_the_core_imports_neither_side_but_where_pinned() -> None:
     # CONTRIBUTING, "Areas": either side may import the core, and the core may not import either
     # side, through `api.py` or not, at module level or inside a function, but for the statements
-    # `CORE_TO_DELIVERY` and `CORE_TO_PACK` pin. The walk is the whole package, so the equality
-    # also fails on a walk that stopped walking: it would find no rows, and the pinned rows are
-    # never empty.
+    # `CORE_TO_DELIVERY` and `CORE_TO_PACK` pin.
     #
     # Mutation (declared): `mutations/`'s "a core module imports the bug ledger".
-    assert len(CORE_TO_DELIVERY) + len(CORE_TO_PACK) == 2
     assert _unpinned_or_gone((CORE, DELIVERY), (CORE, PACK)) == {}
 
 
 def test_delivery_and_the_pack_import_each_other_only_where_pinned() -> None:
     # The two sides each import the core and import each other through the statements
     # `PACK_TO_DELIVERY` and `DELIVERY_TO_PACK` pin and no other, so each can be reworked without
-    # the other; an import within one side is no crossing. Held as the core's rule is, both
-    # directions and a floor of their own.
+    # the other; an import within one side is no crossing. Held as the core's rule is, in both
+    # directions.
     #
     # Mutations (declared): `mutations/`'s "the note store imports the bug ledger", "a pinned
     # crossing's import goes while its row stays" and "setup imports one more name from the guards
     # area in a statement of its own", the last of which a comparison of `(file, module)` sets let
     # through.
-    assert len(PACK_TO_DELIVERY) + len(DELIVERY_TO_PACK) == 8
     assert _unpinned_or_gone((PACK, DELIVERY), (DELIVERY, PACK)) == {}
 
 
