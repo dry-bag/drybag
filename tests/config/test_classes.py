@@ -37,8 +37,9 @@ NOT_KEYS = ("NAMES",)
 # every entry of `Budgets.NAMES`, and neither is a key of its own. Any other field of `Budgets`
 # is a key, so a scalar added there fails the first test until it has a class.
 PER_NAME = frozenset({("budgets", "preset"), ("budgets", "configured")})
-# The keys the machine file holds that no `Config` section carries; `personal.*` is a section.
-MACHINE_FILE_KEYS = frozenset({"guards.bg_cleanup"})
+# The keys the machine file holds that no `Config` section carries: `[guards]`'s default is the
+# schema's own, and `[sync]` is read by the sync area alone (`personal.*` is a section).
+MACHINE_FILE_KEYS = frozenset({"guards.bg_cleanup", "sync.enabled"})
 
 PRESET = LayerName.PRESET
 REPOSITORY = LayerName.REPOSITORY
@@ -72,6 +73,7 @@ def exact_keys(table: Mapping[str, KeyClass]) -> set[str]:
 # One row per key the class table names; a wildcard row is asked through a key it covers.
 TABLE_ROWS = [
     ("personal.preset", KeyClass.MACHINE_ONLY),
+    ("sync.enabled", KeyClass.MACHINE_ONLY),
     ("guards.bg_cleanup", KeyClass.PREFERENCE),
     ("memory.mode", KeyClass.PREFERENCE),
     ("memory.groups", KeyClass.PREFERENCE),

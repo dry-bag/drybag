@@ -1239,3 +1239,12 @@ after = """OVERLAY_FILES = (
 reddens = [
   "tests/setup/test_setup.py::test_a_render_cut_short_is_not_an_overlay_the_next_run_records",
 ]
+
+# `setup --overlay` switches sync on for an overlay it makes (render, create) and leaves a recorded
+# one to its owner: a second machine's `false`, or an absent `[sync]`, stays as it was.
+[[mutation]]
+name = "recording an existing overlay switches sync on"
+file = "src/stayfixed/setup/run.py"
+before = '        switch = {"enabled": True} if planned_overlay.kind != "record" else {}'
+after = '        switch = {"enabled": True}'
+reddens = ["tests/setup/test_setup.py::test_setup_recording_an_overlay_leaves_sync_alone"]

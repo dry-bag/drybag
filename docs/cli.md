@@ -3818,6 +3818,9 @@ in your overlay's `common/memory/`.
 `stayfixed setup` writes one more table, `[machine]`, into the same file — `version`, the
 stayfixed that ran, and `installed`, the date it ran. It is `setup`'s record of what it did, not
 a setting: it is written, never hand-edited, and a file that has never had one loads fine.
+`--overlay` writes `[sync] enabled = true` beside `[overlay] root` when it renders or creates an
+overlay, and nothing under `[sync]` when it records an existing one; the key is yours to change
+by hand, and a repository's `stayfixed.toml` cannot set it.
 
 **This file's location is not selectable by a repository.** The path is
 `~/.config/stayfixed/config.toml`, and neither `STAYFIXED_CONFIG` nor `XDG_CONFIG_HOME` changes

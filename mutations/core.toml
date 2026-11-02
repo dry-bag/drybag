@@ -6244,3 +6244,12 @@ after = "    walked = True"
 reddens = [
   "tests/assess/test_probes.py::test_a_code_root_no_walk_takes_is_named_with_its_reason[preset-defaults-none-walked]",
 ]
+
+# The note sync switches on for a bool `true` and for nothing else: a string "true" or the integer
+# 1, which a hand edit can easily write, must not start a job that commits and pushes.
+[[mutation]]
+name = "a string 'true' switches sync on"
+file = "src/stayfixed/sync/switch.py"
+before = "    return isinstance(table, dict) and table.get(KEY) is True"
+after = "    return isinstance(table, dict) and bool(table.get(KEY))"
+reddens = ["tests/sync/test_switch.py::test_enabled_only_for_a_true_bool"]
