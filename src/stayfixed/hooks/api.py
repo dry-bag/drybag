@@ -17,7 +17,7 @@ Which harness a hook runs under is not vocabulary of this kind, and no handler i
 
 - `EVENTS` is the list a handler's event must come from: `registry.discover` refuses any other,
   and an area that needs a new event adds it here, beside the vocabulary its handlers use.
-- `HandlerFn` is `Handler.run`'s type. `Handler` is what `guards/hooks.py` and
+- `HandlerFn` is `Handler.run`'s type. `Handler` is what `hints/hooks.py` and
   `attach/hooks.py` build, and a consumer that holds one before registering it — a table of
   handlers, a decorator, a test double — cannot annotate the callable without this name.
 - `Sink` is the protocol `dispatch.py` takes and `sink.py` implements, and `NullSink` is the

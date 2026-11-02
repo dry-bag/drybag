@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 
 from stayfixed.config.session import FALLBACK_WARNING, MACHINE_FILE_WARNING, NOTED_WARNING
-from stayfixed.guards.bgcleanup import SLEEP_HINT
-from stayfixed.guards.hygiene import LEAD
+from stayfixed.hints.bgcleanup import SLEEP_HINT
+from stayfixed.hints.hygiene import LEAD
 from stayfixed.hooks.commands import _output_cap, run_hook
 from tests.floor import floor_env
 from tests.gitfixture import git
@@ -234,7 +234,7 @@ def test_a_once_per_context_handler_really_runs_once(tmp_path: Path) -> None:
     # Before the sink, `NullSink.seen()` was always False and `once_key` meant "every
     # invocation" — a once-per-context notice on every single tool call.
     #
-    # The notice's own text is asserted, not the word "hygiene": `guards.hygiene` builds it from
+    # The notice's own text is asserted, not the word "hygiene": `hints.hygiene` builds it from
     # `LEAD` and the two fault sentences, and none of them carries the handler's name. Asserting
     # only that both runs differ would pass with the sink deleted and the handler silent.
     data = tmp_path / "data"

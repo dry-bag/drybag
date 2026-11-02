@@ -1,7 +1,7 @@
 """`stayfixed prove`: run a test command where it is typed, count only its runner's report, and
 say what that proves.
 
-What `prove` does, in order. `guards.api.read_launch` reads the command past its assignments,
+What `prove` does, in order. `hints.api.read_launch` reads the command past its assignments,
 `env` and `uv run …` up to the first word a runner adapter recognises (the launch), and the first
 adapter that recognises what is left plans the run. The command is launched in the directory it
 is typed in, never in the top-level, and is judged in the directory it runs in (`moved`): the one
@@ -85,7 +85,7 @@ from typing import IO, BinaryIO, TextIO
 
 from stayfixed import fsops, processes
 from stayfixed.gitenv import checkout_root
-from stayfixed.guards.api import Launch, read_launch, run_directory
+from stayfixed.hints.api import Launch, read_launch, run_directory
 from stayfixed.printed import clipped, printable
 from stayfixed.profiles.adapters import shipped_adapters
 from stayfixed.profiles.programs import found, launched
@@ -293,7 +293,7 @@ def redacted(argv: Sequence[str]) -> tuple[str, ...]:
 
 
 def assignments(words: Sequence[str]) -> dict[str, str]:
-    """The variables `words`, a launch's assignments (`guards.api.Launch.assignments`, each a
+    """The variables `words`, a launch's assignments (`hints.api.Launch.assignments`, each a
     `NAME=value`), assign, in order, the last of two for one name winning."""
     assigned: dict[str, str] = {}
     for word in words:
@@ -626,7 +626,7 @@ def environment(
 def moved(launch: Launch, cwd: Path, environ: Mapping[str, str]) -> tuple[Launch, Path]:
     """`launch`, typed in `cwd` under `environ` (the run's environment), as the adapter is handed
     it, and the directory its command is judged in: the one its launcher runs it in
-    (`guards.api.run_directory`), by its realpath, where that is a directory and the launcher's
+    (`hints.api.run_directory`), by its realpath, where that is a directory and the launcher's
     program is found from `cwd`, as a shell finds it there. The launcher's first word is then
     handed by the path it was found at, so that nothing looks for it from the directory it moves
     to. Else `launch` as typed and `cwd`: a launcher that names no directory there, or is not

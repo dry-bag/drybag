@@ -710,7 +710,8 @@ reddens = [
 
 # The module graph counts an import inside a function as an edge, which is the whole of what it
 # adds to the package graph: read as that graph reads, it misses the cycle `--check` made through a
-# function-level import, and the edge the pinned crossing makes inside `setup/run.py` with it.
+# function-level import, and the edge `setup/run.py`'s function-level import of the overlay area
+# makes with it.
 [[mutation]]
 name = "the module graph stops reading imports inside a function"
 file = "tests/boundaries/test_layering.py"
@@ -810,15 +811,15 @@ reddens = [
   "tests/boundaries/test_api_surface.py::test_no_module_reaches_into_another_packages_private_module",
 ]
 
-# The delivery rule holds the core to never importing `attach`, `memory` or `overlay`. The tree
-# walk shows it only for the imports the tree makes, so each half of the judgement is broken
-# against the synthetic modules that exercise it: the imported module stops counting as delivery,
-# and every importer starts counting as core.
+# The delivery rule holds the core to importing neither side, and the two sides to importing each
+# other only where pinned. The tree walk shows it only for the imports the tree makes, so each half
+# of the judgement is broken against the synthetic modules that exercise it: the imported module
+# stops counting as on a side, and every importer starts counting as core.
 [[mutation]]
 name = "the delivery rule stops recognising a delivery module"
 file = "tests/boundaries/test_delivery.py"
-before = '            delivery = bits[0] == "stayfixed" and len(bits) > 1 and bits[1] in areas'
-after = "            delivery = False"
+before = "            target = _side(bits[1], delivery, pack) if ours else CORE"
+after = "            target = CORE"
 reddens = [
   "tests/boundaries/test_delivery.py::test_the_delivery_rule_judges_the_importer_and_the_imported",
 ]
@@ -826,8 +827,8 @@ reddens = [
 [[mutation]]
 name = "the delivery rule holds a delivery module to the core's rule"
 file = "tests/boundaries/test_delivery.py"
-before = "    core = parts[0] not in areas"
-after = "    core = True"
+before = "    origin = _side(parts[0], delivery, pack)"
+after = "    origin = CORE"
 reddens = [
   "tests/boundaries/test_delivery.py::test_the_delivery_rule_judges_the_importer_and_the_imported",
 ]

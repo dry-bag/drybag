@@ -37,10 +37,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from stayfixed.gitenv import answer_lines, git_run
-from stayfixed.guards import bashscan
-from stayfixed.guards.roots import contained_roots
+from stayfixed.hints import bashscan
 from stayfixed.profiles.adapters import shipped_adapters
 from stayfixed.profiles.hints import answer, shipped_hints
+from stayfixed.roots import contained_roots
 
 if TYPE_CHECKING:
     from stayfixed.config.schema import Config

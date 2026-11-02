@@ -91,13 +91,14 @@ def _defined_here(tree: ast.AST) -> set[str]:
 def test_every_package_with_a_surface_is_walked() -> None:
     # The floor for the three parametrisations below: a `glob` that stopped matching would turn
     # all three into zero test cases, and a suite that collects nothing reports nothing. Pinned
-    # to the exact thirteen — twelve areas and the `release` package — because a package
+    # to the exact fourteen — thirteen areas and the `release` package — because a package
     # gaining or losing a published surface is a decision.
     assert AREAS == [
         "attach",
         "docs",
         "doctor",
         "guards",
+        "hints",
         "hooks",
         "ledger",
         "memory",

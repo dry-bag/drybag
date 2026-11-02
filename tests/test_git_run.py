@@ -330,7 +330,7 @@ GIT_RUN_BOUNDS = (
     "stayfixed.ledger.write.FETCH_TIMEOUT_SECONDS",
     "stayfixed.overlay.sync.SYNC_TIMEOUT_SECONDS",
     "stayfixed.guards.commit.LOG_TIMEOUT_SECONDS",
-    "stayfixed.guards.hygiene.STATUS_TIMEOUT_SECONDS",
+    "stayfixed.hints.hygiene.STATUS_TIMEOUT_SECONDS",
 )
 # The doctor's `git ls-remote` goes through the `Runner` seam rather than `git_run`, and every
 # test stubs that seam, so a bound shrunk there passes the suite the same way.

@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 
 from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.guards import bgcleanup
-from stayfixed.guards.hooks import register
 from stayfixed.harnesses import CLAUDE
+from stayfixed.hints import bgcleanup
+from stayfixed.hints.hooks import register
 from stayfixed.hooks.api import EVENTS, Handler, HookEvent
 from stayfixed.hooks.dispatch import Recorder, dispatch
 from tests.floor import floor_env
@@ -154,15 +154,15 @@ def test_discovery_imports_no_guards_module_but_hooks(tmp_path: Path) -> None:
     )
     assert completed.returncode == 0, completed.stderr
     imported = set(completed.stdout.split())
-    assert "stayfixed.guards.hooks" in imported
-    assert "stayfixed.guards.bgcleanup" not in imported
-    assert "stayfixed.guards.bashscan" not in imported
+    assert "stayfixed.hints.hooks" in imported
+    assert "stayfixed.hints.bgcleanup" not in imported
+    assert "stayfixed.hints.bashscan" not in imported
     # The test-hygiene notice's modules, named explicitly: `hygiene` imports `bashscan` and
     # `gitenv` at module scope, so a module-level import of it in `hooks.py` would be caught by
     # the line above too — but only by accident of what it happens to import. The hints it asks
     # live in the profiles, which read configuration and data files.
-    assert "stayfixed.guards.hygiene" not in imported
-    assert "stayfixed.guards.roots" not in imported
+    assert "stayfixed.hints.hygiene" not in imported
+    assert "stayfixed.roots" not in imported
     assert "stayfixed.profiles" not in imported
     assert "stayfixed.config" not in imported
 
@@ -316,7 +316,7 @@ def test_a_hygiene_failure_is_recorded_and_never_costs_the_call(
     # inside `context_for` are narrower: each costs one stack's line and nothing else, and
     # `tests/profiles/test_hints.py` pins them. The stderr assertion is reddened by giving
     # `_test_hygiene` its own try/except around `context_for`.
-    from stayfixed.guards import hygiene as module
+    from stayfixed.hints import hygiene as module
 
     def broken(command: str, root: Path, config: object) -> str | None:
         raise RuntimeError("boom")

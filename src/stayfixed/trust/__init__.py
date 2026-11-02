@@ -1,4 +1,4 @@
-"""Every approval a person gave on this machine, in one record the core keeps.
+"""Every approval a person gave on this machine, in one record stayfixed keeps.
 
 An approval is one kind and one subject, held while what was approved still hashes to the digest
 recorded for it. `record` keeps them all in `trust.json` beside the machine file, never in an
