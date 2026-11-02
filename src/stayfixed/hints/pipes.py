@@ -12,9 +12,10 @@ every hint reads a command) that is not its last command, a later command of tha
 `tail`, `head` or `grep`, and the command's text keeps the status (below).
 
 THE HINT'S BOUND, one rule: it reads a FLAT list of pipelines and nothing else. A command whose
-text holds `$(`, a backtick, a parenthesis, a brace or `<<` is not read and gets no hint, so a
-pipe inside a substitution, a subshell, a brace group, a function body or a heredoc body is never
-taken for the command's own. The text is searched, not parsed, for the words that keep the status
+text holds `$(`, a backtick or `<<` is not read and gets no hint, so a pipe inside a substitution
+or a heredoc body is never taken for the command's own. A run opened by a parenthesis or a brace
+(`(pytest | tail)`) reaches the scanner as a word the table does not name and is not seen either.
+The text is searched, not parsed, for the words that keep the status
 (`pipefail`, zsh's `PIPE_FAIL`, `PIPESTATUS` and zsh's `pipestatus`, in any case): a mention in a
 comment or in `set +o pipefail` silences the hint. Silent is the cheap error.
 
@@ -42,7 +43,7 @@ READERS = frozenset({"tail", "head", "grep"})
 _KEEPS_THE_STATUS = ("pipefail", "pipe_fail", "pipestatus")
 
 # Syntax that makes a command more than a flat list of pipelines; see the bound above.
-_NOT_FLAT = ("$(", "`", "(", ")", "{", "}", "<<")
+_NOT_FLAT = ("$(", "`", "<<")
 
 NOTICE = (
     "stayfixed: this test run is piped into tail, head or grep. Without pipefail a pipeline's "

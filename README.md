@@ -113,8 +113,8 @@ names the key).
 The pipe-status hint, from the `pipe-status` handler that runs beside it, names a test run piped into
 `tail`, `head` or `grep` in a command whose text keeps no `pipefail` or `PIPESTATUS` (or zsh's spelling of either), where the pipeline's exit status
 is the reader's and a red run reads as green, and the remedy; it says so once per session context
-and never refuses the command. It reads a flat list of pipelines and nothing else: a command with a substitution, a
-parenthesis, a brace or a heredoc gets no hint. It reads the command alone, so it has no switch and
+and never refuses the command. It reads a flat list of pipelines and nothing else: a command with a substitution or a
+heredoc gets no hint. It reads the command alone, so it has no switch and
 runs in every repository too.
 
 Where a surface does not reach an agent in the session, the repository gates

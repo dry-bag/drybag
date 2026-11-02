@@ -25,6 +25,10 @@ from tests.sessions import NO_CONFIG
         "go test ./... | tee log | tail",
         "cd a && pytest | tail",
         "pytest -x 2>&1 |\n  tail -20",
+        "pytest | grep -E '(FAIL|ERROR)'",
+        "pytest tests/{a,b}.py | tail",
+        "pytest ${ARGS} | tail",
+        'pytest -k "not (slow)" | tail',
     ],
 )
 def test_a_test_run_piped_into_a_reader_gets_the_hint(command: str) -> None:
