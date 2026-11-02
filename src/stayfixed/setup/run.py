@@ -439,9 +439,8 @@ def _requested_overlay(overlay: str | None, *, home: Path) -> _Overlay | None:
     depend on that. Measured while that was written: `root=Path.cwd()` created a real
     `stayfixed-private/` inside this very checkout the first time a test exercised the branch.
 
-    The overlay area is imported here and in `_apply_overlay`, never at module level: this module
-    is behind `setup.api`, which `doctor` imports, and the core loads the private layer only when
-    `--overlay` asks for it (CONTRIBUTING.md, "Areas").
+    The overlay area is imported here and in `_apply_overlay`, never at module level: `setup`
+    loads the overlay area only when `--overlay` asks for it.
     """
     if overlay is None:
         # Nothing was asked for, so nothing is touched: `--overlay` is the only way to reach the

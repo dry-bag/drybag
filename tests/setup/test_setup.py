@@ -473,10 +473,9 @@ _ASK_WITH_NO_OVERLAY = (
 
 
 def test_setup_with_no_overlay_never_loads_the_overlay_area(tmp_path: Path) -> None:
-    # `setup --overlay` is the one crossing from the core into delivery, and the core loads the
-    # private layer only when that flag asks for it (CONTRIBUTING.md, "Areas"). The import stood
-    # above the early return for a run with no `--overlay`, so every such `setup` loaded the
-    # overlay area anyway. A clean interpreter, because this suite has long since imported it.
+    # `setup` loads the overlay area only when `--overlay` asks for it. The import stood above the
+    # early return for a run with no `--overlay`, so every such `setup` loaded the overlay area
+    # anyway. A clean interpreter, because this suite has long since imported it.
     # Mutation (oracle): `mutations/`'s "setup loads the overlay area with no --overlay again" ->
     # `stayfixed.overlay.api` is printed.
     source = Path(__file__).resolve().parents[2] / "src"

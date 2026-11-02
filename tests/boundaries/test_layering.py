@@ -114,9 +114,9 @@ def test_the_packages_import_one_another_without_a_cycle_at_module_level() -> No
     # doctor rule makes (`tests/boundaries/test_discovery.py`): module level, a class body, a
     # `try`, a `with`, an `if` and the `else` of `if TYPE_CHECKING:`. What is not: an import
     # inside a function, which is how this codebase defers a load until a command asks for it
-    # (the pinned crossing into the overlay area, every import of a discovered `hooks.py` and
-    # `doctor.py`), cannot leave a module half-initialised, and is held where it crosses into
-    # delivery by `test_core_never_imports_delivery`; and an `if TYPE_CHECKING:` body, which
+    # (`setup`'s import of the overlay area, every import of a discovered `hooks.py` and
+    # `doctor.py`), cannot leave a module half-initialised, and is held where it crosses from one
+    # side to another by `tests/boundaries/test_delivery.py`; and an `if TYPE_CHECKING:` body, which
     # never runs and is the idiom for naming a type from a package that depends on this one. The
     # nodes are the packages under `src/stayfixed/`, delivery areas included, and imports within
     # one package are not edges.

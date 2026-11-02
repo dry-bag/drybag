@@ -3177,3 +3177,16 @@ after = "        value = list(value)"
 reddens = [
   "tests/project/test_init.py::test_a_commit_type_an_adopted_document_wrote_prints_only_inside_the_grammar",
 ]
+
+# A pinned crossing is held in both directions: a row whose import statement has gone is a finding,
+# so a pardon cannot outlive the crossing it was written for.
+[[mutation]]
+name = "a pinned crossing's import goes while its row stays"
+file = "src/stayfixed/project/uninstall.py"
+before = """    from stayfixed.attach.api import detach
+
+    detach(root, runner=runner)"""
+after = "    detach(root, runner=runner)"
+reddens = [
+  "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
+]

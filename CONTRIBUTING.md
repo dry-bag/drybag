@@ -157,85 +157,88 @@ preference, or a pull request would choose what it is judged by.
 ## Areas
 
 An area is a subpackage of `src/stayfixed/` that the CLI frame, the hook registry and `doctor`'s
-report discover by name — there is no shared registry to edit. One table does name areas, `GROUP_OF` in
-`scripts/mutation_oracle.py`, and it is a deliberate exception kept for a reason outside the code
-("Tests" gives it): it groups their mutation entries into files, and a new area needs no row there:
-its entries go in the group its path falls into.
+report discover by name — there is no shared registry to edit for an area to be found. The one list
+a new area joins is its side in `src/stayfixed/areas.py` (below), which the boundary rules read and
+discovery does not. One table does name areas, `GROUP_OF` in `scripts/mutation_oracle.py`, and it is
+a deliberate exception kept for a reason outside the code ("Tests" gives it): it groups their
+mutation entries into files, and a new area needs no row there: its entries go in the group its path
+falls into.
 
-Today the discovered ones are `assess`, `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`, `ledger`,
-`memory`, `overlay`, `project`, `prove`, `setup` and `trust`, and they fall on two sides of one line. Three of them
-are **delivery**: `overlay`, `attach` and `memory`, the private layer's code — the overlay, binding
-a repository to it, and the note store — named in `DELIVERY_AREAS` in `src/stayfixed/areas.py`.
+Today the discovered ones are `assess`, `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`,
+`ledger`, `memory`, `overlay`, `project`, `prove`, `setup` and `trust`, and every module under
+`src/stayfixed/` sits on one of three sides, which `src/stayfixed/areas.py` names. **Delivery**
+(`DELIVERY_AREAS`) is the private layer, a machine's setup, the trust record and the session hints:
 `overlay` renders and upgrades the private overlay; `attach` binds a repository to one, and its
-`detach` takes back what `attach` wrote while the overlay keeps its record of the binding; and
-`memory` keeps the notes. Every other module under `src/stayfixed/`, `cli.py`
-and the subpackages that are not areas included, is the **core**: what stayfixed does without its
-private layer — the gates, the records they check and a machine's setup. `ledger` keeps the bug
-ledger, `docs` the documentation and plan lints, `guards` the commit-message rules and the test-run
-checks, `hints` the session hints, which moved out of `guards` (the background-cleanup hint, the
-red-run note and the command scanner they share), `hooks` the dispatcher every hook event goes through, `prove` the
-run of a test command and the verdict its runner's own report supports, and `setup` a
-machine's configuration, and `trust` every approval a person gave on the machine, in one record,
-with the `stayfixed trust` commands over it. `project` holds the shipped project templates and `init`, the command that
-writes a repository's scaffold from them; `assess` runs the gates and the inventory over a
-repository as it is, judges a change's `stayfixed.toml` against what its base branch enforces
+`detach` takes back what `attach` wrote while the overlay keeps its record of the binding; `memory`
+keeps the notes; `setup` a machine's configuration; `trust` every approval a person gave on the
+machine, in one record, with the `stayfixed trust` commands over it; and `hints` the session hints
+(the background-cleanup hint, the red-run note and the command scanner they share). It also lists
+`sync`, which is not written yet. The **pack** (`PACK_PACKAGES`) is the methodology's records and
+checks: `ledger` keeps the bug ledger, `docs` the documentation and plan lints, `guards` the
+commit-message rules and the test-run checks, and `prove` the run of a test command and the verdict
+its runner's own report supports; `project` holds the shipped project templates and `init`, the
+command that writes a repository's scaffold from them; `assess` runs the gates and the inventory
+over a repository as it is, judges a change's `stayfixed.toml` against what its base branch enforces
 (`stayfixed gate`), and lists each gate in `[stayfixed] enforced` as a project promotes it
-(`stayfixed adopt promote`); and `doctor` reports on what every other area left behind and repairs
-none of it. `assess` publishes no `api.py`: nothing under `src/` or `scripts/` outside it imports
-it, and tests reach its modules directly, as they do every area's. (`config`, `presets`, `profiles`,
-`release`, `scaffold` and `templates` are subpackages and not areas, and `harnesses` is a module —
-area discovery does not find them, because they carry none of `commands.py`, `hooks.py` and
-`doctor.py`. `release` still publishes an `api.py`, which holds what an installed stayfixed reads
-about its own releases: the tags it pins.)
+(`stayfixed adopt promote`); and the stack profiles under `profiles/` are the pack's too, a package
+and not an area. Every other module is the **core**, which both sides share, `cli.py` and the
+subpackages that are not areas included: its areas (`CORE_AREAS`) are `hooks`, the dispatcher every
+hook event goes through, and `doctor`, which reports on what every other area left behind and
+repairs none of it. `assess` publishes no `api.py`: nothing under `src/` or `scripts/` outside it
+imports it, and tests reach its modules directly, as they do every area's. (`config`, `presets`,
+`profiles`, `release`, `scaffold` and `templates` are subpackages and not areas, and `harnesses` is
+a module — area discovery does not find them, because they carry none of `commands.py`, `hooks.py`
+and `doctor.py`. `release` still publishes an `api.py`, which holds what an installed stayfixed
+reads about its own releases: the tags it pins.)
 
-The rule between the two runs one way: delivery may import the core, and the core may not import
-delivery, through an `api.py` or not, at module level or inside a function, so the private layer can
-be reworked without touching the core. The core may name delivery's paths and configuration keys —
-the `.stayfixed/` namespace and the machine file's keys are the core's — and may not import
-delivery's code or call its behaviour except through discovery, which is how any area plugs into the
-core: the CLI frame, the hook registry and `doctor`'s report import an area's `commands.py`,
-`hooks.py` and `doctor.py` by name and call the `register()` each publishes, without knowing which
-area it is, and the bullets below are that contract. Two crossings still exist, and they are pinned
-in `CORE_TO_DELIVERY` in `tests/boundaries/test_delivery.py` because they are meant to stay rather
-than be cut: `stayfixed setup --overlay` creates or records the overlay as the last step of machine
-setup, so `setup/run.py` imports the overlay area's `api.py`, inside the two functions that use it,
-and those rows stay until the step leaves `setup`; and `stayfixed uninstall` detaches an attached
-repository before it takes the scaffold back, so `project/uninstall.py` imports the attach area's
-`detach`, inside the one function that runs it. A row is one import statement and the names it takes,
-held as a multiset in both directions, so `test_core_never_imports_delivery` refuses a new crossing,
-a second statement beside a pinned one, a pinned statement that takes one more name and a pinned row
-whose import has gone alike. `scripts/` is repository tooling and stays under the `api.py` rule
-alone. The rules this section names live under `tests/boundaries/`, a file for each (discovery, the
-`api.py` surface, delivery and the import layers), and share one reading of the syntax tree,
-`astscan.py`, which has cases of its own. `scripts/` has one rule of its own beside them: no script
-imports another. `scripts/publish_plugin.py` runs `scripts/plugin_tree.py` and `src/stayfixed` read
-out of the tag's objects, so nothing it runs may reach for a sibling script that extraction does not
-carry, and a constant two scripts share is copied into each and held equal by a test rather than
-imported. `tests/scripts/test_script_imports.py` holds the rule over every script and the launcher,
-with one exemption it names: `smoke_exfiltration.py` imports `smoke_hooks`, both CI smoke drivers
-run from the checkout. It reads import statements and judges each by its name, so a script run
-through `runpy` or loaded through `importlib` is not seen, and `sys.path` is not followed.
+The rules between them: either side may import the core, and otherwise no import crosses a side —
+the core imports neither side, and neither side the other — through an `api.py` or not, at module
+level or inside a function, but for the statements pinned in `tests/boundaries/test_delivery.py`, so
+a side can be reworked without touching the core or the other side. The core may name either side's
+paths and configuration keys — the `.stayfixed/` namespace and the machine file's keys are the
+core's — and may not import either side's code or call its behaviour except through discovery, which
+is how any area plugs into the core: the CLI frame, the hook registry and `doctor`'s report import
+an area's `commands.py`, `hooks.py` and `doctor.py` by name and call the `register()` each
+publishes, without knowing which area it is, and the bullets below are that contract. The crossings
+that still exist are pinned one table per direction, each row with what removes it. A row is one
+import statement and the names it takes, held as a multiset in both directions, so
+`test_the_core_imports_neither_side_but_where_pinned` and
+`test_delivery_and_the_pack_import_each_other_only_where_pinned` refuse a new crossing, a second
+statement beside a pinned one, a pinned statement that takes one more name and a pinned row whose
+import has gone alike. `test_every_area_is_on_exactly_one_side` puts every discovered area on
+exactly one side and refuses a listed name that names nothing, unless its area is planned.
+`scripts/` is repository tooling and stays under the `api.py` rule alone. The rules this section
+names live under `tests/boundaries/`, a file for each (discovery, the `api.py` surface, delivery and
+the import layers), and share one reading of the syntax tree, `astscan.py`, which has cases of its
+own. `scripts/` has one rule of its own beside them: no script imports another.
+`scripts/publish_plugin.py` runs `scripts/plugin_tree.py` and `src/stayfixed` read out of the tag's
+objects, so nothing it runs may reach for a sibling script that extraction does not carry, and a
+constant two scripts share is copied into each and held equal by a test rather than imported.
+`tests/scripts/test_script_imports.py` holds the rule over every script and the launcher, with one
+exemption it names: `smoke_exfiltration.py` imports `smoke_hooks`, both CI smoke drivers run from
+the checkout. It reads import statements and judges each by its name, so a script run through
+`runpy` or loaded through `importlib` is not seen, and `sys.path` is not followed.
 
-That rule reads import statements, so a module named to `importlib.import_module` is invisible to
-it, and two rules of their own in `tests/boundaries/test_delivery.py` hold that door. The first
-reads names: no core module names `import_module` or `__import__`, a module's own `__spec__` or
-`__loader__`, the finders on `sys` (`meta_path`, `path_hooks`, `path_importer_cache`),
-`sys.breakpointhook`, or a builtin that runs text (`exec`, `eval`, `compile`, `breakpoint`,
-`__builtins__`) wherever it is the builtin in that scope, under any alias, except `areas.py`'s two
-imports by name and the profile discovery `DYNAMIC_IMPORTERS` pins with its reason. `__builtins__`,
-which every module carries, is also read off any module (`json.__builtins__`) and in a `from` of any
-module. Only a function's own binding, a comprehension's variable or an import from a module other
-than `builtins` hides such a builtin, in its scope and the scopes it encloses. Python looks a
-module's or a class body's names up at run time, where a binding may not have run, may have been
-deleted, or may be the builtin itself (`exec = exec`), so a binding of one of these names there
-hides nothing and is a row of its own, to pin or rename; a walrus in a comprehension binds in the
-scope around it. A docstring is prose and is not read. The second reads imports: the core imports
-the standard library from the modules `STANDARD_IMPORTS` lists, none of which imports a module named
-by a string but through a name the first rule reads, and any other import (`importlib` and `pkgutil`
-among them) is a row of `MACHINERY_IMPORTERS`, with what each file reaches in it.
-`importlib.resources` is held too: `files` imports the anchor it is handed when that names a module,
-so the core calls it only on its own package, `__package__` or `"stayfixed"`, and every other read
-of it is a row.
+Those rules read import statements, so a module named to `importlib.import_module` is invisible to
+them, and two rules of their own in `tests/boundaries/test_delivery.py` hold that door for every
+module, on either side or in the core. The first reads names: no module names `import_module` or
+`__import__`, a module's own `__spec__` or `__loader__`, the finders on `sys` (`meta_path`,
+`path_hooks`, `path_importer_cache`), `sys.breakpointhook`, or a builtin that runs text (`exec`,
+`eval`, `compile`, `breakpoint`, `__builtins__`) wherever it is the builtin in that scope, under any
+alias, except `areas.py`'s two imports by name and the profile discovery `DYNAMIC_IMPORTERS` pins
+with its reason. `__builtins__`, which every module carries, is also read off any module
+(`json.__builtins__`) and in a `from` of any module. Only a function's own binding, a
+comprehension's variable or an import from a module other than `builtins` hides such a builtin, in
+its scope and the scopes it encloses. Python looks a module's or a class body's names up at run
+time, where a binding may not have run, may have been deleted, or may be the builtin itself
+(`exec = exec`), so a binding of one of these names there hides nothing and is a row of its own, to
+pin or rename; a walrus in a comprehension binds in the scope around it. A docstring is prose and is
+not read. The second reads imports: a module imports the standard library from the modules
+`STANDARD_IMPORTS` lists, none of which imports a module named by a string but through a name the
+first rule reads, and any other import (`importlib` and `pkgutil` among them) is a row of
+`MACHINERY_IMPORTERS`, with what each file reaches in it. `importlib.resources` is held too: `files`
+imports the anchor it is handed when that names a module, so a module calls it only on its own
+package, `__package__` or `"stayfixed"`, and every other read of it is a row.
 
 Every call of `area_modules` or `area_imports` names `commands`, `hooks` or `doctor` as a literal,
 and is made by that submodule's one reader: `cli.py` asks for `commands`, `hooks/registry.py` for
@@ -252,9 +255,9 @@ module evaluates (an annotation built at run time and handed to `typing.get_type
 what holds those.
 
 What source cannot show is when a pardoned statement runs, so
-`test_in_isolation_no_core_module_loads_a_delivery_area` imports every core module in a clean
-interpreter and refuses any delivery module among what it loaded: the core loads the private layer
-only when a command asks for it.
+`test_in_isolation_no_core_module_loads_either_side` imports every core module in a clean
+interpreter and refuses any module of either side among what it loaded: the core loads a side only
+when a command asks for it.
 
 The packages under `src/stayfixed/` import one another without a cycle
 (`test_the_packages_import_one_another_without_a_cycle_at_module_level`), counting each import that

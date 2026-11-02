@@ -32,20 +32,31 @@ else:
 
 Registrar = Callable[[SubParsers], None]
 
-# The areas that make up the private layer: `overlay` renders and upgrades the overlay, `attach`
-# binds a repository to it and takes back what that wrote, leaving the overlay's record of the
-# binding, and `memory` keeps the note store. Every other module under `src/stayfixed/` is the core.
+# Every module under `src/stayfixed/` sits on one of three sides, by the first part of its path.
+# Delivery is the private layer, a machine's setup, the trust record and the session hints:
+# `overlay` renders and upgrades the overlay, `attach` binds a repository to it and takes back what
+# that wrote, leaving the overlay's record of the binding, `memory` keeps the note store, `setup`
+# configures a machine, `trust` keeps every approval a person gave on it, and `hints` gives the
+# session hints; `sync` is listed before it is written. The pack is the methodology's records and
+# checks: `ledger`, `docs`, `guards`, `prove`, `assess` and `project`, with the stack profiles, a
+# package and not an area. Every other module is the core, which both sides share: the `doctor` and
+# `hooks` areas, `cli.py`, and the modules and packages that are not areas.
 # One piece of the private layer sits in the core all the same: `templates/overlay/`, the tree
 # `setup --overlay <path>` renders, is data the `overlay` area alone reads, and the import rules
 # below read code, so they cannot see it.
-# The core may not import a delivery area, through its `api.py` or otherwise, and a delivery area
-# may import the core, so the private layer can be reworked without touching the core.
-# `tests/boundaries/test_delivery.py`'s `test_core_never_imports_delivery` holds it, against the
-# import statements of the one crossing still pinned; since that reads import statements, the same
-# file pins which core modules import by a string, and through which of the import machinery, and
-# `test_in_isolation_no_core_module_loads_a_delivery_area` holds that importing the core loads none
-# of the private layer.
-DELIVERY_AREAS: frozenset[str] = frozenset({"attach", "memory", "overlay"})
+# Either side may import the core; the core imports neither side, and the two sides import each
+# other, only through the statements pinned in `tests/boundaries/test_delivery.py`, which holds all
+# three and puts every discovered area on exactly one side; since those rules read import
+# statements, the same file pins every import by a string and every reach into the import
+# machinery, and `test_in_isolation_no_core_module_loads_either_side` holds that importing the core
+# loads neither side.
+DELIVERY_AREAS: frozenset[str] = frozenset(
+    {"attach", "hints", "memory", "overlay", "setup", "sync", "trust"}
+)
+PACK_PACKAGES: frozenset[str] = frozenset(
+    {"assess", "docs", "guards", "ledger", "profiles", "project", "prove"}
+)
+CORE_AREAS: frozenset[str] = frozenset({"doctor", "hooks"})
 
 
 def _has_submodule(area: str, submodule: str) -> bool:

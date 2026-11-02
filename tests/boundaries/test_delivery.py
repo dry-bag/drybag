@@ -1,6 +1,8 @@
-"""The delivery rule: the core never reaches the private layer — `attach`, `memory` and `overlay`
-— by an import statement, by what loads when a core module is imported, by a module named in a
-string, or through the import machinery, but for the crossings pinned here with their reasons."""
+"""The sides: every module under `src/stayfixed/` is on one of three, delivery, the pack or the
+core, as `stayfixed.areas` lists them. The core imports neither side and the two sides import each
+other only through the statements pinned here, each with what removes it; importing the core loads
+neither side; and no module imports by a string or reaches the import machinery but where pinned,
+so the import rules cannot be walked around."""
 
 from __future__ import annotations
 
@@ -15,44 +17,77 @@ import pytest
 
 import stayfixed.areas
 from tests.boundaries import astscan
+from tests.boundaries.test_discovery import area_names
 
 ROOT = Path(__file__).resolve().parents[2]
 
+DELIVERY, PACK, CORE = "delivery", "pack", "core"
 
-# Every import by which a core module reaches a delivery area today, one row per import statement:
-# the importing file relative to `src/stayfixed/`, the module the statement names cut to three
-# dotted parts, and the names it takes out of that module. Held as a multiset and by equality in
-# both directions, so a new crossing reddens the test, and so do a row whose import has gone, a
-# second statement beside a pinned one, and a pinned statement that takes one more name: the pardon
-# covers exactly the statements and names written here, and cutting a crossing is deleting its rows
-# in the same commit.
-#
-# One crossing is left, and it is meant to stay. `stayfixed setup --overlay` creates, renders or
-# records the private overlay as the last step of machine setup, so `setup/run.py` calls into the
-# overlay area by design, and its rows stay until that step leaves `setup`: one statement in
-# `_requested_overlay`, which refuses before the first write, and one in `_apply_overlay`, which
-# creates or renders, and records. Both sit inside the functions, so importing `setup` — which
-# `doctor` does — loads none of it (`test_in_isolation_no_core_module_loads_a_delivery_area`).
-CORE_TO_DELIVERY = (
-    (
-        "setup/run.py",
-        "stayfixed.overlay.api",
-        frozenset({"overlay_fault", "target_root"}),
-    ),
-    (
-        "setup/run.py",
-        "stayfixed.overlay.api",
-        frozenset({"finish", "generate", "render", "require_overlay"}),
-    ),
-    ("project/uninstall.py", "stayfixed.attach.api", frozenset({"detach"})),
+Row = tuple[str, str, frozenset[str]]
+Direction = tuple[str, str]
+
+# Every import by which a module reaches a package on another side, one row per import statement
+# and one table per direction: the importing file relative to `src/stayfixed/`, the module the
+# statement names cut to three dotted parts, and the names it takes out of that module. Each table
+# is held as a multiset and by equality in both directions, so a new crossing reddens its test, and
+# so do a row whose import has gone, a second statement beside a pinned one, and a pinned statement
+# that takes one more name: the pardon covers exactly the statements and names written here, and
+# cutting a crossing is deleting its rows in the same commit. Each row says what removes it.
+# Importing the core is no crossing from either side, and neither is an import within one side.
+CORE_TO_DELIVERY: tuple[Row, ...] = ()
+CORE_TO_PACK: tuple[Row, ...] = (
+    # The harness registry names a profile's type in the rendering a harness gives a profile's
+    # rules, under `if TYPE_CHECKING:`, so it never runs. Goes with the profiles.
+    ("harnesses.py", "stayfixed.profiles", frozenset({"Profile"})),
+    # The scaffold engine checks `[stayfixed] profile` against the profiles that ship, inside the
+    # one function that checks it. Goes with the profiles.
+    ("scaffold/engine.py", "stayfixed.profiles", frozenset()),
 )
+PACK_TO_DELIVERY: tuple[Row, ...] = (
+    # `stayfixed test hygiene` counts the uncommitted changes the red-run note counts, so the two
+    # cannot disagree. Goes when that count moves into the core, or the command leaves `guards`.
+    ("guards/commands.py", "stayfixed.hints.api", frozenset({"dirty_count"})),
+    # `stayfixed uninstall` detaches an attached repository before it takes the scaffold back,
+    # inside the one function that runs it. Goes when `stayfixed uninstall` is deleted.
+    ("project/uninstall.py", "stayfixed.attach.api", frozenset({"detach"})),
+    # `prove` reads a test command's launch the way the red-run hints read it, at module level.
+    # Goes with `prove`.
+    ("prove/run.py", "stayfixed.hints.api", frozenset({"Launch", "read_launch", "run_directory"})),
+)
+DELIVERY_TO_PACK: tuple[Row, ...] = (
+    # The red-run note asks every shipped profile's hint and adapter, and names a hint's type
+    # under `if TYPE_CHECKING:`. All three go with the profiles.
+    ("hints/hygiene.py", "stayfixed.profiles.adapters", frozenset({"shipped_adapters"})),
+    ("hints/hygiene.py", "stayfixed.profiles.hints", frozenset({"answer", "shipped_hints"})),
+    ("hints/hygiene.py", "stayfixed.profiles.hints", frozenset({"RedRunHint"})),
+    # The note graph flags a bug id written as a link, and asks the bug register which words are
+    # ids. Goes when the note graph takes the id rule from the core.
+    ("memory/graph.py", "stayfixed.ledger.api", frozenset({"bug_register"})),
+    # `stayfixed setup --git-hooks` installs and removes the commit-message hook, inside the one
+    # function that runs it. Goes when the commit-hook installer leaves `setup`.
+    ("setup/commands.py", "stayfixed.guards.api", frozenset({"Found", "install", "uninstall"})),
+)
+PINNED: dict[Direction, tuple[Row, ...]] = {
+    (CORE, DELIVERY): CORE_TO_DELIVERY,
+    (CORE, PACK): CORE_TO_PACK,
+    (PACK, DELIVERY): PACK_TO_DELIVERY,
+    (DELIVERY, PACK): DELIVERY_TO_PACK,
+}
 
-DeliveryRow = tuple[str, str, frozenset[str]]
+
+def _side(name: str, delivery: frozenset[str], pack: frozenset[str]) -> str:
+    """The side of the module or package `name` directly under `src/stayfixed/`: one neither side
+    lists is the core's."""
+    return DELIVERY if name in delivery else PACK if name in pack else CORE
 
 
-def _delivery_offences(where: str, text: str, areas: frozenset[str]) -> list[DeliveryRow]:
-    """The delivery rule, for one file: every import statement by which a core module reaches a
-    delivery area, as `(where, module, names)` with the module cut to three dotted parts.
+def _crossings(
+    where: str, text: str, delivery: frozenset[str], pack: frozenset[str]
+) -> list[tuple[Direction, Row]]:
+    """The rule, for one file: every import statement by which it reaches a package on another
+    side, as `((its side, the side reached), (where, module, names))` with the module cut to three
+    dotted parts. Reaching the core is no crossing, and neither is reaching a package of one's own
+    side.
 
     One row per import statement, keyed on the module the statement names and never on its
     aliases: `astscan.imported_modules` also yields `stayfixed.overlay.api.create` for every name a
@@ -60,14 +95,13 @@ def _delivery_offences(where: str, text: str, areas: frozenset[str]) -> list[Del
     row's third part instead, as written, so a pardon is for one statement and what it takes; a
     statement that imports a module itself (`import stayfixed.overlay.api`) takes no names. The
     one spelling whose aliases are the modules is `from stayfixed import memory`, and it is read
-    as such: a row per area, importing the area itself. A module is core when the first part of
-    its path is not a delivery area, so `cli.py`, `config/` and every other subpackage that is not
-    an area are core too. Delivery importing core, or delivery importing delivery, is not this
-    rule's business.
+    as such: a row per package, importing the package itself. A module is on the side its first
+    path part is listed on, so `cli.py`, `config/` and every other module and subpackage that
+    neither side lists are the core's.
     """
     parts = Path(where).parts
-    core = parts[0] not in areas
-    rows: list[DeliveryRow] = []
+    origin = _side(parts[0], delivery, pack)
+    rows: list[tuple[Direction, Row]] = []
     for node in ast.walk(ast.parse(text)):
         if isinstance(node, ast.Import):
             taken = [(alias.name, frozenset[str]()) for alias in node.names]
@@ -82,31 +116,64 @@ def _delivery_offences(where: str, text: str, areas: frozenset[str]) -> list[Del
             continue
         for module, names in taken:
             bits = module.split(".")
-            delivery = bits[0] == "stayfixed" and len(bits) > 1 and bits[1] in areas
-            if core and delivery:
-                rows.append((where, ".".join(bits[:3]), names))
+            ours = bits[0] == "stayfixed" and len(bits) > 1
+            target = _side(bits[1], delivery, pack) if ours else CORE
+            if target not in (origin, CORE):
+                rows.append(((origin, target), (where, ".".join(bits[:3]), names)))
     return rows
 
 
-def test_core_never_imports_delivery() -> None:
-    # CONTRIBUTING, "Areas": the delivery areas may import the core, and the core may not import
-    # them, through `api.py` or not, at module level or inside a function, but for the statements
-    # `CORE_TO_DELIVERY` pins. The walk is the whole package, so the equality below also fails on
-    # a walk that stopped walking: it would find no rows, and the pinned rows are never empty.
-    #
-    # Mutation (declared): `mutations/`'s "setup imports one more name from the overlay area in a
-    # statement of its own", which a comparison of `(file, module)` sets let through.
+def _unpinned_or_gone(*directions: Direction) -> dict[str, dict[str, Counter[Row]]]:
+    """For each of `directions` whose rows the whole package's walk does not find exactly as
+    `PINNED` has them: the rows found and not pinned (`unpinned`) and pinned and not found
+    (`gone`). Empty when every one is held."""
     source = ROOT / "src" / "stayfixed"
-    rows: list[DeliveryRow] = []
+    found: Counter[tuple[Direction, Row]] = Counter()
     for path in sorted(source.rglob("*.py")):
-        rows += _delivery_offences(
-            path.relative_to(source).as_posix(),
-            path.read_text(encoding="utf-8"),
-            stayfixed.areas.DELIVERY_AREAS,
+        found.update(
+            _crossings(
+                path.relative_to(source).as_posix(),
+                path.read_text(encoding="utf-8"),
+                stayfixed.areas.DELIVERY_AREAS,
+                stayfixed.areas.PACK_PACKAGES,
+            )
         )
-    assert len(CORE_TO_DELIVERY) == 3
-    found, pinned = Counter(rows), Counter(CORE_TO_DELIVERY)
-    assert found == pinned, {"unpinned": found - pinned, "gone": pinned - found}
+    differences: dict[str, dict[str, Counter[Row]]] = {}
+    for direction in directions:
+        walked = Counter({row: n for (way, row), n in found.items() if way == direction})
+        pinned = Counter(PINNED[direction])
+        if walked != pinned:
+            differences[" -> ".join(direction)] = {
+                "unpinned": walked - pinned,
+                "gone": pinned - walked,
+            }
+    return differences
+
+
+def test_the_core_imports_neither_side_but_where_pinned() -> None:
+    # CONTRIBUTING, "Areas": either side may import the core, and the core may not import either
+    # side, through `api.py` or not, at module level or inside a function, but for the statements
+    # `CORE_TO_DELIVERY` and `CORE_TO_PACK` pin. The walk is the whole package, so the equality
+    # also fails on a walk that stopped walking: it would find no rows, and the pinned rows are
+    # never empty.
+    #
+    # Mutation (declared): `mutations/`'s "a core module imports the bug ledger".
+    assert len(CORE_TO_DELIVERY) + len(CORE_TO_PACK) == 2
+    assert _unpinned_or_gone((CORE, DELIVERY), (CORE, PACK)) == {}
+
+
+def test_delivery_and_the_pack_import_each_other_only_where_pinned() -> None:
+    # The two sides each import the core and import each other through the statements
+    # `PACK_TO_DELIVERY` and `DELIVERY_TO_PACK` pin and no other, so each can be reworked without
+    # the other; an import within one side is no crossing. Held as the core's rule is, both
+    # directions and a floor of their own.
+    #
+    # Mutations (declared): `mutations/`'s "the note store imports the bug ledger", "a pinned
+    # crossing's import goes while its row stays" and "setup imports one more name from the guards
+    # area in a statement of its own", the last of which a comparison of `(file, module)` sets let
+    # through.
+    assert len(PACK_TO_DELIVERY) + len(DELIVERY_TO_PACK) == 8
+    assert _unpinned_or_gone((PACK, DELIVERY), (DELIVERY, PACK)) == {}
 
 
 # Imports every module it is handed, then prints every `stayfixed` module the interpreter loaded.
@@ -119,27 +186,28 @@ IMPORT_EACH = (
 
 
 def core_files(source: Path) -> list[tuple[str, Path]]:
-    """Every core file under `source`, relative to it: each module outside the delivery areas,
-    `cli.py` and the subpackages that are not areas included."""
+    """Every core file under `source`, relative to it: each module on neither side, `cli.py` and
+    the subpackages that are not areas included."""
+    sides = stayfixed.areas.DELIVERY_AREAS | stayfixed.areas.PACK_PACKAGES
     return [
         (path.relative_to(source).as_posix(), path)
         for path in sorted(source.rglob("*.py"))
-        if path.relative_to(source).parts[0] not in stayfixed.areas.DELIVERY_AREAS
+        if path.relative_to(source).parts[0] not in sides
     ]
 
 
-def test_in_isolation_no_core_module_loads_a_delivery_area() -> None:
-    # The source rule above reads statements, and a statement inside a function is pardoned there
-    # because it is the pinned crossing. What it cannot see is when that statement runs: the
-    # crossing stood at module level in `setup/run.py`, `setup/api.py` re-exports from that
-    # module, and `doctor/entries.py` imported `setup.api` for `USER_SETTINGS` — so importing
-    # `doctor`'s report loaded `overlay.api`, `overlay.create`, `memory.store` and the rest of the
-    # private layer, with every rule green. So every core module is imported in one clean
-    # interpreter, which loads the union of their import closures, and no delivery module may be
-    # among what it loaded: the private layer is loaded by the core only when a command asks for
-    # it, here `setup --overlay`.
+def test_in_isolation_no_core_module_loads_either_side() -> None:
+    # The source rules above read statements, and a statement inside a function, or under
+    # `if TYPE_CHECKING:`, is pardoned there because it is a pinned crossing. What they cannot see
+    # is when that statement runs: a crossing stood at module level in `setup/run.py`,
+    # `setup/api.py` re-exports from that module, and `doctor/entries.py` imported `setup.api` for
+    # `USER_SETTINGS` — so importing `doctor`'s report loaded `overlay.api`, `overlay.create`,
+    # `memory.store` and the rest of the private layer, with every rule green. So every core module
+    # is imported in one clean interpreter, which loads the union of their import closures, and no
+    # module of either side may be among what it loaded: the core loads a side only when a command
+    # asks for it.
     #
-    # Mutation (declared): `mutations/`'s "setup loads the overlay area at import again".
+    # Mutation (declared): `mutations/`'s "the harness registry loads the profiles at import".
     source = ROOT / "src" / "stayfixed"
     # Every core module, dotted. `__main__` is left out because importing it runs the CLI: its
     # whole body is `main()`.
@@ -148,14 +216,14 @@ def test_in_isolation_no_core_module_loads_a_delivery_area() -> None:
         for where, _ in core_files(source)
         if Path(where).name != "__main__.py"
     ]
-    # The walk names the modules the crossing reached, so a list that stopped holding them
-    # cannot keep this green.
+    # The walk names the modules the pinned crossings start from and the report that once loaded
+    # the private layer, so a list that stopped holding them cannot keep this green.
     assert {
         "stayfixed.cli",
         "stayfixed.doctor.api",
         "stayfixed.doctor.checks",
-        "stayfixed.setup.api",
-        "stayfixed.setup.run",
+        "stayfixed.harnesses",
+        "stayfixed.scaffold.engine",
     } <= set(modules), modules
     completed = subprocess.run(
         [sys.executable, "-c", IMPORT_EACH, *modules],
@@ -167,62 +235,112 @@ def test_in_isolation_no_core_module_loads_a_delivery_area() -> None:
     assert completed.returncode == 0, completed.stderr
     loaded = completed.stdout.split()
     assert "stayfixed.doctor.checks" in loaded, "the probe imported nothing"
-    delivery = [
-        name
-        for name in loaded
-        if name.split(".")[1:2] and name.split(".")[1] in stayfixed.areas.DELIVERY_AREAS
-    ]
-    assert delivery == []
+    delivery, pack = stayfixed.areas.DELIVERY_AREAS, stayfixed.areas.PACK_PACKAGES
+    tops = {name: name.split(".")[1] for name in loaded if "." in name}
+    assert [name for name, top in tops.items() if _side(top, delivery, pack) != CORE] == []
 
 
-def test_the_delivery_areas_are_attach_memory_and_overlay() -> None:
-    # The three areas CONTRIBUTING's "Areas" names as delivery, pinned as a literal rather than
-    # read back: the crossing meant to stay exercises only `overlay`, so a change that dropped
-    # `memory` or `attach` from the constant beside a new crossing into it would otherwise keep
-    # `test_core_never_imports_delivery` green.
+def test_each_side_is_pinned_as_a_literal() -> None:
+    # Every rule in this file reads the sides back from `stayfixed.areas`, so an edit to a
+    # constant moves what the rules hold without an edit here: an area moved from one side to the
+    # other is still on exactly one side, and its crossings only change direction, which no pin
+    # notices when it makes none. Pinned as literals, the move is an edit to this test.
     #
     # Mutation (declared): `mutations/`'s "memory stops being a delivery area".
-    declared = stayfixed.areas.DELIVERY_AREAS
-    assert declared == frozenset({"attach", "memory", "overlay"})
+    delivery, pack = stayfixed.areas.DELIVERY_AREAS, stayfixed.areas.PACK_PACKAGES
+    core = stayfixed.areas.CORE_AREAS
+    assert delivery == frozenset({"attach", "hints", "memory", "overlay", "setup", "sync", "trust"})
+    assert pack == frozenset({"assess", "docs", "guards", "ledger", "profiles", "project", "prove"})
+    assert core == frozenset({"doctor", "hooks"})
+
+
+# The one name a side may list before it exists: an area that is planned and not written yet.
+# Held both ways, so the name leaves this set the day its area is written.
+PLANNED = frozenset({"sync"})
+
+
+def test_every_area_is_on_exactly_one_side() -> None:
+    # The import rules judge a module by the side its first path part is listed on, and a module
+    # listed on neither is the core's, so an area dropped from its side would join the core
+    # unseen and be held to the core's rule, and one listed on two sides would be read as the
+    # first. So every area discovery finds is listed on exactly one side, `DELIVERY_AREAS` and
+    # `CORE_AREAS` list areas, `PACK_PACKAGES` lists packages (the profiles are one and not an
+    # area), and a listed name names nothing only when it is planned.
+    #
+    # Mutation (declared): `mutations/`'s "trust drops out of every side".
+    source = ROOT / "src" / "stayfixed"
+    delivery, pack = stayfixed.areas.DELIVERY_AREAS, stayfixed.areas.PACK_PACKAGES
+    core = stayfixed.areas.CORE_AREAS
+    listed = Counter([*delivery, *pack, *core])
+    assert [name for name, sides in listed.items() if sides > 1] == []
+    areas = set(area_names(source))
+    assert areas - set(listed) == set()
+    packages = {path.name for path in source.iterdir() if (path / "__init__.py").is_file()}
+    assert (delivery | core) - areas | pack - packages == PLANNED
 
 
 def test_the_delivery_rule_judges_the_importer_and_the_imported() -> None:
-    # The walk above can only show the rule holding for the imports the tree happens to make, so
+    # The walks above can only show the rules holding for the imports the tree happens to make, so
     # the rule is put in front of spellings the tree does not carry. A core module reaching a
-    # delivery area relatively and from inside a function is an offence, named exactly; a
-    # delivery module reaching another delivery area is not, because only the core is held.
+    # delivery area relatively and from inside a function is a crossing, named exactly; a delivery
+    # module reaching another delivery area is not, because an import within one side is no
+    # crossing.
     #
     # Mutations (declared): `mutations/`'s "the delivery rule stops recognising a delivery
     # module" -> the first arm reddens; "the delivery rule holds a delivery module to the core's
     # rule" -> the second does.
     delivery = frozenset({"attach", "memory", "overlay"})
-    assert _delivery_offences(
-        "docs/commands.py", "def check():\n    from ..memory import api\n", delivery
-    ) == [("docs/commands.py", "stayfixed.memory", frozenset({"api"}))]
-    assert _delivery_offences("memory/x.py", "import stayfixed.overlay.api\n", delivery) == []
+    pack = frozenset({"ledger", "profiles"})
+    assert _crossings(
+        "doctor/commands.py", "def check():\n    from ..memory import api\n", delivery, pack
+    ) == [((CORE, DELIVERY), ("doctor/commands.py", "stayfixed.memory", frozenset({"api"})))]
+    assert _crossings("memory/x.py", "import stayfixed.overlay.api\n", delivery, pack) == []
+
+    # Every direction, and the core reached from each: one text, imported from each side. Measured
+    # by hand: reading an import of the core as a crossing, or reading the pack as delivery, each
+    # reddens one of these.
+    text = "import stayfixed.ledger.api\nimport stayfixed.memory.store\nimport stayfixed.fsops\n"
+    assert _crossings("cli.py", text, delivery, pack) == [
+        ((CORE, PACK), ("cli.py", "stayfixed.ledger.api", frozenset())),
+        ((CORE, DELIVERY), ("cli.py", "stayfixed.memory.store", frozenset())),
+    ]
+    assert _crossings("ledger/x.py", text, delivery, pack) == [
+        ((PACK, DELIVERY), ("ledger/x.py", "stayfixed.memory.store", frozenset()))
+    ]
+    assert _crossings("memory/x.py", text, delivery, pack) == [
+        ((DELIVERY, PACK), ("memory/x.py", "stayfixed.ledger.api", frozenset()))
+    ]
 
     # The one spelling whose module is the package itself, so the area is in an alias: read by
     # alias, and only for that spelling. Mutation (declared): `mutations/`'s "the delivery rule
     # reads `from stayfixed import memory` as importing nothing".
-    assert _delivery_offences("cli.py", "from stayfixed import ledger, memory\n", delivery) == [
-        ("cli.py", "stayfixed.memory", frozenset())
+    assert _crossings("cli.py", "from stayfixed import fsops, memory\n", delivery, pack) == [
+        ((CORE, DELIVERY), ("cli.py", "stayfixed.memory", frozenset()))
     ]
 
     # Two statements naming one module are two rows, each with the names it takes, so a pardon
     # for one statement is never a pardon for a second one beside it. Mutation (declared):
     # `mutations/`'s "the delivery rule forgets which names a statement takes".
     two = "from stayfixed.overlay.api import create\nfrom stayfixed.overlay.api import create\n"
-    assert _delivery_offences("setup/run.py", two, delivery) == [
-        ("setup/run.py", "stayfixed.overlay.api", frozenset({"create"})),
-        ("setup/run.py", "stayfixed.overlay.api", frozenset({"create"})),
+    assert _crossings("doctor/checks.py", two, delivery, pack) == [
+        ((CORE, DELIVERY), ("doctor/checks.py", "stayfixed.overlay.api", frozenset({"create"}))),
+        ((CORE, DELIVERY), ("doctor/checks.py", "stayfixed.overlay.api", frozenset({"create"}))),
     ]
-    assert _delivery_offences(
-        "setup/run.py", "from stayfixed.overlay.api import create, target_root\n", delivery
-    ) == [("setup/run.py", "stayfixed.overlay.api", frozenset({"create", "target_root"}))]
+    assert _crossings(
+        "doctor/checks.py",
+        "from stayfixed.overlay.api import create, target_root\n",
+        delivery,
+        pack,
+    ) == [
+        (
+            (CORE, DELIVERY),
+            ("doctor/checks.py", "stayfixed.overlay.api", frozenset({"create", "target_root"})),
+        )
+    ]
 
 
 # The names through which a module is loaded without an import statement of its own, which the
-# delivery rule above reads no more than discovery's caller does: `import_module` and `__import__`
+# import rules above read no more than discovery's caller does: `import_module` and `__import__`
 # import by a string, a module's own `__spec__` and `__loader__` and the finders on `sys`'s
 # `meta_path`, `path_hooks` and `path_importer_cache` load a module by its file with no import at
 # all, and `sys.breakpointhook` and `sys.__breakpointhook__` import whatever `PYTHONBREAKPOINT`
@@ -254,16 +372,16 @@ DYNAMIC_IMPORTS = frozenset(
 # anything (`json.__builtins__`), and a `from` of it from any module is a row, under any alias.
 TEXT_RUNNERS = frozenset({"__builtins__", "breakpoint", "compile", "eval", "exec"})
 
-# The one core module whose job is importing modules by name: discovery, which imports
+# The one module whose job is importing modules by name: discovery, which imports
 # `stayfixed.<area>.<submodule>` for the submodules `area_modules` is called with (held below), and
-# is how every area, delivery included, plugs into the core.
+# is how every area, on either side or in the core, plugs into the core.
 DISCOVERY_MODULE = "areas.py"
 # What discovery itself reads of the names below, by function: its two imports by name.
 DISCOVERY_READS = (("area_modules", "import_module"), ("area_imports", "import_module"))
 
-# Every other place a core module imports by a string, one row per reference: the file relative to
+# Every other place a module imports by a string, one row per reference: the file relative to
 # `src/stayfixed/`, the innermost function, and the name it reaches. Held as a multiset and by
-# equality in both directions, as `CORE_TO_DELIVERY` is.
+# equality in both directions, as the crossings are.
 #
 # One row, meant to stay. `profiles/__init__.py`'s `stack_module` imports
 # `stayfixed.profiles.<name>.<module>` for a `name` that `stack_directories` listed from this
@@ -349,12 +467,14 @@ def _dynamic_imports(tree: ast.Module) -> list[tuple[str, str]]:
 def test_no_core_module_imports_by_a_string_but_discovery() -> None:
     # The delivery rule reads import statements, so a function-level
     # `importlib.import_module("stayfixed.memory.store")` or `__import__(...)` in a core file
-    # crossed into the private layer with every boundary test green. A string import in the core
-    # is discovery's alone, and the one other one — profile discovery — is pinned with its reason.
+    # crossed into the private layer with every boundary test green. A string import is
+    # discovery's alone, and the one other one — profile discovery — is pinned with its reason.
     # So were a module's own loader (`type(__spec__.loader)(name, path).exec_module(module)`), a
     # finder on `sys.meta_path`, and `exec` of a string that imports. This reads those names; the
     # standard library's other ways to import by a string are held where they must be imported
-    # from, by `test_no_core_module_reaches_the_import_machinery_…`.
+    # from, by `test_no_core_module_reaches_the_import_machinery_…`. Both read every module, the
+    # two sides' as well as the core's, since the import rules hold all three and a string would
+    # walk around any of them.
     #
     # Mutations (declared): `mutations/`'s "a core function imports the note store through
     # importlib", "a core function imports the note store through __import__", "a core function
@@ -366,7 +486,8 @@ def test_no_core_module_imports_by_a_string_but_discovery() -> None:
     source = ROOT / "src" / "stayfixed"
     rows: list[tuple[str, str, str]] = []
     discovery: list[tuple[str, str]] = []
-    for where, path in core_files(source):
+    for path in sorted(source.rglob("*.py")):
+        where = path.relative_to(source).as_posix()
         found = _dynamic_imports(ast.parse(path.read_text(encoding="utf-8")))
         if where == DISCOVERY_MODULE:
             discovery += found
@@ -491,12 +612,11 @@ def test_the_string_import_rules_read_every_spelling() -> None:
         ]
 
 
-# The standard library modules a core module may import with no row, by name or as a package whose
-# submodules are all allowed: the 34 the core imports today, each one whose public functions import
-# no module named by a string and run no code built from text but through a name the rule above
-# reads (`sys.breakpointhook`, `typing.get_type_hints` of a string spelling `__import__`). Every
-# other module is the machinery: a core import of one is a row of `MACHINERY_IMPORTERS` below, with
-# what the file reaches in it.
+# The standard library modules a module may import with no row, by name or as a package whose
+# submodules are all allowed: each one whose public functions import no module named by a string
+# and run no code built from text but through a name the rule above reads (`sys.breakpointhook`,
+# `typing.get_type_hints` of a string spelling `__import__`). Every other module is the machinery:
+# an import of one is a row of `MACHINERY_IMPORTERS` below, with what the file reaches in it.
 # Read the other way round, a deny-list of the modules that can import by a string stayed open to
 # every one nobody had measured yet (`timeit`, `xml.dom.pulldom`'s `xml.sax`, `inspect`'s
 # `importlib`, `builtins`). `importlib` and `pkgutil` are not on the list: discovery imports through
@@ -512,8 +632,8 @@ def test_the_string_import_rules_read_every_spelling() -> None:
 # module or a class body that fails and is caught, which hides a builtin the name rule then takes
 # for the file's own, code built from text at run time, and a string an allowed module evaluates
 # (`typing.get_type_hints` of an annotation built at run time).
-# `test_in_isolation_no_core_module_loads_a_delivery_area` sees what loads at import time and
-# nothing a function does later.
+# `test_in_isolation_no_core_module_loads_either_side` sees what loads at import time and nothing
+# a function does later.
 STANDARD_IMPORTS = frozenset(
     {
         "__future__",
@@ -564,13 +684,13 @@ STANDARD_IMPORTS = frozenset(
 # `importlib.resources` reads package data, and imports a module only as the anchor `files` is
 # handed: given a module's name, it imports that module. So it is outside the rule for exactly two
 # reads, which import nothing that is not already loaded. One is `files` called on the package
-# itself, `__package__` (a core module's own package) or the literal `"stayfixed"`, in a module
+# itself, `__package__` (a module's own package) or the literal `"stayfixed"`, in a module
 # that never binds `__package__` itself. The other is `importlib.resources.abc`, which holds types.
 # Every other read of it, the same function given any other argument, the module handed on and the
 # functions that take an anchor of their own (`read_text`, `open_binary` …), is the machinery.
 RESOURCES = "importlib.resources"
 
-# Every core import of a module off `STANDARD_IMPORTS`, one row per statement: the file relative
+# Every import of a module off `STANDARD_IMPORTS`, one row per statement: the file relative
 # to `src/stayfixed/`, the module the statement names, and what the file reaches through it -- the
 # names a `from` statement takes, or each attribute path read off the name an `import` binds
 # (`<value>` when the name itself is handed on, where anything could be read off it). Held as a
@@ -685,11 +805,11 @@ def test_no_core_module_reaches_the_import_machinery_but_where_pinned() -> None:
     # `importlib.util.find_spec` and a loader's `exec_module`, `importlib.resources.files` handed
     # the store's name, `pydoc.locate`, `pickle.loads`, `logging.config`'s resolver, `timeit` and
     # `xml.sax.make_parser` each crossed into the private layer from a core function with every
-    # boundary test green. So the core imports the standard library from `STANDARD_IMPORTS` alone,
-    # and any other import is pinned with what it reaches: a new importer is a new row, and a
-    # pinned importer reaching one more name changes its row. `importlib.resources` is no row while
-    # it only reads the package's own data. What this cannot see is in the comment over
-    # `STANDARD_IMPORTS`: it is a tripwire, not a proof.
+    # boundary test green. So every module, on either side or in the core, imports the standard
+    # library from `STANDARD_IMPORTS` alone, and any other import is pinned with what it reaches: a
+    # new importer is a new row, and a pinned importer reaching one more name changes its row.
+    # `importlib.resources` is no row while it only reads the package's own data. What this cannot
+    # see is in the comment over `STANDARD_IMPORTS`: it is a tripwire, not a proof.
     #
     # Mutations (declared): `mutations/`'s "a core function imports the note store through
     # pkgutil.resolve_name", "profile discovery reaches importlib.util as well", "a core function
@@ -702,14 +822,14 @@ def test_no_core_module_reaches_the_import_machinery_but_where_pinned() -> None:
     # builtins by a computed name".
     source = ROOT / "src" / "stayfixed"
     rows = [
-        (where, module, reach)
-        for where, path in core_files(source)
+        (path.relative_to(source).as_posix(), module, reach)
+        for path in sorted(source.rglob("*.py"))
         for module, reach in _machinery_imports(ast.parse(path.read_text(encoding="utf-8")))
     ]
     found_rows, pinned = Counter(rows), Counter(MACHINERY_IMPORTERS)
     assert found_rows == pinned, {"unpinned": found_rows - pinned, "gone": pinned - found_rows}
-    # Every module is held to the standard library (`tests/boundaries/test_layering.py`), and the
-    # core to the part of it listed here, so the list may name nothing outside it: a listed module
+    # Every module is held to the standard library (`tests/boundaries/test_layering.py`), and here
+    # to the part of it listed, so the list may name nothing outside it: a listed module
     # the runtime may not import would admit here what the layer below refuses. Mutation
     # (declared): `mutations/`'s "the core's import list admits a module outside the standard
     # library" -> this reddens.
