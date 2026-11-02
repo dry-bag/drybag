@@ -7,12 +7,12 @@
 # dropped a real command on the floor.
 [[mutation]]
 name = "a mid-word hash opens a comment again"
-file = "src/stayfixed/guards/bashscan.py"
+file = "src/stayfixed/hints/bashscan.py"
 before = '        elif character == "#" and _starts_a_word(previous):'
 after = '        elif character == "#":'
 reddens = [
-  "tests/guards/test_bashscan.py::test_a_mid_word_hash_does_not_truncate_the_command",
-  "tests/guards/test_bashscan.py::test_a_hash_inside_a_path_argument_survives",
+  "tests/hints/test_bashscan.py::test_a_mid_word_hash_does_not_truncate_the_command",
+  "tests/hints/test_bashscan.py::test_a_hash_inside_a_path_argument_survives",
 ]
 
 # The newline's separator is space-padded so it can never weld onto a typed `;` and become a
@@ -21,22 +21,22 @@ reddens = [
 # assertion, which is the one that pins the padding itself rather than the second guard.
 [[mutation]]
 name = "the newline separator welds onto a typed semicolon again"
-file = "src/stayfixed/guards/bashscan.py"
+file = "src/stayfixed/hints/bashscan.py"
 before = '            out.append(" ; ")'
 after = '            out.append(";")'
 reddens = [
-  "tests/guards/test_bashscan.py::test_a_newline_after_a_separator_arrives_as_its_own_token",
+  "tests/hints/test_bashscan.py::test_a_newline_after_a_separator_arrives_as_its_own_token",
 ]
 
 # `uv run pytest` is CI's own shape, and stripping `uv run` is what lets an argv0-keyed caller
 # see the program instead of the launcher.
 [[mutation]]
 name = "`uv run` stops being stripped off a segment"
-file = "src/stayfixed/guards/bashscan.py"
+file = "src/stayfixed/hints/bashscan.py"
 before = '        if recognises is not None and uvrun.is_launcher(name):'
 after = '        if False:'
 reddens = [
-  "tests/guards/test_bashscan.py::test_command_words_strips_uv_run_with_nothing_before_the_program",
+  "tests/hints/test_bashscan.py::test_command_words_strips_uv_run_with_nothing_before_the_program",
   "tests/profiles/python/test_hygiene.py::test_a_red_pytest_run_behind_uvs_options_gets_the_same_note",
 ]
 
@@ -44,25 +44,25 @@ reddens = [
 # pytest-xdist pytest` would launch `pytest-xdist`, which no adapter recognises.
 [[mutation]]
 name = "the command `uv run` launches starts at its first word that is no option"
-file = "src/stayfixed/guards/bashscan.py"
+file = "src/stayfixed/hints/bashscan.py"
 before = "        if recognises(segment[at:]):"
 after = '        if not segment[at].startswith("-"):'
 reddens = [
-  "tests/guards/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_a_runner_adapter_recognises[with]",
-  "tests/guards/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_a_runner_adapter_recognises[directory]",
+  "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_a_runner_adapter_recognises[with]",
+  "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_a_runner_adapter_recognises[directory]",
 ]
 
 # A `uv run` in which no adapter recognises a word is read whole: read as all launcher, it is a
 # launch of nothing, and `prove --junit` would read `not proven` for a command it runs as typed.
 [[mutation]]
 name = "a `uv run` no adapter recognises is read as all launcher"
-file = "src/stayfixed/guards/bashscan.py"
+file = "src/stayfixed/hints/bashscan.py"
 before = """            return at
     return None"""
 after = """            return at
     return len(segment)"""
 reddens = [
-  "tests/guards/test_bashscan.py::test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole[no-runner]",
+  "tests/hints/test_bashscan.py::test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole[no-runner]",
   "tests/prove/test_junit_flag.py::test_a_launcher_runs_as_typed_under_junit",
 ]
 
@@ -70,13 +70,13 @@ reddens = [
 # pytest` would be a pytest run.
 [[mutation]]
 name = "a uv command with no `run` is read as launching its words"
-file = "src/stayfixed/guards/uvrun.py"
+file = "src/stayfixed/hints/uvrun.py"
 before = """    if _UV_RUN not in segment[index:]:
         return None"""
 after = """    if _UV_RUN not in segment[index:]:
         return index"""
 reddens = [
-  "tests/guards/test_bashscan.py::test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole[no-run]",
+  "tests/hints/test_bashscan.py::test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole[no-run]",
 ]
 
 # The other two branches `command_words` implements, one entry each: a single mutation cannot pin
@@ -85,33 +85,33 @@ reddens = [
 # argv0 test read `FOO=1` as the program.
 [[mutation]]
 name = "a leading environment assignment stops being stripped off a segment"
-file = "src/stayfixed/guards/bashscan.py"
+file = "src/stayfixed/hints/bashscan.py"
 before = '        if _ASSIGNMENT.match(token):'
 after = '        if False:'
 reddens = [
-  "tests/guards/test_bashscan.py::test_command_words_strips_a_leading_assignment_and_wrapper",
+  "tests/hints/test_bashscan.py::test_command_words_strips_a_leading_assignment_and_wrapper",
 ]
 
 # The `env` half of the same resolution: a bare wrapper token left on the front makes an
 # argv0 test judge the launcher instead of the program it launches.
 [[mutation]]
 name = "a bare wrapper token stops being stripped off a segment"
-file = "src/stayfixed/guards/bashscan.py"
+file = "src/stayfixed/hints/bashscan.py"
 before = '        if name in _SINGLE_WRAPPERS:'
 after = '        if False:'
 reddens = [
-  "tests/guards/test_bashscan.py::test_command_words_strips_a_leading_assignment_and_wrapper",
+  "tests/hints/test_bashscan.py::test_command_words_strips_a_leading_assignment_and_wrapper",
 ]
 
 # `read_launch` names the launcher's words apart from the assignments, which a caller that runs
 # the command hands its environment and checks for forging.
 [[mutation]]
 name = "the launch keeps no launcher's words"
-file = "src/stayfixed/guards/bashscan.py"
+file = "src/stayfixed/hints/bashscan.py"
 before = "            launcher.extend(segment[index:launched])"
 after = "            pass"
 reddens = [
-  "tests/guards/test_bashscan.py::test_read_launch_names_each_word_of_the_launch_by_its_part[uv-env-assignment]",
+  "tests/hints/test_bashscan.py::test_read_launch_names_each_word_of_the_launch_by_its_part[uv-env-assignment]",
   "tests/prove/test_run.py::test_the_adapter_is_handed_the_launcher_s_words_alone[argv0-launch0]",
 ]
 
@@ -120,7 +120,7 @@ reddens = [
 # a red run there. Each case asks the real dispatcher, so what reddens is the note the harness reads.
 [[mutation]]
 name = "the red-run hint is not registered on the event a failed command arrives on"
-file = "src/stayfixed/guards/hooks.py"
+file = "src/stayfixed/hints/hooks.py"
 before = """        Handler(
             name="test-hygiene",
             event="PostToolUseFailure",
@@ -130,9 +130,9 @@ before = """        Handler(
 """
 after = ""
 reddens = [
-  "tests/guards/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[bare]",
-  "tests/guards/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[with-output]",
-  "tests/guards/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[killed-at-its-timeout]",
+  "tests/hints/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[bare]",
+  "tests/hints/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[with-output]",
+  "tests/hints/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[killed-at-its-timeout]",
 ]
 
 # The red-run hint is registered on both events a failed command can arrive on, under one
@@ -140,7 +140,7 @@ reddens = [
 # again on the other. Without the key on one registration, that one notes every red run.
 [[mutation]]
 name = "the red-run hint on a failure forgets that the note was delivered"
-file = "src/stayfixed/guards/hooks.py"
+file = "src/stayfixed/hints/hooks.py"
 before = """            event="PostToolUseFailure",
             run=_test_hygiene,
             once_key=ONCE_TEST_HYGIENE,
@@ -150,14 +150,14 @@ after = """            event="PostToolUseFailure",
             once_key=None,
 """
 reddens = [
-  "tests/guards/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[post-first]",
-  "tests/guards/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[failure-first]",
-  "tests/guards/test_hooks.py::test_the_hygiene_notice_has_one_once_key_on_each_event[PostToolUseFailure]",
+  "tests/hints/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[post-first]",
+  "tests/hints/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[failure-first]",
+  "tests/hints/test_hooks.py::test_the_hygiene_notice_has_one_once_key_on_each_event[PostToolUseFailure]",
 ]
 
 [[mutation]]
 name = "the red-run hint after a successful call forgets that the note was delivered"
-file = "src/stayfixed/guards/hooks.py"
+file = "src/stayfixed/hints/hooks.py"
 before = """            event="PostToolUse",
             run=_test_hygiene,
             once_key=ONCE_TEST_HYGIENE,
@@ -167,9 +167,9 @@ after = """            event="PostToolUse",
             once_key=None,
 """
 reddens = [
-  "tests/guards/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[post-first]",
-  "tests/guards/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[failure-first]",
-  "tests/guards/test_hooks.py::test_the_hygiene_notice_has_one_once_key_on_each_event[PostToolUse]",
+  "tests/hints/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[post-first]",
+  "tests/hints/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[failure-first]",
+  "tests/hints/test_hooks.py::test_the_hygiene_notice_has_one_once_key_on_each_event[PostToolUse]",
 ]
 
 # A value that reaches a subprocess is untrusted. Without the check a range shaped like an option is
@@ -321,19 +321,6 @@ reddens = [
   "tests/guards/test_githooks.py::test_a_hook_an_earlier_release_wrote_is_still_ours",
 ]
 
-# The containment check on `ledger.code_roots`. `config.paths` guards `[paths]` and leaves this
-# field to whoever consumes it, so this call is the only thing between a committed
-# `code_roots = ["../.."]` and a walk of the tree above the project root. Declared rather than
-# only covered because the fixture had to be built for it: an escaping entry that names nothing
-# on disk is dropped by the `is_dir()` filter, and the containment call could then be deleted
-# with every test still green — the test creates the escaping directory so it cannot.
-[[mutation]]
-name = "an escaping code root is followed"
-file = "src/stayfixed/guards/roots.py"
-before = "            candidate = contained(root, folded, resolved_root=resolved_root)"
-after = "            candidate = root / entry"
-reddens = ["tests/profiles/python/test_hygiene.py::test_only_contained_code_roots_are_scanned"]
-
 # The two-paragraph attribution block, and the reason the paragraph rule needed a walk rather
 # than a wider net. The canonical harness attribution is a `Generated with` footer, a blank
 # line, then a `Co-Authored-By:` trailer; judging the final paragraph alone removed the trailer
@@ -437,20 +424,6 @@ before = '    _, bracket, tail = address.rpartition(">")'
 after = '    _, bracket, tail = address.partition(">")'
 reddens = [
   "tests/guards/test_commit.py::test_punctuation_after_the_address_does_not_disarm_the_trailer_rule",
-]
-
-# `contained_roots` is what every consumer of `ledger.code_roots` walks, one `rglob` per entry
-# with the results added up, so a repeated or nested entry multiplies a count rather than
-# widening a scan. Measured with `code_roots = ["src", "src", "src/pkg"]` over two stale `.pyc`
-# files: `stale == 5` with no pruning at all, `stale == 3` with the mutation below, `2` as
-# shipped. A wrong number in a notice whose entire purpose is to be believed about a number.
-[[mutation]]
-name = "a code root listed twice is walked twice"
-file = "src/stayfixed/guards/roots.py"
-before = '        if any(_covers(kept, candidate) for kept in found):'
-after = '        if False:'
-reddens = [
-  "tests/profiles/python/test_hygiene.py::test_a_repeated_or_nested_code_root_is_walked_once",
 ]
 
 # ---------------------------------------------------------------------------------------------
@@ -602,7 +575,7 @@ reddens = [
 # separator inside a name.
 [[mutation]]
 name = "the dirty count counts a name holding a line separator twice"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = "    return sum(1 for line in answer_lines(out) if line.strip())"
 after = "    return sum(1 for line in out.splitlines() if line.strip())"
 reddens = ["tests/test_git_answers.py::test_a_dirty_name_holding_a_line_separator_is_one_entry"]
@@ -623,7 +596,7 @@ reddens = [
 # the suite, so every `timeout=` a `git_run` call passes is read.
 [[mutation]]
 name = "the status query's bound is a literal below git's latency"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = '    code, out = git_run(root, "status", "--porcelain", "--", timeout=STATUS_TIMEOUT_SECONDS)'
 after = '    code, out = git_run(root, "status", "--porcelain", "--", timeout=0.001)'
 reddens = ["tests/test_git_run.py::test_every_bound_a_git_run_call_passes_is_one_the_table_pins"]
@@ -802,30 +775,6 @@ reddens = [
   "tests/guards/test_attribute.py::test_the_tree_listing_is_not_bounded_by_the_argument_free_cap",
 ]
 
-# `contained()` took on the write's component rule, and `contained_roots` catches its refusal and
-# moves on — so `code_roots = ["src/"]` was silently dropped from every count the field feeds. The
-# fold is what keeps a read-only walk from inheriting a rule that exists for writes.
-[[mutation]]
-name = "a code root spelled with a slash is dropped again"
-file = "src/stayfixed/guards/roots.py"
-before = "            candidate = contained(root, folded, resolved_root=resolved_root)"
-after = "            candidate = contained(root, entry, resolved_root=resolved_root)"
-reddens = [
-  "tests/guards/test_hygiene.py::test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked",
-]
-
-# A missing preset default loses no walk only while another root is walked. With none walked,
-# `test hygiene` says so and points at `assess`, which must then name every entry, the preset's
-# own included, or both commands are silent about why nothing was checked.
-[[mutation]]
-name = "a missing preset default goes unnamed when no root is walked"
-file = "src/stayfixed/guards/roots.py"
-before = "    walked = any(isinstance(found, Path) for _, found in judged)"
-after = "    walked = True"
-reddens = [
-  "tests/assess/test_probes.py::test_a_code_root_no_walk_takes_is_named_with_its_reason[preset-defaults-none-walked]",
-]
-
 # In the block led by `mutations/`'s "a gate that could not judge counts as passing": every
 # configured gate is a value CI reads, and each built-in finds what its area's command finds.
 [[mutation]]
@@ -918,7 +867,7 @@ reddens = ["tests/test_cli.py::test_the_test_group_has_hygiene_and_attribute"]
 # the shape a "the profile" design would have, and it silently drops the second stack's line.
 [[mutation]]
 name = "only the first recognising hint speaks"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = "    speaking = [hint for _, hint in hints if hint is not None and _recognises(hint, commands)]"
 after = "    speaking = [hint for _, hint in hints if hint is not None and _recognises(hint, commands)][:1]"
 reddens = ["tests/profiles/test_hints.py::test_two_recognising_hints_both_speak"]
@@ -928,7 +877,7 @@ reddens = ["tests/profiles/test_hints.py::test_two_recognising_hints_both_speak"
 # dirty-tree line and every other stack's line go with the broken one.
 [[mutation]]
 name = "a hint's note is computed outside its guard"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = """    try:
         return answer(hint, contained_roots(root, config))[1]
     except Exception:
@@ -938,7 +887,7 @@ reddens = ["tests/profiles/test_hints.py::test_a_hint_that_raises_costs_its_note
 
 [[mutation]]
 name = "a hint's recognition is asked outside its guard"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = """    try:
         return any(hint.recognises(argv) for argv in commands)
     except Exception:
@@ -950,7 +899,7 @@ reddens = ["tests/profiles/test_hints.py::test_a_hint_that_raises_costs_its_note
 # and a mention in a core module is either moved there or pardoned with its reason.
 [[mutation]]
 name = "the core names pytest again"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = 'LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:"'
 after = """PYTEST = "pytest"
 LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:""""
@@ -962,7 +911,7 @@ reddens = [
 # the import walk is what catches it.
 [[mutation]]
 name = "the core imports the Python profile's hint"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = "from stayfixed.profiles.hints import answer, shipped_hints"
 after = """from stayfixed.profiles.hints import answer, shipped_hints
 from stayfixed.profiles.python.hygiene import PythonHint"""
@@ -972,7 +921,7 @@ reddens = ["tests/test_language_neutral.py::test_no_core_module_imports_a_stack_
 # in a core module is a mention like any string.
 [[mutation]]
 name = "the core names a stack in a bytes literal"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = 'LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:"'
 after = """_VENDORED = b"node_modules"
 LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:""""
@@ -1107,7 +1056,7 @@ reddens = [
 # names either is moved into that stack's profile or pardoned with its reason.
 [[mutation]]
 name = "the core names the Python interpreter"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = 'LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:"'
 after = """INTERPRETER = "python"
 LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:\""""
@@ -1117,7 +1066,7 @@ reddens = [
 
 [[mutation]]
 name = "the core names a Python project's manifest"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = 'LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:"'
 after = """MANIFEST = "pyproject.toml"
 LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:\""""
@@ -1129,7 +1078,7 @@ reddens = [
 # of by `__module__`, so no module but the frame refers to it.
 [[mutation]]
 name = "a core module picks one area's commands out of the CLI frame's registrars"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = "def _note(hint: RedRunHint, root: Path, config: Config) -> str | None:"
 after = """def _memory_registrar() -> object:
     from stayfixed.cli import discover_registrars
@@ -1142,7 +1091,7 @@ reddens = ["tests/boundaries/test_discovery.py::test_discovery_is_asked_only_for
 
 [[mutation]]
 name = "the core names the Python interpreter by its shell name"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = 'LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:"'
 after = """INTERPRETER = "python3"
 LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:\""""
@@ -1350,76 +1299,76 @@ reddens = [
 # whose `error` opened with a longer run of them cost the red-run note an exception.
 [[mutation]]
 name = "the red-run hint reads an exit code of any length"
-file = "src/stayfixed/guards/hygiene.py"
+file = "src/stayfixed/hints/hygiene.py"
 before = '_EXIT_CODE_ERROR = re.compile(r"\AExit code (\d{1,9})(?!\d)")'
 after = '_EXIT_CODE_ERROR = re.compile(r"\AExit code (\d+)")'
 reddens = [
-  'tests/guards/test_hygiene.py::test_red_exit_reads_both_payload_shapes[raw8-None]',
+  'tests/hints/test_hygiene.py::test_red_exit_reads_both_payload_shapes[raw8-None]',
 ]
 
 # The red-run note is about the project, and silent without its configuration.
 [[mutation]]
 name = "the hygiene note judges with no project configuration"
-file = "src/stayfixed/guards/hooks.py"
+file = "src/stayfixed/hints/hooks.py"
 before = "    config = session.config\n    if config is None or event.project_root is None:"
 after = "    config = session.config\n    if event.project_root is None:"
 reddens = [
   "tests/hooks/test_floor.py::test_project_handlers_speak_on_a_file_and_stay_silent_without_one[test_hygiene]",
-  "tests/guards/test_hooks.py::test_no_config_silences_the_hygiene_note_and_never_the_guard",
+  "tests/hints/test_hooks.py::test_no_config_silences_the_hygiene_note_and_never_the_guard",
 ]
 
 # `uvrun.run_directory`, measured on uv 0.12.19: `--directory`, else `UV_WORKING_DIR`, moves
 # where the program runs, and `prove` judges the command there.
 [[mutation]]
 name = "uv's `--directory` is not read"
-file = "src/stayfixed/guards/uvrun.py"
+file = "src/stayfixed/hints/uvrun.py"
 before = "            if name == _DIRECTORY:"
 after = "            if False:"
 reddens = [
-  "tests/guards/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[spaced]",
-  "tests/guards/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[equals]",
-  "tests/guards/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[global]",
+  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[spaced]",
+  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[equals]",
+  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[global]",
   "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[spaced]",
 ]
 
 [[mutation]]
 name = "uv's spaced `--directory` value is not read"
-file = "src/stayfixed/guards/uvrun.py"
+file = "src/stayfixed/hints/uvrun.py"
 before = "                directory = value if equals else _value(words, at)"
 after = "                directory = value"
 reddens = [
-  "tests/guards/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[spaced]",
+  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[spaced]",
 ]
 
 [[mutation]]
 name = "`UV_WORKING_DIR` is not read"
-file = "src/stayfixed/guards/uvrun.py"
+file = "src/stayfixed/hints/uvrun.py"
 before = "        moved = directory if directory is not None else environ.get(WORKING_DIR)"
 after = "        moved = directory"
 reddens = [
-  "tests/guards/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[variable]",
+  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[variable]",
   "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[assigned]",
   "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[inherited]",
 ]
 
 [[mutation]]
 name = "uv's variable wins over its `--directory`"
-file = "src/stayfixed/guards/uvrun.py"
+file = "src/stayfixed/hints/uvrun.py"
 before = "        moved = directory if directory is not None else environ.get(WORKING_DIR)"
 after = "        moved = environ.get(WORKING_DIR) or directory"
 reddens = [
-  "tests/guards/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[option-over-variable]",
+  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[option-over-variable]",
   "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[over-the-variable]",
 ]
 
 [[mutation]]
 name = "a nested `uv run` reads its directory from where the command was typed"
-file = "src/stayfixed/guards/uvrun.py"
+file = "src/stayfixed/hints/uvrun.py"
 before = "            here = here / moved"
 after = "            here = cwd / moved"
 reddens = [
-  "tests/guards/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[nested]",
-  "tests/guards/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[nested-variable]",
+  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[nested]",
+  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[nested-variable]",
   "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[nested]",
 ]
 

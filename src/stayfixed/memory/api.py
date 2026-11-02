@@ -30,7 +30,7 @@ links point at in the overlay, which `attach` asks the length of before its firs
 `memory refs` reports), so the wiki-link grammar, the note walk and `resolved` have no reader
 outside it and are not here. The overlay root the machine file records and the checkout's
 `origin` are the core's to answer (`config.overlay.overlay_root`, `gitenv.origin_remote` and
-`gitenv.GitUnavailable`), because `init` asks them too and the core may not import this area; the
+`gitenv.GitUnavailable`), because `init` asks them too and may not import this area; the
 crossings still pinned are listed in `tests/boundaries/test_delivery.py`.
 
 **Three more have no importer and stay, each for a reason written here**, because a name

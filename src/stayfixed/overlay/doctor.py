@@ -106,7 +106,7 @@ def _pre_commit(context: Context) -> Row:
     from stayfixed import fsops
     from stayfixed.doctor.api import OK, WARN, Row
     from stayfixed.errors import Refusal
-    from stayfixed.guards.api import hooks_dir
+    from stayfixed.gitenv import hooks_dir
     from stayfixed.overlay.layout import PRE_COMMIT_CONFIG, PRE_COMMIT_HOOK
 
     overlay = context.overlay_root

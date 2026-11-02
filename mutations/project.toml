@@ -2163,7 +2163,7 @@ name = "the Python profile's hint imports the session guard again"
 file = "src/stayfixed/profiles/python/hygiene.py"
 before = "from stayfixed.fsops import open_directory, read_bounded"
 after = """from stayfixed.fsops import open_directory, read_bounded
-from stayfixed.guards.api import contained_roots"""
+from stayfixed.hints.api import read_launch"""
 reddens = [
   "tests/boundaries/test_layering.py::test_the_packages_import_one_another_without_a_cycle_at_module_level",
 ]

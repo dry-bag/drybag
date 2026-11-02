@@ -203,10 +203,10 @@ NO_CHANGE = "no uncommitted change"
 
 
 def run_test_hygiene(args: argparse.Namespace) -> Result:
-    from stayfixed.guards.hygiene import dirty_count
-    from stayfixed.guards.roots import contained_roots
+    from stayfixed.hints.api import dirty_count
     from stayfixed.profiles import detects, load_profile
     from stayfixed.profiles.hints import NotText, answer, shipped_hints
+    from stayfixed.roots import contained_roots
 
     root, config = _root_and_config(args)
     dirty = dirty_count(root)

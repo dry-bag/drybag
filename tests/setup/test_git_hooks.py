@@ -13,7 +13,8 @@ from pathlib import Path
 import pytest
 
 from stayfixed.errors import Refusal
-from stayfixed.guards.api import HOOK_MARKER, HOOK_NAME, hooks_dir
+from stayfixed.gitenv import hooks_dir
+from stayfixed.guards.api import HOOK_MARKER, HOOK_NAME
 from stayfixed.printed import quoted
 from stayfixed.setup.commands import run_setup
 from tests import gitfixture
@@ -101,7 +102,7 @@ def test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act(
 def test_the_hook_is_installed_into_the_repositorys_own_hooks_path(tmp_path: Path) -> None:
     # The hook is installed per repository into `git rev-parse --git-path hooks`, never into
     # `core.hooksPath`. The "never" is the assertion: `core.hooksPath` is global state this command
-    # has no business owning. Assert the file lands under `guards.hooks_dir(root)` and that
+    # has no business owning. Assert the file lands under `gitenv.hooks_dir(root)` and that
     # `git config --get core.hooksPath` is still unset afterwards.
     root = _repo(tmp_path)
     run_setup(_args(root=str(root)))

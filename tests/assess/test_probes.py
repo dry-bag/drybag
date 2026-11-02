@@ -33,8 +33,8 @@ from stayfixed.assess.probes import (
 from stayfixed.config.loader import load, preset_defaults
 from stayfixed.findings import Severity
 from stayfixed.gitenv import QUERY_TIMEOUT_SECONDS, git_run
-from stayfixed.guards.roots import NOT_A_DIRECTORY, NOT_CONTAINED, ROOT_ITSELF
 from stayfixed.presets import load_preset
+from stayfixed.roots import NOT_A_DIRECTORY, NOT_CONTAINED, ROOT_ITSELF
 from tests.assess.baserepo import commit
 from tests.assess.smoke import smoke_repo
 from tests.gitfixture import git, needs_git, plant_path, run_git

@@ -40,7 +40,7 @@ authority on what an exclude line hides, asked of this repository's git director
 work tree, where git reads `info/exclude` and `core.excludesFile` and no `.gitignore`, so only the
 two files the owner holds stand in for a line of the block and a `.gitignore`, which the
 repository authors, never does. **Write target**: `info/exclude` as
-`git rev-parse --git-path` names it — `guards.git_path`, the resolver `setup --git-hooks` uses —
+`git rev-parse --git-path` names it — `gitenv.git_path`, the resolver `setup --git-hooks` uses —
 refused when it is a symlink, as `guards.githooks.install` refuses a symlinked hook, and when this
 user cannot write the directory that holds it, both while the run is planned, and written with
 `fsops.write_atomically`, whose rename replaces the name rather than writing through it.
@@ -64,8 +64,7 @@ from pathlib import Path
 from stayfixed import fsops
 from stayfixed.config.paths import contained
 from stayfixed.errors import Refusal
-from stayfixed.gitenv import git_run
-from stayfixed.guards.api import git_path
+from stayfixed.gitenv import git_path, git_run
 from stayfixed.printed import quoted
 from stayfixed.scaffold import RegionError, Style, drop, extract, upsert
 
