@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 import time
 from pathlib import Path
 
@@ -19,6 +18,7 @@ import pytest
 
 from stayfixed.sync import job as J
 from stayfixed.sync.state import LOCK_FILE, STATE_FILE, Lock, Outcome, SyncState, read_state
+from tests.gitfixture import git_bytes
 from tests.sync.conftest import (
     LEAK,
     Overlays,
@@ -256,13 +256,9 @@ def test_a_secret_outside_any_patch_is_never_pushed(overlays: Overlays, where: s
         write(a, "common/memory/deploy.md", "a harmless note\n")
         plain = git(a, "cat-file", "commit", commit_all(a, "memory: by hand"))
         header, _, message = plain.partition("\n\n")
-        crafted = subprocess.run(
-            ["git", "-C", str(a), "hash-object", "-t", "commit", "-w", "--stdin"],
-            input=f"{header}\nx-deploy-token {LEAK}\n\n{message}".encode(),
-            capture_output=True,
-            check=True,
-        )
-        leaky = crafted.stdout.decode().strip()
+        data = f"{header}\nx-deploy-token {LEAK}\n\n{message}".encode()
+        written = git_bytes(a, "hash-object", "-t", "commit", "-w", "--stdin", stdin=data)
+        leaky = written.decode().strip()
         git(a, "update-ref", "refs/heads/main", leaky)
 
     state = job(overlays)
