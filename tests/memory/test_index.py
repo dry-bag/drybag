@@ -1133,7 +1133,7 @@ def test_rerender_writes_the_overlays_index_from_a_bound_checkout(tmp_path: Path
 
     done = rerender_overlay_index(root, machine=machine)
 
-    assert (done.project, done.reason) == ("widget", None)
+    assert done.reason is None
     assert done.overlay_store == share.resolve()
     text = (share / INDEX_NAME).read_text(encoding="utf-8")
     assert "- [N trigger](project-stable/n.md)" in text and REGION_BEGIN in text
@@ -1146,7 +1146,7 @@ def test_an_unbound_checkout_has_a_reason(tmp_path: Path) -> None:
 
     done = rerender_overlay_index(root, machine=machine)
 
-    assert done == type(done)("widget", None, NO_RECORD)
+    assert done == type(done)(None, NO_RECORD)
     assert not (overlay / "projects" / "widget" / "memory" / INDEX_NAME).exists()
 
 

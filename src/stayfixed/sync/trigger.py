@@ -44,7 +44,6 @@ from stayfixed.sync.state import (
     throttled,
 )
 
-EVENTS = ("SessionStart", "Stop", "SessionEnd")
 # A named cap: how long the trigger's own git questions may take, well inside the ten seconds
 # `hooks/hooks.json` gives each sync entry.
 STATUS_TIMEOUT = 5.0
@@ -132,7 +131,7 @@ def decide(
 ) -> tuple[str, datetime | None]:
     """`("run", None)`, `("schedule", <wake time>)` or `("none", None)` for `event` with the
     session start's `source`, the overlay at `overlay` and the state directory `d`."""
-    if event not in EVENTS or not fsops.exists(overlay / ".git"):
+    if not fsops.exists(overlay / ".git"):
         return "none", None
     if event == "SessionStart":
         if source == "compact":

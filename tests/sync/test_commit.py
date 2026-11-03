@@ -521,7 +521,6 @@ def test_a_blocked_alignment_is_index_stale_and_the_next_job_aligns(
     assert outcome is not None and outcome.state == "index_stale"
     assert J.ALIGN_COMMAND in str(outcome.detail)
     assert ctx.pending is not None and ctx.pending.to_sha == head(a)
-    assert "common/memory/new.md" in outcome.paths
     assert ctx.pending.paths == ()  # owes the index only: the tree was the commit's source
     assert "common/memory/new.md\n" in staged(a, *PATHSPEC)  # not aligned
 

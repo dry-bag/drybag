@@ -119,10 +119,6 @@ def test_the_pathspecs_are_derived_from_the_layout_in_three_scopes() -> None:
         ":(top,glob)groups/*/memory/**",
         ":(top,glob)projects/*/memory/**",
     )
-    assert (
-        tuple(spec.replace(":(top", ":(exclude,top") for spec in R.MEMORY_PATHSPEC)
-        == R.NOT_MEMORY_PATHSPEC
-    )
     # The directory each pathspec's literal part lies in, for a `git add` that a link there
     # would refuse whole.
     assert (
@@ -140,7 +136,8 @@ def test_is_memory_path_agrees_with_git(tmp_path: Path) -> None:
 
     every = set(git(repo, "ls-files", "-z").split("\0")) - {""}
     matched = set(git(repo, "ls-files", "-z", "--", *R.MEMORY_PATHSPEC).split("\0")) - {""}
-    excluded = set(git(repo, "ls-files", "-z", "--", *R.NOT_MEMORY_PATHSPEC).split("\0")) - {""}
+    not_memory = [spec.replace(":(top", ":(exclude,top") for spec in R.MEMORY_PATHSPEC]
+    excluded = set(git(repo, "ls-files", "-z", "--", *not_memory).split("\0")) - {""}
 
     assert every == set(_PATHS)
     assert matched == {path for path in every if R.is_memory_path(path)}

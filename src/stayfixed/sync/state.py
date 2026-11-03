@@ -65,23 +65,19 @@ class Outcome:
     state: str
     at: str
     detail: str | None
-    paths: tuple[str, ...]
-    commits: tuple[str, ...]
 
 
 @dataclass(frozen=True)
 class Holds:
     upstream_paths: tuple[str, ...]
-    upstream_since: str | None
     local_commits: tuple[str, ...]
-    local_since: str | None
 
     @property
     def any(self) -> bool:
         return bool(self.upstream_paths or self.local_commits)
 
 
-EMPTY_HOLDS = Holds((), None, (), None)
+EMPTY_HOLDS = Holds((), ())
 
 
 @dataclass(frozen=True)
@@ -101,7 +97,6 @@ class SyncState:
     overlay: str
     outcome: Outcome
     holds: Holds
-    last_fetch_ok: str | None
     fetched_sha: str | None
     last_job_at: str | None
     pending_align: PendingAlign | None
@@ -166,16 +161,12 @@ def _parse(data: dict[str, Any]) -> SyncState:
         state=state,
         at=_get(raw, "at", "outcome.", "timestamp"),
         detail=_get(raw, "detail", "outcome.", none=True),
-        paths=_get(raw, "paths", "outcome.", "string list"),
-        commits=_get(raw, "commits", "outcome.", "string list"),
     )
     raw = _get(data, "holds", "", "object")
     up, local = _get(raw, "upstream", "holds.", "object"), _get(raw, "local", "holds.", "object")
     holds = Holds(
         upstream_paths=_get(up, "paths", "holds.upstream.", "string list"),
-        upstream_since=_get(up, "since", "holds.upstream.", "timestamp", none=True),
         local_commits=_get(local, "commits", "holds.local.", "string list"),
-        local_since=_get(local, "since", "holds.local.", "timestamp", none=True),
     )
     raw = _get(data, "pending_align", "", "object", none=True)
     align = None
@@ -189,7 +180,6 @@ def _parse(data: dict[str, Any]) -> SyncState:
         overlay=_get(data, "overlay", ""),
         outcome=outcome,
         holds=holds,
-        last_fetch_ok=_get(data, "last_fetch_ok", "", "timestamp", none=True),
         fetched_sha=_get(data, "fetched_sha", "", none=True),
         last_job_at=_get(data, "last_job_at", "", "timestamp", none=True),
         pending_align=align,
@@ -224,14 +214,11 @@ def write_state(d: Path, s: SyncState) -> None:
             "state": s.outcome.state,
             "at": s.outcome.at,
             "detail": s.outcome.detail,
-            "paths": list(s.outcome.paths),
-            "commits": list(s.outcome.commits),
         },
         "holds": {
-            "upstream": {"paths": list(s.holds.upstream_paths), "since": s.holds.upstream_since},
-            "local": {"commits": list(s.holds.local_commits), "since": s.holds.local_since},
+            "upstream": {"paths": list(s.holds.upstream_paths)},
+            "local": {"commits": list(s.holds.local_commits)},
         },
-        "last_fetch_ok": s.last_fetch_ok,
         "fetched_sha": s.fetched_sha,
         "last_job_at": s.last_job_at,
         "pending_align": None

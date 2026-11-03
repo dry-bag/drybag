@@ -6676,8 +6676,8 @@ reddens = [
 [[mutation]]
 name = "a failed scan is a pass"
 file = "src/stayfixed/sync/scan.py"
-before = '        return CheckResult(False, "gitleaks", detail, False, None), []'
-after = '        return CheckResult(True, "gitleaks", detail, False, None), []'
+before = '        return CheckResult(False, detail, False, None), []'
+after = '        return CheckResult(True, detail, False, None), []'
 reddens = [
   "tests/sync/test_scan.py::test_a_failed_scan_is_not_a_finding",
 ]
@@ -6819,7 +6819,7 @@ reddens = [
 [[mutation]]
 name = "a record whose move never happened is aligned"
 file = "src/stayfixed/sync/job.py"
-before = "    if pending is not None and not _moved_to(ctx, pending.to_sha):"
+before = '    if pending is not None and not _is_ancestor(ctx, pending.to_sha, "HEAD"):'
 after = "    if False:"
 reddens = [
   "tests/sync/test_commit.py::test_a_kill_before_the_commit_swap_leaves_the_owners_staging_alone",
@@ -6845,7 +6845,7 @@ reddens = ["tests/sync/test_commit.py::test_signing_asked_for_is_honoured"]
 [[mutation]]
 name = "no scanner, and the commit goes on"
 file = "src/stayfixed/sync/job.py"
-before = '        return _outcome(ctx, "scan_unavailable", detail, paths=paths)'
+before = '        return _outcome(ctx, "scan_unavailable", detail)'
 after = "        return None"
 reddens = [
   "tests/sync/test_commit.py::test_no_scanner_commits_nothing_and_says_how_to_build_one",
@@ -6940,13 +6940,6 @@ name = "a tip git cannot read is integrated"
 file = "src/stayfixed/sync/job.py"
 before = '    if timed(readable, "git read-tree").code != 0:'
 after = "    if False:"
-reddens = ["tests/sync/test_integrate.py::test_a_tree_git_cannot_check_out_is_held_not_moved_to"]
-
-[[mutation]]
-name = "a standing hold restarts its time"
-file = "src/stayfixed/sync/job.py"
-before = "    since = held.upstream_since if held.upstream_paths else iso(ctx.now())"
-after = "    since = iso(ctx.now())"
 reddens = ["tests/sync/test_integrate.py::test_a_tree_git_cannot_check_out_is_held_not_moved_to"]
 
 [[mutation]]
@@ -7236,8 +7229,8 @@ reddens = ["tests/sync/test_hooks.py::test_a_trigger_inside_the_throttle_or_duri
 [[mutation]]
 name = "the trigger asks an overlay that is not a repository"
 file = "src/stayfixed/sync/trigger.py"
-before = '    if event not in EVENTS or not fsops.exists(overlay / ".git"):'
-after = "    if event not in EVENTS:"
+before = '    if not fsops.exists(overlay / ".git"):'
+after = "    if False:"
 reddens = ["tests/sync/test_hooks.py::test_no_overlay_or_not_a_repository_spawns_nothing"]
 
 [[mutation]]

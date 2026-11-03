@@ -40,17 +40,12 @@ def _state(**changes: object) -> S.SyncState:
         outcome=S.Outcome(
             state="conflict",
             at=_iso(NOW - timedelta(minutes=3)),
-            detail="common/memory/a.md conflicts",
-            paths=("common/memory/a.md", "projects/x/memory/b c ü.md"),
-            commits=("1" * 40,),
+            detail="common/memory/a.md and projects/x/memory/b c ü.md conflict",
         ),
         holds=S.Holds(
             upstream_paths=("README.md",),
-            upstream_since=_iso(NOW - timedelta(hours=2)),
             local_commits=("2" * 40, "3" * 40),
-            local_since=_iso(NOW - timedelta(hours=1)),
         ),
-        last_fetch_ok=_iso(NOW - timedelta(minutes=4)),
         fetched_sha="4" * 40,
         last_job_at=_iso(NOW - timedelta(minutes=3)),
         pending_align=S.PendingAlign(
@@ -87,9 +82,7 @@ def test_a_state_round_trips_and_carries_its_overlay(tmp_path: Path) -> None:
     assert S.read_state(tmp_path) != _state(overlay="/elsewhere")
     assert stat.S_IMODE((tmp_path / S.STATE_FILE).stat().st_mode) == 0o600
     # A pending alignment of none, and a state that never fetched, come back as they went.
-    bare = _state(
-        pending_align=None, fetched_sha=None, last_fetch_ok=None, last_job_at=None, head=None
-    )
+    bare = _state(pending_align=None, fetched_sha=None, last_job_at=None, head=None)
     S.write_state(tmp_path, bare)
     assert S.read_state(tmp_path) == bare
 
@@ -99,13 +92,12 @@ def test_the_written_shape_is_the_documented_one(tmp_path: Path) -> None:
     S.write_state(tmp_path, _state())
     data = _document(tmp_path)
     assert set(data) == {
-        "overlay", "outcome", "holds", "last_fetch_ok", "fetched_sha", "last_job_at",
-        "pending_align", "head",
+        "overlay", "outcome", "holds", "fetched_sha", "last_job_at", "pending_align", "head",
     }  # fmt: skip
-    assert set(data["outcome"]) == {"state", "at", "detail", "paths", "commits"}  # type: ignore[call-overload]
+    assert set(data["outcome"]) == {"state", "at", "detail"}  # type: ignore[call-overload]
     assert data["holds"] == {
-        "upstream": {"paths": ["README.md"], "since": _iso(NOW - timedelta(hours=2))},
-        "local": {"commits": ["2" * 40, "3" * 40], "since": _iso(NOW - timedelta(hours=1))},
+        "upstream": {"paths": ["README.md"]},
+        "local": {"commits": ["2" * 40, "3" * 40]},
     }
     assert data["pending_align"] == {
         "from": "5" * 40,
@@ -151,7 +143,7 @@ def test_a_write_names_only_an_outcome_the_job_has(tmp_path: Path) -> None:
 def test_a_later_outcome_keeps_the_holds(tmp_path: Path) -> None:
     first = _state()
     S.write_state(tmp_path, first)
-    later = replace(first, outcome=S.Outcome("offline", _iso(NOW), "no route", (), ()))
+    later = replace(first, outcome=S.Outcome("offline", _iso(NOW), "no route"))
     S.write_state(tmp_path, later)
     after = S.read_state(tmp_path)
     assert after is not None and after.outcome.state == "offline" and after.holds == first.holds
@@ -208,9 +200,7 @@ def _written(tmp_path: Path) -> dict[str, object]:
             id="time",
         ),
         pytest.param(
-            lambda d: json.dumps(
-                {**d, "holds": {"upstream": {"paths": "a", "since": None}, "local": {}}}
-            ),
+            lambda d: json.dumps({**d, "holds": {"upstream": {"paths": "a"}, "local": {}}}),
             "not a valid string list",
             id="paths",
         ),
@@ -411,7 +401,7 @@ def _held(**changes: object) -> S.SyncState:
     five_minutes_ago = _iso(NOW - timedelta(minutes=5))
     return _state(
         **{
-            "outcome": S.Outcome("ok", five_minutes_ago, None, (), ()),
+            "outcome": S.Outcome("ok", five_minutes_ago, None),
             "last_job_at": five_minutes_ago,
             **changes,
         }
@@ -437,5 +427,5 @@ def test_back_off_needs_a_hold_the_same_head_and_the_same_upstream() -> None:
 
 
 def test_back_off_holds_for_a_local_hold_alone() -> None:
-    local = replace(S.EMPTY_HOLDS, local_commits=("2" * 40,), local_since=_iso(NOW))
+    local = replace(S.EMPTY_HOLDS, local_commits=("2" * 40,))
     assert S.backed_off(_held(holds=local), HEAD, NOW) is True

@@ -9,13 +9,11 @@ compare-and-swap, the incoming notes written through git, and the index aligned.
 
 from __future__ import annotations
 
-import dataclasses
 import os
 import re
 import shlex
 import stat
 import time
-from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -23,11 +21,10 @@ import pytest
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
 from stayfixed.sync.git import Ran
-from stayfixed.sync.state import Holds, iso, read_state
+from stayfixed.sync.state import Holds, read_state
 from tests.gitfixture import git_bytes
 from tests.sync.conftest import (
     HOST,
-    NOW,
     SLOW,
     TAG,
     Overlays,
@@ -226,7 +223,7 @@ def test_a_dirty_incoming_note_is_waiting_clean_tree(overlays: Overlays) -> None
     outcome = J.integrate(ctx, fetched(overlays, a))
 
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert outcome.paths == ("common/memory/first.md",)
+    assert "(common/memory/first.md)" in str(outcome.detail)
     assert head(a) == before and ctx.pending is None
     assert "edited here" in (a / "common/memory/first.md").read_text()
 
@@ -301,7 +298,7 @@ def test_a_link_above_an_incoming_path_blocks_and_nothing_escapes(
     outcome = J.integrate(context(overlays, a), fetched(overlays, a))
 
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert outcome.paths == ("projects/zeta/memory/project-stable/n.md",)
+    assert "(projects/zeta/memory/project-stable/n.md)" in str(outcome.detail)
     assert head(a) == before and list(outside.iterdir()) == []
 
     # A link inside memory, where upstream turns a note into a directory of notes.
@@ -312,7 +309,7 @@ def test_a_link_above_an_incoming_path_blocks_and_nothing_escapes(
     outcome = J.integrate(context(overlays, a), fetched(overlays, a))
 
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert "common/memory/sub/n.md" in outcome.paths and list(outside.iterdir()) == []
+    assert "common/memory/sub/n.md" in str(outcome.detail) and list(outside.iterdir()) == []
 
 
 # -- a kill after the swap ------------------------------------------------------------------------
@@ -381,7 +378,7 @@ def test_a_link_appearing_after_a_kill_is_named_by_the_job_that_finishes_it(
     assert J.align_first(ctx) is None
 
     [notice] = ctx.notices
-    assert notice.state == "hook_failed" and notice.paths == ("common/memory/sub/n.md",)
+    assert notice.state == "hook_failed" and str(notice.detail).endswith(": common/memory/sub/n.md")
     assert ctx.pending is None and list(outside.iterdir()) == []
 
 
@@ -485,9 +482,8 @@ def test_a_tree_git_cannot_check_out_is_refused_at_the_fetch(overlays: Overlays)
 
 def test_a_tree_git_cannot_check_out_is_held_not_moved_to(overlays: Overlays) -> None:
     # Past the fetch's check (an NTFS alias of `.git`, reached here without a fetch), a tree that
-    # passes every rule but that git will not put in an index is an upstream hold. Mutations
-    # (oracle): `mutations/`'s "a tip git cannot read is integrated" and "a standing hold
-    # restarts its time".
+    # passes every rule but that git will not put in an index is an upstream hold. Mutation
+    # (oracle): `mutations/`'s "a tip git cannot read is integrated".
     a = overlays.a
     path = "projects/alpha/memory/GIT~1/n.md"
     crafted = crafted_commit(a, head(a), path)
@@ -501,15 +497,9 @@ def test_a_tree_git_cannot_check_out_is_held_not_moved_to(overlays: Overlays) ->
     assert any("cannot be checked out" in remark for remark in ctx.remarks)
     assert read_state(overlays.state_dir) is None  # no pending record was ever written
 
-    later = dataclasses.replace(context(overlays, a), now=lambda: NOW + timedelta(hours=1))
-    later.holds = ctx.holds
-    assert J.integrate(later, crafted) is None
-    assert later.holds.upstream_since == ctx.holds.upstream_since == iso(NOW)
-
 
 def _held(overlays: Overlays, ctx: J.JobContext, before: str) -> set[str]:
     assert head(overlays.a) == before
-    assert ctx.holds.upstream_since == iso(NOW)
     return set(ctx.holds.upstream_paths)
 
 
@@ -609,11 +599,8 @@ def test_an_upstream_evil_merge_is_held(overlays: Overlays) -> None:
     assert merge in paths and "common/claude/hooks/launch.sh" in paths
 
 
-def test_a_hold_keeps_its_since_and_clears_once_the_range_is_memory_only(
-    overlays: Overlays,
-) -> None:
-    since = "2026-10-01T00:00:00+00:00"
-    held = Holds(("common/claude/hooks/launch.sh",), since, ("abc",), since)
+def test_a_hold_stands_and_clears_once_the_range_is_memory_only(overlays: Overlays) -> None:
+    held = Holds(("common/claude/hooks/launch.sh",), ("abc",))
     write(overlays.b, "common/claude/hooks/launch.sh", "#!/bin/sh\nstill\n")
     commit_all(overlays.b, "hook")
     git(overlays.b, "push", "-q", "origin", "main")
@@ -622,8 +609,8 @@ def test_a_hold_keeps_its_since_and_clears_once_the_range_is_memory_only(
 
     J.integrate(ctx, fetched(overlays, overlays.a))
 
-    # Still held: the earlier `since` is kept, and the local hold is not this step's business.
-    assert ctx.holds.upstream_since == since and ctx.holds.local_commits == ("abc",)
+    # Still held, and the local hold is not this step's business.
+    assert ctx.holds.upstream_paths and ctx.holds.local_commits == ("abc",)
 
     git(overlays.a, "merge", "-q", "--ff-only", "origin/main")  # the owner reviews and takes it
     push_note(overlays.b, "common/memory/n.md", "n\n")
@@ -632,7 +619,7 @@ def test_a_hold_keeps_its_since_and_clears_once_the_range_is_memory_only(
 
     J.integrate(ctx, fetched(overlays, overlays.a))
 
-    assert ctx.holds.upstream_paths == () and ctx.holds.upstream_since is None
+    assert ctx.holds.upstream_paths == ()
     assert ctx.holds.local_commits == ("abc",)
 
 
@@ -658,7 +645,7 @@ def test_a_note_conflict_is_a_conflict_with_main_unmoved(overlays: Overlays) -> 
     outcome = J.integrate(ctx, upstream)
 
     assert outcome is not None and outcome.state == "conflict"
-    assert outcome.paths == ("common/memory/first.md",)
+    assert "upstream on common/memory/first.md;" in str(outcome.detail)
     assert head(a) == before and ctx.pending is None
     assert (a / "common/memory/first.md").read_text() == "local version\n"
     assert (a / "common/claude/hooks/x.py").read_bytes() == edit
@@ -688,7 +675,7 @@ def test_a_local_merge_commit_is_a_conflict_naming_the_fetched_sha(overlays: Ove
     outcome = J.integrate(context(overlays, a), upstream)
 
     assert outcome is not None and outcome.state == "conflict"
-    assert outcome.commits == (merge,) and head(a) == merge
+    assert f"replayed ({merge})" in str(outcome.detail) and head(a) == merge
     _, take = _review_and_take([str(outcome.detail)])
     assert take == ["git", "rebase", upstream]
 
@@ -720,10 +707,7 @@ def test_two_index_conflicts_are_resolved_by_union_and_re_rendered(overlays: Ove
 
     [notice] = ctx.notices
     assert notice.state == "resolved_index"
-    assert set(notice.paths) == {
-        "projects/alpha/memory/MEMORY.md",
-        "projects/beta/memory/MEMORY.md",
-    }
+    assert str(notice.detail).endswith("united: alpha, beta")
     for project in ("alpha", "beta"):
         index = (a / f"projects/{project}/memory/MEMORY.md").read_text()
         for side in ("a", "b"):
@@ -750,7 +734,7 @@ def test_an_index_conflict_beside_a_note_conflict_is_a_conflict(overlays: Overla
     outcome = J.integrate(context(overlays, overlays.a), fetched(overlays, overlays.a))
 
     assert outcome is not None and outcome.state == "conflict" and head(overlays.a) == before
-    assert set(outcome.paths) == {"common/memory/first.md", "projects/alpha/memory/MEMORY.md"}
+    assert "on common/memory/first.md, projects/alpha/memory/MEMORY.md;" in str(outcome.detail)
 
 
 # -- what runs ------------------------------------------------------------------------------------
@@ -889,11 +873,11 @@ def test_a_fetch_that_hangs_is_a_timeout(
     assert time.monotonic() - started < SLOW
 
 
-def test_the_fetch_records_the_sha_and_the_time(overlays: Overlays) -> None:
+def test_the_fetch_records_the_sha(overlays: Overlays) -> None:
     u = push_note(overlays.b, "common/memory/n.md", "n\n")
     ctx = context(overlays, overlays.a)
 
     assert J.fetch(ctx) == (u, None)
 
-    assert (ctx.fetched_sha, ctx.last_fetch_ok) == (u, iso(NOW))
+    assert ctx.fetched_sha == u
     assert head(overlays.a, J.FETCHED_REF) == u

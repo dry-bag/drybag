@@ -41,7 +41,6 @@ MEMORY_SPECS: tuple[tuple[str, str], ...] = tuple(
     (f":(top,glob){glob}", directory) for directory, glob in _SCOPES
 )
 MEMORY_PATHSPEC: tuple[str, ...] = tuple(spec for spec, _ in MEMORY_SPECS)
-NOT_MEMORY_PATHSPEC: tuple[str, ...] = tuple(f":(exclude,top,glob){glob}" for _, glob in _SCOPES)
 _NAMED_TOPS = {"group": GROUPS, "project": PROJECTS}
 
 

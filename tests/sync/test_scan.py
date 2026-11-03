@@ -280,7 +280,7 @@ def test_a_staged_scan_reads_the_temporary_index_and_finds_the_leak(
 
     result = S.scan_index(repo, index, scanner, SLOW)
 
-    assert (result.ok, result.check_id, result.timed_out) == (False, "gitleaks", False)
+    assert (result.ok, result.timed_out) == (False, False)
     assert "common/memory/leak.md" in result.detail and LEAK not in result.detail
     args = _argv(scanner)
     assert args[0] == "git" and {"--pre-commit", "--staged", "--redact"} <= set(args)
@@ -317,7 +317,7 @@ def test_a_finding_names_rule_file_and_commit_never_the_secret(
 
     result = S.scan_range(repo, base, tip, scanner, SLOW)
 
-    assert (result.ok, result.check_id, result.finding_commit) == (False, "gitleaks", leaky)
+    assert (result.ok, result.finding_commit) == (False, leaky)
     assert result.detail == f"fake-secret in common/memory/leak.md (commit {leaky})"
     assert f"--log-opts={base}..{tip}" in _argv(scanner) and "--redact" in _argv(scanner)
 
@@ -355,7 +355,7 @@ def test_a_scanner_that_is_not_there_fails_the_scan(tmp_path: Path) -> None:
 
     result = S.scan_range(repo, "HEAD", "HEAD", tmp_path / "gone" / "gitleaks", SLOW)
 
-    assert (result.ok, result.check_id, result.timed_out) == (False, "gitleaks", False)
+    assert (result.ok, result.timed_out) == (False, False)
     assert result.detail
 
 
@@ -366,7 +366,7 @@ def test_a_scan_that_outlives_its_bound_is_timed_out(tmp_path: Path, scanner: Pa
     started = time.monotonic()
     result = S.scan_range(repo, "HEAD", "HEAD", scanner, 1)
 
-    assert (result.ok, result.check_id, result.timed_out) == (False, "gitleaks", True)
+    assert (result.ok, result.timed_out) == (False, True)
     assert time.monotonic() - started < 25  # not the stand-in's 30 s
 
 

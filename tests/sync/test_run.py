@@ -184,9 +184,8 @@ def test_a_state_for_another_overlay_is_not_used(overlays: Overlays) -> None:
         overlays.state_dir,
         SyncState(
             overlay=str(elsewhere),
-            outcome=Outcome("offline", iso(NOW), None, (), ()),
-            holds=Holds(("common/claude/hooks/launch.sh",), iso(NOW), ("0" * 40,), iso(NOW)),
-            last_fetch_ok=iso(NOW),
+            outcome=Outcome("offline", iso(NOW), None),
+            holds=Holds(("common/claude/hooks/launch.sh",), ("0" * 40,)),
             fetched_sha="1" * 40,
             last_job_at=iso(NOW),
             pending_align=PendingAlign("2" * 40, "3" * 40, ("common/memory/first.md",)),

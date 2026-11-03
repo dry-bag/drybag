@@ -93,7 +93,7 @@ def test_the_memory_only_range_is_pushed_as_the_checked_sha(
     assert remote_main(overlays) == head(a, f"{later[0]}^")
     assert "common/memory/new.md" in remote_files(overlays, "common/memory")
     assert "common/memory/later.md" not in remote_files(overlays, "common/memory")
-    assert state.fetched_sha is not None and state.last_fetch_ok == state.last_job_at
+    assert state.fetched_sha is not None
     assert state.head == later[0] and not state.holds.any
 
 
@@ -108,7 +108,6 @@ def test_a_local_commit_outside_memory_is_held_and_named(overlays: Overlays) -> 
 
     assert remote_main(overlays) == before
     assert state.holds.local_commits == (hook,)
-    assert state.holds.local_since == state.last_job_at
     assert not state.holds.upstream_paths
     assert state.outcome.detail is not None and "outside memory" in state.outcome.detail
     assert hook in state.outcome.detail
@@ -231,7 +230,6 @@ def test_a_secret_in_the_range_is_secret_found_with_its_sha(overlays: Overlays) 
     state = job(overlays)
 
     assert state.outcome.state == "secret_found"
-    assert state.outcome.commits == (leaky,)
     assert state.outcome.detail is not None
     assert f"git rebase -i {leaky}^" in state.outcome.detail
     assert LEAK not in state.outcome.detail
@@ -264,9 +262,9 @@ def test_a_secret_outside_any_patch_is_never_pushed(overlays: Overlays, where: s
     state = job(overlays)
 
     assert state.outcome.state == "secret_found", state.outcome
-    assert state.outcome.commits == (leaky,) != (clean,)
     assert state.outcome.detail is not None
     assert f"git rebase -i {leaky}^" in state.outcome.detail
+    assert clean not in state.outcome.detail
     assert LEAK not in state.outcome.detail.replace(f"common/memory/{LEAK}.md", "")
     assert remote_main(overlays) == before
 
@@ -282,7 +280,7 @@ def test_a_failed_range_scan_is_hook_failed_not_secret_found(overlays: Overlays)
 
     assert state.outcome.state == "hook_failed", state.outcome
     assert state.outcome.detail is not None and state.outcome.detail.startswith("gitleaks:")
-    assert state.outcome.commits == ()
+    assert "rebase" not in state.outcome.detail
     assert remote_main(overlays) == before
 
 
@@ -367,7 +365,7 @@ def test_a_refused_link_does_not_stop_notes_travelling(overlays: Overlays) -> No
 
     assert state.outcome.state == "hook_failed", state.outcome
     assert state.outcome.detail is not None and state.outcome.detail.startswith("job:")
-    assert state.outcome.paths == ("common/memory/pw.md",)
+    assert state.outcome.detail.splitlines()[0].endswith(": common/memory/pw.md")
     assert (a / "common/memory/from-b.md").read_text() == note_text("from-b")
     assert remote_main(overlays) == head(a)
     files = remote_files(overlays, "common/memory")
@@ -393,8 +391,8 @@ def test_a_refused_link_with_a_rejected_push_is_rejected_and_names_the_link(
 # -- the job's end: one rule ----------------------------------------------------------------------
 
 
-def _said(state: str, detail: str, *paths: str) -> Outcome:
-    return Outcome(state, "2026-10-12T12:00:00+00:00", detail, paths, ())
+def _said(state: str, detail: str) -> Outcome:
+    return Outcome(state, "2026-10-12T12:00:00+00:00", detail)
 
 
 def test_the_end_is_ok_with_nothing_said_and_the_remarks_otherwise(overlays: Overlays) -> None:
@@ -413,7 +411,7 @@ def test_without_a_stop_the_end_is_the_latest_notice_refusals_counting_first(
     ctx = context(overlays, overlays.a)
     ctx.refused.append("common/memory/link.md")
     end = J._end(ctx, None)
-    assert (end.state, end.paths) == ("hook_failed", ("common/memory/link.md",))
+    assert (end.state, end.detail) == ("hook_failed", J._refusal_detail(["common/memory/link.md"]))
 
     ctx.notices.append(_said("scan_unavailable", "no gitleaks build"))
     assert J._end(ctx, None).state == "scan_unavailable"

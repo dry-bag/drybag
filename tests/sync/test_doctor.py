@@ -71,10 +71,10 @@ class Machine:
         overlay: Path | None = None,
         fetched: str | None = None,
     ) -> Machine:
-        recorded = Outcome(outcome, AT, detail, (), ())
+        recorded = Outcome(outcome, AT, detail)
         write_state(
             state_directory(),
-            SyncState(str(overlay or self.overlay), recorded, holds, None, fetched, AT, None, None),
+            SyncState(str(overlay or self.overlay), recorded, holds, fetched, AT, None, None),
         )
         return self
 
@@ -148,7 +148,7 @@ def test_no_scanner_build_is_red_with_the_remedy_the_job_gives(machine: Machine)
 def test_an_upstream_hold_is_a_warning_naming_the_paths_and_the_review_command(
     machine: Machine,
 ) -> None:
-    held = Holds(("common/claude/hooks/launch.sh",), AT, (), None)
+    held = Holds(("common/claude/hooks/launch.sh",), ())
     status, detail, remedy = machine.scanner().state("ok", holds=held, fetched=UPSTREAM).row()
     assert status == WARN
     assert "common/claude/hooks/launch.sh" in detail
@@ -156,7 +156,7 @@ def test_an_upstream_hold_is_a_warning_naming_the_paths_and_the_review_command(
 
 
 def test_a_local_hold_is_a_warning_naming_the_commits(machine: Machine) -> None:
-    held = Holds((), None, ("abc1234", "def5678"), AT)
+    held = Holds((), ("abc1234", "def5678"))
     status, detail, remedy = machine.scanner().state("ok", holds=held).row()
     assert status == WARN
     assert "abc1234" in detail
@@ -167,7 +167,7 @@ def test_a_local_hold_is_a_warning_naming_the_commits(machine: Machine) -> None:
 def test_a_hold_is_named_whatever_the_last_outcome_was(machine: Machine) -> None:
     # An outcome and a hold are different: a later `offline` never clears a hold, and the row
     # names the hold first.
-    held = Holds((), None, ("abc1234",), AT)
+    held = Holds((), ("abc1234",))
     _, detail, _ = machine.scanner().state("offline", holds=held).row()
     assert "abc1234" in detail
 
@@ -207,7 +207,7 @@ def test_a_state_recorded_for_another_overlay_reads_as_never_run(
 ) -> None:
     # The job starts afresh on such a state, so a hold or a failure recorded for the old path is
     # not this overlay's.
-    held = Holds((), None, ("abc1234",), AT)
+    held = Holds((), ("abc1234",))
     stale = machine.scanner().state("offline", holds=held, overlay=tmp_path / "elsewhere")
     status, detail, _ = stale.row()
     assert (status, "has not run" in detail) == (OK, True)

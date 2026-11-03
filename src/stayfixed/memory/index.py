@@ -553,11 +553,9 @@ def write_index(store: Store, config: Config, text: str) -> Path:
 
 @dataclass(frozen=True)
 class Rerendered:
-    """What `rerender_overlay_index` did: the checkout's `project` (`None` when its configuration
-    does not load), the directory of the overlay's copy it wrote (`overlay_store`), or why it
-    wrote none (`reason`, stayfixed's own words)."""
+    """What `rerender_overlay_index` did: the directory of the overlay's copy it wrote
+    (`overlay_store`), or why it wrote none (`reason`, stayfixed's own words)."""
 
-    project: str | None
     overlay_store: Path | None
     reason: str | None
 
@@ -569,21 +567,19 @@ def rerender_overlay_index(root: Path, *, machine: Path | None) -> Rerendered:
     while it rendered). Only a checkout bound in overlay mode renders; the machine file's notes
     are read past, said nowhere, since nobody reads the job's stderr."""
     path = machine_config_path() if machine is None else machine
-    project: str | None = None
     try:
         config = command_config(root, machine=machine, owner=resolve_owner(path, strict=True))
-        project = config.project.name
         found = resolved(root, config, machine=machine)
         if found[0] is None:
-            return Rerendered(project, None, found[1].said)
+            return Rerendered(None, found[1].said)
         store = found[0]
         if store.mode != OVERLAY_MODE:
-            return Rerendered(project, None, f"the checkout's memory mode is {store.mode}")
+            return Rerendered(None, f"the checkout's memory mode is {store.mode}")
         for _ in range(2):
             reconciled = reconcile(store, config, write=True)
             written = write_index(store, config, render_index(reconciled, config, store))
             if not check_index(store, config, reconcile(store, config, write=False)).drifted:
                 break
     except (StayfixedError, OSError) as error:
-        return Rerendered(project, None, str(error).partition("\n")[0] or type(error).__name__)
-    return Rerendered(project, written.parent, None)
+        return Rerendered(None, str(error).partition("\n")[0] or type(error).__name__)
+    return Rerendered(written.parent, None)

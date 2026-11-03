@@ -65,9 +65,8 @@ def _state(
         world.state_dir,
         SyncState(
             overlay=str(world.a),
-            outcome=Outcome(outcome, at, None, (), ()),
-            holds=Holds(upstream, at if upstream else None, local, at if local else None),
-            last_fetch_ok=at,
+            outcome=Outcome(outcome, at, None),
+            holds=Holds(upstream, local),
             fetched_sha=fetched,
             last_job_at=at,
             pending_align=None,

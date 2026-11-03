@@ -131,7 +131,6 @@ class JobContext:
     notices: list[Outcome] = field(default_factory=list)
     pending: PendingAlign | None = None
     fetched_sha: str | None = None
-    last_fetch_ok: str | None = None
     resolved: set[str] = field(default_factory=set)
     refused: list[str] = field(default_factory=list)
     holds: Holds = EMPTY_HOLDS
@@ -154,20 +153,8 @@ class JobContext:
         return self._env
 
 
-def _outcome(
-    ctx: JobContext,
-    state: str,
-    detail: str | None = None,
-    *,
-    paths: Iterable[str] = (),
-    commits: Iterable[str] = (),
-) -> Outcome:
-    return Outcome(state, iso(ctx.now()), detail, tuple(paths), tuple(commits))
-
-
-def _said(text: str) -> str:
-    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
-    return "\n".join(lines[: scan.DETAIL_LINES])[: scan.DETAIL_CHARS]
+def _outcome(ctx: JobContext, state: str, detail: str | None = None) -> Outcome:
+    return Outcome(state, iso(ctx.now()), detail)
 
 
 def _git(
@@ -309,7 +296,9 @@ def _commit_tree(
         ctx, "commit-tree", *parented, *signed, "--end-of-options", tree, env=env, stdin=message
     )
     if signed and (result.timed_out or result.code != 0):
-        said = _said(result.err) or ("waited for a passphrase" if result.timed_out else "")
+        said = scan.first_lines(result.err) or (
+            "waited for a passphrase" if result.timed_out else ""
+        )
         detail = f"commit.gpgsign is set and signing failed: {said}"
         return None, _outcome(ctx, "signing_failed", detail)
     return checked(result, "git commit-tree").out.strip(), None
@@ -344,7 +333,7 @@ def _record_pending(ctx: JobContext, pending: PendingAlign | None) -> None:
     if previous is None or previous.overlay != str(ctx.overlay):
         said = "a job was stopped while moving main; the next job finishes it"
         previous = SyncState(
-            str(ctx.overlay), _outcome(ctx, "skipped", said), EMPTY_HOLDS, None, None, None, None
+            str(ctx.overlay), _outcome(ctx, "skipped", said), EMPTY_HOLDS, None, None, None
         )
     write_state(ctx.state_dir, replace(previous, pending_align=pending))
 
@@ -368,14 +357,14 @@ def _run_checks(ctx: JobContext, index: Path, paths: list[str]) -> Outcome | Non
     binary = scan.gitleaks_binary(ctx.home, ctx.overlay)
     if binary is None:
         detail = scan.NO_SCANNER.format(overlay=ctx.overlay)
-        return _outcome(ctx, "scan_unavailable", detail, paths=paths)
+        return _outcome(ctx, "scan_unavailable", detail)
     result = scan.scan_index(
         ctx.overlay, index, binary, ctx.limit(ctx.limits.checks), env=ctx.env, scratch=index.parent
     )
     if result.ok:
         return None
     state = "timeout" if result.timed_out else "hook_failed"
-    return _outcome(ctx, state, f"{result.check_id}: {result.detail}", paths=paths)
+    return _outcome(ctx, state, f"gitleaks: {result.detail}")
 
 
 def commit_memory(ctx: JobContext, *, also: Iterable[str] = ()) -> Outcome | None:
@@ -449,9 +438,8 @@ def commit_memory(ctx: JobContext, *, also: Iterable[str] = ()) -> Outcome | Non
         detail = (
             "main moved while the memory commit was built; nothing was lost, the next job retries"
         )
-        return _outcome(ctx, "raced", detail, paths=paths, commits=[new])
-    stale = _settle(ctx, pending)
-    return replace(stale, paths=tuple(paths)) if stale is not None else None
+        return _outcome(ctx, "raced", detail)
+    return _settle(ctx, pending)
 
 
 # -- aligning the real index ----------------------------------------------------------------------
@@ -471,13 +459,6 @@ def _prune_empty(overlay: Path, path: str) -> None:
         parts.pop()
 
 
-def _moved_to(ctx: JobContext, sha: str) -> bool:
-    """Whether `main` did move to `sha` (it is in `HEAD`'s history). A commit that never became
-    reachable may have been pruned since: git's error then means "no" as well."""
-    result = _git(ctx, "merge-base", "--is-ancestor", "--end-of-options", sha, "HEAD")
-    return timed(result, "git merge-base").code == 0
-
-
 def _finish_worktree(ctx: JobContext, pending: PendingAlign) -> list[str]:
     """Write the paths a move of `main` brought in, where the working tree still has the old; the
     paths it may not write, because a link or a file stands above them.
@@ -486,7 +467,7 @@ def _finish_worktree(ctx: JobContext, pending: PendingAlign) -> list[str]:
     `HEAD` still has at its `to` version, and only through git (`checkout-index` from a temporary
     index) or `fsops`, after checking no directory above it is a link.
     """
-    if not pending.paths or not _moved_to(ctx, pending.to_sha):
+    if not pending.paths or not _is_ancestor(ctx, pending.to_sha, "HEAD"):
         return []  # nothing to write, or `main` never moved to `to`
     head, to = _blobs(ctx, "HEAD"), _blobs(ctx, pending.to_sha)
     before = _blobs(ctx, pending.from_sha)
@@ -538,17 +519,19 @@ def align(ctx: JobContext, pending: PendingAlign | None) -> Outcome | None:
         if result.code == 0 and not result.timed_out:
             if refused:
                 detail = "job: not written, a link or a file stands above it: " + ", ".join(refused)
-                ctx.notices.append(_outcome(ctx, "hook_failed", detail, paths=refused))
+                ctx.notices.append(_outcome(ctx, "hook_failed", detail))
             return None
         if "index.lock" not in result.err or attempt == ALIGN_RETRIES:
             break
         time.sleep(ALIGN_PAUSE_SECONDS)
-    said = (_said(result.err).splitlines() or ["no answer"])[0] if result else "no answer"
+    said = (
+        (scan.first_lines(result.err).splitlines() or ["no answer"])[0] if result else "no answer"
+    )
     detail = (
         f"the index's memory entries could not be aligned with HEAD ({said}); the next job "
         f"retries first, or run: {ALIGN_COMMAND}"
     )
-    return _outcome(ctx, "index_stale", detail, paths=pending.paths if pending else ())
+    return _outcome(ctx, "index_stale", detail)
 
 
 def _index_needs_align(ctx: JobContext) -> bool:
@@ -582,7 +565,7 @@ def align_first(ctx: JobContext) -> Outcome | None:
     owes nothing, and is dropped without touching the index: the owner's staged notes stay staged.
     """
     pending = ctx.pending
-    if pending is not None and not _moved_to(ctx, pending.to_sha):
+    if pending is not None and not _is_ancestor(ctx, pending.to_sha, "HEAD"):
         ctx.pending = pending = None
     if pending is None and not _index_needs_align(ctx):
         return None
@@ -609,7 +592,7 @@ FETCHED_REF = "refs/stayfixed/fetched"
 
 def _remote_failure(ctx: JobContext, result: Ran, what: str, limit: float) -> Outcome:
     """`timeout`, `auth_failed`, `offline`, or `hook_failed` naming the job, for a network call."""
-    said = _said(result.err) or _said(result.out) or f"exit {result.code}"
+    said = scan.first_lines(result.err) or scan.first_lines(result.out) or f"exit {result.code}"
     if result.timed_out:
         return _outcome(ctx, "timeout", f"{what} did not finish within {limit:g} s")
     text = result.err.lower()
@@ -636,7 +619,7 @@ def fetch(ctx: JobContext) -> tuple[str | None, Outcome | None]:
     if result.timed_out or result.code != 0:
         return None, _remote_failure(ctx, result, "git fetch origin main", limit)
     upstream = _rev(ctx, FETCHED_REF)
-    ctx.fetched_sha, ctx.last_fetch_ok = upstream, iso(ctx.now())
+    ctx.fetched_sha = upstream
     return upstream, None
 
 
@@ -667,10 +650,7 @@ def union_index(local: bytes, upstream: bytes) -> bytes:
 
 def _blob(ctx: JobContext, rev: str, path: str) -> bytes | None:
     """`path`'s content in `rev`; `None` when `rev` has no such file."""
-    result = timed(
-        _git(ctx, "cat-file", "blob", "--end-of-options", f"{rev}:{path}"), "git cat-file"
-    )
-    return result.out.encode("utf-8", "surrogateescape") if result.code == 0 else None
+    return scan.blob(ctx.overlay, f"{rev}:{path}", ctx.limit(ctx.limits.local), ctx.env)
 
 
 def _entry(ctx: JobContext, path: str, data: bytes) -> bytes:
@@ -790,12 +770,10 @@ def _blocked(ctx: JobContext, incoming: list[str]) -> tuple[list[str], list[str]
     return blocked, unite
 
 
-def _hold_upstream(ctx: JobContext, held: Holds, paths: Iterable[str], remark: str) -> None:
-    """Hold upstream on `paths`, since the hold the job found began when one was standing, with
-    `remark`, which says why and how to review it."""
-    since = held.upstream_since if held.upstream_paths else iso(ctx.now())
+def _hold_upstream(ctx: JobContext, paths: Iterable[str], remark: str) -> None:
+    """Hold upstream on `paths`, with `remark`, which says why and how to review it."""
     ctx.remarks.append(remark)
-    ctx.holds = replace(ctx.holds, upstream_paths=tuple(paths), upstream_since=since)
+    ctx.holds = replace(ctx.holds, upstream_paths=tuple(paths))
 
 
 def _unite_worktree(ctx: JobContext, tip: str, path: str) -> bool:
@@ -835,11 +813,9 @@ def integrate(ctx: JobContext, upstream: str) -> Outcome | None:
     committed, and are a notice (`resolved_index`).
     """
     ctx.resolved.clear()
-    held = ctx.holds
     head = _rev(ctx, "HEAD")
-    ancestor = _git(ctx, "merge-base", "--is-ancestor", "--end-of-options", upstream, head)
-    if timed(ancestor, "git merge-base").code == 0:
-        ctx.holds = replace(ctx.holds, upstream_paths=(), upstream_since=None)
+    if _is_ancestor(ctx, upstream, head):
+        ctx.holds = replace(ctx.holds, upstream_paths=())
         return None
     memory_only, offending = range_is_memory_only(
         ctx.overlay, head, upstream, timeout=ctx.limit(ctx.limits.local), env=ctx.env
@@ -849,41 +825,44 @@ def integrate(ctx: JobContext, upstream: str) -> Outcome | None:
             "upstream holds changes outside memory; nothing is integrated or pushed until they "
             f"are taken by hand. Review and take: {REVIEW.format(sha=upstream)}"
         )
-        _hold_upstream(ctx, held, offending, remark)
+        _hold_upstream(ctx, offending, remark)
         return None
-    ctx.holds = replace(ctx.holds, upstream_paths=(), upstream_since=None)
+    ctx.holds = replace(ctx.holds, upstream_paths=())
     by_hand = f"integrate {upstream} by hand: {REVIEW.format(sha=upstream)}"
     local = _nul(_ok(ctx, "rev-list", "-z", "--reverse", "--end-of-options", f"{upstream}..{head}"))
     merges = _nul(_ok(ctx, "rev-list", "-z", "--merges", "--end-of-options", f"{upstream}..{head}"))
     if merges:
-        detail = f"local merge commits are not replayed; {by_hand}"
-        return _outcome(ctx, "conflict", detail, commits=merges)
+        detail = f"local merge commits are not replayed ({', '.join(merges)}); {by_hand}"
+        return _outcome(ctx, "conflict", detail)
     tip, conflicted = replay(ctx, upstream, local) if local else (upstream, [])
     if tip is None:
         ctx.resolved.clear()
-        detail = f"a local commit conflicts with upstream; main was not moved. To {by_hand}"
-        return _outcome(ctx, "conflict", detail, paths=conflicted)
+        detail = (
+            f"a local commit conflicts with upstream on {', '.join(conflicted)}; main was not "
+            f"moved. To {by_hand}"
+        )
+        return _outcome(ctx, "conflict", detail)
     incoming = _nul(
         _ok(ctx, "diff", "--no-renames", "--name-only", "-z", "--end-of-options", head, tip)
     )
     blocked, unite = _blocked(ctx, incoming)
     if blocked:
         detail = (
-            "incoming notes are changed here and not committed yet; the next job commits them "
-            "first, then integrates"
+            f"incoming notes are changed here and not committed yet ({', '.join(blocked)}); the "
+            "next job commits them first, then integrates"
         )
-        return _outcome(ctx, "waiting_clean_tree", detail, paths=blocked)
+        return _outcome(ctx, "waiting_clean_tree", detail)
     # A tree git will not put in an index cannot be written to the working tree either: moving
     # `main` to it would leave an alignment no job can finish. It is held, `main` unmoved.
     with _scratch(ctx) as scratch:
         readable = _git(ctx, "read-tree", "--end-of-options", tip, index_file=scratch / "index")
     if timed(readable, "git read-tree").code != 0:
         remark = (
-            f"upstream's tree cannot be checked out ({_said(readable.err)}); nothing is "
+            f"upstream's tree cannot be checked out ({scan.first_lines(readable.err)}); nothing is "
             "integrated or pushed until upstream is repaired. Review: "
             f"git diff --stat HEAD {upstream}"
         )
-        _hold_upstream(ctx, held, incoming, remark)
+        _hold_upstream(ctx, incoming, remark)
         return None
     pending = PendingAlign(head, tip, tuple(incoming))
     unmerged = _unmerged_now(ctx)
@@ -901,8 +880,7 @@ def integrate(ctx: JobContext, upstream: str) -> Outcome | None:
         return None
     projects = sorted(ctx.resolved)
     detail = "indexes changed on both sides were united: " + ", ".join(projects)
-    paths = [index_of(name) for name in projects]
-    ctx.notices.append(_outcome(ctx, "resolved_index", detail, paths=paths))
+    ctx.notices.append(_outcome(ctx, "resolved_index", detail))
     # The union's own lines are harvested into their notes, and both committed with this job's.
     return commit_memory(ctx, also=projects)
 
@@ -959,7 +937,7 @@ def _scan_push(ctx: JobContext, upstream: str, tip: str) -> Outcome | None:
         return None
     if result.finding_commit:
         detail = f"{result.detail}\n{REMEDY.format(sha=result.finding_commit)}"
-        return _outcome(ctx, "secret_found", detail, commits=[result.finding_commit])
+        return _outcome(ctx, "secret_found", detail)
     return _outcome(ctx, "hook_failed", f"gitleaks: {result.detail}")
 
 
@@ -973,7 +951,7 @@ def push(ctx: JobContext, upstream: str) -> Outcome | None:
     """
     tip = _rev(ctx, "HEAD")
     if _is_ancestor(ctx, tip, upstream):
-        ctx.holds = replace(ctx.holds, local_commits=(), local_since=None)
+        ctx.holds = replace(ctx.holds, local_commits=())
         return None
     pushable, offending = range_is_memory_only(
         ctx.overlay, upstream, tip, timeout=ctx.limit(ctx.limits.local), env=ctx.env
@@ -984,15 +962,13 @@ def push(ctx: JobContext, upstream: str) -> Outcome | None:
             for sha, entries in _range(ctx, upstream, tip)
             if not entries or any(entry_offends(entry) for entry in entries)
         ] or offending
-        held = ctx.holds
-        since = held.local_since if held.local_commits else iso(ctx.now())
         ctx.remarks.append(
             "local commits outside memory are not pushed; push them by hand when reviewed: "
             + ", ".join(commits)
         )
-        ctx.holds = replace(held, local_commits=tuple(commits), local_since=since)
+        ctx.holds = replace(ctx.holds, local_commits=tuple(commits))
         return None
-    ctx.holds = replace(ctx.holds, local_commits=(), local_since=None)
+    ctx.holds = replace(ctx.holds, local_commits=())
     if ctx.holds.upstream_paths:
         ctx.remarks.append("not pushed while upstream is held")
         return None
@@ -1054,7 +1030,7 @@ def _end(ctx: JobContext, stopped: Outcome | None) -> Outcome:
     same failure met twice is said once."""
     notices = list(ctx.notices)
     if ctx.refused:
-        refusal = _outcome(ctx, "hook_failed", _refusal_detail(ctx.refused), paths=ctx.refused)
+        refusal = _outcome(ctx, "hook_failed", _refusal_detail(ctx.refused))
         notices.insert(0, refusal)
     ranked: list[Outcome] = []
     for each in ([stopped] if stopped is not None else []) + notices[::-1]:
@@ -1095,7 +1071,7 @@ def _one_job(ctx: JobContext) -> SyncState:
     another overlay, or one that cannot be read, is not used, and the detail says so."""
     ctx = replace(
         ctx, deadline=time.monotonic() + ctx.limits.job, remarks=[], notices=[], pending=None,
-        fetched_sha=None, last_fetch_ok=None, resolved=set(), refused=[], holds=EMPTY_HOLDS,
+        fetched_sha=None, resolved=set(), refused=[], holds=EMPTY_HOLDS,
     )  # fmt: skip
     scratch = ctx.state_dir / SCRATCH
     shutil.rmtree(scratch, ignore_errors=True)
@@ -1118,7 +1094,8 @@ def _one_job(ctx: JobContext) -> SyncState:
     except JobStopped as stop:
         stopped = stop.outcome
     except Exception as error:  # every failure becomes state, never a traceback
-        stopped = _outcome(ctx, "hook_failed", f"job: {_said(str(error)) or type(error).__name__}")
+        said = scan.first_lines(str(error)) or type(error).__name__
+        stopped = _outcome(ctx, "hook_failed", f"job: {said}")
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     # Not `ctx.env`, which past the deadline would not be built: `rev-parse` asks no remote.
@@ -1127,7 +1104,6 @@ def _one_job(ctx: JobContext) -> SyncState:
         overlay=str(ctx.overlay),
         outcome=_end(ctx, stopped),
         holds=ctx.holds,
-        last_fetch_ok=ctx.last_fetch_ok or (previous.last_fetch_ok if previous else None),
         fetched_sha=ctx.fetched_sha or (previous.fetched_sha if previous else None),
         last_job_at=iso(ctx.now()),
         pending_align=ctx.pending,

@@ -70,7 +70,6 @@ _GOLANG = re.compile(r"\s+golang:\s*(.+)$")
 @dataclass(frozen=True)
 class CheckResult:
     ok: bool
-    check_id: str
     detail: str
     timed_out: bool
     finding_commit: str | None
@@ -162,7 +161,8 @@ def gitleaks_binary(home: Path, overlay: Path, env: Mapping[str, str] | None = N
     return None
 
 
-def _first_lines(text: str) -> str:
+def first_lines(text: str) -> str:
+    """The first lines of what a program said, colour codes stripped, cut for the state."""
     lines = [line.rstrip() for line in _ANSI.sub("", text).splitlines() if line.strip()]
     return "\n".join(lines[:DETAIL_LINES])[:DETAIL_CHARS]
 
@@ -175,14 +175,13 @@ def _findings(report: Path) -> list[dict[str, Any]]:
     return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
 
 
-def _committed(
-    repo: Path, name: str, timeout: float, env: Mapping[str, str] | None
-) -> bytes | None:
-    """The file `name` at the root of `HEAD`, as committed; `None` when it cannot be read, which
-    only ever makes the scan stricter (the default rules, no ignores)."""
+def blob(repo: Path, spec: str, timeout: float, env: Mapping[str, str] | None) -> bytes | None:
+    """The blob `spec` (`<rev>:<path>`) names, as committed; `None` when there is none. For the
+    scan's rules and ignores, `None` only ever makes the scan stricter (the default rules, no
+    ignores)."""
     result = timed(
-        git(repo, "cat-file", "blob", f"HEAD:{name}", timeout=timeout, env=env),
-        f"git cat-file HEAD:{name}",
+        git(repo, "cat-file", "blob", "--end-of-options", spec, timeout=timeout, env=env),
+        f"git cat-file {spec}",
     )
     return result.out.encode("utf-8", "surrogateescape") if result.code == 0 else None
 
@@ -207,7 +206,7 @@ def _pinned(
     gitleaks from reading the root's `.gitleaksignore`, so one that is not the committed file stops
     it.
     """
-    committed = _committed(repo, IGNORES, timeout, env)
+    committed = blob(repo, f"HEAD:{IGNORES}", timeout, env)
     if in_repo:
         try:
             present: bytes | None = fsops.read_regular_bytes(repo / IGNORES)
@@ -220,7 +219,7 @@ def _pinned(
                 f"{IGNORES} at the overlay's root is not the committed one, and gitleaks reads it "
                 "whatever it is told: commit it or remove it"
             )
-    rules = _committed(repo, RULES, timeout, env)
+    rules = blob(repo, f"HEAD:{RULES}", timeout, env)
     if rules is not None:
         config = directory / RULES
         config.write_bytes(rules)
@@ -261,7 +260,7 @@ def _scan(
         directory = Path(name)
         pinned, unpinned = _pinned(repo, binary, directory, timeout, env, in_repo=stdin is None)
         if unpinned:
-            return CheckResult(False, "gitleaks", unpinned, False, None), []
+            return CheckResult(False, unpinned, False, None), []
         report = directory / "report.json"
         result = run(
             [
@@ -287,15 +286,15 @@ def _scan(
         findings = _findings(report)
     if result.timed_out:
         out = f"gitleaks did not finish within {timeout:g} s"
-        return CheckResult(False, "gitleaks", out, True, None), []
+        return CheckResult(False, out, True, None), []
     if result.code == 0:
-        return CheckResult(True, "gitleaks", "no leaks found", False, None), []
+        return CheckResult(True, "no leaks found", False, None), []
     if not findings:
         # A failed scan, not a finding: exit 1 with an empty report.
         detail = (
-            _first_lines(result.err) or _first_lines(result.out) or f"gitleaks exited {result.code}"
+            first_lines(result.err) or first_lines(result.out) or f"gitleaks exited {result.code}"
         )
-        return CheckResult(False, "gitleaks", detail, False, None), []
+        return CheckResult(False, detail, False, None), []
     commit = next((str(item["Commit"]) for item in findings if item.get("Commit")), None)
     # Rule, file and commit only: never the match or the secret, redacted or not.
     lines = [
@@ -305,7 +304,7 @@ def _scan(
     ]
     if len(findings) > DETAIL_LINES:
         lines.append(f"... {len(findings) - DETAIL_LINES} more")
-    return CheckResult(False, "gitleaks", "\n".join(lines), False, commit), findings
+    return CheckResult(False, "\n".join(lines), False, commit), findings
 
 
 def scan_index(
@@ -374,6 +373,6 @@ def scan_commits(
         if found:
             rules = ", ".join(sorted({str(item.get("RuleID", "secret")) for item in found}))
             detail = f"{rules} in the author, message or path names of commit {sha}"
-            return CheckResult(False, "gitleaks", detail, False, sha)
+            return CheckResult(False, detail, False, sha)
     detail = "a finding in the commits' metadata, in no one commit"
-    return CheckResult(False, "gitleaks", detail, False, None)
+    return CheckResult(False, detail, False, None)
