@@ -268,6 +268,7 @@ to find the project root, and reaches no network.
 | Program | Run by | Talks to | When |
 |---|---|---|---|
 | `git fetch` | `stayfixed bugs new`; the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the project's `origin`; for the note sync, the overlay's `origin` (note 1) | `bugs new` unless `--no-fetch`; the note sync on each run |
+| `git push` | the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the overlay's `origin` (note 1) | the note sync, when the commits on `main` that `origin` lacks are all notes and pass the secret scan |
 | `git ls-remote` | `stayfixed init`, `stayfixed upgrade`, `stayfixed doctor`, `stayfixed gate` | `https://github.com/stayfixed/stayfixed`, for its release tags | note 2 |
 | `gh` | `stayfixed setup --overlay create:<owner>/<name>` | GitHub's API, as the account `gh` acts for, and the clones it makes over git (note 3) | note 3 |
 | `git clone` | `stayfixed setup --overlay create:<owner>/<name>` | `git@github.com:<owner>/<name>.git`, the overlay just created | when `gh repo create --clone` reported success and left nothing at the destination |
@@ -295,7 +296,9 @@ to find the project root, and reaches no network.
    git does read names are used. The note sync's fetch is the other way round: it asks the overlay's
    `origin` for `main` alone, into a ref of its own, with your whole environment less the variables
    that point git at another repository, so your ssh agent and proxy settings apply; it never asks
-   for a password (`GIT_TERMINAL_PROMPT=0`, and an `ssh` given `BatchMode=yes`).
+   for a password (`GIT_TERMINAL_PROMPT=0`, and an `ssh` given `BatchMode=yes`). Its **`git
+   push`** goes the same way to the same `origin`: the sha it checked to `main`, never forced and
+   with no tag.
 2. **`git ls-remote`** runs in `init` and `upgrade` in `reusable` mode, to pin the CI workflow they
    write to a release's commit; in `doctor` when `[ci] ref` is recorded; and in `gate` when a
    change moves `[ci] ref` to the commit `--workflow-sha` names.

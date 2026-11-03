@@ -381,6 +381,9 @@ class Overlays:
     checkouts: dict[str, Path]
     gitleaks: Path
     state_dir: Path = field(default_factory=state_directory)
+    # Whether the machine file `use` writes switches the sync on: the job's `main` and the hooks
+    # read it, the steps under test never do.
+    sync: bool = False
 
     def mode(self, mode: str | None) -> None:
         """Set the scanner stand-in's mode (`None`: scan)."""
@@ -395,7 +398,8 @@ class Overlays:
         machine = machine_config_path()
         assert machine is not None
         machine.parent.mkdir(parents=True, exist_ok=True)
-        machine.write_text(f'[overlay]\nroot = "{clone}"\n', encoding="utf-8")
+        switch = "\n[sync]\nenabled = true\n" if self.sync else ""
+        machine.write_text(f'[overlay]\nroot = "{clone}"\n{switch}', encoding="utf-8")
         for name, root in self.checkouts.items():
             build_composed(clone, name, binding.ensure_id(root))
 

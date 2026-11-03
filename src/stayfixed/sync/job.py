@@ -14,23 +14,42 @@ followed by aligning the real index's memory entries with the new `HEAD`, or the
 
 from __future__ import annotations
 
+import argparse
 import contextlib
+import io
+import os
 import re
 import shutil
+import subprocess
+import sys
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from stayfixed import fsops
+from stayfixed.config.overlay import overlay_root
 from stayfixed.sync import scan
-from stayfixed.sync.git import UNMERGED, GitError, Ran, checked, git, job_env, timed
+from stayfixed.sync.git import (
+    UNMERGED,
+    GitError,
+    GitTimeout,
+    Ran,
+    checked,
+    git,
+    guard,
+    job_env,
+    timed,
+)
 from stayfixed.sync.render import prerender, unsafe_parent
 from stayfixed.sync.rules import (
     MEMORY_PATHSPEC,
     MEMORY_SPECS,
+    RawEntry,
+    commit_entries,
     dirty_memory,
+    entry_offends,
     index_of,
     is_memory_path,
     memory_path,
@@ -39,16 +58,26 @@ from stayfixed.sync.rules import (
 )
 from stayfixed.sync.state import (
     EMPTY_HOLDS,
+    LOCK_FILE,
+    PENDING_FILE,
     SCRATCH,
+    SLEEPER_LOCK_FILE,
+    THROTTLE_SECONDS,
     Holds,
+    Lock,
     Outcome,
     PendingAlign,
     StateUnreadable,
     SyncState,
     iso,
+    mark_pending,
+    parse_time,
     read_state,
+    state_directory,
+    take_pending,
     write_state,
 )
+from stayfixed.sync.switch import enabled
 
 # Named caps on the alignment's wait for an `index.lock` the owner's own git holds: five tries a
 # fifth of a second apart, past which the job records `index_stale`. No shipped file states them.
@@ -61,12 +90,11 @@ SWAP_MESSAGE = "stayfixed note sync"
 @dataclass(frozen=True)
 class Limits:
     """Wall-clock limits in seconds, each a named cap no shipped file states: the network calls,
-    the pre-render, both commit checks together, the whole job, and any other single git call.
-    Injectable, so a test can wait one second where the job waits sixty."""
+    both commit checks together, both push scans together, the whole job, and any other single
+    git call. Injectable, so a test can wait one second where the job waits sixty."""
 
     fetch: float = 30.0
     push: float = 30.0
-    prerender: float = 30.0
     checks: float = 60.0
     job: float = 180.0
     local: float = 30.0
@@ -367,7 +395,7 @@ def commit_memory(ctx: JobContext, *, also: Iterable[str] = ()) -> Outcome | Non
     dirty = dirty_memory(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
     if not dirty and not also:
         return None
-    ctx.limit(ctx.limits.prerender)
+    ctx.limit(ctx.limits.job)  # the render is in process: only the job's own deadline bounds it
     left_out = prerender(ctx.overlay, dirty, ctx.state_dir, also=also)
     for project, reason in sorted(left_out.items()):
         ctx.remarks.append(f"{index_of(project)} left out of the commit: {reason}")
@@ -877,3 +905,332 @@ def integrate(ctx: JobContext, upstream: str) -> Outcome | None:
     ctx.notices.append(_outcome(ctx, "resolved_index", detail, paths=paths))
     # The union's own lines are harvested into their notes, and both committed with this job's.
     return commit_memory(ctx, also=projects)
+
+
+# -- push the checked range -----------------------------------------------------------------------
+
+REMEDY = (
+    "rewrite this commit locally: `git rebase -i {sha}^` and edit it; the job pushes the "
+    "rewritten range"
+)
+
+
+def _before_push() -> None:
+    """Nothing; the moment between the range's checks and its push (a test seam)."""
+
+
+def _range(ctx: JobContext, base: str, tip: str) -> list[tuple[str, list[RawEntry]]]:
+    return commit_entries(
+        ctx.overlay, f"{base}..{tip}", timeout=ctx.limit(ctx.limits.local), env=ctx.env
+    )
+
+
+def _metadata(ctx: JobContext, base: str, tip: str) -> list[tuple[str, str]]:
+    """`[(sha, text)]` for each commit of `base..tip`: what its push sends besides the patches,
+    the commit object whole (every header, the message) and the name of every path."""
+    return [
+        (sha, "\n".join([_ok(ctx, "cat-file", "commit", "--end-of-options", sha).rstrip("\n"),
+                         *(entry.path for entry in entries)]) + "\n")
+        for sha, entries in _range(ctx, base, tip)
+    ]  # fmt: skip
+
+
+def _scan_push(ctx: JobContext, upstream: str, tip: str) -> Outcome | None:
+    """Both scans of what the push sends, within `Limits.checks` together; the failure, if any."""
+    binary = scan.gitleaks_binary(ctx.home, ctx.overlay)
+    if binary is None:
+        return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER.format(overlay=ctx.overlay))
+    deadline = time.monotonic() + ctx.limits.checks
+    with _scratch(ctx) as scratch:
+        result = scan.scan_range(
+            ctx.overlay, upstream, tip, binary, ctx.limit(ctx.limits.checks), ctx.env, scratch
+        )
+        left = deadline - time.monotonic()
+        if result.ok and left <= 0:
+            return _outcome(ctx, "timeout", f"the push's scans took over {ctx.limits.checks:g} s")
+        if result.ok:
+            blocks = _metadata(ctx, upstream, tip)
+            result = scan.scan_commits(
+                ctx.overlay, blocks, binary, ctx.limit(left), ctx.env, scratch
+            )
+    if result.timed_out:
+        return _outcome(ctx, "timeout", f"gitleaks: {result.detail}")
+    if result.ok:
+        return None
+    if result.finding_commit:
+        detail = f"{result.detail}\n{REMEDY.format(sha=result.finding_commit)}"
+        return _outcome(ctx, "secret_found", detail, commits=[result.finding_commit])
+    return _outcome(ctx, "hook_failed", f"gitleaks: {result.detail}")
+
+
+def push(ctx: JobContext, upstream: str) -> Outcome | None:
+    """Push `upstream..H`, `H` the sha checked here and never `main`, if it is memory-only; the
+    outcome that stops the job, or `None`.
+
+    The local range is judged even when an upstream hold skips the push, so both holds are
+    recorded at once; one that is not memory-only is a local hold naming its commits. Every byte
+    pushed is scanned first. Never forced, and no tag follows.
+    """
+    tip = _rev(ctx, "HEAD")
+    if _is_ancestor(ctx, tip, upstream):
+        ctx.holds = replace(ctx.holds, local_commits=(), local_since=None)
+        return None
+    pushable, offending = range_is_memory_only(
+        ctx.overlay, upstream, tip, timeout=ctx.limit(ctx.limits.local), env=ctx.env
+    )
+    if not pushable:
+        commits = [
+            sha
+            for sha, entries in _range(ctx, upstream, tip)
+            if not entries or any(entry_offends(entry) for entry in entries)
+        ] or offending
+        held = ctx.holds
+        since = held.local_since if held.local_commits else iso(ctx.now())
+        ctx.remarks.append(
+            "local commits outside memory are not pushed; push them by hand when reviewed: "
+            + ", ".join(commits)
+        )
+        ctx.holds = replace(held, local_commits=tuple(commits), local_since=since)
+        return None
+    ctx.holds = replace(ctx.holds, local_commits=(), local_since=None)
+    if ctx.holds.upstream_paths:
+        ctx.remarks.append("not pushed while upstream is held")
+        return None
+    failed = _scan_push(ctx, upstream, tip)
+    if failed is not None:
+        return failed
+    _before_push()
+    limit = ctx.limit(ctx.limits.push)
+    result = _git(
+        ctx, "push", "--porcelain", "--no-follow-tags", "origin", f"{tip}:refs/heads/main",
+        timeout=limit,
+    )  # fmt: skip
+    if result.code == 0 and not result.timed_out:
+        return None
+    said = (result.out + result.err).lower()
+    if not result.timed_out and any(
+        word in said for word in ("[rejected]", "fetch first", "non-fast-forward")
+    ):
+        detail = "origin/main moved before the push; the next trigger fetches and retries"
+        return _outcome(ctx, "rejected", detail)
+    return _remote_failure(ctx, result, "git push origin", limit)
+
+
+def _is_ancestor(ctx: JobContext, ancestor: str, rev: str) -> bool:
+    result = _git(ctx, "merge-base", "--is-ancestor", "--end-of-options", ancestor, rev)
+    return timed(result, "git merge-base").code == 0
+
+
+# -- the job's end, its run loop and its entry point ----------------------------------------------
+
+# Named caps, no shipped file states them: how many rounds a running job adds for triggers that
+# arrived while it ran; the characters of the outcome's detail kept in the state; and how long
+# the last read of `HEAD` may take, made even when the job's own time is spent.
+LOOPS = 2
+DETAIL_LIMIT = 2000
+HEAD_TIMEOUT = 10.0
+# What the detached process runs, under `-I`: the working directory (the overlay), `PYTHONPATH`
+# and the user site are not on `sys.path`, and only the imported package's own directory, which
+# `job_argv` hands it, is put back.
+BOOT = (
+    "import sys; sys.path.insert(0, sys.argv.pop(1)); "
+    "from stayfixed.sync.job import main; sys.exit(main(sys.argv[1:]))"
+)
+
+
+def _refusal_detail(refused: list[str]) -> str:
+    return (
+        "job: not committed, not a plain-text note under a memory name (a link, at the path or in "
+        "place of a directory above it, a nested repository, an executable, a dot-file or "
+        "dot-directory, a name not ending in .md, or a file git calls binary): "
+        + ", ".join(refused)
+    )
+
+
+def _end(ctx: JobContext, stopped: Outcome | None) -> Outcome:
+    """The job's outcome, by one rule: a stop is the end; otherwise the latest notice, the paths
+    left out of a commit (`ctx.refused`) counting as the earliest; with neither, `ok`. Every other
+    candidate is named in the detail, after the end's own words and before the remarks, and the
+    same failure met twice is said once."""
+    notices = list(ctx.notices)
+    if ctx.refused:
+        refusal = _outcome(ctx, "hook_failed", _refusal_detail(ctx.refused), paths=ctx.refused)
+        notices.insert(0, refusal)
+    ranked: list[Outcome] = []
+    for each in ([stopped] if stopped is not None else []) + notices[::-1]:
+        if all((each.state, each.detail) != (kept.state, kept.detail) for kept in ranked):
+            ranked.append(each)
+    end = ranked[0] if ranked else _outcome(ctx, "ok")
+    others = [f"also {other.state}: {other.detail}" for other in ranked[1:]]
+    return replace(end, detail=_detail([end.detail, *others, *ctx.remarks]))
+
+
+def _detail(parts: list[str | None]) -> str | None:
+    """`parts` a line apart, each said once; when they are too long together each is cut to an
+    equal share, so the last is never dropped for the first."""
+    said = list(dict.fromkeys(part for part in parts if part))
+    joined = "\n".join(said)
+    if len(joined) <= DETAIL_LIMIT:
+        return joined or None
+    share = DETAIL_LIMIT // len(said) - 1
+    return "\n".join(part if len(part) <= share else part[: share - 3] + "..." for part in said)
+
+
+def _steps(ctx: JobContext) -> Outcome | None:
+    """Guard, align what is owed, commit, fetch, integrate, push; the outcome that stopped it."""
+    checked_out = guard(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
+    if not checked_out.ok:
+        return _outcome(ctx, "skipped", checked_out.reason)
+    stopped = align_first(ctx) or commit_memory(ctx)
+    if stopped is not None:
+        return stopped
+    upstream, stopped = fetch(ctx)
+    if upstream is None:
+        return stopped
+    return integrate(ctx, upstream) or push(ctx, upstream)
+
+
+def _one_job(ctx: JobContext) -> SyncState:
+    """The steps once, within the job's limit; the state written for them. A state recorded for
+    another overlay, or one that cannot be read, is not used, and the detail says so."""
+    ctx = replace(
+        ctx, deadline=time.monotonic() + ctx.limits.job, remarks=[], notices=[], pending=None,
+        fetched_sha=None, last_fetch_ok=None, resolved=set(), refused=[], holds=EMPTY_HOLDS,
+    )  # fmt: skip
+    scratch = ctx.state_dir / SCRATCH
+    shutil.rmtree(scratch, ignore_errors=True)
+    try:
+        previous = read_state(ctx.state_dir)
+    except StateUnreadable as error:
+        previous = None
+        ctx.remarks.append(f"the previous state could not be read and was replaced: {error}")
+    if previous is not None and previous.overlay != str(ctx.overlay):
+        ctx.remarks.append(
+            f"the state recorded for {previous.overlay} is not used: the overlay moved"
+        )
+        previous = None
+    if previous is not None:
+        ctx.holds, ctx.pending = previous.holds, previous.pending_align
+    try:
+        stopped = _steps(ctx)
+    except (JobTimeout, GitTimeout) as error:
+        stopped = _outcome(ctx, "timeout", str(error))
+    except JobStopped as stop:
+        stopped = stop.outcome
+    except Exception as error:  # every failure becomes state, never a traceback
+        stopped = _outcome(ctx, "hook_failed", f"job: {_said(str(error)) or type(error).__name__}")
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    # Not `ctx.env`, which past the deadline would not be built: `rev-parse` asks no remote.
+    head = git(ctx.overlay, "rev-parse", "-q", "--verify", "HEAD", timeout=HEAD_TIMEOUT)
+    state = SyncState(
+        overlay=str(ctx.overlay),
+        outcome=_end(ctx, stopped),
+        holds=ctx.holds,
+        last_fetch_ok=ctx.last_fetch_ok or (previous.last_fetch_ok if previous else None),
+        fetched_sha=ctx.fetched_sha or (previous.fetched_sha if previous else None),
+        last_job_at=iso(ctx.now()),
+        pending_align=ctx.pending,
+        head=head.out.strip() if head.code == 0 and not head.timed_out else None,
+    )
+    write_state(ctx.state_dir, state)
+    return state
+
+
+def _released() -> None:
+    """Nothing; the moment right after a job released its lock (a test seam)."""
+
+
+def run_job(ctx: JobContext) -> SyncState | None:
+    """Take the lock, run the job, write the state, release; loop while triggers arrived.
+
+    With the lock busy, the trigger is marked pending for the running job and the current state
+    returned. After each release the mark is taken once more, so a trigger that landed while the
+    job ran runs it again, at most `LOOPS` more times; one still pending after that gets a
+    sleeper, a throttle after this job, as the hooks schedule one.
+    """
+    state: SyncState | None = None
+    for round_number in range(LOOPS + 1):
+        lock = Lock.try_acquire(ctx.state_dir / LOCK_FILE)
+        if lock is None:
+            mark_pending(ctx.state_dir)
+            if state is None:
+                with contextlib.suppress(StateUnreadable):
+                    state = read_state(ctx.state_dir)
+            return state
+        with lock:
+            take_pending(ctx.state_dir)  # this round covers every trigger so far
+            state = _one_job(ctx)
+        _released()
+        if round_number == LOOPS:
+            if fsops.exists(ctx.state_dir / PENDING_FILE) and state.last_job_at is not None:
+                wake = parse_time(state.last_job_at) + timedelta(seconds=THROTTLE_SECONDS)
+                spawn(ctx.overlay, wake=wake)
+        elif not take_pending(ctx.state_dir):
+            break
+    return state
+
+
+def job_argv(*, wake: datetime | None) -> list[str]:
+    """The detached job's command: isolated, given the package's directory, and `--sleep-until`
+    for a sleeper. It reads the switch and the overlay from the machine file itself."""
+    package_parent = str(Path(__file__).resolve().parents[2])
+    sleep = ["--sleep-until", iso(wake)] if wake is not None else []
+    return [sys.executable, "-I", "-c", BOOT, package_parent, *sleep]
+
+
+def spawn(overlay: Path, *, wake: datetime | None = None) -> None:
+    """Start the job detached and return at once: its own session, standard streams on
+    `/dev/null` (a hook's caller reads its output to the end), no inherited descriptor, and the
+    overlay as its working directory."""
+    subprocess.Popen(  # noqa: S603 - list form, never a shell
+        job_argv(wake=wake),
+        cwd=overlay,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        close_fds=True,
+    )
+
+
+def _sleep_until(text: str, now: datetime) -> None:
+    """Sleep until `text`, never longer than the throttle: a clock that jumped must not park the
+    sleeper for hours."""
+    with contextlib.suppress(ValueError):
+        seconds = (parse_time(text) - now).total_seconds()
+        time.sleep(min(max(seconds, 0.0), THROTTLE_SECONDS))
+
+
+def _switched_on() -> Path | None:
+    """The overlay the machine file records, when it also switches the sync on."""
+    overlay = overlay_root(None) if enabled() else None
+    return overlay if overlay is not None and fsops.exists(overlay / ".git") else None
+
+
+def main(argv: list[str] | None = None) -> int:
+    """`[--sleep-until ISO]`: the detached job. Exits 0 whatever happens, and runs no job while
+    the machine file does not switch the sync on, read again when a sleeper wakes."""
+    try:
+        parser = argparse.ArgumentParser(prog="stayfixed-sync", add_help=False)
+        parser.add_argument("--sleep-until")
+        with contextlib.redirect_stderr(io.StringIO()):
+            args = parser.parse_args(argv)
+        if _switched_on() is None:
+            return 0
+        state_dir = state_directory()
+        if args.sleep_until:
+            sleeper = Lock.try_acquire(state_dir / SLEEPER_LOCK_FILE)
+            if sleeper is None:
+                return 0  # another sleeper already waits
+            with sleeper:
+                _sleep_until(args.sleep_until, datetime.now(UTC))
+        overlay = _switched_on()
+        if overlay is None:
+            return 0
+        host = os.uname().nodename.split(".")[0] or "unknown"
+        context = JobContext(overlay, state_dir, Path.home(), host, lambda: datetime.now(UTC))
+        run_job(context)
+    except (Exception, SystemExit):  # noqa: S110 - the job exits 0 whatever happens
+        pass
+    return 0

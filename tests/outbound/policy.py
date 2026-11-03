@@ -80,6 +80,7 @@ NETWORK: dict[tuple[str, ...], str] = {
     ("gh",): "gh",
     ("git", "clone"): "git clone",
     ("git", "fetch"): "git fetch",
+    ("git", "push"): "git push",
     ("git", "ls-remote"): "git ls-remote",
     ("claude", "plugin"): "claude plugin",
     ("codex", "plugin"): "codex plugin",
@@ -247,6 +248,10 @@ PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
     # `git --pre-commit --staged`, `git --log-opts` or `stdin`: it reads the repository and its
     # input and reaches no network, and a path that is not an executable build is never run.
     ("src/stayfixed/sync/scan.py", "_scan", "str(binary)"): NO_ROWS,
+    # The note sync's detached job: this interpreter, isolated (`-I -c BOOT`), running this
+    # package's `sync.job.main`, whose own launches (its `git fetch` and `git push` among them)
+    # are walked where they are, in `sync/job.py`.
+    ("src/stayfixed/sync/job.py", "spawn", "job_argv(wake=wake)"): NO_ROWS,
     # `hooks/run-hook.sh --version` under the plugin root this process derived: stayfixed's
     # own hook wrapper, asked for its version.
     ("src/stayfixed/doctor/checks.py", "_wrapper", "str(root / WRAPPER)"): NO_ROWS,

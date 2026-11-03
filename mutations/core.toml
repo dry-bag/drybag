@@ -6985,3 +6985,157 @@ after = "        if False:"
 reddens = [
   "tests/sync/test_integrate.py::test_the_owners_edit_after_the_kill_wins_over_the_pending_write",
 ]
+
+# The push: it sends the sha its checks read and never a name that may have moved since, never
+# forced, and only after both scans of what it sends; the scan's report, not its exit, decides
+# whether the range holds a secret.
+[[mutation]]
+name = "the push sends main instead of the checked sha"
+file = "src/stayfixed/sync/job.py"
+before = '''        ctx, "push", "--porcelain", "--no-follow-tags", "origin", f"{tip}:refs/heads/main",'''
+after = '''        ctx, "push", "--porcelain", "--no-follow-tags", "origin", "HEAD:refs/heads/main",'''
+reddens = [
+  "tests/sync/test_push.py::test_the_memory_only_range_is_pushed_as_the_checked_sha",
+  "tests/sync/test_push.py::test_the_push_is_never_forced_and_carries_no_tags",
+]
+
+[[mutation]]
+name = "the push is forced"
+file = "src/stayfixed/sync/job.py"
+before = '''        ctx, "push", "--porcelain", "--no-follow-tags", "origin", f"{tip}:refs/heads/main",'''
+after = '''        ctx, "push", "--force", "--porcelain", "--no-follow-tags", "origin", f"{tip}:refs/heads/main",'''
+reddens = [
+  "tests/sync/test_push.py::test_the_push_is_never_forced_and_carries_no_tags",
+  "tests/sync/test_push.py::test_a_rejected_push_is_retried_on_the_next_trigger",
+]
+
+[[mutation]]
+name = "a local range outside memory is pushed"
+file = "src/stayfixed/sync/job.py"
+before = "    if not pushable:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_push.py::test_a_local_commit_outside_memory_is_held_and_named",
+  "tests/sync/test_push.py::test_a_replace_ref_cannot_disguise_a_commit",
+]
+
+[[mutation]]
+name = "the push goes out unscanned"
+file = "src/stayfixed/sync/job.py"
+before = "    failed = _scan_push(ctx, upstream, tip)"
+after = "    failed = None"
+reddens = [
+  "tests/sync/test_push.py::test_a_secret_in_the_range_is_secret_found_with_its_sha",
+  "tests/sync/test_push.py::test_a_failed_range_scan_is_hook_failed_not_secret_found",
+]
+
+[[mutation]]
+name = "a failed push scan is taken for a finding"
+file = "src/stayfixed/sync/job.py"
+before = "    if result.finding_commit:"
+after = "    if True:"
+reddens = ["tests/sync/test_push.py::test_a_failed_range_scan_is_hook_failed_not_secret_found"]
+
+[[mutation]]
+name = "a failed push scan lets the push go"
+file = "src/stayfixed/sync/job.py"
+before = '''    return _outcome(ctx, "hook_failed", f"gitleaks: {result.detail}")'''
+after = "    return None"
+reddens = ["tests/sync/test_push.py::test_a_failed_range_scan_is_hook_failed_not_secret_found"]
+
+[[mutation]]
+name = "the push scans no commit's metadata"
+file = "src/stayfixed/sync/job.py"
+before = "            blocks = _metadata(ctx, upstream, tip)"
+after = "            blocks = []"
+reddens = ["tests/sync/test_push.py::test_a_secret_outside_any_patch_is_never_pushed"]
+
+[[mutation]]
+name = "the push's metadata scan reads no commit object"
+file = "src/stayfixed/sync/job.py"
+before = '''        (sha, "\n".join([_ok(ctx, "cat-file", "commit", "--end-of-options", sha).rstrip("\n"),'''
+after = '''        (sha, "\n".join(["",'''
+reddens = ["tests/sync/test_push.py::test_a_secret_outside_any_patch_is_never_pushed"]
+
+# The job's end: a stop is the end whatever was noted; without one the latest notice is.
+[[mutation]]
+name = "a notice outranks the step that stopped the job"
+file = "src/stayfixed/sync/job.py"
+before = "    for each in ([stopped] if stopped is not None else []) + notices[::-1]:"
+after = "    for each in notices[::-1] + ([stopped] if stopped is not None else []):"
+reddens = [
+  "tests/sync/test_push.py::test_a_stop_is_the_end_whatever_was_noted_and_each_is_said_once",
+  "tests/sync/test_push.py::test_a_failed_commit_scan_then_offline_is_offline_naming_both",
+]
+
+[[mutation]]
+name = "the earliest notice is the job's end"
+file = "src/stayfixed/sync/job.py"
+before = "    for each in ([stopped] if stopped is not None else []) + notices[::-1]:"
+after = "    for each in ([stopped] if stopped is not None else []) + notices:"
+reddens = [
+  "tests/sync/test_push.py::test_without_a_stop_the_end_is_the_latest_notice_refusals_counting_first",
+]
+
+[[mutation]]
+name = "a state recorded for another overlay is used"
+file = "src/stayfixed/sync/job.py"
+before = "    if previous is not None and previous.overlay != str(ctx.overlay):"
+after = "    if False:"
+reddens = ["tests/sync/test_run.py::test_a_state_for_another_overlay_is_not_used"]
+
+# The loop and the sleeper: a trigger that arrived while the job ran runs it again, and one
+# sleeper waits at a time.
+[[mutation]]
+name = "a trigger pending after a round runs no second round"
+file = "src/stayfixed/sync/job.py"
+before = "        elif not take_pending(ctx.state_dir):"
+after = "        elif True:"
+reddens = [
+  "tests/sync/test_run.py::test_a_trigger_during_the_release_runs_a_second_round",
+  "tests/sync/test_run.py::test_busy_lock_marks_pending_and_the_job_loops",
+]
+
+[[mutation]]
+name = "every sleeper takes a lock of its own"
+file = "src/stayfixed/sync/job.py"
+before = "            sleeper = Lock.try_acquire(state_dir / SLEEPER_LOCK_FILE)"
+after = '''            sleeper = Lock.try_acquire(state_dir / f"{SLEEPER_LOCK_FILE}.{os.getpid()}")'''
+reddens = ["tests/sync/test_run.py::test_a_sleeper_waits_then_runs_and_a_second_sleeper_exits"]
+
+# The detached start: isolated, so the overlay it runs in is not on its path, and attached to
+# nothing of the hook that started it.
+[[mutation]]
+name = "the job runs with the overlay on its path"
+file = "src/stayfixed/sync/job.py"
+before = '''    return [sys.executable, "-I", "-c", BOOT, package_parent, *sleep]'''
+after = '''    return [sys.executable, "-c", BOOT, package_parent, *sleep]'''
+reddens = ["tests/sync/test_run.py::test_the_job_imports_nothing_from_the_overlay"]
+
+[[mutation]]
+name = "the job shares the session of what started it"
+file = "src/stayfixed/sync/job.py"
+before = "        start_new_session=True,"
+after = "        start_new_session=False,"
+reddens = ["tests/sync/test_run.py::test_the_job_is_spawned_detached_with_nothing_inherited"]
+
+[[mutation]]
+name = "the job writes to the output its starter reads"
+file = "src/stayfixed/sync/job.py"
+before = "        stdout=subprocess.DEVNULL,"
+after = "        stdout=None,"
+reddens = ["tests/sync/test_run.py::test_the_job_is_spawned_detached_with_nothing_inherited"]
+
+[[mutation]]
+name = "the job inherits its starter's descriptors"
+file = "src/stayfixed/sync/job.py"
+before = "        close_fds=True,"
+after = "        close_fds=False,"
+reddens = ["tests/sync/test_run.py::test_the_job_is_spawned_detached_with_nothing_inherited"]
+
+[[mutation]]
+name = "the job runs where its starter happened to be"
+file = "src/stayfixed/sync/job.py"
+before = "        cwd=overlay,"
+after = "        cwd=None,"
+reddens = ["tests/sync/test_run.py::test_the_job_is_spawned_detached_with_nothing_inherited"]
