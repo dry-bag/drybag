@@ -144,10 +144,65 @@ def test_job_env_pins_attributes_and_replace_refs_and_keeps_core_sshcommand(tmp_
 
     assert G.job_env(repo, timeout=SLOW) == {
         "GIT_TERMINAL_PROMPT": "0",
+        "SSH_ASKPASS_REQUIRE": "never",
         "GIT_SSH_COMMAND": "ssh -i ~/.ssh/k" + _APPENDED,
         "GIT_NO_REPLACE_OBJECTS": "1",  # a replace ref must not show the checks another commit
         "GIT_ATTR_SOURCE": "HEAD",  # nor a working-tree `.gitattributes` filter another blob
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "core.askPass",
+        "GIT_CONFIG_VALUE_0": "",
     }
+
+
+def test_no_askpass_is_ever_asked_for_a_password(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # git asks an askpass before the terminal, so `GIT_TERMINAL_PROMPT=0` alone does not stop an
+    # unattended job popping a password dialog from an editor's `GIT_ASKPASS`, the owner's
+    # `core.askPass` or a desktop's `SSH_ASKPASS`. Mutations (oracle): `mutations/`'s "the job
+    # keeps an inherited askpass" and "the job keeps the owner's core.askPass".
+    repo = init(tmp_path / "r")
+    asked = tmp_path / "asked"
+    askpass = tmp_path / "askpass"
+    askpass.write_text(f'#!/bin/sh\necho "$*" >> {asked}\necho secret\n')
+    askpass.chmod(0o755)
+    for name in ("GIT_ASKPASS", "SSH_ASKPASS"):
+        monkeypatch.setenv(name, str(askpass))
+    git(repo, "config", "core.askPass", str(askpass))
+    env = G.job_env(repo, timeout=SLOW)
+    request = b"protocol=https\nhost=example.invalid\n\n"
+
+    filled = G.git(
+        repo, "-c", "credential.helper=", "credential", "fill", timeout=SLOW, env=env, stdin=request
+    )
+
+    assert filled.code != 0 and not asked.exists()
+    for name in ("GIT_ASKPASS", "SSH_ASKPASS"):
+        monkeypatch.delenv(name)
+    filled = G.git(
+        repo, "-c", "credential.helper=", "credential", "fill", timeout=SLOW, env=env, stdin=request
+    )
+    assert filled.code != 0 and not asked.exists()  # the owner's `core.askPass` is off too
+
+
+@pytest.mark.parametrize("entry", ["", "."])
+def test_a_git_at_the_overlays_root_never_runs_from_a_relative_path_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str
+) -> None:
+    # Every call runs in the overlay, so an empty or `.` entry of `PATH` (a dotfile slip) would
+    # find a `git` planted at its root, and git would find an `ssh` there the same way.
+    # Mutation (oracle): `mutations/`'s "a relative PATH entry reaches the overlay".
+    repo = init(tmp_path / "r")
+    planted = repo / "git"
+    planted.write_text("#!/bin/sh\necho planted\n")
+    planted.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{entry}{os.pathsep}{os.environ['PATH']}")
+
+    ran = G.git(repo, "version", timeout=SLOW)
+
+    assert ran.out.startswith("git version"), ran
+    shown = G.run(["sh", "-c", 'printf %s "$PATH"'], cwd=repo, timeout=SLOW).out
+    assert all(os.path.isabs(part) for part in shown.split(os.pathsep)), shown
 
 
 def test_job_env_defaults_to_ssh_and_prefers_the_environment(

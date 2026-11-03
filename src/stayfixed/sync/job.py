@@ -41,6 +41,7 @@ from stayfixed.sync.git import (
     guard,
     job_env,
     timed,
+    with_config,
 )
 from stayfixed.sync.render import prerender, unsafe_parent
 from stayfixed.sync.rules import (
@@ -695,9 +696,9 @@ def _original(ctx: JobContext, commit: str) -> tuple[dict[str, str], bytes]:
             name, email, date = author.groups()
             env.update(GIT_AUTHOR_NAME=name, GIT_AUTHOR_EMAIL=email, GIT_AUTHOR_DATE=date)
         elif line.startswith("encoding "):
-            encoding = line.removeprefix("encoding ")
-            env.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="i18n.commitEncoding")
-            env.update(GIT_CONFIG_VALUE_0=encoding)
+            env.update(
+                with_config(ctx.env, {"i18n.commitEncoding": line.removeprefix("encoding ")})
+            )
     if "GIT_AUTHOR_NAME" not in env:
         raise GitError(f"commit {commit} has no readable author line")
     return env, message

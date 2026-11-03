@@ -13,6 +13,7 @@ scan alike, and a failed scan leaves an empty report.
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -20,6 +21,7 @@ import pytest
 
 import stayfixed
 from stayfixed.sync import git as G
+from stayfixed.sync import job as J
 from stayfixed.sync import scan as S
 from tests.sync.conftest import (
     DEFAULT_RULES,
@@ -27,8 +29,10 @@ from tests.sync.conftest import (
     GITLEAKS_REV,
     LEAK,
     SLOW,
+    Overlays,
     build_gitleaks,
     commit_all,
+    context,
     git,
     head,
     init,
@@ -455,15 +459,56 @@ def test_gitleaks_variables_are_dropped(
     assert _seen(scanner)["env"] == []
 
 
-def test_gitleaks_reads_a_log_without_signature_lines(tmp_path: Path, scanner: Path) -> None:
-    """Its own `git log -p` parses a patch: a `log.showSignature` in the owner's configuration
-    would put a verification into what it reads."""
+def test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour(
+    tmp_path: Path, scanner: Path
+) -> None:
+    """Its own `git log -p` and `git diff` give it a patch to parse: a `log.showSignature` in the
+    owner's configuration would put a verification into it, and a `color.ui = always` escape
+    codes, which leave its parser no file to scan and the scan passing. Mutations (oracle):
+    `mutations/`'s "gitleaks reads a log with signature lines", "the scan's git colours its patch"
+    and "the scan's git colours its diff"."""
     repo = _repo(tmp_path)
-    git(repo, "config", "log.showSignature", "true")
+    for key, value in (("log.showSignature", "true"), ("color.ui", "always")):
+        git(repo, "config", key, value)
+    git(repo, "config", "color.diff", "always")
+    index = _temporary_index(repo, tmp_path)
+    expected = {"log.showSignature": "false", "color.ui": "false", "color.diff": "false"}
 
-    S.scan_range(repo, "HEAD", "HEAD", scanner, SLOW)
+    for scanned in (
+        lambda: S.scan_range(repo, "HEAD", "HEAD", scanner, SLOW, env={"GIT_CONFIG_COUNT": "0"}),
+        lambda: S.scan_index(repo, index, scanner, SLOW),
+    ):
+        scanned()
+        assert json.loads((scanner.parent / "git_config.json").read_text()) == expected
 
-    assert (scanner.parent / "show_signature").read_text() == "false"
+
+# The pinned build pre-commit made on this machine, when it made one: the owner's own cache, read
+# only, located before the suite's scratch `HOME` replaces the real one.
+_CACHE = Path(
+    os.environ.get("PRE_COMMIT_HOME")
+    or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "pre-commit"
+)
+
+
+def test_the_real_pinned_build_finds_a_token_whatever_colour_the_owner_asks_for(
+    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # End to end with the real gitleaks: its parser reads git's patch text, and a coloured one
+    # made the scan pass and the token travel. Skipped where pre-commit built no such hook.
+    environment = {"PRE_COMMIT_HOME": str(_CACHE)}
+    real = S.gitleaks_binary(overlays.home, overlays.a, environment)
+    if real is None:
+        pytest.skip("pre-commit has built no gitleaks for the pinned revision here")
+    monkeypatch.setattr(S, "gitleaks_binary", lambda *args, **kwargs: real)
+    a = overlays.a
+    git(a, "config", "color.ui", "always")
+    token = "ghp_" + "aB3dE5fG7hJ9kL1mN3pQ5rS7tV9wX1yZ3bC5"  # split: no scanner flags this file
+    write(a, "common/memory/pasted.md", f"the token is {token}\n")
+
+    state = J._one_job(context(overlays, a))
+
+    assert state.outcome.state != "ok", state.outcome
+    assert "pasted.md" not in git(overlays.bare, "ls-tree", "-r", "--name-only", "main")
 
 
 def test_the_report_is_written_under_the_scratch_directory_and_removed(

@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from stayfixed import fsops
-from stayfixed.sync.git import git, run, timed
+from stayfixed.sync.git import git, run, timed, with_config
 
 GITLEAKS_REPO = "https://github.com/gitleaks/gitleaks"
 GITLEAKS_HOOK = "gitleaks"
@@ -52,12 +52,13 @@ DETAIL_CHARS = 600
 # how much of the overlay's own `.pre-commit-config.yaml` to read.
 DB_TIMEOUT = 5.0
 CONFIG_BYTES = 1024 * 1024
-# One configuration entry, given the way `git -c` would give it, for every git gitleaks starts:
-# its `git log -p` never carries signature checks into what it parses.
-NO_SIGNATURES = {
-    "GIT_CONFIG_COUNT": "1",
-    "GIT_CONFIG_KEY_0": "log.showSignature",
-    "GIT_CONFIG_VALUE_0": "false",
+# The configuration every git gitleaks starts is given: its `git log -p` and `git diff` print the
+# patch its parser reads, which a signature check or a colour code the owner's configuration asks
+# for leaves with no file to scan, and the scan passing. Its source passes no `--no-color`.
+SCAN_CONFIG = {
+    "log.showSignature": "false",
+    "color.ui": "false",
+    "color.diff": "false",
 }
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _REPO = re.compile(r"\s*-\s*repo:\s*(.+)$")
@@ -278,7 +279,7 @@ def _scan(
             ],
             cwd=repo if stdin is None else directory,
             timeout=max(deadline - time.monotonic(), 0.0),
-            env={**(env or {}), **NO_SIGNATURES},
+            env=with_config(env or {}, SCAN_CONFIG),
             index_file=index_file,
             stdin=stdin,
             unset_prefixes=("GITLEAKS_",),

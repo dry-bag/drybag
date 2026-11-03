@@ -6606,7 +6606,7 @@ reddens = [
 [[mutation]]
 name = "an inherited repository variable reaches the child"
 file = "src/stayfixed/sync/git.py"
-before = "        if key not in REPOSITORY_VARIABLES and not key.startswith(unset_prefixes)"
+before = "        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)"
 after = "        if not key.startswith(unset_prefixes)"
 reddens = [
   "tests/sync/test_git.py::test_git_ignores_inherited_repository_variables",
@@ -6614,10 +6614,33 @@ reddens = [
 ]
 
 [[mutation]]
+name = "the job keeps an inherited askpass"
+file = "src/stayfixed/sync/git.py"
+before = "        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)"
+after = "        if key not in REPOSITORY_VARIABLES and not key.startswith(unset_prefixes)"
+reddens = ["tests/sync/test_git.py::test_no_askpass_is_ever_asked_for_a_password"]
+
+[[mutation]]
+name = "the job keeps the owner's core.askPass"
+file = "src/stayfixed/sync/git.py"
+before = '    return with_config(env, {"core.askPass": ""})'
+after = "    return env"
+reddens = ["tests/sync/test_git.py::test_no_askpass_is_ever_asked_for_a_password"]
+
+[[mutation]]
+name = "a relative PATH entry reaches the overlay"
+file = "src/stayfixed/sync/git.py"
+before = '        entry for entry in full.get("PATH", "").split(os.pathsep) if os.path.isabs(entry)'
+after = '        entry for entry in full.get("PATH", "").split(os.pathsep)'
+reddens = [
+  "tests/sync/test_git.py::test_a_git_at_the_overlays_root_never_runs_from_a_relative_path_entry",
+]
+
+[[mutation]]
 name = "a variable the caller asked to drop reaches the child"
 file = "src/stayfixed/sync/git.py"
-before = "        if key not in REPOSITORY_VARIABLES and not key.startswith(unset_prefixes)"
-after = "        if key not in REPOSITORY_VARIABLES"
+before = "        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)"
+after = "        if key not in REPOSITORY_VARIABLES | ASKPASS"
 reddens = [
   "tests/sync/test_git.py::test_the_runner_hands_on_the_environment_less_what_redirects_git",
 ]
@@ -6713,10 +6736,28 @@ reddens = [
 [[mutation]]
 name = "gitleaks reads a log with signature lines"
 file = "src/stayfixed/sync/scan.py"
-before = "            env={**(env or {}), **NO_SIGNATURES},"
+before = "            env=with_config(env or {}, SCAN_CONFIG),"
 after = "            env=env,"
 reddens = [
-  "tests/sync/test_scan.py::test_gitleaks_reads_a_log_without_signature_lines",
+  "tests/sync/test_scan.py::test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour",
+]
+
+[[mutation]]
+name = "the scan's git colours its patch"
+file = "src/stayfixed/sync/scan.py"
+before = '    "color.ui": "false",'
+after = ""
+reddens = [
+  "tests/sync/test_scan.py::test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour",
+]
+
+[[mutation]]
+name = "the scan's git colours its diff"
+file = "src/stayfixed/sync/scan.py"
+before = '    "color.diff": "false",'
+after = ""
+reddens = [
+  "tests/sync/test_scan.py::test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour",
 ]
 
 [[mutation]]

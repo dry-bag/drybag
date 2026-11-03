@@ -225,7 +225,8 @@ Modes, from the file `mode` beside it: `scan` (default), `fail`, `sleep [seconds
 Its rules and ignores are found as the real one finds them: `--config`, else `$GITLEAKS_CONFIG`,
 else the scanned directory's `.gitleaks.toml`; ignores from `--gitleaks-ignore-path` and from the
 scanned directory's `.gitleaksignore`. Rules holding `allow-all`, or ignores holding
-`ignore-all`, find nothing. What it saw is recorded in `argv.json` and `seen.json` beside it.
+`ignore-all`, find nothing. What it saw is recorded in `argv.json`, `seen.json` and
+`git_config.json` beside it.
 """
 import json, os, subprocess, sys, time
 from pathlib import Path
@@ -234,8 +235,9 @@ me = Path(__file__)
 args = sys.argv[1:]
 (me.parent / "argv.json").write_text(json.dumps(args))
 (me.parent / "pid").write_text(str(os.getpid()))
-(me.parent / "show_signature").write_text(subprocess.run(
-    ["git", "config", "--get", "log.showSignature"], capture_output=True, text=True).stdout.strip())
+(me.parent / "git_config.json").write_text(json.dumps({{key: subprocess.run(
+    ["git", "config", "--get", key], capture_output=True, text=True).stdout.strip()
+    for key in ("log.showSignature", "color.ui", "color.diff")}}))
 mode_file = me.parent / "mode"
 mode = mode_file.read_text().strip() if mode_file.exists() else "scan"
 report = args[args.index("--report-path") + 1]

@@ -40,6 +40,9 @@ REPOSITORY_VARIABLES = frozenset((
     "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_OBJECT_DIRECTORY", "GIT_PREFIX",
     "GIT_REPLACE_REF_BASE", "GIT_SHALLOW_FILE", "GIT_WORK_TREE",
 ))  # fmt: skip
+# The programs git and ssh ask for a password before the terminal, which no unattended job may
+# start: an editor's terminal sets the first, a desktop the second.
+ASKPASS = frozenset(("GIT_ASKPASS", "SSH_ASKPASS"))
 _VERSION = re.compile(r"git version (\d+)\.(\d+)")
 
 
@@ -76,17 +79,22 @@ def run(
 ) -> Ran:
     """Run `argv` in `cwd` with `env` laid over ours, ending its process group on a timeout.
 
-    The inherited repository variables, and any starting with one of `unset_prefixes`, are dropped
-    first: `env` and `index_file` are the only way to set them. Standard input is `stdin`, or empty:
+    The inherited repository variables, the askpass programs, and any starting with one of
+    `unset_prefixes`, are dropped first: `env` and `index_file` are the only way to set them.
+    `PATH` keeps only its absolute entries: every call runs in the overlay, where an empty or `.`
+    entry would find a `git` or an `ssh` planted at its root. Standard input is `stdin`, or empty:
     nothing the job runs may wait for an answer. A program or directory that is not there is code
     127, as a shell says it.
     """
     full = {
         key: value
         for key, value in os.environ.items()
-        if key not in REPOSITORY_VARIABLES and not key.startswith(unset_prefixes)
+        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)
     }
     full.update(env or {})
+    full["PATH"] = os.pathsep.join(
+        entry for entry in full.get("PATH", "").split(os.pathsep) if os.path.isabs(entry)
+    )
     if index_file is not None:
         full["GIT_INDEX_FILE"] = str(index_file)
     try:
@@ -156,6 +164,17 @@ def ask(repo: Path, deadline: float, env: Mapping[str, str] | None, *args: str) 
     return timed(git(repo, *args, timeout=left(deadline, "a git call"), env=env), f"git {args[0]}")
 
 
+def with_config(env: Mapping[str, str], entries: Mapping[str, str]) -> dict[str, str]:
+    """`env` with `entries` added to the configuration it gives git (`GIT_CONFIG_COUNT`), as
+    `git -c` would give them, after any it already gives."""
+    given = dict(env)
+    count = int(given.get("GIT_CONFIG_COUNT", "0"))
+    for offset, (key, value) in enumerate(entries.items(), start=count):
+        given.update({f"GIT_CONFIG_KEY_{offset}": key, f"GIT_CONFIG_VALUE_{offset}": value})
+    given["GIT_CONFIG_COUNT"] = str(count + len(entries))
+    return given
+
+
 def _is_ssh(command: str) -> bool:
     try:
         words = shlex.split(command)
@@ -167,7 +186,8 @@ def _is_ssh(command: str) -> bool:
 def job_env(repo: Path, *, timeout: float) -> dict[str, str]:
     """What every git call of the job is given on top of our environment.
 
-    `GIT_TERMINAL_PROMPT=0`; the ssh command git would use made non-interactive;
+    `GIT_TERMINAL_PROMPT=0`, `core.askPass` emptied and `SSH_ASKPASS_REQUIRE=never` (with the
+    askpass variables `run` drops); the ssh command git would use made non-interactive;
     `GIT_NO_REPLACE_OBJECTS=1`, since a `refs/replace/` entry must not show the checks one commit
     while the push sends another; and `GIT_ATTR_SOURCE=HEAD`: attributes come from the committed
     tree, never from a `.gitattributes` a memory writer left in the working tree, where a filter
@@ -186,12 +206,14 @@ def job_env(repo: Path, *, timeout: float) -> dict[str, str]:
     if not command:
         program = os.environ.get("GIT_SSH", "")
         command = shlex.quote(program) if program else "ssh"
-    return {
+    env = {
         "GIT_TERMINAL_PROMPT": "0",
+        "SSH_ASKPASS_REQUIRE": "never",
         "GIT_SSH_COMMAND": command + (SSH_OPTIONS if _is_ssh(command) else ""),
         "GIT_NO_REPLACE_OBJECTS": "1",
         "GIT_ATTR_SOURCE": "HEAD",
     }
+    return with_config(env, {"core.askPass": ""})
 
 
 @dataclass(frozen=True)
