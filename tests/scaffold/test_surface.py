@@ -29,7 +29,6 @@ EXPORTED = [
     "digest",
     "drop",
     "extract",
-    "judged_entries",
     "mark",
     "marker_id",
     "owned",

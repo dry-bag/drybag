@@ -1275,16 +1275,6 @@ reddens = [
   "tests/hooks/test_dispatch.py::test_a_once_per_context_handler_that_says_nothing_keeps_its_one_delivery",
 ]
 
-# A caller's bound is chosen where the runner is built and honoured here.
-[[mutation]]
-name = "the runner ignores the bound its caller asked for"
-file = "src/stayfixed/runner.py"
-before = "                timeout=bound,"
-after = "                timeout=NETWORK_TIMEOUT_SECONDS,"
-reddens = [
-  "tests/test_runner.py::test_a_caller_that_asks_for_a_narrower_bound_gets_it",
-]
-
 # The one writer into a `stayfixed.toml` somebody else owns: an edit is kept only when reading it
 # back gives exactly the document before it with that one key set. The multi-line case is the one
 # where the returned text still parses, which is the silent failure the read-back exists for.
@@ -2065,20 +2055,6 @@ after = """    from stayfixed.ledger.api import bug_register
     return error.strerror or type(error).__name__"""
 reddens = [
   "tests/boundaries/test_delivery.py::test_the_core_imports_neither_side_but_where_pinned",
-]
-
-# Importing the core loads neither side. The harness registry names a profile's type under
-# `if TYPE_CHECKING:`, a pinned row that never runs; run at import, the same statement loads the
-# profiles into every command, and only the import-time probe can tell the two apart.
-[[mutation]]
-name = "the harness registry loads the profiles at import"
-file = "src/stayfixed/harnesses.py"
-before = """if TYPE_CHECKING:
-    from stayfixed.profiles import Profile"""
-after = """if True:
-    from stayfixed.profiles import Profile"""
-reddens = [
-  "tests/boundaries/test_delivery.py::test_in_isolation_no_core_module_loads_either_side",
 ]
 
 # The delivery rule reads import statements, so the core reaching the private layer by a string —
@@ -3298,8 +3274,8 @@ reddens = ["tests/config/test_loader_note.py::test_an_escaping_path_resets_only_
 [[mutation]]
 name = "the NOTE retry takes a key the document does not hold for removed"
 file = "src/stayfixed/config/loader.py"
-before = "                return found\n    return None"
-after = "                return found\n    return table, dotted"
+before = "        return held, name\n    return None"
+after = "        return held, name\n    return table, dotted"
 reddens = [
   "tests/config/test_loader_note.py::test_a_validator_that_keeps_refusing_spends_the_document_and_stops",
   "tests/config/test_loader_note.py::test_a_key_the_document_does_not_hold_is_unusable",
@@ -3887,35 +3863,6 @@ file = "src/stayfixed/trust/record.py"
 before = "        approvals[(kind, subject)] = Approval(kind, subject, digest, when)"
 after = "        approvals = {key: a for key, a in approvals.items() if key[1] != subject}\n        approvals[(kind, subject)] = Approval(kind, subject, digest, when)"
 reddens = ["tests/trust/test_record.py::test_two_kinds_never_share_a_subject"]
-
-# A revoke that matches nothing writes nothing.
-[[mutation]]
-name = "a revoke of nothing rewrites the trust record"
-file = "src/stayfixed/trust/record.py"
-before = "    if revoked:\n        _write(machine, approvals)\n    return revoked"
-after = "    if True:\n        _write(machine, approvals)\n    return revoked"
-reddens = ["tests/trust/test_record.py::test_revoke_of_nothing_says_so"]
-
-# Revoking several subjects of a kind is one write of the record, as approving them is.
-[[mutation]]
-name = "revoking a kind writes the record once per subject"
-file = "src/stayfixed/trust/record.py"
-before = "    if revoked:\n        _write(machine, approvals)\n    return revoked"
-after = "    for _ in revoked:\n        _write(machine, approvals)\n    return revoked"
-reddens = [
-  "tests/trust/test_record.py::test_every_subject_of_a_kind_is_revoked_in_one_write",
-]
-
-# A revocation follows the record's matching rule: withdrawn by one subject, a digest is withdrawn
-# from every entry of the kind holding it.
-[[mutation]]
-name = "a revoke leaves another entry holding the same digest"
-file = "src/stayfixed/trust/record.py"
-before = "    revoked = list(dict.fromkeys([*named, *same]))"
-after = "    revoked = named"
-reddens = [
-  "tests/memory/test_reviewed.py::test_withdrawing_one_entry_unreviews_every_note_holding_its_bytes",
-]
 
 # The record is beside the machine file, and with no home there is none.
 [[mutation]]

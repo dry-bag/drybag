@@ -2047,14 +2047,3 @@ reddens = [
   "tests/prove/test_javascript.py::test_a_debugger_wait_s_detail_says_it_waits_for_a_debugger",
 ]
 
-# `init`'s `picked:` list prints the adopted `stayfixed.toml`'s commit types, which no
-# grammar holds, so an escape sequence or `::error::` in one would reach the terminal and the CI
-# runner as written.
-[[mutation]]
-name = "init prints an adopted commit type as written"
-file = "src/stayfixed/project/commands.py"
-before = "        value = [printable(item, PICKED_WITHHELD) for item in value]"
-after = "        value = list(value)"
-reddens = [
-  "tests/project/test_init.py::test_a_commit_type_an_adopted_document_wrote_prints_only_inside_the_grammar",
-]

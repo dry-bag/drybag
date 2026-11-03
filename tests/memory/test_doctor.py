@@ -57,11 +57,10 @@ def test_a_store_that_refuses_skips_the_store_checks(
     # code and a check that "could not run" is not something the repository did wrong.
     #
     # Two cases. Asked about a group that leaves the store, the resolver hands the store over
-    # without that group, whose reason it keeps (`Store.unavailable`), so the rows read what is
-    # left and stay green. The second case is the resolver
-    # raising `Refusal` instead, which is what the lazy value's `except` exists for and what no
-    # `memory.groups` reaches today, so it is stood in for by replacing the resolver where the lazy
-    # value calls it, in `memory.answers`.
+    # without that group, so the rows read what is left and stay green. The second case is the
+    # resolver raising `Refusal` instead, which is what the lazy value's `except` exists for and
+    # what no `memory.groups` reaches today, so it is stood in for by replacing the resolver where
+    # the lazy value calls it, in `memory.answers`.
     #
     # Mutation (oracle): `mutations/`'s "the delivery rows let a refusing store escape" -> the
     # `Refusal` reaches the guard and both rows are red with `this check could not run: Refusal`.

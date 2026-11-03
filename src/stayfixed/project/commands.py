@@ -86,7 +86,6 @@ def _given(args: argparse.Namespace) -> Given:
         profile=args.profile,
         memory_mode=args.memory_mode,
         attribution_check=args.attribution_check,
-        types=listed(args.commit_type),
     )
 
 
@@ -101,16 +100,14 @@ def run_questions(args: argparse.Namespace) -> Result:
 
 
 def _picked_line(key: str, value: object) -> str:
-    """One line of what `init --yes` picked. A value an adopted `stayfixed.toml` wrote, a commit
-    type above all, prints through `printable`, withheld as `PICKED_WITHHELD` outside the grammar:
-    the file holds it as it is."""
+    """One line of what `init --yes` picked. A value an adopted `stayfixed.toml` wrote prints
+    through `printable`, withheld as `PICKED_WITHHELD` outside the grammar: the file holds it as
+    it is."""
     from stayfixed.printed import printable
     from stayfixed.project.questions import shown
 
     if isinstance(value, str) and value:
         value = printable(value, PICKED_WITHHELD)
-    elif isinstance(value, list):
-        value = [printable(item, PICKED_WITHHELD) for item in value]
     return f"  {key}: {shown(value)}"
 
 
@@ -158,7 +155,6 @@ def run_init(args: argparse.Namespace) -> Result:
         "once": once,
         "scaffold": footprint,
         "writes": [*report.once.writes, *report.footprint.writes],
-        "skipped": dict(report.skipped),
         "head_note": report.head_note,
         "stamped": report.stamped,
     }
@@ -176,8 +172,6 @@ def _answers(parser: argparse.ArgumentParser) -> None:
     from stayfixed.config.schema import (
         BRANCH_NAME,
         BRANCH_RULE,
-        COMMIT_TYPE,
-        COMMIT_TYPE_RULE,
         MEMORY_MODES,
         NAME_RULE,
         PROJECT_NAME,
@@ -215,13 +209,6 @@ def _answers(parser: argparse.ArgumentParser) -> None:
         const=True,
         help="[commit_messages] attribution_check = true: the commit gate fails a message "
         "carrying an AI tool's attribution",
-    )
-    answers.add_argument(
-        "--commit-type",
-        action="append",
-        type=grammar(COMMIT_TYPE, f"not a commit type: {COMMIT_TYPE_RULE}"),
-        metavar="TYPE",
-        help="[commit_messages] types; once per type",
     )
 
 

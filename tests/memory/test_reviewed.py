@@ -19,7 +19,7 @@ from stayfixed.memory.notes import walk
 from stayfixed.memory.reviewed import REVIEWED, UNREVIEWED, status
 from stayfixed.memory.store import Store, resolve
 from stayfixed.memory.trust import DELIMITER
-from stayfixed.trust.record import RECORD, SANDBOXED, recorded, revoke_all
+from stayfixed.trust.record import RECORD, SANDBOXED, recorded
 from tests.cli import cli
 from tests.sandboxed import refuse_writes_under
 from tests.sessions import session_of
@@ -196,35 +196,6 @@ def test_promote_refuses_what_is_no_note_of_the_store_and_records_nothing(
     assert code == 2
     assert refusal in err
     assert not (tmp_path / "trust.json").exists()
-
-
-def test_a_withdrawn_record_makes_the_note_unreviewed_again(tmp_path: Path) -> None:
-    # The record kind `reviewed` is withdrawn as any other kind is.
-    root = _project(tmp_path)
-    assert cli(root, tmp_path, "memory", "promote", "developer/rule.md")[0] == 0
-    machine = tmp_path / "absent.toml"
-    rows = recorded(machine)
-    assert [kind for kind, _ in rows] == ["reviewed"]
-    subject = next(iter(rows))[1]
-    assert revoke_all(machine, "reviewed", [subject]) == [subject]
-    assert _status_of(root, tmp_path, "rule") == UNREVIEWED
-
-
-def test_withdrawing_one_entry_unreviews_every_note_holding_its_bytes(tmp_path: Path) -> None:
-    # The record matches on the digest alone, so a withdrawal follows the same rule: withdrawn by
-    # one subject, the bytes are no longer reviewed through another entry holding them — the
-    # same note promoted from a second worktree, or a copy of it. Mutation (oracle):
-    # `mutations/`'s "a revoke leaves another entry holding the same digest".
-    root = _project(tmp_path)
-    base = root / ".stayfixed" / "local" / "memory" / "developer"
-    (base / "copy.md").write_bytes((base / "rule.md").read_bytes())
-    assert cli(root, tmp_path, "memory", "promote", "--changed")[0] == 0
-    machine = tmp_path / "absent.toml"
-    subject = next(s for _, s in recorded(machine) if s.endswith("rule.md"))
-    assert revoke_all(machine, "reviewed", [subject])
-    assert _status_of(root, tmp_path, "rule") == UNREVIEWED
-    assert "RULE-BODY" not in _bundle(root, tmp_path, "standing-rules")
-    assert _status_of(root, tmp_path, "other") == REVIEWED
 
 
 def test_a_record_write_a_sandbox_refused_says_a_person_must_run_it(

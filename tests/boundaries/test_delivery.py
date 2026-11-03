@@ -36,9 +36,6 @@ Direction = tuple[str, str]
 # Importing the core is no crossing from either side, and neither is an import within one side.
 CORE_TO_DELIVERY: tuple[Row, ...] = ()
 CORE_TO_PACK: tuple[Row, ...] = (
-    # The harness registry names a profile's type in the rendering a harness gives a profile's
-    # rules, under `if TYPE_CHECKING:`, so it never runs. Goes with the profiles.
-    ("harnesses.py", "stayfixed.profiles", frozenset({"Profile"})),
     # The scaffold engine checks `[stayfixed] profile` against the profiles that ship, inside the
     # one function that checks it. Goes with the profiles.
     ("scaffold/engine.py", "stayfixed.profiles", frozenset()),
@@ -198,7 +195,9 @@ def test_in_isolation_no_core_module_loads_either_side() -> None:
     # module of either side may be among what it loaded: the core loads a side only when a command
     # asks for it.
     #
-    # Mutation (declared): `mutations/`'s "the harness registry loads the profiles at import".
+    # No declared mutation since the harness registry's import of the profiles went with the
+    # renditions that used it; lifting `scaffold/engine.py`'s in-function import of the profiles to
+    # module level reddens this, measured by hand.
     source = ROOT / "src" / "stayfixed"
     # Every core module, dotted. `__main__` is left out because importing it runs the CLI: its
     # whole body is `main()`.

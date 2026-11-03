@@ -39,14 +39,6 @@ ROOT_THROUGH_SYMLINK = (
 )
 
 
-def repository_top(root: Path) -> Path:
-    """The top of the work tree git finds from `root`, as git spells it."""
-    code, out = git_run(root, "rev-parse", "--show-toplevel")
-    if code != 0:
-        raise Failure(ROOT_UNANSWERED if in_work_tree(root) else NOT_A_REPOSITORY)
-    return Path(out.rstrip("\n"))
-
-
 def repository_prefix(root: Path) -> str:
     """The project root's path inside its repository, `""` at the top or `"a/b/"` below it: git's
     spelling, which is refused unless it is also the caller's."""

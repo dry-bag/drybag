@@ -58,9 +58,6 @@ evidence_boundary_required_for = ["high"]
 
 [defaults.commit_messages]
 attribution_check = false
-# The eleven types `@commitlint/config-conventional` lists; the Conventional Commits specification
-# itself defines only `feat` and `fix`.
-types = ["feat", "fix", "build", "chore", "ci", "docs", "perf", "refactor", "revert", "style", "test"]
 
 [defaults.personal]
 preset = "recommended"

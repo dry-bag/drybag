@@ -106,8 +106,8 @@ class Owners:
 
 @dataclass(frozen=True)
 class Prepared:
-    """Both passes, the reasons an artifact was not rendered, and every target this build writes
-    for each artifact id under this configuration.
+    """Both passes, and every target this build writes for each artifact id under this
+    configuration.
 
     `could_write` is built at the lines that build the templates, from the same calls, so it
     cannot describe a target the footprint could not have. `owners` is the relation read from it.
@@ -115,7 +115,6 @@ class Prepared:
 
     once: tuple[Template, ...]
     footprint: tuple[Template, ...]
-    skipped: dict[str, str]
     could_write: Mapping[str, frozenset[str]]
 
     @cached_property
@@ -217,7 +216,6 @@ def project_templates(config: Config, *, document: str) -> Prepared:
     prepared = Prepared(
         once,
         footprint,
-        {},
         could_write={artifact_id: frozenset(t) for artifact_id, t in could_write.items()},
     )
     _no_file_of_another(prepared)

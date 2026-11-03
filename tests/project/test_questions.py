@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 from stayfixed.cli import build_parser, discover_registrars
-from stayfixed.config.loader import load, preset_defaults
+from stayfixed.config.loader import load
 from stayfixed.config.schema import MEMORY_MODES
 from stayfixed.errors import Refusal
 from stayfixed.presets import load_preset
@@ -72,7 +72,7 @@ def test_the_schema_keys_are_the_stayfixed_toml_keys_the_answers_write(tmp_path:
     schema = _schema(tmp_path, repository(tmp_path))
     assert schema["type"] == "object"
     assert tuple(schema["properties"]) == PROPERTIES == tuple(schema["required"])
-    assert len(PROPERTIES) == 8
+    assert len(PROPERTIES) == 7
     for key, question in schema["properties"].items():
         assert question["x-stayfixed-flag"] == FLAGS[key], key
 
@@ -94,7 +94,6 @@ def test_the_skill_reads_the_order_to_ask_in_from_required_in_the_json(tmp_path:
         "memory.mode",
         "stayfixed.profile",
         "commit_messages.attribution_check",
-        "commit_messages.types",
         "stayfixed.agents",
         "plugins",
     ]
@@ -189,13 +188,11 @@ def test_the_questions_are_refused_where_init_would_refuse(tmp_path: Path) -> No
 
 
 # The order the guided walk asks in, after the name and the base branch it confirms first:
-# memory, the profile, attribution and the commit types, the agents, and the recommended plugins
-# last.
+# memory, the profile, attribution, the agents, and the recommended plugins last.
 GUIDED = (
     "memory.mode",
     "stayfixed.profile",
     "commit_messages.attribution_check",
-    "commit_messages.types",
     "stayfixed.agents",
     "plugins",
 )
@@ -215,14 +212,11 @@ def test_every_question_carries_its_four_lines_in_the_guided_order(tmp_path: Pat
 
 
 @needs_git
-def test_the_skip_takes_attribution_off_the_preset_types_and_no_plugin(tmp_path: Path) -> None:
+def test_the_skip_takes_attribution_off_and_no_plugin(tmp_path: Path) -> None:
     # Taking every default is offered first, so each default is what a person gets without
-    # reading a question: the attribution check off, the preset's commit types, and no plugin of
-    # the ones it recommends.
+    # reading a question: the attribution check off, and no plugin of the ones it recommends.
     schema = _schema(tmp_path, repository(tmp_path))["properties"]
     assert schema["commit_messages.attribution_check"]["default"] is False
-    preset = preset_defaults("widget")
-    assert schema["commit_messages.types"]["default"] == list(preset.commit_messages.types)
     plugins = schema["plugins"]
     assert plugins["default"] == [] and set(plugins["items"]["enum"]) == {
         "superpowers",

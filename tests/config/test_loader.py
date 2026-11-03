@@ -41,7 +41,7 @@ def test_preset_defaults_fill_every_section(tmp_path: Path) -> None:
     assert config.memory.mode == "harness"
     assert config.budgets.effective("agents_md_lines") == 300
     assert config.native_caps.hook_output_chars == 10000
-    assert config.commit_messages.types[-1] == "test"
+    assert config.commit_messages.attribution_check is False
     assert config.personal.preset == "recommended"
 
 

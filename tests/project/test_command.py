@@ -34,7 +34,6 @@ JSON_KEYS = {
     "once",
     "scaffold",
     "writes",
-    "skipped",
     "head_note",
     "stamped",
 }
@@ -374,7 +373,6 @@ def test_the_questions_answered_as_the_skill_answers_them_write_what_yes_writes(
         ("--yes", "--memory-mode", "cloud"),
         ("--yes", "--profile", "rust"),
         ("--yes", "--agent", "cursor"),
-        ("--yes", "--commit-type", "Feat"),
         ("--questions", "--yes"),
     ],
     ids=[
@@ -385,7 +383,6 @@ def test_the_questions_answered_as_the_skill_answers_them_write_what_yes_writes(
         "mode",
         "profile",
         "agent",
-        "commit-type",
         "questions-and-yes",
     ],
 )

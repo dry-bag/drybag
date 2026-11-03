@@ -63,8 +63,8 @@ this area's tests use; an area that comes to need one grows this list by the rul
   `NoteType` — and nothing outside this area imports them.
 - **The inventory group** — `inventory`, `totals`, `Entry` — and nothing outside this area
   imports them.
-- **The store predicates** — `in_repository`, `refusal_reason`,
-  `overlay_group_target` and `resolved`, none with a reader outside this area.
+- **The store predicates** — `in_repository`, `overlay_group_target` and `resolved`, none with
+  a reader outside this area.
 - **The helpers** — `blocks` and `split`, with no reader outside this area.
 - **The bundles group** — `fit`, `render`, and the `Bundle` and `Fit` their signatures name. The
   `bundles` row is this area's own (`memory/doctor.py`) and reads `memory.bundles` directly.

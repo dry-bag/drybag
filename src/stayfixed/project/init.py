@@ -131,7 +131,6 @@ class Given:
     profile: str | None = None  # "" is an answer: no profile
     memory_mode: str | None = None
     attribution_check: bool | None = None
-    types: tuple[str, ...] | None = None
 
 
 NO_ANSWERS = Given()
@@ -141,7 +140,6 @@ NO_ANSWERS = Given()
 class InitReport:
     once: Plan
     footprint: Plan
-    skipped: dict[str, str]
     adopted: bool
     dry_run: bool
     # `HEAD_DEFAULTED` when the detected base branch replaced a remote head outside the grammar;
@@ -236,8 +234,6 @@ def _tables(
     commit_messages: dict[str, object] = {}
     if given.attribution_check is not None:
         commit_messages["attribution_check"] = given.attribution_check
-    if given.types is not None:
-        commit_messages["types"] = list(given.types)
     if commit_messages:
         tables["commit_messages"] = commit_messages
     return tables, head_note
@@ -353,7 +349,6 @@ def init(
     report = InitReport(
         once,
         footprint,
-        prepared.skipped,
         existing is not None,
         dry_run,
         head_note,

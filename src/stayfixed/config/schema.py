@@ -57,12 +57,6 @@ OVERLAY_MODE = "overlay"
 IN_REPO_MODE = "in-repo"
 LOCAL_ONLY_MODE = "local-only"
 MEMORY_MODES = (HARNESS_MODE, OVERLAY_MODE, IN_REPO_MODE, LOCAL_ONLY_MODE)
-# A commit type, the word a conventional subject starts with (`feat` in `feat(scope): …`), spelled
-# once for `init`'s `--commit-type` grammar and the loader; and the same rule in words for the
-# parser's refusal.
-COMMIT_TYPE_WORD = "[a-z]+"
-COMMIT_TYPE = re.compile(rf"\A{COMMIT_TYPE_WORD}\Z")
-COMMIT_TYPE_RULE = "lowercase ASCII letters"
 
 
 @dataclass(frozen=True)
@@ -164,7 +158,6 @@ class Ledger:
 @dataclass(frozen=True)
 class CommitMessages:
     attribution_check: bool
-    types: tuple[str, ...]
 
 
 @dataclass(frozen=True)

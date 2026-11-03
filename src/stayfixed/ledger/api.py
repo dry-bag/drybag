@@ -8,8 +8,8 @@ asserts the `__init__` imports nothing at all.
 
 **Outside this area, `stayfixed.project.templates`
 (with its tests) imports `render_index` and `bug_register` to write a new project's first index,
-and `BUG_RUNBOOK` and `BUG_AUDITS`, joined by `ledger_path`, to write the runbook and audits
-README where that index links them; and `stayfixed.docs.plans`
+and `BUG_AUDITS`, joined by `ledger_path`, to write the audits README where that index links it;
+and `stayfixed.docs.plans`
 imports `bug_register` for the bug ledger's identifiers — nothing else on this list**, measured
 over `src/`, `scripts/` and `tests/`. So every other name below is here on an argument rather
 than on a caller, and the argument is written beside it.
@@ -28,7 +28,7 @@ that reads them:
 
 Both are read and written against a register: `Register`, with the `Schema` and the `Section`s it
 carries, and `bug_register`, which builds the bug ledger's from a project's configuration and links
-its runbook and audits directory by the two names `init` writes them under.
+its runbook and audits directory; `init` writes the audits README under that directory.
 `parse_entry`, `load_entries` and `render_index` each take one, so `tests/test_surfaces.py`
 derives the three types from their signatures.
 
@@ -57,7 +57,6 @@ from stayfixed.ledger.entries import Entry, LedgerError, load_entries, parse_ent
 from stayfixed.ledger.index import is_generated_index, render_index
 from stayfixed.ledger.register import (
     BUG_AUDITS,
-    BUG_RUNBOOK,
     Register,
     Schema,
     Section,
@@ -67,7 +66,6 @@ from stayfixed.ledger.register import (
 
 __all__ = [
     "BUG_AUDITS",
-    "BUG_RUNBOOK",
     "Entry",
     "LedgerError",
     "Register",

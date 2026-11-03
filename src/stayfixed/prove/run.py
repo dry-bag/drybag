@@ -141,9 +141,8 @@ EXIT: Mapping[Verdict, int] = {
 # shipped file states it.
 PROVE_TIMEOUT_SECONDS = 3600
 # A named cap: how long the runner's group has to exit on SIGTERM before it is sent SIGKILL
-# (`processes.end`). Below `processes.TERM_WAIT_SECONDS`, so that a `prove` a gate ends that way
-# (a command past its time limit, or interrupted) has ended its runner, whose
-# session no signal to `prove`'s group reaches, before the gate's own SIGKILL ends `prove`.
+# (`processes.end`): long enough for a runner that ends what it started on SIGTERM, short beside
+# any time limit, so a group that ignores SIGTERM is still ended. No shipped file states it.
 RUNNER_TERM_WAIT_SECONDS = 2
 
 # The reasons, each one arm of `CASCADE` or the step that stopped the run before it. An adapter's

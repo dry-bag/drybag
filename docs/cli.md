@@ -55,7 +55,7 @@ Three things hold everywhere:
 - [`stayfixed docs check [--budgets] [--links]`](#stayfixed-docs-check---budgets---links)
 - [`stayfixed docs trail [--check]`](#stayfixed-docs-trail---check)
 - [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
-- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--commit-type TYPE …] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----profile-name---memory-mode-mode---attribution-check---commit-type-type----root-path---machine-path)
+- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----profile-name---memory-mode-mode---attribution-check---root-path---machine-path)
 - [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
 - [`stayfixed overlay upgrade [--root PATH] [--dry-run]`](#stayfixed-overlay-upgrade---root-path---dry-run)
 - [`stayfixed attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
@@ -1103,7 +1103,7 @@ lints it.
 
 ---
 
-## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--commit-type TYPE …] [--root PATH] [--machine PATH]`
+## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
 
 Writes a repository's stayfixed scaffold, once: `stayfixed.toml`, and the files the pack's
 commands read — the roadmap with its trail markers and `trail.toml` beside it for `docs trail`, the
@@ -1121,18 +1121,16 @@ Each answer flag replaces one default and writes one key:
 - `--profile` writes `[stayfixed] profile`, an empty value meaning none;
 - `--memory-mode` writes `[memory] mode`;
 - `--attribution-check` writes `[commit_messages] attribution_check = true`, which is off unless
-  answered;
-- `--commit-type`, once per type, writes `[commit_messages] types`, each lowercase ASCII letters.
+  answered.
 
 The recommended plugins are not `init`'s to install:
 `init --questions` asks about them, and the answer is `stayfixed setup`'s.
 
 After both reports the run prints `picked:`, one line per question in the order
 `init --questions` asks them, with the value this run took: the name, the base branch, the memory
-mode, the profile, the attribution check (`on` or `off`), the commit types, the
+mode, the profile, the attribution check (`on` or `off`), the
 agents stayfixed serves among those listed, and `plugins: none`, since
-`init` installs none. Taking every default gives the attribution check `off`, the preset's commit
-types and no plugin. A value a `stayfixed.toml` you wrote holds outside the plain-path grammar
+`init` installs none. Taking every default gives the attribution check `off` and no plugin. A value a `stayfixed.toml` you wrote holds outside the plain-path grammar
 prints as `<unprintable; see stayfixed.toml>`.
 
 The parser refuses a value outside its grammar or its choices (`2`), and it refuses a name or
@@ -1232,7 +1230,7 @@ of either, that resolve to one file (`roadmap` and `bug_index` set to one path),
 with the two artifacts and their `[paths]` keys to separate.
 
 `--json` carries `dry_run`, `adopted`, `once` and `scaffold` (each the plan's own rendered
-report), `writes` (both plans' targets), `skipped`, `stamped`, whether this
+report), `writes` (both plans' targets), `stamped`, whether this
 run's plan adds `[stayfixed] version` to a `stayfixed.toml` you wrote — written only by a run that
 is neither a dry run nor refused — and `head_note`, the `note:` line that says `main` replaced an
 `origin/HEAD` outside the plain-branch grammar (the branch it named is never printed), that
@@ -1245,7 +1243,7 @@ the base branch; empty otherwise. An answered `--base-branch` replaced nothing, 
 
 ## `stayfixed init --questions [--root PATH] [--machine PATH]`
 
-Prints the values `stayfixed init --yes` would take for the eight things a person may answer, where
+Prints the values `stayfixed init --yes` would take for the seven things a person may answer, where
 each came from, and the flag that replaces it: on `init --yes`, but for the recommended plugins,
 which `stayfixed setup` installs on the machine. It writes nothing. The `init` skill asks its
 questions from it, taking every default offered first, and a person reads it to see the defaults
@@ -1261,7 +1259,6 @@ detected:
   memory.mode: harness (default; --memory-mode)
   stayfixed.profile: python (profile markers; --profile)
   commit_messages.attribution_check: off (the preset's default; --attribution-check)
-  commit_messages.types: feat, fix, build, chore, ci, docs, perf, refactor, revert, style, test (the preset's default; --commit-type)
   stayfixed.agents: claude, codex (default; --agent)
   plugins: none (default; stayfixed setup --plugin)
 each is answered by the flag its line names, on `stayfixed init --yes` but the plugins'; `stayfixed init --questions --json` carries them as a JSON Schema, each with what it gives, what it gives up, what it leaves and how to undo it
@@ -1276,27 +1273,25 @@ when that names a plain branch under `refs/remotes/origin/`; with no remote at a
 remotes git could not list included, it is the `default`, `main`. The agents come from the `harness
 directories` the root carries; otherwise the `default` is every harness. The profile comes from
 `profile markers`, or there are `no profile markers`. The memory mode is the `default`,
-`harness`, since the preset chooses none; the attribution check (off) and the commit
-types are `the preset's default`; and the plugins are the `default`,
+`harness`, since the preset chooses none; the attribution check (off) is `the preset's default`; and the plugins are the `default`,
 none, because a third-party plugin runs in every session and is installed only when named. Each
 default is exactly what `stayfixed init --yes` writes when that question is not answered. `origin/HEAD` goes stale after the remote's default branch is
 renamed, because git does not refresh one it has. That is why its source is printed: you can
 catch it.
 
-`--json` carries `questions`: a JSON Schema object (draft 2020-12) with eight `properties`, and
-`required` naming all eight in the order the `init` skill asks them; read the order there, since
+`--json` carries `questions`: a JSON Schema object (draft 2020-12) with seven `properties`, and
+`required` naming all seven in the order the `init` skill asks them; read the order there, since
 `--json` prints every object's keys sorted, so the properties arrive by name. Each but the last is
 keyed by the
 `stayfixed.toml` key its answer writes: `project.name`, `project.base_branch`, `memory.mode`,
-`stayfixed.profile`, `commit_messages.attribution_check`, `commit_messages.types` and
-`stayfixed.agents`; the last, `plugins`, offers the plugins the preset
-recommends, which `stayfixed setup --plugin` installs. Each property carries four keys: `default`
+`stayfixed.profile`, `commit_messages.attribution_check` and `stayfixed.agents`; the last,
+`plugins`, offers the plugins the preset recommends, which `stayfixed setup --plugin` installs. Each property carries four keys: `default`
 (absent for a name that is not derivable), `x-stayfixed-source` (the phrase above),
 `x-stayfixed-flag` (the flag that answers it) and `x-stayfixed-tradeoff`, four lines of fixed
 text: `get`, what the answer gives; `give_up`, what it costs; `trace`, what it leaves behind; and
 `undo`, how to take it back. A choice is a `oneOf` of `const` and `title`, `items.enum` for a list
-of choices, or `boolean`. The two free-text properties and each commit type carry `pattern`, the
-grammar their flag enforces.
+of choices, or `boolean`. The two free-text properties carry `pattern`, the grammar their flag
+enforces.
 
 The schema is modelled on MCP elicitation's flat form schema. A client may send it as a
 `requestedSchema` once it drops `pattern` and the `x-stayfixed-*` keys, which that subset does not
@@ -2380,7 +2375,6 @@ volatile_ttl_days = 30
 
 [commit_messages]
 attribution_check = false # whether `commit check` enforces the attribution block
-types = ["feat", "fix", "build", "chore", "ci", "docs", "perf", "refactor", "revert", "style", "test"]
 
 [guards]
 bg_cleanup = true        # false switches the bg-cleanup session guard off by default here;
@@ -2389,8 +2383,7 @@ bg_cleanup = true        # false switches the bg-cleanup session guard off by de
 
 **Eight sections, and the list is closed**: a section this block does not show is refused when
 the file loads (`unknown section(s)`), so the grammar above is the whole of it.
-`[commit_messages] attribution_check` is read by `commit check`; `[commit_messages] types` is read
-by no command. `[guards]` is the guards' default
+`[commit_messages] attribution_check` is read by `commit check`. `[guards]` is the guards' default
 for a session in this repository, which the overlay's files and the machine file override (below);
 no command reads it.
 

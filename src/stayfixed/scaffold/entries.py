@@ -20,11 +20,9 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass
 from typing import Any
 
 from stayfixed.errors import Refusal
-from stayfixed.harnesses import lenient_settings
 from stayfixed.jsonobject import json_object, json_text
 from stayfixed.printed import clipped
 
@@ -209,84 +207,6 @@ def owned_ids(document: str) -> dict[str, str]:
         for event, _, entry in _read_entries(document)
         if (claimed := _claimed(entry)) is not None
     }
-
-
-def entry_count(document: str) -> int:
-    """How many hook entries the document holds, **one per entry**, never keyed by id: two
-    entries sharing one id are two, and an entry with no readable command is one too. Refuses
-    what `owned_ids` refuses, read by the same walk.
-    """
-    return sum(1 for _ in _read_entries(document))
-
-
-@dataclass(frozen=True)
-class Walked:
-    """What a walk for live hook entries read out of a settings document.
-
-    `entries` is how many entries it read. `partly` is whether it skipped a part that could hold
-    a command.
-    """
-
-    entries: int
-    partly: bool
-
-
-def _admitted(value: object, kind: type, skipped: list[object]) -> bool:
-    """Whether `value` is the `kind` the walk reads at its place in the `hooks` section.
-
-    The measured rule, stated once: a scalar where a list or an object belongs holds no command
-    and is skipped, as Claude Code skipped it (`harnesses.LENIENT_SETTINGS` says what, where
-    and when that was measured); a container of the wrong kind was not measured and may hold a
-    command, so it is skipped and kept in `skipped`, for the reader to say so.
-    """
-    if isinstance(value, kind):
-        return True
-    if isinstance(value, dict | list):
-        skipped.append(value)
-    return False
-
-
-def live_entries(document: str) -> Walked:
-    """How many hook entries a harness runs out of the document, counted as `entry_count` counts.
-
-    `entry_count` reads as strictly as `apply_entries` writes, because a merge must not rewrite
-    a shape it cannot read; that is the wrong question for which entries are live. What is
-    skipped is `_admitted`'s rule. One shape more is set aside without a measurement: an object
-    where a group goes that carries a `command` or a `type`, as an entry does, and no `hooks` list
-    -- a reader may run it as an entry, so it is kept with the skipped parts. Refuses what
-    `entry_count` refuses above the events -- a document that is not a JSON object, and a
-    `hooks` that is not an object -- which was not measured either.
-    """
-    raw = _entry_document(document)
-    found = 0
-    skipped: list[object] = []
-    for groups in _hooks_table(raw).values():
-        if not _admitted(groups, list, skipped):
-            continue
-        for group in groups:
-            if not _admitted(group, dict, skipped):
-                continue
-            if "command" in group or "type" in group:
-                skipped.append({key: value for key, value in group.items() if key != "hooks"})
-            entries = group.get("hooks", [])
-            if not _admitted(entries, list, skipped):
-                continue
-            for entry in entries:
-                if _admitted(entry, dict, skipped):
-                    found += 1
-    return Walked(found, bool(skipped))
-
-
-def judged_entries(document: str, *, lenient: bool) -> Walked:
-    """The hook entries a reader judges in a settings file, and what it skipped.
-
-    `lenient` for a file a harness was measured running partly malformed (`harnesses.
-    LENIENT_SETTINGS`): `live_entries`, past a leading byte-order mark. Otherwise the strict
-    `entry_count`, which refuses every shape the merge would, so it skips nothing.
-    """
-    if lenient:
-        return live_entries(lenient_settings(document))
-    return Walked(entry_count(document), partly=False)
 
 
 def owned(document: str) -> str:

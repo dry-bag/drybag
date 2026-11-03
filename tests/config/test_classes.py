@@ -95,7 +95,6 @@ TABLE_ROWS = [
     ("project.base_branch", KeyClass.REPOSITORY_ONLY),
     ("paths.bugs", KeyClass.REPOSITORY_ONLY),
     ("ledger.id_prefix", KeyClass.REPOSITORY_ONLY),
-    ("commit_messages.types", KeyClass.REPOSITORY_ONLY),
     ("native_caps.hook_output_chars", KeyClass.PLUGIN_OWNED),
 ]
 

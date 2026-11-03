@@ -1,7 +1,7 @@
 """The scaffold engine: manifest, regions, keyed entries, plan and apply.
 
 Everything a consumer needs is re-exported here, including the primitives other areas reach for
-directly: `judged_entries` for a settings file's hook entries; `owned_ids` for the ids an
+directly: `owned_ids` for the ids an
 earlier `attach` recorded in its ledger, `mark` for any caller that builds `Template.entries`,
 `drop` / `apply_entries`, and `withdraw_entries` for `attach` and `detach`, which take back
 the entries an earlier `attach` recorded and no other. The three refusals a consumer has to
@@ -22,7 +22,6 @@ from stayfixed.scaffold.entries import (
     EntriesError,
     ParserLimitError,
     apply_entries,
-    judged_entries,
     mark,
     marker_id,
     owned,
@@ -68,7 +67,6 @@ __all__ = [
     "digest",
     "drop",
     "extract",
-    "judged_entries",
     "mark",
     "marker_id",
     "owned",

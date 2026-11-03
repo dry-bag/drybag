@@ -1,6 +1,6 @@
 """What `stayfixed init` would ask, as a JSON Schema: `stayfixed init --questions`.
 
-Eight questions, each keyed by the `stayfixed.toml` key its answer writes, but the last, `plugins`,
+Seven questions, each keyed by the `stayfixed.toml` key its answer writes, but the last, `plugins`,
 which `stayfixed setup` answers on the machine rather than in the repository. Each carries the
 value `stayfixed init --yes` takes when it is not answered, where that value came from, the flag
 that answers it, and four lines (`TRADE_OFFS`): what the answer gives, what it gives up, what it
@@ -25,7 +25,6 @@ from typing import Any
 
 from stayfixed.config.schema import (
     BRANCH_NAME,
-    COMMIT_TYPE,
     HARNESS_MODE,
     IN_REPO_MODE,
     LOCAL_ONLY_MODE,
@@ -46,7 +45,6 @@ FLAGS = {
     "memory.mode": "--memory-mode",
     "stayfixed.profile": "--profile",
     "commit_messages.attribution_check": "--attribution-check",
-    "commit_messages.types": "--commit-type",
     "stayfixed.agents": "--agent",
     PLUGINS: "stayfixed setup --plugin",
 }
@@ -89,12 +87,6 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "set attribution.commit to text, which the hook then leaves for `commit check` to fail",
         "[commit_messages] attribution_check in stayfixed.toml",
         "set it to false in stayfixed.toml",
-    ),
-    "commit_messages.types": (
-        "the list records the commit types this project uses; no command reads it",
-        "nothing is refused",
-        "[commit_messages] types in stayfixed.toml",
-        "edit the list in stayfixed.toml",
     ),
     "stayfixed.agents": (
         "the coding agents this project lists",
@@ -163,7 +155,7 @@ def _recommended() -> list[str]:
 
 
 def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
-    """The eight questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
+    """The seven questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
 
     Refused where `init --yes` with an answer would be (`init.precheck`): a manifest, or a
     `stayfixed.toml` that already answers them. Detection is lenient, so a name outside the
@@ -218,14 +210,6 @@ def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
             "type": "boolean",
             "title": "Fail a pull request whose commit messages carry an AI tool's attribution",
             "default": preset.commit_messages.attribution_check,
-            "x-stayfixed-source": PRESET,
-        },
-        "commit_messages.types": {
-            "type": "array",
-            "title": "Commit types a subject may start with",
-            "items": {"type": "string", "pattern": ecma(COMMIT_TYPE)},
-            "minItems": 1,
-            "default": list(preset.commit_messages.types),
             "x-stayfixed-source": PRESET,
         },
         "stayfixed.agents": {

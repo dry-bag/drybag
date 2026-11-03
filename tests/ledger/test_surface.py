@@ -13,7 +13,7 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     # test alone.
     #
     # Outside this area, `stayfixed.project.templates` imports `render_index`, `bug_register`,
-    # `BUG_RUNBOOK`, `BUG_AUDITS` and `ledger_path`, and `stayfixed.docs.plans` imports
+    # `BUG_AUDITS` and `ledger_path`, and `stayfixed.docs.plans` imports
     # `bug_register`; the other names stay on the argument written beside them in `api.py`: the two
     # artifacts this area leaves on a project's disk, and the register they are read and written
     # against.
@@ -33,9 +33,8 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
         "Schema",
         "Section",
         "bug_register",
-        # the names `init` writes the bug ledger's runbook and audits README under, which its
-        # register links, and the join of each to its root-relative directory that both share
-        "BUG_RUNBOOK",
+        # the name `init` writes the bug ledger's audits README under, which its register links,
+        # and the join of it to its root-relative directory
         "BUG_AUDITS",
         "ledger_path",
     }

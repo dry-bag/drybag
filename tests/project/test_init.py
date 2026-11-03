@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import tomllib
@@ -15,7 +14,7 @@ from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.owned import OWNED, OwnedKeyError
 from stayfixed.config.reading import ConfigError
 from stayfixed.errors import Failure, Refusal
-from stayfixed.project.commands import PICKED, PICKED_WITHHELD
+from stayfixed.project.commands import PICKED
 from stayfixed.project.init import HEADER, InitReport, init
 from stayfixed.project.templates import ONE_FILE
 from stayfixed.scaffold import MANIFEST_PATH, Manifest, Verb
@@ -486,48 +485,23 @@ def test_an_adopted_document_holding_a_hex_integer_of_any_length_is_the_configur
 
 
 @needs_git
-def test_init_yes_says_what_it_picked_attribution_off_the_types_and_no_plugin(
+def test_init_yes_says_what_it_picked_attribution_off_and_no_plugin(
     tmp_path: Path,
 ) -> None:
     # The skip path writes every default without a question asked, so the run itself says what
     # it took, one line per question in the order the guided walk asks them: the attribution
-    # check off, the eleven types of `@commitlint/config-conventional`, and no plugin. The types
-    # are written out here rather than read back from the preset, which compared the preset with
-    # itself and held stayfixed's own `harden` and `guard` as the standard's.
+    # check off, and no plugin.
     root = _repo(tmp_path)
     code, printed, _ = cli(root, tmp_path, "init", "--yes")
     assert code == 0, printed
     assert f"\n{PICKED}\n" in printed, printed
     picked = printed.split(f"\n{PICKED}\n", 1)[1].splitlines()
-    types = "feat, fix, build, chore, ci, docs, perf, refactor, revert, style, test"
-    assert picked[:8] == [
+    assert picked[:7] == [
         "  project.name: widget",
         "  project.base_branch: main",
         "  memory.mode: harness",
         "  stayfixed.profile: none",
         "  commit_messages.attribution_check: off",
-        f"  commit_messages.types: {types}",
         "  stayfixed.agents: claude, codex",
         "  plugins: none",
     ]
-
-
-@needs_git
-def test_a_commit_type_an_adopted_document_wrote_prints_only_inside_the_grammar(
-    tmp_path: Path,
-) -> None:
-    # `picked:` reads the adopted `stayfixed.toml`, whose commit types no grammar holds: a
-    # clone's type carrying an escape sequence and `::error::` would drive the terminal and the CI
-    # runner. It prints withheld, pointing at the file that holds it as written. Mutation (oracle):
-    # `mutations/`'s "init prints an adopted commit type as written" -> the first `in` reddens.
-    root = _repo(tmp_path)
-    hostile = "x\x1b[2J\n::error::forged"
-    document = (
-        f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n\n'
-        f"[commit_messages]\ntypes = {json.dumps(['feat', hostile])}\n"
-    )
-    (root / CONFIG_FILE).write_text(document, encoding="utf-8")
-    code, printed, _ = cli(root, tmp_path, "init", "--yes", "--dry-run")
-    assert code == 0, printed
-    assert f"  commit_messages.types: feat, {PICKED_WITHHELD}\n" in printed
-    assert "\x1b" not in printed and "::error::" not in printed

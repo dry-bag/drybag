@@ -24,11 +24,6 @@ import time
 # Reaping a command whose group was sent SIGKILL. The signal cannot be caught or ignored, so this
 # is slack for the kernel, not a second bound on the command.
 KILL_WAIT_SECONDS = 5
-# A named cap: how long a command whose group `end` sent SIGTERM has to exit before its group is
-# sent SIGKILL. Long enough for a command that ends what it started on SIGTERM, as `stayfixed
-# prove` ends its runner's group, which lives in a session of its own that no signal to this
-# group reaches; short beside any time limit, so a group that ignores SIGTERM is still ended.
-TERM_WAIT_SECONDS = 5
 
 
 def kill_group(process: subprocess.Popen[bytes], signum: int = signal.SIGKILL) -> None:
@@ -76,14 +71,14 @@ def _watched(process: subprocess.Popen[bytes], seconds: float) -> None:
         time.sleep(delay)
 
 
-def end(process: subprocess.Popen[bytes], grace: float | None = None) -> None:
+def end(process: subprocess.Popen[bytes], grace: float) -> None:
     """End the command's whole process group and reap it: SIGTERM first, so that a command which
     ends what it started on it (`stayfixed prove`, whose runner is in a session of its own) does;
-    then, once the command has exited or `grace` seconds have passed (`TERM_WAIT_SECONDS` unless
-    told otherwise), SIGKILL to the whole group, which a member that ignored SIGTERM cannot
-    outlast; then the reap, within `KILL_WAIT_SECONDS`. The command is watched without being
-    reaped, as `exited` watches it, so the SIGKILL still reaches its group alone. An interrupt
-    in the grace (a second Ctrl-C) still sends the SIGKILL, and reaps, before it goes on up.
+    then, once the command has exited or `grace` seconds have passed, SIGKILL to the whole group,
+    which a member that ignored SIGTERM cannot outlast; then the reap, within
+    `KILL_WAIT_SECONDS`. The command is watched without being reaped, as `exited` watches it, so
+    the SIGKILL still reaches its group alone. An interrupt in the grace (a second Ctrl-C) still
+    sends the SIGKILL, and reaps, before it goes on up.
 
     The grace watches the command alone, so behind a shell leader that dies on SIGTERM (`sh -c
     "stayfixed prove -- …"`) it is the leader's: the SIGKILL follows at once and ends `prove`
@@ -92,7 +87,7 @@ def end(process: subprocess.Popen[bytes], grace: float | None = None) -> None:
     try:
         kill_group(process, signal.SIGTERM)
         with contextlib.suppress(subprocess.TimeoutExpired):
-            _watched(process, TERM_WAIT_SECONDS if grace is None else grace)
+            _watched(process, grace)
     finally:
         kill_group(process)
         process.wait(timeout=KILL_WAIT_SECONDS)

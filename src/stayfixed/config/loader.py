@@ -675,19 +675,14 @@ def _known_keys(
 
 
 def _holding(table: dict[str, Any], dotted: str) -> tuple[dict[str, Any], str] | None:
-    """The table that holds the key `dotted` names, at any depth, and the key's name in it;
-    `None` when `table` holds no such key.
-
-    A name may itself hold a dot, so each level is asked for the
-    whole remaining name first and then for every table whose name prefixes it.
-    """
+    """The table that holds the key `dotted` names — a section, or `section.key` — and the key's
+    name in it; `None` when `table` holds no such key."""
     if dotted in table:
         return table, dotted
-    for name, value in table.items():
-        if isinstance(value, dict) and dotted.startswith(f"{name}."):
-            found = _holding(value, dotted[len(name) + 1 :])
-            if found is not None:
-                return found
+    section, _, name = dotted.partition(".")
+    held = table.get(section)
+    if isinstance(held, dict) and name in held:
+        return held, name
     return None
 
 
