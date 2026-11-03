@@ -2538,7 +2538,9 @@ from `common/`, from `projects/<name>/` or from a tag you took off the project l
 next run, each said as `allow rule withdrawn`, and a rule you added by hand, which the ledger does not name, stays.
 The ledger is a file in the checkout that a branch can write, so it is no defence against one: the worst a
 committed `allow` in it achieves is taking a permission away, one you typed included, at the next
-`attach` or `detach`, which both accept. **`.gitignore` is never written**: it is tracked, so
+`attach` or `detach`, which both accept. **A re-attach also removes a `.codex/rules/` copy** the ledger
+names that the overlay no longer holds, so a rule file dropped from a plate, or a tag taken off the
+project, is gone from Codex's view with the next run. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
 release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
 `init`'s.

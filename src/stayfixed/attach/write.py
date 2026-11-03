@@ -263,12 +263,12 @@ class AttachLedger:
     (`_withdraw_settings`) and every re-attach (`permissions.withdrawing`), only ever remove a rule
     the settings file already holds, so the worst a committed `allow` achieves is taking a
     permission away, one the owner typed included. That bound is accepted: a branch can write this
-    file, so it is a convenience and no anchor against one. `store` is read by nothing: `detach` derives every path it
-    withdraws from the configuration and the overlay root, never from this field, so it is a
-    record for a human reading the file and for `doctor`, and a committed value costs nothing —
-    except one holding a NUL, which no path holds and `doctor`'s `Path.resolve` meets with
-    `ValueError`, so that one is a ledger no attach wrote. So is any list field holding something
-    other than a list, which reading it would meet with `TypeError`.
+    file, so it is a convenience and no anchor against one. `store` is read by nothing: `detach`
+    derives every path it withdraws from the configuration and the overlay root, never from this
+    field, so it is a record for a human reading the file and for `doctor`, and a committed value
+    costs nothing — except one holding a NUL, which no path holds and `doctor`'s `Path.resolve`
+    meets with `ValueError`, so that one is a ledger no attach wrote. So is any list field holding
+    something other than a list, which reading it would meet with `TypeError`.
 
     `entries` maps each marker id to its event, which is the shape `scaffold.owned_ids` answers
     in, so `doctor` can compare the two without a translation in between. Only a ledger an earlier
@@ -639,14 +639,6 @@ def _write_ledger(
     granted = {*planned.diff.added_allow, *planned.diff.already_present}
     allow = [rule for rule in previous.allow if rule in granted] if previous else []
     allow += [rule for rule in planned.diff.added_allow if rule not in allow]
-    # The same union for the rule files, and for a sharper reason than the one above. A file
-    # deleted from the overlay between two attaches is not written this time and so drops out of
-    # a ledger built from this run alone — while the copy from the first attach is still sitting
-    # in `.codex/rules/`, where Codex reads it as a standing instruction. `detach` would then
-    # leave an agent-steering file behind, and `attach` must stay idempotent and reversible by
-    # `detach`.
-    placed = list(previous.rules) if previous is not None else []
-    placed += [rule for rule in rules if rule not in placed]
     # The same union as `allow` and `rules`, for the same reason sharpened once more: the second
     # attach in a repository finds every one of these directories already there and would record
     # none, so a ledger built from this run alone would leave `detach` unable to remove what the
@@ -660,7 +652,9 @@ def _write_ledger(
         # No hook entry is merged any more, and the settings file this run writes has taken back
         # every one the earlier ledger recorded.
         "entries": {},
-        "rules": placed,
+        # Only this run's copies: the ones the earlier ledger named and the overlay no longer holds
+        # were removed before any ledger is written (`planned.dropped`), so none is left unrecorded.
+        "rules": list(rules),
         "settings_keys": list(settings_keys),
         "directories": [name for name in CREATED_DIRS if name in made],
         # The digest, never the id and never a path on this machine (`render.Rendered`).
@@ -809,6 +803,8 @@ class AttachPlan:
     hidden: exclude.ExcludeWrite | None
     # Each `.codex/rules/` target and the text to copy there.
     rules: tuple[tuple[str, str], ...]
+    # The rule copies the earlier ledger names that the overlay no longer holds, removed by the run.
+    dropped: tuple[str, ...]
     # What the rendered plugin carries, read from the overlay (`render.read_parts`).
     parts: dict[str, Part]
 
@@ -972,6 +968,11 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     # after the first write: the overlay's rule sources (a file that is not UTF-8) and what the
     # rendered plugin carries (a hook file of a shape it cannot read, a skill that cannot be read).
     rules = _codex_rule_texts(binding)
+    kept = {target for target, _ in rules}
+    dropped = tuple(rule for rule in previous.rules if rule not in kept) if previous else ()
+    for rule in dropped:
+        # The removal's walk, asked here as the writes' is: a link on the way refuses first.
+        contained(root, rule, allow_final_symlink=True)
     parts = read_parts(binding.overlay, binding.project)
     return AttachPlan(
         config=config,
@@ -988,6 +989,7 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         placed=placed,
         hidden=hidden,
         rules=rules,
+        dropped=dropped,
         parts=parts,
     )
 
@@ -1013,6 +1015,10 @@ def _carry_out(
         raise Refusal(exclude.NOT_IGNORED.format(paths=named_placed(shown)))
     for target, text in planned.rules:
         fsops.write_within(root, target, text)
+    # As `detach` removes a recorded copy: Codex reads whatever stays there as a standing rule.
+    for rule in planned.dropped:
+        if fsops.is_file(root / rule):
+            fsops.remove_within(root, rule)
     rules = tuple(target for target, _ in planned.rules)
     written = planned.settings is not None
     if planned.settings is not None:

@@ -517,24 +517,6 @@ def test_detach_leaves_the_binding_record_in_place(tmp_path: Path) -> None:
     assert (store.parents[2] / "common" / "memory" / "shared.md").is_file()
 
 
-def test_detach_removes_a_rule_file_the_overlay_has_since_deleted(tmp_path: Path) -> None:
-    # `attach` stays idempotent and reversible by `detach`, and the ledger is the only record
-    # of what was placed. A rule file deleted from the overlay between two attaches is not
-    # written by the second one and so drops out of a ledger built from that run alone — while
-    # the copy the first attach made is still in `.codex/rules/`, where Codex reads it as a
-    # standing instruction. Without the union, `detach` leaves it there for good.
-    root, store, machine = _bound(tmp_path)
-    _grant(store.parents[2])
-    _attach(root, store, machine)
-    landed = root / ".codex" / "rules" / "common.rules"
-    assert landed.is_file()
-    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
-    _attach(root, store, machine)
-    assert landed.is_file(), "the copy the first attach made is still here"
-    _detach(root)
-    assert not landed.exists()
-
-
 def _rewrite_ledger(root: Path, **fields: object) -> None:
     """The ledger a clone committed: `attach`'s own, with fields replaced.
 

@@ -1800,6 +1800,17 @@ reddens = [
   "tests/attach/test_write.py::test_a_recorded_rule_removed_by_hand_is_not_an_error",
 ]
 
+# Codex reads a `.codex/rules/` copy as a standing instruction: one the overlay stopped holding is
+# removed by the next attach, or an untagged tag keeps steering the agent until `detach`.
+[[mutation]]
+name = "re-attach keeps a Codex rule copy the overlay no longer holds"
+file = "src/stayfixed/attach/write.py"
+before = "    for rule in planned.dropped:\n        if fsops.is_file(root / rule):"
+after = "    for rule in ():\n        if fsops.is_file(root / rule):"
+reddens = [
+  "tests/attach/test_write.py::test_untagging_removes_the_codex_rule_copies_the_overlay_no_longer_holds",
+]
+
 # An allow rule taken back is said on the screen the way a granted one is.
 [[mutation]]
 name = "the attach screen is silent about the allow rules it takes back"

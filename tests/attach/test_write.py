@@ -2753,6 +2753,30 @@ def test_a_recorded_rule_removed_by_hand_is_not_an_error(tmp_path: Path) -> None
     assert _allowed(root) == [RULE, "Bash(x)"]
 
 
+def test_untagging_removes_the_codex_rule_copies_the_overlay_no_longer_holds(
+    tmp_path: Path,
+) -> None:
+    from stayfixed.doctor import checks as doctor_checks
+    from tests.doctor.test_checks import _by_name, _env
+
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    overlay = _tagged(store, "a")
+    (overlay / "groups" / "a" / "codex" / "a.rules").write_text("# tag\n", encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (root / ".codex" / "rules" / "a.rules").is_file()
+    _untag(store)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert not (root / ".codex" / "rules" / "a.rules").exists()
+    assert ledger(root).rules == ()
+    row = _by_name(
+        doctor_checks.run_checks(
+            root, home=None, machine=machine, runner=Recorder(), env=_env(tmp_path)
+        ),
+        "attached",
+    )
+    assert row.status == "ok"
+
+
 def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:
     root, store, machine = _attachable(tmp_path, allow=(RULE,))
     _tag_grants(_tagged(store, "a"), "a", "Bash(x)", "Bash(y)")
