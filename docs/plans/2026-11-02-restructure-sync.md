@@ -101,13 +101,13 @@ at `ae716db`. Each wave re-measures its part and stops on a mismatch.
   one). A path moves only as a regular, non-executable `.md` file with no dot component from the
   scope's name down, and only as text. Nothing configures it.
 - **D2 — the scanner is the overlay's pinned pre-commit build.** The lookup reads the pin from
-  `.pre-commit-config.yaml` and pre-commit's database row for that repository and revision, and takes
+  `HEAD`'s `.pre-commit-config.yaml` and pre-commit's database row for that repository and revision, and takes
   `golangenv-<language_version>`, else `golangenv-default`, else `golangenv-system` (the same source
   at the same revision either way). It does not model pre-commit's choice between the last two, and
   never downloads or builds. No build: `scan_unavailable`, nothing committed or pushed, the remedy
-  `run \`pre-commit install-hooks\` in <overlay>`. Rules and ignores come from `HEAD`; a
-  `.gitleaksignore` or `.gitleaks.toml` at the overlay's root that differs from the committed one
-  stops the scan with a remedy.
+  `run \`pre-commit install-hooks\` in <overlay>`. Rules and ignores come from `HEAD`: a
+  working-tree `.gitleaks.toml` is never read, and a `.gitleaksignore` at the overlay's root that
+  differs from the committed one stops the scan with a remedy.
 - **D3 — state in the data directory.** `~/.local/share/stayfixed/sync/`: `state.json` (the ported
   JSON shape, plus `overlay`, minus `integrated`), `job.lock`, `sleeper.lock`, `pending`,
   `checkouts.json` and one `scratch/` directory the job removes whole at its start and end (a fixed

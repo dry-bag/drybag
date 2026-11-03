@@ -539,12 +539,17 @@ session going on), `Stop` and `SessionEnd`, named `note-sync-start`, `note-sync-
 newest first), because an index renders only from a checkout bound to its project, and always
 starts a job, to fetch. `Stop` and `SessionEnd` ask one `git status` of the overlay's memory paths
 and start a job only when a memory path is changed or untracked, when commits wait to be pushed,
-when the last outcome is not `ok` or `skipped`, or when a hold stands. While a hold stands and
-neither `HEAD` nor the fetched `origin/main` moved, they wait 15 minutes from the last job; a
-changed note never waits. A trigger within 120 seconds of the last job, or while a job runs, is
-marked pending and a sleeper waits out the throttle (a second sleeper exits at once, so a burst of
-turns is one run); `SessionEnd` is never throttled, since no later turn would pick it up. A job
-runs again, at most twice, for the triggers that arrived while it ran.
+when the last outcome is not `ok`, `skipped` or `resolved_index`, or when a hold stands. While a
+hold stands, or a failure only you can clear (`conflict`, `auth_failed`, `hook_failed`,
+`scan_unavailable`, `signing_failed`, `secret_found`, `waiting_clean_tree`), and neither `HEAD`,
+the fetched `origin/main` nor the dirty notes, by name and content, changed since the last job,
+they wait 15 minutes from the last job: the same job would meet the same end.
+A trigger within 120 seconds of the last job is marked pending and a sleeper waits out the
+throttle (a second sleeper exits at once, so a burst of turns is one run); one while a job runs is
+only marked pending, and that job runs again, at most twice, for the triggers that arrived while
+it ran. `SessionEnd` is
+never throttled, since no later turn would pick it up; how long a `SessionEnd` hook may run is the
+harness's to set, whatever `timeout` its entry asks for.
 
 The job is a detached process in its own session, its standard streams on `/dev/null`, started
 as `python -I -c BOOT <package directory> [--sleep-until ISO]` from the overlay. `-I` keeps the
@@ -569,9 +574,10 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    the real index's memory entries are reset to `HEAD`, or the next `git commit` of yours would carry
    the old notes back. A signature is made when `commit.gpgsign` is set, and never switched off.
 5. **Fetch.** `git fetch origin main` into `refs/stayfixed/fetched`, with `fetch.fsckObjects`.
-6. **Integrate.** When everything `HEAD..` the fetched sha brings is memory, the local commits are
-   replayed onto it one by one and `main` moves to the result; an index that conflicts, or that is changed on both sides,
-   is united line by line and rendered again. A merge commit among the local ones is not replayed.
+6. **Integrate.** When everything `HEAD..` the fetched sha brings is memory, and every local commit
+   is a plain commit of memory alone, the local commits are replayed onto it one by one and `main`
+   moves to the result; an index that conflicts, or that is changed on both sides, is united line
+   by line and rendered again. Anything else is a hold, and `HEAD` stays as it is.
 7. **Push.** The checked sha, `<sha>:refs/heads/main`, never forced and with no tag, after the
    secret scan of the range and only when every commit in it is memory.
 
@@ -581,22 +587,26 @@ from the scope's name down, and only as text; a link, an executable, a dot-file,
 Markdown, a nested repository or a file git calls binary is left out of the commit and named. A path outside those globs is
 never committed, integrated, written or pushed. Nothing configures the list.
 
-**What it never does.** Force-push, stash, rebase, pull, push a tag, write a non-memory path of the
-working tree or of the real index, run a script from the overlay's working tree, or ask for a password
-(`GIT_TERMINAL_PROMPT=0`, and an `ssh` given `BatchMode=yes`). Its `git` runs with your
-environment less the variables that point git at another repository, with attributes read from
+**What it never does.** Force-push, stash, rebase, pull, push a tag, rebuild a commit of yours that
+is not memory alone, write a non-memory path of the working tree or of the real index, run a script
+from the overlay's working tree, or ask for a password (`GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS` and
+`SSH_ASKPASS` dropped, `core.askPass` empty, `SSH_ASKPASS_REQUIRE=never`, and `BatchMode=yes`
+for a command that is `ssh` itself). Its `git` runs with your environment less the variables that
+point git at another repository and the relative entries of `PATH`, with attributes read from
 `HEAD` (`GIT_ATTR_SOURCE=HEAD`) and replace refs ignored.
 
-**The secret scan.** The overlay's own pinned gitleaks build: the job reads the pin in
+**The secret scan.** The overlay's own pinned gitleaks build: the job reads the pin in `HEAD`'s
 `.pre-commit-config.yaml` and pre-commit's cache, takes the build made for that revision, and
-never downloads or builds one. Rules and ignores come from `HEAD`; a `.gitleaksignore` or
-`.gitleaks.toml` at the overlay's root that differs from the committed one stops the scan. With no
-build, nothing is committed or pushed (`scan_unavailable`) and the remedy is `pre-commit
+never downloads or builds one. Rules and ignores come from `HEAD` too: a `.gitleaks.toml` in the
+working tree is never read, and a `.gitleaksignore` at the overlay's root that differs from the
+committed one stops the scan, since gitleaks reads that one whatever it is told. Every `git`
+gitleaks starts is given `color.ui`, `color.diff` and `log.showSignature` off, since its parser
+reads their patch text. With no build, nothing is committed or pushed (`scan_unavailable`) and the remedy is `pre-commit
 install-hooks` in the overlay; what is already committed upstream still integrates. A finding stops
 the push (`secret_found`) and names the commit.
 
 **Writes.** In the data directory, `$HOME/.local/share/stayfixed/sync/`: `state.json` (the last
-outcome, the holds and the fetched sha, written in one step), `job.lock` and `sleeper.lock` (held
+outcome, the holds, the fetched sha and a digest of the dirty notes, written in one step), `job.lock` and `sleeper.lock` (held
 while a job runs and while a sleeper waits), `pending` (a trigger that arrived while a job ran),
 `checkouts.json` (the project roots above) and `scratch/`, which the job removes whole at its start
 and its end. In the overlay: the objects and the commit of step 4, `refs/heads/main` (moved by
@@ -608,20 +618,28 @@ it. On the remote, `main`, by step 7. Besides `scratch/` and those notes, it rem
 is removed, the triggers go and this directory stays.
 
 **Outcomes** (`state.json`, and `doctor`): `ok`; `skipped` (the guard's reasons); `conflict` (a local
-commit conflicts with upstream or is a merge, and `main` was not moved); `resolved_index` (indexes
-united); `raced` (`main` moved while the job built a commit or integrated); `rejected`
+commit conflicts with upstream, and `main` was not moved); `resolved_index` (indexes united, a
+success); `raced` (`main` moved while the job built a commit or integrated); `rejected`
 (`origin/main` moved before the push; the next trigger fetches and retries); `offline`,
 `auth_failed` and `timeout` (the remote or a step); `hook_failed` (a step failed, or paths were
 left out of a commit); `scan_unavailable`; `signing_failed`; `secret_found`; `waiting_clean_tree`
 (an incoming note is changed here and not committed yet); `index_stale` (the real index's memory
 entries could not be aligned with `HEAD`). A failure is retried by a later trigger, throttled and
-never forced.
+never forced; one only you can clear waits out the back-off above.
 
 **Holds.** A hold is a range the sync refuses to move until you act, and a later outcome never
-clears it. *Upstream*: `HEAD..origin/main` changes something outside memory, so nothing is
-integrated or pushed; read all of it and take it at the sha that was held: `git log -p
---no-renames HEAD..<sha>`, then `git rebase <sha>`. The next job clears the hold once you have. *Local*: your own
-commits outside memory are not pushed; push them by hand when reviewed. `doctor` names both.
+clears it; while one stands nothing is integrated or pushed, and the next job clears it once you
+have acted. *Upstream*, for one of three reasons. `HEAD..origin/main` changes something outside
+memory: read all of it and take it at the sha that was held, `git log -p --no-renames HEAD..<sha>`,
+then `git rebase <sha>`. Its tree is one git will not check out: `git diff --stat HEAD <sha>`, and
+repair upstream. Or upstream was rewritten: the sha the last job recorded as upstream's, fetched or
+pushed, is not in the new one, and commits it dropped are still in `HEAD`; they are named, and
+never replayed or pushed back. Read them with `git log -p <sha>..HEAD`, then take the rewrite with
+`git rebase -i <sha>`, dropping them, or undo it with `git rebase <sha>` and a push. A first fetch,
+with nothing recorded, is no rewrite. *Local*: your own commits that are not memory alone (a change
+outside memory, a merge, an empty commit) keep their shas: they are neither rebuilt nor pushed, and
+upstream is not integrated past them; integrate and push them by hand when reviewed. `doctor` names
+each.
 
 **The floor.** The job needs `git` 2.43 (`merge-tree --write-tree --merge-base`, and
 `GIT_ATTR_SOURCE`, which an older git ignores without a word). On an older one it records `skipped` with
@@ -3183,7 +3201,9 @@ That one is bounded at **30 seconds**, not at the seam's own five minutes (the b
 `gh repo create --clone`), so a peer that does not answer cannot turn a one-line diagnostic into a
 five-minute block. The `git` questions are `gitenv`'s five seconds each, and the wrapper probe is
 this area's own thirty. The `sync` row's `git version`, of the overlay's `git`, is
-bounded at five seconds like them, and asked only where the note sync is on.
+bounded at five seconds like them, and asked only where the note sync is on; so is its `git
+cat-file` of the pin `HEAD` commits, asked only where pre-commit's database is there, which the
+fourteen do not count.
 
 **The rendered workflow is read as a regular file, and to a bound.** That path is the
 repository's: a clone chooses what sits at `.github/workflows/stayfixed.yml`. Anything there that
@@ -3215,7 +3235,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning only for files in the note store that are not notes, counted (at most 500,000 entries) | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
 | `pre-commit` | whether the overlay's commit-time secret scan is installed on this machine | the overlay |
 | `overlay-requires` | whether the overlay this machine records requires a stayfixed the running one satisfies — red when this project keeps its notes in that overlay, a warning when it does not — and, where that finds nothing, a warning when another repository's work tree holds the overlay root (a `.git` in a directory above it), naming that directory, since that repository can put files into the overlay | the overlay's `stayfixed-overlay.toml`, `stayfixed.toml`, the directories above the overlay root |
-| `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when a hold stands (the paths or commits, and the review command), when the record of the job cannot be read, or when the last outcome is a failure (the outcome and its first line); red when no gitleaks build exists for the overlay's pinned hook, since nothing is then committed or pushed; green otherwise, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, pre-commit's cache and the overlay's `.pre-commit-config.yaml`, `~/.local/share/stayfixed/sync/state.json` |
+| `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when no gitleaks build exists for the overlay's pinned hook (nothing is then committed or pushed; `setup --overlay` switches the sync on without building one, and the job fails closed), when a hold stands (the paths or commits, and the review command, which names the recorded sha only when it is a whole one), when the record of the job cannot be read, or when the last outcome is a failure (the outcome and its first line); green otherwise, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, pre-commit's cache and `HEAD`'s `.pre-commit-config.yaml` (`git cat-file`, asked only once that cache holds a database), `~/.local/share/stayfixed/sync/state.json` |
 
 **How `attached` reads the delivery.** With no ledger, a repository whose `memory.mode` is not
 `overlay` is simply not attached, and the row is green. Once this machine's binding confirms the
