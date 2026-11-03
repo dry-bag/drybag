@@ -5,9 +5,7 @@ one resolver both shipped trees go through. The three write-once files are `Kind
 artifacts in a pass of their own, because two artifacts cannot target one file in one pass;
 everything else is the footprint pass. Every target is a `config.paths` value, which the
 loader has bounded to `PATH_VALUE` and contained; what this module adds is a file name under
-it. A value that reaches a rendered file (`gate_branch` and `ref` into YAML) is quoted or
-shape-checked there — `BRANCH_NAME`, `CI_REF` — and a value outside its grammar costs the
-artifact rather than the run.
+it.
 
 This module builds templates and decides nothing about a manifest. Which recorded artifacts a
 configuration retires, what `[artifacts] local` may not move out of git, and the order of the
@@ -22,13 +20,6 @@ the dangling pointer. The skeleton's budget sentence is the same shape — it st
 `stayfixed docs check` enforces, so it is filled from `Budgets.effective` rather than from three
 literals copied out of the preset.
 
-**One invariant governs the workflow: its `uses:` ref is always what `[ci] ref` says on disk
-after the run.** That is what `doctor`'s `ci-ref` row enforces from the other side — "the
-workflow pins a different ref from `[ci] ref`, so the gate that runs is not the one recorded" —
-and it is why the workflow is rendered from `config.ci.ref` and never from the resolution
-directly. `init` writes a resolved pin into the document only when it is the run that creates
-the document, so on the adoption path `config.ci.ref` is the repository's own recorded value and
-the workflow pins that; where the adopted document records none, no workflow is written at all.
 """
 
 from __future__ import annotations
@@ -39,16 +30,14 @@ from dataclasses import dataclass, replace
 from functools import cached_property, partial
 from typing import TYPE_CHECKING
 
-import stayfixed
 from stayfixed.config.layout import IGNORE_BODY, IGNORE_REGION, rules_file
 from stayfixed.config.loader import CONFIG_FILE
-from stayfixed.config.schema import BRANCH_NAME, Config, Paths
+from stayfixed.config.schema import Config, Paths
 from stayfixed.docs.api import trail_target
 from stayfixed.errors import Failure, Refusal
 from stayfixed.fsops import path_key
 from stayfixed.ledger.api import BUG_AUDITS, BUG_RUNBOOK, bug_register, ledger_path, render_index
 from stayfixed.project.layout import PROJECT_FILES
-from stayfixed.release.api import Resolution
 from stayfixed.scaffold import Kind, Style, Template, validate_sources
 from stayfixed.templates import tree
 
@@ -79,74 +68,14 @@ COMPUTED = "computed"
 PROFILE = "profile"
 CLAUDE_MD = "CLAUDE.md"
 HARNESS_REGION = "harness"
-CI_WORKFLOW = ".github/workflows/stayfixed.yml"
-# The three artifact ids a command's own rules name, spelled once. The workflow is planned last
-# and kept through a `[ci] mode` this build merely does not render (`CI_ARTIFACT`); `rewrite_owned`
-# re-stamps the configuration's record (`CONFIG_ARTIFACT`); `uninstall` removes the ignore region
-# last, and neither of the two may be kept out of git (`IGNORE_ARTIFACT`). An id is also what
-# every initialised repository's committed manifest records, so none of them is renamed lightly:
-# `tests/project/test_templates.py` holds all three to the ids the templates build.
-CI_ARTIFACT = "ci-workflow"
+# The two artifact ids a command's own rules name, spelled once. `rewrite_owned` re-stamps the
+# configuration's record (`CONFIG_ARTIFACT`); `uninstall` removes the ignore region last, and
+# neither of the two may be kept out of git (`IGNORE_ARTIFACT`). An id is also what every
+# initialised repository's committed manifest records, so neither is renamed lightly:
+# `tests/project/test_templates.py` holds both to the ids the templates build.
 CONFIG_ARTIFACT = "config"
 IGNORE_ARTIFACT = "gitignore"
-# `[ci] gate_branch` is held to `config.schema.BRANCH_NAME` before it is written into the
-# rendered workflow. The value is repository-authored and lands in the YAML file's `branches:`
-# lists and its literal `base:`, so it is quoted there *and* held to a shape: quoting alone would
-# still admit a newline, which closes the string and writes further keys.
-# The grammar `[ci] ref` must match before it is written into the rendered workflow's `uses:`
-# line, for the same reason the branch grammar is applied and with the same provenance: the value is
-# repository-authored — on the adoption path it is whatever `stayfixed.toml` already carried —
-# and it lands in a YAML file GitHub executes. A full-length sha and nothing else: it is the
-# only immutable reference a reusable workflow can take (principle 9), it is the only form
-# `doctor`'s `ci-ref` row can resolve against the public repository's tags, and the mutable `v1`
-# alias, documented from 1.0.0 on, is a file a project writes by hand rather than one `init`
-# renders. The anchor is this constant in the installed package; nothing a repository writes can
-# move it.
-CI_REF = re.compile(r"\A[0-9a-f]{40}\Z")
 _SENTINEL = re.compile(r"%%[A-Z_]+%%")
-NO_TAG = (
-    "no released stayfixed tag matches the version running, so there is no commit to pin; "
-    "a later `stayfixed upgrade` pins it once a release matches"
-)
-# One sentence that is true after either kind of run: before a manifest exists `init` can still
-# pin, and after one exists `upgrade` can.
-NOT_ASKED = (
-    "the public repository could not be asked for its tags, so there is no commit to pin; "
-    "`stayfixed init --yes` with the network reachable pins it, or `stayfixed upgrade` once "
-    "this repository is initialised"
-)
-UVX_LATER = (
-    'the uvx form of the gate ships in a later release; [ci] mode = "reusable" is what this '
-    "stayfixed renders"
-)
-NO_CI = "[ci] mode is none"
-# Both fixed text, and neither carries the value. `NO_REF` is the adoption path's own state: the
-# document is a create-once artifact that is already there, so a pin this run resolved would be
-# recorded nowhere, and a workflow pinned to it would be the ref `doctor` reports as disagreeing
-# with `[ci] ref` on the very next run.
-#
-# It answers that whole path and not one case of it, so the second sentence says what the first
-# one leaves open: the remote's answer is not the reason and asking again is not the remedy.
-# Without it the wording reads as "a pin resolved and nothing recorded it", and the two states
-# that reach here with no pin — the remote unreachable, no released tag — were reported with
-# `NOT_ASKED` and `NO_TAG`, both of which send the operator to the network for a file they have
-# to edit by hand.
-#
-# The remedy names the command that acts on it: `upgrade` writes `[ci] ref` into any
-# `stayfixed.toml`, whoever wrote the file, because the key is stayfixed's.
-NO_REF = (
-    "the stayfixed.toml this repository already had records no [ci] ref, and `init` does not "
-    "write into a document it did not create — so a workflow would pin a ref nothing records. "
-    "`stayfixed upgrade` records a released commit there and renders the workflow around it"
-)
-BAD_REF = (
-    "[ci] ref is not a full-length commit sha, so no workflow was rendered around it; from 1.0.0 "
-    "on, the mutable `v1` alias is documented and is yours to write by hand, and until then a "
-    "0.x project pins the commit"
-)
-# Named and never quoted: the value is repository-authored, so the refusal names the key and
-# the grammar and leaves the bytes where they were.
-BAD_BRANCH = "[ci] gate_branch is not a plain branch name, so no workflow was rendered around it"
 
 
 # Which `[paths]` key each artifact's target is built from, so the collision refusal below can
@@ -173,7 +102,6 @@ PATH_KEYS = {
     "plans-keep": "paths.plans",
     IGNORE_ARTIFACT: OWN_NAME,
     "agents-md": "paths.agents_md",
-    CI_ARTIFACT: OWN_NAME,
     "profile-rules": "paths.stayfixed",
 }
 # The whole files a project may keep out of git, under `.stayfixed/local/artifacts/`, with every
@@ -203,8 +131,8 @@ class Owners:
     ask "whose file is this?" read, so they cannot come apart.
 
     **The relation.** `could_write` is `Prepared.could_write`: for each artifact id, every target
-    this build could produce for it under any configuration — this run's templates, the workflow
-    whatever `[ci] mode` says, every shipped profile's rules and each harness's rendition of them.
+    this build could produce for it under any configuration — this run's templates, every shipped
+    profile's rules and each harness's rendition of them.
     A place is `foreign` to an id when another id is built to write it. Which ids exist and where
     each could write are this build's; the `[paths]` values those places are built from are
     committed, and all a value can do here is add a place, never take one away. Places are one
@@ -449,63 +377,6 @@ def _profile_block(profile: Profile | None, rules: str) -> str:
     return PROFILE_BLOCK.format(name=profile.name, path=rules, lines=lines)
 
 
-def _ci(
-    config: Config, resolution: Resolution, *, adopted: bool
-) -> tuple[Template | None, str | None]:
-    """The rendered workflow, or the one sentence saying why this configuration gets none.
-
-    The ref rendered is `config.ci.ref` and never `resolution.pin` — see the module docstring's
-    invariant. `resolution` is still read, but only to say *why* there is no ref to render when
-    there is none: "the remote could not be asked" and "no released tag matches" are different
-    findings from "the document this repository already had records none", and a run that
-    collapsed them would send an operator to the network for a file they have to edit.
-
-    **`adopted` is read before `resolution` is, and that order is the rule above.** This
-    function had the inverse of its own docstring: it could not see which kind of run it was in,
-    so on a repository with a hand-written `stayfixed.toml` — the ordinary adoption path, under
-    the preset's `[ci] mode = "reusable"` — an unreachable remote was reported as `NOT_ASKED`
-    ("run `stayfixed init --yes` again with the network reachable") and a pre-release stayfixed as
-    `NO_TAG`. Running `init` again cannot help either one: `stayfixed.toml` is a `Kind.ONCE`
-    artifact already on disk, so no pin an `init` run resolves is ever recorded. The remote's
-    answer is not what is missing here, and `NO_REF` is the sentence that says what is, and
-    names the command that writes the key.
-    """
-    if config.ci.mode == "none":
-        return None, NO_CI
-    if config.ci.mode == "uvx":
-        return None, UVX_LATER
-    ref = config.ci.ref
-    if not ref:
-        if adopted:
-            return None, NO_REF
-        if not resolution.asked:
-            return None, NOT_ASKED
-        if resolution.pin is None:
-            return None, NO_TAG
-        return None, NO_REF
-    if not CI_REF.match(ref):
-        return None, BAD_REF
-    if not BRANCH_NAME.match(config.ci.gate_branch):
-        return None, BAD_BRANCH
-    # Rendered from `config` alone: the same configuration renders the same bytes online,
-    # offline and before any release, so an up-to-date workflow never reads as refreshed.
-    gate = config.ci.gate_branch
-    return (
-        _template(
-            CI_ARTIFACT,
-            CI_WORKFLOW,
-            "stayfixed.yml",
-            render=lambda: fill(
-                read("stayfixed.yml"),
-                SLUG=stayfixed.REPOSITORY_SLUG,
-                REF=ref,
-                GATE_BRANCH=gate,
-            ),
-        ),
-        None,
-    )
-
-
 def _no_file_of_another(prepared: Prepared) -> None:
     """Refuse an artifact of either pass at a place `Owners.foreign` gives another artifact."""
     for template in (*prepared.once, *prepared.footprint):
@@ -526,20 +397,13 @@ def _no_file_of_another(prepared: Prepared) -> None:
 def project_templates(
     config: Config,
     *,
-    resolution: Resolution,
     document: str,
-    adopted: bool,
 ) -> Prepared:
     """The footprint this configuration asks for, split into the engine's two passes.
 
     Nothing here reads the disk for a target: `trail_target` is a location, like every
     `[paths]`-built target, and the engine contains each one when it plans it. So this can be
     asked about paths no run will use, which `ignored._preset_places` does with the preset's.
-
-    `adopted` says whether this run read a `stayfixed.toml` it did not write, and it is threaded
-    rather than derived: `_ci` cannot tell the two kinds of run apart from a `Config` and a
-    `Resolution`, and every sentence it can print about a missing `[ci] ref` is wrong for one of
-    them. It has no default, because a caller that forgot one would silently get the wrong half.
     """
     from stayfixed.harnesses import HARNESSES, select
     from stayfixed.profiles import load_profile, shipped
@@ -617,11 +481,6 @@ def project_templates(
     ]
     skipped: dict[str, str] = {}
     could_write: dict[str, set[str]] = {}
-    workflow, reason = _ci(config, resolution, adopted=adopted)
-    # Where `_ci` builds the workflow, whatever `[ci] mode` asks for now.
-    could_write[CI_ARTIFACT] = {CI_WORKFLOW}
-    if workflow is None and reason is not None:
-        skipped[CI_ARTIFACT] = reason
     profiled: set[str] = set()
     # Every shipped profile's artifacts are built, so `could_write` lists where each could land;
     # only the configured profile's, for the harnesses this project lists, join the footprint.
@@ -638,10 +497,6 @@ def project_templates(
             if wanted and name == config.stayfixed.profile:
                 footprint.append(template)
                 profiled.add(template.id)
-    # Where the workflow goes in the plan, after everything a command retires too, is
-    # `footprint.prepare`'s to decide.
-    if workflow is not None:
-        footprint.append(workflow)
     for template in (*once, *footprint):
         could_write.setdefault(template.id, set()).add(template.target)
     prepared = Prepared(

@@ -7,9 +7,7 @@ the repository one command leaves is one every later command accepts, on a base 
 not `main`. A failure here is a defect between commands, not a reason to weaken a step.
 
 Nothing reaches the network. The runner the CLI builds is stubbed for the whole scenario at the
-seam `tests/project/test_command.py` stubs (`stayfixed.runner.subprocess_runner`), answering a
-release tag at the running version: `init` resolves its pin through it, and so do `upgrade
---dry-run` and `upgrade`, which read the pinned `[ci] ref`.
+seam `tests/project/test_command.py` stubs (`stayfixed.runner.subprocess_runner`).
 
 Neither scenario declares a mutation. Every guard it composes has its own entry against the
 narrower test that states it, and a scenario that one mutation reddens proves less than those do.
@@ -24,12 +22,12 @@ import pytest
 
 import stayfixed
 from stayfixed.config.loader import CONFIG_FILE, load, preset_defaults
-from stayfixed.project.templates import CI_WORKFLOW, CONFIG_ARTIFACT
+from stayfixed.project.templates import CONFIG_ARTIFACT
 from stayfixed.scaffold import Manifest, digest
 from tests.cli import cli
 from tests.gitfixture import git, needs_git
 from tests.project.repos import repository
-from tests.runners import LsRemote
+from tests.runners import Recorder
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
 pytestmark = needs_git
@@ -39,20 +37,18 @@ DATE = "2026-09-26"
 DESIGN = f"{PATHS.specs}/{DATE}-stayfixed-adoption-design.md"
 PLAN = f"{PATHS.plans}/{DATE}-stayfixed-adoption.md"
 TRAIL = f"{PurePosixPath(PATHS.roadmap).parent}/trail.toml"
-# The released commit the stubbed listing answers, at the version running.
-SHA = "c" * 40
 # The one policy file a person is most likely to rewrite, and a whole-file template.
 POLICY = "documentation-policy"
 
 
 @pytest.fixture
-def released(monkeypatch: pytest.MonkeyPatch) -> LsRemote:
-    """The runner every command builds, answering one release tag at the running version."""
+def released(monkeypatch: pytest.MonkeyPatch) -> Recorder:
+    """The runner every command builds."""
     from stayfixed import runner as runner_module
 
-    listing = LsRemote(stdout=f"{SHA}\trefs/tags/v{stayfixed.__version__}\n")
-    monkeypatch.setattr(runner_module, "subprocess_runner", lambda **_: listing)
-    return listing
+    stub = Recorder()
+    monkeypatch.setattr(runner_module, "subprocess_runner", lambda **_: stub)
+    return stub
 
 
 def _fresh_develop_repository(tmp_path: Path) -> Path:
@@ -73,7 +69,7 @@ def _write(root: Path, relative: str, text: str) -> None:
 
 
 def test_a_fresh_non_main_repository_goes_from_its_answers_to_an_upgrade_that_keeps_a_hand_edit(
-    tmp_path: Path, released: LsRemote
+    tmp_path: Path, released: Recorder
 ) -> None:
     # 1-2. The questions: the base branch is the one `origin/HEAD` names, not `main`.
     root = _fresh_develop_repository(tmp_path)
@@ -83,10 +79,9 @@ def test_a_fresh_non_main_repository_goes_from_its_answers_to_an_upgrade_that_ke
     assert asked["project.base_branch"]["default"] == "develop"
     assert asked["project.base_branch"]["x-stayfixed-source"] == "origin/HEAD"
 
-    # 3. `init --yes` with one answer, pinned to the release the stub lists; commit it all.
+    # 3. `init --yes` with one answer; commit it all.
     code, out, err = cli(root, tmp_path, "init", "--yes", "--name", "widget")
     assert code == 0, out + err
-    assert f"CI: v{stayfixed.__version__}@{SHA}" in out, out
     git(root, "add", "-A")
     git(root, "commit", "-qm", "chore: stayfixed init")
 
@@ -124,19 +119,11 @@ def test_a_fresh_non_main_repository_goes_from_its_answers_to_an_upgrade_that_ke
     code, out, err = cli(root, tmp_path, "upgrade")
     assert code == 0, out + err
     assert policy.read_text(encoding="utf-8") == edited
-    # The stub was the only way out: `init` and both `upgrade` runs asked it, and asked it
-    # nothing but the tag listing.
-    assert len(released.calls) >= 3, released.calls
-    assert all("ls-remote" in call for call in released.calls), released.calls
 
     # What a person sees at the end.
     config = load(root, machine=tmp_path / "absent.toml")
     assert config.project.base_branch == "develop"
     assert config.project.release_branch == "develop"
-    assert config.ci.gate_branch == "develop"
-    workflow = (root / CI_WORKFLOW).read_text(encoding="utf-8")
-    assert workflow.count('branches: ["develop"]') == 3 and 'base: "develop"' in workflow
-    assert f"@{SHA}" in workflow
     for argv in (("docs", "check"), ("docs", "trail", "--check")):
         code, out, err = cli(root, tmp_path, *argv)
         assert code == 0, (argv, out + err)
@@ -147,16 +134,14 @@ def test_a_fresh_non_main_repository_goes_from_its_answers_to_an_upgrade_that_ke
 
 
 def test_a_versionless_answer_sheet_goes_through_the_same_confirmation(
-    tmp_path: Path, released: LsRemote
+    tmp_path: Path, released: Recorder
 ) -> None:
     # The other way in: a `stayfixed.toml` the user wrote, with `[project]` and no version. It
     # meets the same dry run and the same refusal as an answered run, and the one line `init`
     # adds to it is the version. The sheet carries a `[stayfixed]` table of its own, so that line
     # has a table to go into; one without it gains the table's header too.
     root = repository(tmp_path)
-    sheet = (
-        '[stayfixed]\nagents = ["claude"]\n\n[project]\nname = "widget"\n\n[ci]\nmode = "none"\n'
-    )
+    sheet = '[stayfixed]\nagents = ["claude"]\n\n[project]\nname = "widget"\n'
     (root / CONFIG_FILE).write_text(sheet, encoding="utf-8")
     before = snapshot(root)
 

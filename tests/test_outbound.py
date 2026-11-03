@@ -204,17 +204,14 @@ def github_files() -> set[str]:
 
     A template under a `.github/` folder is found by its path. One written into `.github/` from a
     template outside one is found only when its destination is named here, because the path it is
-    written at is computed at run time, which this does not follow: the project's workflow,
-    `init`'s `CI_WORKFLOW`, is the one today, and a second is a row this misses until it is added.
+    written at is computed at run time, which this does not follow: none is today, and one is a row
+    this misses until it is added.
     """
-    from stayfixed.project.templates import CI_WORKFLOW
-
-    shipped = {
+    return {
         "/".join(parts[parts.index(".github") :])
         for path in TEMPLATES.rglob("*")
         if path.is_file() and ".github" in (parts := path.relative_to(TEMPLATES).parts)
     }
-    return shipped | {CI_WORKFLOW}
 
 
 def outbound_programs(launches: list[Launch]) -> set[str]:

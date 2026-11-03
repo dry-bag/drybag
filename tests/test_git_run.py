@@ -332,12 +332,9 @@ GIT_RUN_BOUNDS = (
     "stayfixed.guards.commit.LOG_TIMEOUT_SECONDS",
     "stayfixed.hints.hygiene.STATUS_TIMEOUT_SECONDS",
 )
-# The doctor's `git ls-remote` goes through the `Runner` seam rather than `git_run`, and every
-# test stubs that seam, so a bound shrunk there passes the suite the same way.
-GIT_BOUNDS = (*GIT_RUN_BOUNDS, "stayfixed.doctor.checks.CI_REF_TIMEOUT_SECONDS")
 
 
-@pytest.mark.parametrize("bound", GIT_BOUNDS)
+@pytest.mark.parametrize("bound", GIT_RUN_BOUNDS)
 def test_a_named_git_bound_leaves_git_a_second_to_answer(bound: str) -> None:
     # A second is far above what a local `rev-parse` takes and far below every bound shipped,
     # so the row fails on a bound shrunk by accident and on nothing a person would tune.

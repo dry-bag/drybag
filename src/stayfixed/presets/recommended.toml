@@ -28,7 +28,6 @@ hook_output_chars = 10000
 [defaults.stayfixed]
 profile = ""
 agents = ["claude", "codex"]
-enforced = []
 
 [defaults.project]
 base_branch = "main"
@@ -59,14 +58,6 @@ evidence_boundary_required_for = ["high"]
 
 [defaults.artifacts]
 local = []
-
-[defaults.ci]
-mode = "reusable"
-ref = ""
-
-[defaults.gates]
-builtin = ["docs", "bugs", "plan", "commit", "trail"]
-custom_timeout_seconds = 600
 
 [defaults.commit_messages]
 attribution_check = false

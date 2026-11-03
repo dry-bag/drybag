@@ -21,5 +21,4 @@ PROJECT_FILES: tuple[str, ...] = (
     "agents-skeleton.md",
     "agents-region.md",
     "claude.md",
-    "stayfixed.yml",
 )

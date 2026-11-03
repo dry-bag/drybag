@@ -142,7 +142,7 @@ EXIT: Mapping[Verdict, int] = {
 PROVE_TIMEOUT_SECONDS = 3600
 # A named cap: how long the runner's group has to exit on SIGTERM before it is sent SIGKILL
 # (`processes.end`). Below `processes.TERM_WAIT_SECONDS`, so that a `prove` a gate ends that way
-# (a `[gates.custom]` gate past its time limit, or interrupted) has ended its runner, whose
+# (a command past its time limit, or interrupted) has ended its runner, whose
 # session no signal to `prove`'s group reaches, before the gate's own SIGKILL ends `prove`.
 RUNNER_TERM_WAIT_SECONDS = 2
 

@@ -69,7 +69,6 @@ from stayfixed.config.schema import Config
 from stayfixed.errors import Refusal
 from stayfixed.gitenv import git_run, in_work_tree
 from stayfixed.project.templates import project_templates
-from stayfixed.release.api import Resolution
 from stayfixed.scaffold import LOCAL_ARTIFACTS, Action, Plan, Verb, printable
 
 # Fixed text around `names`, which is each file through `printable`: a `[paths]` value inside the
@@ -110,9 +109,7 @@ def _preset_places(config: Config) -> Mapping[str, frozenset[str]]:
     """
     defaults = preset_defaults(config.project.name, preset=config.stayfixed.preset).paths
     placed = replace(config, paths=defaults)
-    prepared = project_templates(
-        placed, resolution=Resolution(None, True), document="", adopted=True
-    )
+    prepared = project_templates(placed, document="")
     return prepared.could_write
 
 

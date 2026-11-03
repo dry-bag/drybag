@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import ClassVar
 
@@ -12,9 +11,9 @@ from typing import ClassVar
 # how to coerce a value. Every name an annotation uses must stay resolvable from this module's
 # globals at runtime, so a type imported only under `TYPE_CHECKING` would break the loader.
 
-# The one grammar for a name stayfixed answers to: a project, a profile, an overlay owner, a
-# custom gate. Each is one lowercase path segment whose leading class keeps it out of an option's
-# position in an argv. Every other module derives from this spelling rather than keeping its own.
+# The one grammar for a name stayfixed answers to: a project, a profile, an overlay owner. Each is
+# one lowercase path segment whose leading class keeps it out of an option's position in an argv.
+# Every other module derives from this spelling rather than keeping its own.
 PROJECT_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]*\Z")
 # `PROJECT_NAME` in words, for every refusal a person reads: the pattern itself ends in Python's
 # `\Z`, which means nothing to a reader and something else to every other regex dialect.
@@ -31,9 +30,8 @@ NAME_RULE = (
 # underscores, and anything else is counted rather than quoted.
 SECTION_NAME = re.compile(r"^[a-z][a-z_]*\Z")
 # The one grammar for a branch name stayfixed reads or writes: `[project] base_branch` and
-# `release_branch`, which the loader holds to it, `[ci] gate_branch`, which a rendered workflow
-# is withheld over, `--base-branch`, and a detected base branch. Each is repository-authored or
-# typed, and each reaches a git ref, an output line or a YAML file GitHub executes, where quoting
+# `release_branch`, which the loader holds to it, `--base-branch`, and a detected base branch. Each
+# is repository-authored or typed, and each reaches a git ref or an output line, where quoting
 # alone would still admit a newline. Inside that character set it refuses what git's own
 # branch-name rules refuse (`git check-ref-format --branch`), so nothing names a branch no
 # repository can have: `..`, `//`, a component starting with `.`, a component ending in `.lock`,
@@ -50,12 +48,6 @@ BRANCH_RULE = (
     "(no '..' or '//', no component starting with '.' or ending in '.lock', no trailing '/' or "
     "'.', and not HEAD)"
 )
-# The built-in gates, in the order every report lists them. `[gates] builtin` chooses among them
-# and `[gates.custom]` adds a project's own. The loader needs the names without importing an
-# area, which is why they live here; the area that runs them pins its objects to this tuple.
-BUILTIN_GATES = ("docs", "bugs", "plan", "commit", "trail")
-# The configuration check: a gate runner's other verdict, and never a gate's name.
-CONFIG_CHECK = "config"
 # The memory modes, each spelled here and nowhere else, since the areas that read the store branch
 # on them: the agent harness's own memory, where stayfixed delivers nothing, which is the mode
 # where no layer chooses one; notes in the private overlay, the one mode `attach` binds; notes
@@ -65,7 +57,6 @@ OVERLAY_MODE = "overlay"
 IN_REPO_MODE = "in-repo"
 LOCAL_ONLY_MODE = "local-only"
 MEMORY_MODES = (HARNESS_MODE, OVERLAY_MODE, IN_REPO_MODE, LOCAL_ONLY_MODE)
-CI_MODES = ("reusable", "uvx", "none")
 # A commit type, the word a conventional subject starts with (`feat` in `feat(scope): …`), spelled
 # once for `init`'s `--commit-type` grammar and the loader; and the same rule in words for the
 # parser's refusal.
@@ -80,16 +71,6 @@ class Stayfixed:
     preset: str
     profile: str
     agents: tuple[str, ...]
-    enforced: tuple[str, ...]
-
-    @property
-    def enforcing(self) -> frozenset[str]:
-        """The gates that fail a run rather than annotate it: exactly the ones `enforced` names.
-
-        Nothing fills the list, so a gate the list does not name never enforces, however the
-        project configures it.
-        """
-        return frozenset(self.enforced)
 
 
 @dataclass(frozen=True)
@@ -186,33 +167,6 @@ class Artifacts:
 
 
 @dataclass(frozen=True)
-class Ci:
-    mode: str
-    ref: str
-    gate_branch: str
-
-
-@dataclass(frozen=True)
-class CustomGate:
-    """A project's own gate: an argv run from the project root, never a shell string."""
-
-    run: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class Gates:
-    """`[gates]`: which built-in gates run, and the project's own.
-
-    `custom` has a default because the loader fills it itself, table by table, after `_build`
-    has held the rest; it is the one schema field `_build` leaves out when it is absent.
-    """
-
-    builtin: tuple[str, ...]
-    custom_timeout_seconds: int
-    custom: Mapping[str, CustomGate] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
 class CommitMessages:
     attribution_check: bool
     types: tuple[str, ...]
@@ -235,13 +189,5 @@ class Config:
     native_caps: NativeCaps
     ledger: Ledger
     artifacts: Artifacts
-    ci: Ci
-    gates: Gates
     commit_messages: CommitMessages
     personal: Personal
-
-    @property
-    def gate_names(self) -> tuple[str, ...]:
-        """The gates this project runs: its built-ins in `BUILTIN_GATES` order, then its own."""
-        kept = tuple(name for name in BUILTIN_GATES if name in self.gates.builtin)
-        return kept + tuple(sorted(self.gates.custom))

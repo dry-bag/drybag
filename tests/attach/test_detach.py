@@ -28,7 +28,7 @@ from tests.attach.test_binding import CONFIG, _machine
 from tests.attach.test_write import SETTINGS
 from tests.gitfixture import git
 from tests.parserlimits import LONG_NUMBER, NESTED, PAST_ENCODING, overflowing_indent
-from tests.runners import LsRemote, Recorder, claude_code, git_that_cannot_run
+from tests.runners import Recorder, claude_code, git_that_cannot_run
 from tests.snapshot import (
     assert_snapshot_changed,
     assert_snapshot_unchanged,
@@ -376,7 +376,7 @@ def test_uninstall_after_a_real_detach_takes_the_footprint_back(tmp_path: Path) 
     # one `init` left; `uninstall` then runs and takes the footprint back, and a second one finds
     # nothing to take. Mutation: `mutations/`'s "detach leaves its ledger behind".
     root, store, machine = _bound(tmp_path)
-    init(root, machine=machine, runner=LsRemote(), yes=True, dry_run=False, ci=False)
+    init(root, machine=machine, yes=True, dry_run=False)
     git(root, "add", "-A")
     git(root, "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-qm", "footprint")
     initialised = snapshot(root)

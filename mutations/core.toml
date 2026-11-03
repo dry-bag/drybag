@@ -673,10 +673,8 @@ reddens = [
 # Every call through this seam captures its output, so a `git` or `gh` that asks for a
 # credential on an inherited stdin is invisible and blocks for the whole of
 # NETWORK_TIMEOUT_SECONDS. What makes that a finding is which callers reach the network through
-# it: `setup --overlay create:` launches `gh` with the machine owner's own authentication, and
-# `release.pins.released` runs `git ls-remote` for `stayfixed init` and for `doctor`'s `ci-ref`
-# row. (This used to cite that row's URL as repository-authored; it is
-# `stayfixed.REPOSITORY_URL`, a module constant. See `stayfixed.runner._ENV_FORCE`.)
+# it: `setup --overlay create:` launches `gh` with the machine owner's own authentication.
+# See `stayfixed.runner._ENV_FORCE`.
 [[mutation]]
 name = "a launched command gets this process's stdin again"
 file = "src/stayfixed/runner.py"
@@ -969,26 +967,6 @@ reddens = [
   "tests/config/test_paths.py::test_a_paths_value_longer_than_its_cap_is_refused_naming_the_key",
 ]
 
-# The release pins read off a tag listing: an annotated tag resolves to the commit it points at and
-# not to its tag object, and only a semver tag is a release, never the `v1` alias.
-[[mutation]]
-name = "an annotated tag's peeled commit no longer wins over its tag object"
-file = "src/stayfixed/release/pins.py"
-before = "    return {**plain, **peeled}"
-after = "    return {**peeled, **plain}"
-reddens = [
-  "tests/release/test_pins.py::test_an_annotated_tag_resolves_to_its_commit_not_its_tag_object",
-]
-
-[[mutation]]
-name = "is_released stops filtering to semver tags, so the v1 alias counts as a release"
-file = "src/stayfixed/release/pins.py"
-before = "    return any(value == sha for tag, value in pins.items() if _SEMVER.match(tag))"
-after = "    return any(value == sha for tag, value in pins.items())"
-reddens = [
-  "tests/release/test_pins.py::test_is_released_judges_semver_tags_and_never_the_alias",
-]
-
 # One helper, two readers: the section list and the unknown-key lists inside a known table. Dropping
 # the filter reddens both, which is the point of their sharing it.
 [[mutation]]
@@ -1228,7 +1206,7 @@ reddens = [
 
 # The third enumerated-value leak in this loader, after `_build`'s and `_budgets`'. `!r` escapes
 # the control characters, which is why it read as milder than the raw bytes those two printed —
-# but `memory.mode` and `ci.mode` are repository-authored and bounded by no grammar, so what it
+# but `memory.mode` is repository-authored and bounded by no grammar, so what it
 # prints is unbounded in content and in length, and the same branch deleted `; got
 # {project.name!r}` from the refusal one screen below on exactly this reasoning.
 [[mutation]]
@@ -1300,8 +1278,7 @@ reddens = [
   "tests/hooks/test_dispatch.py::test_a_once_per_context_handler_that_says_nothing_keeps_its_one_delivery",
 ]
 
-# In the block led by `mutations/`'s "doctor asks the public repository with no bound of its own": a
-# caller's bound is chosen in one module and honoured in another, an entry each.
+# A caller's bound is chosen where the runner is built and honoured here.
 [[mutation]]
 name = "the runner ignores the bound its caller asked for"
 file = "src/stayfixed/runner.py"
@@ -1330,37 +1307,6 @@ before = "    except UNPARSEABLE as exc:"
 after = "    except KeyError as exc:"
 reddens = [
   "tests/config/test_owned.py::test_a_document_that_does_not_parse_is_refused_by_position_alone",
-]
-
-# The gate set and per-gate enforcement. `mutations/`'s "the loader admits a gate the project does
-# not run into [stayfixed] enforced", "a custom gate's name reaches the loader's refusals unbounded"
-# and "the loader admits a built-in gate stayfixed does not have" bound what a repository-authored
-# gate name may reach in a refusal.
-[[mutation]]
-name = "the loader admits a gate the project does not run into [stayfixed] enforced"
-file = "src/stayfixed/config/loader.py"
-before = "    unknown = [name for name in stayfixed.enforced if name not in configured]"
-after = "    unknown: list[str] = []"
-reddens = [
-  "tests/config/test_loader.py::test_a_gate_the_project_does_not_run_is_counted_and_never_quoted",
-]
-
-[[mutation]]
-name = "a custom gate's name reaches the loader's refusals unbounded"
-file = "src/stayfixed/config/loader.py"
-before = "    unusable = [name for name in tables if not PROJECT_NAME.match(name) or name in reserved]"
-after = "    unusable: list[str] = []"
-reddens = [
-  "tests/config/test_loader.py::test_a_custom_gate_name_outside_the_grammar_is_counted_and_never_quoted",
-]
-
-[[mutation]]
-name = "the loader admits a built-in gate stayfixed does not have"
-file = "src/stayfixed/config/loader.py"
-before = "    unknown = [name for name in gates.builtin if name not in BUILTIN_GATES]"
-after = "    unknown: list[str] = []"
-reddens = [
-  "tests/config/test_loader.py::test_a_built_in_gate_stayfixed_does_not_have_is_counted_and_never_quoted",
 ]
 
 # A harness's files are rendered only for a harness the project lists.
@@ -1499,19 +1445,6 @@ reddens = [
   "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
 ]
 
-# A `stayfixed.toml` that leaves `[ci] gate_branch` out gates its own base branch, whether this run
-# created it or a person wrote it, so the caller it renders runs for the repository's own pull
-# requests.
-[[mutation]]
-name = "a document that leaves [ci] gate_branch out gates main, not its base branch"
-file = "src/stayfixed/config/loader.py"
-before = '    return {"gate_branch": project.base_branch, **ci}'
-after = '    return {"gate_branch": "main", **ci}'
-reddens = [
-  "tests/project/test_answer_flags.py::test_a_fresh_repository_gates_the_branch_it_chose",
-  "tests/project/test_answer_flags.py::test_an_adopted_document_s_workflow_gates_the_branch_its_file_names",
-]
-
 # The branch a rendered caller names follows git's own branch-name rules, so no workflow gates a
 # branch no repository can have. Each rule dropped once.
 [[mutation]]
@@ -1521,7 +1454,6 @@ before = '''    r"^(?!HEAD$)(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[
 after = '''    r"^(?!HEAD$)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[./]$)"'''
 reddens = [
   "tests/project/test_templates.py::test_the_gate_branch_grammar_refuses_what_git_refuses",
-  "tests/project/test_templates.py::test_a_hand_written_gate_branch_git_would_refuse_renders_no_workflow",
   "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
 ]
 
@@ -1532,7 +1464,6 @@ before = '''    r"^(?!HEAD$)(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[
 after = '''    r"^(?!HEAD$)(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*[./]$)"'''
 reddens = [
   "tests/project/test_templates.py::test_the_gate_branch_grammar_refuses_what_git_refuses",
-  "tests/project/test_templates.py::test_a_hand_written_gate_branch_git_would_refuse_renders_no_workflow",
 ]
 
 [[mutation]]
@@ -1542,7 +1473,6 @@ before = '''    r"^(?!HEAD$)(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[
 after = '''    r"^(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[./]$)"'''
 reddens = [
   "tests/project/test_templates.py::test_the_gate_branch_grammar_refuses_what_git_refuses",
-  "tests/project/test_templates.py::test_a_hand_written_gate_branch_git_would_refuse_renders_no_workflow",
   "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
 ]
 
@@ -1683,16 +1613,15 @@ reddens = [
 ]
 
 # Every integer the schema holds is a count or a bound, so the loader refuses zero, a negative and
-# a bool (an `int` to Python). `[gates] custom_timeout_seconds` at 0 or below would make every
-# custom gate "could not run" without a word about why.
+# a bool (an `int` to Python).
 [[mutation]]
 name = "an integer setting at or below zero loads"
 file = "src/stayfixed/config/reading.py"
 before = "    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:"
 after = "    if isinstance(value, bool) or not isinstance(value, int):"
 reddens = [
-  "tests/config/test_loader.py::test_a_gates_table_in_the_wrong_shape_is_refused[no-time-at-all]",
-  "tests/config/test_loader.py::test_a_gates_table_in_the_wrong_shape_is_refused[negative-time]",
+  "tests/config/test_loader.py::test_an_integer_key_in_the_wrong_shape_is_refused[zero]",
+  "tests/config/test_loader.py::test_an_integer_key_in_the_wrong_shape_is_refused[negative]",
 ]
 
 [[mutation]]
@@ -1701,7 +1630,7 @@ file = "src/stayfixed/config/reading.py"
 before = "    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:"
 after = "    if not isinstance(value, int) or value <= 0:"
 reddens = [
-  "tests/config/test_loader.py::test_a_gates_table_in_the_wrong_shape_is_refused[time-as-a-bool]",
+  "tests/config/test_loader.py::test_an_integer_key_in_the_wrong_shape_is_refused[a-bool]",
 ]
 
 # `stayfixed hook` asked `is_file()` of stayfixed.toml, which follows a link: one to a regular file
@@ -1721,17 +1650,6 @@ reddens = [
   "tests/hooks/test_hook_command.py::test_a_symlinked_config_gets_one_verdict_whatever_it_points_at[/dev/zero]",
   "tests/doctor/test_checks.py::test_a_symlinked_configuration_is_one_that_does_not_load_whatever_it_points_at[regular-file]",
   "tests/doctor/test_checks.py::test_a_symlinked_configuration_is_one_that_does_not_load_whatever_it_points_at[/dev/zero]",
-]
-
-# In the block led by `mutations/`'s "the --name refusal prints the pattern": a name refusal words
-# the grammar rather than printing the pattern.
-[[mutation]]
-name = "a custom gate's name refusal prints the pattern"
-file = "src/stayfixed/config/loader.py"
-before = "        raise ConfigError(GATES_CUSTOM_NAME.format(count=len(unusable), rule=NAME_RULE), key=first)"
-after = "        raise ConfigError(GATES_CUSTOM_NAME.format(count=len(unusable), rule=PROJECT_NAME.pattern), key=first)"
-reddens = [
-  "tests/config/test_loader.py::test_every_name_refusal_words_the_rule_and_never_prints_the_pattern",
 ]
 
 # A name the repository chose — a file name, a note's name, a `memory.groups` entry, a TOML key —
@@ -1830,15 +1748,6 @@ reddens = [
 ]
 
 # Every list of names nothing bounds in number takes `findings.listed`.
-[[mutation]]
-name = "the enforced-gate refusal names every gate the project runs"
-file = "src/stayfixed/config/loader.py"
-before = "        known = listed(list(names)) or \"none\""
-after = "        known = \", \".join(names) or \"none\""
-reddens = [
-  "tests/config/test_loader.py::test_the_gates_a_project_runs_are_named_at_most_to_the_listed_limit",
-]
-
 [[mutation]]
 name = "an unknown-key refusal names every plain key"
 file = "src/stayfixed/config/loader.py"
@@ -2665,7 +2574,7 @@ reddens = [
 
 # A hex, octal or binary literal of any length converts, and so does a decimal under 4,300 digits,
 # so a configuration integer checked only for `<= 0` handed its reader a number no `str` could
-# print or no `float` could hold: `[gates] custom_timeout_seconds` ended `assess` and `gate` in an
+# print or no `float` could hold: a timeout key an earlier stayfixed read ended the command in an
 # internal error. Every integer key is bounded by `INTEGER_LIMIT`.
 [[mutation]]
 name = "a configuration integer is bounded only below"
@@ -3478,17 +3387,6 @@ reddens = [
   "tests/config/test_loader_note.py::test_a_path_through_a_symlink_resets_only_that_path",
 ]
 
-# A custom gate's name may hold a dot, so the retry asks each level for the whole remaining name
-# before it splits it.
-[[mutation]]
-name = "the NOTE retry cannot remove a key whose name holds a dot"
-file = "src/stayfixed/config/loader.py"
-before = "    if dotted in table:\n        return table, dotted"
-after = "    if dotted in table and \".\" not in dotted:\n        return table, dotted"
-reddens = [
-  "tests/config/test_loader_note.py::test_a_custom_gate_whose_name_holds_a_dot_is_dropped_by_its_whole_name",
-]
-
 # An unknown name is ignored with a note of its own: nothing stands in for it, and nothing beside
 # it is lost.
 [[mutation]]
@@ -3506,7 +3404,6 @@ after = "        if False:\n            notes.append(UNKNOWN_NOTE"
 reddens = [
   "tests/config/test_loader_note.py::test_an_unknown_name_is_ignored_with_a_note[memory.future]",
   "tests/config/test_loader_note.py::test_an_unknown_name_is_ignored_with_a_note[budgets.future]",
-  "tests/config/test_loader_note.py::test_an_unknown_name_is_ignored_with_a_note[gates.custom.g.future]",
 ]
 
 [[mutation]]
@@ -3516,14 +3413,6 @@ before = '            notes.append(UNKNOWN_NOTE.format(name=clipped(f"{dotted}.{
 after = '''            notes.append(UNKNOWN_NOTE.format(name=clipped(f"{dotted}.{key}")))
             return {}'''
 reddens = ["tests/config/test_loader_note.py::test_the_rest_of_a_newer_file_survives"]
-
-# A custom gate has no preset value, so a refusal of one is keyed to that gate alone.
-[[mutation]]
-name = "a custom gate that cannot run costs every custom gate"
-file = "src/stayfixed/config/loader.py"
-before = "            raise ConfigError(GATES_CUSTOM_EMPTY.format(name=name), key=gate_key)"
-after = '            raise ConfigError(GATES_CUSTOM_EMPTY.format(name=name), key="gates.custom")'
-reddens = ["tests/config/test_loader_note.py::test_a_custom_gate_that_cannot_run_is_dropped"]
 
 # A refusal with no key is the whole document's, and the NOTE path propagates it; a missing
 # required key has no preset value to reset to, so it stays the document's.
@@ -3601,32 +3490,19 @@ reddens = [
 [[mutation]]
 name = "a value the loader fills is called unusable"
 file = "src/stayfixed/config/loader.py"
-before = '_FILLED = frozenset({PRESET_KEY, "ci.gate_branch"})'
+before = '_FILLED = frozenset({PRESET_KEY})'
 after = "_FILLED: frozenset[str] = frozenset()"
 reddens = [
   "tests/config/test_loader_note.py::test_an_unknown_preset_resets_to_recommended",
-  "tests/config/test_loader_note.py::test_a_key_with_a_value_to_fall_back_to_resets_with_its_note[filled-by-the-loader]",
-]
-
-# `key.default` has no mutation of its own: no schema field has a plain default today, so no
-# document reaches that arm; it mirrors `_build`'s own reading of "required".
-[[mutation]]
-name = "a schema default is called unusable"
-file = "src/stayfixed/config/loader.py"
-before = "        or key.default_factory is not MISSING\n        or key.name in defaults"
-after = "        or False\n        or key.name in defaults"
-reddens = [
-  "tests/config/test_loader_note.py::test_a_key_with_a_value_to_fall_back_to_resets_with_its_note[schema-default]",
 ]
 
 [[mutation]]
-name = "a budget or a custom gate is called unusable"
+name = "a budget is called unusable"
 file = "src/stayfixed/config/loader.py"
-before = '    if section == "budgets" or dotted.startswith("gates.custom."):'
+before = '    if section == "budgets":'
 after = "    if False:"
 reddens = [
   "tests/config/test_loader_note.py::test_a_key_with_a_value_to_fall_back_to_resets_with_its_note[absent-entry]",
-  "tests/config/test_loader_note.py::test_a_custom_gate_that_cannot_run_is_dropped",
 ]
 
 # `Noted.keys` is what `doctor` lists a session's notes by.
@@ -4190,33 +4066,6 @@ before = "        resolve_owner(machine_config_path() if machine is None else ma
 after = "        resolve_owner(machine_config_path() if machine is None else machine, strict=False)"
 reddens = [
   "tests/test_command.py::test_a_command_refuses_a_machine_file_that_does_not_load",
-]
-
-# The NOTE retry's bound (`loader.NOTE_REMOVAL_LIMIT`): each removal is a whole build, so a document
-# of thousands of unusable keys cost a hook more than its timeout, which lets the call through.
-[[mutation]]
-name = "the NOTE path removes every key it cannot use, however many"
-file = "src/stayfixed/config/loader.py"
-before = "            if removed == limit:"
-after = "            if False:"
-reddens = [
-  "tests/config/test_loader_note.py::test_one_unusable_key_past_the_limit_refuses_the_whole_document",
-  "tests/config/test_session.py::test_more_unusable_keys_than_the_note_path_reads_drop_the_project",
-  "tests/hooks/test_floor.py::test_a_file_of_thousands_of_unusable_keys_never_outlasts_the_hook",
-]
-
-# The NOTE retry's bound on what its builds cost together (`loader.NOTE_REBUILT_LIMIT`): a build
-# costs in proportion to the document, so 64 of them over tens of thousands of gates that run kept a
-# session past a hook's timeout while the count stayed within its cap.
-[[mutation]]
-name = "the NOTE path's removals are bounded by their count alone"
-file = "src/stayfixed/config/loader.py"
-before = "    limit = min(NOTE_REMOVAL_LIMIT, NOTE_REBUILT_LIMIT // max(len(text), 1))"
-after = "    limit = NOTE_REMOVAL_LIMIT"
-reddens = [
-  "tests/config/test_loader_note.py::test_a_long_document_is_read_past_fewer_unusable_keys",
-  "tests/config/test_session.py::test_the_densest_file_a_session_reads_is_built_as_often_as_its_length_allows",
-  "tests/hooks/test_floor.py::test_the_densest_file_a_session_reads_never_outlasts_the_hook",
 ]
 
 # A session reads `stayfixed.toml` to `session.SESSION_READ_LIMIT` and no further, so what its parse
@@ -4846,8 +4695,8 @@ reddens = [
   "tests/prove/test_results.py::test_read_report_reads_no_kind_it_does_not_name",
 ]
 
-# --- ending a command's whole process group (`stayfixed.processes`), which `[gates.custom]`
-# gates and `prove` share; the gates' tests drive it ---
+# --- ending a command's whole process group (`stayfixed.processes`), which `prove` uses; its tests
+# drive it ---
 
 [[mutation]]
 name = "a timed-out custom gate's children run on after it reported"

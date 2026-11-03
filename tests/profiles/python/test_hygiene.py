@@ -29,7 +29,6 @@ from tests.sessions import session_of
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]

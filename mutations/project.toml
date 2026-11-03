@@ -271,30 +271,6 @@ before = "  - package-ecosystem: github-actions"
 after = "  - package-ecosystem: npm"
 reddens = ["tests/overlay/test_template.py::test_the_template_ships_a_dependabot_configuration_for_its_pinned_actions"]
 
-# Which sentence the run gives for a missing `[ci] ref`, and this entry used to claim something
-# else. It was named "a ci-workflow artifact is rendered with no released commit to pin it to",
-# and the mutation cannot render one: what renders a workflow is a `[ci] ref` that is non-empty
-# and matches `CI_REF` — two guards with entries of their own — and this arm is reached only
-# when there is no ref at all, so the `NO_TAG` case merely falls through to `NO_REF` and no
-# workflow is offered either way. The test's own comment says so.
-#
-# What it does break is the reason, and that is worth an entry on this branch's own argument.
-# Three states reach here with no ref, and they have three different remedies: the document this
-# repository already had records none (`NO_REF`, and nothing the network says can change it), the
-# remote could not be asked (`NOT_ASKED`, try again before a run writes), no released tag matches the version running
-# (`NO_TAG`, wait for a release). Collapsing them is how the adoption path came to be sent to the
-# network for a file it has to edit by hand — the defect `adopted` was threaded to fix, one commit
-# below this one. The mutation makes the run that resolved nothing report the adopted document's
-# sentence instead of its own.
-[[mutation]]
-name = "the no-released-tag state is reported as the adopted document's own reason"
-file = "src/stayfixed/project/templates.py"
-before = "    if resolution.pin is None:"
-after = "    if False:"
-reddens = [
-  "tests/project/test_templates.py::test_the_ci_workflow_is_offered_only_with_a_recorded_ref_and_says_why_otherwise",
-]
-
 # The second half of one rule: a remote URL's last path segment and a checkout's directory name are
 # both repository-authored, so the value that fails the grammar is the one thing the refusal must
 # not carry. The anchor is `PROJECT_NAME`, the loader's own grammar in the package, and the remedy —
@@ -356,38 +332,6 @@ before = "    precheck(root, answering=given != NO_ANSWERS, local=given.local is
 after = "    precheck(root, answering=given != NO_ANSWERS, local=given != NO_ANSWERS)"
 reddens = ["tests/project/test_init.py::test_another_answer_flag_after_init_keeps_the_plain_refusal"]
 
-# One invariant, enforced from both ends: the workflow's `uses:` ref is what `[ci] ref` says on
-# disk after the run, and `doctor`'s `ci-ref` row reports red when the two disagree. On the
-# adoption path `stayfixed.toml` is a create-once artifact already on disk, so a pin recorded
-# into the in-memory tables reaches no file — and the workflow written beside it then pins a sha
-# the document does not carry. Measured before this guard: an adopted `ref = "aaa…"`, a listing
-# resolving `bbb…`, the workflow pinning `bbb…`, `stayfixed.toml` still saying `aaa…`, `skipped`
-# empty, and the run printing `CI: v0.1.0@bbb…` as a success.
-[[mutation]]
-name = "init records a resolved pin in a document it did not create, so the workflow outruns [ci] ref"
-file = "src/stayfixed/project/init.py"
-before = "    if resolution.pin is not None and existing is None:"
-after = "    if resolution.pin is not None:"
-reddens = [
-  "tests/project/test_init.py::test_an_adopted_ref_is_what_the_workflow_pins_and_the_document_is_not_rewritten",
-  "tests/project/test_init.py::test_an_adopted_document_with_no_ref_gets_no_workflow_at_all",
-  "tests/project/test_command.py::test_an_adopted_ref_is_reported_as_the_repositorys_own_and_not_as_a_release",
-]
-
-# `[ci] ref` is repository-authored — on the adoption path it is whatever `stayfixed.toml`
-# already carried, and the loader bounds it to "a string" and nothing more — and it lands in the
-# `uses:` line of a YAML file GitHub executes. The branch grammar's rule (`BRANCH_NAME`), read onto
-# the second value this template interpolates. The anchor is `CI_REF`, a constant in the installed package that
-# nothing a repository writes can move, and a value outside it costs the artifact, not the run.
-[[mutation]]
-name = "a [ci] ref outside the grammar is rendered into the workflow's uses line"
-file = "src/stayfixed/project/templates.py"
-before = "    if not CI_REF.match(ref):"
-after = "    if False:"
-reddens = [
-  "tests/project/test_templates.py::test_a_recorded_ref_outside_the_grammar_is_never_rendered_into_the_uses_line",
-]
-
 # One refusal, read off one relation (`templates.Owners`), for every pair of artifacts at one
 # file: within a pass, where `scaffold.engine.plan` has no duplicate-target detection and two
 # `[paths]` keys aimed at one file had `apply` write both and the manifest record two digests for
@@ -407,25 +351,6 @@ reddens = [
   "tests/project/test_init.py::test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_write",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-paths-value-at-another-artifact-s-file-case-folded-init]",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-paths-value-at-another-artifact-s-file-case-folded-upgrade]",
-]
-
-# The highest-value new guard in the `project` area, and it had a test and no entry.
-# `[ci] gate_branch` is repository-authored and is interpolated into four places of a YAML file
-# GitHub executes — the three `branches:` lists and the literal `base:` — so it is quoted there
-# *and* held to a shape here, because quoting alone still admits a newline, which closes the
-# string and lets further keys be written into the workflow. The anchor is `BRANCH_NAME`, a
-# compiled constant in the installed package; the party bounded is the repository, which cannot
-# move it. A value outside the grammar costs the artifact rather than the run, and the sentence
-# names the key and the grammar and never the value.
-[[mutation]]
-name = "a gate_branch outside the grammar is interpolated into the rendered workflow"
-file = "src/stayfixed/project/templates.py"
-before = "    if not BRANCH_NAME.match(config.ci.gate_branch):"
-after = "    if False:"
-reddens = [
-  "tests/project/test_templates.py::test_the_ci_workflow_is_offered_only_with_a_recorded_ref_and_says_why_otherwise",
-  "tests/project/test_init.py::test_a_gate_branch_outside_the_grammar_leaves_a_pin_with_no_workflow",
-  "tests/project/test_command.py::test_a_hostile_gate_branch_is_reported_as_a_skipped_workflow_and_not_as_a_pin",
 ]
 
 # Without it a `%%REF%%` survives into an adopting project's `uses:` line and a `%%NAME%%` into
@@ -456,28 +381,11 @@ reddens = [
   "tests/project/test_templates.py::test_read_refuses_a_name_this_package_does_not_ship_before_it_joins_it",
 ]
 
-# The pin half of the CI line, which `22969c2` records as a real bug in its other half. The line
-# may name a release only when the workflow really pins that release's commit: on the adoption
-# path the workflow pins the ref `stayfixed.toml` already carried, so `CI: <tag>@<sha>` there
-# asserts that the gate GitHub runs is a release's when it is not — and `doctor`'s `ci-ref` row is
-# what then reports the disagreement. Not a permission gate; it is here for the false-claim class
-# `mutations/` already tracks in doctor's own rows, where what a reader does next follows from the
-# sentence.
-[[mutation]]
-name = "the init CI line claims a release for a ref the run did not resolve"
-file = "src/stayfixed/project/commands.py"
-before = "    elif pin is not None and pin.sha == report.ref:"
-after = "    elif pin is not None:"
-reddens = [
-  "tests/project/test_command.py::test_an_adopted_ref_is_reported_as_the_repositorys_own_and_not_as_a_release",
-]
-
 # The heading over both reports, which was `initialised:` above a REFUSED section saying nothing
 # would be written — invisible while the summary was four count lines, and a claim a reader checks
 # once the report prints. Three states and not two, keyed on `(refused, dry_run)`: an operator who
-# reads "initialised:" over a refusal stops looking for the thing they have to fix. The same
-# false-claim class as `mutations/`'s "the init CI line claims a release for a ref the run did not
-# resolve", and not a permission gate either.
+# reads "initialised:" over a refusal stops looking for the thing they have to fix. Not a
+# permission gate.
 [[mutation]]
 name = "a refused init run is headed as an initialised one"
 file = "src/stayfixed/project/commands.py"
@@ -535,74 +443,6 @@ before = '                LINES=_budget(config, "agents_md_lines"),'
 after = '                LINES=_budget(config, "agents_md_words"),'
 reddens = [
   "tests/project/test_templates.py::test_the_skeleton_states_the_budgets_this_project_will_be_held_to",
-]
-
-# `_ci`'s docstring states the rule this restores — "a run that collapsed them would send an
-# operator to the network for a file they have to edit" — and the code had the inverse of it,
-# because `project_templates` took no adoption flag and `_ci` could not tell the two kinds of
-# run apart. Under the preset's `[ci] mode = "reusable"` on a repository with a hand-written
-# `stayfixed.toml`, an unreachable remote printed "run `stayfixed init --yes` again with the
-# network reachable". Running again cannot help: `stayfixed.toml` is a `Kind.ONCE` artifact
-# already on disk, so no pin is ever recorded and the workflow is skipped again for ever.
-[[mutation]]
-name = "the adoption path is sent back to the network for a file it has to edit by hand"
-file = "src/stayfixed/project/templates.py"
-before = '''        if adopted:
-            return None, NO_REF'''
-after = '''        if False:
-            return None, NO_REF'''
-reddens = [
-  "tests/project/test_templates.py::test_the_adoption_path_is_never_sent_to_the_network_for_a_file_it_must_edit",
-  "tests/project/test_init.py::test_an_adopted_run_is_never_sent_to_the_network_for_a_file_it_must_edit",
-]
-
-# The other half: the flag exists and has to travel. `init` held `existing is None` and passed
-# none of it, which is how the branch above came to be unreachable in the first place.
-[[mutation]]
-name = "init stops telling project_templates which kind of run this is"
-file = "src/stayfixed/project/init.py"
-before = "adopted=existing is not None"
-after = "adopted=False"
-reddens = [
-  "tests/project/test_init.py::test_an_adopted_run_is_never_sent_to_the_network_for_a_file_it_must_edit",
-]
-
-# The ask the adoption path with no `[ci] ref` does not need: `_ci` answers it with `NO_REF`
-# before it reads the resolution, so the round trip — up to its whole timeout offline — bought
-# an answer nothing printed.
-[[mutation]]
-name = "the adoption path with no ref asks the network again"
-file = "src/stayfixed/project/init.py"
-before = 'if config.ci.mode == "reusable" and (existing is None or config.ci.ref)'
-after = 'if config.ci.mode == "reusable"'
-reddens = [
-  "tests/project/test_init.py::test_an_adopted_document_with_no_ref_gets_no_workflow_at_all",
-]
-
-# An unreachable remote on a run that creates the document is answered with the two commands
-# that can still pin: `init --yes` before anything is written, `upgrade` after. The mutation
-# answers it with the adoption path's sentence instead, which blames a hand-written document
-# this run did not have and offers `init --yes` to nobody.
-[[mutation]]
-name = "an unreachable remote is answered with the adoption path's reason instead of its own"
-file = "src/stayfixed/project/templates.py"
-before = "            return None, NOT_ASKED"
-after = "            return None, NO_REF"
-reddens = ["tests/project/test_init.py::test_an_unreachable_remote_is_answered_with_a_command_that_can_act"]
-
-# The unreachable arm, restored. `_ci` returns a workflow only for a non-empty `[ci] ref` and a
-# non-empty reason otherwise, and `init` derives `ref` from that same skip -- so the disjunct
-# could never be the reason the branch was taken and the fallback string could never be
-# formatted. An arm no run can reach is the same species as a vacuous assertion.
-[[mutation]]
-name = "the init CI line grows an arm no run can reach"
-file = "src/stayfixed/project/commands.py"
-before = '''    if skipped is not None:
-        ci_line = f"CI: skipped — {skipped}"'''
-after = '''    if skipped is not None or not report.ref:
-        ci_line = f"CI: skipped — {skipped or 'no workflow was planned'}"'''
-reddens = [
-  "tests/project/test_command.py::test_the_ci_line_has_no_arm_no_run_can_reach",
 ]
 
 # The `_enum` class, at four more sites, in two pairs: `mutations/`'s "a preset name outside the
@@ -740,17 +580,7 @@ before = "        if stamped is not None:\n            try:\n                man
 after = "        if False:\n            try:\n                manifest.write(root)\n"
 reddens = ["tests/project/test_rewrite.py::test_a_write_that_fails_puts_the_record_back_so_a_run_with_other_bytes_still_restamps"]
 
-# `could_write` is the anchor retirement rests on: which ids exist and which targets each could
-# have are this build's, built at the lines that build the templates.
-[[mutation]]
-name = "the workflow's anchor follows [ci] mode, and switching the gate off strands it"
-file = "src/stayfixed/project/templates.py"
-before = '    could_write[CI_ARTIFACT] = {CI_WORKFLOW}'
-after = '    could_write[CI_ARTIFACT] = set()'
-reddens = ["tests/project/test_templates.py::test_every_target_any_configuration_writes_is_one_every_configuration_could"]
-
-# `upgrade` moves `[stayfixed] version`, `[ci] ref` and the workflow's pin together or not at all,
-# never moves a project backward, and retires the workflow only when `[ci] mode` asks for none.
+# `upgrade` moves `[stayfixed] version` and never moves a project backward.
 [[mutation]]
 name = "upgrade moves a project backward to the older stayfixed running"
 file = "src/stayfixed/project/upgrade.py"
@@ -777,51 +607,6 @@ file = "src/stayfixed/project/upgrade.py"
 before = "    if ahead is None:\n        raise Refusal(UNORDERED"
 after = "    if False:\n        raise Refusal(UNORDERED"
 reddens = ["tests/project/test_upgrade.py::test_two_pre_releases_of_one_version_are_refused_as_unordered_and_never_quoted"]
-
-# With no release to pin, `upgrade` moves neither version key and says why; moving one anyway makes
-# the gate refuse the upgrade's own pull request.
-[[mutation]]
-name = "upgrade moves the version with no release to pin, and the gate refuses its own pull request"
-file = "src/stayfixed/project/upgrade.py"
-before = "        changes, held = {}, NO_RELEASE"
-after = "        held = NO_RELEASE"
-reddens = ["tests/project/test_upgrade.py::test_with_no_release_to_pin_neither_key_moves_and_the_report_says_why"]
-
-# A tool-owned key in a shape the editor cannot prove it rewrote is refused before any write,
-# never held silently while the footprint is written around it. The editor is asked even on the
-# path where the version would be held, and the comparison that looks equivalent is not.
-[[mutation]]
-name = "upgrade holds a version it cannot rewrite and writes the footprint anyway"
-file = "src/stayfixed/project/upgrade.py"
-before = "    elif pinned and rewrite(text, changes) != text:"
-after = "    elif pinned and before.stayfixed.version != running:"
-reddens = ["tests/project/test_upgrade.py::test_a_version_in_a_shape_the_editor_cannot_rewrite_is_refused_even_when_it_would_be_held"]
-
-[[mutation]]
-name = "upgrade moves version and ref past a workflow it did not rewrite"
-file = "src/stayfixed/project/upgrade.py"
-before = "    if pinned and document != text and not _rewrites_the_workflow(footprint):"
-after = "    if False:"
-reddens = ["tests/project/test_upgrade.py::test_a_hand_edited_workflow_holds_both_keys_until_it_is_forced"]
-
-# `upgrade` retires the CI workflow only when `[ci] mode` is `none`, never for a mode this build
-# merely does not render.
-[[mutation]]
-name = "upgrade retires the CI workflow for a mode it merely does not render"
-file = "src/stayfixed/project/footprint.py"
-before = '        retired = tuple(t for t in retired if t.id != CI_ARTIFACT or config.ci.mode == "none")'
-after = "        retired = tuple(retired)"
-reddens = ["tests/project/test_upgrade.py::test_a_mode_this_build_does_not_render_is_not_a_request_to_delete_the_gate"]
-
-# The other half of the policy `mutations/`'s "upgrade retires the CI workflow for a mode it merely
-# does not render" holds: `uninstall` retires every record it may, the workflow of a mode this build
-# merely does not render included, or it is left, unlisted, beside a deleted manifest.
-[[mutation]]
-name = "uninstall keeps a workflow the mode merely does not render, and leaves it unlisted"
-file = "src/stayfixed/project/footprint.py"
-before = "    if not removing:\n        retired = tuple("
-after = "    if True:\n        retired = tuple("
-reddens = ["tests/project/test_uninstall.py::test_a_workflow_the_mode_no_longer_renders_still_goes"]
 
 # `upgrade --dry-run` writes nothing and reports everything.
 [[mutation]]
@@ -1034,19 +819,6 @@ reddens = [
   "tests/project/test_uninstall.py::test_stayfixed_toml_or_the_ignore_block_kept_out_of_git_refuses_before_any_write[config]",
   "tests/project/test_init.py::test_stayfixed_toml_or_the_ignore_block_kept_out_of_git_refuses_init_before_any_write",
   "tests/project/test_upgrade.py::test_stayfixed_toml_kept_out_of_git_refuses_upgrade_before_any_write",
-]
-
-# A `[ci] ref` that is not a commit (`v1`, the documented opt-in to a moving stayfixed) is the
-# project's own. Read as pinned, `upgrade` replaced it with a sha and rendered a workflow over
-# the choice, or held the version for ever behind a workflow written around it.
-[[mutation]]
-name = "upgrade repins a [ci] ref that is not a commit"
-file = "src/stayfixed/project/upgrade.py"
-before = """    pinned = before.ci.mode == \"reusable\" and (\n        not before.ci.ref or bool(CI_REF.match(before.ci.ref))\n    )\n"""
-after = "    pinned = before.ci.mode == \"reusable\"\n"
-reddens = [
-  "tests/project/test_upgrade.py::test_a_ref_that_is_not_a_commit_is_the_projects_and_only_the_version_moves[no-workflow]",
-  "tests/project/test_upgrade.py::test_a_ref_that_is_not_a_commit_is_the_projects_and_only_the_version_moves[own-workflow]",
 ]
 
 # The manifest is the one record of what stayfixed wrote. With `stayfixed.toml` gone nothing can be
@@ -1423,7 +1195,7 @@ reddens = [
 [[mutation]]
 name = "the questions take a flag that plans or writes"
 file = "src/stayfixed/project/commands.py"
-before = "        if args.dry_run or not args.ci or _given(args) != NO_ANSWERS:"
+before = "        if args.dry_run or _given(args) != NO_ANSWERS:"
 after = "        if False:"
 reddens = ["tests/project/test_command.py::test_questions_take_no_flag_that_writes_or_plans"]
 
@@ -1477,45 +1249,6 @@ after = "    for target in (MANIFEST_PATH.as_posix(),):"
 reddens = [
   "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[fixed-names-in-the-clone-s-excludes]",
   "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[artifacts-kept-out-of-git]",
-]
-
-# A caller that runs for pull requests into any branch lets a pull request collect a green check
-# against a looser base and then be retargeted onto the gate branch. The anchor is the caller
-# file `stayfixed init` writes, which `/.github/`'s code owners review.
-[[mutation]]
-name = "the caller runs for pull requests into any branch"
-file = "src/stayfixed/templates/project/stayfixed.yml"
-before = """
-  pull_request:
-    branches: ["%%GATE_BRANCH%%"]
-"""
-after = """
-  pull_request:
-"""
-reddens = [
-  "tests/project/test_templates.py::test_the_rendered_trigger_runs_only_for_the_gate_branch_and_re_runs_on_a_retarget",
-]
-
-# `base:` is a literal so that the reusable workflow refuses a pull request whose base is not
-# the gate branch, even where the trigger has been widened by hand. Following `github.base_ref`
-# again, it agrees with whatever branch the pull request targets, and the refusal never fires.
-[[mutation]]
-name = "the caller's base: follows the pull request again"
-file = "src/stayfixed/templates/project/stayfixed.yml"
-before = '      base: "%%GATE_BRANCH%%"'
-after = "      base: ${{ github.base_ref || '%%GATE_BRANCH%%' }}"
-reddens = [
-  "tests/project/test_templates.py::test_the_rendered_trigger_runs_only_for_the_gate_branch_and_re_runs_on_a_retarget",
-]
-
-# The caller's grant is the ceiling for every step of the workflow it calls.
-[[mutation]]
-name = "the caller init writes grants its token write access to the repository"
-file = "src/stayfixed/templates/project/stayfixed.yml"
-before = "  contents: read"
-after = "  contents: write"
-reddens = [
-  "tests/project/test_templates.py::test_the_rendered_caller_grants_the_reusable_workflow_read_access_and_nothing_more",
 ]
 
 # The answers on `init --yes`: each held to its grammar or its choices by the parser, each
@@ -1624,23 +1357,6 @@ file = "src/stayfixed/profiles/evaluate.py"
 before = "    if code == -1 or (code != 0 and in_work_tree(root)):"
 after = "    if code == -1:"
 reddens = ["tests/profiles/test_evaluate.py::test_tracked_names_a_located_file_in_a_repository_git_refuses_rather_than_passing_it"]
-
-# A merge group reports no base the reusable workflow reads, so with the literal `base:` another
-# branch's queue would be judged against the gate branch's configuration. The caller subscribes
-# to the gate branch's queue alone.
-[[mutation]]
-name = "the caller runs for every branch's merge queue"
-file = "src/stayfixed/templates/project/stayfixed.yml"
-before = """
-  merge_group:
-    branches: ["%%GATE_BRANCH%%"]
-"""
-after = """
-  merge_group:
-"""
-reddens = [
-  "tests/project/test_templates.py::test_the_rendered_trigger_runs_only_for_the_gate_branch_and_re_runs_on_a_retarget",
-]
 
 # In the block led by `mutations/`'s "the TOML readers answer a document nested past the parser as
 # an internal error": every reader of a document somebody else wrote answers one nested past the
@@ -3136,7 +2852,6 @@ after = "    detail = NEVER_ENDS_DETAIL"
 reddens = [
   "tests/prove/test_javascript.py::test_a_debugger_wait_s_detail_says_it_waits_for_a_debugger",
 ]
-
 
 # `init`'s `picked:` list prints the adopted `stayfixed.toml`'s commit types, which no
 # grammar holds, so an escape sequence or `::error::` in one would reach the terminal and the CI

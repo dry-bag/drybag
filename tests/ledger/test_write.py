@@ -31,7 +31,6 @@ from tests.snapshot import assert_snapshot_unchanged, snapshot
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]

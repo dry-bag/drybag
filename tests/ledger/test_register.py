@@ -38,13 +38,11 @@ from stayfixed.ledger.register import (
 )
 from stayfixed.ledger.write import Allocation, file_entry, renumber
 from stayfixed.project.api import project_templates
-from stayfixed.release.api import Resolution
 from tests.gitfixture import git, needs_git
 
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]
@@ -204,9 +202,7 @@ def test_init_renders_the_empty_index_with_the_same_digest() -> None:
     # `BUG_INDEX` above, whose test carries the entry; this one adds the path `init` takes.
     prepared = project_templates(
         preset_defaults("widget"),
-        resolution=Resolution(None, True),
         document='[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n',
-        adopted=False,
     )
     (index,) = [t for t in prepared.footprint if t.id == "bug-index"]
     assert hashlib.sha256(index.render().encode("utf-8")).hexdigest() == EMPTY_INDEX_SHA256

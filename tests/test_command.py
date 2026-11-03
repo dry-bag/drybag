@@ -52,7 +52,6 @@ EXCEPTIONS = {
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]
@@ -144,7 +143,7 @@ def _two_documents(tmp_path: Path, command: str) -> tuple[Path, tuple[str, ...]]
     if command == "init":
         root = repository(tmp_path)
         (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
-        return root, ("init", "--yes", "--no-ci", "--json")
+        return root, ("init", "--yes", "--json")
     return initialised(tmp_path), ("upgrade", "--dry-run", "--json")
 
 

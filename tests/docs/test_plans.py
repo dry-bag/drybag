@@ -34,7 +34,6 @@ from tests.gitfixture import answer_shallow_check, criss_cross, dated, git, plan
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]

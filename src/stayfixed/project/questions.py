@@ -25,7 +25,6 @@ from typing import Any
 
 from stayfixed.config.schema import (
     BRANCH_NAME,
-    CI_MODES,
     COMMIT_TYPE,
     HARNESS_MODE,
     IN_REPO_MODE,
@@ -47,7 +46,6 @@ FLAGS = {
     "project.base_branch": "--base-branch",
     "memory.mode": "--memory-mode",
     "stayfixed.profile": "--profile",
-    "ci.mode": "--no-ci",
     "commit_messages.attribution_check": "--attribution-check",
     "commit_messages.types": "--commit-type",
     "artifacts.local": "--local",
@@ -89,14 +87,6 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         'set [stayfixed] profile = "" and run `stayfixed upgrade`, which removes the rules files '
         "you have not edited",
     ),
-    "ci.mode": (
-        "a workflow that runs stayfixed's gates on every pull request, pinned to a released "
-        "stayfixed commit",
-        "init asks the public stayfixed repository for that commit over the network",
-        ".github/workflows/stayfixed.yml, and [ci] mode and ref in stayfixed.toml",
-        'set [ci] mode = "none" and run `stayfixed upgrade`, which removes the workflow if you '
-        "have not edited it",
-    ),
     "commit_messages.attribution_check": (
         "`stayfixed commit check` fails a range whose commit messages end in an AI tool's "
         "attribution trailer or footer",
@@ -135,15 +125,6 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
     ),
 }
 TRADE_OFF_KEYS = ("get", "give_up", "trace", "undo")
-# A title for each `[ci] mode` the CI question offers, read in `CI_MODES`' order: a mode with no
-# title and not in `CI_UNOFFERED` is a `KeyError` when the schema is built, loud in every test.
-CI_TITLES = {
-    "reusable": "Gate pull requests with stayfixed's reusable workflow",
-    "none": "No CI workflow",
-}
-# `uvx` is not offered: `init --yes` answers the question with `--no-ci` alone, so no flag could
-# give that answer, and a project that wants it sets `[ci] mode` in `stayfixed.toml` itself.
-CI_UNOFFERED = frozenset({"uvx"})
 SCHEMA = "https://json-schema.org/draft/2020-12/schema"
 # The source of a default that nothing in the repository chose.
 PRESET = "the preset's default"
@@ -194,7 +175,7 @@ def _recommended() -> list[str]:
 
 
 def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
-    """The ten questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
+    """The nine questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
 
     Refused where `init --yes` with an answer would be (`init.precheck`): a manifest, or a
     `stayfixed.toml` that already answers them. Detection is lenient, so a name outside the
@@ -244,17 +225,6 @@ def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
             ],
             "default": found.profile,
             "x-stayfixed-source": found.sources["profile"],
-        },
-        "ci.mode": {
-            "type": "string",
-            "title": "Gate pull requests in CI",
-            "oneOf": [
-                {"const": mode, "title": CI_TITLES[mode]}
-                for mode in CI_MODES
-                if mode not in CI_UNOFFERED
-            ],
-            "default": preset.ci.mode,
-            "x-stayfixed-source": PRESET,
         },
         "commit_messages.attribution_check": {
             "type": "boolean",

@@ -49,7 +49,7 @@ def _as_an_older_stayfixed_left_it(root: Path, record_id: str, text: str) -> Non
 @needs_git
 def test_init_upgrade_and_uninstall_round_trip_and_keep_every_hand_edit(tmp_path: Path) -> None:
     # Through the launcher and not `cli.run`, so the proof covers the entry point a person and a
-    # skill use. `--no-ci` sets `[ci] mode = "none"`, so neither command asks the network for a pin.
+    # skill use.
     home = tmp_path / "home"
     home.mkdir()
     root = tmp_path / "widget"
@@ -57,7 +57,7 @@ def test_init_upgrade_and_uninstall_round_trip_and_keep_every_hand_edit(tmp_path
     git(root, "init", "-q", "-b", "main")
     git(root, "remote", "add", "origin", "git@github.com:owner/widget.git")
 
-    done = _stayfixed(root, home, "init", "--yes", "--no-ci")
+    done = _stayfixed(root, home, "init", "--yes")
     assert done.returncode == 0, done.stdout + done.stderr
 
     # A release ago stayfixed recorded an older version and wrote other bytes into the

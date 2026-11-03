@@ -20,7 +20,6 @@ import pytest
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.errors import Refusal
 from stayfixed.project.footprint import prepare
-from stayfixed.release.api import Resolution
 from tests.project.repos import DOCUMENT, repository
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -161,9 +160,7 @@ def test_replanning_before_predicting_is_refused(tmp_path: Path) -> None:
     root = repository(tmp_path)
     (root / CONFIG_FILE).write_text(DOCUMENT, encoding="utf-8")
     config = load(root, machine=tmp_path / "absent.toml")
-    passes = prepare(
-        root, config, {}, resolution=Resolution(None, True), document=DOCUMENT, adopted=True
-    )
+    passes = prepare(root, config, {}, document=DOCUMENT)
     with pytest.raises(RuntimeError, match="only after predict"):
         passes.replan(passes.footprint)
     passes.predict((passes.footprint, ()))
@@ -180,9 +177,7 @@ def test_a_predict_the_ignore_guard_refused_leaves_replanning_refused(tmp_path: 
     document = DOCUMENT + '\n[paths]\nagents_md = ".env"\n'
     (root / CONFIG_FILE).write_text(document, encoding="utf-8")
     config = load(root, machine=tmp_path / "absent.toml")
-    passes = prepare(
-        root, config, {}, resolution=Resolution(None, True), document=document, adopted=True
-    )
+    passes = prepare(root, config, {}, document=document)
     with pytest.raises(Refusal):
         passes.predict((passes.footprint, ()))
     with pytest.raises(RuntimeError, match="only after predict"):

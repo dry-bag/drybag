@@ -12,13 +12,10 @@ from stayfixed.config.loader import CONFIG_FILE, _build, load, loads
 from stayfixed.config.paths import PathEscape
 from stayfixed.config.reading import INTEGER_LIMIT, ConfigError, MachineConfigError
 from stayfixed.config.schema import (
-    BUILTIN_GATES,
-    CI_MODES,
     MEMORY_MODES,
     NAME_RULE,
     PROJECT_NAME,
     Config,
-    CustomGate,
 )
 from stayfixed.config.session import session_config
 from stayfixed.findings import LISTED_LIMIT
@@ -39,7 +36,6 @@ def test_missing_file_names_the_next_command(tmp_path: Path) -> None:
 def test_preset_defaults_fill_every_section(tmp_path: Path) -> None:
     write(tmp_path, MINIMAL)
     config = load(tmp_path, machine=tmp_path / "no-machine.toml")
-    assert config.stayfixed.enforced == ()
     assert config.paths.specs == "docs/specs"
     # No layer chooses a memory mode here, so memory is the harness's own.
     assert config.memory.mode == "harness"
@@ -93,14 +89,14 @@ def test_unknown_top_level_section_is_rejected(tmp_path: Path) -> None:
 
 
 def test_unknown_key_inside_a_section_is_rejected(tmp_path: Path) -> None:
-    write(tmp_path, MINIMAL + '\n[ci]\nbranch = "dev"\n')
-    with pytest.raises(ConfigError, match=r"\[ci\] has unknown key\(s\): branch"):
+    write(tmp_path, MINIMAL + '\n[memory]\nbranch = "dev"\n')
+    with pytest.raises(ConfigError, match=r"\[memory\] has unknown key\(s\): branch"):
         load(tmp_path, machine=tmp_path / "no-machine.toml")
 
 
 def test_a_section_that_is_not_a_table_is_rejected(tmp_path: Path) -> None:
-    write(tmp_path, 'ci = "not-a-table"\n' + MINIMAL)
-    with pytest.raises(ConfigError, match=r"\[ci\] must be a table"):
+    write(tmp_path, 'memory = "not-a-table"\n' + MINIMAL)
+    with pytest.raises(ConfigError, match=r"\[memory\] must be a table"):
         load(tmp_path, machine=tmp_path / "no-machine.toml")
 
 
@@ -115,7 +111,6 @@ def test_project_name_must_be_one_lowercase_path_segment(tmp_path: Path, name: s
     ("text", "key"),
     [
         (MINIMAL + '\n[memory]\nmode = "cloud"\n', "memory.mode"),
-        (MINIMAL + '\n[ci]\nmode = "pip"\n', "ci.mode"),
     ],
 )
 def test_enumerated_values_are_validated(tmp_path: Path, text: str, key: str) -> None:
@@ -254,7 +249,7 @@ def test_loads_answers_for_a_document_that_is_not_on_disk(tmp_path: Path) -> Non
     # `text` -> this reddens with FileNotFoundError, because there is no file.
     text = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
     config = loads(text, tmp_path / "project", machine=tmp_path / "absent.toml")
-    assert config.project.name == "widget" and config.stayfixed.enforced == ()
+    assert config.project.name == "widget"
 
 
 def test_load_is_read_then_loads(tmp_path: Path) -> None:
@@ -274,15 +269,13 @@ def test_load_is_read_then_loads(tmp_path: Path) -> None:
 
 
 def test_every_name_refusal_words_the_rule_and_never_prints_the_pattern(tmp_path: Path) -> None:
-    # A project name, a custom gate's name and a detected name are one grammar, and each refusal
-    # printed `PROJECT_NAME.pattern`, whose `\Z` a JSON Schema client or a person reads as a
-    # literal `Z`. Mutation (oracle): `mutations/`'s "a custom gate's name refusal prints the
-    # pattern" -> this reddens.
+    # A project name and a detected name are one grammar, and each refusal printed
+    # `PROJECT_NAME.pattern`, whose `\Z` a JSON Schema client or a person reads as a literal `Z`.
     from stayfixed.project.detect import NOT_A_NAME
 
-    text = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n[gates.custom.Bad]\n'
+    text = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "Bad"\n'
     with pytest.raises(ConfigError) as caught:
-        loads(text + 'run = ["true"]\n', tmp_path, machine=tmp_path / "absent.toml")
+        loads(text, tmp_path, machine=tmp_path / "absent.toml")
     for message in (str(caught.value), NOT_A_NAME):
         assert NAME_RULE in message and "\\Z" not in message, message
 
@@ -304,7 +297,6 @@ def test_a_project_name_is_refused_without_being_quoted(tmp_path: Path) -> None:
     ("text", "key", "allowed"),
     [
         (MINIMAL + '\n[memory]\nmode = "{v}"\n', "memory.mode", MEMORY_MODES),
-        (MINIMAL + '\n[ci]\nmode = "{v}"\n', "ci.mode", CI_MODES),
     ],
 )
 def test_an_enumerated_value_is_refused_without_being_quoted(
@@ -482,78 +474,6 @@ def _gated(tmp_path: Path, stayfixed: str = "", rest: str = "") -> Config:
     return loads(text, tmp_path, machine=tmp_path / "no-machine.toml")
 
 
-TESTS_GATE = '\n[gates.custom.tests]\nrun = ["pytest", "-q"]\n'
-
-
-def test_the_preset_runs_every_built_in_gate_in_the_one_order(tmp_path: Path) -> None:
-    # The preset is TOML and cannot import the tuple, so the one spelling is pinned here.
-    # Mutation: reorder the preset's `builtin` list and this reddens.
-    config = _gated(tmp_path)
-    assert config.gates.builtin == BUILTIN_GATES
-    assert config.gate_names == BUILTIN_GATES
-    assert config.gates.custom == {}
-
-
-def test_a_project_drops_a_built_in_gate_and_adds_its_own(tmp_path: Path) -> None:
-    config = _gated(
-        tmp_path,
-        rest='\n[gates]\nbuiltin = ["trail", "docs"]\n'
-        + TESTS_GATE
-        + '\n[gates.custom.lint]\nrun = ["ruff", "check"]\n',
-    )
-    # Built-ins in their own order whatever the document's, then the project's, sorted.
-    assert config.gate_names == ("docs", "trail", "lint", "tests")
-    assert config.gates.custom["tests"] == CustomGate(run=("pytest", "-q"))
-    assert config.gates.custom_timeout_seconds > 0
-
-
-@pytest.mark.parametrize(
-    "name",
-    ['"docs"', '"config"', '"Tests"', '"-rf"', '"x\\u001b[31m"'],
-    ids=["a-built-in", "the-configuration-check", "uppercase", "option-shaped", "escape"],
-)
-def test_a_custom_gate_name_outside_the_grammar_is_counted_and_never_quoted(
-    tmp_path: Path, name: str
-) -> None:
-    # Mutation: drop the `unusable` refusal and every case loads.
-    with pytest.raises(ConfigError) as caught:
-        _gated(tmp_path, rest=f'\n[gates.custom.{name}]\nrun = ["true"]\n')
-    message = str(caught.value)
-    assert message.startswith("[gates] custom names 1 gate(s) stayfixed cannot run")
-    assert "\x1b" not in message and "[31m" not in message and "Tests" not in message
-
-
-@pytest.mark.parametrize(
-    ("table", "match"),
-    [
-        ("run = []", r"gates\.custom\.tests\.run must name a command"),
-        ('run = "pytest -q"', r"gates\.custom\.tests\.run must be a list of strings"),
-        ('run = ["pytest", "a\\u0000b"]', r"gates\.custom\.tests\.run holds a NUL"),
-        ('run = ["true"]\nshell = true', r"\[gates\.custom\.tests\] has unknown key\(s\): shell"),
-    ],
-    ids=["empty", "a-shell-string", "nul", "unknown-key"],
-)
-def test_a_custom_gate_runs_one_argv_or_is_refused(tmp_path: Path, table: str, match: str) -> None:
-    # The empty and NUL cases are the two argvs `subprocess` cannot run, refused here rather
-    # than raised as an internal error by whatever runs the gate. Mutation: drop either check
-    # and its case reddens.
-    with pytest.raises(ConfigError, match=match):
-        _gated(tmp_path, rest=f"\n[gates.custom.tests]\n{table}\n")
-
-
-def test_a_built_in_gate_stayfixed_does_not_have_is_counted_and_never_quoted(
-    tmp_path: Path,
-) -> None:
-    # Mutation: drop the `builtin` membership check and this reddens.
-    with pytest.raises(ConfigError) as caught:
-        _gated(tmp_path, rest='\n[gates]\nbuiltin = ["docs", "x\\u001b[31m"]\n')
-    message = str(caught.value)
-    assert message == (
-        "[gates] builtin names 1 gate(s) stayfixed does not have; "
-        "the built-in gates are docs, bugs, plan, commit, trail"
-    )
-
-
 def test_state_is_an_unknown_key(tmp_path: Path) -> None:
     # `[stayfixed] state` was the lifecycle beside `enforced`, and is gone with no alias: the
     # loader refuses it as it refuses any key `Stayfixed` does not have, naming the key and never
@@ -565,91 +485,8 @@ def test_state_is_an_unknown_key(tmp_path: Path) -> None:
     assert "installed" not in message and "RED" not in message
 
 
-def test_an_unlisted_gate_does_not_enforce_whatever_the_file_configures(tmp_path: Path) -> None:
-    # `enforced` is the one adoption key: a gate enforces when it names it and never otherwise,
-    # so no default makes an unlisted gate enforce, the way the removed `state` key once made
-    # every gate enforce with no list at all. Without the list, a project enforces nothing, its
-    # own gate included; with one, exactly what it names.
-    configured = (*BUILTIN_GATES, "tests")
-    unlisted = _gated(tmp_path, rest=TESTS_GATE)
-    assert unlisted.gate_names == configured
-    assert unlisted.stayfixed.enforcing == frozenset()
-    listed = _gated(tmp_path, 'enforced = ["docs"]\n', TESTS_GATE)
-    assert listed.stayfixed.enforcing == frozenset({"docs"})
-
-
-def test_a_project_enforces_exactly_what_enforced_lists(tmp_path: Path) -> None:
-    # No mutation of its own: the positive half of the refusals below, which is what keeps each
-    # of them from passing by refusing everything.
-    config = _gated(tmp_path, 'enforced = ["plan", "commit"]\n')
-    assert config.stayfixed.enforced == ("plan", "commit")
-    assert config.stayfixed.enforcing == frozenset({"plan", "commit"})
-
-
-def test_a_gate_the_project_does_not_run_is_counted_and_never_quoted(tmp_path: Path) -> None:
-    # A dropped built-in is not a gate this project runs, so it cannot enforce either.
-    # Mutation: drop the membership check and this reddens.
-    with pytest.raises(ConfigError) as caught:
-        _gated(
-            tmp_path,
-            'enforced = ["docs", "trail", "x\\u001b[31m"]\n',
-            '\n[gates]\nbuiltin = ["docs", "bugs", "plan", "commit"]\n',
-        )
-    message = str(caught.value)
-    assert message.startswith("[stayfixed] enforced names 2 gate(s) this project does not run")
-    assert "\x1b" not in message and "[31m" not in message
-
-
-def test_a_gate_named_twice_is_refused(tmp_path: Path) -> None:
-    # Mutation: drop the refusal and this reddens.
-    with pytest.raises(ConfigError, match="enforced names a gate twice"):
-        _gated(tmp_path, 'enforced = ["docs", "docs"]\n')
-
-
-@pytest.mark.parametrize(
-    ("rest", "match"),
-    [
-        ('\n[gates]\nbuiltin = ["docs", "docs"]\n', r"^\[gates\] builtin names a gate twice$"),
-        ('\n[gates]\ncustom = "pytest"\n', r"^\[gates\.custom\] must be a table$"),
-        ('\n[gates.custom]\ntests = "pytest"\n', r"^\[gates\.custom\.tests\] must be a table$"),
-        (
-            "\n[gates]\ncustom_timeout_seconds = 0\n",
-            r"^gates\.custom_timeout_seconds must be a positive integer$",
-        ),
-        # A bound at or below zero makes every custom gate "could not run", and a bool is an
-        # `int` to Python: each is refused with the same bounded sentence.
-        (
-            "\n[gates]\ncustom_timeout_seconds = -5\n",
-            r"^gates\.custom_timeout_seconds must be a positive integer$",
-        ),
-        (
-            "\n[gates]\ncustom_timeout_seconds = true\n",
-            r"^gates\.custom_timeout_seconds must be a positive integer$",
-        ),
-        (
-            "\n[gates]\ncustom_timeout_seconds = 1.5\n",
-            r"^gates\.custom_timeout_seconds must be a positive integer$",
-        ),
-    ],
-    ids=[
-        "builtin-twice",
-        "custom-not-a-table",
-        "entry-not-a-table",
-        "no-time-at-all",
-        "negative-time",
-        "time-as-a-bool",
-        "fractional-time",
-    ],
-)
-def test_a_gates_table_in_the_wrong_shape_is_refused(tmp_path: Path, rest: str, match: str) -> None:
-    # Each refusal is the only thing between its value and a line that reads it as the right
-    # type or counts it once. Mutation: drop any one of the checks and its case reddens.
-    with pytest.raises(ConfigError, match=match):
-        _gated(tmp_path, rest=rest)
-
-
 def test_the_name_grammar_is_spelled_once() -> None:
-    # A project, a profile, an overlay owner and a custom gate are named in one grammar, and
+    # A project, a profile and an overlay owner are named in one grammar, and
     # every other module derives from `PROJECT_NAME`. Mutation: spell `SOURCE_NAME` out again in
     # `scaffold/engine.py` and this reddens naming the file.
     spelling = PROJECT_NAME.pattern.removeprefix("^").removesuffix("\\Z")
@@ -677,9 +514,9 @@ def test_a_project_branch_outside_the_branch_grammar_is_refused_by_name(
 ) -> None:
     # `[project] base_branch` becomes `refs/remotes/origin/<it>`, `test attribute`'s refusal and
     # `plan check`'s messages print it, and the `gate` command blamed `--base`, which nobody passed,
-    # for it. Held here, at the one place both keys are read, to the grammar the rendered workflow
-    # holds `[ci] gate_branch` to, and refused naming the key and never the value. Mutation
-    # (declared): the check dropped -> nothing is raised.
+    # for it. Held here, at the one place both keys are read, to the branch grammar, and refused
+    # naming the key and never the value. Mutation (declared): the check dropped -> nothing is
+    # raised.
     text = MINIMAL + f"{key} = {json.dumps(value)}\n"
     with pytest.raises(ConfigError, match=rf"project\.{key} is not a plain branch name") as caught:
         loads(text, tmp_path, machine=tmp_path / "absent.toml")
@@ -687,8 +524,8 @@ def test_a_project_branch_outside_the_branch_grammar_is_refused_by_name(
 
 
 def test_the_branch_grammar_is_spelled_once() -> None:
-    # One grammar for a branch name, read by the loader, the workflow renderer, detection, the
-    # questions and `--base-branch`. Mutation: spell it out again in `project/templates.py`.
+    # One grammar for a branch name, read by the loader, detection, the questions and
+    # `--base-branch`. Mutation: spell it out again in `project/questions.py`.
     spelling = r"(?!HEAD$)(?!.*\.\.)"
     src = Path(__file__).resolve().parents[2] / "src" / "stayfixed"
     spelled = sorted(
@@ -697,23 +534,6 @@ def test_the_branch_grammar_is_spelled_once() -> None:
         if spelling in path.read_text(encoding="utf-8")
     )
     assert spelled == ["config/schema.py"]
-
-
-def test_the_gates_a_project_runs_are_named_at_most_to_the_listed_limit(tmp_path: Path) -> None:
-    # Custom gates are the repository's to add, so the refusal's list of the gates the project
-    # runs is bounded in number by nothing: it names the first `LISTED_LIMIT` and counts the
-    # rest. Mutation (oracle): `mutations/`'s "the enforced-gate refusal names every gate the
-    # project runs" -> this reddens.
-    custom = [f"g{n:02}" for n in range(LISTED_LIMIT)]
-    tables = "".join(f'\n[gates.custom.{name}]\nrun = ["true"]\n' for name in custom)
-    with pytest.raises(ConfigError) as caught:
-        _gated(tmp_path, 'enforced = ["absent"]\n', tables)
-    runs = [*BUILTIN_GATES, *custom]
-    shown = ", ".join(runs[:LISTED_LIMIT])
-    assert str(caught.value) == (
-        "[stayfixed] enforced names 1 gate(s) this project does not run; the gates it runs are "
-        f"{shown}, and {len(runs) - LISTED_LIMIT} more"
-    )
 
 
 def test_unknown_keys_are_named_at_most_to_the_listed_limit(tmp_path: Path) -> None:
@@ -736,10 +556,10 @@ def test_unknown_keys_are_named_at_most_to_the_listed_limit(tmp_path: Path) -> N
 @pytest.mark.parametrize(
     "rest",
     [
-        "\n[gates]\ncustom_timeout_seconds = 0x" + "f" * 5_000 + "\n",
-        "\n[gates]\ncustom_timeout_seconds = 0o" + "7" * 6_000 + "\n",
-        "\n[gates]\ncustom_timeout_seconds = 0b" + "1" * 15_000 + "\n",
-        f"\n[gates]\ncustom_timeout_seconds = {INTEGER_LIMIT}\n",
+        "\n[budgets]\nagents_md_lines = 0x" + "f" * 5_000 + "\n",
+        "\n[budgets]\nagents_md_lines = 0o" + "7" * 6_000 + "\n",
+        "\n[budgets]\nagents_md_lines = 0b" + "1" * 15_000 + "\n",
+        f"\n[budgets]\nagents_md_lines = {INTEGER_LIMIT}\n",
         f"\n[budgets]\nagents_md_lines = {'9' * 401}\n",
     ],
     ids=["hex", "octal", "binary", "at-the-bound", "budget"],
@@ -750,9 +570,8 @@ def test_an_integer_key_at_or_past_its_bound_is_refused_without_printing_it(
     # A power-of-two literal of any length converts, and so does a decimal under 4,300 digits, so
     # the loader's own bound is what keeps a number no reader can print or hold out of `Config`.
     # The refusal names the bound and never the value. Mutations (declared): `mutations/`'s "a
-    # configuration integer is bounded only below" -> every case loads; "the schema's integer keys
-    # are taken unchecked" -> the `gates` cases; "a `[budgets]` value is taken unchecked" ->
-    # `budget`.
+    # configuration integer is bounded only below" -> every case loads; "a `[budgets]` value is
+    # taken unchecked" -> every case.
     with pytest.raises(ConfigError) as refused:
         _gated(tmp_path, rest=rest)
     assert str(refused.value).endswith(f"must be a positive integer below {INTEGER_LIMIT:,}")
@@ -761,8 +580,21 @@ def test_an_integer_key_at_or_past_its_bound_is_refused_without_printing_it(
 def test_an_integer_key_just_under_its_bound_loads(tmp_path: Path) -> None:
     # The legitimate side, and the bound's exact edge: one under it is a value like any other.
     # Mutation (declared): `mutations/`'s "a configuration integer one under the bound is refused".
-    config = _gated(tmp_path, rest=f"\n[gates]\ncustom_timeout_seconds = {INTEGER_LIMIT - 1}\n")
-    assert config.gates.custom_timeout_seconds == INTEGER_LIMIT - 1
+    config = _gated(tmp_path, rest=f"\n[budgets]\nagents_md_lines = {INTEGER_LIMIT - 1}\n")
+    assert config.budgets.effective("agents_md_lines") == INTEGER_LIMIT - 1
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["0", "-5", "true", "1.5"],
+    ids=["zero", "negative", "a-bool", "fractional"],
+)
+def test_an_integer_key_in_the_wrong_shape_is_refused(tmp_path: Path, value: str) -> None:
+    # Every integer the schema holds is a count or a bound, so zero and a negative are refused,
+    # and a bool is an `int` to Python: each with the same bounded sentence. Mutation: drop any
+    # one of the checks and its case reddens.
+    with pytest.raises(ConfigError, match=r"^budgets\.agents_md_lines must be a positive integer$"):
+        _gated(tmp_path, rest=f"\n[budgets]\nagents_md_lines = {value}\n")
 
 
 @pytest.mark.parametrize("value", ["0x" + "f" * 5_000, "5", "true"], ids=["long-hex", "5", "true"])

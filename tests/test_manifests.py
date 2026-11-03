@@ -125,7 +125,7 @@ def test_the_readme_still_declares_what_has_not_shipped() -> None:
     # this parser stopped finding items in, would otherwise turn that test into an assertion
     # over an empty list and leave the storefront free to advertise anything.
     items = _not_yet()
-    assert len(items) >= 4, items
+    assert len(items) >= 3, items
     assert "memory MCP server" in items
     assert "hold-the-line baseline" in items
 

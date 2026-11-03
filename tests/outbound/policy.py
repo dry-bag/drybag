@@ -80,7 +80,6 @@ NETWORK: dict[tuple[str, ...], str] = {
     ("gh",): "gh",
     ("git", "clone"): "git clone",
     ("git", "fetch"): "git fetch",
-    ("git", "ls-remote"): "git ls-remote",
     ("claude", "plugin"): "claude plugin",
     ("codex", "plugin"): "codex plugin",
     ("pre-commit", "install"): "pre-commit install",

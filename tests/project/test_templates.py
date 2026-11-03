@@ -1,4 +1,4 @@
-"""The twelve shipped files, and the `Template` list a configuration produces from them."""
+"""The eleven shipped files, and the `Template` list a configuration produces from them."""
 
 from __future__ import annotations
 
@@ -20,13 +20,10 @@ from stayfixed.profiles import load_profile
 from stayfixed.project.api import PROJECT_FILES, Prepared, project_templates
 from stayfixed.project.footprint import LOCAL_PROFILE, refuse_local_profile
 from stayfixed.project.templates import (
-    CI_ARTIFACT,
-    CI_WORKFLOW,
     COMPUTED,
     CONFIG_ARTIFACT,
     IGNORE_ARTIFACT,
     LOCAL_ELIGIBLE,
-    NO_REF,
     ONE_FILE,
     OWN_NAME,
     PATH_KEYS,
@@ -37,37 +34,15 @@ from stayfixed.project.templates import (
     fill,
     read,
 )
-from stayfixed.release.api import Pin, Resolution
 from stayfixed.scaffold import Kind, Style, upsert
 from stayfixed.templates import tree
 from tests.gitfixture import needs_git, run_git
-from tests.workflow_yaml import load
 
-SHA = "a" * 40
 DOCUMENT = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
-NO_PIN = Resolution(None, True)
-PINNED = Resolution(Pin("v0.1.0", SHA), True)
 
 
-def _prepared(
-    config: Config,
-    *,
-    resolution: Resolution = NO_PIN,
-    adopted: bool = False,
-) -> Prepared:
-    """This file's default is the run that *creates* `stayfixed.toml`, which is the path on which
-    the three "why there is no ref" sentences are the answers. `adopted=True` is the other kind
-    of run, and it has one answer; the case below holds that."""
-    return project_templates(config, resolution=resolution, document=DOCUMENT, adopted=adopted)
-
-
-def _recording(config: Config, ref: str = SHA) -> Config:
-    """`config` with `[ci] ref` set, which is the only thing that renders a workflow.
-
-    The workflow is built from what `stayfixed.toml` will say on disk and never from the
-    resolution, so a test that wants one says so on the configuration rather than on the pin.
-    """
-    return replace(config, ci=replace(config.ci, ref=ref))
+def _prepared(config: Config) -> Prepared:
+    return project_templates(config, document=DOCUMENT)
 
 
 def test_every_declared_file_exists_and_no_file_is_undeclared_at_any_depth() -> None:
@@ -222,170 +197,6 @@ def test_the_ignore_block_init_writes_is_the_block_a_project_carries() -> None:
     assert upsert("", template.region, template.render(), template.style) == IGNORE_BLOCK
 
 
-def test_the_ci_workflow_is_offered_only_with_a_recorded_ref_and_says_why_otherwise() -> None:
-    # Mutation (oracle): `if resolution.pin is None:` -> `if False:` -> the "no released tag"
-    # arm falls through to `NO_REF` and the second assertion reddens. The workflow is still not
-    # offered, because what renders one is `[ci] ref` and there is none.
-    config = preset_defaults("widget")
-    assert "ci-workflow" not in {t.id for t in _prepared(config).footprint}
-    assert _prepared(config).skipped["ci-workflow"].startswith("no released stayfixed tag")
-    skipped = _prepared(config, resolution=Resolution(None, False)).skipped
-    assert "could not be asked" in skipped["ci-workflow"]
-    # A pin resolved and the document records no ref. On a run that creates the document this is
-    # unreachable — `init` records the pin it resolved — so the case is stated on the adoption
-    # path, where it is the ordinary one.
-    no_ref = _prepared(config, resolution=PINNED, adopted=True)
-    assert "ci-workflow" not in {t.id for t in no_ref.footprint}
-    assert no_ref.skipped["ci-workflow"].startswith("the stayfixed.toml this repository already")
-    footprint = _prepared(_recording(config), resolution=PINNED).footprint
-    body = {t.id: t for t in footprint}["ci-workflow"].render()
-    assert f"/.github/workflows/check.yml@{SHA}\n" in body and "%%" not in body
-    assert 'branches: ["main"]' in body
-    for mode, phrase in (("none", "[ci] mode is none"), ("uvx", "ships in a later release")):
-        varied = replace(_recording(config), ci=replace(_recording(config).ci, mode=mode))
-        prepared = _prepared(varied, resolution=PINNED)
-        assert phrase in prepared.skipped["ci-workflow"], mode
-    # The hostile arm is reached AFTER a ref is in hand, which is why the skip reason matters as
-    # much as the missing artifact: `commands.py` used to key its CI line on the pin, so this
-    # state printed `CI: <tag>@<sha>` for a run that planned no workflow. `skipped` is what the
-    # command reads now, so this asserts the key is there and says why.
-    recorded = _recording(config)
-    hostile = replace(recorded, ci=replace(recorded.ci, gate_branch="main'; rm -rf"))
-    pinned_hostile = _prepared(hostile, resolution=PINNED)
-    assert "ci-workflow" not in {t.id for t in pinned_hostile.footprint}
-    assert pinned_hostile.skipped["ci-workflow"] == (
-        "[ci] gate_branch is not a plain branch name, so no workflow was rendered around it"
-    )
-    assert "rm -rf" not in pinned_hostile.skipped["ci-workflow"]
-
-
-def test_the_adoption_path_is_never_sent_to_the_network_for_a_file_it_must_edit() -> None:
-    """`_ci`'s own docstring states the rule, and the code had the inverse of it.
-
-    `project_templates` took no adoption flag, so `_ci` saw only a `Resolution` and could not
-    tell which kind of run it was in. Under the preset's `[ci] mode = "reusable"`, on a
-    repository with a hand-written `stayfixed.toml` and no `[ci] ref` — the ordinary adoption
-    path — an unreachable remote printed "run `stayfixed init --yes` again with the network
-    reachable" and a pre-release stayfixed printed "no released stayfixed tag matches the version
-    running". Neither is why there is no workflow, and running again cannot produce one:
-    `stayfixed.toml` is a `Kind.ONCE` artifact already on disk, so no pin any run resolves is ever
-    recorded and the workflow is skipped again, for ever.
-
-    All three states are one answer here, and the same one. Asserted as the whole text and not a
-    prefix, so a run that reached `NO_REF` through a different arm cannot pass for this.
-
-    Mutation (oracle): `if adopted:` -> `if False:` -> the first two cases fall through to the
-    resolution's own arms and redden.
-    """
-    config = preset_defaults("widget")
-    for resolution in (Resolution(None, False), NO_PIN, PINNED):
-        prepared = _prepared(config, resolution=resolution, adopted=True)
-        assert "ci-workflow" not in {t.id for t in prepared.footprint}, resolution
-        assert prepared.skipped["ci-workflow"] == NO_REF, resolution
-    # And the network's own answers still print on the run that creates the document, which is
-    # the only run they are the reason for: a pin written there does reach the file.
-    assert (
-        "could not be asked"
-        in _prepared(config, resolution=Resolution(None, False)).skipped["ci-workflow"]
-    )
-    assert _prepared(config).skipped["ci-workflow"].startswith("no released")
-
-
-def test_a_recorded_ref_outside_the_grammar_is_never_rendered_into_the_uses_line() -> None:
-    """`[ci] ref` is repository-authored and lands in a YAML file GitHub executes.
-
-    On the adoption path it is whatever `stayfixed.toml` already carried, and the loader bounds it
-    to "a string" and nothing more — so it is held to `CI_REF` before it is written, exactly as
-    `gate_branch` is held to `BRANCH_NAME`, and a value outside the grammar costs the artifact
-    rather than the run. The anchor is `CI_REF`, a constant in the installed package that nothing
-    a repository writes can move.
-
-    Mutation (oracle): drop the `CI_REF` check -> the hostile ref is rendered into the `uses:`
-    line and the first assertion of that case reddens.
-    """
-    config = preset_defaults("widget")
-    for ref in ("main'; rm -rf", "abc", SHA.upper(), f"{SHA}\n"):
-        prepared = _prepared(_recording(config, ref), resolution=PINNED)
-        assert "ci-workflow" not in {t.id for t in prepared.footprint}, ref
-        assert prepared.skipped["ci-workflow"].startswith("[ci] ref is not a full-length"), ref
-        # The value itself is never echoed: the reason names the key and the shape, the way
-        # `gate_branch`'s does. Checked apart from the loop below, whose value the fixed text
-        # legitimately names.
-        assert ref not in prepared.skipped["ci-workflow"], ref
-    # The documented mutable alias is refused too, and for a different reason than a hostile
-    # value: `v1` is a ref GitHub would accept and `doctor` reports as a mutable opt-in, and
-    # `docs/cli.md` says it is a file a project writes by hand. `init` renders immutable pins.
-    alias = _prepared(_recording(config, "v1"), resolution=PINNED)
-    assert "ci-workflow" not in {t.id for t in alias.footprint}
-    assert alias.skipped["ci-workflow"].startswith("[ci] ref is not a full-length")
-
-
-def test_the_workflow_is_the_same_bytes_whatever_the_remote_answered() -> None:
-    # The workflow is rendered from the configuration alone. A comment naming the release the
-    # remote resolved made an up-to-date workflow read as refreshed on every offline `upgrade`,
-    # and on the adoption path it named a release beside a commit this build did not resolve.
-    # Mutation (oracle, advisory): render `REF=` from `resolution.pin.sha` when there is one ->
-    # the bodies differ and this reddens.
-    other = "d" * 40
-    config = _recording(preset_defaults("widget"), other)
-    bodies = {
-        {t.id: t for t in _prepared(config, resolution=answer).footprint}["ci-workflow"].render()
-        for answer in (PINNED, NO_PIN, Resolution(None, False))
-    }
-    assert len(bodies) == 1
-    (body,) = bodies
-    assert f"/.github/workflows/check.yml@{other}\n" in body
-    assert "v0.1.0" not in body and SHA not in body
-
-
-def test_the_rendered_trigger_runs_only_for_the_gate_branch_and_re_runs_on_a_retarget() -> None:
-    # A caller that ran for pull requests into any branch let a pull request collect a green
-    # check against a looser base and then be retargeted onto the gate branch, and a `base:`
-    # that followed `github.base_ref` followed it there. So the trigger names the gate branch,
-    # `edited` re-runs the check on a retarget, `merge_group` reports for the gate branch's
-    # queue and no other branch's (whose queue would be judged against this branch's
-    # configuration, since a merge group reports no base the workflow reads), and `base:`
-    # is a literal the reusable workflow holds a pull request's own base to. The equality below
-    # holds every line of the block, so deleting any one of them reddens it. Mutations
-    # (declared): the `pull_request` branch filter removed; the `merge_group` one removed;
-    # `base:` follows the pull request again.
-    recorded = _recording(preset_defaults("widget"))
-    config = replace(recorded, ci=replace(recorded.ci, gate_branch="trunk"))
-    body = {t.id: t for t in _prepared(config, resolution=PINNED).footprint}["ci-workflow"].render()
-    trigger = body[body.index("\non:\n") + 1 : body.index("\npermissions:")]
-    assert trigger == (
-        "on:\n"
-        "  pull_request:\n"
-        '    branches: ["trunk"]\n'
-        "    types: [opened, synchronize, reopened, edited]\n"
-        "  merge_group:\n"
-        '    branches: ["trunk"]\n'
-        "  push:\n"
-        '    branches: ["trunk"]\n'
-    ), trigger
-    assert body.endswith('    with:\n      base: "trunk"\n'), body
-
-
-def test_the_rendered_caller_grants_the_reusable_workflow_read_access_and_nothing_more() -> None:
-    # A called workflow's token can hold no more than its caller grants, so this file's grant is
-    # the ceiling for every step of `check.yml`, the project's own gates included, and those run
-    # files the pull request can change. Read by the strict reader, so the grant's value is held
-    # and not only its key, and the job's keys are held whole: a `permissions:` on the job would
-    # replace the workflow's. Mutation (declared): `contents: write`.
-    body = {
-        t.id: t
-        for t in _prepared(_recording(preset_defaults("widget")), resolution=PINNED).footprint
-    }["ci-workflow"].render()
-    document = load(body)
-    assert isinstance(document, dict), document
-    assert list(document) == ["name", "on", "permissions", "jobs"], list(document)
-    assert document["permissions"] == {"contents": "read"}, document["permissions"]
-    jobs = document["jobs"]
-    assert isinstance(jobs, dict) and list(jobs) == ["check"], jobs
-    job = jobs["check"]
-    assert isinstance(job, dict) and list(job) == ["uses", "with"], job
-
-
 def test_no_two_artifacts_of_one_pass_resolve_to_the_same_file() -> None:
     """The two-pass design's premise, which nothing made true until the collision refusal.
 
@@ -447,8 +258,7 @@ def test_no_two_artifacts_of_one_pass_resolve_to_the_same_file() -> None:
 def test_one_relation_says_whose_file_a_place_is_and_excepts_only_the_agents_md_pair() -> None:
     """`Owners` is what both the collision refusal and the ledger rule read, so its answers are
     asked directly: the designed pair shares `AGENTS.md` and nothing else shares anything, a
-    place is one file in any case, and a place only another configuration builds (the workflow
-    under `mode = "none"`) is still another artifact's.
+    place is one file in any case.
 
     Mutations (oracle): `mutations/`'s "the AGENTS.md skeleton and its region stop sharing a file by
     design" -> the pair's place is foreign to each; "places are compared case-sensitively for
@@ -461,7 +271,6 @@ def test_one_relation_says_whose_file_a_place_is_and_excepts_only_the_agents_md_
     assert owners.foreign("roadmap", "CLAUDE.md") == {"claude-md"}
     assert owners.foreign("roadmap", "claude.md") == {"claude-md"}
     assert owners.foreign("claude-md", "CLAUDE.md") == frozenset()
-    assert owners.foreign("roadmap", CI_WORKFLOW) == {CI_ARTIFACT}
     # A place nobody is built to write is nobody's.
     assert owners.foreign("roadmap", "elsewhere/notes.md") == frozenset()
     # Two ids a configuration put on one place are each other's, in any case.
@@ -470,45 +279,33 @@ def test_one_relation_says_whose_file_a_place_is_and_excepts_only_the_agents_md_
 
 
 def test_the_artifact_ids_the_commands_name_are_the_ones_the_templates_build() -> None:
-    """`CI_ARTIFACT`, `CONFIG_ARTIFACT` and `IGNORE_ARTIFACT` are what `upgrade`, `uninstall`,
+    """`CONFIG_ARTIFACT` and `IGNORE_ARTIFACT` are what `upgrade`, `uninstall`,
     `rewrite_owned` and the placement refusals name an artifact by. Each must be the id of the
     template at its own place, and each must stay the string it is: every initialised
     repository's committed manifest records it, and `attach`'s `detach` reads the ignore region's
     record by that literal, since the attach area imports nothing from this one.
 
-    Mutation (advisory): build the workflow under a literal id of its own -> the first
-    assertion reddens; rename a constant -> the last one does.
+    Mutation (advisory): rename a constant -> the last assertion reddens.
     """
-    prepared = project_templates(
-        _recording(preset_defaults("widget")),
-        resolution=PINNED,
-        document=DOCUMENT,
-        adopted=False,
-    )
+    prepared = project_templates(preset_defaults("widget"), document=DOCUMENT)
     built = (*prepared.once, *prepared.footprint)
-    assert {t.id for t in built if t.target == CI_WORKFLOW} == {CI_ARTIFACT}
     assert {t.id for t in prepared.once if t.target == CONFIG_FILE} == {CONFIG_ARTIFACT}
     assert {t.id for t in built if t.region == IGNORE_REGION} == {IGNORE_ARTIFACT}
     assert {t.target for t in built if t.id == IGNORE_ARTIFACT} == {".gitignore"}
-    assert (CI_ARTIFACT, CONFIG_ARTIFACT, IGNORE_ARTIFACT) == ("ci-workflow", "config", "gitignore")
+    assert (CONFIG_ARTIFACT, IGNORE_ARTIFACT) == ("config", "gitignore")
 
 
 def test_every_artifact_both_passes_build_has_a_paths_key_recorded_for_it() -> None:
     """The anti-drift half of `PATH_KEYS`: an artifact added without a line there would reach a
     `KeyError` only once somebody's configuration happened to collide, which is the worst moment
     for this module to raise something other than its own refusal."""
-    prepared = project_templates(
-        _python(tuple(h.name for h in HARNESSES)),
-        resolution=PINNED,
-        document=DOCUMENT,
-        adopted=False,
-    )
+    prepared = project_templates(_python(tuple(h.name for h in HARNESSES)), document=DOCUMENT)
     ids = {t.id for t in (*prepared.once, *prepared.footprint)}
     # The walk is stated non-empty first, and at its full size: a `Prepared` that built nothing
     # would make the comparison below vacuous in both directions. A harness's rendition has no
     # row in `PATH_KEYS`; its id is asked of the registry, so a harness added there is covered
     # here with no edit.
-    assert len(ids) == 17 + len(_renditions()), sorted(ids)
+    assert len(ids) == 16 + len(_renditions()), sorted(ids)
     expected = set(PATH_KEYS) | _renditions()
     assert ids == expected, (sorted(ids ^ expected),)
 
@@ -543,16 +340,11 @@ def test_every_source_both_passes_build_is_a_shipped_file_or_is_declared_compute
     Mutation (oracle): `_computed`'s source is spelled `f"{PROJECT}/{artifact_id}"` -> the
     computed set's assertion reddens, and so does the fixture module's provenance assertion.
     """
-    prepared = project_templates(
-        _python(tuple(h.name for h in HARNESSES)),
-        resolution=PINNED,
-        document=DOCUMENT,
-        adopted=False,
-    )
+    prepared = project_templates(_python(tuple(h.name for h in HARNESSES)), document=DOCUMENT)
     sources = {t.id: t.source for t in (*prepared.once, *prepared.footprint)}
     # Non-empty and at full size first, for `PATH_KEYS`' reason: nothing built makes every
     # comparison below true of nothing.
-    assert len(sources) == 17 + len(_renditions()), sorted(sources)
+    assert len(sources) == 16 + len(_renditions()), sorted(sources)
     computed = {name for name, source in sources.items() if source.startswith(f"{COMPUTED}/")}
     # As the set and not as a count: an artifact that moved from one rule to the other is exactly
     # the drift this test exists to see, and a count would not see it.
@@ -577,9 +369,8 @@ def test_a_template_sentinel_left_unfilled_costs_the_artifact_rather_than_shippi
     """`fill` refuses text still carrying a `%%KEY%%`, and nothing proved it did.
 
     Measured: with `left = _SENTINEL.search(text)` replaced by `left = None`, `tests/project`
-    was 39 passed — so the guard whose absence puts `check.yml@%%REF%%` into an adopting
-    project's CI (`%%REF%%` is the workflow template's own sentinel), and `# %%NAME%%` at the head
-    of the file every session loads, was executed by the suite and asserted by none of it.
+    was 39 passed — so the guard whose absence puts `# %%NAME%%` at the head of the file every
+    session loads was executed by the suite and asserted by none of it.
 
     The sentinel's own name prints: it is a string from a template this package ships, which is
     stayfixed's own text and not a repository's. The names below are deliberately *not* ones this
@@ -615,7 +406,7 @@ def test_read_refuses_a_name_this_package_does_not_ship_before_it_joins_it() -> 
 
 
 def _python(agents: tuple[str, ...] = ("claude", "codex")) -> Config:
-    config = _recording(preset_defaults("widget"))
+    config = preset_defaults("widget")
     return replace(config, stayfixed=replace(config.stayfixed, profile="python", agents=agents))
 
 
@@ -717,20 +508,13 @@ def test_every_target_any_configuration_writes_is_one_every_configuration_could(
     # one configuration wrote must be listed by the configuration that replaced it, or the file
     # is left behind as an orphan. So it is built at the lines that build the templates, and
     # this holds it across every toggle that turns an artifact on or off.
-    # Mutation (oracle): leave the workflow's path out of `could_write` -> `mode = "none"` no
-    # longer lists what `reusable` wrote, and this reddens.
-    base = _recording(preset_defaults("widget"), SHA)
+    base = preset_defaults("widget")
     configs = [
-        replace(
-            base,
-            ci=replace(base.ci, mode=mode),
-            stayfixed=replace(base.stayfixed, profile=profile, agents=agents),
-        )
-        for mode in ("reusable", "uvx", "none")
+        replace(base, stayfixed=replace(base.stayfixed, profile=profile, agents=agents))
         for profile in ("", "python")
         for agents in ((), ("codex",), ("claude", "codex"))
     ]
-    prepared = [_prepared(config, resolution=PINNED) for config in configs]
+    prepared = [_prepared(config) for config in configs]
     written = {(t.id, t.target) for p in prepared for t in (*p.once, *p.footprint)}
     for each in prepared:
         listed = {(i, target) for i, targets in each.could_write.items() for target in targets}
@@ -765,25 +549,13 @@ BRANCH_NAMES = (
 @needs_git
 @pytest.mark.parametrize("name", BRANCH_NAMES)
 def test_the_gate_branch_grammar_refuses_what_git_refuses(tmp_path: Path, name: str) -> None:
-    # `[ci] gate_branch`, `--base-branch`, a detected `origin/HEAD` and the loaded `[project]`
-    # branches are all held to `BRANCH_NAME` before a rendered caller names the branch; a name git
-    # itself refuses as a branch (`a..b`, `a//b`, a trailing `/` or `.`, a `.lock` component, a
-    # component starting with `.`, the name `HEAD`) is a caller that can never run, so the grammar
-    # refuses it too, and `release/2.0` and `a/HEAD` stay legal. Mutations (oracle): `mutations/`'s
-    # "the gate branch grammar takes a '..' git refuses", "the gate branch grammar takes a '.lock'
-    # component git refuses" and "the gate branch grammar takes the name HEAD git refuses" -> the
-    # `a..b`, `.lock` and `HEAD` cases redden.
+    # `--base-branch`, a detected `origin/HEAD` and the loaded `[project]` branches are all held
+    # to `BRANCH_NAME`; a name git itself refuses as a branch (`a..b`, `a//b`, a trailing `/` or
+    # `.`, a `.lock` component, a component starting with `.`, the name `HEAD`) is a branch no
+    # repository can have, so the grammar refuses it too, and `release/2.0` and `a/HEAD` stay
+    # legal. Mutations (oracle): `mutations/`'s "the gate branch grammar takes a '..' git
+    # refuses", "the gate branch grammar takes a '.lock' component git refuses" and "the gate
+    # branch grammar takes the name HEAD git refuses" -> the `a..b`, `.lock` and `HEAD` cases
+    # redden.
     accepted = run_git(tmp_path, "check-ref-format", "--branch", name).returncode == 0
     assert bool(BRANCH_NAME.match(name)) == accepted, name
-
-
-@pytest.mark.parametrize("name", ["a..b", "a//b", "a/", "a.lock", "a/.b", "HEAD"])
-def test_a_hand_written_gate_branch_git_would_refuse_renders_no_workflow(name: str) -> None:
-    # The hand-written `[ci] gate_branch` half of the same rule: the artifact is skipped with the
-    # fixed reason, and the value is never echoed.
-    recorded = _recording(preset_defaults("widget"))
-    prepared = _prepared(
-        replace(recorded, ci=replace(recorded.ci, gate_branch=name)), resolution=PINNED
-    )
-    assert "ci-workflow" not in {t.id for t in prepared.footprint}, name
-    assert prepared.skipped["ci-workflow"].startswith("[ci] gate_branch is not a plain branch")

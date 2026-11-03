@@ -1,9 +1,7 @@
 """What `doctor` answers about an installation, and what it refuses to guess.
 
 `codex-hooks`, the one check this build could not answer, left the report: what holds on Codex is
-the README's reach table now, since a row no build can answer is a row that never clears. `ci-ref`
-skips on a state of the repository, since `init` writes `[ci] ref`, and not on a limit of this
-build.
+the README's reach table now, since a row no build can answer is a row that never clears.
 
 `git` is required by the fixtures below rather than by the code under test: an attached
 repository is one whose `origin` the overlay recorded, and `read_binding` compares the two.
@@ -18,9 +16,7 @@ import json
 import os
 import pty
 import shutil
-import subprocess
 import sys
-import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -57,9 +53,6 @@ from stayfixed.doctor.checks import (
     VERSION_BEHIND,
     VERSION_UNORDERED,
     VERSION_UNREADABLE,
-    WORKFLOW,
-    WORKFLOW_MAX_BYTES,
-    WORKFLOW_NOT_A_FILE,
 )
 from stayfixed.harnesses import CLAUDE
 from stayfixed.hooks.api import DIAGNOSTICS, DIAGNOSTICS_MAX_BYTES, DIRECTORY, MARKERS
@@ -69,7 +62,6 @@ from stayfixed.printed import quoted
 from tests.gitfixture import git as _git
 from tests.overlay.test_requires import overlay_with
 from tests.parserlimits import LONG_NUMBER
-from tests.runners import LsRemote, Recorder
 from tests.sessions import session_of
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
@@ -83,7 +75,6 @@ def module_checks() -> tuple[tuple[str, Callable[[Context], Row]], ...]:
 LOCAL_ONLY = """
 [stayfixed]
 version = "{version}"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 
 [project]
 name = "p"
@@ -96,7 +87,6 @@ groups = ["developer"]
 OVERLAY = """
 [stayfixed]
 version = "{version}"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 
 [project]
 name = "p"
@@ -109,8 +99,8 @@ groups = ["developer"]
 
 def _context(root: Path, config: Config) -> Context:
     """A `Context` for a case that calls one check directly rather than `run_checks`: no home,
-    no machine file, an empty environment, and a runner that answers success to anything."""
-    return Context(root, None, None, Recorder(), {}, config, session=session_of(config))
+    no machine file and an empty environment."""
+    return Context(root, None, None, {}, config, session=session_of(config))
 
 
 def _checks(
@@ -119,7 +109,6 @@ def _checks(
     *,
     home: Path | None = None,
     machine: Path | None = None,
-    runner: Recorder | None = None,
     env: dict[str, str] | None = None,
 ) -> list[Check]:
     """`run_checks` with this file's hermetic defaults, so no case can be added without them.
@@ -145,7 +134,6 @@ def _checks(
         root,
         home=tmp_path / "home" if home is None else home,
         machine=tmp_path / "no-machine.toml" if machine is None else machine,
-        runner=Recorder() if runner is None else runner,
         env=_env(tmp_path) if env is None else env,
     )
 
@@ -299,7 +287,6 @@ def test_a_repository_without_a_configuration_skips_only_the_rows_that_read_one(
     assert _by_name(checks, "not-initialised").status == WARN
     assert [check.name for check in checks if check.detail == NO_CONFIG_SKIP] == [
         "budgets",
-        "ci-ref",
         "attached",
         "bundles",
     ]
@@ -352,7 +339,7 @@ def test_a_configuration_holding_a_number_past_the_parser_does_not_load(tmp_path
     assert (row.status, row.detail) == (RED, cause(FALLBACK_WARNING))
 
 
-# The report's fourteen names in the report's order, written out rather than read back from the
+# The report's thirteen names in the report's order, written out rather than read back from the
 # registry: the core's own checks, then each delivery area's in area-name order — `attach`,
 # `memory`, `overlay`. `docs/cli.md`'s table is held to the same order.
 REPORT = (
@@ -362,7 +349,6 @@ REPORT = (
     "budgets",
     "preferences",
     "cli-path",
-    "ci-ref",
     "diagnostics",
     "ignored-env",
     "attached",
@@ -375,7 +361,7 @@ REPORT = (
 
 def test_every_check_has_one_row_in_one_report(tmp_path: Path) -> None:
     # Moving a check into its area must not cost it its row, nor give it a second one: the
-    # fourteen are the same fourteen, once each. A literal tuple and not the registry read back,
+    # thirteen are the same thirteen, once each. A literal tuple and not the registry read back,
     # so a check that dropped out of both the core and the areas reddens here. Mutation (oracle):
     # `mutations/`'s "doctor drops the checks an area contributes" -> the five delivery rows are
     # missing. The fixture is an initialised project with nothing else to look at -- no overlay,
@@ -471,12 +457,6 @@ def test_the_wrapper_runs_under_the_variables_the_harness_registry_names(
     assert check.status == "ok", check
     assert seen.read_text(encoding="utf-8").splitlines() == [str(planted), str(root)]
     assert checks.NAMED_ROOTS == ("CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT")
-
-
-def test_ci_ref_skips_where_no_ci_ref_is_recorded(tmp_path: Path) -> None:
-    # `ci-ref` wants `[ci] ref`, which `init` writes and this fixture does not.
-    checks = _checks(tmp_path, _initialised(tmp_path))
-    assert _by_name(checks, "ci-ref").status == "skip"
 
 
 def _planted_plugin(base: Path, *, executable: bool = True) -> Path:
@@ -1189,7 +1169,7 @@ def test_every_registry_name_is_spelled_exactly_once_in_the_module() -> None:
     # times, and the registry spelled the name an eighth time. A row that disagreed with its
     # key was one typo away and nothing would have said so. Now a check
     # returns a `Row` and `_guarded` stamps the registry's name, so each name is a string
-    # literal exactly once in the modules that hold it: the core's nine in `CHECKS`, counted
+    # literal exactly once in the modules that hold it: the core's eight in `CHECKS`, counted
     # over every module that defines one of `CHECKS`' checks, and each area's in its own
     # `doctor.py`, in the `Contribution` its `register()` returns. The core's modules are read off
     # where the checks are defined rather than listed, so a check split into a module of its own
@@ -1214,7 +1194,7 @@ def test_every_registry_name_is_spelled_exactly_once_in_the_module() -> None:
         return {name: literals.count(name) for name in names}
 
     names = [name for name, _ in module.CHECKS]
-    assert len(names) == 9
+    assert len(names) == 8
     core = [module, *{sys.modules[check.__module__] for _, check in module.CHECKS} - {module}]
     assert spelled(core, names) == dict.fromkeys(names, 1)
     found = registry.discover_contributors()
@@ -1309,9 +1289,7 @@ def test_a_machine_file_that_does_not_load_is_named_as_the_file_that_was_read(
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("STAYFIXED_CONFIG", str(elsewhere))
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
-    rows = run_checks(
-        root, home=tmp_path / "home", machine=None, runner=Recorder(), env=_env(tmp_path)
-    )
+    rows = run_checks(root, home=tmp_path / "home", machine=None, env=_env(tmp_path))
     preferences = _by_name(rows, "preferences")
     assert preferences.status == RED
     assert str(read) in preferences.detail
@@ -1353,410 +1331,6 @@ def test_no_case_here_can_read_the_developers_own_machine_configuration(
     assert overlay_root(expected) == overlay, "the planted file records no overlay"
     row = _by_name(_checks(tmp_path, _initialised(tmp_path)), "overlay-requires")
     assert row.status == SKIP, row
-
-
-# The two shas a listing can carry and one it cannot: `RELEASED` is what `v0.1.0` names,
-# `ALIAS_SHA` is what the mutable `v1` names, and `UNRELEASED` is named by no tag at all.
-RELEASED, UNRELEASED, ALIAS_SHA = "c" * 40, "d" * 40, "e" * 40
-LISTING = f"{RELEASED}\trefs/tags/v0.1.0\n{ALIAS_SHA}\trefs/tags/v1\n"
-# Not 2: `git ls-remote --exit-code` exits 2 for "no matching refs", which `released` reads as
-# "no tags", an answer. 128 is `git` itself having failed, which is the arm that warns.
-GIT_FAILED = 128
-
-
-def _configured(
-    tmp_path: Path, ref: str, *, workflow_ref: str | None = None, mode: str = "reusable"
-) -> Path:
-    root = _initialised(tmp_path)
-    (root / CONFIG_FILE).write_text(
-        (root / CONFIG_FILE).read_text(encoding="utf-8")
-        + f'\n[ci]\nmode = "{mode}"\nref = "{ref}"\n',
-        encoding="utf-8",
-    )
-    if workflow_ref is not None:
-        (root / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
-        (root / ".github" / "workflows" / "stayfixed.yml").write_text(
-            f"jobs:\n  check:\n    uses: o/r/.github/workflows/check.yml@{workflow_ref} # v0.1.0\n",
-            encoding="utf-8",
-        )
-    return root
-
-
-def test_a_released_commit_is_ok_and_an_unreleased_one_is_red(tmp_path: Path) -> None:
-    # Mutation (oracle): `if not is_a_release` -> `if is_a_release` -> both arms swap.
-    stub = LsRemote(stdout=LISTING)
-    # The workflow is written here and not left out: a repository with no workflow file has its
-    # own row below, and this case is about what the public repository's tags say.
-    ok = _checks(tmp_path, _configured(tmp_path, RELEASED, workflow_ref=RELEASED), runner=stub)
-    assert _by_name(ok, "ci-ref").status == OK
-    row = _by_name(_checks(tmp_path, _configured(tmp_path, UNRELEASED), runner=stub), "ci-ref")
-    assert row.status == RED and "released" in row.detail
-    assert stub.calls[0] == ["git", "ls-remote", "--exit-code", REPOSITORY_URL, "refs/tags/v*"]
-
-
-def test_a_value_that_is_neither_a_sha_nor_the_alias_is_red_without_a_subprocess(
-    tmp_path: Path,
-) -> None:
-    stub = Recorder()
-    row = _by_name(_checks(tmp_path, _configured(tmp_path, "ext::sh -c id"), runner=stub), "ci-ref")
-    assert row.status == RED and "40-character" in row.detail and stub.calls == []
-    # And the value is not quoted back on the way out: it is repository-authored, and this is
-    # the arm a repository reaches by writing something `git` would have run as a program.
-    assert "ext::" not in row.detail and "ext::" not in row.remedy
-
-
-def test_the_alias_is_a_warning_that_names_it_mutable(tmp_path: Path) -> None:
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path / "alias", "v1", workflow_ref="v1")
-    row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert row.status == WARN and "mutable" in row.detail
-    stub = LsRemote(code=GIT_FAILED)
-    root = _configured(tmp_path / "unaskable", RELEASED, workflow_ref=RELEASED)
-    unaskable = _checks(tmp_path, root, runner=stub)
-    assert _by_name(unaskable, "ci-ref").status == WARN
-    assert "could not be checked" in _by_name(unaskable, "ci-ref").detail
-
-
-def test_the_alias_arm_answers_a_listing_without_it_and_a_git_that_failed(tmp_path: Path) -> None:
-    """The two arms of the alias no case reached, one of which gates the exit code.
-
-    `[ci] ref = "v1"` is the documented mutable opt-in, judged against the public repository's own
-    tag listing. Measured with `--cov-report=term-missing` over `tests/doctor tests/overlay
-    tests/release` before this case: the alias's "the listing could not be asked for" arm and its
-    "the listing carries no such tag" arm were both unexecuted. The second is `RED` — the status
-    `doctor` turns into exit 1, which `tests/doctor/test_command.py::test_any_red_check_exits_one`
-    holds — so the one verdict here that fails a run had no case at all, on a value a repository
-    writes into its own `stayfixed.toml` by hand.
-
-    Mutation (oracle): `if ALIAS not in tags:` -> `if False:` -> the alias that names nothing is
-    reported as the mutable opt-in and the first half reddens. The unaskable half is advisory and
-    ships no entry: `warn` reaches neither the exit code nor anything that reads a verdict as
-    permission, and the sha arm beside it already answers the same way for the same reason.
-    """
-    # Every released tag and no `v1` among them: the alias this repository pinned names nothing,
-    # so no gate is running the commit it thinks it is.
-    stub = LsRemote(stdout=f"{RELEASED}\trefs/tags/v0.1.0\n")
-    root = _configured(tmp_path / "missing", "v1", workflow_ref="v1")
-    missing = _checks(tmp_path, root, runner=stub)
-    row = _by_name(missing, "ci-ref")
-    assert row.status == RED and "no such tag" in row.detail
-    assert "ci-ref" in [check.name for check in missing if check.status == RED]
-    # `git` itself having failed is a fact about this machine and not about `[ci] ref`, so this
-    # arm warns exactly as the sha arm beside it does — the split `_guarded` makes everywhere.
-    absent = _configured(tmp_path / "unaskable", "v1", workflow_ref="v1")
-    unaskable = _checks(tmp_path, absent, runner=LsRemote(code=GIT_FAILED))
-    assert _by_name(unaskable, "ci-ref").status == WARN
-    assert "could not be checked" in _by_name(unaskable, "ci-ref").detail
-
-
-# A safety net for the FIFO case, never its verdict: that case fails on the row's status, and
-# this join only keeps a hang it did not foresee from hanging the suite. Six seconds used to be
-# the verdict itself, and at a load average near thirty the whole `run_checks` around the row
-# took three to four of them, so the margin was load's to spend. Two minutes is no margin load
-# can reach; the guarded row answers in milliseconds, and so does the unguarded one, since a
-# writer feeds the FIFO.
-_FIFO_SAFETY_JOIN_SECONDS = 120.0
-
-
-def test_a_workflow_that_is_not_a_regular_file_is_not_the_refs_own_verdict(tmp_path: Path) -> None:
-    """A path that is there and is not a file is no evidence of agreement.
-
-    A directory where the workflow should be is the shape a repository reaches this with, and it
-    used to arrive through the `OSError` arm naming `IsADirectoryError` — an assertion on one
-    platform's spelling of the fault, which this project's CI (Linux and macOS) happened to make
-    true. The `is_file()` guard answers it above the open instead, so what the row names is this
-    module's own sentence and its own `WORKFLOW` constant, and nothing about the host.
-
-    Advisory rather than an oracle entry, for the reason
-    `test_a_workflow_that_pins_nothing_this_build_recognises_is_never_silence` gives beside it:
-    the arm warns, and `warn` reaches neither the exit code nor anything downstream that reads a
-    verdict as permission. The guard itself has an oracle entry, reddening the case below.
-    """
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    workflow = root / WORKFLOW
-    workflow.unlink()
-    workflow.mkdir()
-    row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert row.status == WARN and "is not a regular file" in row.detail
-    assert WORKFLOW in row.detail
-    # The ref is repository-authored and is not quoted back on this arm either.
-    assert RELEASED not in row.detail and RELEASED not in row.remedy
-    # And a dangling symlink is the same arm: `exists()` follows the link and answers False, so
-    # `is_symlink()` is what keeps it out of the "no workflow at all" sentence one line below.
-    workflow.rmdir()
-    workflow.symlink_to(root / "nowhere.yml")
-    dangling = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert dangling.status == WARN and "is not a regular file" in dangling.detail
-
-
-def test_a_workflow_that_cannot_be_opened_is_not_the_refs_own_verdict(tmp_path: Path) -> None:
-    """The `OSError` arm, which the `is_file()` guard leaves for a regular file that will not open.
-
-    Reached with a mode rather than with a type, which is the one shape left: `is_file()` is true
-    and the open fails. **Platform-dependent on purpose, and guarded rather than assumed** — this
-    project's CI is Linux and macOS, where a 0o000 file is unreadable by its non-root owner, but a
-    run as root or on a filesystem that ignores the mode can read it anyway, and the case says so
-    by asking `os.access` instead of believing the `chmod`.
-    """
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    workflow = root / WORKFLOW
-    workflow.chmod(0o000)
-    if os.access(workflow, os.R_OK):
-        workflow.chmod(0o644)
-        pytest.skip("this process can read a 0o000 file, so the unopenable arm is not reachable")
-    try:
-        row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    finally:
-        workflow.chmod(0o644)
-    assert row.status == WARN and "could not be read" in row.detail
-    assert WORKFLOW in row.detail
-    assert RELEASED not in row.detail and RELEASED not in row.remedy
-
-
-def test_a_workflow_that_is_not_a_file_does_not_hang_the_row(tmp_path: Path) -> None:
-    """A committed symlink to a FIFO at the workflow path used to stop `doctor` returning.
-
-    `read_text` on a FIFO with no writer blocks for ever, and this path is repository-authored:
-    a clone chooses what sits at `.github/workflows/stayfixed.yml`. Measured before the
-    `is_file()` guard, on a real FIFO in a thread with a six-second join: the row did not come
-    back. `doctor` is documented as a one-line diagnostic and has no timeout of its own, so the
-    guard is the whole of the fix.
-
-    **The verdict is the row's status, and no clock decides it.** A writer thread holds the FIFO
-    open with the workflow `init` rendered, pinning `[ci] ref`, so a row that reads the path
-    instead of asking what it is gets an agreeing workflow back and answers `ok`; the guarded
-    row never opens it and warns that it is not a regular file. This case used to separate the
-    two by a six-second join around the whole of `run_checks`, which a loaded machine spent: the
-    guarded run measured three to four seconds at a load average near thirty. The join left is a
-    safety net for a hang nothing here foresees, and the row still runs in a daemon thread
-    because a test that hangs is not a test that fails.
-
-    Mutation (`mutations/`'s "doctor reads the rendered workflow without asking what it is"): the
-    `is_file()` guard is removed -> the row reads the fed workflow, answers `ok`, and the status
-    assertion reddens.
-    """
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    workflow = root / WORKFLOW
-    agreeing = workflow.read_bytes()
-    workflow.unlink()
-    target = root / ".github" / "workflows" / "pipe"
-    os.mkfifo(target)
-    workflow.symlink_to(target)
-
-    def feed() -> None:
-        # Blocks in `open` until something opens the FIFO to read: the unguarded row, or the
-        # cleanup below. The bytes fit the pipe's buffer, so the write never waits on a reader.
-        try:
-            with target.open("wb") as pipe:
-                pipe.write(agreeing)
-        except BrokenPipeError:
-            pass
-
-    writer = threading.Thread(target=feed, daemon=True)
-    writer.start()
-    answered: list[Check] = []
-    thread = threading.Thread(
-        target=lambda: answered.append(_by_name(_checks(tmp_path, root, runner=stub), "ci-ref")),
-        daemon=True,
-    )
-    thread.start()
-    thread.join(timeout=_FIFO_SAFETY_JOIN_SECONDS)
-    # Release the writer whichever way the row went: a non-blocking reader lets its `open` return.
-    reader = os.open(target, os.O_RDONLY | os.O_NONBLOCK)
-    try:
-        writer.join(timeout=_FIFO_SAFETY_JOIN_SECONDS)
-    finally:
-        os.close(reader)
-    assert not thread.is_alive(), f"the ci-ref row never returned with a FIFO at {WORKFLOW}"
-    assert (answered[0].status, answered[0].detail) == (WARN, WORKFLOW_NOT_A_FILE)
-
-
-def test_a_workflow_over_the_cap_is_not_the_refs_own_verdict(tmp_path: Path) -> None:
-    """Over the bound is an answer, and it is not "the workflow agrees".
-
-    The read is `fsops.read_bounded` to `WORKFLOW_MAX_BYTES`, the shape `_diagnostics` reads its
-    log with: a file past the cap is not one `init` rendered, and a `uses:` line beyond it would be
-    compared against bytes nobody read. The fixture pins the *pinned* ref first, so the arm can
-    only be the cap — a file that agrees would otherwise be green either way.
-
-    What this case pins is the *arm* and not the number of bytes held to reach it: a bounded read
-    and an unbounded one answer "over the cap" alike, so no assertion here can tell them apart.
-    Measured, not assumed — the oracle entry's first spelling replaced the bounded read with an
-    unbounded one and survived. The entry is on the arm instead, and says so.
-
-    Mutation (`mutations/`'s "doctor reads the rendered workflow with no bound of its own"): the cap
-    arm is skipped -> this case fails on the status.
-    """
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    workflow = root / WORKFLOW
-    workflow.write_text(
-        workflow.read_text(encoding="utf-8") + "#" + "p" * WORKFLOW_MAX_BYTES + "\n",
-        encoding="utf-8",
-    )
-    row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert row.status == WARN and "larger than" in row.detail
-    assert RELEASED not in row.detail and RELEASED not in row.remedy
-    # Non-vacuous: one byte under the cap is read, and the same file is green.
-    under = _configured(tmp_path / "under", RELEASED, workflow_ref=RELEASED)
-    padded = under / WORKFLOW
-    body = padded.read_text(encoding="utf-8")
-    padded.write_text(body + "#" + "p" * (WORKFLOW_MAX_BYTES - len(body) - 2) + "\n", "utf-8")
-    assert len(padded.read_bytes()) == WORKFLOW_MAX_BYTES
-    assert _by_name(_checks(tmp_path, under, runner=stub), "ci-ref").status == OK
-
-
-def test_a_workflow_carrying_a_byte_that_is_not_utf8_is_still_compared(tmp_path: Path) -> None:
-    """A strict decode made a repository able to force a red row that said nothing.
-
-    `read_text(encoding="utf-8")` raises `UnicodeDecodeError`, a `ValueError`, which no arm here
-    caught: it reached `_guarded` as `ci-ref: red — this check could not run
-    (UnicodeDecodeError)` and exit 1, from a file the row's own rule says must be named rather
-    than absolved. The read is bytes and the decode replaces, so the pin is still compared and
-    the stray byte cannot forge a sha — `_USES` bounds what is compared and nothing read is
-    printed.
-    """
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    workflow = root / WORKFLOW
-    workflow.write_bytes(workflow.read_bytes() + b"# \xff\xfe not utf-8\n")
-    row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert row.status == OK and "released" in row.detail
-
-
-def test_a_workflow_that_pins_something_else_is_red(tmp_path: Path) -> None:
-    # The pin GitHub acts on is the file. Mutation (comment): skip the workflow comparison ->
-    # this reddens.
-    stub = LsRemote(stdout=LISTING)
-    row = _by_name(
-        _checks(tmp_path, _configured(tmp_path, RELEASED, workflow_ref="main"), runner=stub),
-        "ci-ref",
-    )
-    assert row.status == RED and "workflow pins a different ref" in row.detail
-    row = _by_name(
-        _checks(tmp_path, _configured(tmp_path, RELEASED, workflow_ref=RELEASED), runner=stub),
-        "ci-ref",
-    )
-    assert row.status == OK
-    # `finditer` and not `search`: a recognisable pin that follows an unrecognised `uses:` line
-    # is still the pin GitHub acts on, and a `search` that stopped at the first line would report
-    # a workflow that agrees as one that does not.
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    (root / ".github" / "workflows" / "stayfixed.yml").write_text(
-        "jobs:\n  lint:\n    uses: o/r/.github/workflows/other.yml@main\n"
-        f"  check:\n    uses: o/r/.github/workflows/check.yml@{RELEASED} # v0.1.0\n",
-        encoding="utf-8",
-    )
-    assert _by_name(_checks(tmp_path, root, runner=stub), "ci-ref").status == OK
-
-
-# What a `uses:` word pins, each as the pattern `uses:\s*\S+/\.github/workflows/check\.yml@(\S+)`
-# read it: what follows the last call that has a character before it and one after, and a word
-# ending in `uses:` hands on to the word after it. Mutations (oracle): `mutations/`'s "a uses:
-# word pins what follows its first call" -> `the last call`; "a word ending in uses: is passed
-# over whole" -> `a word ending in uses:`; "the call that ends a word no longer falls back to the
-# one before it" -> `a call ending the word`; "a call with nothing before it pins" -> `nothing
-# before the call`.
-USES_WORDS = {
-    "the last call": (
-        "uses: a/.github/workflows/check.yml@x/.github/workflows/check.yml@v2",
-        {"v2"},
-    ),
-    "a call ending the word": (
-        "uses: a/.github/workflows/check.yml@v1/.github/workflows/check.yml@",
-        {"v1/.github/workflows/check.yml@"},
-    ),
-    "a word ending in uses:": ("uses: xuses: o/r/.github/workflows/check.yml@v3", {"v3"}),
-    "nothing before the call": ("uses: /.github/workflows/check.yml@v4", set()),
-}
-
-
-@pytest.mark.parametrize("case", sorted(USES_WORDS))
-def test_a_uses_word_pins_what_the_pattern_read_it_to_pin(case: str) -> None:
-    text, pinned = USES_WORDS[case]
-    assert checks._pinned_refs(text) == pinned
-
-
-# A file of `uses:` alone, which the pattern read again from every `uses:` in it to the end, ten
-# seconds at the read cap and four times as long at each doubling. The cap bounds what `doctor`
-# reads, so the reader is held on a text past it, where the old reading takes four minutes and
-# this one milliseconds; the pin after the run says the text was read to its end.
-_LONG_USES = 1 << 18
-_LONG_USES_SECONDS = 10
-
-
-def test_a_long_workflow_is_read_for_its_pins_in_time_linear_in_its_length() -> None:
-    # In a child under a timeout, so a regression fails this case rather than holding a worker.
-    # Mutation (oracle): `mutations/`'s "a uses: word is read again from every uses: inside it"
-    # -> this reddens.
-    probe = (
-        "import sys\n"
-        "from stayfixed.doctor.checks import _pinned_refs\n"
-        "text = 'uses:' * int(sys.argv[1]) + ' uses: o/r/.github/workflows/check.yml@abc'\n"
-        "print(_pinned_refs(text))\n"
-    )
-    try:
-        done = subprocess.run(
-            [sys.executable, "-c", probe, str(_LONG_USES)],
-            capture_output=True,
-            text=True,
-            timeout=_LONG_USES_SECONDS,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        pytest.fail(f"reading one workflow's pins ran past {_LONG_USES_SECONDS} s")
-    assert done.stdout == "{'abc'}\n", done.stderr
-
-
-def test_a_recorded_ref_with_no_workflow_file_at_all_is_never_green(tmp_path: Path) -> None:
-    """A missing file is no more evidence of agreement than an unrecognised one.
-
-    The `FileNotFoundError` arm returned the ref's own verdict, so a repository with
-    `[ci] mode = "reusable"`, a released sha recorded and no `.github/workflows/stayfixed.yml`
-    reported `ok`: "[ci] ref is a released stayfixed commit". A reader takes that for "my gate is
-    pinned correctly" when no gate exists at all — the same false green the `not pinned` arm
-    eleven lines below already refuses by name. It is the state `init` itself leaves whenever it
-    reports `ci-workflow` under `skipped`, and the state anyone reaches by deleting the file.
-
-    `[ci] mode` is what tells the cases apart, and the `none` arm is asserted beside it: under a
-    mode this build renders no workflow for, an absent workflow is the configuration working.
-
-    Mutation (oracle): `if context.config.ci.mode == "reusable":` -> `if False:` -> the first
-    case goes back to `ok` and reddens.
-    """
-    stub = LsRemote(stdout=LISTING)
-    row = _by_name(_checks(tmp_path, _configured(tmp_path, RELEASED), runner=stub), "ci-ref")
-    assert row.status == WARN, row
-    assert WORKFLOW in row.detail and "is not there at all" in row.detail
-    assert row.remedy and WORKFLOW in row.remedy
-    # No byte of this repository's own configuration is quoted back, ref included.
-    assert RELEASED not in row.detail and RELEASED not in row.remedy
-    quiet = _configured(tmp_path / "off", RELEASED, mode="none")
-    assert _by_name(_checks(tmp_path, quiet, runner=stub), "ci-ref").status == OK
-
-
-def test_a_workflow_that_pins_nothing_this_build_recognises_is_never_silence(
-    tmp_path: Path,
-) -> None:
-    # A file that was read and not recognised used to leave the ref's own verdict standing, which
-    # a reader takes for "the workflow agrees" -- the false green the `OSError` arm beside it
-    # already refuses to produce.
-    #
-    # Advisory rather than an oracle entry: the arm warns, and `warn` reaches neither the exit
-    # code nor anything downstream that reads a verdict as permission. Mutation (comment): return
-    # `row` instead of the warning -> this reddens on the status.
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref="main")
-    (root / ".github" / "workflows" / "stayfixed.yml").write_text(
-        "jobs:\n  check:\n    uses: o/r/.github/workflows/other.yml@main\n", encoding="utf-8"
-    )
-    row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert row.status == WARN and "no `uses:` line this build recognises" in row.detail
-    # The file is repository-authored and none of it is quoted back.
-    assert "o/r" not in row.detail and "other.yml" not in row.detail
 
 
 def test_the_preferences_row_names_the_overlay_project_layer_of_a_budget(tmp_path: Path) -> None:

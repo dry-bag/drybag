@@ -101,15 +101,11 @@ wall-clock timeout, how many bytes of a repository-authored file are read, how d
 descends — is a *named cap*: a constant in the code, almost always a module-level one with a
 name, and never a configuration key. None of them is a project's to move, because each one
 protects the run itself from a hung program, an oversized file or a pathological input, and a
-`stayfixed.toml` is repository-authored (principle 5). The one timeout a project does set,
-`[gates] custom_timeout_seconds`, bounds the project's own gate command rather than anything
-stayfixed runs for itself.
+`stayfixed.toml` is repository-authored (principle 5).
 
 The comment beside a named cap says what it bounds and why the number is what it is. When the number
 has to agree with a shipped file, the comment names that file, so a change to either is visibly a
-change to both: `doctor`'s `WORKFLOW_MAX_BYTES` names `src/stayfixed/templates/project/stayfixed.yml`,
-which it must stay well above, and `NEARLY_FULL` names `hooks/hooks.json`, where a bundle's slot
-count is raised. When no such file exists — a timeout on a hung `git`, the longest command
+change to both: `NEARLY_FULL` names `hooks/hooks.json`, where a bundle's slot count is raised. When no such file exists — a timeout on a hung `git`, the longest command
 `bg-cleanup` will read — the comment says so rather than inventing one.
 
 ### Enumerated writes

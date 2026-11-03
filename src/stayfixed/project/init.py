@@ -8,12 +8,6 @@ manifest; the dry run reports both plans and writes nothing.
 A repository that already holds a `stayfixed.toml` and no manifest is adopted. One that holds a
 manifest is refused: re-running `init` is `stayfixed upgrade`.
 
-**The workflow and `[ci] ref` are one value.** A resolved pin is written into the document
-only when this run is the one that creates it, and `templates._ci` renders the workflow from
-`config.ci.ref` — so the `uses:` ref and what `stayfixed.toml` says on disk cannot come apart.
-`doctor`'s `ci-ref` row reports red when they do, which is why this is the invariant rather than
-a convenience.
-
 **Adopted means read, not replaced.** `stayfixed.toml` is a `Kind.ONCE` artifact: created when
 absent, never looked inside again. So on a repository that already carries one the engine
 reports `skip_modified` — "create-once, and the file is already there" — and the file comes
@@ -25,8 +19,8 @@ target below is built from.
 **The one key is a missing `[stayfixed] version`**, the only tool-owned key the loader
 requires, with its `[stayfixed]` header when the file has none. It is added through
 `config.owned.rewrite`, which keeps every other line, and the file is checked with `loads` as it
-will then be on disk — before any network call and any write, dry run included — because the
-merged document drops `enforced` and every other `[stayfixed]` key it does not carry over, and
+will then be on disk — before any write, dry run included — because the merged document drops
+every `[stayfixed]` key it does not carry over, and
 detects a name the file may lack, and so loads where the next command's `load` would not. The
 other tool-owned keys are written only into a file stayfixed itself creates, which is the only
 file whose header claims them.
@@ -59,19 +53,15 @@ from stayfixed.errors import Failure, Refusal
 from stayfixed.project.detect import CURRENT_BRANCH, DEFAULT_BRANCH, Detected, detect
 from stayfixed.project.footprint import prepare
 from stayfixed.project.rewrite import rewrite_owned
-from stayfixed.project.templates import CI_ARTIFACT
-from stayfixed.release.api import Resolution, resolve_pin
-from stayfixed.runner import Runner
 from stayfixed.scaffold import MANIFEST_PATH, Manifest, Plan, apply
 from stayfixed.tomlout import dumps
 
 VERSION = ("stayfixed", "version")
-USER_OWNED = ("paths", "memory", "budgets", "ledger", "artifacts", "ci", "gates", "commit_messages")
+USER_OWNED = ("paths", "memory", "budgets", "ledger", "artifacts", "commit_messages")
 HEAD_KEYS = ("preset", "profile", "agents")
 HEADER = (
     "# Written by `stayfixed init`. Every key you leave out takes the preset's default;\n"
-    "# `[stayfixed] version` and `enforced`, and `[ci] ref`, are stayfixed's to rewrite in\n"
-    "# place; every other key is yours.\n\n"
+    "# `[stayfixed] version` is stayfixed's to rewrite in place; every other key is yours.\n\n"
 )
 # The pair is spelled literally because the intended reader is an agent relaying this sentence,
 # and `--dry-run` on its own is refused by this same refusal: "pass --yes, and --dry-run to read
@@ -166,13 +156,9 @@ class InitReport:
     once: Plan
     footprint: Plan
     skipped: dict[str, str]
-    resolution: Resolution
     adopted: bool
     dry_run: bool
     note: str = ""
-    # What `[ci] ref` says on disk after the run, which is what the rendered workflow pins;
-    # empty when no workflow was planned. One field for both, because they are one value.
-    ref: str = ""
     # How many names in `[stayfixed] agents` no harness answers to; a count, never the names.
     unknown_harnesses: int = 0
     # `HEAD_DEFAULTED` when the detected base branch replaced a remote head outside the grammar;
@@ -217,7 +203,7 @@ def _existing(root: Path) -> tuple[str, dict[str, object]] | None:
 
 
 def _tables(
-    root: Path, existing: dict[str, object] | None, *, ci: bool, given: Given
+    root: Path, existing: dict[str, object] | None, *, given: Given
 ) -> tuple[dict[str, dict[str, object]], str]:
     """The document's tables, in order: stayfixed's own `version`, then the repository's own
     answers or the ones `given` carries; and the note for a detected base branch no remote head
@@ -262,8 +248,6 @@ def _tables(
         tables["project"] = {"base_branch": branch, "release_branch": branch}
         if name:
             tables["project"] = {"name": name, **tables["project"]}
-        # No `[ci] gate_branch`: the loader takes it from `base_branch` when the file leaves it
-        # out, so the rendered caller gates this branch and follows it if a person edits it.
     if given.memory_mode is not None:
         tables["memory"] = {"mode": given.memory_mode}
     if given.local:
@@ -275,8 +259,6 @@ def _tables(
         commit_messages["types"] = list(given.types)
     if commit_messages:
         tables["commit_messages"] = commit_messages
-    if not ci:
-        tables.setdefault("ci", {})["mode"] = "none"
     return tables, head_note
 
 
@@ -353,10 +335,8 @@ def init(
     root: Path,
     *,
     machine: Path | None,
-    runner: Runner,
     yes: bool,
     dry_run: bool,
-    ci: bool,
     given: Given = NO_ANSWERS,
     owner: Owner | None = None,
 ) -> InitReport:
@@ -383,52 +363,25 @@ def init(
     precheck(root, answering=given != NO_ANSWERS, local=given.local is not None)
     read = _existing(root)
     existing = read[1] if read is not None else None
-    tables, head_note = _tables(root, existing, ci=ci, given=given)
+    tables, head_note = _tables(root, existing, given=given)
     document = _rendered(tables)
     config = loads(document, root, machine=machine, owner=owner)
     on_disk, stamped = _as_on_disk(read)
     if on_disk is not None:
         # What the next command loads is the file, not the merged document: that one drops
-        # `enforced` and every other `[stayfixed]` key it does not carry over, and detects a name
-        # the file may lack.
+        # every `[stayfixed]` key it does not carry over, and detects a name the file may lack.
         loads(on_disk, root, machine=machine, owner=owner)
-    # Not asked on the adoption path with no `[ci] ref` either: `_ci` answers that path with
-    # `NO_REF` before it reads the resolution, and the ask is a network round trip that can take
-    # the whole of its timeout for an answer nothing prints.
-    resolution = (
-        resolve_pin(stayfixed.__version__, runner, cwd=root)
-        if config.ci.mode == "reusable" and (existing is None or config.ci.ref)
-        else Resolution(None, True)
-    )
-    # `existing is None` and not just "a pin resolved": on the adoption path `config` is a
-    # create-once artifact that is already on disk, so nothing written into `tables` here ever
-    # reaches a file. Recording the pin anyway made `config.ci.ref` — which is what `_ci`
-    # renders the workflow from — disagree with `stayfixed.toml`, and the workflow was written
-    # pinned to a sha the document did not carry. `doctor`'s `ci-ref` row reports exactly that
-    # as red, so `init` said it had worked and the next `doctor` said it had not.
-    if resolution.pin is not None and existing is None:
-        tables.setdefault("ci", {})["ref"] = resolution.pin.sha
-        document = _rendered(tables)
-        config = loads(document, root, machine=machine, owner=owner)
     # No manifest yet, so nothing to retire: `prepare` for its refusals and the pass order.
-    passes = prepare(
-        root, config, {}, resolution=resolution, document=document, adopted=existing is not None
-    )
-    # What `[ci] ref` says on disk after this run, and so what the workflow pins — empty exactly
-    # when no workflow was planned. The two are one value by construction, which is the
-    # invariant `templates._ci` states and `doctor`'s `ci-ref` row enforces.
-    ref = "" if CI_ARTIFACT in passes.skipped else config.ci.ref
+    passes = prepare(root, config, {}, document=document)
     note = VERB_NOTE if not fsops.exists(root / config.paths.agents_md) else ""
     once, footprint = passes.predict((passes.once, ()), (passes.footprint, ()))
     report = InitReport(
         once,
         footprint,
         passes.skipped,
-        resolution,
         existing is not None,
         dry_run,
         note,
-        ref,
         passes.unknown_harnesses,
         head_note,
         stamped,

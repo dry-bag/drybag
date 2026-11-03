@@ -17,7 +17,6 @@ import pytest
 from stayfixed.cli import build_parser, discover_registrars, run
 from stayfixed.project.init import init
 from tests.gitfixture import git, needs_git
-from tests.runners import LsRemote
 
 GATES = (
     ["docs", "check"],
@@ -31,8 +30,7 @@ GATES = (
 def _initialised(tmp_path: Path) -> Path:
     """A bare repository, initialised in process, then committed twice.
 
-    `--no-ci` in effect (`ci=False`), so the stub runner is asked nothing and no remote is
-    reached. Two commits, for `tests/test_fixtures.py`'s reason: `commit check
+    Two commits, for `tests/test_fixtures.py`'s reason: `commit check
     --range HEAD~1..HEAD` over an empty range checks one message rather than none, and the
     second commit touches a real file so the range is not empty.
     """
@@ -43,10 +41,8 @@ def _initialised(tmp_path: Path) -> Path:
     init(
         root,
         machine=tmp_path / "absent.toml",
-        runner=LsRemote(),
         yes=True,
         dry_run=False,
-        ci=False,
     )
     git(root, "add", "-A")
     git(root, "commit", "-qm", "chore: initialise stayfixed")

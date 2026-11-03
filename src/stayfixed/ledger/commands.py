@@ -11,6 +11,7 @@ from stayfixed.command import CHECK_HELP, common_flags, root_and_config
 from stayfixed.errors import Failure
 from stayfixed.findings import labels, listed
 from stayfixed.ledger.register import BUG_SCHEMA, bug_register
+from stayfixed.ledger.regressions import DEFAULT_TIMEOUT_SECONDS
 from stayfixed.printed import printable, quoted
 from stayfixed.result import Result
 
@@ -24,6 +25,8 @@ _INERT = "nothing to check: no ledger directory and no generated index"
 # What `regressions` says when no fixed entry carries a `regression` to run, and after its runs.
 NO_REGRESSIONS = "nothing to run: no fixed entry carries a regression"
 REGRESSIONS_RAN = "{ran} regression(s), {not_proved} not proved"
+# `bugs regressions --timeout`'s grammar, said by the parser's refusal.
+NOT_SECONDS = "--timeout takes a whole number of seconds above 0"
 BASE_HELP = (
     "also fail when a commit HEAD forked from this base ref at carries the ledger and the tree "
     "has none, or carries an entry the tree lacks, so a change that deletes the ledger or an "
@@ -100,9 +103,9 @@ def run_bugs_regressions(args: argparse.Namespace) -> Result:
     from stayfixed.prove.api import Verdict, line
 
     root, config = root_and_config(args)
-    # The runner's output goes to standard error in both forms, as a custom gate's does, so that
-    # under `--json` standard output holds the one object.
-    ran = regressions(root, config, echo=sys.stderr)
+    # The runner's output goes to standard error in both forms, so that under `--json` standard
+    # output holds the one object.
+    ran = regressions(root, config, timeout=args.timeout, echo=sys.stderr)
     rows = []
     lines = []
     for entry, receipt in ran:
@@ -178,6 +181,16 @@ def run_bugs_renumber(args: argparse.Namespace) -> Result:
     return Result(f"{args.old} -> {args.new}; a void pointer remains at {void}{naming}", data)
 
 
+def _seconds(value: str) -> int:
+    try:
+        seconds = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(NOT_SECONDS) from None
+    if seconds <= 0:
+        raise argparse.ArgumentTypeError(NOT_SECONDS)
+    return seconds
+
+
 def register(groups: SubParsers) -> None:
     bugs = groups.add_parser("bugs", help="the bug ledger")
     sub = bugs.add_subparsers(dest="command", metavar="<command>")
@@ -202,6 +215,13 @@ def register(groups: SubParsers) -> None:
         sub.add_parser(
             "regressions", help="run each fixed entry's regression and say what its runner proved"
         )
+    )
+    regressions.add_argument(
+        "--timeout",
+        type=_seconds,
+        default=DEFAULT_TIMEOUT_SECONDS,
+        metavar="SECONDS",
+        help=f"end each run past this many seconds (default: {DEFAULT_TIMEOUT_SECONDS})",
     )
     regressions.set_defaults(func=run_bugs_regressions)
     renumber = common_flags(sub.add_parser("renumber", help="move an entry to a free identifier"))

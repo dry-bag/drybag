@@ -8,8 +8,8 @@ whole area into every `discover()` call.
 Three names, each with the consumer that reaches for it:
 
 - `PROJECT_FILES`, for `scripts/check_artifacts.py`. It asks the built wheel whether the
-  twelve shipped template files are actually in it, and before this list existed the only
-  other way to ask was to spell twelve paths a second time in the script — which is the drift
+  eleven shipped template files are actually in it, and before this list existed the only
+  other way to ask was to spell eleven paths a second time in the script — which is the drift
   a published constant exists to stop.
 - `project_templates` and the `Prepared` it returns, for `tests/project/test_fixture.py`,
   which plans both passes over a copy of the smoke fixture and asserts that the planning has
@@ -23,8 +23,7 @@ Three names, each with the consumer that reaches for it:
   `tests/test_surfaces.py` derives that rule rather than restating it.
 
 `read`, `fill` and `HARNESS_REGION` are **not** here: they are this area's own, reached by
-`stayfixed.project.templates` and by nothing outside it. The branch grammar a rendered workflow
-holds `[ci] gate_branch` to is `config.schema.BRANCH_NAME`, which the loader applies too. An area
+`stayfixed.project.templates` and by nothing outside it. An area
 that needs one grows this list deliberately, in a commit that says which area and why.
 """
 

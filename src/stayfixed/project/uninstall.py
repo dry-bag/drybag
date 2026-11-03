@@ -1,8 +1,8 @@
 """`stayfixed uninstall`: `upgrade`'s rule run backwards.
 
 Every artifact the manifest records is retired: one this build still produces with its own
-template, one it no longer produces at a recorded target `Prepared.could_write` lists for its id,
-whatever `[ci] mode` says now. `[artifacts] local` artifacts are never recorded and are retired by
+template, one it no longer produces at a recorded target `Prepared.could_write` lists for its id.
+`[artifacts] local` artifacts are never recorded and are retired by
 id. The engine then removes a whole file while its bytes are stayfixed's, takes a region out of a
 file (and the file, if nothing else was in it), and leaves anything else in place and listed.
 `--force PATH` takes a listed file anyway. Records naming an id this build does not produce, or a
@@ -117,7 +117,6 @@ from stayfixed.errors import Failure, Refusal
 from stayfixed.fsops import path_key, remove_within, rmdir_within, said
 from stayfixed.project.footprint import prepare
 from stayfixed.project.templates import CONFIG_ARTIFACT, IGNORE_ARTIFACT
-from stayfixed.release.api import Resolution
 from stayfixed.runner import Runner
 from stayfixed.scaffold import (
     LOCAL_ARTIFACTS,
@@ -390,9 +389,7 @@ def uninstall(
         root,
         config,
         manifest.records,
-        resolution=Resolution(None, True),
         document=document,
-        adopted=True,
         removing=True,
     )
     orphans = passes.orphans

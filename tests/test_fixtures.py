@@ -1,9 +1,9 @@
 """The two fixture projects the smoke workflow runs against, held to what they claim.
 
-`smoke-project` is a project every gate passes on, with every gate listed in `enforced` so the
-gates enforce; `hostile-project` is the clone the clone-to-exfiltration scenario runs. Both are read
-by CI from this tree, so a fixture that drifted from what a gate accepts would fail the smoke
-workflow with a message about the fixture rather than about stayfixed.
+`smoke-project` is a project every gate passes on; `hostile-project` is the clone the
+clone-to-exfiltration scenario runs. Both are read by CI from this tree, so a fixture that drifted
+from what a gate accepts would fail the smoke workflow with a message about the fixture rather than
+about stayfixed.
 """
 
 from __future__ import annotations
@@ -163,16 +163,6 @@ def test_plan_check_on_the_fixture_lints_the_plan_it_touched(tmp_path: Path) -> 
     assert PLAN in printed, printed
 
 
-def test_the_smoke_fixture_lists_every_gate_so_the_gates_enforce() -> None:
-    import tomllib
-
-    from stayfixed.config.schema import BUILTIN_GATES
-
-    config = tomllib.loads((SMOKE / "stayfixed.toml").read_text(encoding="utf-8"))
-    assert config["stayfixed"]["enforced"] == list(BUILTIN_GATES)
-    assert config["project"]["name"] == "smoke"
-
-
 def test_the_hostile_fixture_carries_the_three_properties_the_scenario_depends_on() -> None:
     # `scripts/smoke_exfiltration.py` asserts that each of these reaches nothing. A fixture
     # that had quietly lost one of them would make every row in that scenario green over a
@@ -182,10 +172,6 @@ def test_the_hostile_fixture_carries_the_three_properties_the_scenario_depends_o
 
     raw = (HOSTILE / "stayfixed.toml").read_text(encoding="utf-8")
     config = tomllib.loads(raw)
-    # The literal and not only the loaded value: the loader's default enforces nothing, and a
-    # fixture that relied on a default would stop being the hostile case the day it moved.
-    assert 'enforced = ["docs", "bugs", "plan", "commit", "trail"]' in raw
-    assert config["stayfixed"]["enforced"] == ["docs", "bugs", "plan", "commit", "trail"]
     # The clone names ANOTHER project, which is the whole of the `mismatch` row.
     assert config["project"]["name"] == "smoke"
     assert config["memory"]["mode"] == "in-repo"

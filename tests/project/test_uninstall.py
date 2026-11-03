@@ -51,7 +51,7 @@ from tests.attach.test_detach import RULE, _attach, _bound, _grant, _render_of
 from tests.cli import cli
 from tests.gitfixture import needs_git, run_git
 from tests.project.repos import BEFORE, DOCUMENT, initialised, repository, tree
-from tests.runners import LsRemote, Recorder
+from tests.runners import Recorder
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
 LOCAL_ROADMAP = f'''[stayfixed]
@@ -62,9 +62,6 @@ name = "widget"
 
 [artifacts]
 local = ["roadmap"]
-
-[ci]
-mode = "none"
 '''
 
 
@@ -190,7 +187,7 @@ def test_an_attached_repository_is_detached_and_then_uninstalled(
     # the scaffold back. The plugin commands go to a recorder, never to a real `claude`.
     monkeypatch.setattr("stayfixed.runner.subprocess_runner", lambda: Recorder())
     root, store, machine = _bound(tmp_path)
-    init(root, machine=machine, runner=LsRemote(), yes=True, dry_run=False, ci=False)
+    init(root, machine=machine, yes=True, dry_run=False)
     run_git(root, "add", "-A")
     run_git(root, "commit", "-qm", "scaffold")
     _grant(store.parents[2], allow=(RULE,), hooks=True)
@@ -222,7 +219,7 @@ def test_a_refused_uninstall_of_an_attached_repository_says_nothing_of_detaching
     # uninstall reports the repository detached" -> the DETACHED line prints and this reddens.
     monkeypatch.setattr("stayfixed.runner.subprocess_runner", lambda: Recorder())
     root, store, machine = _bound(tmp_path)
-    init(root, machine=machine, runner=LsRemote(), yes=True, dry_run=False, ci=False)
+    init(root, machine=machine, yes=True, dry_run=False)
     run_git(root, "add", "-A")
     run_git(root, "commit", "-qm", "scaffold")
     _attach(root, store, machine)
@@ -253,7 +250,7 @@ def test_a_linked_worktree_of_an_attached_repository_detaches_the_main_checkout(
     # checkout's ledger and detaches that.
     monkeypatch.setattr("stayfixed.runner.subprocess_runner", lambda: Recorder())
     root, store, machine = _bound(tmp_path)
-    init(root, machine=machine, runner=LsRemote(), yes=True, dry_run=False, ci=False)
+    init(root, machine=machine, yes=True, dry_run=False)
     run_git(root, "add", "-A")
     run_git(root, "commit", "-qm", "scaffold")
     side = tmp_path / "side"
@@ -282,7 +279,7 @@ def test_an_attached_repository_without_its_stayfixed_toml_is_detached_before_it
     # `dry-run`.
     monkeypatch.setattr("stayfixed.runner.subprocess_runner", lambda: Recorder())
     root, store, machine = _bound(tmp_path)
-    init(root, machine=machine, runner=LsRemote(), yes=True, dry_run=False, ci=False)
+    init(root, machine=machine, yes=True, dry_run=False)
     assert CONFIG_ARTIFACT not in Manifest.read(root).records
     _grant(store.parents[2], allow=(RULE,), hooks=True)
     _attach(root, store, machine)
@@ -351,7 +348,7 @@ def test_a_ledger_committed_after_a_detach_detaches_nothing(
     # render `attach` writes and `detach` removes, outside the work tree.
     monkeypatch.setattr("stayfixed.runner.subprocess_runner", lambda: Recorder())
     root, store, machine = _bound(tmp_path)
-    init(root, machine=machine, runner=LsRemote(), yes=True, dry_run=False, ci=False)
+    init(root, machine=machine, yes=True, dry_run=False)
     _attach(root, store, machine)
     detach(root, runner=Recorder())
     _forge_a_ledger(root)
@@ -377,7 +374,7 @@ def test_a_ledger_left_without_its_render_is_finished_by_detach_and_then_uninsta
 
     monkeypatch.setattr("stayfixed.runner.subprocess_runner", lambda: Recorder())
     root, store, machine = _bound(tmp_path)
-    init(root, machine=machine, runner=LsRemote(), yes=True, dry_run=False, ci=False)
+    init(root, machine=machine, yes=True, dry_run=False)
     run_git(root, "add", "-A")
     run_git(root, "commit", "-qm", "scaffold")
     _grant(store.parents[2], allow=(RULE,), hooks=True)
@@ -770,7 +767,7 @@ def test_a_case_variant_of_a_harness_directory_is_never_pruned(tmp_path: Path) -
     """
     document = (
         f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n\n'
-        '[paths]\nroadmap = ".Claude/roadmap.md"\n\n[ci]\nmode = "none"\n'
+        '[paths]\nroadmap = ".Claude/roadmap.md"\n'
     )
     root = initialised(tmp_path, document=document)
     assert (root / ".Claude" / "roadmap.md").is_file()
@@ -792,7 +789,7 @@ def test_a_harness_directory_a_person_made_stays_when_its_rule_goes(tmp_path: Pa
         ),
         encoding="utf-8",
     )
-    upgrade(root, machine=tmp_path / "absent.toml", runner=LsRemote(), dry_run=False, force=())
+    upgrade(root, machine=tmp_path / "absent.toml", runner=Recorder(), dry_run=False, force=())
     rules = root / ".claude" / "rules"
     assert any(rules.iterdir())
     _uninstall(root, tmp_path)
@@ -850,24 +847,6 @@ def test_a_relocation_with_no_old_file_prunes_no_directory_a_person_made(tmp_pat
     report = _uninstall(root, tmp_path)
     assert (Verb.REMOVE, "some/dir/x.md") in {(a.verb, a.target) for a in report.footprint.actions}
     assert (root / "some" / "dir").is_dir()
-
-
-@needs_git
-def test_a_workflow_the_mode_no_longer_renders_still_goes(tmp_path: Path) -> None:
-    # `upgrade` keeps a workflow `uvx` merely does not render; `uninstall` asks where this build
-    # could have written it, and nothing else. Measured before: the workflow was left, unlisted,
-    # beside a deleted manifest, and counted as an artifact this stayfixed does not produce.
-    # Mutation (oracle): `mutations/`'s "uninstall keeps a workflow the mode merely does not render,
-    # and leaves it unlisted" -> `.github/` stays and the assertion reddens.
-    listing = LsRemote(stdout=f"{'a' * 40}\trefs/tags/v{stayfixed.__version__}\n")
-    root = initialised(tmp_path, runner=listing, ci=True)
-    config = root / CONFIG_FILE
-    config.write_text(
-        config.read_text(encoding="utf-8").replace("[ci]\n", '[ci]\nmode = "uvx"\n'),
-        encoding="utf-8",
-    )
-    report = _uninstall(root, tmp_path)
-    assert not (root / ".github").exists() and report.orphans == 0
 
 
 @pytest.mark.parametrize("target", [MANIFEST_PATH.as_posix(), LOCAL_DIGESTS])
@@ -942,7 +921,7 @@ def test_a_paths_value_naming_another_artifact_s_file_refuses_before_any_write(
     root = initialised(
         tmp_path,
         document=f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n'
-        '\n[artifacts]\nlocal = ["claude-md"]\n\n[ci]\nmode = "none"\n',
+        '\n[artifacts]\nlocal = ["claude-md"]\n',
     )
     copy = ".stayfixed/local/artifacts/CLAUDE.md"
     sha = digest((root / copy).read_text(encoding="utf-8"))
@@ -958,7 +937,7 @@ def test_a_paths_value_naming_another_artifact_s_file_refuses_before_any_write(
     run = (
         (
             lambda: upgrade(
-                root, machine=tmp_path / "absent.toml", runner=LsRemote(), dry_run=False, force=()
+                root, machine=tmp_path / "absent.toml", runner=Recorder(), dry_run=False, force=()
             )
         )
         if command == "upgrade"
@@ -990,7 +969,7 @@ def test_a_profile_artifact_listed_local_after_init_is_still_taken_back(tmp_path
     """
     document = (
         f'[stayfixed]\nversion = "{stayfixed.__version__}"\nprofile = "python"\n'
-        'agents = ["claude"]\n\n[project]\nname = "widget"\n\n[ci]\nmode = "none"\n'
+        'agents = ["claude"]\n\n[project]\nname = "widget"\n'
     )
     root = initialised(tmp_path, document=document)
     rule = ".claude/rules/stayfixed-python.md"
@@ -1077,7 +1056,7 @@ def test_a_copy_left_when_its_id_left_the_local_list_goes_with_the_rest(
         encoding="utf-8",
     )
     if upgraded:
-        upgrade(root, machine=tmp_path / "absent.toml", runner=LsRemote(), dry_run=False, force=())
+        upgrade(root, machine=tmp_path / "absent.toml", runner=Recorder(), dry_run=False, force=())
     _uninstall(root, tmp_path)
     assert tree(root) == {"README.md", "stayfixed.toml"}
 
@@ -1196,7 +1175,7 @@ def test_a_copy_left_when_its_path_moved_is_judged_and_force_reaches_it(
         encoding="utf-8",
     )
     report = upgrade(
-        root, machine=tmp_path / "absent.toml", runner=LsRemote(), dry_run=False, force=()
+        root, machine=tmp_path / "absent.toml", runner=Recorder(), dry_run=False, force=()
     )
     verbs = {(a.verb, a.target) for a in report.footprint.actions}
     assert ((Verb.SKIP_MODIFIED if edited else Verb.REMOVE), LOCAL_COPY) in verbs
@@ -1232,7 +1211,7 @@ def test_a_ledger_value_the_register_refuses_stops_init_and_upgrade_and_never_un
     # renders" -> `uninstall` refuses too, and each case reddens on its own.
     fresh = repository(tmp_path, directory="fresh")
     (fresh / CONFIG_FILE).write_text(DOCUMENT + malformed, encoding="utf-8")
-    code, out, err = cli(fresh, tmp_path, "init", "--yes", "--no-ci")
+    code, out, err = cli(fresh, tmp_path, "init", "--yes")
     assert code == 2 and refusal in err, (out, err)
     assert tree(fresh) == {"README.md", CONFIG_FILE}
     root = initialised(tmp_path, document=DOCUMENT)

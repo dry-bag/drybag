@@ -17,7 +17,7 @@ defines its own record and reuses `findings.listed` for the summary line alone.
 
 **What may be printed, and what may not.** Counts, labels, statuses and stayfixed's own
 vocabulary are computed here and print freely. A repository-authored string does not: not
-`[stayfixed] version`, not `[ci] ref`, not a hook command. The hook sink holds its diagnostics log
+`[stayfixed] version`, not a hook command. The hook sink holds its diagnostics log
 to that line in as many words — reasons, never payloads — and this module holds every other
 row to it, as each area's `doctor.py` holds the rows it contributes, where a note's
 filename and the reason a store does not resolve are repository-authored too.
@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
@@ -91,8 +90,6 @@ from stayfixed.hooks.api import (
     data_root,
 )
 from stayfixed.printed import clipped
-from stayfixed.release.api import is_released, released
-from stayfixed.runner import Runner
 from stayfixed.semver import later
 
 # Where the harness reads stayfixed's wrapper from, relative to the plugin root. `hooks/` stays
@@ -108,16 +105,6 @@ WRAPPER = "hooks/run-hook.sh"
 # Wide enough for a cold interpreter start on a loaded machine, narrow enough that a hung probe does
 # not hang `doctor`.
 WRAPPER_TIMEOUT_SECONDS = 30
-# Wall-clock bound on the one call this area makes that leaves the machine: the `ci-ref` row's
-# `git ls-remote` over the public repository's tags, which `doctor/commands.py` builds the runner
-# with. `runner.NETWORK_TIMEOUT_SECONDS` is 300 and is right for what it was written for — `gh
-# repo create --clone` waiting on GitHub to instantiate a template, then a clone down the wire —
-# but this row reads one tag listing, and once `init` records a ref, five minutes would be a block
-# reachable from a command documented as a one-line diagnostic. The number is the wrapper probe's
-# above, deliberately: both bound one bounded question that a hung peer must not turn into a hung
-# `doctor`, and the report's other `git` calls go through `gitenv`'s five seconds. The shipped
-# file that must change with it: none — nothing about it is a project's to tune.
-CI_REF_TIMEOUT_SECONDS = 30
 # The remedy of the plugin-root skip. A quiet `skip` row is what a machine with no findable
 # plugin root looks like from here, and a `skip` with an empty remedy is what
 # `skills/doctor/SKILL.md` tells the model not to treat as red — so it said nothing about the
@@ -533,220 +520,6 @@ def _cli_path(context: Context) -> Row:
     return Row(OK, "`stayfixed` resolves on PATH")
 
 
-# `init` records `[ci] ref` as a commit, and the documented opt-in, from 1.0.0 on, is the mutable
-# `v1` alias; before the first 1.x release the public repository carries no such tag, and the row
-# is red. Both are judged against the public repository's own tags, which is why neither ever
-# reaches a subprocess: a sha cannot be asked for by name, so the row asks `git ls-remote` about a
-# constant URL and a constant pattern (`release.pins`) and compares in Python.
-_SHA = re.compile(r"\A[0-9a-f]{40}\Z")
-ALIAS = "v1"
-# The rendered workflow, which is the pin GitHub actually acts on.
-WORKFLOW = ".github/workflows/stayfixed.yml"
-# Bound on the read of that file, which a repository authors. `DIAGNOSTICS_MAX_BYTES` is the same
-# number for the same reason one function down. A named cap (CONTRIBUTING.md#named-caps), and the
-# shipped file that changes with it is `templates/project/stayfixed.yml`, which renders to well
-# under 2 KiB. Two orders of magnitude above it leaves room for a project that adds jobs of its own
-# around the call, and still refuses to read a file no `init` could have written into a one-line
-# diagnostic.
-WORKFLOW_MAX_BYTES = 256 * 1024
-# Its `uses:` ref is the word after `@`; a trailing ` # v0.1.0` version comment is not part of it.
-# The word after `uses:` is read once, and its ref found in it by `_pinned_refs`: a pattern that
-# ran on past the word's first character to the last call in it read the word again from every
-# `uses:` inside it, ten seconds over a file at the cap holding nothing else.
-_USES_KEY = "uses:"
-_USES = re.compile(rf"{_USES_KEY}\s*+(\S++)")
-_CALL = "/.github/workflows/check.yml@"
-# Said of a path that is there and is not a regular file: a directory, a device, a FIFO, or a
-# symlink to any of those. Fixed text, and the file's own bytes are never reached.
-WORKFLOW_NOT_A_FILE = (
-    f"{WORKFLOW} is there and is not a regular file, so whether it pins the same ref as [ci] ref "
-    f"was not checked"
-)
-CI_REF_REMEDY = (
-    f"set [ci] ref in {CONFIG_FILE} to a released commit and rewrite the workflow's uses: line "
-    f"to match, or run `stayfixed upgrade` once a release exists and it moves both"
-)
-# `git` itself having failed is a fact about this machine, not about `[ci] ref`, so it warns --
-# the same split `_guarded` makes and for the same reason: red gates the exit code.
-CI_REF_UNASKABLE = "[ci] ref could not be checked against the public repository's tags"
-# A recorded ref and no workflow at all. Fixed text carrying this module's own `WORKFLOW`
-# constant and nothing else: no byte of any repository-authored path reaches it.
-NO_WORKFLOW = (
-    f'[ci] mode is "reusable" and [ci] ref is recorded, and {WORKFLOW} is not there at all, so '
-    f"no stayfixed gate runs on this repository"
-)
-NO_WORKFLOW_REMEDY = (
-    f'write {WORKFLOW} with a uses: line pinned to [ci] ref, or set [ci] mode = "none" if this '
-    f"repository is not meant to run the stayfixed gate; `stayfixed upgrade` renders it for you"
-)
-
-
-def _ref_is_released(context: Context, ref: str) -> Row:
-    """What the public repository's tags say about `[ci] ref`, in one `git ls-remote`.
-
-    The alias arm asks for the tag listing and the sha arm asks the `release` package's own rule
-    (`is_released`, which filters to `vX.Y.Z` so the mutable alias cannot make a commit look
-    released); the two arms are exclusive, so either way the row launches `git` exactly once.
-    """
-    if ref == ALIAS:
-        tags = released(context.runner, cwd=context.root)
-        if tags is None:
-            return Row(WARN, CI_REF_UNASKABLE, CI_REF_REMEDY)
-        if ALIAS not in tags:
-            return Row(
-                RED,
-                f"[ci] ref is the {ALIAS} alias and the public repository carries no such tag",
-                CI_REF_REMEDY,
-            )
-        return Row(
-            WARN,
-            f"[ci] ref is the {ALIAS} alias, a mutable opt-in; a released commit is the "
-            f"immutable form",
-            CI_REF_REMEDY,
-        )
-    if _SHA.match(ref):
-        is_a_release = is_released(ref, context.runner, cwd=context.root)
-        if is_a_release is None:
-            return Row(WARN, CI_REF_UNASKABLE, CI_REF_REMEDY)
-        if not is_a_release:
-            return Row(
-                RED, "[ci] ref is not the commit of any released stayfixed tag", CI_REF_REMEDY
-            )
-        return Row(OK, "[ci] ref is a released stayfixed commit")
-    return Row(
-        RED,
-        f"[ci] ref is neither a 40-character commit sha nor the {ALIAS} alias, so it was not "
-        f"checked against anything",
-        CI_REF_REMEDY,
-    )
-
-
-def _ci_ref(context: Context, config: Config) -> Row:
-    """Whether `[ci] ref` is the commit of a released stayfixed, and whether the rendered workflow
-    pins the same ref.
-
-    **The value never reaches a subprocess.** `init` records it as a sha, and a sha cannot be
-    asked for by name, so the row asks the `release` package which commits the public repository's
-    `v*` tags name -- a constant URL, a constant pattern -- and compares in Python. The alias is
-    reported as what it is, a mutable opt-in; and the rendered workflow is read because the pin
-    GitHub acts on is the file, not the configuration beside it.
-
-    `init` is the command that writes both, so an empty value is `skip` rather than red: a
-    repository that has not been initialised has had no chance to set one, and calling that a
-    fault would make `doctor` red on every correct installation.
-
-    **Three ways the workflow can fail to agree, and none of them is `ok`.** It can disagree
-    (red), be unreadable or unrecognisable (warn), or not be there at all — and that last one,
-    answered with the ref's own verdict, would have a repository with a released sha recorded
-    and no workflow report "[ci] ref is a released stayfixed commit", which a reader takes for
-    "my gate is pinned correctly". `[ci] mode` is what makes the absent file a finding rather than
-    the configuration working: only `reusable` renders one.
-
-    The value is repository-authored and is never printed -- not in the detail, not in the
-    remedy, and not in an argument list.
-    """
-    ref = config.ci.ref
-    if not ref:
-        return Row(SKIP, "no [ci] ref is recorded, so there is nothing to resolve", "")
-    row = _ref_is_released(context, ref)
-    if row.status == RED:
-        return row
-    workflow = context.root / WORKFLOW
-    # **A regular file, and a bounded read of it.** `_diagnostics` reads its log to a cap, and
-    # this path is repository-authored in the same sense: a clone chooses what sits at
-    # `.github/workflows/stayfixed.yml`. A committed symlink to a FIFO there makes an unguarded
-    # `read_text` block with nothing to read, so `doctor` — one line, documented as a diagnostic —
-    # never returns at all; measured on a real FIFO, the row did not come back.
-    #
-    # None of the file's bytes is printed on any arm, so this is containment hygiene rather than a
-    # leak, which is why it is a guard here and not a refusal. A directory reaches the same arm
-    # rather than the `OSError` one below, which would name `IsADirectoryError`; the arm's own
-    # sentence says what a reader needs and carries no platform's spelling of the fault.
-    if not fsops.is_file(workflow):
-        if fsops.exists(workflow) or fsops.is_symlink(workflow):
-            return Row(WARN, WORKFLOW_NOT_A_FILE, CI_REF_REMEDY)
-        # No file at all, which is not agreement either. `return row` here alone would report
-        # `ok` — "[ci] ref is a released stayfixed commit" — for a repository with no gate in it,
-        # and a reader takes that for "my gate is pinned correctly". It is the same false green the
-        # `not pinned` arm below refuses by name, and this is the state `init` itself leaves
-        # whenever it reports `ci-workflow` under `skipped`, and the state anyone reaches by
-        # deleting the file. `mode` is what tells the cases apart: under `none` or `uvx` this build
-        # renders no workflow, so an absent one is the configuration working.
-        if config.ci.mode == "reusable":
-            return Row(WARN, NO_WORKFLOW, NO_WORKFLOW_REMEDY)
-        return row
-    try:
-        # Through `fsops.read_bounded`, so what is opened is asked again: a FIFO swapped in after
-        # the check above is refused unread rather than waited on.
-        raw, over = fsops.read_bounded(workflow, WORKFLOW_MAX_BYTES)
-    except OSError as exc:
-        return Row(
-            WARN,
-            f"{WORKFLOW} is there and could not be read ({fsops.said(exc)}), so whether it "
-            f"pins the same ref as [ci] ref was not checked",
-            CI_REF_REMEDY,
-        )
-    if over:
-        # Over the cap is itself an answer, the way it is for the hook sink's log: this is not a
-        # file `init` rendered, and a `uses:` line past the cap would be compared against bytes
-        # that were never read. Never the ref's own verdict, for the reason the arms around it
-        # give.
-        return Row(
-            WARN,
-            f"{WORKFLOW} is larger than {WORKFLOW_MAX_BYTES} bytes, so whether it pins the same "
-            f"ref as [ci] ref was not checked",
-            CI_REF_REMEDY,
-        )
-    # `errors="replace"` and not a strict decode: a stray byte in a repository-authored file used
-    # to raise `UnicodeDecodeError`, which is a `ValueError` and so escaped to `_guarded` as a red
-    # row saying the check could not run — a red a clone could force, on a row whose own rule is
-    # that a file it cannot account for is named and never absolved. A replaced byte cannot forge
-    # a sha: `_USES` bounds what is compared, and nothing read here is printed.
-    rendered = raw.decode("utf-8", errors="replace")
-    # `finditer` and not `search`: the first `uses:` in the file may belong to another job, and
-    # a recognisable pin after it is still the pin GitHub acts on. Every recognisable one is
-    # compared, so a second job pinning something else is a finding too.
-    pinned = _pinned_refs(rendered)
-    if not pinned:
-        # Read and not recognised. Returning the ref's own verdict here would read as "the
-        # workflow agrees", which is the false green the `OSError` arm beside it already refuses
-        # to produce. None of the file's bytes is printed -- it is a repository-authored file.
-        return Row(
-            WARN,
-            f"{WORKFLOW} is there and carries no `uses:` line this build recognises, so whether "
-            f"it pins the same ref as [ci] ref was not checked",
-            CI_REF_REMEDY,
-        )
-    if pinned != {ref}:
-        return Row(
-            RED,
-            "the workflow pins a different ref from [ci] ref, so the gate that runs is not the "
-            "one recorded",
-            CI_REF_REMEDY,
-        )
-    return row
-
-
-def _pinned_refs(text: str) -> set[str]:
-    r"""Every ref a `uses:` word in `text` pins: what follows the last call in the word that has a
-    character before it and one after, as `uses:\s*\S+/\.github/workflows/check\.yml@(\S+)`
-    read it. A word that pins nothing is passed over whole, since a `uses:` inside it reaches no
-    call the word does not, except one that ends the word, which reads the word after it."""
-    pinned = set()
-    at = 0
-    while (match := _USES.search(text, at)) is not None:
-        word = match.group(1)
-        call = word.rfind(_CALL)
-        if call >= 0 and call + len(_CALL) == len(word):
-            call = word.rfind(_CALL, 0, call)
-        at = match.end()
-        if call > 0:
-            pinned.add(word[call + len(_CALL) :])
-        elif word.endswith(_USES_KEY):
-            at -= len(_USES_KEY)
-    return pinned
-
-
 def _is_record(line: bytes) -> bool:
     """Whether one line of the sink's log is a JSON object, which is all this check asks of it.
 
@@ -898,7 +671,6 @@ CHECKS: tuple[tuple[str, Callable[[Context], Row]], ...] = (
     ("budgets", configured(_budgets)),
     ("preferences", _preferences),
     ("cli-path", _cli_path),
-    ("ci-ref", configured(_ci_ref)),
     ("diagnostics", _diagnostics),
     ("ignored-env", _ignored_env),
 )
@@ -949,7 +721,6 @@ def _context(
     *,
     home: Path | None,
     machine: Path | None,
-    runner: Runner,
     env: Mapping[str, str],
     session: SessionConfig,
 ) -> Context:
@@ -958,7 +729,6 @@ def _context(
         root,
         home,
         machine,
-        runner,
         env,
         session.config,
         own_root=_own_root(),
@@ -972,12 +742,11 @@ def run_checks(
     *,
     home: Path | None,
     machine: Path | None,
-    runner: Runner,
     env: Mapping[str, str] | None = None,
 ) -> list[Check]:
     """One row per check, the core's and every area's, whatever state the machine is in.
 
-    Four keyword parameters, which is the published signature. None chooses the interpreter the
+    Three keyword parameters, which is the published signature. None chooses the interpreter the
     `wrapper` check's probe runs under: the wrapper takes the `python3` on `PATH`. A test fails
     the probe the way a machine does — with a plugin root whose launcher is not there.
 
@@ -998,7 +767,6 @@ def run_checks(
         root,
         home=home,
         machine=machine,
-        runner=runner,
         env=env,
         session=session,
     )

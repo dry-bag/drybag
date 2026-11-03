@@ -6,13 +6,12 @@ description: Upgrade the stayfixed scaffold in a repository after a plugin updat
 # Upgrading the scaffold
 
 `stayfixed upgrade` moves `[stayfixed] version` to the stayfixed running and refreshes every
-scaffold file whose bytes are still the ones stayfixed wrote. When the workflow pins stayfixed by
-commit, `[ci] ref` and the workflow's pin move with the version: all three, or none. A file the
-user edited is skipped and named, never overwritten.
+scaffold file whose bytes are still the ones stayfixed wrote. A file the user edited is skipped
+and named, never overwritten.
 
 1. Run `stayfixed upgrade --dry-run` and relay what it prints: the opening line, the
    `stayfixed.toml:` line with each key it would move, the `scaffold:` report with each file's
-   verdict, the `CI:` line, and every `note:` line.
+   verdict, and every `note:` line.
 2. For each file reported `skip_modified`, edited by the user or never written by stayfixed, ask
    whether the user wants it overwritten. Only on a yes for that file, add `--force <path>` for
    it, with the path exactly as the report prints it. Never force a path the user did not name.
@@ -34,12 +33,6 @@ user edited is skipped and named, never overwritten.
   cause run `stayfixed upgrade --dry-run` again, which plans from what is there now. When it
   says the project records a newer stayfixed than the one running, the plugin is what needs
   updating: relay that, and never edit `[stayfixed] version` to get past it.
-- **A `note:` saying `[stayfixed] version` and `[ci] ref` were left as they are is not a
-  failure.** The scaffold was still refreshed, and the note says what would let the three move
-  together. Relay it as printed. When the workflow is reported `skip_modified`, forcing it is
-  step 2's question like any other file's.
-- **A `[ci] ref` that is not a commit, such as `v1`, is the user's choice.** Only the version
-  moves and the workflow is left as it is. Relay the `CI:` line, and never change the ref.
 - **`stayfixed.toml` keeps every byte but the values it moves.** If the command refuses to
   rewrite a key because of how the file writes it, relay the refusal: it names the key and the
   value to set by hand.

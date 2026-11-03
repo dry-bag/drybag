@@ -21,7 +21,6 @@ from stayfixed.config.schema import Config
 from stayfixed.errors import Refusal
 from stayfixed.project.ignored import refuse_ignored
 from stayfixed.project.templates import (
-    CI_ARTIFACT,
     CONFIG_ARTIFACT,
     IGNORE_ARTIFACT,
     Owners,
@@ -29,7 +28,6 @@ from stayfixed.project.templates import (
     project_templates,
     retired_stub,
 )
-from stayfixed.release.api import Resolution
 from stayfixed.scaffold import (
     Kind,
     LocalDigests,
@@ -120,9 +118,7 @@ def retired_templates(
     through the template this build produces for it, which carries its name and comment style.
     The kind is committed, and all it can do here is turn a removal into an orphan.
 
-    Whether to retire a listed one is `prepare`'s policy: `uninstall` retires every one, and
-    `upgrade` keeps the workflow unless `[ci] mode` asks for no gate. Both apply the rules above
-    through this one function.
+    `uninstall` and `upgrade` both retire every listed one, through this one function.
     """
     retired = tuple(
         retired_stub(artifact_id, records[artifact_id].target)
@@ -141,8 +137,8 @@ def retired_templates(
 class Passes:
     """The two passes a command plans under one configuration, and the one way to plan them.
 
-    `once` is the write-once pass and `footprint` the footprint pass, retirements included and
-    the workflow last; `orphans` counts the records neither touches, and `skipped` and
+    `once` is the write-once pass and `footprint` the footprint pass, retirements included;
+    `orphans` counts the records neither touches, and `skipped` and
     `unknown_harnesses` are what the build said about this configuration. Every plan is made
     with the ownership relation bound (`templates.Owners`), so no ledger entry under one id
     reaches another artifact's copy kept out of git in any command's plan; `predict` also asks
@@ -210,9 +206,7 @@ def prepare(
     config: Config,
     records: Mapping[str, Record],
     *,
-    resolution: Resolution,
     document: str,
-    adopted: bool,
     removing: bool = False,
 ) -> Passes:
     """The two passes a command plans at `root` under `config`, against the manifest's
@@ -223,30 +217,19 @@ def prepare(
     `[artifacts] local` would keep out of git (`refuse_local_profile`), except when `removing`;
     and `stayfixed.toml` or the ignore block listed there (`refuse_local_root_only`).
 
-    **Retirement.** Every record `retired_templates` lists is retired when `removing`. Otherwise
-    the workflow is retired only when `[ci] mode` is `"none"`: a mode this build merely does not
-    render is not a request to delete the gate, so its record is kept, neither retired nor an
-    orphan.
-
-    **The workflow last**, retirements included. The engine writes a plan in order, and the
-    workflow's pin is one value with `[ci] ref`, which `upgrade` writes after the whole footprint;
-    planned last, a write that fails part-way leaves the workflow on the ref `stayfixed.toml` still
-    records. The sort is stable, so every other template keeps the order it was built in.
+    **Retirement.** Every record `retired_templates` lists is retired.
     """
-    prepared = project_templates(config, resolution=resolution, document=document, adopted=adopted)
+    prepared = project_templates(config, document=document)
     if not removing:
         refuse_local_profile(prepared, config)
     refuse_local_root_only(config)
     produced = {t.id for t in (*prepared.once, *prepared.footprint)}
     retired, orphans = retired_templates(prepared.could_write, records, produced)
-    if not removing:
-        retired = tuple(t for t in retired if t.id != CI_ARTIFACT or config.ci.mode == "none")
-    footprint = sorted((*prepared.footprint, *retired), key=lambda t: t.id == CI_ARTIFACT)
     return Passes(
         root,
         config,
         prepared.once,
-        tuple(footprint),
+        (*prepared.footprint, *retired),
         orphans,
         prepared.skipped,
         prepared.unknown_harnesses,

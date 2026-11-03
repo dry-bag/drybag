@@ -54,7 +54,7 @@ from stayfixed.scaffold import digest
 from stayfixed.scaffold.local import LOCAL_ARTIFACTS, LocalDigests
 from tests.gitfixture import git, needs_git
 from tests.project.repos import DOCUMENT, MOVED_OFF_DOCS, forge_record, repository
-from tests.runners import LsRemote, Recorder
+from tests.runners import Recorder
 
 Command = Literal["init", "upgrade", "uninstall"]
 Report = InitReport | UpgradeReport | UninstallReport
@@ -322,14 +322,12 @@ def _run(
         return init(
             root,
             machine=machine,
-            runner=LsRemote(),
             yes=True,
             dry_run=dry_run,
-            ci=False,
             given=given,
         )
     if command == "upgrade":
-        return upgrade(root, machine=machine, runner=LsRemote(), dry_run=dry_run, force=())
+        return upgrade(root, machine=machine, runner=Recorder(), dry_run=dry_run, force=())
     return uninstall(root, machine=machine, dry_run=dry_run, force=(), runner=Recorder())
 
 
@@ -431,7 +429,7 @@ def _assert_invariant(
     elif finished is not None:
         try:
             report = upgrade(
-                root, machine=tmp_path / "absent.toml", runner=LsRemote(), dry_run=True, force=()
+                root, machine=tmp_path / "absent.toml", runner=Recorder(), dry_run=True, force=()
             )
         except Refusal as refused:
             pytest.fail(f"I3: a dry-run upgrade after a finished {finished} refused: {refused}")

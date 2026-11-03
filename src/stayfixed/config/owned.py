@@ -1,10 +1,9 @@
-"""The three keys stayfixed rewrites inside a document somebody else owns.
+"""The one key stayfixed rewrites inside a document somebody else owns.
 
-`[stayfixed] version`, `[stayfixed] enforced` and `[ci] ref` are stayfixed's to rewrite
-(`docs/cli.md#configuration`). Every other key of `stayfixed.toml` is the user's, and so is the
-file around them: its comments, its order, its blank lines. `tomllib` reads and nothing
-in the standard library writes, and `tomlout.dumps` renders a whole document with the comments
-gone, so this module edits lines.
+`[stayfixed] version` is stayfixed's to rewrite (`docs/cli.md#configuration`). Every other key of
+`stayfixed.toml` is the user's, and so is the file around them: its comments, its order, its blank
+lines. `tomllib` reads and nothing in the standard library writes, and `tomlout.dumps` renders a
+whole document with the comments gone, so this module edits lines.
 
 **The read-back is the contract; the line editor is one implementation of it.** Each key is
 edited and proved on its own: the text after the edit must parse to exactly the document before
@@ -16,11 +15,9 @@ stayfixed's own renderer never produces those shapes. A person may, and the refu
 answer to them. The proof covers values and not comments, because a comment is not part of the
 parsed document: the editor keeps a line's trailing comment by pattern, and nothing proves it.
 
-**What a message prints, and why that is safe.** The table and key come from `OWNED`. The value
-is one stayfixed chose, rendered through `tomlout.quoted`: a version, gate names the loader has
-already held to `PROJECT_NAME`, or a sha the `release` package resolved from the public
-repository's tags. A document that does not parse is answered with the parser's position
-alone, as the loader answers it.
+**What a message prints, and why that is safe.** The table and key come from `OWNED`. The value is
+one stayfixed chose, rendered through `tomlout.quoted`: a version. A document that does not parse is
+answered with the parser's position alone, as the loader answers it.
 """
 
 from __future__ import annotations
@@ -36,9 +33,7 @@ from stayfixed.errors import Refusal
 from stayfixed.tomlout import quoted
 
 Value = str | tuple[str, ...]
-OWNED: frozenset[tuple[str, str]] = frozenset(
-    {("stayfixed", "version"), ("stayfixed", "enforced"), ("ci", "ref")}
-)
+OWNED: frozenset[tuple[str, str]] = frozenset({("stayfixed", "version")})
 UNEDITABLE = (
     "[{table}] {key} is written in a shape stayfixed does not rewrite in place, so nothing was "
     "written; set it by hand to `{key} = {literal}` and run the command again"

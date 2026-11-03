@@ -1,11 +1,10 @@
 """The recording `stayfixed.runner.Runner` doubles the suite hands the code under test.
 
-`Recorder` answers any program from a script, and `LsRemote` is `git ls-remote --exit-code`.
-A module states what its runner answers at the call site, as keyword arguments, and keeps no
-private runner class of its own unless the question it asks is not "record the argv and answer
-from a script": `tests/guards/test_attribute.py`'s `_Coded` (answers by the tree it is run in) and
-`tests/scripts/test_publish_template.py`'s `_GitHub` (models a repository's state) are the two
-that are not, and each says why.
+`Recorder` answers any program from a script. A module states what its runner answers at the
+call site, as keyword arguments, and keeps no private runner class of its own unless the question
+it asks is not "record the argv and answer from a script": `tests/guards/test_attribute.py`'s
+`_Coded` (answers by the tree it is run in) and `tests/scripts/test_publish_template.py`'s
+`_GitHub` (models a repository's state) are the two that are not, and each says why.
 
 `git_that_cannot_run` is here too, though it is no `Runner`: the product runs `git` through
 `gitenv.git_run` rather than a `Runner`, and a `git` that cannot be launched is a double every
@@ -23,7 +22,6 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.release.pins import NO_MATCH
 from stayfixed.runner import Completed
 
 
@@ -65,28 +63,6 @@ class Recorder:
         if chosen is not None:
             return chosen[1]
         return Completed(self.code, self.stdout, self.stderr)
-
-
-# `LsRemote.code`'s default, which no process exits with: "derive the code from the listing".
-_FROM_LISTING = -1
-
-
-@dataclass(kw_only=True)
-class LsRemote(Recorder):
-    """`git ls-remote --exit-code` answering from a listing, with no network.
-
-    The exit code follows git's contract unless the case names one: `NO_MATCH` for an empty
-    listing and `0` for any other. So `LsRemote()` is "no tags", `LsRemote(stdout=listing)` is a
-    listing, and `LsRemote(code=128)` or `LsRemote(code=NOT_FOUND)` is a git that failed. A case
-    *about* the no-match branch spells `code=NO_MATCH`, so the value that selects the branch is
-    visible in it.
-    """
-
-    code: int = _FROM_LISTING
-
-    def __post_init__(self) -> None:
-        if self.code == _FROM_LISTING:
-            self.code = 0 if self.stdout else NO_MATCH
 
 
 def git_that_cannot_run(monkeypatch: pytest.MonkeyPatch) -> None:

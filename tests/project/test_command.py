@@ -1,18 +1,10 @@
 """`stayfixed init` through the real parser: the flags, the exit codes and the `--json` keys.
 
-Nothing here reaches the network, and it is kept out three ways. Every case that writes or plans
-a footprint but one goes through `_invoke`, which appends `--no-ci`: with `[ci] mode` set to
-`none` the run never asks the `release` package to resolve a pin, so the `subprocess_runner()`
-`commands.py` builds is never handed a `git ls-remote` against the public repository. The one
-case that must resolve a pin — the hostile `gate_branch` arm, which exists precisely because
-`_ci` reaches that check *after* the pin — stubs `subprocess_runner` at the seam `commands.py`
-builds it from and answers one released tag from a string. The `--questions` cases go through
-`_run`, because `--questions` resolves no pin and refuses `--no-ci` beside it.
+Nothing here reaches the network: `init` launches nothing that leaves the machine.
 """
 
 from __future__ import annotations
 
-import inspect
 import io
 import json
 from contextlib import redirect_stdout
@@ -21,29 +13,22 @@ from typing import Any
 
 import pytest
 
-from stayfixed import __version__
 from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.config.loader import load, loads
+from stayfixed.config.loader import load
 from stayfixed.config.schema import NAME_RULE, Config
-from stayfixed.project.commands import STAMPED, run_init
+from stayfixed.project.commands import STAMPED
 from stayfixed.project.init import (
     HEAD_CURRENT,
     HEAD_DEFAULTED,
     HEAD_REMOTES_UNKNOWN,
     HEAD_UNRECORDED,
 )
-from stayfixed.project.templates import _ci
 from stayfixed.project.uninstall import KEPT_CONFIG
-from stayfixed.release.api import Resolution
 from stayfixed.scaffold import Manifest
 from tests.cli import cli
 from tests.gitfixture import git, needs_git
 from tests.project.repos import DOCUMENT, repository
-from tests.runners import LsRemote
 from tests.snapshot import assert_snapshot_unchanged, snapshot
-
-TAG = f"v{__version__}"  # the release tag the running version would carry
-
 
 JSON_KEYS = {
     "dry_run",
@@ -52,8 +37,6 @@ JSON_KEYS = {
     "scaffold",
     "writes",
     "skipped",
-    "pin",
-    "asked",
     "note",
     "unknown_harnesses",
     "head_note",
@@ -69,11 +52,6 @@ def _run(root: Path, tmp_path: Path, *argv: str) -> tuple[int, str]:
     return code, out.getvalue()
 
 
-def _invoke(root: Path, tmp_path: Path, *argv: str) -> tuple[int, str]:
-    """`_run` with `--no-ci`, which is what keeps the network out of it."""
-    return _run(root, tmp_path, *argv, "--no-ci")
-
-
 @needs_git
 def test_without_yes_the_command_refuses_and_names_the_command_that_prints_the_questions(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -81,7 +59,7 @@ def test_without_yes_the_command_refuses_and_names_the_command_that_prints_the_q
     # The refusal names the command that prints the questions, so a relayer has the next step.
     # Mutation (by hand): the refusal names `stayfixed init` alone -> the first `in` reddens.
     root = repository(tmp_path)
-    code, printed = _invoke(root, tmp_path)
+    code, printed = _run(root, tmp_path)
     assert code == 2 and printed == ""
     stderr = capsys.readouterr().err
     assert "`stayfixed init --questions`" in stderr and "--yes" in stderr
@@ -91,7 +69,7 @@ def test_without_yes_the_command_refuses_and_names_the_command_that_prints_the_q
 @needs_git
 def test_a_dry_run_prints_both_reports_and_says_it_wrote_nothing(tmp_path: Path) -> None:
     root = repository(tmp_path)
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--json")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
     assert code == 0, printed
     data = json.loads(printed)
     assert set(data) >= JSON_KEYS and data["dry_run"] is True
@@ -102,25 +80,24 @@ def test_a_dry_run_prints_both_reports_and_says_it_wrote_nothing(tmp_path: Path)
     # whichever half a refusal landed in.
     assert "CLAUDE.md" in data["once"] and "CLAUDE.md" not in data["scaffold"]
     assert ".gitignore" in data["scaffold"]
-    assert data["adopted"] is False and data["pin"] is None
+    assert data["adopted"] is False
     assert set(data["writes"]) >= {"CLAUDE.md", "stayfixed.toml", ".gitignore"}
     assert not (root / "CLAUDE.md").exists()
 
 
 @needs_git
-def test_a_real_run_prints_both_reports_in_full_and_the_ci_line(tmp_path: Path) -> None:
+def test_a_real_run_prints_both_reports_in_full(tmp_path: Path) -> None:
     # The summary used to be four count lines, so a person without `--json` was told how many files
     # there were and never which. The skill relays "both reports … each one names every file with
     # its verdict", which it could not do from counts.
     root = repository(tmp_path)
-    code, printed = _invoke(root, tmp_path, "--yes")
+    code, printed = _run(root, tmp_path, "--yes")
     assert code == 0, printed
     assert printed.startswith("initialised:")
     assert "write-once:" in printed and "scaffold:" in printed
     # Per-artifact lines, from both passes, with their verbs — not just the counts.
     assert "create         CLAUDE.md  (new)" in printed
     assert "create         docs/adr/0000-template.md  (new)" in printed
-    assert "CI: skipped — [ci] mode is none" in printed
     assert (root / ".stayfixed" / "manifest.json").is_file()
 
 
@@ -130,14 +107,14 @@ def test_a_refused_footprint_exits_one_with_the_refused_section_in_that_report(
 ) -> None:
     root = repository(tmp_path)
     (root / "AGENTS.md").write_text("# Mine\n\n<!-- stayfixed:harness:end -->\n", encoding="utf-8")
-    code, printed = _invoke(root, tmp_path, "--yes", "--json")
+    code, printed = _run(root, tmp_path, "--yes", "--json")
     assert code == 1, printed
     data = json.loads(printed)
     assert "REFUSED" in data["scaffold"] and "REFUSED" not in data["once"]
     assert not (root / ".stayfixed").exists()
     # And in plain text, which is the output a person meets on this path: the REFUSED section
     # with the artifact and the engine's reason, and a heading that does not claim otherwise.
-    code, plain = _invoke(root, tmp_path, "--yes")
+    code, plain = _run(root, tmp_path, "--yes")
     assert code == 1
     assert plain.startswith("refused, and nothing was written:")
     assert "REFUSED — nothing will be written" in plain
@@ -155,143 +132,12 @@ def test_a_refused_write_once_pass_exits_one_and_writes_nothing(tmp_path: Path) 
     (tmp_path / "elsewhere.md").write_text("theirs\n", encoding="utf-8")
     (root / "CLAUDE.md").symlink_to(tmp_path / "elsewhere.md")
     before = snapshot(root)
-    code, printed = _invoke(root, tmp_path, "--yes", "--json")
+    code, printed = _run(root, tmp_path, "--yes", "--json")
     assert code == 1, printed
     data = json.loads(printed)
     assert "REFUSED" in data["once"] and "REFUSED" not in data["scaffold"]
     assert data["summary"].startswith("refused, and nothing was written:")
     assert_snapshot_unchanged(root, before)
-
-
-@needs_git
-def test_a_hostile_gate_branch_is_reported_as_a_skipped_workflow_and_not_as_a_pin(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # A gate branch that is not a plain branch name used to be reported as a release pin, though no
-    # workflow was written; this holds it end to end. `[ci] mode` stays `reusable` here — this is
-    # the one case in this module that does not pass `--no-ci` — so the command really reaches the
-    # `release` package; the runner it would use is stubbed at the seam `commands.py` builds it
-    # from, so no network call is made and the answer is one released tag.
-    from stayfixed import runner as runner_module
-
-    root = repository(tmp_path)
-    # A recorded ref as well: the branch check is reached only once there is a ref to render,
-    # and it is deliberately not the sha the stub listing resolves, so the assertions below can
-    # tell the two sources apart.
-    recorded = "e" * 40
-    (root / "stayfixed.toml").write_text(
-        '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
-        f'[ci]\nref = "{recorded}"\ngate_branch = "main\'; rm -rf"\n',
-        encoding="utf-8",
-    )
-    sha = "c" * 40
-    monkeypatch.setattr(
-        runner_module,
-        "subprocess_runner",
-        lambda: LsRemote(stdout=f"{sha}\trefs/tags/{TAG}\n"),
-    )
-    code, printed = _run(root, tmp_path, "--yes")
-    assert code == 0, printed
-    assert "CI: skipped — [ci] gate_branch is not a plain branch name" in printed
-    assert sha not in printed and f"{TAG}@" not in printed
-    assert not (root / ".github").exists()
-
-
-@needs_git
-def test_an_adopted_ref_is_reported_as_the_repositorys_own_and_not_as_a_release(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # The summary's third arm, and the one the invariant needs: a workflow was planned, but from
-    # the ref `stayfixed.toml` already recorded rather than from the pin this run resolved. Naming
-    # the resolved release here would assert that the gate GitHub runs is that release's, which
-    # is exactly what `doctor`'s `ci-ref` row would then report as red.
-    from stayfixed import runner as runner_module
-
-    root = repository(tmp_path)
-    recorded = "e" * 40
-    (root / "stayfixed.toml").write_text(
-        '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
-        f'[ci]\nmode = "reusable"\nref = "{recorded}"\n',
-        encoding="utf-8",
-    )
-    sha = "c" * 40
-    monkeypatch.setattr(
-        runner_module,
-        "subprocess_runner",
-        lambda: LsRemote(stdout=f"{sha}\trefs/tags/{TAG}\n"),
-    )
-    # The dry run first, because it writes nothing and leaves the repository fresh for the real
-    # one below: `--json` is where a caller reads which ref the workflow will carry.
-    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
-    assert code == 0, printed
-    data = json.loads(printed)
-    assert data["ref"] == recorded and data["pin"] == {"tag": TAG, "sha": sha}
-    code, plain = _run(root, tmp_path, "--yes")
-    assert code == 0, plain
-    assert "CI: the workflow pins the [ci] ref this repository already recorded" in plain
-    assert f"{TAG}@{sha}" not in plain
-    workflow = (root / ".github" / "workflows" / "stayfixed.yml").read_text(encoding="utf-8")
-    assert f"check.yml@{recorded}" in workflow and sha not in workflow
-
-
-def _ci_config(mode: str, ref: str, tmp_path: Path) -> Config:
-    text = (
-        '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
-        f'[ci]\nmode = "{mode}"\nref = "{ref}"\n'
-    )
-    return loads(text, tmp_path, machine=tmp_path / "absent.toml")
-
-
-def test_the_ci_line_has_no_arm_no_run_can_reach(tmp_path: Path) -> None:
-    """An unreachable branch is a vacuous assertion in another shape.
-
-    `run_init` read `if skipped is not None or not report.ref:` and formatted
-    `skipped or <a fallback>`, and neither the disjunct nor the fallback could ever fire.
-    `templates._ci` returns a rendered workflow only for a `[ci] ref` that is non-empty and
-    matches `CI_REF`, and a non-empty reason in every other arm; `init` then derives
-    `report.ref` as `"" if "ci-workflow" in passes.skipped else config.ci.ref` -- its own
-    comment calls the two "one value by construction", and `doctor`'s `ci-ref` row enforces it.
-    So a run with no skip has a ref, and a sentence nobody can provoke has been deleted rather
-    than left standing as a claim about a state the code forbids.
-
-    Both halves are asserted. The invariant is walked over `_ci`'s own arms, so this is a
-    statement about the code rather than about one run; the source is read with its comments
-    stripped, because what "unreachable" means here is that the arm is gone and no behaviour
-    moved when it went.
-
-    Mutation: `mutations/`'s "the init CI line grows an arm no run can reach".
-    """
-    code = "\n".join(
-        line
-        for line in inspect.getsource(run_init).splitlines()
-        if not line.strip().startswith("#")
-    )
-    assert "no workflow was planned" not in code
-    assert "not report.ref" not in code
-
-    rendered, skipped = 0, 0
-    for mode, ref, adopted in [
-        ("none", "", False),
-        ("uvx", "", False),
-        ("reusable", "", True),
-        ("reusable", "", False),
-        ("reusable", "not-a-sha", False),
-        ("reusable", "a" * 40, False),
-    ]:
-        config = _ci_config(mode, ref, tmp_path)
-        workflow, reason = _ci(config, Resolution(None, True), adopted=adopted)
-        if workflow is not None:
-            # The half the deleted arm rested on: a workflow is planned only for a ref, so
-            # `init`'s `report.ref` cannot be empty while `ci-workflow` is absent from `skipped`.
-            assert reason is None and config.ci.ref
-            rendered += 1
-        else:
-            # And the other half: every skip carries a sentence, so the fallback had nothing to
-            # stand in for either.
-            assert reason
-            skipped += 1
-    # Non-vacuous: both branches were actually taken.
-    assert rendered and skipped
 
 
 @needs_git
@@ -306,11 +152,11 @@ def test_a_harness_no_adapter_serves_is_counted_and_never_named(tmp_path: Path) 
         '[project]\nname = "widget"\n',
         encoding="utf-8",
     )
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run")
     assert code == 0, printed
     assert "note: 1 name(s) in [stayfixed] agents name no harness" in printed
     assert "cursor" not in printed and "\x1b" not in printed
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--json")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
     assert json.loads(printed)["unknown_harnesses"] == 1
 
 
@@ -340,16 +186,14 @@ def test_questions_print_each_default_with_its_source_and_write_nothing(tmp_path
 def test_questions_take_no_flag_that_writes_or_plans(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # `--yes` is excluded by the parser; `--dry-run` and `--no-ci` are flags `--yes` takes, so
-    # one mutually exclusive group cannot exclude them too, and the command refuses them.
+    # `--yes` is excluded by the parser; `--dry-run` is a flag `--yes` takes, so one mutually
+    # exclusive group cannot exclude it too, and the command refuses it.
     # Mutation (oracle): that refusal disabled -> `--questions --dry-run` prints the questions
     # and exits 0.
     root = repository(tmp_path)
     code, printed = _run(root, tmp_path, "--questions", "--dry-run")
     assert code == 2 and printed == ""
     assert "--questions writes nothing" in capsys.readouterr().err
-    code, printed = _run(root, tmp_path, "--questions", "--no-ci")
-    assert code == 2 and printed == ""
     # An answer flag is `--yes`'s too: the questions would print defaults it had replaced.
     code, printed = _run(root, tmp_path, "--questions", "--name", "widget")
     assert code == 2 and printed == ""
@@ -364,17 +208,17 @@ def test_a_remote_head_outside_the_grammar_is_noted_and_never_quoted(tmp_path: P
     # report says the default replaced it, in stayfixed's words, without the remote's. Mutation
     # (by hand): the note dropped from the report -> the note assertion reddens.
     root = repository(tmp_path)
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run")
     assert code == 0 and HEAD_DEFAULTED not in printed, printed
     git(root, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/`id`")
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run")
     assert code == 0, printed
     assert f"note: {HEAD_DEFAULTED}" in printed and "`id`" not in printed
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--json")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
     assert json.loads(printed)["head_note"] == HEAD_DEFAULTED
     # An answered base branch replaced nothing, so there is nothing to note. Mutation (by hand):
     # the note keyed on detection alone -> this reddens.
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--base-branch", "develop")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--base-branch", "develop")
     assert code == 0 and "origin/HEAD" not in printed, printed
 
 
@@ -402,7 +246,7 @@ def test_a_pushed_repository_on_a_feature_branch_gates_main_and_says_how_to_reco
     git(root, "remote", "set-url", "origin", str(bare))
     git(root, "push", "-q", "-u", "origin", "main")
     git(root, "checkout", "-q", "-b", "chore/adopt-stayfixed")
-    code, printed = _invoke(root, tmp_path, "--yes")
+    code, printed = _run(root, tmp_path, "--yes")
     assert code == 0 and f"note: {HEAD_UNRECORDED}" in printed, printed
     assert "`git remote set-head origin --auto`" in HEAD_UNRECORDED
     assert load(root).project.base_branch == "main"
@@ -414,13 +258,13 @@ def test_a_pushed_repository_on_a_feature_branch_gates_main_and_says_how_to_reco
     git(other, "fetch", "-q", "origin")
     git(other, "remote", "set-head", "origin", "--auto")
     git(other, "checkout", "-q", "-b", "chore/adopt-stayfixed")
-    code, printed = _invoke(other, tmp_path, "--yes", "--dry-run", "--json")
+    code, printed = _run(other, tmp_path, "--yes", "--dry-run", "--json")
     assert code == 0 and json.loads(printed)["head_note"] == "", printed
     git(other, "remote", "set-head", "origin", "--delete")
-    code, printed = _invoke(other, tmp_path, "--yes", "--dry-run", "--json")
+    code, printed = _run(other, tmp_path, "--yes", "--dry-run", "--json")
     assert json.loads(printed)["head_note"] == HEAD_UNRECORDED, printed
     # An answered base branch replaced nothing.
-    code, printed = _invoke(other, tmp_path, "--yes", "--dry-run", "--base-branch", "develop")
+    code, printed = _run(other, tmp_path, "--yes", "--dry-run", "--base-branch", "develop")
     assert code == 0 and HEAD_UNRECORDED not in printed, printed
 
 
@@ -449,7 +293,7 @@ def test_a_repository_whose_only_remote_is_upstream_gates_main_and_says_how_to_a
         git(tmp_path, "clone", "-q", "-o", "upstream", str(bare), "widget")
         root = tmp_path / "widget"
     git(root, "checkout", "-q", "-b", "chore/adopt-stayfixed")
-    code, printed = _invoke(root, tmp_path, "--yes", "--name", "widget")
+    code, printed = _run(root, tmp_path, "--yes", "--name", "widget")
     assert code == 0 and f"note: {HEAD_UNRECORDED}" in printed, printed
     assert "--base-branch BRANCH" in HEAD_UNRECORDED
     assert load(root).project.base_branch == "main"
@@ -471,7 +315,7 @@ def test_remotes_git_cannot_list_leave_main_with_a_note_of_their_own(
         return (-1, "") if args[0] == "remote" else real(where, *args, **kwargs)
 
     monkeypatch.setattr("stayfixed.project.detect.git_run", unanswered)
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--json")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
     assert code == 0 and json.loads(printed)["head_note"] == HEAD_REMOTES_UNKNOWN, printed
 
 
@@ -483,25 +327,24 @@ def test_a_checked_out_branch_standing_in_for_a_remote_head_is_noted(tmp_path: P
     # Mutation (oracle): `mutations/`'s "the checked-out branch is never noted" -> the note
     # assertion reddens.
     root = repository(tmp_path, origin=None)
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run")
     assert code == 0 and HEAD_CURRENT not in printed, printed
     git(root, "symbolic-ref", "HEAD", "refs/heads/develop")
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run")
     assert code == 0 and f"note: {HEAD_CURRENT}" in printed, printed
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--json")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
     assert json.loads(printed)["head_note"] == HEAD_CURRENT
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--base-branch", "develop")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--base-branch", "develop")
     assert code == 0 and HEAD_CURRENT not in printed, printed
 
 
 def _answers(schema: dict[str, Any]) -> list[str]:
     """`init --yes` argv answering every question as the `init` skill does: each property's own
     flag with its default, one flag per list item, a switch only when its default is on, and
-    `widget` where there is no default. CI is `_invoke`'s own `--no-ci`, and the plugins are
-    `setup`'s, not `init`'s."""
+    `widget` where there is no default. The plugins are `setup`'s, not `init`'s."""
     argv: list[str] = []
     for key, question in schema["properties"].items():
-        if key in ("ci.mode", "plugins"):
+        if key == "plugins":
             continue
         value = question.get("default", "widget" if key == "project.name" else None)
         assert value is not None, key
@@ -537,10 +380,10 @@ def test_the_questions_answered_as_the_skill_answers_them_write_what_yes_writes(
     assert code == 0, printed
     schema = json.loads(printed)["questions"]
     assert ("default" in schema["properties"]["project.name"]) is derivable
-    code, printed = _invoke(root, tmp_path, "--yes", *_answers(schema))
+    code, printed = _run(root, tmp_path, "--yes", *_answers(schema))
     assert code == 0, printed
     twin = repository(tmp_path / "twin")
-    code, printed = _invoke(twin, tmp_path, "--yes")
+    code, printed = _run(twin, tmp_path, "--yes")
     assert code == 0, printed
     assert _written(root, tmp_path) == _written(twin, tmp_path)
 
@@ -586,7 +429,7 @@ def test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing(
     # the profile loader refuses it, after the parser.)
     root = repository(tmp_path)
     with pytest.raises(SystemExit):
-        _invoke(root, tmp_path, *argv)
+        _run(root, tmp_path, *argv)
     err = capsys.readouterr().err
     assert "Not A Name" not in err
     # The rule in words, never the pattern: Python's `\Z` reads as nothing to a person.
@@ -608,10 +451,10 @@ def test_an_answer_over_a_document_the_user_wrote_is_refused(
     root = repository(tmp_path)
     (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
     before = snapshot(root)
-    code, printed = _invoke(root, tmp_path, "--yes", "--name", "other")
+    code, printed = _run(root, tmp_path, "--yes", "--name", "other")
     assert code == 2 and printed == ""
     assert "already has a stayfixed.toml" in capsys.readouterr().err
-    code, printed = _invoke(root, tmp_path, "--name", "other")
+    code, printed = _run(root, tmp_path, "--name", "other")
     assert code == 2 and printed == ""
     assert "--yes" in capsys.readouterr().err
     assert_snapshot_unchanged(root, before)
@@ -626,7 +469,7 @@ def test_a_refused_adoption_says_its_version_would_be_written(tmp_path: Path) ->
     hand_written = '[project]\nname = "widget"\n'
     (root / "stayfixed.toml").write_text(hand_written, encoding="utf-8")
     (root / "CLAUDE.md").mkdir()
-    code, printed = _invoke(root, tmp_path, "--yes")
+    code, printed = _run(root, tmp_path, "--yes")
     assert code == 1, printed
     assert STAMPED.format(verb="would write") in printed
     assert STAMPED.format(verb="wrote") not in printed
@@ -640,7 +483,7 @@ def test_uninstall_says_it_keeps_a_stayfixed_toml_you_wrote(tmp_path: Path) -> N
     # version `init` added. The note says so. Mutation (by hand): the note dropped -> no line.
     root = repository(tmp_path)
     (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
-    code, printed = _invoke(root, tmp_path, "--yes")
+    code, printed = _run(root, tmp_path, "--yes")
     assert code == 0, printed
     code, out, err = cli(root, tmp_path, "uninstall", "--dry-run")
     assert code == 0, err
@@ -658,10 +501,10 @@ def test_an_adopted_document_without_a_version_is_named_in_a_note(tmp_path: Path
     # unmentioned".
     root = repository(tmp_path)
     (root / "stayfixed.toml").write_text('[project]\nname = "widget"\n', encoding="utf-8")
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run")
     assert code == 0, printed
     assert STAMPED.format(verb="would write") in printed
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--json")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
     assert json.loads(printed)["stamped"] is True
 
 
@@ -670,5 +513,5 @@ def test_a_branch_with_a_slash_and_a_dot_is_a_base_branch_the_parser_takes(tmp_p
     # The branch grammar follows git's own rules, which a release branch meets: tightening it
     # must not refuse `release/2.0`. Mutation (by hand): refuse every `.` or `/` -> this reddens.
     root = repository(tmp_path)
-    code, printed = _invoke(root, tmp_path, "--yes", "--dry-run", "--base-branch", "release/2.0")
+    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--base-branch", "release/2.0")
     assert code == 0, printed

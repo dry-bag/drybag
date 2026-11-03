@@ -71,26 +71,16 @@ _ENV_DROP = (
 # invisible and blocks for the whole of `NETWORK_TIMEOUT_SECONDS`, which a caller cannot tell
 # from a hang. What makes that a finding rather than an annoyance is which callers reach the
 # network through here: `setup --overlay create:` launches `gh repo create` and a clone, whose
-# authentication is the machine owner's and which prompts when it is missing, and
-# `release.pins.released` runs `git ls-remote` against the public repository for `stayfixed init`
-# and for `doctor`'s `ci-ref` row -- a write meant to run non-interactively and a read-only
-# diagnostic, neither of them something a person is sitting in front of waiting to type a
-# password.
-#
-# **This used to say the `ci-ref` row resolves a repository-authored URL, and it does not.** That
-# row has asked about `stayfixed.REPOSITORY_URL`, a module constant, ever since that constant was
-# introduced. The control is unchanged and still needed; what was wrong was the sentence explaining
-# it, which named the one caller it had stopped applying to -- and a false rationale on a hardening
-# is how a later change concludes the hardening is unnecessary.
+# authentication is the machine owner's and which prompts when it is missing -- a write meant to
+# run non-interactively, not something a person is sitting in front of waiting to type a password.
 _ENV_FORCE = {"GIT_TERMINAL_PROMPT": "0"}
 # How a launched program's output is read: as text in the locale's codec, and a byte that codec
 # cannot read is U+FFFD rather than a `UnicodeDecodeError`. The rule rests on what every caller
-# does with the output — quotes it in a message, matches it against a grammar (`git ls-remote`'s
-# tag lines, `gh`'s JSON), or ignores it for an exit code — and on none of them comparing it
-# with a path or opening one, which is what `gitenv.git_run`'s lossless reading is for. Read
-# strictly, one such byte would end the command as an internal error — `test attribute` over a
-# test run whose output quotes a latin-1 filename, for one. U+FFFD prints, and a UTF-8 file can
-# hold it.
+# does with the output — quotes it in a message, matches it against a grammar (`gh`'s JSON), or
+# ignores it for an exit code — and on none of them comparing it with a path or opening one,
+# which is what `gitenv.git_run`'s lossless reading is for. Read strictly, one such byte would end
+# the command as an internal error — `test attribute` over a test run whose output quotes a
+# latin-1 filename, for one. U+FFFD prints, and a UTF-8 file can hold it.
 _DECODE_ERRORS = "replace"
 
 
@@ -112,10 +102,8 @@ class _SubprocessRunner:
     `timeout=None` means `NETWORK_TIMEOUT_SECONDS`, read at call time rather than captured here,
     which is what keeps `tests/test_runner.py`'s case able to lower the module constant — and
     what keeps the default one number in one place. A caller passes a smaller one when the
-    question it asks is smaller than the ones this cap was written for: `doctor` asks the public
-    repository for a tag listing on a command documented as a one-line diagnostic, and blocking
-    it for five minutes is not a diagnostic (`doctor.checks.CI_REF_TIMEOUT_SECONDS`). Nobody may
-    pass a *larger* one without saying why here; the cap is for a hung process, not a slow link.
+    question it asks is smaller than the ones this cap was written for. Nobody may pass a
+    *larger* one without saying why here; the cap is for a hung process, not a slow link.
     """
 
     timeout: float | None = None

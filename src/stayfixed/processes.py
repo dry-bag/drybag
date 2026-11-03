@@ -1,7 +1,7 @@
 """Ending a command's whole process group, in the one order that cannot end an unrelated one.
 
-A command stayfixed runs for a project, a `[gates.custom]` gate or a test command `prove` runs,
-starts in a session of its own, so what it starts shares its process group, and that group is
+A command stayfixed runs for a project, a test command `prove` runs, starts in a session of
+its own, so what it starts shares its process group, and that group is
 ended however the command finishes: exit, timeout or interrupt. A descendant that leaves the
 group (a new session, or a job-control shell's own group) is not reached, and nor is one stayfixed
 may not signal (a sudo or setuid descendant). A timeout or an interrupt ends the group with

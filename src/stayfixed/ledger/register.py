@@ -292,8 +292,7 @@ BUG_SCHEMA = Schema(
 )
 
 
-# Counted and never quoted, as the loader words a closed vocabulary (`[gates] builtin`): the
-# values are the repository's, and reach a terminal and a CI log.
+# Counted and never quoted: the values are the repository's, and reach a terminal and a CI log.
 BOUNDARY_LEVELS_UNKNOWN = (
     "[ledger] evidence_boundary_required_for names {count} value(s) that are not a severity, and "
     "a value that names none requires the evidence line of no entry; the severities are {known}"

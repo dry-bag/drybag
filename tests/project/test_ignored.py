@@ -27,7 +27,7 @@ from tests.project.repos import (
     repository,
     tree,
 )
-from tests.runners import LsRemote, Recorder
+from tests.runners import Recorder
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
 ENV_TEXT = "SECRET=1\n"
@@ -38,15 +38,13 @@ def _init(root: Path, tmp_path: Path, *, dry_run: bool = False) -> None:
     init(
         root,
         machine=tmp_path / "absent.toml",
-        runner=LsRemote(),
         yes=True,
         dry_run=dry_run,
-        ci=False,
     )
 
 
 def _upgrade(root: Path, tmp_path: Path, *, dry_run: bool = False) -> None:
-    upgrade(root, machine=tmp_path / "absent.toml", runner=LsRemote(), dry_run=dry_run, force=())
+    upgrade(root, machine=tmp_path / "absent.toml", runner=Recorder(), dry_run=dry_run, force=())
 
 
 def _uninstall(root: Path, tmp_path: Path, *, dry_run: bool = False) -> None:

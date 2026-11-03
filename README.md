@@ -27,13 +27,12 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > the memory bundles arrive ([what each agent enforces](#what-each-agent-enforces)). The first
 > skills ship with them, and so does one command meant for a machine rather than for you — `hook`,
 > which dispatches one harness event. **Not yet:** the memory MCP server, a hold-the-line baseline,
-> the `uvx` form of the gate, and adapters for Cursor or Hermes — each leaves this list in the
+> and adapters for Cursor or Hermes — each leaves this list in the
 > change that ships it. The [Quickstart](#quickstart) shows the three keys that are enough to start
 > a project by hand, which `init` reads as your answers — a run that writes the file itself writes
 > `[stayfixed] version` and `agents`, and `profile` when the repository carries a shipped
 > profile's markers or `--profile` names one, beside `[project] name`, `base_branch` and
-> `release_branch`, a `[ci]` table only when it has a released commit to pin or `--no-ci` asks for
-> none, a `[memory]` table only when `--memory-mode` answers it, and an `[artifacts]` table only
+> `release_branch`, a `[memory]` table only when `--memory-mode` answers it, and an `[artifacts]` table only
 > when `--local` does. [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference; the command list below is held
 > to the parser by a test, so it is complete for what ships.
 
@@ -179,7 +178,7 @@ mkdir -p .stayfixed/local/memory/developer
 printf -- '---\nname: first-note\ndescription: "When to open this note"\n---\n\nThe note.\n' \
   > .stayfixed/local/memory/developer/first-note.md
 stayfixed memory index      # renders .stayfixed/local/memory/MEMORY.md from the notes
-stayfixed doctor            # fourteen checks over this installation, one line; --json has the remedies
+stayfixed doctor            # thirteen checks over this installation, one line; --json has the remedies
 ```
 
 These notes are inside the repository, so they reach a session as data and never as standing
@@ -205,7 +204,7 @@ stayfixed writes files. Being specific about which is the point of this section.
 | `docs/bugs/` and `docs/bug-reports.md` (configurable) | One file per bug, and the generated index over them | `stayfixed init` writes the empty index and `docs/bugs/audits/README.md`; `stayfixed bugs new`, `bugs index` and `bugs renumber` after |
 | `docs/roadmap.md` and `docs/roadmap-history.md` (configurable) | The forward track and the closed phases; in the roadmap, `docs trail` owns only the listing between its two markers | `stayfixed init` writes both files; `stayfixed docs trail` rewrites the listing |
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | `stayfixed init`, once; you after |
-| `AGENTS.md`, `CLAUDE.md`, `docs/architecture/`, `docs/adr/`, `docs/runbooks/`, `docs/specs/`, `docs/plans/`, `.github/workflows/stayfixed.yml` | The project scaffold: the documents every other command reads, plus the pinned CI caller. Written by `stayfixed init`, recorded in the manifest; `stayfixed upgrade` refreshes what you have not touched, and `stayfixed uninstall` takes it back | `stayfixed init` |
+| `AGENTS.md`, `CLAUDE.md`, `docs/architecture/`, `docs/adr/`, `docs/runbooks/`, `docs/specs/`, `docs/plans/` | The project scaffold: the documents every other command reads. Written by `stayfixed init`, recorded in the manifest; `stayfixed upgrade` refreshes what you have not touched, and `stayfixed uninstall` takes it back | `stayfixed init` |
 | `docs/stayfixed/rules/<profile>.md` (configurable) and `.claude/rules/stayfixed-<profile>.md` | The stack profile's rules, the one copy a project edits, and a path-scoped pointer at it for Claude Code (only when `[stayfixed] agents` lists `claude`) | `stayfixed init`, when `[stayfixed] profile` is set |
 | `.stayfixed/manifest.json` | The ledger of every scaffolded artifact | the scaffold engine |
 | `.stayfixed/local/artifacts/` | The artifacts `[artifacts] local` keeps out of git, at the path each would have in the repository — git-ignored, never recorded in the manifest | `stayfixed init` and `stayfixed upgrade`, when `[artifacts] local` lists them; `stayfixed uninstall` takes them back |
@@ -236,9 +235,9 @@ refs`, and the scaffold engine's `plan` phase performs no writes at all.
 stayfixed makes no network request of its own and sends no telemetry: none of its modules imports
 one of Python's network modules. The table has two kinds of row. Most are programs stayfixed
 starts, each only when a command its row's **Run by** names runs, and as your user; stayfixed
-installs none of them. The last three are files stayfixed writes that GitHub runs; stayfixed runs
+installs none of them. The last two are files stayfixed writes that GitHub runs; stayfixed runs
 none of them. stayfixed's skills and its agent start nothing themselves: what your coding agent
-runs on their advice — through `stayfixed test attribute --command`, a `[gates.custom]` command or
+runs on their advice — through `stayfixed test attribute --command` or
 its own shell — is a command it chose, and reaches what that command reaches. The
 `uv sync --locked && uv run --locked pytest …` the `attribute-failure` skill suggests, for one,
 can reach the package index in each of the three trees `test attribute` runs it in.
@@ -256,16 +255,14 @@ to find the project root, and reaches no network.
 | Program | Run by | Talks to | When |
 |---|---|---|---|
 | `git fetch` | `stayfixed bugs new` | the project's `origin` (note 1) | unless `--no-fetch` |
-| `git ls-remote` | `stayfixed init`, `stayfixed upgrade`, `stayfixed doctor` | `https://github.com/stayfixed/stayfixed`, for its release tags | note 2 |
-| `gh` | `stayfixed setup --overlay create:<owner>/<name>` | GitHub's API, as the account `gh` acts for, and the clones it makes over git (note 3) | note 3 |
+| `gh` | `stayfixed setup --overlay create:<owner>/<name>` | GitHub's API, as the account `gh` acts for, and the clones it makes over git (note 2) | note 2 |
 | `git clone` | `stayfixed setup --overlay create:<owner>/<name>` | `git@github.com:<owner>/<name>.git`, the overlay just created | when `gh repo create --clone` reported success and left nothing at the destination |
-| `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed attach`, `stayfixed detach`, and `stayfixed uninstall` on an attached repository, which runs `detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `attach` and `detach`, nothing past this machine (note 4) | `setup` when `--plugin` names a plugin, the preset's agents include `claude` and it names a marketplace for it; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
-| `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 4) | when `--plugin` names a plugin, the preset's agents include `codex` and it names a marketplace for it |
-| `pre-commit install` | `stayfixed setup --overlay` | nothing as it installs; GitHub and Go's servers on the first commit after it (note 5) | when it renders an overlay at a path, records an existing one, or with `create:` |
+| `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed attach`, `stayfixed detach`, and `stayfixed uninstall` on an attached repository, which runs `detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `attach` and `detach`, nothing past this machine (note 3) | `setup` when `--plugin` names a plugin, the preset's agents include `claude` and it names a marketplace for it; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
+| `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 3) | when `--plugin` names a plugin, the preset's agents include `codex` and it names a marketplace for it |
+| `pre-commit install` | `stayfixed setup --overlay` | nothing as it installs; GitHub and Go's servers on the first commit after it (note 4) | when it renders an overlay at a path, records an existing one, or with `create:` |
 | `sh -c` | `stayfixed test attribute --command CMD` | wherever `CMD` reaches; stayfixed does not choose | every run: `CMD` in the working tree, then in extracts of `HEAD` and of the merge base |
 | the test command after `stayfixed prove --` | `stayfixed prove -- COMMAND`; `stayfixed bugs regressions`, with each fixed bug entry's `regression` as `COMMAND`, run from the project root | wherever `COMMAND` reaches; stayfixed does not choose: `uv run` may sync the project's environment from its index, `go test` may download the modules `go.mod` names, and `npx` installs a runner no `node_modules` holds, from the registry the project's `.npmrc` names, without asking, since under `prove` its standard input is no terminal; each as outside `prove` | every run, in the directory `prove` is typed in or the one its launcher is told to run `COMMAND` in, once a runner adapter recognises `COMMAND`, or with `--junit` |
-| `.github/workflows/stayfixed.yml` | your CI, from the workflow `stayfixed init` writes in `reusable` mode | GitHub, through stayfixed's reusable workflow (note 6) | on the events the workflow names |
-| `.github/workflows/scan.yml` | the overlay's CI on GitHub (note 7) | GitHub, through `gitleaks/gitleaks-action` (note 7) | on every push, pull request and manual run, unless the repository is marked a template |
+| `.github/workflows/scan.yml` | the overlay's CI on GitHub (note 5) | GitHub, through `gitleaks/gitleaks-action` (note 5) | on every push, pull request and manual run, unless the repository is marked a template |
 | `.github/dependabot.yml` | GitHub's Dependabot, from the file the same commands write into the overlay | GitHub: it looks up new releases of the scan workflow's two pinned actions and opens one grouped pull request in the overlay to move them | monthly, once the file is on GitHub |
 
 1. **`git fetch`** asks the project's own `origin` for identifiers filed on branches this checkout
@@ -280,9 +277,7 @@ to find the project root, and reaches no network.
    `~/.gitconfig` and `~/.config/git/config` alone: a global configuration either variable points
    elsewhere, and the credential helpers it names, are not read, while the helpers the configuration
    git does read names are used.
-2. **`git ls-remote`** runs in `init` and `upgrade` in `reusable` mode, to pin the CI workflow they
-   write to a release's commit; and in `doctor` when `[ci] ref` is recorded.
-3. **`gh`**: `setup --overlay create:` looks up the template, creates the private overlay from it
+2. **`gh`**: `setup --overlay create:` looks up the template, creates the private overlay from it
    with its clone, and asks whether it exists when that clone left nothing. It is asked nothing
    until `setup` has looked at `<home>/<name>`: a file there, or a directory that is not an
    overlay, is refused before any `gh` call, and the overlay an earlier run made there is left
@@ -290,7 +285,7 @@ to find the project root, and reaches no network.
    `GH_HOST` names. stayfixed passes `gh` your environment, so a `GH_TOKEN` or `GITHUB_TOKEN` there
    is the account it acts as, over the one `gh` is signed in to, and `GH_HOST` can point it at a
    GitHub Enterprise host — while the clone `create:` falls back to is always `git@github.com:`.
-4. **`claude plugin`** registers the marketplace the preset names for Claude Code
+3. **`claude plugin`** registers the marketplace the preset names for Claude Code
    (`anthropics/claude-plugins-official` in `recommended`), reads its list of plugins, and
    downloads each plugin `--plugin` named from the source its entry there names, which can be
    another repository. For `attach`, it registers the directory `attach` renders the overlay's
@@ -299,7 +294,7 @@ to find the project root, and reaches no network.
    past this machine; `detach` uninstalls that plugin and removes that marketplace. **`codex plugin`** registers the marketplace the preset names for Codex and
    adds the named plugins from it; `recommended` names none, so it does not run. Once
    installed, a plugin runs in every session of its harness and reaches what it reaches.
-5. **`pre-commit install`** reaches nothing as it installs. On the first commit after it,
+4. **`pre-commit install`** reaches nothing as it installs. On the first commit after it,
    pre-commit clones `https://github.com/gitleaks/gitleaks` at the commit the overlay's
    `.pre-commit-config.yaml` pins, gitleaks 8.30.1, whose hook is written in Go: pre-commit builds
    it, fetching Go modules through Go's module proxy and checking them against Go's checksum
@@ -308,11 +303,7 @@ to find the project root, and reaches no network.
    which pre-commit passes on, so those can send each request elsewhere; it honours your
    `GOTOOLCHAIN` only when Go was already installed, since pre-commit sets it to `local` for a Go
    it downloaded.
-6. **`stayfixed.yml`** calls stayfixed's reusable workflow at the commit it pins, which checks out
-   your repository and stayfixed, may download a Python, on a pull request that moves `[ci] ref`
-   lists stayfixed's release tags, and, once the configuration and built-in gates pass, runs the
-   commands `[gates.custom]` names (that row above).
-7. **`scan.yml`** is written by `stayfixed setup --overlay <path>` and `stayfixed overlay
+5. **`scan.yml`** is written by `stayfixed setup --overlay <path>` and `stayfixed overlay
    upgrade`; an overlay made with `create:` gets it from the template repository. It checks out the overlay's whole history and runs
    `gitleaks/gitleaks-action` at the commit it pins, v3.0.0. The action looks up the repository's
    owner through GitHub's API and, for an organisation, stops unless a `GITLEAKS_LICENSE` secret is
@@ -419,7 +410,7 @@ stayfixed setup --approval-boundary                    # print the deny rule and
 stayfixed prove -- uv run --locked pytest tests/test_x.py   # run it here; proved, failed, not proven or refused, from the runner's own report
 
 # Diagnosing an installation
-stayfixed doctor                                       # fourteen checks over this installation, one line
+stayfixed doctor                                       # thirteen checks over this installation, one line
 stayfixed doctor --json                                # every check with its status, detail and remedy
 
 # Internal

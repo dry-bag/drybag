@@ -114,9 +114,6 @@ CLASSES: Mapping[str, KeyClass] = MappingProxyType(
         "stayfixed.profile": KeyClass.PREFERENCE,
         **{f"budgets.{name}": KeyClass.SESSION_PARAMETER for name in sorted(SESSION_BUDGETS)},
         **{f"budgets.{name}": KeyClass.GATE_PARAMETER for name in sorted(GATE_BUDGETS)},
-        "stayfixed.enforced": KeyClass.GATE_PARAMETER,
-        "gates.builtin": KeyClass.GATE_PARAMETER,
-        "gates.custom": KeyClass.GATE_PARAMETER,
         "ledger.code_roots": KeyClass.GATE_PARAMETER,
         "ledger.evidence_boundary_required_for": KeyClass.GATE_PARAMETER,
         "stayfixed.version": KeyClass.REPOSITORY_ONLY,
@@ -126,8 +123,6 @@ CLASSES: Mapping[str, KeyClass] = MappingProxyType(
         "paths.*": KeyClass.REPOSITORY_ONLY,
         "ledger.id_prefix": KeyClass.REPOSITORY_ONLY,
         "artifacts.local": KeyClass.REPOSITORY_ONLY,
-        "ci.*": KeyClass.REPOSITORY_ONLY,
-        "gates.custom_timeout_seconds": KeyClass.REPOSITORY_ONLY,
         "commit_messages.*": KeyClass.REPOSITORY_ONLY,
         "native_caps.*": KeyClass.PLUGIN_OWNED,
     }

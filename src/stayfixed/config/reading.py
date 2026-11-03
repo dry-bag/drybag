@@ -55,8 +55,8 @@ TOO_LONG = "(holds a number longer than the parser converts)"
 # A named cap: every integer a configuration key holds is below it. `tomllib` converts a hex, octal
 # or binary literal of any length (a power-of-two base is exempt from the interpreter's 4,300-digit
 # limit), and a decimal of 401 digits is inside that limit, so a key checked only for `<= 0` handed
-# its reader a number no `str` could print or no `float` could hold: `[gates]
-# custom_timeout_seconds` ended the command that read it in an internal error. 2**31 is what a
+# its reader a number no `str` could print or no `float` could hold: a timeout key an earlier
+# stayfixed read ended the command that read it in an internal error. 2**31 is what a
 # signed 32-bit count holds, far above any budget, cap or timeout a project writes (the preset's
 # largest integer is `memory_index_bytes = 25600`), and below what every reader of one handles:
 # `str`, `float`, a comparison. No shipped file states it.
@@ -67,10 +67,9 @@ class ConfigError(Failure):
     """A stayfixed.toml that cannot be trusted as written.
 
     `key` is the dotted key a refusal of one key is about — `memory.mode`, `paths.bugs`, a
-    section's name for a section that is not a table, `gates.custom.<name>` for a custom gate
-    that cannot run — and `None` for a refusal of the whole document. It is the key the NOTE path
-    decides about, removing it or naming it (`loads_noting`); it is never printed, so it may be
-    any text the document chose.
+    section's name for a section that is not a table — and `None` for a refusal of the whole
+    document. It is the key the NOTE path decides about, removing it or naming it
+    (`loads_noting`); it is never printed, so it may be any text the document chose.
     """
 
     def __init__(self, message: str, *, key: str | None = None) -> None:

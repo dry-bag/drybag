@@ -10,54 +10,35 @@ from pathlib import Path
 import pytest
 
 import stayfixed
-from stayfixed import fsops
 from stayfixed.config.loader import CONFIG_FILE
 from stayfixed.config.owned import OwnedKeyError
 from stayfixed.errors import Refusal
 from stayfixed.project import footprint, templates
 from stayfixed.project.upgrade import (
     NEWER,
-    NO_RELEASE,
     NOT_INITIALISED,
     UNORDERED,
     UNREADABLE_VERSION,
-    WORKFLOW_HELD,
     UpgradeReport,
     upgrade,
 )
-from stayfixed.scaffold import Manifest, Record, Verb, digest, engine
+from stayfixed.scaffold import Manifest, Record, Verb, digest
 from stayfixed.scaffold.manifest import Kind, Location
 from tests.gitfixture import needs_git
 from tests.project.repos import initialised
-from tests.runners import LsRemote
+from tests.runners import Recorder
 from tests.snapshot import assert_snapshot_unchanged, snapshot
-
-OLD = "a" * 40
-NEW = "c" * 40
-WORKFLOW = Path(".github") / "workflows" / "stayfixed.yml"
-# `git ls-remote --exit-code` exits 2 when nothing matched, and 128 when it could not ask.
-NO_TAG = LsRemote()
-OFFLINE = LsRemote(code=128)
-
-
-def _listing(version: str, sha: str) -> LsRemote:
-    return LsRemote(stdout=f"{sha}\trefs/tags/v{version}\n")
-
-
-def _pinned(tmp_path: Path) -> Path:
-    return initialised(tmp_path, runner=_listing(stayfixed.__version__, OLD), ci=True)
 
 
 def _upgrade(
     root: Path,
     tmp_path: Path,
-    runner: LsRemote,
     *,
     dry_run: bool = False,
     force: tuple[str, ...] = (),
 ) -> UpgradeReport:
     return upgrade(
-        root, machine=tmp_path / "absent.toml", runner=runner, dry_run=dry_run, force=force
+        root, machine=tmp_path / "absent.toml", runner=Recorder(), dry_run=dry_run, force=force
     )
 
 
@@ -93,13 +74,12 @@ def test_a_profile_kept_out_of_git_refuses_upgrade_before_anything_is_written(
     (root / CONFIG_FILE).write_text(
         f'[stayfixed]\nversion = "{stayfixed.__version__}"\nprofile = "python"\n'
         'agents = ["claude"]\n\n'
-        '[project]\nname = "widget"\n\n[artifacts]\nlocal = ["claude-rules"]\n\n'
-        '[ci]\nmode = "none"\n',
+        '[project]\nname = "widget"\n\n[artifacts]\nlocal = ["claude-rules"]\n',
         encoding="utf-8",
     )
     before = snapshot(root)
     with pytest.raises(Refusal, match="profile's artifacts"):
-        _upgrade(root, tmp_path, NO_TAG)
+        _upgrade(root, tmp_path)
     assert_snapshot_unchanged(root, before)
 
 
@@ -114,7 +94,7 @@ def test_stayfixed_toml_kept_out_of_git_refuses_upgrade_before_any_write(tmp_pat
     )
     before = snapshot(root)
     with pytest.raises(Refusal) as refused:
-        _upgrade(root, tmp_path, NO_TAG)
+        _upgrade(root, tmp_path)
     assert_snapshot_unchanged(root, before)
     assert str(refused.value) == footprint.LOCAL_ROOT_ONLY.format(names="config")
 
@@ -140,25 +120,17 @@ def test_a_committed_path_into_stayfixeds_own_directory_refuses_upgrade_before_a
     )
     before = snapshot(root)
     with pytest.raises(Refusal, match=r"paths\.agents_md names stayfixed's own directory"):
-        _upgrade(root, tmp_path, NO_TAG)
+        _upgrade(root, tmp_path)
     assert_snapshot_unchanged(root, before)
     assert ledger.read_text(encoding="utf-8") == '{"entries": []}\n'
 
 
 @needs_git
-@pytest.mark.parametrize("runner", [_listing(stayfixed.__version__, OLD), NO_TAG, OFFLINE])
-def test_a_current_footprint_upgrades_to_nothing_whatever_the_remote_answers(
-    tmp_path: Path, runner: LsRemote
-) -> None:
-    root = _pinned(tmp_path)
+def test_a_current_footprint_upgrades_to_nothing(tmp_path: Path) -> None:
+    root = initialised(tmp_path)
     before = snapshot(root)
-    report = _upgrade(root, tmp_path, runner)
+    report = _upgrade(root, tmp_path)
     assert report.moved == ()
-    # Nothing needed to move, so nothing was held: a note on every offline run of a current
-    # project would say the pin was withheld when there was nothing to pin. Mutation
-    # (advisory): `elif pinned and rewrite(text, changes) != text:` -> `elif pinned:` -> the
-    # no-tag and offline cases redden.
-    assert report.held == ""
     assert [a.verb for a in report.footprint.actions] == []
     assert_snapshot_unchanged(root, before)
 
@@ -167,14 +139,14 @@ def test_a_current_footprint_upgrades_to_nothing_whatever_the_remote_answers(
 def test_a_newer_stayfixed_refreshes_what_is_untouched_and_skips_what_was_edited(
     tmp_path: Path, newer: Callable[[], None]
 ) -> None:
-    root = _pinned(tmp_path)
+    root = initialised(tmp_path)
     running = stayfixed.__version__
     newer()
     roadmap = root / "docs" / "roadmap.md"
     roadmap.write_text(roadmap.read_text(encoding="utf-8") + "\nOur own line.\n", encoding="utf-8")
     document_before = (root / CONFIG_FILE).read_text(encoding="utf-8")
 
-    report = _upgrade(root, tmp_path, _listing("9.9.9", NEW))
+    report = _upgrade(root, tmp_path)
 
     # Keyed by artifact id, not by path: a document path under `tests/` is one of the strings
     # the neutrality gate refuses in test code.
@@ -185,27 +157,23 @@ def test_a_newer_stayfixed_refreshes_what_is_untouched_and_skips_what_was_edited
     assert "A line the next release adds." in (
         root / "docs" / "architecture" / "documentation.md"
     ).read_text(encoding="utf-8")
-    # Every byte but the two values is the byte it was.
+    # Every byte but the version is the byte it was.
     assert (root / CONFIG_FILE).read_text(encoding="utf-8") == document_before.replace(
         f'version = "{running}"', 'version = "9.9.9"'
-    ).replace(OLD, NEW)
-    assert f"@{NEW}\n" in (root / WORKFLOW).read_text(encoding="utf-8")
-    assert [(m.key, m.after) for m in report.moved] == [
-        (("stayfixed", "version"), "9.9.9"),
-        (("ci", "ref"), NEW),
-    ]
+    )
+    assert [(m.key, m.after) for m in report.moved] == [(("stayfixed", "version"), "9.9.9")]
 
 
 @needs_git
 def test_force_overwrites_exactly_the_edit_it_names(
     tmp_path: Path, newer: Callable[[], None]
 ) -> None:
-    root = _pinned(tmp_path)
+    root = initialised(tmp_path)
     newer()
     for name in ("roadmap.md", "roadmap-history.md"):
         path = root / "docs" / name
         path.write_text(path.read_text(encoding="utf-8") + "\nours\n", encoding="utf-8")
-    _upgrade(root, tmp_path, _listing("9.9.9", NEW), force=("docs/roadmap.md",))
+    _upgrade(root, tmp_path, force=("docs/roadmap.md",))
     assert "ours" not in (root / "docs" / "roadmap.md").read_text(encoding="utf-8")
     assert "ours" in (root / "docs" / "roadmap-history.md").read_text(encoding="utf-8")
 
@@ -218,12 +186,12 @@ def test_a_second_upgrade_to_the_same_release_writes_nothing(
     # and moves the version, and the second finds every artifact as the first left it, so it
     # plans nothing and the tree is the same byte for byte. Mutation: `mutations/`'s "an artifact
     # whose bytes are already the template's is planned again".
-    root = _pinned(tmp_path)
+    root = initialised(tmp_path)
     newer()
-    first = _upgrade(root, tmp_path, _listing("9.9.9", NEW))
+    first = _upgrade(root, tmp_path)
     assert first.moved and Verb.UPDATE in {action.verb for action in first.footprint.actions}
     before = snapshot(root)
-    second = _upgrade(root, tmp_path, _listing("9.9.9", NEW))
+    second = _upgrade(root, tmp_path)
     assert_snapshot_unchanged(root, before)
     assert second.moved == () and second.footprint.actions == ()
     assert second.footprint.unchanged
@@ -233,10 +201,10 @@ def test_a_second_upgrade_to_the_same_release_writes_nothing(
 def test_a_dry_run_writes_nothing_and_reports_everything(
     tmp_path: Path, newer: Callable[[], None]
 ) -> None:
-    root = _pinned(tmp_path)
+    root = initialised(tmp_path)
     newer()
     before = snapshot(root)
-    report = _upgrade(root, tmp_path, _listing("9.9.9", NEW), dry_run=True)
+    report = _upgrade(root, tmp_path, dry_run=True)
     assert report.dry_run and report.moved and report.footprint.actions
     assert_snapshot_unchanged(root, before)
 
@@ -246,16 +214,11 @@ def test_a_version_in_a_shape_the_editor_cannot_rewrite_is_refused_even_when_it_
     tmp_path: Path,
 ) -> None:
     """A tool-owned key written in a shape the editor cannot prove it rewrote is refused before
-    any write, even on the path where no release resolves and the version would be held back
-    anyway. Asking whether the loaded version differs from the running one instead would hold
-    it silently and write the footprint around a key no later run can move either. The
-    roadmap is deleted first, so a run that went on would visibly write.
-
-    Mutation (oracle): `mutations/`'s "upgrade holds a version it cannot rewrite and writes the
-    footprint anyway" (the comparison in place of the editor) -> no refusal, and the roadmap is
-    recreated.
+    any write. Asking whether the loaded version differs from the running one instead would
+    write the footprint around a key no later run can move either. The roadmap is deleted first,
+    so a run that went on would visibly write.
     """
-    root = _pinned(tmp_path)
+    root = initialised(tmp_path)
     config = root / CONFIG_FILE
     text = config.read_text(encoding="utf-8")
     recorded = f'version = "{stayfixed.__version__}"'
@@ -264,168 +227,8 @@ def test_a_version_in_a_shape_the_editor_cannot_rewrite_is_refused_even_when_it_
     (root / "docs" / "roadmap.md").unlink()
     before = snapshot(root)
     with pytest.raises(OwnedKeyError, match=re.escape("[stayfixed] version is written in a shape")):
-        _upgrade(root, tmp_path, NO_TAG)
+        _upgrade(root, tmp_path)
     assert_snapshot_unchanged(root, before)
-
-
-@needs_git
-@pytest.mark.parametrize("runner", [NO_TAG, OFFLINE])
-def test_with_no_release_to_pin_neither_key_moves_and_the_report_says_why(
-    tmp_path: Path, newer: Callable[[], None], runner: LsRemote
-) -> None:
-    # The workflow pins stayfixed by commit, so `version`, `[ci] ref` and its `uses:` line are one
-    # value. A version moved alone is a pull request that still runs the old stayfixed.
-    root = _pinned(tmp_path)
-    newer()
-    document = (root / CONFIG_FILE).read_text(encoding="utf-8")
-    report = _upgrade(root, tmp_path, runner)
-    assert report.moved == () and report.held == NO_RELEASE
-    assert (root / CONFIG_FILE).read_text(encoding="utf-8") == document
-    assert "A line the next release adds." in (
-        root / "docs" / "architecture" / "documentation.md"
-    ).read_text(encoding="utf-8")
-
-
-@needs_git
-def test_a_hand_edited_workflow_holds_both_keys_until_it_is_forced(
-    tmp_path: Path, newer: Callable[[], None]
-) -> None:
-    root = _pinned(tmp_path)
-    newer()
-    workflow = root / WORKFLOW
-    workflow.write_text(workflow.read_text(encoding="utf-8") + "# ours\n", encoding="utf-8")
-    document = (root / CONFIG_FILE).read_text(encoding="utf-8")
-    held = _upgrade(root, tmp_path, _listing("9.9.9", NEW))
-    assert held.moved == () and held.held == WORKFLOW_HELD
-    assert (root / CONFIG_FILE).read_text(encoding="utf-8") == document
-    assert f"@{OLD}" in workflow.read_text(encoding="utf-8")
-
-    forced = _upgrade(root, tmp_path, _listing("9.9.9", NEW), force=(WORKFLOW.as_posix(),))
-    assert [m.key for m in forced.moved] == [
-        ("stayfixed", "version"),
-        ("ci", "ref"),
-    ] and not forced.held
-    assert f"@{NEW}\n" in workflow.read_text(encoding="utf-8")
-
-
-def _adopted(tmp_path: Path, ref: str, *, workflow: bool = True) -> tuple[Path, str]:
-    """A repository that wrote its own `stayfixed.toml` pinning `ref`, and its own caller workflow
-    around it when `workflow` says so, before `init` adopted it. Returns the root and the
-    workflow's text."""
-    document = (
-        f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n\n'
-        f'[ci]\nref = "{ref}"\n'
-    )
-    text = (
-        "# ours, from before stayfixed\non: pull_request\njobs:\n  stayfixed:\n"
-        f"    uses: {stayfixed.REPOSITORY_SLUG}/.github/workflows/check.yml@{ref}\n"
-    )
-    files = {WORKFLOW.as_posix(): text} if workflow else {}
-    return initialised(tmp_path, document=document, files=files), text
-
-
-@needs_git
-def test_a_workflow_stayfixed_did_not_write_holds_both_keys_until_it_is_forced(
-    tmp_path: Path, newer: Callable[[], None]
-) -> None:
-    # The caller workflow is the project's own, so stayfixed never wrote it and holds no record of
-    # it. Unforced, it stays byte for byte and so do version and ref, since the three are one
-    # value. `--force` naming it is the remedy `WORKFLOW_HELD` gives, and it used to do nothing:
-    # the engine's branch for a file with no record ignored `force`, so the run held for ever.
-    # Mutation (oracle): `mutations/`'s "--force stops reaching a whole file stayfixed did not
-    # write" -> the forced run holds again, and the assertions after it redden.
-    root, text = _adopted(tmp_path, OLD)
-    running = stayfixed.__version__
-    newer()
-    workflow, config = root / WORKFLOW, root / CONFIG_FILE
-    document = config.read_text(encoding="utf-8")
-    held = _upgrade(root, tmp_path, _listing("9.9.9", NEW))
-    assert held.moved == () and held.held == WORKFLOW_HELD
-    verbs = {a.artifact_id: (a.verb, a.reason) for a in held.footprint.actions}
-    assert verbs["ci-workflow"] == (Verb.SKIP_MODIFIED, "exists and stayfixed did not write it")
-    assert workflow.read_text(encoding="utf-8") == text
-    assert config.read_text(encoding="utf-8") == document
-
-    forced = _upgrade(root, tmp_path, _listing("9.9.9", NEW), force=(WORKFLOW.as_posix(),))
-    assert [(m.key, m.after) for m in forced.moved] == [
-        (("stayfixed", "version"), "9.9.9"),
-        (("ci", "ref"), NEW),
-    ]
-    assert forced.held == ""
-    assert config.read_text(encoding="utf-8") == document.replace(
-        f'version = "{running}"', 'version = "9.9.9"'
-    ).replace(OLD, NEW)
-    rendered = workflow.read_text(encoding="utf-8")
-    assert f"@{NEW}\n" in rendered and "# ours" not in rendered
-    assert Manifest.read(root).get("ci-workflow") is not None
-
-
-@needs_git
-@pytest.mark.parametrize("workflow", [False, True], ids=["no-workflow", "own-workflow"])
-def test_a_ref_that_is_not_a_commit_is_the_projects_and_only_the_version_moves(
-    tmp_path: Path, newer: Callable[[], None], workflow: bool
-) -> None:
-    # `v1` is the documented opt-in to a moving stayfixed, written by hand. It pins nothing this
-    # command owns: `upgrade` replaced it with a sha and rendered a workflow over the choice, with
-    # no note. Now only `[stayfixed] version` moves, and the ref and any workflow written around it
-    # stay byte for byte. Mutation (oracle): `mutations/`'s "upgrade repins a [ci] ref that is not a
-    # commit".
-    root, text = _adopted(tmp_path, "v1", workflow=workflow)
-    running = stayfixed.__version__
-    newer()
-    config = root / CONFIG_FILE
-    document = config.read_text(encoding="utf-8")
-    report = _upgrade(root, tmp_path, _listing("9.9.9", NEW))
-    assert [(m.key, m.after) for m in report.moved] == [(("stayfixed", "version"), "9.9.9")]
-    assert report.held == ""
-    assert config.read_text(encoding="utf-8") == document.replace(
-        f'version = "{running}"', 'version = "9.9.9"'
-    )
-    assert report.skipped["ci-workflow"] == templates.BAD_REF
-    if workflow:
-        assert (root / WORKFLOW).read_text(encoding="utf-8") == text
-    else:
-        assert not (root / WORKFLOW).exists()
-
-
-@needs_git
-def test_a_write_that_fails_part_way_leaves_the_pin_agreeing_and_the_next_run_converges(
-    tmp_path: Path, newer: Callable[[], None], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # The workflow's pin and `[ci] ref` are one value, and `stayfixed.toml` is written after the
-    # whole footprint. Planned before the profile's artifacts, the workflow was already at the
-    # new commit when a later write failed, while `stayfixed.toml` still recorded the old one,
-    # and `doctor` reported the two apart until the next run. Planned last, a failure anywhere
-    # before it leaves both on the old commit. Mutation (advisory): plan the workflow before the
-    # profile's artifacts again -> the first assertion after the failure reddens.
-    root = _pinned(tmp_path)
-    config = root / CONFIG_FILE
-    config.write_text(
-        config.read_text(encoding="utf-8").replace(
-            "[stayfixed]\n", '[stayfixed]\nprofile = "python"\n', 1
-        ),
-        encoding="utf-8",
-    )
-    newer()
-    original = fsops.write_within
-
-    def failing(where: Path, target: str, payload: str) -> None:
-        if target.endswith("/python.md"):
-            raise OSError("no space left on device")
-        original(where, target, payload)
-
-    monkeypatch.setattr(engine, "write_within", failing)
-    with pytest.raises(Refusal, match="cannot be written"):
-        _upgrade(root, tmp_path, _listing("9.9.9", NEW))
-    text = config.read_text(encoding="utf-8")
-    assert f'ref = "{OLD}"' in text and f"@{OLD}\n" in (root / WORKFLOW).read_text(encoding="utf-8")
-
-    monkeypatch.setattr(engine, "write_within", original)
-    report = _upgrade(root, tmp_path, _listing("9.9.9", NEW))
-    text = config.read_text(encoding="utf-8")
-    assert 'version = "9.9.9"' in text and f'ref = "{NEW}"' in text
-    assert f"@{NEW}\n" in (root / WORKFLOW).read_text(encoding="utf-8")
-    assert [m.key for m in report.moved] == [("stayfixed", "version"), ("ci", "ref")]
 
 
 @needs_git
@@ -433,7 +236,7 @@ def test_a_write_that_fails_part_way_leaves_the_pin_agreeing_and_the_next_run_co
 def test_a_project_recording_a_newer_stayfixed_is_refused(tmp_path: Path, recorded: str) -> None:
     # An older plugin would repin an older release and put older bytes over newer ones. A
     # pre-release suffix does not hide the newer release: the leading `X.Y.Z` decides.
-    root = _pinned(tmp_path)
+    root = initialised(tmp_path)
     path = root / CONFIG_FILE
     path.write_text(
         path.read_text(encoding="utf-8").replace(
@@ -443,7 +246,7 @@ def test_a_project_recording_a_newer_stayfixed_is_refused(tmp_path: Path, record
     )
     before = snapshot(root)
     with pytest.raises(Refusal, match=re.escape(NEWER.format(running=stayfixed.__version__))):
-        _upgrade(root, tmp_path, _listing(stayfixed.__version__, OLD))
+        _upgrade(root, tmp_path)
     assert_snapshot_unchanged(root, before)
 
 
@@ -470,7 +273,7 @@ def test_a_pre_release_build_never_moves_a_project_recording_the_release_down_to
     monkeypatch.setattr(stayfixed, "__version__", "1.0.0rc1")
     before = snapshot(root)
     with pytest.raises(Refusal) as refused:
-        _upgrade(root, tmp_path, NO_TAG)
+        _upgrade(root, tmp_path)
     assert str(refused.value) == NEWER.format(running="1.0.0rc1")
     assert_snapshot_unchanged(root, before)
 
@@ -482,7 +285,7 @@ def test_a_release_moves_a_project_recording_its_own_pre_release_forward(
     root = initialised(tmp_path)
     _recording(root, "1.0.0.dev0")
     monkeypatch.setattr(stayfixed, "__version__", "1.0.0")
-    report = _upgrade(root, tmp_path, NO_TAG)
+    report = _upgrade(root, tmp_path)
     assert [(m.key, m.before, m.after) for m in report.moved] == [
         (("stayfixed", "version"), "(not a version)", "1.0.0")
     ]
@@ -502,7 +305,7 @@ def test_two_pre_releases_of_one_version_are_refused_as_unordered_and_never_quot
     monkeypatch.setattr(stayfixed, "__version__", "1.0.0rc2")
     before = snapshot(root)
     with pytest.raises(Refusal) as refused:
-        _upgrade(root, tmp_path, NO_TAG)
+        _upgrade(root, tmp_path)
     assert str(refused.value) == UNORDERED.format(running="1.0.0rc2")
     assert "PROJECT" not in str(refused.value)
     assert_snapshot_unchanged(root, before)
@@ -515,7 +318,7 @@ def test_a_recorded_version_with_no_leading_triple_is_refused_and_never_quoted(
     # `v99.0.0` has no leading `X.Y.Z`, so which way a move would go is unknown; moving it to the
     # running version could be moving it backward. Mutation (oracle): `mutations/`'s "upgrade moves
     # a recorded version it cannot read".
-    root = _pinned(tmp_path)
+    root = initialised(tmp_path)
     path = root / CONFIG_FILE
     path.write_text(
         path.read_text(encoding="utf-8").replace(
@@ -525,7 +328,7 @@ def test_a_recorded_version_with_no_leading_triple_is_refused_and_never_quoted(
     )
     before = snapshot(root)
     with pytest.raises(Refusal, match=re.escape(UNREADABLE_VERSION)) as refused:
-        _upgrade(root, tmp_path, _listing(stayfixed.__version__, OLD))
+        _upgrade(root, tmp_path)
     assert "v99" not in str(refused.value)
     assert_snapshot_unchanged(root, before)
 
@@ -535,7 +338,7 @@ def test_an_uninitialised_repository_is_refused(tmp_path: Path) -> None:
     root = tmp_path / "bare"
     root.mkdir()
     with pytest.raises(Refusal, match=re.escape(NOT_INITIALISED)):
-        _upgrade(root, tmp_path, NO_TAG)
+        _upgrade(root, tmp_path)
 
 
 @needs_git
@@ -547,7 +350,7 @@ def test_a_record_naming_a_file_this_build_never_writes_is_counted_and_left(
     # `upgrade` touch it: which ids exist, and where each could be, are this build's. No
     # one-line mutation breaches this, because no code turns an unknown record into a template;
     # this case is the guard.
-    root = _pinned(tmp_path)
+    root = initialised(tmp_path)
     readme = root / "README.md"
     readme.write_text("# ours\n", encoding="utf-8")
     manifest = Manifest.read(root)
@@ -562,61 +365,9 @@ def test_a_record_naming_a_file_this_build_never_writes_is_counted_and_left(
             digest("# ours\n"),
         )
     ).write(root)
-    report = _upgrade(root, tmp_path, _listing(stayfixed.__version__, OLD))
+    report = _upgrade(root, tmp_path)
     assert readme.read_text(encoding="utf-8") == "# ours\n"
     assert report.orphans == 1
-
-
-@needs_git
-def test_switching_ci_off_retires_the_workflow_while_its_bytes_are_stayfixeds(
-    tmp_path: Path,
-) -> None:
-    root = _pinned(tmp_path)
-    config = root / CONFIG_FILE
-    # `init` wrote `[ci] ref` and left `mode` to the preset; the user now sets it.
-    text = config.read_text(encoding="utf-8")
-    assert "[ci]\n" in text
-    config.write_text(text.replace("[ci]\n", '[ci]\nmode = "none"\n'), encoding="utf-8")
-    report = _upgrade(root, tmp_path, NO_TAG)
-    assert (Verb.REMOVE, WORKFLOW.as_posix()) in {
-        (a.verb, a.target) for a in report.footprint.actions
-    }
-    assert not (root / WORKFLOW).exists()
-
-
-@needs_git
-def test_switching_ci_off_after_deleting_the_workflow_drops_its_record(tmp_path: Path) -> None:
-    # The workflow deleted by hand, then `[ci] mode = "none"`: the retired record whose file was
-    # already gone read as unchanged, so every `upgrade` kept it for good. It is dropped now,
-    # with nothing removed, since nothing was there.
-    # Mutation: `mutations/`'s "a retired record whose file is gone is kept for good".
-    root = _pinned(tmp_path)
-    (root / WORKFLOW).unlink()
-    config = root / CONFIG_FILE
-    text = config.read_text(encoding="utf-8")
-    config.write_text(text.replace("[ci]\n", '[ci]\nmode = "none"\n'), encoding="utf-8")
-    report = _upgrade(root, tmp_path, NO_TAG)
-    assert (Verb.REMOVE, WORKFLOW.as_posix()) in {
-        (a.verb, a.target) for a in report.footprint.actions
-    }
-    recorded = {record.target for record in Manifest.read(root).records.values()}
-    assert WORKFLOW.as_posix() not in recorded
-
-
-@needs_git
-def test_a_mode_this_build_does_not_render_is_not_a_request_to_delete_the_gate(
-    tmp_path: Path,
-) -> None:
-    # `uvx` is a mode stayfixed accepts and does not yet render, so `_ci` skips the workflow.
-    # A skip is not a retirement, and the record is neither retired nor an orphan: the workflow
-    # is where this build could have written it.
-    root = _pinned(tmp_path)
-    config = root / CONFIG_FILE
-    text = config.read_text(encoding="utf-8")
-    config.write_text(text.replace("[ci]\n", '[ci]\nmode = "uvx"\n'), encoding="utf-8")
-    report = _upgrade(root, tmp_path, NO_TAG)
-    assert (root / WORKFLOW).is_file()
-    assert report.orphans == 0
 
 
 @needs_git
@@ -631,12 +382,12 @@ def test_dropping_the_profile_retires_its_renditions_while_their_bytes_are_stayf
         ),
         encoding="utf-8",
     )
-    _upgrade(root, tmp_path, NO_TAG)
+    _upgrade(root, tmp_path)
     assert (root / "docs" / "stayfixed" / "rules" / "python.md").is_file()
     config.write_text(
         config.read_text(encoding="utf-8").replace('profile = "python"\n', ""), encoding="utf-8"
     )
-    report = _upgrade(root, tmp_path, NO_TAG)
+    report = _upgrade(root, tmp_path)
     removed = {a.artifact_id for a in report.footprint.actions if a.verb is Verb.REMOVE}
     assert removed == {"profile-rules", "claude-rules"}
     assert not (root / "docs" / "stayfixed" / "rules" / "python.md").exists()
@@ -651,11 +402,11 @@ def test_an_edited_artifact_kept_out_of_git_is_left_and_named(tmp_path: Path) ->
         tmp_path,
         document=f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n'
         '[project]\nname = "widget"\n\n'
-        '[artifacts]\nlocal = ["roadmap"]\n\n[ci]\nmode = "none"\n',
+        '[artifacts]\nlocal = ["roadmap"]\n',
     )
     local = root / ".stayfixed" / "local" / "artifacts" / "docs" / "roadmap.md"
     local.write_text(local.read_text(encoding="utf-8") + "\nprivate plans\n", encoding="utf-8")
-    report = _upgrade(root, tmp_path, NO_TAG)
+    report = _upgrade(root, tmp_path)
     verbs = {a.artifact_id: a.verb for a in report.footprint.actions}
     assert verbs["roadmap"] is Verb.SKIP_MODIFIED
     assert "private plans" in local.read_text(encoding="utf-8")
@@ -672,10 +423,10 @@ def test_an_unedited_artifact_kept_out_of_git_follows_a_template_the_release_cha
     root = initialised(
         tmp_path,
         document=f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n'
-        '\n[artifacts]\nlocal = ["documentation-policy"]\n\n[ci]\nmode = "none"\n',
+        '\n[artifacts]\nlocal = ["documentation-policy"]\n',
     )
     newer()
-    report = _upgrade(root, tmp_path, NO_TAG)
+    report = _upgrade(root, tmp_path)
     verbs = {a.artifact_id: (a.verb, a.reason) for a in report.footprint.actions}
     assert verbs["documentation-policy"] == (Verb.UPDATE, "refreshed")
     local = root / ".stayfixed" / "local" / "artifacts" / "docs" / "architecture"
@@ -701,7 +452,7 @@ def test_a_ledger_entry_under_one_id_never_removes_another_artifact_s_copy_kept_
     root = initialised(
         tmp_path,
         document=f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n'
-        '\n[artifacts]\nlocal = ["claude-md"]\n\n[ci]\nmode = "none"\n',
+        '\n[artifacts]\nlocal = ["claude-md"]\n',
     )
     copy = ".stayfixed/local/artifacts/CLAUDE.md"
     assert (root / copy).is_file()
@@ -711,7 +462,7 @@ def test_a_ledger_entry_under_one_id_never_removes_another_artifact_s_copy_kept_
     )
     before = snapshot(root)
     for dry_run in (True, False):
-        report = _upgrade(root, tmp_path, NO_TAG, dry_run=dry_run)
+        report = _upgrade(root, tmp_path, dry_run=dry_run)
         assert copy not in {a.target for a in report.footprint.actions}
         assert_snapshot_unchanged(root, before)
 
@@ -751,7 +502,7 @@ def test_a_ledger_entry_at_a_case_variant_of_another_artifact_s_copy_reaches_not
     root = initialised(
         tmp_path,
         document=f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n'
-        f'\n[artifacts]\nlocal = ["{local}"]\n\n[ci]\nmode = "none"\n',
+        f'\n[artifacts]\nlocal = ["{local}"]\n',
     )
     exact = {
         "claude-md": f"{KEPT}/CLAUDE.md",
@@ -765,7 +516,7 @@ def test_a_ledger_entry_at_a_case_variant_of_another_artifact_s_copy_reaches_not
     )
     before = snapshot(root)
     for dry_run in (True, False):
-        report = _upgrade(root, tmp_path, NO_TAG, dry_run=dry_run)
+        report = _upgrade(root, tmp_path, dry_run=dry_run)
         assert variant not in {a.target for a in report.footprint.actions}
         assert_snapshot_unchanged(root, before)
     assert (root / exact).read_text(encoding="utf-8") == text
@@ -779,7 +530,7 @@ def test_forcing_a_left_copy_away_keeps_the_committed_file_recorded(tmp_path: Pa
     root = initialised(
         tmp_path,
         document=f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n'
-        '\n[artifacts]\nlocal = ["roadmap"]\n\n[ci]\nmode = "none"\n',
+        '\n[artifacts]\nlocal = ["roadmap"]\n',
     )
     copy = ".stayfixed/local/artifacts/docs/roadmap.md"
     (root / copy).write_text("private plans\n", encoding="utf-8")
@@ -788,9 +539,9 @@ def test_forcing_a_left_copy_away_keeps_the_committed_file_recorded(tmp_path: Pa
         config.read_text(encoding="utf-8").replace('local = ["roadmap"]', "local = []"),
         encoding="utf-8",
     )
-    _upgrade(root, tmp_path, NO_TAG)
+    _upgrade(root, tmp_path)
     recorded = Manifest.read(root).get("roadmap")
     assert recorded is not None and recorded.target == "docs/roadmap.md"
-    _upgrade(root, tmp_path, NO_TAG, force=(copy,))
+    _upgrade(root, tmp_path, force=(copy,))
     assert not (root / copy).exists()
     assert Manifest.read(root).get("roadmap") == recorded

@@ -10,18 +10,8 @@ under `once` and `scaffold`, so the two cannot disagree.
 
 That is safe on the repository-bytes rule because `render_report` bounds every target it
 prints: one outside `PATH_VALUE`, such as a target a committed manifest recorded, prints as its
-artifact id. The reason beside it is the engine's own fixed vocabulary. The CI line is one of
-this area's fixed sentences, or a tag and a commit the *release* area resolved from the public
-repository's own tags. The project's name and its `[ci]` values reach none of them.
-
-**The workflow is claimed only when nothing skipped it, and the ref it names is the one on
-disk.** `_ci` reaches its branch-grammar check *after* the pin has resolved, so a repository with
-a resolved tag and a `gate_branch` outside the grammar has a pin and no workflow; keying the CI
-line on the pin told that repository `CI: <tag>@<sha>` while `skipped["ci-workflow"]` said the
-opposite in `--json`. The key in `skipped` is the authority — `_ci` returns a template or a
-reason and never both — and `report.ref` is the second half: on the adoption path the workflow
-pins the ref `stayfixed.toml` already carried rather than one this run resolved, so the line says
-that instead of naming a release the file does not record.
+artifact id. The reason beside it is the engine's own fixed vocabulary. The project's name
+reaches none of them.
 
 **Exit 1 on a refusal, not 2.** A refused artifact is a finding the report names, and `apply`
 was never reached: nothing was written, there is no manifest, and re-running after the fix is
@@ -44,17 +34,7 @@ from stayfixed.scaffold import Plan, Verb, printable, render_report, unlinks
 
 if TYPE_CHECKING:
     from stayfixed.project.init import Given
-    from stayfixed.release.api import Pin
 
-# What the flag does and what it does not: it sets `[ci] mode` in the document this run builds,
-# and on the adoption path that document is a `Kind.ONCE` artifact already on disk — reported
-# `skip_modified`, and given at most a missing `[stayfixed] version` — so the file goes on saying
-# `reusable` and the flag is spent on this run alone. Saying "sets [ci] mode" flat sent an
-# operator looking for a key nothing wrote.
-NO_CI_HELP = (
-    'write no CI workflow and ask no remote for a pin; sets [ci] mode = "none" in the document '
-    "this run builds, which on a repository that already has a stayfixed.toml is this run only"
-)
 # `(refused, dry_run)` -> the opening line. Three states and not two: a refused run wrote
 # nothing, and it used to open `initialised:` above a REFUSED section saying the opposite. That
 # was invisible while the summary was four count lines; printing the report is what made the
@@ -88,7 +68,7 @@ QUESTIONS_HELP = (
     "print the defaults init would take, where each came from and the flag that changes it; "
     "under --json, as a JSON Schema. Writes nothing"
 )
-# `--yes` is excluded by the parser. `--dry-run`, `--no-ci` and the answer flags are flags `--yes`
+# `--yes` is excluded by the parser. `--dry-run` and the answer flags are flags `--yes`
 # takes, so one mutually exclusive group cannot exclude them as well, and this refusal is that
 # half of the rule.
 QUESTIONS_ALONE = (
@@ -115,11 +95,6 @@ def _given(args: argparse.Namespace) -> Given:
         attribution_check=args.attribution_check,
         types=listed(args.commit_type),
     )
-
-
-def _pin(pin: Pin | None) -> dict[str, str] | None:
-    """The resolved pin as `--json` prints it, for `init` and `upgrade` alike."""
-    return None if pin is None else {"tag": pin.tag, "sha": pin.sha}
 
 
 def run_questions(args: argparse.Namespace) -> Result:
@@ -149,11 +124,9 @@ def _picked_line(key: str, value: object) -> str:
 def run_init(args: argparse.Namespace) -> Result:
     from stayfixed.project.init import NO_ANSWERS, init
     from stayfixed.project.questions import picked
-    from stayfixed.project.templates import CI_ARTIFACT
-    from stayfixed.runner import subprocess_runner
 
     if args.questions:
-        if args.dry_run or not args.ci or _given(args) != NO_ANSWERS:
+        if args.dry_run or _given(args) != NO_ANSWERS:
             raise Refusal(QUESTIONS_ALONE)
         return run_questions(args)
     root = Path(args.root).resolve()
@@ -161,32 +134,12 @@ def run_init(args: argparse.Namespace) -> Result:
     report = init(
         root,
         machine=machine,
-        runner=subprocess_runner(),
         yes=args.yes,
         dry_run=args.dry_run,
-        ci=args.ci,
         given=_given(args),
         owner=command_owner(machine),
     )
     once, footprint = render_report(report.once), render_report(report.footprint)
-    pin = report.resolution.pin
-    skipped = report.skipped.get(CI_ARTIFACT)
-    # `skipped is not None` is the whole condition, and the `or not report.ref` that stood
-    # beside it and the `or 'no workflow was planned'` under it were both unreachable.
-    # `templates._ci` returns a rendered workflow only for a non-empty `[ci] ref` that matches
-    # `CI_REF`, and returns a non-empty reason in every other arm; `init` then derives
-    # `report.ref` as `"" if CI_ARTIFACT in passes.skipped else config.ci.ref`. So a run
-    # with no skip has a ref, the fallback string could never be formatted, and the disjunct
-    # could never be the reason this branch was taken. `init`'s own comment calls the two "one
-    # value by construction" and `doctor`'s `ci-ref` row enforces it; an unreachable arm that
-    # would print a sentence nobody can provoke is the same species as a vacuous assertion,
-    # and this repository deletes those.
-    if skipped is not None:
-        ci_line = f"CI: skipped — {skipped}"
-    elif pin is not None and pin.sha == report.ref:
-        ci_line = f"CI: {pin.tag}@{pin.sha}"
-    else:
-        ci_line = "CI: the workflow pins the [ci] ref this repository already recorded"
     refused = report.refused
     lines = [
         HEADINGS[(refused, report.dry_run)],
@@ -196,8 +149,6 @@ def run_init(args: argparse.Namespace) -> Result:
         "",
         "scaffold:",
         footprint,
-        "",
-        ci_line,
     ]
     chosen = picked(report.config) if report.config is not None else {}
     if chosen:
@@ -219,10 +170,7 @@ def run_init(args: argparse.Namespace) -> Result:
         "scaffold": footprint,
         "writes": [*report.once.writes, *report.footprint.writes],
         "skipped": dict(report.skipped),
-        "pin": _pin(pin),
-        "asked": report.resolution.asked,
         "note": report.note,
-        "ref": report.ref,
         "unknown_harnesses": report.unknown_harnesses,
         "head_note": report.head_note,
         "stamped": report.stamped,
@@ -234,7 +182,7 @@ def run_init(args: argparse.Namespace) -> Result:
 # planned it.
 UPGRADE_HEADINGS = {**HEADINGS, (False, True): "would upgrade:", (False, False): "upgraded:"}
 # What `--force` reaches is what `scaffold.plan` lets it reach: a file you edited, a whole file
-# stayfixed never wrote at a path it writes (a caller workflow written by hand), and a copy under
+# stayfixed never wrote at a path it writes, and a copy under
 # `.stayfixed/local/artifacts/` that changed since stayfixed wrote it or that nothing records.
 FORCE_HELP = (
     "overwrite or remove a file the report lists skip_modified because you edited it, stayfixed "
@@ -248,14 +196,6 @@ FORCE_OUTSIDE = "--force takes a path relative to --root, with no '..' component
 FORCE_UNMATCHED = (
     "note: {count} --force path(s) named no file this run had to judge, so they forced nothing; "
     "a path is compared exactly, relative to --root"
-)
-# The `upgrade` CI line when a workflow was rendered. Keyed on what the plan does with it, not on
-# the absence of a skip reason: a workflow the report lists `skip_modified` (edited by hand, or
-# never stayfixed's) or refuses is left as it is, and may pin anything at all.
-CI_PINNED = "CI: the workflow pins [ci] ref"
-CI_LEFT = (
-    "CI: the workflow was left as it is, so what it pins is not this run's to say; the "
-    "scaffold report names it and why"
 )
 # A count: the ids of records this build does not produce are repository-authored.
 ORPHANS = (
@@ -285,7 +225,6 @@ def _unmatched(force: tuple[str, ...], *plans: Plan) -> int:
 
 
 def run_upgrade(args: argparse.Namespace) -> Result:
-    from stayfixed.project.templates import CI_ARTIFACT
     from stayfixed.project.upgrade import upgrade
     from stayfixed.runner import subprocess_runner
 
@@ -308,13 +247,6 @@ def run_upgrade(args: argparse.Namespace) -> Result:
         "scaffold:",
         shown,
     ]
-    skipped = report.skipped.get(CI_ARTIFACT)
-    if skipped:
-        lines.append(f"CI: skipped — {skipped}")
-    else:
-        lines.append(CI_PINNED if report.workflow_current else CI_LEFT)
-    if report.held:
-        lines.append(f"note: {report.held}")
     if report.orphans:
         lines.append(ORPHANS.format(count=report.orphans))
     if unmatched := _unmatched(force, report.footprint):
@@ -324,13 +256,10 @@ def run_upgrade(args: argparse.Namespace) -> Result:
         "moved": [
             {"key": ".".join(m.key), "before": m.before, "after": m.after} for m in report.moved
         ],
-        "held": report.held,
         "scaffold": shown,
         "writes": report.footprint.writes,
         "skipped": dict(report.skipped),
         "orphans": report.orphans,
-        "pin": _pin(report.resolution.pin),
-        "asked": report.resolution.asked,
     }
     return Result("\n".join(lines), data, exit_code=1 if refused else 0)
 
@@ -496,9 +425,8 @@ def register(groups: SubParsers) -> None:
     asking.add_argument("--yes", action="store_true", help=YES_HELP)
     asking.add_argument("--questions", action="store_true", help=QUESTIONS_HELP)
     parser.add_argument("--dry-run", action="store_true", help=DRY_RUN_HELP)
-    parser.add_argument("--no-ci", dest="ci", action="store_false", help=NO_CI_HELP)
     _answers(parser)
-    parser.set_defaults(func=run_init, ci=True)
+    parser.set_defaults(func=run_init)
     upgrade = common_flags(groups.add_parser("upgrade", help="refresh this repository's scaffold"))
     _judging(upgrade).set_defaults(func=run_upgrade)
     uninstall = common_flags(

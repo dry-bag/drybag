@@ -36,10 +36,7 @@ def test_a_launched_command_gets_no_stdin_and_no_credential_prompt(tmp_path: Pat
     # on an inherited stdin is invisible and blocks for the whole of NETWORK_TIMEOUT_SECONDS.
     # What makes that a finding rather than an annoyance is which callers reach the network
     # through this seam: `setup --overlay create:` launches `gh` with the machine owner's own
-    # authentication, and `release.pins.released` runs `git ls-remote` for `stayfixed init` and
-    # for `doctor`'s `ci-ref` row — a write meant to be non-interactive and a read-only
-    # diagnostic. (This used to cite that row's URL as repository-authored; it is
-    # `stayfixed.REPOSITORY_URL`, a module constant. See `stayfixed.runner._ENV_FORCE`.)
+    # authentication, a write meant to be non-interactive. See `stayfixed.runner._ENV_FORCE`.
     #
     # The pty is the point of the case: without it this process's own stdin is already not a
     # terminal under pytest, and the assertion would pass with the guard deleted.
@@ -109,10 +106,8 @@ def test_a_command_that_hangs_is_not_reported_as_one_that_is_missing(tmp_path: P
 def test_a_caller_that_asks_for_a_narrower_bound_gets_it(tmp_path: Path) -> None:
     """`NETWORK_TIMEOUT_SECONDS` is right for what it was written for and wrong for a diagnostic.
 
-    Five minutes bounds `gh repo create --clone` waiting on GitHub and the clone behind it. It
-    also bounded `doctor`'s `ci-ref` row, which reads one tag listing on a command documented as
-    one line of output — and `stayfixed init` recording a `[ci] ref` is what made that block
-    reachable at all. The bound belongs to the caller that knows how big its question is, so it
+    Five minutes bounds `gh repo create --clone` waiting on GitHub and the clone behind it. The
+    bound belongs to the caller that knows how big its question is, so it
     is a keyword on the factory rather than a second module constant: the protocol is untouched
     and no stub in the suite grows a parameter it would ignore.
 

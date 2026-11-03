@@ -809,7 +809,7 @@ _TOML_HEADER = re.compile(r"^\[([a-z_]+)\]", re.MULTILINE)
 
 
 def test_the_configuration_block_shows_every_section_the_loader_accepts() -> None:
-    # Mutation: drop the `[ci]` header from `docs/cli.md`'s block -> reddens naming it.
+    # Mutation: drop the `[artifacts]` header from `docs/cli.md`'s block -> reddens naming it.
     from stayfixed.config.loader import SECTIONS
 
     section = _CONFIGURATION_BLOCK.search(CLI_REFERENCE.read_text(encoding="utf-8"))
@@ -819,18 +819,6 @@ def test_the_configuration_block_shows_every_section_the_loader_accepts() -> Non
     shown = _TOML_HEADER.findall(section.group(1))
     assert len(shown) >= len(SECTIONS), shown
     assert set(shown) == set(SECTIONS), (sorted(set(shown)), sorted(SECTIONS))
-
-
-def test_the_configuration_block_lists_the_built_in_gates_in_their_one_order() -> None:
-    # The reference is prose and cannot import the tuple, so its one spelling of the built-in
-    # gates is pinned here. Mutation: reorder `builtin` in `docs/cli.md`'s block and this
-    # reddens.
-    from stayfixed.config.schema import BUILTIN_GATES
-
-    section = _CONFIGURATION_BLOCK.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md's `## Configuration` has no ```toml block"
-    listed = ", ".join(f'"{name}"' for name in BUILTIN_GATES)
-    assert f"\nbuiltin = [{listed}]" in section.group(1)
 
 
 # `plan check`'s rule count, stated in the reference and emitted by `docs/plans.py`. The
@@ -853,11 +841,11 @@ def test_the_plan_rule_count_is_the_number_of_rules_plan_check_emits() -> None:
     assert _NUMBER_WORDS.get(match.group(1).lower()) == len(codes), (match.group(1), sorted(codes))
 
 
-# The `doctor` check table: fourteen rows, each spelling a check name, and the one
+# The `doctor` check table: thirteen rows, each spelling a check name, and the one
 # code-restating table in this document the branch that built this binding mechanism did not
 # bind. `tests/doctor/test_checks.py` pins each name as a literal exactly once *inside* the module
 # that registers it — `checks.py` or an area's `doctor.py` — so the document's copy is a *second*
-# spelling of each of the fourteen — one that
+# spelling of each of the thirteen — one that
 # guard cannot see, and a renamed check would leave this page green and wrong. That the unbound
 # ones drift is not a hypothesis: `len(OVERLAY_FILES)` was sixteen while four comments one
 # directory over still said fourteen.

@@ -266,8 +266,8 @@ after = "    return action.verb is Verb.REMOVE"
 reddens = ["tests/project/test_uninstall.py::test_a_remainder_kept_out_of_git_is_counted_before_anything_is_written"]
 
 # The whole-file rule is "differs: skip it and name it, and `--force <path>` overwrites it". The
-# branch for a file with no record ignored `force`, so a caller workflow a person wrote held
-# `upgrade`'s version and pin back for ever, under a note whose one remedy did nothing. `forced`
+# branch for a file with no record ignored `force`, so a file a person wrote at a path stayfixed
+# writes could never be taken, under a note whose one remedy did nothing. `forced`
 # is the caller's argv, compared with the target `plan` derived and contained, so no committed
 # file can force anything.
 [[mutation]]
@@ -277,7 +277,6 @@ before = "                and template.kind not in _IN_FILE\n                and
 after = "                and template.kind not in _IN_FILE\n"
 reddens = [
   "tests/scaffold/test_engine.py::test_force_takes_a_whole_file_stayfixed_did_not_write_and_records_it",
-  "tests/project/test_upgrade.py::test_a_workflow_stayfixed_did_not_write_holds_both_keys_until_it_is_forced",
 ]
 
 # `LocalDigests` records what stayfixed last wrote under `.stayfixed/local/artifacts/`, which the
@@ -493,7 +492,6 @@ after = """        if False:
 reddens = [
   "tests/scaffold/test_engine.py::test_a_retired_record_whose_file_is_already_gone_is_dropped[directory-there]",
   "tests/scaffold/test_engine.py::test_a_retired_record_whose_file_is_already_gone_is_dropped[directory-gone]",
-  "tests/project/test_upgrade.py::test_switching_ci_off_after_deleting_the_workflow_drops_its_record",
 ]
 
 # Walking to a removal whose file was already gone failed, as a refusal, when its directory was

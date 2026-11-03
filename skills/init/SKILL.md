@@ -13,7 +13,7 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 
 1. Run `stayfixed init --questions --json`. It refuses a repository that already has
    `.stayfixed/manifest.json` (offer `stayfixed upgrade`) or a `stayfixed.toml` (see the first
-   rule). Otherwise `questions.properties` holds ten questions, asked in the order
+   rule). Otherwise `questions.properties` holds nine questions, asked in the order
    `questions.required` lists them, each with its `default` (what `stayfixed init --yes` alone
    would write), its `x-stayfixed-source`, its `x-stayfixed-flag` and its
    `x-stayfixed-tradeoff`: four lines, what the answer gives (`get`), what it gives up
@@ -26,11 +26,11 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 4. Ask each remaining question in order, one at a time: its options, the default marked, and its
    four lines as written. If the user picks the overlay and its option says the setup skill
    creates one next, ask one follow-up: set one up now, or keep notes on this machine until
-   then, which is the answer `local-only`. A `no` to CI is the flag `--no-ci`.
+   then, which is the answer `local-only`.
 5. Build the command: `--yes --dry-run`, then each answer that differs from its default as its
    `x-stayfixed-flag`, once per item for a list, such as
    `stayfixed init --yes --dry-run --name widget --local roadmap-history`. Leave the plugins out:
-   they are not `init`'s. Run it and relay both reports, the `CI:` line, the `picked:` list
+   they are not `init`'s. Run it and relay both reports, the `picked:` list
    and every `note:` line. Ask for a final yes. **Silence, a timeout or an empty answer is a
    no.**
 6. On a yes, run the same command without `--dry-run`, and relay the real run the same way.
@@ -52,8 +52,6 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
   Never delete the manifest to get past it.
 - **Nothing is written when anything is refused.** Relay every `REFUSED` line, fix the cause
   with the user, and run again.
-- **A `CI:` line saying the workflow was skipped is the whole answer about CI.** Before the
-  first stayfixed release there is no commit to pin, and the sentence says so.
-- **Never hand-edit `[stayfixed] version`, `[ci] ref` or `.stayfixed/manifest.json`.** They are
-  the tool's: `stayfixed upgrade` moves the version and the ref.
+- **Never hand-edit `[stayfixed] version` or `.stayfixed/manifest.json`.** They are
+  the tool's: `stayfixed upgrade` moves the version.
 - **The undo is `stayfixed uninstall`.** Run `stayfixed uninstall --dry-run` first.

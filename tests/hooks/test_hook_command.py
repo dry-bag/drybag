@@ -37,7 +37,6 @@ needs_git = pytest.mark.skipif(
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]
@@ -124,13 +123,13 @@ def test_malformed_stdin_degrades_open(tmp_path: Path, event: str) -> None:
 
 
 def test_a_broken_repository_config_on_pre_tool_use_is_judged_not_refused(tmp_path: Path) -> None:
-    # A `[ci]` that is not a table refused every tool call. It is one key the session puts back
+    # A section that is not a table refused every tool call. It is one key the session puts back
     # to the preset's, and the guard judges the call as it would in any repository: `ls` goes
     # through, a backgrounded `sleep` is hinted at for what it is. Mutation (`mutations/`'s
     # "session_config answers no configuration for a file that loads with notes" reddens the
     # session's own test; this one holds the hook's verdict on both sides).
     (tmp_path / "stayfixed.toml").write_text(
-        'ci = "not-a-table"\n\n[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "demo"\n',
+        'artifacts = "not-a-table"\n\n[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "demo"\n',
         encoding="utf-8",
     )
     completed = hook("PreToolUse", json.dumps(TOOL_CALL), tmp_path)

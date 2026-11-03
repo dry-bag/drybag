@@ -50,12 +50,12 @@ Three things hold everywhere:
 - [`stayfixed bugs new TITLE --severity S --area A [--source S] [--related ID …] [--no-fetch]`](#stayfixed-bugs-new-title---severity-s---area-a---source-s---related-id----no-fetch)
 - [`stayfixed bugs index [--check]`](#stayfixed-bugs-index---check)
 - [`stayfixed bugs check [--base REF]`](#stayfixed-bugs-check---base-ref)
-- [`stayfixed bugs regressions`](#stayfixed-bugs-regressions)
+- [`stayfixed bugs regressions [--timeout SECONDS]`](#stayfixed-bugs-regressions---timeout-seconds)
 - [`stayfixed bugs renumber OLD NEW`](#stayfixed-bugs-renumber-old-new)
 - [`stayfixed docs check [--budgets] [--links]`](#stayfixed-docs-check---budgets---links)
 - [`stayfixed docs trail [--check]`](#stayfixed-docs-trail---check)
 - [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
-- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--commit-type TYPE …] [--local ID …] [--no-ci] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----profile-name---memory-mode-mode---attribution-check---commit-type-type----local-id----no-ci---root-path---machine-path)
+- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--commit-type TYPE …] [--local ID …] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----profile-name---memory-mode-mode---attribution-check---commit-type-type----local-id----root-path---machine-path)
 - [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
 - [`stayfixed upgrade [--dry-run] [--force PATH]… [--root PATH] [--machine PATH]`](#stayfixed-upgrade---dry-run---force-path---root-path---machine-path)
 - [`stayfixed uninstall [--dry-run] [--force PATH]… [--root PATH] [--machine PATH]`](#stayfixed-uninstall---dry-run---force-path---root-path---machine-path)
@@ -846,7 +846,7 @@ Spaces may surround each item and each comma; a tab may not. `regression:`, `reg
 as it does an empty item and an item holding a control character below U+0020, or DEL.
 `bugs renumber` leaves a `regression` exactly as written, while its sweep renames a test whose name
 carries the old identifier in a scanned file, so it names each entry whose argv still names the old
-identifier as one that may need editing by hand. [`bugs regressions`](#stayfixed-bugs-regressions)
+identifier as one that may need editing by hand. [`bugs regressions`](#stayfixed-bugs-regressions---timeout-seconds)
 runs it once the entry is `fixed`. `bugs new` does not write one yet.
 
 **Writes** the entry file (creating `<paths.bugs>` for the first entry) and `<paths.bug_index>`;
@@ -944,12 +944,13 @@ naming either, still names the renumber.
 
 **Writes** nothing.
 
-## `stayfixed bugs regressions`
+## `stayfixed bugs regressions [--timeout SECONDS]`
 
 Run the `regression` of every entry whose `status` is `fixed`, in identifier order, each as
 [`stayfixed prove`](#stayfixed-prove---timeout-seconds---junit-path----command-) runs a command
 and judged as it judges one: from the project root, under the caller's environment, with
-`[gates] custom_timeout_seconds` as each run's bound. An entry of any other status is not run,
+`--timeout` as each run's bound, a whole number of seconds above 0 (default `600`, ten minutes);
+the parser refuses any other value (exit `2`). An entry of any other status is not run,
 whatever it carries: a `rejected` one has no fix to regress, a `partial` one is still open and a
 `void` one is a renumber's pointer. An argv no runner adapter recognises is `not proven`, and
 nothing is started for it.
@@ -1104,7 +1105,7 @@ lints it.
 
 ---
 
-## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--commit-type TYPE …] [--local ID …] [--no-ci] [--root PATH] [--machine PATH]`
+## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--commit-type TYPE …] [--local ID …] [--root PATH] [--machine PATH]`
 
 Writes a repository's stayfixed scaffold, once. It is the only command that creates the
 documents every other command reads, and the only one that writes `stayfixed.toml`.
@@ -1114,8 +1115,7 @@ Without it nothing is written, and the refusal (`2`) names `--questions`.
 
 Each answer flag replaces one default and writes one key:
 - `--name` writes `[project] name`;
-- `--base-branch` writes `[project] base_branch` and `release_branch`; `[ci] gate_branch`,
-  left out, is that branch, so the workflow gates the branch pull requests merge into;
+- `--base-branch` writes `[project] base_branch` and `release_branch`;
 - `--agent`, once per harness, writes `[stayfixed] agents`;
 - `--profile` writes `[stayfixed] profile`, an empty value meaning none;
 - `--memory-mode` writes `[memory] mode`;
@@ -1124,12 +1124,12 @@ Each answer flag replaces one default and writes one key:
 - `--commit-type`, once per type, writes `[commit_messages] types`, each lowercase ASCII letters;
 - `--local`, once per file, writes `[artifacts] local`.
 
-`--no-ci` answers the CI question (below). The recommended plugins are not `init`'s to install:
+The recommended plugins are not `init`'s to install:
 `init --questions` asks about them, and the answer is `stayfixed setup`'s.
 
-After the CI line the run prints `picked:`, one line per question in the order
+After both reports the run prints `picked:`, one line per question in the order
 `init --questions` asks them, with the value this run took: the name, the base branch, the memory
-mode, the profile, the CI mode, the attribution check (`on` or `off`), the commit types, the
+mode, the profile, the attribution check (`on` or `off`), the commit types, the
 files kept out of git, the agents stayfixed serves among those listed, and `plugins: none`, since
 `init` installs none. Taking every default gives the attribution check `off`, the preset's commit
 types and no plugin. A value a `stayfixed.toml` you wrote holds outside the plain-path grammar
@@ -1139,7 +1139,7 @@ The parser refuses a value outside its grammar or its choices (`2`), and it refu
 a branch by naming the rule, never the value. A branch is a name git accepts as one, written in
 letters, digits, `.`, `_`, `-` and `/` and led by a letter or digit: no `..`, `//`, component
 starting with `.` or ending in `.lock`, no trailing `/` or `.`, and not `HEAD`. The same
-grammar holds `[ci] gate_branch` and a detected base branch. Answer flags reach only a
+grammar holds a detected base branch. Answer flags reach only a
 `stayfixed.toml` this run creates. Over one the repository already has, they are refused
 (`2`), because that file is the answer. Passing a default as its flag loads as the same
 configuration as not passing it.
@@ -1156,8 +1156,7 @@ When nothing answers, `init` detects:
   where the remote is `origin`: the branch checked out there is typically the feature branch the
   adoption is made on. Where git cannot list the remotes, it gives `main` with a `note:` saying
   so. Only with no remote at all is it the branch checked out, when that is a plain branch name,
-  with a `note:` when it is not `main`, else `main`. The workflow gates the same branch, since
-  `[ci] gate_branch` left out is the base branch;
+  with a `note:` when it is not `main`, else `main`;
 - the agent surfaces from which of `.claude/` and `.codex/` the repository carries, both when
   it carries neither;
 - `[stayfixed] profile` from the first shipped profile whose markers sit at the root
@@ -1171,7 +1170,7 @@ it: one with no `[project] name` fails (`1`) with the loader's own sentence, wha
 repository suggests.
 
 **A `stayfixed.toml` you wrote is the answer sheet, not an obstacle.** Every key it carries is
-read and kept: the name, the paths, the memory mode, the budgets, the gates. The file itself
+read and kept: the name, the paths, the memory mode, the budgets. The file itself
 is not replaced. It is a create-once artifact, so a repository that already has one is
 reported `skip_modified` ("create-once, and the file is already there").
 
@@ -1181,13 +1180,12 @@ says so in a `note:` line.
 
 The file is then checked as it will be on disk, that key included, before anything is
 written. One the next command could not load fails (`1`) with the loader's own sentence, and
-nothing is written: no `[project] name`, a `[stayfixed] state` line (a key stayfixed no longer
-has, which the loader refuses as any unknown key), or an `enforced` list naming a gate the project
-does not run, or one gate twice.
+nothing is written: no `[project] name`, or a `[stayfixed] state` or `enforced` line (keys
+stayfixed no longer has, which the loader refuses as any unknown key).
 
 The paths it declares are where the scaffold lands. A repository with no `stayfixed.toml` gets
-one written from the detected values and your answers, headed by a comment naming the three
-keys that are stayfixed's to rewrite: `[stayfixed] version` and `enforced`, and `[ci] ref`. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
+one written from the detected values and your answers, headed by a comment naming the one key
+that is stayfixed's to rewrite, `[stayfixed] version`. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
 (`1`) naming the file. A repository that already carries `.stayfixed/manifest.json` is refused
 (`2`): re-running `init` is `stayfixed upgrade`. `stayfixed uninstall` later keeps a
 `stayfixed.toml` you wrote, the version line included.
@@ -1218,7 +1216,6 @@ either way.
 | `specs-keep`, `plans-keep` | scaffold | template | `<specs>/.gitkeep`, `<plans>/.gitkeep` | nothing, so the trail lists no documents |
 | `gitignore` | scaffold | managed region | `.gitignore` | `.stayfixed/local/` and `.stayfixed/assessment.json` |
 | `agents-md` | scaffold | managed region | `[paths] agents_md` | which paths this repository's stayfixed uses |
-| `ci-workflow` | scaffold | template | `.github/workflows/stayfixed.yml` | the pinned call to the reusable gate |
 | `profile-rules` | scaffold | template | `<stayfixed>/rules/<profile>.md` | the profile's rules, the one copy a project edits; only with `[stayfixed] profile` set |
 | `claude-rules` | scaffold | template | `.claude/rules/stayfixed-<profile>.md` | a `paths:`-scoped pointer at `profile-rules` for Claude Code; only when `[stayfixed] agents` lists `claude` |
 
@@ -1235,51 +1232,14 @@ still passes. The others are not offered:
   absent, and a trail kept out of git would be silently ignored.
 - `specs-keep` and `plans-keep` have no purpose outside git.
 - `config` and `gitignore` work only at the root.
-- `CLAUDE.md`, the `AGENTS.md` skeleton and its region, the workflow, and the profile's rules
+- `CLAUDE.md`, the `AGENTS.md` skeleton and its region, and the profile's rules
   and Claude's pointer are read where they are committed.
 
 A `stayfixed.toml` you write may still list any id but `config`, `gitignore` and the profile's
 own. `--local` offers only these four.
 
-**The workflow pins what `[ci] ref` says, and nothing else.** The rendered file calls
-stayfixed's gate workflow at the ref `stayfixed.toml` carries *after this
-run*, and those two are one value by construction — which is the invariant `stayfixed doctor`'s
-`ci-ref` row enforces from the other side ("the workflow pins a different ref from `[ci] ref`,
-so the gate that runs is not the one recorded"). On a repository this run creates the document
-for, the ref is the commit of the stayfixed release running, asked of the public repository's own
-`v*` tags and written into `[ci] ref` beside the workflow. On a repository that already had a
-`stayfixed.toml`, that document's `[ci] ref` is not rewritten — all `init` may add there is a
-missing `[stayfixed] version`, with its `[stayfixed]` header when the file has none — so the workflow
-pins the ref **it** records, and `doctor` judges whether that is a released commit, which is its
-job.
-
-Seven states cost the artifact rather than the run, each reported under `skipped` with one
-sentence: `[ci] mode` is `none`; `[ci] mode` is `uvx`, whose form of the gate has not shipped; the
-public repository could not be asked for its tags; no released tag matches the stayfixed running,
-which is every repository's state before the first release; the `stayfixed.toml` this repository
-already had records no `[ci] ref`, so there is nothing a workflow could pin that anything records;
-`[ci] ref` is not a full-length commit sha, which is the only immutable form and the only one
-`init` renders — the mutable `v1` alias, from `1.0.0` on, is a file you write by hand, and until
-then a `0.x` project pins the commit; and `[ci] gate_branch` is not a plain branch name. `--no-ci`
-is the first of those on purpose: it puts `[ci] mode = "none"` into the document this run builds
-and asks no remote anything. **On a repository that already has a `stayfixed.toml` the flag governs
-this run and nothing more** — that document is a create-once artifact, reported `skip_modified`, so
-the file still says whatever it said and the next `init` would ask the remote again. Writing `none`
-there is yours to do.
-
-**The two states about the remote are reported only on a run that creates the document.** On the
-adoption path the answer is the fifth one whatever the remote said, because it is the whole
-reason: a pin this run resolved would be written into a create-once file that is already there,
-so nothing would record it. Reporting "run `stayfixed init --yes` again with the network
-reachable" there would send you back to a command that cannot help — by the time you read it,
-`.stayfixed/manifest.json` exists and `init` refuses to run again at all. `stayfixed upgrade` is
-the command that can: `[ci] ref` is one of stayfixed's keys in any `stayfixed.toml`, so it records
-a released commit there in place and renders the workflow around it. On a run that created the
-document, the unreachable remote's sentence names both remedies: `stayfixed init --yes` with the
-network reachable while nothing is written yet, and `stayfixed upgrade` once it is.
-
 **Reads** `stayfixed.toml` when there is one, `.stayfixed/manifest.json`, `git` for the name
-and the base branch and for the public repository's tags, which harness directories the root
+and the base branch, which harness directories the root
 carries (`.claude/`, `.codex/`), each shipped profile's marker files at the root, every file
 an artifact targets, and `git check-ignore` for each existing file a write targets at a place
 a `[paths]` value chose.
@@ -1293,7 +1253,6 @@ pass through a symlink:
   Claude pointer only when a profile is set and `[stayfixed] agents` lists `claude`), each at its
   place in the table, except that a document `[artifacts] local` lists is written under
   `.stayfixed/local/artifacts/` at that place instead;
-- `.github/workflows/stayfixed.yml`, where a ref is recorded;
 - `.stayfixed/manifest.json`;
 - `.stayfixed/local/artifacts.json`, when `[artifacts] local` lists anything.
 
@@ -1319,9 +1278,7 @@ existing file a `[paths]` value chose, which the refusal names, or one inside a 
 `git` cannot say whether it is ignored (see `upgrade`'s boundary).
 
 `--json` carries `dry_run`, `adopted`, `once` and `scaffold` (each the plan's own rendered
-report), `writes` (both plans' targets), `skipped`, `pin` (the release this run resolved,
-`{tag, sha}` or `null`), `asked`, `note`, `ref` — what `[ci] ref` says on disk after the run
-and so what the workflow pins, empty when no workflow was planned — `stamped`, whether this
+report), `writes` (both plans' targets), `skipped`, `note`, `stamped`, whether this
 run's plan adds `[stayfixed] version` to a `stayfixed.toml` you wrote — written only by a run that
 is neither a dry run nor refused — `unknown_harnesses`, how many names in `[stayfixed] agents` no
 harness answers to, and `head_note`, the `note:` line that says `main` replaced an
@@ -1335,7 +1292,7 @@ the base branch; empty otherwise. An answered `--base-branch` replaced nothing, 
 
 ## `stayfixed init --questions [--root PATH] [--machine PATH]`
 
-Prints the values `stayfixed init --yes` would take for the ten things a person may answer, where
+Prints the values `stayfixed init --yes` would take for the nine things a person may answer, where
 each came from, and the flag that replaces it: on `init --yes`, but for the recommended plugins,
 which `stayfixed setup` installs on the machine. It writes nothing. The `init` skill asks its
 questions from it, taking every default offered first, and a person reads it to see the defaults
@@ -1350,7 +1307,6 @@ detected:
   project.base_branch: main (origin/HEAD; --base-branch)
   memory.mode: harness (default; --memory-mode)
   stayfixed.profile: python (profile markers; --profile)
-  ci.mode: reusable (the preset's default; --no-ci)
   commit_messages.attribution_check: off (the preset's default; --attribution-check)
   commit_messages.types: feat, fix, build, chore, ci, docs, perf, refactor, revert, style, test (the preset's default; --commit-type)
   artifacts.local: none (the preset's default; --local)
@@ -1368,19 +1324,19 @@ when that names a plain branch under `refs/remotes/origin/`; with no remote at a
 remotes git could not list included, it is the `default`, `main`. The agents come from the `harness
 directories` the root carries; otherwise the `default` is every harness. The profile comes from
 `profile markers`, or there are `no profile markers`. The memory mode is the `default`,
-`harness`, since the preset chooses none; the CI mode, the attribution check (off), the commit
+`harness`, since the preset chooses none; the attribution check (off), the commit
 types and the files kept out of git are `the preset's default`; and the plugins are the `default`,
 none, because a third-party plugin runs in every session and is installed only when named. Each
 default is exactly what `stayfixed init --yes` writes when that question is not answered. `origin/HEAD` goes stale after the remote's default branch is
 renamed, because git does not refresh one it has. That is why its source is printed: you can
 catch it.
 
-`--json` carries `questions`: a JSON Schema object (draft 2020-12) with ten `properties`, and
-`required` naming all ten in the order the `init` skill asks them; read the order there, since
+`--json` carries `questions`: a JSON Schema object (draft 2020-12) with nine `properties`, and
+`required` naming all nine in the order the `init` skill asks them; read the order there, since
 `--json` prints every object's keys sorted, so the properties arrive by name. Each but the last is
 keyed by the
 `stayfixed.toml` key its answer writes: `project.name`, `project.base_branch`, `memory.mode`,
-`stayfixed.profile`, `ci.mode`, `commit_messages.attribution_check`, `commit_messages.types`,
+`stayfixed.profile`, `commit_messages.attribution_check`, `commit_messages.types`,
 `artifacts.local` and `stayfixed.agents`; the last, `plugins`, offers the plugins the preset
 recommends, which `stayfixed setup --plugin` installs. Each property carries four keys: `default`
 (absent for a name that is not derivable), `x-stayfixed-source` (the phrase above),
@@ -1445,33 +1401,12 @@ and skipped the same way when they are not. One whose file is already gone is li
 `remove … (retired, already gone)`: nothing is removed, and its record is dropped, so it is not
 carried into every later run.
 
-**What is rewritten in `stayfixed.toml`, and what is not.** Only the values stayfixed owns:
-`[stayfixed] version` and, under `[ci] mode = "reusable"`, a `[ci] ref` that is a commit sha or
-empty. Every other byte stays where it was — comments, order, blank lines, your keys. A key written
+**What is rewritten in `stayfixed.toml`, and what is not.** Only the value stayfixed owns,
+`[stayfixed] version`. Every other byte stays where it was — comments, order, blank lines, your keys. A key written
 in a shape the editor does not rewrite in place (a dotted key, an inline table, a multi-line value)
 is refused (`2`) naming the key and the line to write by hand, before anything is written. When the
 manifest's `config` record still describes the file, it is re-stamped with the new bytes; when you
 have edited the file, it is not, so `stayfixed.toml` stays yours.
-
-**Version, `[ci] ref` and the workflow's pin move together or not at all.** Under
-`[ci] mode = "reusable"` the workflow pins stayfixed by commit, so `[stayfixed] version`, `[ci] ref`
-and the `uses:` line in `.github/workflows/stayfixed.yml` are one value. When no released commit
-of the stayfixed running is found — before its tag exists, or with the network unreachable — or
-when the workflow would not be rewritten to the new pin, neither key moves: a `note:` line says
-`[stayfixed] version` and `[ci] ref` were left as they are and why, and the rest of the scaffold
-is still refreshed. A workflow you edited by hand, or one stayfixed never wrote, is reported
-`skip_modified` and moves with them only under `--force` with the path the report prints for it.
-When the report refuses the workflow, or the `CI:` line says none was rendered (a `[ci]
-gate_branch` outside the branch-name grammar, say), no flag moves them: the note says to put
-that right and run `stayfixed upgrade` again. The `CI:` line says the workflow pins `[ci] ref` only
-when this run created it, refreshed it or found it current; a workflow the report lists
-`skip_modified` or refuses was left as it is and may pin anything, and the line says so.
-
-**A `[ci] ref` that is not a commit is yours.** The `v1` alias, documented from `1.0.0` on, or any
-other value that is not a full-length sha, is a choice to track a moving stayfixed, so `upgrade`
-moves `[stayfixed] version` alone: it never replaces that ref with a sha, and never renders a
-workflow over the one you wrote around it. The `CI:` line says no workflow was rendered around the
-ref.
 
 **A project recording a newer stayfixed is refused** (`2`), before anything is written: an older
 plugin would repin an older release and put older bytes over newer ones. The recorded version is
@@ -1511,8 +1446,7 @@ it states.
 **Retirement.** An artifact this configuration no longer produces — the profile's rules after
 `[stayfixed] profile` changes, its Claude Code pointer after `agents` drops `claude` — is removed
 only at a target this build could have written for it, and only while its bytes are the ones
-recorded. The workflow is removed only when `[ci] mode` is `"none"`; a mode this build does not
-render, such as `uvx`, is not a request to delete the gate. Every other record in the manifest is
+recorded. Every other record in the manifest is
 counted in a `note:` line and left where it is, and never named, as is a record saying its
 artifact lived inside a file (a region) that this build no longer produces: a region comes out
 only through the template that names it, never as a whole file, which is `uninstall`'s rule too.
@@ -1531,8 +1465,7 @@ the run is refused (`2`) before anything is written, dry run included, when all 
 for a file it would write or remove — the file exists, git ignores it, and it is at a place a
 `[paths]` value chose rather than where the preset puts that artifact. The refusal names each such
 file, as the report prints paths, and says to point the key at a path git does not ignore or take it
-out. A new file, a fixed name (`CLAUDE.md`, `stayfixed.toml`, `.gitignore`, the workflow, a harness's
-rule) and a preset's own place are never refused, so a `CLAUDE.md` in your global excludes or a
+out. A new file, a fixed name (`CLAUDE.md`, `stayfixed.toml`, `.gitignore`, a harness's rule) and a preset's own place are never refused, so a `CLAUDE.md` in your global excludes or a
 `stayfixed.toml` in `.git/info/exclude` works as before. A tracked file that matches an ignore
 pattern is not ignored, because git shows every change to it; the artifacts `[artifacts] local`
 keeps under `.stayfixed/local/artifacts/` are exempt, since keeping them out of git is what that
@@ -1548,8 +1481,7 @@ entries, so an upgrade changes none.
 
 **Reads** `stayfixed.toml`, `.stayfixed/manifest.json`, `.stayfixed/local/artifacts.json`, every
 file an artifact targets, `git check-ignore` for each existing file a write or removal targets at
-a place a `[paths]` value chose, and, under `[ci] mode = "reusable"`, the public repository's
-tags.
+a place a `[paths]` value chose.
 
 **Writes** the scaffold through the scaffold engine — every `create`, `update`, `region_update`,
 `remove` and `relocated` in the report, and each file `--force` takes — then
@@ -1573,9 +1505,8 @@ cannot be written or removed part-way through; what was already applied stays ap
 and running the command again re-plans from there.
 
 `--json` carries `dry_run`, `moved` (each `{key, before, after}`; a `before` outside its grammar
-prints as `(not a version)` or `(not a commit)`), `held` (the note's sentence, or empty),
-`scaffold` (the plan's rendered report), `writes`, `skipped`, `orphans` (a count), `pin`
-(`{tag, sha}` or `null`) and `asked`.
+prints as `(not a version)`), `scaffold` (the plan's rendered report), `writes`, `skipped` and
+`orphans` (a count).
 
 ---
 
@@ -1586,8 +1517,7 @@ records is removed; stayfixed's managed regions come out of files that hold othe
 file goes too only when nothing else was in it; the ledger goes last. A file you edited stays
 where it is, is reported `skip_modified` with its reason, and is counted in a `left in place`
 line. Every recorded artifact is judged, including one this configuration no longer produces, at
-a target this build could have written for it, whatever `[ci] mode` says now: the workflow goes
-under `uvx` too. Any other record is counted in a `note:` line and left where it is, and never
+a target this build could have written for it. Any other record is counted in a `note:` line and left where it is, and never
 named, as is a record saying its artifact lived inside a file (a region) that this build no longer
 produces: a region comes out only through the template that names it, never as a whole file.
 
@@ -2505,18 +2435,16 @@ which name a write this run does not make; `1` for a `HOME` that is empty with n
 
 ## `stayfixed doctor [--json] [--root PATH] [--home PATH] [--machine PATH]`
 
-Fourteen checks over one installation. It **reports and never repairs**: every finding
+Thirteen checks over one installation. It **reports and never repairs**: every finding
 carries the command that would fix it, and not one of them is run for you. Nothing is written.
 
-The rows come in a fixed order: the installation's own nine first, then the five about the
+The rows come in a fixed order: the installation's own eight first, then the five about the
 private layer — the binding's (`attached`), memory's (`bundles`, `memory`) and the
 private overlay's (`pre-commit`, `overlay-requires`). Match a row by its `name`, never by its
 position.
 
 **Several subprocesses are run and every one of them only asks.** stayfixed's own
-`hooks/run-hook.sh` with `--version`; `git ls-remote --exit-code` against the public
-repository's tags, to judge `[ci] ref`, only when one is set; and the `git` queries the other
-rows need — where the overlay keeps its hooks, what this checkout's `origin` is, which the
+`hooks/run-hook.sh` with `--version`, and the `git` queries the other rows need — where the overlay keeps its hooks, what this checkout's `origin` is, which the
 binding's row asks, the repository's common directory, where the binding id is kept, which the
 binding's row, the note store's rows and the `preferences` row's read of the overlay's project
 file each ask for themselves, which checkout is the main one (`git worktree list`), whose ledger
@@ -2525,21 +2453,8 @@ common and its own git directory), which the `memory` row asks to read the main 
 file a linked worktree reads too, whether a path `attach` placed is tracked (`git ls-files`) or ignored (`git check-ignore`) and whether a
 tracked file names the delivery (`git grep`), which the binding's row asks of a bound checkout.
 Thirteen of those are measured on a green attached installation — the wrapper probe and twelve
-`git` questions — and not one of them leaves this machine. The `ci-ref` row's `git ls-remote` is one more on a repository that records a
-`[ci] ref` at all, and it is the only one that does leave: it goes through the `Runner` seam,
-which is what lets the case that pins the thirteen answer it in process instead of launching it.
-That one is bounded at **30 seconds**, not at the seam's own five minutes (the bound for
-`gh repo create --clone`), so a peer that does not answer cannot turn a one-line diagnostic into a
-five-minute block. The `git` questions are `gitenv`'s five seconds each, and the wrapper probe is
-this area's own thirty.
-
-**The rendered workflow is read as a regular file, and to a bound.** That path is the
-repository's: a clone chooses what sits at `.github/workflows/stayfixed.yml`. Anything there that
-is not a regular file — a directory, a symlink to a FIFO, a dangling link — is a warning naming
-the path and never the ref's own verdict, and so is a file past 256 KiB, the same bound the
-`diagnostics` row reads its log under. Not one byte of the file is printed on any arm, and a byte
-that is not UTF-8 is replaced rather than raised: it used to reach the report as a red row saying
-the check could not run, which is a red a clone could force.
+`git` questions — and not one of them leaves this machine. The `git` questions are `gitenv`'s
+five seconds each, and the wrapper probe is this area's own thirty seconds.
 
 The summary line carries the counts and the names of whichever status most needs reading, capped
 the way every summary in this CLI is. The rows are in `--json`, under `checks`, one object per
@@ -2555,7 +2470,6 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `budgets` | every budget set above the preset, named raised, and every one set below it, named lowered | `stayfixed.toml`, the machine file, the preset |
 | `preferences` | each personal value, guard switch, preference and session budget a session resolves, with the layer its value came from — the preset, the repository, the overlay's common file (`overlay common`), its file for the project this checkout is bound to (`overlay project`) or the machine file — and the value only where it is a boolean, a number or one of stayfixed's own words; then, as information that never changes the row's status, every note reading the overlay's layers gave — no overlay recorded, a file not there or not loading, a key it cannot use or may not set; red when the machine file does not load, in the words every command refuses it in, which name the file and where the parser stopped; a warning naming the file when a key in it could not be used | `stayfixed.toml`, the preset, the overlay's two `stayfixed.toml` files, the machine file |
 | `cli-path` | whether `stayfixed` resolves on `PATH` | `PATH` |
-| `ci-ref` | whether `[ci] ref` is the commit of a released stayfixed tag (or the `v1` alias: a warning, as mutable, once a `1.x` release creates it, and red until then), and whether the rendered workflow pins the same ref — under `[ci] mode = "reusable"`, a workflow that is not there at all is a warning and never a green row, and so are a path that is there and is not a regular file and a file past the 256 KiB bound on the read | `git ls-remote --exit-code` over the public repository's tags, bounded at 30 seconds; *.github/workflows/stayfixed.yml*, read as a regular file and to a bound |
 | `diagnostics` | how many reasons the hook sink recorded — a count, never a line of the file | `${CLAUDE_PLUGIN_DATA}/stayfixed/diagnostics.jsonl` |
 | `ignored-env` | as information, never a status: `STAYFIXED_CONFIG` set, or `XDG_CONFIG_HOME` set to anything but the `.config` of the home every command reads under (`HOME`, or the password database's where `HOME` is unset), and not honoured by any command; and a `HOME` that is not the home the password database records for this user, since stayfixed follows `HOME` | the environment, the password database |
 | `attached` | the overlay binding, what it delivers, and, where `memory.mode` is `overlay`, the `autoMemoryDirectory` pointer at the composed store, read alike from every checkout (the states are below the table) | the main checkout's `.stayfixed/local/attach.json` and `.claude/settings.local.json`, `~/.local/share/stayfixed/delivery/<id>/`, `~/.local/share/stayfixed/stores/<id>/`, the overlay's executable parts, `git` on the paths `attach` placed |
@@ -2606,18 +2520,13 @@ the harness's to decide, and this row does not read that file.
 | missing | no `autoMemoryDirectory` | `warn` | `attach`, which writes it |
 | unreadable | a file that cannot be read as one JSON object | `warn` | make it one JSON object, then `attach` |
 
-**Eight of the fourteen have a `skip` arm — nineteen arms between them, every one on a state of
+**Seven of the thirteen have a `skip` arm — seventeen arms between them, every one on a state of
 this machine or this repository.** A `skip` is **not** a finding and never reaches the exit code, so
 read the detail — each one says which measurement it is missing. No row skips for want of a build
 that can answer it: `codex-hooks`, the one that did, left the report, and what holds on Codex is the
 README's reach table.
-`init` writes `[ci] ref`, so what `ci-ref`'s skip reports is a state — this repository records
-none — and which state is the ordinary one moves with the release history rather than with any
-code here: while no released tag matches the stayfixed running there is no commit to pin, so
-`init` records nothing and the row skips on a correct installation; once a release exists, a
-repository `init` set up carries a ref and the row answers.
 
-The eight that skip on a state are `wrapper`, when there is no plugin root this process can
+The seven that skip on a state are `wrapper`, when there is no plugin root this process can
 vouch for; `attached`, when this machine records no overlay to check the ledger
 against, or the overlay could not be asked at all; `pre-commit` and `overlay-requires`, when
 no overlay root is recorded on this machine **or** when the root it records is not a directory
@@ -2627,22 +2536,20 @@ and then moved it is not a machine that recorded none; `attached`, `pre-commit` 
 whether it records an overlay is not known, which is neither of those; `overlay-requires` again
 when the overlay declares no stayfixed requirement and no other repository's work tree holds it;
 `bundles`, when the note store does not resolve; `diagnostics`, when no harness data root is set in the environment, which is every
-`stayfixed doctor` run from a terminal rather than from a hook; and `ci-ref`, when no `[ci] ref`
-is recorded.
-And four rows read the project configuration and skip, in one sentence, when there is none to
-read — no `stayfixed.toml`, or one a session drops whole: `budgets`, `ci-ref`, `attached` and
-`bundles`. `memory` reads the resolution a session reads and answers without one. A checkout this
+`stayfixed doctor` run from a terminal rather than from a hook.
+And three rows read the project configuration and skip, in one sentence, when there is none to
+read — no `stayfixed.toml`, or one a session drops whole: `budgets`, `attached` and `bundles`. `memory` reads the resolution a session reads and answers without one. A checkout this
 machine binds whose main checkout has no `stayfixed.toml` is the one exception for `attached` and
 for the note store `memory` reads: both are judged on the configuration `attach` acted on there,
 the preset's under the overlay's layers for the project the binding record names.
 
-**A `skip` does not mean there is nothing to do.** Six of the nineteen arms carry a remedy:
+**A `skip` does not mean there is nothing to do.** Six of the seventeen arms carry a remedy:
 the plugin-root skip, `wrapper`'s named-root skip, `attached`'s no-overlay and
 could-not-be-asked arms, and the moved-overlay arm of `pre-commit` and of `overlay-requires`. The dividing line is not "always"
-versus "on a state" — every other arm skips on a state and carries nothing: `bundles`,
-`diagnostics` and `ci-ref`, the *no overlay recorded* arms of the two overlay
+versus "on a state" — every other arm skips on a state and carries nothing: `bundles` and
+`diagnostics`, the *no overlay recorded* arms of the two overlay
 rows, `overlay-requires`' no-requirement arm, and the
-four with no project configuration, whose remedy is
+three with no project configuration, whose remedy is
 `not-initialised`'s, and the three on a machine file that does not load, whose remedy is
 `preferences`', red on the same file. Nor
 is it whether another row names a command that changes the state: `pre-commit`'s arm carries
@@ -2650,9 +2557,8 @@ nothing though `attached` names `stayfixed setup --overlay` there. It is whether
 itself worth acting on. Those six report something wrong that no other
 row will tell you: a plugin root nothing can find, a root that will be read and never executed,
 a recorded attach the overlay could not confirm, an overlay root recorded and not there. Of the
-other thirteen, ten report a measurement that is simply unavailable — no store, no overlay,
-no overlay requirement, no harness data root, no `[ci] ref` or no
-project configuration — and no command in that row's gift changes it, and three report a machine
+other eleven, eight report a measurement that is simply unavailable — no store, no overlay,
+no overlay requirement, no harness data root or no project configuration — and no command in that row's gift changes it, and three report a machine
 file another row is red about, with the command that clears it.
 
 **The one to read first is the plugin root**, because it is the quietest and the worst. When
@@ -2663,7 +2569,7 @@ which lets `wrapper` read the wrapper's executable bit even though it still will
 
 **Nothing configured is not broken.** `doctor` reads the configuration the way a session does
 ([`stayfixed hook <event>`](#stayfixed-hook-event)), so every row is asked whatever `--root`
-holds. With no `stayfixed.toml`, `not-initialised` **warns**, the four rows above that read the
+holds. With no `stayfixed.toml`, `not-initialised` **warns**, the three rows above that read the
 project configuration skip, and no row is red for it: a default install, where the guards and
 this report already work, exits `0`. A `stayfixed.toml` that loads with settings ignored or put
 back to the preset's warns, naming at most three of their keys and counting the rest. Only one a session drops whole is **red**: a
@@ -2673,7 +2579,7 @@ names `stayfixed docs check`, which prints the loader's own message.
 
 **What is printed, and what is not. There is one exception, and it is bounded.** Counts,
 statuses, file paths this project chose and stayfixed's own vocabulary print freely; a
-repository-authored string does not. `[stayfixed] version`, `[ci] ref`, a note's filename, every
+repository-authored string does not. `[stayfixed] version`, a note's filename, every
 field of the hook sink's diagnostics log and the reason the store would not resolve are all read
 and none is quoted back — `stayfixed doctor
 --json` is relayed to a model verbatim by the `doctor` skill, so a byte a repository wrote reaching
@@ -2775,7 +2681,6 @@ why so few of them are trusted with anything.
 ```toml
 [stayfixed]
 version = "0.6.1"        # required; there is no default
-enforced = []            # tool-owned: the gates that enforce, each promoted when it passed
 preset = "recommended"
 profile = ""
 agents = ["claude", "codex"]
@@ -2825,19 +2730,6 @@ local = []               # scaffold template ids whose artifact is written under
                          # .stayfixed/local/artifacts/ instead of being committed; never
                          # config or gitignore, which only work at the repository root
 
-[ci]
-mode = "reusable"        # reusable | uvx | none — how this project means to be gated
-ref = ""                 # the commit of the stayfixed release the workflow is pinned to;
-                         # `init` writes it; from 1.0.0, `v1` is the mutable opt-in
-gate_branch = "main"     # the branch the workflow gates; left out, [project] base_branch
-
-[gates]
-builtin = ["docs", "bugs", "plan", "commit", "trail"]  # the built-in gates this project runs
-custom_timeout_seconds = 600  # seconds a gate of your own may run: a whole number above 0
-                              # and below 2,147,483,648
-# [gates.custom.tests]         # zero or more gates of your own, each a table like this
-# run = ["pytest", "-q"]       # an argv, never a shell string
-
 [commit_messages]
 attribution_check = false # whether `commit check` enforces the attribution block
 types = ["feat", "fix", "build", "chore", "ci", "docs", "perf", "refactor", "revert", "style", "test"]
@@ -2847,18 +2739,10 @@ bg_cleanup = true        # false switches the bg-cleanup session guard off by de
                          # the overlay's files and the machine file override it
 ```
 
-**Eleven sections, and the list is closed**: a section this block does not show is refused when
-the file loads (`unknown section(s)`), so the grammar above is the whole of it. All three
-`[ci]` keys are read today: `mode` decides whether `stayfixed init` renders a CI workflow at all
-and which form, `gate_branch` is the branch the rendered workflow gates — it runs for pull
-requests into it and pushes to it, and passes it as a literal `base:`; left out, it is `[project]
-base_branch`, so a file that names `develop` as its base gates `develop`, and `stayfixed upgrade`
-re-renders a caller you have not edited for that branch where an earlier release gated `main`;
-set `[ci] gate_branch = "main"` to keep the old one — and `ref` is written by `init` and judged by
-`doctor`'s `ci-ref` row. `[commit_messages] attribution_check` is read by
-`commit check`, `[artifacts] local` by the scaffold engine, and `[gates] custom_timeout_seconds`
-by `bugs regressions`; `[commit_messages] types`, the rest of `[gates]` and `[stayfixed] enforced`
-are read by no command. `[guards]` is the guards' default
+**Nine sections, and the list is closed**: a section this block does not show is refused when
+the file loads (`unknown section(s)`), so the grammar above is the whole of it.
+`[commit_messages] attribution_check` is read by `commit check` and `[artifacts] local` by the
+scaffold engine; `[commit_messages] types` is read by no command. `[guards]` is the guards' default
 for a session in this repository, which the overlay's files and the machine file override (below);
 no command reads it.
 
@@ -2866,8 +2750,7 @@ no command reads it.
 `doctor` and `memory session-context`, refuses it whole over an unknown section or key, a value it
 cannot use or a `[paths]` value that leaves the root, naming the key and never the value. Those
 two read it the way a session does: an unknown section or key is ignored, a value that cannot be
-used is put back to the preset's, one key at a time, a custom gate that cannot run is left out,
-and each says so in a note naming the key, so a file a newer stayfixed wrote keeps every setting
+used is put back to the preset's, one key at a time, and each says so in a note naming the key, so a file a newer stayfixed wrote keeps every setting
 this one understands. A repository's `[personal]` is the machine owner's to set and is ignored
 the same way, with a note. A session drops the project configuration whole
 only for a file it cannot read as TOML — a symbolic link, one that is not UTF-8, one it cannot
@@ -2878,48 +2761,13 @@ default under a committed symbolic link. It then names that key rather than call
 the guards on the preset and the machine owner's layer ([`stayfixed hook
 <event>`](#stayfixed-hook-event)).
 
-Every value above is what a key you leave out takes, from the `recommended` preset — with three
+Every value above is what a key you leave out takes, from the `recommended` preset — with two
 exceptions. `[stayfixed] version` and `[project] name` have no default at all and are yours to
 write: a file without `version` does not load at all (`[stayfixed] is missing required key(s):
-version`). `[ci] gate_branch` has no preset default: left out, it is `[project] base_branch`, whose default is `main`. Everything else
-from `[project] base_branch` down is the preset's default exactly as written. `[project]
+version`). Everything else from `[project] base_branch` down is the preset's default exactly as written. `[project]
 base_branch` and `release_branch` are branch names git accepts, from letters, digits, `.`, `_`,
-`-` and `/` (the grammar `--base-branch` and `[ci] gate_branch` follow); anything else does not
+`-` and `/` (the grammar `--base-branch` follows); anything else does not
 load, and the refusal names the key and never the value.
-
-**Gates.** A gate is one check run over a pull request. `[gates] builtin` names which of
-stayfixed's own five the project runs, all of them by default, and each
-`[gates.custom.<name>]` names one of the project's own: `run` is an argv to run from the
-project root, never through a shell, given `custom_timeout_seconds` to finish, and a non-zero
-exit is its one finding. Past that limit its process group gets SIGTERM and, once the command
-has exited or 5 seconds have passed, SIGKILL, so what it started can end its own children. A custom gate's name is one lowercase path segment, neither a
-built-in gate's name nor `config`, which names the configuration check.
-
-**A fixed bug's regression as a gate.** [`stayfixed bugs regressions`](#stayfixed-bugs-regressions)
-runs as a custom gate. Where an installed `stayfixed` is on `PATH`, as on a machine stayfixed was
-installed on, the gate is
-
-```toml
-[gates.custom.regressions]
-run = ["stayfixed", "bugs", "regressions"]
-```
-
-and each regression's runner must be on `PATH` there too: a project whose runner lives in an
-environment of its own writes each `regression` wrapped in the command that provides it, such as
-`["uv", "run", "pytest", "tests/test_total.py"]`, which `prove` reads past to the runner. Every
-regression and the gate itself are bounded by the same `custom_timeout_seconds`,
-so a project with many slow regressions raises it; a set that runs past it ends as a gate that could
-not run, never as a pass. Named in `[stayfixed] enforced`, the gate makes a regression that is not
-proved fail the run; otherwise it is advisory, like any other gate.
-
-**Enforcement is per gate.** `[stayfixed] enforced` is the one adoption key: it lists the gates
-that enforce, configured gates each named once, and nothing else makes a gate enforce. It is
-a person's to write; the loader refuses a name the project does not run and a name given twice. Left
-out, or empty, nothing enforces. A project that has promoted every gate lists every gate, and a
-gate it adds later is advisory until the list names it. `[stayfixed] state`, which once stated a
-lifecycle beside the list, is gone: the loader refuses it as any key it does not have. A gate
-enforces when the base branch's list names it or the change under review adds it there, so a
-change that lists a gate is held to it in its own run; every other gate is advisory.
 
 **Which command reads which path.** `agents_md` and `roadmap` are the two documents `docs check`
 budgets, and the roadmap is also what `docs trail` writes into; `specs` and `plans` are the two
