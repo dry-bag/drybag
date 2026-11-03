@@ -85,6 +85,20 @@ def test_segments_split_on_every_separator() -> None:
     assert bashscan.segments(tokens) == [["a", "b"], ["c"], ["d"], ["e"]]
 
 
+def test_pipelines_group_the_commands_a_pipe_joins() -> None:
+    tokens = bashscan.tokenize("a | b; c && d | e")
+    assert tokens is not None
+    assert bashscan.pipelines(tokens) == [[["a"], ["b"]], [["c"]], [["d"], ["e"]]]
+
+
+def test_a_line_break_after_a_pipe_continues_the_pipeline() -> None:
+    # `prepare` rewrites the newline to `;`, and bash and zsh read the next line as the pipe's
+    # right-hand side.
+    tokens = bashscan.tokenize("a |\n  b; c")
+    assert tokens is not None
+    assert bashscan.pipelines(tokens) == [[["a"], ["b"]], [["c"]]]
+
+
 def test_arithmetic_shift_with_spaces_is_not_a_heredoc() -> None:
     cmd = "count=$((1 << 3))\nrm -rf .env\necho done"
     stripped = bashscan.prepare(cmd)[0]
