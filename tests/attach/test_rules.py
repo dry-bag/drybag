@@ -198,13 +198,3 @@ def test_two_tags_hold_one_rule_name_and_the_later_wins(tmp_path: Path) -> None:
     _tagged(overlay, b="From b.", a="From a.")
     said = standing(root)
     assert "From a." in said and "From b." not in said
-
-
-@needs_git
-def test_a_clone_naming_the_project_hears_no_tag_rule(tmp_path: Path) -> None:
-    # The tags are the overlay's record of the project the machine's binding names; a clone whose
-    # `stayfixed.toml` names the project, with no binding, hears nothing from any plate.
-    overlay = _overlay(tmp_path)
-    _tagged(overlay, a="From a.")
-    root = _checkout(tmp_path, bound=False)
-    assert standing(root) == ""

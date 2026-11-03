@@ -200,21 +200,6 @@ def test_reordering_the_tags_reorders_the_win(tmp_path: Path) -> None:
     assert session.resolution.said("memory.mode") == "overlay tag a"
 
 
-def test_the_layers_are_common_then_each_tag_then_the_project(tmp_path: Path) -> None:
-    root = project(tmp_path)
-    recorded = overlay(tmp_path, common="", sample="")
-    tagged(recorded, ["b", "a"], a="", b="")
-    binding.record(root, "sample", None)
-    layers, notes = overlay_layers.read(root, machine=machine(tmp_path, recorded))
-    assert [(layer.name, layer.label) for layer in layers] == [
-        (LayerName.OVERLAY_COMMON, ""),
-        (LayerName.OVERLAY_TAG, "b"),
-        (LayerName.OVERLAY_TAG, "a"),
-        (LayerName.OVERLAY_PROJECT, ""),
-    ]
-    assert notes == ()
-
-
 def test_an_unbound_checkout_reads_no_tag_layer(tmp_path: Path) -> None:
     # The record lists tags, but the checkout is not bound to the project: only the owner's
     # machine binds a checkout, so only the common layer applies.

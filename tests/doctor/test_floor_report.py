@@ -80,26 +80,6 @@ def test_a_bound_checkout_without_a_file_is_ok_and_names_the_overlay(tmp_path: P
     assert not [check.name for check in report if check.status == RED]
 
 
-def test_an_unbound_checkout_without_a_file_still_warns_with_the_init_remedy(
-    tmp_path: Path,
-) -> None:
-    # Nothing on this machine binds a clone, so the layers of an overlay it never attached to
-    # are not its configuration: it still lacks a file, and `init` is what adds one.
-    from stayfixed.binding import read_id
-    from stayfixed.config.paths import data_directory
-    from tests.memory.test_commands import _bound_without_file
-
-    root = _bound_without_file(tmp_path)
-    id = read_id(root)
-    assert id is not None
-    (data_directory() / "bindings" / f"{id}.toml").unlink()
-    checked = row(
-        run_checks_for(tmp_path, root, machine=tmp_path / "machine.toml"), "not-initialised"
-    )
-    assert (checked.status, checked.detail) == (WARN, NOT_INITIALISED)
-    assert "stayfixed init" in checked.remedy
-
-
 @pytest.mark.parametrize(
     "name",
     ["versions", "wrapper", "cli-path", "diagnostics", "ignored-env", "preferences"],

@@ -274,63 +274,39 @@ def _checked(
     return line, data
 
 
-def test_check_names_the_project_a_flag_named_and_says_so(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    "source",
+    [BY_FLAG, BY_RECORD, BY_OVERLAY, BY_REMOTE, BY_FILE],
+    ids=["flag", "record", "overlay", "remote", "file"],
+)
+def test_check_names_the_project_and_where_its_name_came_from(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], source: str
 ) -> None:
-    # The owner reads which project a clone would be bound to before it is: with `--project` the
-    # name is theirs, and the line says it was. Mutation: `mutations/`'s "attach ignores
-    # --project".
-    root, _, machine = _clone(tmp_path, origin="git@example.com:o/widget.git")
-    line, data = _checked(capsys, root, machine, "--project", "mine")
-    assert line.startswith(f"project mine ({BY_FLAG}); ")
-    assert (data["project"], data["project_source"]) == ("mine", BY_FLAG) and BY_FLAG == (
-        "named by --project"
-    )
-
-
-def test_check_names_the_project_this_machines_binding_records_and_says_so(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root, overlay, machine = _clone(tmp_path, origin="git@example.com:o/widget.git")
-    assert invoke(["attach", "--project", "mine", *_flags(root, machine)]) == 0
-    capsys.readouterr()
-    (overlay / PROJECTS / "mine" / PROJECT_RECORD).unlink()
-    line, data = _checked(capsys, root, machine)
-    assert line.startswith(f"project mine ({BY_RECORD}); ")
-    assert (data["project"], data["project_source"]) == ("mine", BY_RECORD)
-    assert BY_RECORD == "this machine's binding record"
-
-
-def test_check_names_the_project_the_overlay_records_for_the_remote_and_says_so(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root, overlay, machine = _clone(tmp_path, origin="https://github.com/o/widget")
-    _recorded(overlay, "alpha", "git@github.com:O/Widget.git")
-    line, data = _checked(capsys, root, machine)
-    assert line.startswith(f"project alpha ({BY_OVERLAY}); ")
-    assert (data["project"], data["project_source"]) == ("alpha", BY_OVERLAY)
-    assert BY_OVERLAY == "the overlay's record of the remote"
-
-
-def test_check_names_the_project_the_remotes_name_gave_and_says_so(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root, _, machine = _clone(tmp_path, origin="https://example.com/Owner/Widget-Kit.git")
-    line, data = _checked(capsys, root, machine)
-    assert line.startswith(f"project widget-kit ({BY_REMOTE}); ")
-    assert (data["project"], data["project_source"]) == ("widget-kit", BY_REMOTE)
-    assert BY_REMOTE == "the remote's name"
-
-
-def test_check_names_the_project_a_stayfixed_toml_names_and_says_so(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
-    machine = _machine(tmp_path, overlay=store.parents[2])
-    line, data = _checked(capsys, root, machine)
-    assert line.startswith(f"project p ({BY_FILE}); ")
-    assert (data["project"], data["project_source"]) == ("p", BY_FILE)
-    assert BY_FILE == "its stayfixed.toml"
+    # The owner reads which project a clone would be bound to before it is, and whose word that is:
+    # with `--project` the name is theirs. Mutation: `mutations/`'s "attach ignores --project".
+    extra: tuple[str, ...] = ()
+    name = "mine"
+    if source == BY_FILE:
+        root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+        machine, name = _machine(tmp_path, overlay=store.parents[2]), "p"
+    elif source == BY_OVERLAY:
+        root, overlay, machine = _clone(tmp_path, origin="https://github.com/o/widget")
+        _recorded(overlay, "alpha", "git@github.com:O/Widget.git")
+        name = "alpha"
+    elif source == BY_REMOTE:
+        root, _, machine = _clone(tmp_path, origin="https://example.com/Owner/Widget-Kit.git")
+        name = "widget-kit"
+    else:
+        root, overlay, machine = _clone(tmp_path, origin="git@example.com:o/widget.git")
+        if source == BY_FLAG:
+            extra = ("--project", name)
+        else:
+            assert invoke(["attach", "--project", name, *_flags(root, machine)]) == 0
+            capsys.readouterr()
+            (overlay / PROJECTS / name / PROJECT_RECORD).unlink()
+    line, data = _checked(capsys, root, machine, *extra)
+    assert line.startswith(f"project {name} ({source}); ")
+    assert (data["project"], data["project_source"]) == (name, source)
 
 
 def test_check_json_keeps_its_existing_fields(

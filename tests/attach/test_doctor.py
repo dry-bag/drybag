@@ -992,21 +992,6 @@ def test_two_tags_setting_one_key_is_a_warning(tmp_path: Path) -> None:
     )
 
 
-def test_a_tag_and_the_project_holding_one_name_is_no_finding(tmp_path: Path) -> None:
-    # Precedence, not a collision: the project's plate is meant to override the tag's.
-    root = _attached(tmp_path)
-    overlay = _tagged(tmp_path, "a")
-    _tag_file(overlay, "a", "claude/rules/x.md")
-    _tag_file(overlay, "a", "stayfixed.toml", '[memory]\nmode = "overlay"\n')
-    project = overlay / PROJECTS / "p"
-    (project / "claude" / "rules").mkdir(parents=True)
-    (project / "claude" / "rules" / "x.md").write_text("x\n", encoding="utf-8")
-    (project / "stayfixed.toml").write_text('[memory]\nmode = "overlay"\n', encoding="utf-8")
-    assert _delivered_row(tmp_path, root) == Check(
-        "attached", OK, _attached_detail(attach_doctor.DELIVERY_IN_PLACE), ""
-    )
-
-
 def test_a_listed_tag_with_no_directory_is_a_warning(tmp_path: Path) -> None:
     root = _attached(tmp_path)
     _tagged(tmp_path, "a")

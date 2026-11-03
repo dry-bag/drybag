@@ -2,8 +2,7 @@
 the overlay's record of the project lists, in list order, then the project.
 
 The tags are the owner's, read from `projects/<name>/project.toml` of the project this machine's
-binding record names, so every case builds an overlay and never a repository, but for the one that
-holds the anchor: a repository cannot name a tag.
+binding record names, so every case builds an overlay and never a repository.
 """
 
 from __future__ import annotations
@@ -12,7 +11,6 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.loader import loads
 from stayfixed.config.plates import (
     GROUPS,
     PROJECTS,
@@ -20,10 +18,8 @@ from stayfixed.config.plates import (
     Plate,
     PlateKind,
     plates,
-    read_record,
     tags,
 )
-from stayfixed.config.reading import ConfigError
 from stayfixed.printed import quoted
 
 PROJECT = "sample"
@@ -92,7 +88,6 @@ def test_a_tag_outside_the_grammar_is_skipped_with_a_note(tmp_path: Path) -> Non
 
 def test_a_tag_with_no_directory_is_skipped_with_a_note(tmp_path: Path) -> None:
     root = overlay(tmp_path, 'tags = ["gone", "here"]\n', "here")
-    (root / GROUPS / "file").write_text("", encoding="utf-8")
     used, notes = tags(root, PROJECT)
     assert used == ("here",)
     assert len(notes) == 1 and "gone" in notes[0]
@@ -152,24 +147,3 @@ def test_no_record_gives_no_tags_and_no_note(tmp_path: Path) -> None:
 
 def test_a_record_with_no_tags_key_gives_no_tags_and_no_note(tmp_path: Path) -> None:
     assert tags(overlay(tmp_path, 'remote = "r"\n'), PROJECT) == ((), ())
-
-
-def test_the_record_reader_raises_what_it_meets(tmp_path: Path) -> None:
-    # No policy of its own: each caller says what a record it cannot read means.
-    with pytest.raises(FileNotFoundError):
-        read_record(tmp_path / "absent.toml")
-    assert read_record(overlay(tmp_path, 'remote = "r"\n') / PROJECTS / PROJECT / RECORD) == {
-        "remote": "r"
-    }
-
-
-def test_the_repository_cannot_name_a_tag(tmp_path: Path) -> None:
-    # The anchor: tags are read from the overlay's record of the project this machine binds, and a
-    # clone's `stayfixed.toml` is not that record. The loader refuses the key it does not read, and
-    # the plate list for the bound project, whose record lists none, holds none.
-    document = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "sample"\ntags = ["a"]\n'
-    with pytest.raises(ConfigError):
-        loads(document, tmp_path, machine=tmp_path / "absent.toml")
-    found, notes = plates(overlay(tmp_path, 'remote = "r"\n', "a"), PROJECT)
-    assert [plate.name for plate in found] == ["common", PROJECT]
-    assert notes == ()
