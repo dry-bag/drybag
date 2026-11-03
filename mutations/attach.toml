@@ -1551,8 +1551,8 @@ reddens = [
 [[mutation]]
 name = "the overlay status judges with no project configuration"
 file = "src/stayfixed/attach/hooks.py"
-before = "    if config is None or event.project_root is None or config.memory.mode != OVERLAY_MODE:"
-after = "    if event.project_root is None or config.memory.mode != OVERLAY_MODE:"
+before = "    if config is None or config.memory.mode != OVERLAY_MODE:"
+after = "    if config.memory.mode != OVERLAY_MODE:"
 reddens = [
   "tests/hooks/test_floor.py::test_project_handlers_speak_on_a_file_and_stay_silent_without_one[overlay_status]",
 ]

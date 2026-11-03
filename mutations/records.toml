@@ -2621,8 +2621,8 @@ reddens = ["tests/hooks/test_floor.py::test_memory_session_context_reads_a_newer
 [[mutation]]
 name = "the bundles row reads a configuration that is not there"
 file = "src/stayfixed/memory/doctor.py"
-before = "            (\"bundles\", configured(lambda context, config: _bundles(context, config, answers))),"
-after = "            (\"bundles\", lambda context: _bundles(context, context.config, answers)),"
+before = "                configured(lambda context, config: _bundles(context, config, answers), attach=True),"
+after = "                lambda context: _bundles(context, context.config, answers),"
 reddens = [
   "tests/doctor/test_checks.py::test_a_repository_without_a_configuration_skips_only_the_rows_that_read_one",
 ]

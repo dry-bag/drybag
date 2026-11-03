@@ -310,6 +310,7 @@ def test_project_handlers_speak_on_a_file_and_stay_silent_without_one(
     root.mkdir()
     handler, event = speaks(root)
     assert run_handler(handler, event, session_config(root, machine=tmp_path / "none.toml")).context
+    (root / "stayfixed.toml").unlink()
     assert not run_handler(handler, event, NO_CONFIG).context
 
 
