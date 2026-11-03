@@ -6993,8 +6993,8 @@ reddens = [
 [[mutation]]
 name = "the fetched sha is read from FETCH_HEAD"
 file = "src/stayfixed/sync/job.py"
-before = "    upstream = _rev(ctx, FETCHED_REF)"
-after = '    upstream = _rev(ctx, "FETCH_HEAD")'
+before = "    return _rev(ctx, FETCHED_REF), None"
+after = '    return _rev(ctx, "FETCH_HEAD"), None'
 reddens = ["tests/sync/test_integrate.py::test_the_fetched_sha_is_read_from_the_jobs_own_ref"]
 
 [[mutation]]
