@@ -303,9 +303,6 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/assess/probes.py", "_commit_types", "f'-n{context.window}'"): (
         "`-n` and the probe's window, an integer"
     ),
-    ("src/stayfixed/sync/scan.py", "_committed", "f'HEAD:{name}'"): (
-        "`HEAD:` and one of this module's two file names: a revision spec, never an option"
-    ),
     ("src/stayfixed/sync/git.py", "guard", "*_MARKER_PATHS"): (
         "the module's own constant: `--git-path` and the name of each in-progress marker"
     ),
@@ -328,13 +325,14 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
 # The package function whose environment every git launch is given, `git` with only the variables
 # it keeps: an `env=` that calls it overrides nothing worth declaring.
 SCRUBBED_ENVIRONMENT = ("src/stayfixed/gitenv.py", "scrubbed_env")
-# The sync job's git environment: the owner's own, less git's repository variables, plus the four
-# variables `sync.git.job_env` names (no prompt, a non-interactive ssh command the owner's own
-# configuration chose, no replace refs, attributes from `HEAD`). The ssh agent has to reach a push,
+# The sync job's git environment: the owner's own, less git's repository variables, plus what
+# `sync.git.job_env` names (no prompt and no askpass, a non-interactive ssh command the owner's own
+# configuration chose, no replace refs, attributes from `HEAD`), and only `PATH`'s absolute
+# entries. The ssh agent has to reach a push,
 # which `scrubbed_env` would drop.
 _JOB_ENVIRONMENT = (
     "the owner's own environment, less the variables that point git at another repository, plus "
-    "`job_env`'s four: the job's git launches are the owner's, signed in as the owner"
+    "what `job_env` sets: the job's git launches are the owner's, signed in as the owner"
 )
 # Each other `env=` or `executable=` a launch passes, by `(file, function, keyword's source text)`,
 # and why it changes nothing the launch's row does not already say. An `executable=` replaces the
@@ -353,10 +351,11 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/sync/git.py", "run", "env=full"): _JOB_ENVIRONMENT,
     ("src/stayfixed/sync/git.py", "git", "env=env"): _JOB_ENVIRONMENT,
     ("src/stayfixed/sync/git.py", "ask", "env=env"): _JOB_ENVIRONMENT,
-    ("src/stayfixed/sync/scan.py", "_committed", "env=env"): _JOB_ENVIRONMENT,
-    ("src/stayfixed/sync/scan.py", "_scan", "env={**(env or {}), **NO_SIGNATURES}"): (
-        "the job's git environment, plus one `git -c`-style entry that keeps signature checks "
-        "out of the log gitleaks parses; the scanner's own `GITLEAKS_` variables are dropped"
+    ("src/stayfixed/sync/scan.py", "blob", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/scan.py", "_scan", "env=with_config(env or {}, SCAN_CONFIG)"): (
+        "the job's git environment, plus `git -c`-style entries that keep signature checks and "
+        "colour out of the patches gitleaks parses; the scanner's own `GITLEAKS_` variables are "
+        "dropped"
     ),
     ("src/stayfixed/sync/job.py", "_git", "env={**ctx.env, **(env or {})}"): (
         _JOB_ENVIRONMENT + ", and for a replayed commit its author and its encoding"
