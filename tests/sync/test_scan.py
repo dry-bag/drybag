@@ -497,12 +497,10 @@ def test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour(
     index = _temporary_index(repo, tmp_path)
     expected = {"log.showSignature": "false", "color.ui": "false", "color.diff": "false"}
 
-    for scanned in (
-        lambda: S.scan_range(repo, "HEAD", "HEAD", scanner, SLOW, env={"GIT_CONFIG_COUNT": "0"}),
-        lambda: S.scan_index(repo, index, scanner, SLOW),
-    ):
-        scanned()
-        assert json.loads((scanner.parent / "git_config.json").read_text()) == expected
+    S.scan_range(repo, "HEAD", "HEAD", scanner, SLOW, env={"GIT_CONFIG_COUNT": "0"})
+    assert json.loads((scanner.parent / "git_config.json").read_text()) == expected
+    S.scan_index(repo, index, scanner, SLOW)
+    assert json.loads((scanner.parent / "git_config.json").read_text()) == expected
 
 
 # The pinned build pre-commit made on this machine, when it made one: the owner's own cache, read

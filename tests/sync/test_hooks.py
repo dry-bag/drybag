@@ -228,7 +228,7 @@ def test_a_failure_only_the_owner_can_clear_backs_off_until_the_notes_change(
 
     state = J.run_job(context(overlays, a))
 
-    assert state is not None and state.outcome.state == "hook_failed", state.outcome
+    assert state is not None and state.outcome.state == "hook_failed", state
     later = NOW + timedelta(minutes=3)  # past the throttle
     assert decide(overlays, "Stop", at=later) == "none"
     assert decide(overlays, "SessionStart", "startup", at=later) == "run"
@@ -247,7 +247,7 @@ def test_no_scanner_backs_off_once_the_indexes_it_rendered_are_recorded(
     write(overlays.a, "common/memory/waiting.md", "a note\n")
     for _ in range(2):
         state = J.run_job(context(overlays, overlays.a))
-        assert state is not None and state.outcome.state == "scan_unavailable", state.outcome
+        assert state is not None and state.outcome.state == "scan_unavailable", state
 
     assert decide(overlays, "Stop", at=NOW + timedelta(minutes=3)) == "none"
 
