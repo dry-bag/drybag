@@ -12,14 +12,16 @@ and what to use instead:
   take a repository off stayfixed, delete the files `init` wrote and `.stayfixed/manifest.json`.
 - `stayfixed memory refs` and `stayfixed memory fit`. `stayfixed doctor`'s `bundles` row still says
   whether each bundle fits its slots.
-- `stayfixed trust list` and `stayfixed trust revoke`. `stayfixed memory promote --changed` takes
-  every note that is not reviewed, and a promoted note is withdrawn by editing it, which changes its
-  digest, or by deleting it.
+- `stayfixed trust list` and `stayfixed trust revoke`. `stayfixed memory inventory --json` gives
+  each note's `reviewed` state and the `unreviewed` total, and `stayfixed doctor`'s `memory` row the
+  store's unreviewed count; both only read. A promoted note is withdrawn by editing it, which
+  changes its digest, or by deleting it.
 - `stayfixed test hygiene`. The red-run note the hook adds after a failed `Bash` call says the same.
 
-Delete these from an existing `stayfixed.toml`, or every command that reads it exits 1 with the
+Delete these from an existing `stayfixed.toml`, or every command that loads it exits 1 with the
 loader's refusal, `[stayfixed] has unknown key(s): enforced` for a key and `has unknown section(s):
-gates` for a table:
+gates` for a table. `stayfixed doctor` is the exception: it warns `not-initialised`, says how many
+settings it ignored and exits 0, and a session's hooks load the file the same way:
 
 - `[stayfixed] enforced`, and `[stayfixed] state` where the file still has it;
 - the whole `[gates]` table, `[gates.custom]` included: `stayfixed bugs regressions --timeout
@@ -33,9 +35,21 @@ gates` for a table:
 base branch whose copy still carries one of these fails it on every pull request: push the edit to
 the base branch first.
 
-`stayfixed init` now writes five files and its manifest: `stayfixed.toml`, `docs/roadmap.md` with
-its trail markers, `docs/trail.toml`, the generated bug index `docs/bug-reports.md` and
-`docs/bugs/audits/README.md`. It writes no `AGENTS.md`, `CLAUDE.md`, ignore region or workflow, and
+`stayfixed init` now writes five files, the `.gitignore` region and its manifest: `stayfixed.toml`,
+`docs/roadmap.md` with its trail markers, `docs/trail.toml`, the generated bug index
+`docs/bug-reports.md`, `docs/bugs/audits/README.md`, and the `stayfixed:ignore` region, which keeps
+`.stayfixed/local/` out of git. It writes no `AGENTS.md`, `CLAUDE.md` or workflow, and
 `init --json` carries no `skipped` key. Its `--local`, `--commit-type` and `--no-ci` flags are gone,
 and `init --questions` no longer asks about CI or commit types. `stayfixed doctor` reports thirteen
 rows: the `ci-ref` row went with `[ci]`.
+
+The generated bug index no longer links a runbook, since `init` no longer writes one: run
+`stayfixed bugs index` once and commit it, or `bugs index --check` and `bugs check` report the
+committed index stale.
+
+An earlier `init` or `[artifacts] local` left files this release neither writes nor reads, and you
+may delete each by hand: `.stayfixed/local/artifacts/` and `.stayfixed/local/artifacts.json`; the
+profile's rules, `docs/stayfixed/rules/<profile>.md` and `.claude/rules/stayfixed-<profile>.md`;
+`docs/roadmap-history.md`; `docs/runbooks/bug-reports.md`; and the `.stayfixed/assessment.json`
+line in the `stayfixed:ignore` region. `.stayfixed/manifest.json` keeps its records of the artifacts
+this release no longer writes, and nothing reads them.

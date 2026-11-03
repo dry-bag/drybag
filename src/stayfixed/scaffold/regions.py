@@ -1,8 +1,8 @@
 """Marker-delimited regions inside files a person owns.
 
 The rule that makes these safe is narrow: the tool reads and rewrites what is between its two
-markers and returns every other byte unchanged. So a project may keep its own `AGENTS.md` and
-its own `.gitignore` while one section of each is refreshed by `upgrade`.
+markers and returns every other byte unchanged. So a project keeps its own `.gitignore` while
+`init` writes one section of it, and `attach` one section of the repository's `info/exclude`.
 
 "Every other byte" is meant literally, which is why this module splits with `keepends=True`
 and never re-joins with `"\\n"`: a file with CRLF endings, or a form feed in a paragraph, must

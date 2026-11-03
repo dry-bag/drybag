@@ -296,8 +296,9 @@ def test_remotes_git_cannot_list_leave_main_with_a_note_of_their_own(
 @needs_git
 def test_a_checked_out_branch_standing_in_for_a_remote_head_is_noted(tmp_path: Path) -> None:
     # With no `origin/HEAD`, a repository on `develop` takes `develop` as its base: the report
-    # says where the branch came from, so a person on a feature branch reads it before the
-    # workflow gates the wrong one. `main` is what the default was anyway, and says nothing.
+    # says where the branch came from, so a person on a feature branch reads it before `plan
+    # check` compares against the wrong one. `main` is what the default was anyway, and says
+    # nothing.
     # Mutation (oracle): `mutations/`'s "the checked-out branch is never noted" -> the note
     # assertion reddens.
     root = repository(tmp_path, origin=None)

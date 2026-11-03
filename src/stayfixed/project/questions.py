@@ -61,8 +61,9 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "edit [project] name in stayfixed.toml",
     ),
     "project.base_branch": (
-        "the branch the workflow gates and the gates compare a change against",
-        "a pull request into any other branch is not gated",
+        "the branch `plan check` and `test attribute` compare a change against when no --base "
+        "is given",
+        "a change into any other branch needs --base on both",
         "[project] base_branch and release_branch in stayfixed.toml",
         "edit both in stayfixed.toml",
     ),

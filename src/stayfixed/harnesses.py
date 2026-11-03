@@ -96,7 +96,7 @@ class Surface(StrEnum):
     NOTICES = "session notices"
     # The bug, documentation, plan, commit and trail checks, run in a project's CI.
     GATES = "repository gates"
-    # The skills and the `AGENTS.md` region.
+    # The skills.
     METHOD = "methodology"
 
 
@@ -228,8 +228,8 @@ CLAUDE = Harness(
     plugin_root_env="CLAUDE_PLUGIN_ROOT",
 )
 # Codex reads `AGENTS.md` from the root down and no other instruction file, and follows no
-# import; `.codex/rules` holds command-execution policy, not instructions. The region is how a
-# profile reaches it, and there is nothing further to render.
+# import; `.codex/rules` holds command-execution policy, not instructions. stayfixed writes no
+# instruction file for it.
 CODEX = Harness(
     name="codex",
     marker_dir=".codex",

@@ -1,7 +1,7 @@
 """Keyed entries inside a settings file a person and several tools share.
 
-Keying on a marker inside the command string rather than on position is what lets `upgrade`
-replace what stayfixed installed while a foreign entry beside it — another plugin's, or the
+Keying on a marker inside the command string rather than on position is what lets stayfixed
+replace or withdraw what it installed while a foreign entry beside it — another plugin's, or the
 owner's own — survives untouched and stays visible to `doctor`.
 
 Two rules make "foreign entries untouched" true rather than approximately true. A group that

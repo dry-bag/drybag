@@ -175,7 +175,7 @@ means the loader's or the parser's existing refusal; no new message is written.
 | `upgrade` | — | a scaffold file is edited by hand | — | — | — |
 | `uninstall` | — | — | `init` now writes four files (Task 8); delete them, and `.stayfixed/manifest.json` | — | — |
 | `memory refs`, `memory fit` | `doctor`'s memory rows still say whether each bundle fits | — | — | — | — |
-| `trust list` | the reviewed-notes record is read by `memory promote --changed`, which lists what is unreviewed | — | — | — | — |
+| `trust list` | the reviewed-notes record is read by `memory inventory --json` (each note's `reviewed` state, the `unreviewed` total) and `doctor`'s `memory` row (the unreviewed count), both read-only | — | — | — | — |
 | `trust revoke` | — | — | a promoted note is withdrawn by editing it (its digest changes) or deleting it | — | — |
 | `test hygiene` | the `PostToolUse` red-run note says the same after a red run | — | — | — | — |
 | `init` (kept, shrunk) | `--dry-run` lists the four files | answers still reach `stayfixed.toml` | delete the four files and the manifest | `[paths] roadmap` still places the roadmap and `trail.toml` beside it | a refused write leaves the manifest unwritten, as today (`tests/project/test_init.py`) |

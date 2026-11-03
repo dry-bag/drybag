@@ -87,34 +87,33 @@ UNWRITABLE_KEY = (
 # Fixed text: the branch `origin/HEAD` named is the remote's, outside the grammar, and not printed.
 HEAD_DEFAULTED = (
     "origin/HEAD does not name a plain branch, so [project] base_branch and release_branch are "
-    "main, and so is the branch the workflow gates; if pull requests merge into another branch, "
-    "answer it with `stayfixed init --yes --base-branch BRANCH` while nothing is written, or set "
-    "[project] base_branch and release_branch in stayfixed.toml, which the workflow follows"
+    "main; if pull requests merge into another branch, answer it with `stayfixed init --yes "
+    "--base-branch BRANCH` while nothing is written, or set [project] base_branch and "
+    "release_branch in stayfixed.toml"
 )
 # Fixed text too, though the branch passed the grammar: one sentence whatever it is called.
 HEAD_CURRENT = (
     "this repository has no remote, so [project] base_branch and release_branch are the "
-    "branch checked out now, and so is the branch the workflow gates; if pull requests merge "
-    "into another branch, answer it with `stayfixed init --yes --base-branch BRANCH` while "
-    "nothing is written, or set [project] base_branch and release_branch in stayfixed.toml"
+    "branch checked out now; if pull requests merge into another branch, answer it with "
+    "`stayfixed init --yes --base-branch BRANCH` while nothing is written, or set [project] "
+    "base_branch and release_branch in stayfixed.toml"
 )
 # A remote with no `origin/HEAD`: a repository created here and pushed, to `origin` or to
 # another remote. The branch checked out is not taken, since it is typically the feature branch
 # the adoption is made on. The remedy names no remote but `origin`, the only one detection reads.
 HEAD_UNRECORDED = (
     "this repository has a remote and no origin/HEAD recorded, so [project] base_branch and "
-    "release_branch are main, and so is the branch the workflow gates; answer it with `stayfixed "
-    "init --yes --base-branch BRANCH` while nothing is written, or set [project] base_branch and "
-    "release_branch in stayfixed.toml; where the remote is origin, `git remote set-head origin "
-    "--auto` records its default branch for the next run"
+    "release_branch are main; answer it with `stayfixed init --yes --base-branch BRANCH` while "
+    "nothing is written, or set [project] base_branch and release_branch in stayfixed.toml; "
+    "where the remote is origin, `git remote set-head origin --auto` records its default branch "
+    "for the next run"
 )
 # git gave no answer to `git remote`, so whether the branch checked out may be taken is not
 # known: the default stands.
 HEAD_REMOTES_UNKNOWN = (
     "git could not list this repository's remotes, so [project] base_branch and release_branch "
-    "are main, and so is the branch the workflow gates; answer it with `stayfixed init --yes "
-    "--base-branch BRANCH` while nothing is written, or set [project] base_branch and "
-    "release_branch in stayfixed.toml"
+    "are main; answer it with `stayfixed init --yes --base-branch BRANCH` while nothing is "
+    "written, or set [project] base_branch and release_branch in stayfixed.toml"
 )
 
 

@@ -244,8 +244,8 @@ def validate_path_values(values: Mapping[str, str], root: Path) -> dict[str, Pat
             #
             # The anchor is the project root the CLI resolved, and `.git` is git's own name
             # inside it; the clone authors this value and nothing else, so it cannot move the
-            # directory being reserved. `.git` and not "a leading dot", because
-            # `.github/workflows/` is stayfixed's own footprint.
+            # directory being reserved. `.git` and not "a leading dot", because `.github/` is
+            # an ordinary directory a project keeps its own files in.
             raise PathEscape(
                 f"paths.{name} names git's control directory, which is git's and not "
                 "stayfixed's to write into",
@@ -254,10 +254,10 @@ def validate_path_values(values: Mapping[str, str], root: Path) -> dict[str, Pat
         if names_stayfixed_directory(relative):
             # Named and never quoted. `.stayfixed/` is where stayfixed keeps its manifest and, under
             # `.stayfixed/local/`, state git never sees: attach's ledger and the local-only notes.
-            # A `[paths]` value is committed, and `agents-md` is a `MANAGED_REGION` inserted into
-            # whatever file `agents_md` names, exempt from the "exists and stayfixed did not write
-            # it" guard — so a pulled commit setting `agents_md = ".stayfixed/local/attach.json"`
-            # had `upgrade` rewrite the ledger in a directory git cannot restore.
+            # A `[paths]` value is committed, and while the scaffold inserted a `MANAGED_REGION`
+            # into whatever file `agents_md` named, exempt from the "exists and stayfixed did not
+            # write it" guard, a pulled commit setting `agents_md = ".stayfixed/local/attach.json"`
+            # had a scaffold refresh rewrite the ledger in a directory git cannot restore.
             #
             # The anchor is the project root the CLI resolved and `STAYFIXED_DIRECTORY` above, a
             # constant in the installed package; the clone authors the value and nothing else.

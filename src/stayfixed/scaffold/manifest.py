@@ -1,11 +1,10 @@
 """The machine ledger every scaffolded artifact is recorded in.
 
-The manifest is committed, so `upgrade` and `uninstall` work for a collaborator who never ran
-`init`. It is also the only reason `skip_modified` can exist: without a recorded hash there is
-no way to tell a file the tool wrote from a file a person wrote, and every refresh would be
-either a clobber or a no-op. It carries a `format` so a later migration can key on it, and it
-is written atomically, because it is the one file whose corruption bricks both `upgrade` and
-`uninstall`.
+The manifest is committed, and it is the only reason `skip_modified` can exist: without a
+recorded hash there is no way to tell a file the tool wrote from a file a person wrote, and every
+refresh would be either a clobber or a no-op. It carries a `format` so a later migration can key
+on it, and it is written atomically, because it is the one file whose corruption stops every
+later plan over the tree it records (`stayfixed overlay upgrade`'s, for an overlay).
 
 Its own path is repository-controlled too. `.stayfixed` is an ordinary directory entry that a
 repository may commit as a symlink, and a clone materialises one, so both ends of the ledger
@@ -16,8 +15,8 @@ whatever the link points at, and `read` takes its idea of what stayfixed owns fr
 component that becomes a link after the check passed. So the write goes through
 `fsops.write_within`, the same `O_NOFOLLOW` walk every scaffolded artifact is written through.
 It did not, and that was the gap worth naming: every file a user can shrug at was written
-through a descriptor, while the one file whose corruption bricks both `upgrade` and
-`uninstall` was written by re-resolved string path — `mkdir(parents=True)` following symlinks
+through a descriptor, while the one file whose corruption stops every later plan was written by
+re-resolved string path — `mkdir(parents=True)` following symlinks
 and `mkstemp` plus `os.replace` on the name. The strongest protection was applied to the least
 valuable targets.
 """

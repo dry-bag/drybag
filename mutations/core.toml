@@ -1424,8 +1424,8 @@ reddens = [
   "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
 ]
 
-# The branch a rendered caller names follows git's own branch-name rules, so no workflow gates a
-# branch no repository can have. Each rule dropped once.
+# `[project] base_branch` and `--base-branch` follow git's own branch-name rules, so no command
+# compares against a branch no repository can have. Each rule dropped once.
 [[mutation]]
 name = "the gate branch grammar takes a '..' git refuses"
 file = "src/stayfixed/config/schema.py"

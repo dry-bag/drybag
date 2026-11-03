@@ -141,7 +141,7 @@ def _payload_and_stamp(template: Template, current: str | None) -> tuple[str, st
             # `None` — so `template.entries or {}` read a caller that forgot one keyword argument
             # as a caller asking to uninstall the user's hook wiring, reported the result as
             # `entries_update` / "refreshed", and rewrote the manifest as though it were an
-            # ordinary upgrade. The malformed-`Template` rule five lines above is the same
+            # ordinary refresh. The malformed-`Template` rule five lines above is the same
             # rule: a bug in the caller that built it, raised rather than acted on. `{}` is left
             # to mean removal, for the caller that genuinely wants it.
             raise Refusal(f"{template.id}: a keyed-entries template names no entries")

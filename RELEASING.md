@@ -470,11 +470,9 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    `stayfixed setup --overlay create:` generates from it.
 
 9. **Move the alias — from `1.0.0` on; a `0.x` release moves none.** The alias is the major:
-   a project that writes `@v1` takes every release the alias moves to. Under semantic
-   versioning a `0.x` minor may break what the one before it did, so a `v0` alias would hand
-   every project on it breaking changes unannounced, and `stayfixed doctor` knows `v1` and no
-   other alias. So a `0.x` project pins the commit `stayfixed init` writes, and this step starts
-   at the first `1.x` release:
+   a reference to `@v1` takes every release the alias moves to. Under semantic versioning a
+   `0.x` minor may break what the one before it did, so a `v0` alias would hand everything that
+   references it breaking changes unannounced, and this step starts at the first `1.x` release:
 
    ```bash
    git tag -f v1 vX.Y.Z && git push -f origin v1

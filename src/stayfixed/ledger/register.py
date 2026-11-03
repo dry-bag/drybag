@@ -189,10 +189,9 @@ class Register:
     writes and a repository cannot. The engine does not check their spelling again, and still
     resolves each through `contained`, which refuses a symlink the tree holds when the engine
     reads or writes. `runbook` is a root-relative file and `audits` one plain directory name
-    under `directory`, each `None` for a register without one. The index links both, and `init`
-    writes a file at the bug ledger's two, so they must stay where a `[paths]` value may point:
-    the runbook is `BUG_RUNBOOK` under `[paths] runbooks`, and `audits` is `BUG_AUDITS`, with no
-    separator of its own. A register built from anything else is a defect."""
+    under `directory`, each `None` for a register without one, and the index links each it has.
+    The bug ledger has no runbook, and its `audits` is `BUG_AUDITS`, with no separator of its own,
+    where `init` writes the audits README. A register built from anything else is a defect."""
 
     name: str  # "bugs": the command group, and the noun in messages
     title: str  # "Bug reports": the index's heading
@@ -203,7 +202,7 @@ class Register:
     # The levels whose entries need a filled evidence line: the bug ledger's are `[ledger]
     # evidence_boundary_required_for`.
     evidence_boundary_for: tuple[str, ...]
-    runbook: str | None  # the bug ledger's "<[paths] runbooks>/<BUG_RUNBOOK>", the index's link
+    runbook: str | None  # a root-relative file the index links; the bug ledger has none
     # the bug ledger's `BUG_AUDITS`: the subdirectory of `directory` holding audit records, which
     # the index links.
     audits: str | None
@@ -232,16 +231,15 @@ What goes wrong, what the user sees, and the evidence for it.
 name what the evidence is silent about, and what would have to be observed to settle it.
 """
 
-# The bug ledger's runbook, a file under `[paths] runbooks`, and its audits directory, a
-# subdirectory of `[paths] bugs`. `bug_register` links both from the index and `init` writes a file
-# at each, both from these two names, so a link and the file it points at cannot be spelled apart.
-BUG_RUNBOOK = "bug-reports.md"
+# The bug ledger's audits directory, a subdirectory of `[paths] bugs`. `bug_register` links it from
+# the index and `init` writes a file in it, both from this name, so a link and the file it points
+# at cannot be spelled apart.
 BUG_AUDITS = "audits"
 
 
 def ledger_path(directory: str, name: str) -> str:
-    """`name` under the root-relative `directory`: a register's runbook or audits directory, as
-    the index names it and `init` writes a file at it. Only that root-relative path is joined
+    """`name` under the root-relative `directory`: a register's audits directory, as the index
+    names it and `init` writes a file in it. Only that root-relative path is joined
     here: the index's link to the audits directory, relative to the index, is joined from the
     same name where it is written, and so is the README `init` writes inside that directory,
     from what this returns."""
@@ -335,6 +333,6 @@ def located_bug_register(config: Config) -> Register:
         ids=Identifiers(config.ledger.id_prefix),
         schema=BUG_SCHEMA,
         evidence_boundary_for=tuple(config.ledger.evidence_boundary_required_for),
-        runbook=ledger_path(paths.runbooks, BUG_RUNBOOK),
+        runbook=None,
         audits=BUG_AUDITS,
     )

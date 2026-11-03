@@ -28,7 +28,7 @@ that reads them:
 
 Both are read and written against a register: `Register`, with the `Schema` and the `Section`s it
 carries, and `bug_register`, which builds the bug ledger's from a project's configuration and links
-its runbook and audits directory; `init` writes the audits README under that directory.
+its audits directory; `init` writes the audits README under that directory.
 `parse_entry`, `load_entries` and `render_index` each take one, so `tests/test_surfaces.py`
 derives the three types from their signatures.
 

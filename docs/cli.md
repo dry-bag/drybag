@@ -2361,7 +2361,7 @@ bug_index = "docs/bug-reports.md"
 roadmap = "docs/roadmap.md"
 roadmap_history = "docs/roadmap-history.md"
 memory = "docs/memory"
-stayfixed = "docs/stayfixed" # stayfixed's own project files: <stayfixed>/rules/<profile>.md
+stayfixed = "docs/stayfixed"
 
 [memory]
 mode = "harness"         # harness | overlay | in-repo | local-only — default: harness
@@ -2373,7 +2373,7 @@ id_prefix = "BR"         # a capital letter, then up to seven more capitals or d
 code_roots = ["src", "tests", "scripts"]
 evidence_boundary_required_for = ["high"]
 
-[budgets]                # the base branch raises or lowers a budget; a pull request lowers a gate's
+[budgets]                # the base branch raises or lowers any budget, the machine file a session's
 agents_md_lines = 300
 agents_md_words = 3000
 status_lines = 50
@@ -2425,12 +2425,9 @@ load, and the refusal names the key and never the value.
 budgets, and the roadmap is also what `docs trail` writes into; `specs` and `plans` are the two
 trees `docs trail` lists, and `plans` is where `plan check` looks for the plans a diff touched.
 `bugs` is the ledger's entry directory and `bug_index` its generated index — `bugs new`,
-`bugs index`, `bugs check` and `bugs renumber` all read both — and `runbooks` supplies the
-`<runbooks>/bug-reports.md` link that index's generated header writes. `memory` is the note
-store. `stayfixed` is the directory stayfixed's own project files go
-under, so that a reader can find them; a stack profile's
-rules are the first, at `<stayfixed>/rules/<profile>.md`. The remaining three are read for their
-location alone, and so is every one of the others: `bugs check` treats the first component of
+`bugs index`, `bugs check` and `bugs renumber` all read both. `memory` is the note store. The
+remaining five — `architecture`, `runbooks`, `adr`, `roadmap_history` and `stayfixed` — are read
+for their location alone, and so is every one of the others: `bugs check` treats the first component of
 every `[paths]` value that has more than one — `docs`, for the defaults — as a directory
 documents live in, and therefore as a place a citation of an entry file may be written and must
 resolve. Pointing a path key somewhere unusual widens that sweep; it cannot take a document

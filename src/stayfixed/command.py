@@ -83,7 +83,7 @@ def command_owner(machine: Path | None) -> Owner:
 
     A command hands this to every load it makes (`config.loader.loads`' `owner`), which stands it
     on the preset each document names. Said by the load instead, the notes were said once a
-    document: twice in `init --yes` and `upgrade --dry-run`, three times in one `gate`.
+    document, so a command that loads two documents said each note twice.
     """
     return said_on_stderr(
         resolve_owner(machine_config_path() if machine is None else machine, strict=True)

@@ -20,9 +20,8 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > one stack's test runner, build artifacts and package manager belong to its profile — data, and
 > optionally the advice to give after that stack's test runner fails — so a repository in several
 > languages gets each stack's advice with no configuration. The first profile, `python`, ships:
-> every agent is handed its rules, and the stale-bytecode line
-> of the note after a failing pytest run is its own. The hooks file that wires all of it into a
-> session ships too, so on Claude Code installing the plugin is enough to make the guards fire and
+> the stale-bytecode line of the note after a failing pytest run is its own. The hooks file that
+> wires all of it into a session ships too, so on Claude Code installing the plugin is enough to make the guards fire and
 > the memory bundles arrive ([what each agent enforces](#what-each-agent-enforces)). The first
 > skills ship with them, and so does one command meant for a machine rather than for you — `hook`,
 > which dispatches one harness event. **Not yet:** the memory MCP server, a hold-the-line baseline,
@@ -210,8 +209,8 @@ stayfixed writes files. Being specific about which is the point of this section.
 | `docs/bugs/` and `docs/bug-reports.md` (configurable) | One file per bug, and the generated index over them | `stayfixed init` writes the empty index and `docs/bugs/audits/README.md`; `stayfixed bugs new`, `bugs index` and `bugs renumber` after |
 | `docs/roadmap.md` (configurable) | The forward track; `docs trail` owns only the listing between its two markers | `stayfixed init` writes it; `stayfixed docs trail` rewrites the listing |
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | `stayfixed init`, once; you after |
-| `.gitignore`, the `stayfixed:ignore` region | The block that keeps `.stayfixed/local/` out of git, recorded in the manifest. `attach` and `detach` never touch `.gitignore` | `stayfixed init` |
 | `.stayfixed/manifest.json` | The ledger of every scaffolded artifact | the scaffold engine |
+| `.gitignore`, the `stayfixed:ignore` region | The block that keeps `.stayfixed/local/` out of git, recorded in the manifest. `attach` and `detach` never touch `.gitignore` | `stayfixed init` |
 | `~/.config/stayfixed/config.toml` | Machine-level settings: `[personal]`; `[guards]`, where `bg_cleanup = false` switches the background guard off on this machine, whatever a repository's `stayfixed.toml` sets as its default; `[budgets]`, the four budgets that bound what a session loads; `[overlay]`; and `[machine]`. `~` is `HOME`, as the harness reads it ([docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration)) | you, or `stayfixed setup` |
 | `~/.config/stayfixed/trust.json` | Every approval recorded on this machine, as a versioned record of kinds and subjects, under the same home, the notes you promoted among them (kind `reviewed`) | `stayfixed memory promote`, which records a note |
 | `hooks/hooks.json` and `hooks/run-hook.sh` | The zero-config wiring both harnesses read, and the wrapper they execute. **Shipped in the plugin; never written into a project** | nothing — they are part of the plugin |
