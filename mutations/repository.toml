@@ -2795,16 +2795,24 @@ reddens = [
 [[mutation]]
 name = "the reference counts one doctor row more than the report has"
 file = "docs/cli.md"
-before = 'Fourteen checks over one installation.'
-after = 'Fifteen checks over one installation.'
+before = 'Fifteen checks over one installation.'
+after = 'Sixteen checks over one installation.'
 reddens = ["tests/test_documents.py::test_every_document_counts_the_rows_the_report_has"]
+
+# The reference's "Note sync" section states the throttle the hooks apply.
+[[mutation]]
+name = "the note sync section states another throttle"
+file = "docs/cli.md"
+before = "A trigger within 120 seconds of the last job"
+after = "A trigger within 90 seconds of the last job"
+reddens = ["tests/test_documents.py::test_the_note_sync_section_names_what_the_sync_keeps_and_records"]
 
 # And the reference's order sentence counts the core's rows and the private layer's apart.
 [[mutation]]
 name = "the reference miscounts the installation's own doctor rows"
 file = "docs/cli.md"
-before = '''The rows come in a fixed order: the installation's own nine first, then the five about the'''
-after = '''The rows come in a fixed order: the installation's own ten first, then the five about the'''
+before = '''The rows come in a fixed order: the installation's own nine first, then the six about the'''
+after = '''The rows come in a fixed order: the installation's own ten first, then the six about the'''
 reddens = [
   "tests/test_documents.py::test_the_reference_counts_the_cores_rows_and_the_private_layers_apart",
 ]

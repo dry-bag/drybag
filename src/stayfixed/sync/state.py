@@ -33,6 +33,10 @@ OUTCOMES: tuple[str, ...] = (
     "waiting_clean_tree", "index_stale",
 )  # fmt: skip
 
+# The outcomes after which the sync has nothing to answer for: the hooks start no job on them and
+# `doctor` reports them green.
+SETTLED = ("ok", "skipped")
+
 STATE_FILE = "state.json"
 LOCK_FILE = "job.lock"
 SLEEPER_LOCK_FILE = "sleeper.lock"

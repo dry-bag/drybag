@@ -7256,3 +7256,31 @@ reddens = [
   "tests/sync/test_hooks.py::test_with_sync_off_stop_runs_no_git_and_spawns_nothing",
   "tests/sync/test_hooks.py::test_session_start_records_the_checkout_when_sync_is_on",
 ]
+
+# The `sync` row of `doctor`: a machine that switched the sync on expects its notes to move, and
+# the job commits and pushes nothing without a scanner build or on a git below its floor. A row
+# green over either says the sync works when it does nothing.
+[[mutation]]
+name = "doctor calls a missing scanner green"
+file = "src/stayfixed/sync/doctor.py"
+before = "    if scan.gitleaks_binary(Path.home(), overlay, context.env) is None:"
+after = "    if False:"
+reddens = ["tests/sync/test_doctor.py::test_no_scanner_build_is_red_with_the_remedy_the_job_gives"]
+
+[[mutation]]
+name = "doctor calls an old git green"
+file = "src/stayfixed/sync/doctor.py"
+before = "    if version.code != 0 or not version_ok(version.out):"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_doctor.py::test_git_below_the_floor_is_a_warning_that_says_the_job_does_nothing",
+]
+
+# A state recorded for another overlay is not this overlay's: the job starts afresh on it, so a hold
+# or a failure recorded for the old path must not warn about the new one.
+[[mutation]]
+name = "doctor reads a state recorded for another overlay"
+file = "src/stayfixed/sync/doctor.py"
+before = "    if state is None or state.overlay != str(overlay):"
+after = "    if state is None:"
+reddens = ["tests/sync/test_doctor.py::test_a_state_recorded_for_another_overlay_reads_as_never_run"]

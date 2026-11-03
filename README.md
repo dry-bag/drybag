@@ -196,7 +196,7 @@ mkdir -p .stayfixed/local/memory/developer
 printf -- '---\nname: first-note\ndescription: "When to open this note"\n---\n\nThe note.\n' \
   > .stayfixed/local/memory/developer/first-note.md
 stayfixed memory index      # renders .stayfixed/local/memory/MEMORY.md from the notes
-stayfixed doctor            # fourteen checks over this installation, one line; --json has the remedies
+stayfixed doctor            # fifteen checks over this installation, one line; --json has the remedies
 ```
 
 These notes are inside the repository, so they reach a session as data and never as standing
@@ -359,8 +359,11 @@ needs such an object can reach that remote. For example, in a clone that left fi
 detection reads the contents; and in one that left trees out as well (`--filter=tree:0`),
 `git ls-tree -r` too. And
 `git archive`, which `stayfixed test attribute` uses to extract `HEAD` and the merge base, runs
-the smudge filters the repository's `.gitattributes` name and your git configuration defines.
-stayfixed passes git your `HOME` and leaves it reading its system configuration and the
+the smudge filters the repository's `.gitattributes` name and your git configuration defines, as
+do the note sync's `git add` and `git checkout-index` over the overlay's notes, which run the
+clean and smudge filters your git configuration defines for the attributes `HEAD` commits
+(`GIT_ATTR_SOURCE=HEAD`) with your whole environment.
+stayfixed passes `test attribute`'s git your `HOME` and leaves it reading its system configuration and the
 repository's own, so where the system, global or repository-local configuration defines
 `filter.lfs` — as `git lfs install` does in the global one — that is `git-lfs smudge`, which
 downloads the LFS objects of those two commits it does not have from the LFS server the repository
@@ -460,7 +463,7 @@ stayfixed adopt promote --builtin                      # the same, running none 
 stayfixed prove -- uv run --locked pytest tests/test_x.py   # run it here; proved, failed, not proven or refused, from the runner's own report
 
 # Diagnosing an installation
-stayfixed doctor                                       # fourteen checks over this installation, one line
+stayfixed doctor                                       # fifteen checks over this installation, one line
 stayfixed doctor --json                                # every check with its status, detail and remedy
 
 # Internal

@@ -37,6 +37,7 @@ from stayfixed.attach.hooks import NOT_ATTACHED
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.doctor.api import OK, RED, SKIP, run_checks
 from stayfixed.memory.api import DELIMITER, PROJECTS, markers
+from stayfixed.sync.scan import gitleaks_pin
 from tests.floor import developer_free_environ
 from tests.gitfixture import git
 from tests.runners import Recorder
@@ -45,6 +46,7 @@ from tests.snapshot import (
     assert_snapshot_unchanged,
     snapshot,
 )
+from tests.sync.conftest import build_gitleaks, pre_commit_store
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -193,7 +195,7 @@ def _cli(walk: Walkthrough, *argv: str) -> subprocess.CompletedProcess[str]:
 
 
 def _doctor(walk: Walkthrough, *, root: Path | None = None) -> list[dict[str, str]]:
-    """The fourteen rows, read back out of what `doctor --json` printed on the launcher's
+    """The fifteen rows, read back out of what `doctor --json` printed on the launcher's
     stdout."""
     done = _cli(
         walk,
@@ -208,7 +210,7 @@ def _doctor(walk: Walkthrough, *, root: Path | None = None) -> list[dict[str, st
     )
     assert done.stdout, done.stderr
     rows: list[dict[str, str]] = json.loads(done.stdout)["checks"]
-    assert len(rows) == 14, rows
+    assert len(rows) == 15, rows
     return rows
 
 
@@ -300,6 +302,14 @@ def _install_path(
         "the second `setup` recorded the overlay into the file the first one wrote"
     )
     assert (overlay / ".git" / "HEAD").is_file(), "`setup` rendered no repository at the overlay"
+    # What `pre-commit install-hooks` leaves in its cache under this home: the scanner build the
+    # `sync` row asks for, since `setup --overlay` switched the note sync on for the overlay it
+    # rendered. Without it that row is red, as it is on a machine that has not built the hook yet.
+    pin = gitleaks_pin(overlay)
+    assert pin is not None, "the rendered overlay pins no gitleaks hook"
+    build = tmp_path / "gitleaks-build"
+    build_gitleaks(build, pin[2] or "default")
+    pre_commit_store(home / ".cache", [(pin[0], pin[1], build)])
     if not attach:
         return walk
     # 4. attach: the diff first, then the write. `--check` writes nothing and prints what the
@@ -539,9 +549,11 @@ def test_doctor_is_green_on_the_attached_fixture(tmp_path: Path) -> None:
 # Written as a number rather than as a set of argv lists so the failure reads as "the count
 # moved", which is the claim.
 #
-# Thirteen: the wrapper probe and the twelve `git` questions the `attached`, note-store, `memory`
-# and `preferences` rows ask of a bound checkout, as `docs/cli.md`'s doctor section lists them.
-DOCTOR_LAUNCHES = 13
+# Fourteen: the wrapper probe and the thirteen `git` questions the `attached`, note-store, `memory`,
+# `preferences` and `sync` rows ask of a bound checkout and its overlay, as `docs/cli.md`'s doctor
+# section lists them; the `sync` row's `git version` is asked because `setup --overlay` switched the
+# note sync on for the overlay this fixture rendered.
+DOCTOR_LAUNCHES = 14
 
 
 def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
@@ -598,11 +610,11 @@ def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
         True,
     ), attached
     assert len(launched) == DOCTOR_LAUNCHES, launched
-    # And they are the thirteen the paragraph names, not thirteen of something else: one wrapper
-    # probe, and twelve `git` questions. Asserted by shape rather than by full argv, because
+    # And they are the fourteen the paragraph names, not fourteen of something else: one wrapper
+    # probe, and thirteen `git` questions. Asserted by shape rather than by full argv, because
     # each `git` call carries the temporary checkout or overlay it asks about.
     assert sum(1 for argv in launched if argv[0] == str(WRAPPER)) == 1
-    assert sum(1 for argv in launched if argv[0] == "git") == 12
+    assert sum(1 for argv in launched if argv[0] == "git") == 13
 
 
 def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Path) -> None:

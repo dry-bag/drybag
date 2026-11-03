@@ -31,6 +31,7 @@ from stayfixed.sync.render import remember_checkout
 from stayfixed.sync.rules import MEMORY_PATHSPEC
 from stayfixed.sync.state import (
     LOCK_FILE,
+    SETTLED,
     THROTTLE_SECONDS,
     Lock,
     StateUnreadable,
@@ -44,7 +45,6 @@ from stayfixed.sync.state import (
 )
 
 EVENTS = ("SessionStart", "Stop", "SessionEnd")
-SETTLED = ("ok", "skipped")
 # A named cap: how long the trigger's own git questions may take, well inside the ten seconds
 # `hooks/hooks.json` gives each sync entry.
 STATUS_TIMEOUT = 5.0

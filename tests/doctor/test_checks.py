@@ -352,9 +352,9 @@ def test_a_configuration_holding_a_number_past_the_parser_does_not_load(tmp_path
     assert (row.status, row.detail) == (RED, cause(FALLBACK_WARNING))
 
 
-# The report's fourteen names in the report's order, written out rather than read back from the
+# The report's fifteen names in the report's order, written out rather than read back from the
 # registry: the core's own checks, then each delivery area's in area-name order — `attach`,
-# `memory`, `overlay`. `docs/cli.md`'s table is held to the same order.
+# `memory`, `overlay`, `sync`. `docs/cli.md`'s table is held to the same order.
 REPORT = (
     "not-initialised",
     "versions",
@@ -370,12 +370,13 @@ REPORT = (
     "memory",
     "pre-commit",
     "overlay-requires",
+    "sync",
 )
 
 
 def test_every_check_has_one_row_in_one_report(tmp_path: Path) -> None:
     # Moving a check into its area must not cost it its row, nor give it a second one: the
-    # fourteen are the same fourteen, once each. A literal tuple and not the registry read back,
+    # fifteen are the same fifteen, once each. A literal tuple and not the registry read back,
     # so a check that dropped out of both the core and the areas reddens here. Mutation (oracle):
     # `mutations/`'s "doctor drops the checks an area contributes" -> the five delivery rows are
     # missing. The fixture is an initialised project with nothing else to look at -- no overlay,
@@ -1218,11 +1219,12 @@ def test_every_registry_name_is_spelled_exactly_once_in_the_module() -> None:
     core = [module, *{sys.modules[check.__module__] for _, check in module.CHECKS} - {module}]
     assert spelled(core, names) == dict.fromkeys(names, 1)
     found = registry.discover_contributors()
-    # The three delivery areas, so the loop below is not vacuously true of no area at all.
+    # The four areas, so the loop below is not vacuously true of no area at all.
     assert [name for name, _ in found] == [
         "stayfixed.attach.doctor",
         "stayfixed.memory.doctor",
         "stayfixed.overlay.doctor",
+        "stayfixed.sync.doctor",
     ]
     areas = [area for _, area in found if isinstance(area, ModuleType)]
     assert len(areas) == len(found), found

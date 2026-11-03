@@ -879,11 +879,11 @@ def test_the_plan_rule_count_is_the_number_of_rules_plan_check_emits() -> None:
     assert _NUMBER_WORDS.get(match.group(1).lower()) == len(codes), (match.group(1), sorted(codes))
 
 
-# The `doctor` check table: fourteen rows, each spelling a check name, and the one
+# The `doctor` check table: fifteen rows, each spelling a check name, and the one
 # code-restating table in this document the branch that built this binding mechanism did not
 # bind. `tests/doctor/test_checks.py` pins each name as a literal exactly once *inside* the module
 # that registers it — `checks.py` or an area's `doctor.py` — so the document's copy is a *second*
-# spelling of each of the fourteen — one that
+# spelling of each of the fifteen — one that
 # guard cannot see, and a renamed check would leave this page green and wrong. That the unbound
 # ones drift is not a hypothesis: `len(OVERLAY_FILES)` was sixteen while four comments one
 # directory over still said fourteen.
@@ -929,7 +929,7 @@ _DOCTOR_COUNTS = {
 def test_every_document_counts_the_rows_the_report_has() -> None:
     # The count was written in five places and held in none: a row added to the report left four
     # documents and the smoke workflow saying the old number. Mutation (`mutations/`'s "the
-    # reference counts one doctor row more than the report has"): `docs/cli.md` says fifteen.
+    # reference counts one doctor row more than the report has"): `docs/cli.md` says sixteen.
     from stayfixed.doctor.checks import CHECKS
     from stayfixed.doctor.registry import contributions
 
@@ -1114,3 +1114,31 @@ def test_every_reason_constant_is_documented() -> None:
     # pass with nothing of theirs held.
     assert adapters and len(reasons) > len(core), sorted(reasons)
     assert [reason for reason in sorted(reasons) if f"`{reason}`" not in section] == []
+
+
+# The "Note sync" section names what the sync keeps and every outcome it records, in words that
+# were written beside the code and are held to it here: a fifth file in the state directory, a new
+# outcome or a different throttle would leave the section true of a sync that is gone.
+_NOTE_SYNC_SECTION = re.compile(r"^## Note sync\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL)
+
+
+def test_the_note_sync_section_names_what_the_sync_keeps_and_records() -> None:
+    # Mutation (declared): a sixth outcome in `state.OUTCOMES`, or `CHECKOUTS_FILE` renamed ->
+    # reddens naming the word the section lacks.
+    from stayfixed.sync import state
+
+    section = _NOTE_SYNC_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
+    assert section is not None, "docs/cli.md has no `Note sync` section"
+    text = section.group(1)
+    kept = (
+        state.STATE_FILE,
+        state.LOCK_FILE,
+        state.SLEEPER_LOCK_FILE,
+        state.PENDING_FILE,
+        state.CHECKOUTS_FILE,
+        f"{state.SCRATCH}/",
+    )
+    absent = [f"`{word}`" for word in (*kept, *state.OUTCOMES) if f"`{word}`" not in text]
+    assert absent == [], absent
+    assert f"within {state.THROTTLE_SECONDS} seconds" in text
+    assert f"{state.BACK_OFF_MINUTES} minutes" in text

@@ -5,16 +5,16 @@ description: Diagnose a stayfixed installation — hooks, memory store, budgets,
 
 # Diagnosing an installation
 
-1. Run `stayfixed doctor --json` and read the report: fourteen checks, each with a status, a
+1. Run `stayfixed doctor --json` and read the report: fifteen checks, each with a status, a
    detail and a remedy. Between them they answer whether the repository is initialised, whether
    the hook wrapper can reach stayfixed at all, whether this checkout is attached, whether the
    overlay's delivery is in place and what shape its memory path has, each budget raised or
    lowered, the layer each preference and machine-owner key
-   came from, a bundle that does not fit its slots, the last reasons a hook failed, and, as
+   came from, a bundle that does not fit its slots, the last reasons a hook failed, whether the overlay's note sync can run, and, as
    information, an environment variable that is set and ignored.
 2. Relay each finding with the remedy the report names, verbatim. Do not change settings or
    hook entries on the user's behalf — name the command that would.
-3. A `skip` is not a fault, and it is not always harmless either. Eight checks skip on a
+3. A `skip` is not a fault, and it is not always harmless either. Nine checks skip on a
    state of the machine or of the repository: `wrapper`
    when no plugin root can be vouched for,
    `attached` when no overlay is recorded or the overlay cannot be asked, `pre-commit` with no
@@ -22,11 +22,12 @@ description: Diagnose a stayfixed installation — hooks, memory store, budgets,
    declared — and those last two also skip when the overlay root this machine records is not a
    directory any more, which is the one overlay skip that carries a remedy (put the overlay
    back, or record where it is now), because the note store is broken with it — `bundles` when the note store does not resolve,
-   `diagnostics` with no harness data root set, and `ci-ref` when the repository records no
+   `diagnostics` with no harness data root set, `sync` when the machine file does not switch the note
+   sync on, and `ci-ref` when the repository records no
    `[ci] ref` — which `stayfixed init` writes once a released stayfixed exists to pin, so that
    row's skip says "nothing recorded here", not "this build cannot answer". With no project
    configuration to read, `budgets`, `ci-ref`, `attached` and `bundles` skip
-   saying so; that is one state, not several, and it brings `budgets` to the eight. Each says which
+   saying so; that is one state, not several, and it brings `budgets` to the nine. Each says which
    state it is in its own detail. Report each as the state it names, and relay the remedy where
    the row carries one.
 4. **`wrapper` skipping for no plugin root is the report's loudest finding, and it is not
