@@ -540,10 +540,12 @@ newest first), because an index renders only from a checkout bound to its projec
 starts a job, to fetch. `Stop` and `SessionEnd` ask one `git status` of the overlay's memory paths
 and start a job only when a memory path is changed or untracked, when commits wait to be pushed,
 when the last outcome is not `ok`, `skipped` or `resolved_index`, or when a hold stands. While a
-hold stands, or a failure only you can clear (`conflict`, `auth_failed`, `hook_failed`,
+hold stands, or a failure a rerun usually meets again (`conflict`, `auth_failed`, `hook_failed`,
 `scan_unavailable`, `signing_failed`, `secret_found`, `waiting_clean_tree`), and neither `HEAD`,
 the fetched `origin/main` nor the dirty notes, by name and content, changed since the last job,
-they wait 15 minutes from the last job: the same job would meet the same end.
+`Stop` waits 15 minutes from the last job: the same job would meet the same end. `SessionEnd`
+waits only under a hold, since a `hook_failed` can also be a step a rerun clears and no later turn
+of the session would retry it.
 A trigger within 120 seconds of the last job is marked pending and a sleeper waits out the
 throttle (a second sleeper exits at once, so a burst of turns is one run); one while a job runs is
 only marked pending, and that job runs again, at most twice, for the triggers that arrived while

@@ -617,9 +617,7 @@ def fetch(ctx: JobContext) -> tuple[str | None, Outcome | None]:
     )  # fmt: skip
     if result.timed_out or result.code != 0:
         return None, _remote_failure(ctx, result, "git fetch origin main", limit)
-    upstream = _rev(ctx, FETCHED_REF)
-    ctx.fetched_sha = upstream
-    return upstream, None
+    return _rev(ctx, FETCHED_REF), None
 
 
 # -- integrate by replay, and the index union -----------------------------------------------------
@@ -835,6 +833,9 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
     head = _rev(ctx, "HEAD")
     local = _nul(_ok(ctx, "rev-list", "-z", "--reverse", "--end-of-options", f"{upstream}..{head}"))
     dropped = _dropped(ctx, recorded, upstream, local)
+    # Recorded only once the rewrite check has judged it: a job stopped before then leaves the
+    # last sha, so the next job still sees what upstream lost.
+    ctx.fetched_sha = upstream
     if dropped:
         remark = (
             f"upstream was rewritten: it no longer has {', '.join(dropped)}, which this overlay "

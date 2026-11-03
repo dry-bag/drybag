@@ -15,12 +15,13 @@ import shlex
 import stat
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
-from stayfixed.sync.git import Ran
+from stayfixed.sync.git import GitTimeout, Ran
 from stayfixed.sync.state import Holds, SyncState, read_state
 from tests.gitfixture import git_bytes
 from tests.sync.conftest import (
@@ -260,6 +261,33 @@ def _purged_on_b(overlays: Overlays) -> str:
     commit_all(b, "memory: other")
     git(b, "push", "-q", "--force", "origin", "main")
     return leaked
+
+
+def test_a_job_stopped_before_the_rewrite_check_still_sees_the_purge(
+    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The sha recorded as upstream's is what the next job judges a rewrite against: recorded at
+    # the fetch, a job stopped between the fetch and the check (its deadline, a git timeout)
+    # would leave the new sha with no hold, and the next job would push the purged note back.
+    # Mutation (oracle): `mutations/`'s "the fetch records upstream before the rewrite check".
+    leaked = _purged_on_b(overlays)
+    real = J._dropped
+    calls = {"n": 0}
+
+    def times_out_once(*args: Any, **kwargs: Any) -> list[str]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise GitTimeout("git rev-list timed out")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(J, "_dropped", times_out_once)
+    assert _job(overlays).outcome.state == "timeout"
+    second = _job(overlays)
+
+    assert leaked in second.holds.upstream_paths, second
+    assert "common/memory/private.md" not in git(
+        overlays.bare, "ls-tree", "-r", "--name-only", "main"
+    )
 
 
 def test_a_purge_forced_elsewhere_does_not_come_back(overlays: Overlays) -> None:
@@ -984,11 +1012,11 @@ def test_a_fetch_that_hangs_is_a_timeout(
     assert time.monotonic() - started < SLOW
 
 
-def test_the_fetch_records_the_sha(overlays: Overlays) -> None:
+def test_the_fetch_leaves_the_record_to_the_rewrite_check(overlays: Overlays) -> None:
     u = push_note(overlays.b, "common/memory/n.md", "n\n")
     ctx = context(overlays, overlays.a)
 
     assert J.fetch(ctx) == (u, None)
 
-    assert ctx.fetched_sha == u
+    assert ctx.fetched_sha is None  # `integrate` records it once the rewrite check has run
     assert head(overlays.a, J.FETCHED_REF) == u

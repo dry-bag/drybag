@@ -7291,7 +7291,7 @@ reddens = ["tests/sync/test_hooks.py::test_a_compaction_starts_nothing"]
 [[mutation]]
 name = "an unchanged hold never backs a turn off"
 file = "src/stayfixed/sync/trigger.py"
-before = "    if _backed_off(overlay, state, tree, now):"
+before = '    if (event != "SessionEnd" or state.holds.any) and _backed_off(overlay, state, tree, now):'
 after = "    if False:"
 reddens = [
   "tests/sync/test_hooks.py::test_an_unchanged_hold_backs_off_until_something_moves",
@@ -7406,3 +7406,20 @@ file = "src/stayfixed/sync/doctor.py"
 before = "    if state is None or state.overlay != str(overlay):"
 after = "    if state is None:"
 reddens = ["tests/sync/test_doctor.py::test_a_state_recorded_for_another_overlay_reads_as_never_run"]
+
+[[mutation]]
+name = "the fetch records upstream before the rewrite check"
+file = "src/stayfixed/sync/job.py"
+before = "    return _rev(ctx, FETCHED_REF), None"
+after = "    ctx.fetched_sha = _rev(ctx, FETCHED_REF)\n    return ctx.fetched_sha, None"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_job_stopped_before_the_rewrite_check_still_sees_the_purge",
+  "tests/sync/test_integrate.py::test_the_fetch_leaves_the_record_to_the_rewrite_check",
+]
+
+[[mutation]]
+name = "session end waits out a standing failure"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if (event != "SessionEnd" or state.holds.any) and _backed_off(overlay, state, tree, now):'
+after = "    if _backed_off(overlay, state, tree, now):"
+reddens = ["tests/sync/test_hooks.py::test_session_end_never_waits_out_a_standing_failure"]

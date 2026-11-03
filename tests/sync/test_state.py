@@ -437,9 +437,10 @@ def test_back_off_needs_a_hold_the_same_head_and_the_same_upstream() -> None:
 
 
 def test_back_off_holds_for_a_standing_outcome_on_the_same_notes() -> None:
-    # A failure only the owner can clear is met again by a job on the same notes; one the network
-    # or a moment's lock caused is not. Mutations (oracle): `mutations/`'s "the back-off ignores a
-    # standing outcome" and "the back-off ignores changed notes".
+    # A failure a rerun usually meets again waits on the same notes; `offline`, `timeout` and
+    # `raced` do not (a `hook_failed` a rerun clears is `SessionEnd`'s to retry, see
+    # `test_session_end_never_waits_out_a_standing_failure`). Mutations (oracle): `mutations/`'s
+    # "the back-off ignores a standing outcome" and "the back-off ignores changed notes".
     standing = _held(holds=S.EMPTY_HOLDS, dirty="m" * 64)
     for outcome in ("hook_failed", "scan_unavailable", "secret_found", "auth_failed", "conflict"):
         state = replace(standing, outcome=replace(standing.outcome, state=outcome))

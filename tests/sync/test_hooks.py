@@ -237,6 +237,19 @@ def test_a_failure_only_the_owner_can_clear_backs_off_until_the_notes_change(
     assert decide(overlays, "Stop", at=NOW + timedelta(minutes=BACK_OFF_MINUTES + 1)) == "run"
 
 
+def test_session_end_never_waits_out_a_standing_failure(overlays: Overlays) -> None:
+    # `hook_failed` also names a failure a rerun clears (a remote that hung up, a step's
+    # exception), and no later turn of the session would retry it: `SessionEnd` runs where `Stop`
+    # waits. Under a hold its notes stay here whatever runs, so it waits there
+    # (`test_an_unchanged_hold_backs_off_until_something_moves`). Mutation (oracle): `mutations/`'s
+    # "session end waits out a standing failure".
+    sha = head(overlays.a)
+    _state(overlays, outcome="hook_failed", ago=180, head_sha=sha, fetched=sha)
+
+    assert decide(overlays, "Stop") == "none"
+    assert decide(overlays, "SessionEnd") == "run"
+
+
 def test_no_scanner_backs_off_once_the_indexes_it_rendered_are_recorded(
     overlays: Overlays,
 ) -> None:

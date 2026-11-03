@@ -107,8 +107,10 @@ def _backed_off(overlay: Path, state: SyncState, tree: Tree | None, now: datetim
     return backed_off(state, tree.head, now, dirty=dirty, upstream=_upstream(overlay))
 
 
-def _triggered(overlay: Path, d: Path, now: datetime, tree: Tree | None) -> bool:
-    """Whether a `Stop` or `SessionEnd` finds something for a job to do."""
+def _triggered(event: str, overlay: Path, d: Path, now: datetime, tree: Tree | None) -> bool:
+    """Whether a `Stop` or `SessionEnd` finds something for a job to do. `SessionEnd` waits out
+    the back-off only under a hold, which keeps its notes here whatever runs: no later turn of
+    the session would retry a failure a rerun clears."""
     try:
         state = read_state(d)
     except StateUnreadable:
@@ -116,7 +118,7 @@ def _triggered(overlay: Path, d: Path, now: datetime, tree: Tree | None) -> bool
     news = tree is not None and (tree.ahead > 0 or bool(tree.paths))
     if state is None:
         return news
-    if _backed_off(overlay, state, tree, now):
+    if (event != "SessionEnd" or state.holds.any) and _backed_off(overlay, state, tree, now):
         return False
     return news or state.outcome.state not in SETTLED or state.holds.any
 
@@ -145,7 +147,7 @@ def decide(
     if event == "SessionStart":
         if source == "compact":
             return "none", None
-    elif not _triggered(overlay, d, now, _tree(overlay)):
+    elif not _triggered(event, overlay, d, now, _tree(overlay)):
         return "none", None
     if event == "SessionEnd":
         return "run", None

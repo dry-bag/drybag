@@ -39,8 +39,8 @@ OUTCOMES: tuple[str, ...] = (
 # The outcomes after which the sync has nothing to answer for: the hooks start no job on them and
 # `doctor` reports them green. A united index is a success: nothing stopped the job.
 SETTLED = ("ok", "skipped", "resolved_index")
-# The failures only their owner can clear: a job run again on the same `HEAD`, upstream and notes
-# meets them again, so a trigger waits them out as it does a hold (`backed_off`).
+# The failures a job run again on the same `HEAD`, upstream and notes usually meets again, so a
+# `Stop` waits them out as it does a hold (`backed_off`); `SessionEnd` retries them.
 STANDING = (
     "conflict", "auth_failed", "hook_failed", "scan_unavailable", "signing_failed",
     "secret_found", "waiting_clean_tree",
