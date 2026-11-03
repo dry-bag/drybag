@@ -1861,3 +1861,14 @@ after = "    if (fault := None) is not None:"
 reddens = [
   "tests/attach/test_write.py::test_an_unreadable_project_record_stops_attach_with_nothing_written",
 ]
+
+# A bound checkout with no `stayfixed.toml` has its notes in the overlay when the overlay's layers
+# say so; the hook that watches the overlay's backup must read that configuration, or it is silent.
+[[mutation]]
+name = "overlay-status is silent in a bound checkout with no stayfixed.toml"
+file = "src/stayfixed/attach/hooks.py"
+before = "    if config is None:\n        # No file: the configuration of a checkout this machine binds, if it binds this one.\n        from stayfixed.config.session import bound_config"
+after = "    if False:\n        # No file: the configuration of a checkout this machine binds, if it binds this one.\n        from stayfixed.config.session import bound_config"
+reddens = [
+  "tests/attach/test_hooks.py::test_a_bound_checkout_with_no_file_hears_the_overlay_status",
+]

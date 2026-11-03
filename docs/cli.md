@@ -508,7 +508,8 @@ deliver the overlay's rules (above), the `attach` area registers one `SessionSta
 per session: the marker is banked only when the handler had something to say, so a session that
 hears a line hears it once, and a repository with nothing to report is asked again on every
 `startup`, `resume`, `clear`, `compact` and `fork` the matcher above covers — and it says
-nothing at all unless `[memory] mode` is `overlay`. Eight lines, each fixed and carrying at most a
+nothing at all unless `[memory] mode` is `overlay`, which for a checkout this machine binds and that has
+no `stayfixed.toml` is the mode the overlay's layers set. Eight lines, each fixed and carrying at most a
 count but the one that names two remotes, joined by newlines in this order: **no overlay recorded** on this machine, or one that
 **could not be asked** about, which is a machine configuration file that will not parse; this
 repository **not attached** to that overlay, or, for a bound one, its **`origin` moved** from
