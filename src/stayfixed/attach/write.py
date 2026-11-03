@@ -107,7 +107,7 @@ from stayfixed.binding import (
 from stayfixed.config.layout import ATTACH_LEDGER
 from stayfixed.config.owner import Owner
 from stayfixed.config.paths import PathEscape, PathUnasked, contained
-from stayfixed.config.plates import TAG_LINK_PREFIX, read_record
+from stayfixed.config.plates import TAG_LINK_PREFIX, read_record, record_fault
 from stayfixed.config.reading import UNPARSEABLE
 from stayfixed.config.schema import OVERLAY_MODE, Config
 from stayfixed.config.session import command_config
@@ -875,6 +875,10 @@ def gates(root: Path, config: Config, binding: Binding) -> PermissionDiff:
     # overlay's sources read under it answer "none" rather than refusing, so nothing below
     # would ask before writing.
     refuse_unless_share_can_exist(binding, config)
+    # A record that cannot say which tags it lists would read as none, and the run would take back
+    # what the tags delivered; the notes of a session take that, a write run does not.
+    if (fault := record_fault(binding.overlay, binding.project)) is not None:
+        raise Refusal(f"{fault}; nothing was written")
     # The diff, read in the run's order: it refuses a settings file the merge could not read.
     diff = diff_permissions(root, binding)
     # The check about the notes, asked only where they are composed.

@@ -26,6 +26,7 @@ from stayfixed.config.layout import ATTACH_LEDGER as LEDGER
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.doctor import checks as doctor_checks
 from stayfixed.doctor.api import OK, RED, SKIP, WARN, Check
+from stayfixed.errors import Refusal
 from stayfixed.memory.api import PROJECT_RECORD, PROJECTS
 from stayfixed.overlay.api import COMMON_CLAUDE
 from stayfixed.printed import quoted
@@ -682,8 +683,8 @@ def test_an_owner_whose_own_binding_record_will_not_parse_is_told_where_to_look(
         assert "could not run" not in _by_name(rows, name).detail
     store = tmp_path / "overlay" / PROJECTS / "p" / "memory"
     (tmp_path / "home").mkdir(exist_ok=True)
-    checked = attach_check(root, store=store, machine=machine)
-    assert f"/{PROJECT_RECORD} is not valid TOML" in checked.summary
+    with pytest.raises(Refusal, match=f"/{PROJECT_RECORD}.* is not valid TOML"):
+        attach_check(root, store=store, machine=machine)
 
 
 # --- the delivery ------------------------------------------------------------------------------
@@ -804,7 +805,6 @@ def test_a_git_that_cannot_say_what_it_tracks_warns_and_never_reads_as_in_place(
     # "Could not ask" is never "nothing tracked": a git that cannot answer leaves the placed paths
     # unchecked, which the row says.
     from stayfixed.attach import exclude
-    from stayfixed.errors import Refusal
 
     def unanswered(root: Path, relatives: object) -> tuple[str, ...]:
         raise Refusal(exclude.UNANSWERED)

@@ -1850,3 +1850,14 @@ reddens = [
   "tests/attach/test_checkout.py::test_a_worktree_of_a_bare_repository_gets_nothing",
   "tests/attach/test_checkout.py::test_a_submodule_gets_nothing",
 ]
+
+# A record that cannot be read lists no tags to a session, and a write run that took it so would
+# take back what the tags delivered: the refusal is what keeps it from untagging by accident.
+[[mutation]]
+name = "attach reads an unreadable project record as listing no tags"
+file = "src/stayfixed/attach/write.py"
+before = "    if (fault := record_fault(binding.overlay, binding.project)) is not None:"
+after = "    if (fault := None) is not None:"
+reddens = [
+  "tests/attach/test_write.py::test_an_unreadable_project_record_stops_attach_with_nothing_written",
+]

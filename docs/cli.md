@@ -2602,10 +2602,8 @@ answer, in the order the run meets them:
   the loader refuses; or the machine configuration cannot be read, is not UTF-8 or is not valid
   TOML.
 - `git` cannot read the `origin` remote, or `git` cannot name the repository's common directory.
-  The overlay's record of this project (`projects/<name>/project.toml`) binds nothing, so one
-  that cannot be read, is not UTF-8 or is not valid TOML — a merge's conflict markers, when two
-  machines first attached the project — stops nothing: the run says where it stopped reading,
-  never writes over it, and `doctor`'s `attached` row warns.
+  The overlay's record of this project (`projects/<name>/project.toml`) binds nothing and is never
+  written over; one that cannot be read, is not UTF-8 or is not valid TOML is a refusal below.
 - The overlay's `permissions.json` or `hooks.json`, or `.claude/settings.local.json`, cannot be
   read or is not UTF-8; or a file under the overlay's `skills/` or `agents/` cannot be read, is
   not a regular file, is not UTF-8 or is longer than 64 MiB, or a directory there cannot be
@@ -2645,6 +2643,12 @@ It exits `2` on a refusal, in the order the run meets them:
   grows by its depth on every line, and `would be longer than this reader reads once written
   back` keeps a run from leaving a file its next read refuses. `--check` refuses it too.
 - A `memory.groups` entry that leaves this project's share of the overlay.
+- The overlay's record of this project, where it is there and cannot be read, is not UTF-8 or is
+  not valid TOML (a merge's conflict markers, when two machines first attached the project), or
+  its `tags` is not a list of strings: the record could not say which tags it lists, and a run
+  that read that as none would take back what they delivered. The refusal names the file, and
+  `--check` refuses it too. A session reads it as no tags and says so. A record that is absent,
+  as before a first attach, is no refusal.
 - A `.stayfixed` that is a symlink, or an existing ledger naming files, settings keys or
   directories `attach` could not have written.
 - A `git check-ignore` that cannot answer.

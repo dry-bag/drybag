@@ -857,22 +857,22 @@ def test_a_placed_path_that_is_the_same_file_as_a_tracked_one_is_refused(tmp_pat
 CONFLICTED = '<<<<<<< HEAD\nfirst_attach = "2026-10-01"\n=======\nfirst_attach = "2026-10-02"\n'
 
 
-def test_an_overlay_project_record_that_cannot_be_read_stops_neither_attach_nor_the_session(
+def test_an_overlay_project_record_that_cannot_be_read_stops_attach_but_not_the_session(
     tmp_path: Path,
 ) -> None:
     # The overlay's `projects/<name>/project.toml` keeps the first remote and date for the owner to
-    # read and binds nothing: the binding is the id and this machine's record of it. Two machines
-    # that first-attach one project each write it, and the overlay's merge leaves conflict
-    # markers, which stopped every attach and silenced the session's binding check. Said, compared
-    # with nothing, and never written over.
+    # read, and the tags it lists: the binding is the id and this machine's record of it. Two
+    # machines that first-attach one project each write it, and the overlay's merge leaves conflict
+    # markers. A write run cannot tell which tags that lists and refuses, never writing over it;
+    # the session's binding check is not silenced by it.
     from stayfixed.attach.binding import binding_for
 
     root, store, machine = _attachable(tmp_path)
     attach(root, store=store, machine=machine, runner=Recorder())
     record = store.parent / PROJECT_RECORD
     record.write_text(CONFLICTED, encoding="utf-8")
-    attached = attach(root, store=store, machine=machine, runner=Recorder())
-    assert any(PROJECT_RECORD in note and "is not valid TOML" in note for note in attached.notes)
+    with pytest.raises(Refusal, match="is not valid TOML"):
+        attach(root, store=store, machine=machine, runner=Recorder())
     assert record.read_text(encoding="utf-8") == CONFLICTED
     found = binding_for(root, load(root, machine=machine), machine=machine)
     assert found.state == "bound"
@@ -2751,6 +2751,26 @@ def test_a_recorded_rule_removed_by_hand_is_not_an_error(tmp_path: Path) -> None
     (root / SETTINGS).write_text(json.dumps(document), encoding="utf-8")
     attach(root, store=store, machine=machine, runner=Recorder())
     assert _allowed(root) == [RULE, "Bash(x)"]
+
+
+def test_an_unreadable_project_record_stops_attach_with_nothing_written(tmp_path: Path) -> None:
+    # A record that cannot be read is no list of tags, and a run that took it so would withdraw the
+    # tags' allow rules, notes and render: it refuses, naming the file, before the first write.
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    (store.parent / PROJECT_RECORD).write_text('tags = ["a"\n', encoding="utf-8")
+    data = Path(os.environ["HOME"]) / ".local" / "share" / "stayfixed"
+    before = (snapshot(root), snapshot(data))
+    for run in (
+        lambda: attach(root, store=store, machine=machine, runner=Recorder()),
+        lambda: check(root, store=store, machine=machine),
+    ):
+        with pytest.raises(Refusal) as refusal:
+            run()
+        assert quoted(str(store.parent / PROJECT_RECORD)) in str(refusal.value)
+    assert (snapshot(root), snapshot(data)) == before
+    assert "Bash(x)" in _allowed(root)
 
 
 def test_untagging_removes_the_codex_rule_copies_the_overlay_no_longer_holds(

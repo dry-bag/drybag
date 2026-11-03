@@ -85,26 +85,43 @@ def read_record(path: Path) -> dict[str, Any]:
     return tomllib.loads(fsops.read_regular_text(path))
 
 
-def tags(overlay: Path, project: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """The usable tags of `project` in list order, each once, and the notes: a record that cannot
-    be read, `tags` not a list of strings, a tag outside `TAG` and a tag with no `groups/<tag>/`
-    directory. No record, or a record with no `tags` key, is no tags and no note."""
+def _listed(overlay: Path, project: str) -> tuple[list[str], str | None]:
+    """The tags `project`'s record lists, and the note for a record that is present and unusable
+    (`record_fault`): it cannot be read, or `tags` is not a list of strings. No record, or a record
+    with no `tags` key, lists none and is no fault."""
     record = overlay / PROJECTS / project / RECORD
     shown = quoted(str(record))
     try:
         listed = read_record(record).get("tags")
     except FileNotFoundError:
-        return (), ()
+        return [], None
     except UnicodeDecodeError:
-        return (), (NOT_UTF8.format(path=shown),)
+        return [], NOT_UTF8.format(path=shown)
     except OSError as exc:
-        return (), (UNREADABLE.format(path=shown, error=fsops.said(exc)),)
+        return [], UNREADABLE.format(path=shown, error=fsops.said(exc))
     except UNPARSEABLE as exc:
-        return (), (NOT_TOML.format(path=shown, position=toml_position(exc)),)
+        return [], NOT_TOML.format(path=shown, position=toml_position(exc))
     if listed is None:
-        return (), ()
+        return [], None
     if not isinstance(listed, list) or not all(isinstance(tag, str) for tag in listed):
-        return (), (NOT_A_LIST.format(path=shown),)
+        return [], NOT_A_LIST.format(path=shown)
+    return listed, None
+
+
+def record_fault(overlay: Path, project: str) -> str | None:
+    """Why `project`'s record cannot say which tags it lists, where it cannot. Readers of a
+    session take that as no tags and say it; `attach` refuses it, since a run that took it so
+    would withdraw what the tags delivered."""
+    return _listed(overlay, project)[1]
+
+
+def tags(overlay: Path, project: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The usable tags of `project` in list order, each once, and the notes: `record_fault`, a tag
+    outside `TAG` and a tag with no `groups/<tag>/` directory."""
+    listed, fault = _listed(overlay, project)
+    if fault is not None:
+        return (), (fault,)
+    shown = quoted(str(overlay / PROJECTS / project / RECORD))
     usable: list[str] = []
     notes: list[str] = []
     for tag in listed:
