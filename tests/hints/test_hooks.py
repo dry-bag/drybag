@@ -84,12 +84,12 @@ def test_no_config_silences_the_hygiene_note_and_never_the_guard(tmp_path: Path)
     # and the hygiene note, which is about the project, stays silent. Mutation (`mutations/`'s
     # "the hygiene note judges with no project configuration"): the note raises on `None`.
     verdicts = {
-        handler.event: handler.run(bash_event(tmp_path, "sleep 300 &"), NO_CONFIG)
+        (handler.name, handler.event): handler.run(bash_event(tmp_path, "sleep 300 &"), NO_CONFIG)
         for handler in register()
     }
-    assert verdicts["PreToolUse"].context == bgcleanup.SLEEP_HINT
+    assert verdicts["bg-cleanup", "PreToolUse"].context == bgcleanup.SLEEP_HINT
     for event in ("PostToolUse", "PostToolUseFailure"):
-        assert verdicts[event].context is None
+        assert verdicts["test-hygiene", event].context is None
 
 
 def test_a_leaking_background_call_is_hinted(tmp_path: Path) -> None:
