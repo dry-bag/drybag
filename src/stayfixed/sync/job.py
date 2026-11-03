@@ -629,6 +629,14 @@ def fetch(ctx: JobContext) -> tuple[str | None, Outcome | None]:
 # fetch moves past it. A rebase rather than a fast-forward, since the notes committed here usually
 # sit beside the held sha; with none, it is a fast-forward.
 REVIEW = "git log -p --no-renames HEAD..{sha}, then git rebase {sha}"
+# How the owner settles a rewritten upstream {sha}: read what this overlay has that it dropped,
+# then take the rewrite or undo it.
+REWRITE = (
+    "git log -p {sha}..HEAD, then git rebase -i {sha} dropping them to take the rewrite, or git "
+    "rebase {sha} and a push to undo it"
+)
+# How the owner reads an upstream {sha} git will not check out, which only upstream can repair.
+UNREADABLE_REVIEW = "git diff --stat HEAD {sha}, then repair upstream"
 _AUTHOR = re.compile(r"author (.*) <([^<>]*)> (\d+ [+-]\d{4})")
 
 
@@ -830,9 +838,8 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
     if dropped:
         remark = (
             f"upstream was rewritten: it no longer has {', '.join(dropped)}, which this overlay "
-            "still has; nothing is integrated or pushed until the owner settles it by hand. "
-            f"Review: git log -p {upstream}..HEAD; take the rewrite with git rebase -i {upstream}, "
-            f"dropping them, or undo it with git rebase {upstream} and a push"
+            "still has; nothing is integrated or pushed until the owner settles it by hand: "
+            + REWRITE.format(sha=upstream)
         )
         _hold_upstream(ctx, REWRITTEN, dropped, remark)
         return None
@@ -884,8 +891,8 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
     if timed(readable, "git read-tree").code != 0:
         remark = (
             f"upstream's tree cannot be checked out ({scan.first_lines(readable.err)}); nothing is "
-            "integrated or pushed until upstream is repaired. Review: "
-            f"git diff --stat HEAD {upstream}"
+            "integrated or pushed until upstream is repaired: "
+            + UNREADABLE_REVIEW.format(sha=upstream)
         )
         _hold_upstream(ctx, UNREADABLE, incoming, remark)
         return None

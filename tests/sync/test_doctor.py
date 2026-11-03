@@ -14,9 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.doctor.api import OK, RED, SKIP, WARN
+from stayfixed.doctor.api import OK, SKIP, WARN
 from stayfixed.sync.state import (
     EMPTY_HOLDS,
+    REWRITTEN,
+    UNREADABLE,
     Holds,
     Outcome,
     SyncState,
@@ -139,11 +141,12 @@ def test_git_below_the_floor_is_a_warning_that_says_the_job_does_nothing(
     assert remedy
 
 
-def test_no_scanner_build_is_red_with_the_remedy_the_job_gives(machine: Machine) -> None:
-    # Mutation (oracle): the row calls a missing scanner green. Red because nothing is committed
-    # or pushed while it is missing, and a machine that switched sync on expects both.
+def test_no_scanner_build_is_a_warning_with_the_remedy_the_job_gives(machine: Machine) -> None:
+    # Mutation (oracle): the row calls a missing scanner green. A warning, not red: `setup
+    # --overlay` switches the sync on without building the hook, so red would fail every freshly
+    # set-up machine, while the job itself fails closed.
     status, detail, remedy = machine.row()
-    assert status == RED
+    assert status == WARN
     assert "nothing is committed or pushed" in detail
     assert remedy == f"run `pre-commit install-hooks` in {machine.overlay}"
 
@@ -156,6 +159,40 @@ def test_an_upstream_hold_is_a_warning_naming_the_paths_and_the_review_command(
     assert status == WARN
     assert "common/claude/hooks/launch.sh" in detail
     assert f"git log -p --no-renames HEAD..{UPSTREAM}, then git rebase {UPSTREAM}" in remedy
+
+
+def test_an_unreadable_upstream_tree_is_named_as_such_with_the_jobs_remedy(
+    machine: Machine,
+) -> None:
+    # Not "outside memory", and not a rebase onto a tree git cannot read. Mutation (oracle):
+    # `mutations/`'s "doctor calls every upstream hold outside memory".
+    held = Holds(("projects/alpha/memory/GIT~1/n.md",), (), UNREADABLE)
+    status, detail, remedy = machine.scanner().state("ok", holds=held, fetched=UPSTREAM).row()
+    assert status == WARN
+    assert "cannot be checked out" in detail and "outside memory" not in detail
+    assert f"git diff --stat HEAD {UPSTREAM}" in remedy and "rebase" not in remedy
+
+
+def test_a_rewritten_upstream_names_the_commits_it_dropped(machine: Machine) -> None:
+    dropped = "fedcba9876543210fedcba9876543210fedcba98"
+    held = Holds((dropped,), (), REWRITTEN)
+    status, detail, remedy = machine.scanner().state("ok", holds=held, fetched=UPSTREAM).row()
+    assert status == WARN
+    assert "rewritten" in detail and dropped in detail
+    assert f"git log -p {UPSTREAM}..HEAD" in remedy and f"git rebase -i {UPSTREAM}" in remedy
+
+
+@pytest.mark.parametrize("fetched", ["x; touch owned", "HEAD~1", None])
+def test_a_recorded_sha_reaches_a_command_only_when_it_is_one(
+    machine: Machine, fetched: str | None
+) -> None:
+    # `doctor` prints commands an agent may run: a planted `fetched_sha` never becomes one, and
+    # without a sha the row names no command rather than one at a moving ref. Mutation (oracle):
+    # `mutations/`'s "doctor puts any recorded sha into a command".
+    held = Holds(("common/claude/hooks/launch.sh",), ())
+    _, _, remedy = machine.scanner().state("ok", holds=held, fetched=fetched).row()
+    assert "git " not in remedy and "touch" not in remedy
+    assert "by hand" in remedy
 
 
 def test_a_local_hold_is_a_warning_naming_the_commits(machine: Machine) -> None:

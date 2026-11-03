@@ -7368,7 +7368,26 @@ name = "doctor calls a missing scanner green"
 file = "src/stayfixed/sync/doctor.py"
 before = "    if scan.gitleaks_binary(Path.home(), overlay, context.env) is None:"
 after = "    if False:"
-reddens = ["tests/sync/test_doctor.py::test_no_scanner_build_is_red_with_the_remedy_the_job_gives"]
+reddens = ["tests/sync/test_doctor.py::test_no_scanner_build_is_a_warning_with_the_remedy_the_job_gives"]
+
+[[mutation]]
+name = "doctor puts any recorded sha into a command"
+file = "src/stayfixed/sync/doctor.py"
+before = "            if full_sha(fetched)"
+after = "            if fetched"
+reddens = [
+  "tests/sync/test_doctor.py::test_a_recorded_sha_reaches_a_command_only_when_it_is_one[x; touch owned]",
+]
+
+[[mutation]]
+name = "doctor calls every upstream hold outside memory"
+file = "src/stayfixed/sync/doctor.py"
+before = "        what, review = held[holds.upstream_why or OUTSIDE]"
+after = "        what, review = held[OUTSIDE]"
+reddens = [
+  "tests/sync/test_doctor.py::test_an_unreadable_upstream_tree_is_named_as_such_with_the_jobs_remedy",
+  "tests/sync/test_doctor.py::test_a_rewritten_upstream_names_the_commits_it_dropped",
+]
 
 [[mutation]]
 name = "doctor calls an old git green"

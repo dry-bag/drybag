@@ -2,7 +2,8 @@
 
 One row, read off this machine's own records: the switch in the machine file, the git the job
 needs, the scanner build it needs, and the state its last job left. It runs nothing but `git
-version` and writes nothing. `doctor`'s core discovers this module by name (CONTRIBUTING.md,
+version` and, once pre-commit's database is there, `git cat-file` of the pin `HEAD` commits, and
+writes nothing. `doctor`'s core discovers this module by name (CONTRIBUTING.md,
 "Areas"); every import sits inside a function body, as in a `hooks.py`, because discovery imports
 it before the report asks anything and the note layout and the job pull in the configuration layer.
 
@@ -37,18 +38,28 @@ def _names(names: tuple[str, ...]) -> str:
 
 
 def _held(holds: Holds, fetched: str | None, overlay: Path) -> Row:
-    """The warning for a hold: what is held, and how to take it."""
+    """The warning for a hold: what is held, and how to take it. A command names the recorded
+    upstream sha only when it is one: `state.json` is a file, and an agent may run what this
+    prints."""
     from stayfixed.doctor.api import WARN, Row
-    from stayfixed.sync.job import REVIEW
+    from stayfixed.sync.job import REVIEW, REWRITE, UNREADABLE_REVIEW
+    from stayfixed.sync.state import OUTSIDE, REWRITTEN, UNREADABLE, full_sha
 
+    held = {
+        OUTSIDE: ("upstream holds changes outside memory", REVIEW),
+        UNREADABLE: ("upstream's tree cannot be checked out here", UNREADABLE_REVIEW),
+        REWRITTEN: ("upstream was rewritten and dropped commits this overlay has", REWRITE),
+    }
     said: list[str] = []
     fixes: list[str] = []
     if holds.upstream_paths:
-        said.append(
-            f"upstream holds changes outside memory ({_names(holds.upstream_paths)}), so nothing "
-            f"is integrated or pushed"
+        what, review = held[holds.upstream_why or OUTSIDE]
+        said.append(f"{what} ({_names(holds.upstream_paths)}), so nothing is integrated or pushed")
+        fixes.append(
+            f"in {overlay}: {review.format(sha=fetched)}"
+            if full_sha(fetched)
+            else "review upstream by hand; the next job clears the hold once it is settled"
         )
-        fixes.append(f"in {overlay}: {REVIEW.format(sha=fetched or 'origin/main')}")
     if holds.local_commits:
         said.append(f"local commits outside memory are not pushed ({_names(holds.local_commits)})")
         fixes.append("review the commits and push them by hand")
@@ -60,7 +71,7 @@ def _sync(context: Context) -> Row:
 
     from stayfixed import fsops
     from stayfixed.config.machine import machine_config_path
-    from stayfixed.doctor.api import OK, RED, SKIP, WARN, Row
+    from stayfixed.doctor.api import OK, SKIP, WARN, Row
     from stayfixed.printed import clipped
     from stayfixed.sync import scan
     from stayfixed.sync.git import MIN_GIT, git, version_ok
@@ -88,11 +99,8 @@ def _sync(context: Context) -> Row:
             f"install git {floor} or newer",
         )
     if scan.gitleaks_binary(Path.home(), overlay, context.env) is None:
-        return Row(
-            RED,
-            "no gitleaks build for the overlay's pinned hook, so nothing is committed or pushed",
-            f"run `pre-commit install-hooks` in {overlay}",
-        )
+        said, _, remedy = scan.NO_SCANNER.format(overlay=overlay).partition("; ")
+        return Row(WARN, said, remedy)
     try:
         state = read_state(state_directory())
     except StateUnreadable as error:

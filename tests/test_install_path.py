@@ -37,7 +37,6 @@ from stayfixed.attach.hooks import NOT_ATTACHED
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.doctor.api import OK, RED, SKIP, run_checks
 from stayfixed.memory.api import DELIMITER, PROJECTS, markers
-from stayfixed.sync.scan import gitleaks_pin
 from tests.floor import developer_free_environ
 from tests.gitfixture import git
 from tests.runners import Recorder
@@ -46,7 +45,6 @@ from tests.snapshot import (
     assert_snapshot_unchanged,
     snapshot,
 )
-from tests.sync.conftest import build_gitleaks, pre_commit_store
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -302,14 +300,6 @@ def _install_path(
         "the second `setup` recorded the overlay into the file the first one wrote"
     )
     assert (overlay / ".git" / "HEAD").is_file(), "`setup` rendered no repository at the overlay"
-    # What `pre-commit install-hooks` leaves in its cache under this home: the scanner build the
-    # `sync` row asks for, since `setup --overlay` switched the note sync on for the overlay it
-    # rendered. Without it that row is red, as it is on a machine that has not built the hook yet.
-    pin = gitleaks_pin(overlay)
-    assert pin is not None, "the rendered overlay pins no gitleaks hook"
-    build = tmp_path / "gitleaks-build"
-    build_gitleaks(build, pin[2] or "default")
-    pre_commit_store(home / ".cache", [(pin[0], pin[1], build)])
     if not attach:
         return walk
     # 4. attach: the diff first, then the write. `--check` writes nothing and prints what the
