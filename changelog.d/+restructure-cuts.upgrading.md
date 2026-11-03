@@ -9,7 +9,8 @@ and what to use instead:
   workflow (`init` wrote it as `.github/workflows/stayfixed.yml`). Nothing writes
   `.stayfixed/assessment.json` any more; delete it.
 - `stayfixed upgrade` and `stayfixed uninstall`. A file `init` wrote is yours to edit by hand. To
-  take a repository off stayfixed, delete the files `init` wrote and `.stayfixed/manifest.json`.
+  take a repository off stayfixed, delete the files `init` wrote, the `stayfixed:ignore` region of
+  `.gitignore` (not the file, unless `init` created it) and `.stayfixed/manifest.json`.
 - `stayfixed memory refs` and `stayfixed memory fit`. `stayfixed doctor`'s `bundles` row still says
   whether each bundle fits its slots.
 - `stayfixed trust list` and `stayfixed trust revoke`. `stayfixed memory inventory --json` gives
