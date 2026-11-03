@@ -1,6 +1,6 @@
 ---
 name: init
-description: Take a repository onto stayfixed — show what it detected, ask the questions a person may answer, and write stayfixed.toml with the roadmap, trail and bug-ledger files the checks read. Use when a project has no .stayfixed/manifest.json yet, or the user asks to initialise stayfixed in it.
+description: Take a repository onto stayfixed — show what it detected, ask the questions a person may answer, and write stayfixed.toml with the roadmap, trail and bug-ledger files the checks read and the .gitignore region that keeps .stayfixed/local/ out of git. Use when a project has no .stayfixed/manifest.json yet, or the user asks to initialise stayfixed in it.
 ---
 
 # Initialising a project

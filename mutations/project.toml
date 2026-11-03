@@ -328,6 +328,18 @@ reddens = [
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-paths-value-at-another-artifact-s-file-case-folded-init]",
 ]
 
+# `--memory-mode local-only` keeps the notes under `.stayfixed/local/`, and only the `.gitignore`
+# region `init` writes keeps that directory out of git; without the path a note is an untracked
+# file the next `git add -A` commits and pushes.
+[[mutation]]
+name = "init's ignore region stops naming .stayfixed/local/"
+file = "src/stayfixed/project/templates.py"
+before = '''IGNORE_BODY = "# stayfixed's local state: yours, never a collaborator's.\n.stayfixed/local/"'''
+after = '''IGNORE_BODY = "# stayfixed's local state: yours, never a collaborator's."'''
+reddens = [
+  "tests/project/test_init.py::test_a_local_only_note_is_kept_out_of_git_by_the_region_init_writes",
+]
+
 # A containment check whose docstring names its anchor's provenance, with nothing proving it:
 # `name` decides which file under the shipped tree is opened, so the membership test is before the
 # join and not after. The anchor is `PROJECT_FILES`, a constant in the wheel beside the files it

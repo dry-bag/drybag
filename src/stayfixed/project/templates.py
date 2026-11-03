@@ -4,7 +4,8 @@ Under the module root beside `templates/overlay/` and resolved by `stayfixed.tem
 one resolver both shipped trees go through. `stayfixed.toml` is a `Kind.ONCE` artifact in a pass of
 its own; the files the surviving pack commands need — the bug ledger's audits README, which keeps
 its directory in git, the generated bug index, the roadmap with its trail markers, and `trail.toml`
-beside it — are the footprint pass. Every target is a `config.paths`
+beside it — are the footprint pass, with the `.gitignore` region that keeps `.stayfixed/local/` out
+of git. Every target but `.gitignore` is a `config.paths`
 value, which the loader has bounded to `PATH_VALUE` and contained; what this module adds is a file
 name under it.
 
@@ -24,7 +25,7 @@ from stayfixed.errors import Failure, Refusal
 from stayfixed.fsops import path_key
 from stayfixed.ledger.api import BUG_AUDITS, bug_register, ledger_path, render_index
 from stayfixed.project.layout import PROJECT_FILES
-from stayfixed.scaffold import Kind, Template, validate_sources
+from stayfixed.scaffold import Kind, Style, Template, validate_sources
 from stayfixed.templates import tree
 
 PROJECT = "project"
@@ -32,9 +33,10 @@ PROJECT = "project"
 # of one never claims a file the wheel does not carry.
 #
 # `Template.source` becomes `Record.template` in `.stayfixed/manifest.json`, which is committed and
-# is where a reader finds out where an artifact's bytes came from. Two artifacts here have no
+# is where a reader finds out where an artifact's bytes came from. Three artifacts here have no
 # shipped file at all — `config` is the rendered document, `bug-index` is
-# `render_index([], bug_register(config))` — and a record naming `project/<id>` for one of them
+# `render_index([], bug_register(config))`, `gitignore` is `IGNORE_BODY` — and a record naming
+# `project/<id>` for one of them
 # would point at a name absent from `PROJECT_FILES` and from the tree, which `read` itself refuses.
 #
 # A separate namespace rather than a name that looks readable: "there is no shipped file, these
@@ -43,10 +45,16 @@ PROJECT = "project"
 # format is untouched. `_computed` is the only place it is spelled, and
 # `tests/project/test_templates.py` holds every source both passes build to one rule or the other.
 COMPUTED = "computed"
-# The artifact id of `stayfixed.toml`, spelled once. An id is also what every initialised
-# repository's committed manifest records, so it is not renamed lightly:
-# `tests/project/test_templates.py` holds it to the id the templates build.
+# The artifact ids of `stayfixed.toml` and of the `.gitignore` region, spelled once. An id is also
+# what every initialised repository's committed manifest records, so neither is renamed lightly:
+# `tests/project/test_templates.py` holds both to the ids the templates build.
 CONFIG_ARTIFACT = "config"
+IGNORE_ARTIFACT = "gitignore"
+# The `.gitignore` region's name and body: the note, and the one path it keeps out of git,
+# `.stayfixed/local/`, where the `local-only` notes and attach's ledger live. `init` records the
+# region by its digest, so a change to these bytes is drift on every project that carries it.
+IGNORE_REGION = "ignore"
+IGNORE_BODY = "# stayfixed's local state: yours, never a collaborator's.\n.stayfixed/local/"
 
 
 # Which `[paths]` key each artifact's target is built from, so the collision refusal below can
@@ -61,6 +69,7 @@ PATH_KEYS = {
     "bug-index": "paths.bug_index",
     "roadmap": "paths.roadmap",
     "trail": "paths.roadmap",
+    IGNORE_ARTIFACT: OWN_NAME,
 }
 # Fixed text with two artifact ids and two `[paths]` key names interpolated — all four are
 # stayfixed's own vocabulary. The colliding path is a repository-authored value and is not printed.
@@ -155,7 +164,13 @@ def _template(artifact_id: str, target: str, name: str) -> Template:
 
 
 def _computed(
-    artifact_id: str, target: str, render: Callable[[], str], *, kind: Kind = Kind.TEMPLATE
+    artifact_id: str,
+    target: str,
+    render: Callable[[], str],
+    *,
+    kind: Kind = Kind.TEMPLATE,
+    region: str | None = None,
+    style: Style = Style.MARKDOWN,
 ) -> Template:
     """An artifact this module builds, whose provenance therefore names no shipped file.
 
@@ -169,6 +184,8 @@ def _computed(
         target=target,
         source=f"{COMPUTED}/{artifact_id}",
         render=render,
+        region=region,
+        style=style,
     )
 
 
@@ -209,6 +226,14 @@ def project_templates(config: Config, *, document: str) -> Prepared:
         _computed("bug-index", p.bug_index, lambda: render_index([], bug_register(config))),
         _template("roadmap", p.roadmap, "roadmap.md"),
         _template("trail", trail_target(config), "trail.toml"),
+        _computed(
+            IGNORE_ARTIFACT,
+            ".gitignore",
+            lambda: IGNORE_BODY,
+            kind=Kind.MANAGED_REGION,
+            region=IGNORE_REGION,
+            style=Style.HASH,
+        ),
     )
     could_write: dict[str, set[str]] = {}
     for template in (*once, *footprint):

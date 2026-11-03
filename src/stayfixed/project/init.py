@@ -1,8 +1,9 @@
 """`stayfixed init --yes`: the footprint, written by the engine in two passes.
 
-`stayfixed.toml` is a `Kind.ONCE` artifact in a pass of its own, and the bug index, the roadmap and
-`trail.toml` are the second. Both are planned before either is applied, so a refusal anywhere
-leaves nothing written and no manifest; the dry run reports both plans and writes nothing.
+`stayfixed.toml` is a `Kind.ONCE` artifact in a pass of its own, and the bug index, the roadmap,
+`trail.toml` and the `.gitignore` region are the second. Both are planned before either is
+applied, so a refusal anywhere leaves nothing written and no manifest; the dry run reports both
+plans and writes nothing.
 
 A repository that already holds a `stayfixed.toml` and no manifest is adopted. One that holds a
 manifest is refused: `init` writes a scaffold once.

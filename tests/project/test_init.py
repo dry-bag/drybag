@@ -19,7 +19,7 @@ from stayfixed.project.init import HEADER, InitReport, init
 from stayfixed.project.templates import ONE_FILE
 from stayfixed.scaffold import MANIFEST_PATH, Manifest, Verb
 from tests.cli import cli
-from tests.gitfixture import git, needs_git
+from tests.gitfixture import git, needs_git, run_git
 from tests.parserlimits import LONG_HEX
 from tests.pathfaults import ROOT_SEARCHES_EVERYTHING, unsearchable
 from tests.project.repos import initialised, repository
@@ -57,17 +57,17 @@ def test_a_bare_repository_gets_the_footprint_and_every_file_is_recorded(tmp_pat
     }
     assert document["project"]["name"] == "widget"
     records = Manifest.read(root).records
-    assert set(records) == {"config", "ledger-audits", "bug-index", "roadmap", "trail"}
+    assert set(records) == {"config", "ledger-audits", "bug-index", "roadmap", "trail", "gitignore"}
     assert not report.refused
 
 
 @needs_git
 def test_a_fresh_init_leaves_trail_and_ledger_checks_green(tmp_path: Path) -> None:
     # `init --yes` writes `stayfixed.toml`, the roadmap with its trail markers, `trail.toml`, the
-    # generated bug index and the ledger's audits README, recorded in the manifest, and nothing
-    # else; the checks that read them pass on what it wrote. Without the index, `bugs index
-    # --check` reports it stale; without a file under the ledger's directory it refuses the index
-    # as orphaned; without the roadmap or the trail, `docs trail --check` fails.
+    # generated bug index, the ledger's audits README and the `.gitignore` region, recorded in the
+    # manifest, and nothing else; the checks that read them pass on what it wrote. Without the
+    # index, `bugs index --check` reports it stale; without a file under the ledger's directory it
+    # refuses the index as orphaned; without the roadmap or the trail, `docs trail --check` fails.
     root = _repo(tmp_path)
     code, out, err = cli(root, tmp_path, "init", "--yes")
     assert code == 0, (out, err)
@@ -76,6 +76,7 @@ def test_a_fresh_init_leaves_trail_and_ledger_checks_green(tmp_path: Path) -> No
         assert code == 0, (argv, out, err)
     untracked = git(root, "ls-files", "--others").split()
     assert sorted(untracked) == [
+        ".gitignore",
         ".stayfixed/manifest.json",
         "docs/bug-reports.md",
         "docs/bugs/audits/README.md",
@@ -83,6 +84,23 @@ def test_a_fresh_init_leaves_trail_and_ledger_checks_green(tmp_path: Path) -> No
         "docs/trail.toml",
         "stayfixed.toml",
     ]
+
+
+@needs_git
+def test_a_local_only_note_is_kept_out_of_git_by_the_region_init_writes(tmp_path: Path) -> None:
+    # `--memory-mode local-only` promises the notes stay on this machine, under
+    # `.stayfixed/local/`, and nothing but `init`'s `.gitignore` region keeps that directory out of
+    # git: without it a note is an untracked file the next `git add -A` commits.
+    # Mutation (oracle): `mutations/`'s "init's ignore region stops naming .stayfixed/local/" ->
+    # `check-ignore` matches nothing.
+    root = _repo(tmp_path)
+    code, out, err = cli(root, tmp_path, "init", "--yes", "--memory-mode", "local-only")
+    assert code == 0, (out, err)
+    note = ".stayfixed/local/memory/developer/first-note.md"
+    (root / note).parent.mkdir(parents=True)
+    (root / note).write_text("---\nname: first-note\ndescription: d\n---\n\nbody\n", "utf-8")
+    assert run_git(root, "check-ignore", "-q", "--", note).returncode == 0
+    assert note not in git(root, "status", "--porcelain", "-uall")
 
 
 @needs_git

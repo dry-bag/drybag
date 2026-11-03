@@ -1113,7 +1113,8 @@ lints it.
 
 Writes a repository's stayfixed scaffold, once: `stayfixed.toml`, and the files the pack's
 commands read — the roadmap with its trail markers and `trail.toml` beside it for `docs trail`, the
-generated bug index and the bug ledger's audits README for `bugs index` and `bugs check`. It is the
+generated bug index and the bug ledger's audits README for `bugs index` and `bugs check` — and the
+`stayfixed:ignore` region in `.gitignore`, which keeps `.stayfixed/local/` out of git. It is the
 only command that writes `stayfixed.toml`. It writes no `AGENTS.md`: `docs check` names a missing
 one until the project writes its own.
 
@@ -1205,9 +1206,11 @@ plans and writes nothing.
 | `bug-index` | scaffold | template | `[paths] bug_index` | the generated index, rendered empty |
 | `roadmap` | scaffold | template | `[paths] roadmap` | `Now`, `Next`, and the trail block |
 | `trail` | scaffold | template | `trail.toml` beside the roadmap | one theme, no declared states |
+| `gitignore` | scaffold | managed region | `.gitignore` | `.stayfixed/local/`, where the `local-only` notes and attach's ledger live |
 
 A file already at an artifact's place that stayfixed did not write is left as it is and reported
-`skip_modified`.
+`skip_modified`. The `gitignore` region is the exception: it goes into a `.gitignore` you wrote,
+between its markers, and every line outside them is kept.
 
 **Reads** `stayfixed.toml` when there is one, `.stayfixed/manifest.json`, `git` for the name
 and the base branch, which harness directories the root carries (`.claude/`, `.codex/`), each
@@ -1217,7 +1220,8 @@ shipped profile's marker files at the root, and every file an artifact targets.
 that every target goes through the containment walk and none may leave the project root or
 pass through a symlink:
 - `stayfixed.toml`, or only its missing `[stayfixed] version` when you wrote it;
-- the documents in the table above, each at its place in the table;
+- the documents in the table above, each at its place in the table, and the `stayfixed:ignore`
+  region in `.gitignore`;
 - `.stayfixed/manifest.json`.
 
 Exits `0` on success. `1` on a finding: either plan carries refusals — the report's REFUSED section
@@ -1547,7 +1551,8 @@ installed. The ledger is the only record
 of which allow rules are stayfixed's, because an allow rule cannot carry a marker the way a hook
 entry can; `detach` reads it and nothing else. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
-release wrote there stays until you remove it.
+release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
+`init`'s.
 
 **What it places, it hides from git, unless git hides it already.** The ledger, each
 `.codex/rules/` file and `.claude/settings.local.json`,
@@ -1741,8 +1746,8 @@ empty, and left standing otherwise. A link tree under `paths.memory` or a harnes
 `~/.claude/projects/` an earlier release made is not touched: remove those by hand.
 
 **`.gitignore` is never touched.** `attach` writes nothing there, so `detach` takes nothing out:
-a `stayfixed:ignore` region an earlier release's `init` or `attach` wrote stays until you remove
-it.
+a `stayfixed:ignore` region `stayfixed init` wrote is the scaffold's, and one an earlier release's
+`attach` wrote stays until you remove it.
 
 **Directories come back too.** `attach` records which of `.stayfixed/local/`, `.stayfixed/`,
 `.codex/rules/`, `.codex/` and `.claude/` this repository did not have before it ran, and `detach`

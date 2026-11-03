@@ -15,6 +15,7 @@ from stayfixed.project.api import PROJECT_FILES, Prepared, project_templates
 from stayfixed.project.templates import (
     COMPUTED,
     CONFIG_ARTIFACT,
+    IGNORE_ARTIFACT,
     ONE_FILE,
     OWN_NAME,
     PATH_KEYS,
@@ -22,10 +23,11 @@ from stayfixed.project.templates import (
     Owners,
     read,
 )
-from stayfixed.scaffold import Kind
+from stayfixed.scaffold import Kind, Style, upsert
 from stayfixed.templates import tree
 from tests.gitfixture import needs_git, run_git
 
+ROOT = Path(__file__).resolve().parents[2]
 DOCUMENT = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
 
 
@@ -46,7 +48,13 @@ def test_the_write_once_artifact_is_once_and_the_rest_are_not() -> None:
     assert [t.id for t in prepared.once] == ["config"]
     assert all(t.kind is Kind.ONCE for t in prepared.once)
     assert {t.id: t.render() for t in prepared.once}["config"] == DOCUMENT
-    assert [t.id for t in prepared.footprint] == ["ledger-audits", "bug-index", "roadmap", "trail"]
+    assert [t.id for t in prepared.footprint] == [
+        "ledger-audits",
+        "bug-index",
+        "roadmap",
+        "trail",
+        "gitignore",
+    ]
     assert not any(t.kind is Kind.ONCE for t in prepared.footprint)
 
 
@@ -135,14 +143,37 @@ def test_one_relation_says_whose_file_a_place_is() -> None:
 
 
 def test_the_artifact_id_the_manifest_records_is_the_one_the_templates_build() -> None:
-    """`CONFIG_ARTIFACT` is the id of the template at `stayfixed.toml`, and it must stay the
-    string it is: every initialised repository's committed manifest records it.
+    """`CONFIG_ARTIFACT` and `IGNORE_ARTIFACT` are the ids of the templates at `stayfixed.toml` and
+    `.gitignore`, and each must stay the string it is: every initialised repository's committed
+    manifest records it.
 
-    Mutation (advisory): rename the constant -> the last assertion reddens.
+    Mutation (advisory): rename either constant -> the last assertion reddens.
     """
     prepared = project_templates(preset_defaults("widget"), document=DOCUMENT)
     assert {t.id for t in prepared.once if t.target == CONFIG_FILE} == {CONFIG_ARTIFACT}
-    assert CONFIG_ARTIFACT == "config"
+    assert {t.id for t in prepared.footprint if t.target == ".gitignore"} == {IGNORE_ARTIFACT}
+    assert (CONFIG_ARTIFACT, IGNORE_ARTIFACT) == ("config", "gitignore")
+
+
+# The `.gitignore` region as a project carries it, copied from the smoke fixture's `.gitignore`
+# and never read back from the code that writes it: `init` records the region in the manifest by
+# its digest, so a change to these bytes is drift on every project that carries it.
+IGNORE_BLOCK = (
+    "# stayfixed:ignore:begin\n"
+    "# stayfixed's local state: yours, never a collaborator's.\n"
+    ".stayfixed/local/\n"
+    "# stayfixed:ignore:end\n"
+)
+
+
+def test_the_ignore_block_init_writes_is_the_block_a_project_carries() -> None:
+    # Held to the bytes a project already carries, into an empty file, and as a hash-style region
+    # in the file git reads.
+    template = {t.id: t for t in _prepared(preset_defaults("widget")).footprint}[IGNORE_ARTIFACT]
+    assert template.kind is Kind.MANAGED_REGION and template.style is Style.HASH
+    assert template.region is not None
+    assert upsert("", template.region, template.render(), template.style) == IGNORE_BLOCK
+    assert (ROOT / "tests/fixtures/smoke-project/.gitignore").read_text("utf-8") == IGNORE_BLOCK
 
 
 def test_every_artifact_both_passes_build_has_a_paths_key_recorded_for_it() -> None:
@@ -153,7 +184,7 @@ def test_every_artifact_both_passes_build_has_a_paths_key_recorded_for_it() -> N
     ids = {t.id for t in (*prepared.once, *prepared.footprint)}
     # The walk is stated non-empty first, and at its full size: a `Prepared` that built nothing
     # would make the comparison below vacuous in both directions.
-    assert len(ids) == 5, sorted(ids)
+    assert len(ids) == 6, sorted(ids)
     assert ids == set(PATH_KEYS), (sorted(ids ^ set(PATH_KEYS)),)
 
 
@@ -176,11 +207,11 @@ def test_every_source_both_passes_build_is_a_shipped_file_or_is_declared_compute
     sources = {t.id: t.source for t in (*prepared.once, *prepared.footprint)}
     # Non-empty and at full size first, for `PATH_KEYS`' reason: nothing built makes every
     # comparison below true of nothing.
-    assert len(sources) == 5, sorted(sources)
+    assert len(sources) == 6, sorted(sources)
     computed = {name for name, source in sources.items() if source.startswith(f"{COMPUTED}/")}
     # As the set and not as a count: an artifact that moved from one rule to the other is exactly
     # the drift this test exists to see, and a count would not see it.
-    assert computed == {"config", "bug-index"}
+    assert computed == {"config", "bug-index", "gitignore"}
     root = tree(PROJECT)
     for artifact_id, source in sources.items():
         if artifact_id in computed:
