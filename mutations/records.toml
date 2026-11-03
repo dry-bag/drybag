@@ -3341,3 +3341,24 @@ reddens = [
   "tests/memory/test_bundles.py::test_a_standing_rule_in_a_tags_notes_is_in_the_standing_rules_bundle",
   "tests/memory/test_index.py::test_the_index_has_a_section_per_tag_after_the_common_notes",
 ]
+
+# A bound checkout with no `stayfixed.toml` has the configuration `attach` acted on
+# (`Context.attach_config`): the note store resolves through it, so the walk that counts its notes
+# and the `bundles` row must read it too, or they report a store they never walked.
+[[mutation]]
+name = "the note store's unreviewed count ignores a bound checkout's configuration"
+file = "src/stayfixed/memory/doctor.py"
+before = "        config = context.attach_config\n"
+after = "        config = context.config\n"
+reddens = [
+  "tests/memory/test_doctor.py::test_the_note_store_rows_read_a_bound_checkouts_configuration",
+]
+
+[[mutation]]
+name = "the bundles row skips a bound checkout with no stayfixed.toml"
+file = "src/stayfixed/memory/doctor.py"
+before = "_bundles(context, config, answers), attach=True),"
+after = "_bundles(context, config, answers)),"
+reddens = [
+  "tests/memory/test_doctor.py::test_the_note_store_rows_read_a_bound_checkouts_configuration",
+]

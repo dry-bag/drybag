@@ -247,3 +247,20 @@ def test_a_note_store_past_the_walk_cap_is_one_the_row_cannot_tell_about(
             "store holds files that are not notes"
         ) in check.detail
         assert check.remedy == "run `stayfixed memory inventory` to see what the store holds"
+
+
+def test_the_note_store_rows_read_a_bound_checkouts_configuration(tmp_path: Path) -> None:
+    # With no `stayfixed.toml` the store resolves through `Context.attach_config`; the walk that
+    # counts its unreviewed notes and the `bundles` row read that configuration too.
+    from tests.memory.test_commands import BARE_NOTE, _bound_without_file, _composed
+
+    root = _bound_without_file(tmp_path)
+    overlay = tmp_path / "overlay"
+    record = overlay / "projects" / "widget" / "project.toml"
+    record.write_text(record.read_text(encoding="utf-8") + 'tags = ["a"]\n', encoding="utf-8")
+    (overlay / "groups" / "a" / "memory").mkdir(parents=True)
+    (overlay / "groups" / "a" / "memory" / "t.md").write_text(BARE_NOTE, encoding="utf-8")
+    (_composed(root) / "tag-a").symlink_to(overlay / "groups" / "a" / "memory")
+    rows = {row.name: row for row in _checks(tmp_path, root, machine=tmp_path / "machine.toml")}
+    assert "2 unreviewed note(s)" in rows["memory"].detail
+    assert rows["bundles"].status != SKIP

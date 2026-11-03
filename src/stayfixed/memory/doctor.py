@@ -185,7 +185,8 @@ def _memory(context: Context, answers: Answers) -> Row:
             where = printable(store.path.relative_to(context.root).as_posix())
         except ValueError:
             where = "the composed store under the data directory"
-        groups = walked_groups(store, context.config) if context.config else []
+        config = context.attach_config
+        groups = walked_groups(store, config) if config else []
         pending = len(unreviewed(store, walk(store.path, groups).notes))
         parts.append(f"store {where}, {pending} unreviewed note(s)")
         debris = _debris(store)
@@ -205,7 +206,10 @@ def register() -> Contribution:
     answers = Answers()
     return Contribution(
         checks=(
-            ("bundles", configured(lambda context, config: _bundles(context, config, answers))),
+            (
+                "bundles",
+                configured(lambda context, config: _bundles(context, config, answers), attach=True),
+            ),
             ("memory", lambda context: _memory(context, answers)),
         )
     )
