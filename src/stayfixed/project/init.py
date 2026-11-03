@@ -6,7 +6,7 @@ planned before either is applied, so a refusal anywhere leaves nothing written a
 manifest; the dry run reports both plans and writes nothing.
 
 A repository that already holds a `stayfixed.toml` and no manifest is adopted. One that holds a
-manifest is refused: re-running `init` is `stayfixed upgrade`.
+manifest is refused: `init` writes a scaffold once.
 
 **Adopted means read, not replaced.** `stayfixed.toml` is a `Kind.ONCE` artifact: created when
 absent, never looked inside again. So on a repository that already carries one the engine
@@ -50,9 +50,9 @@ from stayfixed.config.paths import contained
 from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.config.schema import Config
 from stayfixed.errors import Failure, Refusal
+from stayfixed.fsops import said, write_within
 from stayfixed.project.detect import CURRENT_BRANCH, DEFAULT_BRANCH, Detected, detect
 from stayfixed.project.footprint import prepare
-from stayfixed.project.rewrite import rewrite_owned
 from stayfixed.scaffold import MANIFEST_PATH, Manifest, Plan, apply
 from stayfixed.tomlout import dumps
 
@@ -72,14 +72,7 @@ NEEDS_YES = (
     "beside --yes reads the plan first"
 )
 ALREADY = (
-    f"{MANIFEST_PATH} exists, so this repository is initialised; re-running `init` is "
-    "`stayfixed upgrade`"
-)
-# Said after `ALREADY` when the refused run asked for `--local`: `upgrade` has no such flag, and
-# the key it reads instead is what relocates an artifact already written.
-LOCAL_AFTER_INIT = (
-    "to add a local artifact later, list its id under `[artifacts] local` in stayfixed.toml, "
-    "then run `stayfixed upgrade`"
+    f"{MANIFEST_PATH} exists, so this repository is initialised; `init` writes a scaffold once"
 )
 ANSWER_SHEET = (
     "this repository already has a stayfixed.toml, which answers the questions `init` would ask; "
@@ -313,17 +306,15 @@ def _as_on_disk(read: tuple[str, dict[str, object]] | None) -> tuple[str | None,
     return rewrite(text, {VERSION: stayfixed.__version__}), True
 
 
-def precheck(root: Path, *, answering: bool, local: bool = False) -> None:
+def precheck(root: Path, *, answering: bool) -> None:
     """The refusals `init` and `init --questions` share, before anything beyond the root is read.
 
-    A manifest means `init` has already run, so re-running it is `stayfixed upgrade` — and when
-    the run asked for `--local`, which `upgrade` has no flag for, the refusal says which key does
-    the same there. While `answering` — the questions always are, and `init` is whenever an answer
-    flag is given — a `stayfixed.toml` already answers every question, so asking them over it
-    would collect answers that nothing writes.
+    A manifest means `init` has already run. While `answering` — the questions always are, and
+    `init` is whenever an answer flag is given — a `stayfixed.toml` already answers every
+    question, so asking them over it would collect answers that nothing writes.
     """
     if Manifest.present(root):
-        raise Refusal(f"{ALREADY}; {LOCAL_AFTER_INIT}" if local else ALREADY)
+        raise Refusal(ALREADY)
     # `contained` and not a bare `is_file`, which follows a link: a symlinked `stayfixed.toml` is
     # refused as every command refuses it, whatever it points at, and not taken for an answer
     # sheet (a link to a file) or for no file at all (a link to `/dev/zero`).
@@ -360,7 +351,7 @@ def init(
     """
     if not yes:
         raise Refusal(NEEDS_YES)
-    precheck(root, answering=given != NO_ANSWERS, local=given.local is not None)
+    precheck(root, answering=given != NO_ANSWERS)
     read = _existing(root)
     existing = read[1] if read is not None else None
     tables, head_note = _tables(root, existing, given=given)
@@ -371,10 +362,10 @@ def init(
         # What the next command loads is the file, not the merged document: that one drops
         # every `[stayfixed]` key it does not carry over, and detects a name the file may lack.
         loads(on_disk, root, machine=machine, owner=owner)
-    # No manifest yet, so nothing to retire: `prepare` for its refusals and the pass order.
-    passes = prepare(root, config, {}, document=document)
+    # `prepare` for its refusals and the pass order.
+    passes = prepare(root, config, document=document)
     note = VERB_NOTE if not fsops.exists(root / config.paths.agents_md) else ""
-    once, footprint = passes.predict((passes.once, ()), (passes.footprint, ()))
+    once, footprint = passes.predict(passes.once, passes.footprint)
     report = InitReport(
         once,
         footprint,
@@ -389,9 +380,12 @@ def init(
     )
     if dry_run or report.refused:
         return report
-    if stamped:
+    if stamped and on_disk is not None:
         # No manifest yet, so there is no record to re-stamp: only the one line is written.
-        rewrite_owned(root, {VERSION: stayfixed.__version__})
+        try:
+            write_within(root, CONFIG_FILE, on_disk)
+        except OSError as exc:
+            raise Refusal(f"{CONFIG_FILE} cannot be written ({said(exc)})") from exc
     apply(root, once)
     # Re-planned against the tree the write-once files are now in: on a repository with no
     # `AGENTS.md`, the region the dry run planned as a create of a region-only file is a

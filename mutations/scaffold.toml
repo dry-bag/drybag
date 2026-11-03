@@ -123,10 +123,8 @@ after = """        try:
         except (ValueError, RecursionError) as exc:
             raise ManifestError(f"{MANIFEST_PATH} is unreadable: {exc}") from exc"""
 reddens = [
-  "tests/project/test_footprint_commands.py::test_a_manifest_past_the_parser_is_refused_in_its_own_words[long-number-upgrade]",
-  "tests/project/test_footprint_commands.py::test_a_manifest_past_the_parser_is_refused_in_its_own_words[long-number-uninstall]",
-  "tests/project/test_footprint_commands.py::test_a_manifest_past_the_parser_is_refused_in_its_own_words[nested-upgrade]",
-  "tests/project/test_footprint_commands.py::test_a_manifest_past_the_parser_is_refused_in_its_own_words[nested-uninstall]",
+  "tests/scaffold/test_manifest.py::test_a_manifest_past_the_parser_is_refused_in_its_own_words[long-number]",
+  "tests/scaffold/test_manifest.py::test_a_manifest_past_the_parser_is_refused_in_its_own_words[nested]",
 ]
 
 # In the block led by `mutations/`'s "a preset name outside the rule is quoted back again": a value
@@ -162,40 +160,6 @@ reddens = [
   "tests/scaffold/test_engine.py::test_relocating_a_managed_region_removes_only_its_own_lines",
 ]
 
-# `force` reaches the retired path too: a hand-edited retired artifact the user has decided to
-# remove anyway. `mutations/`'s "forcing a retired region deletes the file around it" is the guard
-# against the data loss that forcing a region would otherwise cause: with a forced payload of
-# `None`, the prose around the region goes with it.
-[[mutation]]
-name = "force stops reaching a retired artifact edited by hand"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    if ours or target in forced:"
-after = "    if ours:"
-reddens = [
-  "tests/scaffold/test_engine.py::test_force_reaches_a_retired_artifact_edited_by_hand",
-  "tests/scaffold/test_engine.py::test_force_on_a_retired_region_removes_the_region_and_keeps_the_prose",
-]
-
-[[mutation]]
-name = "forcing a retired region deletes the file around it"
-file = "src/stayfixed/scaffold/engine.py"
-before = '''                _removal_payload(template, current),
-                "retired" if ours else "retired, forced",'''
-after = '''                _removal_payload(template, current) if ours else None,
-                "retired" if ours else "retired, forced",'''
-reddens = [
-  "tests/scaffold/test_engine.py::test_force_on_a_retired_region_removes_the_region_and_keeps_the_prose",
-]
-
-[[mutation]]
-name = "a file that held only stayfixed's region is rewritten empty instead of removed"
-file = "src/stayfixed/scaffold/engine.py"
-before = "        return remainder if remainder else None"
-after = "        return remainder"
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_retired_region_that_was_the_whole_file_removes_the_file",
-]
-
 # `[stayfixed] profile` must name a profile this build ships.
 [[mutation]]
 name = "the engine accepts a profile this stayfixed does not ship"
@@ -211,19 +175,14 @@ reddens = [
 [[mutation]]
 name = "an edited artifact kept out of git is refreshed over, and git cannot give it back"
 file = "src/stayfixed/scaffold/engine.py"
-before = "                and location is Location.LOCAL\n                and present is not None\n                and target not in forced\n"
+before = '''
+                and location is Location.LOCAL
+                and present is not None
+'''
 after = "                and False\n"
 reddens = [
-  "tests/scaffold/test_engine.py::test_a_local_artifact_that_is_not_this_build_s_bytes_is_left_and_force_takes_it",
-  "tests/project/test_upgrade.py::test_an_edited_artifact_kept_out_of_git_is_left_and_named",
+  "tests/scaffold/test_engine.py::test_a_local_artifact_that_is_not_this_build_s_bytes_is_left",
 ]
-
-[[mutation]]
-name = "a retired artifact kept out of git is removed whatever its bytes"
-file = "src/stayfixed/scaffold/engine.py"
-before = "        ours = ours_locally(template, current, target, digests)"
-after = "        ours = True"
-reddens = ["tests/scaffold/test_engine.py::test_a_retired_local_artifact_edited_by_hand_stays_unless_forced"]
 
 [[mutation]]
 name = "artifacts kept out of git share a directory with attach's ledger and the note store"
@@ -241,42 +200,6 @@ before = '    return item.target if PATH_VALUE.match(item.target) else f"<{item.
 after = "    return item.target"
 reddens = [
   "tests/scaffold/test_report.py::test_a_target_outside_the_path_grammar_prints_as_its_artifact_id",
-  "tests/project/test_footprint_commands.py::test_a_recorded_target_outside_the_path_grammar_prints_as_its_artifact_id",
-]
-
-# A retired file is removed only while its bytes are the ones its record states; an edited one
-# stays, is listed, and goes only with `--force`.
-[[mutation]]
-name = "a retired file is removed whatever its bytes, so a committed path and record reach a local edit"
-file = "src/stayfixed/scaffold/engine.py"
-before = "        ours = present is not None and digest(present) == record.sha256"
-after = "        ours = True"
-reddens = [
-  "tests/project/test_uninstall.py::test_a_committed_path_and_record_reach_only_bytes_the_same_commit_states",
-  "tests/project/test_uninstall.py::test_an_edited_file_stays_and_is_listed_and_force_takes_it",
-]
-
-# A `REMOVE` with a payload leaves a remainder. Counted as a deletion, a private remainder kept out
-# of git passes the check before any write, and the ignore block over it is only saved later.
-[[mutation]]
-name = "a region's remainder is counted as a deleted file"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    return action.verb is Verb.REMOVE and action.payload is None"
-after = "    return action.verb is Verb.REMOVE"
-reddens = ["tests/project/test_uninstall.py::test_a_remainder_kept_out_of_git_is_counted_before_anything_is_written"]
-
-# The whole-file rule is "differs: skip it and name it, and `--force <path>` overwrites it". The
-# branch for a file with no record ignored `force`, so a file a person wrote at a path stayfixed
-# writes could never be taken, under a note whose one remedy did nothing. `forced`
-# is the caller's argv, compared with the target `plan` derived and contained, so no committed
-# file can force anything.
-[[mutation]]
-name = "--force stops reaching a whole file stayfixed did not write"
-file = "src/stayfixed/scaffold/engine.py"
-before = "                and template.kind not in _IN_FILE\n                and target not in forced\n"
-after = "                and template.kind not in _IN_FILE\n"
-reddens = [
-  "tests/scaffold/test_engine.py::test_force_takes_a_whole_file_stayfixed_did_not_write_and_records_it",
 ]
 
 # `LocalDigests` records what stayfixed last wrote under `.stayfixed/local/artifacts/`, which the
@@ -291,7 +214,6 @@ before = "                and not digests.matches(template.id, target, digest(pr
 after = ""
 reddens = [
   "tests/scaffold/test_local.py::test_an_unedited_copy_follows_a_changed_template",
-  "tests/project/test_upgrade.py::test_an_unedited_artifact_kept_out_of_git_follows_a_template_the_release_changed",
 ]
 
 [[mutation]]
@@ -300,9 +222,8 @@ file = "src/stayfixed/scaffold/engine.py"
 before = "    if present is not None and digests.matches(template.id, target, digest(present)):\n        return True"
 after = "    if False:\n        return True"
 reddens = [
-  "tests/scaffold/test_local.py::test_a_retired_unedited_copy_goes_after_its_template_changed",
-  "tests/project/test_uninstall.py::test_an_unedited_copy_kept_out_of_git_goes_after_its_template_changed",
-  "tests/project/test_uninstall.py::test_a_shared_agents_md_kept_out_of_git_goes_whole_after_its_templates_changed",
+  "tests/scaffold/test_local.py::test_a_copy_whose_id_left_the_list_is_retired_while_its_bytes_are_stayfixeds",
+  "tests/scaffold/test_local.py::test_a_ledger_entry_away_from_the_artifact_s_own_place_vouches_only_by_its_digest",
 ]
 
 [[mutation]]
@@ -312,7 +233,6 @@ before = "        for copy in left_copies(template, config, digests, owners):\n 
 after = "        for copy in ():\n            if path_key(copy) in planned:"
 reddens = [
   "tests/scaffold/test_local.py::test_a_copy_whose_id_left_the_list_is_retired_while_its_bytes_are_stayfixeds",
-  "tests/scaffold/test_local.py::test_a_changed_copy_whose_id_left_the_list_is_named_and_force_takes_it",
 ]
 
 # The ledger is kept out of git, and a clone can force-add it anyway, so it authorizes nothing
@@ -334,16 +254,6 @@ before = "    own = path_key(target) == path_key(f\"{LOCAL_ARTIFACTS}/{template.
 after = "    own = True"
 reddens = ["tests/scaffold/test_local.py::test_a_ledger_entry_away_from_the_artifact_s_own_place_vouches_only_by_its_digest"]
 
-# A `[paths]` value moved while the artifact stayed in `[artifacts] local`: the old copy is at a
-# place the ledger records for its id and this configuration no longer gives it, and is judged
-# there. Without it no action named the old copy, and `uninstall` refused over it for good.
-[[mutation]]
-name = "a left copy is judged only where [artifacts] local no longer lists its id"
-file = "src/stayfixed/scaffold/engine.py"
-before = "        if path_key(copy) != path_key(target)\n"
-after = "        if template.id not in config.artifacts.local\n"
-reddens = ["tests/project/test_uninstall.py::test_a_copy_left_when_its_path_moved_is_judged_and_force_reaches_it"]
-
 # A ledger is read as untrusted, and an entry under one id must never reach another artifact's
 # own place kept out of git, whose unedited bytes are predictable: a clone could otherwise
 # force-add an entry that has `upgrade` delete a write-once artifact's copy (`templates.Owners`).
@@ -354,9 +264,6 @@ before = "        and not (owners is not None and owners.foreign(template.id, co
 after = ""
 reddens = [
   "tests/scaffold/test_local.py::test_an_entry_under_one_id_never_names_another_artifact_s_place_kept_out_of_git",
-  "tests/project/test_upgrade.py::test_a_ledger_entry_under_one_id_never_removes_another_artifact_s_copy_kept_out_of_git",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[cross-id-ledger-entry-upgrade]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[cross-id-ledger-entry-case-folded-upgrade]",
 ]
 
 # Within one plan, a left copy at a file another template of the plan targets is that template's
@@ -378,7 +285,6 @@ before = "                if record is not None and path_key(record.target) == p
 after = "                if True:\n"
 reddens = [
   "tests/scaffold/test_local.py::test_removing_a_left_copy_keeps_the_record_of_the_committed_file",
-  "tests/project/test_upgrade.py::test_forcing_a_left_copy_away_keeps_the_committed_file_recorded",
 ]
 
 # In the block led by `mutations/`'s "places are compared case-sensitively for ownership": paths are
@@ -469,43 +375,6 @@ reddens = [
   "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_merge",
 ]
 
-# A retired file that is gone and unrecorded, listed among the unchanged, told the owner on every
-# later run that a file no longer there was unchanged.
-[[mutation]]
-name = "a retired file that is gone and unrecorded is reported unchanged"
-file = "src/stayfixed/scaffold/engine.py"
-before = "        # Gone and unrecorded: nothing of it is left to plan or to report. Listed as unchanged,"
-after = "        unchanged.append(template.id)"
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_retired_artifact_gone_and_unrecorded_is_neither_planned_nor_unchanged",
-]
-
-# A retired artifact whose file was already gone read as unchanged and kept its record for good:
-# every later run passed over it again, and an overlay's memory README never got its successor.
-[[mutation]]
-name = "a retired record whose file is gone is kept for good"
-file = "src/stayfixed/scaffold/engine.py"
-before = """        if record is not None:
-            # The file is gone and its record is not"""
-after = """        if False:
-            # The file is gone and its record is not"""
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_retired_record_whose_file_is_already_gone_is_dropped[directory-there]",
-  "tests/scaffold/test_engine.py::test_a_retired_record_whose_file_is_already_gone_is_dropped[directory-gone]",
-]
-
-# Walking to a removal whose file was already gone failed, as a refusal, when its directory was
-# gone too, and named the file among those removed.
-[[mutation]]
-name = "apply walks to a removal whose file is already gone"
-file = "src/stayfixed/scaffold/engine.py"
-before = "                if action.payload is not None or os.path.lexists(root / action.target):"
-after = "                if True:"
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_retired_record_whose_file_is_already_gone_is_dropped[directory-there]",
-  "tests/scaffold/test_engine.py::test_a_retired_record_whose_file_is_already_gone_is_dropped[directory-gone]",
-]
-
 # In the block led by `mutations/`'s "the JSON writer lets an encode past the interpreter's
 # recursion escape": the settings engine writes back through that one writer.
 [[mutation]]
@@ -555,7 +424,6 @@ before = "    current, reason = _read(path, copy)"
 after = "    current, reason = _read(path, template.target)"
 reddens = ["tests/scaffold/test_local.py::test_an_unreadable_copy_left_kept_out_of_git_is_named_where_it_is"]
 
-
 # An artifact whose bytes are already the template's is left alone, so a second run of the same
 # release plans nothing: planned again, every artifact reads as an update or as hand-edited.
 [[mutation]]
@@ -563,24 +431,22 @@ name = "an artifact whose bytes are already the template's is planned again"
 file = "src/stayfixed/scaffold/engine.py"
 before = "            if present is not None and digest(present) == digest(stamp):"
 after = "            if False:"
-reddens = ["tests/project/test_upgrade.py::test_a_second_upgrade_to_the_same_release_writes_nothing"]
+reddens = [
+  "tests/scaffold/test_engine.py::test_a_recorded_unchanged_file_yields_no_action",
+]
 
 # A committed link into a directory nobody may search makes every path through it a fault to ask
 # about, so whether the manifest is there is asked through `contained`, which names the link, as
-# reading it always was: a bare existence check met the fault, and `init`, `upgrade` and `uninstall`
-# ended in an internal error that printed the absolute path.
+# reading it always was: a bare existence check met the fault, and `init` ended in an internal
+# error that printed the absolute path.
 [[mutation]]
-name = "init, upgrade and uninstall ask for the manifest past contained"
+name = "init asks for the manifest past contained"
 file = "src/stayfixed/scaffold/manifest.py"
 before = "        return fsops.is_file(_contained_path(root))"
 after = "        return fsops.is_file(root / MANIFEST_PATH)"
 reddens = [
-  "tests/project/test_footprint_commands.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed-init]",
-  "tests/project/test_footprint_commands.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed-upgrade]",
-  "tests/project/test_footprint_commands.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed-uninstall]",
-  "tests/project/test_footprint_commands.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed/manifest.json-init]",
-  "tests/project/test_footprint_commands.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed/manifest.json-upgrade]",
-  "tests/project/test_footprint_commands.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed/manifest.json-uninstall]",
+  "tests/project/test_init.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed]",
+  "tests/project/test_init.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed/manifest.json]",
 ]
 
 # `attach` and `detach` take back only the hook entries an earlier attach's ledger records. By the

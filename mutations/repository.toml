@@ -1353,7 +1353,7 @@ reddens = [
 [[mutation]]
 name = "the planning seam's checker stops knowing the seam module binds the planner"
 file = "tests/project/test_planning_seam.py"
-before = '    "stayfixed.project.footprint": {"plan", "left_copies", "local_copies", "refuse_ignored"},'
+before = '    "stayfixed.project.footprint": {"plan", "refuse_ignored"},'
 after = ""
 reddens = [
   "tests/project/test_planning_seam.py::test_the_checker_sees_a_planner_reached_through_the_seam_module",

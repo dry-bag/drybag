@@ -989,14 +989,14 @@ def test_the_cli_reference_contents_lists_every_section_in_order() -> None:
     # Every `## ` heading after the Contents, in order, each linked by GitHub's anchor: a command
     # section added without its Contents line, or a heading renamed under a stale link, is
     # a reference a reader cannot navigate. The floor is today's count of sections after the
-    # Contents, 32, so a walk that found nothing, or half, cannot pass.
+    # Contents, 30, so a walk that found nothing, or half, cannot pass.
     # Mutation (declared): drop the `memory inventory` Contents line -> the lists differ.
     text = (ROOT / "docs" / "cli.md").read_text(encoding="utf-8")
     _, _, after = text.partition("## Contents\n")
     contents, _, rest = after.partition("\n## ")
     listed = re.findall(r"^- \[(.+)\]\(#([^)]+)\)$", contents, re.MULTILINE)
     headings = re.findall(r"^## (.+)$", "## " + rest, re.MULTILINE)
-    assert len(headings) >= 32, len(headings)
+    assert len(headings) >= 30, len(headings)
     assert listed == [(heading, _anchor(heading)) for heading in headings]
 
 

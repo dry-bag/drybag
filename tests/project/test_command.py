@@ -23,9 +23,7 @@ from stayfixed.project.init import (
     HEAD_REMOTES_UNKNOWN,
     HEAD_UNRECORDED,
 )
-from stayfixed.project.uninstall import KEPT_CONFIG
 from stayfixed.scaffold import Manifest
-from tests.cli import cli
 from tests.gitfixture import git, needs_git
 from tests.project.repos import DOCUMENT, repository
 from tests.snapshot import assert_snapshot_unchanged, snapshot
@@ -475,23 +473,6 @@ def test_a_refused_adoption_says_its_version_would_be_written(tmp_path: Path) ->
     assert STAMPED.format(verb="wrote") not in printed
     assert (root / "stayfixed.toml").read_text(encoding="utf-8") == hand_written
     assert not (root / ".stayfixed" / "manifest.json").exists()
-
-
-@needs_git
-def test_uninstall_says_it_keeps_a_stayfixed_toml_you_wrote(tmp_path: Path) -> None:
-    # An adopted file is recorded nowhere, so no report line named it, and it stays with the
-    # version `init` added. The note says so. Mutation (by hand): the note dropped -> no line.
-    root = repository(tmp_path)
-    (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
-    code, printed = _run(root, tmp_path, "--yes")
-    assert code == 0, printed
-    code, out, err = cli(root, tmp_path, "uninstall", "--dry-run")
-    assert code == 0, err
-    assert f"note: {KEPT_CONFIG}" in out.splitlines()
-    code, out, err = cli(root, tmp_path, "uninstall", "--json")
-    assert code == 0, err
-    assert json.loads(out)["kept_config"] is True
-    assert (root / "stayfixed.toml").is_file()
 
 
 @needs_git

@@ -9,8 +9,7 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > without its private layer: the methodology's gates, the records they check, and a machine's setup.
 > It holds the bug ledger; the documentation and plan lints; the guards over a shell call, a commit
 > message and a test run; the scaffolding engine that writes files into a repository;
-> `stayfixed init`, which writes a repository's scaffold from the shipped project templates,
-> `stayfixed upgrade`, which refreshes it, and `stayfixed uninstall`, which takes it back;
+> `stayfixed init`, which writes a repository's scaffold from the shipped project templates;
 > `stayfixed setup`, which configures a
 > machine from a preset; and `stayfixed doctor`, which reports on the result. The **delivery** areas
 > are the private layer: `memory`, the note store; `overlay`, the private overlay
@@ -204,11 +203,11 @@ stayfixed writes files. Being specific about which is the point of this section.
 | `docs/bugs/` and `docs/bug-reports.md` (configurable) | One file per bug, and the generated index over them | `stayfixed init` writes the empty index and `docs/bugs/audits/README.md`; `stayfixed bugs new`, `bugs index` and `bugs renumber` after |
 | `docs/roadmap.md` and `docs/roadmap-history.md` (configurable) | The forward track and the closed phases; in the roadmap, `docs trail` owns only the listing between its two markers | `stayfixed init` writes both files; `stayfixed docs trail` rewrites the listing |
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | `stayfixed init`, once; you after |
-| `AGENTS.md`, `CLAUDE.md`, `docs/architecture/`, `docs/adr/`, `docs/runbooks/`, `docs/specs/`, `docs/plans/` | The project scaffold: the documents every other command reads. Written by `stayfixed init`, recorded in the manifest; `stayfixed upgrade` refreshes what you have not touched, and `stayfixed uninstall` takes it back | `stayfixed init` |
+| `AGENTS.md`, `CLAUDE.md`, `docs/architecture/`, `docs/adr/`, `docs/runbooks/`, `docs/specs/`, `docs/plans/` | The project scaffold: the documents every other command reads. Written by `stayfixed init`, recorded in the manifest | `stayfixed init` |
 | `docs/stayfixed/rules/<profile>.md` (configurable) and `.claude/rules/stayfixed-<profile>.md` | The stack profile's rules, the one copy a project edits, and a path-scoped pointer at it for Claude Code (only when `[stayfixed] agents` lists `claude`) | `stayfixed init`, when `[stayfixed] profile` is set |
 | `.stayfixed/manifest.json` | The ledger of every scaffolded artifact | the scaffold engine |
-| `.stayfixed/local/artifacts/` | The artifacts `[artifacts] local` keeps out of git, at the path each would have in the repository — git-ignored, never recorded in the manifest | `stayfixed init` and `stayfixed upgrade`, when `[artifacts] local` lists them; `stayfixed uninstall` takes them back |
-| `.stayfixed/local/artifacts.json` | The record of the bytes stayfixed last wrote under `.stayfixed/local/artifacts/`, so an unedited copy is refreshed or retired and an edited one is left. Git-ignored and never committed. Deleted, later runs judge a copy at its artifact's own place by what they render, and no longer find a copy left at an earlier place at all | the scaffold engine; `stayfixed uninstall` removes it |
+| `.stayfixed/local/artifacts/` | The artifacts `[artifacts] local` keeps out of git, at the path each would have in the repository — git-ignored, never recorded in the manifest | `stayfixed init`, when `[artifacts] local` lists them |
+| `.stayfixed/local/artifacts.json` | The record of the bytes stayfixed last wrote under `.stayfixed/local/artifacts/`, so an unedited copy is refreshed or retired and an edited one is left. Git-ignored and never committed. Deleted, later runs judge a copy at its artifact's own place by what they render, and no longer find a copy left at an earlier place at all | the scaffold engine |
 | `~/.config/stayfixed/config.toml` | Machine-level settings: `[personal]`; `[guards]`, where `bg_cleanup = false` switches the background guard off on this machine, whatever a repository's `stayfixed.toml` sets as its default; `[budgets]`, the four budgets that bound what a session loads; `[overlay]`; and `[machine]`. `~` is `HOME`, as the harness reads it ([docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration)) | you, or `stayfixed setup` |
 | `~/.config/stayfixed/trust.json` | Every approval recorded on this machine, as a versioned record of kinds and subjects, under the same home, the notes you promoted among them (kind `reviewed`) | `stayfixed memory promote`, which records a note |
 | `hooks/hooks.json` and `hooks/run-hook.sh` | The zero-config wiring both harnesses read, and the wrapper they execute. **Shipped in the plugin; never written into a project** | nothing — they are part of the plugin |
@@ -257,7 +256,7 @@ to find the project root, and reaches no network.
 | `git fetch` | `stayfixed bugs new` | the project's `origin` (note 1) | unless `--no-fetch` |
 | `gh` | `stayfixed setup --overlay create:<owner>/<name>` | GitHub's API, as the account `gh` acts for, and the clones it makes over git (note 2) | note 2 |
 | `git clone` | `stayfixed setup --overlay create:<owner>/<name>` | `git@github.com:<owner>/<name>.git`, the overlay just created | when `gh repo create --clone` reported success and left nothing at the destination |
-| `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed attach`, `stayfixed detach`, and `stayfixed uninstall` on an attached repository, which runs `detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `attach` and `detach`, nothing past this machine (note 3) | `setup` when `--plugin` names a plugin, the preset's agents include `claude` and it names a marketplace for it; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
+| `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed attach` and `stayfixed detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `attach` and `detach`, nothing past this machine (note 3) | `setup` when `--plugin` names a plugin, the preset's agents include `claude` and it names a marketplace for it; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
 | `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 3) | when `--plugin` names a plugin, the preset's agents include `codex` and it names a marketplace for it |
 | `pre-commit install` | `stayfixed setup --overlay` | nothing as it installs; GitHub and Go's servers on the first commit after it (note 4) | when it renders an overlay at a path, records an existing one, or with `create:` |
 | `sh -c` | `stayfixed test attribute --command CMD` | wherever `CMD` reaches; stayfixed does not choose | every run: `CMD` in the working tree, then in extracts of `HEAD` and of the merge base |
@@ -356,10 +355,6 @@ stayfixed init --questions                             # each default, where it 
 stayfixed init --yes --dry-run                         # both reports, nothing written
 stayfixed init --yes --dry-run --name widget           # the plan with one default replaced
 stayfixed init --yes                                   # write the scaffold and record every file
-stayfixed upgrade --dry-run                            # what a newer stayfixed would refresh
-stayfixed upgrade                                      # refresh untouched files; move version and pin
-stayfixed upgrade --force docs/roadmap.md              # overwrite one file you edited
-stayfixed uninstall --dry-run                          # what would go; what you edited stays
 
 # Memory
 stayfixed memory index                                 # render MEMORY.md from the notes

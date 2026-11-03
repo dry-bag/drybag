@@ -279,8 +279,8 @@ def test_one_relation_says_whose_file_a_place_is_and_excepts_only_the_agents_md_
 
 
 def test_the_artifact_ids_the_commands_name_are_the_ones_the_templates_build() -> None:
-    """`CONFIG_ARTIFACT` and `IGNORE_ARTIFACT` are what `upgrade`, `uninstall`,
-    `rewrite_owned` and the placement refusals name an artifact by. Each must be the id of the
+    """`CONFIG_ARTIFACT` and `IGNORE_ARTIFACT` are what the placement refusals name an artifact
+    by. Each must be the id of the
     template at its own place, and each must stay the string it is: every initialised
     repository's committed manifest records it, and `attach`'s `detach` reads the ignore region's
     record by that literal, since the attach area imports nothing from this one.
@@ -504,10 +504,9 @@ def test_a_rendition_that_collides_is_refused_naming_the_harness_s_fixed_name() 
 
 
 def test_every_target_any_configuration_writes_is_one_every_configuration_could() -> None:
-    # `could_write` is the anchor `upgrade` and `uninstall` retire against after a toggle: what
-    # one configuration wrote must be listed by the configuration that replaced it, or the file
-    # is left behind as an orphan. So it is built at the lines that build the templates, and
-    # this holds it across every toggle that turns an artifact on or off.
+    # `could_write` is the anchor the collision refusal reads: what one configuration wrote must
+    # be listed by every other configuration. So it is built at the lines that build the
+    # templates, and this holds it across every toggle that turns an artifact on or off.
     base = preset_defaults("widget")
     configs = [
         replace(base, stayfixed=replace(base.stayfixed, profile=profile, agents=agents))

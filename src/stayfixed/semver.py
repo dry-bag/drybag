@@ -97,8 +97,8 @@ def later(version: str, than: str) -> bool | None:
     Both are read by their leading three components (`VERSION`), compared as integer tuples,
     which decide whenever they differ, so `1.0.0-rc1` is later than `0.9.9`. `None` when either
     has no leading `X.Y.Z` (`v1.0.0`, an empty string): the direction is unknown, and a caller
-    that would move a value in one direction must not guess it. `stayfixed upgrade` refuses such
-    a recorded version, and `doctor`'s `versions` row says so rather than sending it there.
+    that would move a value in one direction must not guess it. `doctor`'s `versions` row says to
+    write such a recorded version by hand.
 
     **Equal triples are not equal versions.** Read by the triple alone, `later('1.0.0',
     '1.0.0rc1')` was `False`, so a pre-release build moved a project recording the release down

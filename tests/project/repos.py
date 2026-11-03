@@ -1,8 +1,7 @@
-"""The initialised repository `upgrade`'s and `uninstall`'s tests start from, and how they read it.
+"""The repository `init`'s tests start from, and how they read it.
 
-One module rather than a copy per test file: both commands are read against the same `init`, and
-two copies of the fixture would drift the way the suite's twenty-three `git` helpers once did
-(`tests/gitfixture.py` says how).
+One module rather than a copy per test file: two copies of the fixture would drift the way the
+suite's twenty-three `git` helpers once did (`tests/gitfixture.py` says how).
 """
 
 from __future__ import annotations

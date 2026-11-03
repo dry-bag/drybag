@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import tomllib
 from pathlib import Path
 
@@ -19,13 +20,12 @@ from stayfixed.project.commands import PICKED, PICKED_WITHHELD
 from stayfixed.project.footprint import LOCAL_ROOT_ONLY
 from stayfixed.project.init import HEADER, InitReport, init
 from stayfixed.project.templates import ONE_FILE, OWN_NAME
-from stayfixed.project.uninstall import uninstall
 from stayfixed.scaffold import MANIFEST_PATH, Manifest, Style, Verb, extract
 from tests.cli import cli
 from tests.gitfixture import git, needs_git
 from tests.parserlimits import LONG_HEX
-from tests.project.repos import repository
-from tests.runners import Recorder
+from tests.pathfaults import ROOT_SEARCHES_EVERYTHING, unsearchable
+from tests.project.repos import initialised, repository
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
 
@@ -206,65 +206,42 @@ def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_repla
 
 
 @needs_git
-def test_an_initialised_repository_is_refused_and_offered_upgrade(tmp_path: Path) -> None:
+@ROOT_SEARCHES_EVERYTHING
+@pytest.mark.parametrize("link", [".stayfixed", MANIFEST_PATH.as_posix()])
+def test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words(
+    tmp_path: Path, link: str
+) -> None:
+    # A clone commits a link as text and needs no mode: an absolute target under a directory its
+    # user cannot search makes every path through the link a fault to ask about. The manifest was
+    # asked for with a bare existence check, which met that fault, and the command ended in
+    # `internal error: PermissionError` with the manifest's absolute path. The manifest is asked
+    # through `contained` now, as reading it always was, so the link is refused by name.
+    # Mutation (oracle): `mutations/`'s "init asks for the manifest past contained" -> every case
+    # ends in an internal error again.
+    root = initialised(tmp_path)
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    if link == ".stayfixed":
+        shutil.rmtree(root / link)
+    else:
+        (root / link).unlink()
+    (root / link).symlink_to(locked / "x")
+    with unsearchable(locked):
+        code, _, err = cli(root, tmp_path, "init", "--yes")
+    assert code == 2
+    assert err == (
+        f"stayfixed: refused: {str(MANIFEST_PATH)!r} passes through a symlink at {link!r}\n"
+    )
+
+
+@needs_git
+def test_an_initialised_repository_is_refused(tmp_path: Path) -> None:
     # Mutation (oracle): drop the manifest guard -> the second call plans a second init.
     root = _repo(tmp_path)
     _init(root, tmp_path)
-    with pytest.raises(Refusal, match="re-running `init` is `stayfixed upgrade`") as refused:
+    with pytest.raises(Refusal, match="`init` writes a scaffold once") as refused:
         _init(root, tmp_path)
     assert "ships later" not in str(refused.value)
-
-
-@needs_git
-def test_local_after_init_names_the_artifacts_key_and_upgrade(tmp_path: Path) -> None:
-    # `init --local ID` after `init` was refused with "re-running `init` is `stayfixed upgrade`",
-    # and `upgrade` has no `--local`: the refusal pointed at a command that cannot do what was
-    # asked, and nothing said the way that works. "stayfixed upgrade" alone was in that refusal
-    # already, so the sentence is asserted whole. Mutation (`mutations/`'s "init stops saying how
-    # to add a local artifact after init"): the sentence dropped -> this reddens.
-    root = _repo(tmp_path)
-    code, out, err = cli(root, tmp_path, "init", "--yes")
-    assert code == 0, (out, err)
-    code, out, err = cli(root, tmp_path, "init", "--yes", "--local", "adr-template")
-    assert code == 2 and err.startswith("stayfixed: refused:"), (out, err)
-    assert (
-        "; to add a local artifact later, list its id under `[artifacts] local` in stayfixed.toml, "
-        "then run `stayfixed upgrade`\n"
-    ) in err
-
-
-@needs_git
-def test_another_answer_flag_after_init_keeps_the_plain_refusal(tmp_path: Path) -> None:
-    # The directions are for `--local` alone: an answer such as `--name` after `init` is an edit
-    # to stayfixed.toml, and naming `[artifacts] local` there would send the reader to a key
-    # that has nothing to do with what they asked. Mutation (`mutations/`'s "init says how to add
-    # a local artifact after any answer flag") -> this reddens.
-    root = _repo(tmp_path)
-    code, out, err = cli(root, tmp_path, "init", "--yes")
-    assert code == 0, (out, err)
-    code, out, err = cli(root, tmp_path, "init", "--yes", "--name", "x")
-    assert code == 2 and "re-running `init` is `stayfixed upgrade`" in err, (out, err)
-    assert "[artifacts] local" not in err
-
-
-@needs_git
-def test_adding_a_local_id_and_upgrading_relocates_the_artifact(tmp_path: Path) -> None:
-    # The route the refusal above names, pinned so the directions stay true: an id added under
-    # `[artifacts] local` after `init`, then `stayfixed upgrade`, moves the artifact under
-    # `.stayfixed/local/artifacts/`.
-    root = _repo(tmp_path)
-    code, out, err = cli(root, tmp_path, "init", "--yes")
-    assert code == 0, (out, err)
-    config = root / CONFIG_FILE
-    config.write_text(
-        config.read_text(encoding="utf-8") + '\n[artifacts]\nlocal = ["adr-template"]\n',
-        encoding="utf-8",
-    )
-    code, out, err = cli(root, tmp_path, "upgrade")
-    assert code == 0, (out, err)
-    assert (root / ".stayfixed/local/artifacts/docs/adr/0000-template.md").is_file()
-    assert not (root / "docs/adr/0000-template.md").exists()
-    assert "relocated" in out, out
 
 
 @needs_git
@@ -478,25 +455,12 @@ def test_a_version_the_editor_cannot_add_is_refused_by_the_dry_run_too(tmp_path:
 
 
 @needs_git
-def test_uninstall_keeps_an_adopted_document_with_the_version_init_added(tmp_path: Path) -> None:
-    # `init` records no `config` artifact for a file it adopted, stamped or not, so `uninstall`
-    # has nothing that says the file is stayfixed's. Mutation (by hand, in the commit message):
-    # record the adopted document in `init`'s manifest -> `uninstall` removes it and this reddens.
-    root = _repo(tmp_path)
-    hand_written = '# ours\n[project]\nname = "widget"\n'
-    (root / CONFIG_FILE).write_text(hand_written, encoding="utf-8")
-    assert _init(root, tmp_path).stamped
-    uninstall(root, machine=tmp_path / "absent.toml", dry_run=False, force=(), runner=Recorder())
-    assert (root / CONFIG_FILE).read_text(encoding="utf-8").startswith(hand_written)
-
-
-@needs_git
 def test_a_symlinked_document_with_no_version_is_refused_by_the_dry_run_too(
     tmp_path: Path,
 ) -> None:
-    # The stamp is written through `rewrite_owned`, which reads through `read_document` and so
-    # refuses a symlinked `stayfixed.toml`; computing the stamp while planning meets that refusal
-    # in the dry run as well, with nothing written on either side of the link. (No single line:
+    # The stamp is computed from what `read_document` read, which refuses a symlinked
+    # `stayfixed.toml`; computing the stamp while planning meets that refusal in the dry run as
+    # well, with nothing written on either side of the link. (No single line:
     # the refusal is `contained()`'s, whose own entries hold it.)
     root = _repo(tmp_path)
     elsewhere = tmp_path / "elsewhere.toml"

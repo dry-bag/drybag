@@ -57,8 +57,6 @@ Three things hold everywhere:
 - [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
 - [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--commit-type TYPE …] [--local ID …] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----profile-name---memory-mode-mode---attribution-check---commit-type-type----local-id----root-path---machine-path)
 - [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
-- [`stayfixed upgrade [--dry-run] [--force PATH]… [--root PATH] [--machine PATH]`](#stayfixed-upgrade---dry-run---force-path---root-path---machine-path)
-- [`stayfixed uninstall [--dry-run] [--force PATH]… [--root PATH] [--machine PATH]`](#stayfixed-uninstall---dry-run---force-path---root-path---machine-path)
 - [`stayfixed overlay upgrade [--root PATH] [--dry-run]`](#stayfixed-overlay-upgrade---root-path---dry-run)
 - [`stayfixed attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
 - [`stayfixed detach [--root PATH] [--machine PATH]`](#stayfixed-detach---root-path---machine-path)
@@ -1187,8 +1185,7 @@ The paths it declares are where the scaffold lands. A repository with no `stayfi
 one written from the detected values and your answers, headed by a comment naming the one key
 that is stayfixed's to rewrite, `[stayfixed] version`. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
 (`1`) naming the file. A repository that already carries `.stayfixed/manifest.json` is refused
-(`2`): re-running `init` is `stayfixed upgrade`. `stayfixed uninstall` later keeps a
-`stayfixed.toml` you wrote, the version line included.
+(`2`): `init` writes a scaffold once.
 
 **Two passes, both planned before either is applied.** The three write-once files are one pass
 and the rest of the scaffold is the other, because two artifacts cannot target one file in one
@@ -1263,8 +1260,7 @@ section or key, a `[project] name` outside its grammar, a value of the wrong typ
 configuration file that does not load), or a `stayfixed.toml` you wrote that, with its version, the
 loader would refuse on the next command's load. `2` on a refusal above the plans: no `--yes`, an
 answer flag over an existing `stayfixed.toml`, an answer outside its grammar or its choices (from the
-parser), a repository already initialised (with `--local`, the refusal also says to list the id
-under `[artifacts] local` and run `stayfixed upgrade`), a detected name outside the grammar that no
+parser), a repository already initialised, a detected name outside the grammar that no
 `--name` answers, a `[stayfixed]` table the key editor cannot add a version to, a `stayfixed.toml`
 that is a symlink, which is never followed, a `[paths]` value outside the plain-path grammar, naming
 git's control directory or stayfixed's own `.stayfixed/`, or reaching through a component that is a
@@ -1275,7 +1271,7 @@ only the `AGENTS.md` skeleton and its region share a file by design, an `[artifa
 naming a profile artifact, which every pointer at it reads at its committed path, one naming
 `config` or `gitignore`, which only work at the repository root, and a write git would hide, at an
 existing file a `[paths]` value chose, which the refusal names, or one inside a repository whose
-`git` cannot say whether it is ignored (see `upgrade`'s boundary).
+`git` cannot say whether it is ignored, which says to run it again once `git check-ignore` works.
 
 `--json` carries `dry_run`, `adopted`, `once` and `scaffold` (each the plan's own rendered
 report), `writes` (both plans' targets), `skipped`, `note`, `stamped`, whether this
@@ -1355,8 +1351,7 @@ harness's limits. The flags validate the answers; the schema
 does not.
 
 It is refused (`2`) before anything beyond the root is read, in three cases:
-- the repository already carries `.stayfixed/manifest.json`: re-running `init` is
-  `stayfixed upgrade`;
+- the repository already carries `.stayfixed/manifest.json`: `init` writes a scaffold once;
 - it carries a `stayfixed.toml`, which answers these questions itself: edit it, then read the plan
   with `stayfixed init --yes --dry-run`;
 - any flag is given but `--root`, `--machine` and `--json`.
@@ -1371,302 +1366,6 @@ when it loads it.
 **Writes** nothing.
 
 Exits `0` with the questions printed; `2` on a refusal.
-
----
-
-## `stayfixed upgrade [--dry-run] [--force PATH]… [--root PATH] [--machine PATH]`
-
-Refreshes a repository's scaffold after a stayfixed update, keeping every hand edit. It moves
-`[stayfixed] version` to the stayfixed running, re-plans every scaffold artifact against
-`.stayfixed/manifest.json` by hash, and never re-plans the write-once files: `stayfixed.toml`,
-`CLAUDE.md` and the `AGENTS.md` skeleton are yours after `init`.
-
-`--dry-run` reports everything and writes nothing. `--force PATH` overwrites or removes one file the
-report named `skip_modified`, as a path relative to `--root` exactly as the report prints it; repeat
-it for each file. It reaches a file you edited, one stayfixed never wrote, and a changed or
-unrecorded copy under `.stayfixed/local/artifacts/`, but not a file left at an artifact's old place
-(`relocated and hand-edited`, or a recorded target the artifact cannot produce): that one is yours
-from then on, to keep or delete by hand. A leading `./` is dropped, and an absolute path or one with
-a `..` component is refused (`2`) naming the rule. A forced path no planned action names — a typo, a
-case difference, or a file with nothing to force — is counted in a `note:` line and forces nothing.
-
-**Four verdicts.** A file whose bytes are still the ones the manifest records is refreshed
-(`update`, or `region_update` for a managed region) when this stayfixed renders it differently,
-and reported `unchanged` when it does not. One that is missing is created. One you edited is
-`skip_modified` and named, and stays as it is until `--force` names it. So is a file stayfixed
-never wrote at a path it would write (`exists and stayfixed did not write it`); forced, it is
-overwritten and recorded, and later runs judge it like any file stayfixed wrote. An artifact this
-configuration no longer produces is removed while its bytes are the ones recorded (`remove`),
-and skipped the same way when they are not. One whose file is already gone is listed
-`remove … (retired, already gone)`: nothing is removed, and its record is dropped, so it is not
-carried into every later run.
-
-**What is rewritten in `stayfixed.toml`, and what is not.** Only the value stayfixed owns,
-`[stayfixed] version`. Every other byte stays where it was — comments, order, blank lines, your keys. A key written
-in a shape the editor does not rewrite in place (a dotted key, an inline table, a multi-line value)
-is refused (`2`) naming the key and the line to write by hand, before anything is written. When the
-manifest's `config` record still describes the file, it is re-stamped with the new bytes; when you
-have edited the file, it is not, so `stayfixed.toml` stays yours.
-
-**A project recording a newer stayfixed is refused** (`2`), before anything is written: an older
-plugin would repin an older release and put older bytes over newer ones. The recorded version is
-read by its leading `X.Y.Z` first, so `1.0.0-rc1` is newer than a running `0.9.0`; with the same
-`X.Y.Z`, a release is newer than its own pre-release, so a project recording `1.0.0` is refused
-by a `1.0.0rc1` build. Update the stayfixed plugin, then run `stayfixed upgrade` with it; never edit
-`[stayfixed] version` to get past it. A recorded version with no leading `X.Y.Z`, such as
-`v1.0.0`, is refused too, because which way a move would go is unknown; set it to the release
-the project was last upgraded with. So is one sharing the running `X.Y.Z` and differing after it
-in a way stayfixed does not order — two pre-releases, such as `1.0.0rc1` and `1.0.0rc2`, or a
-post-release — and that refusal names the version running: set it to that by hand if it is the
-release the project should move to.
-
-**An artifact kept out of git is recorded out of git too.** One listed in `[artifacts] local` lives
-under `.stayfixed/local/artifacts/`, and the committed manifest never records it; instead
-`.stayfixed/local/artifacts.json`, which the ignore block keeps out of git like the artifacts,
-records the bytes stayfixed last wrote there. A file still holding those bytes is refreshed like any
-other when this stayfixed renders it differently. One that no longer does is `skip_modified` (`kept
-out of git, and changed since stayfixed wrote it`), because nothing brings it back once it is
-overwritten, and `--force` with its path takes it; with that record gone, a file that is not exactly
-what this build writes is skipped the same way, saying nothing records what stayfixed wrote there.
-When an id leaves `[artifacts] local`, or its `[paths]` value moves while it stays there, the
-artifact is written at its new place and the copy the record names at the old one is removed while
-it holds exactly the bytes recorded for it (`relocated`); otherwise it is `skip_modified`, stays
-recorded until it is gone, and `--force` with its path takes it. When an id joins the list, the copy
-at its old place is the committed one the manifest records, and it is removed the same way while it
-holds exactly the bytes the manifest records (`relocated`); one you edited is left where it is,
-yours to keep or delete by hand, and said once, as `relocated and hand-edited`: the manifest stops
-recording it, so the next `upgrade` says nothing of it while the tracked copy stays. That is how a
-file is kept out of git after `init`: `init --local` is refused once the repository is initialised,
-and the refusal says to list the id under `[artifacts] local` and run `stayfixed upgrade`. The
-record is read as untrusted, since a clone can commit it anyway: anything but its own exact shape is
-read as no record at all, it is never printed, it names nothing outside
-`.stayfixed/local/artifacts/`, and it vouches only for a file there whose bytes are exactly the ones
-it states.
-
-**Retirement.** An artifact this configuration no longer produces — the profile's rules after
-`[stayfixed] profile` changes, its Claude Code pointer after `agents` drops `claude` — is removed
-only at a target this build could have written for it, and only while its bytes are the ones
-recorded. Every other record in the manifest is
-counted in a `note:` line and left where it is, and never named, as is a record saying its
-artifact lived inside a file (a region) that this build no longer produces: a region comes out
-only through the template that names it, never as a whole file, which is `uninstall`'s rule too.
-
-**The boundary.** Which artifacts exist, and where each could be, are this build's. The `[paths]`
-value a target is built from and the digest a record carries are committed. For a whole file, a
-commit can make `upgrade` rewrite it only while it holds exactly the bytes the same commit records,
-`--force` aside: that overwrites a whole file whatever it holds, one nothing records included, but
-only at a path given exactly on the command line, which no commit can supply. A managed region is
-inserted into whatever file its key names: a commit that points `[paths] agents_md` at another
-tracked file gets the region written into that file, and the diff shows both the edit and the
-region. No `[paths]` value may name git's control directory or stayfixed's own `.stayfixed/`, where
-attach's ledger and the local-only notes live out of git's sight; the loader refuses either, naming
-the key. And a committed `[paths]` value cannot put a write or a removal where git would hide it:
-the run is refused (`2`) before anything is written, dry run included, when all three of these hold
-for a file it would write or remove — the file exists, git ignores it, and it is at a place a
-`[paths]` value chose rather than where the preset puts that artifact. The refusal names each such
-file, as the report prints paths, and says to point the key at a path git does not ignore or take it
-out. A new file, a fixed name (`CLAUDE.md`, `stayfixed.toml`, `.gitignore`, a harness's rule) and a preset's own place are never refused, so a `CLAUDE.md` in your global excludes or a
-`stayfixed.toml` in `.git/info/exclude` works as before. A tracked file that matches an ignore
-pattern is not ignored, because git shows every change to it; the artifacts `[artifacts] local`
-keeps under `.stayfixed/local/artifacts/` are exempt, since keeping them out of git is what that
-setting asks for; and outside a git work tree there is no guard, because there is no diff to hide
-from. Inside one (a `.git` in the root or a directory above it), a `git` that cannot answer refuses
-the run (`2`) before anything is written, dry run included, and the refusal says to run it again
-once `git check-ignore` works: one that timed out, is not installed, or failed on the batch. A
-repository can cause the first and the last: git reads every `.gitignore` along each
-path it is asked about, so a deep enough path under large enough ignore files outlasts its time
-bound, and git answers a whole batch with exit 128 when one path in it lies inside a submodule.
-Run it on a checkout you trust. There are no hooks to re-trust afterwards: `init` writes no project-level hook
-entries, so an upgrade changes none.
-
-**Reads** `stayfixed.toml`, `.stayfixed/manifest.json`, `.stayfixed/local/artifacts.json`, every
-file an artifact targets, `git check-ignore` for each existing file a write or removal targets at
-a place a `[paths]` value chose.
-
-**Writes** the scaffold through the scaffold engine — every `create`, `update`, `region_update`,
-`remove` and `relocated` in the report, and each file `--force` takes — then
-`.stayfixed/manifest.json`, the committed record, written even when a write or removal fails
-part-way, and `.stayfixed/local/artifacts.json`, the record kept out of git, only when what it
-records changed; then `stayfixed.toml`, last (with `.stayfixed/manifest.json` again when its
-`config` record is re-stamped), so the version is the commit point: a run interrupted before it
-leaves the old version recorded, and the next run re-plans from there. Under `--dry-run`,
-nothing.
-
-Exits `0` when it applied the plan or there was nothing to do. `1` on a finding: the plan carries
-refusals — the report's REFUSED section names each, and nothing was written — or a `stayfixed.toml`
-that does not load, as for every command. `2` on a refusal before any write: the repository is not
-initialised, `stayfixed.toml` is missing, it records a newer stayfixed, a version with no leading
-`X.Y.Z` or one stayfixed does not order against the running one, a key is written in a shape the
-editor refuses, two artifacts resolve to one file (named by artifact and `[paths]` key, as `init`
-names it), a profile artifact, `config` or `gitignore` is listed in `[artifacts] local`, git ignores
-(or inside a repository cannot say whether it ignores) an existing file the run would write or
-remove at a place a `[paths]` value chose, or a `--force` path leaves `--root`. `2` also when a file
-cannot be written or removed part-way through; what was already applied stays applied and recorded,
-and running the command again re-plans from there.
-
-`--json` carries `dry_run`, `moved` (each `{key, before, after}`; a `before` outside its grammar
-prints as `(not a version)`), `scaffold` (the plan's rendered report), `writes`, `skipped` and
-`orphans` (a count).
-
----
-
-## `stayfixed uninstall [--dry-run] [--force PATH]… [--root PATH] [--machine PATH]`
-
-Takes back what `init` and `upgrade` wrote. A file whose bytes are still the ones the manifest
-records is removed; stayfixed's managed regions come out of files that hold other text, and such a
-file goes too only when nothing else was in it; the ledger goes last. A file you edited stays
-where it is, is reported `skip_modified` with its reason, and is counted in a `left in place`
-line. Every recorded artifact is judged, including one this configuration no longer produces, at
-a target this build could have written for it. Any other record is counted in a `note:` line and left where it is, and never
-named, as is a record saying its artifact lived inside a file (a region) that this build no longer
-produces: a region comes out only through the template that names it, never as a whole file.
-
-`--dry-run` reports everything and writes nothing. `--force PATH` removes one file the report named
-`skip_modified`, as a path relative to `--root` exactly as the report prints it; repeat it for each
-file. It reaches what `upgrade`'s `--force` reaches, and likewise not a file left at an artifact's
-old place (`relocated and hand-edited`), which is yours to keep or delete by hand. The path rules
-are `upgrade`'s: a leading `./` is dropped, an absolute path or one with a `..` component is refused
-(`2`), and a forced path no planned action names is counted in a `note:` line and forces nothing.
-
-**Two passes, the scaffold first.** The scaffold pass removes files and takes the regions out;
-a region taken out of a file that keeps other text is reported as
-`remove  AGENTS.md  (retired; stayfixed's part only, the file stays)`, and a line without that
-tail means the file itself goes. Every command that prints a plan says it the same way.
-The write-once pass (`stayfixed.toml`, `CLAUDE.md` and the `AGENTS.md` skeleton) is planned again
-after it, so the skeleton is judged once stayfixed's region has left `AGENTS.md`: untouched, it is
-byte for byte what `init` wrote and goes. A dry run cannot take the region out first, so it
-judges the skeleton with the region still in it and calls it edited; a `note:` line says so.
-**Forcing `AGENTS.md` takes stayfixed's region out of it and never the skeleton**: a forced path
-the scaffold pass targets never reaches the write-once pass, compared as the engine places each
-file, so what you wrote into the skeleton is judged on its own bytes.
-
-**The ignore block goes last, and only over an empty `.stayfixed/local/`.** The `.gitignore` region
-is what keeps `.stayfixed/local/` out of git: attach's ledger, the local-only memory notes, and the
-artifacts `[artifacts] local` keeps out of git. So it is taken out in a pass of its own, after the
-disk shows nothing left under `.stayfixed/local/`. Every directory above a file a pass removed goes
-once it is empty, deepest first, and so does every empty directory under
-`.stayfixed/local/artifacts/`, stayfixed's own, which no `[paths]` value reaches; no other goes: an
-empty directory a `[paths]` value merely names may be yours. Then `stayfixed.toml`, which the
-write-once pass holds back for this point; then the ledger: `.stayfixed/assessment.json`,
-`.stayfixed/manifest.json`, and `.stayfixed/local/` and `.stayfixed/` once each is empty. A directory
-someone committed where a ledger file belongs stays. So does a harness's own directory
-(`.claude/`, `.codex/`, or the same name in any other case), even when it is empty, whoever made it:
-`init` may have created `.claude/` to hold the rule it wrote there, but nothing records who made an
-empty directory, and to `init` its presence means the project uses that harness. So a later `init`
-detects that harness and lists it in `[stayfixed] agents` until you remove the directory.
-
-**An attached repository is detached first.** When `attach`'s ledger is in this checkout or in the
-main checkout, where `attach` keeps it from every worktree, and the render `attach` writes for the
-repository's binding id is in `~/.local/share/stayfixed/delivery/`, outside the work tree where no
-commit reaches, the run asks every refusal below, then
-runs [`stayfixed detach`](#stayfixed-detach---root-path---machine-path) before its first write,
-which withdraws what `attach` placed, the overlay's plugin and the allow rules among it, and takes
-the ledger; a `note:` line says so, and a dry run says it would. A run whose plans refuse stops
-before `detach`, and neither it nor its dry run says it detached or would. A `detach` that refuses
-or stops part-way stops the run there with nothing of its own done, its own sentence and exit code
-given.
-While the render is still there, running `uninstall` again finishes from what is left. A `detach`
-that stopped after removing the render, or an `attach` that stopped after writing its ledger and
-before the render, leaves the ledger with no render, which the next `uninstall` refuses as below:
-run `stayfixed detach`, which finishes from the ledger, then `uninstall`. The ledger is not counted
-among the files `.stayfixed/local/` holds while the repository is attached. A ledger with no
-render, which a clone can commit and a pull request can commit after a `detach`, detaches nothing:
-it is a file the run would not remove, and refused as one, so run `stayfixed detach` over a ledger
-only when your own `attach` wrote it.
-
-**Refused before any write** (`2`): the repository is not initialised; `stayfixed.toml` is missing
-while the manifest records it, so restore it; `[artifacts] local` names `config` or `gitignore`, which only work at the repository root, so
-take them out of the list; two artifacts resolve to one file, named as `init` names it;
-`.stayfixed/local/` holds files this run would not remove, such as notes, or an artifact kept out of
-git that changed since stayfixed wrote it, which the refusal counts and never names; git ignores an
-existing file the run would remove or rewrite at a place a `[paths]` value chose, which the refusal
-names; or a `--force` path leaves `--root`. The count is exact before anything is written, including
-what taking a region out of a file kept out of git would leave behind; the record of what stayfixed
-wrote there, `.stayfixed/local/artifacts.json`, is stayfixed's own and goes once nothing else is left,
-before the ignore block. Every artifact it records is judged, a copy left behind when its id left
-`[artifacts] local` or its `[paths]` value moved included, so an unedited one goes. Move the files
-out; one the report lists `skip_modified` in a file of its own there can be named with `--force`
-instead, but an `AGENTS.md` whose region and skeleton are both kept out of git shares one file, and
-forcing it takes only the region, so a line you wrote into that skeleton has to be moved. A dry run
-reports the count in a `note:` line instead of refusing, even when its plans also carry refusals, so
-its report still lists the edited file.
-
-**Refused part-way** (`2`): a file that cannot be written or removed, or files still under
-`.stayfixed/local/` after the write-once pass, which the count before any write should already have
-refused; move them out. What was removed stays removed and recorded, and `stayfixed.toml` and the
-manifest are still there, because they go last, unless the last pass removed `stayfixed.toml` and
-then could not write the manifest, which the next paragraph covers; so running the command again
-finishes from what the first run left, to the same end as a run that was never stopped.
-
-**Without `stayfixed.toml`, nothing the manifest records can be judged.** While the manifest still
-records the file, the run is refused (`2`) before any write, dry run included: restore
-`stayfixed.toml` (from git, for instance) and run it again. This command drops that record as it
-removes the file, so the file was taken by something other than this command, or by a run of it that
-removed the file and then did not rewrite the manifest, because it was killed in between or the
-manifest could not be written; either way the restored file is judged like any other, and the run
-then goes on to the end. When nothing records it — a run stopped between removing it and removing
-the manifest, or a `stayfixed.toml` the project wrote itself before `init`, which `init` never
-records — every recorded file stays, a `note:` line gives their count, and only the ledger goes, so
-`init` and this command no longer refuse the repository. No other directory is pruned then, because
-nothing says where the configuration put its artifacts. A `stayfixed.toml` you wrote before `init`,
-which is there and recorded nowhere, is left as it is, with the keys stayfixed wrote into it; a
-`note:` line says so, and `--json` carries `kept_config: true`.
-
-**The boundary.** Which artifacts exist, where each could be and every region's name are this
-build's. The `[paths]` value a target is built from and the digest a record carries are committed,
-so a commit can make `uninstall` remove a whole file only while it holds exactly the bytes the same
-commit records, and a region only where its key names; the diff shows both. No `[paths]` value may
-name git's control directory or stayfixed's own `.stayfixed/`, and a symlinked `.stayfixed/` is
-refused. An existing file git ignores at a place a `[paths]` value chose is never removed or
-rewritten: the run is refused (`2`) before any removal, dry run included, by `upgrade`'s rule,
-naming the files, and so is a run inside a repository whose `git` cannot answer, as `upgrade`'s
-is. Take
-stayfixed's part out of them by hand, or take the `[paths]` key out of `stayfixed.toml`; the run
-then leaves those files where they are and lists them. That includes a file stayfixed itself
-created at an ignored place a `[paths]` value chose (`roadmap = "build/roadmap.md"`
-under an ignored `build/`, say): creating it was allowed because nothing was there, and by the time
-`uninstall` runs it exists, so this refusal meets it, and taking the key out is the remedy that
-finishes the run. A `CLAUDE.md` or `AGENTS.md` your own excludes ignore is taken back like any
-other. Run it on a checkout you trust.
-
-**What stays on the machine.** `uninstall` takes back one repository's scaffold, and what is the
-machine's stays: the deny rules `stayfixed setup` added to the user settings file, and every
-approval in `~/.config/stayfixed/trust.json`, which no command withdraws.
-
-**Reads** `stayfixed.toml`, `.stayfixed/manifest.json`, `.stayfixed/local/artifacts.json`, every file
-an artifact targets, `git check-ignore` for each existing file a removal targets at a place a
-`[paths]` value chose, and what is under `.stayfixed/local/`; and, to tell whether the repository is
-attached, `attach`'s ledger in this checkout and in the main checkout, which `git` names, the binding
-id in the git common directory, and whether `~/.local/share/stayfixed/delivery/<id>/` is there. On an
-attached repository, what `stayfixed detach` reads.
-
-**Writes** only removals, and region removals, through the scaffold engine, and after each pass
-the two records of what is left: `.stayfixed/manifest.json`, which every pass rewrites, whether or
-not it finished, and `.stayfixed/local/artifacts.json`, the record kept out of git, which a pass
-rewrites when it removed something that record names. Each pass also removes every directory
-above a file it removed, once that directory is empty. After the write-once pass it removes
-`.stayfixed/local/artifacts.json` and then prunes the empty directories it finds by walking
-`.stayfixed/local/artifacts/`, deepest first, that directory included; after the last pass, the
-ledger: `.stayfixed/assessment.json`, `.stayfixed/manifest.json`, then `.stayfixed/local/` and
-`.stayfixed/`, each once it is empty. A harness's own directory is never removed. When
-`stayfixed.toml` is gone and nothing records it, only the ledger is removed. On an attached
-repository it first writes and removes what `stayfixed detach` does, which that section names,
-`attach`'s ledger among them, and runs the same `claude plugin` commands, which write what Claude
-Code records about the plugin. Under `--dry-run`, nothing.
-
-Exits `0` when it applied the plans, including when every recorded file was edited and nothing
-was removed but the ledger. `1` on a finding: a plan carries refusals — the report's REFUSED
-section names each, and nothing was removed — or a `stayfixed.toml` that does not load; and on an
-attached repository, a `detach` that fails as `stayfixed detach` does (`1`), part of what `attach`
-placed withdrawn and nothing of the scaffold removed, which the next run finishes. `2` on the
-refusals above, before any write or part-way; a repository with no `.stayfixed/manifest.json` is
-one of them.
-
-`--json` carries `dry_run`, `scaffold` and `once` (each the plan's rendered report), `left` (the
-files left in place, each as the reports print it), `orphans` (a count), `note` (the dry run's
-order note, or the missing-configuration count, or empty), `kept_locally` (how many files
-under `.stayfixed/local/` the run would leave, on a dry run and on a run whose plans refuse; `0` on
-a run that removed what it planned) and `kept_config`.
 
 ---
 
@@ -2662,12 +2361,11 @@ lists to the real parser.
 
 **Scaffold** means three things on this page, and the sentence says which:
 
-- everything `stayfixed init` writes into a repository, which `upgrade` refreshes and `uninstall`
-  takes back: the write-once files (`stayfixed.toml`, `CLAUDE.md` and the `AGENTS.md` skeleton) and
-  the rest;
-- the rest alone, the second of the two passes those commands plan: the report headed `scaffold:`
-  and the `scaffold` key of their `--json`, beside the write-once pass's `write-once:` report and
-  `once` key (`upgrade` plans this pass alone, so it prints no `write-once:`);
+- everything `stayfixed init` writes into a repository: the write-once files (`stayfixed.toml`,
+  `CLAUDE.md` and the `AGENTS.md` skeleton) and the rest;
+- the rest alone, the second of the two passes `init` plans: the report headed `scaffold:` and the
+  `scaffold` key of its `--json`, beside the write-once pass's `write-once:` report and `once`
+  key;
 - the scaffold engine, which plans and writes both passes and reports every action in the same
   verbs, `stayfixed overlay upgrade`'s included.
 
@@ -2776,7 +2474,7 @@ trees `docs trail` lists, and `plans` is where `plan check` looks for the plans 
 `bugs index`, `bugs check` and `bugs renumber` all read both — and `runbooks` supplies the
 `<runbooks>/bug-reports.md` link that index's generated header writes. `memory` is the note
 store. `stayfixed` is the directory stayfixed's own project files go
-under, so that `uninstall` can account for them and a reader can find them; a stack profile's
+under, so that a reader can find them; a stack profile's
 rules are the first, at `<stayfixed>/rules/<profile>.md`. The remaining three are read for their
 location alone, and so is every one of the others: `bugs check` treats the first component of
 every `[paths]` value that has more than one — `docs`, for the defaults — as a directory
@@ -2797,8 +2495,7 @@ by none of them and refused by nothing.
 `**What this evidence does not establish:**` line, the template's placeholder not counting. Widening it is how a project asks the same of `medium`. Each value must be one of the
 severities, `high`, `medium` and `low`, spelled as the table below spells it. A value that names
 none would require the line of no entry, so it is a refusal (`2`), counted and not quoted, of
-every command that reads the ledger — `bugs`, `plan check`, `init` and `upgrade`
-among them — and never of `uninstall`. An empty list is the project asking it of no severity.
+every command that reads the ledger — `bugs`, `plan check` and `init` among them. An empty list is the project asking it of no severity.
 
 **The two ledger vocabularies**, neither of them configurable — they are the entry contract, and
 a value outside either is a finding (`1`) naming the file:

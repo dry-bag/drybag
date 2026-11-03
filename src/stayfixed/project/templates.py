@@ -7,9 +7,8 @@ everything else is the footprint pass. Every target is a `config.paths` value, w
 loader has bounded to `PATH_VALUE` and contained; what this module adds is a file name under
 it.
 
-This module builds templates and decides nothing about a manifest. Which recorded artifacts a
-configuration retires, what `[artifacts] local` may not move out of git, and the order of the
-footprint pass are the lifecycle policy `init`, `upgrade` and `uninstall` apply to what it
+This module builds templates and decides nothing about a manifest. What `[artifacts] local` may
+not move out of git, and the order of the footprint pass, are the policy `init` applies to what it
 builds, and they are `project.footprint`'s.
 
 **Every write-once file this renders answers to the configuration, including the two that look
@@ -26,7 +25,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from functools import cached_property, partial
 from typing import TYPE_CHECKING
 
@@ -68,11 +67,9 @@ COMPUTED = "computed"
 PROFILE = "profile"
 CLAUDE_MD = "CLAUDE.md"
 HARNESS_REGION = "harness"
-# The two artifact ids a command's own rules name, spelled once. `rewrite_owned` re-stamps the
-# configuration's record (`CONFIG_ARTIFACT`); `uninstall` removes the ignore region last, and
-# neither of the two may be kept out of git (`IGNORE_ARTIFACT`). An id is also what every
-# initialised repository's committed manifest records, so neither is renamed lightly:
-# `tests/project/test_templates.py` holds both to the ids the templates build.
+# The two artifact ids a command's own rules name, spelled once: neither may be kept out of git.
+# An id is also what every initialised repository's committed manifest records, so neither is
+# renamed lightly: `tests/project/test_templates.py` holds both to the ids the templates build.
 CONFIG_ARTIFACT = "config"
 IGNORE_ARTIFACT = "gitignore"
 _SENTINEL = re.compile(r"%%[A-Z_]+%%")
@@ -194,10 +191,8 @@ class Prepared:
 
     `could_write` is built at the lines that build the templates, from the same calls, so it
     cannot describe a target the footprint could not have: for the conditional artifacts it holds
-    the workflow's one path, and each shipped profile's neutral rules and renditions, whichever of
-    them this configuration asks for. `upgrade` and `uninstall` retire a recorded artifact this
-    configuration no longer produces only at a target listed here for its id
-    (`footprint.retired_templates`), and `owners` is the relation read from it.
+    each shipped profile's neutral rules and renditions, whichever of them this configuration asks
+    for. `owners` is the relation read from it.
     """
 
     once: tuple[Template, ...]
@@ -350,16 +345,6 @@ def _profiled(artifact_id: str, target: str, profile: Profile) -> Template:
     )
 
 
-def retired_stub(artifact_id: str, target: str) -> Template:
-    """A recorded artifact this build no longer produces, as the engine plans its retirement.
-
-    A whole file at the recorded target, which the engine judges by the file and the record
-    alone (`_plan_retired`), so `render` is a stub, built by `_computed` like every other
-    template with no shipped file. `footprint.retired_templates` decides which records get one.
-    """
-    return replace(_computed(artifact_id, target, lambda: ""), retired=True)
-
-
 PROFILE_BLOCK = (
     "\n\nThe `{name}` profile's rules are in `{path}`. Before the first command:\n\n{lines}"
 )
@@ -445,9 +430,6 @@ def project_templates(
         _template("documentation-policy", f"{p.architecture}/documentation.md", "documentation.md"),
         _template("adr-template", f"{p.adr}/0000-template.md", "adr-template.md"),
         *_bug_ledger_documents(p),
-        # The register is built where the index renders, because only rendering needs the
-        # identifiers it carries: `uninstall` builds this footprint to take it out, and a prefix the
-        # ledger refuses must not stop it.
         _computed("bug-index", p.bug_index, lambda: render_index([], bug_register(config))),
         _template("roadmap", p.roadmap, "roadmap.md"),
         _template("roadmap-history", p.roadmap_history, "roadmap-history.md"),

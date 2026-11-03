@@ -38,7 +38,6 @@ class Template:
     region: str | None = None
     style: Style = Style.MARKDOWN
     entries: dict[str, list[dict[str, Any]]] | None = None
-    retired: bool = False
 
 
 @dataclass(frozen=True)

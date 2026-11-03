@@ -237,20 +237,20 @@ def _counted(shown: list[str], more: int, separator: str) -> str:
     return separator.join(shown) + (f"{separator}and {more} more" if more > 0 else "")
 
 
-VERSION_BEHIND = "run `stayfixed upgrade`, which moves it and refreshes the scaffold with it"
+VERSION_BEHIND = (
+    "set [stayfixed] version to the version running here once the project has moved to it"
+)
 VERSION_AHEAD = (
-    "update the stayfixed plugin: this project records a newer stayfixed than the one running, "
-    "and `stayfixed upgrade` never moves a project backward"
+    "update the stayfixed plugin: this project records a newer stayfixed than the one running"
 )
 VERSION_UNREADABLE = (
-    "set [stayfixed] version to the X.Y.Z of the stayfixed release this project was last upgraded "
-    "with: `stayfixed upgrade` refuses a version it cannot read rather than guess its direction"
+    "set [stayfixed] version to the X.Y.Z of the stayfixed release this project was last moved "
+    "to: stayfixed cannot read the direction of a version it cannot read"
 )
 VERSION_UNORDERED = (
     "the two share one X.Y.Z and differ after it in a way stayfixed does not order, such as two "
-    "pre-releases, and `stayfixed upgrade` refuses rather than guess the direction; set "
-    "[stayfixed] version to the version running here by hand if that is the one this project "
-    "should move to"
+    "pre-releases; set [stayfixed] version to the version running here by hand if that is the "
+    "one this project should move to"
 )
 
 
@@ -265,12 +265,11 @@ def _versions(context: Context) -> Row:
     if recorded == running:
         return Row(OK, f"the project and this stayfixed are both {running}", "")
     # The project's own string is repository-authored and is not quoted back; what is printed
-    # is the version that is actually running. The remedy follows the direction: `upgrade`
-    # refuses a project that records a newer stayfixed, so sending that one to it is a dead end.
-    # `later` is the reader `upgrade` refuses by, so the two agree: a leading `X.Y.Z` decides
-    # the direction when the two differ in it, a release is newer than its own pre-release, and
-    # a value without a leading `X.Y.Z`, or a pair `later` does not order, is sent to be written
-    # by hand. `later(v, v)` is `None` exactly when `v` has no leading `X.Y.Z`.
+    # is the version that is actually running. The remedy follows the direction (`later`): a
+    # leading `X.Y.Z` decides the direction when the two differ in it, a release is newer than
+    # its own pre-release, and a value without a leading `X.Y.Z`, or a pair `later` does not
+    # order, is sent to be written by hand. `later(v, v)` is `None` exactly when `v` has no
+    # leading `X.Y.Z`.
     ahead = later(recorded, running)
     if ahead is None:
         readable = later(recorded, recorded) is not None

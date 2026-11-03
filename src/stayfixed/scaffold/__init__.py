@@ -3,37 +3,21 @@
 Everything a consumer needs is re-exported here, including the primitives other areas reach for
 directly: `judged_entries` for a settings file's hook entries; `owned_ids` for the ids an
 earlier `attach` recorded in its ledger, `mark` for any caller that builds `Template.entries`,
-`drop` / `apply_entries` for
-`uninstall`, and `withdraw_entries` for `attach` and `detach`, which take back the entries an
-earlier `attach` recorded and no other. The three refusals a consumer has to catch by name
-are here too: a caller that cannot import `ManifestError`, `RegionError` or `EntriesError`
-from this list has no way to tell a bad merge from a bug except by catching `Refusal` whole;
+`drop` / `apply_entries`, and `withdraw_entries` for `attach` and `detach`, which take back
+the entries an earlier `attach` recorded and no other. The three refusals a consumer has to
+catch by name are here too: a caller that cannot import `ManifestError`, `RegionError` or
+`EntriesError` from this list has no way to tell a bad merge from a bug except by catching
+`Refusal` whole;
 `ParserLimitError`, an `EntriesError` too, is the valid JSON past a limit of the parser that
-`attach` must tell from a malformed document. `effective_target` and
-`unlinks` are for `uninstall`, which must compare paths the way the engine resolves them (an
-`[artifacts] local` artifact lives where `Template.target` does not say) and must know which
-planned removal deletes a file rather than rewriting it without stayfixed's part: both are the
-engine's facts, and a second copy of either would drift from it. `ours_locally`, `local_copies`
-and `left_copies` are for `uninstall` too
-(the last two through the project area's planning seam, `project.footprint.Passes`): before any
-write it predicts whether the write-once pass will remove what a region's removal
-leaves in a file kept out of git, and that verdict, which file it is asked of, and which copy a
-`--force` meant for the footprint pass names, are the engine's own rule for such a file.
-`LocalDigests` and `LOCAL_DIGESTS` are the ledger that rule reads, which `uninstall` removes before
-the ignore block goes. `LOCAL_ARTIFACTS` is for the project area's guard against writes git
-ignores, which exempts the one directory stayfixed keeps out of git on purpose. Importing a private
-module of this package from another area is a review finding; if an area needs something this
-list does not carry, the list grows deliberately.
+`attach` must tell from a malformed document. `LOCAL_ARTIFACTS` is for the project area's guard
+against writes git ignores, which exempts the one directory stayfixed keeps out of git on purpose.
+Importing a private module of this package from another area is a review finding; if an area
+needs something this list does not carry, the list grows deliberately.
 """
 
 from stayfixed.scaffold.engine import (
     apply,
-    effective_target,
-    left_copies,
-    local_copies,
-    ours_locally,
     plan,
-    unlinks,
     validate_sources,
 )
 from stayfixed.scaffold.entries import (
@@ -90,14 +74,10 @@ __all__ = [
     "apply_entries",
     "digest",
     "drop",
-    "effective_target",
     "extract",
     "judged_entries",
-    "left_copies",
-    "local_copies",
     "mark",
     "marker_id",
-    "ours_locally",
     "owned",
     "owned_ids",
     "plan",
@@ -105,7 +85,6 @@ __all__ = [
     "render_report",
     "settings_object",
     "settings_text",
-    "unlinks",
     "upsert",
     "validate_sources",
     "withdraw_entries",

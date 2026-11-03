@@ -86,7 +86,7 @@ def test_the_walk_finds_the_ported_skills() -> None:
     # the suite still green. Subsets, not equalities: `skills-author` grows this directory.
     names = {path.parent.name for path in skills()}
     assert {"close-bug", "memory-sweep"} <= names
-    assert {"init", "upgrade", "uninstall", "attach", "setup", "doctor"} <= names
+    assert {"init", "attach", "setup", "doctor"} <= names
     assert {
         "file-bug",
         "sweep-defect-class",

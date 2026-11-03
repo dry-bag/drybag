@@ -11,7 +11,7 @@ from stayfixed.config.owned import OWNED, OwnedKeyError, Value, rewrite
 HAND_WRITTEN = (
     "# The project's own configuration; the comments are part of it.\n"
     "[stayfixed]\n"
-    'version = "0.1.0"   # bumped by stayfixed upgrade\n'
+    'version = "0.1.0"   # bumped by hand\n'
     'preset = "recommended"\n'
     "\n"
     "[project]\n"

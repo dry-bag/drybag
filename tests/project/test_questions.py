@@ -198,7 +198,7 @@ def test_the_questions_are_refused_where_init_would_refuse(tmp_path: Path) -> No
         _schema(tmp_path, root)
     (root / MANIFEST_PATH).parent.mkdir(parents=True)
     (root / MANIFEST_PATH).write_text("{}", encoding="utf-8")
-    with pytest.raises(Refusal, match="stayfixed upgrade"):
+    with pytest.raises(Refusal, match="`init` writes a scaffold once"):
         _schema(tmp_path, root)
 
 

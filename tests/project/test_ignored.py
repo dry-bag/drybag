@@ -13,21 +13,10 @@ from stayfixed.config.loader import CONFIG_FILE
 from stayfixed.errors import Refusal
 from stayfixed.gitenv import git_run
 from stayfixed.project import ignored as module
-from stayfixed.project.ignored import DECLINED, IGNORED, IGNORED_REMOVING
+from stayfixed.project.ignored import DECLINED, IGNORED
 from stayfixed.project.init import init
-from stayfixed.project.uninstall import uninstall
-from stayfixed.project.upgrade import upgrade
-from stayfixed.scaffold import Manifest, digest
 from tests.gitfixture import git, needs_git, run_git
-from tests.project.repos import (
-    DOCUMENT,
-    MOVED_OFF_DOCS,
-    forge_record,
-    initialised,
-    repository,
-    tree,
-)
-from tests.runners import Recorder
+from tests.project.repos import DOCUMENT, MOVED_OFF_DOCS, repository
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
 ENV_TEXT = "SECRET=1\n"
@@ -41,14 +30,6 @@ def _init(root: Path, tmp_path: Path, *, dry_run: bool = False) -> None:
         yes=True,
         dry_run=dry_run,
     )
-
-
-def _upgrade(root: Path, tmp_path: Path, *, dry_run: bool = False) -> None:
-    upgrade(root, machine=tmp_path / "absent.toml", runner=Recorder(), dry_run=dry_run, force=())
-
-
-def _uninstall(root: Path, tmp_path: Path, *, dry_run: bool = False) -> None:
-    uninstall(root, machine=tmp_path / "absent.toml", dry_run=dry_run, force=(), runner=Recorder())
 
 
 def _append(path: Path, text: str) -> None:
@@ -70,31 +51,6 @@ def _excluding(root: Path, pattern: str) -> None:
 
 
 @needs_git
-@pytest.mark.parametrize("dry_run", [False, True], ids=["real", "dry-run"])
-def test_a_committed_path_naming_an_ignored_env_file_is_refused_before_upgrade_writes(
-    tmp_path: Path, dry_run: bool
-) -> None:
-    """The review's reproduction, end to end. `agents_md = ".env"` with `.env` git-ignored had
-    `upgrade` report `region_update .env (refreshed)` and append stayfixed's region to `.env`,
-    while `git status` showed only the manifest. It is refused now, dry run included, and the
-    refusal names the file through the report's own bound.
-
-    Mutation (oracle): `mutations/`'s "a write git ignores goes ahead" -> the region lands in `.env`
-    and the refusal is never raised.
-    """
-    root = initialised(tmp_path)
-    _ignoring(root, ".env")
-    (root / ".env").write_text(ENV_TEXT, encoding="utf-8")
-    _append(root / CONFIG_FILE, '\n[paths]\nagents_md = ".env"\n')
-    before = snapshot(root)
-    with pytest.raises(Refusal) as refused:
-        _upgrade(root, tmp_path, dry_run=dry_run)
-    assert str(refused.value) == IGNORED.format(count=1, names=".env")
-    assert (root / ".env").read_text(encoding="utf-8") == ENV_TEXT
-    assert_snapshot_unchanged(root, before)
-
-
-@needs_git
 def test_init_refuses_an_existing_ignored_file_a_paths_value_names(tmp_path: Path) -> None:
     root = repository(tmp_path)
     (root / ".gitignore").write_text(".env\n", encoding="utf-8")
@@ -108,56 +64,6 @@ def test_init_refuses_an_existing_ignored_file_a_paths_value_names(tmp_path: Pat
     assert_snapshot_unchanged(root, before)
 
 
-def _forge_roadmap(root: Path, target: str, text: str) -> None:
-    """A commit pointing `roadmap` at `target` and recording `text`'s digest there."""
-    _append(root / CONFIG_FILE, f'\n[paths]\nroadmap = "{target}"\n')
-    forge_record(root, "roadmap", target=target, sha256=digest(text))
-
-
-@needs_git
-@pytest.mark.parametrize("command", ["upgrade", "uninstall"])
-def test_a_record_stating_a_predictable_ignored_file_reaches_it_for_neither_command(
-    tmp_path: Path, command: str
-) -> None:
-    # A committed `[paths]` value and a record carrying the digest of a tool-generated file under
-    # an ignored directory had `uninstall` delete it and `upgrade` overwrite it with the roadmap:
-    # the record's digest matched, and git showed nothing. Mutation (oracle): `mutations/`'s "a
-    # write git ignores goes ahead" -> the marker is removed or rewritten.
-    root = initialised(tmp_path)
-    _ignoring(root, "build/")
-    marker = root / "build" / "marker.txt"
-    marker.parent.mkdir()
-    marker.write_text(MARKER, encoding="utf-8")
-    _forge_roadmap(root, "build/marker.txt", MARKER)
-    before = snapshot(root)
-    with pytest.raises(Refusal) as refused:
-        (_upgrade if command == "upgrade" else _uninstall)(root, tmp_path)
-    text = IGNORED if command == "upgrade" else IGNORED_REMOVING
-    assert str(refused.value) == text.format(count=1, names="build/marker.txt")
-    assert marker.read_text(encoding="utf-8") == MARKER
-    assert_snapshot_unchanged(root, before)
-
-
-@needs_git
-def test_uninstall_s_remedy_for_an_ignored_file_works(tmp_path: Path) -> None:
-    # `IGNORED_REMOVING` says to take the `[paths]` key out: the record then names a place the
-    # artifact cannot produce, the file is left where it is and listed, and the run finishes.
-    root = initialised(tmp_path)
-    _ignoring(root, "build/")
-    marker = root / "build" / "marker.txt"
-    marker.parent.mkdir()
-    marker.write_text(MARKER, encoding="utf-8")
-    _forge_roadmap(root, "build/marker.txt", MARKER)
-    config = root / CONFIG_FILE
-    config.write_text(
-        config.read_text(encoding="utf-8").replace('\n[paths]\nroadmap = "build/marker.txt"\n', ""),
-        encoding="utf-8",
-    )
-    uninstall(root, machine=tmp_path / "absent.toml", dry_run=False, force=(), runner=Recorder())
-    assert marker.read_text(encoding="utf-8") == MARKER
-    assert not (root / ".stayfixed").exists()
-
-
 @needs_git
 @pytest.mark.parametrize("dry_run", [False, True], ids=["real", "dry-run"])
 def test_fixed_names_ignored_by_the_clone_s_own_rules_are_written_and_taken_back(
@@ -165,9 +71,7 @@ def test_fixed_names_ignored_by_the_clone_s_own_rules_are_written_and_taken_back
 ) -> None:
     """`CLAUDE.md` and `AGENTS.md` in a person's excludes (global, or `.git/info/exclude`), and
     `stayfixed.toml` kept out of git on purpose: none of those places was chosen by a repository
-    value, so none is refused. The first version refused `init` outright, dry run included,
-    refused `upgrade`'s refresh of the region in an untracked ignored `AGENTS.md`, and left
-    `uninstall` no way to take back the `CLAUDE.md` it wrote but deleting it by hand.
+    value, so none is refused. The first version refused `init` outright, dry run included.
 
     Mutation (advisory): drop the preset-place exemption -> `init` refuses the existing
     `stayfixed.toml` and `AGENTS.md`, and this reddens at the first call.
@@ -182,15 +86,6 @@ def test_fixed_names_ignored_by_the_clone_s_own_rules_are_written_and_taken_back
         return
     assert (root / "CLAUDE.md").is_file()
     assert "stayfixed:harness" in (root / "AGENTS.md").read_text(encoding="utf-8")
-    # stayfixed's region taken out by hand: `upgrade` puts it back into the untracked, ignored
-    # `AGENTS.md` at the preset's own place.
-    agents = root / "AGENTS.md"
-    agents.write_text("# Ours\n", encoding="utf-8")
-    _upgrade(root, tmp_path)
-    assert "stayfixed:harness" in agents.read_text(encoding="utf-8")
-    _uninstall(root, tmp_path)
-    assert not (root / "CLAUDE.md").exists()
-    assert tree(root) == {"README.md", "AGENTS.md", CONFIG_FILE}
 
 
 @needs_git
@@ -208,66 +103,25 @@ def test_a_new_file_at_an_ignored_place_a_paths_value_chose_is_written(tmp_path:
 
 
 @needs_git
-def test_a_file_created_at_an_ignored_paths_place_is_refused_on_uninstall_until_the_key_goes(
-    tmp_path: Path,
-) -> None:
-    # The existence rule that let `init` create it meets it on `uninstall`, and the remedy the
-    # refusal and docs/cli.md give, taking the key out, finishes the run with the file left.
-    root = repository(tmp_path)
-    (root / ".gitignore").write_text("build/\n", encoding="utf-8")
-    config = root / CONFIG_FILE
-    config.write_text(DOCUMENT + '\n[paths]\nroadmap = "build/roadmap.md"\n', encoding="utf-8")
-    _init(root, tmp_path)
-    with pytest.raises(Refusal) as refused:
-        _uninstall(root, tmp_path)
-    # The roadmap and the trail beside it, both where the key put them.
-    names = "build/roadmap.md, build/trail.toml"
-    assert str(refused.value) == IGNORED_REMOVING.format(count=2, names=names)
-    config.write_text(
-        config.read_text(encoding="utf-8").replace('\n[paths]\nroadmap = "build/roadmap.md"\n', ""),
-        encoding="utf-8",
-    )
-    _uninstall(root, tmp_path)
-    assert (root / "build" / "roadmap.md").is_file() and (root / "build" / "trail.toml").is_file()
-    assert not (root / ".stayfixed").exists()
-
-
-@needs_git
 def test_a_tracked_file_matching_an_ignore_pattern_is_not_ignored(tmp_path: Path) -> None:
     # `check-ignore` without `--no-index`: git shows every change to a tracked file, whatever
     # pattern it matches, so the region may go into one. Mutation (advisory): add `--no-index`
     # -> the tracked file reads as ignored and this run refuses.
-    root = initialised(tmp_path)
-    _ignoring(root, "notes/")
+    root = repository(tmp_path)
+    (root / ".gitignore").write_text("notes/\n", encoding="utf-8")
     host = root / "notes" / "AGENTS.md"
     host.parent.mkdir()
     host.write_text("# Our notes\n", encoding="utf-8")
     git(root, "add", "-f", "notes/AGENTS.md")
-    _append(root / CONFIG_FILE, '\n[paths]\nagents_md = "notes/AGENTS.md"\n')
+    (root / CONFIG_FILE).write_text(
+        DOCUMENT + '\n[paths]\nagents_md = "notes/AGENTS.md"\n', encoding="utf-8"
+    )
     assert (
         run_git(root, "check-ignore", "-q", "--no-index", "--", "notes/AGENTS.md").returncode == 0
     )
-    _upgrade(root, tmp_path)
+    _init(root, tmp_path)
     text = host.read_text(encoding="utf-8")
     assert text.startswith("# Our notes\n") and "stayfixed:harness:begin" in text
-
-
-@needs_git
-def test_an_artifact_kept_out_of_git_is_written_and_removed_where_git_ignores_it(
-    tmp_path: Path,
-) -> None:
-    # `[artifacts] local` asks for exactly this: the file under `.stayfixed/local/artifacts/`,
-    # which the footprint's ignore block keeps out of git, at a place `[paths]` chose. Mutation
-    # (advisory): drop the exemption -> uninstall refuses its removal, and this reddens.
-    root = initialised(
-        tmp_path,
-        document=DOCUMENT
-        + '\n[artifacts]\nlocal = ["roadmap"]\n\n[paths]\nroadmap = "plans/roadmap.md"\n',
-    )
-    local = ".stayfixed/local/artifacts/plans/roadmap.md"
-    assert run_git(root, "check-ignore", "-q", "--", local).returncode == 0
-    _uninstall(root, tmp_path)
-    assert not (root / local).exists()
 
 
 def test_outside_a_repository_there_is_no_diff_to_hide_from(tmp_path: Path) -> None:
@@ -282,10 +136,9 @@ def test_outside_a_repository_there_is_no_diff_to_hide_from(tmp_path: Path) -> N
 
 
 @needs_git
-@pytest.mark.parametrize("command", ["upgrade", "uninstall"])
 @pytest.mark.parametrize("timed_out", [False, True], ids=["declined", "timed-out"])
 def test_a_check_ignore_that_cannot_answer_inside_a_repository_refuses_before_any_write(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, timed_out: bool, command: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, timed_out: bool
 ) -> None:
     # A guard that cannot answer must not read as a pass, nor as a warning the run writes past:
     # a repository can choose either way of not answering. git reads every `.gitignore` along each
@@ -299,7 +152,7 @@ def test_a_check_ignore_that_cannot_answer_inside_a_repository_refuses_before_an
     # repository" -> `timed-out`, asking `rev-parse` again; "a check-ignore that gives no answer
     # lets the run write" -> `timed-out`; "a check-ignore that declines lets the run write" ->
     # `declined`.
-    root = initialised(tmp_path)
+    root = repository(tmp_path)
 
     def failing(where: Path, *args: str, **kwargs: object) -> tuple[int, str]:
         if timed_out:
@@ -309,16 +162,15 @@ def test_a_check_ignore_that_cannot_answer_inside_a_repository_refuses_before_an
         return git_run(where, *args)
 
     monkeypatch.setattr(module, "git_run", failing)
-    # An existing file at a place a `[paths]` value chose, with a record stating its bytes, so
-    # `upgrade` would overwrite it and `uninstall` remove it.
+    # An existing file at a place a `[paths]` value chose, which `init` would write its region
+    # into.
     (root / "notes.md").write_text(MARKER, encoding="utf-8")
-    _forge_roadmap(root, "notes.md", MARKER)
+    (root / CONFIG_FILE).write_text(
+        DOCUMENT + '\n[paths]\nagents_md = "notes.md"\n', encoding="utf-8"
+    )
     before = snapshot(root)
     with pytest.raises(Refusal) as refused:
-        if command == "upgrade":
-            _upgrade(root, tmp_path)
-        else:
-            _uninstall(root, tmp_path)
+        _init(root, tmp_path)
     assert str(refused.value) == DECLINED
     assert_snapshot_unchanged(root, before)
 
@@ -327,9 +179,9 @@ def test_a_check_ignore_that_cannot_answer_inside_a_repository_refuses_before_an
 def test_a_symlinked_place_only_the_preset_would_use_refuses_no_command(tmp_path: Path) -> None:
     """Every `[paths]` value moved off `docs/`, and `docs` a symlink to where they went. The guard
     asked the preset's places through `project_templates`, whose trail target called
-    `contained()` on the preset's `docs/trail.toml`, so `init`, `upgrade` and `uninstall` all
-    refused with a symlink at a path this configuration never uses, and did so even with nothing
-    for the guard to ask about. The places are path arithmetic now, and asked only then.
+    `contained()` on the preset's `docs/trail.toml`, so `init` refused with a symlink at a path
+    this configuration never uses, and did so even with nothing for the guard to ask about. The
+    places are path arithmetic now, and asked only then.
 
     Mutation (advisory): put `contained()` back into the trail's template target -> `init`
     refuses at the first call.
@@ -341,44 +193,36 @@ def test_a_symlinked_place_only_the_preset_would_use_refuses_no_command(tmp_path
     (root / CONFIG_FILE).write_text(DOCUMENT + f"\n[paths]\n{moved}", encoding="utf-8")
     _init(root, tmp_path)
     assert (root / "planning" / "roadmap.md").is_file()
-    _upgrade(root, tmp_path)
-    _uninstall(root, tmp_path)
-    assert not (root / ".stayfixed").exists()
     assert (root / "docs").is_symlink()
 
 
 @needs_git
-@pytest.mark.parametrize("command", ["upgrade", "uninstall"])
 def test_a_paths_value_naming_another_artifact_s_preset_place_is_still_that_value_s_choice(
-    tmp_path: Path, command: str
+    tmp_path: Path,
 ) -> None:
-    """`docs/roadmap-history.md` is `roadmap-history`'s preset place, not `roadmap`'s. A commit
-    moves `roadmap_history` elsewhere, points `roadmap` at that file, drops `roadmap-history`'s
-    record and forges a `roadmap` record stating the bytes stayfixed wrote there, which this
-    clone's excludes ignore. For `roadmap` it is a place a `[paths]` value chose: the run is
-    refused, and the file is neither overwritten with the roadmap nor removed. (The file of an
-    artifact this configuration still builds, such as `CLAUDE.md`, is refused earlier, as
-    another artifact's file: `templates.Owners`.)
+    """`docs/roadmap-history.md` is `roadmap-history`'s preset place, not `agents-md`'s. A commit
+    moves `roadmap_history` elsewhere and points `agents_md` at that file, which this clone's
+    excludes ignore. For `agents-md` it is a place a `[paths]` value chose: the run is refused,
+    and the region is never written into the file. (The file of an artifact this configuration
+    still builds, such as `CLAUDE.md`, is refused earlier, as another artifact's file:
+    `templates.Owners`.)
 
     Mutation (oracle): `mutations/`'s "an ignored write passes at any artifact's preset place" ->
-    the file is overwritten or removed, and the refusal is never raised.
+    the region lands in the file, and the refusal is never raised.
     """
     root = repository(tmp_path)
     _excluding(root, "docs/roadmap-history.md")
-    (root / CONFIG_FILE).write_text(DOCUMENT, encoding="utf-8")
-    _init(root, tmp_path)
     history = root / "docs" / "roadmap-history.md"
-    written = history.read_text(encoding="utf-8")
-    _append(
-        root / CONFIG_FILE,
-        '\n[paths]\nroadmap = "docs/roadmap-history.md"\nroadmap_history = "docs/history.md"\n',
+    history.parent.mkdir()
+    history.write_text(MARKER, encoding="utf-8")
+    (root / CONFIG_FILE).write_text(
+        DOCUMENT
+        + '\n[paths]\nagents_md = "docs/roadmap-history.md"\nroadmap_history = "docs/history.md"\n',
+        encoding="utf-8",
     )
-    Manifest.read(root).without(frozenset({"roadmap-history"})).write(root)
-    forge_record(root, "roadmap", target="docs/roadmap-history.md", sha256=digest(written))
     before = snapshot(root)
     with pytest.raises(Refusal) as refused:
-        (_upgrade if command == "upgrade" else _uninstall)(root, tmp_path)
-    text = IGNORED if command == "upgrade" else IGNORED_REMOVING
-    assert str(refused.value) == text.format(count=1, names="docs/roadmap-history.md")
-    assert history.read_text(encoding="utf-8") == written
+        _init(root, tmp_path)
+    assert str(refused.value) == IGNORED.format(count=1, names="docs/roadmap-history.md")
+    assert history.read_text(encoding="utf-8") == MARKER
     assert_snapshot_unchanged(root, before)

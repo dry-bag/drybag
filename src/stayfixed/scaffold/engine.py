@@ -64,12 +64,9 @@ CHANGED_LOCALLY = "kept out of git, and changed since stayfixed wrote it"
 NOT_OURS_LOCALLY = (
     "kept out of git, with no record of what stayfixed wrote there, and not the bytes it writes now"
 )
-# The reason a retired artifact whose file is already gone is planned for removal at all: there is
-# nothing to unlink, and the action exists so that `apply` drops the record the file outlived.
-ALREADY_GONE = "retired, already gone"
 # A copy stayfixed wrote under `LOCAL_ARTIFACTS` at a place this configuration no longer gives the
 # artifact (its id left `[artifacts] local`, or its `[paths]` value moved), and whose bytes are no
-# longer the ones it wrote. `--force` with the path the report prints takes it.
+# longer the ones it wrote.
 LEFT_LOCALLY = (
     "kept out of git where this configuration no longer puts it, and changed since stayfixed "
     "wrote it"
@@ -122,18 +119,11 @@ def effective_target(template: Template, config: Config) -> tuple[str, Location]
     """Where `plan` puts `template` under `config`, and whether that place is kept out of git.
 
     An `[artifacts] local` artifact lives under `LOCAL_ARTIFACTS`, which `Template.target` does
-    not say, so a caller comparing paths the way the engine does asks this rather than
-    re-deriving it.
+    not say.
     """
     if template.id in config.artifacts.local:
         return f"{LOCAL_ARTIFACTS}/{template.target}", Location.LOCAL
     return template.target, Location.REPO
-
-
-def unlinks(action: Action) -> bool:
-    """Whether applying `action` deletes its file. A `REMOVE` with a payload rewrites the file
-    with what is left once stayfixed's part is out, so the file stays."""
-    return action.verb is Verb.REMOVE and action.payload is None
 
 
 def _matches_render(template: Template, current: str) -> bool:
@@ -152,7 +142,7 @@ def _matches_render(template: Template, current: str) -> bool:
 def ours_locally(template: Template, current: str, target: str, digests: LocalDigests) -> bool:
     """Whether `current`, the file at `target` under `LOCAL_ARTIFACTS`, holds only bytes stayfixed
     can show are its own for `template`. The one rule `plan` removes or refreshes a file kept out
-    of git by, public so `uninstall` can ask it of text not yet on disk before anything is written.
+    of git by.
 
     Anywhere under `LOCAL_ARTIFACTS`: exactly what `digests` records stayfixed last wrote there for
     this artifact. At the artifact's own place there, `LOCAL_ARTIFACTS/<its target>`, also what
@@ -194,19 +184,6 @@ def left_copies(
         if path_key(copy) != path_key(target)
         and not (owners is not None and owners.foreign(template.id, copy.removeprefix(kept)))
     )
-
-
-def local_copies(
-    template: Template,
-    config: Config,
-    digests: LocalDigests,
-    owners: Ownership | None,
-) -> tuple[str, ...]:
-    """Every file under `LOCAL_ARTIFACTS` `plan` judges as `template`'s: its effective target
-    while `[artifacts] local` lists it, and its `left_copies`."""
-    target, location = effective_target(template, config)
-    current = (target,) if location is Location.LOCAL else ()
-    return (*current, *left_copies(template, config, digests, owners))
 
 
 def _read(path: Path, relative: str) -> tuple[str | None, str | None]:
@@ -306,7 +283,6 @@ def plan(
     config: Config,
     templates: Sequence[Template],
     *,
-    force: Sequence[str] = (),
     owners: Ownership | None = None,
 ) -> Plan:
     """What applying `templates` under `config` would do, decided and not yet written.
@@ -319,10 +295,6 @@ def plan(
     manifest = Manifest.read(root)
     digests = LocalDigests.read(root)
     resolved_root = root.resolve()
-    # Exact, not `path_key`: a `--force` path is the operator's argv, compared with the path the
-    # report prints, and one that differs only in case forces nothing and is counted as naming no
-    # file, which is the safe way for a hand-typed path to be wrong.
-    forced = set(force)
     # A left copy at a file another template of this plan now targets is that template's to
     # judge; its entry stays until that file is stayfixed's again or gone.
     planned = {path_key(effective_target(template, config)[0]) for template in templates}
@@ -354,7 +326,7 @@ def plan(
             if path_key(copy) in planned:
                 continue
             try:
-                left = _left_locally(root, resolved_root, template, copy, digests, forced)
+                left = _left_locally(root, resolved_root, template, copy, digests)
             except _OWN_FILE_REFUSALS as exc:
                 refusals.append(Refused(template.id, copy, str(exc)))
                 refused = True
@@ -371,14 +343,9 @@ def plan(
 
         # Everything below reads or rewrites this one artifact's own file, so a refusal from it
         # is this artifact's refusal. Letting one escape would hide every other template and
-        # leave `upgrade` with no report at all — including the REFUSED section that exists to
+        # leave the command with no report at all — including the REFUSED section that exists to
         # name exactly these.
         try:
-            if template.retired:
-                _plan_retired(
-                    template, record, current, target, location, forced, actions, unchanged, digests
-                )
-                continue
             if template.kind is Kind.ONCE and current is not None:
                 # `skip_modified` (no record, file present, kind `template` or `once`), and not
                 # `unchanged`, which is what this said: `unchanged` renders as "up to date", and
@@ -415,22 +382,11 @@ def plan(
             if present is not None and digest(present) == digest(stamp):
                 unchanged.append(template.id)
                 continue
-            if (
-                record is None
-                and location is Location.REPO
-                and template.kind not in _IN_FILE
-                and target not in forced
-            ):
+            if record is None and location is Location.REPO and template.kind not in _IN_FILE:
                 # A whole file stayfixed never wrote is somebody's; a region or a hook entry
                 # inside a file stayfixed never wrote is the ordinary first install. A local
                 # artifact is answered by the next branch instead: it is never recorded, so
                 # `record is None` there says nothing about who wrote the file.
-                #
-                # `--force PATH` reaches this file too, which is the whole-file rule: differs,
-                # so skip it and name it, and `--force <path>` overwrites it. `forced` is the
-                # caller's argv and `target` the path `plan` derived and contained above, so no
-                # committed file can force anything; without it a caller workflow a person wrote
-                # held `upgrade`'s version and pin back for ever, with no flag that moved them.
                 actions.append(
                     Action(
                         Verb.SKIP_MODIFIED,
@@ -446,7 +402,6 @@ def plan(
                 record is None
                 and location is Location.LOCAL
                 and present is not None
-                and target not in forced
                 and not digests.matches(template.id, target, digest(present))
             ):
                 # Neither this build's bytes nor, by the ledger, the bytes stayfixed last wrote
@@ -459,7 +414,7 @@ def plan(
             hand_edited = (
                 record is not None and present is not None and digest(present) != record.sha256
             )
-            if hand_edited and target not in forced:
+            if hand_edited:
                 actions.append(
                     Action(Verb.SKIP_MODIFIED, template.id, target, None, "hand-edited", None)
                 )
@@ -490,8 +445,7 @@ def _relocation(root: Path, resolved_root: Path, template: Template, record: Rec
     file at the new target — so a relocated artifact whose old file a user had hand-edited was
     left on disk holding that edit, the manifest ended empty, and the report said "0 skipped,
     0 refused". `apply`'s own comment calls that state a defect: "a file stayfixed wrote carrying
-    no record, which every later run reads as somebody else's … invisible to `uninstall`". The
-    symmetric `_plan_retired` path has always emitted `skip_modified` for it.
+    no record, which every later run reads as somebody else's".
 
     So the three ways the old file is not stayfixed's to remove — a recorded target this template
     could not have produced, one that no longer contains, and one whose bytes are not the ones
@@ -522,9 +476,8 @@ def _relocation(root: Path, resolved_root: Path, template: Template, record: Rec
     present = _present_stamp(template, old)
     if present is None or digest(present) != record.sha256:
         return _left_behind(template, record, "relocated and hand-edited")
-    # The same payload `_plan_retired` computes, and for the same reason: for a managed region
-    # or a set of keyed entries the file at the old path belongs to somebody else, so what
-    # leaves is stayfixed's own part of it and not the file.
+    # For a managed region or a set of keyed entries the file at the old path belongs to somebody
+    # else, so what leaves is stayfixed's own part of it and not the file.
     payload = _removal_payload(template, old)
     return Action(Verb.REMOVE, template.id, record.target, payload, "relocated", record)
 
@@ -535,7 +488,6 @@ def _left_locally(
     template: Template,
     copy: str,
     digests: LocalDigests,
-    forced: set[str],
 ) -> Action | None:
     """A copy kept out of git that an artifact left behind at a place the configuration no longer
     gives it: its id left `[artifacts] local`, or its `[paths]` value moved while it stayed there.
@@ -545,9 +497,7 @@ def _left_locally(
     holding none of this artifact's part (a region whose markers are gone), is nothing to do.
     Bytes `ours_locally` accepts go, as a `REMOVE` that takes a region out of a file and leaves
     the rest: away from the artifact's own place only exactly the recorded digest vouches.
-    Anything else is an edit git cannot give back, so it is left and named, its entry kept, and
-    `--force` with its path takes it. Without this, nothing ever judged the copy again, and
-    `uninstall` refused over it for good, suggesting a `--force` no action could reach.
+    Anything else is an edit git cannot give back, so it is left and named, its entry kept.
     """
     try:
         path = contained(root, copy, resolved_root=resolved_root)
@@ -558,11 +508,9 @@ def _left_locally(
         return Action(Verb.SKIP_MODIFIED, template.id, copy, None, reason, None)
     if current is None or _present_stamp(template, current) is None:
         return None
-    ours = ours_locally(template, current, copy, digests)
-    if ours or copy in forced:
+    if ours_locally(template, current, copy, digests):
         payload = _removal_payload(template, current)
-        why = "relocated" if ours else "relocated, forced"
-        return Action(Verb.REMOVE, template.id, copy, payload, why, None)
+        return Action(Verb.REMOVE, template.id, copy, payload, "relocated", None)
     return Action(Verb.SKIP_MODIFIED, template.id, copy, None, LEFT_LOCALLY, None)
 
 
@@ -570,76 +518,11 @@ def _left_behind(template: Template, record: Record, reason: str) -> Action:
     return Action(Verb.SKIP_MODIFIED, template.id, record.target, None, reason, None)
 
 
-def _plan_retired(
-    template: Template,
-    record: Record | None,
-    current: str | None,
-    target: str,
-    location: Location,
-    forced: set[str],
-    actions: list[Action],
-    unchanged: list[str],
-    digests: LocalDigests,
-) -> None:
-    if current is None:
-        if record is not None:
-            # The file is gone and its record is not: read as unchanged, the record outlived
-            # the file for good, since every later run found the same nothing to remove. A
-            # removal with nothing to unlink, so `apply` drops the record. `plan` has already
-            # dropped a record whose target differs, so this one names `target`.
-            actions.append(Action(Verb.REMOVE, template.id, target, None, ALREADY_GONE, record))
-            return
-        # Gone and unrecorded: nothing of it is left to plan or to report. Listed as unchanged,
-        # it told the owner every run after its removal that the file was "unchanged", and
-        # counted it.
-        return
-    if location is Location.LOCAL:
-        # No manifest record exists for a local artifact, so it is judged by `ours_locally`: the
-        # bytes the ledger says stayfixed last wrote here, or this build's render. The directory
-        # is git-ignored: an edit removed here is one git cannot give back, so a file that is
-        # neither goes only when forced.
-        ours = ours_locally(template, current, target, digests)
-        why = CHANGED_LOCALLY if digests.records(template.id, target) else NOT_OURS_LOCALLY
-        kept, stamped = f"retired, {why}", None
-    elif record is None:
-        # No record: nothing shows that the file is stayfixed's, so it is left alone.
-        unchanged.append(template.id)
-        return
-    else:
-        present = _present_stamp(template, current)
-        ours = present is not None and digest(present) == record.sha256
-        kept, stamped = "retired and hand-edited", record
-    # `force` reaches a retired artifact the user edited and has decided to remove anyway: the
-    # one file a removal's `--force PATH` names. For a region what goes is still the region and
-    # never the file around it: forcing overrides the hand-edit verdict, not the payload.
-    #
-    # The path compared is `target`, the effective target `plan` derived from this template and
-    # `[artifacts] local` and then contained, exactly as the live-template check in `plan` does;
-    # never `record.target`, which the committed manifest supplies. The two are equal wherever
-    # a record reaches here, because `plan` drops a record whose target differs, so comparing the
-    # effective one means no manifest a clone commits can decide which file a `--force PATH`
-    # reaches, and the action names that same path.
-    if ours or target in forced:
-        actions.append(
-            Action(
-                Verb.REMOVE,
-                template.id,
-                target,
-                _removal_payload(template, current),
-                "retired" if ours else "retired, forced",
-                stamped,
-            )
-        )
-        return
-    actions.append(Action(Verb.SKIP_MODIFIED, template.id, target, None, kept, None))
-
-
 def apply(root: Path, planned: Plan) -> Applied:
     """Write what `plan` decided, or refuse the whole plan.
 
-    `apply` takes the `Plan` rather than a bare action list, and no `force`: a refusal is a
-    property of the plan, and forcing is a decision `plan` already made. A caller that wants
-    the good half of a refused plan re-plans without the offending templates.
+    `apply` takes the `Plan` rather than a bare action list: a refusal is a property of the plan.
+    A caller that wants the good half of a refused plan re-plans without the offending templates.
     """
     if planned.refusals:
         detail = "; ".join(f"{r.artifact_id}: {r.reason}" for r in planned.refusals)
@@ -654,10 +537,9 @@ def apply(root: Path, planned: Plan) -> Applied:
 
     # The ledger records what is on disk, so it is persisted for the actions that ran even when
     # a later one refuses. Discarding it would leave a file stayfixed wrote carrying no record,
-    # which every later run reads as somebody else's: `skip_modified` under a false reason,
-    # moved only by a `--force` that names it, and invisible to `uninstall`. The refusal still
-    # propagates; only the loop is wrapped, because the refusal above it has written nothing to
-    # record.
+    # which every later run reads as somebody else's: `skip_modified` under a false reason. The
+    # refusal still propagates; only the loop is wrapped, because the refusal above it has
+    # written nothing to record.
     try:
         for action in planned.actions:
             if action.verb is Verb.SKIP_MODIFIED:
@@ -675,8 +557,8 @@ def apply(root: Path, planned: Plan) -> Applied:
                     removed.append(action.target)
                 # A record goes with the file it names and no other. The copy an artifact left
                 # kept out of git carries the artifact's id too, and dropping by id alone took
-                # the live record of its committed file with it: that file then read as nobody's,
-                # `upgrade` never recorded it again, and `uninstall` left it unlisted.
+                # the live record of its committed file with it: that file then read as nobody's
+                # and was never recorded again.
                 record = manifest.get(action.artifact_id)
                 if record is not None and path_key(record.target) == path_key(action.target):
                     manifest = manifest.without(frozenset({action.artifact_id}))

@@ -44,9 +44,6 @@ CORE_TO_PACK: tuple[Row, ...] = (
     ("scaffold/engine.py", "stayfixed.profiles", frozenset()),
 )
 PACK_TO_DELIVERY: tuple[Row, ...] = (
-    # `stayfixed uninstall` detaches an attached repository before it takes the scaffold back,
-    # inside the one function that runs it. Goes when `stayfixed uninstall` is deleted.
-    ("project/uninstall.py", "stayfixed.attach.api", frozenset({"detach"})),
     # `prove` reads a test command's launch the way the red-run hints read it, at module level.
     # Goes with `prove`.
     ("prove/run.py", "stayfixed.hints.api", frozenset({"Launch", "read_launch", "run_directory"})),

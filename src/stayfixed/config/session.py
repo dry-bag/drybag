@@ -106,8 +106,8 @@ NOTED_WARNING = (
     "stayfixed: stayfixed.toml loaded with {count} setting(s) ignored or put back to the "
     "preset's; run `stayfixed doctor` for the list"
 )
-# The remedy is `doctor`'s `VERSION_AHEAD`'s: `stayfixed upgrade` never moves a project backward,
-# so the way out of a file a later release wrote is a later plugin.
+# The remedy is `doctor`'s `VERSION_AHEAD`'s: the way out of a file a later release wrote is a
+# later plugin.
 NEWER_RELEASE_WARNING = (
     "stayfixed: stayfixed.toml was written by a newer stayfixed, so {count} setting(s) this one "
     "does not read were ignored or put back to the preset's; update the stayfixed plugin, and run "

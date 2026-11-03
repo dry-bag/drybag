@@ -25,14 +25,14 @@ from tests.project.repos import DOCUMENT, repository
 ROOT = Path(__file__).resolve().parents[2]
 AREA = ROOT / "src" / "stayfixed" / "project"
 SEAM = AREA / "footprint.py"
-# The planner and what binds its guards: the engine's plan and the two lookups that take the
-# relation, and the ignore guard. The seam module binds all four at its top level, so importing
-# one from it is the same bypass as importing it from where it is defined.
+# The planner and what binds its guards: the engine's plan and the ignore guard. The seam module
+# binds both at its top level, so importing one from it is the same bypass as importing it from
+# where it is defined.
 PLANNERS = {
-    "stayfixed.scaffold": {"plan", "left_copies", "local_copies"},
-    "stayfixed.scaffold.engine": {"plan", "left_copies", "local_copies"},
+    "stayfixed.scaffold": {"plan"},
+    "stayfixed.scaffold.engine": {"plan"},
     "stayfixed.project.ignored": {"refuse_ignored"},
-    "stayfixed.project.footprint": {"plan", "left_copies", "local_copies", "refuse_ignored"},
+    "stayfixed.project.footprint": {"plan", "refuse_ignored"},
 }
 # The package every checked module sits in, which a relative import is resolved against.
 PACKAGE = "stayfixed.project"
@@ -91,9 +91,9 @@ def test_only_the_planning_seam_imports_the_planner_or_the_ignore_guard() -> Non
     # The walk first: the seam itself must be seen reaching all of them, or a check that
     # matched nothing would pass every module. Mutation (oracle): `mutations/`'s "a footprint
     # command imports the planner past the seam" -> `init` imports `plan` again, and this reddens.
-    assert _planners_reached(SEAM) == {"plan", "left_copies", "local_copies", "refuse_ignored"}
+    assert _planners_reached(SEAM) == {"plan", "refuse_ignored"}
     modules = sorted(p for p in AREA.glob("*.py") if p != SEAM)
-    assert len(modules) >= 10, modules
+    assert len(modules) >= 9, modules
     reached = {p.name: _planners_reached(p) for p in modules}
     assert {name: found for name, found in reached.items() if found} == {}
 
@@ -160,10 +160,10 @@ def test_replanning_before_predicting_is_refused(tmp_path: Path) -> None:
     root = repository(tmp_path)
     (root / CONFIG_FILE).write_text(DOCUMENT, encoding="utf-8")
     config = load(root, machine=tmp_path / "absent.toml")
-    passes = prepare(root, config, {}, document=DOCUMENT)
+    passes = prepare(root, config, document=DOCUMENT)
     with pytest.raises(RuntimeError, match="only after predict"):
         passes.replan(passes.footprint)
-    passes.predict((passes.footprint, ()))
+    passes.predict(passes.footprint)
     assert passes.replan(passes.footprint).actions
 
 
@@ -177,8 +177,8 @@ def test_a_predict_the_ignore_guard_refused_leaves_replanning_refused(tmp_path: 
     document = DOCUMENT + '\n[paths]\nagents_md = ".env"\n'
     (root / CONFIG_FILE).write_text(document, encoding="utf-8")
     config = load(root, machine=tmp_path / "absent.toml")
-    passes = prepare(root, config, {}, document=document)
+    passes = prepare(root, config, document=document)
     with pytest.raises(Refusal):
-        passes.predict((passes.footprint, ()))
+        passes.predict(passes.footprint)
     with pytest.raises(RuntimeError, match="only after predict"):
         passes.replan(passes.footprint)

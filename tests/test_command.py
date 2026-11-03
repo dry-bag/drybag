@@ -3,8 +3,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import pytest
-
 import stayfixed
 from stayfixed.cli import build_parser, discover_registrars
 from stayfixed.command import (
@@ -136,28 +134,18 @@ UNREAD_KEY = "[guards]\nfuture = 1\n"
 DOCUMENT = f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n'
 
 
-def _two_documents(tmp_path: Path, command: str) -> tuple[Path, tuple[str, ...]]:
-    """A repository where `command` loads more than one `stayfixed.toml`, and its argv: `init`
-    adopting a file it loads as merged and as on disk, and `upgrade` the document before and
-    after."""
-    if command == "init":
-        root = repository(tmp_path)
-        (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
-        return root, ("init", "--yes", "--json")
-    return initialised(tmp_path), ("upgrade", "--dry-run", "--json")
-
-
 @needs_git
-@pytest.mark.parametrize("command", ["init", "upgrade"])
 def test_a_command_says_a_machine_file_note_once_however_many_documents_it_loads(
-    tmp_path: Path, command: str
+    tmp_path: Path,
 ) -> None:
-    # The note was said by every load, so once a document: twice in `init --yes` and `upgrade
-    # --dry-run`, one per copy it read. The command resolves the
+    # The note was said by every load, so once a document: twice in `init --yes`, which adopts a
+    # file it loads as merged and as on disk, one per copy it read. The command resolves the
     # owner's layer once (`command.command_owner`) and every load takes it. Mutation (`mutations/`'s
     # "a command keeps quiet about what it read past in the machine file"): none; no one-line edit
     # puts the side effect back into the load, and with it there each case is said again.
-    root, argv = _two_documents(tmp_path, command)
+    root = repository(tmp_path)
+    (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
+    argv = ("init", "--yes", "--json")
     machine = tmp_path / "machine.toml"
     machine.write_text(UNREAD_KEY, encoding="utf-8")
     code, out, err = cli(root, tmp_path, *argv, machine=machine)

@@ -61,22 +61,6 @@ def test_an_unedited_copy_follows_a_changed_template(tmp_path: Path) -> None:
     assert LocalDigests.read(tmp_path).entries == {("agents-md", LOCAL): digest("BODY 2\n")}
 
 
-def test_a_retired_unedited_copy_goes_after_its_template_changed(tmp_path: Path) -> None:
-    # Mutation (oracle): `mutations/`'s "the ledger never vouches for bytes stayfixed wrote kept out
-    # of git" -> the copy is listed as changed and stays.
-    _written(tmp_path)
-    config = a_config(tmp_path, local=("agents-md",))
-    retired = a_template(retired=True, render=lambda: "BODY 2\n")
-    planned = plan(tmp_path, config, [retired])
-    assert [(a.verb, a.target, a.reason) for a in planned.actions] == [
-        (Verb.REMOVE, LOCAL, "retired")
-    ]
-    apply(tmp_path, planned)
-    assert not (tmp_path / LOCAL).exists()
-    # The last entry gone, the ledger goes with it.
-    assert not (tmp_path / LOCAL_DIGESTS).exists()
-
-
 def test_an_edited_copy_is_named_as_changed_and_with_no_ledger_as_unrecorded(
     tmp_path: Path,
 ) -> None:
@@ -117,20 +101,13 @@ def test_a_copy_whose_id_left_the_list_is_retired_while_its_bytes_are_stayfixeds
     assert LocalDigests.read(tmp_path).entries == {}
 
 
-def test_a_changed_copy_whose_id_left_the_list_is_named_and_force_takes_it(
-    tmp_path: Path,
-) -> None:
+def test_a_changed_copy_whose_id_left_the_list_is_named(tmp_path: Path) -> None:
     _written(tmp_path)
     (tmp_path / LOCAL).write_text("BODY\nours\n", encoding="utf-8")
     config = a_config(tmp_path)
     planned = plan(tmp_path, config, [a_template()])
     assert [(a.verb, a.target, a.reason) for a in planned.actions] == [
         (Verb.SKIP_MODIFIED, LOCAL, engine.LEFT_LOCALLY),
-        (Verb.CREATE, "AGENTS.md", "new"),
-    ]
-    forced = plan(tmp_path, config, [a_template()], force=(LOCAL,))
-    assert [(a.verb, a.target, a.reason) for a in forced.actions] == [
-        (Verb.REMOVE, LOCAL, "relocated, forced"),
         (Verb.CREATE, "AGENTS.md", "new"),
     ]
 

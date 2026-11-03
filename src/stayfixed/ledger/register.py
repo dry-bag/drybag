@@ -303,8 +303,8 @@ def bug_register(config: Config) -> Register:
     """The bug ledger, as this project configures it.
 
     Refuses a `[ledger]` value the ledger cannot work with, here and not in the loader, so that
-    every command that builds the register refuses it and `uninstall`, which builds none, does
-    not: `id_prefix` outside the identifier grammar (`Identifiers`), and an
+    every command that builds the register refuses it and a command that builds none does not:
+    `id_prefix` outside the identifier grammar (`Identifiers`), and an
     `evidence_boundary_required_for` level that is no severity, which loaded and enforced the
     evidence line of no entry at all.
     """

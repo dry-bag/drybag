@@ -1,5 +1,5 @@
 """Refuse a write or removal git would never show, at a place a committed `[paths]` value chose:
-one guard for `init`, `upgrade` and `uninstall`.
+the guard `init` plans under.
 
 A managed region is inserted into whatever file its `[paths]` key names, recorded or not, and a
 whole file is overwritten or removed while its bytes are the ones a record states. Both the
@@ -79,13 +79,6 @@ IGNORED = (
     "give it back; nothing was written. Point that [paths] key at a path git does not ignore, "
     "or take it out to use the preset's place, then run the command again"
 )
-IGNORED_REMOVING = (
-    "git ignores {count} file(s) uninstall would remove or rewrite, at a place a [paths] value "
-    "in stayfixed.toml chose ({names}), so what it did there would never show in a diff and git "
-    "could not give it back; nothing was removed. Take stayfixed's part out of them by hand, or "
-    "take that [paths] key out of stayfixed.toml: uninstall then leaves those files where they "
-    "are and lists them"
-)
 # One refusal for every answer that is not one, a timeout and a `git` that cannot start included:
 # what the person can do about each is the same, run it again once git answers. 0.3.1's words.
 DECLINED = (
@@ -113,10 +106,9 @@ def _preset_places(config: Config) -> Mapping[str, frozenset[str]]:
     return prepared.could_write
 
 
-def refuse_ignored(root: Path, config: Config, *plans: Plan, removing: bool = False) -> None:
+def refuse_ignored(root: Path, config: Config, *plans: Plan) -> None:
     """Refuse when git ignores an existing file a write or removal in `plans` targets at a place
-    a `[paths]` value chose, or cannot say whether it does inside a work tree; `removing` picks
-    `uninstall`'s remedy."""
+    a `[paths]` value chose, or cannot say whether it does inside a work tree."""
     existing = [
         action
         for planned in plans
@@ -150,8 +142,7 @@ def refuse_ignored(root: Path, config: Config, *plans: Plan, removing: bool = Fa
         ignored = sorted({name for name in out.split("\0") if name} & set(chosen))
         if ignored:
             names = ", ".join(sorted({printable(chosen[target]) for target in ignored}))
-            text = IGNORED_REMOVING if removing else IGNORED
-            raise Refusal(text.format(count=len(ignored), names=names))
+            raise Refusal(IGNORED.format(count=len(ignored), names=names))
         return
     if in_work_tree(root):
         raise Refusal(DECLINED)

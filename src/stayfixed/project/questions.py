@@ -84,8 +84,7 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "nothing a gate enforces; the rules file is yours to edit, and an edited one is no "
         "longer refreshed",
         "[stayfixed] profile in stayfixed.toml and the profile's rules files",
-        'set [stayfixed] profile = "" and run `stayfixed upgrade`, which removes the rules files '
-        "you have not edited",
+        'set [stayfixed] profile = "" and delete the rules files',
     ),
     "commit_messages.attribution_check": (
         "`stayfixed commit check` fails a range whose commit messages end in an AI tool's "
@@ -106,13 +105,13 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "the documents you choose stay on this machine, under .stayfixed/local/artifacts/",
         "no one else sees them: not a teammate, not CI, not another clone",
         "[artifacts] local in stayfixed.toml and the copies under .stayfixed/local/artifacts/",
-        "take the id out of [artifacts] local and run `stayfixed upgrade`",
+        "take the id out of [artifacts] local and move the copy back by hand",
     ),
     "stayfixed.agents": (
         "each agent you use gets its own pointer at AGENTS.md and the profile's rules",
         "nothing; an agent left out still reads AGENTS.md",
         "[stayfixed] agents in stayfixed.toml and each agent's pointer files",
-        "edit [stayfixed] agents and run `stayfixed upgrade`",
+        "edit [stayfixed] agents and delete the pointer files of an agent left out",
     ),
     PLUGINS: (
         "the plugins the recommended preset names, {plugins}, in every Claude Code session",

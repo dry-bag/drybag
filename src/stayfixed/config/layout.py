@@ -1,7 +1,7 @@
 """Where stayfixed's own files sit inside a project, derived once from `[paths]`.
 
-`[paths] stayfixed` is the directory stayfixed's own project files go under, so that `uninstall`
-can account for them and a reader can find them. The project's documents stay at their own
+`[paths] stayfixed` is the directory stayfixed's own project files go under, so that a reader can
+find them. The project's documents stay at their own
 `[paths]` keys. Every other module asks this one for a derived location rather than spelling it.
 
 A local run's default base is derived here too (`local_base`), because the three areas that
@@ -16,8 +16,7 @@ from stayfixed.config.schema import Config
 
 # Where `attach` records what it added to a project, among the local state the ignore block keeps
 # out of git; `attach` itself hides it through the repository's `info/exclude`. The core names
-# the path and never reads the ledger: `uninstall` tells an attached repository by the file's
-# presence and detaches it first, and `doctor` reports on it.
+# the path and never reads the ledger: `doctor` reports on it.
 ATTACH_LEDGER = ".stayfixed/local/attach.json"
 # The `.gitignore` block `init` writes as a scaffold artifact, spelled once. Its region name, the
 # paths it keeps out of git — the local state, and the inventory an earlier stayfixed wrote — and

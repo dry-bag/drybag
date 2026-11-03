@@ -1155,8 +1155,6 @@ before = "        if names_stayfixed_directory(relative):"
 after = "        if False:"
 reddens = [
   "tests/config/test_paths.py::test_a_paths_value_inside_stayfixeds_own_directory_is_refused_and_never_quoted",
-  "tests/project/test_upgrade.py::test_a_committed_path_into_stayfixeds_own_directory_refuses_upgrade_before_any_write",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-another-artifact-s-hidden-copy-upgrade]",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-attach-s-ledger-init]",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-attach-s-ledger-case-folded-init]",
 ]
@@ -1173,7 +1171,6 @@ reddens = [
   "tests/test_fsops.py::test_gits_control_directory_is_reserved_at_every_depth_and_in_any_case",
   "tests/config/test_paths.py::test_contained_refuses_gits_control_directory_at_any_depth_and_in_any_case",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-git-s-hook-case-folded-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-git-s-hook-case-folded-upgrade]",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-attach-s-ledger-case-folded-init]",
 ]
 
@@ -1378,13 +1375,8 @@ before = '    return names_component(relative, CONTROL_DIRECTORY)'
 after = '    return False'
 reddens = [
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-git-s-hook-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-git-s-hook-upgrade]",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-git-s-hook-case-folded-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-git-s-hook-case-folded-upgrade]",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-new-file-under-git-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-new-file-under-git-upgrade]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[forged-record-at-git-s-hook-upgrade]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[forged-record-at-git-s-hook-uninstall]",
 ]
 
 # A file a person or a repository owns that is not UTF-8 is its reader's own failure, never an
@@ -2286,7 +2278,6 @@ before = "    if not suffix and _PRE_RELEASE.match(other):\n        return True"
 after = "    if not suffix and _PRE_RELEASE.match(other):\n        return False"
 reddens = [
   "tests/test_semver.py::test_equal_triples_order_a_release_after_its_pre_release_and_nothing_else",
-  "tests/project/test_upgrade.py::test_a_pre_release_build_never_moves_a_project_recording_the_release_down_to_itself",
 ]
 
 # `init` writes the `.gitignore` block as a scaffold artifact, held to the bytes a project already

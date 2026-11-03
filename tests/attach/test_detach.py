@@ -21,8 +21,6 @@ from stayfixed.config.layout import ATTACH_LEDGER as LEDGER
 from stayfixed.errors import Failure, Refusal
 from stayfixed.printed import quoted
 from stayfixed.project.init import init
-from stayfixed.project.uninstall import uninstall
-from stayfixed.scaffold import MANIFEST_PATH
 from stayfixed.scaffold.regions import Style, extract
 from tests.attach.test_binding import CONFIG, _machine
 from tests.attach.test_write import SETTINGS
@@ -368,13 +366,10 @@ def test_detach_keeps_the_allow_rule_claude_code_added_to_a_rewritten_settings_f
     assert document["permissions"]["allow"] == ["Bash(git tag *)"]
 
 
-def test_uninstall_after_a_real_detach_takes_the_footprint_back(tmp_path: Path) -> None:
-    # The lifecycle's "uninstalled after a detach": what a detach leaves behind decides whether
-    # `stayfixed uninstall` reads the repository as attached, and so whether it detaches again
-    # before it takes the scaffold back. An `init`
-    # footprint, a real attach that merged a rule and a hook entry, a detach, and the tree is the
-    # one `init` left; `uninstall` then runs and takes the footprint back, and a second one finds
-    # nothing to take. Mutation: `mutations/`'s "detach leaves its ledger behind".
+def test_a_real_detach_after_init_leaves_the_tree_init_left(tmp_path: Path) -> None:
+    # An `init` footprint, a real attach that merged a rule and a hook entry, a detach, and the
+    # tree is the one `init` left, with no ledger behind. Mutation: `mutations/`'s "detach leaves
+    # its ledger behind".
     root, store, machine = _bound(tmp_path)
     init(root, machine=machine, yes=True, dry_run=False)
     git(root, "add", "-A")
@@ -385,10 +380,7 @@ def test_uninstall_after_a_real_detach_takes_the_footprint_back(tmp_path: Path) 
     assert_snapshot_changed(root, initialised)
     _detach(root)
     assert_snapshot_unchanged(root, initialised)
-    uninstall(root, machine=machine, dry_run=False, force=(), runner=Recorder())
-    assert not (root / MANIFEST_PATH).exists() and not (root / LEDGER).exists()
-    with pytest.raises(Refusal):
-        uninstall(root, machine=machine, dry_run=False, force=(), runner=Recorder())
+    assert not (root / LEDGER).exists()
 
 
 def test_detach_leaves_a_rule_the_ledger_does_not_claim(tmp_path: Path) -> None:

@@ -12,8 +12,7 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 ## Walk
 
 1. Run `stayfixed init --questions --json`. It refuses a repository that already has
-   `.stayfixed/manifest.json` (offer `stayfixed upgrade`) or a `stayfixed.toml` (see the first
-   rule). Otherwise `questions.properties` holds nine questions, asked in the order
+   `.stayfixed/manifest.json` or a `stayfixed.toml` (see the first rule). Otherwise `questions.properties` holds nine questions, asked in the order
    `questions.required` lists them, each with its `default` (what `stayfixed init --yes` alone
    would write), its `x-stayfixed-source`, its `x-stayfixed-flag` and its
    `x-stayfixed-tradeoff`: four lines, what the answer gives (`get`), what it gives up
@@ -48,10 +47,8 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 - **A `failed:` line from `init` over a `stayfixed.toml` the user wrote means the next command
   could not load that file.** Nothing was written. Relay the sentence, fix the file with the
   user, and run again.
-- **A repository with `.stayfixed/manifest.json` is refused.** Refreshing is `stayfixed upgrade`.
+- **A repository with `.stayfixed/manifest.json` is refused.** `init` writes a scaffold once.
   Never delete the manifest to get past it.
 - **Nothing is written when anything is refused.** Relay every `REFUSED` line, fix the cause
   with the user, and run again.
-- **Never hand-edit `[stayfixed] version` or `.stayfixed/manifest.json`.** They are
-  the tool's: `stayfixed upgrade` moves the version.
-- **The undo is `stayfixed uninstall`.** Run `stayfixed uninstall --dry-run` first.
+- **Never hand-edit `.stayfixed/manifest.json`.** It is the tool's.

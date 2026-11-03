@@ -1,5 +1,4 @@
-"""The project area's commands: `init` writes a repository's stayfixed scaffold once, `upgrade`
-refreshes it, and `uninstall` takes it back.
+"""The project area's command: `init` writes a repository's stayfixed scaffold once.
 
 **The summary is both rendered reports, the way `overlay upgrade`'s is.** It was four lines of
 counts, with every artifact's verb and the whole REFUSED section reachable only under `--json`
@@ -23,14 +22,14 @@ above the plans, such as a missing `--yes` or a repository that is already initi
 from __future__ import annotations
 
 import argparse
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from stayfixed.areas import SubParsers
 from stayfixed.command import DRY_RUN_HELP, command_owner, common_flags, grammar
 from stayfixed.errors import Refusal
 from stayfixed.result import Result
-from stayfixed.scaffold import Plan, Verb, printable, render_report, unlinks
+from stayfixed.scaffold import render_report
 
 if TYPE_CHECKING:
     from stayfixed.project.init import Given
@@ -178,178 +177,6 @@ def run_init(args: argparse.Namespace) -> Result:
     return Result("\n".join(lines), data, exit_code=1 if refused else 0)
 
 
-# The refused lines are `init`'s, word for word: a refused plan wrote nothing, whichever command
-# planned it.
-UPGRADE_HEADINGS = {**HEADINGS, (False, True): "would upgrade:", (False, False): "upgraded:"}
-# What `--force` reaches is what `scaffold.plan` lets it reach: a file you edited, a whole file
-# stayfixed never wrote at a path it writes, and a copy under
-# `.stayfixed/local/artifacts/` that changed since stayfixed wrote it or that nothing records.
-FORCE_HELP = (
-    "overwrite or remove a file the report lists skip_modified because you edited it, stayfixed "
-    "never wrote it, or it is a changed or unrecorded copy under .stayfixed/local/artifacts/ "
-    "(not one left at an artifact's old place, relocated and hand-edited, which is yours to keep "
-    "or delete by hand); give it as a path relative to --root, repeat for each file, and never "
-    "name one you did not mean"
-)
-# Fixed text: the value is what the operator typed, and the rule is what they can act on.
-FORCE_OUTSIDE = "--force takes a path relative to --root, with no '..' component"
-FORCE_UNMATCHED = (
-    "note: {count} --force path(s) named no file this run had to judge, so they forced nothing; "
-    "a path is compared exactly, relative to --root"
-)
-# A count: the ids of records this build does not produce are repository-authored.
-ORPHANS = (
-    "note: {count} record(s) in .stayfixed/manifest.json name artifacts this stayfixed does not "
-    "produce; they were left where they are"
-)
-
-
-def _force_paths(raw: list[str]) -> tuple[str, ...]:
-    """Each `--force` value as the engine compares it: root-relative, with a leading `./` gone.
-
-    An absolute path or one with a `..` component is refused naming the rule, never the value.
-    """
-    paths: list[str] = []
-    for value in raw:
-        path = PurePosixPath(value.removeprefix("./"))
-        if path.is_absolute() or ".." in path.parts:
-            raise Refusal(FORCE_OUTSIDE)
-        paths.append(path.as_posix())
-    return tuple(paths)
-
-
-def _unmatched(force: tuple[str, ...], *plans: Plan) -> int:
-    """How many forced paths no planned action names: a typo, or a file with nothing to force."""
-    targets = {action.target for planned in plans for action in planned.actions}
-    return sum(1 for path in force if path not in targets)
-
-
-def run_upgrade(args: argparse.Namespace) -> Result:
-    from stayfixed.project.upgrade import upgrade
-    from stayfixed.runner import subprocess_runner
-
-    force = _force_paths(args.force)
-    machine = Path(args.machine) if args.machine else None
-    report = upgrade(
-        Path(args.root).resolve(),
-        machine=machine,
-        runner=subprocess_runner(),
-        dry_run=args.dry_run,
-        force=force,
-        owner=command_owner(machine),
-    )
-    refused = report.refused
-    moved = "; ".join(f"[{m.key[0]}] {m.key[1]} {m.before} -> {m.after}" for m in report.moved)
-    shown = render_report(report.footprint)
-    lines = [
-        UPGRADE_HEADINGS[(refused, report.dry_run)],
-        f"stayfixed.toml: {moved or 'nothing to move'}",
-        "scaffold:",
-        shown,
-    ]
-    if report.orphans:
-        lines.append(ORPHANS.format(count=report.orphans))
-    if unmatched := _unmatched(force, report.footprint):
-        lines.append(FORCE_UNMATCHED.format(count=unmatched))
-    data = {
-        "dry_run": report.dry_run,
-        "moved": [
-            {"key": ".".join(m.key), "before": m.before, "after": m.after} for m in report.moved
-        ],
-        "scaffold": shown,
-        "writes": report.footprint.writes,
-        "skipped": dict(report.skipped),
-        "orphans": report.orphans,
-    }
-    return Result("\n".join(lines), data, exit_code=1 if refused else 0)
-
-
-# Said when the repository was attached: fixed text, since `detach`'s own report is counts of what
-# the repository's ledger and settings named.
-DETACHED = (
-    "this repository was attached to an overlay, so uninstall ran `stayfixed detach` first, which "
-    "withdrew what attach placed and its ledger"
-)
-DETACHED_DRY = (
-    "this repository is attached to an overlay, so uninstall would run `stayfixed detach` first, "
-    "which withdraws what attach placed and its ledger"
-)
-# The refused lines are `init`'s in substance, with the verb this command performs.
-UNINSTALL_HEADINGS = {
-    (True, True): "refused, and nothing would be removed:",
-    (True, False): "refused, and nothing was removed:",
-    (False, True): "would uninstall:",
-    (False, False): "uninstalled:",
-}
-
-
-def run_uninstall(args: argparse.Namespace) -> Result:
-    from stayfixed.project.uninstall import KEPT_CONFIG, KEPT_LOCALLY, uninstall
-    from stayfixed.runner import subprocess_runner
-
-    force = _force_paths(args.force)
-    machine = Path(args.machine) if args.machine else None
-    report = uninstall(
-        Path(args.root).resolve(),
-        machine=machine,
-        dry_run=args.dry_run,
-        force=force,
-        runner=subprocess_runner(),
-        owner=command_owner(machine),
-    )
-    refused = report.refused
-    # Through `printable`, the bound the reports use, so a forged target is `<id>` in both. A
-    # file one pass left and a later action deletes is gone, not left: with stayfixed's region
-    # taken out of `AGENTS.md` by hand, the scaffold pass skips the file and the write-once pass
-    # removes the untouched skeleton, and counting the skip told the person a deleted file was
-    # theirs now.
-    actions = (*report.footprint.actions, *report.once.actions)
-    gone = {a.target for a in actions if unlinks(a)}
-    left = sorted(
-        printable(a) for a in actions if a.verb is Verb.SKIP_MODIFIED and a.target not in gone
-    )
-    footprint, once = render_report(report.footprint), render_report(report.once)
-    lines = [
-        UNINSTALL_HEADINGS[(refused, report.dry_run)],
-        "scaffold:",
-        footprint,
-        "write-once:",
-        once,
-    ]
-    if report.detached:
-        lines.append(f"note: {DETACHED_DRY if report.dry_run else DETACHED}")
-    if left:
-        lines.append(f"left in place, yours now: {len(left)} file(s), each named above")
-    if report.orphans:
-        lines.append(ORPHANS.format(count=report.orphans))
-    if report.note:
-        lines.append(f"note: {report.note}")
-    if report.kept_locally:
-        lines.append(f"note: {KEPT_LOCALLY.format(count=report.kept_locally)}")
-    if report.kept_config:
-        lines.append(f"note: {KEPT_CONFIG}")
-    if unmatched := _unmatched(force, report.footprint, report.once):
-        lines.append(FORCE_UNMATCHED.format(count=unmatched))
-    data = {
-        "dry_run": report.dry_run,
-        "scaffold": footprint,
-        "once": once,
-        "left": left,
-        "orphans": report.orphans,
-        "note": report.note,
-        "kept_locally": report.kept_locally,
-        "kept_config": report.kept_config,
-    }
-    return Result("\n".join(lines), data, exit_code=1 if refused else 0)
-
-
-def _judging(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """The two flags of a command that re-judges a scaffold, `upgrade` and `uninstall`."""
-    parser.add_argument("--dry-run", action="store_true", help=DRY_RUN_HELP)
-    parser.add_argument("--force", action="append", default=[], metavar="PATH", help=FORCE_HELP)
-    return parser
-
-
 def _answers(parser: argparse.ArgumentParser) -> None:
     """The answer flags on `init --yes`, one per question `init --questions` prints.
 
@@ -427,11 +254,3 @@ def register(groups: SubParsers) -> None:
     parser.add_argument("--dry-run", action="store_true", help=DRY_RUN_HELP)
     _answers(parser)
     parser.set_defaults(func=run_init)
-    upgrade = common_flags(groups.add_parser("upgrade", help="refresh this repository's scaffold"))
-    _judging(upgrade).set_defaults(func=run_upgrade)
-    uninstall = common_flags(
-        groups.add_parser(
-            "uninstall", help="remove this repository's scaffold; leave what you edited"
-        )
-    )
-    _judging(uninstall).set_defaults(func=run_uninstall)
