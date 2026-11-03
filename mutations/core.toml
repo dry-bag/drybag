@@ -6341,9 +6341,39 @@ reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_a
 [[mutation]]
 name = "the back-off ignores an absent hold"
 file = "src/stayfixed/sync/state.py"
-before = "    if not state.holds.any:"
+before = "    if not (state.holds.any or state.outcome.state in STANDING):"
 after = "    if False:"
 reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_and_the_same_upstream"]
+
+[[mutation]]
+name = "the back-off ignores a standing outcome"
+file = "src/stayfixed/sync/state.py"
+before = "    if not (state.holds.any or state.outcome.state in STANDING):"
+after = "    if not state.holds.any:"
+reddens = [
+  "tests/sync/test_state.py::test_back_off_holds_for_a_standing_outcome_on_the_same_notes",
+  "tests/sync/test_hooks.py::test_a_failure_only_the_owner_can_clear_backs_off_until_the_notes_change",
+]
+
+[[mutation]]
+name = "the back-off ignores changed notes"
+file = "src/stayfixed/sync/state.py"
+before = "    if dirty is not None and dirty != state.dirty:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_state.py::test_back_off_holds_for_a_standing_outcome_on_the_same_notes",
+  "tests/sync/test_hooks.py::test_a_failure_only_the_owner_can_clear_backs_off_until_the_notes_change",
+]
+
+[[mutation]]
+name = "a united index is not settled"
+file = "src/stayfixed/sync/state.py"
+before = 'SETTLED = ("ok", "skipped", "resolved_index")'
+after = 'SETTLED = ("ok", "skipped")'
+reddens = [
+  "tests/sync/test_hooks.py::test_a_standing_outcome_or_hold_starts_a_job",
+  "tests/sync/test_doctor.py::test_a_settled_last_outcome_is_ok_and_says_when[resolved_index]",
+]
 
 [[mutation]]
 name = "the back-off outlasts its window"
@@ -7226,22 +7256,22 @@ reddens = ["tests/sync/test_run.py::test_the_job_is_spawned_detached_with_nothin
 [[mutation]]
 name = "a dirty note starts no job"
 file = "src/stayfixed/sync/trigger.py"
-before = "    if tree is not None and tree.dirty:"
-after = "    if False:"
+before = "    news = tree is not None and (tree.ahead > 0 or bool(tree.paths))"
+after = "    news = tree is not None and tree.ahead > 0"
 reddens = ["tests/sync/test_hooks.py::test_a_dirty_or_untracked_note_starts_a_job"]
 
 [[mutation]]
 name = "commits ahead of the upstream start no job"
 file = "src/stayfixed/sync/trigger.py"
-before = "    ahead = tree is not None and tree.ahead > 0"
-after = "    ahead = False"
+before = "    news = tree is not None and (tree.ahead > 0 or bool(tree.paths))"
+after = "    news = tree is not None and bool(tree.paths)"
 reddens = ["tests/sync/test_hooks.py::test_commits_ahead_of_the_upstream_start_a_job"]
 
 [[mutation]]
 name = "a standing outcome or hold starts no job"
 file = "src/stayfixed/sync/trigger.py"
-before = "    return ahead or state.outcome.state not in SETTLED or state.holds.any"
-after = "    return ahead"
+before = "    return news or state.outcome.state not in SETTLED or state.holds.any"
+after = "    return news"
 reddens = ["tests/sync/test_hooks.py::test_a_standing_outcome_or_hold_starts_a_job"]
 
 [[mutation]]
@@ -7271,8 +7301,8 @@ reddens = [
 [[mutation]]
 name = "the back-off ignores a moved upstream ref"
 file = "src/stayfixed/sync/trigger.py"
-before = "    return backed_off(state, tree.head, now, upstream=_upstream(overlay))"
-after = "    return True"
+before = "    return backed_off(state, tree.head, now, dirty=dirty, upstream=_upstream(overlay))"
+after = "    return backed_off(state, tree.head, now, dirty=dirty)"
 reddens = [
   "tests/sync/test_hooks.py::test_the_back_off_ends_when_the_upstream_ref_moves",
   "tests/sync/test_hooks.py::test_an_unchanged_hold_backs_off_until_something_moves",
@@ -7297,14 +7327,14 @@ name = "a trigger inside the throttle is dropped"
 file = "src/stayfixed/sync/trigger.py"
 before = '        return "schedule", parse_time(last) + throttle'
 after = '        return "none", None'
-reddens = ["tests/sync/test_hooks.py::test_a_trigger_inside_the_throttle_or_during_a_job_is_scheduled"]
+reddens = ["tests/sync/test_hooks.py::test_a_trigger_inside_the_throttle_is_scheduled"]
 
 [[mutation]]
 name = "a trigger while a job runs is dropped"
 file = "src/stayfixed/sync/trigger.py"
-before = '        return "schedule", now + throttle  # the running job ends some time from now'
+before = "        return \"pending\", None  # the running job's next round takes it"
 after = '        return "none", None'
-reddens = ["tests/sync/test_hooks.py::test_a_trigger_inside_the_throttle_or_during_a_job_is_scheduled"]
+reddens = ["tests/sync/test_hooks.py::test_a_trigger_during_a_job_only_marks_it_pending"]
 
 [[mutation]]
 name = "the trigger asks an overlay that is not a repository"

@@ -2,18 +2,19 @@
 
 Imported by `sync.hooks` only once the machine file switches the sync on. `decide` reads one `git
 status` of the overlay and the state file, and one `rev-parse` of `origin/main` when an unchanged
-hold would back it off, and answers one of three things: **run** the job now; **schedule** it,
-marking a trigger pending and spawning a sleeper that waits out the throttle (the job's own
-`sleeper.lock` makes a second sleeper exit at once, so a burst of turns is one run); or **none**.
+hold or failure would back it off, and answers one of four things: **run** the job now;
+**schedule** it, marking a trigger pending and spawning a sleeper that waits out the throttle (the
+job's own `sleeper.lock` makes a second sleeper exit at once, so a burst of turns is one run);
+**pending**, a mark alone, while a job runs, whose next round takes it; or **none**.
 
 A `Stop` or `SessionEnd` starts a job when a memory path is dirty or untracked, when `@{u}..HEAD`
-holds commits, or when the last outcome is not `ok` or `skipped` or a hold is recorded; a session
-start always does, to fetch, except after a compaction, which is the same session going on.
-While a hold is recorded and neither `HEAD` nor the upstream ref moved since the last job, a
-`Stop` and a `SessionEnd` wait (`state.backed_off`), unpushed commits included, since a local
-hold's own commits keep `@{u}..HEAD` non-empty; a dirty note is never backed off. A trigger
-inside the throttle, or while a job runs, is scheduled, never dropped; `SessionEnd` is never
-throttled, since no later turn would pick it up.
+holds commits, or when the last outcome is not settled or a hold is recorded; a session start
+always does, to fetch, except after a compaction, which is the same session going on. While a
+hold or a failure only its owner can clear is recorded and neither `HEAD`, the upstream ref nor
+the dirty notes changed since the last job, a `Stop` and a `SessionEnd` wait
+(`state.backed_off`), unpushed commits included, since a local hold's own commits keep
+`@{u}..HEAD` non-empty. A trigger inside the throttle is scheduled, never dropped; `SessionEnd` is
+never throttled, since no later turn would pick it up.
 """
 
 from __future__ import annotations
@@ -38,22 +39,27 @@ from stayfixed.sync.state import (
     SyncState,
     backed_off,
     mark_pending,
+    notes_mark,
     parse_time,
     read_state,
     state_directory,
     throttled,
 )
 
-# A named cap: how long the trigger's own git questions may take, well inside the ten seconds
-# `hooks/hooks.json` gives each sync entry.
+# A named cap: how long each of the trigger's own git questions may take. `hooks/hooks.json`
+# gives the `Stop` entry ten seconds; what the harness allows a `SessionEnd` hook is its own.
 STATUS_TIMEOUT = 5.0
+# How many fields stand before the path in each kind of `git status --porcelain=v2` entry: a
+# change, an unmerged path and an untracked one (renames are off).
+_BEFORE_PATH = {"1": 8, "u": 10, "?": 1}
 
 
 @dataclass(frozen=True)
 class Tree:
-    """What the one `git status` says: dirty memory, commits ahead of `@{u}`, and `HEAD`."""
+    """What the one `git status` says: the dirty memory paths, commits ahead of `@{u}`, and
+    `HEAD`."""
 
-    dirty: bool
+    paths: tuple[str, ...]
     ahead: int
     head: str | None
 
@@ -67,7 +73,8 @@ def _tree(overlay: Path) -> Tree | None:
     )  # fmt: skip
     if result.timed_out or result.code != 0:
         return None
-    dirty, ahead, head = False, 0, None
+    paths: list[str] = []
+    ahead, head = 0, None
     for record in result.out.split("\0"):
         if record.startswith("# branch.oid "):
             oid = record.removeprefix("# branch.oid ").strip()
@@ -76,8 +83,9 @@ def _tree(overlay: Path) -> Tree | None:
             text = record.removeprefix("# branch.ab ").split()[0].lstrip("+")
             ahead = int(text) if text.isdigit() else 0
         elif record and not record.startswith("# "):
-            dirty = True  # an entry under the pathspec: changed, staged, unmerged or untracked
-    return Tree(dirty, ahead, head)
+            # An entry under the pathspec: changed, staged, unmerged or untracked.
+            paths.append(record.split(" ", _BEFORE_PATH.get(record[0], 1))[-1])
+    return Tree(tuple(paths), ahead, head)
 
 
 def _upstream(overlay: Path) -> str | None:
@@ -90,27 +98,27 @@ def _upstream(overlay: Path) -> str | None:
 
 
 def _backed_off(overlay: Path, state: SyncState, tree: Tree | None, now: datetime) -> bool:
-    """Whether a standing hold and unpushed commits are old news."""
+    """Whether a standing hold or failure, and the dirty notes and unpushed commits, are old
+    news."""
     if tree is None or tree.head is None or not backed_off(state, tree.head, now):
         return False
-    # Only now is the upstream ref worth reading: the owner's own fetch moving it is news.
-    return backed_off(state, tree.head, now, upstream=_upstream(overlay))
+    # Only now are the notes and the upstream ref worth reading: the owner's own fetch is news.
+    dirty = notes_mark(overlay, tree.paths)
+    return backed_off(state, tree.head, now, dirty=dirty, upstream=_upstream(overlay))
 
 
 def _triggered(overlay: Path, d: Path, now: datetime, tree: Tree | None) -> bool:
     """Whether a `Stop` or `SessionEnd` finds something for a job to do."""
-    if tree is not None and tree.dirty:
-        return True  # a note to commit is never backed off
     try:
         state = read_state(d)
     except StateUnreadable:
         return True  # a state nobody can read is not `ok`; the job replaces it
-    ahead = tree is not None and tree.ahead > 0
+    news = tree is not None and (tree.ahead > 0 or bool(tree.paths))
     if state is None:
-        return ahead
+        return news
     if _backed_off(overlay, state, tree, now):
         return False
-    return ahead or state.outcome.state not in SETTLED or state.holds.any
+    return news or state.outcome.state not in SETTLED or state.holds.any
 
 
 def _busy(d: Path) -> bool:
@@ -129,8 +137,9 @@ def _busy(d: Path) -> bool:
 def decide(
     event: str, source: str | None, overlay: Path, d: Path, now: datetime
 ) -> tuple[str, datetime | None]:
-    """`("run", None)`, `("schedule", <wake time>)` or `("none", None)` for `event` with the
-    session start's `source`, the overlay at `overlay` and the state directory `d`."""
+    """`("run", None)`, `("schedule", <wake time>)`, `("pending", None)` or `("none", None)` for
+    `event` with the session start's `source`, the overlay at `overlay` and the state directory
+    `d`."""
     if not fsops.exists(overlay / ".git"):
         return "none", None
     if event == "SessionStart":
@@ -140,9 +149,9 @@ def decide(
         return "none", None
     if event == "SessionEnd":
         return "run", None
-    throttle = timedelta(seconds=THROTTLE_SECONDS)
     if _busy(d):
-        return "schedule", now + throttle  # the running job ends some time from now
+        return "pending", None  # the running job's next round takes it
+    throttle = timedelta(seconds=THROTTLE_SECONDS)
     try:
         state = read_state(d)
     except StateUnreadable:
@@ -155,7 +164,7 @@ def decide(
 
 def trigger(event: HookEvent) -> None:
     """The handler's work once the sync is on: record a session start's checkout for the
-    pre-render, decide, and spawn the job or a sleeper."""
+    pre-render, decide, mark a trigger pending, and spawn the job or a sleeper."""
     overlay = overlay_root(None)
     if overlay is None:
         return
@@ -165,7 +174,7 @@ def trigger(event: HookEvent) -> None:
     source = event.raw.get("source")
     named = source if isinstance(source, str) else None
     decision, wake = decide(event.name, named, overlay, d, datetime.now(UTC))
-    if decision == "schedule":
+    if decision in ("schedule", "pending"):
         mark_pending(d)
-    if decision != "none":
+    if decision in ("run", "schedule"):
         job.spawn(overlay, wake=wake)

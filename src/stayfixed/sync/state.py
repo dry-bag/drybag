@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import errno
 import fcntl
+import hashlib
 import json
 import os
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -35,8 +37,14 @@ OUTCOMES: tuple[str, ...] = (
 )  # fmt: skip
 
 # The outcomes after which the sync has nothing to answer for: the hooks start no job on them and
-# `doctor` reports them green.
-SETTLED = ("ok", "skipped")
+# `doctor` reports them green. A united index is a success: nothing stopped the job.
+SETTLED = ("ok", "skipped", "resolved_index")
+# The failures only their owner can clear: a job run again on the same `HEAD`, upstream and notes
+# meets them again, so a trigger waits them out as it does a hold (`backed_off`).
+STANDING = (
+    "conflict", "auth_failed", "hook_failed", "scan_unavailable", "signing_failed",
+    "secret_found", "waiting_clean_tree",
+)  # fmt: skip
 
 STATE_FILE = "state.json"
 LOCK_FILE = "job.lock"
@@ -55,6 +63,10 @@ BACK_OFF_MINUTES = 15
 # A named cap: the most bytes of `state.json` read, since `doctor` and every hook read it. The job
 # writes a few kilobytes, far under this; no shipped file states it.
 STATE_BYTES = 4 * 1024 * 1024
+# A named cap: the bytes of each dirty memory file `notes_mark` reads. A note is far smaller, and
+# past it the mark still changes with the file's first bytes and its name; no shipped file states
+# it.
+MARK_BYTES = 1024 * 1024
 
 
 class StateUnreadable(Exception):
@@ -105,7 +117,8 @@ class PendingAlign:
 @dataclass(frozen=True)
 class SyncState:
     """`overlay` is the root the state was recorded for, as the machine file spells it. `head` is
-    the `HEAD` the last job left, which the back-off compares."""
+    the `HEAD` the last job left and `dirty` the `notes_mark` of the memory paths it found dirty,
+    which the back-off compares."""
 
     overlay: str
     outcome: Outcome
@@ -114,6 +127,7 @@ class SyncState:
     last_job_at: str | None
     pending_align: PendingAlign | None
     head: str | None = None
+    dirty: str | None = None
 
 
 def state_directory() -> Path:
@@ -200,6 +214,7 @@ def _parse(data: dict[str, Any]) -> SyncState:
         last_job_at=_get(data, "last_job_at", "", "timestamp", none=True),
         pending_align=align,
         head=_get(data, "head", "", none=True),
+        dirty=_get(data, "dirty", "", none=True),
     )
 
 
@@ -241,6 +256,7 @@ def write_state(d: Path, s: SyncState) -> None:
         if align is None
         else {"from": align.from_sha, "to": align.to_sha, "paths": list(align.paths)},
         "head": s.head,
+        "dirty": s.dirty,
     }
     d.mkdir(parents=True, exist_ok=True, mode=0o700)
     with fsops.open_directory(d) as directory:
@@ -321,17 +337,42 @@ def throttled(last_job_at: str | None, now: datetime) -> bool:
     return age is not None and age < timedelta(seconds=THROTTLE_SECONDS)
 
 
-def backed_off(state: SyncState, head: str, now: datetime, *, upstream: str | None = None) -> bool:
-    """Whether a trigger that only repeats a recorded hold should wait.
+def notes_mark(overlay: Path, paths: Iterable[str]) -> str:
+    """One digest of the dirty memory `paths` and what each holds now, read without following a
+    link: what the back-off compares, so an edit of a note that was already dirty is news."""
+    digest = hashlib.sha256()
+    for path in sorted(set(paths)):
+        try:
+            content = b"=" + fsops.read_bounded_within(overlay, path, MARK_BYTES)[0]
+        except OSError:
+            content = b"-"  # gone, a link, or not a file: the same mark until that changes
+        digest.update(hashlib.sha256(path.encode("utf-8", "surrogateescape")).digest())
+        digest.update(hashlib.sha256(content).digest())
+    return digest.hexdigest()
 
-    True while a hold is recorded, `head` is the one the last job left, the upstream sha the caller
-    sees (`upstream`, when it knows one) is the one that job fetched, and that job is under
-    `BACK_OFF_MINUTES` old. The outcome needs no comparison: only a job changes it, and a job also
-    restarts the window. The caller still starts a job for dirty notes or on `SessionStart`.
+
+def backed_off(
+    state: SyncState,
+    head: str,
+    now: datetime,
+    *,
+    dirty: str | None = None,
+    upstream: str | None = None,
+) -> bool:
+    """Whether a trigger that only repeats a recorded hold, or a failure only its owner can clear
+    (`STANDING`), should wait.
+
+    True while either stands, `head` is the one the last job left, the dirty notes the caller sees
+    (`dirty`, their `notes_mark`, when it knows them) are the ones that job left, the upstream sha
+    it sees (`upstream`, when it knows one) is the one that job recorded, and that job is under
+    `BACK_OFF_MINUTES` old. Only a job changes the outcome, and a job also restarts the window.
+    The caller still starts a job on `SessionStart`.
     """
-    if not state.holds.any:
+    if not (state.holds.any or state.outcome.state in STANDING):
         return False
     if state.head is None or state.head != head:
+        return False
+    if dirty is not None and dirty != state.dirty:
         return False
     if upstream is not None and upstream != state.fetched_sha:
         return False

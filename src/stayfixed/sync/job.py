@@ -76,6 +76,7 @@ from stayfixed.sync.state import (
     full_sha,
     iso,
     mark_pending,
+    notes_mark,
     parse_time,
     read_state,
     state_directory,
@@ -136,6 +137,7 @@ class JobContext:
     notices: list[Outcome] = field(default_factory=list)
     pending: PendingAlign | None = None
     fetched_sha: str | None = None
+    dirty: str | None = None
     resolved: set[str] = field(default_factory=set)
     refused: list[str] = field(default_factory=list)
     holds: Holds = EMPTY_HOLDS
@@ -387,6 +389,7 @@ def commit_memory(ctx: JobContext, *, also: Iterable[str] = ()) -> Outcome | Non
     """
     also = tuple(also)
     dirty = dirty_memory(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
+    ctx.dirty = notes_mark(ctx.overlay, dirty)  # what a trigger finds unchanged if this fails
     if not dirty and not also:
         return None
     ctx.limit(ctx.limits.job)  # the render is in process: only the job's own deadline bounds it
@@ -1095,7 +1098,7 @@ def _one_job(ctx: JobContext) -> SyncState:
     another overlay, or one that cannot be read, is not used, and the detail says so."""
     ctx = replace(
         ctx, deadline=time.monotonic() + ctx.limits.job, remarks=[], notices=[], pending=None,
-        fetched_sha=None, resolved=set(), refused=[], holds=EMPTY_HOLDS,
+        fetched_sha=None, dirty=None, resolved=set(), refused=[], holds=EMPTY_HOLDS,
     )  # fmt: skip
     scratch = ctx.state_dir / SCRATCH
     shutil.rmtree(scratch, ignore_errors=True)
@@ -1133,6 +1136,7 @@ def _one_job(ctx: JobContext) -> SyncState:
         last_job_at=iso(ctx.now()),
         pending_align=ctx.pending,
         head=head.out.strip() if head.code == 0 and not head.timed_out else None,
+        dirty=ctx.dirty,
     )
     write_state(ctx.state_dir, state)
     return state

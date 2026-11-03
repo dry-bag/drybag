@@ -192,7 +192,7 @@ def test_the_first_line_of_an_outcome_is_printed_as_data(machine: Machine) -> No
     assert "\x1b" not in detail
 
 
-@pytest.mark.parametrize("outcome", ["ok", "skipped"])
+@pytest.mark.parametrize("outcome", ["ok", "skipped", "resolved_index"])
 def test_a_settled_last_outcome_is_ok_and_says_when(machine: Machine, outcome: str) -> None:
     status, detail, _ = machine.scanner().state(outcome).row()
     assert status == OK

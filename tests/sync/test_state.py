@@ -53,6 +53,7 @@ def _state(**changes: object) -> S.SyncState:
             from_sha="5" * 40, to_sha="6" * 40, paths=("common/memory/n.md",)
         ),
         head=HEAD,
+        dirty="d" * 64,
     )
     return replace(state, **changes)  # type: ignore[arg-type]
 
@@ -94,6 +95,7 @@ def test_the_written_shape_is_the_documented_one(tmp_path: Path) -> None:
     data = _document(tmp_path)
     assert set(data) == {
         "overlay", "outcome", "holds", "fetched_sha", "last_job_at", "pending_align", "head",
+        "dirty",
     }  # fmt: skip
     assert set(data["outcome"]) == {"state", "at", "detail"}  # type: ignore[call-overload]
     assert data["holds"] == {
@@ -432,6 +434,29 @@ def test_back_off_needs_a_hold_the_same_head_and_the_same_upstream() -> None:
     assert (
         S.backed_off(_held(last_job_at=_iso(NOW - limit + timedelta(seconds=1))), HEAD, NOW) is True
     )
+
+
+def test_back_off_holds_for_a_standing_outcome_on_the_same_notes() -> None:
+    # A failure only the owner can clear is met again by a job on the same notes; one the network
+    # or a moment's lock caused is not. Mutations (oracle): `mutations/`'s "the back-off ignores a
+    # standing outcome" and "the back-off ignores changed notes".
+    standing = _held(holds=S.EMPTY_HOLDS, dirty="m" * 64)
+    for outcome in ("hook_failed", "scan_unavailable", "secret_found", "auth_failed", "conflict"):
+        state = replace(standing, outcome=replace(standing.outcome, state=outcome))
+        assert S.backed_off(state, HEAD, NOW, dirty="m" * 64) is True, outcome
+        assert S.backed_off(state, HEAD, NOW, dirty="n" * 64) is False, outcome
+    for outcome in ("offline", "timeout", "rejected", "raced", "index_stale"):
+        state = replace(standing, outcome=replace(standing.outcome, state=outcome))
+        assert S.backed_off(state, HEAD, NOW, dirty="m" * 64) is False, outcome
+
+
+def test_the_notes_mark_changes_with_a_name_or_a_content(tmp_path: Path) -> None:
+    (tmp_path / "a.md").write_text("a\n")
+    first = S.notes_mark(tmp_path, ["a.md", "gone.md"])
+    assert S.notes_mark(tmp_path, ["gone.md", "a.md"]) == first
+    assert S.notes_mark(tmp_path, ["a.md"]) != first
+    (tmp_path / "a.md").write_text("b\n")
+    assert S.notes_mark(tmp_path, ["a.md", "gone.md"]) != first
 
 
 def test_back_off_holds_for_a_local_hold_alone() -> None:

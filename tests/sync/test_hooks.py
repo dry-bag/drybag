@@ -40,6 +40,7 @@ from stayfixed.sync.state import (
     Outcome,
     SyncState,
     iso,
+    notes_mark,
     write_state,
 )
 from tests.floor import developer_free_environ
@@ -71,6 +72,7 @@ def _state(
             last_job_at=at,
             pending_align=None,
             head=head_sha,
+            dirty=notes_mark(world.a, ()),  # the job left no note dirty
         ),
     )
 
@@ -149,7 +151,9 @@ def test_a_standing_outcome_or_hold_starts_a_job(overlays: Overlays) -> None:
     for outcome in ("offline", "rejected", "index_stale", "hook_failed"):
         _state(overlays, outcome=outcome, head_sha=sha)
         assert decide(overlays, "Stop") == "run", outcome
-    for outcome in ("ok", "skipped"):
+    # A united index is a success: nothing stopped the job. Mutation (oracle): `mutations/`'s "a
+    # united index is not settled".
+    for outcome in ("ok", "skipped", "resolved_index"):
         _state(overlays, outcome=outcome, head_sha=sha)
         assert decide(overlays, "Stop") == "none", outcome
 
@@ -210,6 +214,44 @@ def test_the_back_off_ends_when_the_upstream_ref_moves(overlays: Overlays) -> No
     assert decide(overlays, "Stop") == "run"
 
 
+def test_a_failure_only_the_owner_can_clear_backs_off_until_the_notes_change(
+    overlays: Overlays,
+) -> None:
+    # A note the commit refuses for ever (not `.md`) keeps the tree dirty and the outcome
+    # `hook_failed`: without the back-off every `Stop` would run the whole job, a fetch
+    # included, every two minutes for as long as sessions run. The same outcome on the same
+    # `HEAD`, upstream and notes waits; an edit of the notes is news. Mutations (oracle):
+    # `mutations/`'s "the back-off ignores a standing outcome" and "the back-off ignores changed
+    # notes".
+    a = overlays.a
+    write(a, "common/memory/notes.txt", "never a note\n")
+
+    state = J.run_job(context(overlays, a))
+
+    assert state is not None and state.outcome.state == "hook_failed", state.outcome
+    later = NOW + timedelta(minutes=3)  # past the throttle
+    assert decide(overlays, "Stop", at=later) == "none"
+    assert decide(overlays, "SessionStart", "startup", at=later) == "run"
+    write(a, "common/memory/notes.txt", "edited, still never a note\n")
+    assert decide(overlays, "Stop", at=later) == "run"
+    assert decide(overlays, "Stop", at=NOW + timedelta(minutes=BACK_OFF_MINUTES + 1)) == "run"
+
+
+def test_no_scanner_backs_off_once_the_indexes_it_rendered_are_recorded(
+    overlays: Overlays,
+) -> None:
+    # The default on a freshly set-up machine: no build, a note waiting. The first job's render
+    # leaves the indexes dirty, which is news once; the second records them, and the next `Stop`
+    # waits.
+    (overlays.home / ".cache" / "pre-commit" / "db.db").unlink()
+    write(overlays.a, "common/memory/waiting.md", "a note\n")
+    for _ in range(2):
+        state = J.run_job(context(overlays, overlays.a))
+        assert state is not None and state.outcome.state == "scan_unavailable", state.outcome
+
+    assert decide(overlays, "Stop", at=NOW + timedelta(minutes=3)) == "none"
+
+
 def test_a_real_jobs_upstream_hold_backs_off_the_next_stop(overlays: Overlays) -> None:
     # The back-off compares `origin/main` with the sha the job fetched. The job fetches into a ref
     # of its own, so `origin/main` moves only by git's opportunistic update of the tracking ref;
@@ -231,24 +273,37 @@ def test_a_real_jobs_upstream_hold_backs_off_the_next_stop(overlays: Overlays) -
 # -- the throttle: schedule, never drop -----------------------------------------------------------
 
 
-def test_a_trigger_inside_the_throttle_or_during_a_job_is_scheduled(overlays: Overlays) -> None:
+def test_a_trigger_inside_the_throttle_is_scheduled(overlays: Overlays) -> None:
     write(overlays.a, NOTE, "a note\n")
     _state(overlays, ago=30, head_sha=head(overlays.a))
     decision, wake = T.decide("Stop", None, overlays.a, overlays.state_dir, UTC_NOW)
     assert decision == "schedule"
     assert wake == UTC_NOW - timedelta(seconds=30) + timedelta(seconds=THROTTLE_SECONDS)
 
+    _state(overlays, ago=600, head_sha=head(overlays.a))
+    assert T.decide("Stop", None, overlays.a, overlays.state_dir, UTC_NOW) == ("run", None)
+
+
+def test_a_trigger_during_a_job_only_marks_it_pending(
+    overlays: Overlays, spied: dict[str, list[object]]
+) -> None:
+    # The running job takes the mark and runs a round for it; a sleeper as well would run one
+    # more job, a fetch included, inside the throttle. Mutation (oracle): `mutations/`'s "a
+    # trigger while a job runs is dropped".
+    overlays.sync = True
+    overlays.use(overlays.a)
+    write(overlays.a, NOTE, "a note\n")
+    _state(overlays, ago=600, head_sha=head(overlays.a))
     held = Lock.try_acquire(overlays.state_dir / LOCK_FILE)  # a job is running
     assert held is not None
     try:
-        _state(overlays, ago=600, head_sha=head(overlays.a))
-        decision, wake = T.decide("Stop", None, overlays.a, overlays.state_dir, UTC_NOW)
-        assert (decision, wake) == ("schedule", UTC_NOW + timedelta(seconds=THROTTLE_SECONDS))
+        assert decide(overlays, "Stop") == "pending"
+        assert _handle(_event(overlays, "Stop")) == [HookResult()]
     finally:
         held.release()
 
-    _state(overlays, ago=600, head_sha=head(overlays.a))
-    assert T.decide("Stop", None, overlays.a, overlays.state_dir, UTC_NOW) == ("run", None)
+    assert spied["spawn"] == []
+    assert (overlays.state_dir / PENDING_FILE).exists()
 
 
 def test_session_end_is_never_throttled(overlays: Overlays) -> None:
