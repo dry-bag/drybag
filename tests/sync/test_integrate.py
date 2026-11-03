@@ -21,7 +21,7 @@ import pytest
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
 from stayfixed.sync.git import Ran
-from stayfixed.sync.state import Holds, read_state
+from stayfixed.sync.state import Holds, SyncState, read_state
 from tests.gitfixture import git_bytes
 from tests.sync.conftest import (
     HOST,
@@ -195,17 +195,123 @@ def test_a_replay_keeps_a_non_utf8_message_and_its_encoding(
     assert raw.endswith(b"\n\nmemory: caf\xe9 au lait\n")
 
 
-def test_an_owners_empty_commit_is_replayed_not_dropped(overlays: Overlays) -> None:
-    # An `--allow-empty` commit was empty in its own right: replayed as one (the push then holds
-    # it, since it lists no path), never silently dropped.
+# -- what is replayed at all ----------------------------------------------------------------------
+
+
+def _job(overlays: Overlays) -> SyncState:
+    state = J.run_job(context(overlays, overlays.a))
+    assert state is not None
+    return state
+
+
+def test_an_owners_commit_outside_memory_keeps_its_sha_and_holds_the_sync(
+    overlays: Overlays,
+) -> None:
+    # A replay rebuilds a commit with the job as committer and its own signing: the owner's hook
+    # commit would get a sha the owner never made, and the hold would name that copy. Only a local
+    # range of memory alone is replayed; anything else is the local hold, `HEAD` untouched.
+    # Mutation (oracle): `mutations/`'s "a local range outside memory is replayed".
     a = overlays.a
-    u = push_note(overlays.b, "common/memory/from-b.md", "from b\n")
-    git(a, "commit", "-q", "--allow-empty", "-m", "owner: a marker")
+    write(a, "common/claude/hooks/launch.sh", "#!/bin/sh\nthe owner's own hook change\n")
+    own = commit_all(a, "the owner's hook")
+    upstream = push_note(overlays.b, "common/memory/from-b.md", "from b\n")
 
-    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
+    state = _job(overlays)
 
-    assert git(a, "rev-parse", "HEAD^").strip() == u
-    assert git(a, "log", "-1", "--format=%s").strip() == "owner: a marker"
+    assert head(a) == own
+    assert state.holds.local_commits == (own,)
+    assert git(overlays.bare, "rev-parse", "main").strip() == upstream
+    assert not (a / "common/memory/from-b.md").exists()  # nothing integrated either
+    assert f"git log -p --no-renames HEAD..{upstream}" in str(state.outcome.detail)
+
+
+@pytest.mark.parametrize("kind", ["merge", "empty"])
+def test_a_local_merge_or_empty_commit_is_held_never_replayed(
+    overlays: Overlays, kind: str
+) -> None:
+    # Neither lists a path a range check could judge: each is the owner's, held as it is.
+    a = overlays.a
+    if kind == "merge":
+        git(a, "checkout", "-q", "-b", "side")
+        write(a, "common/memory/side.md", "side\n")
+        commit_all(a, "memory: side")
+        git(a, "checkout", "-q", "main")
+        write(a, "common/memory/main.md", "main\n")
+        commit_all(a, "memory: main")
+        git(a, "merge", "-q", "--no-ff", "-m", "memory: merge side", "side")
+    else:
+        git(a, "commit", "-q", "--allow-empty", "-m", "owner: a marker")
+    own = head(a)
+    push_note(overlays.b, "common/memory/from-b.md", "from b\n")
+
+    state = _job(overlays)
+
+    assert head(a) == own and own in state.holds.local_commits
+
+
+def _purged_on_b(overlays: Overlays) -> str:
+    """A private note pushed from `b` and integrated by `a`'s job, then purged on `b`: the commit
+    dropped and `main` forced back, with a later note on top. The purged commit's sha."""
+    b = overlays.b
+    leaked = push_note(b, "common/memory/private.md", "private address: 1 Example Road\n")
+    assert _job(overlays).outcome.state == "ok" and head(overlays.a) == leaked
+    git(b, "reset", "-q", "--hard", "HEAD~1")
+    write(b, "common/memory/other.md", "unrelated\n")
+    commit_all(b, "memory: other")
+    git(b, "push", "-q", "--force", "origin", "main")
+    return leaked
+
+
+def test_a_purge_forced_elsewhere_does_not_come_back(overlays: Overlays) -> None:
+    # The fetched sha the last job recorded is not in the new upstream: upstream lost history,
+    # and the purged commit, still in this `HEAD`, would read as a local commit to replay and
+    # push. Held instead, naming it, until the owner takes the rewrite or undoes it by hand.
+    # Mutation (oracle): `mutations/`'s "an upstream rewrite is replayed".
+    a = overlays.a
+    leaked = _purged_on_b(overlays)
+    before, remote = head(a), git(overlays.bare, "rev-parse", "main").strip()
+
+    for _ in range(2):  # the next job still holds: the record is the hold, not the last fetch
+        state = _job(overlays)
+        assert head(a) == before and git(overlays.bare, "rev-parse", "main").strip() == remote
+        assert state.holds.upstream_paths == (leaked,) and state.holds.upstream_why == "rewritten"
+        assert "upstream was rewritten" in str(state.outcome.detail)
+
+    git(a, "reset", "-q", "--hard", "origin/main")  # the owner takes the rewrite
+    state = _job(overlays)
+    assert not state.holds.any and head(a) == remote
+    assert "common/memory/private.md" not in git(a, "ls-tree", "-r", "--name-only", "HEAD")
+
+
+def test_a_purge_of_a_note_this_machine_pushed_does_not_come_back(overlays: Overlays) -> None:
+    # After its push the job records the sha it pushed as upstream's: a purge of its own note
+    # before its next fetch is a rewrite too, not a local commit to push again. Mutation (oracle):
+    # `mutations/`'s "the push records nothing of what upstream now has".
+    a, b = overlays.a, overlays.b
+    write(a, "common/memory/mine.md", note_text("mine"))
+    assert _job(overlays).outcome.state == "ok"
+    mine = head(a)
+    assert git(overlays.bare, "rev-parse", "main").strip() == mine
+    git(b, "fetch", "-q", "origin")
+    git(b, "reset", "-q", "--hard", f"{mine}~1")
+    write(b, "common/memory/other.md", "unrelated\n")
+    commit_all(b, "memory: other")
+    git(b, "push", "-q", "--force", "origin", "main")
+
+    state = _job(overlays)
+
+    assert mine in state.holds.upstream_paths and state.holds.upstream_why == "rewritten"
+    assert "mine.md" not in git(overlays.bare, "ls-tree", "-r", "--name-only", "main")
+
+
+def test_a_first_fetch_records_no_rewrite(overlays: Overlays) -> None:
+    # No sha recorded yet: an upstream this machine never fetched cannot have lost anything.
+    push_note(overlays.b, "common/memory/from-b.md", "from b\n")
+    ctx = context(overlays, overlays.a)
+
+    assert J.integrate(ctx, fetched(overlays, overlays.a), None) is None
+
+    assert not ctx.holds.any and (overlays.a / "common/memory/from-b.md").exists()
 
 
 # -- what blocks integration ----------------------------------------------------------------------
@@ -656,27 +762,6 @@ def test_a_note_conflict_is_a_conflict_with_main_unmoved(overlays: Overlays) -> 
     assert "origin/main" not in str(outcome.detail)
     review, take = _review_and_take([str(outcome.detail)])
     assert review == ["git", "log", "-p", "--no-renames", f"HEAD..{upstream}"]
-    assert take == ["git", "rebase", upstream]
-
-
-def test_a_local_merge_commit_is_a_conflict_naming_the_fetched_sha(overlays: Overlays) -> None:
-    a, b = overlays.a, overlays.b
-    git(a, "checkout", "-q", "-b", "side")
-    write(a, "common/memory/side.md", "side\n")
-    commit_all(a, "memory: side")
-    git(a, "checkout", "-q", "main")
-    write(a, "common/memory/main.md", "main\n")
-    commit_all(a, "memory: main")
-    git(a, "merge", "-q", "--no-ff", "-m", "memory: merge side", "side")
-    merge = head(a)
-    push_note(b, "common/memory/from-b.md", "from b\n")
-    upstream = fetched(overlays, a)
-
-    outcome = J.integrate(context(overlays, a), upstream)
-
-    assert outcome is not None and outcome.state == "conflict"
-    assert f"replayed ({merge})" in str(outcome.detail) and head(a) == merge
-    _, take = _review_and_take([str(outcome.detail)])
     assert take == ["git", "rebase", upstream]
 
 

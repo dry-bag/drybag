@@ -59,16 +59,20 @@ from stayfixed.sync.rules import (
 from stayfixed.sync.state import (
     EMPTY_HOLDS,
     LOCK_FILE,
+    OUTSIDE,
     PENDING_FILE,
+    REWRITTEN,
     SCRATCH,
     SLEEPER_LOCK_FILE,
     THROTTLE_SECONDS,
+    UNREADABLE,
     Holds,
     Lock,
     Outcome,
     PendingAlign,
     StateUnreadable,
     SyncState,
+    full_sha,
     iso,
     mark_pending,
     parse_time,
@@ -720,11 +724,8 @@ def replay(ctx: JobContext, onto: str, commits: list[str]) -> tuple[str | None, 
                     return None, conflicted
                 ctx.resolved.update(_projects(conflicted))
                 tree = resolved
-            own = _tree_of(ctx, commit) == _tree_of(ctx, f"{commit}^")
-            if tree == _tree_of(ctx, tip) and not own:
-                # Already upstream: an empty commit would list no path, and be held. One that
-                # was empty in its own right (`--allow-empty`) is the owner's, and is kept.
-                continue
+            if tree == _tree_of(ctx, tip):
+                continue  # already upstream: an empty commit would list no path, and be held
             author, message = _original(ctx, commit)
             new, failed = _commit_tree(ctx, tree, [tip], message, env=author)
             if failed is not None or new is None:
@@ -770,10 +771,23 @@ def _blocked(ctx: JobContext, incoming: list[str]) -> tuple[list[str], list[str]
     return blocked, unite
 
 
-def _hold_upstream(ctx: JobContext, paths: Iterable[str], remark: str) -> None:
-    """Hold upstream on `paths`, with `remark`, which says why and how to review it."""
-    ctx.remarks.append(remark)
-    ctx.holds = replace(ctx.holds, upstream_paths=tuple(paths))
+def _hold_upstream(ctx: JobContext, why: str | None, names: Iterable[str], remark: str) -> None:
+    """Hold upstream for `why` on `names`, with `remark`, which says how to review it; `why`
+    `None`, with no names, clears the hold."""
+    ctx.remarks.extend([remark] if remark else [])
+    ctx.holds = replace(ctx.holds, upstream_paths=tuple(names), upstream_why=why)
+
+
+def _dropped(ctx: JobContext, recorded: str | None, upstream: str, local: list[str]) -> list[str]:
+    """The commits of `local` (`upstream..HEAD`) that upstream once had: those of the sha the last
+    job recorded as upstream's that `upstream` lost, and those a standing rewrite hold names. A
+    first fetch, with nothing recorded, has none."""
+    had = set(ctx.holds.upstream_paths) if ctx.holds.upstream_why == REWRITTEN else set()
+    if full_sha(recorded):
+        lost = _git(ctx, "rev-list", "-z", "--end-of-options", str(recorded), f"^{upstream}")
+        if timed(lost, "git rev-list").code == 0:  # a pruned sha: nothing of it is in `HEAD`
+            had.update(_nul(lost.out))
+    return [sha for sha in local if sha in had]
 
 
 def _unite_worktree(ctx: JobContext, tip: str, path: str) -> bool:
@@ -804,18 +818,31 @@ def _read(path: Path) -> bytes | None:
         return None
 
 
-def integrate(ctx: JobContext, upstream: str) -> Outcome | None:
-    """Bring the checked sha `upstream` in, if `HEAD..upstream` is memory-only; the outcome that
-    stops the job, or `None`.
+def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Outcome | None:
+    """Bring the checked sha `upstream` in, if `HEAD..upstream` is memory-only and so is every
+    local commit; the outcome that stops the job, or `None`. `recorded` is the sha the last job
+    recorded as upstream's.
 
-    The upstream hold in `ctx.holds` is set or cleared here; the local hold is the push's. Indexes
-    united -- conflicting in a replay, or changed here and not committed -- are re-rendered and
-    committed, and are a notice (`resolved_index`).
+    The upstream hold in `ctx.holds` is set or cleared here; the local hold is the push's, which
+    judges the same local range: the owner's own commits are never rebuilt, so a local range
+    outside memory leaves `HEAD` as it is. Indexes united -- conflicting in a replay, or changed
+    here and not committed -- are re-rendered and committed, and are a notice (`resolved_index`).
     """
     ctx.resolved.clear()
     head = _rev(ctx, "HEAD")
+    local = _nul(_ok(ctx, "rev-list", "-z", "--reverse", "--end-of-options", f"{upstream}..{head}"))
+    dropped = _dropped(ctx, recorded, upstream, local)
+    if dropped:
+        remark = (
+            f"upstream was rewritten: it no longer has {', '.join(dropped)}, which this overlay "
+            "still has; nothing is integrated or pushed until the owner settles it by hand. "
+            f"Review: git log -p {upstream}..HEAD; take the rewrite with git rebase -i {upstream}, "
+            f"dropping them, or undo it with git rebase {upstream} and a push"
+        )
+        _hold_upstream(ctx, REWRITTEN, dropped, remark)
+        return None
     if _is_ancestor(ctx, upstream, head):
-        ctx.holds = replace(ctx.holds, upstream_paths=())
+        _hold_upstream(ctx, None, (), "")
         return None
     memory_only, offending = range_is_memory_only(
         ctx.overlay, head, upstream, timeout=ctx.limit(ctx.limits.local), env=ctx.env
@@ -825,15 +852,18 @@ def integrate(ctx: JobContext, upstream: str) -> Outcome | None:
             "upstream holds changes outside memory; nothing is integrated or pushed until they "
             f"are taken by hand. Review and take: {REVIEW.format(sha=upstream)}"
         )
-        _hold_upstream(ctx, offending, remark)
+        _hold_upstream(ctx, OUTSIDE, offending, remark)
         return None
-    ctx.holds = replace(ctx.holds, upstream_paths=())
+    _hold_upstream(ctx, None, (), "")
     by_hand = f"integrate {upstream} by hand: {REVIEW.format(sha=upstream)}"
-    local = _nul(_ok(ctx, "rev-list", "-z", "--reverse", "--end-of-options", f"{upstream}..{head}"))
-    merges = _nul(_ok(ctx, "rev-list", "-z", "--merges", "--end-of-options", f"{upstream}..{head}"))
-    if merges:
-        detail = f"local merge commits are not replayed ({', '.join(merges)}); {by_hand}"
-        return _outcome(ctx, "conflict", detail)
+    owned = range_is_memory_only(
+        ctx.overlay, upstream, head, timeout=ctx.limit(ctx.limits.local), env=ctx.env
+    )[0]
+    if not owned:
+        ctx.remarks.append(
+            f"upstream is not integrated past local commits outside memory; {by_hand}"
+        )
+        return None
     tip, conflicted = replay(ctx, upstream, local) if local else (upstream, [])
     if tip is None:
         ctx.resolved.clear()
@@ -862,7 +892,7 @@ def integrate(ctx: JobContext, upstream: str) -> Outcome | None:
             "integrated or pushed until upstream is repaired. Review: "
             f"git diff --stat HEAD {upstream}"
         )
-        _hold_upstream(ctx, incoming, remark)
+        _hold_upstream(ctx, UNREADABLE, incoming, remark)
         return None
     pending = PendingAlign(head, tip, tuple(incoming))
     unmerged = _unmerged_now(ctx)
@@ -982,6 +1012,7 @@ def push(ctx: JobContext, upstream: str) -> Outcome | None:
         timeout=limit,
     )  # fmt: skip
     if result.code == 0 and not result.timed_out:
+        ctx.fetched_sha = tip  # what upstream now has: the next job's rewrite check starts here
         return None
     said = (result.out + result.err).lower()
     if not result.timed_out and any(
@@ -1060,10 +1091,11 @@ def _steps(ctx: JobContext) -> Outcome | None:
     stopped = align_first(ctx) or commit_memory(ctx)
     if stopped is not None:
         return stopped
+    recorded = ctx.fetched_sha
     upstream, stopped = fetch(ctx)
     if upstream is None:
         return stopped
-    return integrate(ctx, upstream) or push(ctx, upstream)
+    return integrate(ctx, upstream, recorded) or push(ctx, upstream)
 
 
 def _one_job(ctx: JobContext) -> SyncState:
@@ -1087,6 +1119,7 @@ def _one_job(ctx: JobContext) -> SyncState:
         previous = None
     if previous is not None:
         ctx.holds, ctx.pending = previous.holds, previous.pending_align
+        ctx.fetched_sha = previous.fetched_sha
     try:
         stopped = _steps(ctx)
     except (JobTimeout, GitTimeout) as error:
@@ -1104,7 +1137,7 @@ def _one_job(ctx: JobContext) -> SyncState:
         overlay=str(ctx.overlay),
         outcome=_end(ctx, stopped),
         holds=ctx.holds,
-        fetched_sha=ctx.fetched_sha or (previous.fetched_sha if previous else None),
+        fetched_sha=ctx.fetched_sha,
         last_job_at=iso(ctx.now()),
         pending_align=ctx.pending,
         head=head.out.strip() if head.code == 0 and not head.timed_out else None,

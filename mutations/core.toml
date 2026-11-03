@@ -6929,6 +6929,38 @@ reddens = [
 ]
 
 [[mutation]]
+name = "a local range outside memory is replayed"
+file = "src/stayfixed/sync/job.py"
+before = "    if not owned:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_an_owners_commit_outside_memory_keeps_its_sha_and_holds_the_sync",
+]
+
+[[mutation]]
+name = "an upstream rewrite is replayed"
+file = "src/stayfixed/sync/job.py"
+before = "    if dropped:"
+after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_a_purge_forced_elsewhere_does_not_come_back"]
+
+[[mutation]]
+name = "a rewrite hold lasts one job"
+file = "src/stayfixed/sync/job.py"
+before = "    had = set(ctx.holds.upstream_paths) if ctx.holds.upstream_why == REWRITTEN else set()"
+after = "    had: set[str] = set()"
+reddens = ["tests/sync/test_integrate.py::test_a_purge_forced_elsewhere_does_not_come_back"]
+
+[[mutation]]
+name = "the push records nothing of what upstream now has"
+file = "src/stayfixed/sync/job.py"
+before = "        ctx.fetched_sha = tip  # what upstream now has: the next job's rewrite check starts here"
+after = "        pass"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_purge_of_a_note_this_machine_pushed_does_not_come_back",
+]
+
+[[mutation]]
 name = "a range outside memory is integrated"
 file = "src/stayfixed/sync/job.py"
 before = "    if not memory_only:"

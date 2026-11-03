@@ -18,6 +18,7 @@ import errno
 import fcntl
 import json
 import os
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -67,10 +68,22 @@ class Outcome:
     detail: str | None
 
 
+# Why upstream is held: changes outside memory, a tree git will not check out, or a rewrite that
+# dropped commits this overlay still has, which the hold then names in place of paths.
+OUTSIDE, UNREADABLE, REWRITTEN = "outside", "unreadable", "rewritten"
+_SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+
+
+def full_sha(text: str | None) -> bool:
+    """Whether `text` is a whole sha-1 or sha-256 object name, as the job records one."""
+    return text is not None and _SHA.fullmatch(text) is not None
+
+
 @dataclass(frozen=True)
 class Holds:
     upstream_paths: tuple[str, ...]
     local_commits: tuple[str, ...]
+    upstream_why: str | None = None
 
     @property
     def any(self) -> bool:
@@ -167,7 +180,10 @@ def _parse(data: dict[str, Any]) -> SyncState:
     holds = Holds(
         upstream_paths=_get(up, "paths", "holds.upstream.", "string list"),
         local_commits=_get(local, "commits", "holds.local.", "string list"),
+        upstream_why=_get(up, "why", "holds.upstream.", none=True),
     )
+    if holds.upstream_why not in (None, OUTSIDE, UNREADABLE, REWRITTEN):
+        raise StateUnreadable("holds.upstream.why is not a reason the job holds for")
     raw = _get(data, "pending_align", "", "object", none=True)
     align = None
     if raw is not None:
@@ -216,7 +232,7 @@ def write_state(d: Path, s: SyncState) -> None:
             "detail": s.outcome.detail,
         },
         "holds": {
-            "upstream": {"paths": list(s.holds.upstream_paths)},
+            "upstream": {"paths": list(s.holds.upstream_paths), "why": s.holds.upstream_why},
             "local": {"commits": list(s.holds.local_commits)},
         },
         "fetched_sha": s.fetched_sha,

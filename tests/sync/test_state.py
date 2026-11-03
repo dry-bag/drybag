@@ -45,6 +45,7 @@ def _state(**changes: object) -> S.SyncState:
         holds=S.Holds(
             upstream_paths=("README.md",),
             local_commits=("2" * 40, "3" * 40),
+            upstream_why=S.OUTSIDE,
         ),
         fetched_sha="4" * 40,
         last_job_at=_iso(NOW - timedelta(minutes=3)),
@@ -96,7 +97,7 @@ def test_the_written_shape_is_the_documented_one(tmp_path: Path) -> None:
     }  # fmt: skip
     assert set(data["outcome"]) == {"state", "at", "detail"}  # type: ignore[call-overload]
     assert data["holds"] == {
-        "upstream": {"paths": ["README.md"]},
+        "upstream": {"paths": ["README.md"], "why": "outside"},
         "local": {"commits": ["2" * 40, "3" * 40]},
     }
     assert data["pending_align"] == {
@@ -203,6 +204,13 @@ def _written(tmp_path: Path) -> dict[str, object]:
             lambda d: json.dumps({**d, "holds": {"upstream": {"paths": "a"}, "local": {}}}),
             "not a valid string list",
             id="paths",
+        ),
+        pytest.param(
+            lambda d: json.dumps(
+                {**d, "holds": {**d["holds"], "upstream": {"paths": [], "why": "x"}}}
+            ),
+            "not a reason",
+            id="why",
         ),
         pytest.param(
             lambda d: json.dumps({**d, "outcome": []}), "outcome is not a valid object", id="shape"
