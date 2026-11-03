@@ -6295,3 +6295,18 @@ reddens = [
   "tests/attach/test_project_choice.py::test_doctor_reads_an_unbound_checkout_with_no_stayfixed_toml_as_it_did",
   "tests/memory/test_commands.py::test_an_unbound_checkout_with_no_file_is_still_told_to_init",
 ]
+
+# The exclusive create is what leaves a name that is there alone: without `O_EXCL` the open takes
+# an existing file and the write goes over its bytes.
+[[mutation]]
+name = "owner-held files overwrite a present name"
+file = "src/stayfixed/fsops.py"
+before = '''    | os.O_EXCL
+    | os.O_NONBLOCK
+'''
+after = '''    | os.O_NONBLOCK
+'''
+reddens = [
+  "tests/test_fsops.py::test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link",
+  "tests/attach/test_checkout.py::test_a_present_name_is_never_overwritten",
+]

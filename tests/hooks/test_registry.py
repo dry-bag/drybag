@@ -66,7 +66,8 @@ def test_the_vocabulary_is_the_six_events_the_design_table_carries() -> None:
 def test_a_session_start_runs_no_step_that_links_memory() -> None:
     # The harness reaches the composed store through `autoMemoryDirectory` in the main checkout's
     # settings file, which every worktree reads, so no `SessionStart` step links a store into a
-    # worktree: the shipped handlers there are the overlay's status line and its standing rules,
-    # and the count of the store's unreviewed notes, which writes nothing in any checkout.
+    # worktree: the shipped handlers there are the owner-held files a new linked worktree lacks
+    # (`owner-files`, first), the overlay's status line and its standing rules, and the count of
+    # the store's unreviewed notes, which writes nothing in any checkout.
     names = [handler.name for handler in discover() if handler.event == "SessionStart"]
-    assert names == ["overlay-status", "overlay-rules", "unreviewed-notes"]
+    assert names == ["owner-files", "overlay-status", "overlay-rules", "unreviewed-notes"]

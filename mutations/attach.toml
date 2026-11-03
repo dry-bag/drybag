@@ -1788,3 +1788,33 @@ reddens = [
   "tests/attach/test_write.py::test_untagging_takes_back_the_tags_allow_rule",
   "tests/attach/test_write.py::test_check_counts_the_rules_it_would_take_back",
 ]
+
+# The owner-held files are the owner's: a `.env*` file in `checkout/` holds secrets, and the prefix
+# rule is what keeps every one of them out of a worktree whatever its name continues with.
+[[mutation]]
+name = "owner-held files copy .env files"
+file = "src/stayfixed/attach/checkout.py"
+before = "        if name in LITTER or folded in NEVER or folded.startswith(NEVER_PREFIXES):"
+after = "        if name in LITTER or folded in NEVER:"
+reddens = [
+  "tests/attach/test_checkout.py::test_a_new_linked_worktree_gets_the_regular_files_and_nothing_else",
+]
+
+# The main checkout already holds the owner's files and is the one a clone's `origin` points at;
+# only a linked worktree is new. Without the linked check every session start writes into it.
+[[mutation]]
+name = "owner-held files are placed in the main checkout"
+file = "src/stayfixed/attach/checkout.py"
+before = '''    if (
+        git_dir.parent == common / _WORKTREES
+        and common.name == _COMMON
+        and toplevel != common.parent
+    ):
+        return toplevel'''
+after = '''    if toplevel:
+        return toplevel'''
+reddens = [
+  "tests/attach/test_checkout.py::test_the_main_checkout_gets_nothing",
+  "tests/attach/test_checkout.py::test_a_worktree_of_a_bare_repository_gets_nothing",
+  "tests/attach/test_checkout.py::test_a_submodule_gets_nothing",
+]

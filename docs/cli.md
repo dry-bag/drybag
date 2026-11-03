@@ -397,6 +397,22 @@ rule that cannot be read silences the rules of that hook, and `attach` refuses i
 reaches the model as the overlay holds it; the one path printed is the touched file's, withheld
 outside the path grammar.
 
+**The owner-held files.** In a new linked worktree of a checkout this machine binds to an overlay
+project, `SessionStart` places the regular files directly inside the overlay's
+`projects/<name>/checkout/` (`owner-files`, the first handler there) that the worktree does not
+have: an `AGENTS.md`, a `CLAUDE.md`, a `stayfixed.toml` the repository does not track. Never a
+`.env*` file (in any letter case), `settings.local.json` or `.DS_Store`, and never a subdirectory or
+a link in `checkout/`. A file keeps its source's permission bits and is created only where nothing
+is at the name: a file the branch tracks is already there, and a file, directory or link at the name
+is left alone and never written through. It answers from the machine's binding record, never from
+the repository's `stayfixed.toml`, which the worktree may not have until this places it, and it
+places nothing in the main checkout, in a submodule, in a worktree of a bare repository or of a
+repository with a separate git directory, in an unbound checkout or on a machine that records no
+overlay. It says nothing when it placed nothing; otherwise it names the files placed, asks the
+session to read `AGENTS.md` when that or `CLAUDE.md` is among them, and names the placed files git
+would show, to add to the checkout's `.git/info/exclude`. It asks git only `rev-parse` and
+`check-ignore --no-index`, neither of which runs a repository's `core.fsmonitor`.
+
 **Writes** inside `stayfixed/` under the data root the harness names — `CLAUDE_PLUGIN_DATA`, or
 Codex's `PLUGIN_DATA` — and nowhere else of its own: `.probe`, written each time it dispatches to
 learn whether the root can be written at all; under `markers/`, one empty file per `once_key`
@@ -405,7 +421,9 @@ session, both names hashed to a fixed width,
 with all but the newest fifty session directories removed; and `diagnostics.jsonl`, one JSON line
 per diagnostic record, rotated to `diagnostics.1.jsonl` once it would pass 256 KiB. With no data
 root, or a relative one, nothing is written there and a `once_key` handler is asked on every
-invocation. One handler writes outside it: `overlay-path-rules`, the path-scoped rules above,
+invocation. Three handlers write outside it. `owner-files`, the files above, creates one file in the
+root of the new linked worktree for each name it places, and nothing else there; nothing removes
+them. `overlay-path-rules`, the path-scoped rules above,
 writes one empty file per session and file it said a rule for, under
 `$HOME/.local/share/stayfixed/sessions/`, both names hashed to a fixed width; none for a payload
 with no session id, and nothing removes them. And `unreviewed-notes`, which on `SessionStart` says
@@ -2516,6 +2534,12 @@ any line there would be a change every collaborator gets. A `stayfixed:ignore` r
 release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
 `init`'s.
 
+**`projects/<name>/checkout/` holds the owner-held files.** `attach` neither reads nor writes
+it: the files in it are placed in a new linked worktree of the bound checkout by the `owner-files`
+handler of `SessionStart` (`stayfixed hook`, [Hooks](#hooks)), so an `AGENTS.md` or a
+`stayfixed.toml` that you keep out of the repository is in every worktree you start. `attach`
+itself places nothing in the main checkout, where those files already are.
+
 **What it places, it hides from git, unless git hides it already.** The ledger, each
 `.codex/rules/` file and `.claude/settings.local.json`,
 which holds the plugin's entry and so the binding id, are this machine's own, so each one is listed in
@@ -2706,6 +2730,9 @@ Last, each directory the ledger records `attach` as having created — of `.stay
 `.stayfixed/`, `.codex/rules/`, `.codex/` and `.claude/`, in that order — is removed when it is
 empty, and left standing otherwise. A link tree under `paths.memory` or a harness memory link under
 `~/.claude/projects/` an earlier release made is not touched: remove those by hand.
+
+**The files `owner-files` placed stay.** A file the `owner-files` handler put in a linked worktree
+is not on the ledger, and `detach` leaves it, as it leaves any file in a worktree you may have edited.
 
 **`.gitignore` is never touched.** `attach` writes nothing there, so `detach` takes nothing out:
 a `stayfixed:ignore` region `stayfixed init` wrote is the scaffold's, and one an earlier release's
