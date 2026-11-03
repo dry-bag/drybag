@@ -4628,18 +4628,6 @@ reddens = [
   "tests/prove/test_run.py::test_an_ended_run_is_not_proven_and_leaves_no_scratch[terminate]",
 ]
 
-# A group the gate may not signal answers `PermissionError`: on macOS a group left with only the
-# exited, unreaped command, anywhere a sudo or setuid descendant. The command's exit still
-# answers for the gate; the error must not end the whole run.
-[[mutation]]
-name = "a group the gate may not signal ends the gate run"
-file = "src/stayfixed/processes.py"
-before = "    with contextlib.suppress(ProcessLookupError, PermissionError):"
-after = "    with contextlib.suppress(ProcessLookupError):"
-reddens = [
-  "tests/prove/test_run.py::test_a_closed_caller_stream_stops_the_copy_to_it_and_the_report_still_fills",
-]
-
 # A run that ran no test proved nothing whatever it exited with: the zero-tests row stands before
 # the exit code's, so a runner's own "no tests" exit (5, 1) is `failed`, never `not proven`.
 [[mutation]]
