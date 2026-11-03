@@ -6881,3 +6881,107 @@ after = '    shared = any(entry.scope == "common" for entry in parsed)'
 reddens = [
   "tests/sync/test_render.py::test_a_dirty_common_or_group_note_renders_every_recorded_project[group]",
 ]
+
+# The note sync's integration: the fetched sha read from the job's own ref after a checked fetch,
+# a range outside memory held, local commits replayed (never rebased), indexes united, and the
+# incoming notes written only where the working tree still has the old version.
+[[mutation]]
+name = "the integration rebases"
+file = "src/stayfixed/sync/job.py"
+before = "    tip, conflicted = replay(ctx, upstream, local) if local else (upstream, [])"
+after = '    tip, conflicted = (checked(_git(ctx, "rebase", "-q", upstream), "git rebase") and _rev(ctx, "HEAD"), []) if local else (upstream, [])'
+reddens = [
+  "tests/sync/test_integrate.py::test_a_local_memory_commit_is_replayed_onto_the_checked_sha",
+  "tests/sync/test_integrate.py::test_no_rebase_ever_runs",
+]
+
+[[mutation]]
+name = "a replay drops its commit's author"
+file = "src/stayfixed/sync/job.py"
+before = "    return env, message"
+after = "    return {}, message"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_replay_keeps_the_author_of_a_signed_commit_under_show_signature",
+  "tests/sync/test_integrate.py::test_a_local_memory_commit_is_replayed_onto_the_checked_sha",
+]
+
+[[mutation]]
+name = "the fetched sha is read from FETCH_HEAD"
+file = "src/stayfixed/sync/job.py"
+before = "    upstream = _rev(ctx, FETCHED_REF)"
+after = '    upstream = _rev(ctx, "FETCH_HEAD")'
+reddens = ["tests/sync/test_integrate.py::test_the_fetched_sha_is_read_from_the_jobs_own_ref"]
+
+[[mutation]]
+name = "the fetch checks no object it receives"
+file = "src/stayfixed/sync/job.py"
+before = '        ctx, "-c", "fetch.fsckObjects=true", "fetch", "--no-tags", "--no-recurse-submodules",'
+after = '        ctx, "fetch", "--no-tags", "--no-recurse-submodules",'
+reddens = [
+  "tests/sync/test_integrate.py::test_a_tree_git_cannot_check_out_is_refused_at_the_fetch",
+]
+
+[[mutation]]
+name = "a range outside memory is integrated"
+file = "src/stayfixed/sync/job.py"
+before = "    if not memory_only:"
+after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_an_upstream_hook_change_is_held"]
+
+[[mutation]]
+name = "a tip git cannot read is integrated"
+file = "src/stayfixed/sync/job.py"
+before = '    if timed(readable, "git read-tree").code != 0:'
+after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_a_tree_git_cannot_check_out_is_held_not_moved_to"]
+
+[[mutation]]
+name = "a standing hold restarts its time"
+file = "src/stayfixed/sync/job.py"
+before = "    since = held.upstream_since if held.upstream_paths else iso(ctx.now())"
+after = "    since = iso(ctx.now())"
+reddens = ["tests/sync/test_integrate.py::test_a_tree_git_cannot_check_out_is_held_not_moved_to"]
+
+[[mutation]]
+name = "the union drops the local-only bullets"
+file = "src/stayfixed/sync/job.py"
+before = "            extra.append(line)"
+after = "            pass"
+reddens = [
+  "tests/sync/test_integrate.py::test_the_union_keeps_upstream_and_adds_the_local_only_bullets",
+  "tests/sync/test_integrate.py::test_two_index_conflicts_are_resolved_by_union_and_re_rendered",
+]
+
+[[mutation]]
+name = "an incoming note dirty here does not wait"
+file = "src/stayfixed/sync/job.py"
+before = "    if blocked:"
+after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_a_dirty_incoming_note_is_waiting_clean_tree"]
+
+[[mutation]]
+name = "a dirty index waits like a note"
+file = "src/stayfixed/sync/job.py"
+before = "        if clashes == [path] and parsed is not None and parsed.is_index:"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_dirty_index_is_united_in_the_working_tree_never_blocking",
+]
+
+[[mutation]]
+name = "the union overwrites a line appended while it was built"
+file = "src/stayfixed/sync/job.py"
+before = "        if _read(full) != local:"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_an_index_changed_while_the_union_is_built_is_left_for_the_next_job",
+]
+
+[[mutation]]
+name = "a pending write goes over the owner's edit"
+file = "src/stayfixed/sync/job.py"
+before = "        if not _worktree_has(ctx, path, before.get(path)):"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_the_owners_edit_after_the_kill_wins_over_the_pending_write",
+]

@@ -15,6 +15,7 @@ followed by aligning the real index's memory entries with the new `HEAD`, or the
 from __future__ import annotations
 
 import contextlib
+import re
 import shutil
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -24,7 +25,7 @@ from pathlib import Path
 
 from stayfixed import fsops
 from stayfixed.sync import scan
-from stayfixed.sync.git import UNMERGED, Ran, checked, git, job_env, timed
+from stayfixed.sync.git import UNMERGED, GitError, Ran, checked, git, job_env, timed
 from stayfixed.sync.render import prerender, unsafe_parent
 from stayfixed.sync.rules import (
     MEMORY_PATHSPEC,
@@ -34,6 +35,7 @@ from stayfixed.sync.rules import (
     is_memory_path,
     memory_path,
     offending_paths,
+    range_is_memory_only,
 )
 from stayfixed.sync.state import (
     EMPTY_HOLDS,
@@ -238,13 +240,6 @@ def _reset_paths(ctx: JobContext, index: Path, rev: str, paths: Iterable[str]) -
 def _refuse(ctx: JobContext, paths: Iterable[str]) -> None:
     """Name `paths` as left out of the commit; the job goes on, and its end names them."""
     ctx.refused.extend(path for path in paths if path not in ctx.refused)
-
-
-REFUSED = (
-    "job: not committed, not a plain-text note under a memory name (a link -- at the path or in "
-    "place of a directory above it --, a nested repository, an executable, a dot-file or "
-    "dot-directory, a name not ending in .md, or a file git calls binary): "
-)
 
 
 def _staged(ctx: JobContext, index: Path, rev: str, *only: str) -> list[str]:
@@ -564,3 +559,321 @@ def align_first(ctx: JobContext) -> Outcome | None:
     if pending is None and not _index_needs_align(ctx):
         return None
     return _settle(ctx, pending)
+
+
+# -- fetch ----------------------------------------------------------------------------------------
+
+# What git and ssh print when the remote cannot be reached, and when it refuses who we are; the
+# second is matched first, since an HTTPS refusal also says "unable to access".
+_OFFLINE = (
+    "could not resolve host", "could not resolve hostname", "network is unreachable",
+    "no route to host", "connection refused", "connection timed out", "operation timed out",
+    "connection reset", "temporary failure in name resolution", "connection closed by",
+    "unable to access",
+)  # fmt: skip
+_AUTH = (
+    "permission denied", "authentication failed", "could not read username",
+    "could not read password", "host key verification failed", "terminal prompts disabled",
+    "invalid username or password", "returned error: 401", "returned error: 403",
+)  # fmt: skip
+FETCHED_REF = "refs/stayfixed/fetched"
+
+
+def _remote_failure(ctx: JobContext, result: Ran, what: str, limit: float) -> Outcome:
+    """`timeout`, `auth_failed`, `offline`, or `hook_failed` naming the job, for a network call."""
+    said = _said(result.err) or _said(result.out) or f"exit {result.code}"
+    if result.timed_out:
+        return _outcome(ctx, "timeout", f"{what} did not finish within {limit:g} s")
+    text = result.err.lower()
+    if any(pattern in text for pattern in _AUTH):
+        return _outcome(ctx, "auth_failed", f"{what}: {said}")
+    if any(pattern in text for pattern in _OFFLINE):
+        return _outcome(ctx, "offline", f"{what}: {said}")
+    return _outcome(ctx, "hook_failed", f"job: {what} failed: {said}")
+
+
+def fetch(ctx: JobContext) -> tuple[str | None, Outcome | None]:
+    """`git fetch origin main` into the job's own ref; the fetched sha, or the failure.
+
+    The sha is read once, here, from that ref, never `FETCH_HEAD`, which the owner's own fetch
+    rewrites at any moment: a second pusher, or the owner's fetch, changes nothing this job
+    integrates. Every object received is checked (`fetch.fsckObjects`), so a tree holding a `..`
+    or `.git` name is refused before any rule reads it. No tag, no submodule.
+    """
+    limit = ctx.limit(ctx.limits.fetch)
+    result = _git(
+        ctx, "-c", "fetch.fsckObjects=true", "fetch", "--no-tags", "--no-recurse-submodules",
+        "origin", f"+refs/heads/main:{FETCHED_REF}", timeout=limit,
+    )  # fmt: skip
+    if result.timed_out or result.code != 0:
+        return None, _remote_failure(ctx, result, "git fetch origin main", limit)
+    upstream = _rev(ctx, FETCHED_REF)
+    ctx.fetched_sha, ctx.last_fetch_ok = upstream, iso(ctx.now())
+    return upstream, None
+
+
+# -- integrate by replay, and the index union -----------------------------------------------------
+
+# How the owner takes a held range or integrates a fetched sha by hand: read all of it, memory
+# included, and take it at the sha that was held and read, never at `origin/main`, which the next
+# fetch moves past it. A rebase rather than a fast-forward, since the notes committed here usually
+# sit beside the held sha; with none, it is a fast-forward.
+REVIEW = "git log -p --no-renames HEAD..{sha}, then git rebase {sha}"
+_AUTHOR = re.compile(r"author (.*) <([^<>]*)> (\d+ [+-]\d{4})")
+
+
+def union_index(local: bytes, upstream: bytes) -> bytes:
+    """The upstream index plus every bullet line only the local one has, in local order: a line
+    an agent appended survives whichever side committed first, for the next render to harvest."""
+    present = set(upstream.splitlines())
+    extra: list[bytes] = []
+    for line in local.splitlines():
+        if line.startswith(b"- ") and line not in present:
+            extra.append(line)
+            present.add(line)
+    if not extra:
+        return upstream
+    base = upstream if not upstream or upstream.endswith(b"\n") else upstream + b"\n"
+    return base + b"".join(line + b"\n" for line in extra)
+
+
+def _blob(ctx: JobContext, rev: str, path: str) -> bytes | None:
+    """`path`'s content in `rev`; `None` when `rev` has no such file."""
+    result = timed(
+        _git(ctx, "cat-file", "blob", "--end-of-options", f"{rev}:{path}"), "git cat-file"
+    )
+    return result.out.encode("utf-8", "surrogateescape") if result.code == 0 else None
+
+
+def _entry(ctx: JobContext, path: str, data: bytes) -> bytes:
+    """`data` written as a blob, and the `update-index -z --index-info` line naming it at `path`."""
+    sha = _ok(ctx, "hash-object", "-w", "--stdin", stdin=data).strip()
+    return f"100644 {sha}\t{path}".encode("utf-8", "surrogateescape") + b"\0"
+
+
+def _resolve_by_union(
+    ctx: JobContext, scratch: Path, tree: str, tip: str, commit: str, conflicted: list[str]
+) -> str | None:
+    """`tree` with each conflicted index replaced by its union; `None` if one cannot be."""
+    parsed = [memory_path(path) for path in conflicted]
+    if not conflicted or not all(entry is not None and entry.is_index for entry in parsed):
+        return None
+    entries = b""
+    for path in conflicted:
+        upstream, local = _blob(ctx, tip, path), _blob(ctx, commit, path)
+        if upstream is None or local is None:
+            return None  # deleted on one side: not a pair of renderings to unite
+        entries += _entry(ctx, path, union_index(local, upstream))
+    index = scratch / "union-index"
+    index.unlink(missing_ok=True)
+    _ok(ctx, "read-tree", "--end-of-options", tree, index_file=index)
+    _ok(ctx, "update-index", "-z", "--index-info", index_file=index, stdin=entries)
+    return _ok(ctx, "write-tree", index_file=index).strip()
+
+
+def _original(ctx: JobContext, commit: str) -> tuple[dict[str, str], bytes]:
+    """`commit`'s author, as the environment that names it, and its message as bytes, its
+    `encoding` header given back as a `git -c`-style entry: from the commit object itself, never
+    `git log --format`, which `log.showSignature` prefixes with the signature check."""
+    raw = _ok(ctx, "cat-file", "commit", "--end-of-options", commit)
+    header, _, message = raw.encode("utf-8", "surrogateescape").partition(b"\n\n")
+    env: dict[str, str] = {}
+    for line in header.decode("utf-8", "surrogateescape").split("\n"):
+        if (author := _AUTHOR.fullmatch(line)) is not None:
+            name, email, date = author.groups()
+            env.update(GIT_AUTHOR_NAME=name, GIT_AUTHOR_EMAIL=email, GIT_AUTHOR_DATE=date)
+        elif line.startswith("encoding "):
+            encoding = line.removeprefix("encoding ")
+            env.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="i18n.commitEncoding")
+            env.update(GIT_CONFIG_VALUE_0=encoding)
+    if "GIT_AUTHOR_NAME" not in env:
+        raise GitError(f"commit {commit} has no readable author line")
+    return env, message
+
+
+def replay(ctx: JobContext, onto: str, commits: list[str]) -> tuple[str | None, list[str]]:
+    """Replay `commits` (oldest first) onto `onto`: the new tip, or `None` and the paths that
+    conflict. Each is `merge-tree --write-tree --merge-base=c^ tip c` and `commit-tree` with `c`'s
+    author and message, so nothing touches the working tree or the real index; a conflict confined
+    to rendered indexes is resolved by union. A failed signature stops the job (`JobStopped`)."""
+    tip = onto
+    with _scratch(ctx) as scratch:
+        for commit in commits:
+            result = _git(
+                ctx, "merge-tree", "--write-tree", "-z", "--name-only", "--no-messages",
+                f"--merge-base={commit}^", "--end-of-options", tip, commit,
+            )  # fmt: skip
+            if timed(result, "git merge-tree").code not in (0, 1):
+                checked(result, "git merge-tree")
+            tree, *conflicted = _nul(result.out)
+            if result.code == 1:
+                resolved = _resolve_by_union(ctx, scratch, tree, tip, commit, conflicted)
+                if resolved is None:
+                    return None, conflicted
+                ctx.resolved.update(_projects(conflicted))
+                tree = resolved
+            own = _tree_of(ctx, commit) == _tree_of(ctx, f"{commit}^")
+            if tree == _tree_of(ctx, tip) and not own:
+                # Already upstream: an empty commit would list no path, and be held. One that
+                # was empty in its own right (`--allow-empty`) is the owner's, and is kept.
+                continue
+            author, message = _original(ctx, commit)
+            new, failed = _commit_tree(ctx, tree, [tip], message, env=author)
+            if failed is not None or new is None:
+                raise JobStopped(failed or _outcome(ctx, "hook_failed", "job: no commit made"))
+            tip = new
+    return tip, []
+
+
+def _tree_of(ctx: JobContext, rev: str) -> str:
+    return _ok(ctx, "rev-parse", "--verify", "-q", "--end-of-options", f"{rev}^{{tree}}").strip()
+
+
+def _projects(paths: Iterable[str]) -> list[str]:
+    """The projects whose memory `paths` lie in, once each."""
+    found = (memory_path(path) for path in paths)
+    return list(dict.fromkeys(e.name for e in found if e and e.scope == "project" and e.name))
+
+
+def _blocked(ctx: JobContext, incoming: list[str]) -> tuple[list[str], list[str]]:
+    """The incoming paths the working tree is not ready for -- dirty there (or a dirty path above
+    or below one), or reached through a link or a file where git needs a directory -- and the
+    dirty indexes to unite instead once `main` has moved: an index holds no work in progress, only
+    a rendering and lines agents appended, which the union keeps."""
+    dirty = dirty_memory(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
+    blocked: list[str] = []
+    unite: list[str] = []
+    for path in incoming:
+        if unsafe_parent(ctx.overlay, path) is not None or fsops.is_symlink(ctx.overlay / path):
+            blocked.append(path)
+            continue
+        clashes = [
+            entry
+            for entry in dirty
+            if entry == path
+            or path.startswith(entry.rstrip("/") + "/")
+            or entry.startswith(path + "/")
+        ]
+        parsed = memory_path(path)
+        if clashes == [path] and parsed is not None and parsed.is_index:
+            unite.append(path)
+        elif clashes:
+            blocked.append(path)
+    return blocked, unite
+
+
+def _hold_upstream(ctx: JobContext, held: Holds, paths: Iterable[str], remark: str) -> None:
+    """Hold upstream on `paths`, since the hold the job found began when one was standing, with
+    `remark`, which says why and how to review it."""
+    since = held.upstream_since if held.upstream_paths else iso(ctx.now())
+    ctx.remarks.append(remark)
+    ctx.holds = replace(ctx.holds, upstream_paths=tuple(paths), upstream_since=since)
+
+
+def _unite_worktree(ctx: JobContext, tip: str, path: str) -> bool:
+    """Write the union of the index at `path`, as the working tree has it, and `tip`'s into the
+    working tree, through git; whether it was written. Not when `tip` has no such index, nor when
+    the file changed while the union was built (an agent appending its line)."""
+    full = ctx.overlay / path
+    upstream = _blob(ctx, tip, path)
+    if upstream is None or fsops.is_symlink(full) or unsafe_parent(ctx.overlay, path):
+        return False
+    local = _read(full)
+    if local is None:
+        return False
+    with _scratch(ctx) as scratch:
+        index = scratch / "index"
+        entry = _entry(ctx, path, union_index(local, upstream))
+        _ok(ctx, "update-index", "-z", "--index-info", index_file=index, stdin=entry)
+        if _read(full) != local:
+            return False
+        _ok(ctx, "checkout-index", "-f", "-z", "--stdin", index_file=index, stdin=_paths_in([path]))
+    return True
+
+
+def _read(path: Path) -> bytes | None:
+    try:
+        return fsops.read_regular_bytes(path)
+    except OSError:
+        return None
+
+
+def integrate(ctx: JobContext, upstream: str) -> Outcome | None:
+    """Bring the checked sha `upstream` in, if `HEAD..upstream` is memory-only; the outcome that
+    stops the job, or `None`.
+
+    The upstream hold in `ctx.holds` is set or cleared here; the local hold is the push's. Indexes
+    united -- conflicting in a replay, or changed here and not committed -- are re-rendered and
+    committed, and are a notice (`resolved_index`).
+    """
+    ctx.resolved.clear()
+    held = ctx.holds
+    head = _rev(ctx, "HEAD")
+    ancestor = _git(ctx, "merge-base", "--is-ancestor", "--end-of-options", upstream, head)
+    if timed(ancestor, "git merge-base").code == 0:
+        ctx.holds = replace(ctx.holds, upstream_paths=(), upstream_since=None)
+        return None
+    memory_only, offending = range_is_memory_only(
+        ctx.overlay, head, upstream, timeout=ctx.limit(ctx.limits.local), env=ctx.env
+    )
+    if not memory_only:
+        remark = (
+            "upstream holds changes outside memory; nothing is integrated or pushed until they "
+            f"are taken by hand. Review and take: {REVIEW.format(sha=upstream)}"
+        )
+        _hold_upstream(ctx, held, offending, remark)
+        return None
+    ctx.holds = replace(ctx.holds, upstream_paths=(), upstream_since=None)
+    by_hand = f"integrate {upstream} by hand: {REVIEW.format(sha=upstream)}"
+    local = _nul(_ok(ctx, "rev-list", "-z", "--reverse", "--end-of-options", f"{upstream}..{head}"))
+    merges = _nul(_ok(ctx, "rev-list", "-z", "--merges", "--end-of-options", f"{upstream}..{head}"))
+    if merges:
+        detail = f"local merge commits are not replayed; {by_hand}"
+        return _outcome(ctx, "conflict", detail, commits=merges)
+    tip, conflicted = replay(ctx, upstream, local) if local else (upstream, [])
+    if tip is None:
+        ctx.resolved.clear()
+        detail = f"a local commit conflicts with upstream; main was not moved. To {by_hand}"
+        return _outcome(ctx, "conflict", detail, paths=conflicted)
+    incoming = _nul(
+        _ok(ctx, "diff", "--no-renames", "--name-only", "-z", "--end-of-options", head, tip)
+    )
+    blocked, unite = _blocked(ctx, incoming)
+    if blocked:
+        detail = (
+            "incoming notes are changed here and not committed yet; the next job commits them "
+            "first, then integrates"
+        )
+        return _outcome(ctx, "waiting_clean_tree", detail, paths=blocked)
+    # A tree git will not put in an index cannot be written to the working tree either: moving
+    # `main` to it would leave an alignment no job can finish. It is held, `main` unmoved.
+    with _scratch(ctx) as scratch:
+        readable = _git(ctx, "read-tree", "--end-of-options", tip, index_file=scratch / "index")
+    if timed(readable, "git read-tree").code != 0:
+        remark = (
+            f"upstream's tree cannot be checked out ({_said(readable.err)}); nothing is "
+            "integrated or pushed until upstream is repaired. Review: "
+            f"git diff --stat HEAD {upstream}"
+        )
+        _hold_upstream(ctx, held, incoming, remark)
+        return None
+    pending = PendingAlign(head, tip, tuple(incoming))
+    unmerged = _unmerged_now(ctx)
+    if unmerged is not None:
+        return unmerged
+    if not _move_main(ctx, pending):
+        return _outcome(ctx, "raced", "main moved during the integration; the next job retries")
+    stale = _settle(ctx, pending)
+    if stale is not None:
+        return stale
+    for path in unite:
+        if _unite_worktree(ctx, tip, path):
+            ctx.resolved.update(_projects([path]))
+    if not ctx.resolved:
+        return None
+    projects = sorted(ctx.resolved)
+    detail = "indexes changed on both sides were united: " + ", ".join(projects)
+    paths = [index_of(name) for name in projects]
+    ctx.notices.append(_outcome(ctx, "resolved_index", detail, paths=paths))
+    # The union's own lines are harvested into their notes, and both committed with this job's.
+    return commit_memory(ctx, also=projects)

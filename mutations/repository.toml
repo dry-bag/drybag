@@ -1863,7 +1863,7 @@ reddens = [
 [[mutation]]
 name = "the README drops the git fetch row"
 file = "README.md"
-before = "| `git fetch` | `stayfixed bugs new` | the project's `origin` (note 1) | unless `--no-fetch` |"
+before = "| `git fetch` | `stayfixed bugs new`; the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the project's `origin`; for the note sync, the overlay's `origin` (note 1) | `bugs new` unless `--no-fetch`; the note sync on each run |"
 after = ''
 reddens = ["tests/test_outbound.py::test_the_readme_declares_every_program_that_reaches_a_network"]
 

@@ -114,6 +114,8 @@ LOCAL = frozenset(
         # working-tree file's id.
         ("git", "hash-object", "-t", "tree", "--stdin"),
         ("git", "hash-object", "--"),
+        # The note sync's union of two indexes, written into the object store.
+        ("git", "hash-object", "-w", "--stdin"),
         ("git", "init"),
         ("git", "log"),
         ("git", "ls-files"),
@@ -131,12 +133,16 @@ LOCAL = frozenset(
         # The note sync's commit and its moves of `main`, all in the overlay: a temporary index
         # filled (`read-tree`, `add`, `reset`), written (`write-tree`), committed (`commit-tree`),
         # `main` moved (`update-ref`), and the real index's memory entries reset to `HEAD`; and
-        # the notes a move brought in written from a temporary index (`checkout-index`).
+        # the notes a move brought in written from a temporary index (`checkout-index`), and
+        # each local commit replayed onto the fetched sha (`merge-tree`, `update-index` with a
+        # union of two indexes).
         ("git", "add"),
         ("git", "checkout-index"),
         ("git", "commit-tree"),
+        ("git", "merge-tree"),
         ("git", "read-tree"),
         ("git", "reset"),
+        ("git", "update-index", "-z", "--index-info"),
         ("git", "update-ref"),
         ("git", "write-tree"),
     }
@@ -150,10 +156,10 @@ LOCAL_WHOLE = frozenset({("git", "remote")})
 # finding, because the subcommand the tables match would then follow something unread.
 # `--no-optional-locks` keeps a `status` from writing the index it refreshes.
 GIT_GLOBAL_OPTIONS = {"-c": True, "--literal-pathspecs": False, "--no-optional-locks": False}
-# The configuration a launch may set with `git -c`: each changes how git prints a name, and never
-# what it runs or where it reaches, as `core.sshCommand`, `core.fsmonitor` or
-# `url.<base>.insteadOf` would.
-GIT_CONFIG_KEYS = frozenset({"core.quotePath"})
+# The configuration a launch may set with `git -c`: each changes how git prints a name or how
+# strictly it checks what it receives (the note sync's fetch), and never what it runs or where it
+# reaches, as `core.sshCommand`, `core.fsmonitor` or `url.<base>.insteadOf` would.
+GIT_CONFIG_KEYS = frozenset({"core.quotePath", "fetch.fsckObjects"})
 # Options with which a git command that otherwise reads the local repository asks a remote instead
 # (`git archive --remote=<url>`). Wherever one appears before the options end, the launch is not
 # local. Matched by the start of the whole name, since `git archive` takes neither of its two
@@ -305,6 +311,9 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
         "`-p` before each parent, a sha git printed"
     ),
     ("src/stayfixed/sync/job.py", "_commit_tree", "*signed"): "`-S`, or nothing",
+    ("src/stayfixed/sync/job.py", "replay", "f'--merge-base={commit}^'"): (
+        "`--merge-base=` and the parent of a sha git printed"
+    ),
     ("src/stayfixed/sync/rules.py", "commit_entries", "rev_range"): _REVISIONS,
     ("src/stayfixed/sync/rules.py", "offending_paths", "*revisions"): _REVISIONS,
     ("src/stayfixed/sync/rules.py", "range_is_memory_only", "base"): _REVISIONS,
