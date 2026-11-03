@@ -468,43 +468,34 @@ def _finish_worktree(ctx: JobContext, pending: PendingAlign) -> list[str]:
     """Write the paths a move of `main` brought in, where the working tree still has the old; the
     paths it may not write, because a link or a file stands above them.
 
-    Only a path still at its `from` version is written (the owner's later edit wins), only one
-    `HEAD` still has at its `to` version, and only through git (`checkout-index` from a temporary
-    index) or `fsops`, after checking no directory above it is a link.
+    Only a path still at its `from` version is written (the owner's later edit wins), checked
+    right before git writes it, never all checked first; only one `HEAD` still has at its `to`
+    version; and only through git (`checkout-index` from a temporary index) or `fsops`, after
+    checking no directory above it is a link.
     """
     if not pending.paths or not _is_ancestor(ctx, pending.to_sha, "HEAD"):
         return []  # nothing to write, or `main` never moved to `to`
     head, to = _blobs(ctx, "HEAD"), _blobs(ctx, pending.to_sha)
     before = _blobs(ctx, pending.from_sha)
     refused: list[str] = []
-    writes: list[str] = []
-    for path in pending.paths:
-        want = to.get(path)
-        if head.get(path) != want or _worktree_has(ctx, path, want):
-            continue
-        if unsafe_parent(ctx.overlay, path) is not None:
-            refused.append(path)
-            continue
-        if not _worktree_has(ctx, path, before.get(path)):
-            continue  # changed by hand since: left for the next commit
-        if want is None:
-            fsops.remove_within(ctx.overlay, path)
-            _prune_empty(ctx.overlay, path)
-        else:
-            writes.append(path)
-    if writes:
-        with _scratch(ctx) as scratch:
-            index = scratch / "index"
-            _ok(ctx, "read-tree", "--end-of-options", pending.to_sha, index_file=index)
-            _ok(
-                ctx,
-                "checkout-index",
-                "-f",
-                "-z",
-                "--stdin",
-                index_file=index,
-                stdin=_paths_in(writes),
-            )
+    with _scratch(ctx) as scratch:
+        index = scratch / "index"
+        _ok(ctx, "read-tree", "--end-of-options", pending.to_sha, index_file=index)
+        for path in pending.paths:
+            want = to.get(path)
+            if head.get(path) != want or _worktree_has(ctx, path, want):
+                continue
+            if unsafe_parent(ctx.overlay, path) is not None:
+                refused.append(path)
+                continue
+            if not _worktree_has(ctx, path, before.get(path)):
+                continue  # changed by hand since: left for the next commit
+            if want is None:
+                fsops.remove_within(ctx.overlay, path)
+                _prune_empty(ctx.overlay, path)
+            else:
+                write = _paths_in([path])
+                _ok(ctx, "checkout-index", "-f", "-z", "--stdin", index_file=index, stdin=write)
     return refused
 
 

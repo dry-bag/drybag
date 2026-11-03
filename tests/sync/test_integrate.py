@@ -508,6 +508,32 @@ def test_the_owners_edit_after_the_kill_wins_over_the_pending_write(
     assert (a / "common/memory/first.md").read_text() == "the owner wrote this meanwhile\n"
 
 
+def test_an_edit_landing_while_incoming_notes_are_written_is_never_overwritten(
+    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Each incoming path is checked right before git writes it, never all checked first and
+    # written later: an agent's edit of a note already checked, made while a later one is
+    # checked, would be overwritten by the batch. The edit stays, for the next commit.
+    a, b = overlays.a, overlays.b
+    write(b, "common/memory/first.md", "upstream's first\n")
+    write(b, "common/memory/zz.md", "a later note\n")
+    commit_all(b, "memory: two")
+    git(b, "push", "-q", "origin", "main")
+    real = J._worktree_has
+
+    def an_agent_edits_first(ctx: J.JobContext, path: str, blob: tuple[str, str] | None) -> bool:
+        if path == "common/memory/zz.md":
+            (a / "common/memory/first.md").write_text("the agent's edit\n", encoding="utf-8")
+        return real(ctx, path, blob)
+
+    monkeypatch.setattr(J, "_worktree_has", an_agent_edits_first)
+
+    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
+
+    assert (a / "common/memory/first.md").read_text() == "the agent's edit\n"
+    assert (a / "common/memory/zz.md").read_text() == "a later note\n"
+
+
 def test_main_moved_by_the_owner_during_the_integration_is_raced(
     overlays: Overlays, monkeypatch: pytest.MonkeyPatch
 ) -> None:

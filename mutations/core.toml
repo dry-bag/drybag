@@ -7053,8 +7053,8 @@ reddens = [
 [[mutation]]
 name = "a pending write goes over the owner's edit"
 file = "src/stayfixed/sync/job.py"
-before = "        if not _worktree_has(ctx, path, before.get(path)):"
-after = "        if False:"
+before = "            if not _worktree_has(ctx, path, before.get(path)):"
+after = "            if False:"
 reddens = [
   "tests/sync/test_integrate.py::test_the_owners_edit_after_the_kill_wins_over_the_pending_write",
 ]
