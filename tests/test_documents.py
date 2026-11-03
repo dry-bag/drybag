@@ -809,7 +809,7 @@ _TOML_HEADER = re.compile(r"^\[([a-z_]+)\]", re.MULTILINE)
 
 
 def test_the_configuration_block_shows_every_section_the_loader_accepts() -> None:
-    # Mutation: drop the `[artifacts]` header from `docs/cli.md`'s block -> reddens naming it.
+    # Mutation: drop the `[commit_messages]` header from `docs/cli.md`'s block -> reddens naming it.
     from stayfixed.config.loader import SECTIONS
 
     section = _CONFIGURATION_BLOCK.search(CLI_REFERENCE.read_text(encoding="utf-8"))

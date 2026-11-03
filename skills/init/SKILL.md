@@ -1,6 +1,6 @@
 ---
 name: init
-description: Take a repository onto stayfixed — show what it detected, ask the questions a person may answer, and write the scaffold. Use when a project has no .stayfixed/manifest.json yet, or the user asks to initialise stayfixed in it.
+description: Take a repository onto stayfixed — show what it detected, ask the questions a person may answer, and write stayfixed.toml with the roadmap, trail and bug-ledger files the checks read. Use when a project has no .stayfixed/manifest.json yet, or the user asks to initialise stayfixed in it.
 ---
 
 # Initialising a project
@@ -12,7 +12,7 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 ## Walk
 
 1. Run `stayfixed init --questions --json`. It refuses a repository that already has
-   `.stayfixed/manifest.json` or a `stayfixed.toml` (see the first rule). Otherwise `questions.properties` holds nine questions, asked in the order
+   `.stayfixed/manifest.json` or a `stayfixed.toml` (see the first rule). Otherwise `questions.properties` holds eight questions, asked in the order
    `questions.required` lists them, each with its `default` (what `stayfixed init --yes` alone
    would write), its `x-stayfixed-source`, its `x-stayfixed-flag` and its
    `x-stayfixed-tradeoff`: four lines, what the answer gives (`get`), what it gives up
@@ -28,7 +28,7 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
    then, which is the answer `local-only`.
 5. Build the command: `--yes --dry-run`, then each answer that differs from its default as its
    `x-stayfixed-flag`, once per item for a list, such as
-   `stayfixed init --yes --dry-run --name widget --local roadmap-history`. Leave the plugins out:
+   `stayfixed init --yes --dry-run --name widget --memory-mode in-repo`. Leave the plugins out:
    they are not `init`'s. Run it and relay both reports, the `picked:` list
    and every `note:` line. Ask for a final yes. **Silence, a timeout or an empty answer is a
    no.**

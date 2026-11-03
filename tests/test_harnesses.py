@@ -274,8 +274,6 @@ LISTED = {
         6,
         "`PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL`",
     ),
-    ("src/stayfixed/project/templates.py", "claude"): (5, "`init` renders `CLAUDE.md`"),
-    ("src/stayfixed/project/layout.py", "claude"): (1, "from the template `claude.md`"),
     ("src/stayfixed/overlay/layout.py", "claude"): (1, "(`overlay.layout`"),
     ("src/stayfixed/overlay/layout.py", "codex"): (1, "(`overlay.layout`"),
     ("src/stayfixed/overlay/api.py", "claude"): (1, "re-exported by `overlay.api`"),

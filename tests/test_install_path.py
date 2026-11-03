@@ -632,17 +632,14 @@ def test_a_session_before_the_attach_is_told_what_is_missing(tmp_path: Path) -> 
 
 
 def test_detach_on_an_initialised_project_leaves_the_footprint(tmp_path: Path) -> None:
-    # The ignore region's ownership, end to end. `init` recorded the `stayfixed:ignore` region as
-    # the footprint's, so the detach that takes back everything `attach` added leaves that block
-    # where it is — and the manifest with it, because `detach` never touches the scaffold ledger.
-    #
-    # What would break it: withdraw the region unconditionally and `.gitignore` loses its
-    # block, so the byte comparison fails.
+    # The footprint's ownership, end to end: the detach that takes back everything `attach` added
+    # leaves what `init` wrote where it is — and the manifest with it, because `detach` never
+    # touches the scaffold ledger.
     walk = _install_path(tmp_path, initialised=True)
-    ignore_before = (walk.root / ".gitignore").read_text(encoding="utf-8")
-    # Non-vacuous: the block this asserts survives has to be there before the detach.
-    assert "stayfixed:ignore" in ignore_before
+    roadmap = walk.root / "docs" / "roadmap.md"
+    # Non-vacuous: the file this asserts survives has to be there before the detach.
+    before = roadmap.read_text(encoding="utf-8")
     done = _cli(walk, "detach", "--root", str(walk.root))
     assert done.returncode == 0, done.stderr
-    assert (walk.root / ".gitignore").read_text(encoding="utf-8") == ignore_before
+    assert roadmap.read_text(encoding="utf-8") == before
     assert (walk.root / ".stayfixed" / "manifest.json").is_file()

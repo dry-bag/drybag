@@ -162,11 +162,6 @@ class Ledger:
 
 
 @dataclass(frozen=True)
-class Artifacts:
-    local: tuple[str, ...]
-
-
-@dataclass(frozen=True)
 class CommitMessages:
     attribution_check: bool
     types: tuple[str, ...]
@@ -188,6 +183,5 @@ class Config:
     budgets: Budgets
     native_caps: NativeCaps
     ledger: Ledger
-    artifacts: Artifacts
     commit_messages: CommitMessages
     personal: Personal

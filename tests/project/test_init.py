@@ -11,16 +11,14 @@ from pathlib import Path
 import pytest
 
 import stayfixed
-from stayfixed.config.layout import IGNORE_REGION
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.owned import OWNED, OwnedKeyError
 from stayfixed.config.reading import ConfigError
 from stayfixed.errors import Failure, Refusal
 from stayfixed.project.commands import PICKED, PICKED_WITHHELD
-from stayfixed.project.footprint import LOCAL_ROOT_ONLY
 from stayfixed.project.init import HEADER, InitReport, init
-from stayfixed.project.templates import ONE_FILE, OWN_NAME
-from stayfixed.scaffold import MANIFEST_PATH, Manifest, Style, Verb, extract
+from stayfixed.project.templates import ONE_FILE
+from stayfixed.scaffold import MANIFEST_PATH, Manifest, Verb
 from tests.cli import cli
 from tests.gitfixture import git, needs_git
 from tests.parserlimits import LONG_HEX
@@ -60,20 +58,32 @@ def test_a_bare_repository_gets_the_footprint_and_every_file_is_recorded(tmp_pat
     }
     assert document["project"]["name"] == "widget"
     records = Manifest.read(root).records
-    assert {
-        "config",
-        "agents-skeleton",
-        "claude-md",
-        "agents-md",
-        "gitignore",
-        "specs-keep",
-    } <= set(records)
-    assert (root / "CLAUDE.md").read_text(encoding="utf-8") == "@AGENTS.md\n"
-    agents = (root / "AGENTS.md").read_text(encoding="utf-8")
-    assert agents.startswith("# widget\n") and "## Current status" in agents
-    assert extract(agents, "harness", Style.MARKDOWN) is not None
-    assert extract((root / ".gitignore").read_text(encoding="utf-8"), IGNORE_REGION, Style.HASH)
-    assert report.note
+    assert set(records) == {"config", "ledger-audits", "bug-index", "roadmap", "trail"}
+    assert not report.refused
+
+
+@needs_git
+def test_a_fresh_init_leaves_trail_and_ledger_checks_green(tmp_path: Path) -> None:
+    # `init --yes` writes `stayfixed.toml`, the roadmap with its trail markers, `trail.toml`, the
+    # generated bug index and the ledger's audits README, recorded in the manifest, and nothing
+    # else; the checks that read them pass on what it wrote. Without the index, `bugs index
+    # --check` reports it stale; without a file under the ledger's directory it refuses the index
+    # as orphaned; without the roadmap or the trail, `docs trail --check` fails.
+    root = _repo(tmp_path)
+    code, out, err = cli(root, tmp_path, "init", "--yes")
+    assert code == 0, (out, err)
+    for argv in (("docs", "trail", "--check"), ("bugs", "index", "--check"), ("bugs", "check")):
+        code, out, err = cli(root, tmp_path, *argv)
+        assert code == 0, (argv, out, err)
+    untracked = git(root, "ls-files", "--others").split()
+    assert sorted(untracked) == [
+        ".stayfixed/manifest.json",
+        "docs/bug-reports.md",
+        "docs/bugs/audits/README.md",
+        "docs/roadmap.md",
+        "docs/trail.toml",
+        "stayfixed.toml",
+    ]
 
 
 @needs_git
@@ -158,11 +168,11 @@ def test_a_dry_run_writes_nothing_and_reports_both_plans(tmp_path: Path) -> None
 
 @needs_git
 def test_a_refused_footprint_writes_nothing_at_all(tmp_path: Path) -> None:
-    # A repository committing an AGENTS.md with an orphan end marker made
-    # the first draft write three files and exit 2. Mutation (oracle): apply the once pass
-    # before the refusal check -> the snapshot reddens.
+    # A footprint artifact whose place cannot be read refuses that artifact; the write-once pass
+    # is not applied either. Mutation (oracle): apply the once pass before the refusal check ->
+    # the snapshot reddens.
     root = _repo(tmp_path)
-    (root / "AGENTS.md").write_text("# Mine\n\n<!-- stayfixed:harness:end -->\n", encoding="utf-8")
+    (root / "docs" / "roadmap.md").mkdir(parents=True)
     before = snapshot(root)
     report = _init(root, tmp_path)
     assert report.footprint.refusals and not (root / MANIFEST_PATH).exists()
@@ -189,7 +199,7 @@ def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_repla
     (root / ".codex").mkdir()
     hand_written = (
         '[stayfixed]\nversion = "0.0.1"\n\n[project]\nname = "chosen"\nbase_branch = "dev"\n\n'
-        '[paths]\nspecs = "design/specs"\nplans = "design/plans"\n\n[memory]\nmode = "overlay"\n'
+        '[paths]\nroadmap = "design/roadmap.md"\n\n[memory]\nmode = "overlay"\n'
     )
     (root / CONFIG_FILE).write_text(hand_written, encoding="utf-8")
     report = _init(root, tmp_path)
@@ -197,12 +207,9 @@ def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_repla
     assert (root / CONFIG_FILE).read_text(encoding="utf-8") == hand_written
     left = {a.artifact_id: a.reason for a in report.once.actions if a.verb is Verb.SKIP_MODIFIED}
     assert left["config"] == "create-once, and the file is already there"
-    assert (root / "design" / "specs" / ".gitkeep").is_file()
-    assert not (root / "docs" / "specs").exists()
-    # And the answers reach the documents too, not only the directories: the `harness` region
-    # names the trees this file moved.
-    agents = (root / "AGENTS.md").read_text(encoding="utf-8")
-    assert "design/specs/" in agents and "design/plans/" in agents
+    assert (root / "design" / "roadmap.md").is_file()
+    assert (root / "design" / "trail.toml").is_file()
+    assert not (root / "docs" / "roadmap.md").exists()
 
 
 @needs_git
@@ -259,22 +266,6 @@ def test_without_yes_and_with_a_broken_configuration_nothing_happens(tmp_path: P
 
 
 @needs_git
-def test_an_existing_agents_file_keeps_every_byte_outside_the_region(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    prose = (
-        "# Mine\r\n\r\nHand-written, CRLF, and a form feed \x0c here.\r\n\r\n"
-        "## Current status\r\n\r\n- Busy.\r\n"
-    )
-    (root / "AGENTS.md").write_bytes(prose.encode("utf-8"))
-    (root / "CLAUDE.md").write_text("# not the pointer\n", encoding="utf-8")
-    report = _init(root, tmp_path)
-    assert (root / "AGENTS.md").read_bytes().decode("utf-8").startswith(prose)
-    assert (root / "CLAUDE.md").read_text(encoding="utf-8") == "# not the pointer\n"
-    assert not report.note
-    assert {a.verb for a in report.once.actions} == {Verb.SKIP_MODIFIED, Verb.CREATE}
-
-
-@needs_git
 def test_a_configuration_that_will_not_parse_never_quotes_its_own_keys(tmp_path: Path) -> None:
     # Repository bytes never reach a message unbounded, and this leak is one of a family closed at
     # three sites. `tomllib`'s message embeds the source for several of its faults — a duplicate
@@ -295,54 +286,18 @@ def test_a_configuration_that_will_not_parse_never_quotes_its_own_keys(tmp_path:
 
 
 @needs_git
-def test_a_python_repository_gets_the_profile_in_every_form_it_asked_for(tmp_path: Path) -> None:
-    # The fixture carries `.claude/` only, so `detect` answers `agents = ["claude"]` and the
-    # Claude rule is written: that is the point of the case.
-    root = _repo(tmp_path)
-    (root / ".claude").mkdir()
-    (root / "pyproject.toml").write_text("[project]\nname = 'widget'\n", encoding="utf-8")
-    _init(root, tmp_path)
-    assert load(root, machine=tmp_path / "absent.toml").stayfixed.profile == "python"
-    assert (root / "docs" / "stayfixed" / "rules" / "python.md").is_file()
-    rule = (root / ".claude" / "rules" / "stayfixed-python.md").read_text(encoding="utf-8")
-    assert "`docs/stayfixed/rules/python.md`" in rule
-    assert "`docs/stayfixed/rules/python.md`" in (root / "AGENTS.md").read_text(encoding="utf-8")
-    assert {"profile-rules", "claude-rules"} <= set(Manifest.read(root).records)
-
-
-@needs_git
-@pytest.mark.parametrize("local", [["config"], ["gitignore"], ["config", "gitignore"]])
-def test_stayfixed_toml_or_the_ignore_block_kept_out_of_git_refuses_init_before_any_write(
-    tmp_path: Path, local: list[str]
-) -> None:
-    # Every command reads `stayfixed.toml` at the root, and the ignore block at the root is what
-    # keeps `.stayfixed/local/` out of git: a copy under `.stayfixed/local/artifacts/` is never
-    # read. Mutation (declared): `mutations/`'s "stayfixed.toml or the ignore block may be kept out
-    # of git".
-    root = _repo(tmp_path)
-    (root / "stayfixed.toml").write_text(
-        f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n\n'
-        f"[artifacts]\nlocal = {json.dumps(local)}\n",
-        encoding="utf-8",
-    )
-    before = snapshot(root)
-    with pytest.raises(Refusal) as refused:
-        _init(root, tmp_path)
-    assert_snapshot_unchanged(root, before)
-    assert str(refused.value) == LOCAL_ROOT_ONLY.format(names=" and ".join(local))
-
-
-@needs_git
-@pytest.mark.parametrize("value", ["CLAUDE.md", "claude.md"], ids=["exact", "case-variant"])
+@pytest.mark.parametrize(
+    "value", ["docs/bug-reports.md", "docs/Bug-Reports.md"], ids=["exact", "case-variant"]
+)
 def test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_write(
     tmp_path: Path, value: str
 ) -> None:
-    # `[paths] roadmap = "CLAUDE.md"`: each pass on its own has one artifact at that file, and
-    # across the two, `roadmap` and `claude-md` would share it. Refused with nothing written.
-    # Mutation (oracle): `mutations/`'s "an artifact may target a file another artifact is built to
-    # write" -> init writes both into one `CLAUDE.md` and this reddens. `claude.md` is the same file
-    # where case folds, and is refused on every filesystem: `mutations/`'s "places are compared
-    # case-sensitively for ownership" -> that case reddens.
+    # `[paths] roadmap = "docs/bug-reports.md"`: `roadmap` and `bug-index` would share that file.
+    # Refused with nothing written. Mutation (oracle): `mutations/`'s "an artifact may target a
+    # file another artifact is built to write" -> init writes both into one file and this
+    # reddens. `docs/Bug-Reports.md` is the same file where case folds, and is refused on every
+    # filesystem: `mutations/`'s "places are compared case-sensitively for ownership" -> that case
+    # reddens.
     root = _repo(tmp_path)
     (root / "stayfixed.toml").write_text(
         f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n\n'
@@ -354,29 +309,11 @@ def test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_wr
         _init(root, tmp_path)
     assert_snapshot_unchanged(root, before)
     assert str(refused.value) == ONE_FILE.format(
-        first="claude-md",
-        first_key=OWN_NAME,
+        first="bug-index",
+        first_key="paths.bug_index",
         second="roadmap",
         second_key="paths.roadmap",
     )
-
-
-@needs_git
-def test_a_profile_kept_out_of_git_refuses_init_before_anything_is_written(
-    tmp_path: Path,
-) -> None:
-    # The rule meets a hand-written `stayfixed.toml`, not only the onboarding questions. If
-    # `_init` runs the CLI rather than the function, assert its exit 2 instead of the raise.
-    root = _repo(tmp_path)
-    (root / "stayfixed.toml").write_text(
-        f'[stayfixed]\nversion = "{stayfixed.__version__}"\nprofile = "python"\n\n'
-        '[project]\nname = "widget"\n\n[artifacts]\nlocal = ["profile-rules"]\n',
-        encoding="utf-8",
-    )
-    before = snapshot(root)
-    with pytest.raises(Refusal, match="profile's artifacts"):
-        _init(root, tmp_path)
-    assert_snapshot_unchanged(root, before)
 
 
 @needs_git
@@ -563,14 +500,13 @@ def test_init_yes_says_what_it_picked_attribution_off_the_types_and_no_plugin(
     assert f"\n{PICKED}\n" in printed, printed
     picked = printed.split(f"\n{PICKED}\n", 1)[1].splitlines()
     types = "feat, fix, build, chore, ci, docs, perf, refactor, revert, style, test"
-    assert picked[:9] == [
+    assert picked[:8] == [
         "  project.name: widget",
         "  project.base_branch: main",
         "  memory.mode: harness",
         "  stayfixed.profile: none",
         "  commit_messages.attribution_check: off",
         f"  commit_messages.types: {types}",
-        "  artifacts.local: none",
         "  stayfixed.agents: claude, codex",
         "  plugins: none",
     ]

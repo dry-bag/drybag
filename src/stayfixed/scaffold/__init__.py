@@ -7,12 +7,10 @@ earlier `attach` recorded in its ledger, `mark` for any caller that builds `Temp
 the entries an earlier `attach` recorded and no other. The three refusals a consumer has to
 catch by name are here too: a caller that cannot import `ManifestError`, `RegionError` or
 `EntriesError` from this list has no way to tell a bad merge from a bug except by catching
-`Refusal` whole;
-`ParserLimitError`, an `EntriesError` too, is the valid JSON past a limit of the parser that
-`attach` must tell from a malformed document. `LOCAL_ARTIFACTS` is for the project area's guard
-against writes git ignores, which exempts the one directory stayfixed keeps out of git on purpose.
-Importing a private module of this package from another area is a review finding; if an area
-needs something this list does not carry, the list grows deliberately.
+`Refusal` whole; `ParserLimitError`, an `EntriesError` too, is the valid JSON past a limit of the
+parser that `attach` must tell from a malformed document. Importing a private module of this
+package from another area is a review finding; if an area needs something this list does not
+carry, the list grows deliberately.
 """
 
 from stayfixed.scaffold.engine import (
@@ -33,7 +31,6 @@ from stayfixed.scaffold.entries import (
     settings_text,
     withdraw_entries,
 )
-from stayfixed.scaffold.local import LOCAL_ARTIFACTS, LOCAL_DIGESTS, LOCAL_ROOT, LocalDigests
 from stayfixed.scaffold.manifest import (
     FORMAT,
     MANIFEST_PATH,
@@ -50,15 +47,11 @@ from stayfixed.scaffold.report import printable, render_report
 
 __all__ = [
     "FORMAT",
-    "LOCAL_ARTIFACTS",
-    "LOCAL_DIGESTS",
-    "LOCAL_ROOT",
     "MANIFEST_PATH",
     "Action",
     "Applied",
     "EntriesError",
     "Kind",
-    "LocalDigests",
     "Location",
     "Manifest",
     "ManifestError",

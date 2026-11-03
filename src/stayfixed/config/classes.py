@@ -122,7 +122,6 @@ CLASSES: Mapping[str, KeyClass] = MappingProxyType(
         "project.*": KeyClass.REPOSITORY_ONLY,
         "paths.*": KeyClass.REPOSITORY_ONLY,
         "ledger.id_prefix": KeyClass.REPOSITORY_ONLY,
-        "artifacts.local": KeyClass.REPOSITORY_ONLY,
         "commit_messages.*": KeyClass.REPOSITORY_ONLY,
         "native_caps.*": KeyClass.PLUGIN_OWNED,
     }

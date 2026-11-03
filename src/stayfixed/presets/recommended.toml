@@ -56,9 +56,6 @@ id_prefix = "BR"
 code_roots = ["src", "tests", "scripts"]
 evidence_boundary_required_for = ["high"]
 
-[defaults.artifacts]
-local = []
-
 [defaults.commit_messages]
 attribution_check = false
 # The eleven types `@commitlint/config-conventional` lists; the Conventional Commits specification

@@ -35,8 +35,6 @@ JSON_KEYS = {
     "scaffold",
     "writes",
     "skipped",
-    "note",
-    "unknown_harnesses",
     "head_note",
     "stamped",
 }
@@ -73,14 +71,14 @@ def test_a_dry_run_prints_both_reports_and_says_it_wrote_nothing(tmp_path: Path)
     assert set(data) >= JSON_KEYS and data["dry_run"] is True
     # Renamed with no alias: a script reading the old key finds nothing rather than a stale copy.
     assert "footprint" not in data
-    # Two reports, not one rendered twice: the write-once pass plans three files and the
+    # Two reports, not one rendered twice: the write-once pass plans `stayfixed.toml` and the
     # footprint pass plans the rest, and a summary that showed one of them would hide
     # whichever half a refusal landed in.
-    assert "CLAUDE.md" in data["once"] and "CLAUDE.md" not in data["scaffold"]
-    assert ".gitignore" in data["scaffold"]
+    assert "stayfixed.toml" in data["once"] and "stayfixed.toml" not in data["scaffold"]
+    assert "docs/roadmap.md" in data["scaffold"]
     assert data["adopted"] is False
-    assert set(data["writes"]) >= {"CLAUDE.md", "stayfixed.toml", ".gitignore"}
-    assert not (root / "CLAUDE.md").exists()
+    assert set(data["writes"]) >= {"stayfixed.toml", "docs/roadmap.md"}
+    assert not (root / "stayfixed.toml").exists()
 
 
 @needs_git
@@ -94,8 +92,8 @@ def test_a_real_run_prints_both_reports_in_full(tmp_path: Path) -> None:
     assert printed.startswith("initialised:")
     assert "write-once:" in printed and "scaffold:" in printed
     # Per-artifact lines, from both passes, with their verbs — not just the counts.
-    assert "create         CLAUDE.md  (new)" in printed
-    assert "create         docs/adr/0000-template.md  (new)" in printed
+    assert "create         stayfixed.toml  (new)" in printed
+    assert "create         docs/roadmap.md  (new)" in printed
     assert (root / ".stayfixed" / "manifest.json").is_file()
 
 
@@ -104,7 +102,7 @@ def test_a_refused_footprint_exits_one_with_the_refused_section_in_that_report(
     tmp_path: Path,
 ) -> None:
     root = repository(tmp_path)
-    (root / "AGENTS.md").write_text("# Mine\n\n<!-- stayfixed:harness:end -->\n", encoding="utf-8")
+    (root / "docs" / "roadmap.md").mkdir(parents=True)
     code, printed = _run(root, tmp_path, "--yes", "--json")
     assert code == 1, printed
     data = json.loads(printed)
@@ -116,34 +114,13 @@ def test_a_refused_footprint_exits_one_with_the_refused_section_in_that_report(
     assert code == 1
     assert plain.startswith("refused, and nothing was written:")
     assert "REFUSED — nothing will be written" in plain
-    assert "AGENTS.md  (region 'harness' has an end marker with no beginning" in plain
+    assert "docs/roadmap.md  (docs/roadmap.md cannot be read" in plain
 
 
 @needs_git
-def test_a_refused_write_once_pass_exits_one_and_writes_nothing(tmp_path: Path) -> None:
-    # The write-once half of `InitReport.refused`, which the case above cannot reach: its
-    # refusal is the footprint pass's. A `CLAUDE.md` that is a symlink is refused by the
-    # write-once pass alone, and the run must stop there with its report. Mutation (oracle):
-    # `mutations/`'s "init's refusal reads only the footprint plan" -> the run goes on to `apply`,
-    # whose own backstop refuses the plan: exit 2 with the engine's message, and no report.
-    root = repository(tmp_path)
-    (tmp_path / "elsewhere.md").write_text("theirs\n", encoding="utf-8")
-    (root / "CLAUDE.md").symlink_to(tmp_path / "elsewhere.md")
-    before = snapshot(root)
-    code, printed = _run(root, tmp_path, "--yes", "--json")
-    assert code == 1, printed
-    data = json.loads(printed)
-    assert "REFUSED" in data["once"] and "REFUSED" not in data["scaffold"]
-    assert data["summary"].startswith("refused, and nothing was written:")
-    assert_snapshot_unchanged(root, before)
-
-
-@needs_git
-def test_a_harness_no_adapter_serves_is_counted_and_never_named(tmp_path: Path) -> None:
-    # `[stayfixed] agents` is repository-authored, so the report prints how many names went
-    # unserved and none of them. Mutation: print the loaded `agents` names beside the count on
-    # the note line -> the `cursor` and ESC assertion reddens. (Printing them instead of the
-    # count reddens the note assertion first, which proves nothing about the names.)
+def test_a_harness_no_adapter_serves_is_never_named(tmp_path: Path) -> None:
+    # `[stayfixed] agents` is repository-authored, so the report never prints a name no harness
+    # answers to: `picked:` lists the harnesses stayfixed serves among those listed.
     root = repository(tmp_path)
     (root / "stayfixed.toml").write_text(
         '[stayfixed]\nversion = "0.1.0"\nagents = ["claude", "cursor\\u001b[31m"]\n\n'
@@ -152,10 +129,7 @@ def test_a_harness_no_adapter_serves_is_counted_and_never_named(tmp_path: Path) 
     )
     code, printed = _run(root, tmp_path, "--yes", "--dry-run")
     assert code == 0, printed
-    assert "note: 1 name(s) in [stayfixed] agents name no harness" in printed
     assert "cursor" not in printed and "\x1b" not in printed
-    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
-    assert json.loads(printed)["unknown_harnesses"] == 1
 
 
 @needs_git
@@ -172,7 +146,10 @@ def test_questions_print_each_default_with_its_source_and_write_nothing(tmp_path
     assert printed.startswith("detected:\n")
     assert "  project.name: widget (origin remote; --name)\n" in printed
     assert "  memory.mode: harness (default; --memory-mode)\n" in printed
-    assert "  artifacts.local: none (the preset's default; --local)\n" in printed
+    assert (
+        "  commit_messages.attribution_check: off (the preset's default; --attribution-check)\n"
+        in printed
+    )
     code, printed = _run(root, tmp_path, "--questions", "--json")
     assert code == 0, printed
     assert json.loads(printed)["questions"]["type"] == "object"
@@ -394,7 +371,6 @@ def test_the_questions_answered_as_the_skill_answers_them_write_what_yes_writes(
         ("--yes", "--base-branch", "a b"),
         ("--yes", "--base-branch", "a..b"),
         ("--yes", "--base-branch", "HEAD"),
-        ("--yes", "--local", "bug-index"),
         ("--yes", "--memory-mode", "cloud"),
         ("--yes", "--profile", "rust"),
         ("--yes", "--agent", "cursor"),
@@ -406,7 +382,6 @@ def test_the_questions_answered_as_the_skill_answers_them_write_what_yes_writes(
         "branch",
         "branch-git-refuses",
         "branch-head",
-        "not-eligible",
         "mode",
         "profile",
         "agent",
@@ -421,8 +396,8 @@ def test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing(
     # person may have pasted from anywhere; a choice is refused by `choices`, whose error quotes
     # only the operator's own argument. `--profile` takes only the names this build ships.
     # Mutations (oracle): `mutations/`'s "a flag's grammar takes a value outside it as typed:
-    # gate --base a short name a tag answers for, init an answer" -> `name` and `branch` redden;
-    # "--local takes a file no gate can do without" -> `not-eligible` reddens. (By hand: `--profile`
+    # gate --base a short name a tag answers for, init an answer" -> `name` and `branch` redden.
+    # (By hand: `--profile`
     # without `choices` -> `profile` reddens with no `SystemExit`: the name reaches `init`, and only
     # the profile loader refuses it, after the parser.)
     root = repository(tmp_path)
@@ -461,12 +436,12 @@ def test_an_answer_over_a_document_the_user_wrote_is_refused(
 @needs_git
 def test_a_refused_adoption_says_its_version_would_be_written(tmp_path: Path) -> None:
     # A refused run writes nothing, the stamp included, so its note must not say "wrote".
-    # A directory at `CLAUDE.md` is refused by the write-once pass. Mutation (oracle):
+    # A directory at the roadmap's place is refused by the footprint pass. Mutation (oracle):
     # `mutations/`'s "a refused adoption reports its version stamp as written".
     root = repository(tmp_path)
     hand_written = '[project]\nname = "widget"\n'
     (root / "stayfixed.toml").write_text(hand_written, encoding="utf-8")
-    (root / "CLAUDE.md").mkdir()
+    (root / "docs" / "roadmap.md").mkdir(parents=True)
     code, printed = _run(root, tmp_path, "--yes")
     assert code == 1, printed
     assert STAMPED.format(verb="would write") in printed

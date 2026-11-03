@@ -1155,8 +1155,8 @@ before = "        if names_stayfixed_directory(relative):"
 after = "        if False:"
 reddens = [
   "tests/config/test_paths.py::test_a_paths_value_inside_stayfixeds_own_directory_is_refused_and_never_quoted",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-attach-s-ledger-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-attach-s-ledger-case-folded-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-attach-s-ledger-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-attach-s-ledger-case-folded-init]",
 ]
 
 # The case half, on its own. A rule that matched `.git` exactly would be green on every test
@@ -1170,8 +1170,8 @@ after = "    return any(part == name for part in relative.split(\"/\"))"
 reddens = [
   "tests/test_fsops.py::test_gits_control_directory_is_reserved_at_every_depth_and_in_any_case",
   "tests/config/test_paths.py::test_contained_refuses_gits_control_directory_at_any_depth_and_in_any_case",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-git-s-hook-case-folded-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-attach-s-ledger-case-folded-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-git-s-hook-case-folded-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-attach-s-ledger-case-folded-init]",
 ]
 
 # The call site, which is what regressed. A TOML key is arbitrary quoted text, so this message
@@ -1313,7 +1313,6 @@ file = "src/stayfixed/harnesses.py"
 before = "    chosen = tuple(harness for harness in HARNESSES if harness.name in listed)"
 after = "    chosen = HARNESSES"
 reddens = [
-  "tests/project/test_templates.py::test_a_harness_not_listed_gets_no_file_of_its_own",
   "tests/test_harnesses.py::test_select_answers_the_listed_harnesses_and_counts_the_rest",
 ]
 
@@ -1363,10 +1362,8 @@ reddens = [
 # The footprint commands' hidden-write invariant (`tests/project/test_footprint_invariant.py`) is
 # also named by other entries whose guards it holds. Its own are `mutations/`'s "git's control
 # directory is named by no path", the shared `.git` predicate both call sites ask, and the guards
-# made to refuse more than they should, which the legitimate cases catch: `mutations/`'s "the ignore
-# guard refuses a fixed name in the clone's excludes", "the ignore guard refuses a new file at an
-# ignored place", "the ignore guard refuses an artifact kept out of git", "the ignore guard reads a
-# tracked file as ignored" and "the engine refuses every recorded artifact".
+# made to refuse more than they should, which the legitimate cases catch: `mutations/`'s "the
+# engine refuses every recorded artifact".
 
 [[mutation]]
 name = "git's control directory is named by no path"
@@ -1374,8 +1371,8 @@ file = "src/stayfixed/fsops.py"
 before = '    return names_component(relative, CONTROL_DIRECTORY)'
 after = '    return False'
 reddens = [
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-git-s-hook-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-git-s-hook-case-folded-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-git-s-hook-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-git-s-hook-case-folded-init]",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-new-file-under-git-init]",
 ]
 
@@ -2278,17 +2275,6 @@ before = "    if not suffix and _PRE_RELEASE.match(other):\n        return True"
 after = "    if not suffix and _PRE_RELEASE.match(other):\n        return False"
 reddens = [
   "tests/test_semver.py::test_equal_triples_order_a_release_after_its_pre_release_and_nothing_else",
-]
-
-# `init` writes the `.gitignore` block as a scaffold artifact, held to the bytes a project already
-# carries, so changing the one spelling of the block changes what every `upgrade` reports as drift.
-[[mutation]]
-name = "the ignore block's note changes under its writer"
-file = "src/stayfixed/config/layout.py"
-before = """IGNORE_NOTE = "# stayfixed's local state: yours, never a collaborator's.""""
-after = """IGNORE_NOTE = "# stayfixed's local state.""""
-reddens = [
-  "tests/project/test_templates.py::test_the_ignore_block_init_writes_is_the_block_a_project_carries",
 ]
 
 # A git that fails at everything is unavailable, never a repository that answered — with no

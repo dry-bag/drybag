@@ -8,15 +8,11 @@ from stayfixed.scaffold import EntriesError, ManifestError, ParserLimitError, Re
 
 EXPORTED = [
     "FORMAT",
-    "LOCAL_ARTIFACTS",
-    "LOCAL_DIGESTS",
-    "LOCAL_ROOT",
     "MANIFEST_PATH",
     "Action",
     "Applied",
     "EntriesError",
     "Kind",
-    "LocalDigests",
     "Location",
     "Manifest",
     "ManifestError",

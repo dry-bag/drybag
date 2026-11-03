@@ -2,7 +2,7 @@
 
 A write must never land on a file whose bytes the committer does not control and git does not
 show. The inputs that could aim one are repository-authored: the committed `stayfixed.toml`
-(`[paths]`, `[artifacts] local`); and the answers a person passes as flags, which `precheck`
+(`[paths]`); and the answers a person passes as flags, which `precheck`
 keeps off any committed document. Each hostile case below is one such input, met by `init` on a
 fresh clone.
 
@@ -13,14 +13,14 @@ fresh clone.
   `Refusal` raised, and no refusal returned in the report's plans, which is the other way a
   command refuses.
 - **I3, the end state is consistent.** After a finished `init`, the footprint planned again over
-  the same tree plans nothing and refuses nothing: every artifact the configuration builds is at
-  its own place with its own bytes.
+  the same tree plans nothing but what it skips and refuses nothing: every artifact the
+  configuration builds is at its own place with its own bytes, or is a file stayfixed did not
+  write, left and named.
 
-Mutations (declared): each guard of the class put back one at a time — the ignore guard, the
-shared `.git` predicate and its case folding, the `.stayfixed` reservation, the collision rule's
-ownership checks — and guards made to refuse more than they should, which the legitimate cases
-catch. An entry names every row it reddens; a row no single line can redden says so where it is
-declared.
+Mutations (declared): each guard of the class put back one at a time — the shared `.git`
+predicate and its case folding, the `.stayfixed` reservation, the collision rule's ownership
+checks — and guards made to refuse more than they should, which the legitimate cases catch. An
+entry names every row it reddens; a row no single line can redden says so where it is declared.
 
 What this module does not cover: guards that decide nothing about a hidden file's bytes, such
 as the attach refusal, which their own modules hold.
@@ -38,9 +38,9 @@ import pytest
 from stayfixed.config.layout import ATTACH_LEDGER
 from stayfixed.config.loader import CONFIG_FILE, load, read_document
 from stayfixed.errors import Refusal
-from stayfixed.project.footprint import prepare
 from stayfixed.project.init import ANSWER_SHEET, NO_ANSWERS, Given, InitReport, init
-from stayfixed.project.templates import LOCAL_ELIGIBLE
+from stayfixed.project.templates import project_templates
+from stayfixed.scaffold import Verb, plan
 from tests.gitfixture import git, needs_git
 from tests.project.repos import DOCUMENT, MOVED_OFF_DOCS, repository
 
@@ -55,7 +55,6 @@ class Case:
 
     name: str
     paths: Mapping[str, str] = field(default_factory=dict)
-    local: tuple[str, ...] = ()
     ignore: tuple[str, ...] = ()
     exclude: tuple[str, ...] = ()
     # Hidden files the case plants, root-relative, with their text: held to I1 unless tracked.
@@ -72,92 +71,82 @@ class Case:
 
     def document(self, *, with_paths: bool) -> str:
         text = DOCUMENT
-        if self.local:
-            listed = ", ".join(f'"{name}"' for name in self.local)
-            text += f"\n[artifacts]\nlocal = [{listed}]\n"
         if with_paths and self.paths:
             text += "\n[paths]\n" + "".join(f'{k} = "{v}"\n' for k, v in self.paths.items())
         return text
 
 
 HOSTILE = (
+    # A whole file stayfixed did not write is never written over: the roadmap at an existing
+    # ignored file is skipped and named.
     Case(
-        "region-into-an-ignored-file",
-        paths={"agents_md": ".env"},
+        "roadmap-onto-an-ignored-file",
+        paths={"roadmap": ".env"},
         ignore=(".env",),
         plant={".env": FOREIGN},
     ),
     Case(
-        "region-into-git-s-hook",
-        paths={"agents_md": ".git/hooks/pre-commit"},
+        "roadmap-onto-git-s-hook",
+        paths={"roadmap": ".git/hooks/pre-commit"},
     ),
     Case(
-        "region-into-git-s-hook-case-folded",
-        paths={"agents_md": ".GIT/hooks/pre-commit"},
+        "roadmap-onto-git-s-hook-case-folded",
+        paths={"roadmap": ".GIT/hooks/pre-commit"},
     ),
     # A file git does not have yet: the only way to see a write that creates one under `.git/`.
     Case(
         "a-new-file-under-git",
-        paths={"agents_md": ".git/info/attributes"},
+        paths={"roadmap": ".git/info/attributes"},
     ),
-    # Held by three layers — `contained()`'s symlink check, the ignore guard failing closed on a
-    # path git cannot answer about, and the write walk's `O_NOFOLLOW` — so no single line
-    # reddens it: it pins that the three never go at once.
+    # Held by two layers — `contained()`'s symlink check and the write walk's `O_NOFOLLOW` — so
+    # no single line reddens it: it pins that the two never go at once.
     Case(
-        "region-into-git-s-hook-through-a-symlink",
-        paths={"agents_md": "gitlink/hooks/pre-commit"},
+        "roadmap-onto-git-s-hook-through-a-symlink",
+        paths={"roadmap": "gitlink/hooks/pre-commit"},
         links={"gitlink": ".git"},
     ),
     Case(
-        "region-into-attach-s-ledger",
-        paths={"agents_md": ATTACH_LEDGER},
+        "roadmap-onto-attach-s-ledger",
+        paths={"roadmap": ATTACH_LEDGER},
         plant={ATTACH_LEDGER: FOREIGN},
     ),
     Case(
-        "region-into-attach-s-ledger-case-folded",
-        paths={"agents_md": ATTACH_LEDGER.replace(".stayfixed", ".stayfixed")},
+        "roadmap-onto-attach-s-ledger-case-folded",
+        paths={"roadmap": ATTACH_LEDGER.replace(".stayfixed", ".STAYFIXED")},
         plant={ATTACH_LEDGER: FOREIGN},
     ),
-    # The same three layers as the `.git` symlink.
+    # The same two layers as the `.git` symlink.
     Case(
-        "region-into-attach-s-ledger-through-a-symlink",
-        paths={"agents_md": "hidden/attach.json"},
+        "roadmap-onto-attach-s-ledger-through-a-symlink",
+        paths={"roadmap": "hidden/attach.json"},
         plant={ATTACH_LEDGER: FOREIGN},
         links={"hidden": ".stayfixed/local"},
     ),
-    # `roadmap` placed at `CLAUDE.md` spelled in another case: one file where case folds, an
+    # `roadmap` placed at the bug index spelled in another case: one file where case folds, an
     # existing file stayfixed did not write where it does not. Either way the collision must be
-    # refused, or the roadmap is never written and a second plan still has work to do.
+    # refused, or one artifact is never written and a second plan still has work to do.
     Case(
         "a-paths-value-at-another-artifact-s-file-case-folded",
-        paths={"roadmap": "claude.md"},
-        plant={"claude.md": FOREIGN},
+        paths={"roadmap": "docs/Bug-Reports.md"},
+        plant={"docs/Bug-Reports.md": FOREIGN},
     ),
     # Answers over a document the clone committed would rewrite what the committer chose; they
     # are refused before anything is read beyond the root.
     Case(
         "answers-over-a-committed-document",
-        paths={"agents_md": ".env"},
+        paths={"roadmap": ".env"},
         ignore=(".env",),
         plant={".env": FOREIGN},
-        given=Given(local=("roadmap-history",)),
+        given=Given(memory_mode="local-only"),
         refusal=ANSWER_SHEET,
     ),
 )
 
 LEGITIMATE = (
     Case(
-        "fixed-names-in-the-clone-s-excludes",
-        exclude=("CLAUDE.md", "AGENTS.md"),
-    ),
-    Case(
         "a-new-file-at-an-ignored-place",
-        paths={"agents_md": "private/AGENTS.md"},
+        paths={"roadmap": "private/roadmap.md"},
         ignore=("private/",),
-    ),
-    Case(
-        "artifacts-kept-out-of-git",
-        local=("claude-md", "roadmap"),
     ),
     # Its own guard is that planning reads no disk for a place this configuration never uses;
     # breaking it means putting `contained()` back into the trail's target, an edit of several
@@ -167,22 +156,14 @@ LEGITIMATE = (
         paths=MOVED_OFF_DOCS,
         links={"docs": "planning"},
     ),
-    Case(
-        "a-tracked-file-matching-an-ignore-pattern",
-        paths={"agents_md": "notes/AGENTS.md"},
-        ignore=("notes/",),
-        plant={"notes/AGENTS.md": "# Our notes\n"},
-        track=("notes/AGENTS.md",),
-    ),
     Case("an-adopted-project"),
-    # The user the ignore guard exempts on purpose: a person who keeps `stayfixed.toml` out of git
-    # is not refused.
+    # A person who keeps `stayfixed.toml` out of git is not refused.
     Case(
         "an-adopted-project-with-its-config-in-the-clone-s-excludes",
         exclude=(CONFIG_FILE,),
     ),
     # Every answer given, on a clone with no `stayfixed.toml`: the document `init` writes from
-    # them, the files kept out of git included, is one `init` finishes on.
+    # them is one `init` finishes on.
     Case(
         "answers-on-a-fresh-clone",
         written=False,
@@ -192,7 +173,6 @@ LEGITIMATE = (
             agents=("claude", "codex"),
             profile="",
             memory_mode="local-only",
-            local=LOCAL_ELIGIBLE,
         ),
     ),
 )
@@ -285,12 +265,16 @@ def _assert_invariant(
         return
     document = read_document(root) or ""
     config = load(root, machine=tmp_path / "absent.toml")
-    passes = prepare(root, config, document=document)
     try:
-        (planned,) = passes.predict(passes.footprint)
+        planned = plan(root, config, project_templates(config, document=document).footprint)
     except Refusal as refused:
         pytest.fail(f"I3: planning again after a finished init refused: {refused}")
-    actions = [(a.artifact_id, str(a.verb), a.target) for a in planned.actions]
+    # A whole file stayfixed did not write is skipped and named on every run, by design.
+    actions = [
+        (a.artifact_id, str(a.verb), a.target)
+        for a in planned.actions
+        if a.verb is not Verb.SKIP_MODIFIED
+    ]
     assert actions == [], f"I3: a finished init left work for a second plan: {actions}"
     refusals = [f"{r.artifact_id} {r.target}: {r.reason}" for r in planned.refusals]
     assert refusals == [], f"I3: after a finished init: {refusals}"
@@ -311,7 +295,7 @@ def test_no_hostile_input_reaches_a_file_git_hides(
     git_before = _git_files(root)
     refused = _outcome(root, tmp_path, case.given)
     if case.refusal is not None:
-        # Without it the answers row passes on the ignore guard's refusal of `.env` alone.
+        # Without it the answers row would pass on another guard's refusal alone.
         assert refused == [case.refusal], refused
     _assert_invariant(root, tmp_path, hidden, git_before, finished=refused is None)
 

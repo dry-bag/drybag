@@ -45,11 +45,6 @@ HEADINGS = {
     (False, True): "would initialise:",
     (False, False): "initialised:",
 }
-# A count and fixed text: `[stayfixed] agents` is repository-authored, so its names never print.
-UNKNOWN_HARNESSES = (
-    "note: {count} name(s) in [stayfixed] agents name no harness this stayfixed serves; those "
-    "harnesses were given the AGENTS.md region only"
-)
 YES_HELP = (
     "take the defaults `init --questions` shows, with any answer flag below replacing one, and "
     "write the scaffold; without it nothing is written"
@@ -90,7 +85,6 @@ def _given(args: argparse.Namespace) -> Given:
         agents=listed(args.agent),
         profile=args.profile,
         memory_mode=args.memory_mode,
-        local=listed(args.local),
         attribution_check=args.attribution_check,
         types=listed(args.commit_type),
     )
@@ -152,10 +146,6 @@ def run_init(args: argparse.Namespace) -> Result:
     chosen = picked(report.config) if report.config is not None else {}
     if chosen:
         lines += [PICKED, *(_picked_line(key, value) for key, value in chosen.items())]
-    if report.note:
-        lines.append(f"note: {report.note}")
-    if report.unknown_harnesses:
-        lines.append(UNKNOWN_HARNESSES.format(count=report.unknown_harnesses))
     if report.head_note:
         lines.append(f"note: {report.head_note}")
     if report.stamped:
@@ -169,8 +159,6 @@ def run_init(args: argparse.Namespace) -> Result:
         "scaffold": footprint,
         "writes": [*report.once.writes, *report.footprint.writes],
         "skipped": dict(report.skipped),
-        "note": report.note,
-        "unknown_harnesses": report.unknown_harnesses,
         "head_note": report.head_note,
         "stamped": report.stamped,
     }
@@ -196,7 +184,6 @@ def _answers(parser: argparse.ArgumentParser) -> None:
     )
     from stayfixed.harnesses import HARNESSES
     from stayfixed.profiles import shipped
-    from stayfixed.project.templates import LOCAL_ELIGIBLE
 
     answers = parser.add_argument_group(
         "answers", "each replaces one default; `stayfixed init --questions` lists them"
@@ -235,12 +222,6 @@ def _answers(parser: argparse.ArgumentParser) -> None:
         type=grammar(COMMIT_TYPE, f"not a commit type: {COMMIT_TYPE_RULE}"),
         metavar="TYPE",
         help="[commit_messages] types; once per type",
-    )
-    answers.add_argument(
-        "--local",
-        action="append",
-        choices=LOCAL_ELIGIBLE,
-        help="[artifacts] local: keep this file out of git; once per file",
     )
 
 

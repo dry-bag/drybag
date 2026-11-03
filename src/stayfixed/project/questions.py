@@ -1,6 +1,6 @@
 """What `stayfixed init` would ask, as a JSON Schema: `stayfixed init --questions`.
 
-Ten questions, each keyed by the `stayfixed.toml` key its answer writes, but the last, `plugins`,
+Eight questions, each keyed by the `stayfixed.toml` key its answer writes, but the last, `plugins`,
 which `stayfixed setup` answers on the machine rather than in the repository. Each carries the
 value `stayfixed init --yes` takes when it is not answered, where that value came from, the flag
 that answers it, and four lines (`TRADE_OFFS`): what the answer gives, what it gives up, what it
@@ -34,7 +34,6 @@ from stayfixed.config.schema import (
     PROJECT_NAME,
     Config,
 )
-from stayfixed.project.templates import LOCAL_ELIGIBLE
 
 # The recommended plugins' question, which no `stayfixed.toml` key answers: they are installed on
 # the machine, by the command its flag names.
@@ -48,7 +47,6 @@ FLAGS = {
     "stayfixed.profile": "--profile",
     "commit_messages.attribution_check": "--attribution-check",
     "commit_messages.types": "--commit-type",
-    "artifacts.local": "--local",
     "stayfixed.agents": "--agent",
     PLUGINS: "stayfixed setup --plugin",
 }
@@ -59,8 +57,7 @@ PROPERTIES = tuple(FLAGS)
 # the line cannot name a plugin the preset no longer recommends.
 TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
     "project.name": (
-        "the name stayfixed calls this project by: the heading of AGENTS.md and the overlay "
-        "project a later attach binds",
+        "the name stayfixed calls this project by: the overlay project a later attach binds",
         "nothing",
         "[project] name in stayfixed.toml",
         "edit [project] name in stayfixed.toml",
@@ -79,12 +76,10 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "change [memory] mode in stayfixed.toml; notes already written stay where they are",
     ),
     "stayfixed.profile": (
-        "the stack's rules, in AGENTS.md and a rules file every agent reads before its first "
-        "command",
-        "nothing a gate enforces; the rules file is yours to edit, and an edited one is no "
-        "longer refreshed",
-        "[stayfixed] profile in stayfixed.toml and the profile's rules files",
-        'set [stayfixed] profile = "" and delete the rules files',
+        "the stack profile this project names",
+        "nothing",
+        "[stayfixed] profile in stayfixed.toml",
+        'set [stayfixed] profile = "" in stayfixed.toml',
     ),
     "commit_messages.attribution_check": (
         "`stayfixed commit check` fails a range whose commit messages end in an AI tool's "
@@ -101,17 +96,11 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "[commit_messages] types in stayfixed.toml",
         "edit the list in stayfixed.toml",
     ),
-    "artifacts.local": (
-        "the documents you choose stay on this machine, under .stayfixed/local/artifacts/",
-        "no one else sees them: not a teammate, not CI, not another clone",
-        "[artifacts] local in stayfixed.toml and the copies under .stayfixed/local/artifacts/",
-        "take the id out of [artifacts] local and move the copy back by hand",
-    ),
     "stayfixed.agents": (
-        "each agent you use gets its own pointer at AGENTS.md and the profile's rules",
-        "nothing; an agent left out still reads AGENTS.md",
-        "[stayfixed] agents in stayfixed.toml and each agent's pointer files",
-        "edit [stayfixed] agents and delete the pointer files of an agent left out",
+        "the coding agents this project lists",
+        "nothing",
+        "[stayfixed] agents in stayfixed.toml",
+        "edit [stayfixed] agents in stayfixed.toml",
     ),
     PLUGINS: (
         "the plugins the recommended preset names, {plugins}, in every Claude Code session",
@@ -174,7 +163,7 @@ def _recommended() -> list[str]:
 
 
 def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
-    """The nine questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
+    """The eight questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
 
     Refused where `init --yes` with an answer would be (`init.precheck`): a manifest, or a
     `stayfixed.toml` that already answers them. Detection is lenient, so a name outside the
@@ -237,13 +226,6 @@ def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
             "items": {"type": "string", "pattern": ecma(COMMIT_TYPE)},
             "minItems": 1,
             "default": list(preset.commit_messages.types),
-            "x-stayfixed-source": PRESET,
-        },
-        "artifacts.local": {
-            "type": "array",
-            "title": "Files kept out of git",
-            "items": {"type": "string", "enum": list(LOCAL_ELIGIBLE)},
-            "default": list(preset.artifacts.local),
             "x-stayfixed-source": PRESET,
         },
         "stayfixed.agents": {

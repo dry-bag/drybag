@@ -1,9 +1,8 @@
 """`stayfixed init --yes`: the footprint, written by the engine in two passes.
 
-The three write-once files are `Kind.ONCE` artifacts in a pass of their own and the rest of the
-footprint is the second, because two artifacts cannot target one file in one pass. Both are
-planned before either is applied, so a refusal anywhere leaves nothing written and no
-manifest; the dry run reports both plans and writes nothing.
+`stayfixed.toml` is a `Kind.ONCE` artifact in a pass of its own, and the bug index, the roadmap and
+`trail.toml` are the second. Both are planned before either is applied, so a refusal anywhere
+leaves nothing written and no manifest; the dry run reports both plans and writes nothing.
 
 A repository that already holds a `stayfixed.toml` and no manifest is adopted. One that holds a
 manifest is refused: `init` writes a scaffold once.
@@ -38,7 +37,7 @@ run rather than the repository.
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import stayfixed
@@ -52,12 +51,12 @@ from stayfixed.config.schema import Config
 from stayfixed.errors import Failure, Refusal
 from stayfixed.fsops import said, write_within
 from stayfixed.project.detect import CURRENT_BRANCH, DEFAULT_BRANCH, Detected, detect
-from stayfixed.project.footprint import prepare
-from stayfixed.scaffold import MANIFEST_PATH, Manifest, Plan, apply
+from stayfixed.project.templates import project_templates
+from stayfixed.scaffold import MANIFEST_PATH, Manifest, Plan, apply, plan
 from stayfixed.tomlout import dumps
 
 VERSION = ("stayfixed", "version")
-USER_OWNED = ("paths", "memory", "budgets", "ledger", "artifacts", "commit_messages")
+USER_OWNED = ("paths", "memory", "budgets", "ledger", "commit_messages")
 HEAD_KEYS = ("preset", "profile", "agents")
 HEADER = (
     "# Written by `stayfixed init`. Every key you leave out takes the preset's default;\n"
@@ -116,11 +115,6 @@ HEAD_REMOTES_UNKNOWN = (
     "--base-branch BRANCH` while nothing is written, or set [project] base_branch and "
     "release_branch in stayfixed.toml"
 )
-VERB_NOTE = (
-    "AGENTS.md is absent: the run writes the skeleton first and the `agents-md` region is then "
-    "a region_update into it; a dry run plans it as a create of a region-only file. The bytes "
-    "inside the markers are the same either way"
-)
 
 
 @dataclass(frozen=True)
@@ -136,7 +130,6 @@ class Given:
     agents: tuple[str, ...] | None = None
     profile: str | None = None  # "" is an answer: no profile
     memory_mode: str | None = None
-    local: tuple[str, ...] | None = None
     attribution_check: bool | None = None
     types: tuple[str, ...] | None = None
 
@@ -151,9 +144,6 @@ class InitReport:
     skipped: dict[str, str]
     adopted: bool
     dry_run: bool
-    note: str = ""
-    # How many names in `[stayfixed] agents` no harness answers to; a count, never the names.
-    unknown_harnesses: int = 0
     # `HEAD_DEFAULTED` when the detected base branch replaced a remote head outside the grammar;
     # `HEAD_UNRECORDED` when it is the default because a remote is there and `origin/HEAD` is
     # not; `HEAD_REMOTES_UNKNOWN` when it is the default because git could not list the remotes;
@@ -243,8 +233,6 @@ def _tables(
             tables["project"] = {"name": name, **tables["project"]}
     if given.memory_mode is not None:
         tables["memory"] = {"mode": given.memory_mode}
-    if given.local:
-        tables["artifacts"] = {"local": list(given.local)}
     commit_messages: dict[str, object] = {}
     if given.attribution_check is not None:
         commit_messages["attribution_check"] = given.attribution_check
@@ -340,11 +328,8 @@ def init(
     back bare (`_rendered`), a `Config` the loader refuses, an adopted `stayfixed.toml` whose
     missing version the key editor cannot add or that the loader refuses as it will be on disk
     (`_as_on_disk`), an artifact at a file another is built to write, in either pass
-    (`templates.Owners`), a profile artifact `[artifacts] local` would keep out of git
-    (`footprint.refuse_local_profile`), `stayfixed.toml` or the ignore block listed there
-    (`footprint.refuse_local_root_only`), a planned write git ignores
-    (`ignored.refuse_ignored`), and finally a refusal in either plan, which is returned rather
-    than raised so the report can name the artifact.
+    (`templates.Owners`), and finally a refusal in either plan, which is returned rather than
+    raised so the report can name the artifact.
 
     `owner` is the owner's layer the command resolved, which every load here takes, so the machine
     file is read once and what it read past is said once (`config.loader.loads`' own).
@@ -362,18 +347,15 @@ def init(
         # What the next command loads is the file, not the merged document: that one drops
         # every `[stayfixed]` key it does not carry over, and detects a name the file may lack.
         loads(on_disk, root, machine=machine, owner=owner)
-    # `prepare` for its refusals and the pass order.
-    passes = prepare(root, config, document=document)
-    note = VERB_NOTE if not fsops.exists(root / config.paths.agents_md) else ""
-    once, footprint = passes.predict(passes.once, passes.footprint)
+    prepared = project_templates(config, document=document)
+    once = plan(root, config, prepared.once)
+    footprint = plan(root, config, prepared.footprint)
     report = InitReport(
         once,
         footprint,
-        passes.skipped,
+        prepared.skipped,
         existing is not None,
         dry_run,
-        note,
-        passes.unknown_harnesses,
         head_note,
         stamped,
         config,
@@ -387,10 +369,5 @@ def init(
         except OSError as exc:
             raise Refusal(f"{CONFIG_FILE} cannot be written ({said(exc)})") from exc
     apply(root, once)
-    # Re-planned against the tree the write-once files are now in: on a repository with no
-    # `AGENTS.md`, the region the dry run planned as a create of a region-only file is a
-    # `region_update` into the skeleton this pass has just written. `VERB_NOTE` is the sentence
-    # that says the bytes inside the markers are the same either way.
-    footprint = passes.replan(passes.footprint)
     apply(root, footprint)
-    return replace(report, footprint=footprint)
+    return report

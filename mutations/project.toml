@@ -317,11 +317,8 @@ reddens = [
 # One refusal, read off one relation (`templates.Owners`), for every pair of artifacts at one
 # file: within a pass, where `scaffold.engine.plan` has no duplicate-target detection and two
 # `[paths]` keys aimed at one file had `apply` write both and the manifest record two digests for
-# one path; across the two passes; and against a file only another configuration builds. Only
-# the `AGENTS.md` skeleton and its region share a file. `roadmap = "CLAUDE.md"` passed the
-# per-pass checks there used to be, and with a forged ledger entry `upgrade` removed the
-# `CLAUDE.md` kept out of git. The anchor is this module's artifact list; the refusal names two
-# ids and their keys, never the value.
+# one path; and across the two passes. The anchor is this module's artifact list; the refusal
+# names two ids and their keys, never the value.
 [[mutation]]
 name = "an artifact may target a file another artifact is built to write"
 file = "src/stayfixed/project/templates.py"
@@ -331,19 +328,6 @@ reddens = [
   "tests/project/test_templates.py::test_no_two_artifacts_of_one_pass_resolve_to_the_same_file",
   "tests/project/test_init.py::test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_write",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-paths-value-at-another-artifact-s-file-case-folded-init]",
-]
-
-# Without it a `%%REF%%` survives into an adopting project's `uses:` line and a `%%NAME%%` into
-# the head of the file every session loads. Measured before the test beside it existed: the guard
-# was executed by `tests/project` and asserted by none of it — 39 passed with the search made to
-# answer `None`.
-[[mutation]]
-name = "a template sentinel left unfilled is written into a project's file"
-file = "src/stayfixed/project/templates.py"
-before = "    left = _SENTINEL.search(text)"
-after = "    left = None"
-reddens = [
-  "tests/project/test_templates.py::test_a_template_sentinel_left_unfilled_costs_the_artifact_rather_than_shipping",
 ]
 
 # A containment check whose docstring names its anchor's provenance, with nothing proving it:
@@ -392,37 +376,6 @@ after = '        source=f"{PROJECT}/{artifact_id}",'
 reddens = [
   "tests/project/test_templates.py::test_every_source_both_passes_build_is_a_shipped_file_or_is_declared_computed",
   "tests/project/test_fixture.py::test_the_smoke_fixture_is_a_project_init_has_nothing_left_to_create_in",
-]
-
-# The pointer every Claude Code session in an adopting project follows. `CLAUDE.md` shipped as
-# the literal `@AGENTS.md` and was built with no `render` override at all, so a project that set
-# `[paths] agents_md` to anything else received a pointer at a file the run had not written,
-# beside the file it had — and `stayfixed docs check` passed over the pair, because nothing on
-# either side reads the other. The mutation writes the self-pointer the collision refusal
-# (`templates.Owners`) refuses when a repository asks for it, which is the only way left to reach
-# that state.
-[[mutation]]
-name = "the CLAUDE.md pointer stops naming the configured instruction file"
-file = "src/stayfixed/project/templates.py"
-before = '            render=lambda: fill(read("claude.md"), AGENTS_MD=p.agents_md),'
-after = '            render=lambda: fill(read("claude.md"), AGENTS_MD=CLAUDE_MD),'
-reddens = [
-  "tests/project/test_templates.py::test_the_claude_md_pointer_names_the_configured_instruction_file",
-  "tests/project/test_init.py::test_a_bare_repository_gets_the_footprint_and_every_file_is_recorded",
-]
-
-# Three numbers stayfixed writes into somebody else's repository, telling them what a stayfixed
-# gate will hold that same file to. They were literals copied out of `presets/recommended.toml`,
-# so a project that lowered `agents_md_lines` was handed a document saying the preset's number
-# was fine and failed `stayfixed docs check` one line past its own. The mutation takes one budget
-# for another, which is the drift a single shared fill would reintroduce.
-[[mutation]]
-name = "the skeleton states a budget other than the one it names"
-file = "src/stayfixed/project/templates.py"
-before = '                LINES=_budget(config, "agents_md_lines"),'
-after = '                LINES=_budget(config, "agents_md_words"),'
-reddens = [
-  "tests/project/test_templates.py::test_the_skeleton_states_the_budgets_this_project_will_be_held_to",
 ]
 
 # The `_enum` class, at four more sites, in two pairs: `mutations/`'s "a preset name outside the
@@ -500,131 +453,6 @@ reddens = [
   "tests/profiles/test_evaluate.py::test_a_locator_through_a_symlink_out_of_the_root_resolves_to_nothing",
 ]
 
-# Two harness renditions at one place are a refusal naming the harness's fixed name, never a
-# `KeyError`.
-[[mutation]]
-name = "a harness rendition that collides is a KeyError instead of a refusal"
-file = "src/stayfixed/project/templates.py"
-before = "                second_key=PATH_KEYS.get(second, OWN_NAME),"
-after = "                second_key=PATH_KEYS[second],"
-reddens = [
-  "tests/project/test_templates.py::test_a_rendition_that_collides_is_refused_naming_the_harness_s_fixed_name",
-]
-
-# A profile artifact kept out of git leaves the `AGENTS.md` pointer and every harness's rule
-# pointing at a committed path that holds nothing.
-[[mutation]]
-name = "a profile artifact kept out of git is written, and every pointer to it dangles"
-file = "src/stayfixed/project/footprint.py"
-before = "    if local:\n        raise Refusal(LOCAL_PROFILE"
-after = "    if False:\n        raise Refusal(LOCAL_PROFILE"
-reddens = [
-  "tests/project/test_templates.py::test_a_profile_artifact_kept_out_of_git_is_refused",
-  "tests/project/test_init.py::test_a_profile_kept_out_of_git_refuses_init_before_anything_is_written",
-]
-
-# `stayfixed.toml` and the ignore block only work at the root, and `uninstall` removes both after
-# its check of what is left under `.stayfixed/local/`. Kept out of git, the check before any write
-# credits their removal and the check after it finds them still there: the footprint goes, the
-# run refuses part-way, and every later run refuses the same way.
-[[mutation]]
-name = "stayfixed.toml or the ignore block may be kept out of git"
-file = "src/stayfixed/project/footprint.py"
-before = "    if named:\n        raise Refusal(LOCAL_ROOT_ONLY"
-after = "    if False:\n        raise Refusal(LOCAL_ROOT_ONLY"
-reddens = [
-  "tests/project/test_init.py::test_stayfixed_toml_or_the_ignore_block_kept_out_of_git_refuses_init_before_any_write",
-]
-
-# A `[paths]` value is committed, and the promise that makes a region inserted wherever it points
-# acceptable is that the diff shows it. Git shows nothing for a file it ignores: a pulled commit
-# naming a git-ignored `.env` had `upgrade` append stayfixed's region to it with only the manifest
-# in `git status`, and a record stating a predictable ignored file's digest had `uninstall` delete
-# it. One `check-ignore` before any write refuses the run for `init`, `upgrade` and `uninstall`
-# when an existing file at a place a `[paths]` value chose is ignored.
-[[mutation]]
-name = "a write git ignores goes ahead"
-file = "src/stayfixed/project/ignored.py"
-before = "        if ignored:\n            names"
-after = "        if False:\n            names"
-reddens = [
-  "tests/project/test_ignored.py::test_init_refuses_an_existing_ignored_file_a_paths_value_names",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-an-ignored-file-init]",
-]
-
-# The relation's one exception comes from how the build is made, `templates.SHARED_FILE`: the
-# `AGENTS.md` skeleton and its region share a file by design. It is one exception for both rules
-# that read the relation, so without it the collision refusal refuses every footprint (the
-# legitimate row reddens with I2), and the region's left copy at the skeleton's place, which is
-# the region's to take out, is never reached (the uninstall case reddens there first, at the
-# `init` that sets it up).
-[[mutation]]
-name = "the AGENTS.md skeleton and its region stop sharing a file by design"
-file = "src/stayfixed/project/templates.py"
-before = "        return frozenset() if {artifact_id, *others} <= SHARED_FILE else others"
-after = "        return others"
-reddens = [
-  "tests/project/test_templates.py::test_one_relation_says_whose_file_a_place_is_and_excepts_only_the_agents_md_pair",
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[fixed-names-in-the-clone-s-excludes]",
-]
-
-# The guard's anchor for "a place a `[paths]` value chose" is stayfixed's own: the preset's shipped
-# `[defaults.paths]` through this build's `project_templates`, asked per artifact id. Anchored on
-# the configuration itself, every `[paths]` value reads as the preset's place and nothing is
-# refused; asked of any id's places, `[paths] roadmap = "CLAUDE.md"` passes as `claude-md`'s, and a
-# forged `roadmap` record overwrites or removes an ignored `CLAUDE.md` stayfixed wrote.
-[[mutation]]
-name = "an ignored write's place is judged against the configuration's own paths"
-file = "src/stayfixed/project/ignored.py"
-before = "    placed = replace(config, paths=defaults)"
-after = "    placed = config"
-reddens = [
-  "tests/project/test_ignored.py::test_init_refuses_an_existing_ignored_file_a_paths_value_names",
-]
-
-[[mutation]]
-name = "an ignored write passes at any artifact's preset place"
-file = "src/stayfixed/project/ignored.py"
-before = "        if action.target not in places.get(action.artifact_id, frozenset()):"
-after = "        if not any(action.target in each for each in places.values()):"
-reddens = ["tests/project/test_ignored.py::test_a_paths_value_naming_another_artifact_s_preset_place_is_still_that_value_s_choice"]
-
-# Whether a failed `check-ignore` ran inside a repository is read off the disk, never asked of
-# the same `git`: a `rev-parse` that timed out beside it read as "no repository" and passed with
-# nothing said.
-[[mutation]]
-name = "a guard whose git timed out reads as no repository"
-file = "src/stayfixed/project/ignored.py"
-before = "    if in_work_tree(root):\n        raise Refusal(DECLINED)"
-after = "    if git_run(root, \"rev-parse\", \"--is-inside-work-tree\")[0] == 0:\n        raise Refusal(DECLINED)"
-reddens = [
-  "tests/project/test_ignored.py::test_a_check_ignore_that_cannot_answer_inside_a_repository_refuses_before_any_write[timed-out]",
-]
-
-# A `check-ignore` that gives no answer refuses like one that declines: a repository can choose
-# a timeout, since git reads every `.gitignore` along each path it is asked about, and a no-answer
-# that was only a note let a pulled commit append to, or delete, a git-ignored `.env`.
-[[mutation]]
-name = "a check-ignore that gives no answer lets the run write"
-file = "src/stayfixed/project/ignored.py"
-before = "    if in_work_tree(root):"
-after = "    if code != -1 and in_work_tree(root):"
-reddens = [
-  "tests/project/test_ignored.py::test_a_check_ignore_that_cannot_answer_inside_a_repository_refuses_before_any_write[timed-out]",
-]
-
-# Any other failure refuses too, because a repository can choose it: git answers a whole batch
-# holding a path inside a submodule with exit 128, and let through, that let a pulled commit write
-# past the guard to a git-ignored `.env` beside it.
-[[mutation]]
-name = "a check-ignore that declines lets the run write"
-file = "src/stayfixed/project/ignored.py"
-before = "        raise Refusal(DECLINED)"
-after = "        return"
-reddens = [
-  "tests/project/test_ignored.py::test_a_check_ignore_that_cannot_answer_inside_a_repository_refuses_before_any_write[declined]",
-]
-
 # Paths are compared for identity case-folded (`fsops.path_key`): on the default macOS and Windows
 # filesystems `claude.md` is `CLAUDE.md`. This entry and the three named for a case variant each put
 # exact equality back at one site. The refusals are pure string rules; the ledger tests write the
@@ -637,74 +465,16 @@ before = "            if owner != artifact_id and path_key(place) in {path_key(p
 after = "            if owner != artifact_id and place in places"
 reddens = [
   "tests/project/test_templates.py::test_no_two_artifacts_of_one_pass_resolve_to_the_same_file",
-  "tests/project/test_templates.py::test_one_relation_says_whose_file_a_place_is_and_excepts_only_the_agents_md_pair",
   "tests/project/test_init.py::test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_write[case-variant]",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-paths-value-at-another-artifact-s-file-case-folded-init]",
-]
-
-# In the block led by `mutations/`'s "git's control directory is named by no path": the footprint
-# commands' hidden-write invariant, from the side of a guard that refuses too much.
-[[mutation]]
-name = "the ignore guard refuses a fixed name in the clone's excludes"
-file = "src/stayfixed/project/ignored.py"
-before = '        if action.target not in places.get(action.artifact_id, frozenset()):'
-after = '        if True:'
-reddens = [
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[fixed-names-in-the-clone-s-excludes]",
-]
-
-[[mutation]]
-name = 'the ignore guard refuses a new file at an ignored place'
-file = "src/stayfixed/project/ignored.py"
-before = '        and os.path.lexists(root / action.target)'
-after = '        and True'
-reddens = [
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[a-new-file-at-an-ignored-place]",
-]
-
-[[mutation]]
-name = 'the ignore guard refuses an artifact kept out of git'
-file = "src/stayfixed/project/ignored.py"
-before = '        and not action.target.startswith(f"{LOCAL_ARTIFACTS}/")'
-after = '        and True'
-reddens = [
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[artifacts-kept-out-of-git]",
-]
-
-[[mutation]]
-name = 'the ignore guard reads a tracked file as ignored'
-file = "src/stayfixed/project/ignored.py"
-before = '    code, out = git_run(root, "check-ignore", "--stdin", "-z", stdin="\0".join(sorted(chosen)))'
-after = '    code, out = git_run(root, "check-ignore", "--no-index", "--stdin", "-z", stdin="\0".join(sorted(chosen)))'
-reddens = [
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[a-tracked-file-matching-an-ignore-pattern]",
-]
-
-# The planning seam every footprint command plans through (`footprint.Passes`). Each guard it
-# binds reached the commands by hand once: bound here, a command cannot leave either behind. The
-# ignore guard dropped from every prediction: a committed `[paths]` value writes into a file git
-# ignores.
-
-[[mutation]]
-name = "a footprint command predicts its plans without asking the ignore guard"
-file = "src/stayfixed/project/footprint.py"
-before = "        refuse_ignored(self.root, self.config, *plans)"
-after = "        pass"
-reddens = [
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[region-into-an-ignored-file-init]",
+  "tests/project/test_templates.py::test_one_relation_says_whose_file_a_place_is",
 ]
 
 # One definition of "the command refused" per report (`refused`), and it decides twice: whether
 # the command writes anything, and the heading and exit code it prints. Each half of each
 # definition is dropped once, and a case whose only refusal is that half's reddens: the run goes
 # on to `apply`, whose backstop refuses the plan with exit 2 and the engine's message instead of
-# the report, and `uninstall` has removed the footprint by the time the write-once plan refuses.
-[[mutation]]
-name = "init's refusal reads only the footprint plan"
-file = "src/stayfixed/project/init.py"
-before = "        return bool(self.once.refusals or self.footprint.refusals)"
-after = "        return bool(self.footprint.refusals)"
-reddens = ["tests/project/test_command.py::test_a_refused_write_once_pass_exits_one_and_writes_nothing"]
+# the report.
 
 [[mutation]]
 name = "init's refusal reads only the write-once plan"
@@ -712,25 +482,6 @@ file = "src/stayfixed/project/init.py"
 before = "        return bool(self.once.refusals or self.footprint.refusals)"
 after = "        return bool(self.once.refusals)"
 reddens = ["tests/project/test_command.py::test_a_refused_footprint_exits_one_with_the_refused_section_in_that_report"]
-
-# Only the planning seam (`footprint.Passes`) imports the engine's planner or the ignore guard, so
-# every footprint command, the next one included, plans with both guards bound. The engine's
-# `owners` stays optional for `stayfixed.overlay`; the import is the bypass, and this is its check.
-[[mutation]]
-name = "a footprint command imports the planner past the seam"
-file = "src/stayfixed/project/init.py"
-before = "from stayfixed.scaffold import MANIFEST_PATH, Manifest, Plan, apply"
-after = "from stayfixed.scaffold import MANIFEST_PATH, Manifest, Plan, apply, plan"
-reddens = ["tests/project/test_planning_seam.py::test_only_the_planning_seam_imports_the_planner_or_the_ignore_guard"]
-
-# `replan` asks no guard, so it plans only on a `Passes` whose `predict` already asked the ignore
-# guard about the same templates.
-[[mutation]]
-name = "a footprint command replans what it never predicted"
-file = "src/stayfixed/project/footprint.py"
-before = "        if not self._predicted:"
-after = "        if False:"
-reddens = ["tests/project/test_planning_seam.py::test_replanning_before_predicting_is_refused"]
 
 # `init --questions` prints what `detect` returns and carries it as a JSON Schema, so each
 # repository-authored value is held to its grammar before either sees it, the schema's patterns
@@ -784,37 +535,6 @@ before = "        if args.dry_run or _given(args) != NO_ANSWERS:"
 after = "        if False:"
 reddens = ["tests/project/test_command.py::test_questions_take_no_flag_that_writes_or_plans"]
 
-[[mutation]]
-name = "an id offered as local names no whole file of the footprint"
-file = "src/stayfixed/project/templates.py"
-before = 'LOCAL_ELIGIBLE = ("documentation-policy", "adr-template", "ledger-runbook", "roadmap-history")'
-after = 'LOCAL_ELIGIBLE = ("documentation-policy", "adr-template", "ledger-runbook", "roadmap-histroy")'
-reddens = [
-  "tests/project/test_templates.py::test_every_id_offered_as_local_is_a_whole_file_of_the_footprint_pass",
-]
-
-# In the block led by `mutations/`'s "the planning seam's checker reads a relative import as a
-# top-level module": the rest of the planning seam.
-[[mutation]]
-name = "a footprint command plans through the seam's private planner"
-file = "src/stayfixed/project/init.py"
-before = "    footprint = passes.replan(passes.footprint)"
-after = "    footprint = passes._plan(passes.footprint, force=())"
-reddens = ["tests/project/test_planning_seam.py::test_only_the_seam_calls_its_private_planner"]
-
-[[mutation]]
-name = "a refused prediction opens replan"
-file = "src/stayfixed/project/footprint.py"
-before = '''        refuse_ignored(self.root, self.config, *plans)
-        # Only after the guard passed, so a `predict` it refused leaves `replan` shut. `Passes`
-        # is frozen, hence `object.__setattr__`.
-        object.__setattr__(self, "_predicted", True)'''
-after = '''        object.__setattr__(self, "_predicted", True)
-        refuse_ignored(self.root, self.config, *plans)'''
-reddens = [
-  "tests/project/test_planning_seam.py::test_a_predict_the_ignore_guard_refused_leaves_replanning_refused",
-]
-
 # `stayfixed gate` refuses a symlinked `stayfixed.toml`, and `init` reads it through the same reader
 # (`assess` reads it through `load`, whose entry is `mutations/`'s "load follows a symlinked
 # stayfixed.toml"): followed, a clone's link to `/dev/zero` ends the run by exhausting memory.
@@ -845,27 +565,6 @@ after = "    precheck(root, answering=False)"
 reddens = [
   "tests/project/test_command.py::test_an_answer_over_a_document_the_user_wrote_is_refused",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[answers-over-a-committed-document-init]",
-]
-
-[[mutation]]
-name = "--local takes a file no gate can do without"
-file = "src/stayfixed/project/commands.py"
-before = "        choices=LOCAL_ELIGIBLE,"
-after = ""
-reddens = [
-  "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
-]
-
-# The same line as `mutations/`'s "an id offered as local names no whole file of the footprint",
-# with another `after`: here the id is a whole file, and one a gate reads at its committed path.
-[[mutation]]
-name = "a file a gate reads at its committed path is offered as local"
-file = "src/stayfixed/project/templates.py"
-before = 'LOCAL_ELIGIBLE = ("documentation-policy", "adr-template", "ledger-runbook", "roadmap-history")'
-after = 'LOCAL_ELIGIBLE = ("documentation-policy", "adr-template", "ledger-runbook", "roadmap-history", "bug-index")'
-reddens = [
-  "tests/project/test_answer_flags.py::test_every_file_offered_as_local_leaves_every_gate_green",
-  "tests/project/test_questions.py::test_no_file_a_gate_reads_at_its_committed_path_is_offered_as_local",
 ]
 
 # An adopted `stayfixed.toml` is checked as every later command will load it: the text on disk,
@@ -1364,26 +1063,15 @@ reddens = [
   "tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else",
 ]
 
-# `init` writes the runbook and the audits README where the bug ledger's index links them, from the
-# names its register builds those links from.
+# `init` writes the audits README where the bug ledger's index links it, from the name its register
+# builds that link from.
 [[mutation]]
 name = "init writes the audits README under a directory the bug index does not link"
 file = "src/stayfixed/project/templates.py"
-before = "    audits = ledger_path(paths.bugs, BUG_AUDITS)"
-after = '    audits = ledger_path(paths.bugs, "audit")'
+before = "    audits = ledger_path(p.bugs, BUG_AUDITS)"
+after = '    audits = ledger_path(p.bugs, "audit")'
 reddens = [
-  "tests/project/test_templates.py::test_init_writes_the_runbook_and_audits_readme_where_the_bug_index_links_them",
-  "tests/project/test_templates.py::test_the_runbook_and_audits_readme_take_their_names_from_the_bug_ledgers_register",
-]
-
-[[mutation]]
-name = "init writes the runbook where the bug index does not link it"
-file = "src/stayfixed/project/templates.py"
-before = "    runbook = ledger_path(paths.runbooks, BUG_RUNBOOK)"
-after = '    runbook = ledger_path(paths.runbooks, "bug-report.md")'
-reddens = [
-  "tests/project/test_templates.py::test_init_writes_the_runbook_and_audits_readme_where_the_bug_index_links_them",
-  "tests/project/test_templates.py::test_the_runbook_and_audits_readme_take_their_names_from_the_bug_ledgers_register",
+  "tests/project/test_init.py::test_a_fresh_init_leaves_trail_and_ledger_checks_green",
 ]
 
 # A profile's locator reads a value's text with `str()`, which raises past 4,300 digits for a hex

@@ -49,7 +49,6 @@ from stayfixed.config.schema import (
     NAME_RULE,
     PROJECT_NAME,
     SECTION_NAME,
-    Artifacts,
     Budgets,
     CommitMessages,
     Config,
@@ -81,7 +80,6 @@ SECTIONS = (
     "memory",
     "budgets",
     "ledger",
-    "artifacts",
     "commit_messages",
     "guards",
 )
@@ -444,7 +442,6 @@ def _built(
     memory = _deduplicated(_build(Memory, "memory", _merged(raw, defaults, "memory")))
     _enum("memory", "mode", memory.mode, MEMORY_MODES)
     ledger = _build(Ledger, "ledger", _merged(raw, defaults, "ledger"))
-    artifacts = _build(Artifacts, "artifacts", _merged(raw, defaults, "artifacts"))
     commit_messages = _build(
         CommitMessages, "commit_messages", _merged(raw, defaults, "commit_messages")
     )
@@ -472,7 +469,6 @@ def _built(
         budgets=_budgets(raw, preset, owner),
         native_caps=caps,
         ledger=ledger,
-        artifacts=artifacts,
         commit_messages=commit_messages,
         personal=personal,
     )
@@ -629,7 +625,6 @@ _SCHEMA_OF: dict[str, type[Any]] = {
     "paths": Paths,
     "memory": Memory,
     "ledger": Ledger,
-    "artifacts": Artifacts,
     "commit_messages": CommitMessages,
     "guards": Guards,
 }
@@ -701,8 +696,8 @@ def preset_defaults(project: str, *, preset: str = DEFAULT_PRESET) -> Config:
     `stayfixed.toml` and never will.
 
     The overlay is a repository stayfixed writes into and does not manage: it has no project
-    configuration, and the scaffold engine needs one (it reads `stayfixed.profile` and
-    `artifacts.local`, and nothing else). `init --yes` will want the same constructor for the
+    configuration, and the scaffold engine needs one (it reads `stayfixed.profile` and nothing
+    else). `init --yes` will want the same constructor for the
     first write into a project, before the file it would load exists.
 
     `stayfixed.version` is the one value the preset does not carry and `_build` requires: the
@@ -725,7 +720,6 @@ def preset_defaults(project: str, *, preset: str = DEFAULT_PRESET) -> Config:
         budgets=Budgets(preset=dict(raw.get("budgets", {}))),
         native_caps=_build(NativeCaps, "native_caps", dict(raw.get("native_caps", {}))),
         ledger=_build(Ledger, "ledger", defaults.get("ledger", {})),
-        artifacts=_build(Artifacts, "artifacts", defaults.get("artifacts", {})),
         commit_messages=_build(
             CommitMessages, "commit_messages", defaults.get("commit_messages", {})
         ),

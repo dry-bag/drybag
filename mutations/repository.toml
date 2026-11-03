@@ -1029,10 +1029,10 @@ reddens = [
 name = "docs/cli.md's configuration block loses a section the loader accepts"
 file = "docs/cli.md"
 before = """
-[artifacts]
-local = []"""
+[commit_messages]
+attribution_check"""
 after = """
-local = []"""
+attribution_check"""
 reddens = [
   "tests/test_documents.py::test_the_configuration_block_shows_every_section_the_loader_accepts",
 ]
@@ -1326,7 +1326,7 @@ reddens = [
 [[mutation]]
 name = "a fixture record keeps a digest from before its file changed"
 file = "tests/fixtures/smoke-project/.stayfixed/manifest.json"
-before = '"sha256": "0865f7f6103a8c0f6c439aa4a622697dfce8313090f17a99aff6d335e0cc6cf6"'
+before = '"sha256": "a1f6f86c5e8ee8f9e1582ac4b6265c018cacece703f5f77c6e55d37d848e51a1"'
 after = '"sha256": "f779bb0afc2767eb685323322262c83af0db6f81a218a212efc46bf69bcaf164"'
 reddens = [
   "tests/project/test_fixture.py::test_every_recorded_footprint_artifact_follows_a_template_change",
@@ -1345,39 +1345,6 @@ after = "        machine=machine,"
 reddens = [
   "tests/doctor/test_checks.py::test_no_case_here_can_read_the_developers_own_machine_configuration",
 ]
-
-# The planning seam's checker has to see a planner however a module spells its way to it: from
-# the seam module's own top-level binding, and at the end of a dotted chain rooted at an imported
-# package. Both guard the test module that holds the seam, which is what a later command's
-# bypass would have to get past.
-[[mutation]]
-name = "the planning seam's checker stops knowing the seam module binds the planner"
-file = "tests/project/test_planning_seam.py"
-before = '    "stayfixed.project.footprint": {"plan", "refuse_ignored"},'
-after = ""
-reddens = [
-  "tests/project/test_planning_seam.py::test_the_checker_sees_a_planner_reached_through_the_seam_module",
-  "tests/project/test_planning_seam.py::test_the_checker_sees_a_planner_imported_relatively",
-]
-
-[[mutation]]
-name = "the planning seam's checker stops resolving a dotted chain"
-file = "tests/project/test_planning_seam.py"
-before = "                    found.add(node.attr)"
-after = "                    pass"
-reddens = [
-  "tests/project/test_planning_seam.py::test_the_checker_sees_a_fully_dotted_planner",
-  "tests/project/test_planning_seam.py::test_the_checker_sees_a_planner_imported_relatively",
-]
-
-# The rest of the planning seam: a relative import resolved like an absolute one, the private
-# planner called only by the seam, and `replan` opened only by a `predict` the guard passed.
-[[mutation]]
-name = "the planning seam's checker reads a relative import as a top-level module"
-file = "tests/project/test_planning_seam.py"
-before = "    if not node.level:"
-after = "    if True:"
-reddens = ["tests/project/test_planning_seam.py::test_the_checker_sees_a_planner_imported_relatively"]
 
 # The Contents of `docs/cli.md` lists every section of the reference, in order.
 [[mutation]]

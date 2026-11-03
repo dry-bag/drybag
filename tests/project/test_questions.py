@@ -72,7 +72,7 @@ def test_the_schema_keys_are_the_stayfixed_toml_keys_the_answers_write(tmp_path:
     schema = _schema(tmp_path, repository(tmp_path))
     assert schema["type"] == "object"
     assert tuple(schema["properties"]) == PROPERTIES == tuple(schema["required"])
-    assert len(PROPERTIES) == 9
+    assert len(PROPERTIES) == 8
     for key, question in schema["properties"].items():
         assert question["x-stayfixed-flag"] == FLAGS[key], key
 
@@ -95,7 +95,6 @@ def test_the_skill_reads_the_order_to_ask_in_from_required_in_the_json(tmp_path:
         "stayfixed.profile",
         "commit_messages.attribution_check",
         "commit_messages.types",
-        "artifacts.local",
         "stayfixed.agents",
         "plugins",
     ]
@@ -162,19 +161,6 @@ def test_a_machine_file_that_does_not_parse_still_yields_the_questions(tmp_path:
 
 
 @needs_git
-def test_no_file_a_gate_reads_at_its_committed_path_is_offered_as_local(tmp_path: Path) -> None:
-    # A gate reads the ledger, the roadmap and the trail where they are committed, and the
-    # configuration and the ignore block work only at the root: offering one as local would be
-    # offering a project a failing gate or a dead file. Mutation (by hand): `roadmap` added to
-    # `LOCAL_ELIGIBLE` -> the disjointness assertion reddens.
-    local = _schema(tmp_path, repository(tmp_path))["properties"]["artifacts.local"]
-    assert local["default"] == []
-    offered = set(local["items"]["enum"])
-    assert offered
-    assert not offered & {"bug-index", "ledger-audits", "roadmap", "trail", "config", "gitignore"}
-
-
-@needs_git
 def test_a_name_outside_the_grammar_is_left_to_ask_and_never_printed(tmp_path: Path) -> None:
     # The remote's last segment is repository-authored; outside the grammar it is neither the
     # default nor printed. Mutation (oracle): leniency keeps the name -> it becomes the default
@@ -203,14 +189,13 @@ def test_the_questions_are_refused_where_init_would_refuse(tmp_path: Path) -> No
 
 
 # The order the guided walk asks in, after the name and the base branch it confirms first:
-# memory, the profile, attribution and the commit types, files kept out of git, the agents,
-# and the recommended plugins last.
+# memory, the profile, attribution and the commit types, the agents, and the recommended plugins
+# last.
 GUIDED = (
     "memory.mode",
     "stayfixed.profile",
     "commit_messages.attribution_check",
     "commit_messages.types",
-    "artifacts.local",
     "stayfixed.agents",
     "plugins",
 )

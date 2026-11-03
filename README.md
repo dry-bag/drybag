@@ -31,8 +31,8 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > a project by hand, which `init` reads as your answers — a run that writes the file itself writes
 > `[stayfixed] version` and `agents`, and `profile` when the repository carries a shipped
 > profile's markers or `--profile` names one, beside `[project] name`, `base_branch` and
-> `release_branch`, a `[memory]` table only when `--memory-mode` answers it, and an `[artifacts]` table only
-> when `--local` does. [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference; the command list below is held
+> `release_branch`, and a `[memory]` table only when `--memory-mode` answers it.
+> [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference; the command list below is held
 > to the parser by a test, so it is complete for what ships.
 
 ## What this is, and what it is not
@@ -83,7 +83,7 @@ stayfixed reaches an agent in three ways, and they do not hold alike on every ag
 **session notices** add context and refuse nothing (the background-cleanup hints, the test-hygiene
 note, the standing rules, the volatile notes); the **repository gates** — the bug, documentation,
 plan, commit and trail checks — run in CI; and the **methodology** is
-the skills and the `AGENTS.md` region. Each column is an agent under the name `[stayfixed] agents`
+the skills. Each column is an agent under the name `[stayfixed] agents`
 lists it by: `claude` is Claude Code and `codex` is Codex.
 
 | Surface | `claude` | `codex` |
@@ -158,8 +158,8 @@ groups = ["developer"]   # the preset names four; the store below has one
 ```
 
 `stayfixed init --yes` writes that file for you — the name from `origin`, the base branch, the
-agent surfaces this repository carries — along with the documentation skeleton the other
-commands expect and, once there is a stayfixed release to pin, a CI workflow.
+agent surfaces this repository carries — along with the roadmap, its `trail.toml`, and the bug
+ledger's index and audits README, which `docs trail` and `bugs check` read.
 `stayfixed init --questions` shows each value it would take and where it came from, and a flag
 on `--yes` replaces any of them. Read it before it runs; a `stayfixed.toml` you wrote yourself
 is read as your answers rather than replaced:
@@ -185,10 +185,10 @@ rules; [The threat model, in one paragraph](#the-threat-model-in-one-paragraph) 
 Add `.stayfixed/local/` to `.gitignore` if it is not there already.
 
 The other commands in [Commands](#commands) expect more of a repository than those three keys
-create: `docs check` wants an `AGENTS.md`, `docs trail` a `docs/roadmap.md`, `bugs check` a
-ledger entry. `stayfixed init --yes` writes all of those, which is what it is for; in a
-repository you would rather grow by hand, add each path as you start using the command that
-reads it — [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration) lists every default.
+create: `docs trail` wants a `docs/roadmap.md`, `bugs check` a ledger, `docs check` an
+`AGENTS.md`. `stayfixed init --yes` writes the first two; `AGENTS.md` is yours to write, and `docs
+check` names it until you do. In a repository you would rather grow by hand, add each path as you
+start using the command that reads it — [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration) lists every default.
 
 ## What it writes, and where
 
@@ -201,18 +201,13 @@ stayfixed writes files. Being specific about which is the point of this section.
 | `.stayfixed/local/memory/` | The note store in `local-only` mode — git-ignored | `stayfixed memory index` |
 | `<store>/MEMORY.md` | The rendered routing index. **Generated — do not hand-edit** | `stayfixed memory index` |
 | `docs/bugs/` and `docs/bug-reports.md` (configurable) | One file per bug, and the generated index over them | `stayfixed init` writes the empty index and `docs/bugs/audits/README.md`; `stayfixed bugs new`, `bugs index` and `bugs renumber` after |
-| `docs/roadmap.md` and `docs/roadmap-history.md` (configurable) | The forward track and the closed phases; in the roadmap, `docs trail` owns only the listing between its two markers | `stayfixed init` writes both files; `stayfixed docs trail` rewrites the listing |
+| `docs/roadmap.md` (configurable) | The forward track; `docs trail` owns only the listing between its two markers | `stayfixed init` writes it; `stayfixed docs trail` rewrites the listing |
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | `stayfixed init`, once; you after |
-| `AGENTS.md`, `CLAUDE.md`, `docs/architecture/`, `docs/adr/`, `docs/runbooks/`, `docs/specs/`, `docs/plans/` | The project scaffold: the documents every other command reads. Written by `stayfixed init`, recorded in the manifest | `stayfixed init` |
-| `docs/stayfixed/rules/<profile>.md` (configurable) and `.claude/rules/stayfixed-<profile>.md` | The stack profile's rules, the one copy a project edits, and a path-scoped pointer at it for Claude Code (only when `[stayfixed] agents` lists `claude`) | `stayfixed init`, when `[stayfixed] profile` is set |
 | `.stayfixed/manifest.json` | The ledger of every scaffolded artifact | the scaffold engine |
-| `.stayfixed/local/artifacts/` | The artifacts `[artifacts] local` keeps out of git, at the path each would have in the repository — git-ignored, never recorded in the manifest | `stayfixed init`, when `[artifacts] local` lists them |
-| `.stayfixed/local/artifacts.json` | The record of the bytes stayfixed last wrote under `.stayfixed/local/artifacts/`, so an unedited copy is refreshed or retired and an edited one is left. Git-ignored and never committed. Deleted, later runs judge a copy at its artifact's own place by what they render, and no longer find a copy left at an earlier place at all | the scaffold engine |
 | `~/.config/stayfixed/config.toml` | Machine-level settings: `[personal]`; `[guards]`, where `bg_cleanup = false` switches the background guard off on this machine, whatever a repository's `stayfixed.toml` sets as its default; `[budgets]`, the four budgets that bound what a session loads; `[overlay]`; and `[machine]`. `~` is `HOME`, as the harness reads it ([docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration)) | you, or `stayfixed setup` |
 | `~/.config/stayfixed/trust.json` | Every approval recorded on this machine, as a versioned record of kinds and subjects, under the same home, the notes you promoted among them (kind `reviewed`) | `stayfixed memory promote`, which records a note |
 | `hooks/hooks.json` and `hooks/run-hook.sh` | The zero-config wiring both harnesses read, and the wrapper they execute. **Shipped in the plugin; never written into a project** | nothing — they are part of the plugin |
 | `${CLAUDE_PLUGIN_DATA}/stayfixed/` | Once-per-session markers and the hook diagnostics log. Deleted with the plugin | the hook dispatcher |
-| `.gitignore`, the `stayfixed:ignore` region | The block that keeps `.stayfixed/local/` and `.stayfixed/assessment.json` out of git, recorded in the manifest. `attach` and `detach` never touch `.gitignore` | `stayfixed init` |
 | `.stayfixed/local/attach.json` | What `attach` added to this repository, in the main checkout whichever worktree it ran from, so `detach` can take exactly that back — hidden from git by the block `attach` writes in the repository's `info/exclude` | `stayfixed attach` |
 | `<overlay>/common/stayfixed.toml` | Preferences, session budgets, personal values and guard switches for every checkout on a machine that records this overlay, above the repository's `stayfixed.toml` and below the machine file. Read the way a session reads `stayfixed.toml`: what this stayfixed cannot use is ignored with a note, and a gate's input or a fact about the repository is never taken from it | you |
 | `<overlay>/projects/<name>/stayfixed.toml` | The same keys for one project, above the common file: read only for a checkout this machine binds to `<name>`, never for one whose own `stayfixed.toml` merely names it | you |

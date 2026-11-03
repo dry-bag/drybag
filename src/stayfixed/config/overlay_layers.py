@@ -38,7 +38,6 @@ from stayfixed.config.reading import (
 )
 from stayfixed.config.schema import (
     MEMORY_MODES,
-    Artifacts,
     Budgets,
     CommitMessages,
     Ledger,
@@ -81,7 +80,6 @@ _TABLES: dict[str, type[Any]] = {
     "memory": Memory,
     "budgets": Budgets,
     "ledger": Ledger,
-    "artifacts": Artifacts,
     "commit_messages": CommitMessages,
     "personal": Personal,
     "guards": Guards,

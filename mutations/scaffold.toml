@@ -26,17 +26,6 @@ reddens = [
   "tests/scaffold/test_engine.py::test_one_unmarked_entry_beside_a_marked_one_is_still_a_refusal",
 ]
 
-# A relocated artifact whose old file was hand-edited leaves that file behind and reports it, rather
-# than removing it.
-[[mutation]]
-name = "a relocated artifact's hand-edited old file is orphaned silently"
-file = "src/stayfixed/scaffold/engine.py"
-before = '        return _left_behind(template, record, "relocated and hand-edited")'
-after = '        return Action(Verb.REMOVE, template.id, record.target, None, "relocated", record)'
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_relocated_artifact_whose_old_file_was_hand_edited_is_reported",
-]
-
 # An event is a key of a settings document a clone can commit, and the refusal naming it reaches a
 # terminal and a model: printed through `printed.clipped`, never as the document spells it.
 [[mutation]]
@@ -147,19 +136,6 @@ reddens = [
   "tests/scaffold/test_engine.py::test_a_profile_the_listing_lacks_is_refused_and_never_quoted",
 ]
 
-# A region's record stamps the region's body, never the file around it, so its relocation is
-# judged by the region. The fabricated-record test is named too: its record now holds the digest
-# the engine really writes.
-[[mutation]]
-name = "a region's relocation is judged by the whole file's digest again"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    if present is None or digest(present) != record.sha256:"
-after = "    if digest(old) != record.sha256:"
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_region_the_engine_recorded_itself_relocates_and_leaves_the_prose",
-  "tests/scaffold/test_engine.py::test_relocating_a_managed_region_removes_only_its_own_lines",
-]
-
 # `[stayfixed] profile` must name a profile this build ships.
 [[mutation]]
 name = "the engine accepts a profile this stayfixed does not ship"
@@ -169,27 +145,6 @@ after = "    if False:"
 reddens = [
   "tests/scaffold/test_engine.py::test_a_profile_the_listing_lacks_is_refused_and_never_quoted",
 ]
-
-# An artifact kept out of git has no record, and its directory is git-ignored: an edit
-# overwritten or removed there is gone for good, so it is judged against this build's render.
-[[mutation]]
-name = "an edited artifact kept out of git is refreshed over, and git cannot give it back"
-file = "src/stayfixed/scaffold/engine.py"
-before = '''
-                and location is Location.LOCAL
-                and present is not None
-'''
-after = "                and False\n"
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_local_artifact_that_is_not_this_build_s_bytes_is_left",
-]
-
-[[mutation]]
-name = "artifacts kept out of git share a directory with attach's ledger and the note store"
-file = "src/stayfixed/scaffold/local.py"
-before = 'LOCAL_ARTIFACTS = f"{LOCAL_ROOT}/artifacts"'
-after = "LOCAL_ARTIFACTS = LOCAL_ROOT"
-reddens = ["tests/scaffold/test_engine.py::test_a_local_artifact_moves_under_dot_stayfixed"]
 
 # A report prints targets, and a target a committed manifest recorded is repository-authored:
 # only one inside the path grammar may print as itself.
@@ -202,103 +157,9 @@ reddens = [
   "tests/scaffold/test_report.py::test_a_target_outside_the_path_grammar_prints_as_its_artifact_id",
 ]
 
-# `LocalDigests` records what stayfixed last wrote under `.stayfixed/local/artifacts/`, which the
-# committed manifest never does. With the render as the only oracle, an unedited copy read as
-# somebody's after any release that changed its template: `upgrade` skipped it and `uninstall`
-# refused over it, calling it edited; and a copy whose id left `[artifacts] local` was never
-# judged again, so `uninstall` refused for good, suggesting a `--force` nothing could reach.
-[[mutation]]
-name = "an unedited artifact kept out of git is skipped as not stayfixed's once its template changes"
-file = "src/stayfixed/scaffold/engine.py"
-before = "                and not digests.matches(template.id, target, digest(present))\n"
-after = ""
-reddens = [
-  "tests/scaffold/test_local.py::test_an_unedited_copy_follows_a_changed_template",
-]
-
-[[mutation]]
-name = "the ledger never vouches for bytes stayfixed wrote kept out of git"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    if present is not None and digests.matches(template.id, target, digest(present)):\n        return True"
-after = "    if False:\n        return True"
-reddens = [
-  "tests/scaffold/test_local.py::test_a_copy_whose_id_left_the_list_is_retired_while_its_bytes_are_stayfixeds",
-  "tests/scaffold/test_local.py::test_a_ledger_entry_away_from_the_artifact_s_own_place_vouches_only_by_its_digest",
-]
-
-[[mutation]]
-name = "a copy left kept out of git when its id left [artifacts] local is never judged"
-file = "src/stayfixed/scaffold/engine.py"
-before = "        for copy in left_copies(template, config, digests, owners):\n            if path_key(copy) in planned:"
-after = "        for copy in ():\n            if path_key(copy) in planned:"
-reddens = [
-  "tests/scaffold/test_local.py::test_a_copy_whose_id_left_the_list_is_retired_while_its_bytes_are_stayfixeds",
-]
-
-# The ledger is kept out of git, and a clone can force-add it anyway, so it authorizes nothing
-# beyond bytes its writer already names, under `.stayfixed/local/artifacts/`. Two layers, each
-# held by its own case: the reader drops a ledger naming anything outside that directory, and the
-# engine lets this build's render vouch for a file only at the artifact's own place there, so
-# anywhere else the recorded digest alone does.
-[[mutation]]
-name = "a ledger entry may name a file outside the artifacts directory"
-file = "src/stayfixed/scaffold/local.py"
-before = "            and target.startswith(f\"{LOCAL_ARTIFACTS}/\")\n"
-after = ""
-reddens = ["tests/scaffold/test_local.py::test_a_ledger_that_is_not_exactly_this_shape_is_absent"]
-
-[[mutation]]
-name = "a left copy away from its own place goes on the render alone"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    own = path_key(target) == path_key(f\"{LOCAL_ARTIFACTS}/{template.target}\")"
-after = "    own = True"
-reddens = ["tests/scaffold/test_local.py::test_a_ledger_entry_away_from_the_artifact_s_own_place_vouches_only_by_its_digest"]
-
-# A ledger is read as untrusted, and an entry under one id must never reach another artifact's
-# own place kept out of git, whose unedited bytes are predictable: a clone could otherwise
-# force-add an entry that has `upgrade` delete a write-once artifact's copy (`templates.Owners`).
-[[mutation]]
-name = "a ledger entry under one id reaches another artifact's copy kept out of git"
-file = "src/stayfixed/scaffold/engine.py"
-before = "        and not (owners is not None and owners.foreign(template.id, copy.removeprefix(kept)))\n"
-after = ""
-reddens = [
-  "tests/scaffold/test_local.py::test_an_entry_under_one_id_never_names_another_artifact_s_place_kept_out_of_git",
-]
-
-# Within one plan, a left copy at a file another template of the plan targets is that template's
-# to judge; judged twice, its removal deleted the file from under an `unchanged` verdict.
-[[mutation]]
-name = "a left copy at a file another template of the plan targets is judged twice"
-file = "src/stayfixed/scaffold/engine.py"
-before = "            if path_key(copy) in planned:\n                continue\n"
-after = "            if False:\n                continue\n"
-reddens = ["tests/scaffold/test_local.py::test_a_left_copy_at_a_file_another_template_of_the_plan_targets_is_that_template_s"]
-
-# A removal takes the manifest record of the file it removed and no other. The copy an artifact
-# left kept out of git carries the artifact's id, and dropping by id alone took the live record of
-# its committed file with it, which every later run then read as nobody's.
-[[mutation]]
-name = "removing a file drops the record of whatever file its artifact now names"
-file = "src/stayfixed/scaffold/engine.py"
-before = "                if record is not None and path_key(record.target) == path_key(action.target):\n"
-after = "                if True:\n"
-reddens = [
-  "tests/scaffold/test_local.py::test_removing_a_left_copy_keeps_the_record_of_the_committed_file",
-]
-
-# In the block led by `mutations/`'s "places are compared case-sensitively for ownership": paths are
-# compared for identity case-folded, and each entry puts exact equality back at one site.
-[[mutation]]
-name = "a left copy at a case variant of a file the plan targets is judged twice"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    planned = {path_key(effective_target(template, config)[0]) for template in templates}"
-after = "    planned = {effective_target(template, config)[0] for template in templates}"
-reddens = ["tests/scaffold/test_local.py::test_a_left_copy_at_a_case_variant_of_a_file_the_plan_targets_is_that_template_s"]
-
-# `_relocation`'s "a place this template could produce" is folded, so the folded trigger is what
-# keeps the engine from relocating a file onto itself: a record at a case variant of the target
-# is that file where case folds, and a relocation removed it beside an `unchanged` verdict.
+# A record at a case variant of the target is that file where case folds, so the folded trigger is
+# what keeps the engine from naming the artifact's own file as one it cannot produce beside an
+# `unchanged` verdict for it.
 [[mutation]]
 name = "a record at a case variant of the target triggers a relocation"
 file = "src/stayfixed/scaffold/engine.py"
@@ -314,11 +175,8 @@ file = "src/stayfixed/scaffold/engine.py"
 before = '        if reason is not None:'
 after = '        if reason is not None or record is not None:'
 reddens = [
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[fixed-names-in-the-clone-s-excludes]",
   "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[a-new-file-at-an-ignored-place]",
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[artifacts-kept-out-of-git]",
   "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[a-symlinked-directory-no-value-uses]",
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[a-tracked-file-matching-an-ignore-pattern]",
 ]
 
 # git ends a line at `\n` alone. Read as ending at a lone `\r` too, an exclude file whose last line
@@ -407,22 +265,6 @@ reddens = [
   "tests/scaffold/test_engine.py::test_an_unreadable_artifact_is_named_relative_to_the_project_with_the_reason_in_words[too-large]",
   "tests/scaffold/test_engine.py::test_an_unreadable_artifact_is_named_relative_to_the_project_with_the_reason_in_words[not-utf8]",
 ]
-
-# Each caller names the file the reason is about: the recorded old place of a relocation and the
-# copy kept out of git, neither of them the artifact's configured target.
-[[mutation]]
-name = "a relocation names an unreadable old home by the artifact's target"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    old, reason = _read(old_path, record.target)"
-after = "    old, reason = _read(old_path, template.target)"
-reddens = ["tests/scaffold/test_engine.py::test_an_unreadable_old_home_of_a_relocated_artifact_is_named_where_it_is"]
-
-[[mutation]]
-name = "a left copy that cannot be read is named by the artifact's target"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    current, reason = _read(path, copy)"
-after = "    current, reason = _read(path, template.target)"
-reddens = ["tests/scaffold/test_local.py::test_an_unreadable_copy_left_kept_out_of_git_is_named_where_it_is"]
 
 # An artifact whose bytes are already the template's is left alone, so a second run of the same
 # release plans nothing: planned again, every artifact reads as an update or as hand-edited.

@@ -49,9 +49,6 @@ package that names a harness is pardoned there, each pardon by one of these item
   with Claude Code's verbs, `PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL` in
   `attach.render`, and `detach` withdraws it with `PLUGIN_UNINSTALL_LOCAL` and
   `PLUGIN_MARKETPLACE_REMOVE` beside them, so another harness is another render and other verbs.
-- `init` renders `CLAUDE.md`, Claude Code's pointer to `AGENTS.md`, whatever `[stayfixed] agents`
-  lists (`project.templates`, from the template `claude.md`): a project that lists Codex alone
-  gets it too.
 - The overlay spells each harness's half by name: `common/claude` and `common/codex`
   (`overlay.layout`, re-exported by `overlay.api`), and the per-project `claude` and `codex`
   directories, `.codex/rules` and the directories it creates in a project, which `attach` reads
