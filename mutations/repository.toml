@@ -663,10 +663,10 @@ before = '''
           }
         ]
       }
-    ]
+    ],
 '''
 after = '''
-    ]
+    ],
 '''
 reddens = [
   "tests/hooks/test_hooks_json.py::test_the_shipped_hooks_register_post_tool_use_failure_for_bash",

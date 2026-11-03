@@ -611,11 +611,11 @@ name = "the dispatcher stops carrying the event a failed command arrives on"
 file = "src/stayfixed/hooks/api.py"
 before = """    "PostToolUse",
     "PostToolUseFailure",
-)"""
+    "Stop","""
 after = """    "PostToolUse",
-)"""
+    "Stop","""
 reddens = [
-  "tests/hooks/test_registry.py::test_the_vocabulary_is_the_six_events_the_design_table_carries",
+  "tests/hooks/test_registry.py::test_the_vocabulary_is_the_eight_events_the_design_table_carries",
   "tests/hints/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[bare]",
 ]
 
@@ -2152,6 +2152,13 @@ reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one
 name = "trust drops out of every side"
 file = "src/stayfixed/areas.py"
 before = '        "trust",'
+after = ""
+reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
+
+[[mutation]]
+name = "sync drops out of every side"
+file = "src/stayfixed/areas.py"
+before = '        "sync",'
 after = ""
 reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
@@ -7139,3 +7146,113 @@ file = "src/stayfixed/sync/job.py"
 before = "        cwd=overlay,"
 after = "        cwd=None,"
 reddens = ["tests/sync/test_run.py::test_the_job_is_spawned_detached_with_nothing_inherited"]
+
+# The note sync's triggers: each one starts a job, an unchanged hold backs a turn off until
+# something moves, a trigger inside the throttle is scheduled and never dropped, `SessionEnd` is
+# never throttled, and a compaction starts nothing. With the sync off the handler decides nothing.
+[[mutation]]
+name = "a dirty note starts no job"
+file = "src/stayfixed/sync/trigger.py"
+before = "    if tree is not None and tree.dirty:"
+after = "    if False:"
+reddens = ["tests/sync/test_hooks.py::test_a_dirty_or_untracked_note_starts_a_job"]
+
+[[mutation]]
+name = "commits ahead of the upstream start no job"
+file = "src/stayfixed/sync/trigger.py"
+before = "    ahead = tree is not None and tree.ahead > 0"
+after = "    ahead = False"
+reddens = ["tests/sync/test_hooks.py::test_commits_ahead_of_the_upstream_start_a_job"]
+
+[[mutation]]
+name = "a standing outcome or hold starts no job"
+file = "src/stayfixed/sync/trigger.py"
+before = "    return ahead or state.outcome.state not in SETTLED or state.holds.any"
+after = "    return ahead"
+reddens = ["tests/sync/test_hooks.py::test_a_standing_outcome_or_hold_starts_a_job"]
+
+[[mutation]]
+name = "a session start waits for a trigger like a turn"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if event == "SessionStart":'
+after = "    if False:"
+reddens = ["tests/sync/test_hooks.py::test_every_other_session_start_runs"]
+
+[[mutation]]
+name = "a compaction starts a job"
+file = "src/stayfixed/sync/trigger.py"
+before = '        if source == "compact":'
+after = "        if False:"
+reddens = ["tests/sync/test_hooks.py::test_a_compaction_starts_nothing"]
+
+[[mutation]]
+name = "an unchanged hold never backs a turn off"
+file = "src/stayfixed/sync/trigger.py"
+before = "    if _backed_off(overlay, state, tree, now):"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_hooks.py::test_an_unchanged_hold_backs_off_until_something_moves",
+  "tests/sync/test_hooks.py::test_an_unchanged_local_hold_with_unpushed_commits_backs_off",
+]
+
+[[mutation]]
+name = "the back-off ignores a moved upstream ref"
+file = "src/stayfixed/sync/trigger.py"
+before = "    return backed_off(state, tree.head, now, upstream=_upstream(overlay))"
+after = "    return True"
+reddens = [
+  "tests/sync/test_hooks.py::test_the_back_off_ends_when_the_upstream_ref_moves",
+  "tests/sync/test_hooks.py::test_an_unchanged_hold_backs_off_until_something_moves",
+]
+
+[[mutation]]
+name = "the trigger reads origin/main on every turn"
+file = "src/stayfixed/sync/trigger.py"
+before = "    if tree is None or tree.head is None or not backed_off(state, tree.head, now):"
+after = "    if tree is None or tree.head is None or not _upstream(overlay) or not backed_off(state, tree.head, now):"
+reddens = ["tests/sync/test_hooks.py::test_the_trigger_check_is_one_git_status"]
+
+[[mutation]]
+name = "a session end is throttled"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if event == "SessionEnd":'
+after = "    if False:"
+reddens = ["tests/sync/test_hooks.py::test_session_end_is_never_throttled"]
+
+[[mutation]]
+name = "a trigger inside the throttle is dropped"
+file = "src/stayfixed/sync/trigger.py"
+before = '        return "schedule", parse_time(last) + throttle'
+after = '        return "none", None'
+reddens = ["tests/sync/test_hooks.py::test_a_trigger_inside_the_throttle_or_during_a_job_is_scheduled"]
+
+[[mutation]]
+name = "a trigger while a job runs is dropped"
+file = "src/stayfixed/sync/trigger.py"
+before = '        return "schedule", now + throttle  # the running job ends some time from now'
+after = '        return "none", None'
+reddens = ["tests/sync/test_hooks.py::test_a_trigger_inside_the_throttle_or_during_a_job_is_scheduled"]
+
+[[mutation]]
+name = "the trigger asks an overlay that is not a repository"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if event not in EVENTS or not fsops.exists(overlay / ".git"):'
+after = "    if event not in EVENTS:"
+reddens = ["tests/sync/test_hooks.py::test_no_overlay_or_not_a_repository_spawns_nothing"]
+
+[[mutation]]
+name = "a session start records no checkout"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if event.name == "SessionStart" and event.project_root is not None:'
+after = "    if False:"
+reddens = ["tests/sync/test_hooks.py::test_session_start_records_the_checkout_when_sync_is_on"]
+
+[[mutation]]
+name = "sync off still decides"
+file = "src/stayfixed/sync/hooks.py"
+before = "        if enabled():"
+after = "        if True:"
+reddens = [
+  "tests/sync/test_hooks.py::test_with_sync_off_stop_runs_no_git_and_spawns_nothing",
+  "tests/sync/test_hooks.py::test_session_start_records_the_checkout_when_sync_is_on",
+]

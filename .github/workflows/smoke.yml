@@ -204,7 +204,7 @@ jobs:
           # The script carries the same floor in its own constants; this is the CI side of it,
           # because a run that executed one row exits 0 and prints a summary that reads green.
           # `tests/test_check_workflow.py` derives this line from those constants.
-          grep -qx "10 entries, 11 row(s), 0 failure(s)" "$RUNNER_TEMP/hooks.out"
+          grep -qx "12 entries, 13 row(s), 0 failure(s)" "$RUNNER_TEMP/hooks.out"
       - name: doctor on the installed plugin reports no red row
         if: env.FULL == 'true'
         env:
