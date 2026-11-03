@@ -6659,6 +6659,13 @@ reddens = [
 # The secret scan: each entry breaks one rule of the lookup or of a scan, and the tests named watch it.
 
 [[mutation]]
+name = "the scanner's pin is read from the working tree"
+file = "src/stayfixed/sync/scan.py"
+before = '        committed = blob(overlay, f"HEAD:{CONFIG}", DB_TIMEOUT, env)'
+after = "        committed = fsops.read_regular_bytes(overlay / CONFIG)"
+reddens = ["tests/sync/test_scan.py::test_the_pin_is_read_from_head_whatever_the_working_tree_says"]
+
+[[mutation]]
 name = "a row of another rev is the scanner"
 file = "src/stayfixed/sync/scan.py"
 before = 'row = db.execute("SELECT path FROM repos WHERE repo = ? AND ref = ?", (repo, rev))'

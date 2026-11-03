@@ -50,10 +50,10 @@ def _config(
     language_version: str | None = None,
     default_golang: str | None = None,
 ) -> Path:
-    overlay.mkdir(parents=True, exist_ok=True)
     version = f"        language_version: {language_version}\n" if language_version else ""
     defaults = f"default_language_version:\n  golang: {default_golang}\n" if default_golang else ""
-    (overlay / ".pre-commit-config.yaml").write_text(
+    return _committed_config(
+        overlay,
         f"# a comment\n{defaults}repos:\n"
         f"  - repo: {GITLEAKS_REPO}\n"
         f"    rev: {rev}  # frozen: v8.30.1\n"
@@ -62,8 +62,16 @@ def _config(
         f"{version}"
         "\n  - repo: local\n    hooks:\n      - id: other\n"
         "        language_version: other\n",
-        encoding="utf-8",
     )
+
+
+def _committed_config(overlay: Path, text: str | bytes) -> Path:
+    """`overlay` as a repository whose `HEAD` commits `text` as its `.pre-commit-config.yaml`."""
+    init(overlay)
+    config = overlay / ".pre-commit-config.yaml"
+    config.write_bytes(text if isinstance(text, bytes) else text.encode())
+    git(overlay, "add", "--", config.name)
+    git(overlay, "commit", "-q", "--allow-empty", "-m", "config")
     return overlay
 
 
@@ -110,23 +118,38 @@ def test_the_pin_is_read_from_the_overlays_config(tmp_path: Path) -> None:
     assert S.gitleaks_pin(_config(tmp_path / "f"))[2] is None  # type: ignore[index]
 
 
-def test_the_pin_in_the_template_the_overlay_ships_is_understood() -> None:
+def test_the_pin_in_the_template_the_overlay_ships_is_understood(tmp_path: Path) -> None:
     template = Path(stayfixed.__file__).parent / "templates" / "overlay"
+    shipped = (template / ".pre-commit-config.yaml").read_bytes()
 
-    pin = S.gitleaks_pin(template)
+    pin = S.gitleaks_pin(_committed_config(tmp_path / "o", shipped))
 
     assert pin is not None and pin[0] == GITLEAKS_REPO and pin[2] is None
     assert len(pin[1]) == 40  # a full commit sha: a tag is a name its owner can move
 
 
 def test_a_config_without_gitleaks_or_without_a_file_has_no_pin(tmp_path: Path) -> None:
-    overlay = tmp_path / "overlay"
-    overlay.mkdir()
-    assert S.gitleaks_pin(overlay) is None
-    (overlay / ".pre-commit-config.yaml").write_text("repos:\n  - repo: local\n    hooks: []\n")
-    assert S.gitleaks_pin(overlay) is None
-    (overlay / ".pre-commit-config.yaml").write_bytes(b"\xff\xfe")
-    assert S.gitleaks_pin(overlay) is None
+    assert S.gitleaks_pin(tmp_path / "not-a-repository") is None
+    overlay = init(tmp_path / "overlay")
+    assert S.gitleaks_pin(overlay) is None  # no commit at all
+    assert (
+        S.gitleaks_pin(_committed_config(overlay, "repos:\n  - repo: local\n    hooks: []\n"))
+        is None
+    )
+    assert S.gitleaks_pin(_committed_config(overlay, b"\xff\xfe")) is None
+
+
+def test_the_pin_is_read_from_head_whatever_the_working_tree_says(tmp_path: Path) -> None:
+    # The rules and ignores come from `HEAD`, so the scanner does too: a working tree that drops
+    # the hook (an agent silencing a false positive) must not make the scan unavailable with a
+    # remedy, `pre-commit install-hooks`, that cannot fix it, nor pick another build by a pin it
+    # rewrote. Mutation (oracle): `mutations/`'s "the scanner's pin is read from the working tree".
+    overlay = _config(tmp_path / "o")
+    config = overlay / ".pre-commit-config.yaml"
+    config.write_text("repos: []\n", encoding="utf-8")
+    assert S.gitleaks_pin(overlay) == (GITLEAKS_REPO, GITLEAKS_REV, None)
+    config.write_text(config.read_text().replace(GITLEAKS_REV, OTHER_REV), encoding="utf-8")
+    assert S.gitleaks_pin(overlay) == (GITLEAKS_REPO, GITLEAKS_REV, None)
 
 
 def test_the_binary_is_found_through_pre_commits_database(machine: Machine, tmp_path: Path) -> None:

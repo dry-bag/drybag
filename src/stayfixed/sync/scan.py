@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from stayfixed import fsops
-from stayfixed.sync.git import git, run, timed, with_config
+from stayfixed.sync.git import GitError, git, run, timed, with_config
 
 GITLEAKS_REPO = "https://github.com/gitleaks/gitleaks"
 GITLEAKS_HOOK = "gitleaks"
@@ -48,8 +48,8 @@ NO_SCANNER = (
 # what reaches the state file; no shipped file states them.
 DETAIL_LINES = 5
 DETAIL_CHARS = 600
-# Named caps, no shipped file states them: how long to wait on a locked pre-commit database, and
-# how much of the overlay's own `.pre-commit-config.yaml` to read.
+# Named caps, no shipped file states them: how long to wait on a locked pre-commit database or on
+# git reading the committed `.pre-commit-config.yaml`, and how much of that file to read.
 DB_TIMEOUT = 5.0
 CONFIG_BYTES = 1024 * 1024
 # The configuration every git gitleaks starts is given: its `git log -p` and `git diff` print the
@@ -82,17 +82,23 @@ def _scalar(text: str) -> str:
     return text[1:-1] if len(text) >= 2 and text[0] == text[-1] and text[0] in "'\"" else text
 
 
-def gitleaks_pin(overlay: Path) -> tuple[str, str, str | None] | None:
+def gitleaks_pin(
+    overlay: Path, env: Mapping[str, str] | None = None
+) -> tuple[str, str, str | None] | None:
     """`(repo, rev, language_version)` for the overlay's gitleaks hook, or `None` if it has none.
 
-    Read line by line from `.pre-commit-config.yaml`: the standard library has no YAML, and the
-    file is the overlay's own, written in block style. The version is the hook's
-    `language_version`, else the file's `default_language_version.golang`; `None` when neither
-    says more than `default`, which pre-commit reads as "not set here".
+    Read line by line from `HEAD`'s `.pre-commit-config.yaml`, as the rules and ignores are: a
+    working tree that drops or repins the hook changes nothing until it is committed. The standard
+    library has no YAML, and the file is the overlay's own, written in block style. The version is
+    the hook's `language_version`, else the file's `default_language_version.golang`; `None` when
+    neither says more than `default`, which pre-commit reads as "not set here".
     """
     try:
-        lines = fsops.read_regular_text(overlay / CONFIG, limit=CONFIG_BYTES).splitlines()
-    except (OSError, UnicodeDecodeError):
+        committed = blob(overlay, f"HEAD:{CONFIG}", DB_TIMEOUT, env)
+        lines = committed.decode("utf-8").splitlines() if committed else []
+    except (GitError, UnicodeDecodeError):
+        return None
+    if len(committed or b"") > CONFIG_BYTES:
         return None
     top = repo = rev = hook = default = hooked = found = None
     for line in lines:
@@ -118,26 +124,31 @@ def gitleaks_pin(overlay: Path) -> tuple[str, str, str | None] | None:
     return GITLEAKS_REPO, found, next((v for v in (hooked, default) if v and v != "default"), None)
 
 
-def gitleaks_binary(home: Path, overlay: Path, env: Mapping[str, str] | None = None) -> Path | None:
+def gitleaks_binary(
+    home: Path,
+    overlay: Path,
+    env: Mapping[str, str] | None = None,
+    *,
+    git_env: Mapping[str, str] | None = None,
+) -> Path | None:
     """The gitleaks build pre-commit made for the overlay's pinned hook, or `None`.
 
     The environment is the pin's `language_version`, which has no substitute, else `default`, else
     `system`: the same source at the same `rev`, built by whichever go was there. `None` when the
     overlay pins no gitleaks, the database is missing or unreadable, no row has the pinned `repo`
     and `rev` (a row of another `rev` is never a substitute), or no allowed environment holds an
-    executable build. `env` names pre-commit's cache the way pre-commit reads it.
+    executable build. `env` names pre-commit's cache the way pre-commit reads it; `git_env` is
+    laid over the git that reads the pin, asked only once there is a database.
     """
-    pin = gitleaks_pin(overlay)
     env = os.environ if env is None else env
-    if pin is None:
-        return None
-    repo, rev, version = pin
     if env.get("PRE_COMMIT_HOME"):
         database = Path(env["PRE_COMMIT_HOME"]) / "db.db"
     else:
         database = Path(env.get("XDG_CACHE_HOME") or home / ".cache") / "pre-commit" / "db.db"
-    if not fsops.is_file(database):
+    pin = gitleaks_pin(overlay, git_env) if fsops.is_file(database) else None
+    if pin is None:
         return None
+    repo, rev, version = pin
     try:
         with contextlib.closing(
             sqlite3.connect(f"{database.absolute().as_uri()}?mode=ro", uri=True, timeout=DB_TIMEOUT)

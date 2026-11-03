@@ -359,7 +359,7 @@ def _move_main(ctx: JobContext, pending: PendingAlign) -> bool:
 
 def _run_checks(ctx: JobContext, index: Path, paths: list[str]) -> Outcome | None:
     """The secret scan of what `index` stages, before any tree is written; the failure, if any."""
-    binary = scan.gitleaks_binary(ctx.home, ctx.overlay)
+    binary = scan.gitleaks_binary(ctx.home, ctx.overlay, git_env=ctx.env)
     if binary is None:
         detail = scan.NO_SCANNER.format(overlay=ctx.overlay)
         return _outcome(ctx, "scan_unavailable", detail)
@@ -937,7 +937,7 @@ def _metadata(ctx: JobContext, base: str, tip: str) -> list[tuple[str, str]]:
 
 def _scan_push(ctx: JobContext, upstream: str, tip: str) -> Outcome | None:
     """Both scans of what the push sends, within `Limits.checks` together; the failure, if any."""
-    binary = scan.gitleaks_binary(ctx.home, ctx.overlay)
+    binary = scan.gitleaks_binary(ctx.home, ctx.overlay, git_env=ctx.env)
     if binary is None:
         return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER.format(overlay=ctx.overlay))
     deadline = time.monotonic() + ctx.limits.checks

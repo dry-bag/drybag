@@ -29,6 +29,7 @@ from tests.sync.conftest import (
     GITLEAKS_REV,
     PRE_COMMIT_CONFIG,
     build_gitleaks,
+    git,
     pre_commit_store,
 )
 
@@ -56,6 +57,8 @@ class Machine:
     def scanner(self) -> Machine:
         """The overlay pins gitleaks and pre-commit holds a build of that pin."""
         (self.overlay / ".pre-commit-config.yaml").write_text(PRE_COMMIT_CONFIG, encoding="utf-8")
+        git(self.overlay, "add", "--", ".pre-commit-config.yaml")
+        git(self.overlay, "commit", "-q", "-m", "the pinned hook")
         build = self.tmp_path / "gitleaks-source"
         build_gitleaks(build)
         cache = self.tmp_path / "cache"
