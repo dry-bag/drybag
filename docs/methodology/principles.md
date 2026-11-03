@@ -65,8 +65,7 @@ quoted gets quoted instead of opened, so an entry must not read as a finished cl
 renders `MEMORY.md` from them under a declared section order and harvests back any line a
 second writer appended, so the harness's own memory writer and stayfixed share one directory
 without either rewriting the other's keys. `memory inventory` reports each note's size and
-whether its line is curated, harvested or provisional; `memory refs` checks that every path a
-note names still exists, and reports the link graph beside it as advice.
+whether its line is curated, harvested or provisional.
 
 **Why.** The harness loads the first 200 lines or 25 KB of the index into every session
 [S5], so the index is a budget and every word in it is paid on every turn [S17]. There is no
@@ -93,8 +92,8 @@ to.
 none: a standing rule is a note with `metadata.startup` that its owner promoted at the bytes it
 holds (`memory promote`), and the `recommended` preset carries no rule of its own. `memory
 session-context` renders two bundles — standing rules and volatile notes — each across
-numbered parts sized to the platform's per-entry cap, and `memory fit` reports a bundle that
-does not fit its slots.
+numbered parts sized to the platform's per-entry cap, and `doctor`'s `bundles` row reports a
+bundle that does not fit its slots.
 Standing rules are flagged when they outgrow their budget and still delivered, because a
 standing rule that does not arrive is a standing rule that gets broken; volatile notes
 degrade to descriptions instead.

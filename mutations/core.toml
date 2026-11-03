@@ -2227,8 +2227,8 @@ reddens = [
 # could not run" and the session handler's backstop swallows along with every other line of the
 # same result, `NOT_ATTACHED` included — and restores the Unicode-aware digit class, which let a
 # floor written in Eastern Arabic-Indic numerals validate and print back verbatim. The core's own
-# reader is named first: `later` is what `upgrade`, `doctor` and `stayfixed gate` call, so the
-# bound is held by a test of the core and not only by the overlay's and `attach`'s.
+# reader is named first: `later` is what `doctor` and the session's configuration reader call, so
+# the bound is held by a test of the core and not only by the overlay's and `attach`'s.
 [[mutation]]
 name = "the version grammar stops bounding its components"
 file = "src/stayfixed/semver.py"
@@ -2753,9 +2753,8 @@ reddens = [
   "tests/test_fsops.py::test_a_directory_that_can_be_written_but_not_searched_cannot_take_a_new_file",
 ]
 
-# A commit's copy of a document at the project's own path (`committed.py`), read one way for the
-# base's `stayfixed.toml` that governs `stayfixed gate` and for each fork point's that places the
-# ledger. A copy that reads as missing is the bootstrap, where the change decides for itself, so
+# A commit's copy of a document at the project's own path (`committed.py`), read for each fork
+# point's `stayfixed.toml`, which places the ledger. A copy that reads as missing is the bootstrap, where the change decides for itself, so
 # each git argument and refusal whose removal reaches it by accident is a guard: git failing read
 # as "no copy", the bytes read in the locale's codec, a root reached through a symlink or spelled
 # otherwise than git spells it, a project in a subdirectory, a directory named like pathspec magic.

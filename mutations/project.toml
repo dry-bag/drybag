@@ -301,9 +301,7 @@ reddens = [
 
 # The manifest is the record that this repository has been initialised, and it is the only
 # one: a second `init` over an initialised repository would re-plan every artifact against a
-# configuration it rebuilt from scratch. Refreshing a footprint is `stayfixed upgrade`, and the
-# refusal says so rather than doing half of it. The
-# anchor is `.stayfixed/manifest.json`, whose path is the scaffold area's own constant and is
+# configuration it rebuilt from scratch. The anchor is `.stayfixed/manifest.json`, whose path is the scaffold area's own constant and is
 # contained against the root before it is read.
 [[mutation]]
 name = "init runs again over a repository whose manifest says it is already initialised"
@@ -535,9 +533,9 @@ before = "        if args.dry_run or _given(args) != NO_ANSWERS:"
 after = "        if False:"
 reddens = ["tests/project/test_command.py::test_questions_take_no_flag_that_writes_or_plans"]
 
-# `stayfixed gate` refuses a symlinked `stayfixed.toml`, and `init` reads it through the same reader
-# (`assess` reads it through `load`, whose entry is `mutations/`'s "load follows a symlinked
-# stayfixed.toml"): followed, a clone's link to `/dev/zero` ends the run by exhausting memory.
+# `init` reads `stayfixed.toml` through a reader that refuses a symlink, as `load` does (whose entry
+# is `mutations/`'s "load follows a symlinked stayfixed.toml"): followed, a clone's link to
+# `/dev/zero` ends the run by exhausting memory.
 [[mutation]]
 name = "init follows a symlinked stayfixed.toml that carries its version"
 file = "src/stayfixed/project/init.py"
