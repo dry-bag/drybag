@@ -11,7 +11,7 @@ reads `.ENV` as `.env`); a subdirectory or a link there is skipped. Each is crea
 file the branch tracks is already there, so the branch wins, and a file, directory or link at a
 name is never replaced, followed or written through.
 
-**Where.** Only a linked worktree of an ordinary checkout (`linked_worktree`) that this machine
+**Where.** Only a linked worktree (`linked_worktree`) that this machine
 binds to a project, in the overlay the machine file records. `attach` itself places nothing in the
 main checkout, where the owner's files already are.
 
@@ -46,12 +46,6 @@ CHECKOUT = "checkout"
 NEVER = ("settings.local.json",)
 NEVER_PREFIXES = (".env",)
 LITTER = (".DS_Store",)
-# The longest owner-held file placed. A named cap (CONTRIBUTING.md#named-caps): these are the
-# owner's short documents and configuration files, and a file past it is left out; no shipped file
-# states it.
-_FILE_LIMIT = 1024 * 1024
-# `.git` as the common directory is named in an ordinary checkout.
-_COMMON = ".git"
 _WORKTREES = "worktrees"
 
 PLACED = "stayfixed placed your owner-held files in this new worktree: {names}."
@@ -67,11 +61,9 @@ THIS_FILE = "a file with an unprintable name"
 def linked_worktree(root: Path) -> Path | None:
     """The toplevel of the linked worktree `root` is in, or `None`.
 
-    A linked worktree of an ordinary checkout is where `git rev-parse` says the git directory is
-    `<common>/worktrees/<name>`, `<common>` is named `.git`, and the toplevel is not `<common>`'s
-    parent. The main checkout (git directory is the common one), a submodule (its git directory is
-    under `modules/`), a worktree of a bare repository or of one with a separate git directory
-    (the common directory is not named `.git`) and a `git` that gives no answer are none.
+    A linked worktree is where `git rev-parse` says the git directory is
+    `<common>/worktrees/<name>`. The main checkout (its git directory is the common one), a
+    submodule (its git directory is under `modules/`) and a `git` that gives no answer are none.
     """
     code, out = git_run(
         root,
@@ -85,13 +77,7 @@ def linked_worktree(root: Path) -> Path | None:
     if code != 0 or len(lines) != 3:
         return None
     toplevel, git_dir, common = (Path(line) for line in lines)
-    if (
-        git_dir.parent == common / _WORKTREES
-        and common.name == _COMMON
-        and toplevel != common.parent
-    ):
-        return toplevel
-    return None
+    return toplevel if git_dir.parent == common / _WORKTREES else None
 
 
 def _held(source: Path) -> list[str]:
@@ -127,10 +113,9 @@ def place(root: Path, *, machine: Path | None) -> tuple[list[str], list[str]]:
     placed: list[str] = []
     for name in _held(source):
         try:
-            with fsops.open_regular(source / name) as stream:
-                mode = stat.S_IMODE(os.fstat(stream.fileno()).st_mode)
-                data = stream.read(_FILE_LIMIT + 1)
-            if len(data) <= _FILE_LIMIT and fsops.create_within(tree, name, data, mode=mode):
+            data = fsops.read_regular_bytes(source / name)
+            mode = stat.S_IMODE(os.stat(source / name).st_mode)
+            if fsops.create_within(tree, name, data, mode=mode):
                 placed.append(name)
         except OSError:
             continue

@@ -481,9 +481,8 @@ def _group_targets(
         project = config.project.name
         allowed = permitted_roots(overlay, project)
         linked = [tag_link(tag) for tag in tags(overlay, project)[0]]
-    # The tags' links last and in the project's list order, each once: a configured `tag-<t>` of
-    # a listed tag is that link and no other group (`walked_groups`).
-    for group in [*(g for g in config.memory.groups if g not in linked), *linked]:
+    # The tags' links last and in the project's list order (`walked_groups`).
+    for group in [*config.memory.groups, *linked]:
         try:
             target = contained(base, group, allow_final_symlink=True)
         except PathEscape as exc:

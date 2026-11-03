@@ -1837,17 +1837,10 @@ reddens = [
 [[mutation]]
 name = "owner-held files are placed in the main checkout"
 file = "src/stayfixed/attach/checkout.py"
-before = '''    if (
-        git_dir.parent == common / _WORKTREES
-        and common.name == _COMMON
-        and toplevel != common.parent
-    ):
-        return toplevel'''
-after = '''    if toplevel:
-        return toplevel'''
+before = "    return toplevel if git_dir.parent == common / _WORKTREES else None"
+after = "    return toplevel"
 reddens = [
   "tests/attach/test_checkout.py::test_the_main_checkout_gets_nothing",
-  "tests/attach/test_checkout.py::test_a_worktree_of_a_bare_repository_gets_nothing",
   "tests/attach/test_checkout.py::test_a_submodule_gets_nothing",
 ]
 

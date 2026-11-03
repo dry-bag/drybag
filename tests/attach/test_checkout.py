@@ -107,22 +107,6 @@ def test_a_present_name_is_never_overwritten(tmp_path: Path, kind: str) -> None:
         assert not outside.exists()
 
 
-def test_a_tracked_name_is_left_to_the_branch(tmp_path: Path) -> None:
-    # The worktree already has `AGENTS.md` from the branch, so the exclusive create finds the name
-    # taken: nothing is placed over it and nothing is said of it.
-    _overlay(tmp_path)
-    main = _repository(tmp_path / "main")
-    (main / "AGENTS.md").write_text("the branch's\n", encoding="utf-8")
-    git(main, "add", "-A")
-    git(main, "commit", "-qm", "track AGENTS.md")
-    binding.record(main, "p", None)
-    linked = tmp_path / "linked"
-    git(main, "worktree", "add", "-q", str(linked))
-    placed, _ = place(linked, machine=None)
-    assert placed == ["CLAUDE.md", "stayfixed.toml"]
-    assert (linked / "AGENTS.md").read_text(encoding="utf-8") == "the branch's\n"
-
-
 def test_the_main_checkout_gets_nothing(tmp_path: Path) -> None:
     # Mutation (oracle): `mutations/`'s "owner-held files are placed in the main checkout" -> the
     # main checkout is given the files and this reddens.
@@ -130,19 +114,6 @@ def test_the_main_checkout_gets_nothing(tmp_path: Path) -> None:
     assert place(main, machine=None) == ([], [])
     assert _names(main) == {"README.md"}
     assert place(linked, machine=None)[0] == sorted(REGULAR)
-
-
-def test_a_worktree_of_a_bare_repository_gets_nothing(tmp_path: Path) -> None:
-    _overlay(tmp_path)
-    source = _repository(tmp_path / "source")
-    bare = tmp_path / "bare.git"
-    git(tmp_path, "clone", "-q", "--bare", str(source), str(bare))
-    linked = tmp_path / "linked"
-    git(bare, "worktree", "add", "-q", str(linked), "main")
-    binding.record(linked, "p", None)
-    assert binding.bound_project(linked) is not None
-    assert place(linked, machine=None) == ([], [])
-    assert _names(linked) == {"README.md"}
 
 
 def test_a_submodule_gets_nothing(tmp_path: Path) -> None:

@@ -412,9 +412,9 @@ a link in `checkout/`. A file keeps its source's permission bits and is created 
 is at the name: a file the branch tracks is already there, and a file, directory or link at the name
 is left alone and never written through. It answers from the machine's binding record, never from
 the repository's `stayfixed.toml`, which the worktree may not have until this places it, and it
-places nothing in the main checkout, in a submodule, in a worktree of a bare repository or of a
-repository with a separate git directory, in an unbound checkout or on a machine that records no
-overlay. It says nothing when it placed nothing; otherwise it names the files placed, asks the
+places nothing in the main checkout, in a submodule, in an unbound checkout or on a machine that
+records no overlay. It runs on every `SessionStart` there, so a placed file you delete by hand comes
+back with the next session. It says nothing when it placed nothing; otherwise it names the files placed, asks the
 session to read `AGENTS.md` when that or `CLAUDE.md` is among them, and names the placed files git
 would show, to add to the checkout's `.git/info/exclude`. It asks git only `rev-parse` and
 `check-ignore --no-index`, neither of which runs a repository's `core.fsmonitor`.
@@ -2546,11 +2546,8 @@ any line there would be a change every collaborator gets. A `stayfixed:ignore` r
 release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
 `init`'s.
 
-**`projects/<name>/checkout/` holds the owner-held files.** `attach` neither reads nor writes
-it: the files in it are placed in a new linked worktree of the bound checkout by the `owner-files`
-handler of `SessionStart` (`stayfixed hook`, [Hooks](#hooks)), so an `AGENTS.md` or a
-`stayfixed.toml` that you keep out of the repository is in every worktree you start. `attach`
-itself places nothing in the main checkout, where those files already are.
+**`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
+writes: [`owner-files`](#hooks) places them in each new linked worktree.
 
 **What it places, it hides from git, unless git hides it already.** The ledger, each
 `.codex/rules/` file and `.claude/settings.local.json`,

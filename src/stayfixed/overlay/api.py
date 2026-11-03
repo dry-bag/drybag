@@ -9,15 +9,14 @@ does not import a private module of this area.
 absent from this list is a value `setup` can hold and cannot declare. `scripts/publish_template.py`
 renders the template it publishes and holds its names to one path segment, and so needs
 `render_template`, `segment` and `TEMPLATE_REPOSITORY`, the one spelling of the repository `setup`'s
-`create:` looks for. `attach` reads `common/claude`
-and `common/codex` inside the layout (`COMMON_CLAUDE`, `COMMON_CODEX`). The runner is a leaf module
+`create:` looks for. The runner is a leaf module
 (`stayfixed.runner`), not this area's: every area that launches a program imports it from there, and
 none reaches it through this surface.
 
-One name is here with no importer in `src/`, on purpose: `COMMON_MEMORY`, the third of the three
-`common/` directories beside `COMMON_CLAUDE` and `COMMON_CODEX`. The layout is what a consumer
-reads; publishing two thirds of it invites the third to be spelled again by hand, which is the
-drift these constants exist to stop.
+Three names are here with no importer in `src/`, on purpose: `COMMON_CLAUDE`, `COMMON_CODEX` and
+`COMMON_MEMORY`, the three `common/` directories. The layout is what a consumer reads; publishing
+part of it invites the rest to be spelled again by hand, which is the drift these constants exist to
+stop.
 
 `OVERLAY_FILES` is here for `scripts/check_artifacts.py`, which asks whether a built wheel
 carries every template file and can only answer that against this list. It is the one consumer
