@@ -80,7 +80,7 @@ marketplace name (nothing is vendored on a guess).
 ## What each agent enforces
 
 stayfixed reaches an agent in three ways, and they do not hold alike on every agent. The
-**session notices** add context and refuse nothing (the background-cleanup hints, the test-hygiene
+**session notices** add context and refuse nothing (the background-cleanup hints, the pipe-status hint, the test-hygiene
 note, the standing rules, the volatile notes); the **repository gates** — the bug, documentation,
 plan, commit and trail checks — run in CI; and the **methodology** is
 the skills. Each column is an agent under the name `[stayfixed] agents`
@@ -100,6 +100,13 @@ cannot use included, and the session hears once, when it starts, what it could n
 `stayfixed.toml`, and the owner's layers override it: the overlay's files, and the machine file
 last ([`docs/cli.md`](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration)
 names the key).
+
+The pipe-status hint, from the `pipe-status` handler that runs beside it, names a test run piped into
+`tail`, `head` or `grep` in a command whose text keeps no `pipefail` or `PIPESTATUS` (or zsh's spelling of either), where the pipeline's exit status
+is the reader's and a red run reads as green, and the remedy; it says so once per session context
+and never refuses the command. It reads a flat list of pipelines and nothing else: a command with a substitution or a
+heredoc gets no hint. It reads the command alone, so it has no switch and
+runs in every repository too.
 
 Where a surface does not reach an agent in the session, the repository gates
 still hold in CI, which every agent's changes pass through. What was measured of Codex

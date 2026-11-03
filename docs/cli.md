@@ -275,6 +275,12 @@ Not something to run by hand. Its exit-code policy differs from every other comm
 error degrades open (`0`) on every event, with the error on stderr — a bug in stayfixed must not
 cost you a tool call, and on `UserPromptSubmit` an exit `2` would erase what you typed.
 
+On `PreToolUse` for a `Bash` call two handlers hint and neither refuses: `bg-cleanup` names a
+backgrounded command that leaves a job behind, and `pipe-status` names a test run piped into `tail`,
+`head` or `grep` whose text names no `pipefail` or `PIPESTATUS` and is a flat list of pipelines, where
+the run's exit status is lost. Each reads the command alone, so each speaks in a repository with no `stayfixed.toml`; `pipe-status` has no
+switch and speaks once per context.
+
 **A session never dies of its configuration.** The guards run in every repository, whatever
 `stayfixed.toml` holds: none at all, one that does not load, and a broken machine file included;
 only their switches are read, the repository's `[guards]` as a default the overlay's files and the
