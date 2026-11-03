@@ -2543,9 +2543,7 @@ name = "the schema's integer keys are taken unchecked"
 file = "src/stayfixed/config/reading.py"
 before = "        return positive(key, value)"
 after = "        return value"
-reddens = [
-  "tests/config/test_loader.py::test_an_integer_key_at_or_past_its_bound_is_refused_without_printing_it[octal]",
-]
+reddens = ["tests/config/test_owner.py::test_an_invalid_value_resets_only_its_key[budgets]"]
 
 [[mutation]]
 name = "a `[budgets]` value is taken unchecked"
