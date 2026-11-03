@@ -1789,6 +1789,27 @@ reddens = [
   "tests/attach/test_write.py::test_check_counts_the_rules_it_would_take_back",
 ]
 
+# The ledger is the witness of which allow rules are `attach`'s: one the overlay stopped granting
+# leaves it whether or not the file still held it, or a copy the owner types back is taken later.
+[[mutation]]
+name = "re-attach keeps a withdrawn allow rule in the ledger"
+file = "src/stayfixed/attach/write.py"
+before = "    allow = [rule for rule in previous.allow if rule in granted] if previous else []"
+after = "    allow = [r for r in previous.allow if r not in planned.diff.withdrawn_allow] if previous else []"
+reddens = [
+  "tests/attach/test_write.py::test_a_recorded_rule_removed_by_hand_is_not_an_error",
+]
+
+# An allow rule taken back is said on the screen the way a granted one is.
+[[mutation]]
+name = "the attach screen is silent about the allow rules it takes back"
+file = "src/stayfixed/attach/commands.py"
+before = '    lines += [f"allow rule withdrawn: {clipped(rule)}" for rule in attached.allow_withdrawn]'
+after = "    pass"
+reddens = [
+  "tests/attach/test_commands.py::test_a_re_attach_names_each_allow_rule_it_takes_back",
+]
+
 # The owner-held files are the owner's: a `.env*` file in `checkout/` holds secrets, and the prefix
 # rule is what keeps every one of them out of a worktree whatever its name continues with.
 [[mutation]]

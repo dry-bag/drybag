@@ -203,7 +203,7 @@ class Carried:
 @dataclass(frozen=True)
 class Attached:
     """What one `attach` changed, and the screen it is said on: the binding, then what will run
-    that did not before and what no longer will, then the allow rules added.
+    that did not before and what no longer will, then the allow rules added and taken back.
 
     Nothing here is repository-authored but `origin`, this checkout's remote, and `project`, the
     name the binding is recorded under, both of which a caller prints through `printed`, and one
@@ -211,7 +211,8 @@ class Attached:
     `binding` is the binding id as `binding.short` prints it, never the whole id;
     `binding_recorded` says whether this run bound a checkout this machine did not bind before.
     `added` and `removed` are the executable diff against the render the last run left, and
-    `allow_added` the allow rules this run merged; all three are the overlay's.
+    `allow_added` the allow rules this run merged and `allow_withdrawn` those it took back; all
+    four are the overlay's.
     """
 
     settings_written: bool
@@ -224,6 +225,7 @@ class Attached:
     added: Carried = Carried()
     removed: Carried = Carried()
     allow_added: tuple[str, ...] = ()
+    allow_withdrawn: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -257,9 +259,11 @@ class AttachLedger:
 
     `allow` and `store` are not bounded here, and saying why is part of the rule rather than an
     omission. An allow rule has no grammar this area owns — the ledger exists *because* a rule
-    cannot be told from the owner's own by its content — and `_withdraw_settings` only ever
-    removes a rule the settings file already holds, so the worst a committed `allow` achieves is
-    taking a permission away. `store` is read by nothing: `detach` derives every path it
+    cannot be told from the owner's own by its content — and its two consumers, `detach`
+    (`_withdraw_settings`) and every re-attach (`permissions.withdrawing`), only ever remove a rule
+    the settings file already holds, so the worst a committed `allow` achieves is taking a
+    permission away, one the owner typed included. That bound is accepted: a branch can write this
+    file, so it is a convenience and no anchor against one. `store` is read by nothing: `detach` derives every path it
     withdraws from the configuration and the overlay root, never from this field, so it is a
     record for a human reading the file and for `doctor`, and a committed value costs nothing —
     except one holding a NUL, which no path holds and `doctor`'s `Path.resolve` meets with
@@ -630,8 +634,10 @@ def _write_ledger(
     """
     previous, binding = planned.previous, planned.binding
     rules = tuple(target for target, _ in planned.rules)
-    withdrawn = planned.diff.withdrawn_allow
-    allow = [rule for rule in previous.allow if rule not in withdrawn] if previous else []
+    # Only the rules the overlay grants now: one it no longer grants leaves the ledger whether or
+    # not the settings file still held it, or a copy the owner types by hand later would be taken.
+    granted = {*planned.diff.added_allow, *planned.diff.already_present}
+    allow = [rule for rule in previous.allow if rule in granted] if previous else []
     allow += [rule for rule in planned.diff.added_allow if rule not in allow]
     # The same union for the rule files, and for a sharper reason than the one above. A file
     # deleted from the overlay between two attaches is not written this time and so drops out of
@@ -1078,6 +1084,7 @@ def _carry_out(
         added=after.without(before),
         removed=before.without(after),
         allow_added=planned.diff.added_allow,
+        allow_withdrawn=planned.diff.withdrawn_allow,
     )
 
 

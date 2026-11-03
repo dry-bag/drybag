@@ -309,6 +309,10 @@ def withdrawing(
     settings file still `held`. A rule the owner added by hand is not recorded and stays; a
     recorded rule the owner removed by hand is not held and is nothing to take back.
 
+    The ledger is a checkout file a branch can write, so it is no anchor against one: the worst a
+    committed `allow` achieves is taking a permission away, one the owner typed included. `detach`
+    accepts the same bound.
+
     What the overlay grants is `diff`'s own: every rule is in `added_allow` or `already_present`,
     by whether the file held it."""
     granted = {*diff.added_allow, *diff.already_present}

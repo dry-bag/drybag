@@ -158,6 +158,19 @@ def test_an_attach_after_an_added_hook_entry_proceeds_and_shows_the_binding_and_
     assert (root / LEDGER).is_file()
 
 
+def test_a_re_attach_names_each_allow_rule_it_takes_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    _overlay_grants(store, allow=(RULE,))
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    _overlay_grants(store)
+    capsys.readouterr()
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    assert f"allow rule withdrawn: {quoted(RULE)}" in capsys.readouterr().out
+
+
 def test_an_origin_carrying_credentials_is_neither_printed_nor_recorded_with_them(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

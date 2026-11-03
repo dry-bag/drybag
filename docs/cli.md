@@ -2437,10 +2437,10 @@ checkout's `origin`, the project and the remote escaped as every name the reposi
 then each hook entry (by its event and command), skill (by its directory) and
 agent (by its file) the render adds or removes against the render the last run left in
 `$HOME/.local/share/stayfixed/delivery/<id>/`, which is what a session runs, and then each allow
-rule this run merges. A hook's command and an allow rule that do not fit a plain name are printed
+rule this run merges or takes back. A hook's command and an allow rule that do not fit a plain name are printed
 escaped, and cut to their first 120 characters and their length. `--json` carries the same lists
 as `hooks_added`, `hooks_removed`, `skills_added`, `skills_removed`, `agents_added`,
-`agents_removed` and `allow_added`, and no remote and no project of their own. A re-attach that
+`agents_removed`, `allow_added` and `allow_withdrawn`, and no remote and no project of their own. A re-attach that
 binds the checkout to another project than this machine's record named — a `[project] name`
 renamed in a pulled commit moves every worktree's binding — says so on one line naming both.
 `--check`'s line names no project.
@@ -2535,7 +2535,10 @@ of which allow rules are stayfixed's, because an allow rule cannot carry a marke
 entry can; `detach` reads it and nothing else. **A re-attach takes back an allow rule the overlay
 no longer grants**, where the ledger names it and the settings file still holds it: a rule dropped
 from `common/`, from `projects/<name>/` or from a tag you took off the project leaves with the
-next run, and a rule you added by hand, which the ledger does not name, stays. **`.gitignore` is never written**: it is tracked, so
+next run, each said as `allow rule withdrawn`, and a rule you added by hand, which the ledger does not name, stays.
+The ledger is a file in the checkout that a branch can write, so it is no defence against one: the worst a
+committed `allow` in it achieves is taking a permission away, one you typed included, at the next
+`attach` or `detach`, which both accept. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
 release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
 `init`'s.

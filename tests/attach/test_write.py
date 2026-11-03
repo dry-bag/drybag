@@ -2718,8 +2718,8 @@ def test_untagging_takes_back_the_tags_allow_rule(tmp_path: Path) -> None:
 
 
 def test_a_hand_added_rule_the_ledger_does_not_name_stays(tmp_path: Path) -> None:
-    # The ledger is the only witness of which rules are attach's: a rule the owner typed, even one
-    # the overlay once granted under the same text elsewhere, is theirs.
+    # The ledger is the only witness of which rules are attach's: a rule the owner typed, which the
+    # ledger does not name, is theirs.
     root, store, machine = _attachable(tmp_path, allow=(RULE,))
     _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
     attach(root, store=store, machine=machine, runner=Recorder())
@@ -2740,9 +2740,17 @@ def test_a_recorded_rule_removed_by_hand_is_not_an_error(tmp_path: Path) -> None
     document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
     document["permissions"]["allow"].remove("Bash(x)")
     (root / SETTINGS).write_text(json.dumps(document), encoding="utf-8")
+    by_hand = (root / SETTINGS).read_bytes()
     _untag(store)
     attach(root, store=store, machine=machine, runner=Recorder())
-    assert _allowed(root) == [RULE]
+    assert (root / SETTINGS).read_bytes() == by_hand
+    # The overlay grants it no longer, so the ledger forgets it with the file already without it;
+    # typed back by the owner, it is theirs and a later attach leaves it.
+    assert ledger(root).allow == (RULE,)
+    document["permissions"]["allow"].append("Bash(x)")
+    (root / SETTINGS).write_text(json.dumps(document), encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE, "Bash(x)"]
 
 
 def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:
