@@ -55,7 +55,7 @@ TEMPLATES = SRC / "templates"
 WALK = Walk(ROOT_LAUNCHERS)
 # Vacuity floors, not coverage: well under what the walk finds today, so that churn never trips
 # one and a walk that stopped seeing the package does.
-LAUNCHES_FLOOR = 70
+LAUNCHES_FLOOR = 60
 MODULES_FLOOR = 120
 # What ends the options in an argv, after which every element is an operand, read or not.
 END_OF_OPTIONS = ("--", "--end-of-options")
@@ -204,17 +204,14 @@ def github_files() -> set[str]:
 
     A template under a `.github/` folder is found by its path. One written into `.github/` from a
     template outside one is found only when its destination is named here, because the path it is
-    written at is computed at run time, which this does not follow: the project's workflow,
-    `init`'s `CI_WORKFLOW`, is the one today, and a second is a row this misses until it is added.
+    written at is computed at run time, which this does not follow: none is today, and one is a row
+    this misses until it is added.
     """
-    from stayfixed.project.templates import CI_WORKFLOW
-
-    shipped = {
+    return {
         "/".join(parts[parts.index(".github") :])
         for path in TEMPLATES.rglob("*")
         if path.is_file() and ".github" in (parts := path.relative_to(TEMPLATES).parts)
     }
-    return shipped | {CI_WORKFLOW}
 
 
 def outbound_programs(launches: list[Launch]) -> set[str]:
@@ -330,12 +327,12 @@ LAUNCH_SHAPES: dict[str, tuple[str, str, tuple[str | None, ...]]] = {
     ),
     "re-export": (
         TOP,
-        "from stayfixed.memory.refs import git_run as g\ng(r, 'push', 'origin', 'HEAD')",
+        "from stayfixed.docs.trail import git_run as g\ng(r, 'push', 'origin', 'HEAD')",
         ("git", "push", "origin", "HEAD"),
     ),
     "re-export-module": (
         TOP,
-        "from stayfixed.memory import refs\nrefs.git_run(r, 'push')",
+        "from stayfixed.docs import trail\ntrail.git_run(r, 'push')",
         ("git", "push"),
     ),
     "derived": (

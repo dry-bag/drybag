@@ -19,9 +19,8 @@ description: Audit a repository for correctness defects by component — candida
    **refuted** or **plausible** (a real gap you could not make fail). A confident all-clear
    over broken code and a real finding with wrong numbers arrive from the same fleet with
    the same confidence, so no candidate is closed by reading.
-4. Run the tree's own instruments over the same ground: `stayfixed test hygiene` for what
-   could falsify a red run, and `stayfixed docs check` for documents that make claims the tree
-   cannot hold. Their findings are candidates too.
+4. Run the tree's own instrument over the same ground: `stayfixed docs check` for documents
+   that make claims the tree cannot hold. Its findings are candidates too.
 5. File every confirmed finding with the `file-bug` skill, one entry each, with the
    command that showed it. Record every refuted candidate with what refuted it, in the
    audit's own note: a candidate closed without a record is generated again next time.

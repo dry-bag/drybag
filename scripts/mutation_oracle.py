@@ -69,7 +69,7 @@ DECLARATIONS = ROOT / "mutations"
 #
 # **A hand-kept table, and the one deliberate exception to CONTRIBUTING's "areas are discovered
 # by name — there is no shared registry to edit".** One file per area would need no table, and it
-# would be about twenty files, not twelve. The groups were sized for the plugin directory's limit
+# would be about twenty files, not eleven. The groups were sized for the plugin directory's limit
 # of 512 files, while the repository root was the plugin folder and every tracked file counted
 # against it. The plugin's tree (`scripts/plugin_tree.py`) no longer holds `mutations/`, so that
 # limit no longer reaches these files, and no size cap holds a group file. The table stays because
@@ -77,7 +77,6 @@ DECLARATIONS = ROOT / "mutations"
 # collide with every open branch's entries, for no reader's gain. CONTRIBUTING.md, "Tests", states
 # the same ruling.
 GROUP_OF: tuple[tuple[str, str], ...] = (
-    ("src/stayfixed/assess/", "assess"),
     ("src/stayfixed/attach/", "attach"),
     ("src/stayfixed/project/", "project"),
     ("src/stayfixed/templates/", "project"),

@@ -1,7 +1,7 @@
 # The fixture's own plan
 
 **Scope:** this document, and nothing else. It exists so that `stayfixed plan check` has a
-plan to lint when the reusable workflow runs against this project, and so that the four
+plan to lint in this project, and so that the four
 rules that command holds a plan to are exercised by a document that satisfies them.
 
 ## Context

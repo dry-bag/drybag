@@ -218,10 +218,7 @@ def test_every_job_that_reads_the_scope_runs_whole_on_any_answer_but_false() -> 
     # "every checks leg narrows on a change to docs" and "a failed scope job skips the oracle".
     ci, smoke = _jobs(CI_WORKFLOW), _jobs(SMOKE_WORKFLOW)
     assert [name for name in ci if "needs" not in ci[name]] == ["changes"]
-    assert [name for name in smoke if "needs" not in smoke[name]] == [
-        "changes",
-        "same-repository-form",
-    ]
+    assert [name for name in smoke if "needs" not in smoke[name]] == ["changes"]
     for job in (ci["oracle"], ci["plugin"], ci["runners"], ci["demo"]):
         assert job["needs"] == "changes" and job["if"] == NARROWED, job
     for job, full in ((ci["checks"], CHECKS_FULL), (smoke["installed-plugin"], SMOKE_FULL)):

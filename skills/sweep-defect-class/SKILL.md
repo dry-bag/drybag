@@ -19,12 +19,11 @@ description: Turn one defect into its class and close every instance — enumera
    (a deleted name, a status a surviving arm also produces) is worse than none, because it
    reads as coverage.
 4. Fix every instance or file it. A hit outside the change's scope becomes a ledger entry
-   (the `file-bug` skill), with the predicate quoted so the next sweep finds it again.
+   (the `file-bug` skill), with the predicate quoted so the next sweep finds it again;
+   `stayfixed bugs check` says whether the ledger still agrees with the tree.
 5. Declare the mutation for each fix: the one line to change, and the test that must go red
    when it does. Run the declared set unfiltered — a filtered run cannot see an entry an
-   earlier change declared and this one invalidated — and read its last line. Then run
-   `stayfixed test hygiene`: a red run that the tree could falsify is not evidence for the
-   sweep either.
+   earlier change declared and this one invalidated — and read its last line.
 6. Record the class where the next reader meets it: a sentence in the test's comment naming
    the shape and the instance, and one in the commit. The ten shapes an assertion turns out
    vacuous in are the reference: [references/vacuous-oracles.md](references/vacuous-oracles.md).

@@ -1,18 +1,9 @@
-"""`check.yml`'s one job, held to its shape and its two gate steps run as the scripts they are.
+"""`ci.yml`, `smoke.yml` and `release.yml`, held to their shape and their steps run as the
+scripts they are.
 
-The repository carries no YAML parser, so the file is read by `tests.workflow_yaml`, one strict
-reader that returns the whole document or fails naming the line it cannot read, and each gate
-step's script is taken from it by `step_script` and run with `bash` in a workspace laid out as
-the runner lays it out — the caller's checkout at `project/`, against a real clone, with the
-real `stayfixed gate`. Only the two checkouts and `setup-python` are the platform's and are not
-run here. Each gate step hands `stayfixed gate` the platform's raw values for the base and the
-project root, which it checks and resolves itself; `tests/assess/test_read_base.py` holds those
-checks.
-
-**What the judging step must hold.** It is the step whose exit status is the verdict, so it runs
-no command the repository wrote (`--builtin`) and imports nothing from the working directory or a
-user site directory (`python3 -P -s`), it judges the configuration whatever `only:` names, and it
-may not fail quietly. The project's own gates run in the next step, and only after it passed.
+The repository carries no YAML parser, so each file is read by `tests.workflow_yaml`, one strict
+reader that returns the whole document or fails naming the line it cannot read, and a step's
+script is taken from it by `step_script` and run with `bash`.
 """
 
 from __future__ import annotations
@@ -27,14 +18,10 @@ from pathlib import Path
 
 import pytest
 
-import stayfixed
-from stayfixed.config.loader import CONFIG_FILE
 from tests import plugintree, scriptload
-from tests.assess.baserepo import clone, commit
-from tests.floor import developer_free_environ, floor_env
+from tests.floor import developer_free_environ
 from tests.gitfixture import git, needs_git
 from tests.test_fixtures import (
-    CHECK_WORKFLOW,
     CI_WORKFLOW,
     RELEASE_WORKFLOW,
     RELEASING,
@@ -44,130 +31,9 @@ from tests.test_fixtures import (
     needs_ci_workflow,
     needs_release_workflow,
     needs_smoke_workflow,
-    needs_workflow,
     step_script,
 )
 from tests.workflow_yaml import Node, load
-
-GATES = "gates"
-JUDGE = "The configuration and the built-in gates"
-CUSTOM = "The project's own gates"
-PROOF = "stayfixed runs at all"
-
-BASE = f"""[stayfixed]
-version = "{stayfixed.__version__}"
-enforced = ["docs"]
-
-[project]
-name = "widget"
-"""
-LOOSENED = BASE.replace('["docs"]', "[]")
-# Well past the preset's `AGENTS.md` budget, so the `docs` gate has a finding.
-OVER_BUDGET = "".join("word\n" for _ in range(400))
-
-# Every line that names an interpreter, whole, in the order the job runs them. Only three are
-# stayfixed's, and a whitelist rather than a list of bad spellings: `-c` with flags before it,
-# `-Pc`, a program on standard input, a script path, an assignment in front of the command
-# (`PYTHONUSERBASE=… python3 …`), a wrapper (`env`, `exec`) or a second command packed onto the
-# line after a `;` are each a way the checkout reaches the interpreter, and a pattern for each
-# is a pattern for the ones thought of. Whole lines and not a prefix, because a prefix is
-# satisfied by a line that goes on to run something else.
-_PYTHON = re.compile(r"\bpython[\d.]*\b")
-STAYFIXED_INVOCATIONS = (
-    "python3 -m stayfixed --version",
-    "python3 -P -s -m stayfixed gate --builtin --root project \\",
-    "python3 -P -s -m stayfixed gate --custom --root project \\",
-)
-GATE_ENV: dict[str, Node] = {
-    "PYTHONPATH": "stayfixed/src",
-    "INPUT_BASE": "${{ inputs.base }}",
-    "INPUT_PATH": "${{ inputs.path }}",
-    "PR_BASE": "${{ github.base_ref }}",
-    "DEFAULT_BRANCH": "${{ github.event.repository.default_branch }}",
-    "WORKFLOW_SHA": "${{ steps.stayfixed.outputs.sha }}",
-    "ONLY": "${{ inputs.only }}",
-}
-# The custom step's own: its commands run from the project root, so a `python3 -m stayfixed` one
-# starts finds the workflow's stayfixed only through an absolute entry.
-CUSTOM_ENV: dict[str, Node] = {**GATE_ENV, "PYTHONPATH": "${{ github.workspace }}/stayfixed/src"}
-SCRIPT = "<script>"
-# What each gate invocation goes on to, on the lines it continues onto with `\`: first the
-# platform's raw values for the base and the project root, each one argv as `--name=value`, which
-# Python checks (`stayfixed.assess.base`), then the rest.
-BACKSLASH = "\\"
-PLATFORM_ARGUMENTS = (
-    '--pr-base="$PR_BASE" --base-input="$INPUT_BASE" --default-branch="$DEFAULT_BRANCH" '
-    '--path="$INPUT_PATH"'
-)
-GATE_ARGUMENTS = (
-    '--workflow-sha "$WORKFLOW_SHA" --annotate --summary "$GITHUB_STEP_SUMMARY" "${only[@]}"'
-)
-# The job, every step whole but its script, in order; an action is named without its ref, so a
-# pin moving is not a change here. Everything that reaches a step's process other than the
-# platform's own variables is in this list: its `env:`, its working directory, its action's
-# inputs, and whether it may fail or be skipped (a key the list does not carry).
-STEPS: list[dict[str, Node]] = [
-    {
-        "name": "The caller's repository",
-        "uses": "actions/checkout",
-        "with": {"path": "project", "fetch-depth": "0", "persist-credentials": "false"},
-    },
-    {
-        "name": "stayfixed, at this workflow's own commit",
-        "uses": "actions/checkout",
-        "with": {
-            "repository": "${{ job.workflow_repository }}",
-            "ref": "${{ job.workflow_sha }}",
-            "path": "stayfixed",
-            "persist-credentials": "false",
-        },
-    },
-    {
-        "name": "The checkout is the commit this workflow file is at",
-        "id": "stayfixed",
-        "env": {"EXPECTED": "${{ job.workflow_sha }}"},
-        "run": SCRIPT,
-    },
-    {"uses": "actions/setup-python", "with": {"python-version": "${{ inputs.python-version }}"}},
-    {"name": PROOF, "env": {"PYTHONPATH": "stayfixed/src"}, "run": SCRIPT},
-    {"name": JUDGE, "env": GATE_ENV, "run": SCRIPT},
-    {"name": CUSTOM, "env": CUSTOM_ENV, "run": SCRIPT},
-]
-# And each script's text, command for command as `_lines` reads it — a line continued with `\` is
-# one command, and comments, blank lines and indentation are aside: `STEPS` holds what a step is
-# given, and this holds what it does with it. A line that is not an invocation can still
-# change the verdict's process — `export PYTHONUSERBASE=…` or `. project/.ci-env` in a gate step,
-# or a copy into `stayfixed/src/` from an earlier one, where the verdict's `PYTHONPATH` imports a
-# `sitecustomize.py` at start-up — and every such line is a line this list does not carry.
-CHECKOUT_STEP = "The checkout is the commit this workflow file is at"
-SCRIPTS: dict[str, list[str]] = {
-    CHECKOUT_STEP: [
-        'expected="$(git -C stayfixed rev-parse --verify --quiet "$EXPECTED^{commit}")" || { echo'
-        " \"::error::the workflow's own ref '$EXPECTED' names no commit in the checkout\";"
-        " exit 1; }",
-        'actual="$(git -C stayfixed rev-parse HEAD)"',
-        '[ "$actual" = "$expected" ] || { echo "::error::checked out $actual, not the workflow\'s'
-        ' own $expected"; exit 1; }',
-        'echo "sha=$expected" >> "$GITHUB_OUTPUT"',
-    ],
-    PROOF: ["python3 -m stayfixed --version"],
-    JUDGE: [
-        "set -f",
-        "only=()",
-        'for name in $ONLY; do only+=("--only=$name"); done',
-        "set +f",
-        f"{STAYFIXED_INVOCATIONS[1].removesuffix(BACKSLASH).rstrip()} {PLATFORM_ARGUMENTS} "
-        f"{GATE_ARGUMENTS}",
-    ],
-    CUSTOM: [
-        "set -f",
-        "only=()",
-        'for name in $ONLY; do only+=("--only=$name"); done',
-        "set +f",
-        f"{STAYFIXED_INVOCATIONS[2].removesuffix(BACKSLASH).rstrip()} {PLATFORM_ARGUMENTS} "
-        f"{GATE_ARGUMENTS}",
-    ],
-}
 
 
 def _document(workflow: Path) -> dict[str, Node]:
@@ -175,11 +41,6 @@ def _document(workflow: Path) -> dict[str, Node]:
     document = load(workflow.read_text(encoding="utf-8"))
     assert isinstance(document, dict), workflow
     return document
-
-
-def _workflow() -> dict[str, Node]:
-    """`check.yml`."""
-    return _document(CHECK_WORKFLOW)
 
 
 def _jobs(workflow: Path) -> dict[str, dict[str, Node]]:
@@ -201,36 +62,10 @@ def _steps_of(workflow: Path, job: str) -> list[dict[str, Node]]:
     return [step for step in steps if isinstance(step, dict)]
 
 
-def _steps() -> list[dict[str, Node]]:
-    """`check.yml`'s one job's steps."""
-    return _steps_of(CHECK_WORKFLOW, GATES)
-
-
 def _name(step: dict[str, Node]) -> str:
     name = step.get("name") or step.get("uses")
     assert isinstance(name, str), step
     return name.split("@")[0]
-
-
-def _step(name: str) -> dict[str, Node]:
-    return next(step for step in _steps() if _name(step) == name)
-
-
-def _shape(step: dict[str, Node]) -> dict[str, Node]:
-    """The step without its script's text and its action's ref."""
-    shaped: dict[str, Node] = {}
-    for key, value in step.items():
-        if key == "run":
-            shaped[key] = SCRIPT
-        elif key == "uses" and isinstance(value, str):
-            shaped[key] = value.split("@")[0]
-        else:
-            shaped[key] = value
-    return shaped
-
-
-def _scripts() -> list[str]:
-    return [step["run"] for step in _steps() if isinstance(step.get("run"), str)]  # type: ignore[misc]
 
 
 def _code(line: str) -> str:
@@ -276,148 +111,6 @@ def _lines(script: str) -> list[str]:
     return lines
 
 
-def _clone(tmp_path: Path, base: str = BASE) -> Path:
-    """The runner's workspace, with the caller's checkout at `project/` on a branch `change`
-    whose upstream's `main` is the base."""
-    workspace = tmp_path / "workspace"
-    clone(workspace, base)
-    return workspace
-
-
-def _commit(workspace: Path, path: str, text: str) -> None:
-    project = workspace / "project"
-    (project / path).write_text(text, encoding="utf-8")
-    commit(project, "chore: the change under review")
-
-
-def _step_env(step: str) -> dict[str, str]:
-    """The named step's `env:` block, as the strict reader reads it: every key, a comment or a
-    blank line anywhere in it notwithstanding, and a key written twice refused."""
-    env = _step(step).get("env")
-    assert isinstance(env, dict) and all(isinstance(v, str) for v in env.values()), env
-    return {key: value for key, value in env.items() if isinstance(value, str)}
-
-
-def _judge(
-    workspace: Path,
-    only: str,
-    step: str = JUDGE,
-    *,
-    interpreter: Path | None = None,
-    extra: dict[str, str] | None = None,
-) -> tuple[int, str, str]:
-    """The named gate step, run as the runner runs it: from the workspace, with the environment
-    its own `env:` block names and the runner's few variables, and nothing else — unless a case
-    passes `extra`, a variable the step's `env:` could name, or `interpreter`, the directory
-    whose `python3` stands in for `setup-python`'s.
-
-    The `env:` block is read off the shipped file rather than retyped here, so a value it gains
-    — a `PYTHONPATH` that reaches into the checkout, say — is a value these cases run under.
-    Each `${{ }}` in it is replaced by what the runner would put there in this case, a pull
-    request into `main` from a caller that passes no `base:` or `path:`, and one this reader does
-    not know is a failure rather than a guess. stayfixed's own checkout is where the runner puts
-    it, `stayfixed/` beside `project/`.
-    """
-    runner = {
-        "${{ github.workspace }}": str(workspace),
-        "${{ inputs.base }}": "",
-        "${{ inputs.path }}": ".",
-        "${{ github.base_ref }}": "main",
-        "${{ github.event.repository.default_branch }}": "main",
-        "${{ steps.stayfixed.outputs.sha }}": "0" * 40,
-        "${{ inputs.only }}": only,
-    }
-    named = {}
-    for key, value in _step_env(step).items():
-        for expression, replaced in runner.items():
-            value = value.replace(expression, replaced)
-        assert "${{" not in value, (key, value)
-        named[key] = value
-    checkout = workspace / "stayfixed"
-    if not checkout.exists():
-        checkout.symlink_to(ROOT, target_is_directory=True)
-    summary = workspace / "step-summary.md"
-    summary.unlink(missing_ok=True)
-    done = subprocess.run(
-        ["bash", "-e", "-c", step_script(CHECK_WORKFLOW, step)],
-        cwd=workspace,
-        capture_output=True,
-        text=True,
-        check=False,
-        env={
-            # The interpreter running this suite stands in for `setup-python`'s: the step names
-            # `python3`, and a system one below the floor would fail for a reason CI never meets.
-            "PATH": f"{interpreter or Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin",
-            "HOME": str(workspace),
-            "GITHUB_STEP_SUMMARY": str(summary),
-            # The suite's floor under the product's `git`, for the `stayfixed gate` the step runs.
-            **floor_env(),
-            **named,
-            **(extra or {}),
-        },
-    )
-    written = summary.read_text(encoding="utf-8") if summary.exists() else ""
-    return done.returncode, done.stdout + done.stderr, written
-
-
-def _marker_gate(marker: Path) -> str:
-    """A `[gates.custom.tests]` table whose command writes `marker`."""
-    argv = json.dumps([Path(sys.executable).as_posix(), "-c", f"open({str(marker)!r}, 'w')"])
-    return f"\n[gates.custom.tests]\nrun = {argv}\n"
-
-
-@needs_workflow
-def test_the_reusable_workflow_is_one_job() -> None:
-    # Every case below is about `gates`, and a second job beside it would run with the caller's
-    # token and checkout under none of them. Mutation: none -- the assertion is the whole list
-    # of jobs, held by equality, so there is no branch to mutate: any job added reddens it.
-    jobs = _workflow()["jobs"]
-    assert isinstance(jobs, dict) and list(jobs) == [GATES], jobs
-
-
-@needs_workflow
-def test_one_job_whose_judging_steps_may_not_fail_and_run_in_order() -> None:
-    # The verdict is the job's status, so a step that may fail — `continue-on-error`, or an
-    # `if:` that runs it after a failure or skips it — is a verdict that can be turned green.
-    # `stayfixed gate` already exits 0 for an advisory gate's findings, so no step here needs
-    # either. Mutations (declared): the judging step gains `continue-on-error: true`; the custom
-    # step gains `if: always()`, which would run the repository's commands after a refusal.
-    job = _job(CHECK_WORKFLOW, GATES)
-    # And the job itself carries neither: an `if:` on `gates` skips it, and a skipped job is a
-    # required check the platform reports as passing. So the job's keys are held whole, which
-    # also keeps a job-level `env:` from reaching every step. Mutation (declared): the job gains
-    # an `if:`.
-    assert list(job) == ["runs-on", "timeout-minutes", "defaults", "steps"], list(job)
-    steps = _steps()
-    names = [_name(step) for step in steps]
-    # Every step's keys, whole and in order: a step that may fail or may be skipped carries a
-    # key the list does not, and a step with no name is a ninth step. Mutation (declared): such
-    # a step before the proof step.
-    found = [(_name(step), list(step)) for step in steps]
-    assert found == [(_name(step), list(step)) for step in STEPS], found
-    # A stayfixed that cannot run fails under its own name before anything reads as a finding,
-    # and the repository's own commands run last.
-    assert names.index(PROOF) < names.index(JUDGE) < names.index(CUSTOM)
-    assert names[-2:] == [JUDGE, CUSTOM], names
-
-
-@needs_workflow
-def test_the_job_s_time_limit_is_the_input_as_given() -> None:
-    # The caller file is pull-request content, so a bound on the input stops nobody and refuses a
-    # legitimate long caller; the platform's own job limit bounds whatever is passed.
-    inputs = _workflow()["on"]
-    assert isinstance(inputs, dict), inputs
-    call = inputs["workflow_call"]
-    assert isinstance(call, dict) and isinstance(call["inputs"], dict), call
-    declared = call["inputs"]["timeout-minutes"]
-    assert isinstance(declared, dict), declared
-    assert (declared["type"], declared["default"]) == ("number", "15"), declared
-    assert _job(CHECK_WORKFLOW, GATES)["timeout-minutes"] == "${{ inputs.timeout-minutes }}"
-    names = [_name(step) for step in _steps()]
-    assert names[0] == "The caller's repository", names
-    assert "The time limit is inside its bounds" not in names, names
-
-
 def _demanded_summary(step_name: str, output: str) -> str:
     """The one line the named smoke step's `grep -qx` demands of the script output it saved."""
     script = step_script(SMOKE_WORKFLOW, step_name)
@@ -451,224 +144,6 @@ def test_the_smoke_job_demands_the_summary_the_exfiltration_scenario_prints_over
     exfil = scriptload.load(scriptload.SCRIPTS / "smoke_exfiltration.py", "smoke_exfiltration")
     expected = f"{exfil.EXPECTED_ROWS} row(s), 0 failure(s)"
     assert _demanded_summary("The clone-to-exfiltration scenario", "hostile.out") == expected
-
-
-@needs_workflow
-def test_both_gate_steps_start_python_without_the_working_directory_on_its_path() -> None:
-    # Nothing the repository wrote may execute in the process that holds the verdict, and a
-    # module the interpreter imports from its working directory is something the repository
-    # wrote. The steps run from the workspace today, which the pull request writes nothing
-    # into; `-P` keeps that true if a later edit gives a gate step `working-directory: project`,
-    # as the base step it replaced had. And no step reads anything with `python3 -c` any more:
-    # the base step that did is gone. `-s` is the user site's half, and its behaviour is the
-    # `.pth` case below. Mutations (declared): `python3 -s -m` for `python3 -P -s -m` in the
-    # judging step, and in the custom step.
-    for step in (JUDGE, CUSTOM):
-        assert "python3 -P -s -m stayfixed gate" in step_script(CHECK_WORKFLOW, step), step
-    # And no interpreter the job starts runs anything but stayfixed, in any spelling: every
-    # line that names one, comments aside, is one of stayfixed's three invocation lines, whole
-    # and in order. Mutations (declared): the proof step runs `python3 -P -c`, `python3 -Pc`, or
-    # a program on standard input; the judging step's command gains an assignment in front of
-    # it. Whole, because `… gate --help >/dev/null; PYTHONUSERBASE=… python3 -P -m stayfixed gate
-    # --builtin …`, written before `-s`, began with an invocation and passed a prefix match.
-    # Mutation (declared): the judging step's command line runs a second command before the gate.
-    invocations = [
-        line.strip()
-        for script in _scripts()
-        for line in script.splitlines()
-        if not line.strip().startswith("#") and _PYTHON.search(line)
-    ]
-    assert invocations == list(STAYFIXED_INVOCATIONS), invocations
-
-
-@needs_workflow
-def test_no_expression_names_head_ref() -> None:
-    # The pull request's head branch is named by its author, and nothing the gates decide reads
-    # it: the whole file, comments included, names it nowhere.
-    assert "head_ref" not in CHECK_WORKFLOW.read_text(encoding="utf-8")
-
-
-@needs_workflow
-def test_the_judging_step_passes_the_platform_s_workflow_sha_through_env() -> None:
-    # An upgrade's `[ci] ref` is admitted only at the commit the platform says is running, so
-    # the judging step must hand `stayfixed gate` that commit, and from the platform's own record
-    # peeled by the checkout step, below — through `env:`, never spliced into the script. No
-    # clone case reaches an admitted move, which needs a released tag, so the wiring is held
-    # here. Mutation (declared): drop `--workflow-sha "$WORKFLOW_SHA"`.
-    assert '--workflow-sha "$WORKFLOW_SHA"' in step_script(CHECK_WORKFLOW, JUDGE)
-    assert _step_env(JUDGE)["WORKFLOW_SHA"] == "${{ steps.stayfixed.outputs.sha }}"
-
-
-def _checkout_step(workspace: Path, expected: str) -> tuple[int, str, str]:
-    """The checkout-assertion step, run against `workspace/stayfixed` with `EXPECTED` as the
-    platform's `job.workflow_sha`; its exit code, its stderr and what it wrote to the outputs."""
-    output = workspace / "github-output"
-    output.write_text("", encoding="utf-8")
-    done = subprocess.run(
-        ["bash", "-e", "-c", step_script(CHECK_WORKFLOW, CHECKOUT_STEP)],
-        cwd=workspace,
-        capture_output=True,
-        text=True,
-        check=False,
-        env={**floor_env(), "EXPECTED": expected, "GITHUB_OUTPUT": str(output)},
-    )
-    return done.returncode, done.stdout + done.stderr, output.read_text(encoding="utf-8")
-
-
-@needs_git
-@needs_bash
-@needs_workflow
-def test_the_checkout_step_peels_an_annotated_tag_to_the_commit_the_gates_are_handed(
-    tmp_path: Path,
-) -> None:
-    # A caller pinning `@vX.Y.Z` where that tag is annotated gets the tag object's sha as
-    # `job.workflow_sha`, while the checkout lands on the commit: `v0.1.0` was tagged so, and
-    # every run pinned to it refused with "checked out <commit>, not the workflow's own <tag>".
-    # The step peels the value, and hands the commit on. Mutation (declared): the step compares
-    # the raw value -> the annotated case refuses and this reddens.
-    checkout = tmp_path / "stayfixed"
-    checkout.mkdir()
-    git(checkout, "init", "-q")
-    (checkout / "a").write_text("a", encoding="utf-8")
-    commit(checkout, "first")
-    first = git(checkout, "rev-parse", "HEAD").strip()
-    (checkout / "a").write_text("b", encoding="utf-8")
-    commit(checkout, "second")
-    head = git(checkout, "rev-parse", "HEAD").strip()
-    git(checkout, "tag", "-a", "v9.9.9", "-m", "annotated")
-    tag_object = git(checkout, "rev-parse", "v9.9.9").strip()
-    assert tag_object != head
-    for expected in (tag_object, head):
-        code, said, output = _checkout_step(tmp_path, expected)
-        assert (code, output) == (0, f"sha={head}\n"), said
-    # And what still refuses: an empty value, which checks out the default branch, and a sha
-    # that names some other commit.
-    for expected in ("", first):
-        code, said, output = _checkout_step(tmp_path, expected)
-        assert (code, output) == (1, ""), said
-        assert "::error::" in said
-
-
-@needs_git
-@needs_bash
-@needs_workflow
-@pytest.mark.parametrize("only", ["config", ""])
-def test_the_judging_step_fails_a_change_that_loosens_what_the_base_enforces(
-    tmp_path: Path, only: str
-) -> None:
-    # The base enforces `docs` and the change empties `enforced`: a pull request turning off a
-    # gate it is about to face. The step must fail, say which key in an error annotation, and
-    # write it into the job summary. Mutations (declared): the step judges the tree against
-    # itself; it stops annotating; it writes no job summary.
-    workspace = _clone(tmp_path)
-    _commit(workspace, CONFIG_FILE, LOOSENED)
-    code, printed, summary = _judge(workspace, only)
-    assert code == 1, printed
-    assert "::error" in printed and "stayfixed.enforced" in printed, printed
-    assert "stayfixed.enforced" in summary, summary
-
-
-@needs_git
-@needs_bash
-@needs_workflow
-def test_the_judging_step_judges_the_configuration_whatever_only_names(tmp_path: Path) -> None:
-    # `only:` is the caller's, and the caller is pull-request content: a pull request that
-    # loosens `enforced` and sets `only: docs` in its own caller would otherwise run the `docs`
-    # gate under the base's configuration, pass it, and never meet the configuration check. So
-    # the judging step's `--builtin` runs `config` whatever else `only:` names. Mutation
-    # (declared): `gate --builtin` stops adding it.
-    workspace = _clone(tmp_path)
-    _commit(workspace, CONFIG_FILE, LOOSENED)
-    code, printed, summary = _judge(workspace, "docs")
-    assert code == 1, printed
-    assert "stayfixed.enforced" in printed and "stayfixed.enforced" in summary, printed
-
-
-@needs_git
-@needs_bash
-@needs_workflow
-def test_only_runs_the_names_it_is_given_and_nothing_else(tmp_path: Path) -> None:
-    # `AGENTS.md` over its budget under a base that enforces `docs`: only a run that includes
-    # `docs` fails. `config` alone judges an unchanged configuration and passes, which is what a
-    # matrix leg of its own is for. Mutation (declared): the loop that turns `only:` into
-    # `--only` arguments is removed, so every leg runs every gate.
-    workspace = _clone(tmp_path)
-    _commit(workspace, "AGENTS.md", OVER_BUDGET)
-    code, printed, _ = _judge(workspace, "config")
-    assert code == 0, printed
-    for only in ("", "config docs"):
-        code, printed, _ = _judge(workspace, only)
-        assert code == 1, (only, printed)
-
-
-@needs_git
-@needs_bash
-@needs_workflow
-def test_an_only_name_is_never_expanded_as_a_file_pattern(tmp_path: Path) -> None:
-    # `$ONLY` is split unquoted, which is also where the shell would glob: `d*` beside a file
-    # called `docs` in the workspace would become the `docs` gate. With globbing off it stays
-    # `d*`, a name no configuration has, and `stayfixed gate` refuses it (2). Mutation
-    # (declared): `set -f` is removed.
-    workspace = _clone(tmp_path)
-    (workspace / "docs").write_text("", encoding="utf-8")
-    code, printed, _ = _judge(workspace, "d*")
-    assert code == 2, printed
-
-
-@needs_git
-@needs_bash
-@needs_workflow
-def test_the_judging_step_runs_no_custom_gate_and_the_next_step_runs_them(tmp_path: Path) -> None:
-    # A custom gate executes files the pull request can change, so it must never run in the
-    # process that decides the verdict. The next step runs it, once the judging step passed.
-    # Mutation (declared): the judging step loses `--builtin` and the marker appears.
-    # The gate is on the base: one the change adds waits until it lands there.
-    marker = tmp_path / "marker"
-    workspace = _clone(tmp_path, BASE + _marker_gate(marker))
-    code, printed, _ = _judge(workspace, "")
-    assert code == 0, printed
-    assert not marker.exists(), printed
-    code, printed, _ = _judge(workspace, "", step=CUSTOM)
-    assert code == 0, printed
-    assert marker.exists(), printed
-
-
-@needs_workflow
-def test_the_verdict_s_process_gets_only_the_environment_its_step_names() -> None:
-    """Everything that reaches a step's process, held whole for every step, because `-P -s`
-    cover only the working directory and the user site directory: a `PYTHONPATH` entry inside the
-    checkout, a `PYTHONHOME` pointing into it, a `working-directory: project`, or a `BASH_ENV`
-    the step's non-interactive bash sources would each hand the pull request code in the process
-    that decides the verdict — or, in an earlier step, code that writes `$GITHUB_ENV` or
-    `$GITHUB_PATH` and so chooses the next steps' environment and interpreter.
-
-    What reaches it: the workflow's keys (no `env:`), the job's (no `env:`, no `if:`), the job's
-    `defaults:` (the shell and nothing else), and each step whole but for its script's text —
-    `env:`, `with:`, `working-directory:` and every other key — read by the strict reader, so a
-    comment or a blank line inside a block hides nothing, and a key written twice is refused.
-    No script writes `$GITHUB_ENV` or `$GITHUB_PATH` at all, and the next case holds every
-    script's text. The runner's own variables and the `PATH` `setup-python` extends are the
-    platform's.
-    """
-    workflow = _workflow()
-    assert list(workflow) == ["name", "on", "permissions", "jobs"], list(workflow)
-    defaults = _job(CHECK_WORKFLOW, GATES)["defaults"]
-    assert defaults == {"run": {"shell": "bash"}}, defaults
-    assert [_shape(step) for step in _steps()] == STEPS, [_shape(step) for step in _steps()]
-    # Mutation (declared): the checkout step appends to `$GITHUB_ENV`.
-    assert [s for s in _scripts() if "GITHUB_ENV" in s or "GITHUB_PATH" in s] == []
-
-
-@needs_workflow
-def test_the_job_s_token_can_read_the_repository_and_nothing_more() -> None:
-    # Every step runs with the job's token in reach of the platform, the project's own gates
-    # included, and those execute files the pull request can change. The checkouts need to read
-    # the repository and nothing else, so that is all the workflow grants; the workflow's keys
-    # above hold that `permissions:` is there, and this holds what it says. The job carries no
-    # `permissions:` of its own, which the job's keys hold. Mutation (declared): `contents:
-    # write`.
-    permissions = _workflow()["permissions"]
-    assert permissions == {"contents": "read"}, permissions
 
 
 @pytest.mark.parametrize(
@@ -711,141 +186,6 @@ def test_the_line_reader_reads_commands_as_bash_does(script: str, commands: list
     # whose comment ends in a backslash" and "the workflow line reader ends a quote at an escaped
     # quote".
     assert _lines(script) == commands
-
-
-@needs_workflow
-def test_every_script_the_job_runs_is_held_line_for_line() -> None:
-    """The class the environment case above leaves open: a script line that changes the
-    verdict's process — its environment or the code it imports — without being an invocation.
-
-    `-P` keeps the working directory off `sys.path` and nothing more. Measured with a
-    `setup-python`-shaped interpreter (not a virtual environment), before the gate steps passed
-    `-s`: a `.pth` under `project/.local` ran at start-up once the step exported
-    `PYTHONUSERBASE=project/.local`, and a `sitecustomize.py` copied into `stayfixed/src/` ran at
-    start-up under the step's own `PYTHONPATH`. `-s` answers the first, and nothing but this
-    hold answers the second. `export`, `.`/`source`, `cd`, `eval`, `umask` and a write into either
-    checkout are each one line, and a list of forbidden spellings is a list of the ones thought
-    of; so every script is held whole, comments aside, and a line the list does not carry reddens
-    here.
-    Mutations (declared): the judging step exports `PYTHONUSERBASE`; the custom step sources a
-    file from the caller's checkout; the checkout step copies a file into stayfixed's checkout.
-    """
-    found = {_name(step): _lines(str(step["run"])) for step in _steps() if "run" in step}
-    assert found == SCRIPTS, found
-
-
-@needs_git
-@needs_bash
-@needs_workflow
-@pytest.mark.parametrize("step", [JUDGE, CUSTOM], ids=["judging", "custom"])
-def test_no_module_the_checkout_carries_is_imported_by_a_gate_step(
-    tmp_path: Path, step: str
-) -> None:
-    # The behaviour the text above is about, run under the step's own `env:`: a pull request
-    # that adds a `tomllib.py` at its top, which stayfixed's loader would import in place of the
-    # standard library's if the checkout were on `sys.path`. Measured when this case was
-    # written: with `PYTHONPATH: stayfixed/src:project` the planted module ran, and one that
-    # re-exported the real `tomllib` left the step at exit 0. Mutations (declared): that
-    # `PYTHONPATH` on the judging step, and on the custom step.
-    workspace = _clone(tmp_path)
-    marker = tmp_path / "planted"
-    _commit(workspace, "tomllib.py", f"open({str(marker)!r}, 'w').close()\n")
-    code, printed, _ = _judge(workspace, "", step=step)
-    # The marker first: a planted module that ran is the finding, whatever it then broke.
-    assert not marker.exists(), printed
-    assert code == 0, printed
-
-
-def _outside_any_virtual_environment(tmp_path: Path) -> Path:
-    """A directory whose `python3` is this suite's interpreter outside its virtual environment.
-
-    A virtual environment turns the user site directory off by itself, so the suite's own
-    interpreter would pass a case about the user site whatever flags the step passed. The
-    interpreter `setup-python` installs is not in one, and neither is this.
-    """
-    directory = tmp_path / "bin"
-    directory.mkdir()
-    # Not typed in the standard library's stubs; the case below asserts it is what it says.
-    (directory / "python3").symlink_to(Path(getattr(sys, "_base_executable", sys.executable)))
-    return directory
-
-
-@needs_git
-@needs_bash
-@needs_workflow
-@pytest.mark.parametrize("step", [JUDGE, CUSTOM], ids=["judging", "custom"])
-def test_no_pth_file_under_a_user_base_in_the_checkout_runs_in_a_gate_step(
-    tmp_path: Path, step: str
-) -> None:
-    # `-P` leaves the user site directory on, and a `.pth` file in it runs at the interpreter's
-    # start-up, before anything stayfixed imports. The step's `env:` is held whole and names no
-    # `PYTHONUSERBASE`; `-s` is what keeps a `.pth` the pull request commits out of the verdict's
-    # process if it ever does. Measured before `-s`: with `PYTHONUSERBASE=project/.local`, a
-    # committed `.pth` ran under `python3 -P`. Mutations (declared): `-s` dropped from the
-    # judging step, and from the custom step.
-    workspace = _clone(tmp_path)
-    marker = tmp_path / "planted"
-    interpreter = _outside_any_virtual_environment(tmp_path)
-    python3 = str(interpreter / "python3")
-    user_base = {"PYTHONUSERBASE": "project/.local"}
-    env = {"PATH": f"{interpreter}:/usr/bin:/bin:/usr/local/bin", "HOME": str(workspace)}
-    site = subprocess.run(
-        [python3, "-c", "import site; print(site.getusersitepackages())"],
-        cwd=workspace,
-        env={**env, **user_base},
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-    planted = workspace / site / "planted.pth"
-    planted.parent.mkdir(parents=True)
-    planted.write_text(f"import os; open({str(marker)!r}, 'w').close()\n", encoding="utf-8")
-    commit(workspace / "project", "chore: a user base inside the checkout")
-    # The case can fail: this interpreter, started without `-s`, runs the file.
-    subprocess.run(
-        [python3, "-P", "-c", "pass"], cwd=workspace, env={**env, **user_base}, check=True
-    )
-    assert marker.exists(), "no user site directory is read here, so nothing below could fail"
-    marker.unlink()
-    code, printed, _ = _judge(workspace, "", step=step, interpreter=interpreter, extra=user_base)
-    # The marker first: a `.pth` that ran is the finding, whatever the step then said.
-    assert not marker.exists(), printed
-    assert code == 0, printed
-
-
-@needs_git
-@needs_bash
-@needs_workflow
-def test_a_custom_gate_s_python3_m_stayfixed_is_the_workflow_s_own(tmp_path: Path) -> None:
-    # Each command runs from the project root, so the step's `PYTHONPATH` reaches the command's
-    # `python3 -P -m stayfixed` only as an absolute path: measured on 2026-10-26, the relative
-    # `stayfixed/src` printed "No module named stayfixed" and the gate failed. An interpreter
-    # outside any virtual environment, so no installed stayfixed answers in its place.
-    gate = '\n[gates.custom.reach]\nrun = ["python3", "-P", "-m", "stayfixed", "--version"]\n'
-    base = BASE.replace('["docs"]', '["docs", "reach"]') + gate
-    workspace = _clone(tmp_path, base)
-    python = _outside_any_virtual_environment(tmp_path)
-    code, printed, _ = _judge(workspace, "reach", step=CUSTOM, interpreter=python)
-    assert code == 0, printed
-    assert f"stayfixed {stayfixed.__version__}" in printed
-
-
-@needs_git
-@needs_bash
-@needs_workflow
-def test_the_custom_step_runs_only_the_custom_gates_only_names(tmp_path: Path) -> None:
-    # A matrix leg's `only:` reaches the custom step too, so a leg named for a built-in gate
-    # does not also run every command `[gates.custom]` names, and a leg named for a custom gate
-    # runs that one. Mutation (declared): the custom step's loop is removed, and the `docs` leg
-    # runs the marker gate.
-    marker = tmp_path / "marker"
-    workspace = _clone(tmp_path, BASE + _marker_gate(marker))
-    code, printed, _ = _judge(workspace, "docs", step=CUSTOM)
-    assert code == 0, printed
-    assert not marker.exists(), printed
-    code, printed, _ = _judge(workspace, "tests", step=CUSTOM)
-    assert code == 0, printed
-    assert marker.exists(), printed
 
 
 # --- The plugin tree the workflows validate, install and attest -------------------------------
@@ -1702,7 +1042,7 @@ def test_the_validator_reads_a_catalog_whose_entry_pins_a_sha(tmp_path: Path) ->
     (stub / "claude").chmod(0o755)
     temp = tmp_path / "runner"
     temp.mkdir()
-    root = CHECK_WORKFLOW.parents[2]
+    root = ROOT
     done = _run_step(
         step_script(CI_WORKFLOW, PINNED_CATALOG), root, stub, {"RUNNER_TEMP": str(temp)}
     )

@@ -24,9 +24,9 @@ from stayfixed.command import CHECK_HELP, command_owner, common_flags
 from stayfixed.config.schema import HARNESS_MODE, Config
 from stayfixed.config.session import command_config, session_config
 from stayfixed.errors import Failure, Refusal
-from stayfixed.findings import labels, listed
+from stayfixed.findings import listed
 from stayfixed.memory import trust
-from stayfixed.memory.bundles import Bundle, fit, render
+from stayfixed.memory.bundles import Bundle, render
 from stayfixed.memory.index import (
     INDEX_NAME,
     IndexCheck,
@@ -278,88 +278,6 @@ def run_inventory(args: argparse.Namespace) -> Result:
     )
 
 
-def run_doctor_bundles(args: argparse.Namespace) -> Result:
-    """What `doctor` reads: whether each bundle fits the slots `hooks.json` declares."""
-    store, config = _store(args)
-    report = {
-        bundle.value: {
-            "parts": (found := fit(bundle, store, config)).parts,
-            "slots": found.slots,
-            "overflow": found.overflow,
-            "oversized": found.oversized,
-        }
-        for bundle in Bundle
-    }
-    bad = [name for name, row in report.items() if row["overflow"] or row["oversized"]]
-    summary = "every bundle fits its slots" if not bad else f"does not fit: {', '.join(bad)}"
-    return Result(summary, {"bundles": report}, exit_code=1 if bad else 0)
-
-
-# The refusal carries the resolver's reasons rather than naming a command that would report
-# them, because no command does: `run_index` builds its findings from `_findings` and drift and
-# reads `store.unavailable` nowhere, in either `--json` object or on the summary. The one case a
-# resolver reason does surface elsewhere is total failure — `resolve` returns `None` and
-# `_no_store` raises — and that never reaches here, so a pointer would have been false in
-# precisely and only the case that produces it: partial group resolution. `ledger/index.py` says
-# at length why a refusal pointing away from the fix is worth rewriting a guard to avoid.
-#
-# The reasons are built out of `memory.groups` entries and name paths, so they are
-# repository-authored text and reach a reader the way `_no_store`'s reason does: inside
-# `trust.wrap`, with the region markers that say the text is data. So the line above the region
-# counts and names no group: escaping bounds a name's bytes, not its meaning, and a group named as
-# a sentence would otherwise reach an agent as prose outside the markers.
-_UNAVAILABLE_GROUPS = (
-    "{count} configured group(s) could not be resolved, so the walk read a subset and "
-    "no answer from it means anything; the reasons below are repository-authored text, shown as "
-    "data"
-)
-
-
-def _unavailable(unavailable: dict[str, str]) -> Refusal:
-    # Each name through `quoted`: `memory.groups` is repository-written and bounded by no
-    # grammar, and `trust.wrap` delimits text for the model without escaping a byte for the
-    # terminal. The store's own reasons quote the group the same way.
-    #
-    # Not capped, unlike the resolver's one-line reason: this is the data region, one reason per
-    # line, and the line above it counts them. What bounds it on the path a model reads is the
-    # harness, which keeps at most `[native_caps] hook_output_chars` of a hook's output.
-    reasons = "\n".join(f"{quoted(group)}: {unavailable[group]}" for group in sorted(unavailable))
-    head = _UNAVAILABLE_GROUPS.format(count=len(unavailable))
-    return Refusal(f"{head}\n{trust.wrap(reasons)}")
-
-
-def run_refs(args: argparse.Namespace) -> Result:
-    from dataclasses import asdict
-
-    from stayfixed.memory.refs import check_refs
-
-    store, config = _store(args)
-    report = check_refs(Path(args.root).resolve(), config, store)
-    if report.unavailable:
-        raise _unavailable(report.unavailable)
-    data = {
-        "findings": [asdict(f) for f in report.findings],
-        "unreadable": [str(path.relative_to(store.path)) for path, _ in report.unreadable],
-        "notices": [asdict(n) for n in report.notices],
-    }
-    # The link graph is advice: counted on the line and listed in `--json`, never in the exit
-    # code, because the store is shared by every session on the machine and a sibling's
-    # half-finished sweep is not this tree's fault to fail on.
-    advice = (
-        [f"{len(report.notices)} advisory link-graph notice(s), which do not gate"]
-        if report.notices
-        else []
-    )
-    parts: list[str] = []
-    if report.findings:
-        parts.append(f"{len(report.findings)} stale reference(s): {labels(report.findings)}")
-    if report.unreadable:
-        parts.append(f"{len(report.unreadable)} note(s) could not be parsed and were not read")
-    if not parts:
-        return Result("; ".join(["every backticked path in the store resolves", *advice]), data)
-    return Result("; ".join([*parts, *advice]), data, exit_code=1)
-
-
 # What `memory promote` refuses, with nothing recorded: a name that is no note the store walks,
 # and a command line that names notes and asks for every unreviewed one at once, or neither.
 NOT_A_NOTE = (
@@ -431,20 +349,6 @@ def register(groups: SubParsers) -> None:
         sub.add_parser("inventory", help="what a memory sweep reads"), store=True
     )
     listing.set_defaults(func=run_inventory)
-
-    fitting = common_flags(
-        sub.add_parser("fit", help="whether each bundle fits its hook slots"), store=True
-    )
-    fitting.set_defaults(func=run_doctor_bundles)
-
-    refs = common_flags(
-        sub.add_parser(
-            "refs",
-            help="backticked paths in notes that no longer resolve, and the link graph as advice",
-        ),
-        store=True,
-    )
-    refs.set_defaults(func=run_refs)
 
     promoting = common_flags(
         sub.add_parser("promote", help="count notes as the owner's, at the bytes they hold now"),

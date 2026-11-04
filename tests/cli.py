@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import argparse
 import io
-import json
-import sys
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
@@ -26,11 +24,6 @@ def cli(
     with redirect_stdout(io.StringIO()) as out, redirect_stderr(io.StringIO()) as err:
         code = run([*argv, *flags], parser=parser)
     return code, out.getvalue(), err.getvalue()
-
-
-def custom_gate(name: str, code: str) -> str:
-    """A `[gates.custom.<name>]` table running `code` under this interpreter."""
-    return f"\n[gates.custom.{name}]\nrun = {json.dumps([sys.executable, '-c', code])}\n"
 
 
 def subparsers(parser: argparse.ArgumentParser) -> SubParsers | None:

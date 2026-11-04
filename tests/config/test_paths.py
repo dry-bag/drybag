@@ -523,18 +523,12 @@ def test_every_file_stayfixed_keeps_in_its_own_directory_is_under_the_reserved_n
     # either side reddens here instead of leaving an area's state unprotected.
     from stayfixed.config.layout import ATTACH_LEDGER as LEDGER
     from stayfixed.memory.store import LOCAL_STORE
-    from stayfixed.project.uninstall import ASSESSMENT, LEDGER_DIRS
-    from stayfixed.scaffold import LOCAL_ARTIFACTS, LOCAL_DIGESTS, LOCAL_ROOT, MANIFEST_PATH
+    from stayfixed.scaffold import MANIFEST_PATH
 
     for path in (
         LEDGER,
-        LOCAL_ROOT,
-        LOCAL_ARTIFACTS,
-        LOCAL_DIGESTS,
         MANIFEST_PATH.as_posix(),
         LOCAL_STORE.as_posix(),
-        ASSESSMENT,
-        *LEDGER_DIRS,
     ):
         assert path.split("/")[0] == STAYFIXED_DIRECTORY, path
 

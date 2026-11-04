@@ -20,8 +20,6 @@ reads from outside the area:
   the memory area's, so this area publishes neither a copy of the set nor its own members;
 - the file an earlier release merged the overlay's hook entries into (`LOCAL_SETTINGS`), which
   the doctor area's tests write those entries into;
-- `detach`, which `project`'s `uninstall` runs on an attached repository before it takes the
-  scaffold back, and `Detached`, the type it returns;
 - `attach` and `Attached`, which `setup --restore` runs on each checkout the overlay's projects
   file lists (`setup.restore`), and the type it returns, with `Carried`, the type of two of its
   fields (`added` and `removed`), which `tests/test_surfaces.py` derives that a surface carries.
@@ -36,10 +34,11 @@ runs `attach --check` and reads the same `Result`"; `setup` imports nothing of `
 permission-diff half of the area — `check`, `diff_permissions` and the `PermissionDiff` it
 returns — was published on the strength of that sentence and left when the sentence did.
 
-**Trimmed once, and back for `setup --restore`: `attach` and `Attached`, and `detach` and
-`Detached` until `uninstall` ran it.** They were published against a
-second sentence of the same kind — "`tests/test_install_path.py`, the walkthrough that runs the
-four packages in the order a person does, is the other consumer, and it drives `attach` and
+**Trimmed once, and back for `setup --restore`: `attach` and `Attached`; `detach` and
+`Detached` are trimmed again since the `uninstall` that ran `detach` was deleted.** They were
+published against a second sentence of the same kind — "`tests/test_install_path.py`, the
+walkthrough that runs the four packages in the order a person does, is the other consumer, and it
+drives `attach` and
 `detach`, whose returns are `Attached` and `Detached`". That walkthrough drives the argument
 parser: `step("attach", "--store", ..., "--machine", ...)`, which is the point of it, because the
 commands' argv wiring is what it exists to exercise. It imports two surfaces,
@@ -55,21 +54,13 @@ kept the names.
 
 The ledger's path is the core's (`config.layout`'s `ATTACH_LEDGER`), because `project` and
 `doctor` name it too; nothing outside delivery imports this area but through the crossings pinned
-in `tests/boundaries/test_delivery.py`, `uninstall`'s `detach` among them.
+in `tests/boundaries/test_delivery.py`.
 """
 
 from stayfixed.attach.binding import Binding, read_binding
 from stayfixed.attach.permissions import LOCAL_SETTINGS
 from stayfixed.attach.render import Rendered
-from stayfixed.attach.write import (
-    Attached,
-    AttachLedger,
-    Carried,
-    Detached,
-    attach,
-    detach,
-    ledger,
-)
+from stayfixed.attach.write import Attached, AttachLedger, Carried, attach, ledger
 
 __all__ = [
     "LOCAL_SETTINGS",
@@ -77,10 +68,8 @@ __all__ = [
     "Attached",
     "Binding",
     "Carried",
-    "Detached",
     "Rendered",
     "attach",
-    "detach",
     "ledger",
     "read_binding",
 ]

@@ -1,6 +1,6 @@
 ---
 name: init
-description: Take a repository onto stayfixed — show what it detected, ask the questions a person may answer, write the scaffold, and offer the adoption that assesses it. Use when a project has no .stayfixed/manifest.json yet, or the user asks to initialise stayfixed in it.
+description: Take a repository onto stayfixed — show what it detected, ask the questions a person may answer, and write stayfixed.toml with the roadmap, trail and bug-ledger files the checks read and the .gitignore region that keeps .stayfixed/local/ out of git. Use when a project has no .stayfixed/manifest.json yet, or the user asks to initialise stayfixed in it.
 ---
 
 # Initialising a project
@@ -12,8 +12,7 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 ## Walk
 
 1. Run `stayfixed init --questions --json`. It refuses a repository that already has
-   `.stayfixed/manifest.json` (offer `stayfixed upgrade`) or a `stayfixed.toml` (see the first
-   rule). Otherwise `questions.properties` holds ten questions, asked in the order
+   `.stayfixed/manifest.json` or a `stayfixed.toml` (see the first rule). Otherwise `questions.properties` holds seven questions, asked in the order
    `questions.required` lists them, each with its `default` (what `stayfixed init --yes` alone
    would write), its `x-stayfixed-source`, its `x-stayfixed-flag` and its
    `x-stayfixed-tradeoff`: four lines, what the answer gives (`get`), what it gives up
@@ -26,11 +25,11 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 4. Ask each remaining question in order, one at a time: its options, the default marked, and its
    four lines as written. If the user picks the overlay and its option says the setup skill
    creates one next, ask one follow-up: set one up now, or keep notes on this machine until
-   then, which is the answer `local-only`. A `no` to CI is the flag `--no-ci`.
+   then, which is the answer `local-only`.
 5. Build the command: `--yes --dry-run`, then each answer that differs from its default as its
    `x-stayfixed-flag`, once per item for a list, such as
-   `stayfixed init --yes --dry-run --name widget --local roadmap-history`. Leave the plugins out:
-   they are not `init`'s. Run it and relay both reports, the `CI:` line, the `picked:` list
+   `stayfixed init --yes --dry-run --name widget --memory-mode in-repo`. Leave the plugins out:
+   they are not `init`'s. Run it and relay both reports, the `picked:` list
    and every `note:` line. Ask for a final yes. **Silence, a timeout or an empty answer is a
    no.**
 6. On a yes, run the same command without `--dry-run`, and relay the real run the same way.
@@ -39,27 +38,17 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 8. If the answer was the overlay: when the machine records none, hand over to the `setup`
    skill to create or record one; then hand over to the `attach` skill to bind this
    repository. Each asks its own confirmations. Come back here afterwards.
-9. Offer the `adopt` skill, which assesses the repository and walks its adoption with the
-   user. On a yes, hand over to it.
 
 ## Rules
 
 - **A `stayfixed.toml` the user wrote answers the questions.** Skip steps 2–4 and 7 and run
   steps 5 and 6 with no answer flag: the dry run, the relay, the explicit final yes, then the write. The
   file is kept; a missing `[stayfixed] version` is the one thing added, and a `note:` line says so.
-  A file that configures custom gates gets a `note:` naming them. The `adopt` skill's first step
-  asks about them before their commands run, and without a yes it assesses and promotes the
-  rest without running them.
 - **A `failed:` line from `init` over a `stayfixed.toml` the user wrote means the next command
   could not load that file.** Nothing was written. Relay the sentence, fix the file with the
   user, and run again.
-- **A repository with `.stayfixed/manifest.json` is refused.** Refreshing is `stayfixed upgrade`.
+- **A repository with `.stayfixed/manifest.json` is refused.** `init` writes a scaffold once.
   Never delete the manifest to get past it.
 - **Nothing is written when anything is refused.** Relay every `REFUSED` line, fix the cause
   with the user, and run again.
-- **A `CI:` line saying the workflow was skipped is the whole answer about CI.** Before the
-  first stayfixed release there is no commit to pin, and the sentence says so.
-- **Never hand-edit `[stayfixed] version`, `state`, `enforced`, `[ci] ref` or
-  `.stayfixed/manifest.json`.** They are the tool's: `stayfixed adopt promote` moves `state` and
-  `enforced`, and `stayfixed upgrade` moves the version and the ref.
-- **The undo is `stayfixed uninstall`.** Run `stayfixed uninstall --dry-run` first.
+- **Never hand-edit `.stayfixed/manifest.json`.** It is the tool's.

@@ -2,11 +2,11 @@
 
 A note is reviewed when the sha256 of its current bytes is a `reviewed` entry in the machine's
 trust record (`trust.json`, beside the machine file). The digest alone decides: the entry keeps the
-note's resolved path only as the label `trust list` prints, so identical bytes are the note the
-owner promoted wherever they sit — another worktree's copy, a store that moved, a renamed file —
-and an edit is a note to review again. `memory promote` writes the entry, `trust list` lists it and
-`trust revoke reviewed --subject PATH` withdraws it; the record kind is no registered approval
-kind, so nothing else asks about it.
+note's resolved path only as a label, so identical bytes are the note the owner promoted wherever
+they sit — another worktree's copy, a store that moved, a renamed file — and an edit is a note to
+review again. `memory promote` writes the entry, and a promoted note is withdrawn by editing it,
+which changes its digest, or by deleting it; the record kind is no registered approval kind, so
+nothing else asks about it.
 
 **What it stops, and what it rests on.** Every writer of a note but the owner's own review: a clone
 that commits a note ranked `startup: 1`, the harness's memory writer, an agent writing while it
@@ -47,9 +47,9 @@ def digest(note: Path) -> str:
 
 
 def subject(note: Path) -> str:
-    """The label the record keeps beside a note's digest, for `trust list` to print: its resolved
-    path, so a note reached through a group link (`developer` in every composed store) is named by
-    where its bytes are and never by a path naming the binding id. Nothing matches on it."""
+    """The label the record keeps beside a note's digest: its resolved path, so a note reached
+    through a group link (`developer` in every composed store) is named by where its bytes are and
+    never by a path naming the binding id. Nothing matches on it."""
     return str(fsops.resolved(note))
 
 

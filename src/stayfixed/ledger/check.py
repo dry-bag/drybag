@@ -93,8 +93,7 @@ _FORK_UNKNOWN = (
     "where a commit this change forked from `{base}` at kept the ledger is unknown, so the "
     "{name} gate proved nothing: "
 )
-# `{reason}` is the loader's own, bounded where it was raised, as `stayfixed gate` prints it
-# for the base's copy.
+# `{reason}` is the loader's own, bounded where it was raised.
 FORK_DOES_NOT_LOAD = _FORK_UNKNOWN + "its stayfixed.toml does not load ({reason})"
 FORK_REFUSED = (
     _FORK_UNKNOWN + "loading its stayfixed.toml against this tree met a refusal: {reason}"
@@ -218,13 +217,12 @@ def _fork_register(
 ) -> Register:
     """The register as the commit `fork` configured it, out of its own `stayfixed.toml`.
 
-    Found as `stayfixed gate` finds the base's copy (`committed.committed_document`, at the
-    project root's path inside the repository, `prefix`), and loaded as it loads it — through the
-    loader, against this tree's disk, under its own label — with the `[personal]` this command
-    already read, so no second machine file is read.
+    Found by `committed.committed_document`, at the project root's path inside the repository,
+    `prefix`, and loaded through the loader, against this tree's disk, under its own label, with the
+    `[personal]` this command already read, so no second machine file is read.
 
     A commit with no copy there is the bootstrap, the change that adds the configuration, and
-    `register` decides, as the tree decides for `stayfixed gate`. A copy that does not load, is
+    `register` decides. A copy that does not load, is
     not UTF-8 or meets a refusal is no answer, and never the tree's paths in its place: read
     there, a change that moved the ledger would pass the deletion this exists to catch.
     """
@@ -382,7 +380,7 @@ def register_gate(
     if base:
         # The strategy bound once: every fork point is located with the same root, prefix,
         # `[personal]` and fallback. The prefix is asked only when a fork's own copy is read,
-        # and refuses a root git and the caller spell differently, as `stayfixed gate` does.
+        # and refuses a root git and the caller spell differently.
         at = None
         if locate is not None:
             at = partial(
@@ -599,8 +597,7 @@ def _swept_from(found: str, rendered: str, *, old: str, new: str) -> bool:
 
 
 def bugs_gate(root: Path, config: Config, base: str = "") -> list[Finding]:
-    """The `bugs` gate: the bug ledger's `register_gate`, in the `(root, config, base)` shape every
-    gate of `stayfixed assess` shares.
+    """The `bugs` gate: the bug ledger's `register_gate`, in the `(root, config, base)` shape.
 
     `bugs check` answers with this function, with `--base` as `base` or `""`, which judges the
     tree alone; every gate run passes the base it judges against.

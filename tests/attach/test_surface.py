@@ -19,7 +19,7 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     #
     # `attach` is on it since `setup --restore` runs it on each checkout the overlay's projects
     # file lists, with `Attached` it returns and `Carried`, the type of two of its fields.
-    # `detach` is, since `project`'s `uninstall` runs it on an attached repository.
+    # `detach` is not, since no area runs it once `uninstall` was deleted.
     #
     # No mutation entry: the mutation is adding an export, which is two lines in `api.py` (the
     # import and the `__all__` entry) and not one substituted line. Measured by hand instead —
@@ -36,7 +36,5 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
         "attach",  # `setup --restore` attaches each listed checkout
         "Attached",  # what `attach` returns
         "Carried",  # the type of two of `Attached`'s fields
-        "detach",  # `project`'s `uninstall` detaches an attached repository first
-        "Detached",  # what `detach` returns
     }
     assert required == set(attach.__all__)

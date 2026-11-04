@@ -1,13 +1,13 @@
 """The one grammar for "a backticked path in hand-written prose".
 
-The plan lint and the memory reference guard read different documents for different reasons
-and ask them the same question: which backticked spans claim that a path exists. Two copies of
-that question drift, and they drift silently: let one copy accept `.ts`/`.tsx` and the other
-not, and in a repository whose front end is TypeScript a plan naming a deleted `.ts` module gets
-no reference check at all, while the module that came second goes on saying in its docstring
+The plan lint and the always-loaded document's link check read different documents for different
+reasons and ask them the same question: which backticked spans claim that a path exists. Two
+copies of that question drift, and they drift silently: let one copy accept `.ts`/`.tsx` and the
+other not, and in a repository whose front end is TypeScript a plan naming a deleted `.ts` module
+gets no reference check at all, while the module that came second goes on saying in its docstring
 that it shares a grammar it does not. One copy, here, is what stops that. A closed list of
-extensions is the same drift between this grammar and every stack the list leaves out, so there
-is none: a `.rs`, a `.go` or a `.java` file is claimed as a `.py` one is.
+extensions is the same drift between this grammar and every stack the list leaves out, so there is
+none: a `.rs`, a `.go` or a `.java` file is claimed as a `.py` one is.
 
 Four rules live here, and each is a decision rather than a default:
 
@@ -26,8 +26,7 @@ Four rules live here, and each is a decision rather than a default:
   A shared grammar with an unshared resolution rule is the same drift in slower motion:
   `resolves_within` is where that rule is written down.
 
-A leaf module: `docs.plans`, `docs.hygiene`, `memory.graph` and `memory.refs` import it, and
-none may import another's area.
+A leaf module: `docs.plans` and `docs.hygiene` import it, and neither may import the other's area.
 """
 
 from __future__ import annotations
@@ -61,9 +60,6 @@ _BROKEN_SYMBOL = re.compile(r":::|(?<!:):(?!:)|:\Z")
 # later line closes, and took seconds over a few thousand of them.
 _FENCE_MARKS = "`~"
 _FENCE_MIN = 3
-# Inline code, single-line so a stray backtick cannot swallow the lines after it. Blanked
-# AFTER fences (a fence can contain backticks).
-CODE_SPAN = re.compile(r"`[^`\n]*`")
 # A first path component that ends in a dot and a label of two or more characters, the dot after
 # some other character: a host (a Go module path's `example.com/`, a URL with no scheme), not a
 # directory of this repository. A leading dot alone is a hidden directory (`.github/`), and a
@@ -115,16 +111,6 @@ def blank_fences(text: str) -> str:
     return "\n".join(lines)
 
 
-def blank_code_spans(text: str, placeholder: str = "\x00") -> str:
-    """``text`` with each inline code span replaced by ``placeholder``.
-
-    A placeholder, not a deletion: removing a span leaves its neighbours adjacent, so
-    `[[a]] `x` [[a]]` would read as a repeated link. Not for the readers of backticked paths
-    (`path_references` reads spans; this erases them) — the memory graph check is the caller.
-    """
-    return CODE_SPAN.sub(placeholder, text)
-
-
 def path_references(line: str) -> Iterator[str]:
     """Every backticked span in ``line`` that claims a path; bare filenames, and a span whose
     first component is a host (`HOST`), are prose."""
@@ -161,11 +147,6 @@ def resolves_within(root: Path, target: str, *, base: Path | None = None) -> Pat
     document's directory — and defaults to ``root``. Containment is judged against ``root``
     either way, so a link out of `docs/` into `src/` stays inside the project and resolves.
 
-    `memory.refs._resolves` deliberately keeps its own rule and does not call this: a note
-    quoting another host's deployment layout is prose, so an absolute path outside this
-    checkout is DROPPED there rather than reported, which is a different answer from None
-    meaning "do not touch the filesystem". One reader needing a different rule is why this one
-    is written down rather than assumed.
     """
     landed = Path(os.path.normpath(os.path.join(str(base if base is not None else root), target)))
     return landed if landed.is_relative_to(os.path.normpath(str(root))) else None
@@ -182,8 +163,8 @@ def present_within(root: Path, landed: Path) -> bool | None:
     either; a symlink that stays inside the tree is followed. A name the filesystem cannot take
     (`ENAMETOOLONG` for a 5,000-character path) names nothing, which `fsops.exists` answers on
     every interpreter; and a claim the filesystem leaves open, under a directory that cannot be
-    searched, is `False` here rather than an exception. The plan lint, the always-loaded
-    document's link check and `memory refs` each ask it.
+    searched, is `False` here rather than an exception. The plan lint and the always-loaded
+    document's link check each ask it.
     """
     try:
         real = Path(os.path.realpath(landed))

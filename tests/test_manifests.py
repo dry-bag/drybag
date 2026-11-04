@@ -125,7 +125,7 @@ def test_the_readme_still_declares_what_has_not_shipped() -> None:
     # this parser stopped finding items in, would otherwise turn that test into an assertion
     # over an empty list and leave the storefront free to advertise anything.
     items = _not_yet()
-    assert len(items) >= 4, items
+    assert len(items) >= 3, items
     assert "memory MCP server" in items
     assert "hold-the-line baseline" in items
 
@@ -135,7 +135,7 @@ def test_no_storefront_string_advertises_what_the_readme_says_is_not_yet() -> No
 
     `pyproject.toml`'s description is the PyPI page; the two Claude manifests are the plugin
     card and the marketplace row; the Codex listing is the third storefront. All four
-    advertised "an adoption state machine" while `stayfixed assess` did not exist and the
+    advertised "an adoption state machine" while the `assess` command did not exist and the
     README listed it under **Not yet**, and nothing in `scripts/release.py check` or
     `RELEASING.md` looked. Mutation (declared): put the memory MCP server into
     `pyproject.toml`'s description -> reddens naming the file.

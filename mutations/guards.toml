@@ -558,18 +558,6 @@ reddens = [
   "tests/guards/test_commands.py::test_commit_strip_reports_a_message_file_that_is_not_utf_8_as_a_failure",
 ]
 
-# "A tree git could not report on is not a clean tree." The whole value of `test hygiene` is that
-# it answers "can this red run be trusted", and "I do not know" reported as "yes" is the one
-# wrong answer. The replacement is the shape that makes it green and silent.
-[[mutation]]
-name = "a tree git cannot report on is reported as clean"
-file = "src/stayfixed/guards/commands.py"
-before = '        raise Refusal(_NO_GIT)'
-after = '        dirty = 0'
-reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_a_tree_git_cannot_report_on",
-]
-
 # In the block led by `mutations/`'s "the overlay's sync row counts a name holding a line separator
 # twice": a line-oriented git answer is split where git ended each line, never at a `\r` or a line
 # separator inside a name.
@@ -775,17 +763,7 @@ reddens = [
   "tests/guards/test_attribute.py::test_the_tree_listing_is_not_bounded_by_the_argument_free_cap",
 ]
 
-# In the block led by `mutations/`'s "a gate that could not judge counts as passing": every
-# configured gate is a value CI reads, and each built-in finds what its area's command finds.
-[[mutation]]
-name = "the commit gate maps no violation to a finding"
-file = "src/stayfixed/guards/commit.py"
-before = "        for violation in report.violations"
-after = "        for violation in ()"
-reddens = ["tests/assess/test_gates.py::test_the_commit_gate_finds_an_attribution_trailer_after_the_base"]
-
-# In the block led by `mutations/`'s "init's custom-gate note keeps a limit of its own": every list
-# of names nothing bounds in number takes `findings.listed`.
+# Every list of names nothing bounds in number takes `findings.listed`.
 [[mutation]]
 name = "commit check names every offence"
 file = "src/stayfixed/guards/commands.py"
@@ -853,14 +831,14 @@ reddens = [
   "tests/guards/test_attribute.py::test_a_shallow_clone_leaves_the_attribution_undetermined",
 ]
 
-# The test group holds what explains a red run and what attributes a failure; an audit that read
-# one stack's test files and that no gate ran was removed from it, and stays out.
+# The test group holds what attributes a failure; an audit that read one stack's test files and
+# that no gate ran was removed from it, and stays out.
 [[mutation]]
-name = "the test group registers a command besides hygiene and attribute"
+name = "the test group registers a command besides attribute"
 file = "src/stayfixed/guards/commands.py"
-before = "    hygiene = common_flags("
-after = '    test_sub.add_parser("audit-entrypoints"); hygiene = common_flags('
-reddens = ["tests/test_cli.py::test_the_test_group_has_hygiene_and_attribute"]
+before = "    attribute = common_flags("
+after = '    test_sub.add_parser("audit-entrypoints"); attribute = common_flags('
+reddens = ["tests/test_cli.py::test_the_test_group_has_attribute_alone"]
 
 # The red-run hint is chosen by the command that failed, so a repository in two stacks that runs
 # both suites in one command gets both stacks' advice. Keeping only the first recognising hint is
@@ -928,129 +906,6 @@ LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:"
 reddens = [
   "tests/test_language_neutral.py::test_no_core_module_names_a_stack_it_does_not_pardon",
 ]
-
-# `test hygiene` must not call clean a tree the hook calls stale: the hook asks every hint and
-# detects nothing, so a profile with something to say is listed whether or not its markers sit at
-# the root, and a Python project in a subdirectory is not hidden by the root having no marker.
-[[mutation]]
-name = "test hygiene hides a profile its markers do not detect at the root"
-file = "src/stayfixed/guards/commands.py"
-before = "        if note is None and not detects(load_profile(name), root):"
-after = "        if not detects(load_profile(name), root):"
-reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_reports_a_profile_with_something_to_say_wherever_its_markers_sit",
-]
-
-# A failing hint is "I do not know", refused like the rest, and named by its type alone: the
-# exception's message can carry a path the hint walked, which a repository chose.
-[[mutation]]
-name = "test hygiene prints a failing hint's own message"
-file = "src/stayfixed/guards/commands.py"
-before = "            kind = type(exc).__name__"
-after = '            kind = f"{type(exc).__name__}: {exc}"'
-reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_a_failing_hint_without_printing_its_message[False]",
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_a_failing_hint_without_printing_its_message[True]",
-]
-
-# A hint whose walk stopped at its bound has not seen the tree, which is "I do not know" too: read
-# as judged, the command exits 1 as for a tree with a fault, where it cannot judge the tree at all.
-[[mutation]]
-name = "test hygiene reads a walk cut short as a judged tree"
-file = "src/stayfixed/guards/commands.py"
-before = "        if report is None:"
-after = "        if False:"
-reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_a_tree_its_bytecode_walk_could_not_finish[False]",
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_a_tree_its_bytecode_walk_could_not_finish[True]",
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_a_cut_walk_over_a_tree_with_no_python",
-]
-
-# "Could not tell" is a report of `None`, never a key among the counts: a key is a count name a hint
-# chose, and reading one as the sentinel refused a whole tree over a hint's real count.
-[[mutation]]
-name = "test hygiene reads a count named undetermined as could-not-tell"
-file = "src/stayfixed/guards/commands.py"
-before = "        if report is None:"
-after = '        if report is None or report.get("undetermined"):'
-reddens = ["tests/guards/test_commands.py::test_test_hygiene_reads_a_count_named_undetermined_as_a_count"]
-
-# The cut-walk refusal names its way out: the bound is fixed, `[ledger] code_roots` is not, and a
-# repository whose roots hold a dependency tree got exit 2 on every run with nothing to change.
-[[mutation]]
-name = "the cut-walk refusal names no way out"
-file = "src/stayfixed/guards/commands.py"
-before = "            raise Refusal(_UNTOLD.format(name=name) + _UNJUDGED + _NARROW)"
-after = "            raise Refusal(_UNTOLD.format(name=name) + _UNJUDGED)"
-reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_a_tree_its_bytecode_walk_could_not_finish[False]",
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_a_tree_its_bytecode_walk_could_not_finish[True]",
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_a_cut_walk_over_a_tree_with_no_python",
-]
-
-# A repository in two stacks gets two entries, and each carries counts only.
-[[mutation]]
-name = "test hygiene reports the first stack and stops"
-file = "src/stayfixed/guards/commands.py"
-before = "        reports[name] = report"
-after = """        reports[name] = report
-        break"""
-reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_reports_a_repository_in_two_stacks_as_two_entries",
-]
-
-# A profile with nothing to say is listed while its markers sit at the root, so the clean summary
-# names the stacks that were looked at.
-[[mutation]]
-name = "test hygiene lists only the profiles with something to say"
-file = "src/stayfixed/guards/commands.py"
-before = "        if note is None and not detects(load_profile(name), root):"
-after = "        if note is None:"
-reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_reports_a_repository_in_two_stacks_as_two_entries",
-  "tests/guards/test_commands.py::test_test_hygiene_reports_every_stack_by_its_markers_and_not_by_configuration",
-]
-
-# With no code root left to walk, every profile's walk saw nothing, and its silence is no answer:
-# the summary says no code root was walked rather than calling the tree clean.
-[[mutation]]
-name = "test hygiene calls an unwalked tree clean"
-file = "src/stayfixed/guards/commands.py"
-before = "    if not roots:"
-after = "    if False:"
-reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_does_not_call_a_tree_with_no_usable_code_root_clean",
-]
-
-[[mutation]]
-name = "test hygiene's clean summary names no stack"
-file = "src/stayfixed/guards/commands.py"
-before = "    summary = \"; \".join(findings) or clean"
-after = '    summary = "; ".join(findings) or "tree is clean"'
-reddens = ["tests/guards/test_commands.py::test_test_hygiene_is_clean_on_a_committed_tree"]
-
-[[mutation]]
-name = "test hygiene's clean summary names only the first stack"
-file = "src/stayfixed/guards/commands.py"
-before = '        f"; the {name} profile has nothing to report" for name in reports'
-after = '        f"; the {name} profile has nothing to report" for name in list(reports)[:1]'
-reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_names_every_detected_stack_that_has_nothing_to_report",
-]
-
-# A shipped profile whose hint did not load is "I do not know", which this command never reports
-# as a clean tree; the hook goes on without that profile, this command refuses.
-[[mutation]]
-name = "test hygiene calls a tree clean without a hint it could not load"
-file = "src/stayfixed/guards/commands.py"
-before = "    if unloaded:"
-after = "    if False:"
-reddens = [
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_when_a_shipped_hint_cannot_load[absent]",
-  "tests/guards/test_commands.py::test_test_hygiene_refuses_when_a_shipped_hint_cannot_load[no-hint]",
-]
-
-
 
 # The interpreter and the manifest of one stack are stack words like its runner: a core module that
 # names either is moved into that stack's profile or pardoned with its reason.

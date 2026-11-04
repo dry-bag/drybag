@@ -1,7 +1,7 @@
 """A strict reader for the YAML subset this repository's workflows are written in.
 
 The repository carries no YAML parser, and the suite imports only what the runtime does plus its
-declared development tools, so the workflow tests used to read `check.yml` by line pattern — one
+declared development tools, so the workflow tests used to read a workflow by line pattern — one
 pattern per question. Each of those readers could stop early or skip a line: an `env:` reader
 that ended at the first comment left every key after it unread, and a step walk that knew two
 spellings of a step folded a third into the step above it. So there is one reader, and it reads

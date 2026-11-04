@@ -41,17 +41,11 @@ agents = ["claude"]
 name = "widget"
 base_branch = "main"
 release_branch = "main"
-
-[artifacts]
-local = []
 """
 
 
-def a_config(tmp_path: Path, *, local: tuple[str, ...] = ()) -> Config:
-    text = CONFIG
-    if local:
-        text = text.replace("local = []", "local = [" + ", ".join(f'"{i}"' for i in local) + "]")
-    (tmp_path / CONFIG_FILE).write_text(text, encoding="utf-8")
+def a_config(tmp_path: Path) -> Config:
+    (tmp_path / CONFIG_FILE).write_text(CONFIG, encoding="utf-8")
     return load(tmp_path, machine=tmp_path / "absent.toml")
 
 
@@ -135,34 +129,6 @@ def test_a_hand_edited_file_is_skipped_and_named(tmp_path: Path) -> None:
     assert [(a.verb, a.target) for a in result.actions] == [(Verb.SKIP_MODIFIED, "AGENTS.md")]
 
 
-def test_force_takes_a_whole_file_stayfixed_did_not_write_and_records_it(tmp_path: Path) -> None:
-    # The whole-file rule: a file that differs is skipped and named, and `--force <path>` is how
-    # its owner says it may be overwritten. The branch for a file with no record ignored
-    # `force`, so a caller workflow a person wrote held `upgrade`'s version and pin back for
-    # ever. Forced, it is written and recorded like any file stayfixed writes. Mutation (oracle):
-    # `mutations/`'s "--force stops reaching a whole file stayfixed did not write".
-    (tmp_path / "AGENTS.md").write_text("someone wrote this\n", encoding="utf-8")
-    config = a_config(tmp_path)
-    unforced = plan(tmp_path, config, [a_template()], force=("CLAUDE.md",))
-    assert [(a.verb, a.reason) for a in unforced.actions] == [
-        (Verb.SKIP_MODIFIED, "exists and stayfixed did not write it")
-    ]
-    forced = plan(tmp_path, config, [a_template()], force=("AGENTS.md",))
-    assert [(a.verb, a.payload) for a in forced.actions] == [(Verb.UPDATE, "BODY\n")]
-    apply(tmp_path, forced)
-    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "BODY\n"
-    assert Manifest.read(tmp_path).get("agents-md") == a_record()
-
-
-def test_force_overrides_a_hand_edit(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("edited by hand\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(
-        tmp_path, a_config(tmp_path), [a_template(render=lambda: "NEWER\n")], force=("AGENTS.md",)
-    )
-    assert [a.verb for a in result.actions] == [Verb.UPDATE]
-
-
 def test_a_once_artifact_is_never_updated(tmp_path: Path) -> None:
     # `skip_modified` and not `unchanged`: a file that is present with no record is `skip_modified`
     # for a `template` or a `once` kind, and `unchanged` renders as "up to date" for a file
@@ -178,116 +144,13 @@ def test_a_once_artifact_is_never_updated(tmp_path: Path) -> None:
     assert (tmp_path / "CLAUDE.md").read_text(encoding="utf-8") == before
 
 
-def test_a_retired_template_is_removed_while_its_hash_matches(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(retired=True)])
-    assert [(a.verb, a.target, a.payload) for a in result.actions] == [
-        (Verb.REMOVE, "AGENTS.md", None)
-    ]
-
-
-@pytest.mark.parametrize("directory", [True, False], ids=["directory-there", "directory-gone"])
-def test_a_retired_record_whose_file_is_already_gone_is_dropped(
-    tmp_path: Path, directory: bool
-) -> None:
-    # A retired artifact whose file was already gone read as unchanged while its record stayed,
-    # so the record outlived the file for good: every later `upgrade` passed over it again, and
-    # in an overlay the memory README's successor was never written in its place. The removal is
-    # planned with nothing to unlink, and `apply` drops the record, with or without the
-    # directory the file was in.
-    # Mutation: `mutations/`'s "a retired record whose file is gone is kept for good".
-    target = "docs/AGENTS.md"
-    if directory:
-        (tmp_path / "docs").mkdir()
-    Manifest({}).with_record(a_record(target=target)).write(tmp_path)
-    planned = plan(tmp_path, a_config(tmp_path), [a_template(target=target, retired=True)])
-    assert [(a.verb, a.target, a.payload, a.reason) for a in planned.actions] == [
-        (Verb.REMOVE, target, None, "retired, already gone")
-    ]
-    assert planned.unchanged == ()
-    applied = apply(tmp_path, planned)
-    assert applied.removed == ()
-    assert Manifest.read(tmp_path).get("agents-md") is None
-    assert (tmp_path / "docs").is_dir() is directory
-
-
-def test_a_retired_artifact_gone_and_unrecorded_is_neither_planned_nor_unchanged(
-    tmp_path: Path,
-) -> None:
-    # `uninstall` retires every `[artifacts] local` id, recorded or not; one whose file is gone
-    # has nothing to remove, and listing it among the unchanged would name a file not there.
-    # Mutation: `mutations/`'s "a retired file that is gone and unrecorded is reported unchanged".
-    planned = plan(tmp_path, a_config(tmp_path), [a_template(retired=True)])
-    assert planned.actions == ()
-    assert planned.unchanged == ()
-
-
-def test_a_retired_template_edited_by_hand_is_reported_not_removed(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("mine now\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(retired=True)])
-    assert [a.verb for a in result.actions] == [Verb.SKIP_MODIFIED]
-
-
-def test_a_local_artifact_moves_under_dot_stayfixed(tmp_path: Path) -> None:
-    config = a_config(tmp_path, local=("agents-md",))
-    result = plan(tmp_path, config, [a_template()])
-    assert [a.target for a in result.actions] == [".stayfixed/local/artifacts/AGENTS.md"]
-
-
-def test_a_relocated_artifact_is_removed_from_its_old_home(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    config = a_config(tmp_path, local=("agents-md",))
-    result = plan(tmp_path, config, [a_template()])
-    assert [(a.verb, a.target) for a in result.actions] == [
-        (Verb.REMOVE, "AGENTS.md"),
-        (Verb.CREATE, ".stayfixed/local/artifacts/AGENTS.md"),
-    ]
-
-
-def test_a_relocated_artifact_whose_old_file_was_hand_edited_is_reported(tmp_path: Path) -> None:
-    # The plan was `[(create, .stayfixed/local/artifacts/AGENTS.md)]`, the report said "0
-    # skipped, 0 refused", the old file stayed on disk holding the user's edit, and the manifest
-    # ended empty — which `apply`'s own comment calls a defect: "a file stayfixed wrote carrying no
-    # record, which every later run reads as somebody else's … invisible to `uninstall`". The
-    # symmetric `_plan_retired` path has always emitted `skip_modified` for this.
-    old = tmp_path / "AGENTS.md"
-    old.write_text("BODY\nand a line the user added\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)  # recorded sha256 is of "BODY\n"
-    config = a_config(tmp_path, local=("agents-md",))
-    result = plan(tmp_path, config, [a_template()])
-    assert [(a.verb, a.target) for a in result.actions] == [
-        (Verb.SKIP_MODIFIED, "AGENTS.md"),
-        (Verb.CREATE, ".stayfixed/local/artifacts/AGENTS.md"),
-    ]
-    assert result.actions[0].reason == "relocated and hand-edited"
-    applied = apply(tmp_path, result)
-    assert applied.skipped == ("AGENTS.md",)
-    assert old.read_text(encoding="utf-8") == "BODY\nand a line the user added\n"
-
-
-def test_a_relocation_whose_old_file_is_already_gone_reports_no_skip(tmp_path: Path) -> None:
-    # The one branch that must stay silent: nothing at the old path means the move has already
-    # happened, and a `skip_modified` there would report a file that is not on disk.
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    config = a_config(tmp_path, local=("agents-md",))
-    result = plan(tmp_path, config, [a_template()])
-    assert [(a.verb, a.target) for a in result.actions] == [
-        (Verb.REMOVE, "AGENTS.md"),
-        (Verb.CREATE, ".stayfixed/local/artifacts/AGENTS.md"),
-    ]
-    assert apply(tmp_path, result).skipped == ()
-
-
 def test_a_manifest_naming_a_target_outside_the_root_plans_nothing_for_it(tmp_path: Path) -> None:
     # The manifest is committed, so `record.target` is repository-controlled input.
     root = tmp_path / "project"
     root.mkdir()
     (tmp_path / "outside.md").write_text("BODY\n", encoding="utf-8")
     Manifest({}).with_record(a_record(target="../outside.md")).write(root)
-    config = a_config(root, local=("agents-md",))
+    config = a_config(root)
     result = plan(root, config, [a_template()])
     # Said out loud, not silent. The file is still not touched — that is the property — but a
     # record naming a file stayfixed will not remove is something the report has to carry, or
@@ -303,8 +166,7 @@ def test_a_recorded_target_this_template_could_never_produce_is_not_a_relocation
     # Both halves of "is this file ours" come out of the committed manifest: the recorded target
     # and the recorded hash. So without a guard, naming any file in the root and stamping it with
     # the bytes it is committed with is enough to make `plan` emit a REMOVE for it — and a
-    # mismatch between the recorded target and the effective one is all it takes, with no
-    # `[artifacts] local` entry and so no relocation anywhere in sight.
+    # mismatch between the recorded target and the template's is all it takes.
     victim = tmp_path / ".claude"
     victim.mkdir()
     settings = victim / "settings.json"
@@ -320,90 +182,6 @@ def test_a_recorded_target_this_template_could_never_produce_is_not_a_relocation
     applied = apply(tmp_path, planned)
     assert settings.read_text(encoding="utf-8") == before
     assert applied.skipped == (".claude/settings.json",)
-
-
-def test_relocating_a_managed_region_removes_only_its_own_lines(tmp_path: Path) -> None:
-    # A relocation's REMOVE goes through the same writer as a retirement's, so it needs the same
-    # payload. For a region the file at the old path is the user's own; unlinking it takes their
-    # prose with it, while `_plan_retired` in the same module strips just the marked block.
-    host = tmp_path / "AGENTS.md"
-    body = upsert("User prose.\n", "harness", "R1\n", Style.MARKDOWN)
-    host.write_text(body, encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
-    config = a_config(tmp_path, local=("agents-md",))
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1\n")
-    planned = plan(tmp_path, config, [template])
-    assert [(a.verb, a.target) for a in planned.actions] == [
-        (Verb.REMOVE, "AGENTS.md"),
-        (Verb.CREATE, ".stayfixed/local/artifacts/AGENTS.md"),
-    ]
-    apply(tmp_path, planned)
-    assert host.read_text(encoding="utf-8") == "User prose.\n"
-
-
-def test_a_local_artifact_that_is_not_this_build_s_bytes_is_left_and_force_takes_it(
-    tmp_path: Path,
-) -> None:
-    # A local artifact is never recorded, so the one oracle it has is what this build renders.
-    # `.stayfixed/local/` is git-ignored: an owner's edit overwritten there is gone for good, so a
-    # file that differs is left and named, and `--force` is how the owner says it may go.
-    config = a_config(tmp_path, local=("agents-md",))
-    local = tmp_path / ".stayfixed" / "local" / "artifacts" / "AGENTS.md"
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    local.write_text("BODY\nand the owner's own line\n", encoding="utf-8")
-    planned = plan(tmp_path, config, [a_template()])
-    assert [(a.verb, a.reason) for a in planned.actions] == [
-        (Verb.SKIP_MODIFIED, engine.CHANGED_LOCALLY)
-    ]
-    forced = plan(tmp_path, config, [a_template()], force=(".stayfixed/local/artifacts/AGENTS.md",))
-    assert [(a.verb, a.reason) for a in forced.actions] == [(Verb.UPDATE, "refreshed")]
-    apply(tmp_path, forced)
-    assert local.read_text(encoding="utf-8") == "BODY\n"
-    assert Manifest.read(tmp_path).records == {}
-
-
-def test_a_local_artifact_whose_content_already_matches_is_unchanged(tmp_path: Path) -> None:
-    # The other half: refreshing unconditionally would rewrite a file nothing changed in on
-    # every run, which is the report saying work happened when none did.
-    config = a_config(tmp_path, local=("agents-md",))
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    again = plan(tmp_path, config, [a_template()])
-    assert again.actions == ()
-    assert again.unchanged == ("agents-md",)
-
-
-def test_a_retired_local_artifact_is_removed(tmp_path: Path) -> None:
-    # `uninstall` has to be able to finish. A local artifact has no record by design, so its
-    # retirement is judged against this build's render: exactly those bytes, and it goes.
-    config = a_config(tmp_path, local=("agents-md",))
-    local = tmp_path / ".stayfixed" / "local" / "artifacts" / "AGENTS.md"
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    planned = plan(tmp_path, config, [a_template(retired=True)])
-    assert [(a.verb, a.target) for a in planned.actions] == [
-        (Verb.REMOVE, ".stayfixed/local/artifacts/AGENTS.md")
-    ]
-    apply(tmp_path, planned)
-    assert not local.exists()
-
-
-def test_a_retired_local_artifact_edited_by_hand_stays_unless_forced(tmp_path: Path) -> None:
-    config = a_config(tmp_path, local=("agents-md",))
-    local = tmp_path / ".stayfixed" / "local" / "artifacts" / "AGENTS.md"
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    local.write_text("the owner's notes\n", encoding="utf-8")
-    planned = plan(tmp_path, config, [a_template(retired=True)])
-    assert [a.verb for a in planned.actions] == [Verb.SKIP_MODIFIED]
-    apply(tmp_path, planned)
-    assert local.read_text(encoding="utf-8") == "the owner's notes\n"
-    forced = plan(
-        tmp_path,
-        config,
-        [a_template(retired=True)],
-        force=(".stayfixed/local/artifacts/AGENTS.md",),
-    )
-    assert [(a.verb, a.reason) for a in forced.actions] == [(Verb.REMOVE, "retired, forced")]
 
 
 # --- regions and keyed entries, which live inside somebody else's file ---------------------
@@ -453,21 +231,6 @@ def test_a_hand_edited_region_body_is_skipped(tmp_path: Path) -> None:
     ]
 
 
-def test_a_retired_region_leaves_the_file_and_removes_only_its_own_lines(tmp_path: Path) -> None:
-    text = upsert("PROSE\n", "harness", "R1", Style.MARKDOWN)
-    (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
-    template = a_template(
-        kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1", retired=True
-    )
-    planned = plan(tmp_path, a_config(tmp_path), [template])
-    assert [a.verb for a in planned.actions] == [Verb.REMOVE]
-    apply(tmp_path, planned)
-    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "PROSE\n"
-
-
 def test_keyed_entries_are_installed_into_a_file_no_record_covers(tmp_path: Path) -> None:
     settings = tmp_path / ".claude"
     settings.mkdir()
@@ -500,17 +263,6 @@ def test_an_unrelated_edit_beside_the_entries_is_not_a_hand_edit(tmp_path: Path)
     again = plan(tmp_path, a_config(tmp_path), [template])
     assert again.actions == ()
     assert again.unchanged == ("claude-hooks",)
-
-
-def test_a_retired_keyed_entry_leaves_the_rest_of_the_document(tmp_path: Path) -> None:
-    template = a_settings_template(OURS)
-    apply(tmp_path, plan(tmp_path, a_config(tmp_path), [template]))
-    planned = plan(tmp_path, a_config(tmp_path), [replace(template, retired=True)])
-    assert [a.verb for a in planned.actions] == [Verb.REMOVE]
-    apply(tmp_path, planned)
-    text = (tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8")
-    assert "stayfixed:bg-cleanup" not in text
-    assert (tmp_path / ".claude" / "settings.json").exists()
 
 
 # --- refusals ------------------------------------------------------------------------------
@@ -588,20 +340,6 @@ def test_an_unreadable_artifact_is_named_relative_to_the_project_with_the_reason
         agents.write_bytes(b"\xff\xfe not utf-8 \xff")
     result = plan(tmp_path, a_config(tmp_path), [a_template()])
     assert [r.reason for r in result.refusals] == [reason]
-
-
-def test_an_unreadable_old_home_of_a_relocated_artifact_is_named_where_it_is(
-    tmp_path: Path,
-) -> None:
-    # The reason names the file it is about: the recorded old place, which is not the artifact's
-    # configured target when the artifact moves back out of `[artifacts] local`. Mutation:
-    # `mutations/`'s "a relocation names an unreadable old home by the artifact's target".
-    local = ".stayfixed/local/artifacts/AGENTS.md"
-    (tmp_path / local).mkdir(parents=True)
-    Manifest({}).with_record(a_record(target=local, location=Location.LOCAL)).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template()])
-    skipped = [(a.target, a.reason) for a in result.actions if a.verb is Verb.SKIP_MODIFIED]
-    assert skipped == [(local, f"{local} cannot be read (not a regular file)")]
 
 
 def test_a_fifo_at_an_artifacts_place_is_its_refusal_and_never_waited_on(tmp_path: Path) -> None:
@@ -935,25 +673,6 @@ def test_the_write_refuses_a_symlinked_parent_containment_never_saw(tmp_path: Pa
     assert list(outside.iterdir()) == []
 
 
-def test_a_removal_deletes_the_file_and_the_record(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    config = a_config(tmp_path)
-    result = apply(tmp_path, plan(tmp_path, config, [a_template(retired=True)]))
-    assert not (tmp_path / "AGENTS.md").exists()
-    assert result.removed == ("AGENTS.md",)
-    assert Manifest.read(tmp_path).get("agents-md") is None
-
-
-def test_a_local_artifact_is_written_but_never_recorded(tmp_path: Path) -> None:
-    config = a_config(tmp_path, local=("agents-md",))
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    assert (tmp_path / ".stayfixed/local/artifacts/AGENTS.md").read_text(
-        encoding="utf-8"
-    ) == "BODY\n"
-    assert Manifest.read(tmp_path).records == {}
-
-
 def test_a_skipped_artifact_is_reported_and_not_written(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("mine\n", encoding="utf-8")
     config = a_config(tmp_path)
@@ -1115,25 +834,6 @@ def test_a_plan_carrying_a_refusal_creates_no_manifest_at_all(tmp_path: Path) ->
     assert not (tmp_path / MANIFEST_PATH).exists()
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores the directory mode under test")
-def test_a_file_that_cannot_be_unlinked_refuses_rather_than_raising_oserror(
-    tmp_path: Path,
-) -> None:
-    # The removal half of "no bare OSError". `open_within` opens an r-x directory happily, so
-    # EACCES arrives from `os.unlink` rather than as an `UnsafePath`, and the `suppress` around
-    # the unlink is entered after the walk has yielded, so it covers neither.
-    docs = tmp_path / "docs"
-    docs.mkdir()
-    (docs / "OLD.md").write_text("BODY\n", encoding="utf-8")
-    os.chmod(docs, stat.S_IRUSR | stat.S_IXUSR)
-    try:
-        with pytest.raises(Refusal, match="cannot be removed"):
-            engine._remove(tmp_path, "docs/OLD.md", None)
-    finally:
-        os.chmod(docs, 0o755)
-    assert (docs / "OLD.md").exists()
-
-
 # --- the two rules the module docstring is read for ------------------------------------------
 
 
@@ -1157,95 +857,6 @@ def test_the_containment_docstring_claims_the_property_the_walk_actually_holds()
     assert "there is no window in which a component can become a symlink" not in prose
 
 
-def test_a_region_the_engine_recorded_itself_relocates_and_leaves_the_prose(tmp_path: Path) -> None:
-    # The record the engine writes for a region holds the digest of the region's body, never of
-    # the file around it. `_relocation` compared the whole file with it, so every real relocation
-    # read as a hand edit, the local `CREATE` dropped the record, and the region stayed in
-    # `AGENTS.md` where no later run could find it. The relocation test that fabricates its
-    # record passed only because it stamped a whole-file digest, which the engine never records.
-    host = tmp_path / "AGENTS.md"
-    host.write_text("User prose.\n", encoding="utf-8")
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1\n")
-    apply(tmp_path, plan(tmp_path, a_config(tmp_path), [template]))
-    planned = plan(tmp_path, a_config(tmp_path, local=("agents-md",)), [template])
-    assert [(a.verb, a.target, a.reason) for a in planned.actions] == [
-        (Verb.REMOVE, "AGENTS.md", "relocated"),
-        (Verb.CREATE, ".stayfixed/local/artifacts/AGENTS.md", "new"),
-    ]
-    apply(tmp_path, planned)
-    assert host.read_text(encoding="utf-8") == "User prose.\n"
-
-
-def test_force_reaches_a_retired_artifact_edited_by_hand(tmp_path: Path) -> None:
-    # `uninstall --force PATH` exists for exactly this file: one the user edited and has now
-    # decided to remove anyway. Without the fix the verdict is "retired and hand-edited"
-    # whatever is forced, and the command's documented flag does nothing.
-    (tmp_path / "AGENTS.md").write_text("mine now\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(retired=True)], force=("AGENTS.md",))
-    assert [(a.verb, a.target, a.reason) for a in result.actions] == [
-        (Verb.REMOVE, "AGENTS.md", "retired, forced")
-    ]
-    apply(tmp_path, result)
-    assert not (tmp_path / "AGENTS.md").exists()
-
-
-def test_force_on_another_path_leaves_a_retired_hand_edit_alone(tmp_path: Path) -> None:
-    # The negative, so the positive cannot pass because `force` became a blanket switch.
-    (tmp_path / "AGENTS.md").write_text("mine now\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(retired=True)], force=("CLAUDE.md",))
-    assert [a.verb for a in result.actions] == [Verb.SKIP_MODIFIED]
-
-
-def test_force_on_a_retired_region_removes_the_region_and_keeps_the_prose(tmp_path: Path) -> None:
-    # Forcing is the only way to remove a region whose body was edited by hand, and the file
-    # around the region is the user's. Mutation: give the forced branch the payload `None`
-    # (delete the host file) and this reddens; every other scaffold test stays green.
-    host = tmp_path / "AGENTS.md"
-    host.write_text(upsert("User prose.\n", "harness", "EDITED", Style.MARKDOWN), encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
-    template = a_template(
-        kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1", retired=True
-    )
-    planned = plan(tmp_path, a_config(tmp_path), [template], force=("AGENTS.md",))
-    assert [(a.verb, a.reason) for a in planned.actions] == [(Verb.REMOVE, "retired, forced")]
-    apply(tmp_path, planned)
-    assert host.exists(), "forcing a retired region deleted the file around it"
-    assert host.read_text(encoding="utf-8") == "User prose.\n"
-
-
-def test_a_retired_region_that_was_the_whole_file_removes_the_file(tmp_path: Path) -> None:
-    # `init` creates `.gitignore` when there is none, and then it holds nothing but the region.
-    # Taking the region out used to leave a zero-byte `.gitignore` behind. `detach` has always
-    # removed the file it emptied, and the two withdrawals now agree.
-    text = upsert("", "ignore", ".stayfixed/local/", Style.HASH)
-    (tmp_path / ".gitignore").write_text(text, encoding="utf-8")
-    Manifest({}).with_record(
-        a_record(
-            id="gitignore",
-            kind=Kind.MANAGED_REGION,
-            target=".gitignore",
-            sha256=digest(".stayfixed/local/"),
-        )
-    ).write(tmp_path)
-    template = a_template(
-        id="gitignore",
-        kind=Kind.MANAGED_REGION,
-        target=".gitignore",
-        region="ignore",
-        style=Style.HASH,
-        render=lambda: ".stayfixed/local/",
-        retired=True,
-    )
-    planned = plan(tmp_path, a_config(tmp_path), [template])
-    assert [(a.verb, a.payload) for a in planned.actions] == [(Verb.REMOVE, None)]
-    apply(tmp_path, planned)
-    assert not (tmp_path / ".gitignore").exists()
-
-
 def test_a_record_at_a_case_variant_of_the_target_is_that_file_and_never_a_relocation(
     tmp_path: Path,
 ) -> None:
@@ -1254,7 +865,7 @@ def test_a_record_at_a_case_variant_of_the_target_is_that_file_and_never_a_reloc
     # artifact's own file (`relocated`) beside an `unchanged` verdict for it, then dropped its
     # record. Asserted on the plan, which is the same string rule on every filesystem.
     # Mutation (oracle): `mutations/`'s "a record at a case variant of the target triggers a
-    # relocation" -> the plan holds that `REMOVE` and this reddens.
+    # relocation" -> the plan holds a `skip_modified` for `agents.md` and this reddens.
     config = a_config(tmp_path)
     (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
     Manifest({}).with_record(a_record(target="agents.md")).write(tmp_path)

@@ -1,10 +1,9 @@
 """A document as one commit holds it at the project's own path, read the one way every reader
 of a commit's copy reads it.
 
-Two readers ask: `stayfixed gate` for the base's `stayfixed.toml`, which governs the run, and the
-ledger's base comparison for the `stayfixed.toml` of each commit a change forked from, which says
-where that commit kept its ledger. Each answer decides what a pull request is judged against, so
-each is read at the project root's path inside the repository as git spells it, with the
+The ledger's base comparison asks, for the `stayfixed.toml` of each commit a change forked from,
+which says where that commit kept its ledger. The answer decides what a pull request is judged
+against, so it is read at the project root's path inside the repository as git spells it, with the
 pathspec literal and from the repository's top, and a root whose path git and the caller spell
 differently is refused rather than guessed at (`repository_prefix`). Read any other way, a
 change could make the path empty — a symlinked root, a directory named like pathspec magic —
@@ -40,21 +39,10 @@ ROOT_THROUGH_SYMLINK = (
 )
 
 
-def repository_top(root: Path) -> Path:
-    """The top of the work tree git finds from `root`, as git spells it."""
-    code, out = git_run(root, "rev-parse", "--show-toplevel")
-    if code != 0:
-        raise Failure(ROOT_UNANSWERED if in_work_tree(root) else NOT_A_REPOSITORY)
-    return Path(out.rstrip("\n"))
-
-
 def repository_prefix(root: Path) -> str:
     """The project root's path inside its repository, `""` at the top or `"a/b/"` below it: git's
     spelling, which is refused unless it is also the caller's."""
     lexical = root.absolute()
-    # Also the reusable workflow's `path:` bound: `../stayfixed` would point the gates at the
-    # workflow's own checkout and its configuration, and the check is lexical, so the value
-    # cannot move it.
     if ".." in lexical.parts:
         raise Refusal(ROOT_DOT_DOT)
     code, out = git_run(lexical, "rev-parse", "--show-toplevel", "--show-prefix")

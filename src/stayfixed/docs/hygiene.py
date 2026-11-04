@@ -189,23 +189,9 @@ def check_links(root: Path, config: Config) -> list[Finding]:
     ]
 
 
-def docs_reads(root: Path, config: Config) -> list[Path]:
-    """The files the `docs` gate reads by path, each once, there or not: the always-loaded
-    document and every file or directory its links name, as `check_links` reads them. A CI
-    checkout that lacks one fails the gate (`missing-document`, `missing-link`).
-
-    The roadmap, which the budgets read for its prose, is not among them: it is read only when
-    it is there, and an absent one adds no finding, so a roadmap a checkout lacks can only make a
-    verdict taken here stricter than CI's.
-    """
-    linked = dict.fromkeys(landed for _, landed in _links(root, config))
-    return [contained(root, config.paths.agents_md), *linked]
-
-
-def docs_gate(root: Path, config: Config, _base: str = "") -> list[Finding]:
+def docs_gate(root: Path, config: Config) -> list[Finding]:
     """The `docs` gate's whole composition: the budgets and the link targets.
 
-    `docs check` with no flag answers with this function. `_base` is unread: every gate is a
-    `stayfixed.assess.gates.GateFn`, so that module holds each one as a value.
+    `docs check` with no flag answers with this function.
     """
     return check_budgets(root, config) + check_links(root, config)

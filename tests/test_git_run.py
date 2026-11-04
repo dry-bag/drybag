@@ -152,8 +152,7 @@ def test_git_s_own_diagnostics_are_never_decoded_into_a_failure(tmp_path: Path) 
 def test_a_stdin_this_process_cannot_encode_is_minus_one(tmp_path: Path) -> None:
     # A lone surrogate outside the escape range has no bytes under any codec, so git cannot be
     # asked the question at all: `(-1, "")`, the runner's own "git could not be given its
-    # input", which every stdin caller already answers conservatively — `project.ignored`
-    # refuses inside a work tree, `memory.refs` keeps the reference as unresolved. Reachable in
+    # input", which every stdin caller already answers conservatively. Reachable in
     # practice under a non-UTF-8 locale, where a note's text holds characters that locale has
     # no byte for. Mutation (declared): drop `UnicodeEncodeError` from the `except` -> this
     # reddens. `needs_git`, because where no `git` can be launched the `OSError` answers
@@ -332,12 +331,9 @@ GIT_RUN_BOUNDS = (
     "stayfixed.guards.commit.LOG_TIMEOUT_SECONDS",
     "stayfixed.hints.hygiene.STATUS_TIMEOUT_SECONDS",
 )
-# The doctor's `git ls-remote` goes through the `Runner` seam rather than `git_run`, and every
-# test stubs that seam, so a bound shrunk there passes the suite the same way.
-GIT_BOUNDS = (*GIT_RUN_BOUNDS, "stayfixed.doctor.checks.CI_REF_TIMEOUT_SECONDS")
 
 
-@pytest.mark.parametrize("bound", GIT_BOUNDS)
+@pytest.mark.parametrize("bound", GIT_RUN_BOUNDS)
 def test_a_named_git_bound_leaves_git_a_second_to_answer(bound: str) -> None:
     # A second is far above what a local `rev-parse` takes and far below every bound shipped,
     # so the row fails on a bound shrunk by accident and on nothing a person would tune.

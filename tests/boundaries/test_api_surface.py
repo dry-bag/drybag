@@ -19,7 +19,7 @@ def _ruled_packages(source: Path) -> list[str]:
 
     Discovery is how the CLI finds a command; the rule is about the surface. A package with an
     `api.py` and no `commands.py` (`release`) is held to that surface all the same, and an area
-    with no `api.py` (`assess`) publishes nothing, so nothing outside it may import any of its
+    with no `api.py` would publish nothing, so nothing outside it could import any of its
     modules."""
     surfaces = {path.parent.name for path in source.glob("*/api.py")}
     return sorted(set(area_names(source)) | surfaces)
@@ -92,13 +92,13 @@ def test_no_module_reaches_into_another_packages_private_module() -> None:
     # today's numbers and are there to fail on a walk that stopped walking, not to be kept
     # current. Re-measured 2026-10-04, by running this module's own `_ruled_packages` and
     # `_boundary_offences` over the same two globs in an interpreter: 144 files, 11 areas and
-    # one further package with an `api.py`, 5 scripts and 242 crossings, with a walk narrowed to
+    # two further packages with an `api.py`, 5 scripts and 242 crossings, with a walk narrowed to
     # `commands.py` alone counting 9 under `src/` and 24 with the scripts — which is what the
     # crossings floor of 60 has to be below.
     assert len(areas) >= 7, areas
     # The packages held to a surface without being discovered, pinned by name for the reason
     # `tests/test_surfaces.py` pins its list: gaining or losing one is a decision.
-    assert sorted(set(ruled) - set(areas)) == ["release"], ruled
+    assert sorted(set(ruled) - set(areas)) == ["release", "trust"], ruled
     assert len(files) >= 70, len(files)
     # The script walk's own floor: without it a `glob` that stopped matching would take the
     # `scripts/` half of this guard back to the state that hid the violation, and the crossing

@@ -23,7 +23,6 @@ needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not i
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]
@@ -79,8 +78,8 @@ def test_the_notice_carries_counts_and_no_root_names(tmp_path: Path) -> None:
 
 def test_a_git_that_cannot_answer_is_none_not_zero(tmp_path: Path) -> None:
     # Reddened by mutating `dirty_count`'s `if code != 0: return None` to `return 0`; measured.
-    # `None` and `0` are what `test hygiene` turns into exit 2 and exit 0, so collapsing them
-    # reports an unjudgeable tree as clean.
+    # `None` and `0` are "could not tell" and "clean", so collapsing them reports an
+    # unjudgeable tree as clean.
     root = tmp_path / "not-a-repo"
     (root / "src").mkdir(parents=True)
     assert dirty_count(root) is None

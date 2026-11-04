@@ -1,4 +1,4 @@
-"""`stayfixed init --questions`' schema: ten questions, each default what `init --yes` alone
+"""`stayfixed init --questions`' schema: nine questions, each default what `init --yes` alone
 writes, each source one of `detect`'s phrases, and no byte a grammar rejected."""
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from typing import Any
 import pytest
 
 from stayfixed.cli import build_parser, discover_registrars
-from stayfixed.config.loader import load, preset_defaults
-from stayfixed.config.schema import CI_MODES, MEMORY_MODES
+from stayfixed.config.loader import load
+from stayfixed.config.schema import MEMORY_MODES
 from stayfixed.errors import Refusal
 from stayfixed.presets import load_preset
 from stayfixed.project import questions as questions_module
@@ -32,7 +32,6 @@ from stayfixed.scaffold import MANIFEST_PATH
 from tests.cli import cli
 from tests.gitfixture import git, needs_git
 from tests.project.repos import DOCUMENT, repository
-from tests.runners import LsRemote
 
 
 def _schema(tmp_path: Path, root: Path) -> dict[str, Any]:
@@ -59,10 +58,7 @@ def test_each_default_is_what_init_yes_alone_writes(tmp_path: Path, key: str) ->
     (root / ".codex").mkdir()
     (root / "pyproject.toml").write_text("[project]\nname = 'widget'\n", encoding="utf-8")
     default = _schema(tmp_path, root)["properties"][key]["default"]
-    # With CI, as `init --yes` alone runs: the stub answers no released tag, so nothing pins.
-    written = init(
-        root, machine=tmp_path / "absent.toml", runner=LsRemote(), yes=True, dry_run=False, ci=True
-    )
+    written = init(root, machine=tmp_path / "absent.toml", yes=True, dry_run=False)
     assert not written.refused
     table, name = key.split(".")
     value = getattr(getattr(load(root, machine=tmp_path / "absent.toml"), table), name)
@@ -76,7 +72,7 @@ def test_the_schema_keys_are_the_stayfixed_toml_keys_the_answers_write(tmp_path:
     schema = _schema(tmp_path, repository(tmp_path))
     assert schema["type"] == "object"
     assert tuple(schema["properties"]) == PROPERTIES == tuple(schema["required"])
-    assert len(PROPERTIES) == 10
+    assert len(PROPERTIES) == 7
     for key, question in schema["properties"].items():
         assert question["x-stayfixed-flag"] == FLAGS[key], key
 
@@ -97,10 +93,7 @@ def test_the_skill_reads_the_order_to_ask_in_from_required_in_the_json(tmp_path:
         "project.base_branch",
         "memory.mode",
         "stayfixed.profile",
-        "ci.mode",
         "commit_messages.attribution_check",
-        "commit_messages.types",
-        "artifacts.local",
         "stayfixed.agents",
         "plugins",
     ]
@@ -167,19 +160,6 @@ def test_a_machine_file_that_does_not_parse_still_yields_the_questions(tmp_path:
 
 
 @needs_git
-def test_no_file_a_gate_reads_at_its_committed_path_is_offered_as_local(tmp_path: Path) -> None:
-    # A gate reads the ledger, the roadmap and the trail where they are committed, and the
-    # configuration and the ignore block work only at the root: offering one as local would be
-    # offering a project a failing gate or a dead file. Mutation (by hand): `roadmap` added to
-    # `LOCAL_ELIGIBLE` -> the disjointness assertion reddens.
-    local = _schema(tmp_path, repository(tmp_path))["properties"]["artifacts.local"]
-    assert local["default"] == []
-    offered = set(local["items"]["enum"])
-    assert offered
-    assert not offered & {"bug-index", "ledger-audits", "roadmap", "trail", "config", "gitignore"}
-
-
-@needs_git
 def test_a_name_outside_the_grammar_is_left_to_ask_and_never_printed(tmp_path: Path) -> None:
     # The remote's last segment is repository-authored; outside the grammar it is neither the
     # default nor printed. Mutation (oracle): leniency keeps the name -> it becomes the default
@@ -203,20 +183,16 @@ def test_the_questions_are_refused_where_init_would_refuse(tmp_path: Path) -> No
         _schema(tmp_path, root)
     (root / MANIFEST_PATH).parent.mkdir(parents=True)
     (root / MANIFEST_PATH).write_text("{}", encoding="utf-8")
-    with pytest.raises(Refusal, match="stayfixed upgrade"):
+    with pytest.raises(Refusal, match="`init` writes a scaffold once"):
         _schema(tmp_path, root)
 
 
 # The order the guided walk asks in, after the name and the base branch it confirms first:
-# memory, the profile, CI, attribution and the commit types, files kept out of git, the agents,
-# and the recommended plugins last.
+# memory, the profile, attribution, the agents, and the recommended plugins last.
 GUIDED = (
     "memory.mode",
     "stayfixed.profile",
-    "ci.mode",
     "commit_messages.attribution_check",
-    "commit_messages.types",
-    "artifacts.local",
     "stayfixed.agents",
     "plugins",
 )
@@ -236,15 +212,11 @@ def test_every_question_carries_its_four_lines_in_the_guided_order(tmp_path: Pat
 
 
 @needs_git
-def test_the_skip_takes_attribution_off_the_preset_types_and_no_plugin(tmp_path: Path) -> None:
+def test_the_skip_takes_attribution_off_and_no_plugin(tmp_path: Path) -> None:
     # Taking every default is offered first, so each default is what a person gets without
-    # reading a question: the attribution check off, the preset's commit types, and no plugin of
-    # the ones it recommends.
+    # reading a question: the attribution check off, and no plugin of the ones it recommends.
     schema = _schema(tmp_path, repository(tmp_path))["properties"]
     assert schema["commit_messages.attribution_check"]["default"] is False
-    preset = preset_defaults("widget")
-    assert schema["commit_messages.types"]["default"] == list(preset.commit_messages.types)
-    assert schema["ci.mode"]["default"] == "reusable"
     plugins = schema["plugins"]
     assert plugins["default"] == [] and set(plugins["items"]["enum"]) == {
         "superpowers",
@@ -264,21 +236,6 @@ def test_the_plugins_question_names_the_plugins_the_preset_recommends_and_no_oth
     assert plugins["items"]["enum"] == ["alpha", "beta"]
     get = plugins["x-stayfixed-tradeoff"]["get"]
     assert "alpha, beta" in get and "superpowers" not in get and "context7" not in get, get
-
-
-@needs_git
-def test_the_ci_question_offers_each_ci_mode_but_the_one_no_flag_answers(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # The CI options were a table of their own beside `CI_MODES`, so a mode added there was never
-    # offered and nothing said so. They are read off `CI_MODES` now, `uvx` left out because
-    # `init --yes` has no flag that writes it, and a mode with no title stops the schema loudly.
-    schema = _schema(tmp_path, repository(tmp_path))
-    offered = [option["const"] for option in schema["properties"]["ci.mode"]["oneOf"]]
-    assert offered == [mode for mode in CI_MODES if mode != "uvx"] == ["reusable", "none"]
-    monkeypatch.setattr(questions_module, "CI_MODES", (*CI_MODES, "elsewhere"))
-    with pytest.raises(KeyError, match="elsewhere"):
-        _schema(tmp_path, tmp_path / "widget")
 
 
 def test_the_plugins_question_names_the_machine_setup_its_flag_runs() -> None:

@@ -18,14 +18,10 @@ from stayfixed.config import loader
 from stayfixed.config.classes import REFUSED_LAYER_NOTE
 from stayfixed.config.loader import (
     CONFIG_FILE,
-    NOTE_REBUILT_LIMIT,
-    NOTE_REMOVAL_LIMIT,
     RESET_NOTE,
-    TOO_MANY_RESETS,
     UNKNOWN_NOTE,
     UNUSABLE_PRESET,
     UNUSABLE_REQUIRED,
-    TooManyResets,
     UnusableKey,
     loads,
     loads_noting,
@@ -64,7 +60,6 @@ UNKNOWN_NAMES = [
     ("[newer]\nx = 1\n", "newer"),  # a section, in loads
     ("[memory]\nfuture = 1\n", "memory.future"),  # a key, in _build
     ("[budgets]\nfuture = 1\n", "budgets.future"),  # a key, in _budgets
-    ('[gates.custom.g]\nrun = ["x"]\nfuture = 1\n', "gates.custom.g.future"),  # a key, in _gates
 ]
 
 
@@ -169,70 +164,6 @@ def test_an_unknown_preset_resets_to_recommended(tmp_path: Path) -> None:
     assert got.notes == (reset("stayfixed.preset", text, tmp_path),)
 
 
-def test_a_custom_gate_that_cannot_run_is_dropped(tmp_path: Path) -> None:
-    # A custom gate has no preset value to fall back to: the gate is left out, and the gates the
-    # project's other tables name still run. Mutation (`mutations/`'s "a custom gate that cannot
-    # run costs every custom gate"): the refusal is keyed to `gates.custom` and `good` goes too.
-    text = MINIMAL + '[gates.custom.bad]\nrun = []\n[gates.custom.good]\nrun = ["true"]\n'
-    got = loads_noting(text, tmp_path, owner=OWNER)
-    assert sorted(got.config.gates.custom) == ["good"]
-    assert got.notes == (reset("gates.custom.bad", text, tmp_path),)
-
-
-def _unusable_gates(count: int) -> str:
-    return MINIMAL + "[gates.custom]\n" + "".join(f"g{n} = {{ run = [] }}\n" for n in range(count))
-
-
-def test_the_note_path_reads_up_to_its_limit_of_unusable_keys_one_by_one(tmp_path: Path) -> None:
-    # A file a newer release left with keys this one cannot use keeps everything else, however
-    # many of them there are up to the cap: each is left out with its own note.
-    got = loads_noting(_unusable_gates(NOTE_REMOVAL_LIMIT), tmp_path, owner=OWNER)
-    assert got.config.gates.custom == {}
-    assert len(got.notes) == NOTE_REMOVAL_LIMIT
-    assert got.keys == tuple(sorted(f"gates.custom.g{n}" for n in range(NOTE_REMOVAL_LIMIT)))
-
-
-def test_one_unusable_key_past_the_limit_refuses_the_whole_document(tmp_path: Path) -> None:
-    # Each removal is a whole build, so a document of thousands cost a hook more than its timeout;
-    # past the cap the document is refused whole, which a session answers with the floor. Mutation
-    # (`mutations/`'s "the NOTE path removes every key it cannot use, however many"): the document
-    # loads with 65 notes.
-    with pytest.raises(TooManyResets) as refused:
-        loads_noting(_unusable_gates(NOTE_REMOVAL_LIMIT + 1), tmp_path, owner=OWNER)
-    path = quoted(str(tmp_path / CONFIG_FILE))
-    assert str(refused.value) == TOO_MANY_RESETS.format(path=path, limit=NOTE_REMOVAL_LIMIT)
-    assert refused.value.key is None and refused.value.limit == NOTE_REMOVAL_LIMIT
-
-
-# Custom gates that run, about half a megabyte of them: a document long enough that
-# `NOTE_REBUILT_LIMIT` allows it fewer removals than `NOTE_REMOVAL_LIMIT` does.
-RUNNABLE_GATES = "".join(f'v{n} = {{ run = ["true"] }}\n' for n in range(18_000))
-
-
-def _long_with_unusable_gates(count: int) -> str:
-    unusable = "".join(f"g{n} = {{ run = [] }}\n" for n in range(count))
-    return MINIMAL + "[gates.custom]\n" + RUNNABLE_GATES + unusable
-
-
-def test_a_long_document_is_read_past_fewer_unusable_keys(tmp_path: Path) -> None:
-    # Each removal builds the whole document again, every gate that runs included, so 50,000 of
-    # them beside 64 that could not took a session six seconds while the count stayed within its
-    # cap. A long document is allowed as many removals as `NOTE_REBUILT_LIMIT` over its length:
-    # exactly that many load, one more refuses it whole. Mutation (`mutations/`'s "the NOTE path's
-    # removals are bounded by their count alone"): the second document loads with its notes.
-    limit = NOTE_REBUILT_LIMIT // len(_long_with_unusable_gates(0))
-    assert 0 < limit < NOTE_REMOVAL_LIMIT  # the document is long enough to be bounded by size
-    got = loads_noting(_long_with_unusable_gates(limit), tmp_path, owner=OWNER)
-    assert len(got.notes) == limit and len(got.config.gates.custom) == 18_000
-    longer = _long_with_unusable_gates(limit + 1)
-    assert NOTE_REBUILT_LIMIT // len(longer) == limit  # one gate more moves the bound nowhere
-    with pytest.raises(TooManyResets) as refused:
-        loads_noting(longer, tmp_path, owner=OWNER)
-    path = quoted(str(tmp_path / CONFIG_FILE))
-    assert str(refused.value) == TOO_MANY_RESETS.format(path=path, limit=limit)
-    assert refused.value.limit == limit
-
-
 def test_a_document_parsed_once_is_read_as_its_text_is(tmp_path: Path) -> None:
     # `parsed` stands for the text, parsed by the caller already (`config.session`), and is not
     # parsed again: a text that would not parse reads as the document handed in. No mutation:
@@ -295,11 +226,6 @@ REFUSED = [
     pytest.param("[memory]\nfuture = 1\n", r"\[memory\] has unknown key\(s\): future", id="key"),
     pytest.param(
         "[budgets]\nfuture = 1\n", r"\[budgets\] has unknown key\(s\): future", id="budget"
-    ),
-    pytest.param(
-        '[gates.custom.g]\nrun = ["x"]\nfuture = 1\n',
-        r"\[gates\.custom\.g\] has unknown key\(s\): future",
-        id="gate-key",
     ),
     pytest.param('[memory]\nmode = "cloud"\n', r"memory\.mode must be one of", id="enum"),
     pytest.param(
@@ -370,11 +296,11 @@ def test_a_key_the_document_does_not_hold_is_unusable(
     # of a key it cannot remove" -> the validator's own refusal propagates).
     calls: list[object] = []
 
-    def refuses(config: object) -> object:
+    def refuses(config: object, root: object) -> object:
         calls.append(config)
         raise ConfigError("held", key="paths.nowhere")
 
-    monkeypatch.setattr(loader, "_enforcement", refuses)
+    monkeypatch.setattr(loader, "validate_paths", refuses)
     with pytest.raises(UnusableKey) as raised:
         loads_noting(MINIMAL, tmp_path, owner=OWNER)
     assert str(raised.value) == UNUSABLE_PRESET.format(key="paths.nowhere", reason="held")
@@ -391,25 +317,15 @@ def test_a_validator_that_keeps_refusing_spends_the_document_and_stops(
     handed = ["stayfixed.preset", "paths.specs", "paths.specs"]
     calls: list[str] = []
 
-    def refuses(config: object) -> object:
+    def refuses(config: object, root: object) -> object:
         calls.append(handed[len(calls)])
         raise ConfigError("held", key=calls[-1])
 
-    monkeypatch.setattr(loader, "_enforcement", refuses)
+    monkeypatch.setattr(loader, "validate_paths", refuses)
     with pytest.raises(UnusableKey) as raised:
         loads_noting(MINIMAL + '[paths]\nspecs = "design/specs"\n', tmp_path, owner=OWNER)
     assert calls == handed
     assert str(raised.value) == UNUSABLE_PRESET.format(key="paths.specs", reason="held")
-
-
-def test_a_custom_gate_whose_name_holds_a_dot_is_dropped_by_its_whole_name(tmp_path: Path) -> None:
-    # A custom gate's name may hold a dot, so `gates.custom.a.b` names the gate `a.b`, not a key
-    # `b` of a gate `a`. Mutation (`mutations/`'s "the NOTE retry cannot remove a key whose name
-    # holds a dot"): the gate is never found, and the whole file is refused.
-    text = MINIMAL + '[gates.custom."a.b"]\nrun = []\n'
-    got = loads_noting(text, tmp_path, owner=OWNER)
-    assert got.config.gates.custom == {}
-    assert got.notes == (reset("gates.custom.a.b", text, tmp_path),)
 
 
 def test_a_section_that_is_not_a_table_is_the_presets(tmp_path: Path) -> None:
@@ -516,10 +432,6 @@ def test_a_preset_value_a_committed_symlink_breaks_is_named(
 
 
 FALLBACKS = [
-    # A value the loader fills itself: `[ci] gate_branch` is `[project] base_branch`.
-    pytest.param("[ci]\ngate_branch = 1\n", "ci.gate_branch", id="filled-by-the-loader"),
-    # A schema default: `Gates.custom` is empty unless the document adds a gate.
-    pytest.param("[gates]\ncustom = 1\n", "gates.custom", id="schema-default"),
     # An entry that may simply be absent: a budget is then the preset's.
     pytest.param("[budgets]\nagents_md_lines = 0\n", "budgets.agents_md_lines", id="absent-entry"),
 ]
@@ -531,14 +443,10 @@ def test_a_key_with_a_value_to_fall_back_to_resets_with_its_note(
 ) -> None:
     # Each kind of value a key falls back to besides a preset value (`memory.mode` and
     # `stayfixed.preset` above): the key is removed with its note and the load goes on.
-    # Mutations (`mutations/`'s "a value the loader fills is called unusable" ->
-    # `filled-by-the-loader` raises; "a schema default is called unusable" -> `schema-default`
-    # does; "a budget or a custom gate is called unusable" -> `absent-entry` does).
+    # Mutation (`mutations/`'s "a budget is called unusable" -> `absent-entry` raises).
     text = MINIMAL + extra
     got = loads_noting(text, tmp_path, owner=OWNER)
     assert got.notes == (reset(key, text, tmp_path),)
-    assert got.config.ci.gate_branch == got.config.project.base_branch
-    assert got.config.gates.custom == {}
     assert "agents_md_lines" not in got.config.budgets.configured
 
 
