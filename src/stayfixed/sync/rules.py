@@ -24,7 +24,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from stayfixed.memory.api import COMMON, GROUPS, PROJECTS, STORE_DIR
+from stayfixed.config.plates import GROUPS
+from stayfixed.memory.api import COMMON, PROJECTS, STORE_DIR
 from stayfixed.sync.git import LOCAL_TIMEOUT, GitError, checked, git, left
 
 INDEX_NAME = "MEMORY.md"
