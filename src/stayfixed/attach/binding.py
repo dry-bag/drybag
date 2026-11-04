@@ -347,7 +347,7 @@ def _bound(root: Path, config: Config, overlay: Path) -> Binding:
     could answer another root if the file changed in between.
     """
     project = config.project.name
-    store = permitted_roots(overlay, project)[1]
+    store = permitted_roots(overlay, project)[-1]
     try:
         recorded, fault = _recorded(overlay, project), None
     except UnreadableRecord as exc:
@@ -381,16 +381,33 @@ NAMED_BY_FILE = (
 )
 
 
-def choose_project(root: Path, named: str | None, *, machine: Path | None) -> str:
+# Where a project's name came from, in `attach --check`'s words: one phrase for each of the four
+# ways `choose_project` finds it, and one for the file that names it (`write.configured`).
+BY_FLAG = "named by --project"
+BY_RECORD = "this machine's binding record"
+BY_OVERLAY = "the overlay's record of the remote"
+BY_REMOTE = "the remote's name"
+BY_FILE = "its stayfixed.toml"
+
+
+@dataclass(frozen=True)
+class Chosen:
+    """A project `choose_project` found and the phrase for how (`source`, one of the `BY_*`)."""
+
+    name: str
+    source: str
+
+
+def choose_project(root: Path, named: str | None, *, machine: Path | None) -> Chosen:
     """The project a repository with no `stayfixed.toml` attaches under: **a convenience and not
     a gate.** A clone whose `origin` claims one of the owner's repositories is bound to that
     project, and the anchor is `origin`, which whoever cloned set: the owner who runs `attach`
     reads the project and the origin on its screen."""
     if named is not None:
-        return named
+        return Chosen(named, BY_FLAG)
     found = bound_project(root)
     if found is not None:
-        return found.project
+        return Chosen(found.project, BY_RECORD)
     origin = origin_remote(root)
     if origin is None:
         raise Refusal(NO_PROJECT)
@@ -402,11 +419,11 @@ def choose_project(root: Path, named: str | None, *, machine: Path | None) -> st
         names = ", ".join(quoted(name) for name in matches)
         raise Refusal(SEVERAL_PROJECTS.format(count=len(matches), names=names))
     if matches:
-        return matches[0]
+        return Chosen(matches[0], BY_OVERLAY)
     derived = repository_name(origin)
     if not PROJECT_NAME.match(derived):
         raise Refusal(NOT_A_NAME.format(rule=NAME_RULE))
-    return derived
+    return Chosen(derived, BY_REMOTE)
 
 
 def _projects(overlay: Path) -> list[str]:
@@ -451,7 +468,7 @@ def read_binding(
     overlay = overlay_root(machine)
     if overlay is None:
         raise Refusal(NO_OVERLAY)
-    expected = permitted_roots(overlay, config.project.name)[1]
+    expected = permitted_roots(overlay, config.project.name)[-1]
     if store is None:
         return _bound(root, config, overlay)
     try:

@@ -171,6 +171,12 @@ NOT_INITIALISED = (
     "and memory stays the coding agent's own, and `stayfixed init` adds the rest"
 )
 NOT_INITIALISED_REMEDY = "run `stayfixed init --yes`"
+# A checkout with no `stayfixed.toml` that this machine binds (`Context.attach_config`): its
+# configuration is the overlay's layers over the preset, so `init` is not what it lacks.
+BOUND_WITHOUT_FILE = (
+    f"there is no {CONFIG_FILE} here; this machine binds the checkout, so its configuration comes "
+    "from the overlay's layers"
+)
 # A `stayfixed.toml` that loads with keys ignored or put back to the preset's. Key names only: a
 # note's sentence carries the loader's refusal. A key is repository-authored text, so it is
 # printed bounded (`_noted_keys`).
@@ -203,7 +209,8 @@ TOO_LARGE_REMEDY = (
 def _not_initialised(context: Context) -> Row:
     """Whether there is a `stayfixed.toml`, and how much of it the session can use.
 
-    Read the way a session reads it (`config.session`): none at all is a warning, a file that
+    Read the way a session reads it (`config.session`): none at all is a warning, except in a
+    checkout this machine binds, where it is ok and names the overlay as the source; a file that
     loads with notes is a warning listing their keys, and only a file the session drops whole is
     red, in the session's own words. The machine file's warning is the `preferences` row's.
     """
@@ -213,6 +220,8 @@ def _not_initialised(context: Context) -> Row:
         if dropped:
             remedy = TOO_LARGE_REMEDY if dropped[0] == TOO_LARGE_WARNING else FALLBACK_REMEDY
             return Row(RED, cause(dropped[0]), remedy)
+        if context.attach_config is not None:
+            return Row(OK, BOUND_WITHOUT_FILE, "")
         return Row(WARN, NOT_INITIALISED, NOT_INITIALISED_REMEDY)
     if session.noted:
         keys = _noted_keys(session.noted)
@@ -438,7 +447,7 @@ def _preferences(context: Context) -> Row:
     """Each key the session resolved, and the layer its value came from.
 
     The session's one resolution (`SessionConfig.resolution`) over the preset, the repository's
-    file after the NOTE load, the overlay's common and project files and the machine file gives
+    file after the NOTE load, the overlay's common, tag and project files and the machine file gives
     every value and its layer; the row derives none. The value is printed only where it is a
     boolean, a number or one of stayfixed's own words (`ENUMERATED`): a name list, a profile or a
     personal value is text a repository, an overlay or an owner wrote, and stays out of a row a
@@ -452,8 +461,8 @@ def _preferences(context: Context) -> Row:
     """
     resolution = context.session.resolution
     named = [
-        _named(key, resolution.values[key], str(layer))
-        for key, layer in sorted(resolution.provenance.items())
+        _named(key, resolution.values[key], resolution.said(key))
+        for key in sorted(resolution.provenance)
     ]
     detail = "; ".join(named)
     if resolution.notes:

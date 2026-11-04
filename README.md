@@ -54,8 +54,8 @@ adds:
 - **A personal overlay that is a versioned repository of its own**, named by its identity record
   and with its own upgrade manifest, rather than a dotfiles sync. `stayfixed setup --overlay` renders or generates one and `stayfixed attach`
   binds a repository to it: the hooks, skills, agents and allow rules you keep there reach that
-  repository's sessions, and so do your rules — `common/claude/rules/*.md` and
-  `projects/<name>/claude/rules/*.md`, a standing rule at every session's start and one with
+  repository's sessions, and so do your rules — `claude/rules/*.md` in `common/`, in each
+  tag your project lists (`groups/<tag>/`) and in `projects/<name>/`, a standing rule at every session's start and one with
   `paths:` frontmatter the first time a session reads or edits a file its globs match. It also *declares* the stayfixed it needs, in its identity record;
   `stayfixed doctor` reads it and reports it when the stayfixed running is too old — red when
   this project keeps its notes in that overlay, a warning when it does not — and a session in a
@@ -225,6 +225,7 @@ stayfixed writes files. Being specific about which is the point of this section.
 | `~/.local/share/stayfixed/bindings/<id>.toml` | What this machine binds that id to: the project name, the `origin` at attach time and the checkout. Where the binding is decided, never from a name the repository supplies. `~` is `HOME`; no `XDG_*` variable is read | `stayfixed attach` |
 | `~/.local/share/stayfixed/delivery/<id>/` | The overlay's hooks, skills and agents rendered as a plugin, `overlay-<id>` in a marketplace `stayfixed-delivery-<id>`, both named by the binding id, and, when the overlay holds a rule with `paths:`, the `PostToolUse` entry that delivers it, run through whatever launched the stayfixed that ran `attach`: the plugin's hook wrapper, or an installed package's interpreter. A session runs the plugin from here in place, so each attach rewrites it, and `stayfixed detach` removes it | `stayfixed attach` |
 | `~/.local/share/stayfixed/stores/<id>/` | The composed memory store the harness and stayfixed's own bundles read, named by the binding id: a link to each of the overlay's note groups for this project and one to its `MEMORY.md`, which `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json` names. Each attach makes its links the overlay's current set and leaves a note the harness wrote there; `stayfixed detach` takes the links and the key, and the directory where nothing else is left | `stayfixed attach`, in `overlay` mode |
+| `AGENTS.md`, `CLAUDE.md`, `stayfixed.toml` and any other regular file of `<overlay>/projects/<name>/checkout/` (never a `.env*` file or `settings.local.json`) | The files you keep outside the repository, in the root of a new linked worktree of a bound checkout, only where the worktree has nothing at the name. The main checkout is not touched, and `stayfixed detach` leaves them | the `SessionStart` hook |
 | `~/.local/share/stayfixed/sessions/` | One empty file per session and file a path-scoped rule was said for, both names hashed, so the rule is said once per file in a session. Nothing removes them | the hook dispatcher |
 | `~/.local/share/stayfixed/unreviewed/` | One file per note store, named by a hash of the store's path, holding a digest of the set of its unreviewed notes the last session was told about, so the count line is said only when that set changes. Nothing removes them | the hook dispatcher |
 

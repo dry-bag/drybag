@@ -43,6 +43,7 @@ MACHINE_FILE_KEYS = frozenset({"guards.bg_cleanup"})
 PRESET = LayerName.PRESET
 REPOSITORY = LayerName.REPOSITORY
 OVERLAY_COMMON = LayerName.OVERLAY_COMMON
+OVERLAY_TAG = LayerName.OVERLAY_TAG
 OVERLAY_PROJECT = LayerName.OVERLAY_PROJECT
 MACHINE_FILE = LayerName.MACHINE_FILE
 
@@ -160,6 +161,7 @@ def test_the_layers_run_lowest_first() -> None:
         PRESET,
         REPOSITORY,
         OVERLAY_COMMON,
+        OVERLAY_TAG,
         OVERLAY_PROJECT,
         MACHINE_FILE,
     )
@@ -178,6 +180,37 @@ def test_which_layers_may_set_each_class() -> None:
         KeyClass.REPOSITORY_ONLY: frozenset({PRESET, REPOSITORY}),
         KeyClass.PLUGIN_OWNED: frozenset({PRESET}),
     }
+
+
+def test_a_tag_layer_is_admitted_where_the_common_layer_is() -> None:
+    # A tag is the owner's like the common file, so it sets what the common file may and nothing
+    # more: for every class the two stand together.
+    for key_class, layers in ALLOWED.items():
+        assert (OVERLAY_TAG in layers) == (OVERLAY_COMMON in layers), key_class
+
+
+def test_a_tag_layer_names_itself_by_its_label() -> None:
+    # The label is what the owner wrote and `plates` held to `TAG`; a layer without one reads as
+    # its name alone. The winner's label rides with its provenance, and a later layer without one
+    # takes it back.
+    assert Layer(OVERLAY_TAG, {}, "ops").said == "overlay tag ops"
+    assert Layer(OVERLAY_PROJECT, {}).said == "overlay project"
+    got = resolve(
+        [
+            Layer(OVERLAY_TAG, {"memory.mode": "overlay"}, "ops"),
+            Layer(OVERLAY_COMMON, {"memory.mode": "harness"}),
+        ]
+    )
+    assert got.said("memory.mode") == "overlay tag ops"
+    again = resolve(
+        [
+            Layer(OVERLAY_TAG, {"memory.mode": "overlay"}, "ops"),
+            Layer(OVERLAY_PROJECT, {"memory.mode": "harness"}),
+        ]
+    )
+    assert again.said("memory.mode") == "overlay project"
+    with pytest.raises(KeyError):
+        again.said("memory.groups")
 
 
 def test_a_higher_layer_wins_and_says_which() -> None:
@@ -279,6 +312,7 @@ def test_a_layer_reads_as_its_name() -> None:
         "preset",
         "repository",
         "overlay common",
+        "overlay tag",
         "overlay project",
         "machine file",
     ]

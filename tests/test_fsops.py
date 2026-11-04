@@ -19,6 +19,7 @@ from stayfixed.fsops import (
     UnsafePath,
     _mode_of,
     checked_components,
+    create_within,
     mkdirs_within,
     names_control_directory,
     open_within,
@@ -1083,3 +1084,32 @@ def test_an_append_to_a_fifo_with_no_reader_is_refused_and_never_waits(tmp_path:
         check=False,
     )
     assert done.stdout == "ENXIO\n", (done.stdout, done.stderr)
+
+
+def test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link(
+    tmp_path: Path,
+) -> None:
+    # Mutation (oracle): `mutations/`'s "owner-held files overwrite a present name" -> an existing
+    # file is written over and this reddens.
+    assert create_within(tmp_path, "new.txt", b"owned\n", mode=0o640)
+    assert (tmp_path / "new.txt").read_bytes() == b"owned\n"
+    assert stat.S_IMODE((tmp_path / "new.txt").stat().st_mode) == 0o640
+    # A file, a directory and a link, a dangling one included, are each left as they were.
+    (tmp_path / "file.txt").write_bytes(b"theirs\n")
+    (tmp_path / "directory").mkdir()
+    outside = tmp_path / "outside.txt"
+    (tmp_path / "dangling").symlink_to(outside)
+    for name in ("file.txt", "directory", "dangling"):
+        assert create_within(tmp_path, name, b"owned\n", mode=0o600) is False
+    assert (tmp_path / "file.txt").read_bytes() == b"theirs\n"
+    assert (tmp_path / "directory").is_dir()
+    assert os.readlink(tmp_path / "dangling") == str(outside)
+    assert not outside.exists()
+    # A link on the way refuses the walk, and the parent of a name is not created.
+    (tmp_path / "away").symlink_to(tmp_path / "directory")
+    with pytest.raises(UnsafePath):
+        create_within(tmp_path, "away/x.txt", b"owned\n", mode=0o600)
+    assert not (tmp_path / "directory" / "x.txt").exists()
+    with pytest.raises(FileNotFoundError):
+        create_within(tmp_path, "missing/x.txt", b"owned\n", mode=0o600)
+    assert not (tmp_path / "missing").exists()

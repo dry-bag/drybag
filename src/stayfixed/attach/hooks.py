@@ -153,8 +153,17 @@ def _asked_before(event: HookEvent) -> bool:
 def _overlay_status(event: HookEvent, session: SessionConfig) -> HookResult:
     from stayfixed.config.schema import OVERLAY_MODE
 
+    if event.project_root is None:
+        return HookResult()
     config = session.config
-    if config is None or event.project_root is None or config.memory.mode != OVERLAY_MODE:
+    if config is None:
+        # No file: the configuration of a checkout this machine binds, if it binds this one.
+        from stayfixed.config.session import bound_config
+        from stayfixed.errors import resolved_or_none
+
+        root = event.project_root
+        config = resolved_or_none(lambda: bound_config(root, machine=None, owner=session.owner))
+    if config is None or config.memory.mode != OVERLAY_MODE:
         return HookResult()
     try:
         import stayfixed
@@ -239,8 +248,25 @@ def _scoped_rules(event: HookEvent, session: SessionConfig) -> HookResult:
         return HookResult()
 
 
+def _owner_files(event: HookEvent, session: SessionConfig) -> HookResult:
+    """The owner-held files a new linked worktree lacks (`attach.checkout`), placed on every
+    `SessionStart` and said when something was placed. Anchored on the binding and never on a
+    configuration: the worktree this serves has no `stayfixed.toml` until this places it, so
+    `session.config` and `memory.mode` decide nothing here."""
+    if event.project_root is None:
+        return HookResult()
+    try:
+        from stayfixed.attach.checkout import place, said
+
+        return HookResult(context=said(*place(event.project_root, machine=None)) or None)
+    # An open handler never costs a session, as `_overlay_status` says.
+    except Exception:
+        return HookResult()
+
+
 def register() -> list[Handler]:
     return [
+        Handler(name="owner-files", event="SessionStart", run=_owner_files),
         Handler(
             name="overlay-status",
             event="SessionStart",

@@ -256,6 +256,10 @@ def test_project_handlers_speak_on_a_file_and_stay_silent_without_one(
     root.mkdir()
     handler, event = speaks(root)
     assert run_handler(handler, event, session_config(root, machine=tmp_path / "none.toml")).context
+    # `overlay-status` falls back to `bound_config`, which reads a present file, so its file goes.
+    # The hygiene note's stays: that untracked file is what a broken guard would speak about.
+    if speaks is _overlay_status:
+        (root / "stayfixed.toml").unlink()
     assert not run_handler(handler, event, NO_CONFIG).context
 
 

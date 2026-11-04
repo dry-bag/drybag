@@ -64,6 +64,66 @@ def test_a_rebuild_follows_the_overlay_and_keeps_a_note_the_harness_wrote(tmp_pa
     assert (store / "topic.md").read_text(encoding="utf-8") == "the harness's note"
 
 
+def a_tagged_overlay(tmp_path: Path, *tags: str, memory: bool = True) -> tuple[Path, Path]:
+    """`an_overlay` whose record of `p` lists `tags`, each with a `groups/<tag>/` directory and,
+    where `memory`, its `memory/` too."""
+    overlay, share = an_overlay(tmp_path)
+    listed = ", ".join(f'"{tag}"' for tag in tags)
+    (overlay / "projects" / "p" / "project.toml").write_text(f"tags = [{listed}]\n", "utf-8")
+    for tag in tags:
+        (overlay / "groups" / tag / ("memory" if memory else "")).mkdir(parents=True)
+    return overlay, share
+
+
+def test_a_tags_memory_is_linked_under_its_tag_name(tmp_path: Path) -> None:
+    overlay, _share = a_tagged_overlay(tmp_path, "a")
+    store = build(overlay, "p", ID)
+    assert (store / "tag-a").is_symlink()
+    assert (store / "tag-a").resolve() == (overlay / "groups" / "a" / "memory").resolve()
+
+
+def test_a_tag_without_memory_gets_no_link(tmp_path: Path) -> None:
+    # A link at no directory would take a note the harness writes through it into nowhere; the
+    # next attach picks the directory up once it exists.
+    overlay, _share = a_tagged_overlay(tmp_path, "a", memory=False)
+    store = build(overlay, "p", ID)
+    assert "tag-a" not in sorted(entry.name for entry in store.iterdir())
+    (overlay / "groups" / "a" / "memory").mkdir()
+    build(overlay, "p", ID)
+    assert (store / "tag-a").is_symlink()
+
+
+def test_untagging_takes_the_link_and_keeps_a_note_the_harness_wrote(tmp_path: Path) -> None:
+    overlay, _share = a_tagged_overlay(tmp_path, "a")
+    store = build(overlay, "p", ID)
+    (store / "topic.md").write_text("the harness's note", encoding="utf-8")
+    (overlay / "projects" / "p" / "project.toml").write_text("tags = []\n", encoding="utf-8")
+    build(overlay, "p", ID)
+    assert not (store / "tag-a").is_symlink() and not (store / "tag-a").exists()
+    assert (store / "topic.md").read_text(encoding="utf-8") == "the harness's note"
+    assert (overlay / "groups" / "a" / "memory").is_dir()
+
+
+def test_a_project_memory_directory_in_the_tag_namespace_is_not_linked(tmp_path: Path) -> None:
+    # The project side gives up the `tag-` prefix: the directory would otherwise take the name
+    # the tag's own link needs. Mutation (oracle): `mutations/`'s "the composed store links a
+    # project directory in the tag namespace".
+    overlay, share = a_tagged_overlay(tmp_path, "a")
+    (share / "tag-a").mkdir()
+    (share / "tag-b").mkdir()
+    store = build(overlay, "p", ID)
+    assert (store / "tag-a").resolve() == (overlay / "groups" / "a" / "memory").resolve()
+    assert not (store / "tag-b").exists() and not (store / "tag-b").is_symlink()
+
+
+def test_a_tag_and_a_project_group_of_one_name_both_link(tmp_path: Path) -> None:
+    overlay, share = a_tagged_overlay(tmp_path, "specs")
+    (share / "specs").mkdir()
+    store = build(overlay, "p", ID)
+    assert (store / "specs").resolve() == (share / "specs").resolve()
+    assert (store / "tag-specs").resolve() == (overlay / "groups" / "specs" / "memory").resolve()
+
+
 def test_withdraw_removes_the_links_and_the_store_and_never_a_note(tmp_path: Path) -> None:
     # The links go and the overlay they point into stays; a note the harness wrote keeps the
     # directory, since nothing stayfixed placed it there.

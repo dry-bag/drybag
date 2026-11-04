@@ -1,9 +1,11 @@
 """The composed store: the one directory on this machine that the harness reads memory from.
 
 **One directory, named by the binding id, outside every checkout.** `<data>/stores/<id>/` holds a
-link per group into the overlay — `developer` to `<overlay>/common/memory`, the shared notes, and
-each directory of `<overlay>/projects/<project>/memory/` to itself — and `MEMORY.md`, a link to the
-index `stayfixed memory index` renders in that share. `attach` builds it in `overlay` mode and
+link per group into the overlay — `developer` to `<overlay>/common/memory`, the shared notes,
+`tag-<tag>` to the `memory/` of each tag the project's record lists (where that is a directory) and
+each directory of `<overlay>/projects/<project>/memory/` to itself, but for the names that start
+with `tag-` — and `MEMORY.md`, a link to the index `stayfixed memory index` renders in that share.
+`attach` builds it in `overlay` mode and
 writes its absolute path as `autoMemoryDirectory` into the main checkout's excluded
 `settings.local.json`, which Claude Code reads from every worktree, so the harness reads the
 overlay's notes through one key and no per-worktree link. `<project>` is the project this machine's
@@ -31,6 +33,7 @@ from pathlib import Path
 
 from stayfixed import fsops
 from stayfixed.binding import unwritten
+from stayfixed.config.plates import tags
 from stayfixed.config.schema import Config
 from stayfixed.errors import Failure
 from stayfixed.memory.index import INDEX_NAME, index_source, reconcile, render_index, write_index
@@ -43,7 +46,9 @@ from stayfixed.memory.store import (
     composed_directory,
     overlay_group_target,
     permitted_roots,
+    reserved,
     resolve,
+    tag_link,
 )
 
 
@@ -54,17 +59,24 @@ def link_sources(overlay: Path, config: Config) -> tuple[Path, ...]:
     (`attach.binding.refuse_unless_share_can_exist`): the index is what `render_missing_index`
     writes and every group's but the common one a directory `attach` creates."""
     project = config.project.name
-    index = permitted_roots(overlay, project)[1] / INDEX_NAME
+    index = permitted_roots(overlay, project)[-1] / INDEX_NAME
     return (index, *(overlay_group_target(overlay, project, g) for g in config.memory.groups))
 
 
 def _sources(overlay: Path, project: str) -> dict[str, Path]:
-    """Each name the store holds and the path in the overlay its link points at."""
+    """Each name the store holds and the path in the overlay its link points at: the common notes,
+    `tag-<t>` for each usable tag whose `memory/` is a directory (a link at none would take a
+    note written through it into nowhere), each directory of the project's share that is not in
+    the reserved names, and the index."""
     share = overlay / PROJECTS / project / STORE_DIR
     found = {COMMON_GROUP: overlay_group_target(overlay, project, COMMON_GROUP)}
+    for tag in tags(overlay, project)[0]:
+        target = overlay_group_target(overlay, project, tag_link(tag))
+        if fsops.is_dir(target):
+            found[tag_link(tag)] = target
     if fsops.is_dir(share):
         for entry in sorted(os.listdir(share)):
-            if not entry.startswith(".") and entry != COMMON_GROUP and fsops.is_dir(share / entry):
+            if not entry.startswith(".") and not reserved(entry) and fsops.is_dir(share / entry):
                 found[entry] = overlay_group_target(overlay, project, entry)
     found[INDEX_NAME] = share / INDEX_NAME
     return found

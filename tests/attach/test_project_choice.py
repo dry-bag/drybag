@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from stayfixed import binding
+from stayfixed.attach.binding import BY_FILE, BY_FLAG, BY_OVERLAY, BY_RECORD, BY_REMOTE
 from stayfixed.cli import build_parser, discover_registrars, run
 from stayfixed.doctor.api import NO_CONFIG_SKIP, OK, SKIP, Check, run_checks
 from stayfixed.memory.api import PROJECT_RECORD, PROJECTS
@@ -235,7 +236,7 @@ def test_doctor_judges_a_checkout_attached_with_no_stayfixed_toml_on_what_attach
 def test_doctor_reads_an_unbound_checkout_with_no_stayfixed_toml_as_it_did(tmp_path: Path) -> None:
     # Nothing on this machine binds the checkout, so there is no project to build a configuration
     # for: the rows skip and answer as they did before `attach` could bind such a checkout.
-    # Mutation: `mutations/`'s "doctor builds a configuration for a checkout nothing binds".
+    # Mutation: `mutations/`'s "bound_config answers for an unbound checkout".
     root, _, machine = _clone(tmp_path, origin="git@example.com:o/widget.git")
     rows = _doctor(tmp_path, root, machine)
     assert (rows["attached"].status, rows["attached"].detail) == (SKIP, NO_CONFIG_SKIP)
@@ -258,3 +259,61 @@ def test_doctor_reads_a_worktree_whose_main_checkout_has_a_stayfixed_toml_as_it_
     (side / "stayfixed.toml").unlink()
     rows = _doctor(tmp_path, side, machine)
     assert (rows["attached"].status, rows["attached"].detail) == (SKIP, NO_CONFIG_SKIP)
+
+
+def _checked(
+    capsys: pytest.CaptureFixture[str], root: Path, machine: Path, *extra: str
+) -> tuple[str, dict[str, object]]:
+    """`attach --check` as its line and as `--json`, on the same checkout; nothing is written."""
+    before = snapshot(root)
+    assert invoke(["attach", "--check", *extra, *_flags(root, machine)]) == 0
+    line = capsys.readouterr().out.splitlines()[0]
+    assert invoke(["attach", "--check", *extra, *_flags(root, machine), "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert_snapshot_unchanged(root, before)
+    return line, data
+
+
+@pytest.mark.parametrize(
+    "source",
+    [BY_FLAG, BY_RECORD, BY_OVERLAY, BY_REMOTE, BY_FILE],
+    ids=["flag", "record", "overlay", "remote", "file"],
+)
+def test_check_names_the_project_and_where_its_name_came_from(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], source: str
+) -> None:
+    # The owner reads which project a clone would be bound to before it is, and whose word that is:
+    # with `--project` the name is theirs. Mutation: `mutations/`'s "attach ignores --project".
+    extra: tuple[str, ...] = ()
+    name = "mine"
+    if source == BY_FILE:
+        root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+        machine, name = _machine(tmp_path, overlay=store.parents[2]), "p"
+    elif source == BY_OVERLAY:
+        root, overlay, machine = _clone(tmp_path, origin="https://github.com/o/widget")
+        _recorded(overlay, "alpha", "git@github.com:O/Widget.git")
+        name = "alpha"
+    elif source == BY_REMOTE:
+        root, _, machine = _clone(tmp_path, origin="https://example.com/Owner/Widget-Kit.git")
+        name = "widget-kit"
+    else:
+        root, overlay, machine = _clone(tmp_path, origin="git@example.com:o/widget.git")
+        if source == BY_FLAG:
+            extra = ("--project", name)
+        else:
+            assert invoke(["attach", "--project", name, *_flags(root, machine)]) == 0
+            capsys.readouterr()
+            (overlay / PROJECTS / name / PROJECT_RECORD).unlink()
+    line, data = _checked(capsys, root, machine, *extra)
+    assert line.startswith(f"project {name} ({source}); ")
+    assert (data["project"], data["project_source"]) == (name, source)
+
+
+def test_check_json_keeps_its_existing_fields(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The project and its source are added beside the report's fields, never in place of one.
+    root, _, machine = _clone(tmp_path, origin="https://example.com/Owner/Widget-Kit.git")
+    _, data = _checked(capsys, root, machine)
+    assert {"state", "added_allow", "already_present", "rules_to_write"} <= set(data)
+    assert data["state"] == "unbound"

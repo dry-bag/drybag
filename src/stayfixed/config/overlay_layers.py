@@ -1,11 +1,13 @@
-"""The overlay's two layers of a session's preferences: `<overlay>/common/stayfixed.toml` for every
-checkout, and `<overlay>/projects/<project>/stayfixed.toml` for a checkout this machine binds.
+"""The overlay's layers of a session's preferences: `<overlay>/common/stayfixed.toml` for every
+checkout, and for a checkout this machine binds, `<overlay>/groups/<tag>/stayfixed.toml` for each
+tag the project's record lists and `<overlay>/projects/<project>/stayfixed.toml`, in the order of
+`config.plates` (a later layer wins).
 
 **The project comes from the binding record, never from the repository.** `binding.bound_project`
 reads the id in the checkout's git common directory and this machine's record of it, so a clone
-that commits the `[project] name` of one of the owner's projects has no project layer, and only
-the common file applies to it. The overlay is the one `[overlay] root` of the machine file names
-(`config.overlay.overlay_root`).
+that commits the `[project] name` of one of the owner's projects has no project layer and no tag
+layer, and only the common file applies to it. The overlay is the one `[overlay] root` of the
+machine file names (`config.overlay.overlay_root`).
 
 **Read the way a session reads `stayfixed.toml`, noting rather than refusing.** A name this
 stayfixed does not read is ignored, and a value it cannot use is left out so the layer beneath
@@ -28,6 +30,7 @@ from stayfixed import fsops
 from stayfixed.config.classes import ALLOWED, Layer, LayerName, class_of
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.owner import Guards
+from stayfixed.config.plates import COMMON, Plate, PlateKind, plates
 from stayfixed.config.reading import (
     UNPARSEABLE,
     ConfigError,
@@ -50,8 +53,6 @@ from stayfixed.config.schema import (
 from stayfixed.gitenv import GitUnavailable
 from stayfixed.printed import clipped, quoted
 
-COMMON = "common"
-PROJECTS = "projects"
 CONFIG_FILE = "stayfixed.toml"
 # A named cap: the most bytes of an overlay file a session reads, the bound it reads the
 # repository's `stayfixed.toml` to (`session.SESSION_READ_LIMIT`, which says why), for the same
@@ -70,6 +71,12 @@ NO_GIT = "{cause}, so the overlay project layer sets nothing"
 UNKNOWN = "{path}: {name} is not a setting this stayfixed reads; it is ignored"
 NOT_A_TABLE = "{path}: [{table}] must be a table; it is ignored"
 UNUSABLE = "{path}: {problem}; the value beneath it applies"
+
+_NAME_OF = {
+    PlateKind.COMMON: LayerName.OVERLAY_COMMON,
+    PlateKind.TAG: LayerName.OVERLAY_TAG,
+    PlateKind.PROJECT: LayerName.OVERLAY_PROJECT,
+}
 
 # The tables a `stayfixed.toml` holds, and the machine owner's two, each with the schema class
 # `reading.table_types` holds its keys to.
@@ -100,16 +107,19 @@ def read(
         return (), (MACHINE_UNREAD.format(error=exc),)
     if overlay is None:
         return (), (NO_OVERLAY,)
-    layers: list[Layer] = []
-    common = _layer(overlay / COMMON / CONFIG_FILE, LayerName.OVERLAY_COMMON, notes)
-    if common is not None:
-        layers.append(common)
     project = _bound(root, notes)
-    if project is not None:
-        path = overlay / PROJECTS / project / CONFIG_FILE
-        own = _layer(path, LayerName.OVERLAY_PROJECT, notes)
-        if own is not None:
-            layers.append(own)
+    if project is None:
+        found: tuple[Plate, ...] = (Plate(PlateKind.COMMON, COMMON, overlay / COMMON),)
+    else:
+        found, listed = plates(overlay, project)
+        notes.extend(listed)
+    layers: list[Layer] = []
+    for plate in found:
+        name = _NAME_OF[plate.kind]
+        label = plate.name if plate.kind is PlateKind.TAG else ""
+        layer = _layer(plate.directory / CONFIG_FILE, name, label, notes)
+        if layer is not None:
+            layers.append(layer)
     return tuple(layers), tuple(notes)
 
 
@@ -130,26 +140,30 @@ def _bound(root: Path | None, notes: list[str]) -> str | None:
     return None if bound is None else bound.project
 
 
-def _layer(path: Path, name: LayerName, notes: list[str]) -> Layer | None:
-    """The file at `path` as the layer `name`, or `None` with a note where it cannot be read."""
+def _layer(path: Path, name: LayerName, label: str, notes: list[str]) -> Layer | None:
+    """The file at `path` as the layer `name` (`label` the tag a tag's layer is for), or `None`
+    with a note where it cannot be read. A tag with no file sets nothing and says nothing: a tag
+    is often only notes."""
+    said = Layer(name, {}, label).said
     shown = quoted(str(path))
     try:
         text = fsops.read_regular_text(path, limit=READ_LIMIT)
     except FileNotFoundError:
-        notes.append(NOT_THERE.format(path=shown, layer=name))
+        if name is not LayerName.OVERLAY_TAG:
+            notes.append(NOT_THERE.format(path=shown, layer=said))
         return None
     except UnicodeDecodeError:
-        notes.append(NOT_UTF8.format(path=shown, layer=name))
+        notes.append(NOT_UTF8.format(path=shown, layer=said))
         return None
     except OSError as exc:
-        notes.append(UNREADABLE.format(path=shown, error=fsops.said(exc), layer=name))
+        notes.append(UNREADABLE.format(path=shown, error=fsops.said(exc), layer=said))
         return None
     try:
         raw = tomllib.loads(text)
     except UNPARSEABLE as exc:
-        notes.append(NOT_TOML.format(path=shown, position=toml_position(exc), layer=name))
+        notes.append(NOT_TOML.format(path=shown, position=toml_position(exc), layer=said))
         return None
-    return Layer(name, _values(raw, shown, name, notes))
+    return Layer(name, _values(raw, shown, name, notes), label)
 
 
 def _values(
