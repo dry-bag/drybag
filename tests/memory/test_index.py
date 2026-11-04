@@ -476,7 +476,7 @@ def test_an_unreviewed_notes_line_is_labelled_only_in_a_composed_stores_own_inde
     from stayfixed.memory.notes import walk
     from stayfixed.memory.reviewed import promote
 
-    promote(store, [n for n in walk(base, ["developer"]).notes if n.name == "a"])
+    promote(store.machine, [n for n in walk(base, ["developer"]).notes if n.name == "a"])
     lines = render_index(reconcile(store, config, write=False), config, store).splitlines()
     assert "- [B trigger → B](developer/b.md) [unreviewed]" in lines
     assert "- [A trigger → A](developer/a.md)" in lines

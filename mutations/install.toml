@@ -985,8 +985,8 @@ reddens = [
 [[mutation]]
 name = "setup reports the recorded overlay's path raw"
 file = "src/stayfixed/setup/commands.py"
-before = '            f"overlay recorded at {quoted(str(report.overlay))}"'
-after = '            f"overlay recorded at {report.overlay}"'
+before = "            f\"overlay recorded at {quoted(data['overlay'])}\""
+after = "            f\"overlay recorded at {data['overlay']}\""
 reddens = [
   "tests/setup/test_setup.py::test_an_overlay_path_a_repository_spells_is_printed_quoted[the-summary]",
 ]
@@ -1239,3 +1239,25 @@ after = """OVERLAY_FILES = (
 reddens = [
   "tests/setup/test_setup.py::test_a_render_cut_short_is_not_an_overlay_the_next_run_records",
 ]
+
+# A clone's tracked `stayfixed.toml` can claim another of the owner's projects. The store `setup
+# --restore` hands `attach` comes from the table key in the owner's `machine/projects.toml`, and
+# attach refuses a store that is not the checkout's own project's; with no store handed, attach
+# would take the project the clone names for itself and give it that project's notes.
+[[mutation]]
+name = "restore attaches without the store its table key names"
+file = "src/stayfixed/setup/restore.py"
+before = "                store=permitted_roots(overlay, item.name)[1],"
+after = "                store=None,"
+reddens = [
+  "tests/setup/test_restore.py::test_a_checkout_whose_project_is_not_its_table_key_is_refused_and_the_rest_attach",
+]
+
+# `--yes` is the owner's word on their own command line that the overlay's notes are theirs;
+# without it `setup --restore` records nothing as reviewed, however many notes the overlay holds.
+[[mutation]]
+name = "restore records notes as reviewed without --yes"
+file = "src/stayfixed/setup/restore.py"
+before = "        if yes:"
+after = "        if True:"
+reddens = ["tests/setup/test_restore.py::test_without_yes_no_note_is_recorded_as_reviewed"]

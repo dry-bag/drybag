@@ -183,7 +183,7 @@ def _memory(context: Context, answers: Answers) -> Row:
         groups = (
             [g for g in context.config.memory.groups if g in store.groups] if context.config else []
         )
-        pending = len(unreviewed(store, walk(store.path, groups).notes))
+        pending = len(unreviewed(store.machine, walk(store.path, groups).notes))
         parts.append(f"store {where}, {pending} unreviewed note(s)")
         debris = _debris(store)
     parts.append(_pointer(context))

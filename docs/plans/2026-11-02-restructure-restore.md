@@ -784,3 +784,47 @@ report to the controller (not the pull request body) lists the overlay-side call
 
 Filled in as the waves run: each implementer's token total, the review findings with their
 dispositions, the Minors left as follow-ups, and every place the tree differed from this plan.
+
+### Where the tree differed from this plan
+
+- Task 3 (`stayfixed hook` dispatched before the parser) did not land. Reaching `hooks.commands`
+  from `hooks.api` is a module cycle, and naming it from `cli.py` is refused by the discovery
+  rule. It is a follow-up with its measurement: 98 `stayfixed.*` modules imported against 30, and
+  0.12 s against 0.06 s per hook call on Python 3.13.
+- `--sync` (Task 7) did not land: `next` has no `[sync]` machine key or writer yet.
+- Task 4's threat is a repository's `.venv/bin/python`, which uv runs to inspect it even with
+  `--no-config`. A `.python-version` naming a script is not run under the explicit `>=3.11`
+  request. Asking from `/` closes both.
+- Task 7's `--yes` no longer runs `memory promote --changed` in each checkout, and
+  `promote_changed` is gone. That path read the checkout's own `[memory] mode`. A clone in
+  `in-repo` or `local-only` mode had its committed notes recorded as reviewed, and the
+  overlay's notes were not. A checkout with no `stayfixed.toml` came back `failed`. `--yes`
+  now records the notes of the overlay's share for the table key (`memory.api.promote_share`).
+  Nothing a checkout holds is read.
+- A listed `dir` that is not a checkout is `failed`, attach's own verdict, not `refused`.
+
+### Pull request B review
+
+Three seats: correctness, deletion and refusal, and security. Then one fix round (`src` −30 net,
+tests +50) and one scoped re-review, which found every in-scope finding addressed.
+
+Fixed:
+- The `--yes` store (security, Critical; correctness, two Importants).
+- Restore's plugin results and notes are printed, in text and `--json`.
+- The non-checkout verdict.
+- Three false sentences in `docs/cli.md`.
+
+Left as follow-ups (Minors):
+- An `OSError` from recording notes ends the run for a checkout not in overlay mode.
+- The plugin-value patterns could give way to `--`. `claude` accepts it for both verbs.
+- The listing pre-check re-reads Claude Code's install state.
+- `overlay_to_restore`'s function-local imports.
+- Repeated anchor sentences in docstrings.
+- About 30 lines of `docs/cli.md`.
+- Tests that pin wording.
+- No test for `common` notes under `--yes`.
+- No test for the "project added" row.
+- No wrapper test for a `python3` below the floor.
+- `VIRTUAL_ENV`, `CONDA_PREFIX` and `UV_*` steer uv. They are the environment's, the same class
+  as `PATH`.
+- `reviewed`'s functions take the machine file rather than a `Store`.
