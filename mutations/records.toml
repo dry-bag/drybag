@@ -2931,9 +2931,9 @@ before = '        parts.append(f"\n## {section.heading} ({len(selected)})\n\n")'
 after = '        parts.append(f"\n## {section.heading}\n\n")'
 reddens = ["tests/ledger/test_literals.py::test_the_index_is_the_one_it_rendered"]
 
-# `bugs regressions` runs a fixed entry's regression and no other's, counts only `proved` as
-# proved, and starts nothing after a run an interrupt ended. Each is reddened by a case that runs
-# no real runner.
+# `bugs regressions` runs a fixed entry's regression and no other's, judges each by its exit code,
+# counts only `passed` as passed, starts nothing after a run an interrupt ended, reads a SIGTERM as
+# that interrupt, and keeps the command's output off `--json`'s standard output.
 [[mutation]]
 name = "bugs regressions runs an entry of any status"
 file = "src/stayfixed/ledger/regressions.py"
@@ -2942,18 +2942,42 @@ after = "        if not argv:"
 reddens = ["tests/ledger/test_regressions.py::test_only_fixed_entries_run"]
 
 [[mutation]]
-name = "bugs regressions counts every verdict as proved"
+name = "bugs regressions reads every exit code as passed"
+file = "src/stayfixed/ledger/regressions.py"
+before = '    return Run(PASSED if code == 0 else FAILED, f"exit {code}")'
+after = '    return Run(PASSED, f"exit {code}")'
+reddens = ["tests/ledger/test_regressions.py::test_an_exit_0_is_passed_and_any_other_exit_failed"]
+
+[[mutation]]
+name = "bugs regressions counts every verdict as passed"
 file = "src/stayfixed/ledger/commands.py"
-before = "    not_proved = sum(1 for _, receipt in ran if receipt.verdict is not Verdict.PROVED)"
-after = "    not_proved = sum(1 for _, receipt in ran if False)"
-reddens = ["tests/ledger/test_regressions.py::test_an_argv_no_adapter_recognises_is_not_proved"]
+before = "    not_passed = sum(1 for _, run in ran if run.verdict != PASSED)"
+after = "    not_passed = sum(1 for _, run in ran if False)"
+reddens = ["tests/ledger/test_regressions.py::test_an_exit_0_is_passed_and_any_other_exit_failed"]
 
 [[mutation]]
 name = "bugs regressions goes on past an interrupt"
 file = "src/stayfixed/ledger/regressions.py"
-before = "        if receipt.reason == INTERRUPTED:\n            break"
-after = "        if False:\n            break"
-reddens = ["tests/ledger/test_regressions.py::test_an_interrupted_regression_starts_no_further_one"]
+before = "            if run.verdict == INTERRUPTED:\n                break"
+after = "            if False:\n                break"
+reddens = [
+  "tests/ledger/test_regressions.py::test_an_interrupted_regression_starts_no_further_one[INT]",
+  "tests/ledger/test_regressions.py::test_an_interrupted_regression_starts_no_further_one[TERM]",
+]
+
+[[mutation]]
+name = "bugs regressions lets a SIGTERM end stayfixed"
+file = "src/stayfixed/ledger/regressions.py"
+before = "    signals = (signal.SIGTERM, signal.SIGHUP)"
+after = "    signals = (signal.SIGHUP,)"
+reddens = ["tests/ledger/test_regressions.py::test_an_interrupted_regression_starts_no_further_one[TERM]"]
+
+[[mutation]]
+name = "bugs regressions prints the command's output on standard output"
+file = "src/stayfixed/ledger/regressions.py"
+before = "            list(argv), cwd=root, stdin=subprocess.DEVNULL, stdout=2, start_new_session=True"
+after = "            list(argv), cwd=root, stdin=subprocess.DEVNULL, stdout=None, start_new_session=True"
+reddens = ["tests/ledger/test_regressions.py::test_json_stays_one_object_while_the_command_prints"]
 
 # The origin note names both remotes; a token in either one's userinfo is taken out before it does.
 [[mutation]]

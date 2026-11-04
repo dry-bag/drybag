@@ -171,9 +171,9 @@ NO_ROWS: frozenset[str] = frozenset()
 # in it is bound once in its function and never mutated, so the same expression handed again after
 # a rebinding is a finding too. The comment says what each runs; a reviewer reads it.
 PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
-    # The test command typed after `stayfixed prove --`, as the runner adapter that recognised it
-    # planned it: the command's own words, with the runner's report put where `prove` reads it.
-    ("src/stayfixed/prove/run.py", "_launch", "list(plan.argv)"): frozenset({"stayfixed prove --"}),
+    # A fixed bug entry's `regression`, the argv as the entry wrote it, which `bugs regressions`
+    # runs from the project root.
+    ("src/stayfixed/ledger/regressions.py", "_run", "list(argv)"): frozenset({"regression"}),
     # `claude plugin marketplace add` and `codex plugin marketplace add`, then `claude plugin
     # install` and `codex plugin add`, each built by a lambda in `_MARKETPLACE_ADD` or
     # `_PLUGIN_INSTALL`, which `test_the_plugin_installs_reach_the_rows_their_entries_name` calls.
@@ -270,10 +270,5 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/doctor/checks.py", "_wrapper", "env=env"): (
         "the environment doctor was handed, less every `CLAUDE_`, `PLUGIN_` and `STAYFIXED_` "
         "variable, plus the plugin root and project directory the wrapper needs"
-    ),
-    ("src/stayfixed/prove/run.py", "_launch", "env=dict(env)"): (
-        "the caller's own environment, less each variable whose value the runner adapter names "
-        "as forging, then the assignments the command itself typed: the test command is the "
-        "caller's, and reaches what it reaches"
     ),
 }

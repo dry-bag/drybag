@@ -1053,18 +1053,8 @@ reddens = [
 [[mutation]]
 name = "Shared flags forgets that `hook` takes neither project flag"
 file = "docs/cli.md"
-before = "Neither flag is taken by `stayfixed commit strip`, `stayfixed hook` and `stayfixed prove`,"
-after = "Neither flag is taken by `stayfixed commit strip` and `stayfixed prove`,"
-reddens = [
-  "tests/test_documents.py::test_shared_flags_names_every_command_that_takes_neither_root_nor_machine",
-]
-
-# `prove` runs where it is typed and reads no configuration, so it takes neither flag either.
-[[mutation]]
-name = "Shared flags forgets that `prove` takes neither project flag"
-file = "docs/cli.md"
-before = "Neither flag is taken by `stayfixed commit strip`, `stayfixed hook` and `stayfixed prove`,"
-after = "Neither flag is taken by `stayfixed commit strip` and `stayfixed hook`,"
+before = "Neither flag is taken by `stayfixed commit strip` and `stayfixed hook`,"
+after = "Neither flag is taken by `stayfixed commit strip`,"
 reddens = [
   "tests/test_documents.py::test_shared_flags_names_every_command_that_takes_neither_root_nor_machine",
 ]

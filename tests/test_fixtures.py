@@ -482,7 +482,7 @@ _PINNED_ACTION = re.compile(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}")
 @needs_workflows_dir
 def test_every_action_a_step_uses_is_pinned_by_a_commit_sha() -> None:
     # Every workflow, every job, every step: one sweep, so a step added to any job is held.
-    # Mutation (declared): `mutations/`'s "the runners job takes an action by its tag" -> the
+    # Mutation (declared): `mutations/`'s "the demo job takes an action by its tag" -> the
     # step is found unpinned.
     unpinned: list[tuple[str, str, object]] = []
     seen = 0

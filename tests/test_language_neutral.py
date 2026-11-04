@@ -79,10 +79,10 @@ STACK_NAMED = {
     ("src/stayfixed/ledger/scan.py", "pycache"),
     ("src/stayfixed/ledger/scan.py", "pyc"),
     # The command scanner unwraps `uv run <cmd>` to `<cmd>`, as it unwraps `env <cmd>`, up to
-    # the first word a runner adapter recognises; this module is that unwrap and the directory
-    # uv runs the command in, which `hints/bashscan.py` and `prove` call, so neither names a
-    # stack itself. `uv run` is a Python launcher, and it stays beside the shared scanner rather
-    # than in the Python profile because every stack's runner may stand behind it.
+    # the first word a runner adapter recognises; this module is that unwrap, which
+    # `hints/bashscan.py` calls, so the scanner names no stack itself. `uv run` is a Python
+    # launcher, and it stays beside the shared scanner rather than in the Python profile because
+    # every stack's runner may stand behind it.
     ("src/stayfixed/hints/uvrun.py", "uv"),
     # The table of test-runner program names (`hints/runners.py`) names runners only to say that a
     # command is a test run, never to run, plan or advise one, and it is the one place the hints

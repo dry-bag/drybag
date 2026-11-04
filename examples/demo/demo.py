@@ -322,7 +322,7 @@ def act_regression(demo: Demo) -> None:
     demo.stayfixed(
         ["bugs", "regressions", "--json"],
         code=0,
-        fields=[Field("not_proved", 0), Field("regressions[id=BR-001].verdict", "proved")],
+        fields=[Field("not_passed", 0), Field("regressions[id=BR-001].verdict", "passed")],
     )
     demo.git("add", "-A")
     demo.git("commit", "-q", "-m", "a fixed bug and its regression")
@@ -334,7 +334,7 @@ def act_regression(demo: Demo) -> None:
     demo.stayfixed(
         ["bugs", "regressions", "--json"],
         code=1,
-        fields=[Field("not_proved", 1), Field("regressions[id=BR-001].verdict", "failed")],
+        fields=[Field("not_passed", 1), Field("regressions[id=BR-001].verdict", "failed")],
     )
 
 

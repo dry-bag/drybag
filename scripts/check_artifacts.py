@@ -60,13 +60,13 @@ WHEEL_MUST = (
     # profile is the regular package the checkout imports.
     "stayfixed/profiles/python/__init__.py",
     "stayfixed/profiles/python/hygiene.py",
-    # Its runner adapter. `stayfixed.prove.adapters` finds `adapters.py` through the same walk and
-    # imports it, so a build that dropped it would answer every `stayfixed prove -- pytest` with
-    # `not proven`, no adapter recognising the command.
+    # Its runner adapter. `stayfixed.profiles.adapters` finds `adapters.py` through the same walk
+    # and imports it, so a build that dropped it would leave the red-run note recognising no
+    # pytest run.
     "stayfixed/profiles/python/adapters.py",
     # The JavaScript stack's runner adapters, jest's, vitest's and `node --test`'s, which ship no
-    # profile: found by the same walk, so a build that dropped them would answer every
-    # `stayfixed prove -- npx jest` with `not proven`. `__init__.py` with them, as above.
+    # profile: found by the same walk, so a build that dropped them would leave the red-run note
+    # recognising no jest run. `__init__.py` with them, as above.
     "stayfixed/profiles/javascript/__init__.py",
     "stayfixed/profiles/javascript/adapters.py",
     # The Go stack's runner adapter, `go test`'s, likewise with no profile.

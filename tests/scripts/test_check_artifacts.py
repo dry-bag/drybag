@@ -98,7 +98,7 @@ def test_a_wheel_without_the_python_profiles_code_is_named(tmp_path: Path, missi
     # `hint_modules` finds a profile's `hygiene.py` through `importlib.resources`, so a build that
     # dropped it would leave every installed stayfixed with no Python note after a failed pytest
     # run, silently, while the checkout's own suite stayed green; `shipped_adapters` finds its
-    # `adapters.py` the same way, and without it every `prove -- pytest` is `not proven`. Oracle:
+    # `adapters.py` the same way, and without it the red-run note recognises no pytest run. Oracle:
     # `mutations/`'s "the wheel need not carry the Python profile's hint", "the wheel need not
     # carry the Python profile's runner adapter" and "the wheel need not carry the Python
     # profile's package marker".

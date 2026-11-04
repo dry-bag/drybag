@@ -40,11 +40,7 @@ CORE_TO_PACK: tuple[Row, ...] = (
     # one function that checks it. Goes with the profiles.
     ("scaffold/engine.py", "stayfixed.profiles", frozenset()),
 )
-PACK_TO_DELIVERY: tuple[Row, ...] = (
-    # `prove` reads a test command's launch the way the red-run hints read it, at module level.
-    # Goes with `prove`.
-    ("prove/run.py", "stayfixed.hints.api", frozenset({"Launch", "read_launch", "run_directory"})),
-)
+PACK_TO_DELIVERY: tuple[Row, ...] = ()
 DELIVERY_TO_PACK: tuple[Row, ...] = (
     # The red-run note asks every shipped profile's hint and adapter, and names a hint's type
     # under `if TYPE_CHECKING:`. All three go with the profiles.
@@ -628,10 +624,6 @@ STANDARD_IMPORTS = frozenset(
         "posixpath",
         "pwd",
         "re",
-        # `prove` waits for its command's report on standard output without blocking forever
-        # (`selectors`) and copies it in a thread of its own while the command runs
-        # (`threading`); neither imports a module by a name.
-        "selectors",
         # `binding` draws the binding id (`secrets.token_hex`), which imports no module by a name.
         "secrets",
         "shlex",
@@ -643,7 +635,6 @@ STANDARD_IMPORTS = frozenset(
         "subprocess",
         "sys",
         "tempfile",
-        "threading",
         "time",
         "tomllib",
         "types",
@@ -676,10 +667,6 @@ MACHINERY_IMPORTERS = (
     # Reads the running interpreter's bytecode magic, the first four bytes of every `.pyc` it would
     # open; it imports nothing.
     ("profiles/python/hygiene.py", "importlib.util", frozenset({"util.MAGIC_NUMBER"})),
-    # `prove`'s tee decodes a report on standard output across reads for a caller's stream that
-    # takes text alone: the codec of the literal "utf-8", the interpreter's own and already
-    # loaded, so the lookup imports nothing.
-    ("prove/run.py", "codecs", frozenset({"getincrementaldecoder"})),
 )
 
 

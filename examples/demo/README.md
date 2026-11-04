@@ -38,7 +38,7 @@ non-zero on `--version` (run by its own path, never through `PATH`), or when `gi
 
 ## The acts
 
-1. A fixed bug's regression, which `stayfixed bugs regressions` proves on `main`, fails it on the
+1. A fixed bug's regression, which `stayfixed bugs regressions` passes on `main`, fails it on the
    branch `change` that brings the bug back.
 2. `stayfixed attach` binds the repository to a scratch overlay and delivers this project's skill,
    `demo-canary`, and not the other project's, `other-canary`; `git status` stays empty.

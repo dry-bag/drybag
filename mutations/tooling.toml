@@ -2911,55 +2911,14 @@ reddens = [
 ]
 
 [[mutation]]
-name = "a failed scope job skips the runners job"
+name = "the demo job takes an action by its tag"
 file = ".github/workflows/ci.yml"
-before = '''  runners:
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}'''
-after = '''  runners:
-    needs: changes
-    if: ${{ needs.changes.outputs.code == 'true' }}'''
-reddens = [
-  "tests/test_ci_scope.py::test_every_job_that_reads_the_scope_runs_whole_on_any_answer_but_false",
-]
-
-# The `runners` job installs every real runner and is the one job where a missing one must fail:
-# a job that skipped them all would report green having run none.
-[[mutation]]
-name = "the runners job lets a missing runner skip"
-file = ".github/workflows/ci.yml"
-before = '''          STAYFIXED_REQUIRE_RUNNERS: "1"'''
-after = '''          STAYFIXED_REQUIRE_RUNNERS: "0"'''
-reddens = [
-  "tests/test_runners_job.py::test_the_runners_job_runs_the_runner_tests_with_a_missing_runner_failing",
-]
-
-[[mutation]]
-name = "the runners job takes an action by its tag"
-file = ".github/workflows/ci.yml"
-before = '''      - name: Go 1.27.2, the toolchain module, checked against its digest'''
+before = '''      - name: Install Claude Code for the attach act'''
 after = '''      - uses: actions/setup-go@v6
         with:
           go-version: "1.27.2"
-      - name: Go 1.27.2, the toolchain module, checked against its digest'''
+      - name: Install Claude Code for the attach act'''
 reddens = ["tests/test_fixtures.py::test_every_action_a_step_uses_is_pinned_by_a_commit_sha"]
-
-# The digest is the pin, recorded with its provenance in the fixtures' README.
-[[mutation]]
-name = "the runners job checks Go against a digest the README does not record"
-file = ".github/workflows/ci.yml"
-before = "          GO_ZIP_SHA256: 3a467ed067f27cd55bf3a702f8e2bf12479f53c9d8ae0de548f48ebcb3c67796"
-after = "          GO_ZIP_SHA256: 0a467ed067f27cd55bf3a702f8e2bf12479f53c9d8ae0de548f48ebcb3c67796"
-reddens = ["tests/test_runners_job.py::test_the_job_installs_the_pinned_node_and_go"]
-
-[[mutation]]
-name = "the runners job unpacks Go unchecked"
-file = ".github/workflows/ci.yml"
-before = '''          echo "$GO_ZIP_SHA256  $RUNNER_TEMP/go.zip" | sha256sum -c -
-          unzip -q "$RUNNER_TEMP/go.zip" -d "$RUNNER_TEMP/go"'''
-after = '''          unzip -q "$RUNNER_TEMP/go.zip" -d "$RUNNER_TEMP/go"
-          echo "$GO_ZIP_SHA256  $RUNNER_TEMP/go.zip" | sha256sum -c -'''
-reddens = ["tests/test_runners_job.py::test_the_job_installs_the_pinned_node_and_go"]
 
 [[mutation]]
 name = "a failed scope job skips the oracle"
@@ -2982,35 +2941,6 @@ after = '''      FULL: ${{ needs.changes.outputs.code == 'true' }}'''
 reddens = [
   "tests/test_ci_scope.py::test_every_job_that_reads_the_scope_runs_whole_on_any_answer_but_false",
 ]
-
-# Only the runners job opts the real-runner tests into the `node` and `go` on `PATH`.
-[[mutation]]
-name = "the runners job leaves the runners on PATH unused"
-file = ".github/workflows/ci.yml"
-before = '''          STAYFIXED_RUNNERS_ON_PATH: "1"'''
-after = '''          STAYFIXED_RUNNERS_ON_PATH: "0"'''
-reddens = [
-  "tests/test_runners_job.py::test_the_runners_job_runs_the_runner_tests_with_a_missing_runner_failing",
-]
-
-# Only the `runners` job takes `node` and `go` from `PATH` for the tests that run them; every other
-# job's tests skip there rather than run the hosted image's own.
-[[mutation]]
-name = "the checks job opts the tests into the runners on PATH"
-file = ".github/workflows/ci.yml"
-before = """        env:
-          STAYFIXED_OLD_PYTHON: ${{ steps.old-python.outputs.python-path }}"""
-after = """        env:
-          STAYFIXED_RUNNERS_ON_PATH: "1"
-          STAYFIXED_OLD_PYTHON: ${{ steps.old-python.outputs.python-path }}"""
-reddens = ["tests/test_runners_job.py::test_only_the_runners_job_opts_the_tests_into_the_runners_on_path"]
-
-[[mutation]]
-name = "the runners job leaves the pinned Go off PATH"
-file = ".github/workflows/ci.yml"
-before = """          echo "$RUNNER_TEMP/go/$GO_TOOLCHAIN/bin" >> "$GITHUB_PATH""""
-after = """          ls "$RUNNER_TEMP/go/$GO_TOOLCHAIN/bin""""
-reddens = ["tests/test_runners_job.py::test_the_runners_job_puts_the_pinned_go_first_on_path"]
 
 # --- scripts/publish_template.py: the overlay template's publisher -----------------------------
 #

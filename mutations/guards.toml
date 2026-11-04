@@ -53,7 +53,7 @@ reddens = [
 ]
 
 # A `uv run` in which no adapter recognises a word is read whole: read as all launcher, it is a
-# launch of nothing, and `prove --junit` would read `not proven` for a command it runs as typed.
+# launch of nothing.
 [[mutation]]
 name = "a `uv run` no adapter recognises is read as all launcher"
 file = "src/stayfixed/hints/bashscan.py"
@@ -63,7 +63,6 @@ after = """            return at
     return len(segment)"""
 reddens = [
   "tests/hints/test_bashscan.py::test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole[no-runner]",
-  "tests/prove/test_junit_flag.py::test_a_launcher_runs_as_typed_under_junit",
 ]
 
 # A uv command with no `run` launches nothing: read from its first word, `uv pip install
@@ -112,7 +111,6 @@ before = "            launcher.extend(segment[index:launched])"
 after = "            pass"
 reddens = [
   "tests/hints/test_bashscan.py::test_read_launch_names_each_word_of_the_launch_by_its_part[uv-env-assignment]",
-  "tests/prove/test_run.py::test_the_adapter_is_handed_the_launcher_s_words_alone[argv0-launch0]",
 ]
 
 # Claude Code delivers a Bash command that exited non-zero to `PostToolUseFailure` and never to
@@ -1170,61 +1168,6 @@ after = "    config = session.config\n    if event.project_root is None:"
 reddens = [
   "tests/hooks/test_floor.py::test_project_handlers_speak_on_a_file_and_stay_silent_without_one[test_hygiene]",
   "tests/hints/test_hooks.py::test_no_config_silences_the_hygiene_note_and_never_the_guard",
-]
-
-# `uvrun.run_directory`, measured on uv 0.12.19: `--directory`, else `UV_WORKING_DIR`, moves
-# where the program runs, and `prove` judges the command there.
-[[mutation]]
-name = "uv's `--directory` is not read"
-file = "src/stayfixed/hints/uvrun.py"
-before = "            if name == _DIRECTORY:"
-after = "            if False:"
-reddens = [
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[spaced]",
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[equals]",
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[global]",
-  "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[spaced]",
-]
-
-[[mutation]]
-name = "uv's spaced `--directory` value is not read"
-file = "src/stayfixed/hints/uvrun.py"
-before = "                directory = value if equals else _value(words, at)"
-after = "                directory = value"
-reddens = [
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[spaced]",
-]
-
-[[mutation]]
-name = "`UV_WORKING_DIR` is not read"
-file = "src/stayfixed/hints/uvrun.py"
-before = "        moved = directory if directory is not None else environ.get(WORKING_DIR)"
-after = "        moved = directory"
-reddens = [
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[variable]",
-  "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[assigned]",
-  "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[inherited]",
-]
-
-[[mutation]]
-name = "uv's variable wins over its `--directory`"
-file = "src/stayfixed/hints/uvrun.py"
-before = "        moved = directory if directory is not None else environ.get(WORKING_DIR)"
-after = "        moved = environ.get(WORKING_DIR) or directory"
-reddens = [
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[option-over-variable]",
-  "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[over-the-variable]",
-]
-
-[[mutation]]
-name = "a nested `uv run` reads its directory from where the command was typed"
-file = "src/stayfixed/hints/uvrun.py"
-before = "            here = here / moved"
-after = "            here = cwd / moved"
-reddens = [
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[nested]",
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[nested-variable]",
-  "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[nested]",
 ]
 
 # `commit strip` leaves a message alone when the person set Claude Code's `attribution.commit`: the

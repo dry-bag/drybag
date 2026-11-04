@@ -84,7 +84,7 @@ def _finish(groups: SubParsers) -> None:
 def split_json_flag(argv: list[str]) -> tuple[list[str], bool]:
     """`--json` is accepted anywhere before the first bare `--`, so every command carries it
     without declaring it. The words after that `--` are a command's own, which another program
-    reads (`stayfixed prove -- runner --json`), so none of them is read or taken here."""
+    reads, so none of them is read or taken here."""
     cut = argv.index("--") if "--" in argv else len(argv)
     head = argv[:cut]
     return [arg for arg in head if arg != "--json"] + argv[cut:], "--json" in head
@@ -143,9 +143,6 @@ def run(argv: list[str] | None, *, parser: argparse.ArgumentParser) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
     args_in, as_json = split_json_flag(raw)
     args = parser.parse_args(args_in)
-    # A command whose own output reaches standard output besides its result (`prove`'s teed
-    # report) reads it, to keep standard output one object under `--json`.
-    args.as_json = as_json
     func = getattr(args, "func", None)
     if func is None:
         parser.print_help()

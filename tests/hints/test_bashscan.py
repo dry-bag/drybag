@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from pathlib import Path
 
 import pytest
 
-from stayfixed.hints import bashscan, uvrun
+from stayfixed.hints import bashscan
 from stayfixed.profiles.adapters import shipped_adapters
 
 
@@ -361,8 +360,8 @@ def test_command_words_strips_a_leading_assignment_and_wrapper() -> None:
 
 
 def a_runner(words: Sequence[str]) -> bool:
-    """Whether a shipped runner adapter recognises `words`: what `prove` and the red-run hint ask
-    of each word after `uv run`."""
+    """Whether a shipped runner adapter recognises `words`: what the red-run hint asks of each word
+    after `uv run`."""
     return any(adapter.recognises(words) for adapter in shipped_adapters())
 
 
@@ -481,51 +480,3 @@ def test_read_launch_names_each_word_of_the_launch_by_its_part(
     launch = bashscan.read_launch(words, a_runner)
     assert launch == bashscan.Launch(tuple(assignments), tuple(launcher), tuple(expected))
     assert bashscan.command_words(words, a_runner) == expected
-
-
-@pytest.mark.parametrize(
-    ("command", "environ", "moved"),
-    [
-        ("pytest", {"UV_WORKING_DIR": "a"}, ""),
-        ("uv run pytest", {}, ""),
-        ("uv run --directory a pytest", {}, "a"),
-        ("uv run --directory=a pytest", {}, "a"),
-        ("uv --directory a run --locked pytest", {}, "a"),
-        ("uv run pytest", {"UV_WORKING_DIR": "a"}, "a"),
-        ("uv run --directory a pytest", {"UV_WORKING_DIR": "b"}, "a"),
-        ("uv run --directory a uv run --directory b pytest", {}, "a/b"),
-        ("uv run --directory a uv run pytest", {"UV_WORKING_DIR": "b"}, "a/b"),
-        ("uv run --directory /abs pytest", {}, "/abs"),
-        ("uv run -m pytest", {"UV_WORKING_DIR": "a"}, "a"),
-        ("uv run --project a pytest", {"UV_PROJECT": "b"}, ""),
-        ("uv run --directory", {}, ""),
-    ],
-    ids=[
-        "no-launcher",
-        "none",
-        "spaced",
-        "equals",
-        "global",
-        "variable",
-        "option-over-variable",
-        "nested",
-        "nested-variable",
-        "absolute",
-        "module",
-        "project",
-        "no-value",
-    ],
-)
-def test_run_directory_is_where_uv_runs_the_program(
-    command: str, environ: dict[str, str], moved: str
-) -> None:
-    """Measured on uv 0.12.19: `--directory`, before `run` or after it, spaced or with `=`, else
-    `UV_WORKING_DIR`, moves where the program runs, the option winning; a `uv run` that a
-    `uv run` launches reads its own from where the outer one moved to; `--project` and
-    `UV_PROJECT` move nothing. Oracle: `mutations/`'s "uv's `--directory` is not read", "uv's
-    spaced `--directory` value is not read", "`UV_WORKING_DIR` is not read", "uv's variable
-    wins over its `--directory`", "a nested `uv run` reads its directory from where the command
-    was typed"."""
-    launcher = bashscan.read_launch(command.split(), a_runner).launcher
-    typed = Path("/typed")
-    assert uvrun.run_directory(launcher, typed, environ) == typed / moved
