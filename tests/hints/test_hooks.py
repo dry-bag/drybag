@@ -275,8 +275,8 @@ def test_a_red_pytest_over_a_dirty_tree_is_noticed(
 @needs_git
 def test_a_green_run_or_a_non_pytest_command_is_silence(tmp_path: Path) -> None:
     # Reddened by dropping `_test_hygiene`'s `if red_exit(event.raw) is None: return
-    # HookResult()` (the first assertion) and by dropping `context_for`'s `if not speaking:
-    # return None` (the second); both measured.
+    # HookResult()` (the first assertion) and by dropping `context_for`'s `if not
+    # any(names_a_test_run(...)): return None` (the second); both measured.
     root = dirty_project(tmp_path)
     config = load(root, machine=tmp_path / "absent.toml")
     assert (

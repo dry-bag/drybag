@@ -203,7 +203,7 @@ def register(groups: SubParsers) -> None:
     check.set_defaults(func=run_bugs_check)
     regressions = common_flags(
         sub.add_parser(
-            "regressions", help="run each fixed entry's regression and say what its runner proved"
+            "regressions", help="run each fixed entry's regression and say whether its exit was 0"
         )
     )
     regressions.add_argument(

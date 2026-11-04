@@ -16,9 +16,8 @@ that loads it exits 1 with the loader's refusal, `[stayfixed] has unknown key(s)
 ignored and exits 0.
 
 `stayfixed bugs regressions` reports each run as `passed` (exit 0), `failed` (any other exit, its
-code named), `timed-out`, `interrupted` or `not-run` (the argv could not be started), where it
-said `proved` or `not proven`, and its summary ends `<m> not passed`. Every fixed entry's argv now
-runs: one no runner adapter recognised was `not proven` and never started. Under `--json` the count
-of runs that did not pass is `not_passed`, where it was `not_proved`, and each run's `line` is its
-verdict and detail. The command's own output goes to standard error, so `--json`'s standard output
-holds the one object.
+code named), `timed-out`, `interrupted` or `not-run` (the argv could not be started), where it said
+`proved`, `not proven` or `refused`, and its summary ends `<m> not passed`. Every fixed entry's
+argv now runs: one no runner adapter recognised was `not proven` and never started. Under `--json`
+the count of runs that did not pass is `not_passed`, where it was `not_proved`, and each run's
+`line` is its verdict and detail.
