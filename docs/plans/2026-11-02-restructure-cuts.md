@@ -653,20 +653,32 @@ and re-anchored on the line `"setup",` with the same test.
 
 ---
 
-## Pull request 2 (after lane 6's runner table merges into `next`)
+## Pull request 2 (after pull request 1 and lane 6's runner table merged into `next`)
 
-Waves E and F are planned at the level the tree allows today. **Task 12 re-measures and rewrites
-them** against what the runner table and pull request 1 changed, before wave E is dispatched.
+### Task 12: re-measure for pull request 2 (controller) — done
 
-### Task 12: re-measure for pull request 2 (controller)
+Measured on `next` at the merge of pull request 1 (with #159's runner table):
 
-- [ ] **Step 1:** `git merge origin/next` after the controller says lane 6's first pull request (the
-  test-runner table in `hints`) has merged.
-- [ ] **Step 2:** re-run Task 0's measurements for `prove`, `profiles`, `examples/stop-hook`, the
-  demo, `ci.yml`'s `runners` and `demo` jobs and their entries; read the runner table's interface
-  (its module, the name of its lookup, what it returns for a launch).
-- [ ] **Step 3:** rewrite waves E and F below with the measured files, crossings and interfaces;
-  commit `docs(plans): restructure cuts, pull request 2 re-measured`.
+- **No `processes.run` exists.** `stayfixed.processes` offers `exited(process, seconds)` (watch the
+  exit without reaping; raises `subprocess.TimeoutExpired`), `end(process, grace)` (SIGTERM, grace,
+  SIGKILL to the group, reap) and `kill_group(process, signum)`. Its only src caller is
+  `prove/run.py`. `bugs regressions` (`ledger/regressions.py`, 46 lines) calls `prove.api.prove`
+  and returns `(Entry, Receipt)` pairs; `ledger/commands.py:103` imports `prove.api` for printing.
+- **The runner table:** `stayfixed.hints.runners.names_a_test_run(words: Sequence[str]) -> bool`
+  (`hints/runners.py`), true when a simple command's words launch a test runner by its program.
+- **`profiles` importers outside `prove`:** `hints/hygiene.py` (`shipped_adapters`, `answer`,
+  `shipped_hints`, `RedRunHint` — the red-run note), `project/commands.py` (`--profile`),
+  `project/detect.py` (profile detection), `project/questions.py` (the `stayfixed.profile`
+  question), `scaffold/engine.py` (`validate_sources`' profile check); tests:
+  `config/test_deep_toml.py`, `hints/test_bashscan.py`, `test_documents.py`,
+  `test_language_neutral.py`, `test_patterns.py`, `scaffold/test_engine.py`.
+- **`hints/uvrun.py` stays:** `hints/bashscan.py` and `hints/api.py` import it.
+- **`examples/`:** `demo/` (README, `demo.py`) and `stop-hook/` (README, `prove_on_stop.py`).
+  `ci.yml` has a `runners` job (`pytest -m runners`, the real runners `prove`'s adapters run) and a
+  `demo` job (`--require-claude`).
+- **Mutation entries:** 2,101 in all; 255 sit on `prove/` or `profiles/` files and go with them;
+  16 on surviving files lose every reddening test (`ci.yml` 6, `hints/hygiene.py` 3, `roots.py` 2,
+  `examples/stop-hook/prove_on_stop.py` 2, `fsops.py` 1, `processes.py` 1, `cli.py` 1); 11 lose some.
 
 ## Wave E — Tasks 13–14: `prove`
 
@@ -674,28 +686,38 @@ them** against what the runner table and pull request 1 changed, before wave E i
 
 **Files:**
 - Modify: `src/stayfixed/ledger/regressions.py`, `ledger/commands.py`, `tests/ledger/test_regressions.py`,
-  `docs/cli.md` (`bugs regressions`: verdict by exit code)
-- Delete: `src/stayfixed/prove/`, `tests/prove/`, `tests/fixtures/prove/`, `tests/test_runners_job.py`,
-  `ci.yml`'s `runners` job and the `-m runners` marker if nothing else uses it,
-  `CONTRIBUTING.md`'s paragraph on the real runners, `README.md` and `docs/cli.md` rows, the crossing
-  `prove/run.py → stayfixed.hints.api`, `PACK_PACKAGES`' `prove`, `mutations/core.toml`'s `prove`
-  entries
+  `docs/cli.md` (`bugs regressions`: verdict by exit code), `processes.py`'s docstring
+- Delete: `src/stayfixed/prove/`, `tests/prove/`, `tests/fixtures/prove/` if present,
+  `tests/test_runners_job.py`, `ci.yml`'s `runners` job and the `runners` marker if nothing else
+  uses it, `test_documents.py`'s `prove` section tests, `CONTRIBUTING.md`'s paragraph on the real
+  runners, the `prove` rows of `README.md` and `docs/cli.md` (its section), the crossings
+  `prove/* → …` in `tests/boundaries/test_delivery.py`, `PACK_PACKAGES`' `prove`, the `prove` skill
+  text if any, and every mutation entry on `prove/`
 
 **Interfaces:**
-- Consumes: pull request 1's `regressions(root, config, *, timeout, echo)`; the product's process
-  runner (`stayfixed.processes.run`, as Task 12 reads it).
+- Consumes: pull request 1's `regressions(root, config, *, timeout, echo)`; `processes.exited`,
+  `processes.end`, `processes.kill_group`.
 - Produces: `bugs regressions` runs each fixed entry's `regression` argv from the project root
-  through `processes.run` with `timeout`, and reports per entry `verdict` = `passed`, `failed`,
-  `timed-out` or `not-run`; it exits `1` when any entry did not pass. A run an interrupt ended is
-  the last, as today. JSON keys renamed to match (`not_passed` for `not_proved`).
+  in a session of its own (`start_new_session=True`) under the caller's environment, its standard
+  output to where `echo` points today, with `timeout` as its bound, and ends its group the way
+  `processes` documents. Per entry, `verdict` is `passed` (exit 0), `failed` (any other exit),
+  `timed-out` (past `timeout`; the group is ended), `interrupted` (SIGINT or SIGTERM reached
+  `stayfixed` during the run; the group is ended and the loop stops — that run is the last, as
+  today), or `not-run` (the argv could not be started: `OSError` from `Popen`, its message
+  reported). It exits `1` when any entry did not pass. JSON keys follow (`not_passed` for
+  `not_proved`). This runner is the pull request's one named src addition; it emulates no
+  runner's semantics — the exit code is the verdict.
 
 - [ ] **Step 1: Red.** Rewrite `tests/ledger/test_regressions.py`'s verdict cases for the exit-code
-  verdicts (a passing argv, a failing argv, a timed-out argv, an interrupted run stops the loop).
-  Run them. Expected: FAIL (the receipt is still `prove`'s).
-- [ ] **Step 2:** implement on `processes.run`; run them. Expected: PASS.
+  verdicts (a passing argv, a failing argv, a timed-out argv whose group is ended, an argv that
+  cannot start, an interrupted run stops the loop). Run them. Expected: FAIL (the receipt is still
+  `prove`'s).
+- [ ] **Step 2:** implement in `ledger/regressions.py` on `processes`; run them. Expected: PASS.
 - [ ] **Step 3:** delete `prove` with everything listed; search argv callers
-  (`grep -rnE "\"prove\"|'prove'|stayfixed prove" examples scripts .github src tests skills`).
-- [ ] **Step 4: Green**, oracle on `regressions`. Commit
+  (`git grep -nE "\"prove\"|'prove'|stayfixed prove" -- examples scripts .github src tests skills`).
+  `processes.py`'s entries that reddened through `tests/prove/` are re-pointed at the new
+  regression tests, or listed for the owner.
+- [ ] **Step 4: Green**, oracle on `regressions` and `processes`. Commit
   `refactor(prove): drop prove; bugs regressions answers by exit code`.
 
 ### Task 14: the demo and the `Stop`-hook example
@@ -703,7 +725,7 @@ them** against what the runner table and pull request 1 changed, before wave E i
 **Files:**
 - Delete: `examples/stop-hook/`, `tests/test_stop_hook_recipe.py`, demo acts 1–4 and 7
   (`act_proved`, `act_not_recognised`, `act_all_skipped`, `act_forging`, `act_stop_hook`, `_stop`
-  and their fixture files)
+  and their fixture files), their entries
 - Modify: `examples/demo/demo.py` (acts 5 and 6 stay; act 5's fields follow Task 13's keys),
   `examples/demo/README.md`, `ci.yml`'s `demo` job (drops `--require-claude` if only act 7 needed
   it), `README.md`, `docs/cli.md`, `mutations/repository.toml`
@@ -716,45 +738,50 @@ them** against what the runner table and pull request 1 changed, before wave E i
 
 ### Task 15: the red-run note on the runner table
 
-**Files:** `src/stayfixed/hints/hygiene.py`, its tests, `tests/boundaries/test_delivery.py` (the
-three `hints/hygiene.py → stayfixed.profiles.*` rows), `mutations/*`
+**Files:** `src/stayfixed/hints/hygiene.py`, `tests/hints/` (its tests), `tests/boundaries/test_delivery.py`
+(the `hints/hygiene.py → stayfixed.profiles.*` rows), `mutations/*` (the 3 `hygiene.py` entries)
 
-- [ ] **Step 1: Red.** The red-run note's tests name a runner by the table's program names
-  (pytest, `uv run pytest`, `go test`, `npx jest`, …); run them against today's code. Expected: FAIL
-  where a stack's hint came from `profiles`.
-- [ ] **Step 2:** re-point the note at the table; delete what only the profile hints said. The
-  `PostToolUse` note stays a convenience that never refuses.
-- [ ] **Step 3: Green**; oracle on the note's entries (the 3 `hygiene.py` entries that lose their
-  only test in this pull request are re-anchored here). Commit
-  `refactor(hints): the red-run note reads the runner table`.
+- [ ] **Step 1: Red.** The red-run note's tests say: after a failed `Bash` call whose command holds
+  a simple command `names_a_test_run` accepts, on a dirty tree, the note is given; for one it does
+  not accept, no note. Run them against today's code. Expected: FAIL where the profile hints
+  disagreed with the table.
+- [ ] **Step 2:** `context_for` asks `names_a_test_run` of each simple command
+  (`simple_commands` without `shipped_adapters`) and gives one stack-neutral note; delete
+  `_recognises`, `_note` and what only the profile hints said. The `PostToolUse` note stays a
+  convenience that never refuses.
+- [ ] **Step 3: Green**; oracle on the note's entries (re-anchor the 3 that lose their test).
+  Commit `refactor(hints): the red-run note reads the runner table`.
 
 ### Task 16: the `profiles` package and `[stayfixed] profile`
 
 **Files:**
-- Delete: `src/stayfixed/profiles/`, `tests/profiles/`, `tests/test_language_neutral.py`'s pardons
-  that name a profile (the test stays)
+- Delete: `src/stayfixed/profiles/`, `tests/profiles/`, profile pardons in
+  `tests/test_language_neutral.py` (the test stays)
 - Modify: `config/schema.py` (`Stayfixed.profile`), `config/loader.py`, `config/classes.py`,
-  `config/layout.py` (`rules_file`), `harnesses.py` (the `TYPE_CHECKING` import and the rendering of
-  a profile's rules), `scaffold/engine.py` (`validate_sources`' profile check), `project/*` (`--profile`),
-  `areas.py`, `tests/boundaries/test_delivery.py` (`PACK_PACKAGES` loses `profiles`; the
-  `CORE_TO_PACK` rows; `DYNAMIC_IMPORTERS`' row), `scripts/check_artifacts.py` (`WHEEL_MUST`'s
-  profile files), `CONTRIBUTING.md` (the profiles paragraph), `docs/cli.md`, `README.md`,
-  `skills/init/`, `mutations/project.toml` (119 entries)
+  `config/layout.py` (`rules_file`, if only profiles use it), `harnesses.py`, `scaffold/engine.py`
+  (`validate_sources`' profile check), `project/commands.py` (`--profile`), `project/detect.py`
+  (profile detection), `project/questions.py` (the `stayfixed.profile` question), `areas.py`,
+  `tests/boundaries/test_delivery.py` (`PACK_PACKAGES` loses `profiles`; its rows),
+  `scripts/check_artifacts.py` (`WHEEL_MUST`'s profile files), `tests/config/test_deep_toml.py`,
+  `tests/hints/test_bashscan.py`, `tests/test_patterns.py`, `tests/scaffold/test_engine.py`,
+  `CONTRIBUTING.md`, `docs/cli.md`, `README.md`, `skills/init/`, `mutations/*`
 
 - [ ] **Step 1: Red.** Delete the package; run the full suite with `-x`. Expected: every importer
   named above fails.
-- [ ] **Step 2:** delete each importer's profile branch; `uvrun` and anything else Task 17 finds.
+- [ ] **Step 2:** delete each importer's profile branch.
 - [ ] **Step 3: Green**, oracle on re-anchored entries. Commit
   `refactor(profiles): drop the stack profiles and [stayfixed] profile`.
 
-### Task 17: last importers, text, open pull request 2
+### Task 17: last importers and text
 
-- [ ] **Step 1:** Task 9's walk again, for what pull request 2 left without a caller (`hints/uvrun.py`
-  if only `prove` used it, `guards/roots.py` helpers, `fsops` helpers, `cli.py` branches). Delete
-  with tests and entries.
-- [ ] **Step 2:** an `upgrading` fragment for `prove`, `[stayfixed] profile` and `bugs regressions`'
-  new verdicts; Task 10 Step 2's search with `prove|profile`.
-- [ ] **Step 3:** Task 11's Steps 1–5 for pull request 2.
+- [ ] **Step 1:** Task 9's walk again, for what pull request 2 left without a caller (`roots.py`,
+  `fsops.py`, `cli.py` helpers named by the entries above; `processes.py` pieces Task 13's runner
+  does not use). Delete with tests and entries.
+- [ ] **Step 2:** an `upgrading` fragment for `prove`, `[stayfixed] profile`, `init --profile` and
+  `bugs regressions`' new verdicts and keys; Task 10 Step 2's search with
+  `stayfixed prove|\bprofile\b|--profile|not_proved`.
+- [ ] **Step 3 (controller):** merge `origin/next`, full verification, the oracle on every entry
+  this pull request added, moved or re-anchored, one final review, push, open, watch CI.
 
 ---
 
