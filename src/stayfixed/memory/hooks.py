@@ -62,7 +62,7 @@ def _unreviewed(event: HookEvent, session: SessionConfig) -> HookResult:
         store = resolved(event.project_root, config, machine=None)[0]
         if store is None:
             return HookResult()
-        pending = unreviewed(store, walk(store.path, walked_groups(store, config)).notes)
+        pending = unreviewed(store.machine, walk(store.path, walked_groups(store, config)).notes)
         now = _segment("\n".join(sorted(subject(note.path) for note in pending)))
         base, name = data_directory() / SEEN, _segment(str(store.path.resolve()))
         try:

@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from stayfixed import fsops
 from stayfixed.areas import SubParsers
@@ -31,7 +31,10 @@ from stayfixed.errors import Failure, Refusal
 from stayfixed.presets import DEFAULT_PRESET
 from stayfixed.printed import quoted
 from stayfixed.result import Result
-from stayfixed.runner import subprocess_runner
+from stayfixed.runner import Runner, subprocess_runner
+
+if TYPE_CHECKING:
+    from stayfixed.setup.restore import Listed
 
 # Imported at module scope, and not deferred into `run_setup` the way `setup.run.setup` still
 # is: a test that wants to keep this command away from a real `claude`/`codex` binary has to
@@ -50,7 +53,8 @@ from stayfixed.runner import subprocess_runner
 # would write, ask nothing done, and are ignored here, as `docs/cli.md` says.
 _HOOKS_ALONE = (
     "--git-hooks installs a hook into one repository and does nothing of machine setup's, so it "
-    "takes no --preset, --overlay or --plugin; run `stayfixed setup` with those separately"
+    "takes no --preset, --overlay, --plugin or --restore; run `stayfixed setup` with those "
+    "separately"
 )
 # `--uninstall` removes the hook `--git-hooks` installed, and means nothing to machine setup: on
 # its own it was dropped and the machine setup ran, exit 0, for a person who asked for a hook to be
@@ -147,7 +151,20 @@ EMPTY_HOME = (
 # it says only where `--git-hooks` acts, which is refused here.
 _ADVICE_ALONE = (
     "--approval-boundary prints what to set and writes nothing, so it takes no --preset, "
-    "--overlay, --plugin, --git-hooks or --uninstall; run `stayfixed setup` with those separately"
+    "--overlay, --plugin, --restore, --git-hooks or --uninstall; run `stayfixed setup` with those "
+    "separately"
+)
+# `--yes` records the overlay's notes as reviewed while restoring, and means nothing to any other
+# form of this command: refused before anything is written, naming the flag that gives it a meaning.
+_YES_ALONE = (
+    "--yes records the overlay's notes as reviewed and is taken only with --restore; run "
+    "`stayfixed setup --restore --yes` for that, and nothing was written"
+)
+# `--restore` restores from an overlay, and with none recorded and none named there is nothing to
+# restore from: refused above the first write, naming the flag that gives it one.
+_RESTORE_NEEDS_AN_OVERLAY = (
+    "--restore restores from an overlay: name it with --overlay PATH, or run `stayfixed setup "
+    "--overlay PATH` first to record one; nothing was written"
 )
 # What `--approval-boundary` prints: the deny rule over the trust record's directory and the user
 # settings file it belongs in, the setting that turns the sandbox on, and the managed settings that
@@ -162,13 +179,19 @@ BOUNDARY_ADVICE = (
 
 
 def run_setup(args: argparse.Namespace) -> Result:
+    if args.yes and not args.restore:
+        raise Refusal(_YES_ALONE)
     if args.approval_boundary:
         named = (args.preset, args.overlay, args.plugin)
         switched = (args.git_hooks, args.uninstall)
+        if args.restore:
+            raise Refusal(_ADVICE_ALONE)
         if any(switched) or any(value is not None for value in named):
             raise Refusal(_ADVICE_ALONE)
         return run_boundary_advice(args)
     if args.git_hooks:
+        if args.restore:
+            raise Refusal(_HOOKS_ALONE)
         if args.preset is not None or args.overlay is not None or args.plugin is not None:
             raise Refusal(_HOOKS_ALONE)
         return run_git_hooks(args)
@@ -190,11 +213,15 @@ def run_setup(args: argparse.Namespace) -> Result:
     # Resolved here rather than in `register()`, so that `stayfixed setup --help` prints the
     # sentence and not whichever home directory the parser happened to be built under.
     home, machine = _home_and_machine(args)
+    chosen, listed = (
+        _restore_input(args, home=home, machine=machine) if args.restore else (None, ())
+    )
+    runner = subprocess_runner()
     report = setup(
         args.preset or DEFAULT_PRESET,
         home=home,
         machine=machine,
-        runner=subprocess_runner(),
+        runner=runner,
         overlay=args.overlay,
         plugins=args.plugin or (),
     )
@@ -206,19 +233,79 @@ def run_setup(args: argparse.Namespace) -> Result:
         "overlay": str(report.overlay) if report.overlay is not None else None,
         "notes": list(report.notes),
     }
-    summary = "; ".join(
+    if not args.restore:
+        return Result(_summary(machine, data), data)
+    # The overlay `setup` recorded, which is the one a run that rendered or created it made.
+    # Never `None`: `_restore_input` refused a run with no overlay in view, and `setup` records one
+    # whenever `--overlay` names a path.
+    overlay = cast(Path, report.overlay or chosen)
+    return _restored(overlay, listed, data, home=home, machine=machine, runner=runner, yes=args.yes)
+
+
+def _summary(machine: Path, data: dict[str, Any]) -> str:
+    """Machine setup's one line, from its `--json` data."""
+    return "; ".join(
         (
             f"machine configuration written to {machine}",
-            f"{len(report.plugins_installed)} plugin(s) installed",
-            "deny rules merged" if report.deny_written else "deny rules unchanged",
-            "stayfixed is on PATH" if report.cli_on_path else "stayfixed is not on PATH",
-            f"overlay recorded at {quoted(str(report.overlay))}"
-            if report.overlay
+            f"{len(data['plugins_installed'])} plugin(s) installed",
+            "deny rules merged" if data["deny_written"] else "deny rules unchanged",
+            "stayfixed is on PATH" if data["cli_on_path"] else "stayfixed is not on PATH",
+            f"overlay recorded at {quoted(data['overlay'])}"
+            if data["overlay"]
             else "no overlay recorded",
-            *report.notes,
+            *data["notes"],
         )
     )
-    return Result(summary, data)
+
+
+def _restore_input(
+    args: argparse.Namespace, *, home: Path, machine: Path
+) -> tuple[Path | None, tuple[Listed, ...]]:
+    """What `--restore` reads before `setup` writes anything: the overlay it restores from and the
+    projects that overlay lists, so an owner's file that cannot be read costs nothing. The overlay
+    is `--overlay`'s path when it names one that holds an overlay, else the machine file's recorded
+    root; `--overlay create:…` and a path that names nothing list nothing, since the run makes the
+    overlay, and no overlay in view at all is refused."""
+    from stayfixed.setup.restore import listed_projects, overlay_to_restore
+
+    overlay = overlay_to_restore(args.overlay, machine=machine)
+    if overlay is None and args.overlay is None:
+        raise Refusal(_RESTORE_NEEDS_AN_OVERLAY)
+    return overlay, () if overlay is None else listed_projects(overlay, home=home)
+
+
+def _restored(
+    overlay: Path,
+    listed: tuple[Listed, ...],
+    data: dict[str, Any],
+    *,
+    home: Path,
+    machine: Path,
+    runner: Runner,
+    yes: bool,
+) -> Result:
+    """`setup --restore`'s result: setup's summary, holding the plugins restore installed and its
+    notes too, then one line per listed project, and exit 1 when one was refused or failed."""
+    from stayfixed.setup.restore import line, restore
+
+    done = restore(overlay, listed, home=home, machine=machine, runner=runner, yes=yes)
+    data["plugins_installed"] += done.plugins
+    data["notes"] += done.notes
+    data["missing"] = list(done.missing)
+    data["projects"] = [
+        {
+            "name": o.name,
+            "dir": str(o.dir),
+            "state": o.state,
+            "detail": o.detail,
+            "promoted": o.promoted,
+        }
+        for o in done.projects
+    ]
+    lines = [f"missing tools: {', '.join(done.missing)}"] if done.missing else []
+    lines += [_summary(machine, data), *(line(outcome) for outcome in done.projects)]
+    bad = any(outcome.state in ("refused", "failed") for outcome in done.projects)
+    return Result("\n".join(lines), data, exit_code=1 if bad else 0)
 
 
 def _home_and_machine(args: argparse.Namespace) -> tuple[Path, Path]:
@@ -310,6 +397,19 @@ def register(groups: SubParsers) -> None:
             "print the deny rule and the sandbox settings that keep an agent's shell out of the "
             "trust record's directory, and write nothing"
         ),
+    )
+    setup.add_argument(
+        "--restore",
+        action="store_true",
+        help=(
+            "restore this machine from the overlay its machine file records (or --overlay names): "
+            "machine setup, then attach every checkout its machine/projects.toml lists"
+        ),
+    )
+    setup.add_argument(
+        "--yes",
+        action="store_true",
+        help="with --restore, record the overlay's notes for each attached project as reviewed",
     )
     setup.add_argument(
         "--git-hooks",

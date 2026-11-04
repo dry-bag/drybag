@@ -330,8 +330,8 @@ def run_promote(args: argparse.Namespace) -> Result:
         raise Refusal(NOTHING_NAMED)
     store, config = _store(args)
     notes = walk(store.path, walked_groups(store, config)).notes
-    chosen = unreviewed(store, notes) if args.changed else _named(notes, args.notes)
-    recorded = promote(store, chosen) if chosen else {}
+    chosen = unreviewed(store.machine, notes) if args.changed else _named(notes, args.notes)
+    recorded = promote(store.machine, chosen) if chosen else {}
     rows = [{"path": _relative(note), "digest": recorded[note.path]} for note in chosen]
     lines = [f"promoted {printable(row['path'])} {row['digest']}" for row in rows]
     return Result(

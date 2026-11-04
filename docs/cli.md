@@ -234,6 +234,8 @@ outside every tree, so repository bytes cannot write it; an agent whose shell ca
 can, and against it the record is a label, not a gate (what the record holds against is below). No
 command withdraws an approval: a promoted note is withdrawn by editing it, which changes its
 digest, or by deleting it.
+[`stayfixed setup --restore --yes`](#stayfixed-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
+records the notes of the overlay's share for each project it attaches.
 
 Prints each note's path in the store and the digest recorded, one per line. `--json` keys:
 `promoted`, one object per note with its `path` and `digest`.
@@ -440,16 +442,21 @@ three things before stayfixed runs: it unsets an inherited `GIT_DIR` and `GIT_WO
 would make every `git` answer about another repository, and changes into the project root
 (`CLAUDE_PROJECT_DIR`, else `git`'s toplevel) so every command's `--root` default is correct; it
 then takes the `python3` on `PATH` there, where a pyenv, asdf or mise shim chooses by the project's
-own pin, and asks it, by running code, to be 3.11 or newer; and it maps exit codes.
+own pin, and asks it, by running code, to be 3.11 or newer; and it maps exit codes. Where that
+`python3` is missing or older, and uv is on `PATH`, it takes the interpreter `uv python find --no-config
+--no-python-downloads '>=3.11'` names, asked from `/` and not from the project root: uv reads
+`.python-version`, `pyproject.toml` and `uv.toml` from its working directory and its parents, and
+runs the `.venv/bin/python` it finds there to ask its version (measured with uv 0.12.19), so a
+repository could choose the program every hook starts, and in `/` it does not.
 
 No handler refuses a call, so stayfixed's non-zero exit is always a fault. `0` passes through
 untouched. Every non-zero exit, and every fault the wrapper finds before `stayfixed` runs — no
-`python3` of 3.11 or newer on `PATH`, no readable `scripts/stayfixed` beside the wrapper, a project
-root it cannot enter — ends in exit `0` with one line on stderr that names the fault and ends
+`python3` of 3.11 or newer on `PATH` and no uv that names one, no readable `scripts/stayfixed`
+beside the wrapper, a project root it cannot enter — ends in exit `0` with one line on stderr that names the fault and ends
 `continuing open`: **a session never dies of stayfixed's own fault.** `stayfixed hook` exits `0` on
 an internal error of its own for the same reason, so no shipped entry ever blocks a call. Claude
 Code discards stderr on a `0`, so `stayfixed doctor`'s `wrapper` row runs the wrapper and goes red
-on such a line. Without a usable `python3` neither `doctor` nor any hook can run, so the one entry
+on such a line. Without a usable interpreter neither `doctor` nor any hook can run, so the one entry
 that dispatches `SessionStart` (`hook SessionStart`) also prints, on stdout, the hook answer Claude
 Code shows the person (`systemMessage`) and adds to the model's context (`additionalContext`):
 that stayfixed's hooks are off in this session, because there is no `python3` on `PATH` or the one
@@ -1996,7 +2003,11 @@ it, once for the preset and again for the overlay root `--overlay` records;
 `<home>/.claude/settings.json`, where its links lead; and, through the plugin
 commands it runs for each plugin `--plugin` names, on each harness with a declared marketplace (`claude plugin marketplace add` and
 `claude plugin install`, `codex plugin marketplace add` and `codex plugin add`), the marketplace
-registrations and installed plugins those commands write into each harness's own configuration.
+registrations and installed plugins those commands write into each harness's own configuration;
+with `--restore`, the same `claude plugin marketplace add` and `claude plugin install` for what the
+overlay's `machine/claude/settings.json` lists, and, with `--yes`, the trust record's `reviewed`
+approvals (`trust.json`, beside the machine file) for the notes of the overlay's share for each
+attached project.
 `--overlay <path>` naming an overlay writes nothing in its tree: it is recorded, and its
 `pre-commit` git hook is installed through `pre-commit install`. Naming nothing or an
 empty directory, it writes the directory with every file of the template plus `.stayfixed/manifest.json`, the
@@ -2005,10 +2016,18 @@ repository `git init` makes there, and, through `pre-commit install`, its `pre-c
 --template <template> --clone`, a new private repository on GitHub under `<owner>` and its clone
 at `<home>/<name>` — or, when that clone leaves nothing there, a clone from the retried `git clone`
 — then its `pre-commit` git hook. Run again over the overlay it made, it generates nothing.
+`--restore` writes, beyond the above, for each checkout it attaches what
+[`stayfixed attach`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
+writes, listed in its **Writes**, and nothing else; into a checkout it reports `absent` or
+`refused` it writes nothing, and a `failed` one keeps what the failed attach had written, which a
+re-run finishes.
 
 **Exits** `0` on success, and `2` on each of these refusals:
 
 - `--uninstall`, which is taken only with `--git-hooks` (below), before anything is written;
+- `--restore` with no overlay recorded and none named, or with a projects file it cannot read (see
+  `--restore` above), before anything is written; `--restore` beside `--git-hooks` or
+  `--approval-boundary`; and `--yes` without `--restore`;
 - `--root`, which names the repository `--git-hooks` installs into, before anything is written;
 - a refused `--overlay`: a path that names nothing under a directory that is missing or that you
   cannot create it in, a path holding something that is not an overlay, a `create:` destination
@@ -2054,8 +2073,71 @@ malformed spec, a name that is not one path segment, a destination that holds so
 `gh` is run at all.
 
 A plugin that fails to install or a harness that is absent is a note in the report, not a
-nonzero exit. What the failing plugin command printed is quoted as the overlay's notes quote it
+nonzero exit (`--restore` exits `1` when an attach was refused or failed, below). What the failing plugin command printed is quoted as the overlay's notes quote it
 (escaped, and cut to its first 120 characters and its length).
+
+**`--restore`** brings a machine back from the private overlay its machine file records, or the one
+`--overlay` names, in these steps, each reported and none undone by the next:
+
+1. machine setup, as above (`--preset`, `--plugin` and `--overlay` are taken as they are without
+   it);
+2. the plugins the overlay's machine settings enable: `<overlay>/machine/claude/settings.json` is
+   the overlay's copy of Claude Code's user settings, and restore reads two keys of it and writes
+   nothing from it. Each `extraKnownMarketplaces.<name>.source` that is `{"source": "github",
+   "repo": "owner/name"}` (with an optional `ref`) or `{"source": "git", "url": …}` with an `https://`
+   or `git@` URL is added with `claude plugin marketplace add <owner/name[@ref] or URL>` when
+   `claude plugin marketplace list --json` does not name it; any other shape, or a value that could
+   read as an option, is a note and is not added. Each `enabledPlugins` entry that is `true` and
+   reads `<name>@<marketplace>` is installed with `claude plugin install <id>` when `claude plugin
+   list --json` does not name it at user scope. A non-zero exit is a note naming the argv, never a
+   refusal; without `claude` on `PATH` there is one note and nothing is launched. The list is Claude
+   Code's: where `codex` is on `PATH`, one note says nothing was installed for it. A second run
+   asks the two listings and installs nothing. The ids installed count among machine setup's
+   `plugin(s) installed` and `--json`'s `plugins_installed`, and each note is printed among its
+   notes, in its summary line and in `--json`'s `notes`;
+3. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
+   that is not there is reported `absent` and skipped; a checkout `attach` refuses (one whose
+   `stayfixed.toml` names another project than its table key) is `refused`, and one whose attach
+   fails (a plain directory, or a failure part-way) is `failed`, each with attach's own message, and the rest go
+   on. The exit code is `1` when a project was refused or failed, and `0` otherwise, `absent`
+   included. A run twice attaches nothing new, and a project removed from the file stays attached
+   until `stayfixed detach` there.
+
+4. with `--yes` only, the overlay's notes recorded as reviewed on this machine: after each project
+   it attached, every note of the overlay's share for its table key (each group under
+   `projects/<name>/memory/`, and `common/memory`) not already reviewed at its current bytes is
+   recorded in the trust record beside the machine file. Nothing
+   a checkout holds is read, whatever its memory mode, and a note is reviewed wherever the same
+   bytes are read. Without `--yes` nothing is recorded as reviewed, whatever the overlay holds. A project whose notes cannot be recorded (an unreadable
+   trust record, which is never overwritten) is reported `failed`, attached all the same. A second
+   run with `--yes` records nothing new; a note you recorded is withdrawn by editing or deleting
+   it. `--yes` without `--restore` is refused (`2`),
+   naming `--restore`, before anything is written.
+
+Last, it checks the tools and prints what is missing on the first line of its output, above machine
+setup's summary, and refuses nothing: `git`, one of `claude` and `codex`, and a `python3` or a `uv`
+for the hooks. A missing `git` makes each attach fail in attach's own words.
+
+**The input, `<overlay>/machine/projects.toml`**, is the owner's, one `[projects.<name>]` table per
+project: `<name>` is the overlay project the checkout belongs to (the directory under the overlay's
+`projects/`), and `dir` is where its main checkout lives, absolute or led by `~/`, which is read
+under `--home`. Every other key is ignored by stayfixed; an overlay's own scripts may read them.
+`dir` missing, not a string or relative, a file that cannot be read or is not TOML, and a
+`projects` that is not a table, are refused (`2`) naming the table, before anything is written. No
+file lists nothing. The store `attach` is handed is the one the table key names, and `attach`
+refuses a store that is not the checkout's own project's, so a clone that claims another of your
+projects in its tracked `stayfixed.toml` is refused rather than given that project's notes, rules
+and delivery.
+
+With `--restore`, `--overlay` names the overlay to restore from when it holds one; `--overlay
+create:…` and a path that names nothing make an overlay and list no project. With no `--overlay`
+and no overlay recorded, `--restore` is refused (`2`) naming `--overlay PATH`, before anything is
+written. It is refused beside `--git-hooks` and `--approval-boundary`. `--json` adds `missing` and
+`projects`, each project's `name`, `dir`, `state` (`attached`, `absent`, `refused` or `failed`),
+`detail`, the last attach's own words, and `promoted`, the notes `--yes` recorded.
+
+What stays an overlay's own script and is not done here: cloning the checkouts, owner-held files,
+excludes, links, commit hooks and the merge of the overlay's settings.
 
 ---
 
@@ -2091,7 +2173,7 @@ file, is not refused there, because on a case-sensitive volume it names another 
 would refuse a chain that cannot loop. A hook past the 64 MiB read cap is not read, so it is not
 judged either: it is kept and chained, as below.
 
-**Refuses (`2`) together with `--preset`, `--overlay` or `--plugin`.** Each asks machine setup to
+**Refuses (`2`) together with `--preset`, `--overlay`, `--plugin` or `--restore`.** Each asks machine setup to
 do something, which this form does not do, so it names `--git-hooks` and writes nothing, where
 `--overlay` used to be dropped and the hook installed. `--home` and `--machine` say
 only where machine setup would write, and are ignored.
@@ -2111,7 +2193,7 @@ was: it is not stayfixed's hook; nothing was removed`; `--json` carries it as `f
 is neither stayfixed's nor foreign: either form refuses (`2`) naming it and the reason, and leaves
 it. A regular file past the 64 MiB read cap is foreign, since stayfixed's own hook is a couple of
 kilobytes: it is kept and chained, and `--uninstall` leaves it. Exits `0`; `2` when `--preset`,
-`--overlay` or `--plugin` is also given, `--uninstall` is given without `--git-hooks`, the hook
+`--overlay`, `--plugin` or `--restore` is also given, `--uninstall` is given without `--git-hooks`, the hook
 cannot be read, or a hook names `prepare-commit-msg.local`.
 
 ---
@@ -2150,8 +2232,8 @@ and `managed`.
 
 **Writes** nothing.
 
-**Exits** `0`; `2` beside `--preset`, `--overlay`, `--plugin`, `--git-hooks` or `--uninstall`,
-which name a write this run does not make; `1` for a `HOME` that is empty with no `--home` or no
+**Exits** `0`; `2` beside `--preset`, `--overlay`, `--plugin`, `--restore`, `--git-hooks` or
+`--uninstall`, which name a write this run does not make; `1` for a `HOME` that is empty with no `--home` or no
 `--machine`.
 
 ---

@@ -37,6 +37,8 @@ from stayfixed.config.plates import tags
 from stayfixed.config.schema import Config
 from stayfixed.errors import Failure
 from stayfixed.memory.index import INDEX_NAME, index_source, reconcile, render_index, write_index
+from stayfixed.memory.notes import walk
+from stayfixed.memory.reviewed import promote, unreviewed
 from stayfixed.memory.store import (
     COMMON_GROUP,
     PROJECTS,
@@ -78,6 +80,16 @@ def _sources(overlay: Path, project: str) -> dict[str, Path]:
                 found[entry] = overlay_group_target(overlay, project, entry)
     found[INDEX_NAME] = share / INDEX_NAME
     return found
+
+
+def promote_share(overlay: Path, project: str, *, machine: Path | None) -> list[Path]:
+    """Record as reviewed on this machine each note of the overlay's share for `project` that the
+    record does not hold at its bytes, walked in the overlay itself through every group `build`
+    links, the common one included: the path of each note recorded, none when all are. A trust
+    record that cannot be read refuses (`UnreadableTrust`) rather than being replaced."""
+    groups = [path for name, path in _sources(overlay, project).items() if name != INDEX_NAME]
+    chosen = unreviewed(machine, [n for g in groups for n in walk(g.parent, [g.name]).notes])
+    return list(promote(machine, chosen)) if chosen else []
 
 
 def _links(directory: Path) -> list[str]:

@@ -187,7 +187,7 @@ def _memory(context: Context, answers: Answers) -> Row:
             where = "the composed store under the data directory"
         config = context.attach_config
         groups = walked_groups(store, config) if config else []
-        pending = len(unreviewed(store, walk(store.path, groups).notes))
+        pending = len(unreviewed(store.machine, walk(store.path, groups).notes))
         parts.append(f"store {where}, {pending} unreviewed note(s)")
         debris = _debris(store)
     parts.append(_pointer(context))

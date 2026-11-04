@@ -36,7 +36,7 @@ class Entry:
 
 def inventory(reconciled: Reconciliation, config: Config, store: Store) -> list[Entry]:
     today = date.today()
-    held = record(store)
+    held = record(store.machine)
     ttl = config.budgets.effective("volatile_ttl_days")
     entries = [
         Entry(
@@ -51,7 +51,7 @@ def inventory(reconciled: Reconciliation, config: Config, store: Store) -> list[
                 and (note.as_of is None or (today - note.as_of).days > ttl)
             ),
             provenance=note.index_provenance.value,
-            reviewed=status(store, note, held) == REVIEWED,
+            reviewed=status(store.machine, note, held) == REVIEWED,
         )
         for note in reconciled.notes
     ]
