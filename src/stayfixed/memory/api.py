@@ -35,6 +35,9 @@ not here. The overlay root the machine file records and the checkout's
 `gitenv.GitUnavailable`), because `init` asks them too and may not import this area; the
 crossings still pinned are listed in `tests/boundaries/test_delivery.py`.
 
+**`promote_share`** is imported by `setup --restore --yes` (`setup.restore`), which records the
+notes of the overlay's share for each project it attaches as reviewed.
+
 **Three more have no importer and stay, each for a reason written here**, because a name
 kept in silence is what made this pass necessary:
 
@@ -75,7 +78,7 @@ this area's tests use; an area that comes to need one grows this list by the rul
 
 from stayfixed.memory.bundles import SLOTS
 from stayfixed.memory.composed import build as build_composed
-from stayfixed.memory.composed import link_sources, render_missing_index
+from stayfixed.memory.composed import link_sources, promote_share, render_missing_index
 from stayfixed.memory.composed import withdraw as withdraw_composed
 from stayfixed.memory.index import Rerendered, rerender_overlay_index
 from stayfixed.memory.store import (
@@ -119,6 +122,7 @@ __all__ = [
     "markers",
     "origin_note",
     "permitted_roots",
+    "promote_share",
     "read_binding_record",
     "render_missing_index",
     "rerender_overlay_index",

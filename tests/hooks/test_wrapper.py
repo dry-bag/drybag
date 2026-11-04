@@ -47,14 +47,29 @@ def _plugin_root(
     return root
 
 
+def _path_without_uv() -> str:
+    """This process's `PATH` less every directory that holds a `uv`.
+
+    The suite runs under `uv run`, so its own `PATH` holds uv, and a wrapper that falls back to
+    uv's interpreter would pass every case below that expects `off()` from a missing or sub-floor
+    `python3`. Those cases are about the wrapper's own interpreter lookup, so they get this.
+    """
+    kept = [
+        directory
+        for directory in os.environ.get("PATH", "").split(os.pathsep)
+        if directory and not os.access(os.path.join(directory, "uv"), os.X_OK)
+    ]
+    return os.pathsep.join(kept)
+
+
 def _python_on_path(base: Path, interpreter: str = sys.executable) -> str:
-    """A `PATH` whose first `python3` runs `interpreter`, then this process's own `PATH`."""
+    """A `PATH` whose first `python3` runs `interpreter`, then this process's own, without uv."""
     directory = base / "python-on-path"
     directory.mkdir(parents=True, exist_ok=True)
     shim = directory / "python3"
     shim.write_text(f'#!/bin/sh\nexec "{interpreter}" "$@"\n', encoding="utf-8")
     shim.chmod(0o755)
-    return f"{directory}{os.pathsep}{os.environ.get('PATH', '')}"
+    return f"{directory}{os.pathsep}{_path_without_uv()}"
 
 
 def _run(
@@ -98,6 +113,63 @@ def test_no_python3_on_path_degrades_open(tmp_path: Path) -> None:
     result = _run("hook", "PreToolUse", plugin_root=_plugin_root(tmp_path, 0), path=str(empty))
     assert result.returncode == 0
     assert "no python3 on PATH" in result.stderr
+
+
+def test_no_python3_and_no_uv_degrades_open(tmp_path: Path) -> None:
+    # The wrapper's uv fallback is taken only where a uv is named: with an empty `PATH` there is
+    # neither a `python3` nor a uv, and the answer is today's line.
+    result = _run("hook", "PreToolUse", plugin_root=_plugin_root(tmp_path, 0), path="")
+    assert result.returncode == 0
+    assert "no python3 on PATH" in result.stderr
+
+
+def test_uv_is_asked_from_a_neutral_directory_and_a_repository_script_never_runs(
+    tmp_path: Path,
+) -> None:
+    # Measured with uv 0.12.19: asked from a project, `uv python find` runs the executable at
+    # `.venv/bin/python` in its working directory or a parent to ask its version, `--no-config`
+    # and an explicit `>=3.11` request included, so a repository that commits one chooses the
+    # program every hook starts. A `.python-version` naming a script is ignored under either flag
+    # and is planted beside it as the file the requirement names. Asked from `/`, uv looks at no
+    # repository. No `python3` on `PATH`: one directory holds a link to the real uv and another a
+    # link named `python3.<minor>` to the interpreter the suite's venv came from, which uv finds
+    # and the wrapper's own `python3` lookup does not. Skips only where no uv is on `PATH`; CI runs
+    # the suite under `uv run`, so it runs there.
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("no uv on PATH; CI runs the suite under `uv run`")
+    uv_dir, python_dir = tmp_path / "uv-only", tmp_path / "interpreter-only"
+    uv_dir.mkdir()
+    python_dir.mkdir()
+    (uv_dir / "uv").symlink_to(uv)
+    (python_dir / f"python3.{sys.version_info.minor}").symlink_to(_base_interpreter())
+    marker = tmp_path / "script-ran"
+    # `echo` is a builtin: the wrapper's `PATH` here holds no `touch`.
+    script = f"#!/bin/sh\necho ran > '{marker}'\nexit 1\n"
+    project = tmp_path / "project"
+    planted = project / ".venv" / "bin" / "python"
+    planted.parent.mkdir(parents=True)
+    planted.write_text(script, encoding="utf-8")
+    planted.chmod(0o755)
+    (project / ".venv" / "pyvenv.cfg").write_text("home = /usr/bin\n", encoding="utf-8")
+    pinned = tmp_path / "repository-python"
+    pinned.write_text(script, encoding="utf-8")
+    pinned.chmod(0o755)
+    (project / ".python-version").write_text(f"{pinned}\n", encoding="utf-8")
+    result = _run(
+        "hook",
+        "PreToolUse",
+        plugin_root=_plugin_root(tmp_path, 0, echo_cwd=True),
+        project=project,
+        path=f"{uv_dir}{os.pathsep}{python_dir}",
+        # Under `uv run` the suite's own venv is the active one, which uv answers before it looks
+        # at any `.venv` in the directory it runs in.
+        extra={"VIRTUAL_ENV": "", "CONDA_PREFIX": ""},
+    )
+    assert not marker.exists()
+    assert result.returncode == 0 and "continuing open" not in result.stderr
+    # The launcher ran, in the project: only `uv`'s `cd /` stayed in the substitution's subshell.
+    assert Path(result.stdout.strip()) == project.resolve()
 
 
 def test_an_interpreter_below_the_floor_degrades_open(tmp_path: Path) -> None:
@@ -257,7 +329,7 @@ def test_the_interpreter_is_the_one_the_project_root_chooses(tmp_path: Path) -> 
         "PreToolUse",
         plugin_root=_plugin_root(tmp_path, 0),
         project=project,
-        path=f"{shims}{os.pathsep}{os.environ.get('PATH', '')}",
+        path=f"{shims}{os.pathsep}{_path_without_uv()}",
     )
     assert result.returncode == 0
     assert "is not python 3.11 or newer" in result.stderr

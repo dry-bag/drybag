@@ -29,7 +29,6 @@ from typing import Literal
 
 from stayfixed import fsops
 from stayfixed.memory.notes import Note
-from stayfixed.memory.store import Store
 from stayfixed.trust.api import UnreadableTrust, approve_all, recorded
 
 KIND = "reviewed"
@@ -54,19 +53,19 @@ def subject(note: Path) -> str:
     return str(fsops.resolved(note))
 
 
-def record(store: Store) -> Record:
+def record(machine: Path | None) -> Record:
     """Every digest the machine's trust record holds as reviewed, read once for a caller asking of
     many notes, or none where the record cannot be read."""
     try:
-        approvals = recorded(store.machine)
+        approvals = recorded(machine)
     except UnreadableTrust:
         return frozenset()
     return frozenset(approval.digest for (kind, _), approval in approvals.items() if kind == KIND)
 
 
-def status(store: Store, note: Note, digests: Record | None = None) -> Status:
+def status(machine: Path | None, note: Note, digests: Record | None = None) -> Status:
     """`reviewed` iff the note's current digest is one the record holds as reviewed."""
-    held = record(store) if digests is None else digests
+    held = record(machine) if digests is None else digests
     try:
         current = digest(note.path)
     except OSError:
@@ -74,19 +73,19 @@ def status(store: Store, note: Note, digests: Record | None = None) -> Status:
     return REVIEWED if current in held else UNREVIEWED
 
 
-def unreviewed(store: Store, notes: Iterable[Note]) -> list[Note]:
+def unreviewed(machine: Path | None, notes: Iterable[Note]) -> list[Note]:
     """The notes of `notes` the record does not hold at their current bytes, in their order."""
-    held = record(store)
-    return [note for note in notes if status(store, note, held) == UNREVIEWED]
+    held = record(machine)
+    return [note for note in notes if status(machine, note, held) == UNREVIEWED]
 
 
-def promote(store: Store, notes: Iterable[Note]) -> dict[Path, str]:
+def promote(machine: Path | None, notes: Iterable[Note]) -> dict[Path, str]:
     """Record each note at its current digest in one write of the record, and answer each note's
     path and the digest recorded. A record that cannot be read refuses (`UnreadableTrust`) rather
     than being replaced."""
     found = {note.path: digest(note.path) for note in notes}
     approve_all(
-        store.machine,
+        machine,
         KIND,
         {subject(path): value for path, value in found.items()},
         now=datetime.now(UTC),

@@ -67,5 +67,8 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         "UNBOUND",
         # the note a moved `origin` earns, which attach and the session-start line say
         "origin_note",
+        # the unreviewed notes of the overlay's share for a project recorded as reviewed, which
+        # `setup --restore --yes` runs for each project it attaches
+        "promote_share",
     }
     assert required == set(memory.__all__)
