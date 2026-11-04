@@ -365,20 +365,9 @@ Code delivers a `Bash` call that exited non-zero, and it carries the red-run not
 Codex CLI 0.162.0-alpha.17.2). `stayfixed hook` dispatches six events, those four and
 `UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses.
 
-**The red-run note.** The environment faults that make a red test run unattributable:
-uncommitted changes in the tree, which belong to no stack, and whatever each stack's profile knows about its own — for
-Python, `.pyc` files under `[ledger] code_roots` whose recorded source mtime no longer matches
-their source. The note counts the uncommitted changes across the whole repository — a dirty tree
-anywhere makes a red run unattributable — and asks every profile that ships a `hygiene.py`
-(today, Python) for its counts.
-
-A profile's walk is bounded: Python's lists at most 500,000 directory entries under the code
-roots in total, every entry and not only the bytecode, and reads at most 20,000 of the `.pyc`
-files it lists. Reading a `.pyc` costs tens of times listing an entry, so each half has its own
-bound; over 499,990 `.pyc` files sharing one source, the worst tree for both, the walk stopped
-in under 3 s on a laptop with a warm cache, a third of the hook's 10-second timeout. A walk that
-stops at either bound has not seen the tree and reports no count, stale or clean, even when the
-part it saw held no Python. The bounds are fixed; what they walk is not.
+**The red-run note.** The environment fault that makes a red test run unattributable:
+uncommitted changes in the tree. The note counts them across the whole repository — a dirty tree
+anywhere makes a red run unattributable — and says nothing when the tree is clean.
 
 The `PostToolUseFailure` `Bash` hook delivers the note once per context after a red test run:
 Claude Code delivers a command that exited non-zero on that event, with `error` beginning `Exit code
@@ -386,17 +375,15 @@ N`, and an `error` that begins otherwise, or with a run of more than nine digits
 has, gets no note. The same handler is registered on `PostToolUse` too, where no measured harness
 delivers an exit code: Codex delivers a failed command there with none, so the note does not speak,
 and the registration is a placeholder for parity with Codex. The two share one once-per-context key,
-so a context gets at most one note, whichever event carries it. The note is chosen by the command
-that failed rather than by configuration: each simple command of the red run is offered to every
-shipped profile's hint, and the dirty-tree line and the line of each profile whose runner it
-recognises (Python's: `pytest`, or `python -m pytest`) are delivered together. A runner is
-recognised behind environment assignments, an `env` prefix and `uv run`, its bound included: the
-command starts at the first word a runner adapter recognises, so
-a runner named before the real command (`uv run --with pytest echo`, `uv run grep -m pytest x`)
-gets the note, and one named through an alias, or by a path no adapter recognises, does not. A red
-command no profile recognises gets no note. When Python's walk stopped at its bound, its line says
-the walk could not tell whether a stale build was imported, and names neither stale bytecode nor its
-absence.
+so a context gets at most one note, whichever event carries it. The note is given by the command
+that failed rather than by configuration: it speaks when a simple command of the red run starts
+with a test runner's command in the hints' runner table (`pytest`, `python -m pytest`, `cargo test`,
+`go test`, `npm test` and the other common runners), read by the program's file name and never by
+its options. A runner is recognised behind environment assignments, an `env` prefix and `uv run`,
+its bound included: the command starts at the first word the table reads as a test run, so a
+runner named before the real command (`uv run --with pytest echo`, `uv run grep -m pytest x`) gets
+the note, and one named through an alias or another launcher (`poetry run pytest`) does not. A red
+command the table does not name gets no note.
 
 The wrapper exists because a Python process cannot speak for its own absence: a missing script
 exits `2` by CPython accident, and so does a launcher run under an interpreter below stayfixed's
@@ -2228,10 +2215,9 @@ and `BR-nnn` in every message. It is interpolated into patterns and filenames, s
 a shape — a capital letter followed by up to seven more capitals or digits — and a prefix
 outside it is a refusal (`2`), not a finding. The number is three digits or more. `code_roots`
 are the trees `bugs check` sweeps for mentions of an identifier, each of which must have an
-entry behind it, and the trees the red-run note
-walks. `src/` and `./src` are read as `src`. An entry that names the repository root itself,
-leaves the repository, passes through a link, a `..` or `.git`, or names no directory is walked
-by none of them and refused by nothing.
+entry behind it. `src/` and `./src` are read as `src`. An entry that names the repository root
+itself, leaves the repository, passes through a link, a `..` or `.git`, or names no directory is
+not walked and is refused by nothing.
 `evidence_boundary_required_for` names the severities whose entries must carry a filled
 `**What this evidence does not establish:**` line, the template's placeholder not counting. Widening it is how a project asks the same of `medium`. Each value must be one of the
 severities, `high`, `medium` and `low`, spelled as the table below spells it. A value that names

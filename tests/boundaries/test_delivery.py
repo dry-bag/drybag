@@ -42,11 +42,6 @@ CORE_TO_PACK: tuple[Row, ...] = (
 )
 PACK_TO_DELIVERY: tuple[Row, ...] = ()
 DELIVERY_TO_PACK: tuple[Row, ...] = (
-    # The red-run note asks every shipped profile's hint and adapter, and names a hint's type
-    # under `if TYPE_CHECKING:`. All three go with the profiles.
-    ("hints/hygiene.py", "stayfixed.profiles.adapters", frozenset({"shipped_adapters"})),
-    ("hints/hygiene.py", "stayfixed.profiles.hints", frozenset({"answer", "shipped_hints"})),
-    ("hints/hygiene.py", "stayfixed.profiles.hints", frozenset({"RedRunHint"})),
     # `stayfixed setup --git-hooks` installs and removes the commit-message hook, inside the one
     # function that runs it. Goes when the commit-hook installer leaves `setup`.
     ("setup/commands.py", "stayfixed.guards.api", frozenset({"Found", "install", "uninstall"})),

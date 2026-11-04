@@ -1,10 +1,8 @@
 """`ledger.code_roots`, contained. `config.paths` guards `[paths]` and names this field as one
-the consuming module must check itself, and this module is that check for every consumer:
-`ledger.scan` and the `hints` area's red-run note each import it here, because
-two spellings of which roots a configuration reaches would be two answers.
+the consuming module must check itself, and this module is that check: `ledger.scan` imports it
+here, because two spellings of which roots a configuration reaches would be two answers.
 `dropped_roots` names the entries the walks leave out from the same loop, so
-the entries named and the entries walked cannot disagree. A profile's red-run hint is handed what
-`contained_roots` returns by the note that asks the hint, so a stack's code never imports it."""
+the entries named and the entries walked cannot disagree."""
 
 from __future__ import annotations
 

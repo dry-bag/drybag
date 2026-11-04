@@ -37,7 +37,7 @@ before = '        if recognises is not None and uvrun.is_launcher(name):'
 after = '        if False:'
 reddens = [
   "tests/hints/test_bashscan.py::test_command_words_strips_uv_run_with_nothing_before_the_program",
-  "tests/profiles/python/test_hygiene.py::test_a_red_pytest_run_behind_uvs_options_gets_the_same_note",
+  "tests/hints/test_hooks.py::test_the_note_follows_the_runner_table[FOO=1 uv run --locked go test ./...-True]",
 ]
 
 # No option of uv's is read: read as the first word that is no option, `uv run --with
@@ -838,39 +838,6 @@ before = "    attribute = common_flags("
 after = '    test_sub.add_parser("audit-entrypoints"); attribute = common_flags('
 reddens = ["tests/test_cli.py::test_the_test_group_has_attribute_alone"]
 
-# The red-run hint is chosen by the command that failed, so a repository in two stacks that runs
-# both suites in one command gets both stacks' advice. Keeping only the first recognising hint is
-# the shape a "the profile" design would have, and it silently drops the second stack's line.
-[[mutation]]
-name = "only the first recognising hint speaks"
-file = "src/stayfixed/hints/hygiene.py"
-before = "    speaking = [hint for _, hint in hints if hint is not None and _recognises(hint, commands)]"
-after = "    speaking = [hint for _, hint in hints if hint is not None and _recognises(hint, commands)][:1]"
-reddens = ["tests/profiles/test_hints.py::test_two_recognising_hints_both_speak"]
-
-# A hint that raises costs its own line and nothing else. Unguarded, the exception reaches the
-# dispatcher, which records it and drops the handler's whole context: the
-# dirty-tree line and every other stack's line go with the broken one.
-[[mutation]]
-name = "a hint's note is computed outside its guard"
-file = "src/stayfixed/hints/hygiene.py"
-before = """    try:
-        return answer(hint, contained_roots(root, config))[1]
-    except Exception:
-        return None"""
-after = "    return answer(hint, contained_roots(root, config))[1]"
-reddens = ["tests/profiles/test_hints.py::test_a_hint_that_raises_costs_its_note_not_the_dispatch"]
-
-[[mutation]]
-name = "a hint's recognition is asked outside its guard"
-file = "src/stayfixed/hints/hygiene.py"
-before = """    try:
-        return any(hint.recognises(argv) for argv in commands)
-    except Exception:
-        return False"""
-after = "    return any(hint.recognises(argv) for argv in commands)"
-reddens = ["tests/profiles/test_hints.py::test_a_hint_that_raises_costs_its_note_not_the_dispatch"]
-
 # The core names no stack: one stack's runner, artifacts or package manager live in its profile,
 # and a mention in a core module is either moved there or pardoned with its reason.
 [[mutation]]
@@ -888,8 +855,8 @@ reddens = [
 [[mutation]]
 name = "the core imports the Python profile's hint"
 file = "src/stayfixed/hints/hygiene.py"
-before = "from stayfixed.profiles.hints import answer, shipped_hints"
-after = """from stayfixed.profiles.hints import answer, shipped_hints
+before = "from stayfixed.hints.runners import names_a_test_run"
+after = """from stayfixed.hints.runners import names_a_test_run
 from stayfixed.profiles.python.hygiene import PythonHint"""
 reddens = ["tests/test_language_neutral.py::test_no_core_module_imports_a_stack_profiles_code"]
 
@@ -932,14 +899,14 @@ reddens = [
 [[mutation]]
 name = "a core module picks one area's commands out of the CLI frame's registrars"
 file = "src/stayfixed/hints/hygiene.py"
-before = "def _note(hint: RedRunHint, root: Path, config: Config) -> str | None:"
+before = "def context_for(command: str, root: Path) -> str | None:"
 after = """def _memory_registrar() -> object:
     from stayfixed.cli import discover_registrars
 
     return [r for r in discover_registrars() if r.__module__ == "stayfixed.memory.commands"]
 
 
-def _note(hint: RedRunHint, root: Path, config: Config) -> str | None:"""
+def context_for(command: str, root: Path) -> str | None:"""
 reddens = ["tests/boundaries/test_discovery.py::test_discovery_is_asked_only_for_the_submodules_it_names"]
 
 [[mutation]]

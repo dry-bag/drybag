@@ -121,8 +121,8 @@ def test_the_packages_import_one_another_without_a_cycle_at_module_level() -> No
     # nodes are the packages under `src/stayfixed/`, delivery areas included, and imports within
     # one package are not edges.
     #
-    # Mutations (declared): `mutations/`'s "the Python profile's hint imports the session guard
-    # again" and "the path grammar reads the configuration's schema again".
+    # Mutation (declared): `mutations/`'s "the path grammar reads the configuration's schema
+    # again".
     packages = frozenset(
         path.name.removesuffix(".py")
         for path in SRC.iterdir()
@@ -132,9 +132,9 @@ def test_the_packages_import_one_another_without_a_cycle_at_module_level() -> No
     for path in sorted(SRC.rglob("*.py")):
         relative = path.relative_to(SRC).as_posix()
         edges |= _package_imports(relative, path.read_text(encoding="utf-8"), packages)
-    # The walk reads the edges the two cycles were made of, so a reader that stopped finding
+    # The walk reads the edges the second cycle was made of, so a reader that stopped finding
     # imports cannot pass by finding no cycle.
-    assert {("config", "findings"), ("findings", "printed"), ("hints", "profiles")} <= edges
+    assert {("config", "findings"), ("findings", "printed")} <= edges
     assert _cycles(edges) == []
 
 

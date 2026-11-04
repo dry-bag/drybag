@@ -21,10 +21,7 @@ from stayfixed.hints.hygiene import simple_commands
 from stayfixed.profiles.python import hygiene as python_hygiene
 from stayfixed.profiles.python.hygiene import HINT
 from stayfixed.roots import contained_roots
-from tests.gitfixture import git, needs_git
 from tests.profiles.python.bytecode import compile_module, make_stale
-from tests.profiles.redrun import DIRTY_ONE, LEAD, hygiene, red_event
-from tests.sessions import session_of
 
 CONFIG = """
 [stayfixed]
@@ -548,84 +545,6 @@ STALE_TWO = (
     "disk, which fails DETERMINISTICALLY in the shape of the defect the test pins. Delete the "
     "`__pycache__` directories under those roots, then re-run before attributing anything."
 )
-STALE_ONE = STALE_TWO.replace("2 .pyc", "1 .pyc", 1)
-
-
-def faulty_python_tree(tmp_path: Path) -> Path:
-    """A committed tree with one uncommitted change and one stale `.pyc`.
-
-    The bytecode directory is ignored by a committed `.gitignore`, so it is never itself counted
-    as uncommitted, and the one change is a tracked file modified after its commit: the dirty
-    count runs under the owner's own git, whose `status.showUntrackedFiles` could hide an
-    untracked file and make the count depend on the machine.
-    """
-    root = repo(tmp_path)
-    module = root / "src" / "mod.py"
-    (root / "notes.txt").write_text("a\n", encoding="utf-8")
-    (root / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
-    git(root, "init", "-q", "-b", "main")
-    git(root, "add", "-A")
-    git(root, "commit", "-q", "-m", "chore: seed")
-    compile_module(module)
-    make_stale(module)
-    (root / "notes.txt").write_text("b\n", encoding="utf-8")
-    return root
-
-
-@needs_git
-def test_a_red_pytest_run_gets_the_python_profiles_note(tmp_path: Path) -> None:
-    # The everyday case end to end through the handler: a failed pytest over a dirty tree with
-    # stale bytecode gets the core's dirty-tree line and then the Python profile's line, in the
-    # words the notice carried before the move. Reddened by replacing `context_for`'s
-    # `hints = shipped_hints()` with `hints = ()`, so no profile speaks; measured.
-    root = faulty_python_tree(tmp_path)
-    result = hygiene().run(red_event(root, "uv run pytest -q"), session_of(config(root)))
-    assert result.context == f"{LEAD}\n- {DIRTY_ONE}\n- {STALE_ONE}"
-
-
-@needs_git
-def test_a_red_pytest_run_behind_uvs_options_gets_the_same_note(tmp_path: Path) -> None:
-    # The shape the README and the `attribute-failure` skill recommend, end to end through the
-    # handler: unless `uv run` is read through to the word a runner adapter recognises, it gets
-    # no notice at all, not even the core's dirty-tree line, because `context_for` speaks only
-    # when a hint recognises the run. The other shapes are the scanner's own matrix, in
-    # `test_bashscan.py`.
-    # Oracle: `mutations/`'s "`uv run` stops being stripped off a segment".
-    root = faulty_python_tree(tmp_path)
-    command = "uv sync --locked && uv run --locked pytest tests/x.py::t"
-    result = hygiene().run(red_event(root, command), session_of(config(root)))
-    assert result.context == f"{LEAD}\n- {DIRTY_ONE}\n- {STALE_ONE}"
-
-
-@needs_git
-def test_a_red_pytest_run_over_a_walk_cut_short_is_told_it_could_not_tell(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # The same faulty tree with the walk's cap below its size: the notice still names the dirty
-    # tree, and the Python line says the walk could not tell instead of naming a count it never
-    # finished, so a stale `.pyc` the walk did not reach is not reported as absent. Reddened by
-    # disabling the cap check, which puts the stale line here; measured.
-    root = faulty_python_tree(tmp_path)
-    monkeypatch.setattr(fsops, "WALK_ENTRIES", 2)
-    result = hygiene().run(red_event(root, "uv run pytest -q"), session_of(config(root)))
-    assert (
-        result.context == f"{LEAD}\n- {DIRTY_ONE}\n- {UNTOLD.format(entries=2, files=READ_FILES)}"
-    )
-
-
-@needs_git
-def test_no_recognising_profile_means_no_notice(tmp_path: Path) -> None:
-    # A red `cargo test` over the same faulty tree: no shipped profile recognises the runner, so
-    # nothing is said -- not even the dirty-tree line. The core cannot tell a failed test run
-    # from any other failed command, and the notice is once per context: a dirty-tree line after
-    # a failed `grep` would spend the one delivery the next failed test run needed. The Python
-    # tree's stale `.pyc` is what makes this non-vacuous: a Python hint that answered for every
-    # command would put both lines here. Oracle: `mutations/`'s "the Python hint recognises every
-    # command".
-    root = faulty_python_tree(tmp_path)
-    settings = config(root)
-    assert hygiene().run(red_event(root, "cargo test"), session_of(settings)).context is None
-    assert hygiene().run(red_event(root, "pytest"), session_of(settings)).context is not None
 
 
 def test_the_note_is_a_function_of_the_report() -> None:

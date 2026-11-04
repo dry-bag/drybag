@@ -846,17 +846,6 @@ before = '    if header[_PYC_MAGIC] != importlib.util.MAGIC_NUMBER:'
 after = '    if False:'
 reddens = ["tests/profiles/python/test_hygiene.py::test_a_pyc_from_another_interpreter_is_not_judged"]
 
-# Which hint speaks is chosen by the command that failed. A hint that answered for every command
-# would put Python's advice -- and the dirty-tree line, which only a recognised run earns -- on a
-# failed `cargo test`, and spend the once-per-context delivery a failed test run needed.
-[[mutation]]
-name = "the Python hint recognises every command"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = "    def recognises(self, argv: Sequence[str]) -> bool:"
-after = """    def recognises(self, argv: Sequence[str]) -> bool:
-        return True"""
-reddens = ["tests/profiles/python/test_hygiene.py::test_no_recognising_profile_means_no_notice"]
-
 # The profiles' own machinery directly under `profiles/` is core: only a stack's directory,
 # `profiles/<name>/`, may name that stack. A runner named in `hints.py` is a mention like one in
 # any core module.
@@ -868,60 +857,6 @@ after = """HINT_FILE = "hygiene.py"
 _RUNNER = "pytest""""
 reddens = [
   "tests/test_language_neutral.py::test_no_core_module_names_a_stack_it_does_not_pardon",
-]
-
-# What a hint's report may carry out of it: count names in a fixed grammar, with plain integers.
-# A key is text the hint chose, and a path-shaped one would carry the walked tree's names into
-# `note`; taking a boolean for a count lets `True` through
-# as 1.
-[[mutation]]
-name = "a count keeps any string for its name"
-file = "src/stayfixed/profiles/hints.py"
-before = """        and COUNT_NAME.fullmatch(key)
-        and type(value) is int"""
-after = "        and type(value) is int"
-reddens = [
-  "tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else",
-]
-
-# Exactly `str` and `int`: a subclass keeps its own `__str__` and `__format__` and can print as
-# text the check never saw, and `bool` is an `int` subclass that is not a count.
-[[mutation]]
-name = "a count takes an int subclass, a boolean included, for a count"
-file = "src/stayfixed/profiles/hints.py"
-before = "        and type(value) is int"
-after = "        and isinstance(value, int)"
-reddens = ["tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else"]
-
-[[mutation]]
-name = "a count keeps a str subclass for its name"
-file = "src/stayfixed/profiles/hints.py"
-before = "        if type(key) is str"
-after = "        if isinstance(key, str)"
-reddens = ["tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else"]
-
-# A count is a non-negative number below `COUNT_LIMIT`; anything else is a defect in the hint, and
-# an unbounded one makes `json.dumps` raise.
-[[mutation]]
-name = "a count keeps a negative or unbounded integer"
-file = "src/stayfixed/profiles/hints.py"
-before = "        and 0 <= value < COUNT_LIMIT"
-after = "        and True"
-reddens = ["tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else"]
-
-# A profile whose `hygiene.py` does not import or defines no `HINT` goes quiet alone. Imported
-# unguarded, the failure reaches the hook's dispatcher ahead of every per-hint guard and costs the
-# whole notice, the dirty-tree line included.
-[[mutation]]
-name = "a hint module is imported outside its guard"
-file = "src/stayfixed/profiles/hints.py"
-before = """    try:
-        hint: RedRunHint = stack_module(name, HINT_FILE.removesuffix(".py")).HINT
-    except Exception:
-        return None"""
-after = '    hint: RedRunHint = stack_module(name, HINT_FILE.removesuffix(".py")).HINT'
-reddens = [
-  "tests/profiles/test_hints.py::test_a_hint_that_cannot_load_or_gives_no_text_costs_only_its_own_line",
 ]
 
 # A pinned importer is pinned to what it reaches: stack discovery's `import importlib` gives
@@ -1031,18 +966,6 @@ before = "                        if entry.is_dir(follow_symlinks=False):"
 after = "                        if entry.is_dir():"
 reddens = ["tests/profiles/python/test_hygiene.py::test_a_symlinked_directory_under_a_code_root_is_never_entered"]
 
-# The hook asks a hint through `answer`, so a note's shape is judged once. A note that is neither
-# text nor `None` is outside the protocol: passed on, it raises in the hook's join after every
-# per-hint guard has returned and costs the whole notice.
-[[mutation]]
-name = "a note that is not text passes as one"
-file = "src/stayfixed/profiles/hints.py"
-before = "    if note is not None and not isinstance(note, str):"
-after = "    if False:"
-reddens = [
-  "tests/profiles/test_hints.py::test_a_hint_that_cannot_load_or_gives_no_text_costs_only_its_own_line",
-]
-
 # An empty note is nothing to report, as the hook reads it: a hint whose note is "" says nothing.
 [[mutation]]
 name = "an empty note is something to report"
@@ -1051,26 +974,6 @@ before = "    return report, note or None"
 after = "    return report, note"
 reddens = [
   "tests/profiles/test_hints.py::test_an_empty_note_is_nothing_to_report",
-]
-
-# A hint's `note` is handed counts and nothing else, which is what keeps a repository's strings out
-# of the line it renders: the report goes through `counts` first, a fresh mapping of count names to
-# plain integers. Handed as returned, a path the report carried reaches `note`.
-[[mutation]]
-name = "a hint's note is handed its report as returned"
-file = "src/stayfixed/profiles/hints.py"
-before = "    note = hint.note(report)"
-after = "    note = hint.note(hint.report(root, config))"
-reddens = ["tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else"]
-
-# And `answer` returns the counts, never the report as the hint built it.
-[[mutation]]
-name = "answer returns a report as the hint returned it"
-file = "src/stayfixed/profiles/hints.py"
-before = "    report = counts(hint, roots)"
-after = "    report = dict(hint.report(roots))"
-reddens = [
-  "tests/profiles/test_hints.py::test_a_note_is_handed_counts_and_nothing_else",
 ]
 
 # `init` writes the audits README where the bug ledger's index links it, from the name its register
@@ -1100,19 +1003,6 @@ after = """
 """
 reddens = [
   "tests/profiles/test_evaluate.py::test_a_file_that_does_not_parse_resolves_to_nothing[hex-past-str]",
-]
-
-# A stack's red-run hint is handed the contained code roots by the guard that asks it, so the
-# profiles never import the session guard, which imports the profiles' hint machinery: the two
-# packages imported one another at module level.
-[[mutation]]
-name = "the Python profile's hint imports the session guard again"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = "from stayfixed.fsops import open_directory, read_bounded"
-after = """from stayfixed.fsops import open_directory, read_bounded
-import stayfixed.hints.hygiene"""
-reddens = [
-  "tests/boundaries/test_layering.py::test_the_packages_import_one_another_without_a_cycle_at_module_level",
 ]
 
 # A preset is parsed once per process, and every load hands its caller a copy of that parse.
