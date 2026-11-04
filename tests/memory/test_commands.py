@@ -8,6 +8,7 @@ import pytest
 
 from stayfixed import binding
 from stayfixed.cli import build_parser, discover_registrars, run
+from stayfixed.config.paths import data_directory
 from stayfixed.findings import LISTED_LIMIT
 from stayfixed.printed import UNPRINTABLE
 from tests.crafted import CRAFTED, assert_never_raw
@@ -601,3 +602,79 @@ def test_a_binding_refusal_names_its_own_cause_and_the_way_out_that_fits_it(
         # Mutation: `mutations/`'s "the recorded overlay root is printed as repository text".
         assert "moved-away" in lead
         assert DELIMITER not in said
+
+
+def _bound_without_file(tmp_path: Path, *, layer: str = '[memory]\nmode = "overlay"\n') -> Path:
+    """`overlay_project` with no `stayfixed.toml`: this machine binds the checkout to `widget`, and
+    the overlay's project layer (`layer`) is all that says the memory is the overlay's."""
+    root = tmp_path / "project"
+    root.mkdir(parents=True)
+    git(root, "init", "-q", "-b", "main")
+    git(root, "remote", "add", "origin", REMOTE)
+    overlay = tmp_path / "overlay"
+    (overlay / "common" / "memory").mkdir(parents=True)
+    (overlay / "common" / "memory" / "n.md").write_text(BARE_NOTE, encoding="utf-8")
+    home = overlay / "projects" / "widget"
+    (home / "memory").mkdir(parents=True)
+    (home / "project.toml").write_text(f'remote = "{REMOTE}"\n', encoding="utf-8")
+    (home / "stayfixed.toml").write_text(layer, encoding="utf-8")
+    (home / "memory" / "MEMORY.md").write_text("# shared index\n", encoding="utf-8")
+    binding.record(root, "widget", REMOTE)
+    composed = _composed(root)
+    composed.mkdir(parents=True)
+    (composed / "developer").symlink_to(overlay / "common" / "memory", target_is_directory=True)
+    (composed / "MEMORY.md").symlink_to(home / "memory" / "MEMORY.md")
+    (tmp_path / "machine.toml").write_text(f'[overlay]\nroot = "{overlay}"\n', encoding="utf-8")
+    return root
+
+
+@needs_git
+def test_memory_index_renders_in_a_bound_checkout_with_no_file(tmp_path: Path) -> None:
+    # Every memory command refused such a checkout with "run `stayfixed init`", though `attach`
+    # had bound it and its overlay's layers say where the memory is. Mutation: `mutations/`'s
+    # "bound_config answers for an unbound checkout" is the other side of this seam.
+    root = _bound_without_file(tmp_path)
+    assert invoke(["memory", "index", *common(root)]) == 0
+    shared = tmp_path / "overlay" / "projects" / "widget" / "memory" / "MEMORY.md"
+    assert "# Memory Index" in shared.read_text(encoding="utf-8")
+
+
+@needs_git
+def test_an_unbound_checkout_with_no_file_is_still_told_to_init(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The same checkout and overlay, but nothing on this machine binds it: a clone gains no
+    # configuration from the overlay it never attached to, so every command that needs a store
+    # still refuses with `init` as the way out.
+    root = _bound_without_file(tmp_path)
+    id = binding.read_id(root)
+    assert id is not None
+    (data_directory() / binding.BINDINGS / f"{id}.toml").unlink()
+    for argv in (
+        ["index"],
+        ["index", "--check"],
+        ["inventory"],
+        ["promote", "--changed"],
+    ):
+        assert invoke(["memory", *argv, *common(root)]) == 1, argv
+        assert "stayfixed init" in capsys.readouterr().err, argv
+
+
+@needs_git
+def test_the_unreviewed_count_is_said_in_a_bound_checkout_with_no_file(tmp_path: Path) -> None:
+    # The `SessionStart` handler reads the configuration the memory commands read: with no file it
+    # said nothing of a store the machine binds and the owner has notes in.
+    from stayfixed.config.machine import machine_config_path
+    from stayfixed.hooks.api import HookEvent
+    from stayfixed.memory.hooks import UNREVIEWED_COUNT, register
+    from tests.sessions import NO_CONFIG
+
+    root = _bound_without_file(tmp_path)
+    # A hook reads the machine file at its place under `HOME` (the suite's scratch one).
+    where = machine_config_path()
+    assert where is not None
+    where.parent.mkdir(parents=True)
+    where.write_text((tmp_path / "machine.toml").read_text(encoding="utf-8"), encoding="utf-8")
+    (handler,) = [h for h in register() if h.event == "SessionStart"]
+    event = HookEvent("SessionStart", "s1", None, None, {}, root, root, {})
+    assert handler.run(event, NO_CONFIG).context == UNREVIEWED_COUNT.format(count=1)

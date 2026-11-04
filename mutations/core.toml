@@ -2044,13 +2044,6 @@ before = '        "setup",'
 after = ""
 reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
-[[mutation]]
-name = "sync drops out of every side"
-file = "src/stayfixed/areas.py"
-before = '        "sync",'
-after = ""
-reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
-
 # The core imports neither side: the bug ledger imported by a core module, inside a function where
 # nothing loads it until a command asks, is a crossing no row pins.
 [[mutation]]
@@ -3047,8 +3040,8 @@ reddens = ["tests/config/test_classes.py::test_a_key_with_no_class_is_a_key_erro
 [[mutation]]
 name = "a refused layer's note prints its key raw"
 file = "src/stayfixed/config/classes.py"
-before = "                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.name))"
-after = "                notes.append(REFUSED_LAYER_NOTE.format(key=key, layer=layer.name))"
+before = "                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))"
+after = "                notes.append(REFUSED_LAYER_NOTE.format(key=key, layer=layer.said))"
 reddens = [
   "tests/config/test_classes.py::test_a_refused_layer_note_carries_neither_its_value_nor_a_raw_key",
 ]
@@ -3078,9 +3071,21 @@ reddens = ["tests/config/test_classes.py::test_the_budget_split_is_total_and_dis
 [[mutation]]
 name = "the overlay's common and project layers swap places"
 file = "src/stayfixed/config/classes.py"
-before = "    LayerName.OVERLAY_COMMON,\n    LayerName.OVERLAY_PROJECT,"
-after = "    LayerName.OVERLAY_PROJECT,\n    LayerName.OVERLAY_COMMON,"
+before = "    LayerName.OVERLAY_COMMON,\n    LayerName.OVERLAY_TAG,\n    LayerName.OVERLAY_PROJECT,"
+after = "    LayerName.OVERLAY_PROJECT,\n    LayerName.OVERLAY_TAG,\n    LayerName.OVERLAY_COMMON,"
 reddens = ["tests/config/test_classes.py::test_the_layers_run_lowest_first"]
+
+# A project's tags set values between the common file and the project's own: the project wins over
+# every tag, and a later tag over an earlier one.
+[[mutation]]
+name = "tag layers rank above the project layer"
+file = "src/stayfixed/config/classes.py"
+before = "    LayerName.OVERLAY_TAG,\n    LayerName.OVERLAY_PROJECT,"
+after = "    LayerName.OVERLAY_PROJECT,\n    LayerName.OVERLAY_TAG,"
+reddens = [
+  "tests/config/test_overlay_layers.py::test_a_later_tag_wins_a_value_and_the_project_wins_over_every_tag",
+  "tests/config/test_classes.py::test_the_layers_run_lowest_first",
+]
 
 # A limit of the platform is the shipped preset's alone: a repository raising it would raise what
 # a hook may print.
@@ -3096,9 +3101,9 @@ reddens = ["tests/config/test_classes.py::test_which_layers_may_set_each_class"]
 [[mutation]]
 name = "a refused layer's value stands where nothing beneath it is set"
 file = "src/stayfixed/config/classes.py"
-before = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.name))
+before = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))
                 continue"""
-after = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.name))
+after = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))
                 if key in values:
                     continue"""
 reddens = ["tests/config/test_classes.py::test_a_key_only_a_refused_layer_sets_has_no_value"]
@@ -5693,8 +5698,8 @@ reddens = [
 [[mutation]]
 name = "the overlay project file is read as the overlay common layer"
 file = "src/stayfixed/config/overlay_layers.py"
-before = "        own = _layer(path, LayerName.OVERLAY_PROJECT, notes)"
-after = "        own = _layer(path, LayerName.OVERLAY_COMMON, notes)"
+before = "    PlateKind.PROJECT: LayerName.OVERLAY_PROJECT,"
+after = "    PlateKind.PROJECT: LayerName.OVERLAY_COMMON,"
 reddens = [
   "tests/config/test_overlay_layers.py::test_the_project_file_wins_over_the_common_file_for_a_bound_checkout",
   "tests/doctor/test_checks.py::test_the_preferences_row_names_the_overlay_project_layer_of_a_budget",
@@ -5844,6 +5849,67 @@ after = "            candidate = contained(root, entry, resolved_root=resolved_r
 reddens = [
   "tests/test_roots.py::test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked",
 ]
+
+# One precedence for values and item names: a later plate wins, and the tags sit in the order the
+# owner listed them.
+[[mutation]]
+name = "plates keeps the tags in sorted order instead of list order"
+file = "src/stayfixed/config/plates.py"
+before = "    return tuple(usable), tuple(notes)"
+after = "    return tuple(sorted(usable)), tuple(notes)"
+reddens = [
+  "tests/config/test_plates.py::test_plates_are_common_then_tags_in_list_order_then_the_project",
+]
+
+# A checkout this machine binds, with no stayfixed.toml, gets the configuration of the project the
+# binding record names (`bound_config`): with none, `attached`, the note store and every memory
+# command said nothing of a delivery and a composed store that were in place.
+[[mutation]]
+name = "doctor judges a bound checkout with no stayfixed.toml on no configuration"
+file = "src/stayfixed/config/session.py"
+before = "    if bound is None:\n        return None"
+after = "    if True:\n        return None"
+reddens = [
+  "tests/attach/test_project_choice.py::test_doctor_judges_a_checkout_attached_with_no_stayfixed_toml_on_what_attach_used",
+  "tests/config/test_session.py::test_a_bound_checkout_with_no_file_gets_the_configuration_of_its_project",
+  "tests/memory/test_commands.py::test_memory_index_renders_in_a_bound_checkout_with_no_file",
+]
+
+# A checkout nothing on this machine binds has no project to build a configuration for: without the
+# guard, the call ends on an error instead of `None`, and each reader that skips on `None` (doctor's
+# rows, the memory commands' `init` remedy) ends red on it.
+[[mutation]]
+name = "bound_config answers for an unbound checkout"
+file = "src/stayfixed/config/session.py"
+before = "    if bound is None:\n        return None"
+after = "    if False:\n        return None"
+reddens = [
+  "tests/config/test_session.py::test_an_unbound_checkout_with_no_file_has_no_bound_config",
+  "tests/attach/test_project_choice.py::test_doctor_reads_an_unbound_checkout_with_no_stayfixed_toml_as_it_did",
+  "tests/memory/test_commands.py::test_an_unbound_checkout_with_no_file_is_still_told_to_init",
+]
+
+# The exclusive create is what leaves a name that is there alone: without `O_EXCL` the open takes
+# an existing file and the write goes over its bytes.
+[[mutation]]
+name = "owner-held files overwrite a present name"
+file = "src/stayfixed/fsops.py"
+before = '''    | os.O_EXCL
+    | os.O_NONBLOCK
+'''
+after = '''    | os.O_NONBLOCK
+'''
+reddens = [
+  "tests/test_fsops.py::test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link",
+  "tests/attach/test_checkout.py::test_a_present_name_is_never_overwritten",
+]
+
+[[mutation]]
+name = "sync drops out of every side"
+file = "src/stayfixed/areas.py"
+before = '        "sync",'
+after = ""
+reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
 # The note sync switches on for a bool `true` and for nothing else: a string "true" or the integer
 # 1, which a hand edit can easily write, must not start a job that commits and pushes.
@@ -7016,3 +7082,14 @@ file = "src/stayfixed/sync/trigger.py"
 before = '    if (event != "SessionEnd" or state.holds.any) and _backed_off(overlay, state, tree, now):'
 after = "    if _backed_off(overlay, state, tree, now):"
 reddens = ["tests/sync/test_hooks.py::test_session_end_never_waits_out_a_standing_failure"]
+
+# The overlay's group directory is named `groups`: `sync`'s pathspecs are derived from the name.
+[[mutation]]
+name = "a group's directory is not named groups"
+file = "src/stayfixed/config/plates.py"
+before = 'GROUPS = "groups"'
+after = 'GROUPS = "group"'
+reddens = [
+  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
+]

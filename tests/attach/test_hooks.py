@@ -262,6 +262,24 @@ def test_unpushed_work_is_named_by_its_counts_and_only_when_nothing_else_is_wron
 
 
 @needs_git
+def test_a_bound_checkout_with_no_file_hears_the_overlay_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The overlay's layers set the mode, so the notes are the overlay's and the session hears about
+    # their backup as it does in a checkout with a file.
+    root, overlay, _ = _recorded(tmp_path, monkeypatch)
+    (root / CONFIG_FILE).unlink()
+    layer = overlay / "projects" / "widget" / "stayfixed.toml"
+    layer.parent.mkdir(parents=True)
+    layer.write_text('[memory]\nmode = "overlay"\n', encoding="utf-8")
+    git(overlay, "init", "-q", "-b", "main")
+    git(overlay, "add", "-A")
+    git(overlay, "commit", "-qm", "chore: overlay")
+    _bind(overlay)
+    assert _status().run(_event(root), NO_CONFIG).context == NO_UPSTREAM.format(dirty=1)
+
+
+@needs_git
 def test_an_upstream_that_is_behind_still_reports_both_counts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

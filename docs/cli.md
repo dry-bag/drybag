@@ -131,10 +131,23 @@ Exits `2` if `MEMORY.md` is a symlink this store may not follow (the target rule
 overlay mode a symlinked index is refused outright; in overlay mode only a link into *this*
 project's own share of the recorded overlay is honoured).
 
+**A checkout with no `stayfixed.toml` that this machine binds** reads the memory a repository with
+the file reads: every `memory` command, the bundles and `doctor`'s note-store rows use the preset's
+configuration under the overlay's layers (`common/`, the project's tags, `projects/<name>/`), for
+the project this machine's binding record names, which is how a public clone you cannot commit to
+gets its notes. A checkout nothing on this machine binds is still refused (`1`) with `stayfixed
+init` as the way out, and the bundles print nothing for it. A `stayfixed.toml` is read first when
+there is one.
+
 **One store in overlay mode.** There the store is the composed store `stayfixed attach` builds,
 `~/.local/share/stayfixed/stores/<id>/`, named by the checkout's binding id and holding one link per
 group into the overlay, and `--store` is not read. In every other mode `--store` is resolved at the
-path it names, under the same rules as the configured store.
+path it names, under the same rules as the configured store. The groups include the notes of each tag
+the project lists, as `tag-<tag>` (`groups/<tag>/memory/` in the overlay), which every `memory`
+command, the index and the bundles read after the common notes and in the order the project lists
+its tags, whether or not `memory.groups` names them. A note's review is
+recorded by its path, so renaming a tag, which moves its notes' path in the store, makes them
+unreviewed once.
 
 **When there is no store, the refusal says why** (exit `1`). An overlay root the machine
 configuration records that is not a directory on this machine — the overlay moved, or was never
@@ -320,9 +333,10 @@ runs without some of its configuration (`config-fallback`).
 
 **The overlay's rules.** In a checkout this machine binds to an overlay project
 ([`attach`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)), `SessionStart`
-carries the overlay's standing rules — every `*.md` file in `common/claude/rules/` and
-`projects/<name>/claude/rules/` whose frontmatter has no `paths:` key, common first and the
-project's second, each in name order, a project file replacing the common file of its name —
+carries the overlay's standing rules — every `*.md` file in `claude/rules/` of `common/`, of each
+tag the project lists (`groups/<tag>/`) and of `projects/<name>/` whose frontmatter has no `paths:`
+key, in that order and each in name order, a later plate's file replacing the earlier plate's file of
+its name —
 under one fixed lead line, on every event the matcher covers, since a compacted or cleared context
 has lost them. A rule with `paths:` is path-scoped: the plugin `attach` renders carries a
 `PostToolUse` entry for it, matching `Read|Edit|Write`, that runs `hook PostToolUse` through
@@ -337,6 +351,22 @@ rule that cannot be read silences the rules of that hook, and `attach` refuses i
 reaches the model as the overlay holds it; the one path printed is the touched file's, withheld
 outside the path grammar.
 
+**The owner-held files.** In a new linked worktree of a checkout this machine binds to an overlay
+project, `SessionStart` places the regular files directly inside the overlay's
+`projects/<name>/checkout/` (`owner-files`, the first handler there) that the worktree does not
+have: an `AGENTS.md`, a `CLAUDE.md`, a `stayfixed.toml` the repository does not track. Never a
+`.env*` file (in any letter case), `settings.local.json` or `.DS_Store`, and never a subdirectory or
+a link in `checkout/`. A file keeps its source's permission bits and is created only where nothing
+is at the name: a file the branch tracks is already there, and a file, directory or link at the name
+is left alone and never written through. It answers from the machine's binding record, never from
+the repository's `stayfixed.toml`, which the worktree may not have until this places it, and it
+places nothing in the main checkout, in a submodule, in an unbound checkout or on a machine that
+records no overlay. It runs on every `SessionStart` there, so a placed file you delete by hand comes
+back with the next session. It says nothing when it placed nothing; otherwise it names the files placed, asks the
+session to read `AGENTS.md` when that or `CLAUDE.md` is among them, and names the placed files git
+would show, to add to the checkout's `.git/info/exclude`. It asks git only `rev-parse` and
+`check-ignore --no-index`, neither of which runs a repository's `core.fsmonitor`.
+
 **Writes** inside `stayfixed/` under the data root the harness names — `CLAUDE_PLUGIN_DATA`, or
 Codex's `PLUGIN_DATA` — and nowhere else of its own: `.probe`, written each time it dispatches to
 learn whether the root can be written at all; under `markers/`, one empty file per `once_key`
@@ -345,7 +375,9 @@ session, both names hashed to a fixed width,
 with all but the newest fifty session directories removed; and `diagnostics.jsonl`, one JSON line
 per diagnostic record, rotated to `diagnostics.1.jsonl` once it would pass 256 KiB. With no data
 root, or a relative one, nothing is written there and a `once_key` handler is asked on every
-invocation. One handler writes outside it: `overlay-path-rules`, the path-scoped rules above,
+invocation. Three handlers write outside it. `owner-files`, the files above, creates one file in the
+root of the new linked worktree for each name it places, and nothing else there; nothing removes
+them. `overlay-path-rules`, the path-scoped rules above,
 writes one empty file per session and file it said a rule for, under
 `$HOME/.local/share/stayfixed/sessions/`, both names hashed to a fixed width; none for a payload
 with no session id, and nothing removes them. And `unreviewed-notes`, which on `SessionStart` says
@@ -468,7 +500,8 @@ deliver the overlay's rules (above), the `attach` area registers one `SessionSta
 per session: the marker is banked only when the handler had something to say, so a session that
 hears a line hears it once, and a repository with nothing to report is asked again on every
 `startup`, `resume`, `clear`, `compact` and `fork` the matcher above covers — and it says
-nothing at all unless `[memory] mode` is `overlay`. Eight lines, each fixed and carrying at most a
+nothing at all unless `[memory] mode` is `overlay`, which for a checkout this machine binds and that has
+no `stayfixed.toml` is the mode the overlay's layers set. Eight lines, each fixed and carrying at most a
 count but the one that names two remotes, joined by newlines in this order: **no overlay recorded** on this machine, or one that
 **could not be asked** about, which is a machine configuration file that will not parse; this
 repository **not attached** to that overlay, or, for a bound one, its **`origin` moved** from
@@ -500,8 +533,8 @@ place in a context is treated as a new one rather than as one already answered. 
 an overlay which becomes unpushed *during* a session that started clean is not reported at that
 session's compactions, only at its next resume or startup; `stayfixed doctor` answers on demand. And the overlay is never a plugin stayfixed
 executes anything from: it carries no plugin manifest and no
-`hooks/hooks.json`, and hook entries the owner keeps in *common/claude/hooks.json* and
-`projects/<name>/claude/hooks.json` reach a session only through the plugin `attach` renders from
+`hooks/hooks.json`, and hook entries the owner keeps in the `claude/hooks.json` of *common/*, of a tag and of
+`projects/<name>/` reach a session only through the plugin `attach` renders from
 them, named by this machine's binding id.
 
 ## Note sync
@@ -1588,10 +1621,15 @@ overlay's project file sets applies from the first attach.
 and writes its settings file, its `.codex/rules/` copies and its ledger. Nothing is placed in a
 linked worktree, and a worktree created later needs no step of its own.
 
-**`--check` writes nothing.** It reports the binding state — `unbound` or `bound` — with the
+**`--check` writes nothing.** It opens with the project it would bind and where the name came from —
+`project NAME (named by --project)`, `(this machine's binding record)`, `(the overlay's record of the
+remote)`, `(the remote's name)` or, for a checkout that has one, `(its stayfixed.toml)` — the name
+escaped as every name the repository chose is; `--json` carries them as `project` and
+`project_source`. It then reports the binding state — `unbound` or `bound` — with the
 `origin` note the run would print (below), the permission diff
-(which allow rules would be added, and how many of the overlay's rules this
-repository already has), and the Codex standing-rule files it would place under `.codex/rules/`.
+(which allow rules would be added, how many of the overlay's rules this
+repository already has, and, when there are any, how many the ledger names that the overlay no
+longer grants and the run would take back), and the Codex standing-rule files it would place under `.codex/rules/`.
 Read it before the real run: everything under **Writes** below that carries content from the
 overlay is named here first. It asks what the real run asks before its first write, through the
 run's own code, so where the run fails or refuses there, in any case the two lists below give before
@@ -1607,10 +1645,10 @@ checkout's `origin`, the project and the remote escaped as every name the reposi
 then each hook entry (by its event and command), skill (by its directory) and
 agent (by its file) the render adds or removes against the render the last run left in
 `$HOME/.local/share/stayfixed/delivery/<id>/`, which is what a session runs, and then each allow
-rule this run merges. A hook's command and an allow rule that do not fit a plain name are printed
+rule this run merges or takes back. A hook's command and an allow rule that do not fit a plain name are printed
 escaped, and cut to their first 120 characters and their length. `--json` carries the same lists
 as `hooks_added`, `hooks_removed`, `skills_added`, `skills_removed`, `agents_added`,
-`agents_removed` and `allow_added`, and no remote and no project of their own. A re-attach that
+`agents_removed`, `allow_added` and `allow_withdrawn`, and no remote and no project of their own. A re-attach that
 binds the checkout to another project than this machine's record named — a `[project] name`
 renamed in a pulled commit moves every worktree's binding — says so on one line naming both.
 `--check`'s line names no project.
@@ -1618,10 +1656,10 @@ renamed in a pulled commit moves every worktree's binding — says so on one lin
 **The overlay's hooks, skills and agents are delivered as a plugin.** Every run renders them into
 `$HOME/.local/share/stayfixed/delivery/<id>/`, named by the binding id below: a marketplace
 `stayfixed-delivery-<id>` holding one plugin, `overlay-<id>`, whose `hooks/hooks.json` is the union
-of `common/claude/hooks.json` and `projects/<name>/claude/hooks.json` — each event's entry groups in
-that order, as the overlay wrote them — and whose `skills/` and `agents/` are copied from the same
-two directories, this project's copy of a file winning over the common one and each copy keeping its
-source's permission bits, so a skill's script stays executable. A session runs the plugin from that
+of the `claude/hooks.json` of `common/`, of each tag the project lists in list order, and of
+`projects/<name>/` — each event's entry groups in that order, as the overlay wrote them — and whose
+`skills/` and `agents/` are copied from the same directories, a later plate's copy of a file
+winning over an earlier one's and each copy keeping its source's permission bits, so a skill's script stays executable. A session runs the plugin from that
 directory in place, so a later `attach` re-renders it there and an edit reaches the next session
 with no reinstall. Each render is written whole into a new directory beside it and swapped into
 place, so a file the overlay no longer holds is gone, whatever an earlier run recorded; the ledger
@@ -1657,15 +1695,19 @@ repository is one remote whichever of git's three spellings names it — `git@ho
 in any case and, on github.com alone, the path too — so a clone made over https of a repository
 recorded over ssh hears nothing. The overlay's `projects/<name>/project.toml` keeps the remote it
 was first written with and the first attach's date, and is written only while it records no
-remote; an `origin` git prints in bytes that are not UTF-8 is recorded as none. An `origin`'s
+remote, and then only with the keys it lacks, put above everything the owner wrote there, which
+stays byte for byte; an `origin` git prints in bytes that are not UTF-8 is recorded as none. An `origin`'s
 userinfo — a token in `https://user:token@host/…` — is taken out before it is printed, on the
 screen or in the note naming both remotes, and before it is recorded; an ssh URL keeps its user
 (`ssh://git@host/…`) and loses only a password.
 
 **Reads** the overlay's `common/claude/permissions.json`, `common/claude/hooks.json` and the files
-under `common/claude/skills/` and `common/claude/agents/` (dot-named ones left out), this
-project's `projects/<name>/claude/` equivalents, the overlay's `common/codex/` and
-`projects/<name>/codex/` rules, and this repository's existing `.claude/settings.local.json`; for a
+under `common/claude/skills/` and `common/claude/agents/` (dot-named ones left out), the same
+`claude/` files of each tag the project lists in `projects/<name>/project.toml` (`groups/<tag>/`,
+in list order), this project's `projects/<name>/claude/` equivalents, the `codex/` rules of
+`common/`, of each tag and of `projects/<name>/`, a later plate winning a name over an earlier one
+(the order is `common`, the tags, the project), and this repository's existing
+`.claude/settings.local.json`; for a
 repository with no `stayfixed.toml` whose project neither `--project` nor this machine's binding
 names, every `projects/<name>/project.toml` in the overlay.
 `.claude/settings.json` — the committed one — is read for **nothing**: it is repository-controlled,
@@ -1681,9 +1723,12 @@ binding record `$HOME/.local/share/stayfixed/bindings/<id>.toml`, the render
 swapped into place, the render before removed whole) and, through the two `claude plugin` calls,
 Claude Code's own records of the marketplace and the plugin and the main checkout's
 `.claude/settings.local.json`; where the notes are composed, the composed store
-`$HOME/.local/share/stayfixed/stores/<id>/` (a link per group of the overlay's for this project and
-one to its `MEMORY.md`; each run makes its links exactly the overlay's current set and leaves any
-file there that is not a link, such as a note the harness wrote), the key `autoMemoryDirectory`
+`$HOME/.local/share/stayfixed/stores/<id>/` (a link per group of the overlay's for this project,
+`tag-<tag>` to `groups/<tag>/memory/` for each tag the project lists where that is a directory, and
+one to its `MEMORY.md`; a directory of the project's `memory/` whose name starts with `tag-` is not
+linked, the prefix being the tags'; each run makes its links exactly the overlay's current set, so
+untagging takes the link and a rename of a tag moves it, and leaves any file there that is not a
+link, such as a note the harness wrote), the key `autoMemoryDirectory`
 naming that directory, absolute, in the main checkout's `.claude/settings.local.json`, which Claude
 Code reads from every worktree, and — in the overlay — `projects/<name>/project.toml` while it
 records no remote, this project's note directories,
@@ -1695,10 +1740,21 @@ It runs no program in the overlay: its commit-time secret scan is `setup --overl
 or records the overlay, and where that scan is missing `doctor`'s `pre-commit` row says it is not
 installed. The ledger is the only record
 of which allow rules are stayfixed's, because an allow rule cannot carry a marker the way a hook
-entry can; `detach` reads it and nothing else. **`.gitignore` is never written**: it is tracked, so
+entry can; `detach` reads it and nothing else. **A re-attach takes back an allow rule the overlay
+no longer grants**, where the ledger names it and the settings file still holds it: a rule dropped
+from `common/`, from `projects/<name>/` or from a tag you took off the project leaves with the
+next run, each said as `allow rule withdrawn`, and a rule you added by hand, which the ledger does not name, stays.
+The ledger is a file in the checkout that a branch can write, so it is no defence against one: the worst a
+committed `allow` in it achieves is taking a permission away, one you typed included, at the next
+`attach` or `detach`, which both accept. **A re-attach also removes a `.codex/rules/` copy** the ledger
+names that the overlay no longer holds, so a rule file dropped from a plate, or a tag taken off the
+project, is gone from Codex's view with the next run. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
 release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
 `init`'s.
+
+**`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
+writes: [`owner-files`](#hooks) places them in each new linked worktree.
 
 **What it places, it hides from git, unless git hides it already.** The ledger, each
 `.codex/rules/` file and `.claude/settings.local.json`,
@@ -1751,10 +1807,8 @@ answer, in the order the run meets them:
   the loader refuses; or the machine configuration cannot be read, is not UTF-8 or is not valid
   TOML.
 - `git` cannot read the `origin` remote, or `git` cannot name the repository's common directory.
-  The overlay's record of this project (`projects/<name>/project.toml`) binds nothing, so one
-  that cannot be read, is not UTF-8 or is not valid TOML — a merge's conflict markers, when two
-  machines first attached the project — stops nothing: the run says where it stopped reading,
-  never writes over it, and `doctor`'s `attached` row warns.
+  The overlay's record of this project (`projects/<name>/project.toml`) binds nothing and is never
+  written over; one that cannot be read, is not UTF-8 or is not valid TOML is a refusal below.
 - The overlay's `permissions.json` or `hooks.json`, or `.claude/settings.local.json`, cannot be
   read or is not UTF-8; or a file under the overlay's `skills/` or `agents/` cannot be read, is
   not a regular file, is not UTF-8 or is longer than 64 MiB, or a directory there cannot be
@@ -1794,6 +1848,12 @@ It exits `2` on a refusal, in the order the run meets them:
   grows by its depth on every line, and `would be longer than this reader reads once written
   back` keeps a run from leaving a file its next read refuses. `--check` refuses it too.
 - A `memory.groups` entry that leaves this project's share of the overlay.
+- The overlay's record of this project, where it is there and cannot be read, is not UTF-8 or is
+  not valid TOML (a merge's conflict markers, when two machines first attached the project), or
+  its `tags` is not a list of strings: the record could not say which tags it lists, and a run
+  that read that as none would take back what they delivered. The refusal names the file, and
+  `--check` refuses it too. A session reads it as no tags and says so. A record that is absent,
+  as before a first attach, is no refusal.
 - A `.stayfixed` that is a symlink, or an existing ledger naming files, settings keys or
   directories `attach` could not have written.
 - A `git check-ignore` that cannot answer.
@@ -1890,6 +1950,9 @@ Last, each directory the ledger records `attach` as having created — of `.stay
 `.stayfixed/`, `.codex/rules/`, `.codex/` and `.claude/`, in that order — is removed when it is
 empty, and left standing otherwise. A link tree under `paths.memory` or a harness memory link under
 `~/.claude/projects/` an earlier release made is not touched: remove those by hand.
+
+**The files `owner-files` placed stay.** A file the `owner-files` handler put in a linked worktree
+is not on the ledger, and `detach` leaves it, as it leaves any file in a worktree you may have edited.
 
 **`.gitignore` is never touched.** `attach` writes nothing there, so `detach` takes nothing out:
 a `stayfixed:ignore` region `stayfixed init` wrote is the scaffold's, and one an earlier release's
@@ -2334,14 +2397,15 @@ file each ask for themselves, which checkout is the main one (`git worktree list
 and settings file the binding's row reads, whether this checkout is a registered worktree (its
 common and its own git directory), which the `memory` row asks to read the main checkout's settings
 file a linked worktree reads too, whether a path `attach` placed is tracked (`git ls-files`) or ignored (`git check-ignore`) and whether a
-tracked file names the delivery (`git grep`), which the binding's row asks of a bound checkout.
-Fourteen of those are measured on a green attached installation whose machine file switches the
-note sync on, as `setup --overlay` does for an overlay it makes — the wrapper probe and thirteen
+tracked file names the delivery (`git grep`), which the binding's row asks of a bound checkout, and the
+binding's common directory once more, which the binding's row asks to read the overlay's tag layers.
+Fifteen of those are measured on a green attached installation whose machine file switches the
+note sync on, as `setup --overlay` does for an overlay it makes — the wrapper probe and fourteen
 `git` questions, the `sync` row's `git version` among them — and not one of them leaves this
 machine. The `git` questions are `gitenv`'s five seconds each, and the wrapper probe is this
 area's own thirty seconds. The `sync` row's `git version`, of the overlay's `git`, is bounded at
 five seconds like them, and asked only where the note sync is on; so is its `git cat-file` of the
-pin `HEAD` commits, asked only where pre-commit's database is there, which the fourteen do not
+pin `HEAD` commits, asked only where pre-commit's database is there, which the fifteen do not
 count.
 
 The summary line carries the counts and the names of whichever status most needs reading, capped
@@ -2352,7 +2416,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 
 | Check | What it answers | What it reads |
 |---|---|---|
-| `not-initialised` | whether there is a `stayfixed.toml` here, and how much of it a session can use: with none, a warning that the session guards and `doctor` work without one and memory stays the coding agent's own, and that `stayfixed init` adds the rest; with one that loaded with settings ignored or put back to the preset's, a warning naming at most three of their keys and counting the rest, never their values; red only for one a session drops whole, in the words of the session's warning | `stayfixed.toml` |
+| `not-initialised` | whether there is a `stayfixed.toml` here, and how much of it a session can use: with none, a warning that the session guards and `doctor` work without one and memory stays the coding agent's own, and that `stayfixed init` adds the rest, except in a checkout this machine binds, where it is ok and says the configuration comes from the overlay's layers; with one that loaded with settings ignored or put back to the preset's, a warning naming at most three of their keys and counting the rest, never their values; red only for one a session drops whole, in the words of the session's warning | `stayfixed.toml` |
 | `versions` | whether the project's `[stayfixed] version` is the stayfixed running; with no project configuration, which stayfixed runs | `stayfixed.toml`, the package |
 | `wrapper` | whether the wrapper can actually reach stayfixed on this machine: red when it writes a fault to stderr or cannot be run; under a root the environment named, which it never runs, red when the wrapper is not executable and a skip otherwise; a stale `hooks/hooks.json`, an edited wrapper that still runs or a changed `scripts/stayfixed` is not reported | one `run-hook.sh --version`, and only under the plugin root this stayfixed is part of; under a named root, `hooks/run-hook.sh`'s mode |
 | `budgets` | every budget set above the preset, named raised, and every one set below it, named lowered | `stayfixed.toml`, the machine file, the preset |
@@ -2392,6 +2456,7 @@ nothing.
 | drift | the overlay's hooks, skills or agents changed since the last render | `warn` | `attach`, which renders the overlay as it is now |
 | overlay unreadable | the overlay's executable parts could not be read | `warn` | `attach --check`, which says why |
 | `origin` moved | this checkout's `origin` is not the one the binding was recorded with | `warn` | `attach`, which records the new one |
+| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting name (the later tag wins), a listed tag is not a usable name or has no `groups/<tag>/` directory, or a directory of the project's `memory/` starts with `tag-` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | rename one of them in the overlay, or reorder `tags` in the project's `project.toml` |
 
 **How `attached` reads the memory pointer.** Where `memory.mode` is `overlay`, the row reads
 `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json`, which Claude Code reads
@@ -2462,7 +2527,9 @@ which lets `wrapper` read the wrapper's executable bit even though it still will
 ([`stayfixed hook <event>`](#stayfixed-hook-event)), so every row is asked whatever `--root`
 holds. With no `stayfixed.toml`, `not-initialised` **warns**, the three rows above that read the
 project configuration skip, and no row is red for it: a default install, where the guards and
-this report already work, exits `0`. A `stayfixed.toml` that loads with settings ignored or put
+this report already work, exits `0`. In a checkout this machine binds, `not-initialised` is **ok**
+instead and says the configuration comes from the overlay's layers, with no remedy, since `init` is
+not what that checkout lacks. A `stayfixed.toml` that loads with settings ignored or put
 back to the preset's warns, naming at most three of their keys and counting the rest. Only one a session drops whole is **red**: a
 symbolic link, whatever it points at, a file that is not UTF-8, cannot be read or is not TOML, or
 one holding a key nothing can stand in for; the row says which in the session's own words and

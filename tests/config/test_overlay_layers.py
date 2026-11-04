@@ -47,6 +47,23 @@ def overlay(tmp_path: Path, *, common: str = "", sample: str | None = None) -> P
     return root
 
 
+def tagged(root: Path, listed: list[str], **files: str) -> None:
+    """The project `sample`'s record listing `listed`, and `groups/<tag>/stayfixed.toml` for each
+    tag in `files`, holding what it is given."""
+    (root / "projects" / "sample").mkdir(parents=True, exist_ok=True)
+    quoted_tags = ", ".join(f'"{tag}"' for tag in listed)
+    (root / "projects" / "sample" / "project.toml").write_text(
+        f"tags = [{quoted_tags}]\n", encoding="utf-8"
+    )
+    for tag, text in files.items():
+        (root / "groups" / tag).mkdir(parents=True)
+        (root / "groups" / tag / "stayfixed.toml").write_text(text, encoding="utf-8")
+
+
+def mode(value: str) -> str:
+    return f'[memory]\nmode = "{value}"\n'
+
+
 def machine(tmp_path: Path, recorded: Path, extra: str = "") -> Path:
     path = tmp_path / "machine.toml"
     path.write_text(f'[overlay]\nroot = "{recorded}"\n{extra}', encoding="utf-8")
@@ -153,4 +170,80 @@ def test_a_missing_file_is_no_layer_and_one_note(tmp_path: Path) -> None:
     assert notes == (
         overlay_layers.NOT_THERE.format(path=common, layer="overlay common"),
         overlay_layers.NOT_THERE.format(path=own, layer="overlay project"),
+    )
+
+
+def test_a_later_tag_wins_a_value_and_the_project_wins_over_every_tag(tmp_path: Path) -> None:
+    # Mutation (`mutations/`'s "tag layers rank above the project layer"): the tags then outrank
+    # the project, and the project's `overlay` loses to `local-only`.
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common=mode("harness"), sample="")
+    tagged(recorded, ["a", "b"], a=mode("overlay"), b=mode("local-only"))
+    binding.record(root, "sample", None)
+    session = session_config(root, machine=machine(tmp_path, recorded))
+    assert session.resolution.values["memory.mode"] == "local-only"
+    assert session.resolution.provenance["memory.mode"] is LayerName.OVERLAY_TAG
+    assert session.resolution.said("memory.mode") == "overlay tag b"
+    (recorded / "projects" / "sample" / "stayfixed.toml").write_text(mode("overlay"), "utf-8")
+    session = session_config(root, machine=machine(tmp_path, recorded))
+    assert session.resolution.values["memory.mode"] == "overlay"
+    assert session.resolution.said("memory.mode") == "overlay project"
+
+
+def test_reordering_the_tags_reorders_the_win(tmp_path: Path) -> None:
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common=mode("harness"))
+    tagged(recorded, ["b", "a"], a=mode("overlay"), b=mode("local-only"))
+    binding.record(root, "sample", None)
+    session = session_config(root, machine=machine(tmp_path, recorded))
+    assert session.resolution.values["memory.mode"] == "overlay"
+    assert session.resolution.said("memory.mode") == "overlay tag a"
+
+
+def test_an_unbound_checkout_reads_no_tag_layer(tmp_path: Path) -> None:
+    # The record lists tags, but the checkout is not bound to the project: only the owner's
+    # machine binds a checkout, so only the common layer applies.
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common=mode("harness"))
+    tagged(recorded, ["a"], a=mode("overlay"))
+    layers, _ = overlay_layers.read(root, machine=machine(tmp_path, recorded))
+    assert [layer.name for layer in layers] == [LayerName.OVERLAY_COMMON]
+
+
+def test_a_tag_file_that_is_not_toml_is_a_note_and_no_layer(tmp_path: Path) -> None:
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["a"], a="[memory\n")
+    binding.record(root, "sample", None)
+    layers, notes = overlay_layers.read(root, machine=machine(tmp_path, recorded))
+    assert LayerName.OVERLAY_TAG not in [layer.name for layer in layers]
+    path = quoted(str(recorded / "groups" / "a" / "stayfixed.toml"))
+    assert any(
+        path in note and "is not valid TOML" in note and "overlay tag a" in note for note in notes
+    )
+
+
+def test_a_tag_the_record_lists_without_a_directory_is_the_plates_note(tmp_path: Path) -> None:
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["gone"])
+    binding.record(root, "sample", None)
+    layers, notes = overlay_layers.read(root, machine=machine(tmp_path, recorded))
+    assert [layer.name for layer in layers] == [LayerName.OVERLAY_COMMON, LayerName.OVERLAY_PROJECT]
+    assert len(notes) == 1 and "gone" in notes[0]
+
+
+def test_a_gate_parameter_in_a_tag_file_never_reaches_the_config(tmp_path: Path) -> None:
+    # A tag is the owner's like the common file: what a pull request is judged by is the base
+    # branch's alone, and the note names the tag that tried.
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["a"], a='[ledger]\ncode_roots = ["elsewhere"]\n')
+    binding.record(root, "sample", None)
+    session = session_config(root, machine=machine(tmp_path, recorded))
+    preset = defaults_of(load_preset("recommended"))["ledger"]["code_roots"]
+    assert session.config is not None
+    assert session.config.ledger.code_roots == tuple(preset)
+    assert REFUSED_LAYER_NOTE.format(key="ledger.code_roots", layer="overlay tag a") in (
+        session.resolution.notes
     )

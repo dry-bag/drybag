@@ -1,0 +1,1 @@
+`stayfixed attach` now removes a `.codex/rules/` file it placed earlier when your overlay no longer holds it, for example after you take a tag off a project; before, the copy stayed, and Codex went on reading it as a standing instruction, until `stayfixed detach`.

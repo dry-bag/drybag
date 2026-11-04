@@ -58,8 +58,10 @@ from typing import Any
 from stayfixed import fsops, tomlout
 from stayfixed.attach import exclude
 from stayfixed.attach.binding import (
+    BY_FILE,
     NAMED_BY_FILE,
     Binding,
+    Chosen,
     choose_project,
     read_binding,
     refuse_unless_share_can_exist,
@@ -73,6 +75,7 @@ from stayfixed.attach.permissions import (
     diff_permissions,
     local_document,
     settings_document,
+    withdrawing,
 )
 from stayfixed.attach.render import (
     COPIED,
@@ -104,6 +107,7 @@ from stayfixed.binding import (
 from stayfixed.config.layout import ATTACH_LEDGER
 from stayfixed.config.owner import Owner
 from stayfixed.config.paths import PathEscape, PathUnasked, contained
+from stayfixed.config.plates import TAG_LINK_PREFIX, read_record, record_fault
 from stayfixed.config.reading import UNPARSEABLE
 from stayfixed.config.schema import OVERLAY_MODE, Config
 from stayfixed.config.session import command_config
@@ -118,7 +122,6 @@ from stayfixed.memory.api import (
     PROJECTS,
     STORE_DIR,
     build_composed,
-    read_binding_record,
     render_missing_index,
     withdraw_composed,
 )
@@ -200,7 +203,7 @@ class Carried:
 @dataclass(frozen=True)
 class Attached:
     """What one `attach` changed, and the screen it is said on: the binding, then what will run
-    that did not before and what no longer will, then the allow rules added.
+    that did not before and what no longer will, then the allow rules added and taken back.
 
     Nothing here is repository-authored but `origin`, this checkout's remote, and `project`, the
     name the binding is recorded under, both of which a caller prints through `printed`, and one
@@ -208,7 +211,8 @@ class Attached:
     `binding` is the binding id as `binding.short` prints it, never the whole id;
     `binding_recorded` says whether this run bound a checkout this machine did not bind before.
     `added` and `removed` are the executable diff against the render the last run left, and
-    `allow_added` the allow rules this run merged; all three are the overlay's.
+    `allow_added` the allow rules this run merged and `allow_withdrawn` those it took back; all
+    four are the overlay's.
     """
 
     settings_written: bool
@@ -221,6 +225,7 @@ class Attached:
     added: Carried = Carried()
     removed: Carried = Carried()
     allow_added: tuple[str, ...] = ()
+    allow_withdrawn: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -254,14 +259,16 @@ class AttachLedger:
 
     `allow` and `store` are not bounded here, and saying why is part of the rule rather than an
     omission. An allow rule has no grammar this area owns — the ledger exists *because* a rule
-    cannot be told from the owner's own by its content — and `_withdraw_settings` only ever
-    removes a rule the settings file already holds, so the worst a committed `allow` achieves is
-    taking a permission away. `store` is read by nothing: `detach` derives every path it
-    withdraws from the configuration and the overlay root, never from this field, so it is a
-    record for a human reading the file and for `doctor`, and a committed value costs nothing —
-    except one holding a NUL, which no path holds and `doctor`'s `Path.resolve` meets with
-    `ValueError`, so that one is a ledger no attach wrote. So is any list field holding something
-    other than a list, which reading it would meet with `TypeError`.
+    cannot be told from the owner's own by its content — and its two consumers, `detach`
+    (`_withdraw_settings`) and every re-attach (`permissions.withdrawing`), only ever remove a rule
+    the settings file already holds, so the worst a committed `allow` achieves is taking a
+    permission away, one the owner typed included. That bound is accepted: a branch can write this
+    file, so it is a convenience and no anchor against one. `store` is read by nothing: `detach`
+    derives every path it withdraws from the configuration and the overlay root, never from this
+    field, so it is a record for a human reading the file and for `doctor`, and a committed value
+    costs nothing — except one holding a NUL, which no path holds and `doctor`'s `Path.resolve`
+    meets with `ValueError`, so that one is a ledger no attach wrote. So is any list field holding
+    something other than a list, which reading it would meet with `TypeError`.
 
     `entries` maps each marker id to its event, which is the shape `scaffold.owned_ids` answers
     in, so `doctor` can compare the two without a translation in between. Only a ledger an earlier
@@ -456,25 +463,30 @@ def _allow_list(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
 
 
 def _merged_settings(document: str, diff: PermissionDiff, previous: AttachLedger | None) -> str:
-    """The local settings document with the overlay's allow rules appended in order and the hook
-    entries an earlier attach recorded taken back out (`scaffold.withdraw_entries`).
+    """The local settings document with the overlay's allow rules appended in order, the rules it
+    no longer grants (`diff.withdrawn_allow`) taken out, and the hook entries an earlier attach
+    recorded taken back out (`scaffold.withdraw_entries`).
 
-    Only the entries the earlier ledger names, under the event it names, and only where the file
-    still holds them: the ledger and never the marker alone says which entries are stayfixed's.
+    Only the entries and rules the earlier ledger names, and only where the file still holds them:
+    the ledger and never the marker alone says which are stayfixed's.
     """
     recorded = previous.entries if previous is not None else {}
     held = owned_ids(document) if recorded else {}
     withdrawn = {id: event for id, event in recorded.items() if held.get(id) == event}
-    if not diff.added_allow and not withdrawn:
+    if not diff.added_allow and not diff.withdrawn_allow and not withdrawn:
         # Nothing to add or take back, so nothing is touched. A rewrite here would reformat a file
         # the owner owns, on a run that changed nothing, and report itself as a write.
         return document
     raw = settings_document(document)
     permissions, allow = _allow_list(raw)
+    allow = [rule for rule in allow if rule not in diff.withdrawn_allow]
     allow += [rule for rule in diff.added_allow if rule not in allow]
     if allow or permissions:
         permissions["allow"] = allow
         raw["permissions"] = permissions
+    if diff.withdrawn_allow:
+        # As `detach` leaves it: an allow list the take-back emptied is not what the file held.
+        raw = _emptied(raw)
     text = settings_text(raw, LOCAL_SETTINGS) + "\n"
     return withdraw_entries(text, withdrawn) if withdrawn else text
 
@@ -507,34 +519,49 @@ def _nothing_written(sentence: str) -> Failure:
 
 
 def _record_project(binding: Binding, remote: str | None) -> None:
-    """Write `projects/<name>/project.toml` where it records no remote yet, keeping the
-    first-attach date it already carries.
+    """Put `remote` and the first-attach date into `projects/<name>/project.toml` where the record
+    holds no such key at all, and write nothing else; a record that already names a remote is not
+    written.
 
-    The record is what the overlay keeps for the owner to read — the remote the project was first
-    bound with and the first attach's date — and binds nothing: the binding is this machine's
-    (`stayfixed.binding`). So a record that names a remote is left alone, whatever this checkout's
-    `origin` says, and two machines attaching one project each keep their own binding without
-    rewriting it. Re-stamping the date on every attach would turn a fact into a timestamp of the
-    last run. `remote` is the `origin` as the machine's record kept it: none where a UTF-8 file
-    cannot hold it.
+    The record is what the overlay keeps for the owner to read -- the remote the project was first
+    bound with, the first attach's date, the `tags` the owner lists, whatever else they wrote --
+    and binds nothing: the binding is this machine's (`stayfixed.binding`). So a key the record
+    holds is left alone, whatever this checkout's `origin` says, and two machines attaching one
+    project each keep their own binding without rewriting it; re-stamping the date on every attach
+    would turn a fact into a timestamp of the last run. A key present with a value no one can use
+    (an empty `remote`) is left too, since a second spelling of it would make the file invalid.
+    The missing keys are prepended to the text as it stands, ahead of any table, so every byte the
+    owner wrote stays. A record that cannot be read is never written over. `remote` is the `origin`
+    as the machine's record kept it: none where a UTF-8 file cannot hold it.
     """
     if binding.recorded is not None or binding.fault is not None:
         return
     relative = f"{PROJECTS}/{binding.project}/{PROJECT_RECORD}"
-    first = _first_attach(binding.overlay / relative) or datetime.date.today().isoformat()
-    fields: dict[str, object] = {"first_attach": first}
-    if remote is not None:
-        fields = {"remote": remote, **fields}
+    record = binding.overlay / relative
+    held = _record_table(record)
+    if held is None:
+        return
+    missing: dict[str, object] = {}
+    if remote is not None and "remote" not in held:
+        missing["remote"] = remote
+    if "first_attach" not in held:
+        missing["first_attach"] = datetime.date.today().isoformat()
+    if not missing:
+        return
     # `tomlout` and not an f-string: the value is a git remote URL, which is repository-authored
     # (principle 5), and one carrying a quote and a newline would write further keys into it.
-    fsops.write_within(binding.overlay, relative, tomlout.dumps({"": fields}))
+    # Read with the file's own line endings, which `read_text` would translate.
+    text = fsops.read_regular_text(record, newline="") if fsops.is_file(record) else ""
+    fsops.write_within(binding.overlay, relative, tomlout.dumps({"": missing}) + text)
 
 
-def _first_attach(record: Path) -> str | None:
+def _record_table(record: Path) -> dict[str, Any] | None:
+    """The record's keys, `{}` where there is no record, and `None` where it cannot be read: that
+    is `attach`'s `fault` already, so reaching here with one is a record swapped since."""
     if not fsops.is_file(record):
-        return None
+        return {}
     try:
-        return read_binding_record(record).get("first_attach")
+        return read_record(record)
     except (OSError, UnicodeDecodeError, *UNPARSEABLE):
         return None
 
@@ -607,16 +634,11 @@ def _write_ledger(
     """
     previous, binding = planned.previous, planned.binding
     rules = tuple(target for target, _ in planned.rules)
-    allow = list(previous.allow) if previous is not None else []
+    # Only the rules the overlay grants now: one it no longer grants leaves the ledger whether or
+    # not the settings file still held it, or a copy the owner types by hand later would be taken.
+    granted = {*planned.diff.added_allow, *planned.diff.already_present}
+    allow = [rule for rule in previous.allow if rule in granted] if previous else []
     allow += [rule for rule in planned.diff.added_allow if rule not in allow]
-    # The same union for the rule files, and for a sharper reason than the one above. A file
-    # deleted from the overlay between two attaches is not written this time and so drops out of
-    # a ledger built from this run alone — while the copy from the first attach is still sitting
-    # in `.codex/rules/`, where Codex reads it as a standing instruction. `detach` would then
-    # leave an agent-steering file behind, and `attach` must stay idempotent and reversible by
-    # `detach`.
-    placed = list(previous.rules) if previous is not None else []
-    placed += [rule for rule in rules if rule not in placed]
     # The same union as `allow` and `rules`, for the same reason sharpened once more: the second
     # attach in a repository finds every one of these directories already there and would record
     # none, so a ledger built from this run alone would leave `detach` unable to remove what the
@@ -630,7 +652,9 @@ def _write_ledger(
         # No hook entry is merged any more, and the settings file this run writes has taken back
         # every one the earlier ledger recorded.
         "entries": {},
-        "rules": placed,
+        # Only this run's copies: the ones the earlier ledger named and the overlay no longer holds
+        # were removed before any ledger is written (`planned.dropped`), so none is left unrecorded.
+        "rules": list(rules),
         "settings_keys": list(settings_keys),
         "directories": [name for name in CREATED_DIRS if name in made],
         # The digest, never the id and never a path on this machine (`render.Rendered`).
@@ -645,12 +669,13 @@ def _group_directories(binding: Binding, config: Config) -> list[str]:
     One list for the check and for the write both, so the refusal above every write and the
     `O_NOFOLLOW` walk that does the writing cannot come to disagree about which paths they are
     talking about. `common/memory` is not here — it is shared across projects and `overlay
-    create` ships it — and skipping it in one of the two would be the first way they drift.
+    create` ships it — and skipping it in one of the two would be the first way they drift. Nor is a
+    name in the tag namespace: the composed store links none (`memory.store.reserved`).
     """
     return [
         f"{PROJECTS}/{binding.project}/{STORE_DIR}/{group}/{_INSIDE}"
         for group in config.memory.groups
-        if group != COMMON_GROUP
+        if group != COMMON_GROUP and not group.startswith(TAG_LINK_PREFIX)
     ]
 
 
@@ -778,6 +803,8 @@ class AttachPlan:
     hidden: exclude.ExcludeWrite | None
     # Each `.codex/rules/` target and the text to copy there.
     rules: tuple[tuple[str, str], ...]
+    # The rule copies the earlier ledger names that the overlay no longer holds, removed by the run.
+    dropped: tuple[str, ...]
     # What the rendered plugin carries, read from the overlay (`render.read_parts`).
     parts: dict[str, Part]
 
@@ -848,6 +875,10 @@ def gates(root: Path, config: Config, binding: Binding) -> PermissionDiff:
     # overlay's sources read under it answer "none" rather than refusing, so nothing below
     # would ask before writing.
     refuse_unless_share_can_exist(binding, config)
+    # A record that cannot say which tags it lists would read as none, and the run would take back
+    # what the tags delivered; the notes of a session take that, a write run does not.
+    if (fault := record_fault(binding.overlay, binding.project)) is not None:
+        raise Refusal(f"{fault}; nothing was written")
     # The diff, read in the run's order: it refuses a settings file the merge could not read.
     diff = diff_permissions(root, binding)
     # The check about the notes, asked only where they are composed.
@@ -858,20 +889,21 @@ def gates(root: Path, config: Config, binding: Binding) -> PermissionDiff:
 
 def configured(
     root: Path, project: str | None, *, machine: Path | None, owner: Owner | None
-) -> Config:
+) -> tuple[Config, str]:
     """The run's one `Config`, its project chosen where the repository has no `stayfixed.toml`
-    (`binding.choose_project`, asked only then). `project` is `--project`, refused beside the
-    file, which names the project already."""
-    chosen: list[str] = []
+    (`binding.choose_project`, asked only then), and where the project's name came from
+    (`binding.BY_FILE` or the phrase of the way it was chosen). `project` is `--project`, refused
+    beside the file, which names the project already."""
+    chosen: list[Chosen] = []
 
     def unnamed() -> str:
         chosen.append(choose_project(root, project, machine=machine))
-        return chosen[0]
+        return chosen[0].name
 
     config = command_config(root, machine=machine, owner=owner, unnamed=unnamed)
     if project is not None and not chosen:
         raise Refusal(NAMED_BY_FILE)
-    return config
+    return config, chosen[0].source if chosen else BY_FILE
 
 
 def _plan(
@@ -889,7 +921,7 @@ def _plan(
     # One load for the whole run, handed to `read_binding` rather than left for it to make a
     # second of: a `--check` that read two documents reports the wrong thing, while an `attach`
     # that reads two writes under the wrong one.
-    config = configured(root, project, machine=machine, owner=owner)
+    config, _ = configured(root, project, machine=machine, owner=owner)
     binding = read_binding(root, store=store, machine=machine, config=config)
     diff = gates(root, config, binding)
     return plan_writes(root, config, binding, diff)
@@ -922,6 +954,8 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     # The settings merge is computed here, before any write, so a file it cannot read stops the
     # run while nothing is written.
     document = local_document(root)
+    if previous is not None:
+        diff = withdrawing(diff, previous.allow, _allow_list(settings_document(document))[1])
     merged = _merged_settings(document, diff, previous)
     written = merged != document
     placed = placed_paths(target for target, _ in codex_rules(binding))
@@ -938,6 +972,11 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     # after the first write: the overlay's rule sources (a file that is not UTF-8) and what the
     # rendered plugin carries (a hook file of a shape it cannot read, a skill that cannot be read).
     rules = _codex_rule_texts(binding)
+    kept = {target for target, _ in rules}
+    dropped = tuple(rule for rule in previous.rules if rule not in kept) if previous else ()
+    for rule in dropped:
+        # The removal's walk, asked here as the writes' is: a link on the way refuses first.
+        contained(root, rule, allow_final_symlink=True)
     parts = read_parts(binding.overlay, binding.project)
     return AttachPlan(
         config=config,
@@ -954,6 +993,7 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         placed=placed,
         hidden=hidden,
         rules=rules,
+        dropped=dropped,
         parts=parts,
     )
 
@@ -979,6 +1019,10 @@ def _carry_out(
         raise Refusal(exclude.NOT_IGNORED.format(paths=named_placed(shown)))
     for target, text in planned.rules:
         fsops.write_within(root, target, text)
+    # As `detach` removes a recorded copy: Codex reads whatever stays there as a standing rule.
+    for rule in planned.dropped:
+        if fsops.is_file(root / rule):
+            fsops.remove_within(root, rule)
     rules = tuple(target for target, _ in planned.rules)
     written = planned.settings is not None
     if planned.settings is not None:
@@ -1050,6 +1094,7 @@ def _carry_out(
         added=after.without(before),
         removed=before.without(after),
         allow_added=planned.diff.added_allow,
+        allow_withdrawn=planned.diff.withdrawn_allow,
     )
 
 

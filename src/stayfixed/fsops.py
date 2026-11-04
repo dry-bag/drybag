@@ -788,6 +788,42 @@ def write_within(
         write_atomically_at(dir_fd, name, text, encoding=encoding, mode=mode)
 
 
+# The flags of the one exclusive create: a regular file made only where nothing is at the name (a
+# file, a directory or a link, dangling or not), never through a link at the last component.
+_CREATE_FLAGS = (
+    getattr(os, "O_NOFOLLOW", 0)
+    | os.O_WRONLY
+    | os.O_CREAT
+    | os.O_EXCL
+    | os.O_NONBLOCK
+    | os.O_CLOEXEC
+)
+
+
+def create_within(root: Path, target: str, data: bytes, *, mode: int) -> bool:
+    """Create `root/target` holding `data` with exactly `mode`'s bits, and say whether it did.
+
+    The walk is `open_within`'s, and the create is `O_CREAT | O_EXCL | O_NOFOLLOW`, so a name that
+    is already there -- a file, a directory or a link, one pointing nowhere included -- is left as
+    it is and answers `False`, and nothing is ever written through a link. The parents are not
+    created. `mode` is set on the descriptor, which the umask does not narrow; a write that fails
+    after the create removes the file it created and raises.
+    """
+    with open_within(root, target) as (dir_fd, name):
+        try:
+            handle = os.open(name, _CREATE_FLAGS, 0o600, dir_fd=dir_fd)
+        except FileExistsError:
+            return False
+        try:
+            with os.fdopen(handle, "wb") as stream:
+                os.fchmod(stream.fileno(), mode)
+                stream.write(data)
+        except BaseException:
+            _unlink_quietly(dir_fd, name)
+            raise
+    return True
+
+
 def remove_within(root: Path, target: str) -> None:
     """Unlink `root/target` through the same walk; an absent file is not an error.
 

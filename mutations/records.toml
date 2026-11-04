@@ -2355,8 +2355,8 @@ reddens = [
 [[mutation]]
 name = "memory session-context refuses what a session reads"
 file = "src/stayfixed/memory/commands.py"
-before = "    config = session_config(root, machine=machine).config"
-after = "    config = load(root, machine=machine)"
+before = "    config = session.config\n"
+after = "    config = load(root, machine=machine)\n"
 reddens = ["tests/hooks/test_floor.py::test_memory_session_context_reads_a_newer_key_with_a_note"]
 
 # The `bundles` row skips in the core's words with no project configuration: the store and its
@@ -2364,8 +2364,8 @@ reddens = ["tests/hooks/test_floor.py::test_memory_session_context_reads_a_newer
 [[mutation]]
 name = "the bundles row reads a configuration that is not there"
 file = "src/stayfixed/memory/doctor.py"
-before = "            (\"bundles\", configured(lambda context, config: _bundles(context, config, answers))),"
-after = "            (\"bundles\", lambda context: _bundles(context, context.config, answers)),"
+before = "                configured(lambda context, config: _bundles(context, config, answers), attach=True),"
+after = "                lambda context: _bundles(context, context.config, answers),"
 reddens = [
   "tests/doctor/test_checks.py::test_a_repository_without_a_configuration_skips_only_the_rows_that_read_one",
 ]
@@ -3051,15 +3051,59 @@ reddens = [
   "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
 ]
 
-# The overlay's group directory is named `groups`: `sync`'s pathspecs are derived from the name.
+# The project side gives up the `tag-` prefix of the composed store's link names, so a project
+# memory directory named in the tag namespace never takes the name a tag's own link needs.
 [[mutation]]
-name = "a group's directory is not named groups"
-file = "src/stayfixed/memory/store.py"
-before = 'GROUPS = "groups"'
-after = 'GROUPS = "group"'
+name = "the composed store links a project directory in the tag namespace"
+file = "src/stayfixed/memory/composed.py"
+before = "            if not entry.startswith(\".\") and not reserved(entry) and fsops.is_dir(share / entry):"
+after = "            if not entry.startswith(\".\") and fsops.is_dir(share / entry):"
 reddens = [
-  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
-  "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
+  "tests/memory/test_composed.py::test_a_project_memory_directory_in_the_tag_namespace_is_not_linked",
+]
+
+# A link of the composed store is followed only into the project's permitted roots, and a tag's
+# notes are among them: without them the resolver refuses the link `attach` made for the tag.
+[[mutation]]
+name = "permitted roots leave out the tags' notes"
+file = "src/stayfixed/memory/store.py"
+before = "        *(_tag_notes(overlay, tag) for tag in tags(overlay, project)[0]),"
+after = "        *(_tag_notes(overlay, tag) for tag in ()),"
+reddens = [
+  "tests/memory/test_store.py::test_a_tags_memory_is_linked_under_its_tag_name",
+]
+
+# Every reader of the store walks one group list, the configured groups and the tags' notes after
+# the common ones, so the index lists and the bundles deliver a tag's notes.
+[[mutation]]
+name = "walked groups leave out the tags"
+file = "src/stayfixed/memory/store.py"
+before = "    return [*walked[:at], *tagged, *walked[at:]]"
+after = "    return walked"
+reddens = [
+  "tests/memory/test_bundles.py::test_a_standing_rule_in_a_tags_notes_is_in_the_standing_rules_bundle",
+  "tests/memory/test_index.py::test_the_index_has_a_section_per_tag_after_the_common_notes",
+]
+
+# A bound checkout with no `stayfixed.toml` has the configuration `attach` acted on
+# (`Context.attach_config`): the note store resolves through it, so the walk that counts its notes
+# and the `bundles` row must read it too, or they report a store they never walked.
+[[mutation]]
+name = "the note store's unreviewed count ignores a bound checkout's configuration"
+file = "src/stayfixed/memory/doctor.py"
+before = "        config = context.attach_config\n"
+after = "        config = context.config\n"
+reddens = [
+  "tests/memory/test_doctor.py::test_the_note_store_rows_read_a_bound_checkouts_configuration",
+]
+
+[[mutation]]
+name = "the bundles row skips a bound checkout with no stayfixed.toml"
+file = "src/stayfixed/memory/doctor.py"
+before = "_bundles(context, config, answers), attach=True),"
+after = "_bundles(context, config, answers)),"
+reddens = [
+  "tests/memory/test_doctor.py::test_the_note_store_rows_read_a_bound_checkouts_configuration",
 ]
 
 # The note sync's in-process render is `memory index`'s own: it writes the lines a session

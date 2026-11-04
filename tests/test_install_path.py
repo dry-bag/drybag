@@ -574,11 +574,11 @@ def test_doctor_is_green_on_the_attached_fixture(tmp_path: Path) -> None:
 # as a number rather than as a set of argv lists so the failure reads as "the count moved", which
 # is the claim.
 #
-# Fourteen: the wrapper probe and the thirteen `git` questions the `attached`, note-store, `memory`,
+# Fifteen: the wrapper probe and the fourteen `git` questions the `attached`, note-store, `memory`,
 # `preferences` and `sync` rows ask of a bound checkout and its overlay, as `docs/cli.md`'s doctor
 # section lists them; the `sync` row's `git version` is asked because `setup --overlay` switched the
 # note sync on for the overlay this fixture rendered.
-DOCTOR_LAUNCHES = 14
+DOCTOR_LAUNCHES = 15
 
 
 def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
@@ -631,11 +631,11 @@ def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
         True,
     ), attached
     assert len(launched) == DOCTOR_LAUNCHES, launched
-    # And they are the fourteen the paragraph names, not fourteen of something else: one wrapper
-    # probe, and thirteen `git` questions. Asserted by shape rather than by full argv, because
+    # And they are the fifteen the paragraph names, not fifteen of something else: one wrapper
+    # probe, and fourteen `git` questions. Asserted by shape rather than by full argv, because
     # each `git` call carries the temporary checkout or overlay it asks about.
     assert sum(1 for argv in launched if argv[0] == str(WRAPPER)) == 1
-    assert sum(1 for argv in launched if argv[0] == "git") == 13
+    assert sum(1 for argv in launched if argv[0] == "git") == 14
 
 
 def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Path) -> None:

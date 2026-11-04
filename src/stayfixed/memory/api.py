@@ -28,9 +28,11 @@ builds, points the harness at, renders the missing index of and `detach` withdra
 directory, which the `attach` area's `doctor.py` compares the pointer with, and every path its
 links point at in the overlay, which `attach` asks the length of before its first write
 (`build_composed`, `composed_directory`, `render_missing_index`, `withdraw_composed`,
-`link_sources`), and the trust region `tests/test_install_path.py` asserts end to end
-(`DELIMITER`, `markers`). The note walk and `resolved` have no reader outside this area and are
-not here. The overlay root the machine file records and the checkout's
+`link_sources`), the project's memory directories the store leaves unlinked for being in the tag
+namespace, which `attach`'s doctor row names (`reserved_project_groups`), and the trust region
+`tests/test_install_path.py` asserts end to end (`DELIMITER`, `markers`). The note walk and
+`resolved` have no reader outside this area and are not here. The overlay root the machine file
+records and the checkout's
 `origin` are the core's to answer (`config.overlay.overlay_root`, `gitenv.origin_remote` and
 `gitenv.GitUnavailable`), because `init` asks them too and may not import this area; the
 crossings still pinned are listed in `tests/boundaries/test_delivery.py`.
@@ -76,6 +78,7 @@ this area's tests use; an area that comes to need one grows this list by the rul
   `bundles` row is this area's own (`memory/doctor.py`) and reads `memory.bundles` directly.
 """
 
+from stayfixed.config.plates import GROUPS
 from stayfixed.memory.bundles import SLOTS
 from stayfixed.memory.composed import build as build_composed
 from stayfixed.memory.composed import link_sources, promote_share, render_missing_index
@@ -86,7 +89,6 @@ from stayfixed.memory.store import (
     BOUND,
     COMMON,
     COMMON_GROUP,
-    GROUPS,
     PROJECT_RECORD,
     PROJECTS,
     STORE_DIR,
@@ -97,6 +99,7 @@ from stayfixed.memory.store import (
     origin_note,
     permitted_roots,
     read_binding_record,
+    reserved_project_groups,
     resolve,
 )
 from stayfixed.memory.trust import DELIMITER, markers, wrap
@@ -126,6 +129,7 @@ __all__ = [
     "read_binding_record",
     "render_missing_index",
     "rerender_overlay_index",
+    "reserved_project_groups",
     "resolve",
     "withdraw_composed",
     "wrap",
