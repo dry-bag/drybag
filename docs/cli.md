@@ -2043,12 +2043,12 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
 4. with `--yes` only, the overlay's notes recorded as reviewed on this machine: after each project
    it attached, every note of the overlay's share for its table key (each group under
    `projects/<name>/memory/`, and `common/memory`) not already reviewed at its current bytes is
-   recorded in the trust record beside the machine file (`stayfixed trust list` shows it). Nothing
+   recorded in the trust record beside the machine file. Nothing
    a checkout holds is read, whatever its memory mode, and a note is reviewed wherever the same
    bytes are read. Without `--yes` nothing is recorded as reviewed, whatever the overlay holds. A project whose notes cannot be recorded (an unreadable
    trust record, which is never overwritten) is reported `failed`, attached all the same. A second
    run with `--yes` records nothing new; a note you recorded is withdrawn by editing or deleting
-   it, or with `stayfixed trust revoke reviewed --subject PATH`. `--yes` without `--restore` is refused (`2`),
+   it. `--yes` without `--restore` is refused (`2`),
    naming `--restore`, before anything is written.
 
 Last, it checks the tools and prints what is missing on the first line of its output, above machine
