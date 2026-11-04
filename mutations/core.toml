@@ -623,11 +623,11 @@ name = "the dispatcher stops carrying the event a failed command arrives on"
 file = "src/stayfixed/hooks/api.py"
 before = """    "PostToolUse",
     "PostToolUseFailure",
-)"""
+    "Stop","""
 after = """    "PostToolUse",
-)"""
+    "Stop","""
 reddens = [
-  "tests/hooks/test_registry.py::test_the_vocabulary_is_the_six_events_the_design_table_carries",
+  "tests/hooks/test_registry.py::test_the_vocabulary_is_the_eight_events_the_design_table_carries",
   "tests/hints/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[bare]",
 ]
 
@@ -5902,4 +5902,1194 @@ after = '''    | os.O_NONBLOCK
 reddens = [
   "tests/test_fsops.py::test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link",
   "tests/attach/test_checkout.py::test_a_present_name_is_never_overwritten",
+]
+
+[[mutation]]
+name = "sync drops out of every side"
+file = "src/stayfixed/areas.py"
+before = '        "sync",'
+after = ""
+reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
+
+# The note sync switches on for a bool `true` and for nothing else: a string "true" or the integer
+# 1, which a hand edit can easily write, must not start a job that commits and pushes.
+[[mutation]]
+name = "a string 'true' switches sync on"
+file = "src/stayfixed/sync/switch.py"
+before = "    return isinstance(table, dict) and table.get(KEY) is True"
+after = "    return isinstance(table, dict) and bool(table.get(KEY))"
+reddens = ["tests/sync/test_switch.py::test_enabled_only_for_a_true_bool"]
+
+# The sync job's state is a file `doctor` and every hook read. A file that is there and cannot be
+# used is not "never ran", and an outcome the job does not have is not one it wrote.
+[[mutation]]
+name = "an unreadable state reads as absent"
+file = "src/stayfixed/sync/state.py"
+before = '        raise StateUnreadable(f"{STATE_FILE} cannot be read ({fsops.said(exc)})") from None'
+after = "        return None"
+reddens = [
+  "tests/sync/test_state.py::test_a_state_that_is_not_text_or_not_a_file_is_unreadable",
+  "tests/sync/test_state.py::test_a_state_past_the_cap_is_unreadable",
+]
+
+[[mutation]]
+name = "a state naming an outcome the job lacks is accepted"
+file = "src/stayfixed/sync/state.py"
+before = "    if state.outcome.state not in OUTCOMES:"
+after = "    if False:"
+reddens = ["tests/sync/test_state.py::test_a_corrupt_state_is_unreadable_not_absent"]
+
+[[mutation]]
+name = "the state writer accepts an outcome the job lacks"
+file = "src/stayfixed/sync/state.py"
+before = "    if s.outcome.state not in OUTCOMES:"
+after = "    if False:"
+reddens = ["tests/sync/test_state.py::test_a_write_names_only_an_outcome_the_job_has"]
+
+# The job lock is the single-job guarantee. Waiting for its holder would stack a session's every
+# trigger behind a running job; a descriptor a git child inherited would keep it past the job's death.
+[[mutation]]
+name = "the job lock waits for its holder instead of reporting busy"
+file = "src/stayfixed/sync/state.py"
+before = "            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)"
+after = "            fcntl.flock(fd, fcntl.LOCK_EX)"
+reddens = [
+  "tests/sync/test_state.py::test_a_lock_held_elsewhere_is_busy_and_released_on_close",
+  "tests/sync/test_state.py::test_a_lock_dies_with_its_holder",
+]
+
+[[mutation]]
+name = "the job lock descriptor is inherited by its children"
+file = "src/stayfixed/sync/state.py"
+before = "        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)"
+after = "        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600); os.set_inheritable(fd, True)"
+reddens = ["tests/sync/test_state.py::test_a_child_of_a_killed_job_does_not_keep_the_lock"]
+
+# Pacing: the throttle and the back-off decide whether a trigger starts a job at all. A clock that
+# jumped back must not stall the sync for as long as the jump.
+[[mutation]]
+name = "the throttle holds a job two minutes old"
+file = "src/stayfixed/sync/state.py"
+before = "    return age is not None and age < timedelta(seconds=THROTTLE_SECONDS)"
+after = "    return age is not None and age <= timedelta(seconds=THROTTLE_SECONDS)"
+reddens = ["tests/sync/test_state.py::test_throttle_covers_the_interval_and_not_a_second_more"]
+
+[[mutation]]
+name = "a future last-job time still throttles"
+file = "src/stayfixed/sync/state.py"
+before = "    return age if age >= timedelta(0) else None"
+after = "    return age"
+reddens = [
+  "tests/sync/test_state.py::test_throttle_and_back_off_treat_a_future_time_as_long_past",
+]
+
+[[mutation]]
+name = "the back-off ignores a moved HEAD"
+file = "src/stayfixed/sync/state.py"
+before = "    if state.head is None or state.head != head:"
+after = "    if state.head is None:"
+reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_and_the_same_upstream"]
+
+[[mutation]]
+name = "the back-off ignores a moved upstream"
+file = "src/stayfixed/sync/state.py"
+before = "    if upstream is not None and upstream != state.fetched_sha:"
+after = "    if False:"
+reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_and_the_same_upstream"]
+
+[[mutation]]
+name = "the back-off ignores an absent hold"
+file = "src/stayfixed/sync/state.py"
+before = "    if not (state.holds.any or state.outcome.state in STANDING):"
+after = "    if False:"
+reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_and_the_same_upstream"]
+
+[[mutation]]
+name = "the back-off ignores a standing outcome"
+file = "src/stayfixed/sync/state.py"
+before = "    if not (state.holds.any or state.outcome.state in STANDING):"
+after = "    if not state.holds.any:"
+reddens = [
+  "tests/sync/test_state.py::test_back_off_holds_for_a_standing_outcome_on_the_same_notes",
+  "tests/sync/test_hooks.py::test_a_failure_only_the_owner_can_clear_backs_off_until_the_notes_change",
+]
+
+[[mutation]]
+name = "the back-off ignores changed notes"
+file = "src/stayfixed/sync/state.py"
+before = "    if dirty is not None and dirty != state.dirty:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_state.py::test_back_off_holds_for_a_standing_outcome_on_the_same_notes",
+  "tests/sync/test_hooks.py::test_a_failure_only_the_owner_can_clear_backs_off_until_the_notes_change",
+]
+
+[[mutation]]
+name = "a united index is not settled"
+file = "src/stayfixed/sync/state.py"
+before = 'SETTLED = ("ok", "skipped", "resolved_index")'
+after = 'SETTLED = ("ok", "skipped")'
+reddens = [
+  "tests/sync/test_hooks.py::test_a_standing_outcome_or_hold_starts_a_job",
+  "tests/sync/test_doctor.py::test_a_settled_last_outcome_is_ok_and_says_when[resolved_index]",
+]
+
+[[mutation]]
+name = "the back-off outlasts its window"
+file = "src/stayfixed/sync/state.py"
+before = "    return age is not None and age < timedelta(minutes=BACK_OFF_MINUTES)"
+after = "    return age is not None"
+reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_and_the_same_upstream"]
+
+# The sync's git layer and the rules of what may move: each entry breaks one rule, and the
+# tests named are the ones that watch it. A multi-line `before` is one exact substring.
+
+[[mutation]]
+name = "the memory pathspecs drop glob magic"
+file = "src/stayfixed/sync/rules.py"
+before = '    (f":(top,glob){glob}", directory) for directory, glob in _SCOPES'
+after = '    (f":(top){glob}", directory) for directory, glob in _SCOPES'
+reddens = [
+  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
+]
+
+[[mutation]]
+name = "a group's notes are not memory"
+file = "src/stayfixed/sync/rules.py"
+before = '''    (GROUPS, f"{GROUPS}/*/{STORE_DIR}/**"),
+'''
+after = ""
+reddens = [
+  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
+]
+
+[[mutation]]
+name = "the parse stops reading a group's notes as memory"
+file = "src/stayfixed/sync/rules.py"
+before = '_NAMED_TOPS = {"group": GROUPS, "project": PROJECTS}'
+after = '_NAMED_TOPS = {"project": PROJECTS}'
+reddens = [
+  "tests/sync/test_rules.py::test_the_layout_takes_a_path_apart",
+  "tests/sync/test_rules.py::test_a_range_of_notes_in_every_scope_is_memory_only",
+]
+
+[[mutation]]
+name = "a rename stops listing both of its sides"
+file = "src/stayfixed/sync/rules.py"
+before = '_RAW = ("--raw", "--numstat", "--no-abbrev", "-z", "--no-renames", "--no-color")'
+after = '_RAW = ("--raw", "--numstat", "--no-abbrev", "-z", "--no-color")'
+reddens = [
+  "tests/sync/test_rules.py::test_a_rename_into_memory_lists_its_source",
+]
+
+[[mutation]]
+name = "a commit that lists no path is memory-only"
+file = "src/stayfixed/sync/rules.py"
+before = "        if not entries:"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_rules.py::test_a_commit_that_lists_no_path_is_not_memory_only",
+  "tests/sync/test_rules.py::test_a_clean_merge_of_notes_is_still_not_memory_only",
+]
+
+[[mutation]]
+name = "the tree bound diffs nothing"
+file = "src/stayfixed/sync/rules.py"
+before = "    for path in offending_paths(repo, bound, tip, timeout=left(deadline, what), env=env):"
+after = "    for path in ():"
+reddens = [
+  "tests/sync/test_rules.py::test_the_tree_bound_catches_what_commits_hide",
+]
+
+[[mutation]]
+name = "a range with no common history is not measured from the empty tree"
+file = "src/stayfixed/sync/rules.py"
+before = "    if merge_base.code == 1 and not merge_base.timed_out:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_rules.py::test_a_range_with_no_common_history_is_measured_from_the_empty_tree",
+]
+
+[[mutation]]
+name = "the range check's budget is a hundred times what it was given"
+file = "src/stayfixed/sync/rules.py"
+before = '''    deadline = time.monotonic() + timeout
+    what = f"the range check of {base}..{tip}"'''
+after = '''    deadline = time.monotonic() + 100 * timeout
+    what = f"the range check of {base}..{tip}"'''
+reddens = [
+  "tests/sync/test_rules.py::test_the_range_check_keeps_to_its_whole_budget",
+]
+
+[[mutation]]
+name = "a component starting with a dot is judged a note"
+file = "src/stayfixed/sync/rules.py"
+before = '        plain = all(name and not name.startswith(".") for name in names)'
+after = "        plain = all(names)"
+reddens = [
+  "tests/sync/test_rules.py::test_a_dot_component_or_a_non_md_name_under_memory_is_not_memory_only",
+]
+
+[[mutation]]
+name = "a name not ending in .md is judged a note"
+file = "src/stayfixed/sync/rules.py"
+before = '        return plain and self.below[-1].endswith(".md")'
+after = "        return plain"
+reddens = [
+  "tests/sync/test_rules.py::test_a_dot_component_or_a_non_md_name_under_memory_is_not_memory_only",
+]
+
+[[mutation]]
+name = "the note rule stops reaching the group's or project's own name"
+file = "src/stayfixed/sync/rules.py"
+before = "        names = ((self.name,) if self.name is not None else ()) + self.below"
+after = "        names = self.below"
+reddens = [
+  "tests/sync/test_rules.py::test_a_project_or_group_name_that_is_not_a_plain_name_never_moves",
+  "tests/sync/test_rules.py::test_a_crafted_tree_with_such_a_name_is_not_memory_only",
+]
+
+[[mutation]]
+name = "a note git calls binary moves"
+file = "src/stayfixed/sync/rules.py"
+before = "    return entry.binary"
+after = "    return False"
+reddens = [
+  "tests/sync/test_rules.py::test_a_binary_note_is_not_memory_only_per_commit_and_by_the_bound",
+]
+
+[[mutation]]
+name = "a link under a memory name may move"
+file = "src/stayfixed/sync/rules.py"
+before = 'ALLOWED_MODES = frozenset({"100644", "000000"})'
+after = 'ALLOWED_MODES = frozenset({"100644", "000000", "120000"})'
+reddens = [
+  "tests/sync/test_rules.py::test_a_symlink_under_memory_is_not_memory_only",
+]
+
+[[mutation]]
+name = "an embedded repository under a memory name may move"
+file = "src/stayfixed/sync/rules.py"
+before = 'ALLOWED_MODES = frozenset({"100644", "000000"})'
+after = 'ALLOWED_MODES = frozenset({"100644", "000000", "160000"})'
+reddens = [
+  "tests/sync/test_rules.py::test_a_gitlink_under_memory_is_not_memory_only",
+]
+
+[[mutation]]
+name = "an executable under a memory name may move"
+file = "src/stayfixed/sync/rules.py"
+before = 'ALLOWED_MODES = frozenset({"100644", "000000"})'
+after = 'ALLOWED_MODES = frozenset({"100644", "000000", "100755"})'
+reddens = [
+  "tests/sync/test_rules.py::test_an_executable_note_is_not_memory_only",
+]
+
+[[mutation]]
+name = "a deletion mode is allowed to end any change"
+file = "src/stayfixed/sync/rules.py"
+before = '        return entry.status != "D"'
+after = "        return False"
+reddens = [
+  "tests/sync/test_rules.py::test_mode_000000_is_allowed_only_for_a_deletion",
+]
+
+[[mutation]]
+name = "a git older than 2.43 is accepted"
+file = "src/stayfixed/sync/git.py"
+before = "MIN_GIT = (2, 43)"
+after = "MIN_GIT = (2, 40)"
+reddens = [
+  "tests/sync/test_git.py::test_the_git_version_floor_is_2_43",
+  "tests/sync/test_git.py::test_the_guard_skips_a_git_older_than_2_43_with_the_reason",
+]
+
+[[mutation]]
+name = "the guard accepts unmerged paths"
+file = "src/stayfixed/sync/git.py"
+before = "    if unmerged.code != 0 or unmerged.out:"
+after = "    if unmerged.code != 0:"
+reddens = [
+  "tests/sync/test_git.py::test_the_guard_refuses_unmerged_paths_a_stash_pop_left_without_a_marker",
+]
+
+[[mutation]]
+name = "the guard accepts an operation in progress"
+file = "src/stayfixed/sync/git.py"
+before = "        if fsops.exists(repo / marker):"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_git.py::test_the_guard_refuses_a_merge_and_a_cherry_pick_on_main",
+  "tests/sync/test_git.py::test_the_guard_refuses_another_branch_a_detached_head_and_a_rebase",
+]
+
+[[mutation]]
+name = "the guard accepts any upstream"
+file = "src/stayfixed/sync/git.py"
+before = '    if (remote, merge) != ("origin", "refs/heads/main"):'
+after = "    if False:"
+reddens = [
+  "tests/sync/test_git.py::test_the_guard_refuses_main_not_tracking_origin_main",
+  "tests/sync/test_git.py::test_the_guard_refuses_main_tracking_another_upstream",
+]
+
+[[mutation]]
+name = "attributes come from the working tree again"
+file = "src/stayfixed/sync/git.py"
+before = '''        "GIT_ATTR_SOURCE": "HEAD",
+'''
+after = ""
+reddens = [
+  "tests/sync/test_git.py::test_job_env_pins_attributes_and_replace_refs_and_keeps_core_sshcommand",
+]
+
+[[mutation]]
+name = "a replace ref can disguise a commit again"
+file = "src/stayfixed/sync/git.py"
+before = '''        "GIT_NO_REPLACE_OBJECTS": "1",
+'''
+after = ""
+reddens = [
+  "tests/sync/test_git.py::test_job_env_pins_attributes_and_replace_refs_and_keeps_core_sshcommand",
+]
+
+[[mutation]]
+name = "a wrapper around ssh is given ssh's options"
+file = "src/stayfixed/sync/git.py"
+before = '        "GIT_SSH_COMMAND": command + (SSH_OPTIONS if _is_ssh(command) else ""),'
+after = '        "GIT_SSH_COMMAND": command + SSH_OPTIONS,'
+reddens = [
+  "tests/sync/test_git.py::test_job_env_leaves_a_wrapper_as_is",
+]
+
+[[mutation]]
+name = "a timed-out git call is read as an answer"
+file = "src/stayfixed/sync/git.py"
+before = "    if result.timed_out:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_git.py::test_a_checked_call_names_a_failure_and_a_timeout",
+  "tests/sync/test_git.py::test_job_env_and_the_guard_time_out_instead_of_answering",
+]
+
+[[mutation]]
+name = "a timeout ends the child and not its group"
+file = "src/stayfixed/sync/git.py"
+before = "        kill_group(process)"
+after = "        process.kill()"
+reddens = [
+  "tests/sync/test_git.py::test_the_runner_kills_the_group_of_a_child_that_outlives_its_timeout",
+]
+
+[[mutation]]
+name = "the child shares the caller's session"
+file = "src/stayfixed/sync/git.py"
+before = "            start_new_session=True,"
+after = "            start_new_session=False,"
+reddens = [
+  "tests/sync/test_git.py::test_the_runner_kills_the_group_of_a_child_that_outlives_its_timeout",
+]
+
+[[mutation]]
+name = "an inherited repository variable reaches the child"
+file = "src/stayfixed/sync/git.py"
+before = "        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)"
+after = "        if not key.startswith(unset_prefixes)"
+reddens = [
+  "tests/sync/test_git.py::test_git_ignores_inherited_repository_variables",
+  "tests/sync/test_git.py::test_the_runner_hands_on_the_environment_less_what_redirects_git",
+]
+
+[[mutation]]
+name = "the job keeps an inherited askpass"
+file = "src/stayfixed/sync/git.py"
+before = "        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)"
+after = "        if key not in REPOSITORY_VARIABLES and not key.startswith(unset_prefixes)"
+reddens = ["tests/sync/test_git.py::test_no_askpass_is_ever_asked_for_a_password"]
+
+[[mutation]]
+name = "the job keeps the owner's core.askPass"
+file = "src/stayfixed/sync/git.py"
+before = '    return with_config(env, {"core.askPass": ""})'
+after = "    return env"
+reddens = ["tests/sync/test_git.py::test_no_askpass_is_ever_asked_for_a_password"]
+
+[[mutation]]
+name = "a relative PATH entry reaches the overlay"
+file = "src/stayfixed/sync/git.py"
+before = '        entry for entry in full.get("PATH", "").split(os.pathsep) if os.path.isabs(entry)'
+after = '        entry for entry in full.get("PATH", "").split(os.pathsep)'
+reddens = [
+  "tests/sync/test_git.py::test_a_git_at_the_overlays_root_never_runs_from_a_relative_path_entry",
+]
+
+[[mutation]]
+name = "a variable the caller asked to drop reaches the child"
+file = "src/stayfixed/sync/git.py"
+before = "        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)"
+after = "        if key not in REPOSITORY_VARIABLES | ASKPASS"
+reddens = [
+  "tests/sync/test_git.py::test_the_runner_hands_on_the_environment_less_what_redirects_git",
+]
+
+[[mutation]]
+name = "the guard's budget is a hundred times what it was given"
+file = "src/stayfixed/sync/git.py"
+before = '''    deadline = time.monotonic() + timeout
+    version = ask('''
+after = '''    deadline = time.monotonic() + 100 * timeout
+    version = ask('''
+reddens = [
+  "tests/sync/test_git.py::test_the_helpers_of_one_step_share_its_whole_budget",
+]
+
+# The secret scan: each entry breaks one rule of the lookup or of a scan, and the tests named watch it.
+
+[[mutation]]
+name = "the scanner's pin is read from the working tree"
+file = "src/stayfixed/sync/scan.py"
+before = '        committed = blob(overlay, f"HEAD:{CONFIG}", DB_TIMEOUT, env)'
+after = "        committed = fsops.read_regular_bytes(overlay / CONFIG)"
+reddens = ["tests/sync/test_scan.py::test_the_pin_is_read_from_head_whatever_the_working_tree_says"]
+
+[[mutation]]
+name = "a row of another rev is the scanner"
+file = "src/stayfixed/sync/scan.py"
+before = 'row = db.execute("SELECT path FROM repos WHERE repo = ? AND ref = ?", (repo, rev))'
+after = 'row = db.execute("SELECT path FROM repos WHERE repo = ? AND ? = ?", (repo, rev, rev))'
+reddens = [
+  "tests/sync/test_scan.py::test_no_row_for_the_pinned_rev_is_no_scanner",
+  "tests/sync/test_scan.py::test_the_pinned_rev_row_is_the_one_chosen",
+]
+
+[[mutation]]
+name = "an explicit version has a substitute"
+file = "src/stayfixed/sync/scan.py"
+before = '    for name in [version] if version else ["default", "system"]:'
+after = '    for name in [version, "default", "system"] if version else ["default", "system"]:'
+reddens = [
+  "tests/sync/test_scan.py::test_an_explicit_version_has_no_substitute",
+]
+
+[[mutation]]
+name = "system is tried before default"
+file = "src/stayfixed/sync/scan.py"
+before = '    for name in [version] if version else ["default", "system"]:'
+after = '    for name in [version] if version else ["system", "default"]:'
+reddens = [
+  "tests/sync/test_scan.py::test_default_then_system",
+]
+
+[[mutation]]
+name = "a build linking out of its row is the scanner"
+file = "src/stayfixed/sync/scan.py"
+before = '''            and os.path.commonpath((os.path.realpath(binary), row_path)) == row_path
+'''
+after = ""
+reddens = [
+  "tests/sync/test_scan.py::test_a_build_linking_out_of_its_row_is_not_it",
+]
+
+[[mutation]]
+name = "a failed scan is a pass"
+file = "src/stayfixed/sync/scan.py"
+before = '        return CheckResult(False, detail, False, None), []'
+after = '        return CheckResult(True, detail, False, None), []'
+reddens = [
+  "tests/sync/test_scan.py::test_a_failed_scan_is_not_a_finding",
+]
+
+[[mutation]]
+name = "a timed-out scan is a failure like any other"
+file = "src/stayfixed/sync/scan.py"
+before = "    if result.timed_out:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_scan.py::test_a_scan_that_outlives_its_bound_is_timed_out",
+]
+
+[[mutation]]
+name = "the scan reads the rules from the working tree"
+file = "src/stayfixed/sync/scan.py"
+before = '    return ["--config", str(config), "--gitleaks-ignore-path", str(ignores)], None'
+after = '    return ["--gitleaks-ignore-path", str(ignores)], None'
+reddens = [
+  "tests/sync/test_scan.py::test_rules_and_ignores_come_from_head",
+]
+
+[[mutation]]
+name = "a GITLEAKS_ variable reaches the scan"
+file = "src/stayfixed/sync/scan.py"
+before = '            unset_prefixes=("GITLEAKS_",),'
+after = "            unset_prefixes=(),"
+reddens = [
+  "tests/sync/test_scan.py::test_gitleaks_variables_are_dropped",
+  "tests/sync/test_scan.py::test_rules_and_ignores_come_from_head",
+]
+
+[[mutation]]
+name = "gitleaks reads a log with signature lines"
+file = "src/stayfixed/sync/scan.py"
+before = "            env=with_config(env or {}, SCAN_CONFIG),"
+after = "            env=env,"
+reddens = [
+  "tests/sync/test_scan.py::test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour",
+]
+
+[[mutation]]
+name = "the scan's git colours its patch"
+file = "src/stayfixed/sync/scan.py"
+before = '    "color.ui": "false",'
+after = ""
+reddens = [
+  "tests/sync/test_scan.py::test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour",
+]
+
+[[mutation]]
+name = "the scan's git colours its diff"
+file = "src/stayfixed/sync/scan.py"
+before = '    "color.diff": "false",'
+after = ""
+reddens = [
+  "tests/sync/test_scan.py::test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour",
+]
+
+[[mutation]]
+name = "an uncommitted ignore list at the root does not stop a scan"
+file = "src/stayfixed/sync/scan.py"
+before = "        if present is not None and present != committed:"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_scan.py::test_an_uncommitted_gitleaksignore_at_the_root_stops_the_scan",
+]
+
+[[mutation]]
+name = "a scan's report is written in TMPDIR"
+file = "src/stayfixed/sync/scan.py"
+before = '    with tempfile.TemporaryDirectory(prefix="scan-", dir=scratch) as name:'
+after = '    with tempfile.TemporaryDirectory(prefix="scan-") as name:'
+reddens = [
+  "tests/sync/test_scan.py::test_the_report_is_written_under_the_scratch_directory_and_removed",
+]
+
+[[mutation]]
+name = "a metadata scan runs at the overlay's root"
+file = "src/stayfixed/sync/scan.py"
+before = "            cwd=repo if stdin is None else directory,"
+after = "            cwd=repo,"
+reddens = [
+  "tests/sync/test_scan.py::test_a_metadata_scan_reads_nothing_at_the_overlays_root",
+]
+
+[[mutation]]
+name = "the metadata scan reads nothing"
+file = "src/stayfixed/sync/scan.py"
+before = '    whole = "".join(text for _, text in commits).encode("utf-8", "surrogateescape")'
+after = '    whole = b""'
+reddens = [
+  "tests/sync/test_scan.py::test_the_metadata_scan_names_the_commit",
+]
+
+[[mutation]]
+name = "the metadata scan names no commit"
+file = "src/stayfixed/sync/scan.py"
+before = "        if found:"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_scan.py::test_the_metadata_scan_names_the_commit",
+]
+
+# The note sync's commit: built in a temporary index from `HEAD` with the memory pathspecs only,
+# `main` moved by compare-and-swap after the move is recorded, and the real index aligned after.
+[[mutation]]
+name = "the sync commit stages the whole tree"
+file = "src/stayfixed/sync/job.py"
+before = '            added = _git(ctx, "add", "-A", "--", spec, index_file=index)'
+after = '            added = _git(ctx, "add", "-A", index_file=index)'
+reddens = ["tests/sync/test_commit.py::test_non_notes_are_never_staged_so_nothing_is_refused"]
+
+[[mutation]]
+name = "the sync commit is built in the real index"
+file = "src/stayfixed/sync/job.py"
+before = '''        index = scratch / "index"
+        _ok(ctx, "read-tree", "--end-of-options", old, index_file=index)'''
+after = '''        index = ctx.overlay / ".git" / "index"
+        _ok(ctx, "read-tree", "--end-of-options", old, index_file=index)'''
+reddens = ["tests/sync/test_commit.py::test_staged_non_memory_stays_staged_and_out"]
+
+[[mutation]]
+name = "main moves without a compare-and-swap"
+file = "src/stayfixed/sync/job.py"
+before = '"refs/heads/main", new, old'
+after = '"refs/heads/main", new'
+reddens = ["tests/sync/test_commit.py::test_main_moved_before_update_ref_is_raced"]
+
+[[mutation]]
+name = "the swap compares against a HEAD read later"
+file = "src/stayfixed/sync/job.py"
+before = "    if _swap(ctx, pending.to_sha, pending.from_sha):"
+after = '    if _swap(ctx, pending.to_sha, _rev(ctx, "HEAD")):'
+reddens = ["tests/sync/test_commit.py::test_main_moved_before_update_ref_is_raced"]
+
+[[mutation]]
+name = "the pending alignment is not recorded before the swap"
+file = "src/stayfixed/sync/job.py"
+before = '''    _record_pending(ctx, pending)
+    ctx.pending = pending'''
+after = '''    ctx.pending = pending'''
+reddens = [
+  "tests/sync/test_commit.py::test_the_pending_alignment_is_on_disk_before_the_commit_swap",
+]
+
+[[mutation]]
+name = "the real index is not aligned after a move"
+file = "src/stayfixed/sync/job.py"
+before = "    stale = align(ctx, pending)"
+after = "    stale = None"
+reddens = [
+  "tests/sync/test_commit.py::test_the_real_indexs_memory_entries_are_aligned",
+  "tests/sync/test_commit.py::test_the_owners_commit_after_the_alignment_carries_no_memory_path",
+]
+
+[[mutation]]
+name = "a record whose move never happened is aligned"
+file = "src/stayfixed/sync/job.py"
+before = '    if pending is not None and not _is_ancestor(ctx, pending.to_sha, "HEAD"):'
+after = "    if False:"
+reddens = [
+  "tests/sync/test_commit.py::test_a_kill_before_the_commit_swap_leaves_the_owners_staging_alone",
+]
+
+[[mutation]]
+name = "the unmerged entries are not asked again before main moves"
+file = "src/stayfixed/sync/job.py"
+before = "    if found.code != 0 or found.out:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_commit.py::test_a_stash_pop_conflicting_while_the_job_runs_is_never_committed",
+  "tests/sync/test_commit.py::test_an_unmerged_note_from_a_stash_pop_is_never_committed",
+]
+
+[[mutation]]
+name = "the sync's commits are never signed"
+file = "src/stayfixed/sync/job.py"
+before = '    signed = ("-S",) if _signing(ctx) else ()'
+after = "    signed = ()"
+reddens = ["tests/sync/test_commit.py::test_signing_asked_for_is_honoured"]
+
+[[mutation]]
+name = "no scanner, and the commit goes on"
+file = "src/stayfixed/sync/job.py"
+before = '        return _outcome(ctx, "scan_unavailable", detail)'
+after = "        return None"
+reddens = [
+  "tests/sync/test_commit.py::test_no_scanner_commits_nothing_and_says_how_to_build_one",
+]
+
+[[mutation]]
+name = "a link at a pathspec's root fails the whole commit"
+file = "src/stayfixed/sync/job.py"
+before = '            link = unsafe_parent(ctx.overlay, f"{root}/-")'
+after = "            link = None"
+reddens = [
+  "tests/sync/test_commit.py::test_a_link_in_place_of_common_memory_is_named_and_the_projects_still_travel",
+]
+
+[[mutation]]
+name = "a link in place of a project directory deletes its notes"
+file = "src/stayfixed/sync/job.py"
+before = "        beyond = list(dict.fromkeys(link for link in deleted if link is not None))"
+after = "        beyond: list[str] = []"
+reddens = [
+  "tests/sync/test_commit.py::test_a_link_in_place_of_a_project_directory_deletes_nothing",
+]
+
+[[mutation]]
+name = "the temporary index keeps what is not a note"
+file = "src/stayfixed/sync/job.py"
+before = "        _reset_paths(ctx, index, old, refused)"
+after = "        _reset_paths(ctx, index, old, [])"
+reddens = [
+  "tests/sync/test_commit.py::test_link_and_nested_repository_under_memory_are_not_committed",
+  "tests/sync/test_commit.py::test_dot_paths_non_md_and_binary_under_memory_are_refused_and_named",
+]
+
+# The pre-render: a group note re-renders every recorded project, as a shared one does.
+[[mutation]]
+name = "a group note does not re-render the recorded projects"
+file = "src/stayfixed/sync/render.py"
+before = '    shared = any(entry.scope != "project" for entry in parsed)'
+after = '    shared = any(entry.scope == "common" for entry in parsed)'
+reddens = [
+  "tests/sync/test_render.py::test_a_dirty_common_or_group_note_renders_every_recorded_project[group]",
+]
+
+# The note sync's integration: the fetched sha read from the job's own ref after a checked fetch,
+# a range outside memory held, local commits replayed (never rebased), indexes united, and the
+# incoming notes written only where the working tree still has the old version.
+[[mutation]]
+name = "the integration rebases"
+file = "src/stayfixed/sync/job.py"
+before = "    tip, conflicted = replay(ctx, upstream, local) if local else (upstream, [])"
+after = '    tip, conflicted = (checked(_git(ctx, "rebase", "-q", upstream), "git rebase") and _rev(ctx, "HEAD"), []) if local else (upstream, [])'
+reddens = [
+  "tests/sync/test_integrate.py::test_a_local_memory_commit_is_replayed_onto_the_checked_sha",
+  "tests/sync/test_integrate.py::test_no_rebase_ever_runs",
+]
+
+[[mutation]]
+name = "a replay drops its commit's author"
+file = "src/stayfixed/sync/job.py"
+before = "    return env, message"
+after = "    return {}, message"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_replay_keeps_the_author_of_a_signed_commit_under_show_signature",
+  "tests/sync/test_integrate.py::test_a_local_memory_commit_is_replayed_onto_the_checked_sha",
+]
+
+[[mutation]]
+name = "the fetched sha is read from FETCH_HEAD"
+file = "src/stayfixed/sync/job.py"
+before = "    return _rev(ctx, FETCHED_REF), None"
+after = '    return _rev(ctx, "FETCH_HEAD"), None'
+reddens = ["tests/sync/test_integrate.py::test_the_fetched_sha_is_read_from_the_jobs_own_ref"]
+
+[[mutation]]
+name = "the fetch checks no object it receives"
+file = "src/stayfixed/sync/job.py"
+before = '        ctx, "-c", "fetch.fsckObjects=true", "fetch", "--no-tags", "--no-recurse-submodules",'
+after = '        ctx, "fetch", "--no-tags", "--no-recurse-submodules",'
+reddens = [
+  "tests/sync/test_integrate.py::test_a_tree_git_cannot_check_out_is_refused_at_the_fetch",
+]
+
+[[mutation]]
+name = "a local range outside memory is replayed"
+file = "src/stayfixed/sync/job.py"
+before = "    if not owned:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_an_owners_commit_outside_memory_keeps_its_sha_and_holds_the_sync",
+]
+
+[[mutation]]
+name = "an upstream rewrite is replayed"
+file = "src/stayfixed/sync/job.py"
+before = "    if dropped:"
+after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_a_purge_forced_elsewhere_does_not_come_back"]
+
+[[mutation]]
+name = "a rewrite hold lasts one job"
+file = "src/stayfixed/sync/job.py"
+before = "    had = set(ctx.holds.upstream_paths) if ctx.holds.upstream_why == REWRITTEN else set()"
+after = "    had: set[str] = set()"
+reddens = ["tests/sync/test_integrate.py::test_a_purge_forced_elsewhere_does_not_come_back"]
+
+[[mutation]]
+name = "the push records nothing of what upstream now has"
+file = "src/stayfixed/sync/job.py"
+before = "        ctx.fetched_sha = tip  # what upstream now has: the next job's rewrite check starts here"
+after = "        pass"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_purge_of_a_note_this_machine_pushed_does_not_come_back",
+]
+
+[[mutation]]
+name = "a range outside memory is integrated"
+file = "src/stayfixed/sync/job.py"
+before = "    if not memory_only:"
+after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_an_upstream_hook_change_is_held"]
+
+[[mutation]]
+name = "a tip git cannot read is integrated"
+file = "src/stayfixed/sync/job.py"
+before = '    if timed(readable, "git read-tree").code != 0:'
+after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_a_tree_git_cannot_check_out_is_held_not_moved_to"]
+
+[[mutation]]
+name = "the union drops the local-only bullets"
+file = "src/stayfixed/sync/job.py"
+before = "            extra.append(line)"
+after = "            pass"
+reddens = [
+  "tests/sync/test_integrate.py::test_the_union_keeps_upstream_and_adds_the_local_only_bullets",
+  "tests/sync/test_integrate.py::test_two_index_conflicts_are_resolved_by_union_and_re_rendered",
+]
+
+[[mutation]]
+name = "an incoming note dirty here does not wait"
+file = "src/stayfixed/sync/job.py"
+before = "    if blocked:"
+after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_a_dirty_incoming_note_is_waiting_clean_tree"]
+
+[[mutation]]
+name = "a dirty index waits like a note"
+file = "src/stayfixed/sync/job.py"
+before = "        if clashes == [path] and parsed is not None and parsed.is_index:"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_dirty_index_is_united_in_the_working_tree_never_blocking",
+]
+
+[[mutation]]
+name = "the union overwrites a line appended while it was built"
+file = "src/stayfixed/sync/job.py"
+before = "        if _read(full) != local:"
+after = "        if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_an_index_changed_while_the_union_is_built_is_left_for_the_next_job",
+]
+
+[[mutation]]
+name = "a pending write goes over the owner's edit"
+file = "src/stayfixed/sync/job.py"
+before = "            if not _worktree_has(ctx, path, before.get(path)):"
+after = "            if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_the_owners_edit_after_the_kill_wins_over_the_pending_write",
+]
+
+# The push: it sends the sha its checks read and never a name that may have moved since, never
+# forced, and only after both scans of what it sends; the scan's report, not its exit, decides
+# whether the range holds a secret.
+[[mutation]]
+name = "the push sends main instead of the checked sha"
+file = "src/stayfixed/sync/job.py"
+before = '''        ctx, "push", "--porcelain", "--no-follow-tags", "origin", f"{tip}:refs/heads/main",'''
+after = '''        ctx, "push", "--porcelain", "--no-follow-tags", "origin", "HEAD:refs/heads/main",'''
+reddens = [
+  "tests/sync/test_push.py::test_the_memory_only_range_is_pushed_as_the_checked_sha",
+  "tests/sync/test_push.py::test_the_push_is_never_forced_and_carries_no_tags",
+]
+
+[[mutation]]
+name = "the push is forced"
+file = "src/stayfixed/sync/job.py"
+before = '''        ctx, "push", "--porcelain", "--no-follow-tags", "origin", f"{tip}:refs/heads/main",'''
+after = '''        ctx, "push", "--force", "--porcelain", "--no-follow-tags", "origin", f"{tip}:refs/heads/main",'''
+reddens = [
+  "tests/sync/test_push.py::test_the_push_is_never_forced_and_carries_no_tags",
+  "tests/sync/test_push.py::test_a_rejected_push_is_retried_on_the_next_trigger",
+]
+
+[[mutation]]
+name = "a local range outside memory is pushed"
+file = "src/stayfixed/sync/job.py"
+before = "    if not pushable:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_push.py::test_a_local_commit_outside_memory_is_held_and_named",
+  "tests/sync/test_push.py::test_a_replace_ref_cannot_disguise_a_commit",
+]
+
+[[mutation]]
+name = "the push goes out unscanned"
+file = "src/stayfixed/sync/job.py"
+before = "    failed = _scan_push(ctx, upstream, tip)"
+after = "    failed = None"
+reddens = [
+  "tests/sync/test_push.py::test_a_secret_in_the_range_is_secret_found_with_its_sha",
+  "tests/sync/test_push.py::test_a_failed_range_scan_is_hook_failed_not_secret_found",
+]
+
+[[mutation]]
+name = "a failed push scan is taken for a finding"
+file = "src/stayfixed/sync/job.py"
+before = "    if result.finding_commit:"
+after = "    if True:"
+reddens = ["tests/sync/test_push.py::test_a_failed_range_scan_is_hook_failed_not_secret_found"]
+
+[[mutation]]
+name = "a failed push scan lets the push go"
+file = "src/stayfixed/sync/job.py"
+before = '''    return _outcome(ctx, "hook_failed", f"gitleaks: {result.detail}")'''
+after = "    return None"
+reddens = ["tests/sync/test_push.py::test_a_failed_range_scan_is_hook_failed_not_secret_found"]
+
+[[mutation]]
+name = "the push scans no commit's metadata"
+file = "src/stayfixed/sync/job.py"
+before = "            blocks = _metadata(ctx, upstream, tip)"
+after = "            blocks = []"
+reddens = ["tests/sync/test_push.py::test_a_secret_outside_any_patch_is_never_pushed"]
+
+[[mutation]]
+name = "the push's metadata scan reads no commit object"
+file = "src/stayfixed/sync/job.py"
+before = '''        (sha, "\n".join([_ok(ctx, "cat-file", "commit", "--end-of-options", sha).rstrip("\n"),'''
+after = '''        (sha, "\n".join(["",'''
+reddens = ["tests/sync/test_push.py::test_a_secret_outside_any_patch_is_never_pushed"]
+
+# The job's end: a stop is the end whatever was noted; without one the latest notice is.
+[[mutation]]
+name = "a notice outranks the step that stopped the job"
+file = "src/stayfixed/sync/job.py"
+before = "    for each in ([stopped] if stopped is not None else []) + notices[::-1]:"
+after = "    for each in notices[::-1] + ([stopped] if stopped is not None else []):"
+reddens = [
+  "tests/sync/test_push.py::test_a_stop_is_the_end_whatever_was_noted_and_each_is_said_once",
+  "tests/sync/test_push.py::test_a_failed_commit_scan_then_offline_is_offline_naming_both",
+]
+
+[[mutation]]
+name = "the earliest notice is the job's end"
+file = "src/stayfixed/sync/job.py"
+before = "    for each in ([stopped] if stopped is not None else []) + notices[::-1]:"
+after = "    for each in ([stopped] if stopped is not None else []) + notices:"
+reddens = [
+  "tests/sync/test_push.py::test_without_a_stop_the_end_is_the_latest_notice_refusals_counting_first",
+]
+
+[[mutation]]
+name = "a state recorded for another overlay is used"
+file = "src/stayfixed/sync/job.py"
+before = "    if previous is not None and previous.overlay != str(ctx.overlay):"
+after = "    if False:"
+reddens = ["tests/sync/test_run.py::test_a_state_for_another_overlay_is_not_used"]
+
+# The loop and the sleeper: a trigger that arrived while the job ran runs it again, and one
+# sleeper waits at a time.
+[[mutation]]
+name = "a trigger pending after a round runs no second round"
+file = "src/stayfixed/sync/job.py"
+before = "        elif not take_pending(ctx.state_dir):"
+after = "        elif True:"
+reddens = [
+  "tests/sync/test_run.py::test_a_trigger_during_the_release_runs_a_second_round",
+  "tests/sync/test_run.py::test_busy_lock_marks_pending_and_the_job_loops",
+]
+
+[[mutation]]
+name = "every sleeper takes a lock of its own"
+file = "src/stayfixed/sync/job.py"
+before = "            sleeper = Lock.try_acquire(state_dir / SLEEPER_LOCK_FILE)"
+after = '''            sleeper = Lock.try_acquire(state_dir / f"{SLEEPER_LOCK_FILE}.{os.getpid()}")'''
+reddens = ["tests/sync/test_run.py::test_a_sleeper_waits_then_runs_and_a_second_sleeper_exits"]
+
+# The detached start: isolated, so the overlay it runs in is not on its path, and attached to
+# nothing of the hook that started it.
+[[mutation]]
+name = "the job runs with the overlay on its path"
+file = "src/stayfixed/sync/job.py"
+before = '''    return [sys.executable, "-I", "-c", BOOT, package_parent, *sleep]'''
+after = '''    return [sys.executable, "-c", BOOT, package_parent, *sleep]'''
+reddens = ["tests/sync/test_run.py::test_the_job_imports_nothing_from_the_overlay"]
+
+[[mutation]]
+name = "the job shares the session of what started it"
+file = "src/stayfixed/sync/job.py"
+before = "        start_new_session=True,"
+after = "        start_new_session=False,"
+reddens = ["tests/sync/test_run.py::test_the_job_is_spawned_detached_with_nothing_inherited"]
+
+[[mutation]]
+name = "the job writes to the output its starter reads"
+file = "src/stayfixed/sync/job.py"
+before = "        stdout=subprocess.DEVNULL,"
+after = "        stdout=None,"
+reddens = ["tests/sync/test_run.py::test_the_job_is_spawned_detached_with_nothing_inherited"]
+
+[[mutation]]
+name = "the job inherits its starter's descriptors"
+file = "src/stayfixed/sync/job.py"
+before = "        close_fds=True,"
+after = "        close_fds=False,"
+reddens = ["tests/sync/test_run.py::test_the_job_is_spawned_detached_with_nothing_inherited"]
+
+[[mutation]]
+name = "the job runs where its starter happened to be"
+file = "src/stayfixed/sync/job.py"
+before = "        cwd=overlay,"
+after = "        cwd=None,"
+reddens = ["tests/sync/test_run.py::test_the_job_is_spawned_detached_with_nothing_inherited"]
+
+# The note sync's triggers: each one starts a job, an unchanged hold backs a turn off until
+# something moves, a trigger inside the throttle is scheduled and never dropped, `SessionEnd` is
+# never throttled, and a compaction starts nothing. With the sync off the handler decides nothing.
+[[mutation]]
+name = "a dirty note starts no job"
+file = "src/stayfixed/sync/trigger.py"
+before = "    news = tree is not None and (tree.ahead > 0 or bool(tree.paths))"
+after = "    news = tree is not None and tree.ahead > 0"
+reddens = ["tests/sync/test_hooks.py::test_a_dirty_or_untracked_note_starts_a_job"]
+
+[[mutation]]
+name = "commits ahead of the upstream start no job"
+file = "src/stayfixed/sync/trigger.py"
+before = "    news = tree is not None and (tree.ahead > 0 or bool(tree.paths))"
+after = "    news = tree is not None and bool(tree.paths)"
+reddens = ["tests/sync/test_hooks.py::test_commits_ahead_of_the_upstream_start_a_job"]
+
+[[mutation]]
+name = "a standing outcome or hold starts no job"
+file = "src/stayfixed/sync/trigger.py"
+before = "    return news or state.outcome.state not in SETTLED or state.holds.any"
+after = "    return news"
+reddens = ["tests/sync/test_hooks.py::test_a_standing_outcome_or_hold_starts_a_job"]
+
+[[mutation]]
+name = "a session start waits for a trigger like a turn"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if event == "SessionStart":'
+after = "    if False:"
+reddens = ["tests/sync/test_hooks.py::test_every_other_session_start_runs"]
+
+[[mutation]]
+name = "a compaction starts a job"
+file = "src/stayfixed/sync/trigger.py"
+before = '        if source == "compact":'
+after = "        if False:"
+reddens = ["tests/sync/test_hooks.py::test_a_compaction_starts_nothing"]
+
+[[mutation]]
+name = "an unchanged hold never backs a turn off"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if (event != "SessionEnd" or state.holds.any) and _backed_off(overlay, state, tree, now):'
+after = "    if False:"
+reddens = [
+  "tests/sync/test_hooks.py::test_an_unchanged_hold_backs_off_until_something_moves",
+  "tests/sync/test_hooks.py::test_an_unchanged_local_hold_with_unpushed_commits_backs_off",
+]
+
+[[mutation]]
+name = "the back-off ignores a moved upstream ref"
+file = "src/stayfixed/sync/trigger.py"
+before = "    return backed_off(state, tree.head, now, dirty=dirty, upstream=_upstream(overlay))"
+after = "    return backed_off(state, tree.head, now, dirty=dirty)"
+reddens = [
+  "tests/sync/test_hooks.py::test_the_back_off_ends_when_the_upstream_ref_moves",
+  "tests/sync/test_hooks.py::test_an_unchanged_hold_backs_off_until_something_moves",
+]
+
+[[mutation]]
+name = "the trigger reads origin/main on every turn"
+file = "src/stayfixed/sync/trigger.py"
+before = "    if tree is None or tree.head is None or not backed_off(state, tree.head, now):"
+after = "    if tree is None or tree.head is None or not _upstream(overlay) or not backed_off(state, tree.head, now):"
+reddens = ["tests/sync/test_hooks.py::test_the_trigger_check_is_one_git_status"]
+
+[[mutation]]
+name = "a session end is throttled"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if event == "SessionEnd":'
+after = "    if False:"
+reddens = ["tests/sync/test_hooks.py::test_session_end_is_never_throttled"]
+
+[[mutation]]
+name = "a trigger inside the throttle is dropped"
+file = "src/stayfixed/sync/trigger.py"
+before = '        return "schedule", parse_time(last) + throttle'
+after = '        return "none", None'
+reddens = ["tests/sync/test_hooks.py::test_a_trigger_inside_the_throttle_is_scheduled"]
+
+[[mutation]]
+name = "a trigger while a job runs is dropped"
+file = "src/stayfixed/sync/trigger.py"
+before = "        return \"pending\", None  # the running job's next round takes it"
+after = '        return "none", None'
+reddens = ["tests/sync/test_hooks.py::test_a_trigger_during_a_job_only_marks_it_pending"]
+
+[[mutation]]
+name = "the trigger asks an overlay that is not a repository"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if not fsops.exists(overlay / ".git"):'
+after = "    if False:"
+reddens = ["tests/sync/test_hooks.py::test_no_overlay_or_not_a_repository_spawns_nothing"]
+
+[[mutation]]
+name = "a session start records no checkout"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if event.name == "SessionStart" and event.project_root is not None:'
+after = "    if False:"
+reddens = ["tests/sync/test_hooks.py::test_session_start_records_the_checkout_when_sync_is_on"]
+
+[[mutation]]
+name = "sync off still decides"
+file = "src/stayfixed/sync/hooks.py"
+before = "        if enabled():"
+after = "        if True:"
+reddens = [
+  "tests/sync/test_hooks.py::test_with_sync_off_stop_runs_no_git_and_spawns_nothing",
+  "tests/sync/test_hooks.py::test_session_start_records_the_checkout_when_sync_is_on",
+]
+
+# The `sync` row of `doctor`: a machine that switched the sync on expects its notes to move, and
+# the job commits and pushes nothing without a scanner build or on a git below its floor. A row
+# green over either says the sync works when it does nothing.
+[[mutation]]
+name = "doctor calls a missing scanner green"
+file = "src/stayfixed/sync/doctor.py"
+before = "    if scan.gitleaks_binary(Path.home(), overlay, context.env) is None:"
+after = "    if False:"
+reddens = ["tests/sync/test_doctor.py::test_no_scanner_build_is_a_warning_with_the_remedy_the_job_gives"]
+
+[[mutation]]
+name = "doctor puts any recorded sha into a command"
+file = "src/stayfixed/sync/doctor.py"
+before = "            if full_sha(fetched)"
+after = "            if fetched"
+reddens = [
+  "tests/sync/test_doctor.py::test_a_recorded_sha_reaches_a_command_only_when_it_is_one[x; touch owned]",
+]
+
+[[mutation]]
+name = "doctor calls every upstream hold outside memory"
+file = "src/stayfixed/sync/doctor.py"
+before = "        what, review = held[holds.upstream_why or OUTSIDE]"
+after = "        what, review = held[OUTSIDE]"
+reddens = [
+  "tests/sync/test_doctor.py::test_an_unreadable_upstream_tree_is_named_as_such_with_the_jobs_remedy",
+  "tests/sync/test_doctor.py::test_a_rewritten_upstream_names_the_commits_it_dropped",
+]
+
+[[mutation]]
+name = "doctor calls an old git green"
+file = "src/stayfixed/sync/doctor.py"
+before = "    if version.code != 0 or not version_ok(version.out):"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_doctor.py::test_git_below_the_floor_is_a_warning_that_says_the_job_does_nothing",
+]
+
+# A state recorded for another overlay is not this overlay's: the job starts afresh on it, so a hold
+# or a failure recorded for the old path must not warn about the new one.
+[[mutation]]
+name = "doctor reads a state recorded for another overlay"
+file = "src/stayfixed/sync/doctor.py"
+before = "    if state is None or state.overlay != str(overlay):"
+after = "    if state is None:"
+reddens = ["tests/sync/test_doctor.py::test_a_state_recorded_for_another_overlay_reads_as_never_run"]
+
+[[mutation]]
+name = "the fetch records upstream before the rewrite check"
+file = "src/stayfixed/sync/job.py"
+before = "    return _rev(ctx, FETCHED_REF), None"
+after = "    ctx.fetched_sha = _rev(ctx, FETCHED_REF)\n    return ctx.fetched_sha, None"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_job_stopped_before_the_rewrite_check_still_sees_the_purge",
+  "tests/sync/test_integrate.py::test_the_fetch_leaves_the_record_to_the_rewrite_check",
+]
+
+[[mutation]]
+name = "session end waits out a standing failure"
+file = "src/stayfixed/sync/trigger.py"
+before = '    if (event != "SessionEnd" or state.holds.any) and _backed_off(overlay, state, tree, now):'
+after = "    if _backed_off(overlay, state, tree, now):"
+reddens = ["tests/sync/test_hooks.py::test_session_end_never_waits_out_a_standing_failure"]
+
+# The overlay's group directory is named `groups`: `sync`'s pathspecs are derived from the name.
+[[mutation]]
+name = "a group's directory is not named groups"
+file = "src/stayfixed/config/plates.py"
+before = 'GROUPS = "groups"'
+after = 'GROUPS = "group"'
+reddens = [
+  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
 ]

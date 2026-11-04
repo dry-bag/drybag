@@ -159,12 +159,14 @@ exception kept for a reason outside the code ("Tests" gives it): it groups their
 into files, and a new area needs no row there: its entries go in the group its path falls into.
 
 Today the discovered ones are `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`,
-`ledger`, `memory`, `overlay`, `project`, `prove` and `setup`, and every module under
+`ledger`, `memory`, `overlay`, `project`, `prove`, `setup` and `sync`, and every module under
 `src/stayfixed/` sits on one of three sides, which `src/stayfixed/areas.py` names. **Delivery**
 (`DELIVERY_AREAS`) is the private layer, a machine's setup and the session hints:
 `overlay` renders and upgrades the private overlay; `attach` binds a repository to one, and its
 `detach` takes back what `attach` wrote while the overlay keeps its record of the binding; `memory`
-keeps the notes; `setup` a machine's configuration; and `hints` the session hints
+keeps the notes; `setup` a machine's configuration; `sync` the unattended commit, fetch and push
+of the overlay's memory notes (the session triggers, a detached job and its `doctor` row), switched
+on per machine; and `hints` the session hints
 (the background-cleanup hint, the red-run note and the command scanner they share). The **pack**
 (`PACK_PACKAGES`) is the methodology's records and checks: `ledger` keeps the bug ledger, `docs`
 the documentation and plan lints, `guards` the commit-message rules and the test-run checks, and

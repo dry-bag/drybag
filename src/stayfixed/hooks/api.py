@@ -65,11 +65,12 @@ __all__ = [
 ]
 
 
-# The six events the dispatcher carries. An area that needs a seventh adds it here deliberately;
+# The eight events the dispatcher carries. An area that needs a ninth adds it here deliberately;
 # `registry.discover` refuses anything else, so a handler registered for "PreToolUSe" is a
 # loud failure at discovery rather than a guard that never fires and tests that never notice.
 # `PostToolUseFailure` is where Claude Code delivers a tool call that failed, a Bash command that
-# exited non-zero among them, and never on `PostToolUse`.
+# exited non-zero among them, and never on `PostToolUse`. `Stop` ends each turn and `SessionEnd`
+# the session; the note sync starts its job from both.
 EVENTS = (
     "SessionStart",
     "UserPromptSubmit",
@@ -77,6 +78,8 @@ EVENTS = (
     "PreToolUse",
     "PostToolUse",
     "PostToolUseFailure",
+    "Stop",
+    "SessionEnd",
 )
 
 

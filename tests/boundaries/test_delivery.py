@@ -618,6 +618,7 @@ STANDARD_IMPORTS = frozenset(
         "datetime",
         "enum",
         "errno",
+        "fcntl",
         "functools",
         "hashlib",
         "io",
@@ -637,6 +638,9 @@ STANDARD_IMPORTS = frozenset(
         "shlex",
         "shutil",
         "signal",
+        # `sync` reads pre-commit's database, a SQLite file, read-only; `sqlite3` imports no module
+        # by a name.
+        "sqlite3",
         "stat",
         "string",
         "struct",

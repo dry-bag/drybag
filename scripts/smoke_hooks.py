@@ -33,14 +33,14 @@ VOLATILE_NOTE = "SMOKE-VOLATILE-NOTE"
 # own bounds on `git` (`stayfixed.gitenv.FLOOR_VARIABLE`, which can only raise them). Spelled out
 # rather than imported, because this script runs without `stayfixed` importable.
 FLOOR_VARIABLE = "STAYFIXED_GIT_FLOOR_SECONDS"
-# Counted against the shipped `hooks/hooks.json` and this fixture: ten entries, eleven rows
+# Counted against the shipped `hooks/hooks.json` and this fixture: twelve entries, thirteen rows
 # (`PreToolUse` carries two samples), unchanged by the overlay's delivery, since its rules reach a
 # session through `hook SessionStart` and its path-scoped ones through the rendered plugin, neither
 # an entry of `hooks/hooks.json`. Both are asserted because a run that executes fewer rows
 # prints an identically green summary — the shape `unsampled` and `unentered` close for events
 # and nothing closed for rows.
-EXPECTED_ENTRIES = 10
-EXPECTED_ROWS = 11
+EXPECTED_ENTRIES = 12
+EXPECTED_ROWS = 13
 # What the red-run note opens with, `stayfixed.hints.hygiene.LEAD`, spelled out for the reason
 # `FLOOR_VARIABLE` is. The note is all a `PostToolUseFailure` entry is for, so its row asks for it
 # by its words and not only for an envelope naming the event, which an entry whose handler said
@@ -113,6 +113,11 @@ SAMPLES: dict[str, tuple[Sample, ...]] = {
             context_says=(RED_RUN_NOTE,),
         ),
     ),
+    # The note sync's triggers. The scratch `HOME` has no machine file, so the sync is off: the
+    # handler reads that and says nothing, and the envelope carries no `decision` that would keep
+    # a turn from ending.
+    "Stop": (Sample({"stop_hook_active": False}, 0, "a turn ends", stderr_never=(FAULT,)),),
+    "SessionEnd": (Sample({"reason": "other"}, 0, "a session ends", stderr_never=(FAULT,)),),
 }
 
 # What each `memory session-context` entry must have put in front of the model, by the part of

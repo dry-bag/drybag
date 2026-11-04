@@ -43,6 +43,7 @@ DELIVERY_AREAS: frozenset[str] = frozenset(
         "memory",
         "overlay",
         "setup",
+        "sync",
     }
 )
 PACK_PACKAGES: frozenset[str] = frozenset(

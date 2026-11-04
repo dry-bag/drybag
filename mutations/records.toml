@@ -3105,3 +3105,14 @@ after = "_bundles(context, config, answers)),"
 reddens = [
   "tests/memory/test_doctor.py::test_the_note_store_rows_read_a_bound_checkouts_configuration",
 ]
+
+# The note sync's in-process render is `memory index`'s own: it writes the lines a session
+# appended into their notes before it renders.
+[[mutation]]
+name = "the sync's render harvests no appended line"
+file = "src/stayfixed/memory/index.py"
+before = "            reconciled = reconcile(store, config, write=True)"
+after = "            reconciled = reconcile(store, config, write=False)"
+reddens = [
+  "tests/memory/test_index.py::test_rerender_writes_the_overlays_index_from_a_bound_checkout",
+]

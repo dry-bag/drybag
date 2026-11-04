@@ -43,6 +43,7 @@ Three things hold everywhere:
 - [`stayfixed memory promote NOTE… | --changed`](#stayfixed-memory-promote-note----changed)
 - [`stayfixed hook <event>`](#stayfixed-hook-event)
 - [Hooks](#hooks)
+- [Note sync](#note-sync)
 - [`stayfixed commit check --range RANGE`](#stayfixed-commit-check---range-range)
 - [`stayfixed commit strip FILE`](#stayfixed-commit-strip-file)
 - [`stayfixed test attribute --command CMD [--base REF]`](#stayfixed-test-attribute---command-cmd---base-ref)
@@ -382,7 +383,9 @@ writes one empty file per session and file it said a rule for, under
 with no session id, and nothing removes them. And `unreviewed-notes`, which on `SessionStart` says
 "N notes are unreviewed" when the set of the store's unreviewed notes differs from the one last
 said, writes one file per store under `$HOME/.local/share/stayfixed/unreviewed/`, named by a hash
-of the store's path and holding a digest of that set; nothing removes them. No handler links a memory store into a worktree:
+of the store's path and holding a digest of that set; nothing removes them. And the note sync's three handlers, on a machine whose machine file switches
+the sync on and nowhere else, write `checkouts.json` and `pending` under `$HOME/.local/share/stayfixed/sync/` and start the
+job that writes the rest ([Note sync](#note-sync) names every path). No handler links a memory store into a worktree:
 the harness reads the composed store from every worktree through the main checkout's
 `autoMemoryDirectory` (`stayfixed attach`).
 
@@ -395,12 +398,16 @@ The two harnesses do not run `stayfixed` directly. Every entry in `hooks/hooks.j
 run-hook.sh <stayfixed args…>
 ```
 
-`hooks/hooks.json` files its entries under four events: `SessionStart`, `PreToolUse`,
-`PostToolUse` and `PostToolUseFailure`, each tool event matched on `Bash`. The last is where Claude
-Code delivers a `Bash` call that exited non-zero, and it carries the red-run note
-(below); Codex reads the same file and ignores that key (measured on
-Codex CLI 0.162.0-alpha.17.2). `stayfixed hook` dispatches six events, those four and
-`UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses.
+`hooks/hooks.json` files its entries under six events: `SessionStart`, `PreToolUse`,
+`PostToolUse`, `PostToolUseFailure`, `Stop` and `SessionEnd`, each tool event matched on `Bash`.
+`PostToolUseFailure` is where Claude Code delivers a `Bash` call that exited non-zero, and it
+carries the red-run note (below); Codex reads the same file and ignores that key (measured on
+Codex CLI 0.162.0-alpha.17.2). `Stop` and `SessionEnd` carry the note sync's handlers
+([Note sync](#note-sync)) and print nothing that blocks: each answers
+`{"hookSpecificOutput": {"hookEventName": …}}` with no `decision`, which on `Stop` would keep the
+turn from ending. An event Codex delivers from that file runs the same handlers behind the same
+per-machine switch, and that has not been measured on Codex. `stayfixed hook` dispatches eight
+events, those six and `UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses.
 
 **The red-run note.** The environment faults that make a red test run unattributable:
 uncommitted changes in the tree, which belong to no stack, and whatever each stack's profile knows about its own — for
@@ -529,6 +536,138 @@ executes anything from: it carries no plugin manifest and no
 `hooks/hooks.json`, and hook entries the owner keeps in the `claude/hooks.json` of *common/*, of a tag and of
 `projects/<name>/` reach a session only through the plugin `attach` renders from
 them, named by this machine's binding id.
+
+## Note sync
+
+A machine whose machine file says `[sync] enabled = true` commits the overlay's notes, takes in the
+other machines' and pushes its own, unattended, from Claude Code's session hooks; a machine whose
+file does not say so runs nothing. The sync has no command and no `stayfixed.toml` key.
+
+**The switch.** `[sync] enabled = true` in [the machine file](#configuration), the bool `true` and
+nothing else: a string, a number, a table that is not one or a file that does not load reads as
+off. `[sync]` is machine-only, so a repository's `stayfixed.toml` that holds it is refused and
+switches nothing. `stayfixed setup --overlay` writes it for an overlay it renders or creates and
+leaves it alone for one it records; turn it off by changing it to `false` or removing it. Off, the
+three handlers read the machine file and return: no `git` call and no process, on every turn of every
+session. `doctor`'s `sync` row says which it is.
+
+**The triggers.** One handler on each of `SessionStart` (not after a compaction, which is the same
+session going on), `Stop` and `SessionEnd`, named `note-sync-start`, `note-sync-stop` and
+`note-sync-end`. `SessionStart` records the session's project root in `checkouts.json` (at most 64,
+newest first), because an index renders only from a checkout bound to its project, and always
+starts a job, to fetch. `Stop` and `SessionEnd` ask one `git status` of the overlay's memory paths
+and start a job only when a memory path is changed or untracked, when commits wait to be pushed,
+when the last outcome is not `ok`, `skipped` or `resolved_index`, or when a hold stands. While a
+hold stands, or a failure a rerun usually meets again (`conflict`, `auth_failed`, `hook_failed`,
+`scan_unavailable`, `signing_failed`, `secret_found`, `waiting_clean_tree`), and neither `HEAD`,
+the fetched `origin/main` nor the dirty notes, by name and content, changed since the last job,
+`Stop` waits 15 minutes from the last job: the same job would meet the same end. `SessionEnd`
+waits only under a hold, since a `hook_failed` can also be a step a rerun clears and no later turn
+of the session would retry it.
+A trigger within 120 seconds of the last job is marked pending and a sleeper waits out the
+throttle (a second sleeper exits at once, so a burst of turns is one run); one while a job runs is
+only marked pending, and that job runs again, at most twice, for the triggers that arrived while
+it ran. `SessionEnd` is
+never throttled, since no later turn would pick it up; how long a `SessionEnd` hook may run is the
+harness's to set, whatever `timeout` its entry asks for.
+
+The job is a detached process in its own session, its standard streams on `/dev/null`, started
+as `python -I -c BOOT <package directory> [--sleep-until ISO]` from the overlay. `-I` keeps the
+overlay's root, `PYTHONPATH` and the user site off `sys.path`, so a `json.py` or a `stayfixed/` the
+overlay holds is never imported. It reads the switch and the overlay root from the machine file itself, and a sleeper reads
+the switch again when it wakes. It exits `0` whatever happens and records the outcome.
+
+**The job, in order.** Each step is bounded in time, and the whole job in 180 seconds.
+
+1. **Guard.** `git` 2.43 or newer, a repository, no merge, rebase, cherry-pick or revert in
+   progress, no unmerged paths, `HEAD` on `main`, and `main` tracking `origin/main`. Anything else
+   is the outcome `skipped`, with the reason, and nothing changes. Work in progress outside memory
+   is no reason: the job never touches it.
+2. **Align.** A job killed after moving `main` and before aligning the real index left that owed, and
+   the next job does it first.
+3. **Pre-render.** The memory indexes render in process, as `stayfixed memory index` renders them,
+   from the checkouts the sessions recorded that are still bound into this overlay: those whose project's notes
+   changed, and every one when a common or a group note changed. A project with no such checkout
+   keeps its `MEMORY.md` out of the commit and the detail names it; its notes still travel.
+4. **Commit.** Every changed memory path goes into one commit built in a temporary index read from
+   `HEAD`, after the secret scan of what it stages, and `main` moves to it by a compare-and-swap. Then
+   the real index's memory entries are reset to `HEAD`, or the next `git commit` of yours would carry
+   the old notes back. A signature is made when `commit.gpgsign` is set, and never switched off.
+5. **Fetch.** `git fetch origin main` into `refs/stayfixed/fetched`, with `fetch.fsckObjects`.
+6. **Integrate.** When everything `HEAD..` the fetched sha brings is memory, and every local commit
+   is a plain commit of memory alone, the local commits are replayed onto it one by one and `main`
+   moves to the result; an index that conflicts, or that is changed on both sides, is united line
+   by line and rendered again. Anything else is a hold, and `HEAD` stays as it is.
+7. **Push.** The checked sha, `<sha>:refs/heads/main`, never forced and with no tag, after the
+   secret scan of the range and only when every commit in it is memory.
+
+**What moves.** Three globs only: `common/memory/**`, `groups/*/memory/**` and
+`projects/*/memory/**`. A path moves as a regular, non-executable `.md` file with no dot component
+from the scope's name down, and only as text; a link, an executable, a dot-file, a file that is not
+Markdown, a nested repository or a file git calls binary is left out of the commit and named. A path outside those globs is
+never committed, integrated, written or pushed. Nothing configures the list.
+
+**What it never does.** Force-push, stash, rebase, pull, push a tag, rebuild a commit of yours that
+is not memory alone, write a non-memory path of the working tree or of the real index, run a script
+from the overlay's working tree, or ask for a password (`GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS` and
+`SSH_ASKPASS` dropped, `core.askPass` empty, `SSH_ASKPASS_REQUIRE=never`, and `BatchMode=yes`
+for a command that is `ssh` itself). Its `git` runs with your environment less the variables that
+point git at another repository and the relative entries of `PATH`, with attributes read from
+`HEAD` (`GIT_ATTR_SOURCE=HEAD`) and replace refs ignored.
+
+**The secret scan.** The overlay's own pinned gitleaks build: the job reads the pin in `HEAD`'s
+`.pre-commit-config.yaml` and pre-commit's cache, takes the build made for that revision, and
+never downloads or builds one. Rules and ignores come from `HEAD` too: a `.gitleaks.toml` in the
+working tree is never read, and a `.gitleaksignore` at the overlay's root that differs from the
+committed one stops the scan, since gitleaks reads that one whatever it is told. Every `git`
+gitleaks starts is given `color.ui`, `color.diff` and `log.showSignature` off, since its parser
+reads their patch text. With no build, nothing is committed or pushed (`scan_unavailable`) and the remedy is `pre-commit
+install-hooks` in the overlay; what is already committed upstream still integrates. A finding stops
+the push (`secret_found`) and names the commit.
+
+**Writes.** In the data directory, `$HOME/.local/share/stayfixed/sync/`: `state.json` (the last
+outcome, the holds, the fetched sha and a digest of the dirty notes, written in one step), `job.lock` and `sleeper.lock` (held
+while a job runs and while a sleeper waits), `pending` (a trigger that arrived while a job ran),
+`checkouts.json` (the project roots above) and `scratch/`, which the job removes whole at its start
+and its end. In the overlay: the objects and the commit of step 4, `refs/heads/main` (moved by
+`update-ref` against the sha it read), `refs/stayfixed/fetched`, the memory entries of the real index (`git reset`),
+the `MEMORY.md` indexes and the `index:` lines the pre-render writes into notes, and the notes a move of `main`
+brought in, written through `git checkout-index` from a temporary index where the working tree still holds the old version, or removed, with the empty
+directories above a removed note, where it still holds the old one and no link stands above it; a note you changed by hand since is left as you made
+it. On the remote, `main`, by step 7. Besides `scratch/` and those notes, it removes `pending` when it takes it, and nothing else. When the plugin
+is removed, the triggers go and this directory stays.
+
+**Outcomes** (`state.json`, and `doctor`): `ok`; `skipped` (the guard's reasons); `conflict` (a local
+commit conflicts with upstream, and `main` was not moved); `resolved_index` (indexes united, a
+success); `raced` (`main` moved while the job built a commit or integrated); `rejected`
+(`origin/main` moved before the push; the next trigger fetches and retries); `offline`,
+`auth_failed` and `timeout` (the remote or a step); `hook_failed` (a step failed, or paths were
+left out of a commit); `scan_unavailable`; `signing_failed`; `secret_found`; `waiting_clean_tree`
+(an incoming note is changed here and not committed yet); `index_stale` (the real index's memory
+entries could not be aligned with `HEAD`). A failure is retried by a later trigger, throttled and
+never forced; one only you can clear waits out the back-off above.
+
+**Holds.** A hold is a range the sync refuses to move until you act, and a later outcome never
+clears it; while one stands nothing is integrated or pushed, and the next job clears it once you
+have acted. *Upstream*, for one of three reasons. `HEAD..origin/main` changes something outside
+memory: read all of it and take it at the sha that was held, `git log -p --no-renames HEAD..<sha>`,
+then `git rebase <sha>`. Its tree is one git will not check out: `git diff --stat HEAD <sha>`, and
+repair upstream. Or upstream was rewritten: the sha the last job recorded as upstream's, fetched or
+pushed, is not in the new one, and commits it dropped are still in `HEAD`; they are named, and
+never replayed or pushed back. Read them with `git log -p <sha>..HEAD`, then take the rewrite with
+`git rebase -i <sha>`, dropping them, or undo it with `git rebase <sha>` and a push. A first fetch,
+with nothing recorded, is no rewrite. *Local*: your own commits that are not memory alone (a change
+outside memory, a merge, an empty commit) keep their shas: they are neither rebuilt nor pushed, and
+upstream is not integrated past them; integrate and push them by hand when reviewed. `doctor` names
+each.
+
+**The floor.** The job needs `git` 2.43 (`merge-tree --write-tree --merge-base`, and
+`GIT_ATTR_SOURCE`, which an older git ignores without a word). On an older one it records `skipped` with
+the reason, changes nothing, and `doctor` says why.
+
+**Claude Code and Codex.** The triggers are the entries of `hooks/hooks.json` ([Hooks](#hooks)):
+an event Codex delivers from that file runs the same handlers behind the same per-machine switch,
+and that has not been measured on Codex. There is no cloud mode.
 
 ## `stayfixed commit check --range RANGE`
 
@@ -1999,7 +2138,9 @@ the record. A generated overlay has no `.stayfixed/manifest.json`, so `stayfixed
 refreshes none of its files once they differ from a release's (`overlay upgrade`, above).
 
 **Writes** `<home>` itself when it is not there yet; `--machine`'s file, with the directories above
-it, once for the preset and again for the overlay root `--overlay` records;
+it, once for the preset and again for the overlay root `--overlay` records, and, for an overlay it
+renders or creates, `[sync] enabled = true` beside it, which switches the [note sync](#note-sync) on
+(recording an existing overlay leaves `[sync]` as it is);
 `<home>/.claude/settings.json`, where its links lead; and, through the plugin
 commands it runs for each plugin `--plugin` names, on each harness with a declared marketplace (`claude plugin marketplace add` and
 `claude plugin install`, `codex plugin marketplace add` and `codex plugin add`), the marketplace
@@ -2240,12 +2381,12 @@ and `managed`.
 
 ## `stayfixed doctor [--json] [--root PATH] [--home PATH] [--machine PATH]`
 
-Thirteen checks over one installation. It **reports and never repairs**: every finding
+Fourteen checks over one installation. It **reports and never repairs**: every finding
 carries the command that would fix it, and not one of them is run for you. Nothing is written.
 
-The rows come in a fixed order: the installation's own eight first, then the five about the
-private layer — the binding's (`attached`), memory's (`bundles`, `memory`) and the
-private overlay's (`pre-commit`, `overlay-requires`). Match a row by its `name`, never by its
+The rows come in a fixed order: the installation's own eight first, then the six about the
+private layer — the binding's (`attached`), memory's (`bundles`, `memory`), the
+private overlay's (`pre-commit`, `overlay-requires`) and its note sync's (`sync`). Match a row by its `name`, never by its
 position.
 
 **Several subprocesses are run and every one of them only asks.** stayfixed's own
@@ -2258,9 +2399,14 @@ common and its own git directory), which the `memory` row asks to read the main 
 file a linked worktree reads too, whether a path `attach` placed is tracked (`git ls-files`) or ignored (`git check-ignore`) and whether a
 tracked file names the delivery (`git grep`), which the binding's row asks of a bound checkout, and the
 binding's common directory once more, which the binding's row asks to read the overlay's tag layers.
-Fourteen of those are measured on a green attached installation — the wrapper probe and thirteen
-`git` questions — and not one of them leaves this machine. The `git` questions are `gitenv`'s
-five seconds each, and the wrapper probe is this area's own thirty seconds.
+Fifteen of those are measured on a green attached installation whose machine file switches the
+note sync on, as `setup --overlay` does for an overlay it makes — the wrapper probe and fourteen
+`git` questions, the `sync` row's `git version` among them — and not one of them leaves this
+machine. The `git` questions are `gitenv`'s five seconds each, and the wrapper probe is this
+area's own thirty seconds. The `sync` row's `git version`, of the overlay's `git`, is bounded at
+five seconds like them, and asked only where the note sync is on; so is its `git cat-file` of the
+pin `HEAD` commits, asked only where pre-commit's database is there, which the fifteen do not
+count.
 
 The summary line carries the counts and the names of whichever status most needs reading, capped
 the way every summary in this CLI is. The rows are in `--json`, under `checks`, one object per
@@ -2283,6 +2429,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning only for files in the note store that are not notes, counted (at most 500,000 entries) | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
 | `pre-commit` | whether the overlay's commit-time secret scan is installed on this machine | the overlay |
 | `overlay-requires` | whether the overlay this machine records requires a stayfixed the running one satisfies — red when this project keeps its notes in that overlay, a warning when it does not — and, where that finds nothing, a warning when another repository's work tree holds the overlay root (a `.git` in a directory above it), naming that directory, since that repository can put files into the overlay | the overlay's `stayfixed-overlay.toml`, `stayfixed.toml`, the directories above the overlay root |
+| `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when no gitleaks build exists for the overlay's pinned hook (nothing is then committed or pushed; `setup --overlay` switches the sync on without building one, and the job fails closed), when a hold stands (the paths or commits, and the review command, which names the recorded sha only when it is a whole one), when the record of the job cannot be read, or when the last outcome is a failure (the outcome and its first line); green otherwise, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, pre-commit's cache and `HEAD`'s `.pre-commit-config.yaml` (`git cat-file`, asked only once that cache holds a database), `~/.local/share/stayfixed/sync/state.json` |
 
 **How `attached` reads the delivery.** With no ledger, a repository whose `memory.mode` is not
 `overlay` is simply not attached, and the row is green. Once this machine's binding confirms the
@@ -2327,13 +2474,13 @@ the harness's to decide, and this row does not read that file.
 | missing | no `autoMemoryDirectory` | `warn` | `attach`, which writes it |
 | unreadable | a file that cannot be read as one JSON object | `warn` | make it one JSON object, then `attach` |
 
-**Seven of the thirteen have a `skip` arm — seventeen arms between them, every one on a state of
+**Eight of the fourteen have a `skip` arm — eighteen arms between them, every one on a state of
 this machine or this repository.** A `skip` is **not** a finding and never reaches the exit code, so
 read the detail — each one says which measurement it is missing. No row skips for want of a build
 that can answer it: `codex-hooks`, the one that did, left the report, and what holds on Codex is the
 README's reach table.
 
-The seven that skip on a state are `wrapper`, when there is no plugin root this process can
+The eight that skip on a state are `wrapper`, when there is no plugin root this process can
 vouch for; `attached`, when this machine records no overlay to check the ledger
 against, or the overlay could not be asked at all; `pre-commit` and `overlay-requires`, when
 no overlay root is recorded on this machine **or** when the root it records is not a directory
@@ -2343,18 +2490,19 @@ and then moved it is not a machine that recorded none; `attached`, `pre-commit` 
 whether it records an overlay is not known, which is neither of those; `overlay-requires` again
 when the overlay declares no stayfixed requirement and no other repository's work tree holds it;
 `bundles`, when the note store does not resolve; `diagnostics`, when no harness data root is set in the environment, which is every
-`stayfixed doctor` run from a terminal rather than from a hook.
+`stayfixed doctor` run from a terminal rather than from a hook; and `sync`, when the machine file
+does not switch the note sync on.
 And three rows read the project configuration and skip, in one sentence, when there is none to
 read — no `stayfixed.toml`, or one a session drops whole: `budgets`, `attached` and `bundles`. `memory` reads the resolution a session reads and answers without one. A checkout this
 machine binds whose main checkout has no `stayfixed.toml` is the one exception for `attached` and
 for the note store `memory` reads: both are judged on the configuration `attach` acted on there,
 the preset's under the overlay's layers for the project the binding record names.
 
-**A `skip` does not mean there is nothing to do.** Six of the seventeen arms carry a remedy:
+**A `skip` does not mean there is nothing to do.** Six of the eighteen arms carry a remedy:
 the plugin-root skip, `wrapper`'s named-root skip, `attached`'s no-overlay and
 could-not-be-asked arms, and the moved-overlay arm of `pre-commit` and of `overlay-requires`. The dividing line is not "always"
-versus "on a state" — every other arm skips on a state and carries nothing: `bundles` and
-`diagnostics`, the *no overlay recorded* arms of the two overlay
+versus "on a state" — every other arm skips on a state and carries nothing: `bundles`,
+`diagnostics` and `sync`, the *no overlay recorded* arms of the two overlay
 rows, `overlay-requires`' no-requirement arm, and the
 three with no project configuration, whose remedy is
 `not-initialised`'s, and the three on a machine file that does not load, whose remedy is
@@ -2364,8 +2512,9 @@ nothing though `attached` names `stayfixed setup --overlay` there. It is whether
 itself worth acting on. Those six report something wrong that no other
 row will tell you: a plugin root nothing can find, a root that will be read and never executed,
 a recorded attach the overlay could not confirm, an overlay root recorded and not there. Of the
-other eleven, eight report a measurement that is simply unavailable — no store, no overlay,
-no overlay requirement, no harness data root or no project configuration — and no command in that row's gift changes it, and three report a machine
+other twelve, nine report a measurement that is simply unavailable — no store, no overlay,
+no overlay requirement, no harness data root, a note sync that is off or no project
+configuration — and no command in that row's gift changes it, and three report a machine
 file another row is red about, with the command that clears it.
 
 **The one to read first is the plugin root**, because it is the quietest and the worst. When
@@ -2680,6 +2829,9 @@ in your overlay's `common/memory/`.
 `stayfixed setup` writes one more table, `[machine]`, into the same file — `version`, the
 stayfixed that ran, and `installed`, the date it ran. It is `setup`'s record of what it did, not
 a setting: it is written, never hand-edited, and a file that has never had one loads fine.
+`--overlay` writes `[sync] enabled = true` beside `[overlay] root` when it renders or creates an
+overlay, and nothing under `[sync]` when it records an existing one; the key is yours to change
+by hand, and a repository's `stayfixed.toml` cannot set it ([Note sync](#note-sync)).
 
 **This file's location is not selectable by a repository.** The path is
 `~/.config/stayfixed/config.toml`, and neither `STAYFIXED_CONFIG` nor `XDG_CONFIG_HOME` changes

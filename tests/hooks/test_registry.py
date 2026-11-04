@@ -47,10 +47,11 @@ def test_a_handler_on_a_known_event_registers_normally(monkeypatch: pytest.Monke
     assert discover() == [handler]
 
 
-def test_the_vocabulary_is_the_six_events_the_design_table_carries() -> None:
-    # An area that needs a seventh adds it to EVENTS deliberately; widening it by accident is
+def test_the_vocabulary_is_the_eight_events_the_design_table_carries() -> None:
+    # An area that needs a ninth adds it to EVENTS deliberately; widening it by accident is
     # what turns a mistyped handler back into a guard that never fires. The sixth,
-    # `PostToolUseFailure`, is where Claude Code delivers a command that exited non-zero.
+    # `PostToolUseFailure`, is where Claude Code delivers a command that exited non-zero; `Stop`
+    # and `SessionEnd` are where the note sync starts its job.
     # Mutation: `mutations/`'s "the dispatcher stops carrying the event a failed command arrives
     # on".
     assert EVENTS == (
@@ -60,6 +61,8 @@ def test_the_vocabulary_is_the_six_events_the_design_table_carries() -> None:
         "PreToolUse",
         "PostToolUse",
         "PostToolUseFailure",
+        "Stop",
+        "SessionEnd",
     )
 
 
@@ -67,7 +70,14 @@ def test_a_session_start_runs_no_step_that_links_memory() -> None:
     # The harness reaches the composed store through `autoMemoryDirectory` in the main checkout's
     # settings file, which every worktree reads, so no `SessionStart` step links a store into a
     # worktree: the shipped handlers there are the owner-held files a new linked worktree lacks
-    # (`owner-files`, first), the overlay's status line and its standing rules, and the count of
-    # the store's unreviewed notes, which writes nothing in any checkout.
+    # (`owner-files`, first), the overlay's status line and its standing rules, the count of the
+    # store's unreviewed notes, which writes nothing in any checkout, and the note sync's trigger,
+    # which writes only in the data directory.
     names = [handler.name for handler in discover() if handler.event == "SessionStart"]
-    assert names == ["owner-files", "overlay-status", "overlay-rules", "unreviewed-notes"]
+    assert names == [
+        "owner-files",
+        "overlay-status",
+        "overlay-rules",
+        "unreviewed-notes",
+        "note-sync-start",
+    ]

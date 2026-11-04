@@ -110,6 +110,7 @@ SESSION_BUDGETS: frozenset[str] = frozenset(
 CLASSES: Mapping[str, KeyClass] = MappingProxyType(
     {
         "personal.*": KeyClass.MACHINE_ONLY,
+        "sync.*": KeyClass.MACHINE_ONLY,
         "guards.*": KeyClass.PREFERENCE,
         "memory.mode": KeyClass.PREFERENCE,
         "memory.groups": KeyClass.PREFERENCE,
