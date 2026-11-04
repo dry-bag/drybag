@@ -25,7 +25,6 @@ DENIED = os.strerror(errno.EACCES)
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]
@@ -500,22 +499,18 @@ def test_check_answers_with_the_bugs_gate_s_own_function(
 
 @pytest.mark.parametrize(
     "argv",
-    [["bugs", "check"], ["plan", "check", "{plan}"], ["memory", "refs"]],
-    ids=["bugs-check", "plan-check", "memory-refs"],
+    [["bugs", "check"], ["plan", "check", "{plan}"]],
+    ids=["bugs-check", "plan-check"],
 )
 def test_a_boundary_level_that_names_no_severity_is_a_refusal_in_every_command_that_reads_it(
     tmp_path: Path, argv: list[str]
 ) -> None:
-    # `bug_register` is reached from `plan check` and `memory refs` as well as the `bugs`
+    # `bug_register` is reached from `plan check` as well as the `bugs`
     # group, so the refusal is a `Refusal`, which each prints as a normal `refused:` line with
     # exit 2, and never a `ValueError`, which each would print as an internal error.
     root, _ = project(tmp_path)
     document = CONFIG + '\n[ledger]\nevidence_boundary_required_for = ["critical"]\n'
-    document += (
-        '\n[paths]\nmemory = "notes"\n\n[memory]\nmode = "in-repo"\ngroups = ["developer"]\n'
-    )
     (root / "stayfixed.toml").write_text(document, encoding="utf-8")
-    (root / "notes" / "developer").mkdir(parents=True)
     (root / "docs" / "plans").mkdir()
     (root / "docs" / "plans" / "p.md").write_text("# A plan\n", encoding="utf-8")
     plan = str(root / "docs" / "plans" / "p.md")

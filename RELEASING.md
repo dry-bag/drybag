@@ -16,7 +16,7 @@ repository's tag names the pinned commit and then release the PyPI upload and th
 attached to `vX.Y.Z` only and never to the floating `v1`, which immutable releases would freeze →
 `main` moves to the release commit → `scripts/publish_template.py`, which renders
 `templates/overlay/` and pushes it to the template repository from your own authenticated
-checkout → from `1.0.0` on, the `v1` alias moves → the cross-repository smoke runs at the new tag →
+checkout → from `1.0.0` on, the `v1` alias moves →
 the release returns to `dev` (section 5). Both pushes to a second repository are yours, so the
 public repository's CI holds no credential that can write one.
 
@@ -199,13 +199,6 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    That is five of the seven sources; `uv.lock` is the sixth and `uv sync` above writes it.
    `CHANGELOG.md` is the seventh and is still behind here; a pending fragment is what lets it
    lag, and step 4 catches it up.
-
-   **And the release smoke's tag, which a test holds.** `.github/workflows/smoke-release.yml`
-   calls `check.yml@vX.Y.Z`, written out, because `uses:` takes no expression; set it to the
-   new version here, and in `mutations/`'s "the release smoke calls the alias a 0.x release does
-   not have", whose `before` is that line.
-   `tests/test_fixtures.py` fails until it names the version the tree carries, and the release
-   workflow runs the suite on the tag.
 
    **And the two example configurations, which a test holds.** `README.md`'s and `docs/cli.md`'s
    example `stayfixed.toml` blocks each carry `version = "X.Y.Z"`, and a copy of a stale one
@@ -477,28 +470,17 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    `stayfixed setup --overlay create:` generates from it.
 
 9. **Move the alias — from `1.0.0` on; a `0.x` release moves none.** The alias is the major:
-   a project that writes `@v1` takes every release the alias moves to. Under semantic
-   versioning a `0.x` minor may break what the one before it did, so a `v0` alias would hand
-   every project on it breaking changes unannounced, and `stayfixed doctor` knows `v1` and no
-   other alias. So a `0.x` project pins the commit `stayfixed init` writes, and this step starts
-   at the first `1.x` release:
+   a reference to `@v1` takes every release the alias moves to. Under semantic versioning a
+   `0.x` minor may break what the one before it did, so a `v0` alias would hand everything that
+   references it breaking changes unannounced, and this step starts at the first `1.x` release:
 
    ```bash
    git tag -f v1 vX.Y.Z && git push -f origin v1
    git ls-remote origin refs/tags/v1 refs/tags/vX.Y.Z   # both lines name one commit
    ```
 
-   The alias resolves as any tag does, which step 10 proves for the release tag itself; what
-   is left to check is that it names the release, and the listing above is that check.
-
-10. **Run the cross-repository smoke at the release tag**, at every release. It calls
-    `check.yml` at `@dev` and at the `vX.Y.Z` step 3 wrote into `smoke-release.yml`, which
-    resolves only now that the tag is pushed.
-
-    ```bash
-    gh workflow run smoke-release.yml
-    gh run watch <id> --exit-status
-    ```
+   The alias resolves as any tag does; what is left to check is that it names the release, and
+   the listing above is that check.
 
 ## 3. One-time setup
 
@@ -674,18 +656,6 @@ bump them by hand, to one gitleaks release, in one commit.
 A rendered overlay ships its own `dependabot.yml` and keeps itself current from then on;
 what this line is about is the state every *new* overlay starts from. Check them here, at
 the release that publishes the template.
-
-**The project workflow's pin, and what the first tag unlocks.** There is a second sha-pinned
-template now: `src/stayfixed/templates/project/stayfixed.yml`, the caller `stayfixed init` renders
-into an adopting project's `.github/workflows/`. Its `uses:` line is not pinned in the tree —
-the sha is filled in at render time, and it is the commit of the *released* stayfixed that did
-the rendering, read off this repository's own `v*` tags. So nothing here rots, and nothing here
-needs checking at a release; what a release changes is whether the workflow can be written at
-all. Before the first tag `init` finds no released commit to name, reports the workflow skipped
-with that reason, and writes nothing into `.github/` — which means every project initialised
-before the first release carries no CI caller and no `[ci] ref`, and gets both when `stayfixed
-upgrade` ships. The first tag is the event that changes that, and it changes it for new
-projects only.
 
 ## 5. If something goes wrong
 

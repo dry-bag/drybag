@@ -425,8 +425,8 @@ def test_a_rewritten_key_keeps_the_body_and_the_files_own_line_endings(tmp_path:
 def test_a_note_linked_to_a_device_is_quarantined_and_one_through_a_linked_group_is_read(
     tmp_path: Path,
 ) -> None:
-    # `read_note` followed a committed link to whatever it named: `/dev/stdin` hung `memory refs`
-    # and `memory inventory`, and `/dev/zero` would read until memory ran out. `walk` skips a note
+    # `read_note` followed a committed link to whatever it named: `/dev/stdin` hung
+    # `memory inventory`, and `/dev/zero` would read until memory ran out. `walk` skips a note
     # file that is a link, and `read_note` itself reads a regular file only; unguarded, the
     # `/dev/null` case read as an empty note and was refused for having no frontmatter, which the
     # reason tells apart. The group directory beside it is a link, as `attach` makes it in overlay

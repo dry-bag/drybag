@@ -10,6 +10,7 @@ import pytest
 
 from stayfixed import fsops
 from stayfixed.config.paths import PathEscape
+from stayfixed.jsonobject import LONG_NUMBER, NESTED
 from stayfixed.scaffold.manifest import (
     FORMAT,
     MANIFEST_PATH,
@@ -20,6 +21,7 @@ from stayfixed.scaffold.manifest import (
     Record,
     digest,
 )
+from tests import parserlimits
 
 
 def a_record(**overrides: object) -> Record:
@@ -103,6 +105,32 @@ def test_a_malformed_manifest_refuses_rather_than_reading_as_empty(tmp_path: Pat
     (tmp_path / MANIFEST_PATH).write_text("{not json", encoding="utf-8")
     with pytest.raises(ManifestError):
         Manifest.read(tmp_path)
+
+
+# Two manifests that are valid JSON past this interpreter's parser, and what the refusal says of
+# each: nested deeper than it follows, and an integer longer than it converts (4,300 digits by
+# default).
+PAST_THE_PARSER = {
+    "nested": (parserlimits.NESTED, NESTED),
+    "long-number": ('{"format": ' + parserlimits.LONG_NUMBER + "}", LONG_NUMBER),
+}
+
+
+@pytest.mark.parametrize("case", sorted(PAST_THE_PARSER))
+def test_a_manifest_past_the_parser_is_refused_in_its_own_words(tmp_path: Path, case: str) -> None:
+    # The reader caught both documents and quoted the exception: "is unreadable: Exceeds the limit
+    # (4300 digits) for integer string conversion ... use sys.set_int_max_str_digits() to increase
+    # the limit", which tells the owner of a committed ledger to change their interpreter, and
+    # for the nested one the parser's report of its own stack. The refusal now says what the file
+    # holds, in the sentence shape the reader's other refusals have, and quotes no interpreter.
+    # Mutation (oracle): `mutations/`'s "the manifest reader quotes the parser's exception for a
+    # document past its reach" -> every case reddens.
+    document, clause = PAST_THE_PARSER[case]
+    (tmp_path / ".stayfixed").mkdir()
+    (tmp_path / MANIFEST_PATH).write_text(document, encoding="utf-8")
+    with pytest.raises(ManifestError) as refused:
+        Manifest.read(tmp_path)
+    assert str(refused.value) == f"{MANIFEST_PATH} {clause}"
 
 
 def test_a_manifest_past_the_read_cap_is_unreadable_and_never_read_whole(

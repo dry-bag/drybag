@@ -1,18 +1,12 @@
 """`stayfixed init --yes`: the footprint, written by the engine in two passes.
 
-The three write-once files are `Kind.ONCE` artifacts in a pass of their own and the rest of the
-footprint is the second, because two artifacts cannot target one file in one pass. Both are
-planned before either is applied, so a refusal anywhere leaves nothing written and no
-manifest; the dry run reports both plans and writes nothing.
+`stayfixed.toml` is a `Kind.ONCE` artifact in a pass of its own, and the bug index, the roadmap,
+`trail.toml` and the `.gitignore` region are the second. Both are planned before either is
+applied, so a refusal anywhere leaves nothing written and no manifest; the dry run reports both
+plans and writes nothing.
 
 A repository that already holds a `stayfixed.toml` and no manifest is adopted. One that holds a
-manifest is refused: re-running `init` is `stayfixed upgrade`.
-
-**The workflow and `[ci] ref` are one value.** A resolved pin is written into the document
-only when this run is the one that creates it, and `templates._ci` renders the workflow from
-`config.ci.ref` — so the `uses:` ref and what `stayfixed.toml` says on disk cannot come apart.
-`doctor`'s `ci-ref` row reports red when they do, which is why this is the invariant rather than
-a convenience.
+manifest is refused: `init` writes a scaffold once.
 
 **Adopted means read, not replaced.** `stayfixed.toml` is a `Kind.ONCE` artifact: created when
 absent, never looked inside again. So on a repository that already carries one the engine
@@ -25,8 +19,8 @@ target below is built from.
 **The one key is a missing `[stayfixed] version`**, the only tool-owned key the loader
 requires, with its `[stayfixed]` header when the file has none. It is added through
 `config.owned.rewrite`, which keeps every other line, and the file is checked with `loads` as it
-will then be on disk — before any network call and any write, dry run included — because the
-merged document drops `enforced` and every other `[stayfixed]` key it does not carry over, and
+will then be on disk — before any write, dry run included — because the merged document drops
+every `[stayfixed]` key it does not carry over, and
 detects a name the file may lack, and so loads where the next command's `load` would not. The
 other tool-owned keys are written only into a file stayfixed itself creates, which is the only
 file whose header claims them.
@@ -44,7 +38,7 @@ run rather than the repository.
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import stayfixed
@@ -56,22 +50,18 @@ from stayfixed.config.paths import contained
 from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.config.schema import Config
 from stayfixed.errors import Failure, Refusal
+from stayfixed.fsops import said, write_within
 from stayfixed.project.detect import CURRENT_BRANCH, DEFAULT_BRANCH, Detected, detect
-from stayfixed.project.footprint import prepare
-from stayfixed.project.rewrite import rewrite_owned
-from stayfixed.project.templates import CI_ARTIFACT
-from stayfixed.release.api import Resolution, resolve_pin
-from stayfixed.runner import Runner
-from stayfixed.scaffold import MANIFEST_PATH, Manifest, Plan, apply
+from stayfixed.project.templates import project_templates
+from stayfixed.scaffold import MANIFEST_PATH, Manifest, Plan, apply, plan
 from stayfixed.tomlout import dumps
 
 VERSION = ("stayfixed", "version")
-USER_OWNED = ("paths", "memory", "budgets", "ledger", "artifacts", "ci", "gates", "commit_messages")
+USER_OWNED = ("paths", "memory", "budgets", "ledger", "commit_messages")
 HEAD_KEYS = ("preset", "profile", "agents")
 HEADER = (
     "# Written by `stayfixed init`. Every key you leave out takes the preset's default;\n"
-    "# `[stayfixed] version` and `enforced`, and `[ci] ref`, are stayfixed's to rewrite in\n"
-    "# place; every other key is yours.\n\n"
+    "# `[stayfixed] version` is stayfixed's to rewrite in place; every other key is yours.\n\n"
 )
 # The pair is spelled literally because the intended reader is an agent relaying this sentence,
 # and `--dry-run` on its own is refused by this same refusal: "pass --yes, and --dry-run to read
@@ -82,14 +72,7 @@ NEEDS_YES = (
     "beside --yes reads the plan first"
 )
 ALREADY = (
-    f"{MANIFEST_PATH} exists, so this repository is initialised; re-running `init` is "
-    "`stayfixed upgrade`"
-)
-# Said after `ALREADY` when the refused run asked for `--local`: `upgrade` has no such flag, and
-# the key it reads instead is what relocates an artifact already written.
-LOCAL_AFTER_INIT = (
-    "to add a local artifact later, list its id under `[artifacts] local` in stayfixed.toml, "
-    "then run `stayfixed upgrade`"
+    f"{MANIFEST_PATH} exists, so this repository is initialised; `init` writes a scaffold once"
 )
 ANSWER_SHEET = (
     "this repository already has a stayfixed.toml, which answers the questions `init` would ask; "
@@ -104,39 +87,33 @@ UNWRITABLE_KEY = (
 # Fixed text: the branch `origin/HEAD` named is the remote's, outside the grammar, and not printed.
 HEAD_DEFAULTED = (
     "origin/HEAD does not name a plain branch, so [project] base_branch and release_branch are "
-    "main, and so is the branch the workflow gates; if pull requests merge into another branch, "
-    "answer it with `stayfixed init --yes --base-branch BRANCH` while nothing is written, or set "
-    "[project] base_branch and release_branch in stayfixed.toml, which the workflow follows"
+    "main; if pull requests merge into another branch, answer it with `stayfixed init --yes "
+    "--base-branch BRANCH` while nothing is written, or set [project] base_branch and "
+    "release_branch in stayfixed.toml"
 )
 # Fixed text too, though the branch passed the grammar: one sentence whatever it is called.
 HEAD_CURRENT = (
     "this repository has no remote, so [project] base_branch and release_branch are the "
-    "branch checked out now, and so is the branch the workflow gates; if pull requests merge "
-    "into another branch, answer it with `stayfixed init --yes --base-branch BRANCH` while "
-    "nothing is written, or set [project] base_branch and release_branch in stayfixed.toml"
+    "branch checked out now; if pull requests merge into another branch, answer it with "
+    "`stayfixed init --yes --base-branch BRANCH` while nothing is written, or set [project] "
+    "base_branch and release_branch in stayfixed.toml"
 )
 # A remote with no `origin/HEAD`: a repository created here and pushed, to `origin` or to
 # another remote. The branch checked out is not taken, since it is typically the feature branch
 # the adoption is made on. The remedy names no remote but `origin`, the only one detection reads.
 HEAD_UNRECORDED = (
     "this repository has a remote and no origin/HEAD recorded, so [project] base_branch and "
-    "release_branch are main, and so is the branch the workflow gates; answer it with `stayfixed "
-    "init --yes --base-branch BRANCH` while nothing is written, or set [project] base_branch and "
-    "release_branch in stayfixed.toml; where the remote is origin, `git remote set-head origin "
-    "--auto` records its default branch for the next run"
+    "release_branch are main; answer it with `stayfixed init --yes --base-branch BRANCH` while "
+    "nothing is written, or set [project] base_branch and release_branch in stayfixed.toml; "
+    "where the remote is origin, `git remote set-head origin --auto` records its default branch "
+    "for the next run"
 )
 # git gave no answer to `git remote`, so whether the branch checked out may be taken is not
 # known: the default stands.
 HEAD_REMOTES_UNKNOWN = (
     "git could not list this repository's remotes, so [project] base_branch and release_branch "
-    "are main, and so is the branch the workflow gates; answer it with `stayfixed init --yes "
-    "--base-branch BRANCH` while nothing is written, or set [project] base_branch and "
-    "release_branch in stayfixed.toml"
-)
-VERB_NOTE = (
-    "AGENTS.md is absent: the run writes the skeleton first and the `agents-md` region is then "
-    "a region_update into it; a dry run plans it as a create of a region-only file. The bytes "
-    "inside the markers are the same either way"
+    "are main; answer it with `stayfixed init --yes --base-branch BRANCH` while nothing is "
+    "written, or set [project] base_branch and release_branch in stayfixed.toml"
 )
 
 
@@ -153,9 +130,7 @@ class Given:
     agents: tuple[str, ...] | None = None
     profile: str | None = None  # "" is an answer: no profile
     memory_mode: str | None = None
-    local: tuple[str, ...] | None = None
     attribution_check: bool | None = None
-    types: tuple[str, ...] | None = None
 
 
 NO_ANSWERS = Given()
@@ -165,16 +140,8 @@ NO_ANSWERS = Given()
 class InitReport:
     once: Plan
     footprint: Plan
-    skipped: dict[str, str]
-    resolution: Resolution
     adopted: bool
     dry_run: bool
-    note: str = ""
-    # What `[ci] ref` says on disk after the run, which is what the rendered workflow pins;
-    # empty when no workflow was planned. One field for both, because they are one value.
-    ref: str = ""
-    # How many names in `[stayfixed] agents` no harness answers to; a count, never the names.
-    unknown_harnesses: int = 0
     # `HEAD_DEFAULTED` when the detected base branch replaced a remote head outside the grammar;
     # `HEAD_UNRECORDED` when it is the default because a remote is there and `origin/HEAD` is
     # not; `HEAD_REMOTES_UNKNOWN` when it is the default because git could not list the remotes;
@@ -183,9 +150,6 @@ class InitReport:
     # Whether this run's plan adds `[stayfixed] version` to a `stayfixed.toml` a person wrote. It
     # is written only by a run that is neither a dry run nor refused.
     stamped: bool = False
-    # The custom gates the adopted `stayfixed.toml` configures, by name: `assess`, `gate` and
-    # `adopt promote` run their commands. Names only, each held to the loader's grammar.
-    custom_gates: tuple[str, ...] = ()
     # The configuration the run wrote or adopted, from which the command says what it picked.
     config: Config | None = None
 
@@ -199,7 +163,7 @@ class InitReport:
 def _existing(root: Path) -> tuple[str, dict[str, object]] | None:
     """The `stayfixed.toml` already in the repository, as its text and parsed, or `None`.
 
-    Read through `read_document`, the reader `stayfixed gate` uses, so a symlinked file is a
+    Read through `read_document`, the loader's reader, so a symlinked file is a
     refusal and is never followed: a clone's link to `/dev/zero` would end the run by exhausting
     memory. Its refusals for a file that is not UTF-8 text or cannot be read are the loader's.
     A file that will not parse is a `Failure` naming the file and the position `tomllib`
@@ -220,7 +184,7 @@ def _existing(root: Path) -> tuple[str, dict[str, object]] | None:
 
 
 def _tables(
-    root: Path, existing: dict[str, object] | None, *, ci: bool, given: Given
+    root: Path, existing: dict[str, object] | None, *, given: Given
 ) -> tuple[dict[str, dict[str, object]], str]:
     """The document's tables, in order: stayfixed's own `version`, then the repository's own
     answers or the ones `given` carries; and the note for a detected base branch no remote head
@@ -265,21 +229,13 @@ def _tables(
         tables["project"] = {"base_branch": branch, "release_branch": branch}
         if name:
             tables["project"] = {"name": name, **tables["project"]}
-        # No `[ci] gate_branch`: the loader takes it from `base_branch` when the file leaves it
-        # out, so the rendered caller gates this branch and follows it if a person edits it.
     if given.memory_mode is not None:
         tables["memory"] = {"mode": given.memory_mode}
-    if given.local:
-        tables["artifacts"] = {"local": list(given.local)}
     commit_messages: dict[str, object] = {}
     if given.attribution_check is not None:
         commit_messages["attribution_check"] = given.attribution_check
-    if given.types is not None:
-        commit_messages["types"] = list(given.types)
     if commit_messages:
         tables["commit_messages"] = commit_messages
-    if not ci:
-        tables.setdefault("ci", {})["mode"] = "none"
     return tables, head_note
 
 
@@ -334,17 +290,15 @@ def _as_on_disk(read: tuple[str, dict[str, object]] | None) -> tuple[str | None,
     return rewrite(text, {VERSION: stayfixed.__version__}), True
 
 
-def precheck(root: Path, *, answering: bool, local: bool = False) -> None:
+def precheck(root: Path, *, answering: bool) -> None:
     """The refusals `init` and `init --questions` share, before anything beyond the root is read.
 
-    A manifest means `init` has already run, so re-running it is `stayfixed upgrade` — and when
-    the run asked for `--local`, which `upgrade` has no flag for, the refusal says which key does
-    the same there. While `answering` — the questions always are, and `init` is whenever an answer
-    flag is given — a `stayfixed.toml` already answers every question, so asking them over it
-    would collect answers that nothing writes.
+    A manifest means `init` has already run. While `answering` — the questions always are, and
+    `init` is whenever an answer flag is given — a `stayfixed.toml` already answers every
+    question, so asking them over it would collect answers that nothing writes.
     """
     if Manifest.present(root):
-        raise Refusal(f"{ALREADY}; {LOCAL_AFTER_INIT}" if local else ALREADY)
+        raise Refusal(ALREADY)
     # `contained` and not a bare `is_file`, which follows a link: a symlinked `stayfixed.toml` is
     # refused as every command refuses it, whatever it points at, and not taken for an answer
     # sheet (a link to a file) or for no file at all (a link to `/dev/zero`).
@@ -356,10 +310,8 @@ def init(
     root: Path,
     *,
     machine: Path | None,
-    runner: Runner,
     yes: bool,
     dry_run: bool,
-    ci: bool,
     given: Given = NO_ANSWERS,
     owner: Owner | None = None,
 ) -> InitReport:
@@ -372,82 +324,45 @@ def init(
     back bare (`_rendered`), a `Config` the loader refuses, an adopted `stayfixed.toml` whose
     missing version the key editor cannot add or that the loader refuses as it will be on disk
     (`_as_on_disk`), an artifact at a file another is built to write, in either pass
-    (`templates.Owners`), a profile artifact `[artifacts] local` would keep out of git
-    (`footprint.refuse_local_profile`), `stayfixed.toml` or the ignore block listed there
-    (`footprint.refuse_local_root_only`), a planned write git ignores
-    (`ignored.refuse_ignored`), and finally a refusal in either plan, which is returned rather
-    than raised so the report can name the artifact.
+    (`templates.Owners`), and finally a refusal in either plan, which is returned rather than
+    raised so the report can name the artifact.
 
     `owner` is the owner's layer the command resolved, which every load here takes, so the machine
     file is read once and what it read past is said once (`config.loader.loads`' own).
     """
     if not yes:
         raise Refusal(NEEDS_YES)
-    precheck(root, answering=given != NO_ANSWERS, local=given.local is not None)
+    precheck(root, answering=given != NO_ANSWERS)
     read = _existing(root)
     existing = read[1] if read is not None else None
-    tables, head_note = _tables(root, existing, ci=ci, given=given)
+    tables, head_note = _tables(root, existing, given=given)
     document = _rendered(tables)
     config = loads(document, root, machine=machine, owner=owner)
     on_disk, stamped = _as_on_disk(read)
     if on_disk is not None:
         # What the next command loads is the file, not the merged document: that one drops
-        # `enforced` and every other `[stayfixed]` key it does not carry over, and detects a name
-        # the file may lack.
+        # every `[stayfixed]` key it does not carry over, and detects a name the file may lack.
         loads(on_disk, root, machine=machine, owner=owner)
-    # Not asked on the adoption path with no `[ci] ref` either: `_ci` answers that path with
-    # `NO_REF` before it reads the resolution, and the ask is a network round trip that can take
-    # the whole of its timeout for an answer nothing prints.
-    resolution = (
-        resolve_pin(stayfixed.__version__, runner, cwd=root)
-        if config.ci.mode == "reusable" and (existing is None or config.ci.ref)
-        else Resolution(None, True)
-    )
-    # `existing is None` and not just "a pin resolved": on the adoption path `config` is a
-    # create-once artifact that is already on disk, so nothing written into `tables` here ever
-    # reaches a file. Recording the pin anyway made `config.ci.ref` — which is what `_ci`
-    # renders the workflow from — disagree with `stayfixed.toml`, and the workflow was written
-    # pinned to a sha the document did not carry. `doctor`'s `ci-ref` row reports exactly that
-    # as red, so `init` said it had worked and the next `doctor` said it had not.
-    if resolution.pin is not None and existing is None:
-        tables.setdefault("ci", {})["ref"] = resolution.pin.sha
-        document = _rendered(tables)
-        config = loads(document, root, machine=machine, owner=owner)
-    # No manifest yet, so nothing to retire: `prepare` for its refusals and the pass order.
-    passes = prepare(
-        root, config, {}, resolution=resolution, document=document, adopted=existing is not None
-    )
-    # What `[ci] ref` says on disk after this run, and so what the workflow pins — empty exactly
-    # when no workflow was planned. The two are one value by construction, which is the
-    # invariant `templates._ci` states and `doctor`'s `ci-ref` row enforces.
-    ref = "" if CI_ARTIFACT in passes.skipped else config.ci.ref
-    note = VERB_NOTE if not fsops.exists(root / config.paths.agents_md) else ""
-    once, footprint = passes.predict((passes.once, ()), (passes.footprint, ()))
+    prepared = project_templates(config, document=document)
+    once = plan(root, config, prepared.once)
+    footprint = plan(root, config, prepared.footprint)
     report = InitReport(
         once,
         footprint,
-        passes.skipped,
-        resolution,
         existing is not None,
         dry_run,
-        note,
-        ref,
-        passes.unknown_harnesses,
         head_note,
         stamped,
-        tuple(sorted(config.gates.custom)) if existing is not None else (),
         config,
     )
     if dry_run or report.refused:
         return report
-    if stamped:
+    if stamped and on_disk is not None:
         # No manifest yet, so there is no record to re-stamp: only the one line is written.
-        rewrite_owned(root, {VERSION: stayfixed.__version__})
+        try:
+            write_within(root, CONFIG_FILE, on_disk)
+        except OSError as exc:
+            raise Refusal(f"{CONFIG_FILE} cannot be written ({said(exc)})") from exc
     apply(root, once)
-    # Re-planned against the tree the write-once files are now in: on a repository with no
-    # `AGENTS.md`, the region the dry run planned as a create of a region-only file is a
-    # `region_update` into the skeleton this pass has just written. `VERB_NOTE` is the sentence
-    # that says the bytes inside the markers are the same either way.
-    footprint = passes.replan(passes.footprint)
     apply(root, footprint)
-    return replace(report, footprint=footprint)
+    return report

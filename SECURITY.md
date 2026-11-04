@@ -62,8 +62,7 @@ Out of scope:
 
 - Anything that requires the attacker to already be able to write to the machine owner's home
   directory or to a directory on their own `PATH`. stayfixed runs the `python3` and the `git` on
-  your `PATH` by design, in a hook as at a terminal and in a `stayfixed gate` step in CI. In the
-  commands an agent runs through its own shell tool, `PATH` is the harness's to choose, and that
+  your `PATH` by design, in a hook as at a terminal. In the commands an agent runs through its own shell tool, `PATH` is the harness's to choose, and that
   includes which `stayfixed` runs, and so which `git` it runs, which nothing inside stayfixed can
   decide. A `PATH` a trusted folder's `env` block sets is the harness's boundary, as the last item
   below says.

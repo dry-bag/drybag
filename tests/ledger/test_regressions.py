@@ -29,7 +29,6 @@ from tests.prove.real_runners import needs_runner, runner_directory
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]
@@ -202,3 +201,29 @@ def test_json_stays_one_object_while_the_runner_prints(
     assert json.loads(out)["regressions"][0]["verdict"] == "proved"
     assert "1 passed" in err
     assert capfd.readouterr().out == ""
+
+
+@needs_git
+def test_the_timeout_is_the_option_or_ten_minutes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Each run's bound is the command's own option, through the real parser: ten minutes when it
+    # is not given, the value `[gates] custom_timeout_seconds` held in the preset before the gates
+    # went, and what `--timeout` says when it is. Anything but a whole number of seconds above 0
+    # is the parser's refusal, exit 2, before any entry runs.
+    bounds: list[object] = []
+
+    def recorded(argv: Sequence[str], **kwargs: object) -> Receipt:
+        bounds.append(kwargs["timeout"])
+        return Receipt(Verdict.NOT_PROVEN, "", "", tuple(argv))
+
+    monkeypatch.setattr(module, "prove", recorded)
+    root = ledger(tmp_path, {"BR-001": ("fixed", UNRECOGNISED)})
+    regressions(tmp_path, root)
+    regressions(tmp_path, root, "--timeout", "5")
+    assert bounds == [600, 5]
+    for value in ("0", "-1", "1.5", "five"):
+        with pytest.raises(SystemExit) as refused:
+            regressions(tmp_path, root, "--timeout", value)
+        assert refused.value.code == 2, value
+    assert bounds == [600, 5]

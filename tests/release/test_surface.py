@@ -12,16 +12,9 @@ import stayfixed.release.api as release
 
 def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     # An equality and not a subset, for the reason tests/doctor/test_surface.py gives: a subset
-    # lets an export arrive unnoticed. `doctor` reads the pins, and `scripts/release.py`, which
-    # checks the version, reads `tag_for` and `PACKAGE`.
+    # lets an export arrive unnoticed. `scripts/release.py`, which checks the version, reads
+    # `tag_for` and `PACKAGE`.
     required = {
-        # which commit a release is: `init` writes the pin, `doctor`'s `ci-ref` row
-        # judges it
-        "Pin",
-        "Resolution",
-        "released",
-        "resolve_pin",
-        "is_released",
         # what a release is tagged as, for the script's `check --tag`, and the package name the
         # platform's tag carries, which the script also looks the package up by in `uv.lock`
         "tag_for",

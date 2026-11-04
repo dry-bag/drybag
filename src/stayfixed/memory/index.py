@@ -370,7 +370,7 @@ def _extra(config: Config, store: Store) -> list[str]:
 
     An entry that escapes is dropped, the way `_group_targets` drops a group whose target it
     refuses. Dropped silently, because this function returns a plain list and has no report
-    channel of its own; `store.unavailable` is the shape that would carry one. (A *survivor* of
+    channel of its own. (A *survivor* of
     these checks can still be dropped later, loudly, by `render_index`'s own domain gate —
     `reconcile` names those in `Reconciliation.refused_extra` — but that is a different
     question from the one this function answers, and this function does not need to know it is
@@ -519,7 +519,7 @@ def check_index(store: Store, config: Config, reconciled: Reconciliation) -> Ind
         over_budget=len(text.split()) > config.budgets.effective("memory_index_words"),
         over_caps=caps,
         provisional=list(reconciled.provisional),
-        # Store-relative, as the summary line and `memory refs` name it: one file has one name
+        # Store-relative, as the summary line names it: one file has one name
         # in one answer, and the absolute prefix is this machine's, not the store's.
         unreadable=[path.relative_to(store.path).as_posix() for path, _ in reconciled.unreadable],
     )

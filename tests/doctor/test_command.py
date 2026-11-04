@@ -92,46 +92,9 @@ def test_a_second_report_is_the_first_and_neither_writes_anything(
     assert_snapshot_unchanged(tmp_path, before)
 
 
-def test_the_runner_this_command_builds_is_bounded_for_a_diagnostic(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The one call this area makes that leaves the machine is bounded, and here is where it is.
-
-    `runner.NETWORK_TIMEOUT_SECONDS` is five minutes, written for `gh repo create --clone` and
-    the clone behind it. `doctor` inherited it for the `ci-ref` row's single `git ls-remote` —
-    and `stayfixed init` recording a `[ci] ref` is what made a five-minute block reachable on a
-    command whose whole output is one line. The row's own `git` questions go through `gitenv`'s
-    five seconds and the wrapper probe through this module's thirty, so the bound here is the
-    module's own thirty and `checks.CI_REF_TIMEOUT_SECONDS` carries the argument for it.
-
-    Asserted where the runner is *built*, because that is the only place the choice exists: the
-    `Runner` protocol has no timeout and every stub in this suite is bounded at nothing. The
-    factory is imported inside `run_doctor`, so patching the module attribute is the seam.
-
-    Mutation (`mutations/`'s "doctor asks the public repository with no bound of its own"):
-    `subprocess_runner(timeout=CI_REF_TIMEOUT_SECONDS)` -> `subprocess_runner()` -> this reddens
-    on the recorded keyword.
-    """
-    import stayfixed.runner as runner
-
-    asked: list[float | None] = []
-    real = runner.subprocess_runner
-
-    def spy(*, timeout: float | None = None) -> runner.Runner:
-        asked.append(timeout)
-        return real(timeout=timeout)
-
-    monkeypatch.setattr(runner, "subprocess_runner", spy)
-    root = _initialised(tmp_path)
-    assert invoke(["doctor", "--root", str(root), "--home", str(tmp_path / "home")]) == 0
-    assert asked == [checks.CI_REF_TIMEOUT_SECONDS]
-    # And it is narrower than the seam's own default, which is the whole point of asking.
-    assert checks.CI_REF_TIMEOUT_SECONDS < runner.NETWORK_TIMEOUT_SECONDS
-
-
 def test_a_skip_is_not_a_finding(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    # `ci-ref` skips on a state this repository is in: it records no `[ci] ref`. If a skip
-    # exited 1, `doctor` would be red on every correct installation.
+    # Rows skip on states this repository is in: no overlay is recorded. If a skip exited 1,
+    # `doctor` would be red on every correct installation.
     root = _initialised(tmp_path)
     code = invoke(["doctor", "--root", str(root), "--home", str(tmp_path / "home"), "--json"])
     assert code == 0
@@ -140,11 +103,11 @@ def test_a_skip_is_not_a_finding(tmp_path: Path, capsys: pytest.CaptureFixture[s
 
 
 def test_any_red_check_exits_one(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    # Exit 1 is "findings". A doctor that always exits 0 is a doctor nothing can gate on: a
-    # script or a CI step that runs it reads the exit code, since `stayfixed assess` runs no
-    # doctor check. A `stayfixed.toml` that is not TOML is the cheapest red there is, and the
-    # report's own first row; a directory with none at all is a warning, which exits 0. Mutation
-    # (`mutations/`'s "not-initialised is red with no stayfixed.toml"): the second run exits 1.
+    # Exit 1 is "findings". A doctor that always exits 0 is a doctor nothing can gate on: a script
+    # or a CI step that runs it reads the exit code. A `stayfixed.toml` that is not TOML is the
+    # cheapest red there is, and the report's own first row; a directory with none at all is a
+    # warning, which exits 0. Mutation (`mutations/`'s "not-initialised is red with no
+    # stayfixed.toml"): the second run exits 1.
     (tmp_path / "stayfixed.toml").write_text("[[[", encoding="utf-8")
     code = invoke(["doctor", "--root", str(tmp_path), "--home", str(tmp_path / "home")])
     assert code == 1
@@ -206,13 +169,13 @@ def test_the_json_form_carries_every_check_and_its_remedy(
 ) -> None:
     # The skill relays remedies verbatim, so a remedy missing from `--json` is a remedy the
     # user never sees — and the summary line has room for none of them. The count is the
-    # report's fourteen rows, held beside `README.md`, `docs/cli.md`, the doctor skill and the
+    # report's thirteen rows, held beside `README.md`, `docs/cli.md`, the doctor skill and the
     # smoke workflow by `tests/test_documents.py`.
     (tmp_path / "stayfixed.toml").write_text("[[[", encoding="utf-8")
     code = invoke(["doctor", "--root", str(tmp_path), "--home", str(tmp_path / "home"), "--json"])
     assert code == 1
     report = json.loads(capsys.readouterr().out)
-    assert len(report["checks"]) == 14
+    assert len(report["checks"]) == 13
     assert all({"name", "status", "detail", "remedy"} <= set(check) for check in report["checks"])
     red = next(check for check in report["checks"] if check["status"] == "red")
     assert red["remedy"]
@@ -238,7 +201,7 @@ def test_doctor_json_carries_no_codex_hooks_row(
 
 def test_the_summary_line_is_bounded() -> None:
     # `findings.LISTED_LIMIT` exists because an unbounded summary pushes the repairing command
-    # off the end of the line, and fourteen checks is already past eight. Asserted over a
+    # off the end of the line, and thirteen checks is already past eight. Asserted over a
     # synthetic report rather than a fixture, because arranging nine simultaneous real failures
     # would be a test about the fixture.
     checks = [Check(f"check-{n}", RED, "d", "r") for n in range(LISTED_LIMIT + 3)]

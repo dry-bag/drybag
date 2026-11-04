@@ -26,9 +26,8 @@ directory, which the `attach` area's `doctor.py` compares the pointer with, and 
 links point at in the overlay, which `attach` asks the length of before its first write
 (`build_composed`, `composed_directory`, `render_missing_index`, `withdraw_composed`,
 `link_sources`), and the trust region `tests/test_install_path.py` asserts end to end
-(`DELIMITER`, `markers`). The link graph's check is this area's own (`memory.graph`, which
-`memory refs` reports), so the wiki-link grammar, the note walk and `resolved` have no reader
-outside it and are not here. The overlay root the machine file records and the checkout's
+(`DELIMITER`, `markers`). The note walk and `resolved` have no reader outside this area and are
+not here. The overlay root the machine file records and the checkout's
 `origin` are the core's to answer (`config.overlay.overlay_root`, `gitenv.origin_remote` and
 `gitenv.GitUnavailable`), because `init` asks them too and may not import this area; the
 crossings still pinned are listed in `tests/boundaries/test_delivery.py`.
@@ -62,12 +61,10 @@ this area's tests use; an area that comes to need one grows this list by the rul
   that want one run it.
 - **The notes group** — `read_note`, `render_note`, `with_index`, `write_note`, `NoteError`,
   `NoteType` — and nothing outside this area imports them.
-- **The refs group** — `check_refs`, `unresolved`, `audience_violations`, `RefsReport`: an area
-  existing is not the same as an area importing, and none imports these.
 - **The inventory group** — `inventory`, `totals`, `Entry` — and nothing outside this area
   imports them.
-- **The store predicates** — `in_repository`, `refusal_reason`,
-  `overlay_group_target` and `resolved`, none with a reader outside this area.
+- **The store predicates** — `in_repository`, `overlay_group_target` and `resolved`, none with
+  a reader outside this area.
 - **The helpers** — `blocks` and `split`, with no reader outside this area.
 - **The bundles group** — `fit`, `render`, and the `Bundle` and `Fit` their signatures name. The
   `bundles` row is this area's own (`memory/doctor.py`) and reads `memory.bundles` directly.

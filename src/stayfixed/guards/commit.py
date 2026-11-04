@@ -131,7 +131,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 from stayfixed.errors import Refusal
-from stayfixed.findings import Finding
 from stayfixed.gitenv import NO_ANSWER, answer_bytes, git_run
 
 if TYPE_CHECKING:
@@ -538,22 +537,6 @@ def check_range(root: Path, rev_range: str, config: Config) -> Report:
         if offences:
             violations.append(Violation(sha, tuple(offences)))
     return Report(len(commits), tuple(violations))
-
-
-def commit_gate(root: Path, config: Config, base: str) -> list[Finding]:
-    """The `commit` gate's whole composition: each attribution line in `base..HEAD` as a finding.
-
-    A finding's location is the commit's sha, the line in its message and a label from
-    `ATTRIBUTION_LABELS` — all computed here, none of it repository text. `commit check --range`
-    calls `check_range` itself rather than this function, because it reports more than
-    findings: how many messages it read.
-    """
-    report = check_range(root, f"{base}..HEAD", config)
-    return [
-        Finding("attribution", violation.sha, offence.line, offence.label)
-        for violation in report.violations
-        for offence in violation.offences
-    ]
 
 
 def harness_says_what_commits_carry(home: Path | None) -> bool:

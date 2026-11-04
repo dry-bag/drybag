@@ -8,7 +8,7 @@ wherever it is asked.
 **Three of them are repository-authored strings, and each is held to a grammar before it is
 returned:** the remote's last path segment and the checkout's directory name to `[project]
 name`'s, and `origin/HEAD`'s branch — or, in a repository with no remote at all, the branch
-checked out — to the one a rendered workflow accepts. A name outside its grammar is
+checked out — to `BRANCH_NAME`, git's own rules for a branch. A name outside its grammar is
 refused naming the grammar and never the value, or, leniently, returned as `""` and `not
 derivable`, so `init --questions` asks for it rather than suggesting it. A branch outside its
 grammar is reported as the default.

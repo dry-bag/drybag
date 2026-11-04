@@ -45,20 +45,13 @@ from stayfixed.config.reading import (
 from stayfixed.config.schema import (
     BRANCH_NAME,
     BRANCH_RULE,
-    BUILTIN_GATES,
-    CI_MODES,
-    CONFIG_CHECK,
     MEMORY_MODES,
     NAME_RULE,
     PROJECT_NAME,
     SECTION_NAME,
-    Artifacts,
     Budgets,
-    Ci,
     CommitMessages,
     Config,
-    CustomGate,
-    Gates,
     Ledger,
     Memory,
     NativeCaps,
@@ -68,7 +61,7 @@ from stayfixed.config.schema import (
     Stayfixed,
 )
 from stayfixed.errors import Failure
-from stayfixed.findings import LISTED_LIMIT, listed
+from stayfixed.findings import LISTED_LIMIT
 from stayfixed.fsops import TooLarge, read_regular_text, said
 from stayfixed.presets import (
     DEFAULT_PRESET,
@@ -87,9 +80,6 @@ SECTIONS = (
     "memory",
     "budgets",
     "ledger",
-    "artifacts",
-    "ci",
-    "gates",
     "commit_messages",
     "guards",
 )
@@ -114,35 +104,6 @@ NOT_A_PRESET_NAME = "stayfixed.preset must be a string; {available}"
 # digits, `.`, `_` and `-` in `/`-separated segments.
 UNKNOWN_NOTE = "{name} is not a setting this stayfixed reads; it is ignored"
 RESET_NOTE = "{key} is left out ({reason}); the preset's value applies"
-# A named cap: the most keys the NOTE path removes from a document and builds it again without. Each
-# removal costs a whole build of the configuration, `validate_paths` included, so a document holding
-# thousands of keys nothing can use -- ten thousand custom gates with an empty `run`, a 200 KB
-# committed file -- cost a hook more than its ten-second timeout, which Claude Code answers by
-# letting the `PreToolUse` call through, the guard silent. A release
-# that leaves a handful of keys an older one cannot use is what the NOTE path reads key by key; 64
-# is far above that. It bounds how many builds there are and not what they cost: a build costs in
-# proportion to the document, which `NOTE_REBUILT_LIMIT` bounds them by. Past it the document is
-# refused whole (`TooManyResets`), and a session runs on the preset and the owner's layer. No
-# shipped file states it.
-NOTE_REMOVAL_LIMIT = 64
-# A named cap: how many characters of document the NOTE path builds again, its removals together.
-# 50,000 custom gates that run beside 64 that cannot, a 1.4 MB file, took a session six seconds
-# within the count alone, 64 builds each over every gate. So a document is read past only as many
-# removals as this divided by its length allows, and never more than `NOTE_REMOVAL_LIMIT`: 64 for
-# any document up to 16 KiB, still many times a `stayfixed.toml` that `init` writes, and 4 for the
-# longest a session reads (`session.SESSION_READ_LIMIT`, 256 KiB), so a session builds at most
-# about 1.25 MiB of any document it reads. The costliest is that longest one filled with dotted
-# custom gates that run (`g1.run = [""]`, the most gates to the byte) beside keys that fail only
-# once every gate is built, four `[paths]` values that escape: parsed and built five times, it
-# took 0.25 s of CPU on Python 3.13 and 0.28 s on 3.11.4 on a laptop's performance cores, and 1.4
-# to 1.5 s on its efficiency cores (`taskpolicy -c background`). With this at 4 MiB and the read
-# at 1 MiB, the same shape a mebibyte long took 1.2 s, 1.9 s and 6.1 to 7.5 s, which a slower
-# machine would have carried past a hook's ten seconds. No shipped file states it.
-NOTE_REBUILT_LIMIT = 1024 * 1024
-TOO_MANY_RESETS = (
-    "{path} holds more than {limit} settings this stayfixed cannot use, so it is not read key "
-    "by key"
-)
 # `UnusableKey`'s two sentences, in the same words as the notes: a key, or a section holding one,
 # that has no default, and a key whose preset value fails too. `reason` is again the refusal
 # `loads` would have raised for that key, or, for a preset value, the one that value got.
@@ -151,27 +112,6 @@ UNUSABLE_PRESET = (
     "{key} falls back to the preset's value, which does not hold in this repository either "
     "({reason})"
 )
-# Every refusal below names its key and quotes no value from the document. A count is a count, and
-# the names a refusal lists are stayfixed's own tuple or configured names that have already matched
-# `PROJECT_NAME`.
-GATES_BUILTIN_UNKNOWN = (
-    "[gates] builtin names {count} gate(s) stayfixed does not have; the built-in gates are {known}"
-)
-GATES_BUILTIN_TWICE = "[gates] builtin names a gate twice"
-GATES_CUSTOM_NAME = (
-    "[gates] custom names {count} gate(s) stayfixed cannot run under that name: a custom gate's "
-    "name is {rule}, and neither a built-in gate's name nor `config`"
-)
-GATES_CUSTOM_TABLE = "[gates.custom.{name}] must be a table"
-GATES_CUSTOM_EMPTY = "gates.custom.{name}.run must name a command"
-GATES_CUSTOM_NUL = "gates.custom.{name}.run holds a NUL character, which no argv can carry"
-GATES_UNKNOWN = (
-    "[stayfixed] enforced names {count} gate(s) this project does not run; the gates it runs are "
-    "{known}"
-)
-GATES_TWICE = "[stayfixed] enforced names a gate twice"
-# The key every refusal of `[stayfixed] enforced` is about: left out, the project enforces nothing.
-ENFORCED = "stayfixed.enforced"
 
 
 T = TypeVar("T")
@@ -205,17 +145,6 @@ class UnusableKey(ConfigError):
         super().__init__(message, key=key)
 
 
-class TooManyResets(ConfigError):
-    """A document holding more keys the NOTE path cannot use than it removes (`limit`, which
-    `NOTE_REMOVAL_LIMIT` and `NOTE_REBUILT_LIMIT` set): a refusal of the whole document, so `key` is
-    `None`, and a reader that must go on drops the project's configuration whole, as for a
-    document that does not parse."""
-
-    def __init__(self, message: str, *, limit: int) -> None:
-        super().__init__(message)
-        self.limit = limit
-
-
 class TooLargeDocument(ConfigError):
     """`stayfixed.toml` longer than its reader reads (`read_document`'s `limit`), read no further:
     a refusal of the whole document, in the words of any file that cannot be read, which a session
@@ -234,19 +163,6 @@ def _table(raw: dict[str, Any], name: str) -> dict[str, Any]:
 
 def _merged(raw: dict[str, Any], defaults: dict[str, Any], name: str) -> dict[str, Any]:
     return {**defaults.get(name, {}), **_table(raw, name)}
-
-
-def _gate_branch(ci: dict[str, Any], project: Project) -> dict[str, Any]:
-    """`[ci]` with `gate_branch` taken from `[project] base_branch` when the file leaves it out.
-
-    The rendered workflow runs only for pull requests into `gate_branch`, and `assess`, `plan
-    check` and `adopt promote` judge against `base_branch`. A fixed default of `main` would make
-    a hand-written file that names `develop` as its base, and says nothing about `[ci]`, render a
-    workflow that never runs for a pull request into `develop` — local runs and CI judging two
-    different branches, with nothing printed. So the preset carries no `gate_branch`: left out,
-    it is the base branch, which the loader has already held to the branch grammar.
-    """
-    return {"gate_branch": project.base_branch, **ci}
 
 
 def _named(unknown: list[str], noun: str) -> str:
@@ -295,8 +211,8 @@ def _build(cls: type[T], name: str, values: dict[str, Any]) -> T:
         raise ConfigError(
             f"[{name}] has unknown key(s): {_named(unknown, 'key')}", key=f"{name}.{unknown[0]}"
         )
-    # A field with a default is filled by the section's own reader after `_build` (`Gates.custom`
-    # is the one), so only a field without one is required of the merged table.
+    # A field with a default need not be in the merged table, so only a field without one is
+    # required of it.
     required = {
         f.name
         for f in fields(cast(Any, cls))
@@ -316,10 +232,10 @@ def _build(cls: type[T], name: str, values: dict[str, Any]) -> T:
 def _enum(section: str, key: str, value: str, allowed: tuple[str, ...]) -> None:
     """The key and the vocabulary it may be spelled in; never the value it was spelled with.
 
-    The two keys this guards — `memory.mode` and `ci.mode` — are repository-authored strings
-    bounded by no grammar, so a clone can write anything at all into one, and the refusal reaches
-    a terminal and a model through the `init` and `attach` skills' relay. `; got {value!r}`
-    therefore put unbounded repository bytes into it:
+    The key this guards, `memory.mode`, is a repository-authored string bounded by no grammar, so
+    a clone can write anything at all into it, and the refusal reaches a terminal and a model
+    through the `init` and `attach` skills' relay. `; got {value!r}` therefore put unbounded
+    repository bytes into it, as it did for the `ci.mode` an earlier stayfixed read:
     `ci.mode must be one of reusable, uvx, none; got '\\x1b[2JIGNORE PRIOR RULES'`. `!r` escapes
     the control characters, which makes it milder than a raw-bytes leak and not a different
     kind of thing — it is still content- and length-unbounded.
@@ -361,77 +277,6 @@ def _deduplicated(memory: Memory) -> Memory:
     return replace(memory, groups=tuple(dict.fromkeys(memory.groups)))
 
 
-def _gates(raw: dict[str, Any], defaults: dict[str, Any]) -> Gates:
-    """`[gates]`: which built-in gates run, and the project's own.
-
-    A custom gate's name is a TOML key, which is arbitrary quoted text, so a name is counted
-    and never quoted until it has matched `PROJECT_NAME`; after that it is printable, and every
-    later refusal names it. `run` is never printed at all. The two argvs `subprocess` cannot run,
-    an empty one and one carrying a NUL, are refused here rather than raised as an internal
-    error by whatever runs the gate.
-    """
-    values = _merged(raw, defaults, "gates")
-    tables = values.pop("custom", {})
-    gates = _build(Gates, "gates", values)
-    unknown = [name for name in gates.builtin if name not in BUILTIN_GATES]
-    if unknown:
-        known = ", ".join(BUILTIN_GATES)
-        raise ConfigError(
-            GATES_BUILTIN_UNKNOWN.format(count=len(unknown), known=known), key="gates.builtin"
-        )
-    if len(set(gates.builtin)) != len(gates.builtin):
-        raise ConfigError(GATES_BUILTIN_TWICE, key="gates.builtin")
-    if not isinstance(tables, dict):
-        raise ConfigError("[gates.custom] must be a table", key="gates.custom")
-    reserved = (*BUILTIN_GATES, CONFIG_CHECK)
-    unusable = [name for name in tables if not PROJECT_NAME.match(name) or name in reserved]
-    if unusable:
-        # The key of the first unusable gate, which the NOTE path drops before it asks again; a
-        # second unusable one is the next attempt's refusal.
-        first = f"gates.custom.{unusable[0]}"
-        raise ConfigError(GATES_CUSTOM_NAME.format(count=len(unusable), rule=NAME_RULE), key=first)
-    custom: dict[str, CustomGate] = {}
-    for name, table in sorted(tables.items()):
-        # A custom gate has no preset value to fall back to, so every refusal of one is keyed to
-        # the gate itself: the NOTE path leaves the gate out rather than one of its keys.
-        gate_key = f"gates.custom.{name}"
-        if not isinstance(table, dict):
-            raise ConfigError(GATES_CUSTOM_TABLE.format(name=name), key=gate_key)
-        try:
-            gate = _build(CustomGate, gate_key, table)
-        except ConfigError as exc:
-            raise ConfigError(str(exc), key=gate_key) from None
-        if not gate.run:
-            raise ConfigError(GATES_CUSTOM_EMPTY.format(name=name), key=gate_key)
-        if any("\0" in part for part in gate.run):
-            raise ConfigError(GATES_CUSTOM_NUL.format(name=name), key=gate_key)
-        custom[name] = gate
-    return replace(gates, custom=custom)
-
-
-def _enforcement(config: Config) -> Config:
-    """`[stayfixed] enforced` held to the gates this project runs.
-
-    The list is the one adoption key: it names the gates that enforce, configured gate names,
-    once each, and nothing fills it. An entry outside the configured set is counted and never
-    quoted: it is exactly the value no grammar has bounded. The names the refusal lists are the
-    configured ones, each already held to a grammar.
-    """
-    stayfixed = config.stayfixed
-    names = config.gate_names
-    # Asked of a set: both lists are the repository's to lengthen, and forty thousand enforced
-    # gates asked of the tuple cost one build seconds.
-    configured = frozenset(names)
-    unknown = [name for name in stayfixed.enforced if name not in configured]
-    if unknown:
-        # Capped: custom gates are the repository's to add, so the list is bounded by nothing.
-        known = listed(list(names)) or "none"
-        raise ConfigError(GATES_UNKNOWN.format(count=len(unknown), known=known), key=ENFORCED)
-    if len(set(stayfixed.enforced)) != len(stayfixed.enforced):
-        raise ConfigError(GATES_TWICE, key=ENFORCED)
-    return config
-
-
 def _budgets(raw: dict[str, Any], preset: dict[str, Any], owner: Owner | None) -> Budgets:
     configured = _table(raw, "budgets")
     unknown = sorted(set(configured) - set(Budgets.NAMES))
@@ -465,9 +310,9 @@ def load(root: Path, *, machine: Path | None = None, owner: Owner | None = None)
     a session does. A command hands in the layer it resolved and said once (`loads`' `owner`).
 
     **One reader of the file.** Through `read_document`, which goes through `contained()`: a
-    `stayfixed.toml` that is a symlink is refused by every command, as `stayfixed gate` refuses
-    it. Read with a plain `read_text`, a clone's link to `/dev/zero` would keep `adopt`, `bugs
-    check` and `plan check` reading until the machine ran out of memory.
+    `stayfixed.toml` that is a symlink is refused by every command. Read with a plain `read_text`, a
+    clone's link to `/dev/zero` would keep `bugs check` and `plan check` reading until the machine
+    ran out of memory.
     """
     text = read_document(root)
     if text is None:
@@ -510,8 +355,8 @@ def loads(
 
     `load` is "read the file, then `loads`"; `init --yes` needs a `Config` for a document it
     has not written to disk yet, so the parse-and-validate half is this function on its own.
-    `label` is what a refusal calls the document when it is not the file at `root`: the base's
-    copy `stayfixed gate` reads out of git is validated against the tree's disk, and a refusal
+    `label` is what a refusal calls the document when it is not the file at `root`: a commit's
+    copy `bugs check --base` reads out of git is validated against the tree's disk, and a refusal
     naming `<root>/stayfixed.toml` would send its owner to a file with nothing wrong in it.
     `personal` is the `[personal]` a load earlier in the same command already read, taken in
     place of reading the machine file again: a caller that holds a `Config` and not the path
@@ -588,8 +433,7 @@ def _built(
         raise ConfigError(f"project.name must be {NAME_RULE}", key="project.name")
     for key in ("base_branch", "release_branch"):
         # Named, never quoted: the value becomes a git ref and reaches output lines, and it is
-        # the text the grammar refused. The grammar is the one the rendered workflow holds
-        # `[ci] gate_branch` to; git could not have such a branch anyway.
+        # the text the grammar refused; git could not have such a branch anyway.
         if not BRANCH_NAME.match(getattr(project, key)):
             raise ConfigError(
                 f"project.{key} is not a plain branch name: {BRANCH_RULE}", key=f"project.{key}"
@@ -598,10 +442,6 @@ def _built(
     memory = _deduplicated(_build(Memory, "memory", _merged(raw, defaults, "memory")))
     _enum("memory", "mode", memory.mode, MEMORY_MODES)
     ledger = _build(Ledger, "ledger", _merged(raw, defaults, "ledger"))
-    artifacts = _build(Artifacts, "artifacts", _merged(raw, defaults, "artifacts"))
-    ci = _build(Ci, "ci", _gate_branch(_merged(raw, defaults, "ci"), project))
-    _enum("ci", "mode", ci.mode, CI_MODES)
-    gates = _gates(raw, defaults)
     commit_messages = _build(
         CommitMessages, "commit_messages", _merged(raw, defaults, "commit_messages")
     )
@@ -629,13 +469,9 @@ def _built(
         budgets=_budgets(raw, preset, owner),
         native_caps=caps,
         ledger=ledger,
-        artifacts=artifacts,
-        ci=ci,
-        gates=gates,
         commit_messages=commit_messages,
         personal=personal,
     )
-    config = _enforcement(config)
     validate_paths(config, root)
     return config
 
@@ -682,12 +518,10 @@ def loads_noting(
 
     Nothing is removed that would leave the next attempt a required key to call missing, so no
     refusal is ever read against an earlier removal. Each retry removes one key the document
-    holds and builds the whole document again, so the removals are bounded by what they cost as
-    well as by their count: at most `NOTE_REMOVAL_LIMIT`, and at most `NOTE_REBUILT_LIMIT` over the
-    length of `text`. The refusal that would remove one more raises `TooManyResets`, a refusal of
-    the whole document. A refusal with no key is the whole document's and propagates, as a
-    document that is not TOML does; a required key the document never wrote is one
-    (`MissingKeys`). The owner's layer is folded in as `loads` folds it.
+    holds and builds the whole document again, so there are at most as many retries as the
+    schema has keys: `_known_only` removed every other name first. A refusal with no key is the
+    whole document's and propagates, as a document that is not TOML does; a required key the
+    document never wrote is one (`MissingKeys`). The owner's layer is folded in as `loads` folds it.
     `parsed` is `text` as a caller already parsed it, which is then not parsed again.
     """
     path = _document(root, label)
@@ -695,8 +529,6 @@ def loads_noting(
     notes: list[str] = []
     keys: list[str] = []
     document = _known_only(raw, notes, keys)
-    limit = min(NOTE_REMOVAL_LIMIT, NOTE_REBUILT_LIMIT // max(len(text), 1))
-    removed = 0
     while True:
         try:
             config = _built(document, root, machine=None, personal=None, owner=owner)
@@ -710,10 +542,6 @@ def loads_noting(
             unusable = _without_fallback(exc.key, exc, document, root)
             if unusable is not None:
                 raise UnusableKey(unusable, key=exc.key) from None
-            if removed == limit:
-                message = TOO_MANY_RESETS.format(path=path, limit=limit)
-                raise TooManyResets(message, limit=limit) from None
-            removed += 1
             table, name = held
             del table[name]
             notes.append(RESET_NOTE.format(key=clipped(exc.key), reason=exc))
@@ -753,22 +581,21 @@ def preset_named(document: Mapping[str, object]) -> str:
 
 
 # The keys the loader fills itself when the document leaves them out, where the preset's
-# `[defaults]` holds no value: the preset's own name (`DEFAULT_PRESET`), and `[ci] gate_branch`,
-# which is `[project] base_branch` (`_gate_branch`).
-_FILLED = frozenset({PRESET_KEY, "ci.gate_branch"})
+# `[defaults]` holds no value: the preset's own name (`DEFAULT_PRESET`).
+_FILLED = frozenset({PRESET_KEY})
 
 
 def _stands_in(dotted: str, defaults: dict[str, Any]) -> bool:
     """Whether a document without the key `dotted` names still builds a value for it.
 
-    A budget and a custom gate may simply be absent. A key of a schema section has a value when
+    A budget may simply be absent. A key of a schema section has a value when
     it has a schema default, a preset value in `defaults` (the preset's `[defaults]`), or one the
     loader fills (`_FILLED`); a section that is not a table has one when every key it holds does.
     A name no schema declares is answered no: `_known_only` removed every such name the document
     wrote before the first build, so one here is a name nothing has vouched for.
     """
     section, _, name = dotted.partition(".")
-    if section == "budgets" or dotted.startswith("gates.custom."):
+    if section == "budgets":
         return True
     schema = _SCHEMA_OF.get(section)
     if schema is None:
@@ -798,9 +625,6 @@ _SCHEMA_OF: dict[str, type[Any]] = {
     "paths": Paths,
     "memory": Memory,
     "ledger": Ledger,
-    "artifacts": Artifacts,
-    "ci": Ci,
-    "gates": Gates,
     "commit_messages": CommitMessages,
     "guards": Guards,
 }
@@ -845,33 +669,20 @@ def _known_keys(
         if key not in known:
             notes.append(UNKNOWN_NOTE.format(name=clipped(f"{dotted}.{key}")))
             keys.append(f"{dotted}.{key}")
-        elif dotted == "gates" and key == "custom" and isinstance(value, dict):
-            fields_of_gate = schema_types(CustomGate).keys()
-            kept[key] = {
-                name: _known_keys(f"gates.custom.{name}", gate, fields_of_gate, notes, keys)
-                if isinstance(gate, dict)
-                else gate
-                for name, gate in value.items()
-            }
         else:
             kept[key] = value
     return kept
 
 
 def _holding(table: dict[str, Any], dotted: str) -> tuple[dict[str, Any], str] | None:
-    """The table that holds the key `dotted` names, at any depth, and the key's name in it;
-    `None` when `table` holds no such key.
-
-    A name may itself hold a dot (a custom gate's name may), so each level is asked for the
-    whole remaining name first and then for every table whose name prefixes it.
-    """
+    """The table that holds the key `dotted` names — a section, or `section.key` — and the key's
+    name in it; `None` when `table` holds no such key."""
     if dotted in table:
         return table, dotted
-    for name, value in table.items():
-        if isinstance(value, dict) and dotted.startswith(f"{name}."):
-            found = _holding(value, dotted[len(name) + 1 :])
-            if found is not None:
-                return found
+    section, _, name = dotted.partition(".")
+    held = table.get(section)
+    if isinstance(held, dict) and name in held:
+        return held, name
     return None
 
 
@@ -880,8 +691,8 @@ def preset_defaults(project: str, *, preset: str = DEFAULT_PRESET) -> Config:
     `stayfixed.toml` and never will.
 
     The overlay is a repository stayfixed writes into and does not manage: it has no project
-    configuration, and the scaffold engine needs one (it reads `stayfixed.profile` and
-    `artifacts.local`, and nothing else). `init --yes` will want the same constructor for the
+    configuration, and the scaffold engine needs one (it reads `stayfixed.profile` and nothing
+    else). `init --yes` will want the same constructor for the
     first write into a project, before the file it would load exists.
 
     `stayfixed.version` is the one value the preset does not carry and `_build` requires: the
@@ -904,9 +715,6 @@ def preset_defaults(project: str, *, preset: str = DEFAULT_PRESET) -> Config:
         budgets=Budgets(preset=dict(raw.get("budgets", {}))),
         native_caps=_build(NativeCaps, "native_caps", dict(raw.get("native_caps", {}))),
         ledger=_build(Ledger, "ledger", defaults.get("ledger", {})),
-        artifacts=_build(Artifacts, "artifacts", defaults.get("artifacts", {})),
-        ci=_build(Ci, "ci", _gate_branch(dict(defaults.get("ci", {})), project_config)),
-        gates=_gates({}, defaults),
         commit_messages=_build(
             CommitMessages, "commit_messages", defaults.get("commit_messages", {})
         ),

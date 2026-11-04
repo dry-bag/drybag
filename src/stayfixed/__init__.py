@@ -2,8 +2,8 @@
 
 __version__ = "0.6.1"
 
-# The public repository, spelled once — the install hint, the workflow pin and the
-# `ci-ref` row all derive from it. `scripts/release.py check` reads `__version__` through a regex
-# anchored on that name alone, and does not see these two lines.
+# The public repository, spelled once — the install hints derive from it. `scripts/release.py
+# check` reads `__version__` through a regex anchored on that name alone, and does not see these
+# two lines.
 REPOSITORY_SLUG = "stayfixed/stayfixed"
 REPOSITORY_URL = f"https://github.com/{REPOSITORY_SLUG}"

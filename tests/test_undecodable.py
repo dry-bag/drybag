@@ -217,8 +217,8 @@ def test_an_undecodable_worktree_back_pointer_is_no_registered_worktree(tmp_path
 @pytest.mark.parametrize(
     ("argv", "planted"),
     [
-        (("init", "--yes", "--dry-run", "--no-ci"), "machine"),
-        (("init", "--yes", "--dry-run", "--no-ci"), CONFIG_FILE),
+        (("init", "--yes", "--dry-run"), "machine"),
+        (("init", "--yes", "--dry-run"), CONFIG_FILE),
         (("bugs", "check"), CONFIG_FILE),
     ],
     ids=["init-machine", "init-stayfixed-toml", "bugs-check-stayfixed-toml"],

@@ -30,8 +30,6 @@ one nobody can tell from a leftover:
 - `NO_CONFIG_SKIP` is the skip of a row that reads the project configuration in a repository with
   none: the areas' `attached` and `bundles` give it as the core's rows do, so one
   sentence says one state, through `configured`.
-
-`stayfixed assess` needs nothing from this list.
 """
 
 from stayfixed.doctor.checks import run_checks

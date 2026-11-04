@@ -42,8 +42,8 @@ non-zero on `--version` (run by its own path, never through `PATH`), or when `gi
 2. A command that only prints `42 passed` proves nothing: `not proven`, `not-recognised`.
 3. A run whose only test was skipped is `failed`, `all-skipped`, never a pass.
 4. `PYTHONOPTIMIZE=1`, which compiles assertions out, is `refused`, `assigned-forging`.
-5. A fixed bug's regression, run by a gate of the project's own that `stayfixed adopt promote`
-   enforces on `main`, fails `stayfixed gate` on the branch `change` that brings the bug back.
+5. A fixed bug's regression, which `stayfixed bugs regressions` proves on `main`, fails it on the
+   branch `change` that brings the bug back.
 6. `stayfixed attach` binds the repository to a scratch overlay and delivers this project's skill,
    `demo-canary`, and not the other project's, `other-canary`; `git status` stays empty.
 7. The `Stop`-hook recipe in `../stop-hook/`, given `pytest -q tests/test_total.py`, keeps the

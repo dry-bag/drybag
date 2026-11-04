@@ -413,8 +413,8 @@ def _resolved(
     names: Bindings, name: str, seen: frozenset[tuple[str, str]] = frozenset()
 ) -> Bindings:
     """What `name` is, bound as `name`: a name a package module only imports is what it imports
-    there, followed to the module that defines it, so `from stayfixed.memory.refs import
-    git_run` is `gitenv`'s `git_run`, which `refs` imports."""
+    there, followed to the module that defines it, so `from stayfixed.docs.trail import
+    git_run` is `gitenv`'s `git_run`, which `trail` imports."""
     resolved = Bindings(names.file, {}, {}, {})
     if name in names.stdlib:
         resolved.stdlib[name] = names.stdlib[name]

@@ -1,7 +1,6 @@
 """The red-run hint's machinery, with hints that stand in for a profile's: which hints speak after
 which command, and what a hint that fails costs. The Python profile's own hint is pinned beside it
-(`tests/profiles/python/test_hygiene.py`), and `stayfixed test hygiene` in
-`tests/guards/test_commands.py`."""
+(`tests/profiles/python/test_hygiene.py`)."""
 
 from __future__ import annotations
 
@@ -16,11 +15,13 @@ from stayfixed.config.loader import CONFIG_FILE
 from stayfixed.harnesses import CLAUDE
 from stayfixed.hints.hooks import register
 from stayfixed.hooks.dispatch import Recorder, dispatch
+from stayfixed.profiles.hints import answer
 from tests.gitfixture import git, needs_git
 from tests.profiles.redrun import (
     CONFIG,
     DIRTY_ONE,
     LEAD,
+    EmptyHint,
     FakeHint,
     LoudHint,
     WordlessHint,
@@ -147,7 +148,7 @@ def test_a_note_is_handed_counts_and_nothing_else(
     # integer, an `int` or `str` subclass that prints as something else, a non-string key and a
     # key shaped like a path are dropped before the hint renders anything, and the hint never sees
     # the very object it returned. A key is text too, and one a hint built from the tree it walked
-    # would carry that tree's names into `note` and into `stayfixed test hygiene --json`. Oracle:
+    # would carry that tree's names into `note`. Oracle:
     # `mutations/`'s "a hint's note is handed its report as returned", "a count keeps any string
     # for its name", "a count takes an int subclass, a boolean included, for a count", "a count
     # keeps a str subclass for its name" and "a count keeps a negative or unbounded integer".
@@ -158,3 +159,9 @@ def test_a_note_is_handed_counts_and_nothing_else(
     assert result.context == f"{LEAD}\n- loud says (1)"
     assert loud.given == {"found": 1}
     assert loud.given is not loud.returned
+
+
+def test_an_empty_note_is_nothing_to_report() -> None:
+    # An empty note is text with nothing in it: nothing to report, the same answer the hook gives
+    # by leaving the line out. Oracle: `mutations/`'s "an empty note is something to report".
+    assert answer(EmptyHint("x", "alpha says"), [])[1] is None

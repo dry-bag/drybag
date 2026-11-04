@@ -28,6 +28,6 @@ Skills reference the CLI by name (`stayfixed …`): the plugin root placeholder 
 in skill content under Codex, so a path to the launcher would break there. Detail beyond a
 short procedure goes in `<skill>/references/`.
 
-The seven authored skills, `adopt` among them, wrap the methodology rather than a command: each
+The six authored skills wrap the methodology rather than a command: each
 names the commands it runs and the reference that carries its detail, and each ends by saying
 what it does not do.

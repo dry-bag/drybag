@@ -3,7 +3,7 @@
 A profile is what stayfixed knows about one stack: which files say a repository is written in it
 (`detect`), which paths its rules are about (`scope`), the prose (`rules.md`), the lines every
 agent must have before its first command (`essentials`, the bullets of one marked section of
-that prose), and the static checks `stayfixed assess` runs. Nothing here knows which stack.
+that prose), and its static checks. Nothing here knows which stack.
 Adding a language adds a directory beside the shipped ones.
 
 A shipped profile is stayfixed's own data. A fault in one is a defect in the build: it raises

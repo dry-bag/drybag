@@ -103,10 +103,10 @@ _PYC_MTIME_MASK = 0xFFFFFFFF
 # the largest of those under a third of the timeout, which leaves room for a slower disk, a cold
 # cache and the `git status` the same hook runs; it is more bytecode, and 500k more entries, than
 # a code root holds once virtual environments and dependency trees are outside it.
-# `docs/cli.md`'s `test hygiene` section states both numbers.
+# `docs/cli.md`'s red-run note paragraph states both numbers.
 BYTECODE_READ_FILES = 20_000
 
-# The two counts `report` returns, and the names `stayfixed test hygiene --json` prints them under.
+# The two counts `report` returns, and the names they are kept under.
 STALE_KEY = "stale"  # .pyc files whose recorded source mtime no longer matches the source
 ROOTS_KEY = "roots"  # how many code roots were scanned
 STALE = (

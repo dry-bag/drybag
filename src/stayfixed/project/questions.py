@@ -1,6 +1,6 @@
 """What `stayfixed init` would ask, as a JSON Schema: `stayfixed init --questions`.
 
-Ten questions, each keyed by the `stayfixed.toml` key its answer writes, but the last, `plugins`,
+Seven questions, each keyed by the `stayfixed.toml` key its answer writes, but the last, `plugins`,
 which `stayfixed setup` answers on the machine rather than in the repository. Each carries the
 value `stayfixed init --yes` takes when it is not answered, where that value came from, the flag
 that answers it, and four lines (`TRADE_OFFS`): what the answer gives, what it gives up, what it
@@ -25,8 +25,6 @@ from typing import Any
 
 from stayfixed.config.schema import (
     BRANCH_NAME,
-    CI_MODES,
-    COMMIT_TYPE,
     HARNESS_MODE,
     IN_REPO_MODE,
     LOCAL_ONLY_MODE,
@@ -35,7 +33,6 @@ from stayfixed.config.schema import (
     PROJECT_NAME,
     Config,
 )
-from stayfixed.project.templates import LOCAL_ELIGIBLE
 
 # The recommended plugins' question, which no `stayfixed.toml` key answers: they are installed on
 # the machine, by the command its flag names.
@@ -47,10 +44,7 @@ FLAGS = {
     "project.base_branch": "--base-branch",
     "memory.mode": "--memory-mode",
     "stayfixed.profile": "--profile",
-    "ci.mode": "--no-ci",
     "commit_messages.attribution_check": "--attribution-check",
-    "commit_messages.types": "--commit-type",
-    "artifacts.local": "--local",
     "stayfixed.agents": "--agent",
     PLUGINS: "stayfixed setup --plugin",
 }
@@ -61,15 +55,15 @@ PROPERTIES = tuple(FLAGS)
 # the line cannot name a plugin the preset no longer recommends.
 TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
     "project.name": (
-        "the name stayfixed calls this project by: the heading of AGENTS.md and the overlay "
-        "project a later attach binds",
+        "the name stayfixed calls this project by: the overlay project a later attach binds",
         "nothing",
         "[project] name in stayfixed.toml",
         "edit [project] name in stayfixed.toml",
     ),
     "project.base_branch": (
-        "the branch the workflow gates and the gates compare a change against",
-        "a pull request into any other branch is not gated",
+        "the branch `plan check` and `test attribute` compare a change against when no --base "
+        "is given",
+        "a change into any other branch needs --base on both",
         "[project] base_branch and release_branch in stayfixed.toml",
         "edit both in stayfixed.toml",
     ),
@@ -81,48 +75,25 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "change [memory] mode in stayfixed.toml; notes already written stay where they are",
     ),
     "stayfixed.profile": (
-        "the stack's rules, in AGENTS.md and a rules file every agent reads before its first "
-        "command",
-        "nothing a gate enforces; the rules file is yours to edit, and an edited one is no "
-        "longer refreshed",
-        "[stayfixed] profile in stayfixed.toml and the profile's rules files",
-        'set [stayfixed] profile = "" and run `stayfixed upgrade`, which removes the rules files '
-        "you have not edited",
-    ),
-    "ci.mode": (
-        "a workflow that runs stayfixed's gates on every pull request, pinned to a released "
-        "stayfixed commit",
-        "init asks the public stayfixed repository for that commit over the network",
-        ".github/workflows/stayfixed.yml, and [ci] mode and ref in stayfixed.toml",
-        'set [ci] mode = "none" and run `stayfixed upgrade`, which removes the workflow if you '
-        "have not edited it",
+        "the stack profile this project names",
+        "nothing",
+        "[stayfixed] profile in stayfixed.toml",
+        'set [stayfixed] profile = "" in stayfixed.toml',
     ),
     "commit_messages.attribution_check": (
-        "the commit gate fails a pull request whose commit messages end in an AI tool's "
+        "`stayfixed commit check` fails a range whose commit messages end in an AI tool's "
         "attribution trailer or footer",
         "every such trailer has to come out before a merge; the git hook `stayfixed setup "
         "--git-hooks` installs strips it as you commit, except where your own harness settings "
-        "set attribution.commit to text, which the hook then leaves for the gate to fail",
+        "set attribution.commit to text, which the hook then leaves for `commit check` to fail",
         "[commit_messages] attribution_check in stayfixed.toml",
         "set it to false in stayfixed.toml",
     ),
-    "commit_messages.types": (
-        "`stayfixed assess` names the recent commits whose subject's type is not in this list",
-        "nothing is refused: the probe only advises",
-        "[commit_messages] types in stayfixed.toml",
-        "edit the list in stayfixed.toml",
-    ),
-    "artifacts.local": (
-        "the documents you choose stay on this machine, under .stayfixed/local/artifacts/",
-        "no one else sees them: not a teammate, not CI, not another clone",
-        "[artifacts] local in stayfixed.toml and the copies under .stayfixed/local/artifacts/",
-        "take the id out of [artifacts] local and run `stayfixed upgrade`",
-    ),
     "stayfixed.agents": (
-        "each agent you use gets its own pointer at AGENTS.md and the profile's rules",
-        "nothing; an agent left out still reads AGENTS.md",
-        "[stayfixed] agents in stayfixed.toml and each agent's pointer files",
-        "edit [stayfixed] agents and run `stayfixed upgrade`",
+        "the coding agents this project lists",
+        "nothing",
+        "[stayfixed] agents in stayfixed.toml",
+        "edit [stayfixed] agents in stayfixed.toml",
     ),
     PLUGINS: (
         "the plugins the recommended preset names, {plugins}, in every Claude Code session",
@@ -135,15 +106,6 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
     ),
 }
 TRADE_OFF_KEYS = ("get", "give_up", "trace", "undo")
-# A title for each `[ci] mode` the CI question offers, read in `CI_MODES`' order: a mode with no
-# title and not in `CI_UNOFFERED` is a `KeyError` when the schema is built, loud in every test.
-CI_TITLES = {
-    "reusable": "Gate pull requests with stayfixed's reusable workflow",
-    "none": "No CI workflow",
-}
-# `uvx` is not offered: `init --yes` answers the question with `--no-ci` alone, so no flag could
-# give that answer, and a project that wants it sets `[ci] mode` in `stayfixed.toml` itself.
-CI_UNOFFERED = frozenset({"uvx"})
 SCHEMA = "https://json-schema.org/draft/2020-12/schema"
 # The source of a default that nothing in the repository chose.
 PRESET = "the preset's default"
@@ -194,7 +156,7 @@ def _recommended() -> list[str]:
 
 
 def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
-    """The ten questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
+    """The seven questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
 
     Refused where `init --yes` with an answer would be (`init.precheck`): a manifest, or a
     `stayfixed.toml` that already answers them. Detection is lenient, so a name outside the
@@ -245,36 +207,10 @@ def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
             "default": found.profile,
             "x-stayfixed-source": found.sources["profile"],
         },
-        "ci.mode": {
-            "type": "string",
-            "title": "Gate pull requests in CI",
-            "oneOf": [
-                {"const": mode, "title": CI_TITLES[mode]}
-                for mode in CI_MODES
-                if mode not in CI_UNOFFERED
-            ],
-            "default": preset.ci.mode,
-            "x-stayfixed-source": PRESET,
-        },
         "commit_messages.attribution_check": {
             "type": "boolean",
             "title": "Fail a pull request whose commit messages carry an AI tool's attribution",
             "default": preset.commit_messages.attribution_check,
-            "x-stayfixed-source": PRESET,
-        },
-        "commit_messages.types": {
-            "type": "array",
-            "title": "Commit types a subject may start with",
-            "items": {"type": "string", "pattern": ecma(COMMIT_TYPE)},
-            "minItems": 1,
-            "default": list(preset.commit_messages.types),
-            "x-stayfixed-source": PRESET,
-        },
-        "artifacts.local": {
-            "type": "array",
-            "title": "Files kept out of git",
-            "items": {"type": "string", "enum": list(LOCAL_ELIGIBLE)},
-            "default": list(preset.artifacts.local),
             "x-stayfixed-source": PRESET,
         },
         "stayfixed.agents": {
