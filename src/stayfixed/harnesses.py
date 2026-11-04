@@ -1,12 +1,9 @@
 """Every harness stayfixed serves, as values in one registry.
 
-A harness is served first by the `AGENTS.md` region, which `project.templates` renders and
-every harness that reads the standard sees. Where a harness reads something better natively,
-its `render_profile` renders a profile into that form. `settings` names the committed files in
-which it reads hook entries, for `stayfixed assess`'s foreign-hooks probe to inventory;
-`marker_dir` is the directory whose presence says a repository uses it. A harness is a value,
-not a class: what this module states about a harness is one more value in `HARNESSES`, and
-nothing that reads the registry changes. What it does not state yet is the list below.
+`settings` names the committed files in which a harness reads hook entries; `marker_dir` is the
+directory whose presence says a repository uses it. A harness is a value, not a class: what this
+module states about a harness is one more value in `HARNESSES`, and nothing that reads the
+registry changes. What it does not state yet is the list below.
 
 The registry is also the adapter the `hooks` area answers through. `stayfixed hook` asks `detect`
 which value it is running under and shapes its stdout with that value's `render`, and nothing
@@ -49,9 +46,6 @@ package that names a harness is pardoned there, each pardon by one of these item
   with Claude Code's verbs, `PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL` in
   `attach.render`, and `detach` withdraws it with `PLUGIN_UNINSTALL_LOCAL` and
   `PLUGIN_MARKETPLACE_REMOVE` beside them, so another harness is another render and other verbs.
-- `init` renders `CLAUDE.md`, Claude Code's pointer to `AGENTS.md`, whatever `[stayfixed] agents`
-  lists (`project.templates`, from the template `claude.md`): a project that lists Codex alone
-  gets it too.
 - The overlay spells each harness's half by name: `common/claude` and `common/codex`
   (`overlay.layout`, re-exported by `overlay.api`), and the per-project `claude` and `codex`
   directories, `.codex/rules` and the directories it creates in a project, which `attach` reads
@@ -75,10 +69,9 @@ package that names a harness is pardoned there, each pardon by one of these item
   `hooks.api`, `hooks.sink`), in `guards` and in the areas' hook handlers, so a
   harness whose payload differs is an edit to each.
 
-Elsewhere, code that needs a harness fact asks this registry: `assess` reads every selected
-value's `settings` for hook entries; `doctor` reads the plugin-root variables off every value;
-`setup` reads the machine's settings file off `CLAUDE.settings`; and `attach` merges into the one
-file `CLAUDE.local_settings` names.
+Elsewhere, code that needs a harness fact asks this registry: `doctor` reads the plugin-root
+variables off every value; `setup` reads the machine's settings file off `CLAUDE.settings`; and
+`attach` merges into the one file `CLAUDE.local_settings` names.
 
 A name `[stayfixed] agents` lists and no harness answers to is counted, never refused and never
 printed: the list is repository-authored, and a project may name a harness a later stayfixed
@@ -92,19 +85,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from stayfixed.profiles import Profile
-
-
-@dataclass(frozen=True)
-class Rendition:
-    """One file a harness reads natively, rendered from a profile."""
-
-    artifact_id: str
-    target: str
-    render: Callable[[], str]
+from typing import Any
 
 
 class Surface(StrEnum):
@@ -113,9 +94,9 @@ class Surface(StrEnum):
     # A hook that adds context and refuses nothing: the background-cleanup hints, the
     # pipe-status hint, the test-hygiene note, the standing rules, the volatile notes.
     NOTICES = "session notices"
-    # The bug, documentation, plan, commit and trail checks, run by the reusable workflow.
+    # The bug, documentation, plan, commit and trail checks, run in a project's CI.
     GATES = "repository gates"
-    # The skills and the `AGENTS.md` region.
+    # The skills.
     METHOD = "methodology"
 
 
@@ -149,7 +130,7 @@ class Harness:
     marker_dir: str
     settings: tuple[str, ...]
     # Settings files this harness reads that a repository keeps out of git, which `doctor`
-    # walks beside `settings` and `stayfixed assess` does not: they are this machine's.
+    # walks beside `settings`: they are this machine's.
     local_settings: tuple[str, ...]
     # The variable this harness names the project root in, if any. Every registered value's is
     # asked, in `project_root_variables`' order, whichever harness was detected (`detect`).
@@ -167,8 +148,6 @@ class Harness:
     plugin_root_env: str
     # Positive detection, for every harness but the canonical one, which is the fallback.
     detects: Callable[[Mapping[str, str], Mapping[str, Any] | None], bool] | None = None
-    # The profile, and the repository-relative path of its rules file.
-    render_profile: Callable[[Profile, str], Rendition] | None = None
 
 
 def hook_specific_output(event_name: str, context: str, notice: str) -> str:
@@ -199,36 +178,9 @@ def _codex_detects(env: Mapping[str, str], payload: Mapping[str, Any] | None) ->
 
 
 CLAUDE_DIR = ".claude"
-POINTER = (
-    "This repository's `{name}` rules are in `{rules}`; open that file before editing a file "
-    "these paths match. It is the one copy, and changes to the rules go there.\n"
-)
-
-
-def _claude_rule(profile: Profile, rules: str) -> Rendition:
-    """A path-scoped rule whose body points at the one copy of the rules, and copies nothing.
-
-    `paths:` is the one frontmatter field Claude Code reads in a rules file, and a rule under it
-    loads when the session reads a matching file, not on every prompt. The body is one sentence
-    rather than the rules themselves: a copy would drift from the file the project edits, and
-    an import inside a rules file is not documented behaviour. `stayfixed-` in the file name says
-    who owns it and leaves `<profile>.md` free for the project's own rule.
-    """
-    # `json.dumps` quotes each glob as a YAML double-quoted scalar. The globs are the profile's
-    # own and carry `*`, which bare YAML would read as an alias.
-    head = "---\npaths:\n" + "".join(f"  - {json.dumps(g)}\n" for g in profile.scope) + "---\n\n"
-    body = POINTER.format(name=profile.name, rules=rules)
-    return Rendition(
-        "claude-rules", f"{CLAUDE_DIR}/rules/stayfixed-{profile.name}.md", lambda: head + body
-    )
-
-
-# The gates are the reusable workflow's, which runs the same under every agent: this repository's
-# smoke workflow runs it against a fixture project, and no agent takes part.
+# The gates run in a project's own CI, which runs the same under every agent: no agent takes part.
 _IN_CI = Reach(
-    Tier.CI,
-    "the reusable workflow, run on a fixture project by `.github/workflows/smoke.yml` on every "
-    "change to this repository and weekly",
+    Tier.CI, "unmeasured: the checks run in a project's own CI, where no agent takes part"
 )
 # The records the measurements below are kept in. The delivery spike's plan is not named by its
 # path, which carries words this repository keeps out of its code.
@@ -273,12 +225,11 @@ CLAUDE = Harness(
             ),
         }
     ),
-    render_profile=_claude_rule,
     plugin_root_env="CLAUDE_PLUGIN_ROOT",
 )
 # Codex reads `AGENTS.md` from the root down and no other instruction file, and follows no
-# import; `.codex/rules` holds command-execution policy, not instructions. The region is how a
-# profile reaches it, and there is nothing further to render.
+# import; `.codex/rules` holds command-execution policy, not instructions. stayfixed writes no
+# instruction file for it.
 CODEX = Harness(
     name="codex",
     marker_dir=".codex",
@@ -315,25 +266,18 @@ CANONICAL = CLAUDE
 # The order `init` writes into `[stayfixed] agents`.
 HARNESSES: tuple[Harness, ...] = (CLAUDE, CODEX)
 
-# The settings files whose hook entries are read as a harness was measured running them: past a
-# leading UTF-8 byte-order mark, and past a scalar where an event's list, a group, a group's
-# `hooks` or an entry belongs (`scaffold.judged_entries`). Claude Code 2.1.288 ran the valid hooks
-# of such a file (measured on macOS, 2026-10-05, on the project's `.claude/settings.json`); every
-# other settings file -- Codex's, which no measurement covers -- is read as strictly as the merge
-# that rewrites it. A path relative to the project root.
-LENIENT_SETTINGS: frozenset[str] = frozenset(CLAUDE.settings)
-# The leading UTF-8 byte-order mark Claude Code reads past in a file of `LENIENT_SETTINGS`.
+# The leading UTF-8 byte-order mark Claude Code reads past in its settings files (measured on
+# macOS, 2026-10-05, Claude Code 2.1.288, on the project's `.claude/settings.json`).
 BYTE_ORDER_MARK = "\ufeff"
 
 
 def lenient_settings(text: str) -> str:
-    """The text of a Claude Code settings file of `LENIENT_SETTINGS` as Claude Code reads it: past a
-    leading UTF-8 byte-order mark.
+    """The text of a Claude Code settings file as Claude Code reads it: past a leading UTF-8
+    byte-order mark.
 
-    The one reading of that mark for every reader of such a file: the hook entries' walk
-    (`scaffold.judged_entries`) and `setup`'s merge into the user settings file, the last from the
-    file's bytes as UTF-8. Refused, the mark stopped `setup` on an owner's own file the harness
-    reads.
+    The one reading of that mark for every reader of such a file: `setup`'s merge into the user
+    settings file, from the file's bytes as UTF-8, and the commit guard's read of it. Refused, the
+    mark stopped `setup` on an owner's own file the harness reads.
     """
     return text.removeprefix(BYTE_ORDER_MARK)
 

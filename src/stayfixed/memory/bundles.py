@@ -237,7 +237,7 @@ def fit(bundle: Bundle, store: Store, config: Config) -> Fit:
 OVERSIZED_NOTICE = (
     "stayfixed: the {bundle} bundle's part {part} is a single block larger than one "
     "session-start slot, so it was withheld rather than delivered cut in half. Nothing here is "
-    "missing from the store; run `stayfixed memory fit` to see which block is oversized, and "
+    "missing from the store; run `stayfixed memory inventory` to see which note is largest, and "
     "split or shorten it."
 )
 

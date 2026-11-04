@@ -37,8 +37,8 @@ allow rules included, is listed in the `info/exclude` block (`attach.exclude`), 
 carries; the block is written first, and git is then asked whether each placed path is ignored,
 so a `.gitignore` that re-includes one (a `!` line outranks the exclude file) stops the run
 before that path is written. The binding id is placed too, but in the git common directory, which
-git never tracks, so it is neither listed nor asked about. `init`'s own `stayfixed:ignore` region
-is `init`'s, and this module neither writes nor withdraws it.
+git never tracks, so it is neither listed nor asked about. A `stayfixed:ignore` region in
+`.gitignore` is not this module's: it neither writes nor withdraws one.
 
 **Every write goes through a primitive that already exists.** `fsops.write_within(root, …)` for
 everything inside the project, `fsops.write_within(overlay, …)` for the overlay's project record,

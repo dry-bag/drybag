@@ -91,7 +91,7 @@ def upgrade(root: Path, *, dry_run: bool) -> OverlayUpgrade:
     make it unsafe.
 
     `project.name` is the instance's directory name and goes nowhere: the engine reads
-    `stayfixed.profile` and `artifacts.local` out of a `Config` and nothing else. It is passed
+    `stayfixed.profile` out of a `Config` and nothing else. It is passed
     because a `Config` has to be complete, not because an overlay is a project.
     """
     require_overlay(root, because=NOT_AN_OVERLAY)

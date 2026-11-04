@@ -207,7 +207,7 @@ def test_without_an_overlay_layer_the_mode_is_the_presets_and_no_pointer_is_writ
 
 
 def _doctor(tmp_path: Path, root: Path, machine: Path) -> dict[str, Check]:
-    rows = run_checks(root, home=None, machine=machine, runner=Recorder(), env=_env(tmp_path))
+    rows = run_checks(root, home=None, machine=machine, env=_env(tmp_path))
     return {row.name: row for row in rows}
 
 

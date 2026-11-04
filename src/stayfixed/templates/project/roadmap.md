@@ -1,8 +1,8 @@
 # Roadmap
 
 Phase status in prose — the phase you are in first, what follows it after — with the trail
-below generated. Closed phases move to the roadmap history; `stayfixed docs check` budgets the
-prose above the trail marker.
+below generated. A closed phase leaves this file; `stayfixed docs check` budgets the prose
+above the trail marker.
 
 ## Now
 

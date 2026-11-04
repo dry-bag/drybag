@@ -38,9 +38,8 @@ session-start handler. The floor is one grammar and two readers, and the other i
 `overlay-requires` row in `stayfixed doctor` (`overlay/doctor.py`); the overlay's sync state is the
 overlay's question, asked where the overlay is owned.
 
-`later` and `RELEASE`, the order of two versions and the `X.Y.Z` grammar whole, are the core's
-`stayfixed.semver`, which the floor's reader builds on; `upgrade`, `doctor` and `stayfixed gate`
-import them from there.
+`later`, the order of two versions, is the core's `stayfixed.semver`, which the floor's reader
+builds on; `doctor` imports it from there.
 """
 
 from stayfixed.overlay.create import (

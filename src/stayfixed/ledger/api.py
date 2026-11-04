@@ -6,11 +6,11 @@ submodule it wants, so a re-export list in `__init__.py` would pull this whole a
 it the configuration layer — into every `discover()` call. `tests/ledger/test_surface.py`
 asserts the `__init__` imports nothing at all.
 
-**Outside this area, `stayfixed.assess.gates` imports `bugs_gate`; `stayfixed.project.templates`
+**Outside this area, `stayfixed.project.templates`
 (with its tests) imports `render_index` and `bug_register` to write a new project's first index,
-and `BUG_RUNBOOK` and `BUG_AUDITS`, joined by `ledger_path`, to write the runbook and audits
-README where that index links them; and `stayfixed.docs.plans` and `stayfixed.memory.graph`
-import `bug_register` for the bug ledger's identifiers — nothing else on this list**, measured
+and `BUG_AUDITS`, joined by `ledger_path`, to write the audits README where that index links it;
+and `stayfixed.docs.plans`
+imports `bug_register` for the bug ledger's identifiers — nothing else on this list**, measured
 over `src/`, `scripts/` and `tests/`. So every other name below is here on an argument rather
 than on a caller, and the argument is written beside it.
 
@@ -28,7 +28,7 @@ that reads them:
 
 Both are read and written against a register: `Register`, with the `Schema` and the `Section`s it
 carries, and `bug_register`, which builds the bug ledger's from a project's configuration and links
-its runbook and audits directory by the two names `init` writes them under.
+its audits directory; `init` writes the audits README under that directory.
 `parse_entry`, `load_entries` and `render_index` each take one, so `tests/test_surfaces.py`
 derives the three types from their signatures.
 
@@ -49,20 +49,14 @@ publishes at all is a structural decision and the owner's; the list stays above 
 The identifier grammar and the finding shape are **not** here: they are leaves
 (`stayfixed.identifiers`, `stayfixed.findings`), and the surface test pins every export to this
 area's own modules, so re-exporting a leaf would redden it. An area that reads the bug ledger's
-identifiers takes them from its register, `bug_register(config).ids`, as the `Fixes` claim and
-the memory graph do: the prefix is read one way, the way the ledger reads it.
-
-**`bugs_gate` is `stayfixed assess`'s.** It is `(root, config, base) -> list[Finding]`, the
-shape every gate shares, and `bugs check` answers with the same function. It builds the bug
-ledger's register and runs `register_gate`, which stays behind it in `stayfixed.ledger.check`.
+identifiers takes them from its register, `bug_register(config).ids`, as the `Fixes` claim does: the
+prefix is read one way, the way the ledger reads it.
 """
 
-from stayfixed.ledger.check import bugs_gate
 from stayfixed.ledger.entries import Entry, LedgerError, load_entries, parse_entry
 from stayfixed.ledger.index import is_generated_index, render_index
 from stayfixed.ledger.register import (
     BUG_AUDITS,
-    BUG_RUNBOOK,
     Register,
     Schema,
     Section,
@@ -72,14 +66,12 @@ from stayfixed.ledger.register import (
 
 __all__ = [
     "BUG_AUDITS",
-    "BUG_RUNBOOK",
     "Entry",
     "LedgerError",
     "Register",
     "Schema",
     "Section",
     "bug_register",
-    "bugs_gate",
     "is_generated_index",
     "ledger_path",
     "load_entries",

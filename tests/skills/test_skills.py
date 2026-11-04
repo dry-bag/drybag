@@ -13,10 +13,8 @@ from pathlib import Path
 import pytest
 
 from stayfixed.areas import area_modules
-from stayfixed.assess.assessment import SKIPPED, SUMMARY_LEAD
 from stayfixed.cli import build_parser, discover_registrars, split_json_flag
 from stayfixed.overlay.template import template_root
-from stayfixed.project.commands import CUSTOM_GATES
 
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS = ROOT / "skills"
@@ -88,7 +86,7 @@ def test_the_walk_finds_the_ported_skills() -> None:
     # the suite still green. Subsets, not equalities: `skills-author` grows this directory.
     names = {path.parent.name for path in skills()}
     assert {"close-bug", "memory-sweep"} <= names
-    assert {"init", "upgrade", "uninstall", "attach", "setup", "doctor"} <= names
+    assert {"init", "attach", "setup", "doctor"} <= names
     assert {
         "file-bug",
         "sweep-defect-class",
@@ -96,7 +94,6 @@ def test_the_walk_finds_the_ported_skills() -> None:
         "attribute-failure",
         "run-correctness-audit",
         "retro-to-guard",
-        "adopt",
     } <= names
     # The same guard for the wider walk: a `references/` that goes quiet takes its own
     # invocation cases with it.
@@ -201,80 +198,3 @@ def test_the_agent_file_carries_its_frontmatter_and_names_no_product() -> None:
     fields, body = split(AGENTS / "code-navigator.md")
     assert fields["name"] == "code-navigator" and "tools" in fields
     assert "if one is installed" in body  # the capability, not the product
-
-
-def test_the_adopt_skill_asks_before_it_runs_the_custom_gates() -> None:
-    # Plain `stayfixed assess` runs every command a clone's `[gates.custom]` names, and the
-    # `adopt` skill may be invoked with no `init` before it: in a later session, or in a clone of
-    # an adopted repository. So its first step cannot wait for `init`'s note. It runs the
-    # assessment that runs none of those commands first, and that run's own line naming the gates
-    # it left out is what the question keys on. Mutation (by hand): step 1's first command made
-    # plain `stayfixed assess` -> the `--builtin` run no longer comes first and this reddens.
-    text = (SKILLS / "adopt" / "SKILL.md").read_text(encoding="utf-8")
-    words = " ".join(text.split())
-    builtin = words.index("run `stayfixed assess --builtin`")
-    plain = words.index("`stayfixed assess`")
-    skipped = SKIPPED.split(":", 1)[0]
-    # A run that never reaches its summary prints no such line either, so it stops the adoption
-    # rather than reading as "no custom gate"; the line is keyed on the lead `render` writes.
-    # Mutation (by hand): the stop sentence deleted, or the lead renamed -> this reddens.
-    stop = words.index(f"When it prints no `{SUMMARY_LEAD}` summary line, stop the adoption")
-    assert "never go on to step 2 without that summary" in words[stop:plain]
-    # The line clips its names, so the question names them from the inventory's full list.
-    listed = words.index("the `skipped` list in `.stayfixed/assessment.json` holds every one")
-    assert builtin < stop < words.index(skipped) < listed < words.index("explicit yes") < plain
-    assert "**Silence, a timeout or an empty answer is a no.**" in words[builtin:plain]
-    # Anything but a yes keeps the assessment already made, rather than running anything more.
-    assert "Otherwise keep the `--builtin` result" in words[plain:]
-    # Nothing conditions the question on `init`'s output: neither its note's words nor a
-    # sentence that names `init` and a note. Mutation (by hand): the old step 1, keyed on
-    # `init`'s note, restored -> this reddens.
-    assert CUSTOM_GATES.split("{count}", 1)[0].strip() not in words
-    assert not [s for s in words.split(". ") if "`init`" in s and "note" in s]
-
-
-def test_init_offers_the_adopt_skill_as_its_last_step() -> None:
-    # The adoption is a skill of its own, so `init` hands over to it instead of linking a
-    # reference of its own; every path through the walk reaches its last step.
-    text = (SKILLS / "init" / "SKILL.md").read_text(encoding="utf-8")
-    assert "references/adoption.md" not in text
-    walk = text.split("## Walk", 1)[1].split("## Rules", 1)[0]
-    steps = re.split(r"\n(?=\d+\. )", walk.strip())
-    assert steps[-1].startswith(f"{len(steps)}. ")
-    assert "the `adopt` skill" in " ".join(steps[-1].split())
-
-
-def test_the_adopt_skill_runs_the_custom_gates_only_after_a_yes_in_this_session() -> None:
-    # `stayfixed assess` and `stayfixed adopt promote` without `--builtin` run every custom gate
-    # the clone configures, and in a clone the base is the clone author's, so its having the
-    # command is no brake. The flag is the default: a missing question, a no, silence or a later
-    # session all leave it on, and the plain form is named only under the user's yes. Mutation
-    # (oracle): the closing step's `--builtin` dropped -> the plain form is handed over with no
-    # yes and this reddens.
-    text = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in (
-            SKILLS / "adopt" / "SKILL.md",
-            SKILLS / "init" / "SKILL.md",
-            *(SKILLS / "init" / "references").glob("*.md"),
-        )
-    )
-    words = " ".join(text.split())
-    named = [
-        c for c in ("stayfixed assess", "stayfixed adopt promote", "stayfixed gate") if c in words
-    ]
-    assert named == ["stayfixed assess", "stayfixed adopt promote"]
-    for command in named:
-        assert f"`{command} --builtin`" in words, command
-    adopt = " ".join((SKILLS / "adopt" / "SKILL.md").read_text(encoding="utf-8").split())
-    assert "takes `--builtin` unless the user said yes, in this session" in adopt
-    assert "Only the user's own explicit reply in this session is a yes" in adopt
-    sentences = re.split(r"(?<=\.)\**\s+", adopt)
-    plain = [s for s in sentences if re.search(r"`stayfixed (?:assess|adopt promote)`", s)]
-    assert plain and all(s.startswith(("On a yes", "After a yes")) for s in plain), plain
-    # A yes covers the gates it named; a custom gate added since needs its own. Mutation (by
-    # hand): the clause deleted -> the plain promotion outlives the yes and this reddens.
-    assert (
-        "once `[gates.custom]` names a gate the yes did not cover, the command takes `--builtin` "
-        "again until the user says yes to that gate"
-    ) in adopt

@@ -939,9 +939,7 @@ def test_the_attached_row_reads_the_main_checkouts_pointer_from_every_checkout(
     _git(root, "worktree", "add", "-q", str(side), "-b", "side")
     attach(root, store=store, machine=machine, runner=Recorder())
     for checkout in (root, side):
-        rows = doctor_checks.run_checks(
-            checkout, home=None, machine=machine, runner=Recorder(), env=_env(tmp_path)
-        )
+        rows = doctor_checks.run_checks(checkout, home=None, machine=machine, env=_env(tmp_path))
         row = _by_name(rows, "attached")
         assert (row.status, row.detail) == (
             OK,

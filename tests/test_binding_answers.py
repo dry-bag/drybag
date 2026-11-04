@@ -55,9 +55,7 @@ def test_a_checkout_whose_origin_was_removed_stays_bound_on_every_surface(
 
     doctor = next(
         row
-        for row in run_checks(
-            root, home=home, machine=machine, runner=Recorder(), env={"HOME": str(home)}
-        )
+        for row in run_checks(root, home=home, machine=machine, env={"HOME": str(home)})
         if row.name == "attached"
     )
     assert "the binding is bound" in doctor.detail

@@ -52,7 +52,7 @@ def schema_keys() -> list[str]:
     """Every key `Config`'s sections hold, dotted, derived from `dataclasses.fields`.
 
     A section with a `NAMES` tuple contributes each name as well, which is how `budgets.*` and
-    `native_caps.*` are spelled; `gates.custom` is one key, the table of the project's own gates.
+    `native_caps.*` are spelled.
     """
     hints = get_type_hints(Config)
     keys: list[str] = []
@@ -87,9 +87,6 @@ TABLE_ROWS = [
     ("budgets.status_lines", KeyClass.GATE_PARAMETER),
     ("budgets.roadmap_prose_lines", KeyClass.GATE_PARAMETER),
     ("budgets.roadmap_prose_words", KeyClass.GATE_PARAMETER),
-    ("stayfixed.enforced", KeyClass.GATE_PARAMETER),
-    ("gates.builtin", KeyClass.GATE_PARAMETER),
-    ("gates.custom", KeyClass.GATE_PARAMETER),
     ("ledger.code_roots", KeyClass.GATE_PARAMETER),
     ("ledger.evidence_boundary_required_for", KeyClass.GATE_PARAMETER),
     ("stayfixed.version", KeyClass.REPOSITORY_ONLY),
@@ -99,10 +96,6 @@ TABLE_ROWS = [
     ("project.base_branch", KeyClass.REPOSITORY_ONLY),
     ("paths.bugs", KeyClass.REPOSITORY_ONLY),
     ("ledger.id_prefix", KeyClass.REPOSITORY_ONLY),
-    ("artifacts.local", KeyClass.REPOSITORY_ONLY),
-    ("ci.mode", KeyClass.REPOSITORY_ONLY),
-    ("gates.custom_timeout_seconds", KeyClass.REPOSITORY_ONLY),
-    ("commit_messages.types", KeyClass.REPOSITORY_ONLY),
     ("native_caps.hook_output_chars", KeyClass.PLUGIN_OWNED),
 ]
 

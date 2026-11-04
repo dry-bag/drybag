@@ -1,12 +1,11 @@
 """A `stayfixed.toml` that is a symlink, met by every command family that loads the configuration.
 
-There were two readers of the file: `stayfixed gate`, `assess` and `init` went through
-`read_document`, which refuses a symlink, and every other command through a plain `read_text`,
-which follows one. A clone's `stayfixed.toml -> /dev/zero` then kept `adopt`, `bugs check` and
-`plan check` reading until the machine ran out of memory. `load` now reads through
-`read_document`, so each family below is refused before anything is read. The link here points
-at a valid document, so a reader that follows it would load it and go on: the refusal is the
-only thing that can make these cases pass, and a regression cannot hang the suite.
+There were two readers of the file: `init` went through `read_document`, which refuses a symlink,
+and every other command through a plain `read_text`, which follows one. A clone's `stayfixed.toml ->
+/dev/zero` then kept `bugs check` and `plan check` reading until the machine ran out of memory.
+`load` now reads through `read_document`, so each family below is refused before anything is read.
+The link here points at a valid document, so a reader that follows it would load it and go on: the
+refusal is the only thing that can make these cases pass, and a regression cannot hang the suite.
 """
 
 from __future__ import annotations
@@ -45,13 +44,10 @@ def test_load_refuses_a_symlinked_stayfixed_toml(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "argv",
     [
-        pytest.param(["adopt", "promote"], id="adopt-promote"),
         pytest.param(["bugs", "check"], id="bugs-check"),
         pytest.param(["plan", "check"], id="plan-check"),
         pytest.param(["docs", "check"], id="docs-check"),
         pytest.param(["docs", "trail", "--check"], id="docs-trail"),
-        pytest.param(["assess"], id="assess"),
-        pytest.param(["gate"], id="gate"),
     ],
 )
 def test_every_command_family_refuses_a_symlinked_stayfixed_toml(

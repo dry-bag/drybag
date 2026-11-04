@@ -9,7 +9,6 @@ from stayfixed.scaffold.entries import (
     EntriesError,
     ParserLimitError,
     apply_entries,
-    entry_count,
     mark,
     marker_id,
     owned,
@@ -212,35 +211,6 @@ def test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_merge(
     assert owned_ids(long) == {"bg-cleanup": "PreToolUse"}
     with pytest.raises(ParserLimitError, match="number longer"):
         apply_entries(long, {})
-
-
-def test_every_entry_counts_once_and_the_count_refuses_as_owned_ids_refuses() -> None:
-    # `assess`'s `foreign-hooks` reads a file no measurement covers by this count, so every entry
-    # is one: two entries sharing one id are two, and one whose command is absent or not a string
-    # is one too.
-    shared = mark("a.sh", "same-id")
-    raw = {
-        "permissions": {"allow": ["Bash(ls)"]},
-        "hooks": {
-            "PreToolUse": [
-                {"matcher": "Bash", "hooks": [{"command": shared}, {"type": "command"}]},
-                {"hooks": [{"command": None}, {"command": 7}, {"command": "plain.sh"}]},
-            ],
-            "SessionStart": [{"hooks": [{"command": shared}]}],
-        },
-    }
-    assert entry_count(json.dumps(raw)) == 6
-    assert entry_count("") == 0
-    assert entry_count(json.dumps({"permissions": {}})) == 0
-    # The walk is the engine's strict one: a shape `apply_entries` would refuse is refused here,
-    # as `owned_ids` refuses it, and a number past the parser's reach is read as its text.
-    for refused in ("not json", "[]", '{"hooks": []}', '{"hooks": {"Stop": [1]}}'):
-        with pytest.raises(EntriesError):
-            owned_ids(refused)
-        with pytest.raises(EntriesError):
-            entry_count(refused)
-    long = json.dumps(raw)[:-1] + ', "n": ' + LONG_NUMBER + "}"
-    assert entry_count(long) == 6
 
 
 def test_an_empty_document_gains_the_wanted_entries() -> None:

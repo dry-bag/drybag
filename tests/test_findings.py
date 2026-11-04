@@ -35,8 +35,8 @@ def test_labels_renders_findings_through_the_same_cap() -> None:
 
 
 def test_a_path_outside_the_grammar_never_reaches_a_label_raw() -> None:
-    # The label is printed on stdout by `bugs check`, `docs check`, `plan check` and
-    # `memory refs`, and in CI a line that starts `::error::` is an instruction to the runner.
+    # The label is printed on stdout by `bugs check`, `docs check` and
+    # `plan check`, and in CI a line that starts `::error::` is an instruction to the runner.
     # Mutation: print `self.path` in `labelled` — this reddens.
     label = Finding("dead-link", f"docs/{CRAFTED}.md", 3, "d").label
     assert_never_raw(label)

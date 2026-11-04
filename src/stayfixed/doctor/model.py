@@ -25,7 +25,6 @@ from stayfixed.config.reading import MachineConfigError
 from stayfixed.config.schema import Config
 from stayfixed.config.session import SessionConfig, bound_config
 from stayfixed.errors import Failure, Refusal, resolved_or_none
-from stayfixed.runner import Runner
 
 OK: Final = "ok"
 WARN: Final = "warn"
@@ -113,7 +112,6 @@ class Context:
     root: Path
     home: Path | None
     machine: Path | None
-    runner: Runner
     env: Mapping[str, str]
     config: Config | None
     plugin_root: Path | None = None

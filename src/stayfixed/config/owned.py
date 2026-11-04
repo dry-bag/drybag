@@ -1,26 +1,23 @@
-"""The three keys stayfixed rewrites inside a document somebody else owns.
+"""The one key stayfixed rewrites inside a document somebody else owns.
 
-`[stayfixed] version`, `[stayfixed] enforced` and `[ci] ref` are stayfixed's to rewrite
-(`docs/cli.md#configuration`). Every other key of `stayfixed.toml` is the user's, and so is the
-file around them: its comments, its order, its blank lines. `tomllib` reads and nothing
-in the standard library writes, and `tomlout.dumps` renders a whole document with the comments
-gone, so this module edits lines.
+`[stayfixed] version` is stayfixed's to rewrite (`docs/cli.md#configuration`). Every other key of
+`stayfixed.toml` is the user's, and so is the file around them: its comments, its order, its blank
+lines. `tomllib` reads and nothing in the standard library writes, and `tomlout.dumps` renders a
+whole document with the comments gone, so this module edits lines.
 
 **The read-back is the contract; the line editor is one implementation of it.** Each key is
 edited and proved on its own: the text after the edit must parse to exactly the document before
 it with that one key set to its value. The editor does not understand every shape: a dotted
-key, a quoted key, an inline table, a value that is not a one-line string or a one-line array of
-strings, a header-looking line inside a multi-line string. None of those ever yields a wrong
+key, a quoted key, an inline table, a value that is not a one-line string, a header-looking line
+inside a multi-line string. None of those ever yields a wrong
 file; each yields an `OwnedKeyError` naming the key that failed and the line to write by hand.
 stayfixed's own renderer never produces those shapes. A person may, and the refusal is the honest
 answer to them. The proof covers values and not comments, because a comment is not part of the
 parsed document: the editor keeps a line's trailing comment by pattern, and nothing proves it.
 
-**What a message prints, and why that is safe.** The table and key come from `OWNED`. The value
-is one stayfixed chose, rendered through `tomlout.quoted`: a version, gate names the loader has
-already held to `PROJECT_NAME`, or a sha the `release` package resolved from the public
-repository's tags. A document that does not parse is answered with the parser's position
-alone, as the loader answers it.
+**What a message prints, and why that is safe.** The table and key come from `OWNED`. The value is
+one stayfixed chose, rendered through `tomlout.quoted`: a version. A document that does not parse is
+answered with the parser's position alone, as the loader answers it.
 """
 
 from __future__ import annotations
@@ -35,10 +32,8 @@ from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.errors import Refusal
 from stayfixed.tomlout import quoted
 
-Value = str | tuple[str, ...]
-OWNED: frozenset[tuple[str, str]] = frozenset(
-    {("stayfixed", "version"), ("stayfixed", "enforced"), ("ci", "ref")}
-)
+Value = str
+OWNED: frozenset[tuple[str, str]] = frozenset({("stayfixed", "version")})
 UNEDITABLE = (
     "[{table}] {key} is written in a shape stayfixed does not rewrite in place, so nothing was "
     "written; set it by hand to `{key} = {literal}` and run the command again"
@@ -50,7 +45,7 @@ _HEADER = re.compile(r"^[ \t]*\[[ \t]*([A-Za-z0-9_-]+)[ \t]*\][ \t]*(?:#.*)?$")
 _ANY_HEADER = re.compile(r"^[ \t]*\[")
 _ASSIGNMENT = (
     r"^(?P<lead>[ \t]*){key}(?P<eq>[ \t]*=[ \t]*)"
-    r"(?P<value>\"(?:[^\"\\]|\\.)*\"|'[^'\n]*'|\[[^\n]*?\])(?P<tail>[ \t]*(?:#.*)?)$"
+    r"(?P<value>\"(?:[^\"\\]|\\.)*\"|'[^'\n]*')(?P<tail>[ \t]*(?:#.*)?)$"
 )
 
 
@@ -61,16 +56,6 @@ class OwnedKeyError(Refusal):
 class UnparsedDocument(OwnedKeyError):
     """The document does not parse at all, so no key's shape is the problem: a caller that
     words its own remedy for a key it could not rewrite passes this one on unchanged."""
-
-
-def _literal(value: Value) -> str:
-    if isinstance(value, str):
-        return quoted(value)
-    return "[" + ", ".join(quoted(item) for item in value) + "]"
-
-
-def _plain(value: Value) -> str | list[str]:
-    return value if isinstance(value, str) else list(value)
 
 
 def _lines(text: str) -> list[str]:
@@ -107,15 +92,15 @@ def _set(lines: list[str], table: str, key: str, value: Value, newline: str) -> 
     if len(hits) == 1:
         index, match = hits[0]
         ending = lines[index][len(lines[index].rstrip("\r\n")) :]
-        out[index] = f"{match['lead']}{key}{match['eq']}{_literal(value)}{match['tail']}{ending}"
+        out[index] = f"{match['lead']}{key}{match['eq']}{quoted(value)}{match['tail']}{ending}"
     elif not hits and header is not None:
         if not out[header].endswith("\n"):
             out[header] += newline
-        out.insert(header + 1, f"{key} = {_literal(value)}{newline}")
+        out.insert(header + 1, f"{key} = {quoted(value)}{newline}")
     elif not hits:
         if out and not out[-1].endswith("\n"):
             out[-1] += newline
-        out += [newline, f"[{table}]{newline}", f"{key} = {_literal(value)}{newline}"]
+        out += [newline, f"[{table}]{newline}", f"{key} = {quoted(value)}{newline}"]
     # Two hits means one of them sits inside a string, because `tomllib` refuses a duplicate
     # key. Nothing is edited, and the read-back refuses the unchanged text.
     return out
@@ -141,13 +126,13 @@ def rewrite(text: str, changes: Mapping[tuple[str, str], Value]) -> str:
     result = text
     for (table, key), value in sorted(changes.items()):
         current = expected.get(table)
-        if isinstance(current, dict) and current.get(key) == _plain(value):
+        if isinstance(current, dict) and current.get(key) == value:
             continue
-        refusal = OwnedKeyError(UNEDITABLE.format(table=table, key=key, literal=_literal(value)))
+        refusal = OwnedKeyError(UNEDITABLE.format(table=table, key=key, literal=quoted(value)))
         if current is not None and not isinstance(current, dict):
             raise refusal
         candidate = "".join(_set(_lines(result), table, key, value, newline))
-        expected.setdefault(table, {})[key] = _plain(value)
+        expected.setdefault(table, {})[key] = value
         try:
             proved = tomllib.loads(candidate) == expected
         except UNPARSEABLE:

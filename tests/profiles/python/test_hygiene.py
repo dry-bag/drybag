@@ -29,7 +29,6 @@ from tests.sessions import session_of
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]
@@ -195,7 +194,7 @@ def test_bytecode_under_a_hidden_directory_is_judged(tmp_path: Path) -> None:
 def test_a_directory_that_cannot_be_listed_is_passed_over(tmp_path: Path) -> None:
     # A directory the walk cannot list is passed over, as `rglob` passed over it, and the rest
     # of the tree is still judged: raising would turn a permission bit on one directory into a
-    # failed hint, and `test hygiene` into a refusal for the whole tree. Oracle: `mutations/`'s
+    # failed hint, and the whole tree's note into a refusal. Oracle: `mutations/`'s
     # "an unlistable directory fails the stale-bytecode walk".
     root = repo(tmp_path)
     module = root / "src" / "mod.py"
@@ -430,7 +429,7 @@ def a_tree_with_a_piped_pyc(tmp_path: Path) -> tuple[Path, Path]:
 @needs_mkfifo
 def test_a_pyc_that_is_a_named_pipe_never_blocks_the_walk(tmp_path: Path) -> None:
     """Opening a named pipe for reading waits for a writer, so a `.pyc` that is one, like a
-    committed symlink to `/dev/stdin`, hung `stayfixed test hygiene` for good. The walk opens
+    committed symlink to `/dev/stdin`, hung the red-run walk for good. The walk opens
     without waiting.
 
     The walk runs in a thread so that a regression fails instead of hanging: when it is still

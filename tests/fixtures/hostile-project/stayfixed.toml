@@ -4,7 +4,6 @@
 # a repository is untrusted input (principle 5 of docs/methodology/principles.md).
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 
 [project]
 name = "smoke"

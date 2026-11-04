@@ -2789,9 +2789,7 @@ def test_untagging_removes_the_codex_rule_copies_the_overlay_no_longer_holds(
     assert not (root / ".codex" / "rules" / "a.rules").exists()
     assert ledger(root).rules == ()
     row = _by_name(
-        doctor_checks.run_checks(
-            root, home=None, machine=machine, runner=Recorder(), env=_env(tmp_path)
-        ),
+        doctor_checks.run_checks(root, home=None, machine=machine, env=_env(tmp_path)),
         "attached",
     )
     assert row.status == "ok"

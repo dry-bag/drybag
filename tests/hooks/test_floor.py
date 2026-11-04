@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import resource
-import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -27,7 +26,6 @@ from stayfixed.config.session import (
 from stayfixed.hints.hooks import register as hints_handlers
 from stayfixed.hooks.api import DIAGNOSTICS, DIRECTORY, Handler, HookEvent, HookResult
 from stayfixed.hooks.commands import CONFIG_FALLBACK
-from tests.config.test_session import densest_file, long_file_of_gates_that_run
 from tests.gitfixture import git
 from tests.hooks.test_hook_command import (
     BACKGROUND_SLEEP,
@@ -105,35 +103,8 @@ def test_the_background_guard_judges_whatever_the_configuration(
     assert (allowed.returncode, allowed.stderr) == (0, "")
 
 
-# Ten thousand custom gates that cannot run: about 200 KB of committed `stayfixed.toml`. Read key by
-# key, each gate cost the NOTE load a whole build, and the hook ran past its ten-second timeout,
-# which Claude Code answers by letting the call through.
-MANY_UNUSABLE_GATES = (
-    CONFIG + "\n[gates.custom]\n" + "".join(f"g{n} = {{ run = [] }}\n" for n in range(10_000))
-)
-# Well above what the hook takes with the file refused whole, and well below the ten-second
-# timeout `hooks/hooks.json` gives the `PreToolUse` entry.
+# Well below the ten-second timeout `hooks/hooks.json` gives the `PreToolUse` entry.
 HOOK_BOUND_SECONDS = 5
-# The most a hook may spend on the densest file, as a multiple of what it spends on the same gates
-# built once: five builds at the read cap, with the parse and the start-up, come to one and a half
-# times the one build, and 65 builds to ten or eleven. Two hooks on the same machine, so a slower
-# runner moves both sides of the ratio, and four leaves room on each: eight such tests at once, or
-# one on efficiency cores, put the five builds at 1.5 to 1.6.
-DENSE_BUILDS_BOUND = 4
-
-
-def test_a_file_of_thousands_of_unusable_keys_never_outlasts_the_hook(tmp_path: Path) -> None:
-    # The guard's own verdict, in time: the file is refused whole past `NOTE_REMOVAL_LIMIT`
-    # removals, so the hook answers on the preset and the owner's layer long before the harness
-    # would give up on it. Mutation (`mutations/`'s "the NOTE path removes every key it cannot use,
-    # however many"): the hook takes about fifteen seconds.
-    root, home = _setup(tmp_path, no_file)
-    (root / "stayfixed.toml").write_text(MANY_UNUSABLE_GATES, encoding="utf-8")
-    started = time.monotonic()
-    answer = hook("PreToolUse", json.dumps(BACKGROUND_SLEEP), root, home=home)
-    elapsed = time.monotonic() - started
-    assert hinted(answer)
-    assert elapsed < HOOK_BOUND_SECONDS, elapsed
 
 
 def _hook_seconds(tmp_path: Path, document: str) -> float:
@@ -150,31 +121,6 @@ def _hook_seconds(tmp_path: Path, document: str) -> float:
     after = resource.getrusage(resource.RUSAGE_CHILDREN)
     assert hinted(answer)
     return (after.ru_utime + after.ru_stime) - (before.ru_utime + before.ru_stime)
-
-
-def test_a_long_file_of_gates_that_run_never_outlasts_the_hook(tmp_path: Path) -> None:
-    # A file of thousands of gates that run is built once per removal its length allows
-    # (`loader.NOTE_REBUILT_LIMIT`), so what one build costs is paid that often, and the hook still
-    # answers well inside its timeout. By hand, `_enforcement` asking the tuple of gate names
-    # rather than a set: the hook takes about ten seconds of CPU.
-    spent = _hook_seconds(tmp_path, long_file_of_gates_that_run())
-    assert spent < HOOK_BOUND_SECONDS, spent
-
-
-def test_the_densest_file_a_session_reads_never_outlasts_the_hook(tmp_path: Path) -> None:
-    # Dotted gates that run, filled to the read cap, beside 64 keys the NOTE load cannot use, each
-    # refused only once every gate before it is built (`tests/config/test_session.py`'s
-    # `densest_file`): built five times, the most its length allows, and dropped whole, so the hook
-    # spends about 0.4 s of CPU here, one and a half times what the same gates built once cost it.
-    # Under the hook's bound, and the ratio is what tells five builds from 65, which the bound
-    # alone could not: mutation (`mutations/`'s "the NOTE path's removals are bounded by their
-    # count alone"), the hook spends 2.2 to 2.9 s, ten times what the one build costs it. The one
-    # build is timed first, so a cold bytecode cache, paid by the first hook, can only lower the
-    # ratio.
-    once = _hook_seconds(tmp_path / "once", densest_file(unusable=False))
-    spent = _hook_seconds(tmp_path / "unusable", densest_file())
-    assert spent < HOOK_BOUND_SECONDS, spent
-    assert spent < DENSE_BUILDS_BOUND * once, (spent, once)
 
 
 # A `[paths]` value of forty thousand components, eighty kilobytes, none of which is there.

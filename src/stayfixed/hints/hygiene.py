@@ -57,7 +57,7 @@ _EXIT_CODE_ERROR = re.compile(r"\AExit code (\d{1,9})(?!\d)")
 # A named cap (CONTRIBUTING.md#named-caps) of its own, and no shipped file changes with it. Not
 # `gitenv.GIT_TIMEOUT_SECONDS`: that constant covers "local, argument-free, read-only" queries, and
 # `git status --porcelain` walks the worktree. A timeout here is `None`, "could not answer", which
-# `test hygiene` turns into a refusal.
+# the note leaves unsaid.
 STATUS_TIMEOUT_SECONDS = 20
 
 LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:"
@@ -138,10 +138,10 @@ def notice(dirty: int | None, notes: Sequence[str]) -> str | None:
 # and skipped, and the two guards below catch everything else, broad on purpose, because an
 # exception out of one stack's hint would reach the dispatcher, which records
 # it and drops the handler's whole context -- the dirty-tree line and every other stack's line
-# with it. They are also silent, and that is a cost rather than a design: a handler has no sink
-# to record into, and `stayfixed test hygiene`, which exposes the rest, never calls `recognises`,
-# so a broken one is visible nowhere. Recording it in the hook's diagnostics would take a sink the
-# handler can reach, a change to the handler contract and not to this module.
+# with it. They are also silent, and that is a cost rather than a design: a handler has no sink to
+# record into, and nothing else calls `recognises`, so a broken one is visible nowhere. Recording
+# it in the hook's diagnostics would take a sink the handler can reach, a change to the handler
+# contract and not to this module.
 def _recognises(hint: RedRunHint, commands: Sequence[Sequence[str]]) -> bool:
     try:
         return any(hint.recognises(argv) for argv in commands)

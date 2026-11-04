@@ -176,85 +176,6 @@ def run_commit_strip(args: argparse.Namespace) -> Result:
     return Result(f"stripped {count} attribution line(s) from {path}", {"stripped": count})
 
 
-# A tree git could not report on is not a clean tree. Exit 2 (refusal), never exit 0: the whole
-# value of this command is that it answers "can this red run be trusted", and "I do not know"
-# reported as "yes" is the one wrong answer.
-_NO_GIT = "git could not report the tree's status, so this tree cannot be judged"
-# The same answer for a profile this command could not ask, which is not one with nothing to
-# report: its hint did not load, answered outside its protocol, or raised. `{name}` is a shipped
-# profile's directory name, never a repository value, and of an exception only its type is
-# printed: its message can carry a path the hint walked, and a path is repository-authored text.
-_UNLOADED = "the {name} profile's red-run hint could not be loaded"
-_WORDLESS = "the {name} profile's red-run hint answered in something other than text"
-_FAILED = "the {name} profile's red-run hint failed: {kind}"
-# And for a hint whose walk stopped at its bound (a report of `None`): it has not seen the tree,
-# so neither its count nor its silence is an answer, and a refusal is the one that says so. Even
-# over a tree with no bytecode in it: a walk cut short that met none has not seen the rest, and
-# the order it lists in is the filesystem's. The bound is not configurable and what it walks is,
-# so the refusal names that way out.
-_UNTOLD = "the {name} profile's red-run hint stopped its walk at a bound and could not tell"
-_UNJUDGED = ", so this tree cannot be judged"
-_NARROW = "; narrow `[ledger] code_roots` to the directories that hold code"
-# What the summary says after the uncommitted-change check's answer, in place of "tree is clean",
-# when no code root is left to walk: every profile's walk saw nothing, so its silence is no answer
-# about the tree. `assess` counts each entry left out; its inventory names it, and why.
-NO_ROOTS = "no [ledger] code_roots entry names a directory here, so no code root was walked"
-NO_CHANGE = "no uncommitted change"
-
-
-def run_test_hygiene(args: argparse.Namespace) -> Result:
-    from stayfixed.hints.api import dirty_count
-    from stayfixed.profiles import detects, load_profile
-    from stayfixed.profiles.hints import NotText, answer, shipped_hints
-    from stayfixed.roots import contained_roots
-
-    root, config = _root_and_config(args)
-    dirty = dirty_count(root)
-    if dirty is None:
-        raise Refusal(_NO_GIT)
-    findings: list[str] = []
-    if dirty:
-        findings.append(f"{dirty} uncommitted change(s) in the tree")
-    hints = shipped_hints()
-    unloaded = [name for name, hint in hints if hint is None]
-    if unloaded:
-        raise Refusal("; ".join(_UNLOADED.format(name=name) for name in unloaded) + _UNJUDGED)
-    # Every stack the repository is written in, and not the one `[stayfixed] profile` names: a
-    # repository in two stacks gets two entries. A profile is listed when its markers sit at the
-    # root, and also, whether or not they do, when it has something to say: the hook asks every
-    # hint and detects nothing, so a Python project in a subdirectory gets the stale-bytecode
-    # note after a failed run, and this command must not call the same tree clean.
-    reports: dict[str, dict[str, int]] = {}
-    roots = contained_roots(root, config)
-    for name, hint in ((name, hint) for name, hint in hints if hint is not None):
-        try:
-            report, note = answer(hint, roots)
-        except NotText:
-            raise Refusal(_WORDLESS.format(name=name) + _UNJUDGED) from None
-        except Exception as exc:
-            kind = type(exc).__name__
-            raise Refusal(_FAILED.format(name=name, kind=kind) + _UNJUDGED) from None
-        if report is None:
-            raise Refusal(_UNTOLD.format(name=name) + _UNJUDGED + _NARROW)
-        if note is None and not detects(load_profile(name), root):
-            continue
-        reports[name] = report
-        if note:
-            findings.append(f"{name}: {note}")
-    # Counts, fixed sentences and shipped profiles' names only: a `ledger.code_roots` entry is a
-    # repository-authored string and never reaches the summary. `data` is the documented
-    # exception and carries none either: each report is what `counts` kept, count names in a
-    # fixed grammar with plain integers.
-    clean = "tree is clean" + "".join(
-        f"; the {name} profile has nothing to report" for name in reports
-    )
-    summary = "; ".join(findings) or clean
-    if not roots:
-        summary = "; ".join([*(findings or [NO_CHANGE]), NO_ROOTS])
-    data = {"dirty": dirty, "profiles": reports}
-    return Result(summary, data, exit_code=1 if findings else 0)
-
-
 def run_test_attribute(args: argparse.Namespace) -> Result:
     from stayfixed.config.layout import local_base
     from stayfixed.guards.attribute import attribute
@@ -290,10 +211,6 @@ def register(groups: SubParsers) -> None:
 
     test = groups.add_parser("test", help="test-suite hygiene")
     test_sub = test.add_subparsers(dest="command", metavar="<command>")
-    hygiene = common_flags(
-        test_sub.add_parser("hygiene", help="what could falsify a red run in this tree")
-    )
-    hygiene.set_defaults(func=run_test_hygiene)
     attribute = common_flags(
         test_sub.add_parser(
             "attribute", help="attribute a failing command to the change or to the environment"

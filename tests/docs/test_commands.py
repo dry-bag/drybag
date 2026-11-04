@@ -16,7 +16,6 @@ from tests.crafted import CRAFTED, CRAFTED_TOML, assert_never_raw
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]
@@ -54,7 +53,7 @@ def test_docs_check_passes_a_compliant_project_and_names_the_enforced_set_only(
 
 def test_docs_check_takes_no_store(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # `--store` named the note store whose link graph `docs check` used to report, and that graph
-    # is `memory refs`'s now. Accepted and never read, the option would answer a person who passes
+    # is gone. Accepted and never read, the option would answer a person who passes
     # it exactly as if it had done something, so it is a usage error instead. Mutation (declared):
     # `mutations/`'s "docs check accepts a store it never reads".
     root, common = project(tmp_path)
@@ -334,8 +333,8 @@ def test_a_non_utf8_roadmap_or_plan_exits_1_through_the_frame_and_never_2(
 def test_the_command_answers_with_its_gate_s_own_function(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: list[str], module: str, gate: str
 ) -> None:
-    # The gate `stayfixed assess` runs and the command a person runs are one function, so the
-    # two cannot drift apart. Mutations (advisory): `problems = docs_gate(root, config)` becomes
+    # The gate function and the command a person runs are one function, so the two cannot drift
+    # apart. Mutations (advisory): `problems = docs_gate(root, config)` becomes
     # `problems = check_budgets(root, config) + check_links(root, config)` in `run_docs_check`
     # (first case); `trail_gate(root, config)` replaced by an inline comparison in
     # `run_docs_trail` (second case) — each makes the patch unseen and reddens.

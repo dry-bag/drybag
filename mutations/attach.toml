@@ -1435,14 +1435,14 @@ before = "    if owner_home() is None:"
 after = "    if False:"
 reddens = ["tests/attach/test_doctor.py::test_an_empty_home_is_told_it_is_home_that_names_none"]
 
-# The ledger is what `stayfixed uninstall` reads as "this repository is attached", so a detach that
-# left it behind would leave a repository uninstall refuses for good.
+# The ledger is what `doctor` reads as "this repository is attached", so a detach that left it
+# behind would leave a repository `doctor` still reports as attached.
 [[mutation]]
 name = "detach leaves its ledger behind"
 file = "src/stayfixed/attach/write.py"
 before = "    fsops.remove_within(root, ATTACH_LEDGER)\n    # Last, because the ledger lives in one of them."
 after = "    # Last, because the ledger lives in one of them."
-reddens = ["tests/attach/test_detach.py::test_uninstall_after_a_real_detach_takes_the_footprint_back"]
+reddens = ["tests/attach/test_detach.py::test_a_real_detach_after_init_leaves_the_tree_init_left"]
 
 # `write` imports `permissions` at module level, so `permissions` importing the writer back, even
 # inside a function where no import fails, is a cycle in the layering: the one `--check` made while

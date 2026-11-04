@@ -6,12 +6,11 @@ which hints speak, through `RedRunHint.recognises`, and `[stayfixed] profile` pl
 repository in several languages runs several stacks' suites, and the stack whose runner failed is
 the one whose advice applies.
 
-`note` receives counts and nothing else, or `None` for a walk that could not tell: both callers,
-the hook's notice and `stayfixed test hygiene`, ask a hint through `answer`, which reads its report
-through `counts`. That keeps a key
+`note` receives counts and nothing else, or `None` for a walk that could not tell: the hook's
+notice asks a hint through `answer`, which reads its report through `counts`. That keeps a key
 only when it is a count name (`COUNT_NAME`: lower-case letters, digits and underscores, at most
 32 characters) and its value only when it is a plain integer, and drops the rest before anything
-reaches `note` or `--json`.
+reaches `note`.
 A key is text a hint chose, and one built from the tree it walked would otherwise carry that
 tree's names out; the grammar admits no `/`, `.`, space or upper case, so no path, file name or
 command text a repository authored can pass as a count's name. So the trust rule
@@ -71,8 +70,7 @@ class RedRunHint(Protocol):
         contained (`stayfixed.roots.contained_roots`), which the caller computes and hands
         over, so a stack's code never imports it. `None` when the walk stopped at a
         bound before it had seen the tree, so no count it reached is an answer either way: not a
-        key among the counts, since every key a hint returns is a count name it chose.
-        `stayfixed test hygiene` refuses on `None` rather than read the tree as judged."""
+        key among the counts, since every key a hint returns is a count name it chose."""
         ...
 
     def note(self, counts: Mapping[str, int] | None) -> str | None:

@@ -16,7 +16,5 @@ def test_the_surface_is_what_consumers_reach_for() -> None:
         "Launch",
         # where that launcher runs the command, for prove to judge it in that directory
         "run_directory",
-        # the uncommitted changes the red-run note counts, for the guards area's `test hygiene`
-        "dirty_count",
     }
     assert required == set(api.__all__)

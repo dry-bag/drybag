@@ -39,11 +39,10 @@ CI gate belongs in neither, and the note is deleted.
 5. Delete resolved, contradicted, one-session or otherwise stale notes and their links.
 6. Volatile notes arrive in context already; the standing job is to verify their named
    paths, flags and dates before use, and to delete each one the moment it resolves.
-7. **A backticked path asserts the file is in the tree.** `stayfixed memory refs` checks it,
-   and only a sweep runs that guard — the store is git-ignored in most modes, so no CI runner
-   has one to scan. Between sweeps the convention is all there is. Write the path in
-   *italics* wherever it deliberately does not resolve: a file the note records as deleted,
-   or one belonging to another repository.
+7. **A backticked path asserts the file is in the tree.** No command checks it — the store is
+   git-ignored in most modes, so no CI runner has one to scan — and a sweep opens each path a
+   note names before it keeps the note. Write the path in *italics* wherever it deliberately
+   does not resolve: a file the note records as deleted, or one belonging to another repository.
 
 ## In a worktree
 
@@ -51,5 +50,4 @@ The store is linked, not copied, so a note written from either side is the same 
 nothing is lost when the worktree goes. Linking is automatic, and it is not the job of
 `stayfixed memory index`: a `SessionStart` handler makes one link per group at the start of a
 session and says how many it made. When a group is missing from the worktree, read that line
-first — the handler reports a path it refused rather than failing the session — and
-`stayfixed memory refs` refuses for the same gap once the sweep runs.
+first — the handler reports a path it refused rather than failing the session.

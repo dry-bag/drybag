@@ -115,7 +115,7 @@ jobs:
             --require-pin --json > "$RUNNER_TEMP/plugin-commit.json" \
             || { cat "$RUNNER_TEMP/plugin-commit.json" >&2; exit 1; }
           commit="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["commit"])' "$RUNNER_TEMP/plugin-commit.json")"
-          # The script prints no other shape, so no test reaches this; `tests/test_check_workflow.py`
+          # The script prints no other shape, so no test reaches this; `tests/test_workflows.py`
           # holds its pattern to the scripts'.
           if ! [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::plugin_tree.py commit named no plugin commit: '$commit'"
@@ -203,7 +203,7 @@ jobs:
   # each line is selected by its whole ref name, because `ls-remote` matches a pattern against
   # the tail of a name and so also lists `refs/tags/x/refs/tags/vX.Y.Z`; the `^{}` line, when
   # the tag is annotated, is the commit it names. A step in each gated job and not a job of its
-  # own, which would ask for a second approval; `tests/test_check_workflow.py` holds the two
+  # own, which would ask for a second approval; `tests/test_workflows.py` holds the two
   # copies equal. No credential: the plugin repository is public.
   publish:
     needs: [build, environment-gate, attest]

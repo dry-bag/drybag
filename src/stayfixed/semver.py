@@ -1,11 +1,10 @@
 """How one version orders against another, read the one way every reader of a version does.
 
-`upgrade` refuses to move a project backward, `doctor`'s `versions` row points by direction, and
-`stayfixed gate` admits an upgrade only where `upgrade` would move to it: one comparison, so the
-three cannot disagree about which way a recorded version lies. The overlay's `requires` reader
-reads a floor through the same component grammar and decides the floor's own triple by
-`pre_release`, the reading `later` orders a release after, so a pre-release does not meet the
-floor of the release it comes before.
+`upgrade` refuses to move a project backward and `doctor`'s `versions` row points by direction: one
+comparison, so the two cannot disagree about which way a recorded version lies. The overlay's
+`requires` reader reads a floor through the same component grammar and decides the floor's own
+triple by `pre_release`, the reading `later` orders a release after, so a pre-release does not meet
+the floor of the release it comes before.
 
 A leaf module: it imports nothing from `stayfixed`.
 """
@@ -35,9 +34,6 @@ COMPONENT = r"([0-9]{1,9})"
 # A version's leading `X.Y.Z`, whatever follows it: the triple `later` orders versions by first,
 # for any caller that compares a version by its release.
 VERSION = re.compile(rf"^{COMPONENT}\.{COMPONENT}\.{COMPONENT}")
-# A version that is exactly `X.Y.Z` and nothing after it, in the same bounded components: what a
-# caller may print back as a version when the string is otherwise repository-authored.
-RELEASE = re.compile(rf"\A{COMPONENT}\.{COMPONENT}\.{COMPONENT}\Z")
 # What may follow an `X.Y.Z` in a pre-release of it: PEP 440's `a`, `b`, `rc` and `dev` segments
 # and their spellings, with an optional separator (`1.0.0rc1`, `1.0.0-rc.1`, `0.2.0.dev0`). The
 # whole suffix must be one of them, so `1.0.0rc1.post2` is not read as a pre-release.
@@ -98,8 +94,8 @@ def later(version: str, than: str) -> bool | None:
     Both are read by their leading three components (`VERSION`), compared as integer tuples,
     which decide whenever they differ, so `1.0.0-rc1` is later than `0.9.9`. `None` when either
     has no leading `X.Y.Z` (`v1.0.0`, an empty string): the direction is unknown, and a caller
-    that would move a value in one direction must not guess it. `stayfixed upgrade` refuses such
-    a recorded version, and `doctor`'s `versions` row says so rather than sending it there.
+    that would move a value in one direction must not guess it. `doctor`'s `versions` row says to
+    write such a recorded version by hand.
 
     **Equal triples are not equal versions.** Read by the triple alone, `later('1.0.0',
     '1.0.0rc1')` was `False`, so a pre-release build moved a project recording the release down

@@ -14,8 +14,8 @@ is the one owner-authored string that prints, normalised the way it was validate
 checkout whose `origin` moved hears both remotes, each through `printed.quoted`
 (`memory.store.origin_note`). A repository chooses `project.name`, `memory.groups` and
 `paths.memory`, and none of the three appears here — a repository is untrusted input (principle
-5), which is also why
-`memory.store.refusal_reason` is not used: its text is built out of those same fields.
+5), which is also why a store's refusal reason is not used: its text is built out of those same
+fields.
 
 **At most once per session (`once_key`), and what it actually costs.** The matcher fires on
 `startup`, `resume`, `clear`, `compact` and `fork`, inside an entry whose `timeout` is ten

@@ -120,19 +120,19 @@ def test_an_unbound_checkout_naming_the_project_gets_no_project_layer(tmp_path: 
 
 def test_a_gate_parameter_in_either_overlay_file_never_reaches_the_config(tmp_path: Path) -> None:
     # What a pull request is judged by is the base branch's file alone: `resolve` refuses both
-    # overlay layers for `gates.builtin`, and says so for each.
+    # overlay layers for `ledger.code_roots`, and says so for each.
     root = project(tmp_path)
-    gate = '[gates]\nbuiltin = ["ledger"]\n'
+    gate = '[ledger]\ncode_roots = ["elsewhere"]\n'
     recorded = overlay(tmp_path, common=gate, sample=gate)
     binding.record(root, "sample", None)
     session = session_config(root, machine=machine(tmp_path, recorded))
-    preset = defaults_of(load_preset("recommended"))["gates"]["builtin"]
+    preset = defaults_of(load_preset("recommended"))["ledger"]["code_roots"]
     assert session.config is not None
-    assert session.config.gates.builtin == tuple(preset)
-    assert REFUSED_LAYER_NOTE.format(key="gates.builtin", layer="overlay common") in (
+    assert session.config.ledger.code_roots == tuple(preset)
+    assert REFUSED_LAYER_NOTE.format(key="ledger.code_roots", layer="overlay common") in (
         session.resolution.notes
     )
-    assert REFUSED_LAYER_NOTE.format(key="gates.builtin", layer="overlay project") in (
+    assert REFUSED_LAYER_NOTE.format(key="ledger.code_roots", layer="overlay project") in (
         session.resolution.notes
     )
 
@@ -238,12 +238,12 @@ def test_a_gate_parameter_in_a_tag_file_never_reaches_the_config(tmp_path: Path)
     # branch's alone, and the note names the tag that tried.
     root = project(tmp_path)
     recorded = overlay(tmp_path, common="", sample="")
-    tagged(recorded, ["a"], a='[gates]\nbuiltin = ["ledger"]\n')
+    tagged(recorded, ["a"], a='[ledger]\ncode_roots = ["elsewhere"]\n')
     binding.record(root, "sample", None)
     session = session_config(root, machine=machine(tmp_path, recorded))
-    preset = defaults_of(load_preset("recommended"))["gates"]["builtin"]
+    preset = defaults_of(load_preset("recommended"))["ledger"]["code_roots"]
     assert session.config is not None
-    assert session.config.gates.builtin == tuple(preset)
-    assert REFUSED_LAYER_NOTE.format(key="gates.builtin", layer="overlay tag a") in (
+    assert session.config.ledger.code_roots == tuple(preset)
+    assert REFUSED_LAYER_NOTE.format(key="ledger.code_roots", layer="overlay tag a") in (
         session.resolution.notes
     )

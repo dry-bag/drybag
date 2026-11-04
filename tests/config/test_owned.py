@@ -1,4 +1,4 @@
-"""`config.owned.rewrite`: three keys, rewritten in place, every other byte left alone."""
+"""`config.owned.rewrite`: the owned key, rewritten in place, every other byte left alone."""
 
 from __future__ import annotations
 
@@ -11,36 +11,17 @@ from stayfixed.config.owned import OWNED, OwnedKeyError, Value, rewrite
 HAND_WRITTEN = (
     "# The project's own configuration; the comments are part of it.\n"
     "[stayfixed]\n"
-    'version = "0.1.0"   # bumped by stayfixed upgrade\n'
-    'enforced = ["plan"]\n'
+    'version = "0.1.0"   # bumped by hand\n'
     'preset = "recommended"\n'
     "\n"
     "[project]\n"
     'name = "widget"  # never edited by the tool\n'
-    "\n"
-    "[ci]\n"
-    'mode = "reusable"\n'
-    'ref = "' + "a" * 40 + '"\n'
 )
 
 
 def test_a_value_is_replaced_and_every_other_byte_is_where_it_was() -> None:
     after = rewrite(HAND_WRITTEN, {("stayfixed", "version"): "0.2.0"})
     assert after == HAND_WRITTEN.replace('"0.1.0"', '"0.2.0"')
-
-
-def test_a_list_of_gates_is_rewritten_as_one_line() -> None:
-    after = rewrite(HAND_WRITTEN, {("stayfixed", "enforced"): ("docs", "plan")})
-    assert 'enforced = ["docs", "plan"]\n' in after
-    assert tomllib.loads(after)["stayfixed"]["enforced"] == ["docs", "plan"]
-
-
-def test_two_keys_in_two_tables_are_rewritten_in_one_call() -> None:
-    after = rewrite(HAND_WRITTEN, {("stayfixed", "enforced"): ("docs",), ("ci", "ref"): "b" * 40})
-    document = tomllib.loads(after)
-    assert document["stayfixed"]["enforced"] == ["docs"]
-    assert document["ci"]["ref"] == "b" * 40
-    assert "# never edited by the tool" in after
 
 
 def test_a_missing_key_is_written_under_its_table_header() -> None:
@@ -61,9 +42,9 @@ def test_a_missing_table_is_appended_and_nothing_above_it_moves() -> None:
 @pytest.mark.parametrize(
     ("text", "change"),
     [
-        (HAND_WRITTEN, {("stayfixed", "enforced"): ("docs",), ("ci", "ref"): "c" * 40}),
-        # Inserting under an existing header: the first promotion writes `enforced` this way.
-        ('[stayfixed]\npreset = "recommended"\n', {("stayfixed", "enforced"): ("docs",)}),
+        (HAND_WRITTEN, {("stayfixed", "version"): "0.2.0"}),
+        # Inserting under an existing header.
+        ('[stayfixed]\npreset = "recommended"\n', {("stayfixed", "version"): "0.2.0"}),
         # Appending a table the document does not have.
         ('[project]\nname = "widget"\n', {("stayfixed", "version"): "0.2.0"}),
     ],
@@ -104,37 +85,23 @@ def test_a_shape_the_editor_does_not_rewrite_is_refused_and_never_written(text: 
         rewrite(text, {("stayfixed", "version"): "0.2.0"})
 
 
-def test_the_refusal_names_the_key_that_failed_and_a_line_that_pastes() -> None:
-    # Only `version` is in a shape the editor does not rewrite; `[ci] ref` is fine. A single
-    # read-back after every edit named whichever pending key sorted first, `[ci] ref`, and
-    # `upgrade` always changes the two together. Mutation: build the refusal from
-    # `min(changes)` instead of the key in hand, and this reddens.
-    text = '[stayfixed]\n"version" = "0.1.0"\n\n[ci]\nref = "' + "a" * 40 + '"\n'
-    with pytest.raises(OwnedKeyError) as caught:
-        rewrite(text, {("stayfixed", "version"): "0.2.0", ("ci", "ref"): "b" * 40})
-    message = str(caught.value)
-    assert message.startswith("[stayfixed] version ")
-    assert '`version = "0.2.0"`' in message
-    assert "[ci]" not in message
-
-
 def test_a_table_header_inside_a_multi_line_string_is_not_where_the_key_is() -> None:
-    # The line editor's blind spot, and the reason the read-back exists. A `[ci]` line and a
-    # `ref = "…"` line inside a `"""` string look exactly like the real thing to a reader that
-    # goes line by line. Whatever the editor does with them, the result may not come back.
+    # The line editor's blind spot, and the reason the read-back exists. A `[stayfixed]` line and
+    # a `version = "…"` line inside a `"""` string look exactly like the real thing to a reader
+    # that goes line by line. Whatever the editor does with them, the result may not come back.
     text = (
-        "[ci]\n"
-        'ref = "' + "a" * 40 + '"\n'
+        "[stayfixed]\n"
+        'version = "0.1.0"\n'
         "\n"
         "[project]\n"
         'name = "widget"\n'
         'notes = """\n'
-        "[ci]\n"
-        'ref = "old"\n'
+        "[stayfixed]\n"
+        'version = "old"\n'
         '"""\n'
     )
     with pytest.raises(OwnedKeyError):
-        rewrite(text, {("ci", "ref"): "b" * 40})
+        rewrite(text, {("stayfixed", "version"): "0.2.0"})
 
 
 @pytest.mark.parametrize(
@@ -170,8 +137,7 @@ def test_a_document_that_does_not_parse_is_refused_by_position_alone() -> None:
 
 
 def test_only_the_owned_keys_can_be_named() -> None:
-    stayfixed = {("stayfixed", "version"), ("stayfixed", "enforced")}
-    assert stayfixed | {("ci", "ref")} == OWNED
+    assert {("stayfixed", "version")} == OWNED
     with pytest.raises(ValueError, match="not a tool-owned key"):
         rewrite(HAND_WRITTEN, {("project", "name"): "other"})
 
@@ -182,24 +148,13 @@ def test_only_the_owned_keys_can_be_named() -> None:
         HAND_WRITTEN,
         # Two spellings of an up-to-date value that the editor would otherwise rewrite, or refuse:
         # a literal string, and a quoted key.
-        "[stayfixed]\nversion = '0.1.0'\nenforced = ['plan']\n",
-        '[stayfixed]\n"version" = "0.1.0"\n"enforced" = ["plan"]\n',
+        "[stayfixed]\nversion = '0.1.0'\n",
+        '[stayfixed]\n"version" = "0.1.0"\n',
     ],
     ids=["canonical", "literal-strings", "quoted-keys"],
 )
 def test_an_unchanged_value_returns_the_text_byte_for_byte(text: str) -> None:
     # Mutation: drop the "already that value" `continue` and the literal-string case comes back
     # rewritten with double quotes, and the quoted-key case is refused.
-    same: dict[tuple[str, str], Value] = {
-        ("stayfixed", "version"): "0.1.0",
-        ("stayfixed", "enforced"): ("plan",),
-    }
+    same: dict[tuple[str, str], Value] = {("stayfixed", "version"): "0.1.0"}
     assert rewrite(text, same) == text
-
-
-def test_a_comment_holding_brackets_survives_an_array_rewrite() -> None:
-    # A greedy array pattern read `["plan"]  # see [docs]` as one value and dropped the comment,
-    # and the read-back accepted it: the comment is not part of the parsed document.
-    text = HAND_WRITTEN.replace('enforced = ["plan"]\n', 'enforced = ["plan"]  # see [docs]\n')
-    after = rewrite(text, {("stayfixed", "enforced"): ("docs", "plan")})
-    assert 'enforced = ["docs", "plan"]  # see [docs]\n' in after

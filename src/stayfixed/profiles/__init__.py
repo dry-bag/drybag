@@ -15,10 +15,8 @@ through `importlib.resources` over this package, never over a repository path, s
 stayfixed itself ships is ever imported.
 
 `detects` is what `init` asks: which profile a repository looks like. `evaluate` and the
-`Outcome` it returns run a profile's checks against a repository; `stayfixed assess` calls them
-and reports each failed check as one item of its inventory. They live here rather than in
-`stayfixed.assess` because the checks are this package's data, and a reader of them there would
-be a second one.
+`Outcome` it returns run a profile's checks against a repository. They live here because the
+checks are this package's data, and a reader of them elsewhere would be a second one.
 """
 
 from __future__ import annotations

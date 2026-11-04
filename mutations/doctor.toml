@@ -362,63 +362,6 @@ reddens = [
   "tests/doctor/test_checks.py::test_every_registry_name_is_spelled_exactly_once_in_the_module",
 ]
 
-# `[ci] ref` is repository-authored and must be the commit of a released stayfixed. Which commits
-# those are is the `release` package's own rule (`is_released`, semver tags only), and the row's
-# verdict is what a reader acts on: a ref no released tag names is a project pinned to a gate
-# nobody shipped, reported green.
-[[mutation]]
-name = "a ci-ref that is no released commit is reported as a released commit"
-file = "src/stayfixed/doctor/checks.py"
-before = "        if not is_a_release:"
-after = "        if is_a_release:"
-reddens = [
-  "tests/doctor/test_checks.py::test_a_released_commit_is_ok_and_an_unreleased_one_is_red",
-]
-
-# A supply-chain verdict, and the one `ci-ref` row that gates the exit code from the file rather
-# than from the configuration: the pin GitHub acts on is the workflow's `uses:` line, so a
-# workflow pinning something other than `[ci] ref` means the gate that runs is not the one
-# recorded. Returning the ref's own verdict there reads as "the workflow agrees" — the same false
-# green the two `warn` arms beside it refuse by name. The anchor is `_USES`, this module's own
-# pattern in the installed package; the file it reads is repository-authored and no byte of it is
-# printed.
-[[mutation]]
-name = "doctor stops comparing the workflow's pin with [ci] ref"
-file = "src/stayfixed/doctor/checks.py"
-before = "    if pinned != {ref}:"
-after = "    if False:"
-reddens = [
-  "tests/doctor/test_checks.py::test_a_workflow_that_pins_something_else_is_red",
-]
-
-# The same row's other red, over the documented mutable opt-in. `[ci] ref = "v1"` is judged
-# against the public repository's own tag listing, and an alias the listing does not carry is a
-# project whose gate resolves to nothing; reported as the ordinary `warn` ("a mutable opt-in"), it
-# reads as an installation working. Uncovered as well as unproven until the case beside this
-# entry was written.
-[[mutation]]
-name = "an alias the public repository does not carry is reported as the mutable opt-in"
-file = "src/stayfixed/doctor/checks.py"
-before = "        if ALIAS not in tags:"
-after = "        if False:"
-reddens = [
-  "tests/doctor/test_checks.py::test_the_alias_arm_answers_a_listing_without_it_and_a_git_that_failed",
-]
-
-# A verdict a reader acts on. With `[ci] mode = "reusable"`, a released sha recorded and no
-# `.github/workflows/stayfixed.yml`, the row reported `ok` — "[ci] ref is a released stayfixed
-# commit" — for a repository with no gate in it at all. That is the false green the `not pinned`
-# arm eleven lines below already refuses by name, and it is the state `init` itself leaves
-# whenever it reports `ci-workflow` under `skipped`. The mutation puts the false green back.
-[[mutation]]
-name = "doctor reports a pinned ref as ok with no workflow file to pin it in"
-file = "src/stayfixed/doctor/checks.py"
-before = '        if config.ci.mode == "reusable":'
-after = "        if False:"
-reddens = [
-  "tests/doctor/test_checks.py::test_a_recorded_ref_with_no_workflow_file_at_all_is_never_green",
-]
-
 # Spelled once. `overlay-requires`' remedy a few rows below reads `REPOSITORY_URL`, while
 # `cli-path`'s carried the address written out -- two places to change when the repository moves, in
 # the command whose whole job is finding the two halves of something that has stopped agreeing. The
@@ -431,78 +374,6 @@ before = '            f"run `uv tool install git+{REPOSITORY_URL}`",'
 after = '            "run `uv tool install git+https://github.com/stayfixed/stayfixed`",'
 reddens = [
   "tests/doctor/test_checks.py::test_a_cli_that_does_not_resolve_is_a_warning_that_names_the_install_command",
-]
-
-# The `ci-ref` row's two missing guards, and both are about a path the *repository* authors:
-# `.github/workflows/stayfixed.yml`. This row read it with neither guard -- `_diagnostics` reads
-# its log to a cap -- so a committed symlink to a FIFO made
-# `read_text` block with nothing to read, and `doctor`, which is one line of output and has no
-# timeout of its own, never returned. Measured on a real FIFO before the guard: the row did not come
-# back. None of the bytes reaches the report either way, so this is containment hygiene rather than
-# a leak, which is why it is a guard and not a refusal.
-[[mutation]]
-name = "doctor reads the rendered workflow without asking what it is"
-file = "src/stayfixed/doctor/checks.py"
-before = """    if not fsops.is_file(workflow):
-        if fsops.exists(workflow) or fsops.is_symlink(workflow):"""
-after = """    if False:
-        if fsops.exists(workflow) or fsops.is_symlink(workflow):"""
-reddens = [
-  "tests/doctor/test_checks.py::test_a_workflow_that_is_not_a_file_does_not_hang_the_row",
-]
-
-# Over the bound is itself an answer, which is the sibling rule of `mutations/`'s "doctor reads an
-# environment-named log with no bound of its own" one function down: a workflow `init` rendered is
-# under 2 KiB, a file a clone committed there has no cap at all, and a `uses:` line past the bound
-# would be compared against bytes nobody read. So the arm must not fall through to the ref's own
-# verdict, which is what this entry breaks.
-#
-# **What has no entry, and why: an unbounded read itself.** A read of the whole file and the bounded
-# one answer "over the bound" identically -- the difference is how many bytes were held to answer
-# it, and no assertion at a testable file size can see that. Measured rather than assumed: this
-# entry's `after` was an unbounded read on its first run and the oracle reported it survived, which
-# is the finding that produced this paragraph. The sibling `_diagnostics` entry does redden, because
-# that row counts records *inside* what it read and an unbounded read counts more of them; this row
-# returns above its count. The bound on the read itself is `fsops.read_bounded`'s, held by
-# `mutations/`'s "the regular-file reader reads past its limit" and "the regular-file reader refuses
-# a file at its limit".
-[[mutation]]
-name = "doctor reads the rendered workflow with no bound of its own"
-file = "src/stayfixed/doctor/checks.py"
-before = "    if over:\n        # Over the cap is itself an answer"
-after = "    if False:\n        # Over the cap is itself an answer"
-reddens = [
-  "tests/doctor/test_checks.py::test_a_workflow_over_the_cap_is_not_the_refs_own_verdict",
-]
-
-# The strict decode was a red a *clone* could force. `read_text(encoding="utf-8")` raises
-# `UnicodeDecodeError`, a `ValueError`, which no arm of this row caught: it reached `_guarded` as
-# "this check could not run" and exit 1, out of the one row whose own rule is that a file it cannot
-# account for is named rather than absolved. A replaced byte cannot forge a sha -- `_USES` bounds
-# what is compared and nothing read here is printed.
-[[mutation]]
-name = "a workflow byte that is not utf-8 makes the ci-ref row a broken check"
-file = "src/stayfixed/doctor/checks.py"
-before = '    rendered = raw.decode("utf-8", errors="replace")'
-after = '    rendered = raw.decode("utf-8")'
-reddens = [
-  "tests/doctor/test_checks.py::test_a_workflow_carrying_a_byte_that_is_not_utf8_is_still_compared",
-]
-
-# The one call this area makes that leaves the machine, and the five-minute cap it inherited.
-# `NETWORK_TIMEOUT_SECONDS` is written for `gh repo create --clone` and the clone behind it; the
-# `ci-ref` row reads one tag listing, on a command that prints one line of output and `docs/cli.md`
-# calls a diagnostic. `stayfixed init` recording a `[ci] ref` is what made the block reachable at
-# all. Two entries, this one and `mutations/`'s "the runner ignores the bound its caller asked for",
-# because the choice and the honouring of it are in different modules: without the second, a
-# caller's bound is accepted and ignored.
-[[mutation]]
-name = "doctor asks the public repository with no bound of its own"
-file = "src/stayfixed/doctor/commands.py"
-before = "        runner=subprocess_runner(timeout=CI_REF_TIMEOUT_SECONDS),"
-after = "        runner=subprocess_runner(),"
-reddens = [
-  "tests/doctor/test_command.py::test_the_runner_this_command_builds_is_bounded_for_a_diagnostic",
 ]
 
 # `${CLAUDE_PLUGIN_DATA}` is a variable a committed `env` block can set, so the hook sink's log is a
@@ -674,47 +545,6 @@ before = "            f\"the hook sink's session markers could not be listed ({f
 after = "            f\"the hook sink's session markers could not be listed ({type(exc).__name__}), so \""
 reddens = ["tests/doctor/test_checks.py::test_a_harness_data_root_this_process_cannot_read_is_a_warning"]
 
-# A `uses:` word is read once: read again from every `uses:` inside it, a file of them at the cap
-# took ten seconds. Its ref is what follows the word's last call, and a word ending in `uses:`
-# hands on to the next.
-[[mutation]]
-name = "a uses: word is read again from every uses: inside it"
-file = "src/stayfixed/doctor/checks.py"
-before = "    while (match := _USES.search(text, at)) is not None:"
-after = '''    return {m.group(1) for m in re.finditer(r"uses:\s*\S+/\.github/workflows/check\.yml@(\S+)", text)}
-    while (match := _USES.search(text, at)) is not None:'''
-reddens = ["tests/doctor/test_checks.py::test_a_long_workflow_is_read_for_its_pins_in_time_linear_in_its_length"]
-
-[[mutation]]
-name = "a uses: word pins what follows its first call"
-file = "src/stayfixed/doctor/checks.py"
-before = "        call = word.rfind(_CALL)"
-after = "        call = word.find(_CALL)"
-reddens = ["tests/doctor/test_checks.py::test_a_uses_word_pins_what_the_pattern_read_it_to_pin[the last call]"]
-
-[[mutation]]
-name = "a word ending in uses: is passed over whole"
-file = "src/stayfixed/doctor/checks.py"
-before = "            at -= len(_USES_KEY)"
-after = "            pass"
-reddens = ["tests/doctor/test_checks.py::test_a_uses_word_pins_what_the_pattern_read_it_to_pin[a word ending in uses:]"]
-
-# The call that ends a word has nothing after it, so the word's ref follows the call before it;
-# and a call at the word's start has nothing before it, so it pins nothing.
-[[mutation]]
-name = "the call that ends a word no longer falls back to the one before it"
-file = "src/stayfixed/doctor/checks.py"
-before = "            call = word.rfind(_CALL, 0, call)"
-after = "            call = -1"
-reddens = ["tests/doctor/test_checks.py::test_a_uses_word_pins_what_the_pattern_read_it_to_pin[a call ending the word]"]
-
-[[mutation]]
-name = "a call with nothing before it pins"
-file = "src/stayfixed/doctor/checks.py"
-before = "        if call > 0:"
-after = "        if call >= 0:"
-reddens = ["tests/doctor/test_checks.py::test_a_uses_word_pins_what_the_pattern_read_it_to_pin[nothing before the call]"]
-
 # `doctor` on a repository with nothing configured warns and is red about nothing; it reads the
 # configuration the way a session does, so only a file the session drops whole is red.
 [[mutation]]
@@ -772,13 +602,6 @@ file = "src/stayfixed/doctor/checks.py"
 before = "    (\"budgets\", configured(_budgets)),"
 after = "    (\"budgets\", lambda context: _budgets(context, context.config)),  # type: ignore[arg-type]"
 reddens = ["tests/doctor/test_floor_report.py::test_rows_that_read_the_configuration_skip_without_one[budgets]"]
-
-[[mutation]]
-name = "the ci-ref row reads a configuration that is not there"
-file = "src/stayfixed/doctor/checks.py"
-before = "    (\"ci-ref\", configured(_ci_ref)),"
-after = "    (\"ci-ref\", lambda context: _ci_ref(context, context.config)),  # type: ignore[arg-type]"
-reddens = ["tests/doctor/test_floor_report.py::test_rows_that_read_the_configuration_skip_without_one[ci-ref]"]
 
 # Every row that reads the configuration before anything else skips through `model.configured`, so
 # breaking that one wrapper reaches the core's rows and the areas' alike.

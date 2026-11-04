@@ -305,20 +305,13 @@ def act_forging(demo: Demo) -> None:
     )
 
 
-# The project's configuration: no built-in gate, and one gate of its own that runs every fixed
-# bug's regression, as docs/cli.md gives it for a machine with `stayfixed` on `PATH`.
+# The project's configuration.
 CONFIGURATION = """\
 [stayfixed]
 version = "{version}"
 
 [project]
 name = "demo"
-
-[gates]
-builtin = []
-
-[gates.custom.regressions]
-run = ["stayfixed", "bugs", "regressions"]
 """
 BUG_TITLE = "total drops the last item"
 # The argv the ledger entry carries, which `bugs regressions` runs once the entry is fixed.
@@ -382,26 +375,15 @@ def act_regression(demo: Demo) -> None:
     )
     demo.git("add", "-A")
     demo.git("commit", "-q", "-m", "a fixed bug and its regression")
-    # Promoted on `main` and committed there, as the owner's direct push to the base would be.
-    demo.stayfixed(
-        ["adopt", "promote", "regressions", "--base", "refs/heads/main", "--json"],
-        code=0,
-        fields=[Field("promoted", "regressions", "holds")],
-    )
-    demo.git("commit", "-q", "-a", "-m", "enforce the regressions gate")
-    # On `change`: the bug comes back, and the enforced gate fails the change.
+    # On `change`: the bug comes back, and its regression fails the change.
     demo.git("switch", "-q", "-c", "change")
     source = (demo.repo / "total.py").read_text(encoding="utf-8")
     demo.write("total.py", source.replace(FIXED, BROKEN))
     demo.git("commit", "-q", "-a", "-m", "total drops the last item again")
     demo.stayfixed(
-        ["gate", "--only", "regressions", "--base", "refs/heads/main", "--json"],
+        ["bugs", "regressions", "--json"],
         code=1,
-        fields=[
-            Field("gates[name=regressions].enforcing", True),
-            Field("gates[name=regressions].answered", True),
-            Field("gates[name=regressions].failing", True),
-        ],
+        fields=[Field("not_proved", 1), Field("regressions[id=BR-001].verdict", "failed")],
     )
 
 

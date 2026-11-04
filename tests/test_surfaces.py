@@ -1,6 +1,6 @@
 """The three checks every `api.py` is held to, asked once of every package that publishes one:
-each area with a surface, and the `release` package, which is not an area and is held to its
-surface like one.
+each area with a surface, and the `release` and `trust` packages, which are not areas and are
+held to their surfaces like one.
 
 CONTRIBUTING states the contract once for all of them: "`api.py` is the area's import surface.
 Other areas import from it and from nothing else, and its `__all__` must equal exactly what it
@@ -36,10 +36,10 @@ from stayfixed.config.session import SessionConfig
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src" / "stayfixed"
 
-# Every package with an `api.py`: the areas that publish one and the `release` package, which is
-# not an area; `AREAS` and the parameter `area` are named for the ten that are. Derived from the
-# tree rather than listed, so an area added tomorrow is covered the day it arrives — which is the
-# whole of what went wrong with `hooks`.
+# Every package with an `api.py`: the areas that publish one and the `release` and `trust`
+# packages, which are not areas; `AREAS` and the parameter `area` are named for the ten that are.
+# Derived from the tree rather than listed, so an area added tomorrow is covered the day it
+# arrives — which is the whole of what went wrong with `hooks`.
 AREAS = sorted(path.parent.name for path in SOURCE.glob("*/api.py"))
 
 # The one area whose `api.py` **defines** rather than re-exports, named rather than skipped silently
@@ -91,8 +91,8 @@ def _defined_here(tree: ast.AST) -> set[str]:
 def test_every_package_with_a_surface_is_walked() -> None:
     # The floor for the three parametrisations below: a `glob` that stopped matching would turn
     # all three into zero test cases, and a suite that collects nothing reports nothing. Pinned
-    # to the exact fourteen — thirteen areas and the `release` package — because a package
-    # gaining or losing a published surface is a decision.
+    # to the exact fourteen — twelve areas and the `release` and `trust` packages — because a
+    # package gaining or losing a published surface is a decision.
     assert AREAS == [
         "attach",
         "docs",
