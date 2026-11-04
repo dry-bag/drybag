@@ -144,7 +144,7 @@ def test_a_hooks_path_that_is_not_utf_8_is_the_directory_git_names(tmp_path: Pat
 @needs_git
 def test_a_dirty_name_that_is_not_utf_8_is_counted_and_not_raised(tmp_path: Path) -> None:
     # `git status --porcelain` prints a name raw under `core.quotePath=false`, a common setting
-    # for anyone whose names are not ASCII; decoded strictly, the red-run hint of `test hygiene`
+    # for anyone whose names are not ASCII; decoded strictly, the red-run hint
     # became an internal error. Planted in the index, so the name is both added and missing
     # from the disk: one entry. Mutation (declared, on `gitenv`): the decode made strict again
     # -> this reddens.
@@ -220,7 +220,7 @@ def test_attach_binds_an_origin_it_cannot_record_and_records_none(tmp_path: Path
 @needs_git
 def test_a_dirty_name_holding_a_line_separator_is_one_entry(tmp_path: Path) -> None:
     # U+2028 is valid UTF-8, `status --porcelain` prints it raw under `core.quotePath=false`,
-    # and `str.splitlines()` breaks at it: one planted name counted as two in `test hygiene`'s
+    # and `str.splitlines()` breaks at it: one planted name counted as two in the red-run
     # hint and in the overlay's sync row. Counted by the lines git wrote. Mutation (declared):
     # count with `splitlines()` again -> this reddens.
     root = repo(tmp_path)

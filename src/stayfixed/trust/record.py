@@ -20,7 +20,7 @@ writers at once each replace the file whole, the last one wins, and neither leav
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime
 from pathlib import Path
@@ -166,27 +166,6 @@ def approve_all(
     for subject, digest in digests.items():
         approvals[(kind, subject)] = Approval(kind, subject, digest, when)
     _write(machine, approvals)
-
-
-def revoke_all(machine: Path | None, kind: str, subjects: Iterable[str]) -> list[str]:
-    """Remove the approval of every subject of `kind` in `subjects` that has one, and every other
-    approval of `kind` holding a digest one of them held, in one write of the record; and answer
-    the subjects removed, those given first in their order. Nothing is written when none had one.
-
-    A digest is what an approval is matched on (`memory.reviewed`), so withdrawing one subject
-    withdraws the bytes it approved: another subject holding the same digest would otherwise keep
-    them approved. One write, as `approve_all`'s, so a kind with several subjects is withdrawn
-    whole or not at all, and the record is not replaced once per subject."""
-    approvals = recorded(machine)
-    named = [subject for subject in subjects if (kind, subject) in approvals]
-    digests = {approvals[(kind, subject)].digest for subject in named}
-    same = [s for (k, s), a in sorted(approvals.items()) if k == kind and a.digest in digests]
-    revoked = list(dict.fromkeys([*named, *same]))
-    for subject in revoked:
-        del approvals[(kind, subject)]
-    if revoked:
-        _write(machine, approvals)
-    return revoked
 
 
 def _write(machine: Path | None, approvals: dict[tuple[str, str], Approval]) -> None:

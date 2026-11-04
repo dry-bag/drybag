@@ -4,9 +4,8 @@ Which statuses run, and why the run is a convenience and not a control, `docs/cl
 `stayfixed bugs regressions` says, once.
 
 Each argv runs as `prove` runs a command, from the project root, under the caller's environment,
-with `[gates] custom_timeout_seconds` as its bound, the bound a project already sets for its own
-gates; and every receipt is judged as `prove` judges it, so an argv no runner adapter recognises is
-`not proven` and nothing is started for it.
+with the command's `--timeout` as its bound; and every receipt is judged as `prove` judges it, so
+an argv no runner adapter recognises is `not proven` and nothing is started for it.
 """
 
 from __future__ import annotations
@@ -22,14 +21,20 @@ from stayfixed.prove.api import INTERRUPTED, Receipt, prove
 if TYPE_CHECKING:
     from stayfixed.config.schema import Config
 
+# A named cap: how long one regression may run when `--timeout` does not say, in seconds. Ten
+# minutes, the value `[gates] custom_timeout_seconds` held in `presets/recommended.toml` before
+# the gates went, so a project that ran its regressions under that bound runs them under the same.
+DEFAULT_TIMEOUT_SECONDS = 600
 
-def regressions(root: Path, config: Config, *, echo: TextIO) -> list[tuple[Entry, Receipt]]:
+
+def regressions(
+    root: Path, config: Config, *, timeout: int, echo: TextIO
+) -> list[tuple[Entry, Receipt]]:
     """Every fixed entry that carries a `regression`, in identifier order, with the receipt of its
     run; the runner's standard output goes to `echo`. A run an interrupt ended (a Ctrl-C, or the
-    SIGTERM a custom gate's bound sends) is the last: `prove` returns its receipt rather than
+    SIGTERM a caller's bound sends) is the last: `prove` returns its receipt rather than
     raising, so going on would start the next runner after the signal."""
     ran: list[tuple[Entry, Receipt]] = []
-    timeout = config.gates.custom_timeout_seconds
     for entry in load_entries(root, bug_register(config)):
         argv = entry.lists["regression"]
         if entry.status != "fixed" or not argv:

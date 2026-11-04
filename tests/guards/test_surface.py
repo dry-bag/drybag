@@ -30,7 +30,5 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
         "Removed",
         "install",
         "uninstall",
-        # the commit gate stayfixed.assess.gates runs
-        "commit_gate",
     }
     assert required == set(guards.__all__)

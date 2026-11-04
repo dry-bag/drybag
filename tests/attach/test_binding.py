@@ -42,7 +42,6 @@ DEFAULT_MEMORY = load_preset("recommended")["defaults"]["paths"]["memory"]
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]

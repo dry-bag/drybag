@@ -33,7 +33,6 @@ from stayfixed.printed import CLIPPED_CHARS, clipped
 from tests.crafted import assert_never_raw
 from tests.doctor.test_checks import LOCAL_ONLY, _initialised
 from tests.overlay.test_requires import overlay_with
-from tests.runners import Recorder
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -41,7 +40,7 @@ pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not 
 def run_checks_for(tmp_path: Path, root: Path, *, machine: Path) -> list[Check]:
     """`run_checks` hermetic: a home, a machine file and an environment of the test's own."""
     env = {"PATH": os.environ.get("PATH", ""), "HOME": os.environ["HOME"]}
-    return run_checks(root, home=tmp_path / "home", machine=machine, runner=Recorder(), env=env)
+    return run_checks(root, home=tmp_path / "home", machine=machine, env=env)
 
 
 def row(report: list[Check], name: str) -> Check:
@@ -82,7 +81,7 @@ def test_rows_that_need_no_configuration_run_without_one(tmp_path: Path, name: s
     assert checked.detail != NO_CONFIG_SKIP
 
 
-@pytest.mark.parametrize("name", ["budgets", "ci-ref"])
+@pytest.mark.parametrize("name", ["budgets"])
 def test_rows_that_read_the_configuration_skip_without_one(tmp_path: Path, name: str) -> None:
     # Mutation (`mutations/`'s "the budgets row reads a configuration that is not there"): the
     # row raises and reads as a check that could not run.
@@ -96,10 +95,13 @@ def test_notes_are_listed_by_key(tmp_path: Path) -> None:
     # Keys only: a note's sentence carries the loader's refusal, and the value never prints.
     # Mutation (`mutations/`'s "not-initialised is green over a file that loaded with notes"):
     # the row is green.
-    root = _initialised(tmp_path, template=LOCAL_ONLY + '\n[newer]\nx = 1\n[ci]\nmode = "fax"\n')
+    root = _initialised(
+        tmp_path,
+        template=LOCAL_ONLY + '\n[newer]\nx = 1\n[commit_messages]\nattribution_check = "fax"\n',
+    )
     checked = row(run_checks_for(tmp_path, root, machine=none(tmp_path)), "not-initialised")
     assert checked.status == WARN
-    assert checked.detail.endswith(": newer, ci.mode")
+    assert checked.detail.endswith(": newer, commit_messages.attribution_check")
     assert "fax" not in checked.detail
 
 

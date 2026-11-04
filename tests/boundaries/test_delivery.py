@@ -36,20 +36,11 @@ Direction = tuple[str, str]
 # Importing the core is no crossing from either side, and neither is an import within one side.
 CORE_TO_DELIVERY: tuple[Row, ...] = ()
 CORE_TO_PACK: tuple[Row, ...] = (
-    # The harness registry names a profile's type in the rendering a harness gives a profile's
-    # rules, under `if TYPE_CHECKING:`, so it never runs. Goes with the profiles.
-    ("harnesses.py", "stayfixed.profiles", frozenset({"Profile"})),
     # The scaffold engine checks `[stayfixed] profile` against the profiles that ship, inside the
     # one function that checks it. Goes with the profiles.
     ("scaffold/engine.py", "stayfixed.profiles", frozenset()),
 )
 PACK_TO_DELIVERY: tuple[Row, ...] = (
-    # `stayfixed test hygiene` counts the uncommitted changes the red-run note counts, so the two
-    # cannot disagree. Goes when that count moves into the core, or the command leaves `guards`.
-    ("guards/commands.py", "stayfixed.hints.api", frozenset({"dirty_count"})),
-    # `stayfixed uninstall` detaches an attached repository before it takes the scaffold back,
-    # inside the one function that runs it. Goes when `stayfixed uninstall` is deleted.
-    ("project/uninstall.py", "stayfixed.attach.api", frozenset({"detach"})),
     # `prove` reads a test command's launch the way the red-run hints read it, at module level.
     # Goes with `prove`.
     ("prove/run.py", "stayfixed.hints.api", frozenset({"Launch", "read_launch", "run_directory"})),
@@ -60,9 +51,6 @@ DELIVERY_TO_PACK: tuple[Row, ...] = (
     ("hints/hygiene.py", "stayfixed.profiles.adapters", frozenset({"shipped_adapters"})),
     ("hints/hygiene.py", "stayfixed.profiles.hints", frozenset({"answer", "shipped_hints"})),
     ("hints/hygiene.py", "stayfixed.profiles.hints", frozenset({"RedRunHint"})),
-    # The note graph flags a bug id written as a link, and asks the bug register which words are
-    # ids. Goes when the note graph takes the id rule from the core.
-    ("memory/graph.py", "stayfixed.ledger.api", frozenset({"bug_register"})),
     # `stayfixed setup --git-hooks` installs and removes the commit-message hook, inside the one
     # function that runs it. Goes when the commit-hook installer leaves `setup`.
     ("setup/commands.py", "stayfixed.guards.api", frozenset({"Found", "install", "uninstall"})),
@@ -207,7 +195,9 @@ def test_in_isolation_no_core_module_loads_either_side() -> None:
     # module of either side may be among what it loaded: the core loads a side only when a command
     # asks for it.
     #
-    # Mutation (declared): `mutations/`'s "the harness registry loads the profiles at import".
+    # No declared mutation since the harness registry's import of the profiles went with the
+    # renditions that used it; lifting `scaffold/engine.py`'s in-function import of the profiles to
+    # module level reddens this, measured by hand.
     source = ROOT / "src" / "stayfixed"
     # Every core module, dotted. `__main__` is left out because importing it runs the CLI: its
     # whole body is `main()`.
@@ -248,7 +238,7 @@ def test_every_area_is_on_exactly_one_side() -> None:
     # `CORE_AREAS` list areas, `PACK_PACKAGES` lists packages (the profiles are one and not an
     # area), and every listed name names one: an area joins its side in the change that writes it.
     #
-    # Mutations (declared): `mutations/`'s "trust drops out of every side" and "memory stops being
+    # Mutations (declared): `mutations/`'s "setup drops out of every side" and "memory stops being
     # a delivery area".
     source = ROOT / "src" / "stayfixed"
     delivery, pack = stayfixed.areas.DELIVERY_AREAS, stayfixed.areas.PACK_PACKAGES

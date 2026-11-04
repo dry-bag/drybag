@@ -71,10 +71,9 @@ _HERE = "."
 # `.GIT/hooks/pre-commit` reaches the same file there; **at every depth**, because a `.git`
 # below the top is a submodule's control directory and is exactly as off-limits.
 #
-# **`.git` and not "a leading dot".** `.github/workflows/stayfixed.yml` is an artifact this
-# project ships and `.stayfixed/manifest.json` is its own ledger, so a leading-dot rule would
-# refuse stayfixed's own footprint. `.gitignore`, `.gitattributes` and `.gitkeep` are ordinary
-# files and are untouched by an equality test on the whole component.
+# **`.git` and not "a leading dot".** `.stayfixed/manifest.json` is this project's own ledger, so
+# a leading-dot rule would refuse stayfixed's own footprint. `.gitignore`, `.gitattributes` and
+# `.gitkeep` are ordinary files and are untouched by an equality test on the whole component.
 #
 # The one place stayfixed does write inside `.git` is `guards.githooks.install`, and it does not
 # come through here: git itself names the directory (`rev-parse --git-path hooks`), the result

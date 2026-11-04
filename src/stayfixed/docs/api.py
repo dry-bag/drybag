@@ -7,23 +7,20 @@ whole area — and with it the configuration layer — into every `discover()` c
 `tests/docs/test_surface.py` asserts the `__init__` imports nothing at all.
 
 **Outside this area, `project` imports `trail_target` (the paragraphs on `trail_path` and
-`trail_target` say why), `stayfixed.assess.gates` imports the three gate functions (the last
-paragraph), and `stayfixed.assess.gates` records what the `docs` and `trail` gates read by path
-through `docs_reads` and `trail_reads`; nothing imports any other name on this list**, measured
-over `src/`, `scripts/` and `tests/`: this area's own tests reach `stayfixed.docs.plans`,
+`trail_target` say why); nothing imports any other name on this list**, measured over `src/`,
+`scripts/` and `tests/`: this area's own tests reach `stayfixed.docs.plans`,
 `stayfixed.docs.hygiene` and `stayfixed.docs.trail` directly, and every other area runs the
 commands.
 So every other name below is here on an argument rather than on a caller, and the argument is
 written beside it — a surface that survives a trim with no explanation is what made the trim
 necessary.
 
-The two besides `trail_target`, the gate functions and what two of them read are checks this
-area *is*, one call each: `check_budgets` and `check_links` each answer one question about the
-documentation tree and return `Finding`s from `stayfixed.findings`, the leaf three areas share —
-a consumer imports the finding shape from there, not from here.
+The two besides `trail_target` are checks this area *is*, one call each: `check_budgets` and
+`check_links` each answer one question about the documentation tree and return `Finding`s from
+`stayfixed.findings`, the leaf three areas share — a consumer imports the finding shape from there,
+not from here.
 
-`lint` and the `Lint` it returns are **not** here: `plan check` and the `plan` gate are this
-area's own, and `plan_gate` is the one call a consumer runs.
+`lint` and the `Lint` it returns are **not** here: `plan check` is this area's own.
 
 `Finding` and `labels` are **not** here: they are `stayfixed.findings`', and a consumer imports
 them from there.
@@ -46,33 +43,13 @@ configuration may never use. It is the location with no disk access, and the eng
 every target it plans: `trail_path` contains its answer against the root, so asked there it
 would refuse whenever that place passed through a symlink, and it stays in
 `stayfixed.docs.trail` for this area's own commands.
-
-**`docs_reads` and `trail_reads`, for `stayfixed assess` and `stayfixed adopt promote`**, which ask
-git whether each file those gates read by path is tracked, since CI sees only those. Each lists
-what its gate reads, beside the gate function it must agree with: the link targets are read by
-this area's link reader, so the gate and the question cannot disagree about which files a link
-names. `stayfixed.assess.gates` holds them on the gates' records.
-
-**Three gate functions, for `stayfixed assess`.** `docs_gate`, `plan_gate` and
-`trail_gate` are each `(root, config, base) -> list[Finding]`, the shape
-`stayfixed.assess.gates.GateFn` spells, one gate's whole composition, and each raises when it
-cannot judge the tree.
-`stayfixed assess` runs them as values, and this area's own commands answer with the same
-functions (`docs check` with no flag, `docs trail --check`) or with the one call a function
-wraps (`plan check` calls `lint`), so a command and its gate cannot drift apart.
 """
 
-from stayfixed.docs.hygiene import check_budgets, check_links, docs_gate, docs_reads
-from stayfixed.docs.plans import plan_gate
-from stayfixed.docs.trail import trail_gate, trail_reads, trail_target
+from stayfixed.docs.hygiene import check_budgets, check_links
+from stayfixed.docs.trail import trail_target
 
 __all__ = [
     "check_budgets",
     "check_links",
-    "docs_gate",
-    "docs_reads",
-    "plan_gate",
-    "trail_gate",
-    "trail_reads",
     "trail_target",
 ]

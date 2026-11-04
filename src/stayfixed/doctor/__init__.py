@@ -3,15 +3,12 @@
 This area **reports and never repairs.** Every other area in this package writes something;
 this one reads.
 
-**Every subprocess a report runs only asks.** This area's own are stayfixed's hook wrapper with
-`--version`, and `git ls-remote --exit-code` over the public repository's tags, which is how
-`[ci] ref` is judged; the rows the areas contribute ask `git` questions of their own, inside those
-areas. None of them writes, and only the `ci-ref` row's `git ls-remote` leaves this machine, which
-is why it alone goes through the `Runner` seam, under a bound of its own
-(`checks.CI_REF_TIMEOUT_SECONDS`). How many a report launches is a measurement and not this
-package's to state: `docs/cli.md` gives it, and
-`tests/test_install_path.py::test_doctor_launches_the_number_of_subprocesses_it_says_it_does`
-pins it.
+**Every subprocess a report runs only asks.** This area's own is stayfixed's hook wrapper with
+`--version`; the rows the areas contribute ask `git` questions of their own, inside those areas.
+None of them writes, and none leaves this machine. How many a report launches is a measurement and
+not this package's to state: `docs/cli.md` gives it, and
+`tests/test_install_path.py::test_doctor_launches_the_number_of_subprocesses_it_says_it_does` pins
+it.
 
 **Two of the core's rows read something the environment named, and neither trusts it.** `wrapper`
 executes only the plugin root this process derived from its own module path, because a root a

@@ -1,5 +1,5 @@
 # Who reads what: the configuration loader (`stayfixed.config`) reads [budgets], [native_caps] and
-# [defaults.*] into a project's configuration; `stayfixed.assess` reads [assess]; `stayfixed.setup`
+# [defaults.*] into a project's configuration; `stayfixed.setup`
 # reads [plugins.<harness>] and [deny] when it installs a machine, and [defaults.personal] and
 # [defaults.stayfixed] for its own answers; `stayfixed init --questions` reads [plugins]
 # recommended.
@@ -25,14 +25,9 @@ memory_index_lines = 200
 memory_index_bytes = 25600
 hook_output_chars = 10000
 
-[assess]
-# How many commits `stayfixed assess` reads for the commit-vocabulary probe.
-commit_window = 100
-
 [defaults.stayfixed]
 profile = ""
 agents = ["claude", "codex"]
-enforced = []
 
 [defaults.project]
 base_branch = "main"
@@ -61,22 +56,8 @@ id_prefix = "BR"
 code_roots = ["src", "tests", "scripts"]
 evidence_boundary_required_for = ["high"]
 
-[defaults.artifacts]
-local = []
-
-[defaults.ci]
-mode = "reusable"
-ref = ""
-
-[defaults.gates]
-builtin = ["docs", "bugs", "plan", "commit", "trail"]
-custom_timeout_seconds = 600
-
 [defaults.commit_messages]
 attribution_check = false
-# The eleven types `@commitlint/config-conventional` lists; the Conventional Commits specification
-# itself defines only `feat` and `fix`.
-types = ["feat", "fix", "build", "chore", "ci", "docs", "perf", "refactor", "revert", "style", "test"]
 
 [defaults.personal]
 preset = "recommended"

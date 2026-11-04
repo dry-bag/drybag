@@ -61,7 +61,7 @@ from stayfixed.config.schema import HARNESS_MODE, LOCAL_ONLY_MODE, OVERLAY_MODE,
 from stayfixed.errors import Failure
 from stayfixed.fsops import read_regular_text
 from stayfixed.gitenv import git_answer, without_userinfo
-from stayfixed.printed import clipped, quoted
+from stayfixed.printed import quoted
 
 LOCAL_STORE = Path(".stayfixed") / "local" / "memory"
 # The overlay's per-project directory, named once: the two call sites below and the `overlay` area
@@ -115,12 +115,6 @@ class Store:
     mode: str
     root: Path
     groups: dict[str, Path] = field(default_factory=dict)
-    # Per-group refusal prose from `_group_targets`, built the same way `refusal_reason` builds
-    # its message: it embeds the raw `memory.groups` entry, a field with no schema constraint
-    # (a TOML multi-line string carries literal newlines through unchanged). Same hazard, same
-    # rule — never put a value out of this dict into model context unwrapped; `trust.wrap` it
-    # first if a consumer must show the detail.
-    unavailable: dict[str, str] = field(default_factory=dict)
     # The machine file this store was resolved against, carried rather than re-passed.
     #
     # Not an optional keyword on every function that reads the store: a `None` there is not
@@ -426,16 +420,14 @@ def _declared(root: Path, config: Config) -> Path | Unresolved:
         )
 
 
-def _group_targets(
-    base: Path, config: Config, overlay: Path | None
-) -> tuple[dict[str, Path], dict[str, str]]:
+def _group_targets(base: Path, config: Config, overlay: Path | None) -> dict[str, Path]:
+    """Each group of `memory.groups` this store holds and may read, by its directory; a group
+    whose directory escapes the store, or links where it may not, is left out."""
     groups: dict[str, Path] = {}
-    unavailable: dict[str, str] = {}
     for group in config.memory.groups:
         try:
             target = contained(base, group, allow_final_symlink=True)
-        except PathEscape as exc:
-            unavailable[group] = str(exc)
+        except PathEscape:
             continue
         if not fsops.exists(target):
             # A group directory the store does not hold is an empty group: it contributes no
@@ -443,17 +435,12 @@ def _group_targets(
             continue
         if fsops.is_symlink(target):
             if overlay is None:
-                unavailable[group] = f"{clipped(group)} is a link and no overlay is recorded"
                 continue
             allowed = permitted_roots(overlay, config.project.name)
             if not any(_inside(target, permitted) for permitted in allowed):
-                unavailable[group] = (
-                    f"{clipped(group)} links outside this project's share of the overlay "
-                    f"({', '.join(str(p) for p in allowed)})"
-                )
                 continue
         groups[group] = target
-    return groups, unavailable
+    return groups
 
 
 # A store and no reason, or no store and the reason: `resolved`'s answer, which never holds both
@@ -540,8 +527,8 @@ def _resolve_at(
         # elsewhere it refuses, so it is named as the way out only there.
         said = STORE_MISSING + (BUILT_BY_ATTACH if mode == OVERLAY_MODE else "")
         return None, Unresolved(said, shown(base))
-    groups, unavailable = _group_targets(base, config, overlay if mode == OVERLAY_MODE else None)
-    return Store(base, mode, root, groups, unavailable, machine), None
+    groups = _group_targets(base, config, overlay if mode == OVERLAY_MODE else None)
+    return Store(base, mode, root, groups, machine), None
 
 
 def resolved(
@@ -553,15 +540,17 @@ def resolved(
 ) -> Resolution:
     """The store and, when there is none, why — in **one** pass.
 
-    `resolve` and `refusal_reason` each walk the whole resolution, and a caller that needs both
-    (every `memory` command does: the store to work with, the reason to report) would walk it
+    `resolve` walks the whole resolution too, and a caller that needs both answers (every
+    `memory` command does: the store to work with, the reason to report) would otherwise walk it
     twice. Each walk runs up to four `git` queries with a five-second timeout apiece, so a
     hanging `git` would cost a refused command up to forty seconds — inside a `SessionStart`
-    hook, once per bundle entry. The two functions below stay, because a caller that wants only one
-    of the two answers should not have to say so; this is the one for callers that want both.
+    hook, once per bundle entry. `resolve` stays, because a caller that wants only the store
+    should not have to say so; this is the one for callers that want both.
 
-    The reason's `detail` is repository-authored text: see `refusal_reason` for what that
-    obliges a consumer to do with it. Its `said` is stayfixed's own and prints as it is.
+    The reason's `detail` is built out of `config.paths.memory`, repository-controlled and not
+    schema-constrained — a TOML multi-line string carries literal newlines through unchanged —
+    so it must never reach model context unwrapped: a consumer that must show it wraps it first
+    with `trust.wrap`. Its `said` is stayfixed's own and prints as it is.
 
     There is always exactly one of the two, and the type says so (`Resolution`): a caller that
     tests `found[0] is None` holds a reason, and has no "no reason" case to invent words for.
@@ -589,26 +578,6 @@ def resolve(
     # environment, and a parameter that exists and is ignored is a claim a test can pin.
     del env
     return resolved(root, config, override=override, machine=machine)[0]
-
-
-def refusal_reason(
-    root: Path,
-    config: Config,
-    *,
-    override: str | None = None,
-    machine: Path | None = None,
-) -> str | None:
-    """Why `resolve` returned no store for this call, or `None` when it would not have refused.
-
-    The string is built out of `memory.groups` entries (`_group_targets`'s `unavailable`
-    messages) and out of `config.paths.memory`, both repository-controlled and neither
-    schema-constrained — a TOML multi-line string carries literal newlines through unchanged,
-    so this can come back multi-line, and the same repository text can appear in it twice. It
-    must never reach model context unwrapped: a consumer that must show the detail wraps it first
-    with `trust.wrap`.
-    """
-    reason = resolved(root, config, override=override, machine=machine)[1]
-    return None if reason is None else str(reason)
 
 
 def in_repository(store: Store, path: Path) -> bool:

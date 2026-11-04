@@ -44,12 +44,10 @@ DELIVERY_AREAS: frozenset[str] = frozenset(
         "overlay",
         "setup",
         "sync",
-        "trust",
     }
 )
 PACK_PACKAGES: frozenset[str] = frozenset(
     {
-        "assess",
         "docs",
         "guards",
         "ledger",

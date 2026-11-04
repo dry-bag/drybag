@@ -14,7 +14,6 @@ from stayfixed.presets import load_preset
 from stayfixed.project.init import init
 from stayfixed.scaffold import Kind, Template, apply, plan
 from tests.gitfixture import git, needs_git
-from tests.runners import LsRemote
 
 VALID_HEAD = """
 [stayfixed]
@@ -290,10 +289,8 @@ def _init(root: Path) -> None:
     init(
         root,
         machine=root / "absent.toml",
-        runner=LsRemote(),
         yes=True,
         dry_run=False,
-        ci=True,
     )
 
 

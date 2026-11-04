@@ -12,9 +12,6 @@ could not use in one warning, which `SessionStart` shows (`hooks.dispatch`):
   configuration, and `FALLBACK_WARNING`;
 - one longer than a session reads (`SESSION_READ_LIMIT`), read no further: no project
   configuration, and `TOO_LARGE_WARNING`;
-- one holding more settings it cannot use than the NOTE load removes (`loader.NOTE_REMOVAL_LIMIT`,
-  and fewer for a long file, `loader.NOTE_REBUILT_LIMIT`): no project configuration, and
-  `TOO_MANY_WARNING`;
 - one whose key cannot be used and has nothing to stand in for it — a required key, or a section
   holding one, that the document got wrong or never wrote, or a preset value that does not hold in
   this repository — no project configuration, and `UNUSABLE_WARNING` naming the key;
@@ -59,7 +56,6 @@ from stayfixed.config.classes import (
 from stayfixed.config.loader import (
     MissingKeys,
     TooLargeDocument,
-    TooManyResets,
     UnusableKey,
     load,
     loads,
@@ -80,13 +76,10 @@ from stayfixed.semver import later
 # A named cap: the most bytes of `stayfixed.toml` a session reads. A hook has the ten seconds
 # `hooks/hooks.json` gives each entry, and a `PreToolUse` hook that runs past them loses its guard,
 # so what the parse and the NOTE load cost,
-# each in proportion to the file, is bounded by the file before either starts: a 2.8 MB file of
-# custom gates kept a hook fourteen seconds, and at 1 MiB the costliest file a session read took 6
-# to 7.5 s of CPU on a laptop's efficiency cores. A `stayfixed.toml` that `init` writes is a few
-# hundred bytes, and one that spells out every setting and a few dozen gates is a few kilobytes;
-# 256 KiB is still dozens of times the second, and the costliest file of that length takes 0.25 s
-# on Python 3.13 and 1.4 to 1.5 s on efficiency cores (`loader.NOTE_REBUILT_LIMIT` gives its
-# shape). A command reads the file to `fsops.REGULAR_READ_LIMIT`.
+# each in proportion to the file, is bounded by the file before either starts: a 2.8 MB file kept a
+# hook fourteen seconds. A `stayfixed.toml` that `init` writes is a few hundred bytes, and one that
+# spells out every setting is a few kilobytes; 256 KiB is still dozens of times the second. A
+# command reads the file to `fsops.REGULAR_READ_LIMIT`.
 SESSION_READ_LIMIT = 256 * 1024
 # How every warning opens, and how the two that drop the project configuration close: `doctor`
 # shows the words between (`cause`), since it is where that pointer leads.
@@ -107,22 +100,14 @@ UNUSABLE_WARNING = (
     "session runs the guards on the preset and the machine owner's layer, without the project's "
     f"settings{DOCTOR_DETAIL}"
 )
-# A file holding more settings this stayfixed cannot use than the NOTE load reads past one by one,
-# `limit` (`loader.TooManyResets`): read key by key, it would cost a hook more than its timeout,
-# which Claude Code answers by letting the call through.
-TOO_MANY_WARNING = (
-    f"{PREFIX}stayfixed.toml holds more than {{limit}} settings this stayfixed cannot use, so this "
-    "session runs the guards on the preset and the machine owner's layer, without the project's "
-    f"settings{DOCTOR_DETAIL}"
-)
 # What `UNUSABLE_WARNING` says for a key `printable` withholds, or for a refusal that named none.
 UNNAMED_KEY = "a setting"
 NOTED_WARNING = (
     "stayfixed: stayfixed.toml loaded with {count} setting(s) ignored or put back to the "
     "preset's; run `stayfixed doctor` for the list"
 )
-# The remedy is `doctor`'s `VERSION_AHEAD`'s: `stayfixed upgrade` never moves a project backward,
-# so the way out of a file a later release wrote is a later plugin.
+# The remedy is `doctor`'s `VERSION_AHEAD`'s: the way out of a file a later release wrote is a
+# later plugin.
 NEWER_RELEASE_WARNING = (
     "stayfixed: stayfixed.toml was written by a newer stayfixed, so {count} setting(s) this one "
     "does not read were ignored or put back to the preset's; update the stayfixed plugin, and run "
@@ -257,8 +242,6 @@ def _read(root: Path | None, path: Path | None) -> SessionConfig:
         return _with_owner(owner, path, _unusable(exc.key))
     except MissingKeys as exc:
         return _with_owner(owner, path, _unusable(exc.missing[0]))
-    except TooManyResets as exc:
-        return _with_owner(owner, path, TOO_MANY_WARNING.format(limit=exc.limit))
     except (ConfigError, PathEscape) as exc:
         # Every refusal `loads_noting` raises past the two above names a key or is the document
         # not parsing, which `tomllib` already answered; this arm is for one it has not, so that a

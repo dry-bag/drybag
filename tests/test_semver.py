@@ -1,40 +1,36 @@
-"""How one version orders against another: the reader `upgrade`, `doctor` and `stayfixed gate`
-share, so the three cannot disagree about which way a recorded version lies."""
+"""How one version orders against another: the reader `upgrade` and `doctor` share, so the two
+cannot disagree about which way a recorded version lies."""
 
 from __future__ import annotations
 
 import pytest
 
-from stayfixed.semver import RELEASE, later
+from stayfixed.semver import later
 
 
 def test_a_component_past_nine_digits_is_no_version_and_never_an_exception() -> None:
-    # `int()` refuses a string past 4300 digits, so an unbounded component turned a recorded
-    # version into a `ValueError` out of `later`, which `upgrade`, `doctor` and `stayfixed gate`
-    # call on a version a repository wrote. The value is asserted rather than the crash, because
-    # the crash is the thing being removed. Mutation (declared): `mutations/`'s "the version
-    # grammar stops bounding its components".
+    # `int()` refuses a string past 4300 digits, so an unbounded component turned a recorded version
+    # into a `ValueError` out of `later`, which `upgrade` and `doctor` call on a version a
+    # repository wrote. The value is asserted rather than the crash, because the crash is the thing
+    # being removed. Mutation (declared): `mutations/`'s "the version grammar stops bounding its
+    # components".
     long = "1" * 5000
     assert later(f"{long}.0.0", "0.1.0") is None
     assert later("0.1.0", f"{long}.0.0") is None
     # Ten digits, the first length past the bound rather than the first past `int()`, with nine
     # beside it so the refusal is the bound's and not the pattern's.
     assert later("1234567890.0.0", "0.1.0") is None
-    assert RELEASE.match("1234567890.0.0") is None
     assert later("123456789.0.0", "0.1.0") is True
-    assert RELEASE.match("123456789.0.0") is not None
 
 
 def test_a_version_in_digits_that_are_not_ascii_is_no_version() -> None:
     # `\d` matches every Unicode decimal digit and `int()` converts them, so `1.0.0` spelled in
-    # Eastern Arabic-Indic numerals ordered as a release and passed `RELEASE`, which is what
-    # `upgrade` checks before it prints a recorded version back. Spelled as escapes so this file
-    # stays ASCII. Mutation (declared): `mutations/`'s "the version grammar stops bounding its
+    # Eastern Arabic-Indic numerals ordered as a release. Spelled as escapes so this file stays
+    # ASCII. Mutation (declared): `mutations/`'s "the version grammar stops bounding its
     # components".
     eastern = "\u0661.\u0660.\u0660"
     assert later(eastern, "0.1.0") is None
     assert later("0.1.0", eastern) is None
-    assert RELEASE.match(eastern) is None
 
 
 def test_later_reads_each_version_s_leading_triple_and_answers_none_without_one() -> None:

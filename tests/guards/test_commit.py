@@ -630,7 +630,6 @@ def test_a_long_trailer_is_judged_in_memory_linear_in_its_length(shape: str) -> 
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]

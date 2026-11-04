@@ -1,8 +1,7 @@
-"""The initialised repository `upgrade`'s and `uninstall`'s tests start from, and how they read it.
+"""The repository `init`'s tests start from, and how they read it.
 
-One module rather than a copy per test file: both commands are read against the same `init`, and
-two copies of the fixture would drift the way the suite's twenty-three `git` helpers once did
-(`tests/gitfixture.py` says how).
+One module rather than a copy per test file: two copies of the fixture would drift the way the
+suite's twenty-three `git` helpers once did (`tests/gitfixture.py` says how).
 """
 
 from __future__ import annotations
@@ -14,17 +13,12 @@ from pathlib import Path
 import stayfixed
 from stayfixed.config.loader import preset_defaults
 from stayfixed.project.init import init
-from stayfixed.runner import Runner
 from stayfixed.scaffold import Manifest
 from tests.gitfixture import git
-from tests.runners import LsRemote
 
 BEFORE = "# ours, from before stayfixed\n"
-# The smallest `stayfixed.toml` a test writes by hand: this build's version, a name, and no CI.
-DOCUMENT = (
-    f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n\n'
-    '[ci]\nmode = "none"\n'
-)
+# The smallest `stayfixed.toml` a test writes by hand: this build's version and a name.
+DOCUMENT = f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n'
 # Every `[paths]` value that defaults under `docs/`, moved off it, so a symlinked `docs` is on no
 # path the configuration uses. Derived from the preset, so a key added there is moved too.
 MOVED_OFF_DOCS = {
@@ -64,8 +58,6 @@ def forge_record(root: Path, artifact_id: str, *, target: str, sha256: str | Non
 def initialised(
     tmp_path: Path,
     *,
-    runner: Runner | None = None,
-    ci: bool = False,
     document: str = "",
     files: Mapping[str, str] | None = None,
 ) -> Path:
@@ -79,14 +71,7 @@ def initialised(
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
-    init(
-        root,
-        machine=tmp_path / "absent.toml",
-        runner=runner or LsRemote(),
-        yes=True,
-        dry_run=False,
-        ci=ci,
-    )
+    init(root, machine=tmp_path / "absent.toml", yes=True, dry_run=False)
     return root
 
 

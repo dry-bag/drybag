@@ -336,7 +336,6 @@ PRE_COMMIT_CONFIG = (
 )
 PROJECT_CONFIG = """[stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]

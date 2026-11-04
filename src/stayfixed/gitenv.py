@@ -226,8 +226,7 @@ def git_run(
 
     The answer is lossless rather than a placeholder, so every caller still decides about the
     path that is really there. What it does not make safe is writing that `str` into a UTF-8
-    file or parsing it as UTF-8 text: a caller whose answer ends up in one checks it itself, as
-    `assess.base.read_base` does for the base's `stayfixed.toml`.
+    file or parsing it as UTF-8 text: a caller whose answer ends up in one checks it itself.
 
     No answer is three things, and `NO_ANSWER` names all three: git could not be launched, it
     ran past `timeout`, or `stdin` held a

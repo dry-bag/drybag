@@ -111,7 +111,7 @@ def test_a_file_that_does_not_parse_resolves_to_nothing(tmp_path: Path, text: st
     # `tomllib` to raise `RecursionError` rather than `TOMLDecodeError` (measured on 3.13.0 at a
     # depth of 500), and a raise here would end the whole evaluation, not one locator. A hex
     # literal of any length parses, and `str()` of it past 4,300 digits raises `ValueError` when
-    # the locator reads its text: `stayfixed assess` ended in an internal error. Mutations: drop
+    # the locator reads its text: the `assess` command ended in an internal error. Mutations: drop
     # `RecursionError` from `_toml_document`'s catch (declared) or from `_toml_value`'s (by hand;
     # advisory output) -> `nested-past-the-stack` reddens; `mutations/`'s "a profile locator
     # stringifies a number past the conversion limit" -> `hex-past-str` reddens.

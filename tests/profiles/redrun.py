@@ -21,7 +21,6 @@ from stayfixed.profiles.hints import COUNT_LIMIT
 CONFIG = """
 [stayfixed]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
 profile = ""
 agents = ["claude"]
@@ -106,7 +105,7 @@ class WordlessHint(FakeHint):
 class EmptyHint(FakeHint):
     """A hint whose note is the empty string: text, with nothing in it."""
 
-    def note(self, counts: Mapping[str, int]) -> str | None:
+    def note(self, counts: Mapping[str, int] | None) -> str | None:
         return ""
 
 

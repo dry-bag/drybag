@@ -5,10 +5,10 @@ in one reader, a format string in a writer, a filename glob in a third — until
 disagree about what an identifier is and no one of them can be corrected alone. One object that
 every reader and writer asks is what makes a prefix that changes change all of them together,
 and it is why this grammar exists at all rather than as a constant per module. A leaf module:
-the ledger builds each register's identifiers from it, and the plan lint (`Fixes BR-nnn`) and the
-memory graph (`[[BR-nnn]]`) read the bug ledger's through its register, from
-`stayfixed.ledger.api`. The prefix is repository-controlled (principle 5): it is interpolated
-into patterns and filenames, so it is held to a shape before either happens.
+the ledger builds each register's identifiers from it, and the plan lint (`Fixes BR-nnn`) reads
+the bug ledger's through its register, from `stayfixed.ledger.api`. The prefix is
+repository-controlled (principle 5): it is interpolated into patterns and filenames, so it is
+held to a shape before either happens.
 """
 
 from __future__ import annotations

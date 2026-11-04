@@ -392,7 +392,7 @@ def test_the_command_name_walk_discriminates() -> None:
         assert unregistered(named_commands("x.py", text)), text
     assert unregistered(named_commands("x.md", "```bash\nstayfixed release check\n```\n"))
     fine = [
-        f"{tick}stayfixed adopt promote{tick}, {tick}stayfixed hook <event>{tick}",
+        f"{tick}stayfixed plan check{tick}, {tick}stayfixed hook <event>{tick}",
         f"{tick}stayfixed <group>{tick}, {tick}stayfixed …{tick}, {tick}stayfixed {{name}}{tick}",
         f'"{tick}stayfixed memory "\n    "index --check{tick}"',
         f"{tick}stayfixed --version{tick}, {run} stayfixed init --yes",
@@ -451,9 +451,9 @@ def test_every_readme_row_parses() -> None:
 
 
 # `--json`'s one cross-command promise, in the README's Exit-codes paragraph. The sentence
-# named four commands while five emit the key — `memory refs` was missing — so a reader
-# scripting against it would have treated a `findings` list as "this command does not report
-# findings". Bound to the real parser's functions rather than to a second hand-written list.
+# once named four commands while five emitted the key, so a reader scripting against it would have
+# treated a `findings` list as "this command does not report findings". Bound to the real parser's
+# functions rather than to a second hand-written list.
 _FINDINGS_SENTENCE = re.compile(
     r"The commands that report a list of\s+findings — (.+?) —\s+all spell it `findings`", re.DOTALL
 )
@@ -485,10 +485,10 @@ def command_functions() -> dict[str, object]:
 
 
 def test_the_readme_names_every_command_whose_json_carries_findings() -> None:
-    # Mutation: drop `memory refs` from the README sentence -> reddens naming it.
+    # Mutation: drop `docs check` from the README sentence -> reddens naming it.
     # The floor first: a walk that resolved no functions would make the comparison below
-    # vacuously true, and a regex that stopped matching would look the same. Four emit the key
-    # today: `bugs check`, `docs check`, `memory refs` and `plan check`.
+    # vacuously true, and a regex that stopped matching would look the same. Three emit the key
+    # today: `bugs check`, `docs check` and `plan check`.
     functions = command_functions()
     assert len(functions) >= REGISTERED_COMMANDS_FLOOR, sorted(functions)
     emitting = {
@@ -496,7 +496,7 @@ def test_the_readme_names_every_command_whose_json_carries_findings() -> None:
         for name, func in functions.items()
         if '"findings":' in inspect.getsource(func)  # type: ignore[arg-type]
     }
-    assert len(emitting) >= 4, sorted(emitting)
+    assert len(emitting) >= 3, sorted(emitting)
     match = _FINDINGS_SENTENCE.search(README.read_text(encoding="utf-8"))
     assert match is not None, "README's --json paragraph no longer names the findings commands"
     named = set(re.findall(r"`([^`]+)`", match.group(1)))
@@ -795,32 +795,6 @@ def test_shared_flags_names_every_command_that_takes_neither_root_nor_machine() 
     assert {name for name in rest if not options[name] >= _PROJECT_FLAGS} == set()
 
 
-_REUSABLE_WORKFLOW_SECTION = re.compile(
-    r"^## The reusable workflow\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL
-)
-# The repository settings the reusable workflow's verdict binds under. The caller file is
-# pull-request content, so without them the gates still run and report but a pull request can
-# edit its own caller; a section that lost one would read as if the verdict held without it.
-SETTINGS = (
-    "CODEOWNERS covering `/.github/`",
-    "Dismiss stale pull request approvals when new commits are pushed",
-    "the `check / gates` status check required",
-    "expected source set to GitHub Actions",
-    "branches required to be up to date before merging, or a merge queue",
-    "a `v*` tag ruleset on the stayfixed repository",
-)
-
-
-def test_the_reusable_workflow_names_every_setting_the_verdict_binds_under() -> None:
-    # No oracle entry: this holds a document, not a guard. Checked by hand when it was
-    # written: the "Dismiss stale" bullet deleted from the section reddens this case naming it.
-    section = _REUSABLE_WORKFLOW_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md has no `## The reusable workflow` section"
-    # Whitespace folded, so a setting wrapped across two lines is still found as one phrase.
-    text = " ".join(section.group(1).split())
-    assert [setting for setting in SETTINGS if setting not in text] == []
-
-
 # The configuration block in `docs/cli.md` is introduced as the grammar, and the loader
 # *refuses* an unknown section — so a section the block leaves out reads to a reader as a key
 # that is invalid. Three of the nine were missing (`[artifacts]`, `[ci]`, `[commit_messages]`),
@@ -835,7 +809,7 @@ _TOML_HEADER = re.compile(r"^\[([a-z_]+)\]", re.MULTILINE)
 
 
 def test_the_configuration_block_shows_every_section_the_loader_accepts() -> None:
-    # Mutation: drop the `[ci]` header from `docs/cli.md`'s block -> reddens naming it.
+    # Mutation: drop the `[commit_messages]` header from `docs/cli.md`'s block -> reddens naming it.
     from stayfixed.config.loader import SECTIONS
 
     section = _CONFIGURATION_BLOCK.search(CLI_REFERENCE.read_text(encoding="utf-8"))
@@ -845,18 +819,6 @@ def test_the_configuration_block_shows_every_section_the_loader_accepts() -> Non
     shown = _TOML_HEADER.findall(section.group(1))
     assert len(shown) >= len(SECTIONS), shown
     assert set(shown) == set(SECTIONS), (sorted(set(shown)), sorted(SECTIONS))
-
-
-def test_the_configuration_block_lists_the_built_in_gates_in_their_one_order() -> None:
-    # The reference is prose and cannot import the tuple, so its one spelling of the built-in
-    # gates is pinned here. Mutation: reorder `builtin` in `docs/cli.md`'s block and this
-    # reddens.
-    from stayfixed.config.schema import BUILTIN_GATES
-
-    section = _CONFIGURATION_BLOCK.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md's `## Configuration` has no ```toml block"
-    listed = ", ".join(f'"{name}"' for name in BUILTIN_GATES)
-    assert f"\nbuiltin = [{listed}]" in section.group(1)
 
 
 # `plan check`'s rule count, stated in the reference and emitted by `docs/plans.py`. The
@@ -879,11 +841,11 @@ def test_the_plan_rule_count_is_the_number_of_rules_plan_check_emits() -> None:
     assert _NUMBER_WORDS.get(match.group(1).lower()) == len(codes), (match.group(1), sorted(codes))
 
 
-# The `doctor` check table: fifteen rows, each spelling a check name, and the one
+# The `doctor` check table: fourteen rows, each spelling a check name, and the one
 # code-restating table in this document the branch that built this binding mechanism did not
 # bind. `tests/doctor/test_checks.py` pins each name as a literal exactly once *inside* the module
 # that registers it — `checks.py` or an area's `doctor.py` — so the document's copy is a *second*
-# spelling of each of the fifteen — one that
+# spelling of each of the fourteen — one that
 # guard cannot see, and a renamed check would leave this page green and wrong. That the unbound
 # ones drift is not a hypothesis: `len(OVERLAY_FILES)` was sixteen while four comments one
 # directory over still said fourteen.
@@ -1027,14 +989,14 @@ def test_the_cli_reference_contents_lists_every_section_in_order() -> None:
     # Every `## ` heading after the Contents, in order, each linked by GitHub's anchor: a command
     # section added without its Contents line, or a heading renamed under a stale link, is
     # a reference a reader cannot navigate. The floor is today's count of sections after the
-    # Contents, 39, so a walk that found nothing, or half, cannot pass.
-    # Mutation (declared): drop the `memory fit` Contents line -> the lists differ.
+    # Contents, 30, so a walk that found nothing, or half, cannot pass.
+    # Mutation (declared): drop the `memory inventory` Contents line -> the lists differ.
     text = (ROOT / "docs" / "cli.md").read_text(encoding="utf-8")
     _, _, after = text.partition("## Contents\n")
     contents, _, rest = after.partition("\n## ")
     listed = re.findall(r"^- \[(.+)\]\(#([^)]+)\)$", contents, re.MULTILINE)
     headings = re.findall(r"^## (.+)$", "## " + rest, re.MULTILINE)
-    assert len(headings) >= 39, len(headings)
+    assert len(headings) >= 30, len(headings)
     assert listed == [(heading, _anchor(heading)) for heading in headings]
 
 

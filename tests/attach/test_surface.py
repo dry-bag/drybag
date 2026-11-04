@@ -18,8 +18,8 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     # vocabulary requires it — rather than freezing whatever the list happened to hold.
     #
     # `attach` is not on it: `tests/test_install_path.py` drives it through the argument parser
-    # and imports only `stayfixed.doctor.api` and `stayfixed.memory.api`. `detach` is, since
-    # `project`'s `uninstall` runs it on an attached repository.
+    # and imports only `stayfixed.doctor.api` and `stayfixed.memory.api`; nor is `detach`, which
+    # no area runs since `uninstall` was deleted.
     #
     # No mutation entry: the mutation is adding an export, which is two lines in `api.py` (the
     # import and the `__all__` entry) and not one substituted line. Measured by hand instead —
@@ -33,7 +33,5 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
         "read_binding",
         "Binding",
         "LOCAL_SETTINGS",  # the file an earlier release merged the overlay's hook entries into
-        "detach",  # `project`'s `uninstall` detaches an attached repository first
-        "Detached",  # what `detach` returns
     }
     assert required == set(attach.__all__)

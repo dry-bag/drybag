@@ -39,7 +39,6 @@ from stayfixed.doctor.api import OK, RED, SKIP, run_checks
 from stayfixed.memory.api import DELIMITER, PROJECTS, markers
 from tests.floor import developer_free_environ
 from tests.gitfixture import git
-from tests.runners import Recorder
 from tests.snapshot import (
     assert_snapshot_changed,
     assert_snapshot_unchanged,
@@ -67,7 +66,6 @@ NOTE = (
 
 CONFIG = """[stayfixed]
 version = "{version}"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 
 [project]
 name = "{project}"
@@ -82,13 +80,11 @@ def _project(tmp_path: Path, *, mode: str, initialised: bool = False) -> Path:
     """The repository the walkthrough starts from; `initialised`, the shape the owner's has.
 
     **`initialised` does not run `init` here.** It builds the repository `init` is run *over*:
-    notes already in `paths.memory` as real directories, `[ci] mode = "none"`, and one commit,
-    so the history predates stayfixed. `stayfixed init --yes` is `_install_path`'s step 0, which
+    notes already in `paths.memory` as real directories, and one commit, so the history predates
+    stayfixed. `stayfixed init --yes` is `_install_path`'s step 0, which
     is where the launcher environment lives. The flag keeps the name `_install_path` gives it,
     because renaming one of the pair would split them.
 
-    `[ci] mode = "none"` because this repository wants no workflow — a `ci` mode that asked for one
-    would have `init` reach for the release pin and a remote, which is a different test's subject.
     The commit matters because `init` then writes its footprint on top of a tree that was already
     committed, which is the order an adopting project meets it in, and the notes moved later are
     notes that were tracked before stayfixed arrived.
@@ -96,8 +92,6 @@ def _project(tmp_path: Path, *, mode: str, initialised: bool = False) -> Path:
     root = tmp_path / "project"
     root.mkdir(parents=True, exist_ok=True)
     document = CONFIG.format(version=stayfixed.__version__, project=PROJECT, mode=mode)
-    if initialised:
-        document += '[ci]\nmode = "none"\n'
     (root / CONFIG_FILE).write_text(document, encoding="utf-8")
     git(root, "init", "-q", "-b", "main")
     git(root, "remote", "add", "origin", ORIGIN)
@@ -193,7 +187,7 @@ def _cli(walk: Walkthrough, *argv: str) -> subprocess.CompletedProcess[str]:
 
 
 def _doctor(walk: Walkthrough, *, root: Path | None = None) -> list[dict[str, str]]:
-    """The fifteen rows, read back out of what `doctor --json` printed on the launcher's
+    """The fourteen rows, read back out of what `doctor --json` printed on the launcher's
     stdout."""
     done = _cli(
         walk,
@@ -208,7 +202,7 @@ def _doctor(walk: Walkthrough, *, root: Path | None = None) -> list[dict[str, st
     )
     assert done.stdout, done.stderr
     rows: list[dict[str, str]] = json.loads(done.stdout)["checks"]
-    assert len(rows) == 15, rows
+    assert len(rows) == 14, rows
     return rows
 
 
@@ -524,20 +518,16 @@ def test_detach_returns_the_project_to_where_it_started(tmp_path: Path) -> None:
 
 
 def test_doctor_is_green_on_the_attached_fixture(tmp_path: Path) -> None:
-    # Green meaning: no `red`, and the only `skip` is `ci-ref`, which skips on a state this
-    # fixture is in rather than on a limit of the build: it records no `[ci] ref`, because no
-    # released tag matches the stayfixed running here for `init` to have pinned.
+    # Green meaning: no `red`, and no `skip`.
     walk = _install_path(tmp_path)
     rows = _doctor(walk)
     assert [row["name"] for row in rows if row["status"] == RED] == []
-    assert [row["name"] for row in rows if row["status"] == SKIP] == ["ci-ref"]
+    assert [row["name"] for row in rows if row["status"] == SKIP] == []
 
 
-# What `docs/cli.md` says `stayfixed doctor` launches on a green attached installation *besides*
-# the `ci-ref` row, which the stub runner below answers in process rather than launching — so one
-# more in production on a repository that records a `[ci] ref`, which is what `docs/cli.md` says.
-# Written as a number rather than as a set of argv lists so the failure reads as "the count
-# moved", which is the claim.
+# What `docs/cli.md` says `stayfixed doctor` launches on a green attached installation. Written
+# as a number rather than as a set of argv lists so the failure reads as "the count moved", which
+# is the claim.
 #
 # Fourteen: the wrapper probe and the thirteen `git` questions the `attached`, note-store, `memory`,
 # `preferences` and `sync` rows ask of a bound checkout and its overlay, as `docs/cli.md`'s doctor
@@ -559,9 +549,7 @@ def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
     # a reader who has to update a constant has read the paragraph that states it.
     #
     # `Popen` and not `subprocess.run`: `run` is a wrapper around it, so patching the lower of
-    # the two counts a caller that reached past `run` as well. `ci-ref` is not among these — it
-    # goes through `stayfixed.runner.Runner`, which the stub below answers, and it is the only
-    # one that would leave the machine.
+    # the two counts a caller that reached past `run` as well.
     #
     # **The one test here that keeps the library seam**, and the reason is the measurement
     # itself: this counts launches through a `Popen` patched in *this* process, and a `doctor`
@@ -579,15 +567,13 @@ def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
     # under; this process reads them under its own.
     monkeypatch.setenv("HOME", str(walk.home))
     monkeypatch.setattr(subprocess, "Popen", spy)
-    # The one call in this module that runs `run_checks` in this process, so it needs a runner to
-    # hand it; `ci-ref`, the only row that would use one, skips on this fixture. Everything else
-    # here reaches the CLI's own `subprocess_runner()` through the launcher, and the fakes
+    # The one call in this module that runs `run_checks` in this process. Everything else here
+    # reaches the CLI's own `subprocess_runner()` through the launcher, and the fakes
     # `_fake_binaries` writes are what answer it.
     checks = run_checks(
         walk.root,
         home=walk.home,
         machine=walk.machine,
-        runner=Recorder(),
         env=_doctor_env(walk),
     )
     monkeypatch.undo()
@@ -648,17 +634,14 @@ def test_a_session_before_the_attach_is_told_what_is_missing(tmp_path: Path) -> 
 
 
 def test_detach_on_an_initialised_project_leaves_the_footprint(tmp_path: Path) -> None:
-    # The ignore region's ownership, end to end. `init` recorded the `stayfixed:ignore` region as
-    # the footprint's, so the detach that takes back everything `attach` added leaves that block
-    # where it is — and the manifest with it, because `detach` never touches the scaffold ledger.
-    #
-    # What would break it: withdraw the region unconditionally and `.gitignore` loses its
-    # block, so the byte comparison fails.
+    # The footprint's ownership, end to end: the detach that takes back everything `attach` added
+    # leaves what `init` wrote where it is — and the manifest with it, because `detach` never
+    # touches the scaffold ledger.
     walk = _install_path(tmp_path, initialised=True)
-    ignore_before = (walk.root / ".gitignore").read_text(encoding="utf-8")
-    # Non-vacuous: the block this asserts survives has to be there before the detach.
-    assert "stayfixed:ignore" in ignore_before
+    roadmap = walk.root / "docs" / "roadmap.md"
+    # Non-vacuous: the file this asserts survives has to be there before the detach.
+    before = roadmap.read_text(encoding="utf-8")
     done = _cli(walk, "detach", "--root", str(walk.root))
     assert done.returncode == 0, done.stderr
-    assert (walk.root / ".gitignore").read_text(encoding="utf-8") == ignore_before
+    assert roadmap.read_text(encoding="utf-8") == before
     assert (walk.root / ".stayfixed" / "manifest.json").is_file()

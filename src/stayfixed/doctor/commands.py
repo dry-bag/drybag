@@ -7,7 +7,7 @@ invokes.
 trust on, which no spike has measured — skips on every installation, so an exit code that counted
 skips would make `doctor` red on every correct one. Every other skip is a state of the machine or
 of the repository, and which of those states is the ordinary one can move with things no code
-here decides — whether a released tag exists for `init` to record as `[ci] ref`, say — so nothing
+here decides, so nothing
 in this module asserts how many rows skip, or which: that census is `docs/cli.md`'s, and whether a
 skip carries a remedy is `model.Check`'s rule. Exit 1, the findings exit code, is reserved for
 `red`, and `warn` does not reach it either: a budget lowered below the preset is a correct state
@@ -27,7 +27,7 @@ from pathlib import Path
 
 from stayfixed.areas import SubParsers
 from stayfixed.command import HOME_HELP, common_flags
-from stayfixed.doctor.checks import CI_REF_TIMEOUT_SECONDS, run_checks
+from stayfixed.doctor.checks import run_checks
 from stayfixed.doctor.model import RED, SKIP, WARN, Check
 from stayfixed.findings import listed
 from stayfixed.result import Result
@@ -52,19 +52,13 @@ def summarise(checks: list[Check]) -> str:
 
 
 def run_doctor(args: argparse.Namespace) -> Result:
-    from stayfixed.runner import subprocess_runner
-
     root = Path(args.root).resolve()
-    # The bound, asked for here because this is where the real runner is built. It applies to the
-    # one call in this area that leaves the machine — the `ci-ref` row's `git ls-remote` — and
-    # `checks.CI_REF_TIMEOUT_SECONDS` carries the argument for the number.
     checks = run_checks(
         root,
         # `None` means the machine owner's own, said out loud rather than defaulted, for the reason
         # `attach.write.attach` gives: a resolver without one reads the developer's real `~`.
         home=Path(args.home).expanduser() if args.home else None,
         machine=Path(args.machine) if args.machine else None,
-        runner=subprocess_runner(timeout=CI_REF_TIMEOUT_SECONDS),
     )
     data = {
         "checks": [
