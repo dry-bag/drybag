@@ -107,7 +107,10 @@ The controller copies the relevant part into every brief.
 1. **Final review.** One per pull request, after wave D (pull request 1) and wave F (pull request 2).
    A deletion-only pull request gets **one correctness seat**: did anything still shipped lose a
    test, a document row, a mutation guard or a caller; does every surviving command still run; is a
-   removed control's adversary named in the body. One scoped re-review, then stop. Reviewers report
+   removed control's adversary named in the body. From pull request 2 the seat also asks of every
+   check, refusal, branch, record and test left or added: what reproduced case or measurement it
+   rests on, whether existing code already does it, and whether the test can fail; a line without
+   evidence is a deletion finding, not a Minor. One scoped re-review, then stop. Reviewers report
    findings with no replacement text; only correctness and requirement gaps go back to the
    implementer; Minors become follow-ups in the report.
 2. **Lifecycle matrix.** The table below, checked at pre-flight (Task 0) and again by the reviewer.
