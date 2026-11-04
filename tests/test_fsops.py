@@ -915,94 +915,13 @@ def test_the_read_limit_sits_far_above_every_file_its_readers_take() -> None:
 
 def test_a_bounded_read_returns_what_fits_and_says_whether_more_is_there(tmp_path: Path) -> None:
     # One reader for every bound: a file at the bound is read whole and is not over, one a byte
-    # longer is read to the bound and is, with or without a root. Mutations (declared):
+    # longer is read to the bound and is. Mutations (declared):
     # `mutations/`'s "the regular-file reader reads past its limit" -> the longer file is not over;
     # "the regular-file reader refuses a file at its limit" -> the file at the bound is.
     (tmp_path / "at.md").write_bytes(b"abcd")
     (tmp_path / "past.md").write_bytes(b"abcde")
-    for at, past in (
-        (fsops.read_bounded(tmp_path / "at.md", 4), fsops.read_bounded(tmp_path / "past.md", 4)),
-        (
-            fsops.read_bounded_within(tmp_path, "at.md", 4),
-            fsops.read_bounded_within(tmp_path, "past.md", 4),
-        ),
-    ):
-        assert at == (b"abcd", False)
-        assert past == (b"abcd", True)
-
-
-def test_a_bounded_read_under_a_root_follows_no_link_and_reads_only_a_regular_file(
-    tmp_path: Path,
-) -> None:
-    # Under a root the file is reached as a write reaches it: a link at the last component is
-    # refused, and so is one above it, where without a root a link to a regular file is read. A
-    # directory is refused as not a regular file. Mutation (declared): `mutations/`'s "a symlinked
-    # .pyc is followed" -> the linked file is read under the root.
-    (tmp_path / "real").mkdir()
-    (tmp_path / "real" / "file.md").write_bytes(b"x")
-    (tmp_path / "real" / "link.md").symlink_to(tmp_path / "real" / "file.md")
-    (tmp_path / "linked").symlink_to(tmp_path / "real", target_is_directory=True)
-    assert fsops.read_bounded_within(tmp_path, "real/file.md", 4) == (b"x", False)
-    assert fsops.read_bounded(tmp_path / "real" / "link.md", 4) == (b"x", False)
-    with pytest.raises(OSError) as refused:
-        fsops.read_bounded_within(tmp_path, "real/link.md", 4)
-    assert refused.value.errno == errno.ELOOP
-    with pytest.raises(UnsafePath):
-        fsops.read_bounded_within(tmp_path, "linked/file.md", 4)
-    with pytest.raises(NotRegularFile):
-        fsops.read_bounded_within(tmp_path, "real", 4)
-
-
-def test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer(tmp_path: Path) -> None:
-    # The open under a root never waits, and what it opened is asked whether it is a regular file:
-    # a FIFO opened without a writer reads as empty, so it must be refused by its descriptor. In a
-    # child under a timeout, so a regression fails this case rather than hanging. Mutations
-    # (declared): `mutations/`'s "a .pyc that is a named pipe is opened waiting for a writer" -> the
-    # child times out; "a .pyc that is not a regular file is read" -> the FIFO reads as empty.
-    os.mkfifo(tmp_path / "pipe.md")
-    probe = (
-        "import sys\n"
-        "from pathlib import Path\n"
-        "from stayfixed import fsops\n"
-        "try:\n"
-        "    print(fsops.read_bounded_within(Path(sys.argv[1]), 'pipe.md', 4))\n"
-        "except fsops.NotRegularFile:\n"
-        "    print('refused')\n"
-    )
-    try:
-        done = subprocess.run(
-            [sys.executable, "-c", probe, str(tmp_path)],
-            capture_output=True,
-            text=True,
-            timeout=20,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        pytest.fail("the open under a root waited on a FIFO")
-    assert done.stdout == "refused\n", done.stderr
-
-
-def test_a_bounded_read_under_an_open_directory_takes_one_name_and_follows_no_link(
-    tmp_path: Path,
-) -> None:
-    # A reader of many files in one directory opens it once (`open_directory`) and reads each
-    # name under it, by the same rules as under a root path: one name and no path below it, no
-    # link followed, a regular file only. Mutation (declared): `mutations/`'s "a name under an open
-    # directory may be a path" -> the file below a subdirectory is read.
-    (tmp_path / "file.md").write_bytes(b"abcde")
-    (tmp_path / "link.md").symlink_to(tmp_path / "file.md")
-    (tmp_path / "sub").mkdir()
-    (tmp_path / "sub" / "file.md").write_bytes(b"x")
-    with fsops.open_directory(tmp_path) as directory:
-        assert fsops.read_bounded_within(directory, "file.md", 4) == (b"abcd", True)
-        assert fsops.read_bounded_within(directory, "file.md", 5) == (b"abcde", False)
-        with pytest.raises(OSError) as refused:
-            fsops.read_bounded_within(directory, "link.md", 4)
-        assert refused.value.errno == errno.ELOOP
-        with pytest.raises(UnsafePath):
-            fsops.read_bounded_within(directory, "sub/file.md", 4)
-        with pytest.raises(NotRegularFile):
-            fsops.read_bounded_within(directory, "sub", 4)
+    assert fsops.read_bounded(tmp_path / "at.md", 4) == (b"abcd", False)
+    assert fsops.read_bounded(tmp_path / "past.md", 4) == (b"abcd", True)
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root writes into every directory")

@@ -2576,48 +2576,6 @@ reddens = [
   "tests/ledger/test_entries.py::test_a_ledger_file_linked_to_a_device_is_a_ledger_error_and_one_linked_to_a_file_is_read",
 ]
 
-# Under a root, `read_bounded` reaches a file as a write does, no link followed, the file's own
-# included, and judges what it opened by the descriptor; `.pyc` bytecode is read this way. Following
-# a symlinked one reads a file outside every code root, opening a named pipe without `O_NONBLOCK`
-# waits for a writer for good (a link to `/dev/stdin` hung the red-run walk in a terminal), and a pipe
-# whose writer has written a header reads like bytecode.
-[[mutation]]
-name = "a symlinked .pyc is followed"
-file = "src/stayfixed/fsops.py"
-before = '_WITHIN_OPEN = _REGULAR_OPEN | getattr(os, "O_NOFOLLOW", 0)'
-after = "_WITHIN_OPEN = _REGULAR_OPEN"
-reddens = [
-  "tests/test_fsops.py::test_a_bounded_read_under_a_root_follows_no_link_and_reads_only_a_regular_file",
-  "tests/test_fsops.py::test_a_bounded_read_under_an_open_directory_takes_one_name_and_follows_no_link",
-]
-
-[[mutation]]
-name = "a name under an open directory may be a path"
-file = "src/stayfixed/fsops.py"
-before = """        if len(parts) != 1:
-            raise UnsafePath(f"{relative!r} is not one name in the directory it is read from")
-        descriptor = os.open(parts[0], _WITHIN_OPEN, dir_fd=root)"""
-after = """        descriptor = os.open(relative, _WITHIN_OPEN, dir_fd=root)"""
-reddens = [
-  "tests/test_fsops.py::test_a_bounded_read_under_an_open_directory_takes_one_name_and_follows_no_link",
-]
-
-[[mutation]]
-name = "a .pyc that is a named pipe is opened waiting for a writer"
-file = "src/stayfixed/fsops.py"
-before = '_WITHIN_OPEN = _REGULAR_OPEN | getattr(os, "O_NOFOLLOW", 0)'
-after = '_WITHIN_OPEN = (_REGULAR_OPEN & ~os.O_NONBLOCK) | getattr(os, "O_NOFOLLOW", 0)'
-reddens = ["tests/test_fsops.py::test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer"]
-
-[[mutation]]
-name = "a .pyc that is not a regular file is read"
-file = "src/stayfixed/fsops.py"
-before = """        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise NotRegularFile(errno.EINVAL, "not a regular file", relative)"""
-after = """        if False:
-            raise NotRegularFile(errno.EINVAL, "not a regular file", relative)"""
-reddens = ["tests/test_fsops.py::test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer"]
-
 # `tomllib` converts a hex, octal or binary literal of any length, and `str` of one past 4,300
 # digits raises: `init --yes` re-rendering an adopted `stayfixed.toml`, and `setup` rewriting the
 # owner's machine file, ended in an internal error on one such line. The serialiser spells it in

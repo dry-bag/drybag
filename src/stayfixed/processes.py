@@ -50,12 +50,6 @@ def exited(process: subprocess.Popen[bytes], seconds: float) -> None:
 
     Raises `subprocess.TimeoutExpired` past `seconds`, as `Popen.wait` does.
     """
-    _watched(process, seconds)
-
-
-def _watched(process: subprocess.Popen[bytes], seconds: float) -> None:
-    """`exited`'s wait, which `end` asks too: a caller that stands in for `exited` (a test's own
-    timeout or interrupt) leaves `end`'s wait for the command it ends as it is."""
     if not hasattr(os, "waitid"):
         process.wait(timeout=seconds)
         return
@@ -86,7 +80,7 @@ def end(process: subprocess.Popen[bytes], grace: float) -> None:
     try:
         kill_group(process, signal.SIGTERM)
         with contextlib.suppress(subprocess.TimeoutExpired):
-            _watched(process, grace)
+            exited(process, grace)
     finally:
         kill_group(process)
         process.wait(timeout=KILL_WAIT_SECONDS)
