@@ -1,9 +1,10 @@
 """What attaching would add to this project's local settings, and where it may read it from.
 
-**Two sources, and the third one is the defect.** The inputs are `<overlay>/common/claude/` and
-`<overlay>/projects/<name>/claude/` — the machine owner's own files, in the repository the
-machine file anchors. `.claude/settings.json` is read for *nothing*: it is committed, so it is
-repository-controlled, and committed settings that would widen a permission are never merged.
+**The plates are the sources, and the committed settings file is the defect.** The inputs are the
+`claude/` directory of each plate of the overlay (`config.plates`: `common/`, the project's tags,
+`projects/<name>/`) — the machine owner's own files, in the repository the machine file anchors.
+`.claude/settings.json` is read for *nothing*: it is committed, so it is repository-controlled, and
+committed settings that would widen a permission are never merged.
 `.claude/settings.local.json` is read, and only to subtract: a rule the project already carries
 is not something this attach would add.
 
@@ -22,18 +23,18 @@ and `attach.check` reports only how many there were.
 from __future__ import annotations
 
 import stat
-from dataclasses import dataclass
+from collections.abc import Collection, Iterable
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from stayfixed import fsops
 from stayfixed.attach.binding import Binding, cannot_exist
+from stayfixed.config.plates import PlateKind, plates
 from stayfixed.errors import Failure
 from stayfixed.fsops import read_regular_text
 from stayfixed.harnesses import CLAUDE
 from stayfixed.jsonobject import WRITTEN_PAST
-from stayfixed.memory.api import PROJECTS
-from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from stayfixed.printed import quoted
 from stayfixed.scaffold import (
     EntriesError,
@@ -57,10 +58,13 @@ CODEX_RULES = ".codex/rules"
 
 @dataclass(frozen=True)
 class PermissionDiff:
-    """What `attach` would add to the allow rules, and what is already there."""
+    """What `attach` would add to the allow rules, what is already there, and what it would take
+    back: `withdrawn_allow`, filled by `withdrawing`, is a rule the previous ledger recorded that
+    the overlay no longer grants and the settings file still holds."""
 
     added_allow: tuple[str, ...]
     already_present: tuple[str, ...]
+    withdrawn_allow: tuple[str, ...] = ()
 
 
 def settings_document(text: str) -> dict[str, Any]:
@@ -89,10 +93,10 @@ def _read(path: Path, *, share: Path | None = None, label: str | None = None) ->
     permission, a directory where the file goes, and a path ruled out *below* a directory the name
     does pick out -- the name holds no `/`, so a file where `claude/` goes is the owner's own
     state, and read as absent it granted nothing: the owner's entries read red and `attach`
-    stripped them. So is any fault under `common/`, whose spelling the overlay alone chooses. The
-    project's own `.claude/` is never read this way: a `.claude` that is a file has to stop
-    `attach` before it writes, and read as an empty settings file it would stop only at the write
-    of that file.
+    stripped them. So is any fault under `common/` or a tag's `groups/<tag>/`, whose spelling the
+    overlay alone chooses. The project's own `.claude/` is never read this way: a `.claude` that is
+    a file has to stop `attach` before it writes, and read as an empty settings file it would stop
+    only at the write of that file.
     """
     with fsops.reading(label or path, Failure):
         try:
@@ -207,8 +211,8 @@ def codex_rules(binding: Binding) -> tuple[tuple[str, Path], ...]:
     This is **reporting and not gating**, as everything the overlay grants is: the overlay is the
     machine owner's own artifact, so `attach` shows what it places and proceeds.
 
-    This project's own `codex/` is read second, so a file it shares a name with in `common/` is
-    the one that lands; the pair is returned rather than two lists so the caller cannot pair
+    Each plate's `codex/` is read in plate order (`config.plates`), so of two files sharing a name
+    the later plate's lands; the pair is returned rather than two lists so the caller cannot pair
     them up differently from the way the write does.
 
     A directory this user cannot list, or one whose entries cannot be asked about (`0o444`: the
@@ -218,10 +222,8 @@ def codex_rules(binding: Binding) -> tuple[tuple[str, Path], ...]:
     path prints through `quoted`.
     """
     found: dict[str, Path] = {}
-    for source in (
-        binding.overlay / COMMON_CODEX,
-        binding.overlay / PROJECTS / binding.project / PROJECT_CODEX,
-    ):
+    for plate in plates(binding.overlay, binding.project)[0]:
+        source = plate.directory / PROJECT_CODEX
         try:
             if not fsops.is_dir(source):
                 continue
@@ -240,15 +242,16 @@ def codex_rules(binding: Binding) -> tuple[tuple[str, Path], ...]:
     return tuple(found.items())
 
 
-def _claude_sources(
-    binding: Binding, name: str
-) -> tuple[tuple[Path, Path | None], tuple[Path, Path | None]]:
-    """The two per-harness files this diff reads, common first, this project's second, each with
-    the directory `project.name` picks for it, when it has one (`_read`'s `share`)."""
-    share = binding.overlay / PROJECTS / binding.project
-    return (
-        (binding.overlay / COMMON_CLAUDE / name, None),
-        (share / PROJECT_CLAUDE / name, share),
+def _claude_sources(binding: Binding, name: str) -> tuple[tuple[Path, Path | None], ...]:
+    """The per-harness files this diff reads, one for each plate in plate order, each with the
+    directory `project.name` picks for it, when it has one (`_read`'s `share`): the project's
+    plate alone."""
+    return tuple(
+        (
+            plate.directory / PROJECT_CLAUDE / name,
+            plate.directory if plate.kind is PlateKind.PROJECT else None,
+        )
+        for plate in plates(binding.overlay, binding.project)[0]
     )
 
 
@@ -296,3 +299,22 @@ def diff_permissions(root: Path, binding: Binding) -> PermissionDiff:
     added_allow = tuple(dict.fromkeys(rule for rule in granted if rule not in held))
     already = tuple(dict.fromkeys(rule for rule in granted if rule in held))
     return PermissionDiff(added_allow, already)
+
+
+def withdrawing(
+    diff: PermissionDiff, recorded: Iterable[str], held: Collection[str]
+) -> PermissionDiff:
+    """`diff` with the rules to take back: those `recorded` (the previous attach ledger's `allow`,
+    the one witness of which rules are `attach`'s) that the overlay no longer grants and the
+    settings file still `held`. A rule the owner added by hand is not recorded and stays; a
+    recorded rule the owner removed by hand is not held and is nothing to take back.
+
+    The ledger is a checkout file a branch can write, so it is no anchor against one: the worst a
+    committed `allow` achieves is taking a permission away, one the owner typed included. `detach`
+    accepts the same bound.
+
+    What the overlay grants is `diff`'s own: every rule is in `added_allow` or `already_present`,
+    by whether the file held it."""
+    granted = {*diff.added_allow, *diff.already_present}
+    taken = tuple(dict.fromkeys(rule for rule in recorded if rule in held and rule not in granted))
+    return replace(diff, withdrawn_allow=taken)

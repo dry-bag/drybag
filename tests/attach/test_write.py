@@ -857,22 +857,22 @@ def test_a_placed_path_that_is_the_same_file_as_a_tracked_one_is_refused(tmp_pat
 CONFLICTED = '<<<<<<< HEAD\nfirst_attach = "2026-10-01"\n=======\nfirst_attach = "2026-10-02"\n'
 
 
-def test_an_overlay_project_record_that_cannot_be_read_stops_neither_attach_nor_the_session(
+def test_an_overlay_project_record_that_cannot_be_read_stops_attach_but_not_the_session(
     tmp_path: Path,
 ) -> None:
     # The overlay's `projects/<name>/project.toml` keeps the first remote and date for the owner to
-    # read and binds nothing: the binding is the id and this machine's record of it. Two machines
-    # that first-attach one project each write it, and the overlay's merge leaves conflict
-    # markers, which stopped every attach and silenced the session's binding check. Said, compared
-    # with nothing, and never written over.
+    # read, and the tags it lists: the binding is the id and this machine's record of it. Two
+    # machines that first-attach one project each write it, and the overlay's merge leaves conflict
+    # markers. A write run cannot tell which tags that lists and refuses, never writing over it;
+    # the session's binding check is not silenced by it.
     from stayfixed.attach.binding import binding_for
 
     root, store, machine = _attachable(tmp_path)
     attach(root, store=store, machine=machine, runner=Recorder())
     record = store.parent / PROJECT_RECORD
     record.write_text(CONFLICTED, encoding="utf-8")
-    attached = attach(root, store=store, machine=machine, runner=Recorder())
-    assert any(PROJECT_RECORD in note and "is not valid TOML" in note for note in attached.notes)
+    with pytest.raises(Refusal, match="is not valid TOML"):
+        attach(root, store=store, machine=machine, runner=Recorder())
     assert record.read_text(encoding="utf-8") == CONFLICTED
     found = binding_for(root, load(root, machine=machine), machine=machine)
     assert found.state == "bound"
@@ -1221,6 +1221,55 @@ def test_a_record_with_no_remote_is_given_one_and_keeps_its_first_attach_date(
     record = tomllib.loads((store.parent / "project.toml").read_text(encoding="utf-8"))
     assert record["remote"] == "git@example.com:o/p.git"
     assert record["first_attach"] == "2020-02-02"
+
+
+def test_attach_keeps_every_key_and_byte_of_the_record_it_did_not_write(tmp_path: Path) -> None:
+    # The owner lists `tags` in the record by hand, with comments around them; the record is the
+    # owner's, and `attach` adds the two keys it owns above everything and rewrites nothing else.
+    # Mutation (`mutations/`'s "attach rewrites the whole project record"): the file is written
+    # from the parsed keys, and the comment, the tag list and the table are gone.
+    import datetime
+    import tomllib
+
+    root, store, machine = _attachable(tmp_path)
+    original = '# who is on what\ntags = ["a"]\n\n[notes]\nowner = "me"  # kept\n'
+    (store.parent / PROJECT_RECORD).write_text(original, encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    text = (store.parent / PROJECT_RECORD).read_text(encoding="utf-8")
+    today = datetime.date.today().isoformat()
+    assert text == f'remote = "git@example.com:o/p.git"\nfirst_attach = "{today}"\n' + original
+    assert tomllib.loads(text)["tags"] == ["a"]
+
+
+def test_attach_keeps_the_line_endings_of_the_record_it_did_not_write(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    original = b'tags = ["a"]\r\n'
+    (store.parent / PROJECT_RECORD).write_bytes(original)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (store.parent / PROJECT_RECORD).read_bytes().endswith(original)
+
+
+def test_attach_writes_no_key_the_record_holds_unusable(tmp_path: Path) -> None:
+    # A second `remote` beside an empty one would make the file invalid TOML, and a file the
+    # owner wrote stays theirs: only `first_attach`, which is absent, goes in.
+    import datetime
+    import tomllib
+
+    root, store, machine = _attachable(tmp_path)
+    (store.parent / PROJECT_RECORD).write_text('remote = ""\n', encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    text = (store.parent / PROJECT_RECORD).read_text(encoding="utf-8")
+    today = datetime.date.today().isoformat()
+    assert text == f'first_attach = "{today}"\nremote = ""\n'
+    assert tomllib.loads(text)["remote"] == ""
+
+
+def test_a_record_that_holds_both_keys_is_not_written(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    original = 'first_attach = "2020-02-02"\nremote = "git@example.com:o/p.git"\ntags = []\n'
+    (store.parent / PROJECT_RECORD).write_text(original, encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (store.parent / PROJECT_RECORD).read_text(encoding="utf-8") == original
 
 
 def test_a_repository_with_no_origin_remote_attaches_and_records_none(tmp_path: Path) -> None:
@@ -2567,3 +2616,193 @@ def test_attach_from_a_linked_worktree_writes_the_main_checkout_only(tmp_path: P
     assert RULE in json.loads((root / SETTINGS).read_text(encoding="utf-8"))["permissions"]["allow"]
     assert not (side / LEDGER).exists() and not (side / SETTINGS).exists()
     assert _status(side) == []
+
+
+def _tagged(store: Path, *tags: str) -> Path:
+    """The overlay of `_attachable`, its project listing `tags`, each with a `groups/<tag>/`
+    directory; the overlay's root."""
+    overlay = store.parents[2]
+    listed = ", ".join(f'"{tag}"' for tag in tags)
+    (store.parent / PROJECT_RECORD).write_text(f"tags = [{listed}]\n", encoding="utf-8")
+    for tag in tags:
+        (overlay / "groups" / tag / "claude").mkdir(parents=True)
+        (overlay / "groups" / tag / "codex").mkdir(parents=True)
+    return overlay
+
+
+def _tag_grants(overlay: Path, tag: str, *allow: str) -> None:
+    (overlay / "groups" / tag / "claude" / "permissions.json").write_text(
+        json.dumps({"permissions": {"allow": list(allow)}}), encoding="utf-8"
+    )
+
+
+def test_a_tag_codex_rule_is_placed_and_a_later_plate_wins_its_name(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, codex="# common\n")
+    overlay = _tagged(store, "a", "b")
+    (store.parent / "codex").mkdir()
+    (store.parent / "codex" / "project.rules").write_text("# project\n", encoding="utf-8")
+    for tag in ("a", "b"):
+        (overlay / "groups" / tag / "codex" / "common.rules").write_text(
+            f"# from {tag}\n", encoding="utf-8"
+        )
+        (overlay / "groups" / tag / "codex" / f"{tag}.rules").write_text(
+            "# tag\n", encoding="utf-8"
+        )
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    rules = root / ".codex" / "rules"
+    assert (rules / "common.rules").read_text(encoding="utf-8") == "# from b\n"
+    assert {path.name for path in rules.iterdir()} == {
+        "common.rules",
+        "project.rules",
+        "a.rules",
+        "b.rules",
+    }
+    assert set(attached.rules_written) == {f".codex/rules/{name}" for name in os.listdir(rules)}
+
+
+def test_a_tag_allow_rule_is_added(tmp_path: Path) -> None:
+    from stayfixed.attach.binding import read_binding
+    from stayfixed.attach.permissions import diff_permissions
+
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    diff = diff_permissions(root, read_binding(root, store=store, machine=machine))
+    assert diff.added_allow == (RULE, "Bash(x)")
+
+
+def test_an_unreadable_tag_file_stops_attach_with_nothing_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if os.geteuid() == 0:
+        pytest.skip("root reads every file")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    hooks = _tagged(store, "a") / "groups" / "a" / "claude" / "hooks.json"
+    hooks.write_text("{}", encoding="utf-8")
+    hooks.chmod(0o000)
+    flags = ("--store", str(store))
+    before = snapshot(root)
+    try:
+        attached = cli(root, tmp_path, "attach", *flags, machine=machine)
+    finally:
+        hooks.chmod(0o644)
+    assert attached[0] == 1
+    assert_snapshot_unchanged(root, before)
+    # No render was made either: the delivery directory is as it was, which is to say absent.
+    assert not (Path(os.environ["HOME"]) / ".local" / "share" / "stayfixed" / "delivery").exists()
+
+
+def _untag(store: Path) -> None:
+    """The project's record listing no tag any more; the `groups/` directories stay."""
+    (store.parent / PROJECT_RECORD).write_text("tags = []\n", encoding="utf-8")
+
+
+def _allowed(root: Path) -> list[str]:
+    document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+    return list(document.get("permissions", {}).get("allow", []))
+
+
+def test_untagging_takes_back_the_tags_allow_rule(tmp_path: Path) -> None:
+    # The ledger recorded `Bash(x)` as attach's own; with the tag gone the overlay no longer grants
+    # it, and left in the settings file it would stay until `detach`. Mutation (oracle):
+    # `mutations/`'s "re-attach keeps an allow rule the overlay no longer grants".
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE, "Bash(x)"]
+    _untag(store)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE]
+    assert ledger(root).allow == (RULE,)
+
+
+def test_a_hand_added_rule_the_ledger_does_not_name_stays(tmp_path: Path) -> None:
+    # The ledger is the only witness of which rules are attach's: a rule the owner typed, which the
+    # ledger does not name, is theirs.
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+    document["permissions"]["allow"].append("Bash(mine)")
+    (root / SETTINGS).write_text(json.dumps(document), encoding="utf-8")
+    _untag(store)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE, "Bash(mine)"]
+    assert "Bash(mine)" not in ledger(root).allow
+
+
+def test_a_recorded_rule_removed_by_hand_is_not_an_error(tmp_path: Path) -> None:
+    # An owner who deleted a rule from the settings file and then untagged: nothing to take.
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+    document["permissions"]["allow"].remove("Bash(x)")
+    (root / SETTINGS).write_text(json.dumps(document), encoding="utf-8")
+    by_hand = (root / SETTINGS).read_bytes()
+    _untag(store)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (root / SETTINGS).read_bytes() == by_hand
+    # The overlay grants it no longer, so the ledger forgets it with the file already without it;
+    # typed back by the owner, it is theirs and a later attach leaves it.
+    assert ledger(root).allow == (RULE,)
+    document["permissions"]["allow"].append("Bash(x)")
+    (root / SETTINGS).write_text(json.dumps(document), encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE, "Bash(x)"]
+
+
+def test_an_unreadable_project_record_stops_attach_with_nothing_written(tmp_path: Path) -> None:
+    # A record that cannot be read is no list of tags, and a run that took it so would withdraw the
+    # tags' allow rules, notes and render: it refuses, naming the file, before the first write.
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    (store.parent / PROJECT_RECORD).write_text('tags = ["a"\n', encoding="utf-8")
+    data = Path(os.environ["HOME"]) / ".local" / "share" / "stayfixed"
+    before = (snapshot(root), snapshot(data))
+    for run in (
+        lambda: attach(root, store=store, machine=machine, runner=Recorder()),
+        lambda: check(root, store=store, machine=machine),
+    ):
+        with pytest.raises(Refusal) as refusal:
+            run()
+        assert quoted(str(store.parent / PROJECT_RECORD)) in str(refusal.value)
+    assert (snapshot(root), snapshot(data)) == before
+    assert "Bash(x)" in _allowed(root)
+
+
+def test_untagging_removes_the_codex_rule_copies_the_overlay_no_longer_holds(
+    tmp_path: Path,
+) -> None:
+    from stayfixed.doctor import checks as doctor_checks
+    from tests.doctor.test_checks import _by_name, _env
+
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    overlay = _tagged(store, "a")
+    (overlay / "groups" / "a" / "codex" / "a.rules").write_text("# tag\n", encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (root / ".codex" / "rules" / "a.rules").is_file()
+    _untag(store)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert not (root / ".codex" / "rules" / "a.rules").exists()
+    assert ledger(root).rules == ()
+    row = _by_name(
+        doctor_checks.run_checks(root, home=None, machine=machine, env=_env(tmp_path)),
+        "attached",
+    )
+    assert row.status == "ok"
+
+
+def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)", "Bash(y)")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    before = (root / SETTINGS).read_bytes()
+    assert "taken back" not in check(root, store=store, machine=machine).summary
+    _untag(store)
+    summary = check(root, store=store, machine=machine).summary
+    assert "2 allow rule(s) would be taken back" in summary
+    # A preview writes nothing.
+    assert (root / SETTINGS).read_bytes() == before

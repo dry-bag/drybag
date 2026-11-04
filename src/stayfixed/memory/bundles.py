@@ -28,7 +28,7 @@ from stayfixed.memory import trust
 from stayfixed.memory.index import is_volatile
 from stayfixed.memory.notes import Note, walk
 from stayfixed.memory.reviewed import REVIEWED, UNREVIEWED_LABEL, record, status
-from stayfixed.memory.store import Store
+from stayfixed.memory.store import Store, walked_groups
 
 
 class Bundle(StrEnum):
@@ -99,7 +99,7 @@ def _cap(config: Config) -> int:
 
 
 def _notes(store: Store, config: Config) -> list[Note]:
-    return walk(store.path, [g for g in config.memory.groups if g in store.groups]).notes
+    return walk(store.path, walked_groups(store, config)).notes
 
 
 def _flag(note: Note, today: date, ttl: int) -> str:
@@ -196,8 +196,8 @@ def blocks(bundle: Bundle, store: Store, config: Config) -> list[str]:
     # wrote, one edited since it was promoted — reaches a session only as data, inside the region
     # `trust.wrap` marks, and never as a standing rule, whatever it says about itself.
     notes = _notes(store, config)
-    held = record(store)
-    reviewed = {note.path for note in notes if status(store, note, held) == REVIEWED}
+    held = record(store.machine)
+    reviewed = {note.path for note in notes if status(store.machine, note, held) == REVIEWED}
     if bundle is Bundle.STANDING_RULES:
         return _standing([note for note in notes if note.path in reviewed], config)
     return _volatile(notes, reviewed, config)

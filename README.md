@@ -50,8 +50,8 @@ adds:
 - **A personal overlay that is a versioned repository of its own**, named by its identity record
   and with its own upgrade manifest, rather than a dotfiles sync. `stayfixed setup --overlay` renders or generates one and `stayfixed attach`
   binds a repository to it: the hooks, skills, agents and allow rules you keep there reach that
-  repository's sessions, and so do your rules — `common/claude/rules/*.md` and
-  `projects/<name>/claude/rules/*.md`, a standing rule at every session's start and one with
+  repository's sessions, and so do your rules — `claude/rules/*.md` in `common/`, in each
+  tag your project lists (`groups/<tag>/`) and in `projects/<name>/`, a standing rule at every session's start and one with
   `paths:` frontmatter the first time a session reads or edits a file its globs match. It also *declares* the stayfixed it needs, in its identity record;
   `stayfixed doctor` reads it and reports it when the stayfixed running is too old — red when
   this project keeps its notes in that overlay, a warning when it does not — and a session in a
@@ -138,8 +138,10 @@ As a command-line tool:
 uv tool install stayfixed
 ```
 
-**Requirements: Python 3.11 or newer, and a POSIX system.** Linux and macOS are supported and
-tested; Windows is not. The containment this project is built on uses `openat` with
+**Requirements: Python 3.11 or newer, and a POSIX system.** The hooks take the `python3` on `PATH`,
+or else uv, which is asked from `/` with `--no-config` so that no repository file chooses the
+interpreter. Linux and macOS are supported and tested; Windows is not. The containment this
+project is built on uses `openat` with
 `O_NOFOLLOW` and `O_DIRECTORY`, which have no Windows equivalent.
 
 ## Quickstart
@@ -179,7 +181,7 @@ mkdir -p .stayfixed/local/memory/developer
 printf -- '---\nname: first-note\ndescription: "When to open this note"\n---\n\nThe note.\n' \
   > .stayfixed/local/memory/developer/first-note.md
 stayfixed memory index      # renders .stayfixed/local/memory/MEMORY.md from the notes
-stayfixed doctor            # thirteen checks over this installation, one line; --json has the remedies
+stayfixed doctor            # fourteen checks over this installation, one line; --json has the remedies
 ```
 
 These notes are inside the repository, so they reach a session as data and never as standing
@@ -207,7 +209,7 @@ stayfixed writes files. Being specific about which is the point of this section.
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | `stayfixed init`, once; you after |
 | `.stayfixed/manifest.json` | The ledger of every scaffolded artifact | the scaffold engine |
 | `.gitignore`, the `stayfixed:ignore` region | The block that keeps `.stayfixed/local/` out of git, recorded in the manifest. `attach` and `detach` never touch `.gitignore` | `stayfixed init` |
-| `~/.config/stayfixed/config.toml` | Machine-level settings: `[personal]`; `[guards]`, where `bg_cleanup = false` switches the background guard off on this machine, whatever a repository's `stayfixed.toml` sets as its default; `[budgets]`, the four budgets that bound what a session loads; `[overlay]`; and `[machine]`. `~` is `HOME`, as the harness reads it ([docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration)) | you, or `stayfixed setup` |
+| `~/.config/stayfixed/config.toml` | Machine-level settings: `[personal]`; `[guards]`, where `bg_cleanup = false` switches the background guard off on this machine, whatever a repository's `stayfixed.toml` sets as its default; `[budgets]`, the four budgets that bound what a session loads; `[overlay]`; `[sync]`, whose `enabled = true` `setup --overlay` writes for an overlay it makes; and `[machine]`. `~` is `HOME`, as the harness reads it ([docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration)) | you, or `stayfixed setup` |
 | `~/.config/stayfixed/trust.json` | Every approval recorded on this machine, as a versioned record of kinds and subjects, under the same home, the notes you promoted among them (kind `reviewed`) | `stayfixed memory promote`, which records a note |
 | `hooks/hooks.json` and `hooks/run-hook.sh` | The zero-config wiring both harnesses read, and the wrapper they execute. **Shipped in the plugin; never written into a project** | nothing — they are part of the plugin |
 | `${CLAUDE_PLUGIN_DATA}/stayfixed/` | Once-per-session markers and the hook diagnostics log. Deleted with the plugin | the hook dispatcher |
@@ -219,6 +221,7 @@ stayfixed writes files. Being specific about which is the point of this section.
 | `~/.local/share/stayfixed/bindings/<id>.toml` | What this machine binds that id to: the project name, the `origin` at attach time and the checkout. Where the binding is decided, never from a name the repository supplies. `~` is `HOME`; no `XDG_*` variable is read | `stayfixed attach` |
 | `~/.local/share/stayfixed/delivery/<id>/` | The overlay's hooks, skills and agents rendered as a plugin, `overlay-<id>` in a marketplace `stayfixed-delivery-<id>`, both named by the binding id, and, when the overlay holds a rule with `paths:`, the `PostToolUse` entry that delivers it, run through whatever launched the stayfixed that ran `attach`: the plugin's hook wrapper, or an installed package's interpreter. A session runs the plugin from here in place, so each attach rewrites it, and `stayfixed detach` removes it | `stayfixed attach` |
 | `~/.local/share/stayfixed/stores/<id>/` | The composed memory store the harness and stayfixed's own bundles read, named by the binding id: a link to each of the overlay's note groups for this project and one to its `MEMORY.md`, which `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json` names. Each attach makes its links the overlay's current set and leaves a note the harness wrote there; `stayfixed detach` takes the links and the key, and the directory where nothing else is left | `stayfixed attach`, in `overlay` mode |
+| `AGENTS.md`, `CLAUDE.md`, `stayfixed.toml` and any other regular file of `<overlay>/projects/<name>/checkout/` (never a `.env*` file or `settings.local.json`) | The files you keep outside the repository, in the root of a new linked worktree of a bound checkout, only where the worktree has nothing at the name. The main checkout is not touched, and `stayfixed detach` leaves them | the `SessionStart` hook |
 | `~/.local/share/stayfixed/sessions/` | One empty file per session and file a path-scoped rule was said for, both names hashed, so the rule is said once per file in a session. Nothing removes them | the hook dispatcher |
 | `~/.local/share/stayfixed/unreviewed/` | One file per note store, named by a hash of the store's path, holding a digest of the set of its unreviewed notes the last session was told about, so the count line is said only when that set changes. Nothing removes them | the hook dispatcher |
 
@@ -246,15 +249,16 @@ dynamic dispatch, aliasing, a value computed at run time, a connection the stand
 on the package's behalf — is beyond it; the docstring of
 [`tests/outbound/walk.py`](https://github.com/stayfixed/stayfixed/blob/main/tests/outbound/walk.py) says what it sees and names each such case.
 The **Run by**, **Talks to** and **When** columns are kept by hand. The hook wrapper,
-`hooks/run-hook.sh`, is not Python and is not walked: it starts `python3` and `git`, the last
-to find the project root, and reaches no network.
+`hooks/run-hook.sh`, is not Python and is not walked: it starts `python3` or uv and `git`, the
+last to find the project root, and reaches no network.
 
 | Program | Run by | Talks to | When |
 |---|---|---|---|
-| `git fetch` | `stayfixed bugs new` | the project's `origin` (note 1) | unless `--no-fetch` |
+| `git fetch` | `stayfixed bugs new`; the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the project's `origin`; for the note sync, the overlay's `origin` (note 1) | `bugs new` unless `--no-fetch`; the note sync on each run |
+| `git push` | the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the overlay's `origin` (note 1) | the note sync, when the commits on `main` that `origin` lacks are all notes and pass the secret scan |
 | `gh` | `stayfixed setup --overlay create:<owner>/<name>` | GitHub's API, as the account `gh` acts for, and the clones it makes over git (note 2) | note 2 |
 | `git clone` | `stayfixed setup --overlay create:<owner>/<name>` | `git@github.com:<owner>/<name>.git`, the overlay just created | when `gh repo create --clone` reported success and left nothing at the destination |
-| `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed attach` and `stayfixed detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `attach` and `detach`, nothing past this machine (note 3) | `setup` when `--plugin` names a plugin, the preset's agents include `claude` and it names a marketplace for it; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
+| `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed setup --restore`, `stayfixed attach` and `stayfixed detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `setup --restore`, the marketplaces and plugins your overlay's `machine/claude/settings.json` names; for `attach` and `detach`, nothing past this machine (note 3) | `setup` when `--plugin` names a plugin, the preset's agents include `claude` and it names a marketplace for it; `setup --restore` when that file lists a marketplace Claude Code has not registered or a plugin it has not installed at user scope; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
 | `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 3) | when `--plugin` names a plugin, the preset's agents include `codex` and it names a marketplace for it |
 | `pre-commit install` | `stayfixed setup --overlay` | nothing as it installs; GitHub and Go's servers on the first commit after it (note 4) | when it renders an overlay at a path, records an existing one, or with `create:` |
 | `sh -c` | `stayfixed test attribute --command CMD` | wherever `CMD` reaches; stayfixed does not choose | every run: `CMD` in the working tree, then in extracts of `HEAD` and of the merge base |
@@ -273,7 +277,12 @@ to find the project root, and reaches no network.
    `XDG_CONFIG_HOME` and `GIT_CONFIG_GLOBAL`, git reads your global configuration from
    `~/.gitconfig` and `~/.config/git/config` alone: a global configuration either variable points
    elsewhere, and the credential helpers it names, are not read, while the helpers the configuration
-   git does read names are used.
+   git does read names are used. The note sync's fetch is the other way round: it asks the overlay's
+   `origin` for `main` alone, into a ref of its own, with your whole environment less the variables
+   that point git at another repository, so your ssh agent and proxy settings apply; it never asks
+   for a password (`GIT_TERMINAL_PROMPT=0`, and an `ssh` given `BatchMode=yes`). Its **`git
+   push`** goes the same way to the same `origin`: the sha it checked to `main`, never forced and
+   with no tag.
 2. **`gh`**: `setup --overlay create:` looks up the template, creates the private overlay from it
    with its clone, and asks whether it exists when that clone left nothing. It is asked nothing
    until `setup` has looked at `<home>/<name>`: a file there, or a directory that is not an
@@ -320,8 +329,11 @@ needs such an object can reach that remote. For example, in a clone that left fi
 detection reads the contents; and in one that left trees out as well (`--filter=tree:0`),
 `git ls-tree -r` too. And
 `git archive`, which `stayfixed test attribute` uses to extract `HEAD` and the merge base, runs
-the smudge filters the repository's `.gitattributes` name and your git configuration defines.
-stayfixed passes git your `HOME` and leaves it reading its system configuration and the
+the smudge filters the repository's `.gitattributes` name and your git configuration defines, as
+do the note sync's `git add` and `git checkout-index` over the overlay's notes, which run the
+clean and smudge filters your git configuration defines for the attributes `HEAD` commits
+(`GIT_ATTR_SOURCE=HEAD`) with your whole environment.
+stayfixed passes `test attribute`'s git your `HOME` and leaves it reading its system configuration and the
 repository's own, so where the system, global or repository-local configuration defines
 `filter.lfs` — as `git lfs install` does in the global one — that is `git-lfs smudge`, which
 downloads the LFS objects of those two commits it does not have from the LFS server the repository
@@ -395,12 +407,13 @@ stayfixed detach                                       # remove what attach adde
 stayfixed setup --preset recommended                   # the machine configuration and deny rules; no plugin unless --plugin names one
 stayfixed setup --preset recommended --overlay ../stayfixed-private   # record an existing overlay, or render one there if nothing is; no network call
 stayfixed setup --preset recommended --overlay create:you/stayfixed-private  # create one on GitHub from your <owner>/stayfixed-overlay-template if you published one, else stayfixed's
+stayfixed setup --restore --overlay ../stayfixed-private   # restore a machine: machine setup, then attach every checkout the overlay's machine/projects.toml lists
 stayfixed setup --git-hooks                            # install the commit-message hook into this repository
 stayfixed setup --git-hooks --uninstall                # remove it; restore the hook it chained to
 stayfixed setup --approval-boundary                    # print the deny rule and sandbox settings that keep an agent out of the trust record; writes nothing
 
 # Diagnosing an installation
-stayfixed doctor                                       # thirteen checks over this installation, one line
+stayfixed doctor                                       # fourteen checks over this installation, one line
 stayfixed doctor --json                                # every check with its status, detail and remedy
 
 # Internal

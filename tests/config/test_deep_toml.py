@@ -110,7 +110,7 @@ READERS = [
 ]
 
 DEGRADERS = [
-    pytest.param(lambda t, d: write._first_attach(_record(t, d)), None, id="first-attach"),
+    pytest.param(lambda t, d: write._record_table(_record(t, d)), None, id="record-table"),
 ]
 
 

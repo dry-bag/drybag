@@ -18,12 +18,12 @@ from functools import cached_property
 from pathlib import Path
 from typing import Final, Literal
 
-from stayfixed.binding import bound_project, main_checkout_or_none
+from stayfixed.binding import main_checkout_or_none
 from stayfixed.config.loader import read_document
 from stayfixed.config.overlay import overlay_root as recorded_overlay_root
 from stayfixed.config.reading import MachineConfigError
 from stayfixed.config.schema import Config
-from stayfixed.config.session import SessionConfig, command_config
+from stayfixed.config.session import SessionConfig, bound_config
 from stayfixed.errors import Failure, Refusal, resolved_or_none
 
 OK: Final = "ok"
@@ -155,7 +155,7 @@ class Context:
     def attach_config(self) -> Config | None:
         """`config`, or, where this machine binds a checkout whose main checkout has no
         `stayfixed.toml` at all, the configuration `attach` acts on there
-        (`config.session.command_config` in the main checkout, for the project the binding record
+        (`config.session.bound_config` in the main checkout, for the project the binding record
         names): the rows about what `attach` delivered — `attached` and the note store — judge such
         a checkout on what `attach` used. Every other row reads `config`, and every other case,
         a file the session dropped or one only the main checkout has included, is `None`, as
@@ -167,12 +167,7 @@ class Context:
             main = main_checkout_or_none(self.root)
             if main is None or read_document(main) is not None:
                 return None
-            bound = bound_project(main)
-            if bound is None:
-                return None
-            return command_config(
-                main, machine=self.machine, owner=self.session.owner, unnamed=lambda: bound.project
-            )
+            return bound_config(main, machine=self.machine, owner=self.session.owner)
 
         return resolved_or_none(built)
 

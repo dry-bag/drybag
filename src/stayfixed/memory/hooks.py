@@ -40,21 +40,29 @@ def _segment(value: str) -> str:
 def _unreviewed(event: HookEvent, session: SessionConfig) -> HookResult:
     from stayfixed.config.schema import HARNESS_MODE
 
+    if event.project_root is None:
+        return HookResult()
     config = session.config
-    if config is None or event.project_root is None or config.memory.mode == HARNESS_MODE:
+    if config is None:
+        # No file: the configuration of a checkout this machine binds, if it binds this one.
+        from stayfixed.config.session import bound_config
+        from stayfixed.errors import resolved_or_none
+
+        root = event.project_root
+        config = resolved_or_none(lambda: bound_config(root, machine=None, owner=session.owner))
+    if config is None or config.memory.mode == HARNESS_MODE:
         return HookResult()
     try:
         from stayfixed import fsops
         from stayfixed.config.paths import data_directory
         from stayfixed.memory.notes import walk
         from stayfixed.memory.reviewed import subject, unreviewed
-        from stayfixed.memory.store import resolved
+        from stayfixed.memory.store import resolved, walked_groups
 
         store = resolved(event.project_root, config, machine=None)[0]
         if store is None:
             return HookResult()
-        groups = [g for g in config.memory.groups if g in store.groups]
-        pending = unreviewed(store, walk(store.path, groups).notes)
+        pending = unreviewed(store.machine, walk(store.path, walked_groups(store, config)).notes)
         now = _segment("\n".join(sorted(subject(note.path) for note in pending)))
         base, name = data_directory() / SEEN, _segment(str(store.path.resolve()))
         try:

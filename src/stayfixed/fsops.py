@@ -406,6 +406,58 @@ def open_regular(path: Path) -> BinaryIO:
     return os.fdopen(descriptor, "rb")
 
 
+# The open `read_bounded_within` makes of the last component under a root: `_REGULAR_OPEN`'s, and a
+# link there is refused as every component above it is.
+_WITHIN_OPEN = _REGULAR_OPEN | getattr(os, "O_NOFOLLOW", 0)
+
+
+@contextmanager
+def open_directory(path: Path) -> Iterator[int]:
+    """A descriptor for the directory `path`, its last component not followed if it is a link,
+    closed when the block ends: the `root` `read_bounded_within` reads several files under with
+    one open."""
+    descriptor = os.open(path, _DIR_FLAGS)
+    try:
+        yield descriptor
+    finally:
+        os.close(descriptor)
+
+
+def _opened_within(root: Path | int, relative: str) -> int:
+    """A descriptor for `root/relative` opened for reading, no component of it followed if it is a
+    symbolic link, the file included; `NotRegularFile` if it is anything else. `root` an open
+    directory descriptor takes one name and no path below it."""
+    if isinstance(root, int):
+        parts = checked_components(relative)
+        if len(parts) != 1:
+            raise UnsafePath(f"{relative!r} is not one name in the directory it is read from")
+        descriptor = os.open(parts[0], _WITHIN_OPEN, dir_fd=root)
+    else:
+        with open_within(root, relative) as (dir_fd, name):
+            descriptor = os.open(name, _WITHIN_OPEN, dir_fd=dir_fd)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise NotRegularFile(errno.EINVAL, "not a regular file", relative)
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _read_upto(descriptor: int, size: int) -> bytes:
+    """Up to `size` bytes from `descriptor`, fewer only at its end: unbuffered, since a header of a
+    few bytes costs a buffer's allocation per file otherwise, and looped, since one `read` may
+    return less than it was asked for."""
+    chunks: list[bytes] = []
+    while size > 0:
+        chunk = os.read(descriptor, size)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        size -= len(chunk)
+    return b"".join(chunks)
+
+
 def _bounded(content: bytes, limit: int) -> tuple[bytes, bool]:
     """`content`, read to one byte past `limit`, cut to `limit`, and whether it ran past it."""
     return content[:limit], len(content) > limit
@@ -414,14 +466,29 @@ def _bounded(content: bytes, limit: int) -> tuple[bytes, bool]:
 def read_bounded(path: Path, limit: int) -> tuple[bytes, bool]:
     """At most `limit` bytes of a regular file, and whether it holds more than that.
 
-    The one reader of a file held to a bound, whatever the bound is. `path` is opened by
-    `open_regular`'s rules: followed through symbolic links, and a regular file only. The open
-    never waits on a FIFO, anything but a regular file is `NotRegularFile`, and one byte past
-    `limit` is asked for and no more, so a file that reads on for as long as anyone asks costs
-    `limit + 1` bytes and is over.
+    The one reader of a file held to a bound, whatever the bound is, and `read_bounded_within` the
+    one under a root. `path` is opened by `open_regular`'s rules: followed through symbolic links,
+    and a regular file only. The open never waits on a FIFO, anything but a regular file is
+    `NotRegularFile`, and one byte past `limit` is asked for and no more, so a file that reads on
+    for as long as anyone asks costs `limit + 1` bytes and is over.
     """
     with open_regular(path) as stream:
         return _bounded(stream.read(limit + 1), limit)
+
+
+def read_bounded_within(root: Path | int, relative: str, limit: int) -> tuple[bytes, bool]:
+    """`read_bounded` of `relative` under `root`, reached as `open_within` reaches a file.
+
+    No component is followed if it is a symbolic link, the file included, and the descriptor
+    opened is asked whether it is a regular file, so the open never waits on a FIFO either. `root`
+    may be a directory `open_directory` opened, and `relative` then one name in it, so a reader of
+    many files in one directory opens it once.
+    """
+    descriptor = _opened_within(root, relative)
+    try:
+        return _bounded(_read_upto(descriptor, limit + 1), limit)
+    finally:
+        os.close(descriptor)
 
 
 def read_regular_bytes(path: Path, *, limit: int | None = None) -> bytes:
@@ -716,6 +783,42 @@ def write_within(
     mkdirs_within(root, target)
     with open_within(root, target) as (dir_fd, name):
         write_atomically_at(dir_fd, name, text, encoding=encoding, mode=mode)
+
+
+# The flags of the one exclusive create: a regular file made only where nothing is at the name (a
+# file, a directory or a link, dangling or not), never through a link at the last component.
+_CREATE_FLAGS = (
+    getattr(os, "O_NOFOLLOW", 0)
+    | os.O_WRONLY
+    | os.O_CREAT
+    | os.O_EXCL
+    | os.O_NONBLOCK
+    | os.O_CLOEXEC
+)
+
+
+def create_within(root: Path, target: str, data: bytes, *, mode: int) -> bool:
+    """Create `root/target` holding `data` with exactly `mode`'s bits, and say whether it did.
+
+    The walk is `open_within`'s, and the create is `O_CREAT | O_EXCL | O_NOFOLLOW`, so a name that
+    is already there -- a file, a directory or a link, one pointing nowhere included -- is left as
+    it is and answers `False`, and nothing is ever written through a link. The parents are not
+    created. `mode` is set on the descriptor, which the umask does not narrow; a write that fails
+    after the create removes the file it created and raises.
+    """
+    with open_within(root, target) as (dir_fd, name):
+        try:
+            handle = os.open(name, _CREATE_FLAGS, 0o600, dir_fd=dir_fd)
+        except FileExistsError:
+            return False
+        try:
+            with os.fdopen(handle, "wb") as stream:
+                os.fchmod(stream.fileno(), mode)
+                stream.write(data)
+        except BaseException:
+            _unlink_quietly(dir_fd, name)
+            raise
+    return True
 
 
 def remove_within(root: Path, target: str) -> None:

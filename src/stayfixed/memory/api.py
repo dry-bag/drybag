@@ -14,7 +14,10 @@ area and why — it does not import a private module of this area.
 
 The names imported from outside this area today, by the `attach` and `overlay` areas and by this
 repository's tests: the resolver (`resolve` and `permitted_roots`), the overlay layout `attach`
-writes and `overlay` renders (`PROJECTS`, `PROJECT_RECORD`, `STORE_DIR`, `COMMON_GROUP`), the one
+writes and `overlay` renders (`PROJECTS`, `PROJECT_RECORD`, `STORE_DIR`, `COMMON_GROUP`), the
+note roots `sync`'s pathspecs are built from beside `config.plates.GROUPS` (`COMMON`,
+`PROJECTS`), the index render `sync` runs in process from a bound checkout and what it answers
+(`rerender_overlay_index`, `Rerendered`), the one
 reader of the overlay's project record, which `attach` reads it with and answers its own way when
 it cannot (`read_binding_record`), the binding's one classifier and the states it answers in
 (`binding_state`, `UNBOUND` and `BOUND`, which `attach`'s own doctor row reads), which `attach`
@@ -25,12 +28,17 @@ builds, points the harness at, renders the missing index of and `detach` withdra
 directory, which the `attach` area's `doctor.py` compares the pointer with, and every path its
 links point at in the overlay, which `attach` asks the length of before its first write
 (`build_composed`, `composed_directory`, `render_missing_index`, `withdraw_composed`,
-`link_sources`), and the trust region `tests/test_install_path.py` asserts end to end
-(`DELIMITER`, `markers`). The note walk and `resolved` have no reader outside this area and are
-not here. The overlay root the machine file records and the checkout's
+`link_sources`), the project's memory directories the store leaves unlinked for being in the tag
+namespace, which `attach`'s doctor row names (`reserved_project_groups`), and the trust region
+`tests/test_install_path.py` asserts end to end (`DELIMITER`, `markers`). The note walk and
+`resolved` have no reader outside this area and are not here. The overlay root the machine file
+records and the checkout's
 `origin` are the core's to answer (`config.overlay.overlay_root`, `gitenv.origin_remote` and
 `gitenv.GitUnavailable`), because `init` asks them too and may not import this area; the
 crossings still pinned are listed in `tests/boundaries/test_delivery.py`.
+
+**`promote_share`** is imported by `setup --restore --yes` (`setup.restore`), which records the
+notes of the overlay's share for each project it attaches as reviewed.
 
 **Three more have no importer and stay, each for a reason written here**, because a name
 kept in silence is what made this pass necessary:
@@ -72,11 +80,13 @@ this area's tests use; an area that comes to need one grows this list by the rul
 
 from stayfixed.memory.bundles import SLOTS
 from stayfixed.memory.composed import build as build_composed
-from stayfixed.memory.composed import link_sources, render_missing_index
+from stayfixed.memory.composed import link_sources, promote_share, render_missing_index
 from stayfixed.memory.composed import withdraw as withdraw_composed
+from stayfixed.memory.index import Rerendered, rerender_overlay_index
 from stayfixed.memory.store import (
     BINDING_STATES,
     BOUND,
+    COMMON,
     COMMON_GROUP,
     PROJECT_RECORD,
     PROJECTS,
@@ -88,6 +98,7 @@ from stayfixed.memory.store import (
     origin_note,
     permitted_roots,
     read_binding_record,
+    reserved_project_groups,
     resolve,
 )
 from stayfixed.memory.trust import DELIMITER, markers, wrap
@@ -95,6 +106,7 @@ from stayfixed.memory.trust import DELIMITER, markers, wrap
 __all__ = [
     "BINDING_STATES",
     "BOUND",
+    "COMMON",
     "COMMON_GROUP",
     "DELIMITER",
     "PROJECTS",
@@ -102,6 +114,7 @@ __all__ = [
     "SLOTS",
     "STORE_DIR",
     "UNBOUND",
+    "Rerendered",
     "Store",
     "binding_state",
     "build_composed",
@@ -110,8 +123,11 @@ __all__ = [
     "markers",
     "origin_note",
     "permitted_roots",
+    "promote_share",
     "read_binding_record",
     "render_missing_index",
+    "rerender_overlay_index",
+    "reserved_project_groups",
     "resolve",
     "withdraw_composed",
     "wrap",

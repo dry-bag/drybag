@@ -187,7 +187,7 @@ def _cli(walk: Walkthrough, *argv: str) -> subprocess.CompletedProcess[str]:
 
 
 def _doctor(walk: Walkthrough, *, root: Path | None = None) -> list[dict[str, str]]:
-    """The thirteen rows, read back out of what `doctor --json` printed on the launcher's
+    """The fourteen rows, read back out of what `doctor --json` printed on the launcher's
     stdout."""
     done = _cli(
         walk,
@@ -202,7 +202,7 @@ def _doctor(walk: Walkthrough, *, root: Path | None = None) -> list[dict[str, st
     )
     assert done.stdout, done.stderr
     rows: list[dict[str, str]] = json.loads(done.stdout)["checks"]
-    assert len(rows) == 13, rows
+    assert len(rows) == 14, rows
     return rows
 
 
@@ -517,6 +517,51 @@ def test_detach_returns_the_project_to_where_it_started(tmp_path: Path) -> None:
     assert_snapshot_unchanged(root, before)
 
 
+def test_restore_attaches_every_listed_checkout_and_detach_undoes_it(tmp_path: Path) -> None:
+    # `setup --restore` through the launcher, over an overlay `setup` rendered and the owner's
+    # projects file listing one checkout that is there and one that is not: the present one is
+    # attached (`doctor`'s `attached` row reads it so), the absent one is reported and skipped,
+    # and `detach` there returns the checkout to the bytes it had before the restore.
+    home = tmp_path / "home"
+    machine = tmp_path / "config" / "stayfixed" / "config.toml"
+    machine.parent.mkdir(parents=True)
+    bin_dir = tmp_path / "bin"
+    _fake_binaries(bin_dir)
+    root = _project(tmp_path, mode="overlay")
+    (tmp_path / "overlays").mkdir()
+    overlay = tmp_path / "overlays" / "stayfixed-private"
+    walk = Walkthrough(
+        root,
+        overlay,
+        machine,
+        home,
+        tmp_path / "plugin-data",
+        overlay / PROJECTS / PROJECT,
+        bin_dir,
+    )
+
+    def step(*argv: str) -> subprocess.CompletedProcess[str]:
+        done = _cli(walk, *argv)
+        assert done.returncode == 0, f"`{' '.join(argv)}`: {done.stdout}{done.stderr}"
+        return done
+
+    flags = ("--home", str(home), "--machine", str(machine))
+    step("setup", "--preset", "recommended", "--overlay", str(overlay), *flags)
+    (overlay / "machine").mkdir(exist_ok=True)
+    (overlay / "machine" / "projects.toml").write_text(
+        f'[projects.{PROJECT}]\ndir = "{root}"\n[projects.ghost]\ndir = "{tmp_path / "nowhere"}"\n',
+        encoding="utf-8",
+    )
+    before = snapshot(root)
+    done = step("setup", "--restore", "--overlay", str(overlay), *flags)
+    assert f"{PROJECT} at" in done.stdout and "ghost" in done.stdout and "absent" in done.stdout
+    assert_snapshot_changed(root, before)
+    rows = {row["name"]: row["status"] for row in _doctor(walk)}
+    assert rows["attached"] == OK, rows
+    step("detach")
+    assert_snapshot_unchanged(root, before)
+
+
 def test_doctor_is_green_on_the_attached_fixture(tmp_path: Path) -> None:
     # Green meaning: no `red`, and no `skip`.
     walk = _install_path(tmp_path)
@@ -529,9 +574,11 @@ def test_doctor_is_green_on_the_attached_fixture(tmp_path: Path) -> None:
 # as a number rather than as a set of argv lists so the failure reads as "the count moved", which
 # is the claim.
 #
-# Thirteen: the wrapper probe and the twelve `git` questions the `attached`, note-store, `memory`
-# and `preferences` rows ask of a bound checkout, as `docs/cli.md`'s doctor section lists them.
-DOCTOR_LAUNCHES = 13
+# Fifteen: the wrapper probe and the fourteen `git` questions the `attached`, note-store, `memory`,
+# `preferences` and `sync` rows ask of a bound checkout and its overlay, as `docs/cli.md`'s doctor
+# section lists them; the `sync` row's `git version` is asked because `setup --overlay` switched the
+# note sync on for the overlay this fixture rendered.
+DOCTOR_LAUNCHES = 15
 
 
 def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
@@ -584,11 +631,11 @@ def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
         True,
     ), attached
     assert len(launched) == DOCTOR_LAUNCHES, launched
-    # And they are the thirteen the paragraph names, not thirteen of something else: one wrapper
-    # probe, and twelve `git` questions. Asserted by shape rather than by full argv, because
+    # And they are the fifteen the paragraph names, not fifteen of something else: one wrapper
+    # probe, and fourteen `git` questions. Asserted by shape rather than by full argv, because
     # each `git` call carries the temporary checkout or overlay it asks about.
     assert sum(1 for argv in launched if argv[0] == str(WRAPPER)) == 1
-    assert sum(1 for argv in launched if argv[0] == "git") == 12
+    assert sum(1 for argv in launched if argv[0] == "git") == 14
 
 
 def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Path) -> None:

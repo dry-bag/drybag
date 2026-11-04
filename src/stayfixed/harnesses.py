@@ -42,6 +42,9 @@ package that names a harness is pardoned there, each pardon by one of these item
 - `setup` installs the plugin through each harness's own command-line verbs,
   `_MARKETPLACE_ADD` and `_PLUGIN_INSTALL` in `setup/run.py`, keyed by harness name, so another
   harness is another entry in each.
+- `setup --restore` installs what the overlay's `machine/claude/settings.json` lists, Claude Code's
+  marketplaces and plugins, with Claude Code's verbs, `install_listed` in `setup/restore.py`, and
+  says so for Codex, so another harness is another list and other verbs.
 - `attach` renders the overlay's hooks, skills and agents as a Claude Code plugin and installs it
   with Claude Code's verbs, `PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL` in
   `attach.render`, and `detach` withdraws it with `PLUGIN_UNINSTALL_LOCAL` and

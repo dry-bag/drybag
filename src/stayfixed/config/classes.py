@@ -11,7 +11,7 @@ caller names folds them lowest first, with the layer each value came from.
 `resolve` decides who may set a key, and where a value came from. It builds the owner's layer
 (`config.owner`, from the preset and the machine file), refuses a repository's machine-only keys
 for the NOTE load (`config.loader`), and builds a session's preferences and session budgets once,
-over the preset, the repository, the overlay's two files and the machine file
+over the preset, the repository, the overlay's files and the machine file
 (`config.session`), whose provenance `doctor`'s `preferences` row prints; the rest of the
 project's `Config` is built by `config.loader`, from the repository's file over the preset.
 
@@ -24,7 +24,7 @@ field added to the schema has a class before anything may set it (`CONTRIBUTING.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
 
@@ -51,13 +51,15 @@ class KeyClass(StrEnum):
 class LayerName(StrEnum):
     """Where a value came from. The value is the word a note names the layer by.
 
-    The overlay's two scopes are named for the overlay, `OVERLAY_COMMON` and `OVERLAY_PROJECT`,
-    since "project" means the repository everywhere else a person reads it (its `stayfixed.toml`,
-    Claude Code's project settings)."""
+    The overlay's scopes are named for the overlay, `OVERLAY_COMMON`, `OVERLAY_TAG` (one layer for
+    each tag the project's record lists, told apart by `Layer.label`) and `OVERLAY_PROJECT`, since
+    "project" means the repository everywhere else a person reads it (its `stayfixed.toml`, Claude
+    Code's project settings)."""
 
     PRESET = "preset"
     REPOSITORY = "repository"
     OVERLAY_COMMON = "overlay common"
+    OVERLAY_TAG = "overlay tag"
     OVERLAY_PROJECT = "overlay project"
     MACHINE_FILE = "machine file"
 
@@ -67,6 +69,7 @@ ORDER: tuple[LayerName, ...] = (
     LayerName.PRESET,
     LayerName.REPOSITORY,
     LayerName.OVERLAY_COMMON,
+    LayerName.OVERLAY_TAG,
     LayerName.OVERLAY_PROJECT,
     LayerName.MACHINE_FILE,
 )
@@ -107,6 +110,7 @@ SESSION_BUDGETS: frozenset[str] = frozenset(
 CLASSES: Mapping[str, KeyClass] = MappingProxyType(
     {
         "personal.*": KeyClass.MACHINE_ONLY,
+        "sync.*": KeyClass.MACHINE_ONLY,
         "guards.*": KeyClass.PREFERENCE,
         "memory.mode": KeyClass.PREFERENCE,
         "memory.groups": KeyClass.PREFERENCE,
@@ -150,10 +154,18 @@ def class_of(key: str) -> KeyClass:
 
 @dataclass(frozen=True)
 class Layer:
-    """One layer's values, keyed by dotted key."""
+    """One layer's values, keyed by dotted key. `label` tells apart the layers of one name: the
+    tag an `OVERLAY_TAG` layer is for, which the owner wrote and `config.plates` held to `TAG`, so
+    it prints as is."""
 
     name: LayerName
     values: Mapping[str, object]
+    label: str = ""
+
+    @property
+    def said(self) -> str:
+        """The layer as a person reads it: `overlay tag ops`, or its name where it has no label."""
+        return f"{self.name} {self.label}" if self.label else str(self.name)
 
 
 @dataclass(frozen=True)
@@ -164,6 +176,15 @@ class Resolution:
     values: Mapping[str, object]
     provenance: Mapping[str, LayerName]
     notes: tuple[str, ...]
+    # The label of the layer a value came from, for the keys whose layer has one.
+    labels: Mapping[str, str] = field(default_factory=dict)
+
+    def said(self, key: str) -> str:
+        """The layer `key`'s value came from as `Layer.said` reads it; `KeyError` where no layer
+        set `key`."""
+        layer = self.provenance[key]
+        label = self.labels.get(key)
+        return f"{layer} {label}" if label else str(layer)
 
 
 def resolve(
@@ -182,19 +203,25 @@ def resolve(
     folds = merge or {}
     values: dict[str, object] = {}
     provenance: dict[str, LayerName] = {}
+    labels: dict[str, str] = {}
     notes: list[str] = []
     for layer in sorted(stack, key=lambda layer: _RANK[layer.name]):
         for key, value in layer.values.items():
             if layer.name not in ALLOWED[class_of(key)]:
-                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.name))
+                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))
                 continue
             if key in folds and key in values:
                 values[key] = folds[key](values[key], value)
             else:
                 values[key] = value
             provenance[key] = layer.name
+            if layer.label:
+                labels[key] = layer.label
+            else:
+                labels.pop(key, None)
     return Resolution(
         values=MappingProxyType(values),
         provenance=MappingProxyType(provenance),
         notes=tuple(notes),
+        labels=MappingProxyType(labels),
     )

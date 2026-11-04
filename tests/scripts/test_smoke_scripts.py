@@ -76,7 +76,7 @@ def test_every_hook_entry_answers_its_sample_event_through_the_checkout(
     )
     out = capsys.readouterr().out
     assert code == 0, out
-    assert "10 entries, 11 row(s), 0 failure(s)" in out, out
+    assert "12 entries, 13 row(s), 0 failure(s)" in out, out
 
 
 @needs_git
@@ -140,7 +140,7 @@ def test_a_red_run_entry_that_says_nothing_is_reported(
     out = capsys.readouterr().out
     assert code == 1, out
     assert "the context does not say 'Before calling this red a flake" in out, out
-    assert "10 entries, 11 row(s), 1 failure(s)" in out, out
+    assert "12 entries, 13 row(s), 1 failure(s)" in out, out
 
 
 @needs_git
@@ -277,7 +277,7 @@ def test_hooks_json_gaining_an_entry_is_reported_rather_than_quietly_run(
     )
     out = capsys.readouterr().out
     assert code == 1, out
-    assert "11 entries and 12 rows, expected 10 and 11" in out, out
+    assert "13 entries and 14 rows, expected 12 and 13" in out, out
 
 
 @needs_git

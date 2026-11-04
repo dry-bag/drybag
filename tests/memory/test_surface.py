@@ -29,6 +29,12 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         "PROJECT_RECORD",
         "STORE_DIR",
         "COMMON_GROUP",
+        # the three roots of the overlay's notes, which `sync` builds its pathspecs from
+        "COMMON",
+        # the index render `sync` runs in process from a bound checkout before it commits, and
+        # what that render answers
+        "rerender_overlay_index",
+        "Rerendered",
         # the one reader of the overlay's project record, which attach reads with a policy of its
         # own
         "read_binding_record",
@@ -60,5 +66,11 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         "UNBOUND",
         # the note a moved `origin` earns, which attach and the session-start line say
         "origin_note",
+        # the unreviewed notes of the overlay's share for a project recorded as reviewed, which
+        # `setup --restore --yes` runs for each project it attaches
+        "promote_share",
+        # the project's memory directories the composed store leaves unlinked for being in the
+        # tag namespace, which the `attached` row names
+        "reserved_project_groups",
     }
     assert required == set(memory.__all__)

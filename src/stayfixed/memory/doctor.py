@@ -161,12 +161,17 @@ def _memory(context: Context, answers: Answers) -> Row:
     from stayfixed.doctor.api import OK, Row
     from stayfixed.memory.notes import walk
     from stayfixed.memory.reviewed import unreviewed
+    from stayfixed.memory.store import walked_groups
     from stayfixed.printed import printable
 
     resolution = context.session.resolution
     mode = str(resolution.values.get("memory.mode", HARNESS_MODE))
-    layer = resolution.provenance.get("memory.mode")
-    parts = [f"mode {mode}, " + ("which no layer sets" if layer is None else f"set by {layer}")]
+    setter = (
+        f"set by {resolution.said('memory.mode')}"
+        if "memory.mode" in resolution.provenance
+        else "which no layer sets"
+    )
+    parts = [f"mode {mode}, {setter}"]
     store = answers.store(context)
     debris = None
     if store is None:
@@ -180,10 +185,9 @@ def _memory(context: Context, answers: Answers) -> Row:
             where = printable(store.path.relative_to(context.root).as_posix())
         except ValueError:
             where = "the composed store under the data directory"
-        groups = (
-            [g for g in context.config.memory.groups if g in store.groups] if context.config else []
-        )
-        pending = len(unreviewed(store, walk(store.path, groups).notes))
+        config = context.attach_config
+        groups = walked_groups(store, config) if config else []
+        pending = len(unreviewed(store.machine, walk(store.path, groups).notes))
         parts.append(f"store {where}, {pending} unreviewed note(s)")
         debris = _debris(store)
     parts.append(_pointer(context))
@@ -202,7 +206,10 @@ def register() -> Contribution:
     answers = Answers()
     return Contribution(
         checks=(
-            ("bundles", configured(lambda context, config: _bundles(context, config, answers))),
+            (
+                "bundles",
+                configured(lambda context, config: _bundles(context, config, answers), attach=True),
+            ),
             ("memory", lambda context: _memory(context, answers)),
         )
     )

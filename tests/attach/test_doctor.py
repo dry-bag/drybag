@@ -26,6 +26,7 @@ from stayfixed.config.layout import ATTACH_LEDGER as LEDGER
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.doctor import checks as doctor_checks
 from stayfixed.doctor.api import OK, RED, SKIP, WARN, Check
+from stayfixed.errors import Refusal
 from stayfixed.memory.api import PROJECT_RECORD, PROJECTS
 from stayfixed.overlay.api import COMMON_CLAUDE
 from stayfixed.printed import quoted
@@ -682,8 +683,8 @@ def test_an_owner_whose_own_binding_record_will_not_parse_is_told_where_to_look(
         assert "could not run" not in _by_name(rows, name).detail
     store = tmp_path / "overlay" / PROJECTS / "p" / "memory"
     (tmp_path / "home").mkdir(exist_ok=True)
-    checked = attach_check(root, store=store, machine=machine)
-    assert f"/{PROJECT_RECORD} is not valid TOML" in checked.summary
+    with pytest.raises(Refusal, match=f"/{PROJECT_RECORD}.* is not valid TOML"):
+        attach_check(root, store=store, machine=machine)
 
 
 # --- the delivery ------------------------------------------------------------------------------
@@ -804,7 +805,6 @@ def test_a_git_that_cannot_say_what_it_tracks_warns_and_never_reads_as_in_place(
     # "Could not ask" is never "nothing tracked": a git that cannot answer leaves the placed paths
     # unchecked, which the row says.
     from stayfixed.attach import exclude
-    from stayfixed.errors import Refusal
 
     def unanswered(root: Path, relatives: object) -> tuple[str, ...]:
         raise Refusal(exclude.UNANSWERED)
@@ -946,3 +946,79 @@ def test_the_attached_row_reads_the_main_checkouts_pointer_from_every_checkout(
             "attached; the delivery is in place; autoMemoryDirectory points the harness at the "
             "composed store; the binding is bound",
         ), checkout
+
+
+def _tagged(tmp_path: Path, *tags: str) -> Path:
+    """The overlay's record of project `p` listing `tags`, each with a `groups/<tag>/` directory;
+    the overlay's root."""
+    overlay = tmp_path / "overlay"
+    record = overlay / PROJECTS / "p" / PROJECT_RECORD
+    listed = ", ".join(f'"{tag}"' for tag in tags)
+    record.write_text(record.read_text(encoding="utf-8") + f"tags = [{listed}]\n", "utf-8")
+    for tag in tags:
+        (overlay / "groups" / tag).mkdir(parents=True)
+    return overlay
+
+
+def _tag_file(overlay: Path, tag: str, relative: str, text: str = "x\n") -> None:
+    path = overlay / "groups" / tag / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def test_two_tags_holding_one_rule_name_is_a_warning_naming_both_and_the_winner(
+    tmp_path: Path,
+) -> None:
+    root = _attached(tmp_path)
+    overlay = _tagged(tmp_path, "a", "b")
+    for tag in ("a", "b"):
+        _tag_file(overlay, tag, "claude/rules/x.md")
+    clause = "the rule x.md is held by the tags a, b: the later, b, wins"
+    assert _delivered_row(tmp_path, root) == Check(
+        "attached", WARN, _attached_detail(clause), attach_doctor.TAGS_REMEDY
+    )
+
+
+def test_two_tags_setting_one_key_is_a_warning(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    overlay = _tagged(tmp_path, "a", "b")
+    for tag in ("a", "b"):
+        _tag_file(overlay, tag, "stayfixed.toml", '[memory]\nmode = "overlay"\n')
+    clause = "the setting memory.mode is held by the tags a, b: the later, b, wins"
+    assert _delivered_row(tmp_path, root) == Check(
+        "attached", WARN, _attached_detail(clause), attach_doctor.TAGS_REMEDY
+    )
+
+
+def test_a_listed_tag_with_no_directory_is_a_warning(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    _tagged(tmp_path, "a")
+    shutil.rmtree(tmp_path / "overlay" / "groups" / "a")
+    row = _delivered_row(tmp_path, root)
+    assert row.status == WARN and row.remedy == attach_doctor.TAGS_REMEDY
+    assert "the tag a has no directory groups/a; it is skipped" in row.detail
+
+
+def test_doctor_names_a_project_memory_directory_in_the_tag_namespace(tmp_path: Path) -> None:
+    # `tag-` is a tag's link name in the composed store, so the project's own directory of that
+    # name is not linked: the warning names it, in the tags finding.
+    root = _attached(tmp_path)
+    memory = tmp_path / "overlay" / PROJECTS / "p" / "memory"
+    (memory / "tag-a").mkdir(parents=True)
+    (memory / "tag-file").write_text("not a directory\n", encoding="utf-8")
+    row = _delivered_row(tmp_path, root)
+    assert row.status == WARN and row.remedy == attach_doctor.TAGS_REMEDY
+    assert attach_doctor.RESERVED_GROUP.format(name="tag-a") in row.detail
+    assert "tag-file" not in row.detail
+
+
+def test_a_tag_warning_never_hides_a_red_finding(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    overlay = _tagged(tmp_path, "a", "b")
+    for tag in ("a", "b"):
+        _tag_file(overlay, tag, "claude/rules/x.md")
+    shutil.rmtree(delivery_directory(_id(root)))
+    row = _delivered_row(tmp_path, root)
+    assert row.status == RED
+    assert attach_doctor.TAGS_REMEDY not in row.remedy
+    assert "render directory" in row.detail

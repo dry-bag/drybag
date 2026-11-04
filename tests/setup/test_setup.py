@@ -1543,6 +1543,88 @@ def test_setup_renders_an_overlay_at_an_absent_or_empty_path_and_records_it(
     assert report.overlay == destination
 
 
+# --- the sync switch an overlay made here is born with ------------------------------------------
+
+_FOREIGN = '[foreign]\nkeep = 1\n\n[personal]\npreset = "mine"\n'
+
+
+def _sync_table(machine: Path) -> object:
+    return read_machine(machine).get("sync")
+
+
+def _kept(machine: Path) -> None:
+    """What a switch written beside the rest must leave alone."""
+    raw = read_machine(machine)
+    assert raw["foreign"] == {"keep": 1}
+    assert raw["personal"]["preset"] == "mine"
+    assert "version" in raw["machine"]
+    assert "root" in raw["overlay"]
+
+
+@needs_git
+def test_setup_rendering_an_overlay_switches_sync_on(tmp_path: Path) -> None:
+    # A new overlay is one this machine's sync should keep; the switch is the machine file's
+    # `[sync] enabled`, written in the write that records `[overlay] root`. Mutation (`mutations/`'s
+    # "recording an existing overlay switches sync on") is the other direction; here dropping the
+    # `sync` argument from that write reddens.
+    machine = tmp_path / "config.toml"
+    machine.write_text(_FOREIGN, encoding="utf-8")
+    setup(
+        "recommended",
+        home=tmp_path / "home",
+        machine=machine,
+        runner=Recorder(on_call=real_git),
+        overlay=str(tmp_path / "mine"),
+    )
+    assert _sync_table(machine) == {"enabled": True}
+    _kept(machine)
+
+
+def test_setup_creating_an_overlay_switches_sync_on(tmp_path: Path) -> None:
+    machine = tmp_path / "config.toml"
+    machine.write_text(_FOREIGN, encoding="utf-8")
+    runner = Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=_populate_overlay)
+    setup(
+        "recommended",
+        home=tmp_path / "home",
+        machine=machine,
+        runner=runner,
+        overlay="create:octo/stayfixed-private",
+    )
+    assert any(argv[:3] == ["gh", "repo", "create"] for argv in runner.calls)
+    assert _sync_table(machine) == {"enabled": True}
+    _kept(machine)
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        pytest.param("", None, id="absent-stays-absent"),
+        pytest.param("[sync]\nenabled = false\n", {"enabled": False}, id="false-stays-false"),
+    ],
+)
+def test_setup_recording_an_overlay_leaves_sync_alone(
+    tmp_path: Path, before: str, after: object
+) -> None:
+    # A second machine records the overlay the first one made. Whether it syncs is that machine's
+    # owner's to say by hand, so recording writes the root and touches no `[sync]`.
+    # Mutation: `mutations/`'s "recording an existing overlay switches sync on".
+    existing = tmp_path / "overlay"
+    _seed_overlay(existing)
+    machine = tmp_path / "config.toml"
+    machine.write_text(_FOREIGN + before, encoding="utf-8")
+    setup(
+        "recommended",
+        home=tmp_path / "home",
+        machine=machine,
+        runner=Recorder(),
+        overlay=str(existing),
+    )
+    assert overlay_root(machine) == existing
+    assert _sync_table(machine) == after
+    _kept(machine)
+
+
 def test_recording_an_existing_overlay_arms_its_commit_time_secret_scan(tmp_path: Path) -> None:
     # A second machine records the overlay the first one made, from a clone: the `pre-commit` hook
     # lives in the clone's own `.git`, which no clone carries, so a recorded overlay had no

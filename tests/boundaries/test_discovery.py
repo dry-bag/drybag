@@ -98,6 +98,7 @@ def test_an_area_submodule_that_fails_to_import_is_handed_over_as_its_exception(
         "stayfixed.attach.doctor",
         "stayfixed.memory.doctor",
         "stayfixed.overlay.doctor",
+        "stayfixed.sync.doctor",
         "stayfixed.zzplanted.doctor",
     ]
     assert all(isinstance(module, ModuleType) for _, module in found[:-1])
@@ -165,8 +166,8 @@ def test_an_areas_doctor_module_imports_only_inside_its_functions() -> None:
     # inside a try".
     source = ROOT / "src" / "stayfixed"
     found = sorted(source.glob("*/doctor.py"))
-    # Three areas carry one each, and the walk says so before it judges them.
-    assert [path.parent.name for path in found] == ["attach", "memory", "overlay"]
+    # Four areas carry one each, and the walk says so before it judges them.
+    assert [path.parent.name for path in found] == ["attach", "memory", "overlay", "sync"]
     offences: list[str] = []
     for path in found:
         tree = ast.parse(path.read_text(encoding="utf-8"))

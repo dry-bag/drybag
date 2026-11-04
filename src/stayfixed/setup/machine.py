@@ -118,8 +118,9 @@ def write_machine(
     personal: Mapping[str, object],
     overlay_root: Path | None,
     machine: Mapping[str, object],
+    sync: Mapping[str, object] = {},
 ) -> Written:
-    """Merge `personal`, `overlay_root` and `machine` into the file at `path`, and write it.
+    """Merge `personal`, `overlay_root`, `machine` and `sync` into the file at `path`, and write it.
 
     Each of the three is merged over what the file already holds, key by key, rather than
     replacing its table outright — a second `setup` run that only sets one of them must not
@@ -150,6 +151,7 @@ def write_machine(
             **({"root": str(overlay_root)} if overlay_root is not None else {}),
         },
         "machine": {**_table(existing, "machine"), **machine},
+        "sync": {**_table(existing, "sync"), **sync},
     }
 
     tables: dict[str, dict[str, object]] = {}

@@ -37,12 +37,14 @@ NOT_KEYS = ("NAMES",)
 # every entry of `Budgets.NAMES`, and neither is a key of its own. Any other field of `Budgets`
 # is a key, so a scalar added there fails the first test until it has a class.
 PER_NAME = frozenset({("budgets", "preset"), ("budgets", "configured")})
-# The keys the machine file holds that no `Config` section carries; `personal.*` is a section.
-MACHINE_FILE_KEYS = frozenset({"guards.bg_cleanup"})
+# The keys the machine file holds that no `Config` section carries: `[guards]`'s default is the
+# schema's own, and `[sync]` is read by the sync area alone (`personal.*` is a section).
+MACHINE_FILE_KEYS = frozenset({"guards.bg_cleanup", "sync.enabled"})
 
 PRESET = LayerName.PRESET
 REPOSITORY = LayerName.REPOSITORY
 OVERLAY_COMMON = LayerName.OVERLAY_COMMON
+OVERLAY_TAG = LayerName.OVERLAY_TAG
 OVERLAY_PROJECT = LayerName.OVERLAY_PROJECT
 MACHINE_FILE = LayerName.MACHINE_FILE
 
@@ -72,6 +74,7 @@ def exact_keys(table: Mapping[str, KeyClass]) -> set[str]:
 # One row per key the class table names; a wildcard row is asked through a key it covers.
 TABLE_ROWS = [
     ("personal.preset", KeyClass.MACHINE_ONLY),
+    ("sync.enabled", KeyClass.MACHINE_ONLY),
     ("guards.bg_cleanup", KeyClass.PREFERENCE),
     ("memory.mode", KeyClass.PREFERENCE),
     ("memory.groups", KeyClass.PREFERENCE),
@@ -159,6 +162,7 @@ def test_the_layers_run_lowest_first() -> None:
         PRESET,
         REPOSITORY,
         OVERLAY_COMMON,
+        OVERLAY_TAG,
         OVERLAY_PROJECT,
         MACHINE_FILE,
     )
@@ -177,6 +181,37 @@ def test_which_layers_may_set_each_class() -> None:
         KeyClass.REPOSITORY_ONLY: frozenset({PRESET, REPOSITORY}),
         KeyClass.PLUGIN_OWNED: frozenset({PRESET}),
     }
+
+
+def test_a_tag_layer_is_admitted_where_the_common_layer_is() -> None:
+    # A tag is the owner's like the common file, so it sets what the common file may and nothing
+    # more: for every class the two stand together.
+    for key_class, layers in ALLOWED.items():
+        assert (OVERLAY_TAG in layers) == (OVERLAY_COMMON in layers), key_class
+
+
+def test_a_tag_layer_names_itself_by_its_label() -> None:
+    # The label is what the owner wrote and `plates` held to `TAG`; a layer without one reads as
+    # its name alone. The winner's label rides with its provenance, and a later layer without one
+    # takes it back.
+    assert Layer(OVERLAY_TAG, {}, "ops").said == "overlay tag ops"
+    assert Layer(OVERLAY_PROJECT, {}).said == "overlay project"
+    got = resolve(
+        [
+            Layer(OVERLAY_TAG, {"memory.mode": "overlay"}, "ops"),
+            Layer(OVERLAY_COMMON, {"memory.mode": "harness"}),
+        ]
+    )
+    assert got.said("memory.mode") == "overlay tag ops"
+    again = resolve(
+        [
+            Layer(OVERLAY_TAG, {"memory.mode": "overlay"}, "ops"),
+            Layer(OVERLAY_PROJECT, {"memory.mode": "harness"}),
+        ]
+    )
+    assert again.said("memory.mode") == "overlay project"
+    with pytest.raises(KeyError):
+        again.said("memory.groups")
 
 
 def test_a_higher_layer_wins_and_says_which() -> None:
@@ -278,6 +313,7 @@ def test_a_layer_reads_as_its_name() -> None:
         "preset",
         "repository",
         "overlay common",
+        "overlay tag",
         "overlay project",
         "machine file",
     ]

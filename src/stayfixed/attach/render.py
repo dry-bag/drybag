@@ -12,12 +12,13 @@ the marketplace is `stayfixed-delivery-<id>` and the plugin `overlay-<id>`, each
 binding id, which never leaves this machine (`stayfixed.binding`): a clone cannot name what it never
 saw. No other name of a delivered part is predictable, and none of these is ever printed.
 
-**What is rendered.** The union of `<overlay>/common/claude/hooks.json` and
-`<overlay>/projects/<project>/claude/hooks.json`, each event's entry groups common first, as the
-overlay wrote them; and `skills/` and `agents/` copied from the same two directories, this
-project's copy of a file winning over the common one. `<project>` is the project this machine's
-binding record names, which the caller passes. Every source is read before anything is written
-(`read_parts`), so a file that cannot be read stops the run while the render is as it was.
+**What is rendered.** The union of the `claude/hooks.json` of each plate of the overlay
+(`config.plates`: `common/`, the project's tags in list order, `projects/<project>/`), each event's
+entry groups in plate order, as the overlay wrote them; and `skills/` and `agents/` copied from the
+same directories, a later plate's copy of a file winning over an earlier one's. `<project>` is the
+project this machine's binding record names, which the caller passes. Every source is read before
+anything is written (`read_parts`), so a file that cannot be read stops the run while the render
+is as it was.
 
 **The overlay's path-scoped rules** (`attach.rules`) add one entry: on `PostToolUse`, matching
 `Read|Edit|Write`, `hook PostToolUse` run through whatever launched the stayfixed that renders
@@ -55,9 +56,8 @@ from stayfixed import fsops
 from stayfixed.attach.permissions import HOOKS_FILE, PROJECT_CLAUDE, hook_groups
 from stayfixed.attach.rules import scoped_exist
 from stayfixed.binding import delivery_directory, short, unwritten
+from stayfixed.config.plates import PlateKind, plates
 from stayfixed.errors import Failure
-from stayfixed.memory.api import PROJECTS
-from stayfixed.overlay.api import COMMON_CLAUDE
 from stayfixed.printed import quoted
 
 MARKETPLACE_PREFIX = "stayfixed-delivery-"
@@ -242,8 +242,13 @@ def read_parts(overlay: Path, project: str, *, command: str | None = None) -> di
     copied directories. `command` is the path-scoped rules' command, this process's own
     (`scoped_command`) where it is `None`: `doctor` passes the one the render holds, so a report
     run through another launcher than `attach` was reads no drift for that alone."""
-    share = overlay / PROJECTS / project
-    sources = ((overlay / COMMON_CLAUDE, None), (share / PROJECT_CLAUDE, share))
+    sources = tuple(
+        (
+            plate.directory / PROJECT_CLAUDE,
+            plate.directory if plate.kind is PlateKind.PROJECT else None,
+        )
+        for plate in plates(overlay, project)[0]
+    )
     hooks: dict[str, list[object]] = {}
     for source, owner in sources:
         for event, groups in hook_groups(source / HOOKS_FILE, share=owner).items():

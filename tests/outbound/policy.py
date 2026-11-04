@@ -80,6 +80,7 @@ NETWORK: dict[tuple[str, ...], str] = {
     ("gh",): "gh",
     ("git", "clone"): "git clone",
     ("git", "fetch"): "git fetch",
+    ("git", "push"): "git push",
     ("claude", "plugin"): "claude plugin",
     ("codex", "plugin"): "codex plugin",
     ("pre-commit", "install"): "pre-commit install",
@@ -103,9 +104,17 @@ LOCAL = frozenset(
         ("git", "archive"),
         ("git", "cat-file"),
         ("git", "check-ignore"),
+        ("git", "config", "--get"),
+        ("git", "config", "--type=bool", "--get"),
         ("git", "config", "--type=path", "--get"),
         ("git", "diff"),
         ("git", "grep"),
+        # Without `-w` it writes nothing: the empty tree's id, from an empty standard input, and a
+        # working-tree file's id.
+        ("git", "hash-object", "-t", "tree", "--stdin"),
+        ("git", "hash-object", "--"),
+        # The note sync's union of two indexes, written into the object store.
+        ("git", "hash-object", "-w", "--stdin"),
         ("git", "init"),
         ("git", "log"),
         ("git", "ls-files"),
@@ -116,8 +125,24 @@ LOCAL = frozenset(
         ("git", "rev-parse"),
         ("git", "status"),
         ("git", "symbolic-ref"),
+        ("git", "version"),
         ("git", "worktree", "list"),
         ("tar", "-xf"),
+        # The note sync's commit and its moves of `main`, all in the overlay: a temporary index
+        # filled (`read-tree`, `add`, `reset`), written (`write-tree`), committed (`commit-tree`),
+        # `main` moved (`update-ref`), and the real index's memory entries reset to `HEAD`; and
+        # the notes a move brought in written from a temporary index (`checkout-index`), and
+        # each local commit replayed onto the fetched sha (`merge-tree`, `update-index` with a
+        # union of two indexes).
+        ("git", "add"),
+        ("git", "checkout-index"),
+        ("git", "commit-tree"),
+        ("git", "merge-tree"),
+        ("git", "read-tree"),
+        ("git", "reset"),
+        ("git", "update-index", "-z", "--index-info"),
+        ("git", "update-ref"),
+        ("git", "write-tree"),
     }
 )
 # Local only as the whole argv: `git remote` alone lists the remotes' names, and anything after it
@@ -127,11 +152,12 @@ LOCAL_WHOLE = frozenset({("git", "remote")})
 # argument as its value. None of them changes which program git runs or where it reaches, except
 # `-c`, whose value is configuration: it is held to `GIT_CONFIG_KEYS`. Any other option there is a
 # finding, because the subcommand the tables match would then follow something unread.
-GIT_GLOBAL_OPTIONS = {"-c": True, "--literal-pathspecs": False}
-# The configuration a launch may set with `git -c`: each changes how git prints a name, and never
-# what it runs or where it reaches, as `core.sshCommand`, `core.fsmonitor` or
-# `url.<base>.insteadOf` would.
-GIT_CONFIG_KEYS = frozenset({"core.quotePath"})
+# `--no-optional-locks` keeps a `status` from writing the index it refreshes.
+GIT_GLOBAL_OPTIONS = {"-c": True, "--literal-pathspecs": False, "--no-optional-locks": False}
+# The configuration a launch may set with `git -c`: each changes how git prints a name or how
+# strictly it checks what it receives (the note sync's fetch), and never what it runs or where it
+# reaches, as `core.sshCommand`, `core.fsmonitor` or `url.<base>.insteadOf` would.
+GIT_CONFIG_KEYS = frozenset({"core.quotePath", "fetch.fsckObjects"})
 # Options with which a git command that otherwise reads the local repository asks a remote instead
 # (`git archive --remote=<url>`). Wherever one appears before the options end, the launch is not
 # local. Matched by the start of the whole name, since `git archive` takes neither of its two
@@ -213,10 +239,23 @@ PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
     # `git [-c core.excludesFile=…] --git-dir=… --work-tree=<empty> check-ignore --no-index
     # --stdin -z`, assembled in `asked`: the owner's own exclude files, asked about.
     ("src/stayfixed/attach/exclude.py", "unhidden_by_owner", "*asked"): NO_ROWS,
+    # The overlay's own pinned gitleaks build, found through pre-commit's database and run on
+    # `git --pre-commit --staged`, `git --log-opts` or `stdin`: it reads the repository and its
+    # input and reaches no network, and a path that is not an executable build is never run.
+    ("src/stayfixed/sync/scan.py", "_scan", "str(binary)"): NO_ROWS,
+    # The note sync's detached job: this interpreter, isolated (`-I -c BOOT`), running this
+    # package's `sync.job.main`, whose own launches (its `git fetch` and `git push` among them)
+    # are walked where they are, in `sync/job.py`.
+    ("src/stayfixed/sync/job.py", "spawn", "job_argv(wake=wake)"): NO_ROWS,
     # `hooks/run-hook.sh --version` under the plugin root this process derived: stayfixed's
     # own hook wrapper, asked for its version.
     ("src/stayfixed/doctor/checks.py", "_wrapper", "str(root / WRAPPER)"): NO_ROWS,
 }
+# What the sync's revisions are: built by its own callers, never from repository text.
+_REVISIONS = (
+    "a sha git printed or a ref the job names (`HEAD`, `origin/main`), joined by `..` where it is "
+    "a range, or `--cached`: never a string a repository chose"
+)
 # Each element a launch hands before its options end that the walk cannot read, keyed and held as
 # `PASS_THROUGH` is, and the reason it cannot be an option that changes what the launch reaches:
 # an option's value, an option the code builds, or an operand its callers have refused when it
@@ -252,11 +291,37 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/project/detect.py", "_symbolic", "ref"): (
         "`HEAD` or `refs/remotes/origin/HEAD`, its callers' constants"
     ),
+    ("src/stayfixed/sync/git.py", "guard", "*_MARKER_PATHS"): (
+        "the module's own constant: `--git-path` and the name of each in-progress marker"
+    ),
+    ("src/stayfixed/sync/job.py", "_staged", "*filters"): (
+        "`--diff-filter=` and the status letters its callers name, or nothing"
+    ),
+    ("src/stayfixed/sync/job.py", "_commit_tree", "*parented"): (
+        "`-p` before each parent, a sha git printed"
+    ),
+    ("src/stayfixed/sync/job.py", "_commit_tree", "*signed"): "`-S`, or nothing",
+    ("src/stayfixed/sync/job.py", "replay", "f'--merge-base={commit}^'"): (
+        "`--merge-base=` and the parent of a sha git printed"
+    ),
+    ("src/stayfixed/sync/rules.py", "commit_entries", "rev_range"): _REVISIONS,
+    ("src/stayfixed/sync/rules.py", "offending_paths", "*revisions"): _REVISIONS,
+    ("src/stayfixed/sync/rules.py", "range_is_memory_only", "base"): _REVISIONS,
+    ("src/stayfixed/sync/rules.py", "range_is_memory_only", "tip"): _REVISIONS,
 }
 
 # The package function whose environment every git launch is given, `git` with only the variables
 # it keeps: an `env=` that calls it overrides nothing worth declaring.
 SCRUBBED_ENVIRONMENT = ("src/stayfixed/gitenv.py", "scrubbed_env")
+# The sync job's git environment: the owner's own, less git's repository variables, plus what
+# `sync.git.job_env` names (no prompt and no askpass, a non-interactive ssh command the owner's own
+# configuration chose, no replace refs, attributes from `HEAD`), and only `PATH`'s absolute
+# entries. The ssh agent has to reach a push,
+# which `scrubbed_env` would drop.
+_JOB_ENVIRONMENT = (
+    "the owner's own environment, less the variables that point git at another repository, plus "
+    "what `job_env` sets: the job's git launches are the owner's, signed in as the owner"
+)
 # Each other `env=` or `executable=` a launch passes, by `(file, function, keyword's source text)`,
 # and why it changes nothing the launch's row does not already say. An `executable=` replaces the
 # program the argv names, and an `env=` can carry `GIT_CONFIG_COUNT` and its keys and values,
@@ -271,4 +336,23 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
         "the environment doctor was handed, less every `CLAUDE_`, `PLUGIN_` and `STAYFIXED_` "
         "variable, plus the plugin root and project directory the wrapper needs"
     ),
+    ("src/stayfixed/sync/git.py", "run", "env=full"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/git.py", "git", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/git.py", "ask", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/scan.py", "blob", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/scan.py", "_scan", "env=with_config(env or {}, SCAN_CONFIG)"): (
+        "the job's git environment, plus `git -c`-style entries that keep signature checks and "
+        "colour out of the patches gitleaks parses; the scanner's own `GITLEAKS_` variables are "
+        "dropped"
+    ),
+    ("src/stayfixed/sync/job.py", "_git", "env={**ctx.env, **(env or {})}"): (
+        _JOB_ENVIRONMENT + ", and for a replayed commit its author and its encoding"
+    ),
+    ("src/stayfixed/sync/job.py", "_commit_tree", "env=env"): (
+        "a replayed commit's own author, and its encoding as one `git -c`-style entry"
+    ),
+    ("src/stayfixed/sync/rules.py", "dirty_memory", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/rules.py", "commit_entries", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/rules.py", "offending_paths", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/rules.py", "range_is_memory_only", "env=env"): _JOB_ENVIRONMENT,
 }

@@ -5,10 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import fsops
+from stayfixed import binding, fsops
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.schema import Config
 from stayfixed.errors import Refusal
+from stayfixed.memory.api import build_composed, rerender_overlay_index
 from stayfixed.memory.index import (
     EXTRA_TITLE,
     INDEX_NAME,
@@ -25,8 +26,9 @@ from stayfixed.memory.index import (
     write_index,
 )
 from stayfixed.memory.notes import Provenance, read_note
-from stayfixed.memory.store import Store
+from stayfixed.memory.store import NO_RECORD, Store
 from tests.cli import cli
+from tests.memory.test_store import REMOTE, a_config, a_machine_file, a_repo, an_overlay
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
 CONFIG = """
@@ -124,6 +126,58 @@ def test_the_header_contract_is_present(tmp_path: Path) -> None:
 def test_sections_follow_the_declared_order(tmp_path: Path) -> None:
     headings = [line for line in rendered(tmp_path).splitlines() if line.startswith("## ")]
     assert headings[:3] == ["## Project — volatile", "## Project — stable", "## Developer"]
+
+
+def test_the_index_has_a_section_per_tag_after_the_common_notes(tmp_path: Path) -> None:
+    # The store holds a tag's notes as a `tag-<tag>` group the configuration does not list, and
+    # the one walk puts it after `developer`, the common notes, so the index names the notes the
+    # agent reads. Mutation (oracle): `mutations/`'s "walked groups leave out the tags".
+    store, config = a_store(tmp_path)
+    tagged = store.path / "tag-a"
+    tagged.mkdir()
+    (tagged / "t.md").write_text(note("t", index="T trigger → T"), encoding="utf-8")
+    store.groups["tag-a"] = tagged
+    text = render_index(reconcile(store, config, write=False), config, store)
+    headings = [line for line in text.splitlines() if line.startswith("## ")]
+    assert headings[:4] == [
+        "## Project — volatile",
+        "## Project — stable",
+        "## Developer",
+        f"## {section_title('tag-a')}",
+    ]
+    assert "(tag-a/t.md)" in text
+
+
+def test_walked_groups_follows_the_tag_list_order(tmp_path: Path) -> None:
+    # The tags' links are made in the order the project lists them (`b`, then `a`), whatever the
+    # directory listing or the alphabet says, and the walk keeps it.
+    from stayfixed import binding
+    from stayfixed.memory.composed import build
+    from stayfixed.memory.store import resolve, walked_groups
+    from tests.memory.test_store import (
+        REMOTE,
+        a_config,
+        a_machine_file,
+        a_repo,
+        a_tagged_overlay,
+    )
+
+    root = tmp_path / "project"
+    a_repo(root)
+    overlay = a_tagged_overlay(tmp_path, "b", "a")
+    binding.record(root, "widget", REMOTE)
+    id = binding.read_id(root)
+    assert id is not None
+    build(overlay, "widget", id)
+    config = a_config(root, "overlay", '["project-stable", "developer"]')
+    store = resolve(root, config, machine=a_machine_file(tmp_path, overlay))
+    assert store is not None
+    assert walked_groups(store, config) == ["project-stable", "developer", "tag-b", "tag-a"]
+    # A configuration that lists no `developer` puts the tags first.
+    bare = a_config(root, "overlay", '["project-stable"]')
+    again = resolve(root, bare, machine=a_machine_file(tmp_path, overlay))
+    assert again is not None
+    assert walked_groups(again, bare) == ["tag-b", "tag-a", "project-stable"]
 
 
 def test_a_startup_ranked_note_sorts_before_an_unranked_one(tmp_path: Path) -> None:
@@ -475,7 +529,7 @@ def test_an_unreviewed_notes_line_is_labelled_only_in_a_composed_stores_own_inde
     from stayfixed.memory.notes import walk
     from stayfixed.memory.reviewed import promote
 
-    promote(store, [n for n in walk(base, ["developer"]).notes if n.name == "a"])
+    promote(store.machine, [n for n in walk(base, ["developer"]).notes if n.name == "a"])
     lines = render_index(reconcile(store, config, write=False), config, store).splitlines()
     assert "- [B trigger → B](developer/b.md) [unreviewed]" in lines
     assert "- [A trigger → A](developer/a.md)" in lines
@@ -1096,3 +1150,54 @@ def test_a_store_with_no_group_directory_is_an_empty_store_not_a_refusal(
     if native:
         lines = (base / INDEX_NAME).read_text(encoding="utf-8").splitlines()
         assert all(line in lines for line in NATIVE_LINES), lines
+
+
+def _an_attached_checkout(tmp_path: Path, *, bound: bool = True) -> tuple[Path, Path, Path]:
+    """`(checkout, overlay, machine file)`: an overlay-mode checkout, bound to `widget` and its
+    composed store built as `attach` builds it, where `bound`."""
+    overlay = an_overlay(tmp_path)
+    machine = a_machine_file(tmp_path, overlay)
+    root = tmp_path / "widget"
+    a_repo(root)
+    a_config(root, "overlay")
+    if bound:
+        binding.record(root, "widget", REMOTE)
+        build_composed(overlay, "widget", binding.ensure_id(root))
+    return root, overlay, machine
+
+
+def test_rerender_writes_the_overlays_index_from_a_bound_checkout(tmp_path: Path) -> None:
+    # The note sync renders in process what `stayfixed memory index` renders from the checkout:
+    # into the overlay's copy, harvesting a line a session appended into its note.
+    root, overlay, machine = _an_attached_checkout(tmp_path)
+    share = overlay / "projects" / "widget" / "memory"
+    (share / "project-stable" / "n.md").write_text(note("n", index="N trigger"), encoding="utf-8")
+    (share / "project-stable" / "m.md").write_text(note("m"), encoding="utf-8")
+    (share / INDEX_NAME).write_text("- [Harvested](project-stable/m.md)\n", encoding="utf-8")
+
+    done = rerender_overlay_index(root, machine=machine)
+
+    assert done.reason is None
+    assert done.overlay_store == share.resolve()
+    text = (share / INDEX_NAME).read_text(encoding="utf-8")
+    assert "- [N trigger](project-stable/n.md)" in text and REGION_BEGIN in text
+    assert read_note(share / "project-stable" / "m.md").index == "Harvested"
+    assert not (root / INDEX_NAME).exists()
+
+
+def test_an_unbound_checkout_has_a_reason(tmp_path: Path) -> None:
+    root, overlay, machine = _an_attached_checkout(tmp_path, bound=False)
+
+    done = rerender_overlay_index(root, machine=machine)
+
+    assert done == type(done)(None, NO_RECORD)
+    assert not (overlay / "projects" / "widget" / "memory" / INDEX_NAME).exists()
+
+
+def test_a_machine_file_that_does_not_load_is_a_reason_not_a_raise(tmp_path: Path) -> None:
+    root, _, machine = _an_attached_checkout(tmp_path)
+    machine.write_text("[overlay\n", encoding="utf-8")
+
+    done = rerender_overlay_index(root, machine=machine)
+
+    assert done.overlay_store is None and done.reason

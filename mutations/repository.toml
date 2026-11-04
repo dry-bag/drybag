@@ -466,10 +466,21 @@ reddens = [
 [[mutation]]
 name = "a python3 below the floor leaves the session unaware that stayfixed is off"
 file = "hooks/run-hook.sh"
-before = '  off "$python" "$python is not python 3.11 or newer"'
-after = '  skip "$python is not python 3.11 or newer"'
+before = '    off "$bad" "$bad is not python 3.11 or newer"'
+after = '    skip "$bad is not python 3.11 or newer"'
 reddens = [
   "tests/hooks/test_wrapper.py::test_the_dispatching_session_start_says_the_hooks_are_off[below-the-floor]",
+]
+
+# `uv python find` runs the executable script a `.python-version` in its working directory names, so
+# uv asked from the project root would let a repository choose the program every hook starts.
+[[mutation]]
+name = "the hook wrapper asks uv from the project root"
+file = "hooks/run-hook.sh"
+before = "python=$(cd / && uv python find"
+after = "python=$(uv python find"
+reddens = [
+  "tests/hooks/test_wrapper.py::test_uv_is_asked_from_a_neutral_directory_and_a_repository_script_never_runs",
 ]
 
 [[mutation]]
@@ -590,8 +601,8 @@ reddens = [
 [[mutation]]
 name = "the interpreter probe runs with the environment's PYTHONPATH and user site again"
 file = "hooks/run-hook.sh"
-before = '"$python" -I -c '
-after = '"$python" -c '
+before = '"$1" -I -c '
+after = '"$1" -c '
 reddens = [
   "tests/hooks/test_wrapper.py::test_a_module_the_environment_plants_never_runs[pythonpath]",
   "tests/hooks/test_wrapper.py::test_a_module_the_environment_plants_never_runs[user-site]",
@@ -663,10 +674,10 @@ before = '''
           }
         ]
       }
-    ]
+    ],
 '''
 after = '''
-    ]
+    ],
 '''
 reddens = [
   "tests/hooks/test_hooks_json.py::test_the_shipped_hooks_register_post_tool_use_failure_for_bash",
@@ -1809,7 +1820,14 @@ reddens = [
 [[mutation]]
 name = "the README drops the git fetch row"
 file = "README.md"
-before = "| `git fetch` | `stayfixed bugs new` | the project's `origin` (note 1) | unless `--no-fetch` |"
+before = "| `git fetch` | `stayfixed bugs new`; the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the project's `origin`; for the note sync, the overlay's `origin` (note 1) | `bugs new` unless `--no-fetch`; the note sync on each run |"
+after = ''
+reddens = ["tests/test_outbound.py::test_the_readme_declares_every_program_that_reaches_a_network"]
+
+[[mutation]]
+name = "the README drops the git push row"
+file = "README.md"
+before = "| `git push` | the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the overlay's `origin` (note 1) | the note sync, when the commits on `main` that `origin` lacks are all notes and pass the secret scan |"
 after = ''
 reddens = ["tests/test_outbound.py::test_the_readme_declares_every_program_that_reaches_a_network"]
 
@@ -2725,16 +2743,24 @@ reddens = [
 [[mutation]]
 name = "the reference counts one doctor row more than the report has"
 file = "docs/cli.md"
-before = 'Thirteen checks over one installation.'
-after = 'Fourteen checks over one installation.'
+before = 'Fourteen checks over one installation.'
+after = 'Fifteen checks over one installation.'
 reddens = ["tests/test_documents.py::test_every_document_counts_the_rows_the_report_has"]
+
+# The reference's "Note sync" section states the throttle the hooks apply.
+[[mutation]]
+name = "the note sync section states another throttle"
+file = "docs/cli.md"
+before = "A trigger within 120 seconds of the last job"
+after = "A trigger within 90 seconds of the last job"
+reddens = ["tests/test_documents.py::test_the_note_sync_section_names_what_the_sync_keeps_and_records"]
 
 # And the reference's order sentence counts the core's rows and the private layer's apart.
 [[mutation]]
 name = "the reference miscounts the installation's own doctor rows"
 file = "docs/cli.md"
-before = '''The rows come in a fixed order: the installation's own eight first, then the five about the'''
-after = '''The rows come in a fixed order: the installation's own nine first, then the five about the'''
+before = '''The rows come in a fixed order: the installation's own eight first, then the six about the'''
+after = '''The rows come in a fixed order: the installation's own nine first, then the six about the'''
 reddens = [
   "tests/test_documents.py::test_the_reference_counts_the_cores_rows_and_the_private_layers_apart",
 ]

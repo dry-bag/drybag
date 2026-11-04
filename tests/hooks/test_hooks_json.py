@@ -47,7 +47,7 @@ SESSION_SOURCES = {"startup", "resume", "clear", "compact", "fork"}
 def test_there_are_entries_at_all() -> None:
     # The non-vacuity guard every walk-driven assertion below depends on: an empty `hooks`
     # object satisfies all six of them.
-    assert len(_entries()) == 10
+    assert len(_entries()) == 12
 
 
 def test_every_command_parses_against_the_real_parser() -> None:

@@ -668,7 +668,10 @@ def setup(
         notes.append(note)
         if previous is not None and previous != overlay_root:
             notes.append(REPLACED_ROOT.format(previous=quoted(str(previous))))
-        write_machine(machine, personal={}, overlay_root=overlay_root, machine={})
+        # An overlay this run made is one this machine syncs; recording an existing one is the
+        # owner's to switch on (`sync.switch`).
+        switch = {"enabled": True} if planned_overlay.kind != "record" else {}
+        write_machine(machine, personal={}, overlay_root=overlay_root, machine={}, sync=switch)
 
     return SetupReport(
         machine_written=True,
