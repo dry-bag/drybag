@@ -102,17 +102,6 @@ reddens = [
   "tests/hints/test_bashscan.py::test_command_words_strips_a_leading_assignment_and_wrapper",
 ]
 
-# `read_launch` names the launcher's words apart from the assignments, which a caller that runs
-# the command hands its environment and checks for forging.
-[[mutation]]
-name = "the launch keeps no launcher's words"
-file = "src/stayfixed/hints/bashscan.py"
-before = "            launcher.extend(segment[index:launched])"
-after = "            pass"
-reddens = [
-  "tests/hints/test_bashscan.py::test_read_launch_names_each_word_of_the_launch_by_its_part[uv-env-assignment]",
-]
-
 # Claude Code delivers a Bash command that exited non-zero to `PostToolUseFailure` and never to
 # `PostToolUse`, so with the red-run hint registered on `PostToolUse` alone the note never reached
 # a red run there. Each case asks the real dispatcher, so what reddens is the note the harness reads.

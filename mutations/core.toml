@@ -2577,12 +2577,12 @@ reddens = [
 ]
 
 # Under a root, `read_bounded` reaches a file as a write does, no link followed, the file's own
-# included, and judges what it opened by the descriptor; `.pyc` bytecode is read this way. Following
-# a symlinked one reads a file outside every code root, opening a named pipe without `O_NONBLOCK`
-# waits for a writer for good (a link to `/dev/stdin` hung the red-run walk in a terminal), and a pipe
-# whose writer has written a header reads like bytecode.
+# included, and judges what it opened by the descriptor; the sync reads each dirty memory note this
+# way for the mark its back-off compares. Following a symlinked note reads a file outside the
+# overlay, and opening a named pipe without `O_NONBLOCK` waits for a writer for good (a link to
+# `/dev/stdin` once hung a reader in a terminal).
 [[mutation]]
-name = "a symlinked .pyc is followed"
+name = "a symlinked note is followed"
 file = "src/stayfixed/fsops.py"
 before = '_WITHIN_OPEN = _REGULAR_OPEN | getattr(os, "O_NOFOLLOW", 0)'
 after = "_WITHIN_OPEN = _REGULAR_OPEN"
@@ -2603,14 +2603,14 @@ reddens = [
 ]
 
 [[mutation]]
-name = "a .pyc that is a named pipe is opened waiting for a writer"
+name = "a note that is a named pipe is opened waiting for a writer"
 file = "src/stayfixed/fsops.py"
 before = '_WITHIN_OPEN = _REGULAR_OPEN | getattr(os, "O_NOFOLLOW", 0)'
 after = '_WITHIN_OPEN = (_REGULAR_OPEN & ~os.O_NONBLOCK) | getattr(os, "O_NOFOLLOW", 0)'
 reddens = ["tests/test_fsops.py::test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer"]
 
 [[mutation]]
-name = "a .pyc that is not a regular file is read"
+name = "a note that is not a regular file is read"
 file = "src/stayfixed/fsops.py"
 before = """        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise NotRegularFile(errno.EINVAL, "not a regular file", relative)"""
@@ -4120,7 +4120,7 @@ reddens = [
 [[mutation]]
 name = "a timed-out custom gate's children run on after it reported"
 file = "src/stayfixed/processes.py"
-before = "        os.killpg(process.pid, signum)"
+before = "        os.killpg(process.pid, signal.SIGKILL)"
 after = "        process.kill()"
 reddens = ["tests/ledger/test_regressions.py::test_a_timed_out_regression_ends_its_whole_group"]
 
@@ -4330,6 +4330,22 @@ reddens = [
   "tests/ledger/test_scan.py::test_a_code_root_outside_the_project_is_skipped_not_scanned",
   "tests/test_roots.py::test_each_code_root_no_walk_takes_is_named_with_its_reason[outside]",
 ]
+
+# Where git cannot list the files, `ledger.scan` walks each code root and adds up what it finds, so
+# a root inside another doubled the count `bugs check` prints for a mention under both.
+[[mutation]]
+name = "a code root inside a kept one is walked again"
+file = "src/stayfixed/roots.py"
+before = "        if any(_covers(kept, candidate) for kept in found):"
+after = "        if False:"
+reddens = ["tests/test_roots.py::test_no_directory_is_walked_twice[inside]"]
+
+[[mutation]]
+name = "a code root around a kept one leaves it walked"
+file = "src/stayfixed/roots.py"
+before = "        found = [kept for kept in found if not _covers(candidate, kept)]"
+after = "        found = found"
+reddens = ["tests/test_roots.py::test_no_directory_is_walked_twice[around]"]
 
 # `contained()` took on the write's component rule, and `contained_roots` catches its refusal and
 # moves on — so `code_roots = ["src/"]` was silently dropped from every count the field feeds. The

@@ -54,8 +54,7 @@ def test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked(
     `contained()` took on the write's component rule, which refuses a trailing `/`, a doubled
     `/` and a leading `./` because the engine cannot write through them. A code root is only
     walked, and `contained_roots` caught the refusal and moved on — so both entries left the
-    hygiene counts and the citation roots with nothing saying so. They are folded before the
-    question now.
+    mention and citation scans with nothing saying so. They are folded before the question now.
 
     Oracle: `mutations/`'s "a code root spelled with a slash is dropped again".
     """
@@ -66,6 +65,23 @@ def test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked(
         encoding="utf-8",
     )
     assert contained_roots(root, config(root)) == [root / "src", root / "tests"]
+
+
+@pytest.mark.parametrize(
+    "roots", ['["src", "src/pkg"]', '["src/pkg", "src"]'], ids=["inside", "around"]
+)
+def test_no_directory_is_walked_twice(tmp_path: Path, roots: str) -> None:
+    # Where git cannot list the files, `ledger.scan` walks each root and adds up what it finds:
+    # with `["src", "src/pkg"]`, `bugs check` said one mention was "referenced 2 time(s)".
+    # Mutations (oracle): `mutations/`'s "a code root inside a kept one is walked again" ->
+    # `inside`; "a code root around a kept one leaves it walked" -> `around`.
+    root = repo(tmp_path)
+    (root / "src" / "pkg").mkdir()
+    (root / CONFIG_FILE).write_text(
+        CONFIG.replace('code_roots = ["src", "tests"]', f"code_roots = {roots}"),
+        encoding="utf-8",
+    )
+    assert contained_roots(root, config(root)) == [root / "src"]
 
 
 @pytest.mark.parametrize(

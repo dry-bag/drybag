@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import signal
 import subprocess
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,10 +29,6 @@ if TYPE_CHECKING:
 # minutes, the value `[gates] custom_timeout_seconds` held in `presets/recommended.toml` before
 # the gates went, so a project that ran its regressions under that bound runs them under the same.
 DEFAULT_TIMEOUT_SECONDS = 600
-# A named cap: how long a regression's group has to exit on SIGTERM before it is sent SIGKILL
-# (`processes.end`): long enough for a command that ends what it started on SIGTERM, short beside
-# any timeout, so a group that ignores SIGTERM is still ended.
-TERM_GRACE_SECONDS = 2
 
 PASSED = "passed"
 FAILED = "failed"
@@ -56,24 +51,20 @@ def regressions(root: Path, config: Config, *, timeout: int) -> list[tuple[Entry
     sends, each read as a Ctrl-C while the runs go) is the last."""
     ran: list[tuple[Entry, Run]] = []
     signals = (signal.SIGTERM, signal.SIGHUP)
-    kept = {number: signal.signal(number, signal.default_int_handler) for number in signals}
-    try:
-        for entry in load_entries(root, bug_register(config)):
-            argv = entry.lists["regression"]
-            if entry.status != "fixed" or not argv:
-                continue
-            run = _run(argv, root, timeout)
-            ran.append((entry, run))
-            if run.verdict == INTERRUPTED:
-                break
-    finally:
-        for number, handler in kept.items():
-            signal.signal(number, handler)
+    for number in signals:
+        signal.signal(number, signal.default_int_handler)
+    for entry in load_entries(root, bug_register(config)):
+        argv = entry.lists["regression"]
+        if entry.status != "fixed" or not argv:
+            continue
+        run = _run(argv, root, timeout)
+        ran.append((entry, run))
+        if run.verdict == INTERRUPTED:
+            break
     return ran
 
 
 def _run(argv: Sequence[str], root: Path, timeout: int) -> Run:
-    sys.stderr.flush()
     try:
         # S603: the entry's own argv, list form, never a shell. Standard input is `/dev/null`, never
         # the caller's, which could drive the command; its standard output is stayfixed's standard
@@ -92,7 +83,8 @@ def _run(argv: Sequence[str], root: Path, timeout: int) -> Run:
         stopped = Run(INTERRUPTED, "the run was interrupted and ended")
     finally:
         # However it finished, what it left in its group goes, while its pid is unreaped.
-        processes.end(process, TERM_GRACE_SECONDS)
+        processes.kill_group(process)
+        process.wait(timeout=processes.KILL_WAIT_SECONDS)
     if stopped is not None:
         return stopped
     code = process.returncode

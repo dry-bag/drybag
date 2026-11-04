@@ -403,12 +403,10 @@ def test_the_command_uv_runs_starts_at_the_first_word_the_runner_table_names(
     command: str, launcher: str
 ) -> None:
     """No option of uv's is read to find the command: every word before the first the runner
-    table reads as a test run is the launcher's, handed to uv as typed. Oracle: `mutations/`'s "the
-    command `uv run` launches starts at its first word that is no option"."""
+    table reads as a test run is the launcher's. Oracle: `mutations/`'s "the command `uv run`
+    launches starts at its first word that is no option"."""
     words = command.split()
-    launch = bashscan.read_launch(words, names_a_test_run)
-    assert launch.launcher == tuple(launcher.split())
-    assert launch.command == tuple(words[len(launch.launcher) :])
+    assert bashscan.command_words(words, names_a_test_run) == words[len(launcher.split()) :]
 
 
 @pytest.mark.parametrize(
@@ -429,27 +427,19 @@ def test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole(
     assert bashscan.command_words(command.split(), recognises) == command.split()
 
 
-# --- `read_launch`: the same walk, every word of the launch named by its part ------------------
-
-
 @pytest.mark.parametrize(
-    ("command", "assignments", "launcher", "program"),
+    ("command", "program"),
     [
-        ("A=1 env B=2 pytest -q", ["A=1", "B=2"], [], ["pytest", "-q"]),
+        ("A=1 env B=2 pytest -q", ["pytest", "-q"]),
         # Every word before the command is the launcher's, an `env` and its assignments or an
         # assignment-shaped word too, which a shell hands to uv as a word.
-        ("uv run env FORGE=x pytest", [], ["uv", "run", "env", "FORGE=x"], ["pytest"]),
-        ("env A=1 uv run env B=2 pytest", ["A=1"], ["uv", "run", "env", "B=2"], ["pytest"]),
-        (
-            "uv --config-file c.toml run --env-file=.env --with x==1 pytest",
-            [],
-            ["uv", "--config-file", "c.toml", "run", "--env-file=.env", "--with", "x==1"],
-            ["pytest"],
-        ),
-        ("uv run FOO=1 pytest", [], ["uv", "run", "FOO=1"], ["pytest"]),
-        ("uv run -- pytest", [], ["uv", "run", "--"], ["pytest"]),
-        ("uv run --locked ruff check", [], [], "uv run --locked ruff check"),
-        ("env -i A=1 pytest", [], [], ["-i", "A=1", "pytest"]),
+        ("uv run env FORGE=x pytest", ["pytest"]),
+        ("env A=1 uv run env B=2 pytest", ["pytest"]),
+        ("uv --config-file c.toml run --env-file=.env --with x==1 pytest", ["pytest"]),
+        ("uv run FOO=1 pytest", ["pytest"]),
+        ("uv run -- pytest", ["pytest"]),
+        ("uv run --locked ruff check", "uv run --locked ruff check"),
+        ("env -i A=1 pytest", ["-i", "A=1", "pytest"]),
     ],
     ids=[
         "assignments-and-env",
@@ -462,15 +452,8 @@ def test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole(
         "env-option",
     ],
 )
-def test_read_launch_names_each_word_of_the_launch_by_its_part(
-    command: str, assignments: list[str], launcher: list[str], program: list[str] | str
+def test_the_command_starts_past_every_assignment_and_launcher_word(
+    command: str, program: list[str] | str
 ) -> None:
-    """A caller that runs the command needs more than the program: every assignment the shell or
-    `env` would make before the launcher, and the launcher's own words apart from them.
-    `command_words` is the same walk's last part. Oracle: `mutations/`'s "the launch keeps no
-    launcher's words"."""
-    words = command.split()
     expected = program.split() if isinstance(program, str) else program
-    launch = bashscan.read_launch(words, names_a_test_run)
-    assert launch == bashscan.Launch(tuple(assignments), tuple(launcher), tuple(expected))
-    assert bashscan.command_words(words, names_a_test_run) == expected
+    assert bashscan.command_words(command.split(), names_a_test_run) == expected

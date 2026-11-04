@@ -913,8 +913,8 @@ still open and a `void` one is a renumber's pointer.
 Each run's exit code is its verdict, and no test runner's report is read: `passed` (exit 0),
 `failed` (any other exit), `timed-out` (past `--timeout`), `interrupted` (a Ctrl-C, or a SIGTERM
 or SIGHUP to stayfixed, during the run) or `not-run` (the argv could not be started). Each run
-starts in a session of its own, and whatever it started in that process group is ended however it
-finishes, SIGTERM first and then SIGKILL. An interrupted run is the last: nothing after it starts.
+starts in a session of its own, and whatever it started in that process group is ended with SIGKILL
+however it finishes. An interrupted run is the last: nothing after it starts.
 
 The line names each run, `<id>: <verdict>: <detail>`, the detail being the exit code (`exit 3`),
 the bound it ran past, or why it could not start, and ends `<n> regression(s), <m> not passed`;

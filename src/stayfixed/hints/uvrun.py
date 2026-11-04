@@ -1,10 +1,10 @@
-"""Where `uv run` stops and the command it launches starts, for `bashscan.read_launch`.
+"""Where `uv run` stops and the command it launches starts, for `bashscan.command_words`.
 
 uv is one stack's launcher, and this module is where the shared scanner keeps it, so the scanner
 itself names no stack (`tests/test_language_neutral.py` pardons this file for that reason). None
 of uv's option grammar is read: the command starts at the first word after `run` that the caller
-recognises (`bashscan.read_launch`), and every word before it is the launcher's, handed to uv as
-typed. It never runs uv.
+recognises (`bashscan.command_words`), and every word before it is the launcher's. It never runs
+uv.
 """
 
 from __future__ import annotations

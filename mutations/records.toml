@@ -2932,8 +2932,9 @@ after = '        parts.append(f"\n## {section.heading}\n\n")'
 reddens = ["tests/ledger/test_literals.py::test_the_index_is_the_one_it_rendered"]
 
 # `bugs regressions` runs a fixed entry's regression and no other's, judges each by its exit code,
-# counts only `passed` as passed, starts nothing after a run an interrupt ended, reads a SIGTERM as
-# that interrupt, and keeps the command's output off `--json`'s standard output.
+# counts only `passed` as passed, starts nothing after a run an interrupt ended, reads a SIGTERM or
+# a SIGHUP as that interrupt, keeps the command's output off `--json`'s standard output, and hands
+# it no standard input.
 [[mutation]]
 name = "bugs regressions runs an entry of any status"
 file = "src/stayfixed/ledger/regressions.py"
@@ -2958,8 +2959,8 @@ reddens = ["tests/ledger/test_regressions.py::test_an_exit_0_is_passed_and_any_o
 [[mutation]]
 name = "bugs regressions goes on past an interrupt"
 file = "src/stayfixed/ledger/regressions.py"
-before = "            if run.verdict == INTERRUPTED:\n                break"
-after = "            if False:\n                break"
+before = "        if run.verdict == INTERRUPTED:\n            break"
+after = "        if False:\n            break"
 reddens = [
   "tests/ledger/test_regressions.py::test_an_interrupted_regression_starts_no_further_one[INT]",
   "tests/ledger/test_regressions.py::test_an_interrupted_regression_starts_no_further_one[TERM]",
@@ -2973,11 +2974,25 @@ after = "    signals = (signal.SIGHUP,)"
 reddens = ["tests/ledger/test_regressions.py::test_an_interrupted_regression_starts_no_further_one[TERM]"]
 
 [[mutation]]
+name = "bugs regressions lets a SIGHUP end stayfixed"
+file = "src/stayfixed/ledger/regressions.py"
+before = "    signals = (signal.SIGTERM, signal.SIGHUP)"
+after = "    signals = (signal.SIGTERM,)"
+reddens = ["tests/ledger/test_regressions.py::test_an_interrupted_regression_starts_no_further_one[HUP]"]
+
+[[mutation]]
 name = "bugs regressions prints the command's output on standard output"
 file = "src/stayfixed/ledger/regressions.py"
 before = "            list(argv), cwd=root, stdin=subprocess.DEVNULL, stdout=2, start_new_session=True"
 after = "            list(argv), cwd=root, stdin=subprocess.DEVNULL, stdout=None, start_new_session=True"
 reddens = ["tests/ledger/test_regressions.py::test_json_stays_one_object_while_the_command_prints"]
+
+[[mutation]]
+name = "bugs regressions hands the command the caller's standard input"
+file = "src/stayfixed/ledger/regressions.py"
+before = "            list(argv), cwd=root, stdin=subprocess.DEVNULL, stdout=2, start_new_session=True"
+after = "            list(argv), cwd=root, stdin=None, stdout=2, start_new_session=True"
+reddens = ["tests/ledger/test_regressions.py::test_a_regression_reads_nothing_piped_into_stayfixed"]
 
 # The origin note names both remotes; a token in either one's userinfo is taken out before it does.
 [[mutation]]

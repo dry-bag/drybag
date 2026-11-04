@@ -171,26 +171,62 @@ def test_a_timed_out_regression_ends_its_whole_group(tmp_path: Path) -> None:
 
 
 @needs_git
-@pytest.mark.parametrize("signal_name", ["INT", "TERM"])
+@pytest.mark.parametrize("signal_name", ["INT", "TERM", "HUP"])
 def test_an_interrupted_regression_starts_no_further_one(tmp_path: Path, signal_name: str) -> None:
-    # The first regression sends stayfixed the signal a Ctrl-C or a caller's bound would, while it
-    # runs; the second would leave a file behind. A loop that went on would start it after the
-    # signal. A SIGTERM the command takes no handler for lands on this case's own, which does
-    # nothing, so the run times out instead of ending this process. Mutation (oracle):
-    # `mutations/`'s "bugs regressions goes on past an interrupt" -> the second entry runs;
-    # `mutations/`'s "bugs regressions lets a SIGTERM end stayfixed" -> the first times out.
-    kept = signal.signal(signal.SIGTERM, lambda signum, frame: None)
+    # The first regression sends stayfixed the signal a Ctrl-C, a caller's bound or a closed
+    # terminal would, while its background child holds the FIFO open; the second would leave a
+    # file behind. A loop that went on would start it after the signal, and a group left running
+    # would keep the FIFO open. A SIGTERM or SIGHUP the command takes no handler for lands on this
+    # case's own, which does nothing, so the run times out instead of ending this process.
+    # Mutation (oracle): `mutations/`'s "bugs regressions goes on past an interrupt" -> the second
+    # entry runs; "bugs regressions lets a SIGTERM end stayfixed" -> `TERM` times out; "bugs
+    # regressions lets a SIGHUP end stayfixed" -> `HUP` times out.
+    pipe = tmp_path / "held"
+    os.mkfifo(pipe)
+    fifo = os.open(pipe, os.O_RDONLY | os.O_NONBLOCK)
+    quiet = {
+        number: signal.signal(number, lambda *_: None) for number in (signal.SIGTERM, signal.SIGHUP)
+    }
     try:
         late = tmp_path / "late"
-        signalled = ["sh", "-c", f"sleep 0.2; kill -{signal_name} {os.getpid()}; sleep 30"]
+        signalled = [
+            "sh",
+            "-c",
+            f"exec 3>'{pipe}'; sleep 30 & sleep 0.2; kill -{signal_name} {os.getpid()}; wait",
+        ]
         entries = {"BR-001": ("fixed", signalled), "BR-002": ("fixed", ["touch", str(late)])}
         code, data = as_json(tmp_path, ledger(tmp_path, entries), "--timeout", "3")
+        released = _released(fifo)
     finally:
-        signal.signal(signal.SIGTERM, kept)
+        for number, handler in quiet.items():
+            signal.signal(number, handler)
+        os.close(fifo)
     rows = data["regressions"]
     assert [(row["id"], row["verdict"]) for row in rows] == [("BR-001", "interrupted")]  # type: ignore[attr-defined]
     assert code == 1
     assert not late.exists()
+    assert released
+
+
+@needs_git
+def test_a_regression_reads_nothing_piped_into_stayfixed(tmp_path: Path) -> None:
+    # Whatever feeds stayfixed's standard input, an agent or a pipe upstream, could drive the
+    # command (a runner's debugger takes its commands there), so each run's is `/dev/null` and a
+    # command that reads it sees its end at once. Mutation (oracle): `mutations/`'s "bugs
+    # regressions hands the command the caller's standard input" -> it reads the line and fails.
+    root = ledger(tmp_path, {"BR-001": ("fixed", ["sh", "-c", "! read line"])})
+    reader, writer = os.pipe()
+    os.write(writer, b"pass\n")
+    os.close(writer)
+    saved = os.dup(0)
+    try:
+        os.dup2(reader, 0)
+        code, data = as_json(tmp_path, root)
+    finally:
+        os.dup2(saved, 0)
+        os.close(reader)
+        os.close(saved)
+    assert (code, data["not_passed"]) == (0, 0)
 
 
 @needs_git
