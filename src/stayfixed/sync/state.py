@@ -149,73 +149,48 @@ def _aware(moment: datetime) -> datetime:
     return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
-def _get(data: Any, key: str, where: str, kind: str = "string", *, none: bool = False) -> Any:
-    """`data[key]` held to `kind` (`string`, `timestamp`, `string list` as a tuple, `object`), or
-    `None` where `none` allows it; `where` is the dotted path to `data`, for the message."""
-    if not isinstance(data, dict):
-        raise StateUnreadable(f"{where.rstrip('.') or 'the state'} is not an object")
-    if key not in data:
-        raise StateUnreadable(f"{where}{key} is missing")
-    value = data[key]
-    if value is None and none:
-        return None
-    text = isinstance(value, str)
-    ok = {
-        "string": text,
-        "timestamp": text and _readable_time(value),
-        "string list": isinstance(value, list) and all(isinstance(item, str) for item in value),
-        "object": isinstance(value, dict),
-    }[kind]
-    if not ok:
-        raise StateUnreadable(f"{where}{key} is not a valid {kind}")
-    return tuple(value) if kind == "string list" else value
+def _text(value: Any, *, none: bool = False) -> Any:
+    if isinstance(value, str) or (none and value is None):
+        return value
+    raise TypeError(value)
 
 
-def _readable_time(text: str) -> bool:
-    try:
-        parse_time(text)
-    except ValueError:
-        return False
-    return True
+def _texts(value: Any) -> tuple[str, ...]:
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return tuple(value)
+    raise TypeError(value)
+
+
+def _time(value: Any, *, none: bool = False) -> Any:
+    if _text(value, none=none) is not None:
+        parse_time(value)
+    return value
 
 
 def _parse(data: dict[str, Any]) -> SyncState:
-    raw = _get(data, "outcome", "", "object")
-    state = _get(raw, "state", "outcome.")
-    if state not in OUTCOMES:
-        raise StateUnreadable("outcome.state is not a sync outcome")
-    outcome = Outcome(
-        state=state,
-        at=_get(raw, "at", "outcome.", "timestamp"),
-        detail=_get(raw, "detail", "outcome.", none=True),
-    )
-    raw = _get(data, "holds", "", "object")
-    up, local = _get(raw, "upstream", "holds.", "object"), _get(raw, "local", "holds.", "object")
-    holds = Holds(
-        upstream_paths=_get(up, "paths", "holds.upstream.", "string list"),
-        local_commits=_get(local, "commits", "holds.local.", "string list"),
-        upstream_why=_get(up, "why", "holds.upstream.", none=True),
-    )
-    if holds.upstream_why not in (None, OUTSIDE, UNREADABLE, REWRITTEN):
-        raise StateUnreadable("holds.upstream.why is not a reason the job holds for")
-    raw = _get(data, "pending_align", "", "object", none=True)
-    align = None
-    if raw is not None:
-        align = PendingAlign(
-            _get(raw, "from", "pending_align."),
-            _get(raw, "to", "pending_align."),
-            _get(raw, "paths", "pending_align.", "string list"),
+    """The state in `data`, every field of the type the job writes, or `StateUnreadable`."""
+    try:
+        raw, up, local = data["outcome"], data["holds"]["upstream"], data["holds"]["local"]
+        align = data["pending_align"]
+        state = SyncState(
+            overlay=_text(data["overlay"]),
+            outcome=Outcome(_text(raw["state"]), _time(raw["at"]), _text(raw["detail"], none=True)),
+            holds=Holds(_texts(up["paths"]), _texts(local["commits"]), _text(up["why"], none=True)),
+            fetched_sha=_text(data["fetched_sha"], none=True),
+            last_job_at=_time(data["last_job_at"], none=True),
+            pending_align=None
+            if align is None
+            else PendingAlign(_text(align["from"]), _text(align["to"]), _texts(align["paths"])),
+            head=_text(data["head"], none=True),
+            dirty=_text(data["dirty"], none=True),
         )
-    return SyncState(
-        overlay=_get(data, "overlay", ""),
-        outcome=outcome,
-        holds=holds,
-        fetched_sha=_get(data, "fetched_sha", "", none=True),
-        last_job_at=_get(data, "last_job_at", "", "timestamp", none=True),
-        pending_align=align,
-        head=_get(data, "head", "", none=True),
-        dirty=_get(data, "dirty", "", none=True),
-    )
+    except (KeyError, TypeError, ValueError):
+        raise StateUnreadable(f"{STATE_FILE} does not hold the fields the job writes") from None
+    if state.outcome.state not in OUTCOMES:
+        raise StateUnreadable("outcome.state is not a sync outcome")
+    if state.holds.upstream_why not in (None, OUTSIDE, UNREADABLE, REWRITTEN):
+        raise StateUnreadable("holds.upstream.why is not a reason the job holds for")
+    return state
 
 
 def read_state(d: Path) -> SyncState | None:

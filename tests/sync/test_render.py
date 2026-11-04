@@ -186,18 +186,19 @@ def test_an_index_that_is_a_link_is_not_rendered_through(
     assert ("A", "projects/alpha/memory/project-stable/alpha-new.md") in committed(a)
 
 
-def test_nothing_renders_while_the_machine_file_records_another_overlay(
+def test_a_job_on_an_overlay_the_machine_file_does_not_record_leaves_its_indexes_out(
     overlays: Overlays,
 ) -> None:
     # The render writes into the overlay the machine file records, so a job on any other one
-    # renders nothing and leaves the indexes out.
+    # (the machine file changed while it ran) reports its indexes as not this overlay's and
+    # leaves them out of its commit.
     a, b = overlays.a, overlays.b
     alpha = _index(a, "alpha")
     write(b, "projects/alpha/memory/project-stable/new.md", note_text("new"))
 
     reasons = prerender(b, _dirty(b), overlays.state_dir)
 
-    assert set(reasons) == {"alpha"} and "another overlay" in reasons["alpha"]
+    assert set(reasons) == {"alpha"} and "not this overlay's" in reasons["alpha"]
     assert _index(a, "alpha") == alpha
 
 

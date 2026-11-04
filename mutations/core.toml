@@ -5869,7 +5869,7 @@ reddens = [
 [[mutation]]
 name = "a state naming an outcome the job lacks is accepted"
 file = "src/stayfixed/sync/state.py"
-before = "    if state not in OUTCOMES:"
+before = "    if state.outcome.state not in OUTCOMES:"
 after = "    if False:"
 reddens = ["tests/sync/test_state.py::test_a_corrupt_state_is_unreadable_not_absent"]
 

@@ -187,10 +187,14 @@ def _written(tmp_path: Path) -> dict[str, object]:
         pytest.param(lambda d: "", "JSON", id="empty"),
         pytest.param(lambda d: "[]", "not a JSON object", id="a-list"),
         pytest.param(lambda d: "[" * 100000 + "]" * 100000, "nested", id="deep-nesting"),
-        pytest.param(lambda d: _without("overlay", d), "overlay is missing", id="no-overlay"),
-        pytest.param(lambda d: _without("outcome.at", d), "outcome.at is missing", id="no-time"),
         pytest.param(
-            lambda d: json.dumps({**d, "overlay": 3}), "overlay is not a valid string", id="type"
+            lambda d: _without("overlay", d), "the fields the job writes", id="no-overlay"
+        ),
+        pytest.param(
+            lambda d: _without("outcome.at", d), "the fields the job writes", id="no-time"
+        ),
+        pytest.param(
+            lambda d: json.dumps({**d, "overlay": 3}), "the fields the job writes", id="type"
         ),
         pytest.param(
             lambda d: json.dumps({**d, "outcome": {**d["outcome"], "state": "fine"}}),
@@ -199,12 +203,12 @@ def _written(tmp_path: Path) -> dict[str, object]:
         ),
         pytest.param(
             lambda d: json.dumps({**d, "last_job_at": "yesterday"}),
-            "not a valid timestamp",
+            "the fields the job writes",
             id="time",
         ),
         pytest.param(
             lambda d: json.dumps({**d, "holds": {"upstream": {"paths": "a"}, "local": {}}}),
-            "not a valid string list",
+            "the fields the job writes",
             id="paths",
         ),
         pytest.param(
@@ -215,7 +219,7 @@ def _written(tmp_path: Path) -> dict[str, object]:
             id="why",
         ),
         pytest.param(
-            lambda d: json.dumps({**d, "outcome": []}), "outcome is not a valid object", id="shape"
+            lambda d: json.dumps({**d, "outcome": []}), "the fields the job writes", id="shape"
         ),
     ],
 )

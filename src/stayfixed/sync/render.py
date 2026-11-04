@@ -20,7 +20,6 @@ from pathlib import Path
 
 from stayfixed import fsops
 from stayfixed.binding import bound_project
-from stayfixed.config.overlay import overlay_root
 from stayfixed.errors import StayfixedError
 from stayfixed.memory.api import COMMON, PROJECTS, STORE_DIR, rerender_overlay_index
 from stayfixed.sync.rules import INDEX_NAME, index_of, memory_path
@@ -91,12 +90,6 @@ def prerender(
     named = {entry.name for entry in parsed if entry.scope == "project" and entry.name}
     wanted = {name for name in named | set(also) if _plain(name)}
     shared = any(entry.scope != "project" for entry in parsed)
-    try:
-        here = overlay_root(None)
-    except StayfixedError:
-        here = None
-    if here is None or here.resolve() != overlay.resolve():
-        return dict.fromkeys(wanted, "not pre-rendered: the machine file records another overlay")
     reasons: dict[str, str] = {}
     done: set[str] = set()
     for root in checkouts(d):
