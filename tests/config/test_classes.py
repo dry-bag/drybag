@@ -76,7 +76,6 @@ TABLE_ROWS = [
     ("memory.mode", KeyClass.PREFERENCE),
     ("memory.groups", KeyClass.PREFERENCE),
     ("memory.index_extra", KeyClass.PREFERENCE),
-    ("stayfixed.profile", KeyClass.PREFERENCE),
     ("budgets.memory_index_words", KeyClass.SESSION_PARAMETER),
     ("budgets.startup_rules_words", KeyClass.SESSION_PARAMETER),
     ("budgets.volatile_notes_words", KeyClass.SESSION_PARAMETER),

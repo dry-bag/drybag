@@ -174,7 +174,6 @@ def test_preferences_names_the_layer_and_hides_free_text(tmp_path: Path) -> None
         "memory.mode = local-only (repository)",
         "memory.groups (repository)",
         "memory.index_extra (repository)",
-        "stayfixed.profile (preset)",
     ):
         assert named in checked.detail, named
     assert "IGNORE-PRIOR-RULES" not in checked.detail

@@ -51,12 +51,11 @@ def test_each_default_is_what_init_yes_alone_writes(tmp_path: Path, key: str) ->
     # The card promises that each default is what `init --yes` would take, and the skill asks
     # the person to confirm the card, not the file. The two are computed in two places, so each
     # is held to the other over a repository where no default is the preset's: a `develop`
-    # branch, a harness directory and a profile's markers. Mutation (by hand): the card's base
+    # branch and a harness directory. Mutation (by hand): the card's base
     # branch taken from the preset -> the `project.base_branch` case reddens.
     root = repository(tmp_path, origin=None)
     git(root, "symbolic-ref", "HEAD", "refs/heads/develop")
     (root / ".codex").mkdir()
-    (root / "pyproject.toml").write_text("[project]\nname = 'widget'\n", encoding="utf-8")
     default = _schema(tmp_path, root)["properties"][key]["default"]
     written = init(root, machine=tmp_path / "absent.toml", yes=True, dry_run=False)
     assert not written.refused
@@ -72,7 +71,7 @@ def test_the_schema_keys_are_the_stayfixed_toml_keys_the_answers_write(tmp_path:
     schema = _schema(tmp_path, repository(tmp_path))
     assert schema["type"] == "object"
     assert tuple(schema["properties"]) == PROPERTIES == tuple(schema["required"])
-    assert len(PROPERTIES) == 7
+    assert len(PROPERTIES) == 6
     for key, question in schema["properties"].items():
         assert question["x-stayfixed-flag"] == FLAGS[key], key
 
@@ -92,7 +91,6 @@ def test_the_skill_reads_the_order_to_ask_in_from_required_in_the_json(tmp_path:
         "project.name",
         "project.base_branch",
         "memory.mode",
-        "stayfixed.profile",
         "commit_messages.attribution_check",
         "stayfixed.agents",
         "plugins",
@@ -113,7 +111,6 @@ def test_each_default_says_where_it_came_from(tmp_path: Path) -> None:
     no_origin = _defaults(_schema(tmp_path / "b", repository(tmp_path / "b", origin=None)))
     assert no_origin["project.base_branch"] == ("main", "current branch")
     assert defaults["stayfixed.agents"] == (["claude", "codex"], "default")
-    assert defaults["stayfixed.profile"] == ("", "no profile markers")
 
 
 def test_the_free_text_patterns_are_anchored_for_ecma_262() -> None:
@@ -188,10 +185,9 @@ def test_the_questions_are_refused_where_init_would_refuse(tmp_path: Path) -> No
 
 
 # The order the guided walk asks in, after the name and the base branch it confirms first:
-# memory, the profile, attribution, the agents, and the recommended plugins last.
+# memory, attribution, the agents, and the recommended plugins last.
 GUIDED = (
     "memory.mode",
-    "stayfixed.profile",
     "commit_messages.attribution_check",
     "stayfixed.agents",
     "plugins",

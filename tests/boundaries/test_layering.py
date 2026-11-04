@@ -104,10 +104,10 @@ def _cycles(edges: set[tuple[str, str]]) -> list[list[str]]:
 
 
 def test_the_packages_import_one_another_without_a_cycle_at_module_level() -> None:
-    # Two package cycles stood in the tree: the session guard imported the profiles' hint
-    # machinery while the Python profile's hint imported the guard's roots, and the configuration
-    # loader printed through `findings`, which printed through `printed`, which read its grammar
-    # from the configuration's schema. Neither failed an import, because each was entered from
+    # Two package cycles stood in the tree: the session guard imported a stack's hint machinery
+    # while that hint imported the guard's roots, and the configuration loader printed through
+    # `findings`, which printed through `printed`, which read its grammar from the
+    # configuration's schema. Neither failed an import, because each was entered from
     # one side only, so nothing said so until a review drew the graph.
     #
     # What is counted is an import that runs when its module is imported -- the same reading the
@@ -143,18 +143,18 @@ def test_the_package_graph_reads_imports_that_run_and_finds_every_cycle() -> Non
     # hand: reading function bodies, reading `if TYPE_CHECKING:` bodies or dropping the
     # own-package filter each reddens the first assertion, and a `_cycles` that kept components
     # of one package, or read reachability one way only, reddens the second.
-    packages = frozenset({"config", "findings", "guards", "printed", "profiles"})
+    packages = frozenset({"config", "findings", "guards", "printed", "ledger"})
     text = (
         "from stayfixed.findings import listed\n"
         "if TYPE_CHECKING:\n    from stayfixed.config.schema import Config\n"
         "else:\n    import stayfixed.printed\n"
         "def f():\n    from stayfixed.guards.api import contained_roots\n"
-        "from . import sibling\nfrom stayfixed.profiles import shipped\n"
+        "from . import sibling\nfrom stayfixed.ledger import scan\n"
         "from stayfixed import nothing_here\n"
     )
-    assert _package_imports("profiles/python/hygiene.py", text, packages) == {
-        ("profiles", "findings"),
-        ("profiles", "printed"),
+    assert _package_imports("ledger/check.py", text, packages) == {
+        ("ledger", "findings"),
+        ("ledger", "printed"),
     }
     edges = {("a", "b"), ("b", "c"), ("c", "a"), ("c", "d"), ("d", "e"), ("e", "d"), ("f", "a")}
     assert _cycles(edges) == [["a", "b", "c"], ["d", "e"]]
@@ -173,8 +173,8 @@ def _module_imports(where: str, text: str, modules: frozenset[str]) -> set[tuple
     one, and to the package's `__init__` either way, since Python runs it to look the name up.
 
     **And every import is an edge to each package above the module it names**, relative imports
-    resolved first: `from stayfixed.profiles.model import Check` runs `profiles/__init__.py`
-    before `profiles/model.py`, so whatever that `__init__` imports is reached through it. Not the
+    resolved first: `from stayfixed.scaffold.model import Template` runs `scaffold/__init__.py`
+    before `scaffold/model.py`, so whatever that `__init__` imports is reached through it. Not the
     packages above the importer itself, which Python started before the importer ran and does not
     run again."""
     parts = Path(where).with_suffix("").parts
@@ -202,7 +202,7 @@ def test_the_modules_import_one_another_without_a_cycle_even_inside_functions() 
     # runs, is left out. No cycle is pinned: a new one is a layering to fix, not a row to add.
     #
     # Mutations (declared): `mutations/`'s "permissions reads the writer again inside a function"
-    # and "gitenv reads the profiles inside a function".
+    # and "printed reads the scaffold inside a function".
     files = {path.relative_to(SRC).as_posix(): path for path in sorted(SRC.rglob("*.py"))}
     modules = frozenset(
         ".".join(("stayfixed", *Path(where).with_suffix("").parts)).removesuffix(".__init__")
@@ -252,48 +252,50 @@ def test_the_module_graph_reads_imports_inside_functions_and_names_the_module_im
 
 
 def test_the_module_graph_runs_every_package_above_the_module_imported() -> None:
-    # Python runs `profiles/__init__.py` before `profiles/model.py`, and the graph gave
-    # `from stayfixed.profiles.model import Check` no edge to it. A review planted that import
-    # inside a function in `gitenv.py`: `profiles/__init__.py` imports `evaluate`, which imports
-    # `gitenv`, so it closed a cycle, and every cycle test above passed. Hoisted to module level,
-    # the same import stops `import stayfixed.gitenv` on a partially initialised module. Mutations
-    # (declared): `mutations/`'s "the module graph stops running the packages above the module
-    # imported", and "gitenv reads the profiles inside a function", the planted import itself.
+    # Python runs a package's `__init__.py` before the submodule an import names, and the graph
+    # once gave such an import no edge to it. A review planted one inside a function in
+    # `gitenv.py`, through a package whose `__init__` reached `gitenv` again, so it closed a cycle,
+    # and every cycle test above passed. Hoisted to module level, the same import stops the
+    # importer on a partially initialised module. Mutations (declared): `mutations/`'s "the module
+    # graph stops running the packages above the module imported", and "printed reads the
+    # scaffold inside a function", the same shape in today's tree.
     modules = frozenset(
         {
             "stayfixed",
             "stayfixed.attach",
             "stayfixed.attach.write",
-            "stayfixed.gitenv",
-            "stayfixed.profiles",
-            "stayfixed.profiles.evaluate",
-            "stayfixed.profiles.model",
+            "stayfixed.printed",
+            "stayfixed.scaffold",
+            "stayfixed.scaffold.engine",
+            "stayfixed.scaffold.model",
         }
     )
-    planted = "def _probe():\n    from stayfixed.profiles.model import Check\n    return Check\n"
-    assert _module_imports("gitenv.py", planted, modules) == {
-        ("stayfixed.gitenv", "stayfixed.profiles"),
-        ("stayfixed.gitenv", "stayfixed.profiles.model"),
+    planted = (
+        "def _probe():\n    from stayfixed.scaffold.model import Template\n    return Template\n"
+    )
+    assert _module_imports("printed.py", planted, modules) == {
+        ("stayfixed.printed", "stayfixed.scaffold"),
+        ("stayfixed.printed", "stayfixed.scaffold.model"),
     }
     edges = (
-        _module_imports("gitenv.py", planted, modules)
-        | _module_imports("profiles/__init__.py", "from .evaluate import evaluate\n", modules)
-        | _module_imports("profiles/evaluate.py", "from stayfixed.gitenv import git_run\n", modules)
+        _module_imports("printed.py", planted, modules)
+        | _module_imports("scaffold/__init__.py", "from .engine import plan\n", modules)
+        | _module_imports("scaffold/engine.py", "from stayfixed.printed import quoted\n", modules)
     )
     assert _cycles(edges) == [
-        ["stayfixed.gitenv", "stayfixed.profiles", "stayfixed.profiles.evaluate"],
+        ["stayfixed.printed", "stayfixed.scaffold", "stayfixed.scaffold.engine"],
     ]
     # `import a.b.c` runs the same packages, and so does a relative import once resolved. The
     # packages above the importer itself are not edges: Python started them before it, and an
     # edge to each would put every package that imports its own submodules in a cycle.
     text = (
-        "import stayfixed.profiles.model\n"
+        "import stayfixed.scaffold.model\n"
         "from .write import ledger\n"
-        "def f():\n    from ..profiles.evaluate import evaluate\n"
+        "def f():\n    from ..scaffold.engine import plan\n"
     )
     assert _module_imports("attach/check.py", text, modules) == {
         ("stayfixed.attach.check", "stayfixed.attach.write"),
-        ("stayfixed.attach.check", "stayfixed.profiles"),
-        ("stayfixed.attach.check", "stayfixed.profiles.evaluate"),
-        ("stayfixed.attach.check", "stayfixed.profiles.model"),
+        ("stayfixed.attach.check", "stayfixed.scaffold"),
+        ("stayfixed.attach.check", "stayfixed.scaffold.engine"),
+        ("stayfixed.attach.check", "stayfixed.scaffold.model"),
     }

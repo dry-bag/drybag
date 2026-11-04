@@ -27,7 +27,6 @@ CONFIG = """
 [stayfixed]
 version = "0.1.0"
 preset = "recommended"
-profile = ""
 agents = ["claude"]
 
 [project]

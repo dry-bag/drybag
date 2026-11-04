@@ -4,7 +4,7 @@ renders a list of them (one line per command).
 The label carries what the check computed — a repo-relative path, a line number, a rule name from
 the check's own vocabulary; the detail may quote the repository and is for `--json`, because a
 summary line never quotes the repository's own text (principle 5). The docs, doctor, guards,
-ledger and memory areas import it, and so does `profiles`.
+ledger and memory areas import it.
 
 **The path is bounded too.** It is a name found on disk, so the repository chose it, and the
 label goes through `printed.printable`: a path inside the path grammar prints as itself, any

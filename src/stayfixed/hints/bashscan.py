@@ -196,7 +196,7 @@ _ASSIGNMENT = re.compile(r"\A[A-Za-z_][A-Za-z0-9_]*=")
 # `env pytest`: a bare wrapper token, not the command. Deliberately not a general argv
 # resolver: `env` and `uv run` (`hints/uvrun.py`) are the only launchers read through, and
 # `poetry run`, `npx`, `sudo` and `time` are not, unless they stand behind `uv run`, where every
-# word before the first a runner adapter recognises is the launcher's.
+# word before the first the caller's `recognises` reads a command from is the launcher's.
 _SINGLE_WRAPPERS = frozenset({"env"})
 
 

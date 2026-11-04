@@ -1492,7 +1492,6 @@ before = "UNPARSEABLE = (tomllib.TOMLDecodeError, RecursionError, ValueError)"
 after = "UNPARSEABLE = (tomllib.TOMLDecodeError, RecursionError)"
 reddens = [
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[loads]",
-  "tests/config/test_deep_toml.py::test_a_profile_document_holding_a_number_past_the_parser_resolves_to_nothing",
   "tests/doctor/test_checks.py::test_a_configuration_holding_a_number_past_the_parser_does_not_load",
   "tests/hooks/test_hook_command.py::test_a_config_that_does_not_load_whole_never_refuses_a_tool_call[long-number]",
   "tests/hooks/test_hook_command.py::test_a_config_that_does_not_load_whole_is_named_once_at_session_start[long-number]",
@@ -2207,17 +2206,17 @@ reddens = [
   "tests/boundaries/test_layering.py::test_the_packages_import_one_another_without_a_cycle_at_module_level",
 ]
 
-# `profiles/__init__.py` imports `evaluate`, which imports `gitenv`, so `gitenv` reading any
-# submodule of `profiles`, even inside a function where no import fails, is a cycle through that
-# `__init__`: the import a review planted, which every cycle test passed until the module graph ran
-# the packages above the module imported.
+# `scaffold/__init__.py` imports `engine`, which imports `printed`, so `printed` reading any
+# submodule of `scaffold`, even inside a function where no import fails, is a cycle through that
+# `__init__`: the shape a review once planted in `gitenv.py`, which every cycle test passed until
+# the module graph ran the packages above the module imported.
 [[mutation]]
-name = "gitenv reads the profiles inside a function"
-file = "src/stayfixed/gitenv.py"
-before = "    env = {key: os.environ[key] for key in GIT_ENV_KEEP if key in os.environ}"
-after = """    from stayfixed.profiles.model import Check  # noqa: F401
+name = "printed reads the scaffold inside a function"
+file = "src/stayfixed/printed.py"
+before = "    return name if PATH_VALUE.match(name) else withheld"
+after = """    from stayfixed.scaffold.model import Template  # noqa: F401
 
-    env = {key: os.environ[key] for key in GIT_ENV_KEEP if key in os.environ}"""
+    return name if PATH_VALUE.match(name) else withheld"""
 reddens = [
   "tests/boundaries/test_layering.py::test_the_modules_import_one_another_without_a_cycle_even_inside_functions",
 ]
@@ -2588,7 +2587,6 @@ file = "src/stayfixed/fsops.py"
 before = '_WITHIN_OPEN = _REGULAR_OPEN | getattr(os, "O_NOFOLLOW", 0)'
 after = "_WITHIN_OPEN = _REGULAR_OPEN"
 reddens = [
-  "tests/profiles/python/test_hygiene.py::test_a_pyc_that_is_a_symlink_is_not_followed",
   "tests/test_fsops.py::test_a_bounded_read_under_a_root_follows_no_link_and_reads_only_a_regular_file",
   "tests/test_fsops.py::test_a_bounded_read_under_an_open_directory_takes_one_name_and_follows_no_link",
 ]
@@ -2609,10 +2607,7 @@ name = "a .pyc that is a named pipe is opened waiting for a writer"
 file = "src/stayfixed/fsops.py"
 before = '_WITHIN_OPEN = _REGULAR_OPEN | getattr(os, "O_NOFOLLOW", 0)'
 after = '_WITHIN_OPEN = (_REGULAR_OPEN & ~os.O_NONBLOCK) | getattr(os, "O_NOFOLLOW", 0)'
-reddens = [
-  "tests/profiles/python/test_hygiene.py::test_a_pyc_that_is_a_named_pipe_never_blocks_the_walk",
-  "tests/test_fsops.py::test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer",
-]
+reddens = ["tests/test_fsops.py::test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer"]
 
 [[mutation]]
 name = "a .pyc that is not a regular file is read"
@@ -2621,10 +2616,7 @@ before = """        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise NotRegularFile(errno.EINVAL, "not a regular file", relative)"""
 after = """        if False:
             raise NotRegularFile(errno.EINVAL, "not a regular file", relative)"""
-reddens = [
-  "tests/profiles/python/test_hygiene.py::test_a_pyc_that_is_a_named_pipe_is_never_read",
-  "tests/test_fsops.py::test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer",
-]
+reddens = ["tests/test_fsops.py::test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer"]
 
 # `tomllib` converts a hex, octal or binary literal of any length, and `str` of one past 4,300
 # digits raises: `init --yes` re-rendering an adopted `stayfixed.toml`, and `setup` rewriting the
@@ -2693,14 +2685,14 @@ reddens = [
   "tests/test_fsops.py::test_a_regular_file_past_the_read_limit_is_refused_and_one_at_it_is_read",
 ]
 
-# A reader may hold its files to a cap of its own below the read cap, a profile's configuration
-# files among them; the reader honours it rather than reading to the read cap.
+# A reader may hold its files to a cap of its own below the read cap, the session's read of
+# `stayfixed.toml` among them; the reader honours it rather than reading to the read cap.
 [[mutation]]
 name = "the regular-file reader ignores the cap a reader hands it"
 file = "src/stayfixed/fsops.py"
 before = "    content, over = read_bounded(path, REGULAR_READ_LIMIT if limit is None else limit)"
 after = "    content, over = read_bounded(path, REGULAR_READ_LIMIT)"
-reddens = ["tests/profiles/test_evaluate.py::test_a_file_at_the_text_cap_is_read_and_one_past_it_is_not"]
+reddens = ["tests/config/test_session.py::test_a_file_longer_than_a_session_reads_is_read_no_further"]
 
 # A reader that refuses a file it could not read says why in `fsops.said`'s words, through
 # `fsops.reading`: never by the error's class name, which names stayfixed's internals and no
@@ -4322,20 +4314,9 @@ name = "an escaping code root is followed"
 file = "src/stayfixed/roots.py"
 before = "            candidate = contained(root, folded, resolved_root=resolved_root)"
 after = "            candidate = root / entry"
-reddens = ["tests/profiles/python/test_hygiene.py::test_only_contained_code_roots_are_scanned"]
-
-# `contained_roots` is what every consumer of `ledger.code_roots` walks, one `rglob` per entry
-# with the results added up, so a repeated or nested entry multiplies a count rather than
-# widening a scan. Measured with `code_roots = ["src", "src", "src/pkg"]` over two stale `.pyc`
-# files: `stale == 5` with no pruning at all, `stale == 3` with the mutation below, `2` as
-# shipped. A wrong number in a notice whose entire purpose is to be believed about a number.
-[[mutation]]
-name = "a code root listed twice is walked twice"
-file = "src/stayfixed/roots.py"
-before = '        if any(_covers(kept, candidate) for kept in found):'
-after = '        if False:'
 reddens = [
-  "tests/profiles/python/test_hygiene.py::test_a_repeated_or_nested_code_root_is_walked_once",
+  "tests/ledger/test_scan.py::test_a_code_root_outside_the_project_is_skipped_not_scanned",
+  "tests/test_roots.py::test_each_code_root_no_walk_takes_is_named_with_its_reason[outside]",
 ]
 
 # `contained()` took on the write's component rule, and `contained_roots` catches its refusal and

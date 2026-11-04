@@ -52,7 +52,7 @@ Three things hold everywhere:
 - [`stayfixed docs check [--budgets] [--links]`](#stayfixed-docs-check---budgets---links)
 - [`stayfixed docs trail [--check]`](#stayfixed-docs-trail---check)
 - [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
-- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----profile-name---memory-mode-mode---attribution-check---root-path---machine-path)
+- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----memory-mode-mode---attribution-check---root-path---machine-path)
 - [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
 - [`stayfixed overlay upgrade [--root PATH] [--dry-run]`](#stayfixed-overlay-upgrade---root-path---dry-run)
 - [`stayfixed attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
@@ -886,7 +886,7 @@ lints it.
 
 ---
 
-## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
+## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
 
 Writes a repository's stayfixed scaffold, once: `stayfixed.toml`, and the files the pack's
 commands read — the roadmap with its trail markers and `trail.toml` beside it for `docs trail`, the
@@ -902,7 +902,6 @@ Each answer flag replaces one default and writes one key:
 - `--name` writes `[project] name`;
 - `--base-branch` writes `[project] base_branch` and `release_branch`;
 - `--agent`, once per harness, writes `[stayfixed] agents`;
-- `--profile` writes `[stayfixed] profile`, an empty value meaning none;
 - `--memory-mode` writes `[memory] mode`;
 - `--attribution-check` writes `[commit_messages] attribution_check = true`, which is off unless
   answered.
@@ -912,7 +911,7 @@ The recommended plugins are not `init`'s to install:
 
 After both reports the run prints `picked:`, one line per question in the order
 `init --questions` asks them, with the value this run took: the name, the base branch, the memory
-mode, the profile, the attribution check (`on` or `off`), the
+mode, the attribution check (`on` or `off`), the
 agents stayfixed serves among those listed, and `plugins: none`, since
 `init` installs none. Taking every default gives the attribution check `off` and no plugin. A value a `stayfixed.toml` you wrote holds outside the plain-path grammar
 prints as `<unprintable; see stayfixed.toml>`.
@@ -940,10 +939,7 @@ When nothing answers, `init` detects:
   so. Only with no remote at all is it the branch checked out, when that is a plain branch name,
   with a `note:` when it is not `main`, else `main`;
 - the agent surfaces from which of `.claude/` and `.codex/` the repository carries, both when
-  it carries neither;
-- `[stayfixed] profile` from the first shipped profile whose markers sit at the root
-  (`python`: `pyproject.toml`, `setup.py`, `setup.cfg`, a requirements file, a `Pipfile` or a
-  lockfile), written only when one is found.
+  it carries neither.
 
 Both name candidates, the remote's segment and the directory name, are repository-authored.
 So one outside `[project] name`'s grammar is refused naming the grammar and the remedy, and
@@ -990,8 +986,8 @@ A file already at an artifact's place that stayfixed did not write is left as it
 between its markers, and every line outside them is kept.
 
 **Reads** `stayfixed.toml` when there is one, `.stayfixed/manifest.json`, `git` for the name
-and the base branch, which harness directories the root carries (`.claude/`, `.codex/`), each
-shipped profile's marker files at the root, and every file an artifact targets.
+and the base branch, which harness directories the root carries (`.claude/`, `.codex/`), and
+every file an artifact targets.
 
 **Writes**, every one of them through the scaffold engine or `stayfixed.toml`'s key editor, so
 that every target goes through the containment walk and none may leave the project root or
@@ -1030,7 +1026,7 @@ the base branch; empty otherwise. An answered `--base-branch` replaced nothing, 
 
 ## `stayfixed init --questions [--root PATH] [--machine PATH]`
 
-Prints the values `stayfixed init --yes` would take for the seven things a person may answer, where
+Prints the values `stayfixed init --yes` would take for the six things a person may answer, where
 each came from, and the flag that replaces it: on `init --yes`, but for the recommended plugins,
 which `stayfixed setup` installs on the machine. It writes nothing. The `init` skill asks its
 questions from it, taking every default offered first, and a person reads it to see the defaults
@@ -1044,7 +1040,6 @@ detected:
   project.name: widget (origin remote; --name)
   project.base_branch: main (origin/HEAD; --base-branch)
   memory.mode: harness (default; --memory-mode)
-  stayfixed.profile: python (profile markers; --profile)
   commit_messages.attribution_check: off (the preset's default; --attribution-check)
   stayfixed.agents: claude, codex (default; --agent)
   plugins: none (default; stayfixed setup --plugin)
@@ -1058,20 +1053,19 @@ not a lowercase path segment the source is `not derivable`, and the value prints
 when that names a plain branch under `refs/remotes/origin/`; with no remote at all, from the
 `current branch` when that is a plain branch; otherwise, a remote with no `origin/HEAD` and
 remotes git could not list included, it is the `default`, `main`. The agents come from the `harness
-directories` the root carries; otherwise the `default` is every harness. The profile comes from
-`profile markers`, or there are `no profile markers`. The memory mode is the `default`,
+directories` the root carries; otherwise the `default` is every harness. The memory mode is the `default`,
 `harness`, since the preset chooses none; the attribution check (off) is `the preset's default`; and the plugins are the `default`,
 none, because a third-party plugin runs in every session and is installed only when named. Each
 default is exactly what `stayfixed init --yes` writes when that question is not answered. `origin/HEAD` goes stale after the remote's default branch is
 renamed, because git does not refresh one it has. That is why its source is printed: you can
 catch it.
 
-`--json` carries `questions`: a JSON Schema object (draft 2020-12) with seven `properties`, and
-`required` naming all seven in the order the `init` skill asks them; read the order there, since
+`--json` carries `questions`: a JSON Schema object (draft 2020-12) with six `properties`, and
+`required` naming all six in the order the `init` skill asks them; read the order there, since
 `--json` prints every object's keys sorted, so the properties arrive by name. Each but the last is
 keyed by the
 `stayfixed.toml` key its answer writes: `project.name`, `project.base_branch`, `memory.mode`,
-`stayfixed.profile`, `commit_messages.attribution_check` and `stayfixed.agents`; the last,
+`commit_messages.attribution_check` and `stayfixed.agents`; the last,
 `plugins`, offers the plugins the preset recommends, which `stayfixed setup --plugin` installs. Each property carries four keys: `default`
 (absent for a name that is not derivable), `x-stayfixed-source` (the phrase above),
 `x-stayfixed-flag` (the flag that answers it) and `x-stayfixed-tradeoff`, four lines of fixed
@@ -1096,8 +1090,8 @@ It is refused (`2`) before anything beyond the root is read, in three cases:
 
 `--yes` beside it is a usage error from the parser.
 
-**Reads** `git` for the name and the base branch, which harness directories the root carries, each
-shipped profile's marker files at the root, and the machine configuration, to learn whether it
+**Reads** `git` for the name and the base branch, which harness directories the root carries, and
+the machine configuration, to learn whether it
 records an overlay. A machine file that does not load reads as "not recorded"; `init` reports it
 when it loads it.
 
@@ -2118,7 +2112,6 @@ why so few of them are trusted with anything.
 [stayfixed]
 version = "0.6.1"        # required; there is no default
 preset = "recommended"
-profile = ""
 agents = ["claude", "codex"]
 
 [project]
@@ -2290,8 +2283,8 @@ Between the repository's file and this one, a session reads the overlay's two, u
 `<overlay>/projects/<name>/stayfixed.toml` for a checkout this machine binds to `<name>` — by the
 binding id `stayfixed attach` records, never by the repository's own `[project] name`, so a clone
 that names one of your projects gets the common file alone. Each may set a `[personal]` value, a
-`[guards]` switch, a preference (`[memory] mode`, `groups` and `index_extra`, `[stayfixed]
-profile`) and a session budget; the project file wins over the common one, and this file over
+`[guards]` switch, a preference (`[memory] mode`, `groups` and `index_extra`) and a session
+budget; the project file wins over the common one, and this file over
 both. They are read the way a session reads `stayfixed.toml`: an unknown name is ignored, and a
 value this stayfixed cannot use is left out so the layer beneath applies; a gate's input or a fact
 about the repository written there is never taken from it. A missing file, an overlay this file

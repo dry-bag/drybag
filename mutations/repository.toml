@@ -2471,7 +2471,7 @@ reddens = [
 ]
 
 # The shape check reads more than the patterns a module holds at its top level: a pattern built
-# inside a function from text the source spells, and every shipped profile's `match`. Each entry
+# inside a function from text the source spells. Each entry
 # narrows that reading back the way a walk regresses, and a planted case goes unseen or misread.
 [[mutation]]
 name = "the pattern scan stops at a function's body"
@@ -2567,15 +2567,6 @@ before = "    return spelled, unspelled"
 after = "    return spelled, list(dict.fromkeys(unspelled))"
 reddens = [
   "tests/test_patterns.py::test_the_scan_reads_a_pattern_wherever_the_source_spells_it[two calls of handed text in one function]",
-]
-
-[[mutation]]
-name = "the pattern walk leaves the shipped profiles' locators out"
-file = "tests/test_patterns.py"
-before = "    for name in profiles.shipped(source=source):"
-after = "    for name in ():"
-reddens = [
-  "tests/test_patterns.py::test_the_walk_reads_the_match_of_every_shipped_profiles_locators",
 ]
 
 [[mutation]]
@@ -2746,16 +2737,5 @@ before = '''The rows come in a fixed order: the installation's own eight first, 
 after = '''The rows come in a fixed order: the installation's own nine first, then the five about the'''
 reddens = [
   "tests/test_documents.py::test_the_reference_counts_the_cores_rows_and_the_private_layers_apart",
-]
-
-# A stack's code may stand in a directory with no profile; a core import of it is a stack import
-# all the same.
-[[mutation]]
-name = "the stack-import walk reads only the shipped profiles"
-file = "tests/test_language_neutral.py"
-before = '            p.name for p in profiles.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))'
-after = '            p.name for p in profiles.iterdir() if (p / "profile.toml").is_file()'
-reddens = [
-  "tests/test_language_neutral.py::test_every_stack_directory_is_read_whether_or_not_it_holds_a_profile",
 ]
 

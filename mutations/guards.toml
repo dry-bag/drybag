@@ -41,21 +41,21 @@ reddens = [
 ]
 
 # No option of uv's is read: read as the first word that is no option, `uv run --with
-# pytest-xdist pytest` would launch `pytest-xdist`, which no adapter recognises.
+# pytest-xdist pytest` would launch `pytest-xdist`, which the runner table does not name.
 [[mutation]]
 name = "the command `uv run` launches starts at its first word that is no option"
 file = "src/stayfixed/hints/bashscan.py"
 before = "        if recognises(segment[at:]):"
 after = '        if not segment[at].startswith("-"):'
 reddens = [
-  "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_a_runner_adapter_recognises[with]",
-  "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_a_runner_adapter_recognises[directory]",
+  "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_the_runner_table_names[with]",
+  "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_the_runner_table_names[directory]",
 ]
 
-# A `uv run` in which no adapter recognises a word is read whole: read as all launcher, it is a
-# launch of nothing.
+# A `uv run` in which the runner table reads no word as a test run is read whole: read as all
+# launcher, it is a launch of nothing.
 [[mutation]]
-name = "a `uv run` no adapter recognises is read as all launcher"
+name = "a `uv run` naming no test run is read as all launcher"
 file = "src/stayfixed/hints/bashscan.py"
 before = """            return at
     return None"""
@@ -838,8 +838,8 @@ before = "    attribute = common_flags("
 after = '    test_sub.add_parser("audit-entrypoints"); attribute = common_flags('
 reddens = ["tests/test_cli.py::test_the_test_group_has_attribute_alone"]
 
-# The core names no stack: one stack's runner, artifacts or package manager live in its profile,
-# and a mention in a core module is either moved there or pardoned with its reason.
+# No module names a stack: a mention of one stack's runner, artifacts or package manager is
+# pardoned with its reason or goes.
 [[mutation]]
 name = "the core names pytest again"
 file = "src/stayfixed/hints/hygiene.py"
@@ -849,16 +849,6 @@ LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:"
 reddens = [
   "tests/test_language_neutral.py::test_no_core_module_names_a_stack_it_does_not_pardon",
 ]
-
-# The words miss the core importing a stack's own code, since a module path holds no listed word;
-# the import walk is what catches it.
-[[mutation]]
-name = "the core imports the Python profile's hint"
-file = "src/stayfixed/hints/hygiene.py"
-before = "from stayfixed.hints.runners import names_a_test_run"
-after = """from stayfixed.hints.runners import names_a_test_run
-from stayfixed.profiles.python.hygiene import PythonHint"""
-reddens = ["tests/test_language_neutral.py::test_no_core_module_imports_a_stack_profiles_code"]
 
 # A bytes literal is code too: the walk reads it as Latin-1, so a stack's word spelled as bytes
 # in a core module is a mention like any string.
@@ -872,8 +862,8 @@ reddens = [
   "tests/test_language_neutral.py::test_no_core_module_names_a_stack_it_does_not_pardon",
 ]
 
-# The interpreter and the manifest of one stack are stack words like its runner: a core module that
-# names either is moved into that stack's profile or pardoned with its reason.
+# The interpreter and the manifest of one stack are stack words like its runner: a module that
+# names either is pardoned with its reason or goes.
 [[mutation]]
 name = "the core names the Python interpreter"
 file = "src/stayfixed/hints/hygiene.py"

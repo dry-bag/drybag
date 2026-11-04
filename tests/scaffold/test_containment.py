@@ -19,7 +19,6 @@ VALID_HEAD = """
 [stayfixed]
 version = "0.1.0"
 preset = "recommended"
-profile = ""
 agents = ["claude"]
 
 [project]
@@ -63,7 +62,6 @@ evidence_boundary_required_for = ["high"]
 
 HOSTILE_NAME = VALID_HEAD.replace('name = "widget"', 'name = "../common"')
 HOSTILE_PRESET = VALID_HEAD.replace('preset = "recommended"', 'preset = "../../etc/passwd"')
-HOSTILE_PROFILE = VALID_HEAD.replace('profile = ""', 'profile = "../../etc/passwd"')
 
 ESCAPES = ["../../AGENTS.md", "/etc/stayfixed", "../runbooks/x.md", "docs/../../x.md", "", "."]
 
@@ -204,17 +202,6 @@ def test_load_preset_names_the_key_its_caller_passes() -> None:
     message = str(caught.value)
     assert message.startswith("--preset is not a plain identifier"), message
     assert "\x1b" not in message and "IGNORE" not in message
-
-
-# --- the field the scaffold engine owns -------------------------------------------------------
-
-
-def test_the_engine_refuses_a_profile_the_loader_lets_through(tmp_path: Path) -> None:
-    write_config(tmp_path, HOSTILE_PROFILE)
-    config = load_at(tmp_path)
-    assert config.stayfixed.profile == "../../etc/passwd"
-    with pytest.raises(PathEscape, match="profile"):
-        plan(tmp_path, config, escaping_templates())
 
 
 def test_every_escaping_target_yields_zero_actions(tmp_path: Path) -> None:

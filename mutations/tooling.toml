@@ -1815,81 +1815,8 @@ before = '        return sub.add_parser(name, help=sentence, description=sentenc
 after = '        return sub.add_parser(name, help=None, epilog=JSON_EPILOG)'
 reddens = ["tests/scripts/test_release.py::test_every_command_opens_its_own_help_with_what_it_does"]
 
-# The wheel must carry the Python profile's code: the red-run hint is found and imported from the
-# installed package, and a build without it loses the Python note with nothing failing.
-[[mutation]]
-name = "the wheel need not carry the Python profile's hint"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/python/hygiene.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_the_python_profiles_code_is_named[stayfixed/profiles/python/hygiene.py]",
-]
-
-[[mutation]]
-name = "the wheel need not carry the Python profile's runner adapter"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/python/adapters.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_the_python_profiles_code_is_named[stayfixed/profiles/python/adapters.py]",
-]
-
-[[mutation]]
-name = "the wheel need not carry the Python profile's package marker"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/python/__init__.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_the_python_profiles_code_is_named[stayfixed/profiles/python/__init__.py]",
-]
-
 # A `--root` that is no repository root is no version disagreeing: printed under "version drift:",
 # it read as one.
-# The JavaScript stack ships adapters and no profile; the same walk finds them.
-[[mutation]]
-name = "the wheel need not carry the JavaScript runner adapters"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/javascript/adapters.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_a_stack_s_runner_adapters_is_named[stayfixed/profiles/javascript/adapters.py]",
-]
-
-[[mutation]]
-name = "the wheel need not carry the Go runner adapter"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/go/adapters.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_a_stack_s_runner_adapters_is_named[stayfixed/profiles/go/adapters.py]",
-]
-
-[[mutation]]
-name = "the wheel need not carry the Go stack's package marker"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/go/__init__.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_a_stack_s_runner_adapters_is_named[stayfixed/profiles/go/__init__.py]",
-]
-
-[[mutation]]
-name = "the wheel need not carry the JavaScript stack's package marker"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/javascript/__init__.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_a_stack_s_runner_adapters_is_named[stayfixed/profiles/javascript/__init__.py]",
-]
-
 [[mutation]]
 name = "a root the release check cannot read is reported as version drift"
 file = "scripts/release.py"

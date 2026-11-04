@@ -16,11 +16,8 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > — `overlay upgrade`, with `setup --overlay` making it; and `attach`,
 > whose `attach` binds a repository to the overlay and whose `detach` takes back what `attach`
 > wrote, keeping the overlay's record of the binding ([CONTRIBUTING.md](https://github.com/stayfixed/stayfixed/blob/main/CONTRIBUTING.md#areas) says
-> where the line between the two runs). The core is language-neutral, and a stack is a **profile**:
-> one stack's test runner, build artifacts and package manager belong to its profile — data, and
-> optionally the advice to give after that stack's test runner fails — so a repository in several
-> languages gets each stack's advice with no configuration. The first profile, `python`, ships:
-> the stale-bytecode line of the note after a failing pytest run is its own. The hooks file that
+> where the line between the two runs). The core is language-neutral, so a repository in several
+> languages needs no configuration. The hooks file that
 > wires all of it into a session ships too, so on Claude Code installing the plugin is enough to make the guards fire and
 > the memory bundles arrive ([what each agent enforces](#what-each-agent-enforces)). The first
 > skills ship with them, and so does one command meant for a machine rather than for you — `hook`,
@@ -28,8 +25,7 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > and adapters for Cursor or Hermes — each leaves this list in the
 > change that ships it. The [Quickstart](#quickstart) shows the three keys that are enough to start
 > a project by hand, which `init` reads as your answers — a run that writes the file itself writes
-> `[stayfixed] version` and `agents`, and `profile` when the repository carries a shipped
-> profile's markers or `--profile` names one, beside `[project] name`, `base_branch` and
+> `[stayfixed] version` and `agents`, beside `[project] name`, `base_branch` and
 > `release_branch`, and a `[memory]` table only when `--memory-mode` answers it.
 > [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference; the command list below is held
 > to the parser by a test, so it is complete for what ships.

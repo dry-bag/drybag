@@ -1,4 +1,4 @@
-# The project group: a repository's footprint and the templates, profiles and presets behind it.
+# The project group: a repository's footprint and the templates and presets behind it.
 # Which group an entry belongs in is `GROUP_OF` in `scripts/mutation_oracle.py`; what an entry is:
 # CONTRIBUTING.md, "Tests".
 
@@ -388,14 +388,12 @@ reddens = [
   "tests/project/test_fixture.py::test_the_smoke_fixture_is_a_project_init_has_nothing_left_to_create_in",
 ]
 
-# The `_enum` class, at four more sites, in two pairs: `mutations/`'s "a preset name outside the
-# rule is quoted back again" and "a preset this build does not ship is quoted back again", then
-# `mutations/`'s "a profile outside one path segment is quoted back again" and "a profile the
-# listing lacks is quoted back again". Each refusal is reached by a value a clone writes into
-# `stayfixed.toml` — `[stayfixed] preset` or `[stayfixed] profile` — and each ran `{name!r}` into a
-# message the skills relay to a terminal and a model. The first of each pair runs exactly for a
-# value that failed its rule, so it could carry ESC and line breaks; the second is reached only by a
-# name that passed, and could still carry an instruction spelled in letters. The anchor is
+# The `_enum` class, at two more sites: `mutations/`'s "a preset name outside the rule is quoted
+# back again" and "a preset this build does not ship is quoted back again". Each refusal is reached
+# by a value a clone writes into `stayfixed.toml` — `[stayfixed] preset` — and each ran `{name!r}`
+# into a message the skills relay to a terminal and a model. The first runs exactly for a value
+# that failed its rule, so it could carry ESC and line breaks; the second is reached only by a name
+# that passed, and could still carry an instruction spelled in letters. The anchor is
 # stayfixed's own vocabulary: the key, the rule in words, and the listing this build ships. Each
 # mutation puts the value back into its message.
 [[mutation]]
@@ -450,17 +448,6 @@ before = "            raise Refusal(UNWRITABLE_KEY.format(table=name)) from None
 after = "            raise"
 reddens = [
   "tests/project/test_init.py::test_an_adopted_key_that_is_not_bare_is_refused_naming_only_its_table",
-]
-
-# A profile's locator reaches a file only through the contained walk, so a symlink out of the root
-# resolves to nothing.
-[[mutation]]
-name = "a profile locator stops refusing a symlinked file the repository planted"
-file = "src/stayfixed/profiles/evaluate.py"
-before = "        try:\n            path = contained(root, relative)"
-after = "        try:\n            path = root / relative"
-reddens = [
-  "tests/profiles/test_evaluate.py::test_a_locator_through_a_symlink_out_of_the_root_resolves_to_nothing",
 ]
 
 # Paths are compared for identity case-folded (`fsops.path_key`): on the default macOS and Windows
@@ -631,16 +618,6 @@ reddens = [
   "tests/project/test_init.py::test_an_adopted_document_with_no_name_is_answered_by_the_loader_and_not_by_detection",
 ]
 
-# Inside a work tree git refuses a repository (a worktree whose git directory is gone, dubious
-# ownership) with the exit it gives outside one, and "not untracked" passed the profile's check
-# without looking, where every other probe reports that it could not look.
-[[mutation]]
-name = "a profile's tracked check reads git refusing the repository as nothing untracked"
-file = "src/stayfixed/profiles/evaluate.py"
-before = "    if code == -1 or (code != 0 and in_work_tree(root)):"
-after = "    if code == -1:"
-reddens = ["tests/profiles/test_evaluate.py::test_tracked_names_a_located_file_in_a_repository_git_refuses_rather_than_passing_it"]
-
 # In the block led by `mutations/`'s "the TOML readers answer a document nested past the parser as
 # an internal error": every reader of a document somebody else wrote answers one nested past the
 # parser as one that does not parse.
@@ -652,15 +629,6 @@ after = "    except tomllib.TOMLDecodeError as exc:"
 reddens = [
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_document_nested_past_the_parser_as_one_that_does_not_parse[init]",
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[init]",
-]
-
-[[mutation]]
-name = "a profile check meets a repository TOML file nested past the parser as an internal error"
-file = "src/stayfixed/profiles/evaluate.py"
-before = "    except UNPARSEABLE:"
-after = "    except tomllib.TOMLDecodeError:"
-reddens = [
-  "tests/profiles/test_evaluate.py::test_a_file_that_does_not_parse_resolves_to_nothing[nested-past-the-stack]",
 ]
 
 # In the block led by `mutations/`'s "a session lets a symlinked stayfixed.toml raise": a
@@ -800,182 +768,6 @@ reddens = [
 # `LISTED_LIMIT` on the rest of the class: every list of names the repository or its history
 # bounds in number by nothing, on a summary line or in a refusal, takes `findings.listed`.
 
-# The Python profile's red-run hint. Its bytecode reads moved here with it from the core, and the
-# entries with them.
-# The stale-bytecode predicate, both directions: `!=` against the header's recorded mtime is
-# the comparison CPython makes; a naive `pyc mtime > source mtime` reported the healthy case
-# as stale and missed the real one.
-[[mutation]]
-name = "stale bytecode is never counted"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = '                if recorded != int(source.stat().st_mtime) & _PYC_MTIME_MASK:'
-after = '                if False:'
-reddens = ["tests/profiles/python/test_hygiene.py::test_stale_bytecode_is_counted"]
-
-[[mutation]]
-name = "fresh bytecode is counted as stale"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = '                if recorded != int(source.stat().st_mtime) & _PYC_MTIME_MASK:'
-after = '                if True:'
-reddens = ["tests/profiles/python/test_hygiene.py::test_a_normally_compiled_pyc_is_not_stale"]
-
-# The other half of the stale-bytecode predicate, and the direction that costs a person time
-# rather than only missing a warning. PEP 552 bytes 8-12 hold the source mtime only while bit 0
-# of the flags word is clear; in a hash-based `.pyc` they hold half the source hash, and
-# comparing that fragment to an mtime reports a perfectly current cache as stale on every run.
-# `SOURCE_DATE_EPOCH` alone flips `py_compile` into that mode, so a reproducible build turns the
-# notice into a permanent false alarm.
-[[mutation]]
-name = "a hash-based .pyc is read as if it carried an mtime"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = '    if int(struct.unpack("<I", header[_PYC_FLAGS])[0]) & _PYC_HASH_BASED:'
-after = '    if False:'
-reddens = ["tests/profiles/python/test_hygiene.py::test_a_hash_based_pyc_is_not_judged"]
-
-# The third half of the stale-bytecode header read, and the same class as `mutations/`'s "a
-# hash-based .pyc is read as if it carried an mtime": PEP 552 bytes 8-12 are this interpreter's
-# recorded source mtime only when bytes 0-4 are this interpreter's magic. A `__pycache__` keeps one
-# `.pyc` per interpreter tag and nothing removes the old ones, so a `mod.cpython-311.pyc` records
-# the mtime as of a run whose bytecode will never be imported again -- and any edit since makes it
-# mismatch. Measured on a tree whose current bytecode had just been compiled and was fresh:
-# `_stale_bytecode` -> 1, so the notice fires on every red run of a healthy tree.
-[[mutation]]
-name = "a .pyc from another interpreter is read as this one's"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = '    if header[_PYC_MAGIC] != importlib.util.MAGIC_NUMBER:'
-after = '    if False:'
-reddens = ["tests/profiles/python/test_hygiene.py::test_a_pyc_from_another_interpreter_is_not_judged"]
-
-# The profiles' own machinery directly under `profiles/` is core: only a stack's directory,
-# `profiles/<name>/`, may name that stack. A runner named in `hints.py` is a mention like one in
-# any core module.
-[[mutation]]
-name = "the profiles' machinery names a stack"
-file = "src/stayfixed/profiles/hints.py"
-before = 'HINT_FILE = "hygiene.py"'
-after = """HINT_FILE = "hygiene.py"
-_RUNNER = "pytest""""
-reddens = [
-  "tests/test_language_neutral.py::test_no_core_module_names_a_stack_it_does_not_pardon",
-]
-
-# A pinned importer is pinned to what it reaches: stack discovery's `import importlib` gives
-# `importlib.util.find_spec` as well, and a loader's `exec_module` after it, with no new import
-# statement for the rule to see.
-[[mutation]]
-name = "profile discovery reaches importlib.util as well"
-file = "src/stayfixed/profiles/__init__.py"
-before = '    return importlib.import_module(f"{__package__}.{name}.{module}")'
-after = '''    importlib.util.find_spec("stayfixed.memory.store")
-    return importlib.import_module(f"{__package__}.{name}.{module}")'''
-reddens = ["tests/boundaries/test_delivery.py::test_no_core_module_reaches_the_import_machinery_but_where_pinned"]
-
-# A profile reads configuration files a repository commits, each to `_TEXT_CAP`: one at the cap is
-# read, and one past it reads as no file.
-[[mutation]]
-name = "a profile reads a configuration file past its cap"
-file = "src/stayfixed/profiles/evaluate.py"
-before = "        return read_regular_text(contained(root, relative), limit=_TEXT_CAP)"
-after = "        return read_regular_text(contained(root, relative))"
-reddens = ["tests/profiles/test_evaluate.py::test_a_file_at_the_text_cap_is_read_and_one_past_it_is_not"]
-
-[[mutation]]
-name = "a profile refuses a configuration file at its cap"
-file = "src/stayfixed/profiles/evaluate.py"
-before = "        return read_regular_text(contained(root, relative), limit=_TEXT_CAP)"
-after = "        return read_regular_text(contained(root, relative), limit=_TEXT_CAP - 1)"
-reddens = ["tests/profiles/test_evaluate.py::test_a_file_at_the_text_cap_is_read_and_one_past_it_is_not"]
-
-# The source is not held to the rule a `.pyc` is (`mutations/`'s "a symlinked .pyc is followed",
-# declared in the core group, where the reader is): the interpreter follows a symlinked source too.
-[[mutation]]
-name = "a source that is a symlink is not compared"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = "                if not fsops.is_file(source):"
-after = "                if not fsops.is_file(source) or fsops.is_symlink(source):"
-reddens = ["tests/profiles/python/test_hygiene.py::test_a_pyc_that_is_a_symlink_is_not_followed"]
-
-# The walk for `.pyc` files stops at its named cap and then says it could not tell: unbounded, a
-# large code root ran it past the hook's timeout, which delivers nothing and banks no once-key.
-[[mutation]]
-name = "the stale-bytecode walk ignores its cap"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = "                        if visited > fsops.WALK_ENTRIES:"
-after = "                        if False:"
-reddens = ["tests/profiles/python/test_hygiene.py::test_a_walk_cut_short_by_its_cap_could_not_tell"]
-
-# The entry cap bounds the listing, the cheap half. Each `.pyc` listed is then opened, read and
-# its source stat'ed, and any number of them share one source: 200k under one `m.py` ran 18 s
-# with the entry cap alone, past the hook's timeout. The reads are charged to a cap of their own.
-[[mutation]]
-name = "the stale-bytecode walk reads past its read cap"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = "            if read > BYTECODE_READ_FILES:"
-after = "            if False:"
-reddens = ["tests/profiles/python/test_hygiene.py::test_bytecode_past_the_read_cap_could_not_tell"]
-
-# The walk's documented behaviour, one entry per claim of `_bytecode`'s docstring. The cap is one
-# total across the code roots: counted afresh per root, every root listed multiplies it.
-[[mutation]]
-name = "the stale-bytecode walk counts its cap afresh for each code root"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = """    visited = 0
-    for root in roots:
-        pending = [root]
-"""
-after = """    for root in roots:
-        visited = 0
-        pending = [root]
-"""
-reddens = ["tests/profiles/python/test_hygiene.py::test_the_entry_cap_is_one_total_across_the_code_roots"]
-
-# A directory that cannot be listed is passed over: raising fails the hint, and the whole
-# tree's note is lost over one permission bit.
-[[mutation]]
-name = "an unlistable directory fails the stale-bytecode walk"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = """            except OSError:
-                continue
-            if names and"""
-after = """            except FileNotFoundError:
-                continue
-            if names and"""
-reddens = ["tests/profiles/python/test_hygiene.py::test_a_directory_that_cannot_be_listed_is_passed_over"]
-
-[[mutation]]
-name = "the stale-bytecode walk skips hidden directories"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = "                        if entry.is_dir(follow_symlinks=False):"
-after = '                        if entry.is_dir(follow_symlinks=False) and entry.name[:1] != ".":'
-reddens = ["tests/profiles/python/test_hygiene.py::test_bytecode_under_a_hidden_directory_is_judged"]
-
-# Only a `__pycache__` holds bytecode the interpreter imports for the sources beside it; a `.pyc`
-# anywhere else is read against the wrong source.
-[[mutation]]
-name = "the stale-bytecode walk judges a .pyc outside __pycache__"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = '            if names and directory.name == "__pycache__":'
-after = "            if names:"
-reddens = ["tests/profiles/python/test_hygiene.py::test_a_pyc_outside_a_pycache_is_not_judged"]
-
-# Nor does it enter a symlinked directory, which can lead out of every code root.
-[[mutation]]
-name = "the stale-bytecode walk follows a symlinked directory"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = "                        if entry.is_dir(follow_symlinks=False):"
-after = "                        if entry.is_dir():"
-reddens = ["tests/profiles/python/test_hygiene.py::test_a_symlinked_directory_under_a_code_root_is_never_entered"]
-
-# An empty note is nothing to report, as the hook reads it: a hint whose note is "" says nothing.
-[[mutation]]
-name = "an empty note is something to report"
-file = "src/stayfixed/profiles/hints.py"
-before = "    return report, note or None"
-after = "    return report, note"
-reddens = [
-  "tests/profiles/test_hints.py::test_an_empty_note_is_nothing_to_report",
-]
-
 # `init` writes the audits README where the bug ledger's index links it, from the name its register
 # builds that link from.
 [[mutation]]
@@ -985,24 +777,6 @@ before = "    audits = ledger_path(p.bugs, BUG_AUDITS)"
 after = '    audits = ledger_path(p.bugs, "audit")'
 reddens = [
   "tests/project/test_init.py::test_a_fresh_init_leaves_trail_and_ledger_checks_green",
-]
-
-# A profile's locator reads a value's text with `str()`, which raises past 4,300 digits for a hex
-# literal of any length a repository's `pyproject.toml` can hold: `stayfixed assess` ended in an
-# internal error. Such a value resolves to nothing, as a file that does not parse does.
-[[mutation]]
-name = "a profile locator stringifies a number past the conversion limit"
-file = "src/stayfixed/profiles/evaluate.py"
-before = """
-    except (RecursionError, ValueError):
-        return None
-"""
-after = """
-    except RecursionError:
-        return None
-"""
-reddens = [
-  "tests/profiles/test_evaluate.py::test_a_file_that_does_not_parse_resolves_to_nothing[hex-past-str]",
 ]
 
 # A preset is parsed once per process, and every load hands its caller a copy of that parse.
@@ -1019,94 +793,4 @@ file = "src/stayfixed/presets/__init__.py"
 before = "    return copy.deepcopy(_parsed(name))"
 after = "    return _parsed(name)"
 reddens = ["tests/config/test_schema.py::test_a_loaded_preset_is_the_callers_own_copy"]
-
-[[mutation]]
-name = "a program is found in a file it cannot execute"
-file = "src/stayfixed/profiles/programs.py"
-before = "        return stat.S_ISREG(os.stat(path).st_mode) and os.access(path, os.X_OK)"
-after = "        return stat.S_ISREG(os.stat(path).st_mode)"
-reddens = [
-  "tests/profiles/test_programs.py::test_a_file_that_cannot_be_executed_and_a_directory_are_passed_over",
-]
-
-# A word holding a `/` is read from the directory the command runs in, never searched on
-# `PATH`.
-[[mutation]]
-name = "a program named by its path is searched on PATH"
-file = "src/stayfixed/profiles/programs.py"
-before = "    if os.sep in word:"
-after = "    if False:"
-reddens = [
-  "tests/profiles/test_programs.py::test_a_word_holding_a_slash_is_read_from_the_directory_never_from_the_path",
-]
-
-# A relative `PATH` entry is read from the directory the command runs in, as a shell reads it.
-[[mutation]]
-name = "a relative PATH entry is read from stayfixed's own directory"
-file = "src/stayfixed/profiles/programs.py"
-before = "        candidates = [cwd / entry / word for entry in path.split(os.pathsep)]"
-after = "        candidates = [Path(entry) / word for entry in path.split(os.pathsep)]"
-reddens = [
-  "tests/profiles/test_programs.py::test_a_relative_path_entry_is_read_from_the_directory_the_command_runs_in",
-]
-
-# The launcher's words stay in front of the command's, as typed.
-[[mutation]]
-name = "a launcher's words are dropped from the argv"
-file = "src/stayfixed/profiles/programs.py"
-before = "    words = (*launch, *argv)"
-after = "    words = tuple(argv)"
-reddens = ["tests/profiles/test_programs.py::test_the_launcher_is_kept_in_front_and_found"]
-
-# A run with no `PATH` searches the default one, as a shell does.
-[[mutation]]
-name = "a run with no PATH searches nothing"
-file = "src/stayfixed/profiles/programs.py"
-before = '        path = environ.get("PATH", os.defpath)'
-after = '        path = environ.get("PATH", "")'
-reddens = ["tests/profiles/test_programs.py::test_without_a_path_the_default_search_path_is_read"]
-
-# A `PATH` entry that cannot be asked about is passed over, as a shell passes it over, and never
-# ends the run's planning.
-[[mutation]]
-name = "a PATH entry that cannot be asked about raises"
-file = "src/stayfixed/profiles/programs.py"
-before = "    except (OSError, ValueError):\n        return False"
-after = "    except ValueError:\n        return False"
-reddens = ["tests/profiles/test_programs.py::test_a_path_entry_that_cannot_be_asked_about_is_passed_over"]
-
-[[mutation]]
-name = "a program is found on the last PATH entry that holds one"
-file = "src/stayfixed/profiles/programs.py"
-before = "    return next((candidate for candidate in candidates if executable(candidate)), None)"
-after = "    return next((candidate for candidate in reversed(candidates) if executable(candidate)), None)"
-reddens = ["tests/profiles/test_programs.py::test_a_bare_name_is_the_first_on_the_path"]
-
-[[mutation]]
-name = "a runner's report options go after --"
-file = "src/stayfixed/profiles/programs.py"
-before = "    return list(args).index(SEPARATOR) if SEPARATOR in args else len(args)"
-after = "    return len(args)"
-reddens = [
-  "tests/profiles/test_programs.py::test_the_runner_s_options_go_before_the_first_separator",
-]
-
-# One reading of a pytest run, the hint's and the adapter's.
-[[mutation]]
-name = "the pytest command reads no `poetry run`"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = "    if len(words) > 1 and (Path(words[0]).name, words[1]) == _POETRY:"
-after = "    if False:"
-reddens = [
-  "tests/profiles/python/test_hygiene.py::test_a_real_pytest_invocation_is_recognised[poetry run pytest]",
-]
-
-[[mutation]]
-name = "the pytest command reads py.test as no pytest"
-file = "src/stayfixed/profiles/python/hygiene.py"
-before = '_PYTEST_SCRIPTS = frozenset({_PYTEST, "py.test"})'
-after = "_PYTEST_SCRIPTS = frozenset({_PYTEST})"
-reddens = [
-  "tests/profiles/python/test_hygiene.py::test_a_real_pytest_invocation_is_recognised[py.test -q]",
-]
 

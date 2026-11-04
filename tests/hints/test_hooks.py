@@ -23,7 +23,6 @@ CONFIG = """
 [stayfixed]
 version = "0.1.0"
 preset = "recommended"
-profile = ""
 agents = ["claude"]
 
 [project]
@@ -414,8 +413,8 @@ def test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_
 
 
 # One red run, as Claude Code reports a Bash command that exited non-zero: on `PostToolUseFailure`,
-# with no `tool_response`, and the exit code at the head of `error`. The command is one the shipped
-# Python profile recognises, so the note has a runner line beside the dirty-tree line.
+# with no `tool_response`, and the exit code at the head of `error`. The command is a test run the
+# runner table names, so the note speaks.
 RED_RUN = "uv run pytest -q"
 
 
