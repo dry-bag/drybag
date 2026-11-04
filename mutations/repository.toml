@@ -2769,21 +2769,3 @@ reddens = [
   "tests/test_language_neutral.py::test_every_stack_directory_is_read_whether_or_not_it_holds_a_profile",
 ]
 
-# The `Stop`-hook recipe in `examples/stop-hook/`. Claude Code's cap on stop-hook continuations
-# resets on every tool call, so without the `stop_hook_active` let-through a tree the agent cannot
-# make green blocks every stop it makes.
-[[mutation]]
-name = "the stop recipe blocks a stop it is already continuing"
-file = "examples/stop-hook/prove_on_stop.py"
-before = '    if event.get("stop_hook_active") is True:'
-after = '    if False:'
-reddens = ["tests/test_stop_hook_recipe.py::test_a_continued_stop_is_let_through_without_a_run"]
-
-# And the verdict it lets through is `proved` alone: widened to every verdict, a failed run ends
-# the agent's turn as if it were green.
-[[mutation]]
-name = "the stop recipe lets a failed run through"
-file = "examples/stop-hook/prove_on_stop.py"
-before = '    if verdict == "proved":'
-after = '    if verdict == "proved" or True:'
-reddens = ["tests/test_stop_hook_recipe.py::test_a_failed_run_blocks_the_stop"]

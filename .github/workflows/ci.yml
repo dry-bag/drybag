@@ -376,11 +376,10 @@ jobs:
           uv run pytest -n auto -m runners
 
   # The demo script, `examples/demo/demo.py`, against this checkout's `stayfixed`: each act passes
-  # on the product's own exit code and `--json` answer, and the last drives the `Stop`-hook recipe
-  # in `examples/stop-hook/`. Claude Code is installed at the `plugin` job's pin for the act that
-  # attaches an overlay, and `--require-claude` fails the run when that act is skipped, so a
-  # missing `claude` is a red job and not a quiet skip. It makes no model call. `PATH` leads with
-  # the project's environment, so its `pytest` and `python3` are the ones the acts run.
+  # on the product's own exit code and `--json` answer. Claude Code is installed at the `plugin`
+  # job's pin for the act that attaches an overlay, and `--require-claude` fails the run when that
+  # act is skipped, so a missing `claude` is a red job and not a quiet skip. It makes no model
+  # call. `PATH` leads with the project's environment, so its `pytest` is the one the acts run.
   demo:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}

@@ -85,8 +85,6 @@ SDIST_MUST = (
     "hooks/run-hook.sh",
     "hooks/hooks.json",
     "scripts/stayfixed",
-    # Under `examples/**`; `tests/test_stop_hook_recipe.py` runs it.
-    "examples/stop-hook/prove_on_stop.py",
     *(f"mutations/{path.name}" for path in sorted(DECLARATIONS.glob("*.toml"))),
 )
 SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/stayfixed")
