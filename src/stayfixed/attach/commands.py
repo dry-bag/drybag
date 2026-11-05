@@ -65,6 +65,7 @@ def run_attach(args: argparse.Namespace) -> Result:
         },
         "allow_added": list(attached.allow_added),
         "allow_withdrawn": list(attached.allow_withdrawn),
+        "rules_left": list(attached.rules_left),
     }
     summary = "; ".join(
         (
@@ -80,12 +81,12 @@ def run_attach(args: argparse.Namespace) -> Result:
 
 def _screen(attached: Attached) -> list[str]:
     """The binding, then what will run that did not before and what no longer will, then the
-    allow rules added and withdrawn: one screen, said as the run proceeds, since the overlay is the
-    owner's and what it grants is shown rather than gated. The binding line names the project it is
-    recorded under: the owner reading which of their projects is delivered here is what the deleted
-    `--trust-remote` and `--yes` were replaced by. Every name prints through `printed`: the project
-    and the remote are the repository's, and a hook's command or an allow rule holds spaces and may
-    hold anything."""
+    allow rules added and withdrawn and the Codex copies it left: one screen, said as the run
+    proceeds, since the overlay is the owner's and what it grants is shown rather than gated. The
+    binding line names the project it is recorded under: the owner reading which of their projects
+    is delivered here is what the deleted `--trust-remote` and `--yes` were replaced by. Every name
+    prints through `printed`: the project and the remote are the repository's, and a hook's command
+    or an allow rule holds spaces and may hold anything."""
     origin = "no origin remote" if attached.origin is None else f"origin {quoted(attached.origin)}"
     lines = [f"binding {attached.binding}: project {quoted(attached.project)}, {origin}"]
     for side in ("added", "removed"):
@@ -98,6 +99,11 @@ def _screen(attached: Attached) -> list[str]:
         lines += [f"agent {side}: {quoted(name)}" for name in carried.agents]
     lines += [f"allow rule added: {clipped(rule)}" for rule in attached.allow_added]
     lines += [f"allow rule withdrawn: {clipped(rule)}" for rule in attached.allow_withdrawn]
+    lines += [
+        f"Codex rule copy no longer in the overlay: {quoted(rule)} "
+        "(remove it, or run `stayfixed detach`)"
+        for rule in attached.rules_left
+    ]
     return lines
 
 

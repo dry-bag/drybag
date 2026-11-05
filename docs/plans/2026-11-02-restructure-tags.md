@@ -144,7 +144,7 @@ session, so they need no attach.
 |---|---|---|---|---|---|---|
 | tag (add to `tags`) | next session (T2) | next session (T3) | next attach; `doctor` digest drift until then (T3) | next attach adds (existing) | next attach links `tag-<t>` (T6); index drifts until `memory index` (existing `--check`) | unaffected |
 | change a tag's content | next session | next session | next attach; digest drift | next attach adds | notes live through the link | unaffected |
-| untag | next session | next session | next attach drops them (render takes back what the overlay no longer holds) | next attach takes back (T4) | next attach unlinks (`build` keeps exactly the current set, T6); index drifts until `memory index` | unaffected |
+| untag | next session | next session | next attach drops them from the render (it takes back what the overlay no longer holds); a Codex rule copy stays, is named by the next attach and removed by `detach` | next attach takes back (T4) | next attach unlinks (`build` keeps exactly the current set, T6); index drifts until `memory index` | unaffected |
 | rename a tag (rename `groups/<a>` and the list entry) | as untag + tag | as untag + tag | as untag + tag | as untag + tag | link `tag-a` → `tag-b`; the notes' reviewed records are keyed by path, so they read as unreviewed again once (stated in `docs/cli.md`) | unaffected |
 | a listed tag with no `groups/<t>/` | skipped, note | skipped | skipped | skipped | no link | — |
 | list order changed | later tag wins (T2) | later tag's rule wins its name (T3) | later tag's file wins its path; hooks union in the new order (T3) | union, unchanged | index sections follow list order after `memory index` | — |

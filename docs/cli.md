@@ -1649,7 +1649,7 @@ agent (by its file) the render adds or removes against the render the last run l
 rule this run merges or takes back. A hook's command and an allow rule that do not fit a plain name are printed
 escaped, and cut to their first 120 characters and their length. `--json` carries the same lists
 as `hooks_added`, `hooks_removed`, `skills_added`, `skills_removed`, `agents_added`,
-`agents_removed`, `allow_added` and `allow_withdrawn`, and no remote and no project of their own. A re-attach that
+`agents_removed`, `allow_added`, `allow_withdrawn` and `rules_left`, and no remote and no project of their own. A re-attach that
 binds the checkout to another project than this machine's record named — a `[project] name`
 renamed in a pulled commit moves every worktree's binding — says so on one line naming both.
 `--check`'s line names no project.
@@ -1750,9 +1750,11 @@ The ledger sits in the git common directory beside the binding id, where a branc
 nothing a branch commits names what a re-attach or `detach` takes back. **An upgrade from a release that
 kept the ledger in `.stayfixed/local/attach.json`** neither reads nor removes that file: delete it,
 run `attach` again to rebuild the ledger, and note that `detach` does not remove the allow rules and
-the directories an attach merged before the move, so take those out by hand. **A re-attach also removes a `.codex/rules/` copy** the ledger
-names that the overlay no longer holds, so a rule file dropped from a plate, or a tag taken off the
-project, is gone from Codex's view with the next run. **`.gitignore` is never written**: it is tracked, so
+the directories an attach merged before the move, so take those out by hand. **A re-attach removes no `.codex/rules/` copy**: a
+file dropped from a plate, or a tag taken off the project, may since have been committed or edited
+by the team, so the run leaves it, keeps it on the ledger and says `Codex rule copy no longer in the
+overlay: <path>` (`rules_left` in `--json`); remove it, or run `detach`, which removes every copy `attach`
+placed. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
 release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
 `init`'s.

@@ -213,7 +213,9 @@ class Attached:
     `binding_recorded` says whether this run bound a checkout this machine did not bind before.
     `added` and `removed` are the executable diff against the render the last run left, and
     `allow_added` the allow rules this run merged and `allow_withdrawn` those it took back; all
-    four are the overlay's.
+    four are the overlay's. `rules_left` is each `.codex/rules/` copy an earlier attach placed that
+    the overlay no longer holds and that is still there: a re-attach removes no Codex copy, so
+    `detach` or the owner does.
     """
 
     settings_written: bool
@@ -227,6 +229,7 @@ class Attached:
     removed: Carried = Carried()
     allow_added: tuple[str, ...] = ()
     allow_withdrawn: tuple[str, ...] = ()
+    rules_left: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -628,7 +631,14 @@ def _write_ledger(
     and the second call would otherwise union against the file the first call just wrote.
     """
     previous, binding = planned.previous, planned.binding
-    rules = tuple(target for target, _ in planned.rules)
+    # The union for the rule files, and for a sharper reason than the one in the docstring. A file
+    # deleted from the overlay between two attaches is not written this time and so drops out of a
+    # ledger built from this run alone, while the copy from the first attach is still in
+    # `.codex/rules/`, where Codex reads it as a standing instruction. `detach` would then leave an
+    # agent-steering file behind. A re-attach removes no copy, since the team may have committed
+    # or edited it since (`Attached.rules_left` names it instead), so it stays recorded.
+    rules = list(previous.rules) if previous is not None else []
+    rules += [target for target, _ in planned.rules if target not in rules]
     # Only the rules the overlay grants now: one it no longer grants leaves the ledger whether or
     # not the settings file still held it, or a copy the owner types by hand later would be taken.
     granted = planned.diff.granted
@@ -647,9 +657,7 @@ def _write_ledger(
         # No hook entry is merged any more, and the settings file this run writes has taken back
         # every one the earlier ledger recorded.
         "entries": {},
-        # Only this run's copies: the ones the earlier ledger named and the overlay no longer holds
-        # were removed before any ledger is written (`planned.dropped`), so none is left unrecorded.
-        "rules": list(rules),
+        "rules": rules,
         "settings_keys": list(settings_keys),
         "directories": [name for name in CREATED_DIRS if name in made],
         # The digest, never the id and never a path on this machine (`render.Rendered`).
@@ -799,8 +807,6 @@ class AttachPlan:
     hidden: exclude.ExcludeWrite | None
     # Each `.codex/rules/` target and the text to copy there.
     rules: tuple[tuple[str, str], ...]
-    # The rule copies the earlier ledger names that the overlay no longer holds, removed by the run.
-    dropped: tuple[str, ...]
     # What the rendered plugin carries, read from the overlay (`render.read_parts`).
     parts: dict[str, Part]
 
@@ -968,11 +974,6 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     # after the first write: the overlay's rule sources (a file that is not UTF-8) and what the
     # rendered plugin carries (a hook file of a shape it cannot read, a skill that cannot be read).
     rules = _codex_rule_texts(binding)
-    kept = {target for target, _ in rules}
-    dropped = tuple(rule for rule in previous.rules if rule not in kept) if previous else ()
-    for rule in dropped:
-        # The removal's walk, asked here as the writes' is: a link on the way refuses first.
-        contained(root, rule, allow_final_symlink=True)
     parts = read_parts(binding.plates)
     return AttachPlan(
         config=config,
@@ -989,7 +990,6 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         placed=placed,
         hidden=hidden,
         rules=rules,
-        dropped=dropped,
         parts=parts,
     )
 
@@ -1015,10 +1015,6 @@ def _carry_out(
         raise Refusal(exclude.NOT_IGNORED.format(paths=named_placed(shown)))
     for target, text in planned.rules:
         fsops.write_within(root, target, text)
-    # As `detach` removes a recorded copy: Codex reads whatever stays there as a standing rule.
-    for rule in planned.dropped:
-        if fsops.is_file(root / rule):
-            fsops.remove_within(root, rule)
     rules = tuple(target for target, _ in planned.rules)
     written = planned.settings is not None
     if planned.settings is not None:
@@ -1091,6 +1087,11 @@ def _carry_out(
         removed=before.without(after),
         allow_added=planned.diff.added_allow,
         allow_withdrawn=planned.diff.withdrawn_allow,
+        rules_left=tuple(
+            rule
+            for rule in (previous.rules if previous is not None else ())
+            if rule not in rules and fsops.is_file(root / rule)
+        ),
     )
 
 

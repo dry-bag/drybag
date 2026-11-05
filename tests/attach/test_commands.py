@@ -171,6 +171,23 @@ def test_a_re_attach_names_each_allow_rule_it_takes_back(
     assert f"allow rule withdrawn: {quoted(RULE)}" in capsys.readouterr().out
 
 
+def test_a_re_attach_names_each_codex_rule_copy_the_overlay_no_longer_holds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    _overlay_grants(store, codex="# standing rule\n")
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
+    capsys.readouterr()
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    out = capsys.readouterr().out
+    assert f"Codex rule copy no longer in the overlay: {quoted('.codex/rules/common.rules')}" in out
+    assert (root / ".codex" / "rules" / "common.rules").is_file()
+    assert invoke(["attach", "--json", *_flags(root, store, machine)]) == 0
+    assert json.loads(capsys.readouterr().out)["rules_left"] == [".codex/rules/common.rules"]
+
+
 def test_an_origin_carrying_credentials_is_neither_printed_nor_recorded_with_them(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

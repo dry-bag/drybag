@@ -1581,8 +1581,8 @@ def _status(root: Path) -> list[str]:
 
 
 def _placed() -> list[str]:
-    """Every path `attach` puts into the project for this fixture, the ledger aside: the Codex
-    rule it copies and the settings file."""
+    """Every path `attach` puts into the project for this fixture: the Codex rule it copies and
+    the settings file."""
     return [".codex/rules/common.rules", SETTINGS]
 
 
@@ -2746,26 +2746,24 @@ def test_an_unreadable_project_record_stops_attach_with_nothing_written(tmp_path
     assert "Bash(x)" in _allowed(root)
 
 
-def test_untagging_removes_the_codex_rule_copies_the_overlay_no_longer_holds(
+def test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it(
     tmp_path: Path,
 ) -> None:
-    from stayfixed.doctor import checks as doctor_checks
-    from tests.doctor.test_checks import _by_name, _env
-
-    root, store, machine = _attachable(tmp_path, allow=(RULE,))
-    overlay = _tagged(store, "a")
-    (overlay / "groups" / "a" / "codex" / "a.rules").write_text("# tag\n", encoding="utf-8")
+    # The team commits `.codex/rules/common.rules` after `attach` placed it, then the overlay drops
+    # the rule: the next routine `attach` must not delete a file the checkout tracks. It leaves
+    # every copy standing, keeps it in the ledger for `detach`, and names it.
+    # Mutation: `mutations/`'s "re-attach removes a Codex copy the overlay dropped".
+    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
+    _committed(root)
     attach(root, store=store, machine=machine, runner=Recorder())
-    assert (root / ".codex" / "rules" / "a.rules").is_file()
-    _untag(store)
-    attach(root, store=store, machine=machine, runner=Recorder())
-    assert not (root / ".codex" / "rules" / "a.rules").exists()
-    assert ledger(root).rules == ()
-    row = _by_name(
-        doctor_checks.run_checks(root, home=None, machine=machine, env=_env(tmp_path)),
-        "attached",
-    )
-    assert row.status == "ok"
+    copy = ".codex/rules/common.rules"
+    _git(root, "add", "-f", copy)
+    _git(root, "commit", "-qm", "the team keeps the rule")
+    (store.parents[2] / COMMON_CODEX / "common.rules").unlink()
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    assert (root / copy).is_file() and _status(root) == []
+    assert again.rules_left == (copy,)
+    assert ledger(root).rules == (copy,)
 
 
 def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:

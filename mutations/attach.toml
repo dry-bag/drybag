@@ -1804,15 +1804,27 @@ reddens = [
   "tests/attach/test_write.py::test_a_recorded_rule_removed_by_hand_is_not_an_error",
 ]
 
-# Codex reads a `.codex/rules/` copy as a standing instruction: one the overlay stopped holding is
-# removed by the next attach, or an untagged tag keeps steering the agent until `detach`.
+# A Codex copy the overlay stopped holding may since have been committed or edited by the team, and
+# the ledger is how a re-attach would know which copies are stayfixed's: so a re-attach leaves
+# every copy and names it, and `detach` is what removes one.
 [[mutation]]
-name = "re-attach keeps a Codex rule copy the overlay no longer holds"
+name = "re-attach removes a Codex copy the overlay dropped"
 file = "src/stayfixed/attach/write.py"
-before = "    for rule in planned.dropped:\n        if fsops.is_file(root / rule):"
-after = "    for rule in ():\n        if fsops.is_file(root / rule):"
+before = "    rules = tuple(target for target, _ in planned.rules)\n    written"
+after = "    rules = tuple(target for target, _ in planned.rules)\n    for rule in previous.rules if previous else ():\n        if rule not in rules and fsops.is_file(root / rule):\n            fsops.remove_within(root, rule)\n    written"
 reddens = [
-  "tests/attach/test_write.py::test_untagging_removes_the_codex_rule_copies_the_overlay_no_longer_holds",
+  "tests/attach/test_write.py::test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it",
+]
+
+# The ledger keeps every Codex copy any attach placed, or a copy the overlay has since dropped is
+# left in `.codex/rules/` with nothing to name it to `detach`.
+[[mutation]]
+name = "the ledger forgets a Codex copy the overlay dropped"
+file = "src/stayfixed/attach/write.py"
+before = "    rules = list(previous.rules) if previous is not None else []\n"
+after = "    rules = []\n"
+reddens = [
+  "tests/attach/test_detach.py::test_detach_removes_a_rule_file_the_overlay_has_since_deleted",
 ]
 
 # An allow rule taken back is said on the screen the way a granted one is.
