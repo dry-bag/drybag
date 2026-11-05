@@ -122,8 +122,8 @@ file = "src/stayfixed/scaffold/engine.py"
 before = '        if reason is not None:'
 after = '        if reason is not None or record is not None:'
 reddens = [
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[a-new-file-at-an-ignored-place]",
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[a-symlinked-directory-no-value-uses]",
+  "tests/scaffold/test_engine.py::test_a_recorded_unchanged_file_yields_no_action",
+  "tests/scaffold/test_engine.py::test_a_recorded_file_the_tool_wrote_is_updated",
 ]
 
 # git ends a line at `\n` alone. Read as ending at a lone `\r` too, an exclude file whose last line
