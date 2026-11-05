@@ -2078,8 +2078,8 @@ before = '            if read is not None and _launcher(read, source.names, laun
 after = '            if False:'
 reddens = ["tests/test_outbound.py::test_a_launch_of_any_shape_is_found[getattr-literal]"]
 
-# `getattr(os, "O_NOFOLLOW", 0)` and `hasattr(os, "waitid")` use `os` for one attribute that is no
-# launcher; read as handing the module on, they are findings the tree's own `fsops` makes.
+# `getattr(os, "O_NOFOLLOW", 0)` uses `os` for one attribute that is no launcher; read as handing
+# the module on, it is a finding the tree's own `fsops` makes.
 [[mutation]]
 name = "a module getattr or hasattr reads by a literal name is taken for handed on"
 file = "tests/outbound/walk.py"
