@@ -143,8 +143,8 @@ uv tool install stayfixed
 ```
 
 **Requirements: Python 3.11 or newer, and a POSIX system.** The hooks take the `python3` on `PATH`,
-or else uv, which is asked from `/` with `--no-config` so that no repository file chooses the
-interpreter. Linux and macOS are supported and tested; Windows is not. The containment this
+or else uv's, both asked from `/` so that no repository file chooses the interpreter. Linux and
+macOS are supported and tested; Windows is not. The containment this
 project is built on uses `openat` with
 `O_NOFOLLOW` and `O_DIRECTORY`, which have no Windows equivalent.
 

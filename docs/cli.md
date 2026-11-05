@@ -448,13 +448,15 @@ floor, and on `PreToolUse` Claude Code reads a `2` as a refusal of the call. So 
 three things before stayfixed runs: it unsets an inherited `GIT_DIR` and `GIT_WORK_TREE`, which
 would make every `git` answer about another repository, and changes into the project root
 (`CLAUDE_PROJECT_DIR`, else `git`'s toplevel) so every command's `--root` default is correct; it
-then takes the `python3` on `PATH` there, where a pyenv, asdf or mise shim chooses by the project's
-own pin, and asks it, by running code, to be 3.11 or newer; and it maps exit codes. Where that
-`python3` is missing or older, and uv is on `PATH`, it takes the interpreter `uv python find --no-config
---no-python-downloads '>=3.11'` names, asked from `/` and not from the project root: uv reads
-`.python-version`, `pyproject.toml` and `uv.toml` from its working directory and its parents, and
-runs the `.venv/bin/python` it finds there to ask its version (measured with uv 0.12.19), so a
-repository could choose the program every hook starts, and in `/` it does not.
+takes its interpreter from `PATH` resolved in `/`, which a repository cannot move because it writes
+no file there; and it maps exit codes. The `python3` found from `/` is asked, by running code, to be
+3.11 or newer and to print the binary it really is, which then runs stayfixed from the project
+root. Where that `python3` is missing or older, it takes the interpreter `uv python find '>=3.11'`
+names, also asked from `/`. Asked from the project root, an empty or relative `PATH` element would
+run a `python3` the repository commits, a pyenv, asdf or mise shim would run what the project's own
+pin names, and uv reads `.python-version`, `pyproject.toml` and `uv.toml` from its working
+directory and its parents and runs the `.venv/bin/python` it finds there to ask its version
+(measured with uv 0.12.19).
 
 No handler refuses a call, so stayfixed's non-zero exit is always a fault. `0` passes through
 untouched. Every non-zero exit, and every fault the wrapper finds before `stayfixed` runs — no
