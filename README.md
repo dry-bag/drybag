@@ -342,7 +342,7 @@ address, and `core.fsmonitor` runs a program when git looks for changed files.
 ## The threat model, in one paragraph
 
 **A repository is untrusted input.** A clone you have not read can commit a `stayfixed.toml`, a
-`MEMORY.md`, a `.stayfixed/manifest.json`, a `.claude/settings.json` `env` block and a tree of
+`MEMORY.md`, a `.claude/settings.json` `env` block and a tree of
 symlinks, and every one of those reaches stayfixed before you do. So a note counts as yours only
 once you promote it (`stayfixed memory promote`), which records its digest in `trust.json` outside
 every tree; until then, and again after any edit, it reaches the model as the harness delivers the

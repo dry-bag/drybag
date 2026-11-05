@@ -9,11 +9,10 @@ file keeps only the allow rules the ledger names, and the plugin's `enabledPlugi
 holds the entries that release merged, named by its ledger's `entries`: `attach` takes back
 exactly those, through `scaffold.withdraw_entries`, and records none.
 
-*Not the scaffold engine's `plan`/`apply` for the settings file.* The engine stamps a digest of
-the document into the **committed** `.stayfixed/manifest.json`, which would publish a digest of
-the owner's personal allow rules to every collaborator. The pure functions are called
-instead — document string in, document string out, no manifest — and the ledger below takes
-the manifest's place. This is the one place where refusing an existing mechanism is right.
+*Not the scaffold engine's `plan`/`apply` for the settings file.* The engine writes whole files
+and marked regions and has no kind that edits entries inside a settings document, so the pure
+functions are called instead — document string in, document string out, no manifest — and the
+ledger below records what was written.
 
 An allow rule cannot carry a marker — `scaffold.mark` appends to a *command* — so it has exactly
 **one** witness, the ledger at `.stayfixed/local/attach.json`, and `detach` is only ever as good

@@ -1,6 +1,6 @@
 Keys nothing read any more are gone. Delete each from an existing `stayfixed.toml`, or every
 command that loads it exits 1 with the loader's refusal, `[stayfixed] has unknown key(s): agents`
-for the first. `stayfixed doctor` warns `not-initialised`, names each among the settings it
+for the first. `stayfixed doctor` warns `not-initialised`, says how many settings it
 ignored and exits 0, and a session's hooks load the file the same way:
 
 - `[stayfixed] agents`, with `stayfixed init --agent` and the agents question of
@@ -15,8 +15,8 @@ ignored and exits 0, and a session's hooks load the file the same way:
   already do, so a project on the defaults loses nothing.
 
 `stayfixed init` writes nothing into a `stayfixed.toml` you wrote. It no longer adds a missing
-`[stayfixed] version`, and no longer refuses a file the next command cannot load: that command
-exits 1 naming what the file lacks, `[stayfixed] is missing required key(s): version` for this
+`[stayfixed] version`: the next command that loads the file
+exits 1 naming what it lacks, `[stayfixed] is missing required key(s): version` for this
 key, and the remedy is the line written by hand. A `stayfixed.toml` `init` creates no longer says
 in its header that stayfixed rewrites `[stayfixed] version`, since no command does.
 

@@ -41,8 +41,8 @@ the base branch first.
 `docs/bug-reports.md`, `docs/bugs/audits/README.md`, and the `stayfixed:ignore` region, which keeps
 `.stayfixed/local/` out of git. It writes no `AGENTS.md`, `CLAUDE.md` or workflow, and
 `init --json` carries no `skipped` key. Its `--local`, `--commit-type` and `--no-ci` flags are gone,
-and `init --questions` no longer asks about CI or commit types. `stayfixed doctor` reports thirteen
-rows: the `ci-ref` row went with `[ci]`.
+and `init --questions` no longer asks about CI or commit types. `stayfixed doctor` has no `ci-ref`
+row any more: it went with `[ci]`.
 
 The generated bug index no longer links a runbook, since `init` no longer writes one: run
 `stayfixed bugs index` once and commit it, or `bugs index --check` and `bugs check` report the
