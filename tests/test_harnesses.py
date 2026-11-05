@@ -301,10 +301,7 @@ LISTED = {
 PROSE = {
     # Messages naming the Codex rule files `attach` places, and `--check` would place.
     ("src/stayfixed/attach/check.py", "codex"): 1,
-    # The instruction file Claude Code reads beside `AGENTS.md`, which `owner-files` asks the
-    # session to read now when it placed either.
-    ("src/stayfixed/attach/checkout.py", "claude"): 1,
-    ("src/stayfixed/attach/commands.py", "codex"): 2,
+    ("src/stayfixed/attach/commands.py", "codex"): 3,
     # The advice `setup --approval-boundary` prints, which names the harness whose settings it is.
     ("src/stayfixed/setup/commands.py", "claude"): 1,
     # The commit-trailer guard's names of tools that sign commits as authors: the agent as an

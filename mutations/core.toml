@@ -5658,11 +5658,11 @@ reddens = ["tests/prove/test_junit.py::test_a_todo_testcase_is_skipped_whatever_
 [[mutation]]
 name = "bound_project falls back to the repository's project name"
 file = "src/stayfixed/binding.py"
-before = """    id = read_id(root)
+before = """    id = read_id(root, common=common)
     if id is None:
         return None
 """
-after = """    id = read_id(root)
+after = """    id = read_id(root, common=common)
     if id is None:
         name = tomllib.loads((root / "stayfixed.toml").read_text())["project"]["name"]
         return Bound(name, None, root)
