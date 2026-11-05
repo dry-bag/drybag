@@ -2225,18 +2225,17 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
    it);
 2. the plugins the overlay's machine settings enable: `<overlay>/machine/claude/settings.json` is
    the overlay's copy of Claude Code's user settings, and restore reads two keys of it and writes
-   nothing from it. Each `extraKnownMarketplaces.<name>.source` that is `{"source": "github",
-   "repo": "owner/name"}` (with an optional `ref`) or `{"source": "git", "url": …}` with an `https://`
-   or `git@` URL is added with `claude plugin marketplace add <owner/name[@ref] or URL>` when
-   `claude plugin marketplace list --json` does not name it; any other shape, or a value that could
-   read as an option, is a note and is not added. Each `enabledPlugins` entry that is `true` and
-   reads `<name>@<marketplace>` is installed with `claude plugin install <id>` when `claude plugin
-   list --json` does not name it at user scope. A non-zero exit is a note naming the argv, never a
-   refusal; without `claude` on `PATH` there is one note and nothing is launched. The list is Claude
-   Code's: where `codex` is on `PATH`, one note says nothing was installed for it. A second run
-   asks the two listings and installs nothing. The ids installed count among machine setup's
-   `plugin(s) installed` and `--json`'s `plugins_installed`, and each note is printed among its
-   notes, in its summary line and in `--json`'s `notes`;
+   nothing from it. Each `extraKnownMarketplaces.<name>.source` that is exactly `{"source":
+   "github", "repo": R}` or `{"source": "git", "url": U}`, string values, is added with `claude plugin
+   marketplace add R` or `… U`; a source of another kind, or holding any other key (a `git`
+   source's `ref`, a `github` source's `path` or `sparsePaths`), is a note naming the marketplace
+   and what restore does not carry, and is not added. Each `enabledPlugins` key whose value is `true`
+   is installed as written with `claude plugin install <id>`. These are `setup --plugin`'s own argv,
+   and a non-zero exit, a missing `claude` included, is a note quoting what it said, never a
+   refusal. A second restore runs them again, and whatever Claude Code answers for a marketplace
+   already registered or a plugin already installed is what you see. The ids installed count among
+   machine setup's `plugin(s) installed` and `--json`'s `plugins_installed`, and each note is
+   printed among its notes, in its summary line and in `--json`'s `notes`;
 3. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
    that is not there is reported `absent` and skipped; a checkout with no `stayfixed.toml` is
    attached under the project its table key names, as `attach --project` would; a checkout `attach`

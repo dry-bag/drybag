@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import json
 import shutil
+from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from stayfixed.setup.restore import (
     missing_tools,
     restore,
 )
+from stayfixed.setup.run import _MARKETPLACE_ADD, _PLUGIN_INSTALL
 from tests.attach.test_binding import CONFIG
 from tests.gitfixture import git
 from tests.runners import Recorder
@@ -131,17 +133,6 @@ def invoke(argv: list[str]) -> tuple[int, str, str]:
     with redirect_stdout(io.StringIO()) as out, redirect_stderr(io.StringIO()) as err:
         code = run(argv, parser=build_parser(discover_registrars()))
     return code, out.getvalue(), err.getvalue()
-
-
-@pytest.fixture(autouse=True)
-def _a_harness_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`claude` is on `PATH` and `codex` is not, for every case, so none depends on the machine
-    running it; the runner is a `Recorder`, which launches nothing."""
-    real = shutil.which
-    there = {"claude": "/bin/claude", "codex": None}
-    monkeypatch.setattr(
-        shutil, "which", lambda name, *a, **k: there[name] if name in there else real(name)
-    )
 
 
 def test_a_listed_checkout_that_exists_is_attached(tmp_path: Path) -> None:
@@ -431,29 +422,8 @@ def test_restore_prints_the_missing_tools_first_and_still_attaches(
 
 # --- the plugins the overlay's machine settings enable ---------------------------------------
 #
-# The listings' shapes are the ones `claude` 2.1.312 printed under a scratch HOME: a JSON array,
-# `plugin marketplace list` of `{"name", "source", "repo", "installLocation"}` and `plugin list` of
-# `{"id", "version", "scope", "enabled", "installPath", ...}`.
-
-OFFICIAL = "claude-plugins-official"
-MARKETPLACE_LIST = "claude plugin marketplace list --json"
-PLUGIN_LIST = "claude plugin list --json"
-
-
-def _registered(*names: str) -> Completed:
-    rows = [
-        {"name": n, "source": "github", "repo": f"owner/{n}", "installLocation": f"/x/{n}"}
-        for n in names
-    ]
-    return Completed(0, json.dumps(rows, indent=2) + "\n", "")
-
-
-def _installed(*ids: str, scope: str = "user") -> Completed:
-    rows = [
-        {"id": i, "version": "a7ba5b93db0c", "scope": scope, "enabled": True, "installPath": "/x"}
-        for i in ids
-    ]
-    return Completed(0, json.dumps(rows, indent=2) + "\n", "")
+# Restore runs setup's own verbs (`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`) on every run and asks
+# Claude Code no listing: what it answers is what the person sees, as with `setup --plugin`.
 
 
 def _machine_settings(overlay: Path, document: object) -> None:
@@ -469,128 +439,97 @@ def _enabling(*ids: str, marketplaces: dict[str, object] | None = None) -> dict[
     }
 
 
-def _github(repo: str, ref: str | None = None) -> dict[str, object]:
-    source: dict[str, object] = {"source": "github", "repo": repo}
-    if ref is not None:
-        source["ref"] = ref
-    return {"source": source}
+def _plugin_calls(runner: Recorder) -> list[list[str]]:
+    return [c for c in runner.calls if c[:2] == ["claude", "plugin"] and "--scope" not in c]
 
 
-def _plugin_calls(runner: Recorder) -> list[str]:
-    return [
-        " ".join(c) for c in runner.calls if c[:2] == ["claude", "plugin"] and "--scope" not in c
-    ]
-
-
-def test_only_the_missing_marketplaces_and_plugins_are_installed(tmp_path: Path) -> None:
+def test_every_listed_marketplace_and_plugin_is_run_through_setups_argv(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path)
-    _machine_settings(
-        overlay,
-        _enabling(
-            f"have@{OFFICIAL}",
-            f"need@{OFFICIAL}",
-            "other@third",
-            marketplaces={OFFICIAL: _github("o/official"), "third": _github("o/third", "v2")},
-        ),
-    )
-    runner = Recorder(
-        answers={
-            MARKETPLACE_LIST: _registered(OFFICIAL),
-            PLUGIN_LIST: _installed(f"have@{OFFICIAL}"),
-        }
-    )
+    marketplaces: dict[str, object] = {
+        "hub": {"source": {"source": "github", "repo": "o/hub"}},
+        "lab": {"source": {"source": "git", "url": "https://example.com/lab.git"}},
+    }
+    _machine_settings(overlay, _enabling("a@hub", "b@lab", marketplaces=marketplaces))
+    runner = Recorder()
     report = _restore(tmp_path, overlay, (), runner=runner)
+    add: Callable[[str], list[str]] = _MARKETPLACE_ADD["claude"]
+    install: Callable[[str], list[str]] = _PLUGIN_INSTALL["claude"]
     assert _plugin_calls(runner) == [
-        MARKETPLACE_LIST,
-        PLUGIN_LIST,
-        "claude plugin marketplace add o/third@v2",
-        f"claude plugin install need@{OFFICIAL}",
-        "claude plugin install other@third",
+        add("o/hub"),
+        add("https://example.com/lab.git"),
+        install("a@hub"),
+        install("b@lab"),
     ]
-    assert report.plugins == (f"need@{OFFICIAL}", "other@third") and report.notes == ()
-
-
-def test_a_plugin_installed_at_another_scope_is_installed_at_user_scope(tmp_path: Path) -> None:
-    overlay = _overlay(tmp_path)
-    _machine_settings(overlay, _enabling(f"need@{OFFICIAL}"))
-    runner = Recorder(
-        answers={
-            MARKETPLACE_LIST: _registered(OFFICIAL),
-            PLUGIN_LIST: _installed(f"need@{OFFICIAL}", scope="local"),
-        }
-    )
-    _restore(tmp_path, overlay, (), runner=runner)
-    assert f"claude plugin install need@{OFFICIAL}" in _plugin_calls(runner)
+    assert report.plugins == ("a@hub", "b@lab") and report.notes == ()
 
 
 @pytest.mark.parametrize(
-    "source",
+    ("source", "named"),
     [
-        {"source": "directory", "path": "/x"},
-        {"source": "github", "repo": "--upload-pack=x"},
-        {"source": "github", "repo": "o/p", "ref": "-x"},
-        {"source": "github"},
-        {"source": "git", "url": "http://example.com/p.git"},
-        {"source": "git", "url": "--config=x"},
-        {"source": "git", "url": "file:///x"},
-        "o/p",
+        ({"source": "git", "url": "https://example.com/p.git", "ref": "v2"}, "`ref`"),
+        ({"source": "github", "repo": "o/p", "path": "sub"}, "`path`"),
+        ({"source": "github", "repo": "o/p", "sparsePaths": ["a"]}, "`sparsePaths`"),
+        ({"source": "github", "repo": "o/p", "ref": "v2"}, "`ref`"),
+        ({"source": "directory", "path": "/x"}, "github"),
+        ({"source": "directory", "": "/x"}, "github"),
+        ({"source": "github"}, "github"),
+        ({"source": "git", "url": 3}, "github"),
+        ("o/p", "github"),
     ],
     ids=[
+        "git-ref",
+        "github-path",
+        "github-sparse",
+        "github-ref",
         "directory",
-        "option-repo",
-        "option-ref",
+        "blank-key",
         "no-repo",
-        "http",
-        "option-url",
-        "file",
+        "url-number",
         "string",
     ],
 )
-def test_a_marketplace_source_of_another_shape_is_a_note_and_not_added(
-    tmp_path: Path, source: object
+def test_a_marketplace_source_restore_does_not_carry_is_a_note_and_not_added(
+    tmp_path: Path, source: object, named: str
 ) -> None:
     overlay = _overlay(tmp_path)
     _machine_settings(overlay, _enabling(marketplaces={"third": {"source": source}}))
     runner = Recorder()
     report = _restore(tmp_path, overlay, (), runner=runner)
-    assert not any("marketplace add" in c for c in _plugin_calls(runner))
-    assert len(report.notes) == 1 and "third" in report.notes[0]
+    assert not _plugin_calls(runner)
+    assert len(report.notes) == 1 and "third" in report.notes[0] and named in report.notes[0]
 
 
-def test_a_git_marketplace_source_over_https_or_ssh_is_added_as_its_url(tmp_path: Path) -> None:
+def test_an_id_claude_code_refuses_is_a_note(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path)
-    _machine_settings(
-        overlay,
-        _enabling(
-            marketplaces={
-                "a": {"source": {"source": "git", "url": "https://example.com/a.git"}},
-                "b": {"source": {"source": "git", "url": "git@example.com:o/b.git"}},
-            }
-        ),
+    _machine_settings(overlay, _enabling("no-marketplace"))
+    runner = Recorder(answers={"claude plugin install": Completed(1, "", "no such plugin\n")})
+    report = _restore(tmp_path, overlay, (), runner=runner)
+    install: Callable[[str], list[str]] = _PLUGIN_INSTALL["claude"]
+    assert _plugin_calls(runner) == [install("no-marketplace")]
+    assert report.plugins == ()
+    assert report.notes == (
+        "claude: 'claude plugin install no-marketplace' did not succeed ('no such plugin')",
     )
-    runner = Recorder(answers={MARKETPLACE_LIST: _registered(), PLUGIN_LIST: _installed()})
-    _restore(tmp_path, overlay, (), runner=runner)
-    adds = [c for c in _plugin_calls(runner) if "marketplace add" in c]
-    assert adds == [
-        "claude plugin marketplace add https://example.com/a.git",
-        "claude plugin marketplace add git@example.com:o/b.git",
-    ]
+
+
+def test_a_marketplace_claude_code_does_not_register_is_a_note(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    hub: dict[str, object] = {"hub": {"source": {"source": "github", "repo": "o/hub"}}}
+    _machine_settings(overlay, _enabling(marketplaces=hub))
+    runner = Recorder(answers={"claude plugin marketplace": Completed(1, "", "not found\n")})
+    report = _restore(tmp_path, overlay, (), runner=runner)
+    assert report.notes == ("claude: could not register marketplace o/hub ('not found')",)
 
 
 def test_a_failed_install_is_a_note_and_the_projects_still_attach(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path)
     alpha = _checkout(tmp_path, "alpha")
-    _machine_settings(overlay, _enabling(f"need@{OFFICIAL}"))
-    runner = Recorder(
-        answers={
-            MARKETPLACE_LIST: _registered(OFFICIAL),
-            PLUGIN_LIST: _installed(),
-            f"claude plugin install need@{OFFICIAL}": Completed(1, "", "no such plugin\n"),
-        }
-    )
+    _machine_settings(overlay, _enabling("need@hub"))
+    install = "claude plugin install need@hub"
+    runner = Recorder(answers={install: Completed(1, "", "no such plugin\n")})
     report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha), runner=runner)
     assert report.plugins == ()
-    assert len(report.notes) == 1 and f"claude plugin install need@{OFFICIAL}" in report.notes[0]
+    assert len(report.notes) == 1 and install in report.notes[0]
     assert _states(report) == {"alpha": "attached"}
 
 
@@ -599,41 +538,14 @@ def test_a_failed_install_is_printed_by_the_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, json_flag: list[str]
 ) -> None:
     overlay = _overlay(tmp_path)
-    _machine_settings(overlay, _enabling(f"need@{OFFICIAL}"))
-    install = f"claude plugin install need@{OFFICIAL}"
-    runner = Recorder(
-        answers={
-            MARKETPLACE_LIST: _registered(OFFICIAL),
-            PLUGIN_LIST: _installed(),
-            install: Completed(1, "", "no such plugin\n"),
-        }
-    )
+    _machine_settings(overlay, _enabling("need@hub"))
+    install = "claude plugin install need@hub"
+    runner = Recorder(answers={install: Completed(1, "", "no such plugin\n")})
     monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: runner)
     code, out, _ = invoke(_restoring(tmp_path, overlay, *json_flag))
     assert code == 0
     said = json.loads(out)["notes"] if json_flag else [out]
     assert any(install in note for note in said)
-
-
-def test_an_unreadable_listing_is_one_note_and_nothing_is_installed(tmp_path: Path) -> None:
-    overlay = _overlay(tmp_path)
-    _machine_settings(overlay, _enabling(f"need@{OFFICIAL}"))
-    runner = Recorder(answers={MARKETPLACE_LIST: Completed(0, "not json", "")})
-    report = _restore(tmp_path, overlay, (), runner=runner)
-    assert len(report.notes) == 1 and report.plugins == ()
-    assert not any("install" in c for c in _plugin_calls(runner))
-
-
-def test_no_claude_on_path_is_one_note_and_no_launch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    overlay = _overlay(tmp_path)
-    _machine_settings(overlay, _enabling(f"need@{OFFICIAL}"))
-    monkeypatch.setattr(shutil, "which", lambda name, *a, **k: None)
-    runner = Recorder()
-    report = _restore(tmp_path, overlay, (), runner=runner)
-    assert len(report.notes) == 1 and "claude" in report.notes[0]
-    assert not runner.calls
 
 
 def test_an_overlay_with_no_machine_settings_lists_no_plugins(tmp_path: Path) -> None:
@@ -660,38 +572,11 @@ def test_machine_settings_of_another_shape_list_nothing_and_say_so(
     assert marketplaces == () and ids == () and len(notes) == 1
 
 
-def test_only_enabled_plugin_ids_of_the_form_name_at_marketplace_are_listed(tmp_path: Path) -> None:
+def test_every_enabled_plugin_id_is_listed_as_written(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path)
-    _machine_settings(
-        overlay,
-        {
-            "enabledPlugins": {
-                "a@m": True,
-                "b@m": False,
-                "no-marketplace": True,
-                "--flag@m": True,
-                "c@--m": True,
-                "d@m": "yes",
-                "e@m@n": True,
-            }
-        },
-    )
-    assert listed_plugins(overlay)[1] == ("a@m",)
-
-
-def test_codex_gets_one_note(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # The overlay's list is Claude Code's: where `codex` is on `PATH` too, it is told nothing was
-    # installed for it, once, and no `codex` program is launched.
-    real = shutil.which
-    monkeypatch.setattr(
-        shutil, "which", lambda name, *a, **k: "/bin/codex" if name == "codex" else real(name)
-    )
-    overlay = _overlay(tmp_path)
-    _machine_settings(overlay, _enabling(f"need@{OFFICIAL}"))
-    runner = Recorder(answers={MARKETPLACE_LIST: _registered(OFFICIAL), PLUGIN_LIST: _installed()})
-    report = _restore(tmp_path, overlay, (), runner=runner)
-    assert not any(c[0] == "codex" for c in runner.calls)
-    assert sum("Codex" in note for note in report.notes) == 1
+    enabled = {"a@m": True, "b@m": False, "no-marketplace": True, "d@m": "yes", "e@m@n": True}
+    _machine_settings(overlay, {"enabledPlugins": enabled})
+    assert listed_plugins(overlay)[1] == ("a@m", "no-marketplace", "e@m@n")
 
 
 # --- `--yes`: the overlay's notes, recorded as reviewed -----------------------------------------

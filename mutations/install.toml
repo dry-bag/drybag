@@ -1268,3 +1268,16 @@ file = "src/stayfixed/setup/restore.py"
 before = "        if yes:"
 after = "        if True:"
 reddens = ["tests/setup/test_restore.py::test_without_yes_no_note_is_recorded_as_reviewed"]
+
+# A marketplace source that holds a key restore does not carry (a `git` source's `ref`, a `github`
+# source's `path` or `sparsePaths`) would be registered without it, unpinned or at the root, and
+# so not be the marketplace the overlay's settings name; it is a note and is not added.
+[[mutation]]
+name = "restore adds a marketplace whose source holds a key it does not carry"
+file = "src/stayfixed/setup/restore.py"
+before = '        elif extra := sorted(set(source) - {"source", key}):'
+after = "        elif extra := []:"
+reddens = [
+  "tests/setup/test_restore.py::test_a_marketplace_source_restore_does_not_carry_is_a_note_and_not_added[git-ref]",
+  "tests/setup/test_restore.py::test_a_marketplace_source_restore_does_not_carry_is_a_note_and_not_added[github-path]",
+]
