@@ -1968,7 +1968,7 @@ file = "src/stayfixed/jsonobject.py"
 before = "    except ValueError:"
 after = "    except ZeroDivisionError:"
 reddens = [
-  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_merge",
+  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_withdrawal",
   "tests/attach/test_write.py::test_a_settings_file_holding_a_number_past_the_parsers_reach_is_refused",
   "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[long-number]",
   "tests/attach/test_write.py::test_a_ledger_holding_a_number_past_the_parsers_reach_is_a_failure_and_never_an_internal_error",
@@ -2491,7 +2491,7 @@ after = """
     except ZeroDivisionError:
 """
 reddens = [
-  "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested[apply-entries]",
+  "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested",
 ]
 
 # The depth bound sits where every interpreter can write back what it read: above what a harness

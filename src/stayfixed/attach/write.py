@@ -1260,7 +1260,7 @@ def _emptied(raw: dict[str, Any]) -> dict[str, Any]:
 
     An empty `permissions.allow` is not what the file looked like before `attach`, and the round
     trip this command promises is measured in bytes: `tests/attach/test_detach.py` snapshots
-    every file under the root and compares. `apply_entries` already does the same for `hooks`.
+    every file under the root and compares. `withdraw_entries` does the same for `hooks`.
     """
     permissions = raw.get("permissions")
     if isinstance(permissions, dict):

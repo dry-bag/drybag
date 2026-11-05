@@ -400,8 +400,8 @@ def test_detach_leaves_a_rule_the_ledger_does_not_claim(tmp_path: Path) -> None:
 
 
 def test_detach_leaves_a_hook_entry_that_was_never_marked(tmp_path: Path) -> None:
-    # The same rule for the other half of the file. `scaffold.apply_entries` splits a group
-    # rather than replacing it, so a developer's own entry beside stayfixed's survives — and
+    # The same rule for the other half of the file. `scaffold.withdraw_entries` splits a group
+    # rather than dropping it, so a developer's own entry beside stayfixed's survives — and
     # this is the command whose mistake would delete it.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], hooks=True)

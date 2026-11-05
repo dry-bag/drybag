@@ -177,27 +177,18 @@ file = "src/stayfixed/scaffold/entries.py"
 before = "    return settings_object(document, numbers=str)"
 after = "    return settings_object(document)"
 reddens = [
-  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_merge",
+  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_withdrawal",
 ]
 
 # In the block led by `mutations/`'s "the JSON writer lets an encode past the interpreter's
 # recursion escape": the settings engine writes back through that one writer.
 [[mutation]]
-name = "the settings engine writes a merge back with a bare encode"
+name = "the settings engine writes a withdrawal back with a bare encode"
 file = "src/stayfixed/scaffold/entries.py"
 before = '    return settings_text(raw) + "\n"'
 after = '    return json.dumps(raw, indent=2) + "\n"'
 reddens = [
-  "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested[apply-entries]",
-]
-
-[[mutation]]
-name = "the settings engine renders its own entries with a bare encode"
-file = "src/stayfixed/scaffold/entries.py"
-before = "    return settings_text(claimed, sort_keys=True)"
-after = "    return json.dumps(claimed, indent=2, sort_keys=True)"
-reddens = [
-  "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested[owned]",
+  "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested",
 ]
 
 # An artifact the engine cannot read is named relative to the project, its reason in words: the
