@@ -154,7 +154,7 @@ def _released(fifo: int) -> bool:
 def test_a_timed_out_regression_ends_its_whole_group(tmp_path: Path) -> None:
     # The command's background child holds the FIFO open for as long as it lives, and an ended
     # child's descriptors close: the FIFO reads its end only once the whole group is gone, not
-    # the command alone. Mutation (oracle): `mutations/`'s "a timed-out custom gate's children run
+    # the command alone. Mutation (oracle): `mutations/`'s "a timed-out regression's children run
     # on after it reported" -> the child outlives the run.
     pipe = tmp_path / "held"
     os.mkfifo(pipe)

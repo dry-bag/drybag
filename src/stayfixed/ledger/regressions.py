@@ -5,7 +5,7 @@ Which statuses run, and why the run is a convenience and not a control, `docs/cl
 
 Each argv runs from the project root, under the caller's environment, with the command's
 `--timeout` as its bound, in a session of its own, so what it starts shares its process group,
-which `stayfixed.processes` ends however the run finishes. No runner's report is read: exit 0 is
+which `stayfixed.processes` ends on a timeout or an interrupt. No runner's report is read: exit 0 is
 `passed`, any other exit `failed`.
 """
 
@@ -26,8 +26,7 @@ if TYPE_CHECKING:
     from stayfixed.config.schema import Config
 
 # A named cap: how long one regression may run when `--timeout` does not say, in seconds. Ten
-# minutes, the value `[gates] custom_timeout_seconds` held in `presets/recommended.toml` before
-# the gates went, so a project that ran its regressions under that bound runs them under the same.
+# minutes, the bound regressions ran under before this command had an option of its own.
 DEFAULT_TIMEOUT_SECONDS = 600
 
 PASSED = "passed"
@@ -66,9 +65,10 @@ def regressions(root: Path, config: Config, *, timeout: int) -> list[tuple[Entry
 
 def _run(argv: Sequence[str], root: Path, timeout: int) -> Run:
     try:
-        # S603: the entry's own argv, list form, never a shell. Standard input is `/dev/null`, never
-        # the caller's, which could drive the command; its standard output is stayfixed's standard
-        # error, so that under `--json` standard output holds the one object.
+        # S603: the entry's own argv, list form, never a shell. Standard input is `/dev/null`, so a
+        # command that reads it ends at once instead of waiting on the terminal until `--timeout`;
+        # its standard output is stayfixed's standard error, so that under `--json` standard output
+        # holds the one object.
         process = subprocess.Popen(  # noqa: S603
             list(argv), cwd=root, stdin=subprocess.DEVNULL, stdout=2, start_new_session=True
         )
@@ -76,16 +76,15 @@ def _run(argv: Sequence[str], root: Path, timeout: int) -> Run:
         return Run(NOT_RUN, fsops.said(error))
     stopped: Run | None = None
     try:
-        processes.exited(process, timeout)
+        process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         stopped = Run(TIMED_OUT, f"ran past {timeout} s and was ended")
     except KeyboardInterrupt:
         stopped = Run(INTERRUPTED, "the run was interrupted and ended")
-    finally:
-        # However it finished, what it left in its group goes, while its pid is unreaped.
+    if stopped is not None:
+        # Not yet reaped, so its pid still names its own group alone: what it started goes with it.
         processes.kill_group(process)
         process.wait(timeout=processes.KILL_WAIT_SECONDS)
-    if stopped is not None:
         return stopped
     code = process.returncode
     return Run(PASSED if code == 0 else FAILED, f"exit {code}")

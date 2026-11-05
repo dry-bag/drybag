@@ -423,8 +423,8 @@ stayfixed hook SessionStart                            # dispatch one harness ho
 Commands that read a project take `--root` (default: the current directory) and `--machine` (read
 a machine configuration file other than the default); `memory` commands and `attach` take
 `--store` as well. The commands that take neither, and the ones that mean something else by
-either, are listed in [Shared flags](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#shared-flags). `--json` is accepted anywhere before `--` and
-prints one machine-readable object instead of one line; the words after `--` are the command's own. The commands that report a list of
+either, are listed in [Shared flags](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#shared-flags). `--json` is accepted anywhere and
+prints one machine-readable object instead of one line. The commands that report a list of
 findings — `bugs check`, `docs check`, `plan check` — all spell it `findings`,
 whatever their summary line calls them; every other command's keys are its own and are listed
 with it in [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md).

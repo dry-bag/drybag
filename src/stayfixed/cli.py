@@ -82,12 +82,8 @@ def _finish(groups: SubParsers) -> None:
 
 
 def split_json_flag(argv: list[str]) -> tuple[list[str], bool]:
-    """`--json` is accepted anywhere before the first bare `--`, so every command carries it
-    without declaring it. The words after that `--` are a command's own, which another program
-    reads, so none of them is read or taken here."""
-    cut = argv.index("--") if "--" in argv else len(argv)
-    head = argv[:cut]
-    return [arg for arg in head if arg != "--json"] + argv[cut:], "--json" in head
+    """`--json` is accepted anywhere, so every command carries it without declaring it."""
+    return [arg for arg in argv if arg != "--json"], "--json" in argv
 
 
 def _report(kind: str, message: str, code: int, as_json: bool) -> int:

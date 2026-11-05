@@ -356,15 +356,8 @@ def test_a_base_exception_in_a_command_is_an_internal_error_not_the_interpreters
     [
         (["doctor", "--json"], ["doctor"], True),
         (["--json", "doctor"], ["doctor"], True),
-        (["run", "--json", "--", "x", "--json"], ["run", "--", "x", "--json"], True),
-        (["run", "--", "x", "--json"], ["run", "--", "x", "--json"], False),
-        (["run", "--", "x", "--", "--json"], ["run", "--", "x", "--", "--json"], False),
+        (["doctor"], ["doctor"], False),
     ],
 )
-def test_json_is_read_before_the_first_separator_and_never_after_it(
-    argv: list[str], kept: list[str], as_json: bool
-) -> None:
-    # The words after a bare `--` are a command's own, which another program reads: `run -- x
-    # --json` hands `--json` to `x`. Mutation (declared): every `--json` on the line stripped ->
-    # `x`'s is taken.
+def test_json_is_read_anywhere_on_the_line(argv: list[str], kept: list[str], as_json: bool) -> None:
     assert split_json_flag(argv) == (kept, as_json)

@@ -4118,22 +4118,11 @@ reddens = [
 # uses; its tests drive it ---
 
 [[mutation]]
-name = "a timed-out custom gate's children run on after it reported"
+name = "a timed-out regression's children run on after it reported"
 file = "src/stayfixed/processes.py"
 before = "        os.killpg(process.pid, signal.SIGKILL)"
 after = "        process.kill()"
 reddens = ["tests/ledger/test_regressions.py::test_a_timed_out_regression_ends_its_whole_group"]
-
-# The words after a bare `--` are a command's own: `--json` is read before it alone.
-[[mutation]]
-name = "the frame takes a --json after the separator"
-file = "src/stayfixed/cli.py"
-before = '    cut = argv.index("--") if "--" in argv else len(argv)'
-after = "    cut = len(argv)"
-reddens = [
-  "tests/test_cli.py::test_json_is_read_before_the_first_separator_and_never_after_it[argv2-kept2-True]",
-  "tests/test_cli.py::test_json_is_read_before_the_first_separator_and_never_after_it[argv3-kept3-False]",
-]
 
 [[mutation]]
 name = "the one appending write opens without O_APPEND"

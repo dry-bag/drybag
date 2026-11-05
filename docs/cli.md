@@ -5,9 +5,8 @@ gives you the one-line version; this is the rest.
 
 Three things hold everywhere:
 
-- **`--json` is accepted anywhere before `--`** and prints one machine-readable object instead of
-  one line. It is not declared per command — the frame strips it from `argv` before parsing. The
-  words after a bare `--` are a command's own and are never read for it. A command whose result is a list of findings carries it under **`findings`**, named after what the
+- **`--json` is accepted anywhere** and prints one machine-readable object instead of
+  one line. It is not declared per command — the frame strips it from `argv` before parsing. A command whose result is a list of findings carries it under **`findings`**, named after what the
   values are and spelled the same way by every command, whatever its summary line calls them.
   Three commands do: `bugs check`, `docs check` and `plan check`. Every other
   command's keys are its own and are listed with it below — `doctor`'s `checks`, `docs trail`'s
@@ -913,8 +912,8 @@ still open and a `void` one is a renumber's pointer.
 Each run's exit code is its verdict, and no test runner's report is read: `passed` (exit 0),
 `failed` (any other exit), `timed-out` (past `--timeout`), `interrupted` (a Ctrl-C, or a SIGTERM
 or SIGHUP to stayfixed, during the run) or `not-run` (the argv could not be started). Each run
-starts in a session of its own, and whatever it started in that process group is ended with SIGKILL
-however it finishes. An interrupted run is the last: nothing after it starts.
+starts in a session of its own, and on a timeout or an interrupt whatever it started in that process
+group is ended with SIGKILL. An interrupted run is the last: nothing after it starts.
 
 The line names each run, `<id>: <verdict>: <detail>`, the detail being the exit code (`exit 3`),
 the bound it ran past, or why it could not start, and ends `<n> regression(s), <m> not passed`;
