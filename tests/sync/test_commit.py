@@ -1,11 +1,10 @@
-"""The job's commit of memory through a temporary index, and the alignment of the real index.
+"""The job's commit of memory: `git commit --only` of the notes the status lists.
 
-The commit is built without the working tree or the real index ever being used for it: a temporary
-index read from `HEAD`, the three memory pathspecs added to it, the scan run against it,
-`write-tree` and `commit-tree`, and `main` moved by compare-and-swap. Then the real index's memory
-entries are aligned with the new `HEAD`, so an unrelated `git commit` by the owner cannot carry the
-old notes back. The owner's work in progress -- staged or not, outside memory -- is never touched,
-and a kill at any point before the swap leaves everything as it was.
+A new note is added intent-to-add first, and each is judged by what git would record from the
+working tree: a path that is not a plain-text note, or that a link or a file stands above, is left
+out and named, and a note holding a secret waits while the others commit. git then commits exactly
+those notes, with no hook, moves `main` and updates the real index for those paths alone, so the
+owner's work in progress -- staged or not, outside memory -- stays as it was.
 """
 
 from __future__ import annotations
@@ -15,19 +14,17 @@ import shutil
 import signal
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
 
 import pytest
 
 from stayfixed.sync import job as J
-from stayfixed.sync.state import LOCK_FILE, Lock, Outcome, read_state
+from stayfixed.sync.state import LOCK_FILE, Lock, Outcome
 from tests.gitfixture import run_git
 from tests.sync.conftest import (
     HOST,
     LEAK,
-    PATHSPEC,
     TAG,
     Overlays,
     commit_all,
@@ -104,10 +101,9 @@ def test_never_commits_outside_pathspec(overlays: Overlays) -> None:
 
 
 def test_non_notes_are_never_staged_so_nothing_is_refused(overlays: Overlays) -> None:
-    # The pathspec keeps non-notes out of the temporary index in the first place. The refusal of
-    # offending entries would still keep them out of the commit, so only the refusal list tells
-    # "never staged" from "staged, then refused". Mutation (oracle): `mutations/`'s "the sync
-    # commit stages the whole tree".
+    # The status's pathspec keeps non-notes out of the commit in the first place. The refusal of
+    # offending entries would still keep them out, so only the refusal list tells "never listed"
+    # from "listed, then refused".
     a = overlays.a
     write(a, "common/claude/hooks/x.py", "print('edited')\n")
     write(a, "projects/alpha/checkout/memory/x.md", "not a note\n")
@@ -168,7 +164,7 @@ def test_a_dirty_index_is_never_committed(overlays: Overlays) -> None:
 
 def test_link_and_nested_repository_under_memory_are_not_committed(overlays: Overlays) -> None:
     # Both named like notes, so only their modes refuse them. Mutation (oracle): `mutations/`'s
-    # "the temporary index keeps what is not a note".
+    # "an offending note is committed".
     a = overlays.a
     (a / "common/memory/pw.md").symlink_to("/etc/passwd")
     nested = a / "common/memory/nested.md"
@@ -252,6 +248,27 @@ def test_dot_paths_non_md_and_binary_under_memory_are_refused_and_named(
     assert ("A", "common/memory/fine.md") in committed(a)
 
 
+def test_a_link_an_executable_or_a_binary_note_is_refused_and_leaves_no_index_entry(
+    overlays: Overlays,
+) -> None:
+    # Each new one is added intent-to-add to be judged, and dropped again when refused.
+    # Mutation (oracle): `mutations/`'s "an offending note is committed".
+    a = overlays.a
+    link, script, blob = "common/memory/pw.md", "common/memory/run.md", "common/memory/blob.md"
+    (a / link).symlink_to("/etc/passwd")
+    write(a, script, "#!/bin/sh\n")
+    (a / script).chmod(0o755)
+    (a / blob).write_bytes(b"token: x\x00y\n")
+    write(a, "common/memory/fine.md", "a plain note\n")
+    ctx = context(overlays, a)
+
+    assert J.commit_memory(ctx) is None
+
+    assert set(ctx.refused) == {link, script, blob}
+    assert committed(a) == [("A", "common/memory/fine.md")]
+    assert git(a, "ls-files", "--", link, script, blob) == ""
+
+
 def _link_in_place(overlays: Overlays, relative: str) -> Path:
     """Move the directory `relative` out of `a` and leave a link to it in its place."""
     away = overlays.a.parent / "elsewhere" / relative.replace("/", "_")
@@ -268,8 +285,9 @@ def _link_in_place(overlays: Overlays, relative: str) -> Path:
 def test_a_link_in_place_of_a_project_directory_deletes_nothing(
     overlays: Overlays, linked: str
 ) -> None:
-    # A link at a project's directory hides its notes from `git add`, which would stage their
-    # deletion. The deletions stay out, the job goes on and names the link. Mutation (oracle):
+    # A link at a project's directory makes git see its notes as deleted, and a new note behind
+    # it would be read through the link. The deletions stay out, the job goes on and names the
+    # link. Mutation (oracle):
     # `mutations/`'s "a link in place of a project directory deletes its notes".
     a = overlays.a
     note = "projects/alpha/memory/project-stable/alpha-one.md"
@@ -287,9 +305,9 @@ def test_a_link_in_place_of_a_project_directory_deletes_nothing(
 def test_a_link_in_place_of_common_memory_is_named_and_the_projects_still_travel(
     overlays: Overlays,
 ) -> None:
-    # `git add` refuses a pathspec beyond a link; the job skips that root, names the link, and
-    # still commits the project notes. Mutation (oracle): `mutations/`'s "a link at a
-    # pathspec's root fails the whole commit".
+    # git would follow the link and record the notes as deleted; the job leaves them out, names
+    # the link, and still commits the project notes. Mutation (oracle): `mutations/`'s "a link
+    # in place of a project directory deletes its notes".
     a = overlays.a
     _link_in_place(overlays, "common/memory")
     project_note = "projects/beta/memory/project-stable/beta-new.md"
@@ -350,8 +368,12 @@ def _start_job(overlays: Overlays, checks: float) -> subprocess.Popen[str]:
     )
 
 
-def _index_bytes(repo: Path) -> bytes:
-    return (repo / ".git" / "index").read_bytes()
+def _entries(repo: Path, *leaving_out: str) -> list[str]:
+    """The real index's entries, modes and blobs, less those of `leaving_out`."""
+    return [
+        line for line in git(repo, "ls-files", "--stage").splitlines()
+        if line.split("\t", 1)[1] not in leaving_out
+    ]  # fmt: skip
 
 
 def test_a_kill_mid_scan_loses_nothing(overlays: Overlays) -> None:
@@ -363,7 +385,7 @@ def test_a_kill_mid_scan_loses_nothing(overlays: Overlays) -> None:
     write(a, "common/memory/owner-staged.md", "staged by the owner\n")
     git(a, "add", "common/memory/owner-staged.md")
     write(a, "common/memory/new.md", "a note made during the turn\n")
-    real_index, before = _index_bytes(a), head(a)
+    real_index, before = _entries(a), head(a)
     overlays.mode("sleep 30")
 
     # The scan sleeps past its limit: the step times out.
@@ -373,7 +395,7 @@ def test_a_kill_mid_scan_loses_nothing(overlays: Overlays) -> None:
     assert time.monotonic() - started < 60, err
     assert out.strip() == "timeout", err
     assert (a / "common/claude/hooks/x.py").read_bytes() == edit
-    assert _index_bytes(a) == real_index and head(a) == before
+    assert _entries(a) == real_index and head(a) == before
 
     # The job is killed outright in the middle of the scan.
     (overlays.gitleaks.parent / "argv.json").unlink()
@@ -386,8 +408,9 @@ def test_a_kill_mid_scan_loses_nothing(overlays: Overlays) -> None:
     job.communicate(timeout=10)
     os.kill(int((overlays.gitleaks.parent / "pid").read_text()), signal.SIGKILL)
 
+    # Killed after `git add -N`: the new note's intent-to-add entry stays, and nothing else moved.
     assert (a / "common/claude/hooks/x.py").read_bytes() == edit
-    assert _index_bytes(a) == real_index and head(a) == before
+    assert _entries(a, "common/memory/new.md") == real_index and head(a) == before
     assert staged(a) == "common/claude/hooks/staged.py\ncommon/memory/owner-staged.md\n"
     assert (a / "common/memory/new.md").read_text() == "a note made during the turn\n"
     lock = Lock.try_acquire(overlays.state_dir / LOCK_FILE)
@@ -395,17 +418,29 @@ def test_a_kill_mid_scan_loses_nothing(overlays: Overlays) -> None:
     lock.release()
 
 
-def test_staged_non_memory_stays_staged_and_out(overlays: Overlays) -> None:
+def test_the_owners_staged_work_stays_staged(overlays: Overlays) -> None:
+    # `git commit --only` takes the notes alone: a staged file and a staged hunk outside memory
+    # stay staged as they were, and a note the owner staged travels as the working tree has it.
+    # Mutation (oracle): `mutations/`'s "the sync commit stages the whole tree".
     a = overlays.a
-    write(a, "common/claude/hooks/x.py", "print('staged edit')\n")
-    git(a, "add", "common/claude/hooks/x.py")
+    write(a, "common/claude/hooks/new.py", "print('staged')\n")
+    write(a, "README.md", "overlay\nstaged line\n")
+    git(a, "add", "common/claude/hooks/new.py", "README.md")
+    write(a, "README.md", "overlay\nstaged line\nunstaged line\n")
+    write(a, "common/memory/first.md", "staged by the owner\n")
+    git(a, "add", "common/memory/first.md")
+    write(a, "common/memory/first.md", "edited after staging\n")
     write(a, "common/memory/new.md", "a note\n")
+    outside = (".", ":(exclude)common/memory")
+    cached = git(a, "diff", "--cached", "--", *outside)
 
     assert J.commit_memory(context(overlays, a)) is None
 
-    assert "common/claude/hooks/x.py" not in _committed_paths(a)
-    assert staged(a) == "common/claude/hooks/x.py\n"
-    assert git(a, "show", ":common/claude/hooks/x.py") == "print('staged edit')\n"
+    assert committed(a) == [("A", "common/memory/new.md"), ("M", "common/memory/first.md")]
+    assert git(a, "show", "HEAD:common/memory/first.md") == "edited after staging\n"
+    assert git(a, "diff", "--cached", "--", *outside) == cached
+    assert (a / "README.md").read_text() == "overlay\nstaged line\nunstaged line\n"
+    assert memory_status(a) == ""
 
 
 def _a_stash_that_conflicts(clone: Path) -> str:
@@ -431,22 +466,26 @@ def test_an_unmerged_note_from_a_stash_pop_is_never_committed(overlays: Overlays
     outcome = J.commit_memory(ctx)
 
     assert outcome is not None and outcome.state == "skipped" and "unmerged" in str(outcome.detail)
-    assert head(a) == before and ctx.pending is None
+    assert head(a) == before
     assert git(a, "status", "--porcelain", "--", path).startswith("UU ")
 
 
 def test_a_stash_pop_conflicting_while_the_job_runs_is_never_committed(
     overlays: Overlays, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The guard looked before the conflict existed: the job looks again before `main` moves.
-    # Mutation (oracle): `mutations/`'s "the unmerged entries are not asked again before main
-    # moves".
+    # The guard looked before the conflict existed, and `git commit --only` commits beside
+    # unmerged entries (and a conflicted note's markers, when it is listed): the job asks again
+    # right before the commit. The note that starts the job is tracked, since git refuses a
+    # `stash pop` over an intent-to-add entry. Mutation (oracle): `mutations/`'s "the unmerged
+    # entries are not asked again before the commit".
     a = overlays.a
     path = _a_stash_that_conflicts(a)
-    write(a, "common/memory/other.md", "a note that starts the job\n")
+    write(a, "projects/alpha/memory/project-stable/alpha-one.md", "a change that starts the job\n")
     real = J._run_checks
 
-    def the_owner_pops_meanwhile(*args: object, **kwargs: object) -> Outcome | None:
+    def the_owner_pops_meanwhile(
+        *args: object, **kwargs: object
+    ) -> tuple[Outcome | None, tuple[str, ...]]:
         run_git(a, "stash", "pop")
         return real(*args, **kwargs)  # type: ignore[arg-type]
 
@@ -457,57 +496,13 @@ def test_a_stash_pop_conflicting_while_the_job_runs_is_never_committed(
     outcome = J.commit_memory(ctx)
 
     assert outcome is not None and outcome.state == "skipped" and "unmerged" in str(outcome.detail)
-    assert head(a) == before and ctx.pending is None
+    assert head(a) == before
     assert git(a, "status", "--porcelain", "--", path).startswith("UU ")
 
 
-def test_main_moved_before_update_ref_is_raced(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Mutations (oracle): `mutations/`'s "main moves without a compare-and-swap" and "the swap
-    # compares against a HEAD read later".
-    a = overlays.a
-    write(a, "common/memory/new.md", "a note\n")
-    owner: list[str] = []
-
-    def owner_commits() -> None:
-        write(a, "README.md", "the owner's edit\n")
-        git(a, "commit", "-q", "-m", "owner", "--", "README.md")
-        owner.append(head(a))
-
-    monkeypatch.setattr(J, "_before_swap", owner_commits)
-    ctx = context(overlays, a)
-
-    outcome = J.commit_memory(ctx)
-
-    assert outcome is not None and outcome.state == "raced"
-    assert head(a) == owner[0] and committed(a) == [("M", "README.md")]
-    assert ctx.pending is None
-    state = read_state(overlays.state_dir)
-    assert state is not None and state.pending_align is None
-    # Nothing lost: the note is still there, still to be committed next time.
-    assert (a / "common/memory/new.md").read_text() == "a note\n"
-    assert "?? common/memory/new.md" in memory_status(a)
-
-
-def test_the_real_indexs_memory_entries_are_aligned(overlays: Overlays) -> None:
-    # Mutation (oracle): `mutations/`'s "the real index is not aligned after a move".
-    a = overlays.a
-    write(a, "common/memory/staged.md", "staged by the owner\n")
-    git(a, "add", "common/memory/staged.md")
-    write(a, "common/memory/loose.md", "not staged\n")
-    (a / "common/memory/first.md").unlink()
-    git(a, "rm", "-q", "--cached", "--", "projects/alpha/memory/project-stable/alpha-one.md")
-
-    assert J.commit_memory(context(overlays, a)) is None
-
-    assert staged(a, *PATHSPEC) == ""
-    assert memory_status(a) == ""
-    assert ("A", "common/memory/loose.md") in committed(a)
-    assert ("D", "common/memory/first.md") in committed(a)
-
-
-def test_the_owners_commit_after_the_alignment_carries_no_memory_path(overlays: Overlays) -> None:
+def test_the_owners_commit_after_the_sync_carries_no_memory_path(overlays: Overlays) -> None:
+    # `git commit --only` updates the real index for the notes it commits, so the owner's next
+    # `git commit -a` cannot carry the old notes back.
     a = overlays.a
     write(a, "common/memory/new.md", "a note\n")
     (a / "common/memory/first.md").unlink()
@@ -519,162 +514,46 @@ def test_the_owners_commit_after_the_alignment_carries_no_memory_path(overlays: 
     assert committed(a) == [("M", "common/claude/hooks/x.py")]
 
 
-# -- alignment ------------------------------------------------------------------------------------
-
-
-def test_a_blocked_alignment_is_index_stale_and_the_next_job_aligns(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    a = overlays.a
-    monkeypatch.setattr(J, "ALIGN_PAUSE_SECONDS", 0.01)
-    write(a, "common/memory/new.md", "a note\n")
-    lock = a / ".git" / "index.lock"
-    lock.write_text("")
-    ctx = context(overlays, a)
-
-    outcome = J.commit_memory(ctx)
-
-    assert outcome is not None and outcome.state == "index_stale"
-    assert J.ALIGN_COMMAND in str(outcome.detail)
-    assert ctx.pending is not None and ctx.pending.to_sha == head(a)
-    assert ctx.pending.paths == ()  # owes the index only: the tree was the commit's source
-    assert "common/memory/new.md\n" in staged(a, *PATHSPEC)  # not aligned
-
-    lock.unlink()
-    assert J.align_first(context(overlays, a, pending=ctx.pending)) is None
-
-    assert staged(a, *PATHSPEC) == "" and memory_status(a) == ""
-
-
-def test_the_alignment_waits_out_an_index_lock_the_owner_holds(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    a = overlays.a
-    write(a, "common/memory/new.md", "a note\n")
-    lock = a / ".git" / "index.lock"
-
-    def owner_takes_the_lock() -> None:
-        lock.write_text("")
-        threading.Timer(0.5, lock.unlink).start()
-
-    monkeypatch.setattr(J, "_before_swap", owner_takes_the_lock)
-
-    assert J.commit_memory(context(overlays, a)) is None
-
-    assert staged(a, *PATHSPEC) == ""
-
-
-def test_a_kill_between_the_swap_and_the_alignment_is_aligned_by_the_shape(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # No pending record at all: the index differs from HEAD while the tree equals HEAD.
-    a = overlays.a
-    write(a, "common/memory/new.md", "a note\n")
-    with monkeypatch.context() as patch:
-        patch.setattr(J, "align", lambda ctx, pending: None)  # the job "died" before aligning
-        assert J.commit_memory(context(overlays, a)) is None
-    assert "common/memory/new.md" in memory_status(a)
-
-    assert J.align_first(context(overlays, a)) is None
-
-    assert staged(a, *PATHSPEC) == "" and memory_status(a) == ""
-
-
 class _Killed(BaseException):
     """The job dies here: nothing after this point runs, as with SIGKILL."""
 
 
-def test_the_pending_alignment_is_on_disk_before_the_commit_swap(
+def test_a_kill_after_git_add_n_is_committed_by_the_next_job(
     overlays: Overlays, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Mutation (oracle): `mutations/`'s "the pending alignment is not recorded before the swap".
+    # Killed between `git add -N` and the commit, the real index holds an intent-to-add entry,
+    # which no commit of the owner's carries; the next job commits the note.
     a = overlays.a
     write(a, "common/memory/new.md", "a note\n")
-    real_swap = J._swap
 
-    def swap_then_die(ctx: J.JobContext, new: str, old: str) -> bool:
-        assert real_swap(ctx, new, old)
+    def die(*args: object, **kwargs: object) -> None:
         raise _Killed
 
     with monkeypatch.context() as patch, pytest.raises(_Killed):
-        patch.setattr(J, "_swap", swap_then_die)
+        patch.setattr(J, "_run_checks", die)
         J.commit_memory(context(overlays, a))
+    assert git(a, "ls-files", "--", "common/memory/new.md") == "common/memory/new.md\n"
 
-    state = read_state(overlays.state_dir)
-    assert state is not None and state.pending_align is not None
-    assert state.pending_align.to_sha == head(a) and state.overlay == str(a)
+    assert J.commit_memory(context(overlays, a)) is None
 
-    ctx = context(overlays, a, pending=state.pending_align)
-    assert J.align_first(ctx) is None
-
-    assert ctx.pending is None and staged(a, *PATHSPEC) == ""
+    assert committed(a) == [("A", "common/memory/new.md")]
+    assert memory_status(a) == ""
 
 
-def test_a_kill_before_the_commit_swap_leaves_the_owners_staging_alone(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # A record whose move never happened owes nothing: the next job drops it without touching
-    # the index. Mutation (oracle): `mutations/`'s "a record whose move never happened is
-    # aligned".
+def test_a_locked_index_is_raced_and_the_lock_is_left(overlays: Overlays) -> None:
+    # The owner's git holds `index.lock`, or a git killed mid-write left it: the job cannot tell
+    # which, so it never removes it, and says git's words.
     a = overlays.a
-    before = head(a)
-    write(a, "common/memory/new.md", "a note\n")
-
-    def die() -> None:
-        raise _Killed
-
-    with monkeypatch.context() as patch, pytest.raises(_Killed):
-        patch.setattr(J, "_before_swap", die)
-        J.commit_memory(context(overlays, a))
-
-    state = read_state(overlays.state_dir)
-    assert state is not None and state.pending_align is not None
-    assert state.pending_align.paths == () and head(a) == before
-    write(a, "common/memory/first.md", "staged by the owner\n")
-    git(a, "add", "common/memory/first.md")
-    ctx = context(overlays, a, pending=state.pending_align)
-
-    assert J.align_first(ctx) is None
-
-    assert ctx.pending is None
-    assert staged(a) == "common/memory/first.md\n"
-
-
-def test_the_owners_removal_after_a_stale_commit_is_not_undone(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # The commit's pending alignment owes the index only: the working tree was the commit's
-    # source, so a note the owner removed meanwhile is not written back.
-    a = overlays.a
-    monkeypatch.setattr(J, "ALIGN_PAUSE_SECONDS", 0.01)
     write(a, "common/memory/new.md", "a note\n")
     lock = a / ".git" / "index.lock"
-    lock.write_text("")
-    ctx = context(overlays, a)
+    lock.write_text("the owner's git\n", encoding="utf-8")
+    before = head(a)
 
-    outcome = J.commit_memory(ctx)
+    state = J.run_job(context(overlays, a))
 
-    assert outcome is not None and outcome.state == "index_stale"
-    lock.unlink()
-    (a / "common/memory/new.md").unlink()  # the owner drops the note before the next job
-    later = context(overlays, a, pending=ctx.pending)
-
-    assert J.align_first(later) is None and J.commit_memory(later) is None
-
-    assert not (a / "common/memory/new.md").exists()
-    assert not _in_head(a, "common/memory/new.md")
-
-
-def test_the_owners_staged_memory_edit_is_not_mistaken_for_the_shape(overlays: Overlays) -> None:
-    # The index differs from HEAD but so does the tree: the owner's own staging, left alone.
-    a = overlays.a
-    write(a, "common/memory/first.md", "staged version\n")
-    git(a, "add", "common/memory/first.md")
-    write(a, "common/memory/first.md", "a later, unstaged version\n")
-
-    assert J.align_first(context(overlays, a)) is None
-
-    assert staged(a) == "common/memory/first.md\n"
+    assert state is not None and state.outcome.state == "raced"
+    assert "index.lock" in str(state.outcome.detail)
+    assert lock.read_text(encoding="utf-8") == "the owner's git\n" and head(a) == before
 
 
 # -- the scan, signing and the message ------------------------------------------------------------
@@ -688,23 +567,38 @@ def _notice(overlays: Overlays, clone: Path) -> Outcome:
     return ctx.notices[0]
 
 
-def test_a_failed_scan_or_a_finding_is_hook_failed_naming_the_scanner(overlays: Overlays) -> None:
+def test_a_failed_scan_is_hook_failed_naming_the_scanner(overlays: Overlays) -> None:
     a = overlays.a
     before = head(a)
     write(a, "common/memory/new.md", "a note\n")
-
     overlays.mode("fail")
+
     outcome = _notice(overlays, a)
+
     assert (outcome.state, str(outcome.detail).split(":")[0]) == ("hook_failed", "gitleaks")
     assert "failed to scan" in str(outcome.detail)
+    assert head(a) == before and git(a, "ls-files", "--", "common/memory/new.md") == ""
 
-    # A finding while committing is a failed check, not `secret_found` (that is the push's).
-    overlays.mode(None)
+
+def test_one_secret_note_waits_and_the_others_commit(overlays: Overlays) -> None:
+    # The note with a finding is left out and named with its remedy; the notes beside it commit.
+    # Mutation (oracle): `mutations/`'s "a secret in one note keeps every note out".
+    a = overlays.a
+    tracked = "projects/alpha/memory/project-stable/alpha-one.md"
     write(a, "common/memory/leak.md", f"key = {LEAK}\n")
+    write(a, "common/memory/fine.md", "a plain note\n")
+    write(a, tracked, note_text("alpha-one", body="changed"))
+
     outcome = _notice(overlays, a)
-    assert (outcome.state, str(outcome.detail).split(":")[0]) == ("hook_failed", "gitleaks")
-    assert "common/memory/leak.md" in str(outcome.detail) and LEAK not in str(outcome.detail)
-    assert head(a) == before
+
+    assert committed(a) == [("A", "common/memory/fine.md"), ("M", tracked)]
+    assert outcome.state == "secret_found"
+    assert str(outcome.detail).startswith(
+        "remove the secret from common/memory/leak.md; the next job commits it\n"
+    )
+    assert LEAK not in str(outcome.detail)
+    assert git(a, "ls-files", "--", "common/memory/leak.md") == ""
+    assert memory_status(a) == "?? common/memory/leak.md\n"
 
 
 def test_a_gitattributes_filter_left_in_the_working_tree_changes_nothing_committed(

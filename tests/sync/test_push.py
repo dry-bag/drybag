@@ -365,7 +365,7 @@ def test_a_failed_commit_scan_then_offline_is_offline_naming_both(overlays: Over
     assert state.outcome.state == "offline", state.outcome
     detail = state.outcome.detail
     assert detail is not None and "Could not resolve hostname" in detail
-    assert "also hook_failed: gitleaks" in detail
+    assert "also secret_found: remove the secret from common/memory/leak.md" in detail
     assert LEAK not in detail
 
 

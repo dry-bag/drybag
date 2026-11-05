@@ -119,7 +119,7 @@ def test_a_pre_commit_database_chooses_no_scanner(
     ctx = context(overlays, a)
     assert J.commit_memory(ctx) is None
 
-    assert [notice.state for notice in ctx.notices] == ["hook_failed"]
+    assert [notice.state for notice in ctx.notices] == ["secret_found"]
     assert "common/memory/leak.md" in str(ctx.notices[0].detail)
 
 
@@ -276,7 +276,7 @@ def test_a_note_name_never_exempts_it_from_the_scan(overlays: Overlays) -> None:
     name = _leak_note(overlays, "common/memory/allowlisted.md")
 
     notice = _commit_notice(overlays)
-    assert notice is not None and notice.state == "hook_failed" and name in notice.detail
+    assert notice is not None and notice.state == "secret_found" and name in notice.detail
 
     git(a, "add", "--", name)
     leaky = commit_all(a, "memory: by hand")
@@ -301,7 +301,7 @@ def test_a_scan_reads_no_file_at_the_overlays_root(
 
     notice = _commit_notice(overlays)
 
-    assert notice is not None and notice.state == "hook_failed" and name in notice.detail
+    assert notice is not None and notice.state == "secret_found" and name in notice.detail
     source = Path(_seen(overlays.gitleaks)["source"])
     assert source.parent.parent == (overlays.state_dir / SCRATCH).resolve()
 
@@ -329,7 +329,7 @@ def test_a_textconv_cannot_hide_a_note(overlays: Overlays) -> None:
     name = _leak_note(overlays)
 
     notice = _commit_notice(overlays)
-    assert notice is not None and notice.state == "hook_failed" and name in notice.detail
+    assert notice is not None and notice.state == "secret_found" and name in notice.detail
 
     git(a, "add", "--", name)
     commit_all(a, "memory: by hand")

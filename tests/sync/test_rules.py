@@ -498,29 +498,28 @@ def test_the_owners_notes_with_odd_names_pass(world: World) -> None:
     assert R.range_is_memory_only(a, base, tip) == (True, [])
 
 
-def _staged_in(repo: Path, index: Path, *specs: str) -> None:
-    """A temporary index of `HEAD` plus the working tree's `specs`, as the commit step builds it."""
-    G.git(repo, "read-tree", "HEAD", index_file=index)
-    ran = G.git(repo, "add", "-A", "--", *specs, index_file=index)
+def _judged(repo: Path, *paths: str, against: str = "HEAD") -> list[str]:
+    """What the commit step refuses of `paths`: each added intent-to-add, then judged by what git
+    would record from the working tree against `against`, path by path."""
+    literal = {"GIT_LITERAL_PATHSPECS": "1"}
+    ran = G.git(repo, "add", "-N", "--", *paths, env=literal)
     assert ran.code == 0, ran.err
+    entries = R.diff_entries(repo, against, paths=paths)
+    return [entry.path for entry in entries if R.entry_offends(entry)]
 
 
-def test_offending_paths_on_a_temporary_index(world: World, tmp_path: Path) -> None:
-    """What the commit step runs on its temporary index before writing a tree."""
+def test_a_link_and_a_nested_repository_are_judged_by_their_modes(world: World) -> None:
+    """What the commit step judges before it commits: what git would record for each path."""
     a = world.a
     write(a, "common/memory/fine.md")
     symlink(a, "groups/g/memory/link.md", "/etc/passwd")
     nested = init(a / "projects/p/memory/nested.md")
     write(nested, "f.md")
     commit_all(nested, "inner")
-    index = tmp_path / "sync.index"
-    _staged_in(a, index, *R.MEMORY_PATHSPEC)
 
-    assert R.offending_paths(a, "--cached", "HEAD", index_file=index) == [
-        "groups/g/memory/link.md",
-        "projects/p/memory/nested.md",
-    ]
-    assert git(a, "diff", "--cached", "--name-only") == ""  # the real index was never involved
+    assert _judged(
+        a, "common/memory/fine.md", "groups/g/memory/link.md", "projects/p/memory/nested.md"
+    ) == ["groups/g/memory/link.md", "projects/p/memory/nested.md"]
 
 
 # Each refused by exactly one of the three rules, so dropping that rule reddens its case.
@@ -641,18 +640,14 @@ def test_a_note_made_binary_by_attributes_is_not_memory_only(world: World) -> No
     )
 
 
-def test_a_gitattributes_in_the_working_tree_makes_its_siblings_binary(
-    world: World, tmp_path: Path
-) -> None:
+def test_a_gitattributes_in_the_working_tree_makes_its_siblings_binary(world: World) -> None:
     """The working tree's attributes are git's -- and gitleaks' -- whether committed or not: a
     refused `.gitattributes` saying `-diff` also keeps the notes it covers from moving."""
     a = world.a
     write(a, "groups/g/memory/.gitattributes", "* -diff\n")
     write(a, "groups/g/memory/covered.md", "token: FAKE\n")
-    index = tmp_path / "sync.index"
-    _staged_in(a, index, R.MEMORY_PATHSPEC[1])
 
-    assert R.offending_paths(a, "--cached", "HEAD", index_file=index) == [
+    assert _judged(a, "groups/g/memory/.gitattributes", "groups/g/memory/covered.md") == [
         "groups/g/memory/.gitattributes",
         "groups/g/memory/covered.md",
     ]
@@ -669,7 +664,7 @@ def test_deleting_a_binary_note_moves(world: World) -> None:
     assert R.range_is_memory_only(a, base, tip) == (True, [])
 
 
-def test_an_ordinary_note_name_is_never_refused(world: World, tmp_path: Path) -> None:
+def test_an_ordinary_note_name_is_never_refused(world: World) -> None:
     a = world.a
     base = head(a)
     for path in _ACCEPTED:
@@ -677,25 +672,26 @@ def test_an_ordinary_note_name_is_never_refused(world: World, tmp_path: Path) ->
     tip = commit_all(a, "notes")
 
     assert R.range_is_memory_only(a, base, tip) == (True, [])
-    index = tmp_path / "sync.index"
-    G.git(a, "read-tree", base, index_file=index)
-    G.git(a, "add", "-A", "--", *R.MEMORY_PATHSPEC, index_file=index)
-    assert R.offending_paths(a, "--cached", base, index_file=index) == []
+    assert _judged(a, *_ACCEPTED, against=base) == []
+    # Each matched as written: a quote, a leading dash, a Cyrillic name.
+    assert len(R.diff_entries(a, base, paths=_ACCEPTED)) == len(_ACCEPTED)
 
 
-def test_the_temporary_index_names_every_path_that_is_not_a_note(
-    world: World, tmp_path: Path
-) -> None:
+def test_the_judgement_names_every_path_that_is_not_a_note(world: World) -> None:
     a = world.a
-    write(a, "common/memory/fine.md")
-    write(a, "projects/p/memory/g/.claude/skills/x/SKILL.md")
-    write(a, "groups/g/memory/h/.claude/skills/x/SKILL.md")
+    paths = [
+        "common/memory/fine.md",
+        "projects/p/memory/g/.claude/skills/x/SKILL.md",
+        "groups/g/memory/h/.claude/skills/x/SKILL.md",
+        "common/memory/.gitattributes",
+        "common/memory/blob.md",
+    ]
+    for path in paths[:3]:
+        write(a, path)
     write(a, "common/memory/.gitattributes", "nothing-here.md -diff\n")
     (a / "common/memory/blob.md").write_bytes(b"a\x00b")
-    index = tmp_path / "sync.index"
-    _staged_in(a, index, *R.MEMORY_PATHSPEC)
 
-    assert sorted(R.offending_paths(a, "--cached", "HEAD", index_file=index)) == [
+    assert sorted(_judged(a, *paths)) == [
         "common/memory/.gitattributes",
         "common/memory/blob.md",
         "groups/g/memory/h/.claude/skills/x/SKILL.md",

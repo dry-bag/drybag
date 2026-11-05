@@ -597,10 +597,14 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    is no reason: the job never touches it.
 2. **Align.** A job killed after moving `main` and before aligning the real index left that owed, and
    the next job does it first.
-3. **Commit.** Every changed memory path goes into one commit built in a temporary index read from
-   `HEAD`, after the secret scan of what it stages, and `main` moves to it by a compare-and-swap. Then
-   the real index's memory entries are reset to `HEAD`, or the next `git commit` of yours would carry
-   the old notes back. A signature is made when `commit.gpgsign` is set, and never switched off.
+3. **Commit.** `git commit --only` of exactly the changed notes, with no hook. A new note is added
+   intent-to-add first (`git add -N`), so each is judged by what git would record from the working
+   tree. One that may not move (below), or that a link or a file stands above, is left out and named;
+   one the secret scan finds something in is left out and named with its remedy (`secret_found`)
+   while the others commit; and the intent-to-add entry of a note left out is removed again. git
+   moves `main` and updates the real index for those notes alone, so your staged work stays staged
+   and your next `git commit` carries no old note back. A signature is made when `commit.gpgsign` is
+   set, and never switched off.
 4. **Fetch.** `git fetch origin main` into `refs/stayfixed/fetched`, with `fetch.fsckObjects`.
 5. **Integrate.** When everything `HEAD..` the fetched sha brings is memory, and every local commit
    is a plain commit of memory alone, the local commits are replayed onto it one by one and `main`
@@ -647,7 +651,9 @@ or under a `node_modules` directory is scanned like any other; and a `.gitleaksi
 or not, since its fingerprints name paths the scan never shows. A committed rule set's content
 allowlists (regexes and stopwords) still apply. With no `gitleaks` there, nothing is committed or
 pushed (`scan_unavailable`) and the remedy is to install gitleaks on the `PATH` the sessions run
-with; what is already committed upstream still integrates. A finding stops the push
+with; what is already committed upstream still integrates. A finding before the commit leaves that
+note out (`secret_found`, its detail opening with `remove the secret from <path>; the next job
+commits it`), and the notes beside it commit. A finding stops the push
 (`secret_found`): its detail opens with the rewrite from the oldest commit found, then names each
 finding's rule, commit and path.
 
@@ -655,7 +661,9 @@ finding's rule, commit and path.
 outcome, the holds, the fetched sha and a digest of the dirty notes, written in one step), `job.lock` and `sleeper.lock` (held
 while a job runs and while a sleeper waits), `pending` (a trigger that arrived while a job ran),
 and `scratch/`, which the job removes whole at its start and its end. In the overlay: the objects
-and the commit of step 3, `refs/heads/main` (moved by
+and the commit of step 3, which `git commit --only` writes with `main` and the real index's entries
+of the notes it commits, an intent-to-add entry for each new note (`git add -N`, removed again by
+`git update-index --force-remove` for one left out), `refs/heads/main` (moved by
 `update-ref` against the sha it read), `refs/stayfixed/fetched`, the memory entries of the real index (`git reset`),
 and the notes a move of `main`
 brought in, written through `git checkout-index` from a temporary index where the working tree still holds the old version, or removed, with the empty

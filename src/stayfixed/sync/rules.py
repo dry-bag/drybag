@@ -22,7 +22,7 @@ of `memory`, which no repository byte reaches.
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -197,11 +197,13 @@ _BEFORE_PATH = {"1": 8, "u": 10, "?": 1}
 
 @dataclass(frozen=True)
 class Status:
-    """What one `git status` says: the dirty memory paths, commits ahead of `@{u}`, and `HEAD`."""
+    """What one `git status` says: the dirty memory paths, commits ahead of `@{u}`, `HEAD`, and
+    which of the paths the index does not hold at all."""
 
     paths: tuple[str, ...]
     ahead: int
     head: str | None
+    untracked: tuple[str, ...] = ()
 
 
 def status(repo: Path, *, timeout: float, env: Mapping[str, str] | None) -> Status:
@@ -222,6 +224,7 @@ def status(repo: Path, *, timeout: float, env: Mapping[str, str] | None) -> Stat
         "git status",
     )  # fmt: skip
     paths: list[str] = []
+    untracked: list[str] = []
     ahead, head = 0, None
     for record in result.out.split("\0"):
         if record.startswith("# branch.oid "):
@@ -232,7 +235,8 @@ def status(repo: Path, *, timeout: float, env: Mapping[str, str] | None) -> Stat
             ahead = int(text) if text.isdigit() else 0
         elif record and not record.startswith("# "):
             paths.append(record.split(" ", _BEFORE_PATH.get(record[0], 1))[-1])
-    return Status(tuple(paths), ahead, head)
+            untracked.extend(paths[-1:] if record[0] == "?" else [])
+    return Status(tuple(dict.fromkeys(paths)), ahead, head, tuple(untracked))
 
 
 def dirty_memory(
@@ -293,37 +297,45 @@ def commit_entries(
     return commits
 
 
-def offending_paths(
+def diff_entries(
     repo: Path,
     *revisions: str,
-    index_file: Path | None = None,
+    paths: Sequence[str] = (),
     timeout: float = LOCAL_TIMEOUT,
     env: Mapping[str, str] | None = None,
-) -> list[str]:
-    """Paths of `git diff --raw <revisions>` that may not move, in git's order (`entry_offends`).
+) -> list[RawEntry]:
+    """The changes of `git diff --raw <revisions>`, in git's order; with `paths`, of exactly those
+    paths (literal pathspecs), never of the whole tree.
 
-    The tree bound runs it as `<merge base> <tip>`; the commit step runs it on its temporary index
-    as `--cached HEAD` with `index_file`, so such a path is refused before any tree is written.
+    The commit step runs it as `HEAD` against the working tree for the notes it may commit, an
+    intent-to-add entry standing for each new one: what git would record for each, its mode and
+    whether it is text, judged before any commit is made.
     """
     what = f"git diff {' '.join(revisions)}"
+    literal = {**(env or {}), "GIT_LITERAL_PATHSPECS": "1"} if paths else env
     result = checked(
         git(
-            repo,
-            "diff",
-            *_RAW,
-            "--no-ext-diff",
-            *revisions,
-            "--",
-            timeout=timeout,
-            env=env,
-            index_file=index_file,
+            repo, "diff", *_RAW, "--no-ext-diff", *revisions, "--", *paths,
+            timeout=timeout, env=literal,
         ),
         what,
-    )
+    )  # fmt: skip
     fields = result.out.split("\0")
     entries, index = _entries(fields, 0, what)
     if any(fields[index:]):
         raise GitError(f"{what}: unexpected output after the --raw lines")
+    return entries
+
+
+def offending_paths(
+    repo: Path,
+    *revisions: str,
+    timeout: float = LOCAL_TIMEOUT,
+    env: Mapping[str, str] | None = None,
+) -> list[str]:
+    """Paths of `diff_entries` that may not move, in git's order (`entry_offends`). The tree bound
+    runs it as `<merge base> <tip>`."""
+    entries = diff_entries(repo, *revisions, timeout=timeout, env=env)
     return [entry.path for entry in entries if entry_offends(entry)]
 
 

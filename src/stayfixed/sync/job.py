@@ -1,9 +1,9 @@
 """The note sync's job: commit the overlay's notes, take in upstream's, push its own.
 
 Each step is bounded in time and records what it did in the context the job's state is written
-from: guard; align the real index first where a killed job left that owed; commit memory through a
-temporary index; fetch `origin main` into the job's own ref; integrate that sha, only when
-everything it brings is memory, by replay; push the checked range. A project's `MEMORY.md` is
+from: guard; align the real index first where a killed job left that owed; commit the changed
+notes by `git commit --only`; fetch `origin main` into the job's own ref; integrate that sha, only
+when everything it brings is memory, by replay; push the checked range. A project's `MEMORY.md` is
 never among them: each machine renders its own (`sync.rules`).
 
 It never writes a non-memory path of the working tree or the real index, stashes, rebases, pulls
@@ -47,15 +47,15 @@ from stayfixed.sync.git import (
 )
 from stayfixed.sync.rules import (
     MEMORY_PATHSPEC,
-    MEMORY_SPECS,
     RawEntry,
     commit_entries,
+    diff_entries,
     dirty_memory,
     entry_offends,
     is_memory_path,
     memory_path,
-    offending_paths,
     range_is_memory_only,
+    status,
     unsafe_parent,
 )
 from stayfixed.sync.state import (
@@ -247,34 +247,20 @@ def _worktree_has(ctx: JobContext, path: str, blob: tuple[str, str] | None) -> b
     return _ok(ctx, "hash-object", "--", path).strip() == blob[1]
 
 
-# -- the commit through a temporary index ---------------------------------------------------------
+# -- the commit, by `git commit --only` ------------------------------------------------------------
+
+# How the job hands git a list of paths: NUL-separated on standard input, each matched literally.
+_FROM_STDIN = ("--pathspec-from-file=-", "--pathspec-file-nul")
+_LITERAL = {"GIT_LITERAL_PATHSPECS": "1"}
 
 
 def _before_swap() -> None:
     """Nothing; the moment between building a commit and moving `main` (a test seam)."""
 
 
-def _reset_paths(ctx: JobContext, index: Path, rev: str, paths: Iterable[str]) -> None:
-    """Put `paths` in the temporary `index` back to what `rev` has (or nothing)."""
-    specs = [_literal(path) for path in paths]
-    if specs:
-        _ok(ctx, "reset", "-q", "--end-of-options", rev, "--", *specs, index_file=index)
-
-
 def _refuse(ctx: JobContext, paths: Iterable[str]) -> None:
     """Name `paths` as left out of the commit; the job goes on, and its end names them."""
     ctx.refused.extend(path for path in paths if path not in ctx.refused)
-
-
-def _staged(ctx: JobContext, index: Path, rev: str, *only: str) -> list[str]:
-    """The paths `index` stages against `rev`, of the `--diff-filter` letters in `only`."""
-    filters = (f"--diff-filter={''.join(only)}",) if only else ()
-    return _nul(
-        _ok(
-            ctx, "diff", "--cached", "--name-only", "-z", "--no-renames", *filters,
-            "--end-of-options", rev, "--", index_file=index,
-        )
-    )  # fmt: skip
 
 
 def _message(ctx: JobContext, paths: list[str]) -> bytes:
@@ -287,6 +273,12 @@ def _signing(ctx: JobContext) -> bool:
     """Whether `commit.gpgsign` asks for a signature; a timed-out answer is never "no"."""
     answer = timed(_git(ctx, "config", "--type=bool", "--get", "commit.gpgsign"), "git config")
     return answer.code == 0 and answer.out.strip() == "true"
+
+
+def _unsigned(ctx: JobContext, result: Ran) -> Outcome:
+    """`signing_failed` for a commit git could not sign, with git's words."""
+    said = scan.first_lines(result.err) or ("waited for a passphrase" if result.timed_out else "")
+    return _outcome(ctx, "signing_failed", f"commit.gpgsign is set and signing failed: {said}")
 
 
 def _commit_tree(
@@ -304,11 +296,7 @@ def _commit_tree(
         ctx, "commit-tree", *parented, *signed, "--end-of-options", tree, env=env, stdin=message
     )
     if signed and (result.timed_out or result.code != 0):
-        said = scan.first_lines(result.err) or (
-            "waited for a passphrase" if result.timed_out else ""
-        )
-        detail = f"commit.gpgsign is set and signing failed: {said}"
-        return None, _outcome(ctx, "signing_failed", detail)
+        return None, _unsigned(ctx, result)
     return checked(result, "git commit-tree").out.strip(), None
 
 
@@ -321,9 +309,9 @@ def _swap(ctx: JobContext, new: str, old: str) -> bool:
 
 
 def _unmerged_now(ctx: JobContext) -> Outcome | None:
-    """`skipped` when the real index holds unmerged entries now, asked right before every move of
-    `main`: a `stash pop` that conflicts while the job runs leaves notes holding conflict markers,
-    which a commit would carry and the alignment's reset would erase from the owner's view."""
+    """`skipped` when the real index holds unmerged entries now, asked right before the commit and
+    every move of `main`: a `stash pop` that conflicts while the job runs leaves notes holding
+    conflict markers, which `git commit --only` carries when it lists them, and commits beside."""
     found = timed(_git(ctx, "ls-files", "--unmerged", "-z"), "git ls-files")
     if found.code != 0 or found.out:
         return _outcome(ctx, "skipped", UNMERGED)
@@ -386,89 +374,117 @@ def _objects(ctx: JobContext, names: list[str]) -> list[bytes]:
     return found
 
 
-def _run_checks(ctx: JobContext, scratch: Path, paths: list[str]) -> Outcome | None:
-    """The secret scan of the working-tree bytes of the notes `paths` names, before any tree is
-    written; the failure, if any."""
+def _run_checks(
+    ctx: JobContext, scratch: Path, paths: list[str]
+) -> tuple[Outcome | None, tuple[str, ...]]:
+    """The secret scan of the working-tree bytes of the notes `paths` names, before the commit:
+    the failure that keeps every note out, or the `secret_found` notice and the notes it names."""
     binary = ctx.scanner
     if binary is None:
-        return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER)
+        return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER), ()
     try:
         items = [(path, fsops.read_regular_bytes(ctx.overlay / path)) for path in paths]
     except OSError as error:
-        return _outcome(ctx, "hook_failed", f"gitleaks: a note cannot be read: {fsops.said(error)}")
+        detail = f"gitleaks: a note cannot be read: {fsops.said(error)}"
+        return _outcome(ctx, "hook_failed", detail), ()
     result = scan.scan(items, binary, _committed_rules(ctx), ctx.limit(ctx.limits.checks), scratch)
+    if result.found:
+        remedy = f"remove the secret from {', '.join(result.found)}; the next job commits it"
+        return _outcome(ctx, "secret_found", f"{remedy}\n{result.detail}"), result.found
     if result.ok:
-        return None
+        return None, ()
     state = "timeout" if result.timed_out else "hook_failed"
-    return _outcome(ctx, state, f"gitleaks: {result.detail}")
+    return _outcome(ctx, state, f"gitleaks: {result.detail}"), ()
+
+
+def _locked(ctx: JobContext, result: Ran) -> Ran:
+    """`result`, or the stop `raced` when git names `index.lock`: another git holds the real
+    index, or one killed mid-write left the lock. The job cannot tell which, so it never removes
+    it, and says git's words."""
+    if "index.lock" in result.err:
+        said = scan.first_lines(result.err).splitlines()[0]
+        raise JobStopped(_outcome(ctx, "raced", f"{said}; the next job retries"))
+    return result
+
+
+def _drop(ctx: JobContext, paths: list[str]) -> None:
+    """Remove the intent-to-add entries `git add -N` made for `paths` again, and only those: a
+    deletion the owner staged at such a path stays staged."""
+    if paths:
+        removed = _git(
+            ctx, "update-index", "--force-remove", "-z", "--stdin", stdin=_paths_in(paths)
+        )
+        checked(_locked(ctx, removed), "git update-index")
+
+
+def _commit(ctx: JobContext, scratch: Path, paths: list[str]) -> None:
+    """`git commit --only` of exactly `paths`, its message a file in `scratch`: git writes the
+    commit, moves `main` and updates the real index for those paths alone, signed as
+    `commit.gpgsign` says. A failure is a notice, `signing_failed` or `hook_failed` with git's
+    words; a locked index stops the job (`_locked`)."""
+    message = scratch / "message"
+    message.write_bytes(_message(ctx, paths))
+    result = _locked(
+        ctx,
+        _git(
+            ctx, "commit", "--only", "-q", "-F", str(message), *_FROM_STDIN, env=_LITERAL,
+            stdin=_paths_in(paths),
+        ),
+    )  # fmt: skip
+    if result.code == 0 and not result.timed_out:
+        return
+    if _signing(ctx):
+        ctx.notices.append(_unsigned(ctx, result))
+        return
+    said = scan.first_lines(timed(result, "git commit").err) or f"exit {result.code}"
+    ctx.notices.append(_outcome(ctx, "hook_failed", f"job: git commit failed: {said}"))
 
 
 def commit_memory(ctx: JobContext) -> Outcome | None:
-    """Commit every memory change; the outcome that stops the job (`raced`, `skipped`, `timeout`,
-    `index_stale`), or `None`.
+    """Commit every changed note by `git commit --only` of exactly those, with no hook; the
+    outcome that stops the job (`raced`, `skipped`, `timeout`), or `None`.
 
-    A failed scan, no scanner or a failed signature does not stop it: what is already committed
-    still integrates and pushes. It is a notice, and nothing is committed. Paths that are not
-    notes are left out and named (`_refuse`); the notes beside them are committed.
-
-    Built in a temporary index read from `HEAD`. The working tree and the real index are only read
-    until `main` has moved; after that, only the real index's memory entries are touched (`align`).
+    The status's dirty paths are the candidates. One that is not a note by name, or that a link or
+    a file stands above (git would read it through the link), is left out and named (`_refuse`). A
+    new one is added intent-to-add, so that `git diff HEAD` judges what git would record from the
+    working tree for each: one that may not move (`entry_offends`) is left out and named, and so
+    is one the scan finds a secret in, in a `secret_found` notice; the intent-to-add entry of a
+    note left out is removed again. A failed scan, no scanner or a failed signature keeps every
+    note out and does not stop the job: what is already committed still integrates and pushes.
     """
-    dirty = dirty_memory(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
-    ctx.dirty = notes_mark(ctx.overlay, dirty)  # what a trigger finds unchanged if this fails
-    if not dirty:
+    found = status(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
+    ctx.dirty = notes_mark(ctx.overlay, found.paths)  # what a trigger finds unchanged if this fails
+    notes: list[str] = []
+    for path in found.paths:
+        link, parsed = unsafe_parent(ctx.overlay, path), memory_path(path)
+        if link is not None or parsed is None or not parsed.is_note:
+            _refuse(ctx, [link or path.rstrip("/")])
+        else:
+            notes.append(path)
+    if not notes:
         return None
-    old = _rev(ctx, "HEAD")
+    added = [path for path in notes if path in found.untracked]
+    if added:
+        intent = _git(ctx, "add", "-N", *_FROM_STDIN, env=_LITERAL, stdin=_paths_in(added))
+        checked(_locked(ctx, intent), "git add")
+    limit = ctx.limit(ctx.limits.local)
+    entries = diff_entries(ctx.overlay, "HEAD", paths=notes, timeout=limit, env=ctx.env)
+    _refuse(ctx, [entry.path for entry in entries if entry_offends(entry)])
+    kept = [entry for entry in entries if not entry_offends(entry)]
     with _scratch(ctx) as scratch:
-        index = scratch / "index"
-        _ok(ctx, "read-tree", "--end-of-options", old, index_file=index)
-        for specs, root in MEMORY_SPECS:
-            link = unsafe_parent(ctx.overlay, f"{root}/-")
-            if link is not None:
-                _refuse(ctx, [link])  # nothing behind it is added, nothing deleted
-                continue
-            added = _git(ctx, "add", "-A", "--", *specs, index_file=index)
-            if added.code == 128 and "did not match any files" in added.err:
-                continue  # nothing under this pathspec at all: an overlay without projects
-            checked(added, "git add")
-        # A link in place of `projects/<p>` or its `memory` hides the notes behind it from
-        # `git add -A`, which then stages each as deleted: not the owner's deletions. A literal
-        # reset of the link's path puts back everything below it.
-        deleted = (unsafe_parent(ctx.overlay, path) for path in _staged(ctx, index, old, "D"))
-        beyond = list(dict.fromkeys(link for link in deleted if link is not None))
-        _reset_paths(ctx, index, old, beyond)
-        _refuse(ctx, beyond)
-        refused = offending_paths(
-            ctx.overlay, "--cached", old, index_file=index, timeout=ctx.limit(ctx.limits.local),
-            env=ctx.env,
-        )  # fmt: skip
-        _reset_paths(ctx, index, old, refused)
-        _refuse(ctx, refused)
-        paths = _staged(ctx, index, old)
+        said, secret = _run_checks(ctx, scratch, [each.path for each in kept if each.status != "D"])
+        stops_all = said is not None and not secret
+        paths = [] if stops_all else [each.path for each in kept if each.path not in secret]
+        _drop(ctx, [path for path in added if path not in paths])
+        if said is not None and said.state == "timeout":
+            return said  # what is left of the job's time is not enough to go on
+        ctx.notices.extend([said] if said is not None else [])
         if not paths:
             return None
-        new = None
-        failed = _run_checks(ctx, scratch, _staged(ctx, index, old, "d"))
-        if failed is None:
-            tree = _ok(ctx, "write-tree", index_file=index).strip()
-            new, failed = _commit_tree(ctx, tree, [old], _message(ctx, paths))
-    if new is None:
-        if failed is not None and failed.state == "timeout":
-            return failed  # what is left of the job's time is not enough to go on
-        ctx.notices.extend([failed] if failed is not None else [])
-        return None
-    # No paths to write: the working tree was this commit's source, so the alignment owes the
-    # index only, and a note the owner changed or removed since stays as the owner left it.
-    pending = PendingAlign(old, new, ())
-    unmerged = _unmerged_now(ctx)
-    if unmerged is not None:
-        return unmerged
-    if not _move_main(ctx, pending):
-        detail = (
-            "main moved while the memory commit was built; nothing was lost, the next job retries"
-        )
-        return _outcome(ctx, "raced", detail)
-    return _settle(ctx, pending)
+        unmerged = _unmerged_now(ctx)
+        if unmerged is None:
+            _commit(ctx, scratch, paths)
+    return unmerged
 
 
 # -- aligning the real index ----------------------------------------------------------------------

@@ -126,19 +126,22 @@ LOCAL = frozenset(
         ("git", "version"),
         ("git", "worktree", "list"),
         ("tar", "-xf"),
-        # The note sync's commit and its moves of `main`, all in the overlay: a temporary index
-        # filled (`read-tree`, `add`, `reset`), written (`write-tree`), committed (`commit-tree`),
-        # `main` moved (`update-ref`), and the real index's memory entries reset to `HEAD`; and
-        # the notes a move brought in written from a temporary index (`checkout-index`), and
-        # each local commit replayed onto the fetched sha (`merge-tree`).
+        # The note sync's commit and its moves of `main`, all in the overlay: new notes added
+        # intent-to-add (`add -N`) and a refused one's entry removed again (`update-index`), the
+        # notes committed (`commit --only`, which runs `gpg.program` as the owner's own commit
+        # does, and no hook), `main` moved (`update-ref`), and the real index's memory entries
+        # reset to `HEAD`; the notes a move brought in written from a temporary index
+        # (`checkout-index`), and each local commit replayed onto the fetched sha (`merge-tree`,
+        # `commit-tree`) and checked readable in a temporary index (`read-tree`).
         ("git", "add"),
         ("git", "checkout-index"),
+        ("git", "commit"),
         ("git", "commit-tree"),
         ("git", "merge-tree"),
         ("git", "read-tree"),
         ("git", "reset"),
+        ("git", "update-index"),
         ("git", "update-ref"),
-        ("git", "write-tree"),
     }
 )
 # Local only as the whole argv: `git remote` alone lists the remotes' names, and anything after it
@@ -289,8 +292,8 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/sync/git.py", "guard", "*_MARKER_PATHS"): (
         "the module's own constant: `--git-path` and the name of each in-progress marker"
     ),
-    ("src/stayfixed/sync/job.py", "_staged", "*filters"): (
-        "`--diff-filter=` and the status letters its callers name, or nothing"
+    ("src/stayfixed/sync/job.py", "_commit", "str(message)"): (
+        "the value of `-F`, a file in the job's own scratch directory"
     ),
     ("src/stayfixed/sync/job.py", "_commit_tree", "*parented"): (
         "`-p` before each parent, a sha git printed"
@@ -300,7 +303,7 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
         "`--merge-base=` and the parent of a sha git printed"
     ),
     ("src/stayfixed/sync/rules.py", "commit_entries", "rev_range"): _REVISIONS,
-    ("src/stayfixed/sync/rules.py", "offending_paths", "*revisions"): _REVISIONS,
+    ("src/stayfixed/sync/rules.py", "diff_entries", "*revisions"): _REVISIONS,
     ("src/stayfixed/sync/rules.py", "range_is_memory_only", "base"): _REVISIONS,
     ("src/stayfixed/sync/rules.py", "range_is_memory_only", "tip"): _REVISIONS,
 }
@@ -351,7 +354,15 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/sync/job.py", "_one_job", "env=ctx.env"): _JOB_ENVIRONMENT,
     ("src/stayfixed/sync/trigger.py", "_upstream", "env=JOB_SETTINGS"): _JOB_ENVIRONMENT,
     ("src/stayfixed/sync/rules.py", "commit_entries", "env=env"): _JOB_ENVIRONMENT,
-    ("src/stayfixed/sync/rules.py", "offending_paths", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/rules.py", "diff_entries", "env=literal"): (
+        _JOB_ENVIRONMENT + ", and `GIT_LITERAL_PATHSPECS=1` when it names the paths"
+    ),
+    ("src/stayfixed/sync/job.py", "commit_memory", "env=_LITERAL"): (
+        "`GIT_LITERAL_PATHSPECS=1` alone, over the job's own: each note's path matched as written"
+    ),
+    ("src/stayfixed/sync/job.py", "_commit", "env=_LITERAL"): (
+        "`GIT_LITERAL_PATHSPECS=1` alone, over the job's own: each note's path matched as written"
+    ),
     ("src/stayfixed/sync/rules.py", "range_is_memory_only", "env=env"): _JOB_ENVIRONMENT,
     ("src/stayfixed/prove/run.py", "_launch", "env=dict(env)"): (
         "the caller's own environment, less each variable whose value the runner adapter names "
