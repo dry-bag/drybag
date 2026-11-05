@@ -37,6 +37,7 @@ from tests.attach.test_write import ledger_file
 from tests.gitfixture import git
 from tests.runners import Recorder
 from tests.snapshot import assert_snapshot_unchanged, snapshot
+from tests.tagged import with_tags
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -730,6 +731,21 @@ def test_yes_records_the_overlays_notes_for_the_key_and_never_the_checkouts(
     committed = alpha / "n" / "project-stable" / "planted.md"
     committed.parent.mkdir(parents=True)
     committed.write_text(_note("planted"), encoding="utf-8")
+    _notes(overlay, "alpha", "one")
+    report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha), yes=True)
+    assert [(o.state, o.promoted) for o in report.projects] == [("attached", 1)]
+    assert [Path(s).name for s in _reviewed(_machine(tmp_path, overlay))] == ["one.md"]
+
+
+def test_restore_hands_attach_the_projects_own_store_when_the_project_lists_a_tag(
+    tmp_path: Path,
+) -> None:
+    # The store handed to `attach` is the project's own notes, the last of its permitted roots.
+    # Indexed from the front it was the first tag's, which `attach` refuses as not the project's.
+    # Mutation: `mutations/`'s "restore hands attach the first tag's notes as the store".
+    overlay = _overlay(tmp_path)
+    alpha = _checkout(tmp_path, "alpha")
+    with_tags(overlay, "alpha", ["ops"], "memory")
     _notes(overlay, "alpha", "one")
     report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha), yes=True)
     assert [(o.state, o.promoted) for o in report.projects] == [("attached", 1)]

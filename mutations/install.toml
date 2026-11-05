@@ -1262,6 +1262,17 @@ reddens = [
   "tests/setup/test_restore.py::test_a_checkout_whose_project_is_not_its_table_key_is_refused_and_the_rest_attach",
 ]
 
+# The store handed to `attach` is the project's own notes, the last of its permitted roots: indexed
+# from the front it is the first tag's when the project lists one, and `attach` refuses it.
+[[mutation]]
+name = "restore hands attach the first tag's notes as the store"
+file = "src/stayfixed/setup/restore.py"
+before = "                store=project_notes(overlay, item.name),"
+after = "                store=__import__(\"stayfixed.memory.store\", fromlist=[\"x\"]).permitted_roots(overlay, item.name)[1],"
+reddens = [
+  "tests/setup/test_restore.py::test_restore_hands_attach_the_projects_own_store_when_the_project_lists_a_tag",
+]
+
 # `--yes` is the owner's word on their own command line that the overlay's notes are theirs;
 # without it `setup --restore` records nothing as reviewed, however many notes the overlay holds.
 [[mutation]]
