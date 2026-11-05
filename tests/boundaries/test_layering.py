@@ -114,12 +114,12 @@ def test_the_packages_import_one_another_without_a_cycle_at_module_level() -> No
     # doctor rule makes (`tests/boundaries/test_discovery.py`): module level, a class body, a
     # `try`, a `with`, an `if` and the `else` of `if TYPE_CHECKING:`. What is not: an import
     # inside a function, which is how this codebase defers a load until a command asks for it
-    # (`setup`'s import of the overlay area, every import of a discovered `hooks.py` and
-    # `doctor.py`), cannot leave a module half-initialised, and is held where it crosses from one
-    # side to another by `tests/boundaries/test_delivery.py`; and an `if TYPE_CHECKING:` body, which
-    # never runs and is the idiom for naming a type from a package that depends on this one. The
-    # nodes are the packages under `src/stayfixed/`, delivery areas included, and imports within
-    # one package are not edges.
+    # (every import of a discovered `hooks.py` and `doctor.py`), cannot leave a module
+    # half-initialised, and is held where it crosses from one side to another by
+    # `tests/boundaries/test_delivery.py`; and an `if TYPE_CHECKING:` body, which never runs and is
+    # the idiom for naming a type from a package that depends on this one. The nodes are the
+    # packages under `src/stayfixed/`, delivery areas included, and imports within one package are
+    # not edges.
     #
     # Mutation (declared): `mutations/`'s "the path grammar reads the configuration's schema
     # again".
@@ -211,11 +211,11 @@ def test_the_modules_import_one_another_without_a_cycle_even_inside_functions() 
     edges: set[tuple[str, str]] = set()
     for where, path in files.items():
         edges |= _module_imports(where, path.read_text(encoding="utf-8"), modules)
-    # The walk reads an edge that runs only inside a function, the pinned crossing `setup --overlay`
-    # makes, and the edge that import makes to the package above the module it names, so a reader
-    # that stopped finding either cannot pass by finding no cycle.
-    assert ("stayfixed.setup.run", "stayfixed.overlay.api") in edges
-    assert ("stayfixed.setup.run", "stayfixed.overlay") in edges
+    # The walk reads an edge that runs only inside a function, and the edge that import makes to the
+    # package above the module it names, so a reader that stopped finding either cannot pass by
+    # finding no cycle.
+    assert ("stayfixed.config.overlay_layers", "stayfixed.binding") in edges
+    assert ("stayfixed.memory.doctor", "stayfixed.doctor") in edges
     assert _cycles(edges) == []
 
 

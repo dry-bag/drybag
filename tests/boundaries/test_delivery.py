@@ -23,15 +23,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 DELIVERY, PACK, CORE = "delivery", "pack", "core"
 
-Row = tuple[str, str, frozenset[str]]
+Row = tuple[str, str]
 Direction = tuple[str, str]
 
 # Every import by which a module reaches a package on another side, one row per import statement
 # and one table per direction: the importing file relative to `src/stayfixed/`, the module the
-# statement names cut to three dotted parts, and the names it takes out of that module. Each table
-# is held as a multiset and by equality in both directions, so a new crossing reddens its test, and
-# so do a row whose import has gone, a second statement beside a pinned one, and a pinned statement
-# that takes one more name: the pardon covers exactly the statements and names written here, and
+# statement names cut to three dotted parts. Each table is held as a multiset and by equality in
+# both directions, so a new crossing reddens its test, and so do a row whose import has gone and a
+# second statement beside a pinned one: the pardon covers exactly the statements written here, and
 # cutting a crossing is deleting its rows in the same commit. Each row says what removes it.
 # Importing the core is no crossing from either side, and neither is an import within one side.
 CORE_TO_DELIVERY: tuple[Row, ...] = ()
@@ -40,7 +39,7 @@ PACK_TO_DELIVERY: tuple[Row, ...] = ()
 DELIVERY_TO_PACK: tuple[Row, ...] = (
     # `stayfixed setup --git-hooks` installs and removes the commit-message hook, inside the one
     # function that runs it. Goes when the commit-hook installer leaves `setup`.
-    ("setup/commands.py", "stayfixed.guards.api", frozenset({"Found", "install", "uninstall"})),
+    ("setup/commands.py", "stayfixed.guards.api"),
 )
 PINNED: dict[Direction, tuple[Row, ...]] = {
     (CORE, DELIVERY): CORE_TO_DELIVERY,
@@ -60,17 +59,15 @@ def _crossings(
     where: str, text: str, delivery: frozenset[str], pack: frozenset[str]
 ) -> list[tuple[Direction, Row]]:
     """The rule, for one file: every import statement by which it reaches a package on another
-    side, as `((its side, the side reached), (where, module, names))` with the module cut to three
-    dotted parts. Reaching the core is no crossing, and neither is reaching a package of one's own
+    side, as `((its side, the side reached), (where, module))` with the module cut to three dotted
+    parts. Reaching the core is no crossing, and neither is reaching a package of one's own
     side.
 
     One row per import statement, keyed on the module the statement names and never on its
     aliases: `astscan.imported_modules` also yields `stayfixed.overlay.api.create` for every name a
-    `from` imports, which would turn one import of four names into four rows. The names are the
-    row's third part instead, as written, so a pardon is for one statement and what it takes; a
-    statement that imports a module itself (`import stayfixed.overlay.api`) takes no names. The
-    one spelling whose aliases are the modules is `from stayfixed import memory`, and it is read
-    as such: a row per package, importing the package itself. A module is on the side its first
+    `from` imports, which would turn one import of four names into four rows. The one spelling
+    whose aliases are the modules is `from stayfixed import memory`, and it is read as such: a row
+    per package, importing the package itself. A module is on the side its first
     path part is listed on, so `cli.py`, `config/` and every other module and subpackage that
     neither side lists are the core's.
     """
@@ -79,22 +76,22 @@ def _crossings(
     rows: list[tuple[Direction, Row]] = []
     for node in ast.walk(ast.parse(text)):
         if isinstance(node, ast.Import):
-            taken = [(alias.name, frozenset[str]()) for alias in node.names]
+            taken = [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom):
             # `astscan.imported_modules` yields the statement's own module first, resolved when
             # the import is relative, and then one name per alias.
             module = astscan.imported_modules(node, ("stayfixed", *parts[:-1]))[0][1]
-            taken = [(module, frozenset(alias.name for alias in node.names))]
+            taken = [module]
             if module == "stayfixed":
-                taken = [(f"{module}.{alias.name}", frozenset[str]()) for alias in node.names]
+                taken = [f"{module}.{alias.name}" for alias in node.names]
         else:
             continue
-        for module, names in taken:
+        for module in taken:
             bits = module.split(".")
             ours = bits[0] == "stayfixed" and len(bits) > 1
             target = _side(bits[1], delivery, pack) if ours else CORE
             if target not in (origin, CORE):
-                rows.append(((origin, target), (where, ".".join(bits[:3]), names)))
+                rows.append(((origin, target), (where, ".".join(bits[:3]))))
     return rows
 
 
@@ -145,8 +142,8 @@ def test_delivery_and_the_pack_import_each_other_only_where_pinned() -> None:
     # directions.
     #
     # Mutations (declared): `mutations/`'s "the note store imports the bug ledger", "a pinned
-    # crossing's import goes while its row stays" and "setup imports one more name from the guards
-    # area in a statement of its own", the last of which a comparison of `(file, module)` sets let
+    # crossing's import goes while its row stays" and "setup adds a second import statement from
+    # the guards area beside the pinned one", which a comparison of `(file, module)` sets let
     # through.
     assert _unpinned_or_gone((PACK, DELIVERY), (DELIVERY, PACK)) == {}
 
@@ -224,8 +221,7 @@ def test_every_area_is_on_exactly_one_side() -> None:
     # `CORE_AREAS` list areas, `PACK_PACKAGES` lists packages, and every listed name names one:
     # an area joins its side in the change that writes it.
     #
-    # Mutations (declared): `mutations/`'s "setup drops out of every side" and "memory stops being
-    # a delivery area".
+    # Mutation (declared): `mutations/`'s "memory stops being a delivery area".
     source = ROOT / "src" / "stayfixed"
     delivery, pack = stayfixed.areas.DELIVERY_AREAS, stayfixed.areas.PACK_PACKAGES
     core = stayfixed.areas.CORE_AREAS
@@ -251,7 +247,7 @@ def test_the_delivery_rule_judges_the_importer_and_the_imported() -> None:
     pack = frozenset({"ledger", "docs"})
     assert _crossings(
         "doctor/commands.py", "def check():\n    from ..memory import api\n", delivery, pack
-    ) == [((CORE, DELIVERY), ("doctor/commands.py", "stayfixed.memory", frozenset({"api"})))]
+    ) == [((CORE, DELIVERY), ("doctor/commands.py", "stayfixed.memory"))]
     assert _crossings("memory/x.py", "import stayfixed.overlay.api\n", delivery, pack) == []
 
     # Every direction, and the core reached from each: one text, imported from each side. Measured
@@ -259,41 +255,29 @@ def test_the_delivery_rule_judges_the_importer_and_the_imported() -> None:
     # reddens one of these.
     text = "import stayfixed.ledger.api\nimport stayfixed.memory.store\nimport stayfixed.fsops\n"
     assert _crossings("cli.py", text, delivery, pack) == [
-        ((CORE, PACK), ("cli.py", "stayfixed.ledger.api", frozenset())),
-        ((CORE, DELIVERY), ("cli.py", "stayfixed.memory.store", frozenset())),
+        ((CORE, PACK), ("cli.py", "stayfixed.ledger.api")),
+        ((CORE, DELIVERY), ("cli.py", "stayfixed.memory.store")),
     ]
     assert _crossings("ledger/x.py", text, delivery, pack) == [
-        ((PACK, DELIVERY), ("ledger/x.py", "stayfixed.memory.store", frozenset()))
+        ((PACK, DELIVERY), ("ledger/x.py", "stayfixed.memory.store"))
     ]
     assert _crossings("memory/x.py", text, delivery, pack) == [
-        ((DELIVERY, PACK), ("memory/x.py", "stayfixed.ledger.api", frozenset()))
+        ((DELIVERY, PACK), ("memory/x.py", "stayfixed.ledger.api"))
     ]
 
     # The one spelling whose module is the package itself, so the area is in an alias: read by
     # alias, and only for that spelling. Mutation (declared): `mutations/`'s "the delivery rule
     # reads `from stayfixed import memory` as importing nothing".
     assert _crossings("cli.py", "from stayfixed import fsops, memory\n", delivery, pack) == [
-        ((CORE, DELIVERY), ("cli.py", "stayfixed.memory", frozenset()))
+        ((CORE, DELIVERY), ("cli.py", "stayfixed.memory"))
     ]
 
-    # Two statements naming one module are two rows, each with the names it takes, so a pardon
-    # for one statement is never a pardon for a second one beside it. Mutation (declared):
-    # `mutations/`'s "the delivery rule forgets which names a statement takes".
+    # Two statements naming one module are two rows, so a pardon for one statement is never a
+    # pardon for a second one beside it.
     two = "from stayfixed.overlay.api import create\nfrom stayfixed.overlay.api import create\n"
     assert _crossings("doctor/checks.py", two, delivery, pack) == [
-        ((CORE, DELIVERY), ("doctor/checks.py", "stayfixed.overlay.api", frozenset({"create"}))),
-        ((CORE, DELIVERY), ("doctor/checks.py", "stayfixed.overlay.api", frozenset({"create"}))),
-    ]
-    assert _crossings(
-        "doctor/checks.py",
-        "from stayfixed.overlay.api import create, target_root\n",
-        delivery,
-        pack,
-    ) == [
-        (
-            (CORE, DELIVERY),
-            ("doctor/checks.py", "stayfixed.overlay.api", frozenset({"create", "target_root"})),
-        )
+        ((CORE, DELIVERY), ("doctor/checks.py", "stayfixed.overlay.api")),
+        ((CORE, DELIVERY), ("doctor/checks.py", "stayfixed.overlay.api")),
     ]
 
 

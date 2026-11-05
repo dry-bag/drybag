@@ -92,6 +92,14 @@ from stayfixed.errors import Failure, Refusal
 from stayfixed.fsops import utf_8_name
 from stayfixed.harnesses import BYTE_ORDER_MARK, lenient_settings
 from stayfixed.jsonobject import json_object, json_text
+from stayfixed.overlay.api import (
+    finish,
+    generate,
+    overlay_fault,
+    render,
+    require_overlay,
+    target_root,
+)
 from stayfixed.presets import defaults_of, load_preset
 from stayfixed.printed import answered, quoted
 from stayfixed.runner import Runner
@@ -438,17 +446,12 @@ def _requested_overlay(overlay: str | None, *, home: Path) -> _Overlay | None:
     command, run from wherever the owner happened to be sitting, and a created overlay must not
     depend on that. Measured while that was written: `root=Path.cwd()` created a real
     `stayfixed-private/` inside this very checkout the first time a test exercised the branch.
-
-    The overlay area is imported here and in `_apply_overlay`, never at module level: `setup`
-    loads the overlay area only when `--overlay` asks for it.
     """
     if overlay is None:
         # Nothing was asked for, so nothing is touched: `--overlay` is the only way to reach the
         # overlay at all, and a default here would turn an omitted flag into a repository created
         # on somebody's account.
         return None
-    from stayfixed.overlay.api import overlay_fault, target_root
-
     if overlay.startswith("create:"):
         spec = overlay[len("create:") :]
         owner, sep, name = spec.partition("/")
@@ -525,8 +528,6 @@ def _apply_overlay(planned: _Overlay, *, runner: Runner) -> tuple[Path, str]:
     repository may exist and how to record it: the report is discarded on a refusal, so nothing
     else would ever tell the owner.
     """
-    from stayfixed.overlay.api import finish, generate, render, require_overlay
-
     match planned.kind:
         case "record":
             require_overlay(planned.root, because=_RECORDING)

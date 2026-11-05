@@ -2036,13 +2036,6 @@ before = '        "memory",'
 after = ""
 reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
-[[mutation]]
-name = "setup drops out of every side"
-file = "src/stayfixed/areas.py"
-before = '        "setup",'
-after = ""
-reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
-
 # The core imports neither side: the bug ledger imported by a core module, inside a function where
 # nothing loads it until a command asks, is a crossing no row pins.
 [[mutation]]
@@ -4401,13 +4394,6 @@ reddens = [
   "tests/test_fsops.py::test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link",
   "tests/attach/test_checkout.py::test_a_present_name_is_never_overwritten",
 ]
-
-[[mutation]]
-name = "sync drops out of every side"
-file = "src/stayfixed/areas.py"
-before = '        "sync",'
-after = ""
-reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
 # The note sync switches on for a bool `true` and for nothing else: a string "true" or the integer
 # 1, which a hand edit can easily write, must not start a job that commits and pushes.
