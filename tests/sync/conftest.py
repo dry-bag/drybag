@@ -22,6 +22,7 @@ import pytest
 
 from stayfixed.config.machine import machine_config_path
 from stayfixed.sync.job import JobContext, Limits
+from stayfixed.sync.rules import MEMORY_PATHSPEC
 from stayfixed.sync.state import state_directory
 from tests import gitfixture as fx
 
@@ -291,12 +292,6 @@ def path_without_gitleaks(git_only: Path) -> str:
 NOW = datetime(2026, 10, 12, 12, 0, 0, tzinfo=UTC)
 HOST = "testhost"
 TAG = "team"
-PATHSPEC = [
-    ":(top,glob)common/memory/**",
-    ":(top,glob)groups/*/memory/**",
-    ":(top,glob)projects/*/memory/**",
-    ":(top,exclude,glob)projects/*/memory/MEMORY.md",
-]
 
 
 def note_text(name: str, *, index: str | None = None, body: str = "") -> str:
@@ -390,7 +385,7 @@ def committed(repo: Path, rev: str = "HEAD") -> list[tuple[str, str]]:
 
 
 def memory_status(repo: Path) -> str:
-    return git(repo, "status", "--porcelain", "--no-renames", "--", *PATHSPEC)
+    return git(repo, "status", "--porcelain", "--no-renames", "--", *MEMORY_PATHSPEC)
 
 
 def staged(repo: Path, *pathspec: str) -> str:

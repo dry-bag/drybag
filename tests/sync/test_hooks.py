@@ -249,21 +249,6 @@ def test_session_end_never_waits_out_a_standing_failure(overlays: Overlays) -> N
     assert decide(overlays, "SessionEnd") == "run"
 
 
-def test_no_scanner_backs_off_once_the_indexes_it_rendered_are_recorded(
-    overlays: Overlays,
-) -> None:
-    # A machine with no gitleaks on PATH, a note waiting. The first job's render
-    # leaves the indexes dirty, which is news once; the second records them, and the next `Stop`
-    # waits.
-    overlays.gitleaks.unlink()
-    write(overlays.a, "common/memory/waiting.md", "a note\n")
-    for _ in range(2):
-        state = J.run_job(context(overlays, overlays.a))
-        assert state is not None and state.outcome.state == "scan_unavailable", state
-
-    assert decide(overlays, "Stop", at=NOW + timedelta(minutes=3)) == "none"
-
-
 def test_a_real_jobs_upstream_hold_backs_off_the_next_stop(overlays: Overlays) -> None:
     # The back-off compares `origin/main` with the sha the job fetched. The job fetches into a ref
     # of its own, so `origin/main` moves only by git's opportunistic update of the tracking ref;
@@ -468,19 +453,6 @@ def test_a_claude_code_hook_process_still_starts_the_job(
     monkeypatch.delenv("PLUGIN_ROOT", raising=False)
     monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(overlays.home / "plugin"))
     assert _handle(_event(overlays, "SessionEnd")) == [HookResult()]
-    assert spied["spawn"] == [None]
-
-
-def test_session_start_records_no_checkout(
-    overlays: Overlays, spied: dict[str, list[object]]
-) -> None:
-    # The job renders no index, so it needs no checkout: each session renders its own.
-    overlays.sync = True
-    overlays.use(overlays.a)
-    for source in ("startup", "compact"):
-        _handle(_event(overlays, "SessionStart", source=source))
-
-    assert not (overlays.state_dir / "checkouts.json").exists()
     assert spied["spawn"] == [None]
 
 

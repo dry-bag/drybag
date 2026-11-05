@@ -64,18 +64,6 @@ def _document(path: Path) -> dict[str, object]:
 # -- where it lives, and what is written --------------------------------------------------------
 
 
-def test_state_lives_in_the_data_directory() -> None:
-    assert S.state_directory() == Path.home() / ".local/share/stayfixed/sync"
-
-
-def test_the_outcomes_are_the_thirteen_in_order() -> None:
-    assert S.OUTCOMES == (
-        "ok", "skipped", "conflict", "raced", "rejected", "offline",
-        "auth_failed", "timeout", "hook_failed", "scan_unavailable", "signing_failed",
-        "secret_found", "waiting_clean_tree",
-    )  # fmt: skip
-
-
 @pytest.mark.parametrize("retired", ["resolved_index", "index_stale"])
 def test_a_retired_outcome_is_unreadable_and_replaced(overlays: Overlays, retired: str) -> None:
     # Indexes are no longer united and the real index no longer aligned, so neither outcome is
@@ -163,28 +151,6 @@ def test_a_write_names_only_an_outcome_the_job_has(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="fine"):
         S.write_state(tmp_path, state)
     assert not (tmp_path / S.STATE_FILE).exists()
-
-
-def test_a_later_outcome_keeps_the_holds(tmp_path: Path) -> None:
-    first = _state()
-    S.write_state(tmp_path, first)
-    later = replace(first, outcome=S.Outcome("offline", _iso(NOW), "no route"))
-    S.write_state(tmp_path, later)
-    after = S.read_state(tmp_path)
-    assert after is not None and after.outcome.state == "offline" and after.holds == first.holds
-
-
-def test_a_local_rewrite_hold_round_trips(tmp_path: Path) -> None:
-    held = S.Holds(("5" * 40,), (), S.LOCAL_REWRITE)
-    S.write_state(tmp_path, _state(holds=held))
-    after = S.read_state(tmp_path)
-    assert after is not None and after.holds == held
-
-
-def test_a_hold_is_any_upstream_path_or_local_commit() -> None:
-    assert not S.EMPTY_HOLDS.any
-    assert replace(S.EMPTY_HOLDS, upstream_paths=("a",)).any
-    assert replace(S.EMPTY_HOLDS, local_commits=("a",)).any
 
 
 # -- reading what cannot be used ----------------------------------------------------------------

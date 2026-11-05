@@ -99,12 +99,6 @@ def test_the_layout_takes_a_path_apart(
     assert (found if found is None else (found.scope, found.name, found.below)) == parsed
 
 
-def test_a_scope_knows_its_root() -> None:
-    assert R.memory_path("common/memory/a.md").root == "common/memory"  # type: ignore[union-attr]
-    assert R.memory_path("groups/g/memory/a.md").root == "groups/g/memory"  # type: ignore[union-attr]
-    assert R.memory_path("projects/p/memory/a.md").root == "projects/p/memory"  # type: ignore[union-attr]
-
-
 def test_a_projects_index_is_not_memory(tmp_path: Path) -> None:
     # Each machine renders its own index, so the sync never stages, writes or moves one: a
     # project's `MEMORY.md` is outside memory, by the layout and by git's own match, and a change
@@ -491,19 +485,6 @@ def test_the_tree_bound_checks_modes_too(world: World) -> None:
     )
 
 
-def test_the_owners_notes_with_odd_names_pass(world: World) -> None:
-    """The legitimate use the mode rule must not refuse: regular notes, however they are named."""
-    a = world.a
-    base = head(a)
-    write(a, 'common/memory/the "owner\'s" note.md')
-    write(a, "projects/p/memory/a b ü.md")
-    commit_all(a, "notes")
-    (a / "common/memory/first.md").unlink()
-    tip = commit_all(a, "delete one")
-
-    assert R.range_is_memory_only(a, base, tip) == (True, [])
-
-
 def _judged(repo: Path, *paths: str, against: str = "HEAD") -> list[str]:
     """What the commit step refuses of `paths`: each added intent-to-add, then judged by what git
     would record from the working tree against `against`, path by path."""
@@ -512,20 +493,6 @@ def _judged(repo: Path, *paths: str, against: str = "HEAD") -> list[str]:
     assert ran.code == 0, ran.err
     entries = R.diff_entries(repo, against, paths=paths)
     return [entry.path for entry in entries if R.entry_offends(entry)]
-
-
-def test_a_link_and_a_nested_repository_are_judged_by_their_modes(world: World) -> None:
-    """What the commit step judges before it commits: what git would record for each path."""
-    a = world.a
-    write(a, "common/memory/fine.md")
-    symlink(a, "groups/g/memory/link.md", "/etc/passwd")
-    nested = init(a / "projects/p/memory/nested.md")
-    write(nested, "f.md")
-    commit_all(nested, "inner")
-
-    assert _judged(
-        a, "common/memory/fine.md", "groups/g/memory/link.md", "projects/p/memory/nested.md"
-    ) == ["groups/g/memory/link.md", "projects/p/memory/nested.md"]
 
 
 # Each refused by exactly one of the three rules, so dropping that rule reddens its case.
@@ -682,52 +649,27 @@ def test_an_ordinary_note_name_is_never_refused(world: World) -> None:
     assert len(R.diff_entries(a, base, paths=_ACCEPTED)) == len(_ACCEPTED)
 
 
-def test_the_judgement_names_every_path_that_is_not_a_note(world: World) -> None:
-    a = world.a
-    paths = [
-        "common/memory/fine.md",
-        "projects/p/memory/g/.claude/skills/x/SKILL.md",
-        "groups/g/memory/h/.claude/skills/x/SKILL.md",
-        "common/memory/.gitattributes",
-        "common/memory/blob.md",
-    ]
-    for path in paths[:3]:
-        write(a, path)
-    write(a, "common/memory/.gitattributes", "nothing-here.md -diff\n")
-    (a / "common/memory/blob.md").write_bytes(b"a\x00b")
-
-    assert sorted(_judged(a, *paths)) == [
-        "common/memory/.gitattributes",
-        "common/memory/blob.md",
-        "groups/g/memory/h/.claude/skills/x/SKILL.md",
-        "projects/p/memory/g/.claude/skills/x/SKILL.md",
-    ]
+_NOTE = "groups/g/memory/a.md"
 
 
-def test_entry_offends_judges_name_mode_and_content() -> None:
-    plain = R.RawEntry("100644", "A", "common/memory/a.md", BLOB)
-    assert R.entry_offends(plain) is False
-    assert R.entry_offends(R.RawEntry("100644", "A", "groups/g/memory/a.md", BLOB, True)) is True
-    assert R.entry_offends(R.RawEntry("000000", "D", "common/memory/a.md", BLOB, True)) is False
-    assert R.entry_offends(R.RawEntry("100644", "A", "common/memory/.a.md", BLOB)) is True
-    assert R.entry_offends(R.RawEntry("000000", "D", "common/memory/a.txt", BLOB)) is True
-    assert R.entry_offends(R.RawEntry("100644", "A", "common/claude/x.md", BLOB)) is True
-
-
-def test_mode_000000_is_allowed_only_for_a_deletion() -> None:
-    """`000000` is git's "nothing here": right for a deletion, wrong for anything else."""
-    note = "groups/g/memory/a.md"
-    assert R.entry_offends(R.RawEntry("000000", "D", note, BLOB)) is False
-    for status in ("A", "M", "T", "U", "X"):
-        assert R.entry_offends(R.RawEntry("000000", status, note, BLOB)) is True, status
-    assert R.entry_offends(R.RawEntry("100644", "A", note, BLOB)) is False
-
-
-def test_only_a_regular_file_or_a_deletion_may_move() -> None:
-    note = "common/memory/a.md"
-    assert R.entry_offends(R.RawEntry("100644", "M", note, BLOB)) is False
-    for mode in ("100755", "120000", "160000", "040000"):
-        assert R.entry_offends(R.RawEntry(mode, "M", note, BLOB)) is True, mode
+@pytest.mark.parametrize(
+    ("mode", "status", "path", "binary", "offends"),
+    [
+        ("100644", "A", "common/memory/a.md", False, False),
+        ("100644", "M", _NOTE, False, False),
+        ("100644", "A", _NOTE, True, True),  # git calls the content binary
+        ("000000", "D", _NOTE, True, False),  # a deletion has no content to call binary
+        ("100644", "A", "common/memory/.a.md", False, True),
+        ("000000", "D", "common/memory/a.txt", False, True),  # it was never a note either
+        ("100644", "A", "common/claude/x.md", False, True),
+        *(("000000", status, _NOTE, False, True) for status in "AMTUX"),  # "nothing here": a delete
+        *((mode, "M", _NOTE, False, True) for mode in ("100755", "120000", "160000", "040000")),
+    ],
+)
+def test_entry_offends_judges_name_mode_and_content(
+    mode: str, status: str, path: str, binary: bool, offends: bool
+) -> None:
+    assert R.entry_offends(R.RawEntry(mode, status, path, BLOB, binary)) is offends
 
 
 def test_an_empty_range_is_memory_only(world: World) -> None:

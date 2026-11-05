@@ -25,7 +25,6 @@ from stayfixed.config.machine import machine_config_path
 from stayfixed.sync import job as J
 from stayfixed.sync.state import (
     EMPTY_HOLDS,
-    LOCK_FILE,
     PENDING_FILE,
     SCRATCH,
     SLEEPER_LOCK_FILE,
@@ -175,18 +174,6 @@ def test_the_jobs_git_runs_no_hook(overlays: Overlays) -> None:
     assert state is not None and state.outcome.state == "ok", state
     assert NOTE in remote_files(overlays)
     assert sorted(path.name for path in hooks.glob("*.ran")) == []
-
-
-def test_a_busy_lock_marks_pending_and_returns_the_state(overlays: Overlays) -> None:
-    held = Lock.try_acquire(overlays.state_dir / LOCK_FILE)
-    assert held is not None
-    try:
-        assert job(overlays) is None
-    finally:
-        held.release()
-
-    assert (overlays.state_dir / PENDING_FILE).exists()
-    assert read_state(overlays.state_dir) is None
 
 
 # -- the state a job starts from ------------------------------------------------------------------

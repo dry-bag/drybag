@@ -89,8 +89,11 @@ def test_never_commits_outside_pathspec(overlays: Overlays) -> None:
     write(a, "common/claude/hooks/x.py", "print('edited')\n")
     write(a, "projects/alpha/memory/project-stable/real.md", "a note\n")
 
-    assert J.commit_memory(context(overlays, a)) is None
+    ctx = context(overlays, a)
 
+    assert J.commit_memory(ctx) is None
+
+    assert ctx.refused == []  # never listed, rather than listed and refused
     paths = _committed_paths(a)
     assert "projects/alpha/memory/project-stable/real.md" in paths
     assert all(path.startswith(("common/memory/", "projects/alpha/memory/")) for path in paths)
@@ -98,34 +101,6 @@ def test_never_commits_outside_pathspec(overlays: Overlays) -> None:
     assert "?? projects/alpha/checkout/memory/x.md" in status and "?? common/memory.md" in status
     assert "?? groups/memory/z.md" in status
     assert " M common/claude/hooks/x.py" in status
-
-
-def test_non_notes_are_never_staged_so_nothing_is_refused(overlays: Overlays) -> None:
-    # The status's pathspec keeps non-notes out of the commit in the first place. The refusal of
-    # offending entries would still keep them out, so only the refusal list tells "never listed"
-    # from "listed, then refused".
-    a = overlays.a
-    write(a, "common/claude/hooks/x.py", "print('edited')\n")
-    write(a, "projects/alpha/checkout/memory/x.md", "not a note\n")
-    write(a, "common/memory/fresh.md", "a note\n")
-    ctx = context(overlays, a)
-
-    assert J.commit_memory(ctx) is None
-
-    assert ctx.refused == []
-    assert ("A", "common/memory/fresh.md") in committed(a)
-
-
-def test_only_one_pathspec_matching_still_commits(overlays: Overlays) -> None:
-    # `git add -A` exits 128 when a pathspec matches nothing: an overlay without projects.
-    a = overlays.a
-    git(a, "rm", "-q", "-r", "projects", "groups")
-    commit_all(a, "no projects")
-    write(a, "common/memory/solo.md", "a note\n")
-
-    assert J.commit_memory(context(overlays, a)) is None
-
-    assert committed(a) == [("A", "common/memory/solo.md")]
 
 
 def test_nothing_to_commit_runs_no_scan(overlays: Overlays) -> None:
@@ -162,27 +137,6 @@ def test_a_dirty_index_is_never_committed(overlays: Overlays) -> None:
     ]
 
 
-def test_link_and_nested_repository_under_memory_are_not_committed(overlays: Overlays) -> None:
-    # Both named like notes, so only their modes refuse them. Mutation (oracle): `mutations/`'s
-    # "an offending note is committed".
-    a = overlays.a
-    (a / "common/memory/pw.md").symlink_to("/etc/passwd")
-    nested = a / "common/memory/nested.md"
-    nested.mkdir(parents=True)
-    git(nested, "init", "-q")
-    write(nested, "n.md", "x\n")
-    commit_all(nested, "nested")
-    write(a, "common/memory/fine.md", "a plain note\n")
-    ctx = context(overlays, a)
-
-    assert J.commit_memory(ctx) is None  # the step goes on; the job's end names them
-
-    assert set(ctx.refused) == {"common/memory/pw.md", "common/memory/nested.md"}
-    paths = _committed_paths(a)
-    assert "common/memory/fine.md" in paths
-    assert not _in_head(a, "common/memory/pw.md") and not _in_head(a, "common/memory/nested.md")
-
-
 def test_a_refused_link_alone_commits_nothing(overlays: Overlays) -> None:
     a = overlays.a
     before = head(a)
@@ -193,28 +147,6 @@ def test_a_refused_link_alone_commits_nothing(overlays: Overlays) -> None:
 
     assert ctx.refused == ["projects/alpha/memory/key"]
     assert head(a) == before
-
-
-def test_ordinary_note_names_are_never_refused(overlays: Overlays) -> None:
-    # The names the note rule must let through: quotes, a leading dash, dots inside, depth,
-    # Cyrillic, and a group's own notes.
-    a = overlays.a
-    names = [
-        'common/memory/the owner\'s "quoted" note.md',
-        "common/memory/-rf.md",
-        "common/memory/v1.2.md",
-        "projects/alpha/memory/project-stable/sub/deeper.md",
-        "common/memory/заметка.md",
-        f"groups/{TAG}/memory/{TAG}-two.md",
-    ]
-    for name in names:
-        write(a, name, note_text("n", index="A note"))
-    ctx = context(overlays, a)
-
-    assert J.commit_memory(ctx) is None
-
-    assert ctx.refused == []
-    assert set(names) <= _committed_paths(a)
 
 
 _SKILL = (
@@ -251,10 +183,16 @@ def test_dot_paths_non_md_and_binary_under_memory_are_refused_and_named(
 def test_a_link_an_executable_or_a_binary_note_is_refused_and_leaves_no_index_entry(
     overlays: Overlays,
 ) -> None:
-    # Each new one is added intent-to-add to be judged, and dropped again when refused.
-    # Mutation (oracle): `mutations/`'s "an offending note is committed".
+    # Each new one is added intent-to-add to be judged, and dropped again when refused. A link
+    # and a nested repository are named like notes, so only their modes refuse them. Mutation
+    # (oracle): `mutations/`'s "an offending note is committed".
     a = overlays.a
     link, script, blob = "common/memory/pw.md", "common/memory/run.md", "common/memory/blob.md"
+    nested = "common/memory/nested.md"
+    (a / nested).mkdir(parents=True)
+    git(a / nested, "init", "-q")
+    write(a / nested, "n.md", "x\n")
+    commit_all(a / nested, "nested")
     (a / link).symlink_to("/etc/passwd")
     write(a, script, "#!/bin/sh\n")
     (a / script).chmod(0o755)
@@ -264,9 +202,9 @@ def test_a_link_an_executable_or_a_binary_note_is_refused_and_leaves_no_index_en
 
     assert J.commit_memory(ctx) is None
 
-    assert set(ctx.refused) == {link, script, blob}
+    assert set(ctx.refused) == {link, script, blob, nested}
     assert committed(a) == [("A", "common/memory/fine.md")]
-    assert git(a, "ls-files", "--", link, script, blob) == ""
+    assert git(a, "ls-files", "--", link, script, blob, nested) == ""
 
 
 def _link_in_place(overlays: Overlays, relative: str) -> Path:

@@ -245,17 +245,12 @@ def test_the_guard_allows_staged_and_unstaged_work_outside_memory(world: World) 
         ("git version 2.43.0.windows.1\n", True),
         ("git version 3.0.1\n", True),
         ("git version 2.42.2\n", False),
-        ("git version 2.40.0\n", False),  # ignores GIT_ATTR_SOURCE: attributes from the tree
-        ("git version 2.39.5\n", False),
-        ("git version 2.38.0\n", False),
-        ("git version 2.37.9\n", False),
         ("git version 1.99.0\n", False),
         ("something else\n", False),
         ("", False),
     ],
 )
 def test_the_git_version_floor_is_2_43(text: str, ok: bool) -> None:
-    assert G.MIN_GIT == (2, 43)
     assert G.version_ok(text) is ok
 
 

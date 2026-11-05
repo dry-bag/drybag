@@ -6269,7 +6269,7 @@ file = "src/stayfixed/sync/rules.py"
 before = '        return entry.status != "D"'
 after = "        return False"
 reddens = [
-  "tests/sync/test_rules.py::test_mode_000000_is_allowed_only_for_a_deletion",
+  "tests/sync/test_rules.py::test_entry_offends_judges_name_mode_and_content",
 ]
 
 [[mutation]]
@@ -6508,7 +6508,6 @@ file = "src/stayfixed/sync/job.py"
 before = "    kept = [entry for entry in entries if not entry_offends(entry)]"
 after = "    kept = entries"
 reddens = [
-  "tests/sync/test_commit.py::test_link_and_nested_repository_under_memory_are_not_committed",
   "tests/sync/test_commit.py::test_a_link_an_executable_or_a_binary_note_is_refused_and_leaves_no_index_entry",
 ]
 
