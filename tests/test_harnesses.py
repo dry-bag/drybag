@@ -20,17 +20,10 @@ from stayfixed.harnesses import (
     Harness,
     Surface,
     detect,
-    select,
 )
 from tests.test_language_neutral import _docstrings
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def test_select_answers_the_listed_harnesses_and_counts_the_rest() -> None:
-    assert select(["claude", "codex"]) == ((CLAUDE, CODEX), 0)
-    assert select(["codex"]) == ((CODEX,), 0)
-    assert select(["claude", "cursor", "x\x1b"]) == ((CLAUDE,), 2)
 
 
 def test_every_harness_is_registered_once_and_codex_reads_only_the_standard() -> None:
@@ -38,8 +31,6 @@ def test_every_harness_is_registered_once_and_codex_reads_only_the_standard() ->
     assert len(names) == len(set(names))
     assert CLAUDE.settings == (".claude/settings.json",)
     assert CODEX.settings == (".codex/hooks.json",)
-    # `project.detect` reads these instead of spelling the directories a second time.
-    assert (CLAUDE.marker_dir, CODEX.marker_dir) == (".claude", ".codex")
 
 
 # What a hook may say about a tool call, in either harness's schema. A harness's `render` shapes
@@ -67,7 +58,6 @@ PAYLOADS: tuple[dict[str, object] | None, ...] = (
 # variable is in none of the inputs above, as a new harness's would be in neither of theirs.
 OTHER = Harness(
     name="other",
-    marker_dir=".other",
     settings=(),
     local_settings=(),
     project_dir_env=None,
@@ -135,7 +125,6 @@ def _keys(value: object) -> set[str]:
 # the event and the context, and nothing promises it emits JSON.
 TEXT = Harness(
     name="text",
-    marker_dir=".text",
     settings=(),
     local_settings=(),
     project_dir_env=None,

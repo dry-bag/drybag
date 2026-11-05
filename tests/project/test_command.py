@@ -117,21 +117,6 @@ def test_a_refused_footprint_exits_one_with_the_refused_section_in_that_report(
 
 
 @needs_git
-def test_a_harness_no_adapter_serves_is_never_named(tmp_path: Path) -> None:
-    # `[stayfixed] agents` is repository-authored, so the report never prints a name no harness
-    # answers to: `picked:` lists the harnesses stayfixed serves among those listed.
-    root = repository(tmp_path)
-    (root / "stayfixed.toml").write_text(
-        '[stayfixed]\nversion = "0.1.0"\nagents = ["claude", "cursor\\u001b[31m"]\n\n'
-        '[project]\nname = "widget"\n',
-        encoding="utf-8",
-    )
-    code, printed = _run(root, tmp_path, "--yes", "--dry-run")
-    assert code == 0, printed
-    assert "cursor" not in printed and "\x1b" not in printed
-
-
-@needs_git
 def test_questions_print_each_default_with_its_source_and_write_nothing(tmp_path: Path) -> None:
     # The card is what a person reads before choosing any answer, so each line carries the
     # value `init --yes` would take and where it came from; the questions plan nothing.

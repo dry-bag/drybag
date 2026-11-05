@@ -170,7 +170,6 @@ LEGITIMATE = (
         given=Given(
             name="widget",
             base_branch="main",
-            agents=("claude", "codex"),
             memory_mode="local-only",
         ),
     ),

@@ -1,9 +1,8 @@
 """Every harness stayfixed serves, as values in one registry.
 
-`settings` names the committed files in which a harness reads hook entries; `marker_dir` is the
-directory whose presence says a repository uses it. A harness is a value, not a class: what this
-module states about a harness is one more value in `HARNESSES`, and nothing that reads the
-registry changes. What it does not state yet is the list below.
+`settings` names the committed files in which a harness reads hook entries. A harness is a value,
+not a class: what this module states about a harness is one more value in `HARNESSES`, and
+nothing that reads the registry changes. What it does not state yet is the list below.
 
 The registry is also the adapter the `hooks` area answers through. `stayfixed hook` asks `detect`
 which value it is running under and shapes its stdout with that value's `render`, and nothing
@@ -75,16 +74,12 @@ package that names a harness is pardoned there, each pardon by one of these item
 Elsewhere, code that needs a harness fact asks this registry: `doctor` reads the plugin-root
 variables off every value; `setup` reads the machine's settings file off `CLAUDE.settings`; and
 `attach` merges into the one file `CLAUDE.local_settings` names.
-
-A name `[stayfixed] agents` lists and no harness answers to is counted, never refused and never
-printed: the list is repository-authored, and a project may name a harness a later stayfixed
-serves.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
@@ -130,7 +125,6 @@ class Reach:
 @dataclass(frozen=True)
 class Harness:
     name: str
-    marker_dir: str
     settings: tuple[str, ...]
     # Settings files this harness reads that a repository keeps out of git, which `doctor`
     # walks beside `settings`: they are this machine's.
@@ -206,7 +200,6 @@ _CODEX_HOOKS_UNVERIFIED = Reach(
 
 CLAUDE = Harness(
     name="claude",
-    marker_dir=CLAUDE_DIR,
     settings=(f"{CLAUDE_DIR}/settings.json",),
     # The file `attach` merges the overlay's hook entries into.
     local_settings=(f"{CLAUDE_DIR}/settings.local.json",),
@@ -235,7 +228,6 @@ CLAUDE = Harness(
 # instruction file for it.
 CODEX = Harness(
     name="codex",
-    marker_dir=".codex",
     settings=(".codex/hooks.json",),
     local_settings=(),
     # Codex names the project root in no variable of its own (`read_event` still asks every
@@ -266,7 +258,7 @@ CODEX = Harness(
 # Claude Code's hook schema is the de-facto one, which other harnesses imitate, so it answers
 # whatever no other value claims and detects nothing of its own.
 CANONICAL = CLAUDE
-# The order `init` writes into `[stayfixed] agents`.
+# The order the README's table and `setup` take the harnesses in.
 HARNESSES: tuple[Harness, ...] = (CLAUDE, CODEX)
 
 # The leading UTF-8 byte-order mark Claude Code reads past in its settings files (measured on
@@ -289,10 +281,9 @@ def project_root_variables() -> tuple[str, ...]:
     """The variables a hook's project root is read from, in the order they are asked.
 
     `CANONICAL`'s first, then every other registered value's in registry order, each once. The
-    registry's order is the order `init` writes `agents` in, a choice about presentation, so it is
-    not the precedence too: a harness registered ahead of Claude Code would otherwise move every
-    Claude Code session's root to a variable of its own. Every value's is asked whichever value
-    was detected, as `detect` says.
+    registry's order is a choice about presentation, so it is not the precedence too: a harness
+    registered ahead of Claude Code would otherwise move every Claude Code session's root to a
+    variable of its own. Every value's is asked whichever value was detected, as `detect` says.
     """
     ordered = (CANONICAL, *(harness for harness in HARNESSES if harness is not CANONICAL))
     return tuple(dict.fromkeys(h.project_dir_env for h in ordered if h.project_dir_env))
@@ -329,11 +320,3 @@ def detect(env: Mapping[str, str], payload: Mapping[str, Any] | None) -> Harness
         if harness.detects is not None and harness.detects(env, payload):
             return harness
     return CANONICAL
-
-
-def select(agents: Sequence[str]) -> tuple[tuple[Harness, ...], int]:
-    """The harnesses `agents` names, in registry order, and how many names none answers to."""
-    listed = set(agents)
-    chosen = tuple(harness for harness in HARNESSES if harness.name in listed)
-    unknown = len(listed - {harness.name for harness in HARNESSES})
-    return chosen, unknown

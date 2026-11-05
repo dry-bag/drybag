@@ -38,7 +38,6 @@ CONFIG = """
 [stayfixed]
 version = "0.1.0"
 preset = "recommended"
-agents = ["claude"]
 
 [project]
 name = "widget"
@@ -395,8 +394,8 @@ def test_codex_gets_a_note_naming_the_unverified_plugins_rather_than_silence(
     tmp_path: Path,
 ) -> None:
     # A harness this preset cannot install for on a verified path is a reported note, never silence
-    # and never a failure. `agents = ["claude", "codex"]` is the preset's own default, so an
-    # ordinary run reaches this for every machine that has Codex configured.
+    # and never a failure. `setup` installs for every registered harness, so an ordinary run
+    # reaches this for every machine that has Codex configured.
     preset = load_preset("recommended")
     report = setup(
         "recommended",

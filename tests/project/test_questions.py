@@ -71,17 +71,17 @@ def test_the_schema_keys_are_the_stayfixed_toml_keys_the_answers_write(tmp_path:
     schema = _schema(tmp_path, repository(tmp_path))
     assert schema["type"] == "object"
     assert tuple(schema["properties"]) == PROPERTIES == tuple(schema["required"])
-    assert len(PROPERTIES) == 6
+    assert len(PROPERTIES) == 5
     for key, question in schema["properties"].items():
         assert question["x-stayfixed-flag"] == FLAGS[key], key
 
 
 @needs_git
 def test_the_skill_reads_the_order_to_ask_in_from_required_in_the_json(tmp_path: Path) -> None:
-    # The skill and docs/cli.md said each property under `questions.properties` came in the order
-    # to ask it, but `--json` prints with sorted keys, so the properties arrive alphabetically and
-    # a skill walking them asked about the agents first. `required` is a list, which keeps its
-    # order through the printer, so that is where the skill reads the order: here as the skill
+    # The skill and docs/cli.md said each property under `questions.properties` came in the order to
+    # ask it, but `--json` prints with sorted keys, so the properties arrive alphabetically and a
+    # skill walking them asked about the attribution check first. `required` is a list, which keeps
+    # its order through the printer, so that is where the skill reads the order: here as the skill
     # reads it, from the printed JSON, in the order the skill and the release notes name.
     root = repository(tmp_path)
     code, printed, _ = cli(root, tmp_path, "init", "--questions", "--json")
@@ -92,7 +92,6 @@ def test_the_skill_reads_the_order_to_ask_in_from_required_in_the_json(tmp_path:
         "project.base_branch",
         "memory.mode",
         "commit_messages.attribution_check",
-        "stayfixed.agents",
         "plugins",
     ]
     assert sorted(schema["properties"]) == sorted(schema["required"])
@@ -101,8 +100,7 @@ def test_the_skill_reads_the_order_to_ask_in_from_required_in_the_json(tmp_path:
 @needs_git
 def test_each_default_says_where_it_came_from(tmp_path: Path) -> None:
     # Each (default, source) pair is what `init --yes` alone takes, and says why: a default with
-    # no source is one a person cannot check before accepting it. Mutation (by hand): the agents'
-    # fallback reports `harness directories` -> the agents assertion reddens.
+    # no source is one a person cannot check before accepting it.
     defaults = _defaults(_schema(tmp_path, repository(tmp_path)))
     assert defaults["project.name"] == ("widget", "origin remote")
     # An `origin` with no `origin/HEAD`, as a repository created here and pushed has it: the
@@ -110,7 +108,6 @@ def test_each_default_says_where_it_came_from(tmp_path: Path) -> None:
     assert defaults["project.base_branch"] == ("main", "default")
     no_origin = _defaults(_schema(tmp_path / "b", repository(tmp_path / "b", origin=None)))
     assert no_origin["project.base_branch"] == ("main", "current branch")
-    assert defaults["stayfixed.agents"] == (["claude", "codex"], "default")
 
 
 def test_the_free_text_patterns_are_anchored_for_ecma_262() -> None:
@@ -185,11 +182,10 @@ def test_the_questions_are_refused_where_init_would_refuse(tmp_path: Path) -> No
 
 
 # The order the guided walk asks in, after the name and the base branch it confirms first:
-# memory, attribution, the agents, and the recommended plugins last.
+# memory, attribution, and the recommended plugins last.
 GUIDED = (
     "memory.mode",
     "commit_messages.attribution_check",
-    "stayfixed.agents",
     "plugins",
 )
 

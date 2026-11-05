@@ -32,7 +32,6 @@ CONFIG = """
 [stayfixed]
 version = "0.1.0"
 preset = "recommended"
-agents = ["claude"]
 
 [project]
 name = "widget"
@@ -412,7 +411,6 @@ OVERLAY_CONFIG = """
 [stayfixed]
 version = "0.1.0"
 preset = "recommended"
-agents = ["claude"]
 
 [project]
 name = "widget"

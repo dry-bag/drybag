@@ -51,10 +51,7 @@ def test_a_bare_repository_gets_the_footprint_and_every_file_is_recorded(tmp_pat
     config = load(root, machine=tmp_path / "absent.toml")
     assert config.project.name == "widget"
     document = tomllib.loads((root / CONFIG_FILE).read_text(encoding="utf-8"))
-    assert document["stayfixed"] == {
-        "version": stayfixed.__version__,
-        "agents": ["claude", "codex"],
-    }
+    assert document["stayfixed"] == {"version": stayfixed.__version__}
     assert document["project"]["name"] == "widget"
     records = Manifest.read(root).records
     assert set(records) == {"config", "ledger-audits", "bug-index", "roadmap", "trail", "gitignore"}
@@ -207,7 +204,7 @@ def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_repla
     # `[paths]` this file declares and under none of the preset's.
     #
     # **The engine is the authority on this, not an expectation written ahead of it.** A first
-    # draft of this test asserted that stayfixed's own keys and a detected `agents` were written
+    # draft of this test asserted that stayfixed's own keys were written
     # into the adopted file; `scaffold.engine.plan` skips a `Kind.ONCE` artifact whose
     # file is present, unconditionally and above every `force`, and the two rules above —
     # "created when absent", "read as the answers rather than replaced" — say the same thing the
@@ -514,11 +511,10 @@ def test_init_yes_says_what_it_picked_attribution_off_and_no_plugin(
     assert code == 0, printed
     assert f"\n{PICKED}\n" in printed, printed
     picked = printed.split(f"\n{PICKED}\n", 1)[1].splitlines()
-    assert picked[:6] == [
+    assert picked[:5] == [
         "  project.name: widget",
         "  project.base_branch: main",
         "  memory.mode: harness",
         "  commit_messages.attribution_check: off",
-        "  stayfixed.agents: claude, codex",
         "  plugins: none",
     ]

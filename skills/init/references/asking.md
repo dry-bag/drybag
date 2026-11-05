@@ -16,12 +16,11 @@ what you get, what you give up, what it leaves behind, how to undo it.
 | 3, corrections | the named values, in one call | the named values, in one call | one per turn |
 | 4, each remaining question | one question per call, its four lines in the question | the same | one per turn |
 | 4, the overlay follow-up | a call of its own | a call of its own | one turn |
-| 4, a list (types, files, agents, plugins) | one multi-select question per four options | one free-text question listing the options, answered comma-separated | one question listing the options |
+| 4, a list (the plugins) | one multi-select question per four options | one free-text question listing the options, answered comma-separated | one question listing the options |
 | 5, the final yes | one question | one question | one plain question |
 
 - **Free text.** A name, a branch or a commit type is a plain question, or the default plus the
   harness's own free-text answer where it has one.
-- **Agents without multi-select.** Offer each harness alone and all of them together.
 - **The overlay follow-up depends on the answer before it,** so it never shares that call.
 - **Every option list stays within the limit.** A longer list is split across questions,
   never cut.

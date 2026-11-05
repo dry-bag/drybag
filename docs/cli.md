@@ -52,7 +52,7 @@ Three things hold everywhere:
 - [`stayfixed docs check [--budgets] [--links]`](#stayfixed-docs-check---budgets---links)
 - [`stayfixed docs trail [--check]`](#stayfixed-docs-trail---check)
 - [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
-- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----memory-mode-mode---attribution-check---root-path---machine-path)
+- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---memory-mode-mode---attribution-check---root-path---machine-path)
 - [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
 - [`stayfixed overlay upgrade [--root PATH] [--dry-run]`](#stayfixed-overlay-upgrade---root-path---dry-run)
 - [`stayfixed attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
@@ -1064,7 +1064,7 @@ lints it.
 
 ---
 
-## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
+## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
 
 Writes a repository's stayfixed scaffold, once: `stayfixed.toml`, and the files the pack's
 commands read — the roadmap with its trail markers and `trail.toml` beside it for `docs trail`, the
@@ -1079,7 +1079,6 @@ Without it nothing is written, and the refusal (`2`) names `--questions`.
 Each answer flag replaces one default and writes one key:
 - `--name` writes `[project] name`;
 - `--base-branch` writes `[project] base_branch`;
-- `--agent`, once per harness, writes `[stayfixed] agents`;
 - `--memory-mode` writes `[memory] mode`;
 - `--attribution-check` writes `[commit_messages] attribution_check = true`, which is off unless
   answered.
@@ -1089,9 +1088,7 @@ The recommended plugins are not `init`'s to install:
 
 After both reports the run prints `picked:`, one line per question in the order
 `init --questions` asks them, with the value this run took: the name, the base branch, the memory
-mode, the attribution check (`on` or `off`), the
-agents stayfixed serves among those listed, and `plugins: none`, since
-`init` installs none. Taking every default gives the attribution check `off` and no plugin. A value a `stayfixed.toml` you wrote holds outside the plain-path grammar
+mode, the attribution check (`on` or `off`), and `plugins: none`, since `init` installs none. Taking every default gives the attribution check `off` and no plugin. A value a `stayfixed.toml` you wrote holds outside the plain-path grammar
 prints as `<unprintable; see stayfixed.toml>`.
 
 The parser refuses a value outside its grammar or its choices (`2`), and it refuses a name or
@@ -1164,8 +1161,7 @@ A file already at an artifact's place that stayfixed did not write is left as it
 between its markers, and every line outside them is kept.
 
 **Reads** `stayfixed.toml` when there is one, `.stayfixed/manifest.json`, `git` for the name
-and the base branch, which harness directories the root carries (`.claude/`, `.codex/`), and
-every file an artifact targets.
+and the base branch, and every file an artifact targets.
 
 **Writes**, every one of them through the scaffold engine or `stayfixed.toml`'s key editor, so
 that every target goes through the containment walk and none may leave the project root or
@@ -1204,7 +1200,7 @@ the base branch; empty otherwise. An answered `--base-branch` replaced nothing, 
 
 ## `stayfixed init --questions [--root PATH] [--machine PATH]`
 
-Prints the values `stayfixed init --yes` would take for the six things a person may answer, where
+Prints the values `stayfixed init --yes` would take for the five things a person may answer, where
 each came from, and the flag that replaces it: on `init --yes`, but for the recommended plugins,
 which `stayfixed setup` installs on the machine. It writes nothing. The `init` skill asks its
 questions from it, taking every default offered first, and a person reads it to see the defaults
@@ -1219,7 +1215,6 @@ detected:
   project.base_branch: main (origin/HEAD; --base-branch)
   memory.mode: harness (default; --memory-mode)
   commit_messages.attribution_check: off (the preset's default; --attribution-check)
-  stayfixed.agents: claude, codex (default; --agent)
   plugins: none (default; stayfixed setup --plugin)
 each is answered by the flag its line names, on `stayfixed init --yes` but the plugins'; `stayfixed init --questions --json` carries them as a JSON Schema, each with what it gives, what it gives up, what it leaves and how to undo it
 ```
@@ -1230,20 +1225,19 @@ not a lowercase path segment the source is `not derivable`, and the value prints
 `none; asked`, never as what the repository suggested. The base branch comes from `origin/HEAD`
 when that names a plain branch under `refs/remotes/origin/`; with no remote at all, from the
 `current branch` when that is a plain branch; otherwise, a remote with no `origin/HEAD` and
-remotes git could not list included, it is the `default`, `main`. The agents come from the `harness
-directories` the root carries; otherwise the `default` is every harness. The memory mode is the `default`,
+remotes git could not list included, it is the `default`, `main`. The memory mode is the `default`,
 `harness`, since the preset chooses none; the attribution check (off) is `the preset's default`; and the plugins are the `default`,
 none, because a third-party plugin runs in every session and is installed only when named. Each
 default is exactly what `stayfixed init --yes` writes when that question is not answered. `origin/HEAD` goes stale after the remote's default branch is
 renamed, because git does not refresh one it has. That is why its source is printed: you can
 catch it.
 
-`--json` carries `questions`: a JSON Schema object (draft 2020-12) with six `properties`, and
-`required` naming all six in the order the `init` skill asks them; read the order there, since
+`--json` carries `questions`: a JSON Schema object (draft 2020-12) with five `properties`, and
+`required` naming all five in the order the `init` skill asks them; read the order there, since
 `--json` prints every object's keys sorted, so the properties arrive by name. Each but the last is
 keyed by the
 `stayfixed.toml` key its answer writes: `project.name`, `project.base_branch`, `memory.mode`,
-`commit_messages.attribution_check` and `stayfixed.agents`; the last,
+and `commit_messages.attribution_check`; the last,
 `plugins`, offers the plugins the preset recommends, which `stayfixed setup --plugin` installs. Each property carries four keys: `default`
 (absent for a name that is not derivable), `x-stayfixed-source` (the phrase above),
 `x-stayfixed-flag` (the flag that answers it) and `x-stayfixed-tradeoff`, four lines of fixed
@@ -1268,8 +1262,7 @@ It is refused (`2`) before anything beyond the root is read, in three cases:
 
 `--yes` beside it is a usage error from the parser.
 
-**Reads** `git` for the name and the base branch, which harness directories the root carries, and
-the machine configuration, to learn whether it
+**Reads** `git` for the name and the base branch, and the machine configuration, to learn whether it
 records an overlay. A machine file that does not load reads as "not recorded"; `init` reports it
 when it loads it.
 
@@ -1832,9 +1825,8 @@ lowercase ASCII letters, digits and `-`, led by a letter or a digit, and the par
 other, naming that rule. A third-party plugin runs in every session of its harness, hooks
 included, and none is pinned, so none is installed unasked; the preset's `[plugins] recommended`
 lists the ones `stayfixed init --questions` offers (`superpowers` and `context7` in
-`recommended`). A named plugin is installed per configured harness, from
-`[defaults.stayfixed] agents` (`claude` and `codex` by default) and from the preset's own
-per-harness marketplace table (`[plugins.<harness>]`). For each harness the preset declares a
+`recommended`). A named plugin is installed per harness stayfixed serves (`claude` and `codex`),
+from the preset's own per-harness marketplace table (`[plugins.<harness>]`). For each harness the preset declares a
 marketplace for, `setup` registers it (`claude plugin marketplace add <source>`; idempotent — an already-registered
 source is a no-op reported as such) and then installs each plugin bare (`claude plugin install
 <name>@<marketplace>`; no `--scope` or `-y` — the spike record's own measured output reports
@@ -2409,7 +2401,6 @@ why so few of them are trusted with anything.
 [stayfixed]
 version = "0.6.1"        # required; there is no default
 preset = "recommended"
-agents = ["claude", "codex"]
 
 [project]
 name = "widget"          # one lowercase path segment

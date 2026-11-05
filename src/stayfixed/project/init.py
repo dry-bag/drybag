@@ -58,7 +58,7 @@ from stayfixed.tomlout import dumps
 
 VERSION = ("stayfixed", "version")
 USER_OWNED = ("paths", "memory", "budgets", "ledger", "commit_messages")
-HEAD_KEYS = ("preset", "agents")
+HEAD_KEYS = ("preset",)
 HEADER = (
     "# Written by `stayfixed init`. Every key you leave out takes the preset's default;\n"
     "# `[stayfixed] version` is stayfixed's to rewrite in place; every other key is yours.\n\n"
@@ -124,7 +124,6 @@ class Given:
 
     name: str | None = None
     base_branch: str | None = None
-    agents: tuple[str, ...] | None = None
     memory_mode: str | None = None
     attribution_check: bool | None = None
 
@@ -194,8 +193,8 @@ def _tables(
     with `--name`, or to write `[project] name` into `stayfixed.toml` by hand and run `init` again.
     A branch that consulted `detect` for anything the preset can default would make that second
     remedy dead: the repository whose name cannot be guessed would go on being refused after doing
-    exactly what it was told. Everything else the head does not carry — `preset` and
-    `agents` — has a preset default, and the loader supplies it.
+    exactly what it was told. The one other key of the head, `preset`, has a default the loader
+    supplies.
 
     `precheck` guarantees that `given` is `NO_ANSWERS` whenever `existing` carries tables, so
     the answers never overwrite a table a person wrote.
@@ -216,7 +215,6 @@ def _tables(
         # missing `[project] name` is the loader's to refuse, since `--name` cannot reach it.
         found = detect(root, lenient=given.name is not None or existing is not None)
         head_note = _head_note(found) if given.base_branch is None else ""
-        head.setdefault("agents", list(given.agents or found.agents))
         name = given.name or found.name
         branch = given.base_branch or found.base_branch
         tables["project"] = {"base_branch": branch}

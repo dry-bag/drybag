@@ -865,7 +865,7 @@ reddens = [
   "tests/test_harnesses.py::test_every_harness_renders_through_the_canonical_render",
 ]
 
-# The registry's order is the order `init` writes `[stayfixed] agents` in, so it is not the root's
+# The registry's order is a choice about presentation, so it is not the root's
 # precedence: the canonical harness's variable is asked first, and a harness registered ahead of
 # Claude Code cannot move a Claude Code session's root to a variable of its own.
 [[mutation]]
@@ -1294,16 +1294,6 @@ before = "    except UNPARSEABLE as exc:"
 after = "    except KeyError as exc:"
 reddens = [
   "tests/config/test_owned.py::test_a_document_that_does_not_parse_is_refused_by_position_alone",
-]
-
-# A harness's files are rendered only for a harness the project lists.
-[[mutation]]
-name = "a harness's rendering is applied though the project does not list it"
-file = "src/stayfixed/harnesses.py"
-before = "    chosen = tuple(harness for harness in HARNESSES if harness.name in listed)"
-after = "    chosen = HARNESSES"
-reddens = [
-  "tests/test_harnesses.py::test_select_answers_the_listed_harnesses_and_counts_the_rest",
 ]
 
 # Detection asks every value that detects before it falls back to Claude Code's schema: Codex

@@ -63,7 +63,6 @@ MEMORY_MODES = (HARNESS_MODE, OVERLAY_MODE, IN_REPO_MODE, LOCAL_ONLY_MODE)
 class Stayfixed:
     version: str
     preset: str
-    agents: tuple[str, ...]
 
 
 @dataclass(frozen=True)

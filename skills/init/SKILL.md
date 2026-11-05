@@ -12,7 +12,7 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 ## Walk
 
 1. Run `stayfixed init --questions --json`. It refuses a repository that already has
-   `.stayfixed/manifest.json` or a `stayfixed.toml` (see the first rule). Otherwise `questions.properties` holds six questions, asked in the order
+   `.stayfixed/manifest.json` or a `stayfixed.toml` (see the first rule). Otherwise `questions.properties` holds five questions, asked in the order
    `questions.required` lists them, each with its `default` (what `stayfixed init --yes` alone
    would write), its `x-stayfixed-source`, its `x-stayfixed-flag` and its
    `x-stayfixed-tradeoff`: four lines, what the answer gives (`get`), what it gives up

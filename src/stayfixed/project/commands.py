@@ -72,17 +72,12 @@ QUESTIONS_ALONE = (
 
 
 def _given(args: argparse.Namespace) -> Given:
-    """The answer flags as `init` takes them: `None` for a flag not given, and a list flag's
-    values in the order first given, each once."""
+    """The answer flags as `init` takes them: `None` for a flag not given."""
     from stayfixed.project.init import Given
-
-    def listed(values: list[str] | None) -> tuple[str, ...] | None:
-        return None if values is None else tuple(dict.fromkeys(values))
 
     return Given(
         name=args.name,
         base_branch=args.base_branch,
-        agents=listed(args.agent),
         memory_mode=args.memory_mode,
         attribution_check=args.attribution_check,
     )
@@ -175,7 +170,6 @@ def _answers(parser: argparse.ArgumentParser) -> None:
         NAME_RULE,
         PROJECT_NAME,
     )
-    from stayfixed.harnesses import HARNESSES
 
     answers = parser.add_argument_group(
         "answers", "each replaces one default; `stayfixed init --questions` lists them"
@@ -187,12 +181,6 @@ def _answers(parser: argparse.ArgumentParser) -> None:
         "--base-branch",
         type=grammar(BRANCH_NAME, branch_rule),
         help="[project] base_branch",
-    )
-    answers.add_argument(
-        "--agent",
-        action="append",
-        choices=[h.name for h in HARNESSES],
-        help="[stayfixed] agents; once per harness",
     )
     answers.add_argument("--memory-mode", choices=MEMORY_MODES, help="[memory] mode")
     answers.add_argument(

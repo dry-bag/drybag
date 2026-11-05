@@ -25,8 +25,8 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > and adapters for Cursor or Hermes — each leaves this list in the
 > change that ships it. The [Quickstart](#quickstart) shows the three keys that are enough to start
 > a project by hand, which `init` reads as your answers — a run that writes the file itself writes
-> `[stayfixed] version` and `agents`, beside `[project] name` and `base_branch`, and a `[memory]`
-> table only when `--memory-mode` answers it.
+> `[stayfixed] version`, beside `[project] name` and `base_branch`, and a `[memory]` table only
+> when `--memory-mode` answers it.
 > [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference; the command list below is held
 > to the parser by a test, so it is complete for what ships.
 
@@ -78,8 +78,8 @@ stayfixed reaches an agent in three ways, and they do not hold alike on every ag
 **session notices** add context and refuse nothing (the background-cleanup hints, the pipe-status hint, the test-hygiene
 note, the standing rules, the volatile notes); the **repository gates** — the bug, documentation,
 plan, commit and trail checks — run in CI; and the **methodology** is
-the skills. Each column is an agent under the name `[stayfixed] agents`
-lists it by: `claude` is Claude Code and `codex` is Codex.
+the skills. Each column is an agent under its name in stayfixed's registry: `claude` is Claude
+Code and `codex` is Codex.
 
 | Surface | `claude` | `codex` |
 |---|---|---|
@@ -161,8 +161,7 @@ name = "widget"          # one lowercase path segment
 groups = ["developer"]   # the preset names four; the store below has one
 ```
 
-`stayfixed init --yes` writes that file for you — the name from `origin`, the base branch, the
-agent surfaces this repository carries — along with the roadmap, its `trail.toml`, and the bug
+`stayfixed init --yes` writes that file for you — the name from `origin` and the base branch — along with the roadmap, its `trail.toml`, and the bug
 ledger's index and audits README, which `docs trail` and `bugs check` read.
 `stayfixed init --questions` shows each value it would take and where it came from, and a flag
 on `--yes` replaces any of them. Read it before it runs; a `stayfixed.toml` you wrote yourself
@@ -258,8 +257,8 @@ last to find the project root, and reaches no network.
 | `git push` | the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the overlay's `origin` (note 1) | the note sync, when the commits on `main` that `origin` lacks are all notes and pass the secret scan |
 | `gh` | `stayfixed setup --overlay create:<owner>/<name>` | GitHub's API, as the account `gh` acts for, and the clones it makes over git (note 2) | note 2 |
 | `git clone` | `stayfixed setup --overlay create:<owner>/<name>` | `git@github.com:<owner>/<name>.git`, the overlay just created | when `gh repo create --clone` reported success and left nothing at the destination |
-| `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed setup --restore`, `stayfixed attach` and `stayfixed detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `setup --restore`, the marketplaces and plugins your overlay's `machine/claude/settings.json` names; for `attach` and `detach`, nothing past this machine (note 3) | `setup` when `--plugin` names a plugin, the preset's agents include `claude` and it names a marketplace for it; `setup --restore` when that file lists a marketplace Claude Code has not registered or a plugin it has not installed at user scope; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
-| `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 3) | when `--plugin` names a plugin, the preset's agents include `codex` and it names a marketplace for it |
+| `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed setup --restore`, `stayfixed attach` and `stayfixed detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `setup --restore`, the marketplaces and plugins your overlay's `machine/claude/settings.json` names; for `attach` and `detach`, nothing past this machine (note 3) | `setup` when `--plugin` names a plugin and the preset names a marketplace for Claude Code; `setup --restore` when that file lists a marketplace Claude Code has not registered or a plugin it has not installed at user scope; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
+| `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 3) | when `--plugin` names a plugin and the preset names a marketplace for Codex |
 | `pre-commit install` | `stayfixed setup --overlay` | nothing as it installs; GitHub and Go's servers on the first commit after it (note 4) | when it renders an overlay at a path, records an existing one, or with `create:` |
 | `sh -c` | `stayfixed test attribute --command CMD` | wherever `CMD` reaches; stayfixed does not choose | every run: `CMD` in the working tree, then in extracts of `HEAD` and of the merge base |
 | each fixed bug entry's `regression` | `stayfixed bugs regressions`, each argv run as written from the project root | wherever the argv reaches; stayfixed does not choose: `uv run` may sync the project's environment from its index, `go test` may download the modules `go.mod` names, and `npx` installs a runner no `node_modules` holds, from the registry the project's `.npmrc` names, without asking, since the argv's standard input is no terminal | every run, for each fixed entry that carries one |
