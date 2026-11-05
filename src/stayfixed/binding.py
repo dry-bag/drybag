@@ -41,6 +41,11 @@ from stayfixed.printed import quoted
 # Where the id lives under the git common directory, and where each record and each render lives
 # under the machine's data directory.
 ID_FILE = "stayfixed/binding"
+# `attach`'s ledger of what it added to the checkout, kept beside the id for the same reason: a
+# branch cannot write the common directory, so nothing a branch commits can name what `detach`
+# or a re-attach takes back. `LEDGER_NAME` is how a message calls it.
+LEDGER_FILE = "stayfixed/attach.json"
+LEDGER_NAME = f"`{LEDGER_FILE}` in the git common directory"
 BINDINGS = "bindings"
 DELIVERY = "delivery"
 # Exactly what `secrets.token_hex(16)` draws; anything else at `ID_FILE` is no id.

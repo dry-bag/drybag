@@ -134,6 +134,20 @@ reddens = [
   "tests/attach/test_commands.py::test_nothing_the_ledger_holds_reaches_detachs_line_or_its_json",
 ]
 
+# The ledger lives in the git common directory, which a branch cannot write. Kept in the working
+# tree, a branch's committed copy named hand-written Codex rules and typed allow rules for a
+# re-attach and a `detach` to remove.
+[[mutation]]
+name = "the ledger is read from the working tree"
+file = "src/stayfixed/attach/write.py"
+before = '''    path = common_directory(root) / LEDGER_FILE
+    return read_ledger(path) if fsops.is_file(path) else None'''
+after = '''    path = root / ".stayfixed/local/attach.json"
+    return read_ledger(path) if fsops.is_file(path) else None'''
+reddens = [
+  "tests/attach/test_detach.py::test_a_ledger_a_branch_commits_names_nothing_a_re_attach_or_detach_removes",
+]
+
 # `attach`'s own rule, one door over, and introduced by the commit that wrote the rule down.
 # `ledger()` refuses a ledger naming files or settings keys `attach` could not have written, and
 # `_write_ledger` was the thing that asked for it — from the fourth write of the run. A clone
@@ -398,17 +412,6 @@ before = '    hidden = {name for name in out.split("\0") if name}'
 after = "    hidden: set[str] = set()"
 reddens = [
   "tests/attach/test_write.py::test_a_checkout_that_already_hides_everything_is_not_touched",
-]
-
-# The ledger's path is the one project path `attach` writes that no exclude candidate names, so
-# nothing held it to the project by name above the first write.
-[[mutation]]
-name = "attach stops holding the ledger's path to the project"
-file = "src/stayfixed/attach/write.py"
-before = "    contained(root, ATTACH_LEDGER)"
-after = "    pass"
-reddens = [
-  "tests/attach/test_write.py::test_a_symlinked_stayfixed_directory_is_refused_before_anything_is_written",
 ]
 
 # A repository-authored group name holding U+2028 (or a NUL, or another character `str.splitlines`
@@ -713,8 +716,8 @@ reddens = [
 [[mutation]]
 name = "attach leaves the settings file out of what it places"
 file = "src/stayfixed/attach/write.py"
-before = "    return (ATTACH_LEDGER, *rules, LOCAL_SETTINGS)"
-after = "    return (ATTACH_LEDGER, *rules)"
+before = "    return (*rules, LOCAL_SETTINGS)"
+after = "    return (*rules,)"
 reddens = [
   "tests/attach/test_write.py::test_a_settings_file_an_earlier_attach_wrote_is_hidden_by_the_next_one",
 ]
@@ -771,30 +774,15 @@ reddens = [
 
 # Every path `detach` writes or removes is walked before the first withdrawal, with the removal's
 # own walk. The earlier check asked `contained` instead, which let `paths.memory`'s last component
-# be a link and asked nothing of the ledger or the settings file, so each of those linked in after
-# the attach ended as `internal error: UnsafePath` with the settings file already withdrawn.
-[[mutation]]
-name = "detach walks to the ledger only when it removes it"
-file = "src/stayfixed/attach/write.py"
-before = """    _walked(
-        root,
-        ATTACH_LEDGER,
-        what=f"the ledger, `{ATTACH_LEDGER}`",
-        where="`.stayfixed` or `.stayfixed/local`",
-    )"""
-after = ""
-reddens = [
-  "tests/attach/test_detach.py::test_a_directory_linked_in_after_attach_refuses_before_anything_is_withdrawn[stayfixed]",
-  "tests/attach/test_detach.py::test_a_directory_linked_in_after_attach_refuses_before_anything_is_withdrawn[stayfixed-local]",
-]
-
+# be a link and asked nothing of the settings file, so one linked in after the attach ended as
+# `internal error: UnsafePath` with the allow rules already withdrawn.
 [[mutation]]
 name = "detach walks to the settings file only when it rewrites it"
 file = "src/stayfixed/attach/write.py"
 before = "    if settings.text is not None:"
 after = "    if False:"
 reddens = [
-  "tests/attach/test_detach.py::test_a_directory_linked_in_after_attach_refuses_before_anything_is_withdrawn[claude]",
+  "tests/attach/test_detach.py::test_a_directory_linked_in_after_attach_refuses_before_anything_is_withdrawn",
 ]
 
 # A rule copy that is itself a link is unlinked by the removal, which follows no final component;
@@ -842,10 +830,10 @@ reddens = [
   "tests/attach/test_write.py::test_an_overlay_rule_that_is_not_utf8_stops_attach_before_it_writes",
 ]
 
-# `.stayfixed/local/attach.json` is a file a clone can commit, so the row asks the overlay — the
-# trusted side — whether a binding stands behind it.
+# A ledger is one half of an attach and this machine's binding the other, so the row asks the
+# binding whether one stands behind it.
 [[mutation]]
-name = "a committed ledger counts as an attach again"
+name = "a ledger with no binding counts as an attach"
 file = "src/stayfixed/attach/doctor.py"
 before = "    if state == UNBOUND or id is None:"
 after = "    if False:"
@@ -906,17 +894,17 @@ reddens = [
   "tests/attach/test_doctor.py::test_a_ledger_on_a_machine_that_records_no_overlay_skips_and_never_reads_as_attached",
 ]
 
-# A ledger that will not parse is the repository's doing, and answering it as an overlay that
+# A ledger that will not parse is a fact about the ledger, and answering it as an overlay that
 # could not be asked makes the `attached` row a `skip` that blames `git`. `skip` never reaches the
-# exit code, so this is not only a wrong sentence: a clone's own committed, malformed ledger was
-# silent as well as misattributed.
+# exit code, so this is not only a wrong sentence: a malformed ledger was silent as well as
+# misattributed.
 [[mutation]]
-name = "doctor blames git for a ledger the repository committed"
+name = "doctor blames git for a ledger that will not parse"
 file = "src/stayfixed/attach/doctor.py"
-before = "    if isinstance(recorded, str):\n        return UNREADABLE_LEDGER"
+before = "    if isinstance(recorded, str):\n        return recorded"
 after = "    if isinstance(recorded, str):\n        return UNASKABLE"
 reddens = [
-  "tests/attach/test_doctor.py::test_a_ledger_that_cannot_be_read_is_this_repositorys_doing_and_never_blamed_on_git",
+  "tests/attach/test_doctor.py::test_a_ledger_that_cannot_be_read_is_never_blamed_on_git",
 ]
 
 # The binding's row for a checkout that was never attached, captured from the code before the row
@@ -924,16 +912,15 @@ reddens = [
 [[mutation]]
 name = "the unattached row's sentence is reworded"
 file = "src/stayfixed/attach/doctor.py"
-before = '''            f"memory.mode is overlay and {ATTACH_LEDGER} does not exist, so nothing records an "'''
-after = '''            f"memory.mode is overlay and {ATTACH_LEDGER} is missing, so nothing records an "'''
+before = '''            f"memory.mode is overlay and {LEDGER_NAME} does not exist, so nothing records an "'''
+after = '''            f"memory.mode is overlay and {LEDGER_NAME} is missing, so nothing records an "'''
 reddens = [
   "tests/attach/test_doctor.py::test_an_unattached_project_reports_attached_as_it_did[overlay]",
 ]
 
-# The attach ledger is a file a clone can commit, and its readers catch the reader's own `Failure`
-# and `Refusal`. A shape `attach` never writes that raised anything else reached `doctor`'s guard,
-# and `attached` read red, "this check could not run", on a file the repository
-# chose: a `store` holding a NUL, which `Path.resolve` meets with `ValueError`, one holding a
+# The attach ledger's readers catch the reader's own `Failure` and `Refusal`. A shape `attach`
+# never writes that raised anything else reached `doctor`'s guard, and `attached` read red, "this
+# check could not run", on a file a hand edit could leave: a `store` holding a NUL, which `Path.resolve` meets with `ValueError`, one holding a
 # character no path can spell, which it meets with `UnicodeEncodeError`, and a list field holding a
 # number, which iterating it meets with `TypeError`.
 [[mutation]]
@@ -1179,7 +1166,7 @@ reddens = [
   "tests/attach/test_commands.py::test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_by_check_too[a-long-group]",
 ]
 
-# A committed ledger, or a directory above it, can be a symbolic link to a name longer than a file
+# The ledger, or the directory above it, can be a symbolic link to a name longer than a file
 # name may be. Raised past every catch to `_guarded`, `ENAMETOOLONG` puts its warning in place of the
 # whole row. `fsops.names_regular_file` raises it on every interpreter, and the ledger reads as one
 # that cannot be read.
@@ -1193,14 +1180,15 @@ reddens = [
   "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer[its-directory]",
 ]
 
-# `attached` asks whether there is a ledger through the reading `register()` creates. Asked with `is_file()`, a ledger behind a link to a name longer
-# than a file name may be raised on Python 3.11 to 3.13, and `_guarded`'s warning stood in for the
-# row; on 3.14 the row said the ledger does not exist.
+# `attached` asks whether there is a ledger through the reading `register()` creates. Asked with
+# `is_file()`, a ledger behind a link to a name longer than a file name may be raised on Python 3.11
+# to 3.13, and `_guarded`'s warning stood in for the row; on 3.14 the row said the ledger does not
+# exist.
 [[mutation]]
 name = "attached asks is_file() of the ledger again"
 file = "src/stayfixed/attach/doctor.py"
 before = "    if ledger.state(main) == NO_LEDGER:"
-after = "    if not (main / ATTACH_LEDGER).is_file():"
+after = "    from stayfixed.binding import LEDGER_FILE, common_directory\n    if not (common_directory(main) / LEDGER_FILE).is_file():"
 reddens = [
   "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer[the-ledger]",
   "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer[its-directory]",
@@ -1413,7 +1401,7 @@ reddens = [
 [[mutation]]
 name = "the ledger refusal of a file that is not UTF-8 prints the path it opened"
 file = "src/stayfixed/attach/write.py"
-before = "    with fsops.reading(ATTACH_LEDGER, Failure):"
+before = "    with fsops.reading(LEDGER_NAME, Failure):"
 after = "    with fsops.reading(path, Failure):"
 reddens = ["tests/attach/test_detach.py::test_a_ledger_that_is_not_utf8_is_named_as_the_project_names_it"]
 
@@ -1440,8 +1428,8 @@ reddens = ["tests/attach/test_doctor.py::test_an_empty_home_is_told_it_is_home_t
 [[mutation]]
 name = "detach leaves its ledger behind"
 file = "src/stayfixed/attach/write.py"
-before = "    fsops.remove_within(root, ATTACH_LEDGER)\n    # Last, because the ledger lives in one of them."
-after = "    # Last, because the ledger lives in one of them."
+before = "    fsops.remove_within(common_directory(root), LEDGER_FILE)\n"
+after = ""
 reddens = ["tests/attach/test_detach.py::test_a_real_detach_after_init_leaves_the_tree_init_left"]
 
 # `write` imports `permissions` at module level, so `permissions` importing the writer back, even
@@ -1470,7 +1458,6 @@ before = "    planned = plan_writes(root, config, binding, diff)\n    return _re
 after = "    return _report(binding, diff, source)\n"
 reddens = [
   "tests/attach/test_commands.py::test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words[not-json]",
-  "tests/attach/test_commands.py::test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words[a-link]",
   "tests/attach/test_commands.py::test_check_ends_on_an_overlay_rule_that_is_not_utf8_with_the_runs_code_and_line",
   "tests/attach/test_commands.py::test_check_ends_on_each_refusal_past_the_runs_gates_with_the_runs_code_and_line[exclude-block-doubled]",
   "tests/attach/test_commands.py::test_check_ends_on_each_refusal_past_the_runs_gates_with_the_runs_code_and_line[claude-linked-in]",

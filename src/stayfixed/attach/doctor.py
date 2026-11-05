@@ -1,11 +1,12 @@
 """The binding's row in `stayfixed doctor`: the delivery and the memory pointer.
 
-`attached` is this area's: it reads the attach ledger this area writes, asks this machine, through
-this area's own `read_binding`, whether a binding stands behind it, and then reads what the binding
-delivers: the render `attach` left under the machine's data directory, the paths it placed in the
-main checkout, and the `autoMemoryDirectory` key there. Every checkout of a repository reads the
-main checkout's ledger and settings file, since `attach` writes there alone. `doctor`'s core
-discovers this module by name (CONTRIBUTING.md, "Areas") and imports nothing of this area.
+`attached` is this area's: it reads the attach ledger this area writes, in the git common
+directory, asks this machine, through this area's own `read_binding`, whether a binding stands
+behind it, and then reads what the binding delivers: the render `attach` left under the
+machine's data directory, the paths it placed in the main checkout, and the `autoMemoryDirectory`
+key there. Every checkout of a repository reads the main checkout's settings file, since `attach`
+writes there alone. `doctor`'s core discovers this module by name (CONTRIBUTING.md, "Areas") and
+imports nothing of this area.
 
 The overlay root is the core's answer, `Context.overlay_root`, resolved at most once per report
 for every row that reads it. The attach ledger comes from the `_Ledger` this module's `register()`
@@ -40,34 +41,38 @@ UNREADABLE_LEDGER: Final = "unreadable-ledger"
 def _ledger_state(root: Path) -> AttachLedger | str:
     """This repository's attach ledger, `NO_LEDGER` when the path names no file, or
     `UNREADABLE_LEDGER` when the file is there and cannot be read as a ledger. `root` is the main
-    checkout (`_owner`), where `attach` writes it.
+    checkout (`_owner`); the ledger is in the git common directory, so any checkout names it.
 
     Three answers and not two. `ledger()` raises on a file that is not JSON, is not an object,
-    or names something `attach` could not have written — and `.stayfixed/local/attach.json` is a
-    path a clone can commit, because `.gitignore` does not untrack a committed file. Let through to
-    the report's guard, that would let a repository force a row red with the detail "this check
-    could not run: Failure" and a remedy that cannot help, on an installation with nothing wrong
-    with it. The rows report the file instead.
+    or names something `attach` could not have written. Let through to the report's guard, that
+    would show the row red with the detail "this check could not run: Failure" and a remedy that
+    cannot help. The rows report the file instead. Where git cannot be run, the row cannot say
+    (`UNASKABLE`); in no repository there is no ledger.
 
     **Whether it is there is `fsops.names_regular_file`'s answer, and a path it cannot answer
-    about is unreadable.** A clone can commit the ledger, or a directory above it, as a symbolic
-    link to a name longer than a file name may be. Raised past this function to `_guarded`, the
-    error's warning would stand in for the whole row; read as no ledger, a file that is there
-    would be skipped. A path that names no file — nothing there, a dangling link or a loop, or
-    something other than a regular file — is no ledger.
+    about is unreadable.** Raised past this function to `_guarded`, the error's warning would
+    stand in for the whole row; read as no ledger, a file that is there would be skipped. A path
+    that names no file — nothing there, a dangling link or a loop, or something other than a
+    regular file — is no ledger.
     """
-    from stayfixed.attach.write import ledger
-    from stayfixed.config.layout import ATTACH_LEDGER
+    from stayfixed.attach.write import read_ledger
+    from stayfixed.binding import LEDGER_FILE, common_directory
     from stayfixed.errors import Failure, Refusal
     from stayfixed.fsops import names_regular_file
+    from stayfixed.gitenv import GitUnavailable
 
     try:
-        if not names_regular_file(root / ATTACH_LEDGER):
+        path = common_directory(root) / LEDGER_FILE
+        if not names_regular_file(path):
             return NO_LEDGER
+    except GitUnavailable:
+        return UNASKABLE
+    except Failure:
+        return NO_LEDGER
     except OSError:
         return UNREADABLE_LEDGER
     try:
-        return ledger(root)
+        return read_ledger(path)
     except (Failure, Refusal):
         return UNREADABLE_LEDGER
 
@@ -349,7 +354,7 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
     status of the two and the worse one's remedy first.
     """
     from stayfixed.attach import ATTACH_COMMAND
-    from stayfixed.config.layout import ATTACH_LEDGER
+    from stayfixed.binding import LEDGER_NAME
     from stayfixed.config.machine import owner_home
     from stayfixed.config.schema import OVERLAY_MODE
     from stayfixed.doctor.api import OK, RED, WARN, Row
@@ -359,10 +364,10 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
     linked = config.memory.mode == OVERLAY_MODE
     if ledger.state(main) == NO_LEDGER:
         if not linked:
-            return Row(OK, f"{ATTACH_LEDGER} does not exist, so nothing records an attach")
+            return Row(OK, f"{LEDGER_NAME} does not exist, so nothing records an attach")
         return Row(
             WARN,
-            f"memory.mode is overlay and {ATTACH_LEDGER} does not exist, so nothing records an "
+            f"memory.mode is overlay and {LEDGER_NAME} does not exist, so nothing records an "
             f"attach",
             f"run `{ATTACH_COMMAND} --check`",
         )
@@ -376,9 +381,8 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
         )
     answer = _binding_answer(context, config, ledger, main)
     # The ledger exists, so from here on this row's job is to say what **this machine** makes of
-    # it (principle 5): the ledger is a path a clone can commit, and the binding is the one record
-    # a repository cannot choose. Every arm below but the last refuses to print the word
-    # "attached".
+    # it: whether the overlay and the binding stand behind it. Every arm below but the last refuses
+    # to print the word "attached".
     if isinstance(answer, str):
         return _uncorroborated(answer)
     state = answer.state
@@ -393,7 +397,7 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
     if damaged is not None:
         return Row(
             WARN,
-            f"{ATTACH_LEDGER} records an attach, but {damaged} is not a directory, so the overlay "
+            f"{LEDGER_NAME} records an attach, but {damaged} is not a directory, so the overlay "
             f"this machine records is damaged and holds none of this checkout's notes or grants",
             OVERLAY_REPAIR.format(path=damaged, command="`stayfixed doctor`"),
         )
@@ -406,9 +410,8 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
     if state == UNBOUND or id is None:
         return Row(
             WARN,
-            f"{ATTACH_LEDGER} records an attach, but this machine records no binding of this "
-            f"checkout to this project — a clone can commit that file, so it is not evidence of "
-            f"an attach",
+            f"{LEDGER_NAME} records an attach, but this machine records no binding of this "
+            f"checkout to this project",
             _re_attach(),
         )
     recorded = ledger.state(main)
@@ -432,7 +435,7 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
 
 # Why the overlay could not corroborate the ledger, as `_binding_answer`'s three answers. Not
 # statuses and not sentences: the row below decides both, and these are the question's own
-# vocabulary. `UNRESOLVED` is about the repository, the other two about this machine.
+# vocabulary. `UNRESOLVED` is about the store the ledger names, the other two about this machine.
 UNRESOLVED: Final = "unresolved"
 NO_OVERLAY: Final = "no-overlay"
 UNASKABLE: Final = "unaskable"
@@ -440,11 +443,11 @@ UNASKABLE: Final = "unaskable"
 # `MachineUnread`), so whether it records an overlay is not known. Read as `NO_OVERLAY` it told the
 # owner the machine records none, and as `UNASKABLE` that `git` or the overlay was at fault.
 MACHINE_UNREAD: Final = "machine-unread"
-# The fourth is `UNREADABLE_LEDGER`, above, and it is about the repository rather than about this
-# machine: a ledger that is there and will not parse is a file in the checkout the reader is
-# standing in. Told with the other two, the row would blame `git` or an unreadable record and send
-# the reader to run `stayfixed doctor` where `git` runs, which cannot fix it, and its `skip` never
-# reaches the exit code, so a repository's own committed, malformed ledger would go unreported.
+# The fourth is `UNREADABLE_LEDGER`, above, and it is about the ledger rather than about this
+# machine: a ledger that is there and will not parse. Told with the other two, the row would blame
+# `git` or an unreadable record and send the reader to run `stayfixed doctor` where `git` runs,
+# which cannot fix it, and its `skip` never reaches the exit code, so a malformed ledger would go
+# unreported.
 
 
 def _re_attach() -> str:
@@ -452,73 +455,62 @@ def _re_attach() -> str:
     command it names is imported, and an import here sits inside a function body."""
     from stayfixed.attach import ATTACH_COMMAND
 
-    return (
-        f"run `{ATTACH_COMMAND} --check`; if this checkout was never attached on this machine, "
-        "remove the ledger"
-    )
+    return f"run `{ATTACH_COMMAND} --check`"
 
 
 def _uncorroborated(reason: str) -> Row:
     """The row for a ledger the overlay did not confirm, split by what the reason is *about*.
 
-    `warn` accuses the repository and `skip` does not, and the split is the point: `skip` never
-    reaches the exit code, so using it for the repository's own doing would silence it, and using
-    `warn` for a machine where `setup` has never run would make `doctor` warn on every correct
-    fresh install. Neither row ever says "attached".
+    `warn` is for a ledger the machine can act on and `skip` for one it cannot judge here, and the
+    split is the point: `skip` never reaches the exit code, so using it for a ledger that is wrong
+    would silence it, and using `warn` for a machine where `setup` has never run would make
+    `doctor` warn on every correct fresh install. Neither row ever says "attached".
 
-    **Four reasons and not three.** A ledger that is there and will not parse is the
-    repository's doing, so by this function's own rule it warns. Answered with the machine-side
-    two, its row would blame `git` for a malformed file in the reader's own checkout and offer a
-    remedy — run this somewhere `git` works — that could not fix it.
+    **Four reasons and not three.** A ledger that is there and will not parse warns. Answered with
+    the machine-side two, its row would blame `git` for a malformed file and offer a remedy — run
+    this somewhere `git` works — that could not fix it.
     """
     from stayfixed.attach import ATTACH_COMMAND
-    from stayfixed.config.layout import ATTACH_LEDGER
+    from stayfixed.binding import LEDGER_NAME
     from stayfixed.doctor.api import SKIP, WARN, Row
 
-    # Said by every row that meets a ledger the overlay has not confirmed, because it is the whole
-    # reason those rows exist: the binding lives in the git common directory and this machine's
-    # record of it, and this file does not.
-    not_evidence = (
-        f"a clone can commit {ATTACH_LEDGER}, so on its own it is not evidence of an attach"
-    )
     if reason == UNRESOLVED:
         return Row(
             WARN,
-            f"{ATTACH_LEDGER} records an attach, and the store it names is not this project's "
-            f"directory inside the overlay this machine records — {not_evidence}",
+            f"{LEDGER_NAME} records an attach, and the store it names is not this project's "
+            f"directory inside the overlay this machine records",
             _re_attach(),
         )
     if reason == UNREADABLE_LEDGER:
         return Row(
             WARN,
-            f"{ATTACH_LEDGER} is here and cannot be read as a ledger, so nothing in it can be "
-            f"corroborated and this checkout's attach state is unknown — {not_evidence}",
-            f"remove {ATTACH_LEDGER}, then run `{ATTACH_COMMAND} --check`",
+            f"{LEDGER_NAME} is here and cannot be read as a ledger, so nothing in it can be "
+            f"corroborated and this checkout's attach state is unknown",
+            f"remove {LEDGER_NAME}, then run `{ATTACH_COMMAND} --check`",
         )
     if reason == MACHINE_UNREAD:
         # No remedy of its own: the `preferences` row is red on the same file, and names it and
         # what to do.
         return Row(
             SKIP,
-            f"{ATTACH_LEDGER} records an attach and the machine configuration file could not be "
+            f"{LEDGER_NAME} records an attach and the machine configuration file could not be "
             f"read, so whether this checkout is attached could not be answered here; the "
-            f"`preferences` row says why — {not_evidence}",
+            f"`preferences` row says why",
             "",
         )
     if reason == NO_OVERLAY:
         return Row(
             SKIP,
-            f"{ATTACH_LEDGER} records an attach and this machine records no overlay to check it "
-            f"against, so whether this checkout is attached could not be answered here — "
-            f"{not_evidence}",
+            f"{LEDGER_NAME} records an attach and this machine records no overlay to check it "
+            f"against, so whether this checkout is attached could not be answered here",
             "run `stayfixed setup --overlay <path>` to record the overlay, then `stayfixed "
             "doctor` again",
         )
     return Row(
         SKIP,
-        f"{ATTACH_LEDGER} records an attach and the overlay could not be asked about it here — no "
+        f"{LEDGER_NAME} records an attach and the overlay could not be asked about it here — no "
         f"`git`, or an overlay record this process could not read — so whether this checkout "
-        f"is attached could not be answered; {not_evidence}",
+        f"is attached could not be answered",
         "run `stayfixed doctor` again where `git` runs and the overlay is readable",
     )
 
@@ -612,9 +604,9 @@ def _binding_answer(context: Context, config: Config, ledger: _Ledger, main: Pat
     the overlay does not permit, a machine that records no overlay at all, and a machine with no
     usable `git` — because collapsed, the `attached` row would read the last two as *attached*.
     They are not one finding. A ledger whose store is not this project's share of the recorded
-    overlay is a fact about **this repository**, and `.stayfixed/local/attach.json` is a path a
-    clone can commit, so it earns a warning. A missing overlay or a missing `git` is a fact about
-    **our own inputs**, and a row that accused the repository on it would be reporting on itself.
+    overlay is a fact about **the ledger**, so it earns a warning. A missing overlay or a missing
+    `git` is a fact about **our own inputs**, and a row that accused the ledger on it would be
+    reporting on itself.
     So is a machine file that could not be read (`MACHINE_UNREAD`), asked first as `NO_OVERLAY` is:
     `read_binding` would raise its refusal as a `Failure`, read as `UNASKABLE`, which blames `git`.
 
@@ -638,12 +630,11 @@ def _binding_answer(context: Context, config: Config, ledger: _Ledger, main: Pat
     if isinstance(context.overlay_root, MachineUnread):
         return MACHINE_UNREAD
     recorded = ledger.state(main)
-    # This one is the repository's file and not our inputs, so it does not join the other two: a
-    # clone can commit `.stayfixed/local/attach.json`, and a file that will not parse is a fact
-    # about the checkout the reader is standing in. `NO_LEDGER` never reaches here: `_attached`
-    # answers it before asking.
+    # A file that will not parse is a fact about the ledger and not our inputs, so it does not join
+    # the other two; `UNASKABLE` is `_ledger_state`'s own, from a `git` that cannot be run.
+    # `NO_LEDGER` never reaches here: `_attached` answers it before asking.
     if isinstance(recorded, str):
-        return UNREADABLE_LEDGER
+        return recorded
     try:
         # The report's own `Config`, which `read_binding` would otherwise load a second time.
         return read_binding(

@@ -21,8 +21,7 @@ from stayfixed.attach.api import LOCAL_SETTINGS
 from stayfixed.attach.check import check as attach_check
 from stayfixed.attach.render import MARKETPLACE_FILE, read_parts
 from stayfixed.attach.render import write as render_write
-from stayfixed.binding import delivery_directory
-from stayfixed.config.layout import ATTACH_LEDGER as LEDGER
+from stayfixed.binding import LEDGER_NAME, delivery_directory
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.plates import plates
 from stayfixed.doctor import checks as doctor_checks
@@ -31,6 +30,7 @@ from stayfixed.errors import Refusal
 from stayfixed.memory.api import PROJECT_RECORD, PROJECTS
 from stayfixed.overlay.api import COMMON_CLAUDE
 from stayfixed.printed import quoted
+from tests.attach.test_write import ledger_file
 from tests.doctor.test_checks import (
     LOCAL_ONLY,
     OVERLAY,
@@ -53,9 +53,8 @@ pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not 
 def _past_a_name(tmp_path: Path, path: Path) -> None:
     """Make `path` a symbolic link to a name longer than a file name may be on Linux and macOS.
 
-    A clone can commit the link, and nothing on the machine has to be wrong for it. Asked about
-    through it, `stat` raises `ENAMETOOLONG` on every supported Python; `Path.is_file()` raises it
-    on 3.11 to 3.13 and answers `False` from 3.14.
+    Asked about through it, `stat` raises `ENAMETOOLONG` on every supported Python;
+    `Path.is_file()` raises it on 3.11 to 3.13 and answers `False` from 3.14.
     """
     if path.is_dir() and not path.is_symlink():
         shutil.rmtree(path)
@@ -74,12 +73,11 @@ UNATTACHED = {
     "overlay": Check(
         "attached",
         "warn",
-        "memory.mode is overlay and .stayfixed/local/attach.json does not exist, so nothing "
-        "records an attach",
+        f"memory.mode is overlay and {LEDGER_NAME} does not exist, so nothing records an attach",
         "run `stayfixed attach --check`",
     ),
     "local-only": Check(
-        "attached", "ok", f"{LEDGER} does not exist, so nothing records an attach", ""
+        "attached", "ok", f"{LEDGER_NAME} does not exist, so nothing records an attach", ""
     ),
 }
 
@@ -123,10 +121,10 @@ def test_an_overlay_project_with_no_ledger_is_a_warning_naming_the_file(tmp_path
     # configured for an overlay before anyone has run `stayfixed attach` in this checkout, which
     # is the ordinary state of a fresh clone. The remedy is the command that ends it.
     root = _attached(tmp_path)
-    (root / LEDGER).unlink()
+    ledger_file(root).unlink()
     check = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
     assert check.status == "warn"
-    assert LEDGER in check.detail
+    assert LEDGER_NAME in check.detail
     assert "stayfixed attach" in check.remedy
 
 
@@ -245,10 +243,8 @@ def test_a_settings_file_that_cannot_be_read_as_settings_warns(tmp_path: Path) -
 def test_a_ledger_with_no_binding_in_the_overlay_is_a_warning_and_never_an_attach(
     tmp_path: Path,
 ) -> None:
-    # `.stayfixed/local/attach.json` is a path a clone can commit, and `_attached` took its
-    # existence as "this checkout was attached". The binding this machine keeps is the trusted
-    # side, so the row asks it: a ledger with no binding id behind it in the git common directory
-    # is a warning that names the file, and the remedy says what to do in each of the two cases.
+    # The binding this machine keeps is the other half of an attach, so the row asks it: a ledger
+    # with no binding id behind it in the git common directory is a warning that names the file.
     #
     # Mutation (declared): `if state == UNBOUND or id is None:` -> `if False:` -> the row falls
     # through to the harness-shape branch and this reddens on the sentence.
@@ -259,34 +255,30 @@ def test_a_ledger_with_no_binding_in_the_overlay_is_a_warning_and_never_an_attac
     row = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
     assert row.status == WARN
     assert "records no binding of this checkout to this project" in row.detail
-    assert "a clone can commit that file" in row.detail
-    assert "stayfixed attach" in row.remedy and "remove the ledger" in row.remedy
+    assert "stayfixed attach" in row.remedy
 
 
 def test_a_ledger_naming_a_store_the_overlay_does_not_permit_is_a_warning(tmp_path: Path) -> None:
     # `_attached` asked the overlay only for its *state*, and `read_binding` answers with a
     # `Refusal` — not a state — when the store the ledger names is not this project's share of
     # the recorded overlay. That refusal used to collapse into the same `None` as "no overlay
-    # recorded", the row skipped both new arms, and a repository that committed
-    # `.stayfixed/local/attach.json` with any store it liked was reported `attached: ok` to a
-    # model. This is the likeliest hostile shape of the three: an attacker cannot know
-    # the victim's overlay root, so the store they commit is one the overlay does not permit.
+    # recorded", the row skipped both new arms, and a ledger naming any store it liked was
+    # reported `attached: ok`.
     #
-    # `warn` and not `skip`: this is a fact about the repository, and `skip` never reaches the
-    # exit code.
+    # `warn` and not `skip`: this is a fact about the ledger, and `skip` never reaches the exit
+    # code.
     #
     # Mutation (declared): `except Refusal: return UNRESOLVED` -> `return UNASKABLE` -> the row
     # becomes a skip about this machine and this reddens on the status and the sentence.
     root = _attached(tmp_path)
-    recorded = json.loads((root / LEDGER).read_text(encoding="utf-8"))
+    recorded = json.loads(ledger_file(root).read_text(encoding="utf-8"))
     recorded["store"] = str(tmp_path / "somewhere-else" / "memory")
-    (root / LEDGER).write_text(json.dumps(recorded), encoding="utf-8")
+    ledger_file(root).write_text(json.dumps(recorded), encoding="utf-8")
     row = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
     assert row.status == WARN
     assert "is not this project's directory inside the overlay" in row.detail
-    assert "not evidence of an attach" in row.detail
     assert "attached;" not in row.detail, "a ledger the overlay does not confirm is not an attach"
-    assert "stayfixed attach" in row.remedy and "remove the ledger" in row.remedy
+    assert "stayfixed attach" in row.remedy
 
 
 def test_a_ledger_on_a_machine_that_records_no_overlay_skips_and_never_reads_as_attached(
@@ -357,26 +349,26 @@ def test_an_attached_checkout_the_overlay_confirms_is_still_green_and_says_the_b
     assert "the binding is bound" in row.detail
 
 
-def test_a_ledger_that_cannot_be_read_is_this_repositorys_doing_and_never_blamed_on_git(
+def test_a_ledger_that_cannot_be_read_is_never_blamed_on_git(
     tmp_path: Path,
 ) -> None:
     # `_binding_answer` had three answers and needed four. A ledger that is there and will not
     # parse was joining "no overlay" and "no git" under `unaskable`, so the row said "no `git`,
     # or a record this process could not read" and the remedy said "run `stayfixed doctor` again
-    # where `git` runs" — about a file in the checkout the reader is standing in. `skip` never
-    # reaches the exit code either, so a clone's committed, malformed ledger was silent, which
-    # is the split `_uncorroborated`'s own docstring exists to make.
+    # where `git` runs" — about a file `git` has nothing to do with. `skip` never reaches the exit
+    # code either, so a malformed ledger was silent, which is the split `_uncorroborated`'s own
+    # docstring exists to make.
     #
     # Mutation (declared): the unreadable ledger answers `UNASKABLE` again -> the row is `skip`,
     # blames `git`, and every assertion below reddens.
     root = _attached(tmp_path)
-    (root / LEDGER).write_text("this is not json", encoding="utf-8")
+    ledger_file(root).write_text("this is not json", encoding="utf-8")
     row = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
 
     assert row.status == WARN
-    assert f"{LEDGER} is here and cannot be read as a ledger" in row.detail
+    assert f"{LEDGER_NAME} is here and cannot be read as a ledger" in row.detail
     assert "`git`" not in row.detail and "`git`" not in row.remedy
-    assert LEDGER in row.remedy
+    assert LEDGER_NAME in row.remedy
 
 
 # Ledger fields a clone can commit in shapes `attach` never writes, each of which used to raise out
@@ -413,10 +405,9 @@ PAST_STR_FIELDS = {"store-past-str": "store", "entry-past-str": "entries"}
 UNREADABLE_LEDGER_ATTACHED = Check(
     "attached",
     "warn",
-    f"{LEDGER} is here and cannot be read as a ledger, so nothing in it can be corroborated "
-    f"and this checkout's attach state is unknown — a clone can commit {LEDGER}, so on its own "
-    f"it is not evidence of an attach",
-    f"remove {LEDGER}, then run `stayfixed attach --check`",
+    f"{LEDGER_NAME} is here and cannot be read as a ledger, so nothing in it can be corroborated "
+    f"and this checkout's attach state is unknown",
+    f"remove {LEDGER_NAME}, then run `stayfixed attach --check`",
 )
 
 
@@ -432,7 +423,7 @@ UNREADABLE_LEDGERS = {
 def _unreadable_own_ledger(root: Path, shape: str) -> None:
     """Replace the owner's ledger in `root` with `shape`, one `ledger()` cannot read: a field from
     `HOSTILE_FIELDS`, a field from `PAST_STR_FIELDS`, or whole bytes from `UNREADABLE_LEDGERS`."""
-    recorded = json.loads((root / LEDGER).read_text(encoding="utf-8"))
+    recorded = json.loads(ledger_file(root).read_text(encoding="utf-8"))
     if shape in HOSTILE_FIELDS:
         key, value = HOSTILE_FIELDS[shape]
         recorded[key] = value
@@ -447,7 +438,7 @@ def _unreadable_own_ledger(root: Path, shape: str) -> None:
         text = json.dumps(recorded).replace('"@deep@"', "[" * PAST_STR + "]" * PAST_STR)
     else:
         text = UNREADABLE_LEDGERS[shape]
-    (root / LEDGER).write_text(text, encoding="utf-8")
+    ledger_file(root).write_text(text, encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -514,11 +505,11 @@ def test_one_report_reads_the_ledger_once_and_the_configuration_not_again(
 
     reads: list[Path] = []
     loads: list[Path] = []
-    real_ledger = write.ledger
+    real_ledger = write.read_ledger
 
-    def counted_ledger(root: Path) -> object:
-        reads.append(root)
-        return real_ledger(root)
+    def counted_ledger(path: Path) -> object:
+        reads.append(path)
+        return real_ledger(path)
 
     def counted_load(root: Path, *, machine: Path | None) -> object:
         # `load` is the loader's own, which `binding` imports by name; only `read_binding` calls it
@@ -526,7 +517,7 @@ def test_one_report_reads_the_ledger_once_and_the_configuration_not_again(
         loads.append(root)
         return load(root, machine=machine)
 
-    monkeypatch.setattr(write, "ledger", counted_ledger)
+    monkeypatch.setattr(write, "read_ledger", counted_ledger)
     monkeypatch.setattr(binding, "load", counted_load)
     root = _attached(tmp_path)
     rows = _checks(tmp_path, root, machine=_machine(tmp_path))
@@ -567,13 +558,12 @@ def test_one_report_resolves_the_overlay_root_once_for_every_area(
 # --- the ledger's path, the binding record and the overlay's shape -----------------------------
 
 
-# Where a clone can put a symbolic link to a name longer than a file name may be, so that `stat`
-# cannot answer about the ledger on any supported Python: the ledger itself, and the directory that
-# holds it.
-UNCHECKABLE_LEDGERS = {"the-ledger": LEDGER, "its-directory": str(Path(LEDGER).parent)}
+# Where a symbolic link to a name longer than a file name may be makes `stat` unable to answer
+# about the ledger on any supported Python: the ledger itself, and the directory that holds it.
+UNCHECKABLE_LEDGERS = ("the-ledger", "its-directory")
 
 
-@pytest.mark.parametrize("shape", sorted(UNCHECKABLE_LEDGERS))
+@pytest.mark.parametrize("shape", UNCHECKABLE_LEDGERS)
 def test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer(
     tmp_path: Path, shape: str
 ) -> None:
@@ -584,7 +574,8 @@ def test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer
     # to 3.13 and the ledger does not exist on 3.14; "a ledger doctor cannot ask about reads as no
     # ledger" -> the ledger does not exist.
     root = _attached(tmp_path)
-    _past_a_name(tmp_path, root / UNCHECKABLE_LEDGERS[shape])
+    path = ledger_file(root)
+    _past_a_name(tmp_path, path.parent if shape == "its-directory" else path)
     rows = _checks(tmp_path, root, machine=_machine(tmp_path))
     assert _by_name(rows, "attached") == UNREADABLE_LEDGER_ATTACHED
 
@@ -604,7 +595,7 @@ def test_a_ledger_path_that_names_no_file_is_no_ledger_as_before(
     # ledger cannot be read; "the regular-file probe reads a path that is no regular file" -> the
     # directory does.
     root = _attached(tmp_path)
-    path = root / LEDGER
+    path = ledger_file(root)
     path.unlink()
     if shape == "a-dangling-link":
         path.symlink_to(tmp_path / "nothing-here")
@@ -647,7 +638,7 @@ def test_a_bound_checkouts_damaged_overlay_is_named_and_never_answered_by_removi
     assert attached == Check(
         "attached",
         WARN,
-        f"{LEDGER} records an attach, but {broken} is not a directory, so the overlay this "
+        f"{LEDGER_NAME} records an attach, but {broken} is not a directory, so the overlay this "
         f"machine records is damaged and holds none of this checkout's notes or grants",
         f"repair the overlay so that {broken} is a directory again (or clone the overlay afresh), "
         f"then run `stayfixed doctor` again",
@@ -765,8 +756,8 @@ def test_an_overlay_that_moved_is_red_and_names_where_it_was(tmp_path: Path) -> 
 def test_a_placed_path_the_repository_tracks_is_red(tmp_path: Path) -> None:
     # A tracked file is one every collaborator gets, and no exclude line hides it.
     root = _attached(tmp_path)
-    _git(root, "add", "-f", LEDGER)
-    clause = attach_doctor.PLACED_TRACKED.format(paths=LEDGER)
+    _git(root, "add", "-f", LOCAL_SETTINGS)
+    clause = attach_doctor.PLACED_TRACKED.format(paths=LOCAL_SETTINGS)
     row = _delivered_row(tmp_path, root)
     assert (row.status, row.detail) == (RED, _attached_detail(clause))
     assert row.remedy.startswith("take each out of the index with `git rm --cached`")
@@ -817,8 +808,8 @@ def test_a_git_that_cannot_say_what_it_tracks_warns_and_never_reads_as_in_place(
 
 
 def _ledger_field(root: Path, **fields: object) -> None:
-    recorded = json.loads((root / LEDGER).read_text(encoding="utf-8"))
-    (root / LEDGER).write_text(json.dumps({**recorded, **fields}), encoding="utf-8")
+    recorded = json.loads(ledger_file(root).read_text(encoding="utf-8"))
+    ledger_file(root).write_text(json.dumps({**recorded, **fields}), encoding="utf-8")
 
 
 def test_a_ledger_that_records_no_install_warns(tmp_path: Path) -> None:

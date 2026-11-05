@@ -27,7 +27,6 @@ from stayfixed import REPOSITORY_URL, binding
 from stayfixed.attach import exclude
 from stayfixed.attach.api import LOCAL_SETTINGS
 from stayfixed.attach.render import RenderRecord, render
-from stayfixed.config.layout import ATTACH_LEDGER as LEDGER
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.overlay_layers import NOT_THERE
@@ -215,8 +214,8 @@ def _machine(tmp_path: Path) -> Path:
 
 
 # Every path `attach` places in the fixture's checkout, as `attach.write.placed_paths` names them
-# for a project the overlay grants no standing rule: the ledger and the settings file.
-PLACED = (LEDGER, LOCAL_SETTINGS)
+# for a project the overlay grants no standing rule: the settings file.
+PLACED = (LOCAL_SETTINGS,)
 
 
 def _attached(tmp_path: Path) -> Path:
@@ -246,8 +245,7 @@ def _attached(tmp_path: Path) -> Path:
     settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps({"autoMemoryDirectory": str(composed)}) + "\n", encoding="utf-8")
     rendered = _rendered(root, overlay)
-    recorded = root / LEDGER
-    recorded.parent.mkdir(parents=True, exist_ok=True)
+    recorded = binding.common_directory(root) / binding.LEDGER_FILE
     recorded.write_text(
         json.dumps(
             {

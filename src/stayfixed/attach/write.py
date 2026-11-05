@@ -16,8 +16,8 @@ instead — document string in, document string out, no manifest — and the led
 the manifest's place. This is the one place where refusing an existing mechanism is right.
 
 An allow rule cannot carry a marker — `scaffold.mark` appends to a *command* — so it has exactly
-**one** witness, the ledger at `.stayfixed/local/attach.json`, and `detach` is only ever as good
-as that file.
+**one** witness, the ledger in the git common directory (`binding.LEDGER_FILE`), and `detach` is
+only ever as good as that file.
 
 **Delivery does not depend on the memory mode.** Every repository is rendered and installed; the
 note half — the overlay's group directories, the composed store and the `autoMemoryDirectory` key
@@ -32,13 +32,13 @@ checkout, a bare repository's worktree, `attach` refuses with "cannot tell" (`NO
 
 **Nothing goes into `.gitignore`, and every placed path is ignored before the first write after
 the exclude block.** `.gitignore` is tracked, so a line `attach` wrote there was a change every
-collaborator got. Everything `attach` places in the checkout, the ledger with the owner's personal
-allow rules included, is listed in the `info/exclude` block (`attach.exclude`), which no clone
-carries; the block is written first, and git is then asked whether each placed path is ignored,
-so a `.gitignore` that re-includes one (a `!` line outranks the exclude file) stops the run
-before that path is written. The binding id is placed too, but in the git common directory, which
-git never tracks, so it is neither listed nor asked about. A `stayfixed:ignore` region in
-`.gitignore` is not this module's: it neither writes nor withdraws one.
+collaborator got. Everything `attach` places in the checkout is listed in the `info/exclude` block
+(`attach.exclude`), which no clone carries; the block is written first, and git is then asked
+whether each placed path is ignored, so a `.gitignore` that re-includes one (a `!` line outranks
+the exclude file) stops the run before that path is written. The binding id and the ledger, which
+holds the owner's personal allow rules, are placed too, but in the git common directory, which git
+never tracks and a branch cannot write, so they are neither listed nor asked about. A
+`stayfixed:ignore` region in `.gitignore` is not this module's: it neither writes nor withdraws one.
 
 **Every write goes through a primitive that already exists.** `fsops.write_within(root, …)` for
 everything inside the project, `fsops.write_within(overlay, …)` for the overlay's project record,
@@ -96,7 +96,10 @@ from stayfixed.attach.render import (
 )
 from stayfixed.attach.render import write as write_render
 from stayfixed.binding import (
+    LEDGER_FILE,
+    LEDGER_NAME,
     bound_project,
+    common_directory,
     delivery_directory,
     ensure_id,
     main_checkout_or_none,
@@ -104,7 +107,6 @@ from stayfixed.binding import (
     record,
     short,
 )
-from stayfixed.config.layout import ATTACH_LEDGER
 from stayfixed.config.owner import Owner
 from stayfixed.config.paths import PathEscape, PathUnasked, contained
 from stayfixed.config.plates import TAG_LINK_PREFIX, read_record, record_fault
@@ -167,15 +169,14 @@ _INSIDE = ".keep"
 # Every directory `attach` can bring into existence in the project root, as a *closed* list,
 # deepest first — which is also the order `detach` has to remove them in.
 #
-# There are exactly three writes that create a directory here, and each one's parents are on
-# this list: `ATTACH_LEDGER` under `.stayfixed/local/`, the rule copies under `.codex/rules/`, and
-# `LOCAL_SETTINGS` under `.claude/`.
+# There are exactly two writes that create a directory here, and each one's parents are on this
+# list: the rule copies under `.codex/rules/`, and `LOCAL_SETTINGS` under `.claude/`.
 #
-# Closed because a ledger is a file a clone can commit. `detach` iterates this tuple and keeps
+# Closed so that a ledger edited by hand cannot extend it. `detach` iterates this tuple and keeps
 # only the members the ledger names, so the ledger can shorten the list and never extend it,
-# and a committed `["src"]` names nothing this loop will act on. `ledger()` refuses one anyway,
-# on the same standard `rules` and `settings_keys` are held to.
-CREATED_DIRS = (".stayfixed/local", ".stayfixed", ".codex/rules", ".codex", ".claude")
+# and a `["src"]` names nothing this loop will act on. `ledger()` refuses one anyway, on the same
+# standard `rules` and `settings_keys` are held to.
+CREATED_DIRS = (".codex/rules", ".codex", ".claude")
 
 
 @dataclass(frozen=True)
@@ -232,13 +233,12 @@ class Attached:
 class AttachLedger:
     """The only witness an allow rule has, and the record `detach` acts from.
 
-    Not *authority*, and the difference is the whole of this docstring. `.gitignore` does not
-    untrack a file a clone committed, so this path can arrive in a fresh checkout with contents
-    nobody on this machine wrote — and `detach` then deletes files by the strings in `rules` and
-    drops settings keys by the strings in `settings_keys`. Obeyed, a ledger claiming
-    `settings_keys = ["permissions"]` would delete the owner's whole `permissions` block, **deny
-    rules included**: a widening driven by repository-authored bytes, out of a file that is no
-    authority.
+    **The anchor is the git common directory**, which a branch cannot write: the ledger sat in the
+    working tree once, and a branch that committed one made `detach` and every re-attach delete
+    files and withdraw allow rules by strings the branch chose. Nothing is read from that old
+    path now. Still, `detach` deletes files by the strings in `rules` and drops settings keys by
+    the strings in `settings_keys`, and a ledger edited by hand claiming `settings_keys =
+    ["permissions"]` would delete the owner's whole `permissions` block, **deny rules included**.
 
     So `ledger()` answers one question about every field before `detach` sees it — *what could
     `attach` possibly have written here?* — and refuses anything outside that answer rather than
@@ -261,14 +261,12 @@ class AttachLedger:
     omission. An allow rule has no grammar this area owns — the ledger exists *because* a rule
     cannot be told from the owner's own by its content — and its two consumers, `detach`
     (`_withdraw_settings`) and every re-attach (`permissions.withdrawing`), only ever remove a rule
-    the settings file already holds, so the worst a committed `allow` achieves is taking a
-    permission away, one the owner typed included. That bound is accepted: a branch can write this
-    file, so it is a convenience and no anchor against one. `store` is read by nothing: `detach`
-    derives every path it withdraws from the configuration and the overlay root, never from this
-    field, so it is a record for a human reading the file and for `doctor`, and a committed value
-    costs nothing — except one holding a NUL, which no path holds and `doctor`'s `Path.resolve`
-    meets with `ValueError`, so that one is a ledger no attach wrote. So is any list field holding
-    something other than a list, which reading it would meet with `TypeError`.
+    the settings file already holds. `store` is read by nothing: `detach` derives every path it
+    withdraws from the configuration and the overlay root, never from this field, so it is a
+    record for a human reading the file and for `doctor`, and a value costs nothing — except one
+    holding a NUL, which no path holds and `doctor`'s `Path.resolve` meets with `ValueError`, so
+    that one is a ledger no attach wrote. So is any list field holding something other than a
+    list, which reading it would meet with `TypeError`.
 
     `entries` maps each marker id to its event, which is the shape `scaffold.owned_ids` answers
     in, so `doctor` can compare the two without a translation in between. Only a ledger an earlier
@@ -345,7 +343,13 @@ def _checked(
 
 
 def ledger(root: Path) -> AttachLedger:
-    """The ledger this repository's last `attach` wrote, or a `Failure` naming the missing file.
+    """The ledger this repository's last `attach` wrote (`read_ledger` of the file in the git
+    common directory), or a `Failure` naming the missing file."""
+    return read_ledger(common_directory(root) / LEDGER_FILE)
+
+
+def read_ledger(path: Path) -> AttachLedger:
+    """The ledger at `path`, or a `Failure` naming the missing file.
 
     Never a best effort. Guessing which allow rules were stayfixed's from their content is the
     heuristic this file exists to replace, and a `detach` built on a guess removes a rule the
@@ -356,16 +360,14 @@ def ledger(root: Path) -> AttachLedger:
     ledger keep the members it is entitled to and lose only the hostile ones, which is a partial
     defence reported as a success.
     """
-    path = root / ATTACH_LEDGER
-    with fsops.reading(ATTACH_LEDGER, Failure):
+    with fsops.reading(LEDGER_NAME, Failure):
         try:
-            # A regular file only (`fsops.read_regular_text`): a clone can commit the ledger, and
-            # `detach` read it with no other check first, so a link to `/dev/zero` read until
+            # A regular file only (`fsops.read_regular_text`): a link to `/dev/zero` read until
             # memory ran out.
             text = fsops.read_regular_text(path)
         except FileNotFoundError as exc:
             raise Failure(
-                f"{ATTACH_LEDGER} is not there, so nothing records what `stayfixed attach` added "
+                f"{LEDGER_NAME} is not there, so nothing records what `stayfixed attach` added "
                 f"to this repository; there is no safe way to guess it from the settings file"
             ) from exc
     # Empty text fails as JSON: `attach` never writes an empty ledger, so one is no record. Valid
@@ -442,16 +444,9 @@ def _render(value: object, path: Path) -> Rendered | None:
 def existing_ledger(root: Path) -> AttachLedger | None:
     """The ledger, or `None` when there is none: `attach` and `attach --check`, the two callers
     that may carry on without it, read it here, so the two end with one code on a ledger the run
-    cannot take.
-
-    Its path is held to the project before anything reads it: it is the one path `attach` writes
-    inside the project that no other candidate names, so a `.stayfixed` committed as a link is
-    refused here by name rather than by the walk that writes the ledger, after every write before
-    it."""
-    contained(root, ATTACH_LEDGER)
-    if not fsops.is_file(root / ATTACH_LEDGER):
-        return None
-    return ledger(root)
+    cannot take."""
+    path = common_directory(root) / LEDGER_FILE
+    return read_ledger(path) if fsops.is_file(path) else None
 
 
 def _allow_list(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
@@ -569,7 +564,7 @@ def _record_table(record: Path) -> dict[str, Any] | None:
 def _absent_directories(root: Path) -> tuple[str, ...]:
     """Which of `CREATED_DIRS` this repository does not have, asked before the first write.
 
-    Asked *before*, because after the ledger is written `.stayfixed/local/` exists and the answer
+    Asked *before*, because after the first copy is written `.codex/rules/` exists and the answer
     is not the one `detach` needs. `attach` therefore takes it at the top of the run and
     hands it down, the same way it hands down `previous`.
 
@@ -594,17 +589,17 @@ def _reached_directory(path: Path) -> bool:
 
 
 def placed_paths(rules: Iterable[str]) -> tuple[str, ...]:
-    """Every path an attach puts into the main checkout's work tree: the ledger, each rule copy in
-    `rules` (`codex_rules`' targets for a run, the ledger's for `doctor`), and the settings file.
-    These are what `attach.exclude` hides and holds inside the project, and what one rule holds:
-    none tracked, each ignored once the block stands. The binding id is placed too, but under the
-    git common directory, which git never tracks, so it is no path of the work tree.
+    """Every path an attach puts into the main checkout's work tree: each rule copy in `rules`
+    (`codex_rules`' targets for a run, the ledger's for `doctor`), and the settings file. These are
+    what `attach.exclude` hides and holds inside the project, and what one rule holds: none
+    tracked, each ignored once the block stands. The binding id and the ledger are placed too, but
+    under the git common directory, which git never tracks, so they are no paths of the work tree.
 
     **The settings file always, because it names the id.** `claude plugin install --scope local`
     writes the plugin's `enabledPlugins` entry, `overlay-<id>@stayfixed-delivery-<id>`, into it on
     the first attach, and it holds that entry on every run after; a name a clone could read there is
     a name it could commit."""
-    return (ATTACH_LEDGER, *rules, LOCAL_SETTINGS)
+    return (*rules, LOCAL_SETTINGS)
 
 
 def named_placed(paths: tuple[str, ...]) -> str:
@@ -660,7 +655,8 @@ def _write_ledger(
         # The digest, never the id and never a path on this machine (`render.Rendered`).
         "render": None if render is None else {"digest": render.digest},
     }
-    fsops.write_within(root, ATTACH_LEDGER, json.dumps(document, indent=2, sort_keys=True) + "\n")
+    text = json.dumps(document, indent=2, sort_keys=True) + "\n"
+    fsops.write_within(common_directory(root), LEDGER_FILE, text)
 
 
 def _group_directories(binding: Binding, config: Config) -> list[str]:
@@ -948,8 +944,8 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     """
     previous = existing_ledger(root)
     memory = config.memory.mode == OVERLAY_MODE
-    # Above every write, because the first of them creates `.stayfixed/local/` and the answer
-    # would then be wrong by exactly the directory this run brought into existence.
+    # Above every write, because the first of them creates `.codex/rules/` or `.claude/` and the
+    # answer would then be wrong by exactly the directory this run brought into existence.
     absent = _absent_directories(root)
     # The settings merge is computed here, before any write, so a file it cannot read stops the
     # run while nothing is written.
@@ -1337,10 +1333,9 @@ def _withdraw_settings(root: Path, planned: SettingsWithdrawal) -> tuple[str, ..
 def _withdraw_directories(root: Path, recorded: AttachLedger) -> tuple[str, ...]:
     """Remove the directories this repository did not have before the attach, and only those.
 
-    The last step of a detach, after the ledger itself is gone, because `.stayfixed/local/` holds
-    it. `docs/cli.md` promises "an attach and a detach leave the tree byte-for-byte as it was",
-    and directories are part of the tree, though a snapshot that filters on `is_file()` cannot
-    see them.
+    The last step of a detach, after the files in them are gone. `docs/cli.md` promises "an
+    attach and a detach leave the tree byte-for-byte as it was", and directories are part of the
+    tree, though a snapshot that filters on `is_file()` cannot see them.
 
     **Three things keep this from deleting somebody's directory.** It walks `CREATED_DIRS`, a
     closed list, and keeps only what the ledger named — so a committed ledger can shorten the
@@ -1401,7 +1396,7 @@ def _refuse_unwithdrawable(
     root: Path, recorded: AttachLedger, settings: SettingsWithdrawal
 ) -> None:
     """Walk to every path the withdrawal writes or removes, before the first withdrawal: the
-    settings file when it is rewritten, each recorded rule copy, and the ledger.
+    settings file when it is rewritten, and each recorded rule copy.
 
     The writes and removals are `fsops` walks that refuse a symlinked component, and asked first
     by them, the question would come after the settings file was already withdrawn.
@@ -1417,12 +1412,6 @@ def _refuse_unwithdrawable(
             what="a `.codex/rules/` copy this checkout's attach recorded",
             where="`.codex` or `.codex/rules`",
         )
-    _walked(
-        root,
-        ATTACH_LEDGER,
-        what=f"the ledger, `{ATTACH_LEDGER}`",
-        where="`.stayfixed` or `.stayfixed/local`",
-    )
 
 
 def detach(root: Path, *, runner: Runner) -> Detached:
@@ -1503,8 +1492,7 @@ def detach(root: Path, *, runner: Runner) -> Detached:
         store_kept = not withdraw_composed(id)
     if hidden is not None:
         exclude.write(hidden)
-    fsops.remove_within(root, ATTACH_LEDGER)
-    # Last, because the ledger lives in one of them.
+    fsops.remove_within(common_directory(root), LEDGER_FILE)
     directories = _withdraw_directories(root, recorded)
     return Detached(
         allow_removed,

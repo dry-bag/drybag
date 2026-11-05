@@ -1142,11 +1142,10 @@ reddens = [
   "tests/config/test_paths.py::test_a_paths_value_naming_gits_control_directory_is_refused_and_never_quoted",
 ]
 
-# stayfixed's own directory, reserved the same way. `.stayfixed/local/` holds attach's ledger and
-# the local-only notes, state git never sees, and `agents-md` is a region inserted into whatever
-# file `[paths] agents_md` names. Measured before the rule: a committed
-# `agents_md = ".stayfixed/local/attach.json"` had `upgrade` exit 0 with `region_update
-# .stayfixed/local/attach.json (refreshed)`. The anchor is the resolved root and the
+# stayfixed's own directory, reserved the same way. `.stayfixed/local/` holds the local-only notes,
+# state git never sees, and `agents-md` is a region inserted into whatever file `[paths]
+# agents_md` names. Measured before the rule: a committed `agents_md` naming a file there had
+# `upgrade` exit 0 with `region_update` on it. The anchor is the resolved root and the
 # `STAYFIXED_DIRECTORY` constant in the installed package; a clone authors only the value.
 [[mutation]]
 name = "a [paths] value may name stayfixed's own directory"
@@ -1155,8 +1154,8 @@ before = "        if names_stayfixed_directory(relative):"
 after = "        if False:"
 reddens = [
   "tests/config/test_paths.py::test_a_paths_value_inside_stayfixeds_own_directory_is_refused_and_never_quoted",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-attach-s-ledger-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-attach-s-ledger-case-folded-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-a-local-state-file-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-a-local-state-file-case-folded-init]",
 ]
 
 # The case half, on its own. A rule that matched `.git` exactly would be green on every test
@@ -1171,7 +1170,7 @@ reddens = [
   "tests/test_fsops.py::test_gits_control_directory_is_reserved_at_every_depth_and_in_any_case",
   "tests/config/test_paths.py::test_contained_refuses_gits_control_directory_at_any_depth_and_in_any_case",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-git-s-hook-case-folded-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-attach-s-ledger-case-folded-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-a-local-state-file-case-folded-init]",
 ]
 
 # The call site, which is what regressed. A TOML key is arbitrary quoted text, so this message

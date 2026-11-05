@@ -485,8 +485,8 @@ def read_binding(
         resolved: Path | None = fsops.resolved(store)
     except OSError:
         # A store through a symlink loop, which `fsops.resolved` answers as an `OSError` on every
-        # interpreter. `doctor` hands this the store a ledger names, and a clone can commit
-        # both, so it is refused here as any store that is not this one is.
+        # interpreter. `doctor` hands this the store a ledger names, so it is refused here as any
+        # store that is not this one is.
         resolved = None
     if resolved != expected.resolve():
         # The shape and never `expected`, which embeds `project.name` (see `_recorded`).

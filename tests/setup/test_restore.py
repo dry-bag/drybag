@@ -33,13 +33,12 @@ from stayfixed.setup.restore import (
     restore,
 )
 from tests.attach.test_binding import CONFIG
+from tests.attach.test_write import ledger_file
 from tests.gitfixture import git
 from tests.runners import Recorder
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
-
-ATTACH_LEDGER = ".stayfixed/local/attach.json"
 
 
 def _overlay(tmp_path: Path) -> Path:
@@ -151,7 +150,7 @@ def test_a_listed_checkout_that_exists_is_attached(tmp_path: Path) -> None:
     assert _states(report) == {"alpha": "attached"}
     # The overlay's record of the binding, which attach writes under the project the key names.
     assert fsops.is_file(overlay / "projects" / "alpha" / "project.toml")
-    assert fsops.is_file(alpha / ATTACH_LEDGER)
+    assert fsops.is_file(ledger_file(alpha))
 
 
 def test_a_listed_dir_that_is_not_there_is_reported_and_skipped(tmp_path: Path) -> None:
@@ -175,7 +174,7 @@ def test_a_checkout_whose_project_is_not_its_table_key_is_refused_and_the_rest_a
     report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=claiming, gamma=gamma))
     assert _states(report) == {"alpha": "refused", "gamma": "attached"}
     assert_snapshot_unchanged(claiming, before)
-    assert not fsops.exists(claiming / ATTACH_LEDGER)
+    assert not fsops.exists(ledger_file(claiming))
     assert binding.bound_project(claiming) is None
     assert not fsops.exists(overlay / "projects" / "beta")
 
@@ -281,7 +280,7 @@ def test_restore_twice_changes_nothing_the_second_time(tmp_path: Path) -> None:
     first = _restore(tmp_path, overlay, listed)
     after = snapshot(alpha)
     # Non-vacuous: the first run did write into the checkout.
-    assert ATTACH_LEDGER in after
+    assert ".claude/settings.local.json" in after
     second = _restore(tmp_path, overlay, listed)
     assert _states(first) == _states(second) == {"alpha": "attached"}
     assert "already recorded" in second.projects[0].detail
@@ -380,7 +379,7 @@ def test_restore_prints_the_missing_tools_first_and_still_attaches(
     code, out, _ = invoke(_restoring(tmp_path, overlay))
     assert code == 0
     assert out.splitlines()[0].startswith("missing tools: codex")
-    assert fsops.is_file(alpha / ATTACH_LEDGER)
+    assert fsops.is_file(ledger_file(alpha))
 
 
 # --- the plugins the overlay's machine settings enable ---------------------------------------

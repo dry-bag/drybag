@@ -27,7 +27,6 @@ import pytest
 from stayfixed import fsops
 from stayfixed.attach import binding, permissions, write
 from stayfixed.attach.binding import Binding
-from stayfixed.config.layout import ATTACH_LEDGER
 from stayfixed.config.loader import CONFIG_FILE, load, read_document
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.plates import plates
@@ -114,7 +113,7 @@ RAISING: list[tuple[str, Callable[[Path], Callable[[], object]], type[Exception]
     ),
     (
         "the attach ledger",
-        lambda t: (_plant(t / ATTACH_LEDGER), lambda: write.ledger(t))[1],
+        lambda t: (_plant(t / "attach.json"), lambda: write.read_ledger(t / "attach.json"))[1],
         Failure,
     ),
     (

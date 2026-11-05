@@ -35,7 +35,6 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.layout import ATTACH_LEDGER
 from stayfixed.config.loader import CONFIG_FILE, load, read_document
 from stayfixed.errors import Refusal
 from stayfixed.project.init import ANSWER_SHEET, NO_ANSWERS, Given, InitReport, init
@@ -46,6 +45,8 @@ from tests.project.repos import DOCUMENT, MOVED_OFF_DOCS, repository
 
 # Bytes no stayfixed build renders: a person's file, or a tool's.
 FOREIGN = "bytes a person or another tool wrote\n"
+# A file in the directory stayfixed reserves for state git never sees.
+LOCAL_STATE = ".stayfixed/local/state.json"
 HOOK = "#!/bin/sh\n# the clone's own pre-commit hook\n"
 
 
@@ -106,20 +107,20 @@ HOSTILE = (
         links={"gitlink": ".git"},
     ),
     Case(
-        "roadmap-onto-attach-s-ledger",
-        paths={"roadmap": ATTACH_LEDGER},
-        plant={ATTACH_LEDGER: FOREIGN},
+        "roadmap-onto-a-local-state-file",
+        paths={"roadmap": LOCAL_STATE},
+        plant={LOCAL_STATE: FOREIGN},
     ),
     Case(
-        "roadmap-onto-attach-s-ledger-case-folded",
-        paths={"roadmap": ATTACH_LEDGER.replace(".stayfixed", ".STAYFIXED")},
-        plant={ATTACH_LEDGER: FOREIGN},
+        "roadmap-onto-a-local-state-file-case-folded",
+        paths={"roadmap": LOCAL_STATE.replace(".stayfixed", ".STAYFIXED")},
+        plant={LOCAL_STATE: FOREIGN},
     ),
     # The same two layers as the `.git` symlink.
     Case(
-        "roadmap-onto-attach-s-ledger-through-a-symlink",
-        paths={"roadmap": "hidden/attach.json"},
-        plant={ATTACH_LEDGER: FOREIGN},
+        "roadmap-onto-a-local-state-file-through-a-symlink",
+        paths={"roadmap": "hidden/state.json"},
+        plant={LOCAL_STATE: FOREIGN},
         links={"hidden": ".stayfixed/local"},
     ),
     # `roadmap` placed at the bug index spelled in another case: one file where case folds, an
