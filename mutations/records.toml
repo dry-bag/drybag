@@ -1369,6 +1369,16 @@ reddens = [
   "tests/ledger/test_commands.py::test_check_with_a_base_answers_for_a_ledger_the_base_carries",
 ]
 
+[[mutation]]
+name = "bugs check --base judges a root reached through a symlink at the link's target"
+file = "src/stayfixed/ledger/commands.py"
+before = "        repository_prefix(Path(args.root).absolute())"
+after = "        pass"
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[moved-behind-a-link]",
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[linked-back-to-the-top]",
+]
+
 # `bugs check` answers with the `bugs` gate's own function, so a step either gains, a filter or a
 # register built another way, is the other's too: the command cannot pass what a gate run fails.
 # Reaching past the gate to the register gate it runs answers the same today, and only a finding

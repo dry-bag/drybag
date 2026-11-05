@@ -8,6 +8,7 @@ from __future__ import annotations
 import errno
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -120,6 +121,120 @@ def test_check_with_a_base_answers_for_a_ledger_the_base_carries(
     assert "nothing to check" in capsys.readouterr().out
     assert invoke(["bugs", "check", "--base", base, *common]) == 1
     assert capsys.readouterr().out == "FAIL: 1 ledger problem(s): docs/bugs [ledger-removed]\n"
+
+
+def based(tmp_path: Path, under: str, paths: str = "") -> tuple[Path, list[str]]:
+    """A repository whose `main` holds a project under `under` with BR-001 and BR-002, checked
+    out on a branch `change`; the project and the arguments that name `main` as the base."""
+    repository = tmp_path / "repository"
+    root = repository / under
+    root.mkdir(parents=True)
+    (root / "stayfixed.toml").write_text(CONFIG + paths, encoding="utf-8")
+    common = ["--root", str(root), "--machine", str(tmp_path / "m.toml")]
+    for title in ("a", "b"):
+        invoke(["bugs", "new", title, "--severity", "low", "--area", "a", "--no-fetch", *common])
+    git(repository, "init", "-q", "-b", "main")
+    git(repository, "add", "-A")
+    git(repository, "commit", "-q", "-m", "base")
+    git(repository, "checkout", "-q", "-b", "change")
+    return root, ["bugs", "check", "--base", "main", *common]
+
+
+# Each takes the project at `app` and answers the root to pass and where the project now is.
+def _moved_behind_a_link(root: Path) -> tuple[Path, Path]:
+    os.rename(root, root.parent / "elsewhere")
+    os.symlink("elsewhere", root)
+    return root, root.parent / "elsewhere"
+
+
+def _linked_back_to_the_top(root: Path) -> tuple[Path, Path]:
+    for name in ("stayfixed.toml", "docs"):
+        os.rename(root / name, root.parent / name)
+    root.rmdir()
+    os.symlink(".", root)
+    return root, root.parent
+
+
+def _reached_from_outside(root: Path) -> tuple[Path, Path]:
+    outside = root.parent.parent / "outside"
+    os.symlink(root, outside)
+    return outside, root
+
+
+@needs_git
+@pytest.mark.parametrize(
+    "link",
+    [_moved_behind_a_link, _linked_back_to_the_top, _reached_from_outside],
+    ids=["moved-behind-a-link", "linked-back-to-the-top", "reached-from-outside"],
+)
+def test_a_root_reached_through_a_link_is_refused_against_its_base(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], link: Callable[[Path], tuple[Path, Path]]
+) -> None:
+    # CI names the root; the change can make a component of it a link. Resolved, the root is
+    # wherever the link points, where the base keeps no stayfixed.toml, so the change read as the
+    # bootstrap and deleted BR-002 with exit 0. Mutations (oracle): `mutations/`'s "bugs check
+    # --base judges a root reached through a symlink at the link's target" -> moved-behind-a-link
+    # and linked-back-to-the-top pass; "a project root reached through a symlink reads the base
+    # at a path it never had" -> the same; "the ancestor that resolves to the top is looked for
+    # from the nearest end" -> linked-back-to-the-top passes; "a root no ancestor of which
+    # resolves to the top is read as if one did" -> reached-from-outside is an internal error.
+    root, argv = based(tmp_path, "app")
+    spelled, moved = link(root)
+    (moved / "docs" / "bugs" / "BR-002.md").unlink()
+    git(tmp_path / "repository", "add", "-A")
+    git(tmp_path / "repository", "commit", "-q", "-m", "change")
+    capsys.readouterr()
+    argv[argv.index("--root") + 1] = str(spelled)
+    assert invoke(argv) == 2
+    assert capsys.readouterr().err.startswith(
+        "stayfixed: refused: the project root is reached through a symlink"
+    )
+
+
+@needs_git
+def test_a_ledger_the_base_placed_below_a_directory_named_like_pathspec_magic_is_read_there(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The base's stayfixed.toml is read at the project's path from the repository's top, taken
+    # literally: read at the top, relative to the project, or as the pathspec `:/` ("from the
+    # top"), it is missing, the change is the bootstrap, and moving the ledger by `[paths]` while
+    # deleting BR-002 passed. Mutations (oracle): `mutations/`'s "a project in a subdirectory
+    # reads the base's copy at the repository's top", "the base's copy is listed relative to the
+    # project root rather than the repository's top" and "a project under a directory named like
+    # pathspec magic reads no copy on the base" -> no entry-removed.
+    root, argv = based(tmp_path, ":", paths='\n[paths]\nbugs = "records/bugs"\n')
+    text = (root / "stayfixed.toml").read_text(encoding="utf-8")
+    (root / "stayfixed.toml").write_text(text.replace("records/bugs", "kept"), encoding="utf-8")
+    (root / "kept").mkdir()
+    os.rename(root / "records" / "bugs" / "BR-001.md", root / "kept" / "BR-001.md")
+    (root / "records" / "bugs" / "BR-002.md").unlink()
+    capsys.readouterr()
+    assert invoke(argv) == 1
+    assert "kept/BR-002.md [entry-removed]" in capsys.readouterr().out
+
+
+@needs_git
+@pytest.mark.parametrize(
+    ("dot_git", "said"),
+    [
+        (None, "the project root is not inside a git repository"),
+        ("gitdir: gone\n", "git gave no answer about the repository the project root is in"),
+    ],
+    ids=["no-repository", "git-directory-gone"],
+)
+def test_a_root_git_answers_nothing_for_fails_against_its_base(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], dot_git: str | None, said: str
+) -> None:
+    # git refuses a worktree whose git directory is gone as it refuses a directory in no
+    # repository, so which one it was is read off the disk, and neither is judged as if git had
+    # answered. Mutations (oracle): `mutations/`'s "a root outside any repository is judged as if
+    # git had answered" -> both are a refusal naming a symlink; "a repository git will not answer
+    # for is called no repository" -> git-directory-gone sends the owner looking for a repository.
+    root, common = project(tmp_path)
+    if dot_git is not None:
+        (root / ".git").write_text(dot_git, encoding="utf-8")
+    assert invoke(["bugs", "check", "--base", "main", *common]) == 1
+    assert capsys.readouterr().err.startswith(f"stayfixed: failed: {said}")
 
 
 def test_check_reports_problems_on_one_line_and_lists_them_in_json(

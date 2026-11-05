@@ -2771,6 +2771,84 @@ reddens = [
 ]
 
 [[mutation]]
+name = "a project root reached through a symlink reads the base at a path it never had"
+file = "src/stayfixed/committed.py"
+before = '    if spelled != prefix.rstrip("\n"):'
+after = "    if False:"
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[moved-behind-a-link]",
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[linked-back-to-the-top]",
+]
+
+[[mutation]]
+name = "the ancestor that resolves to the top is looked for from the nearest end"
+file = "src/stayfixed/committed.py"
+before = "    chain = (*reversed(lexical.parents), lexical)"
+after = "    chain = (lexical, *lexical.parents)"
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[linked-back-to-the-top]",
+]
+
+[[mutation]]
+name = "a root no ancestor of which resolves to the top is read as if one did"
+file = "src/stayfixed/committed.py"
+before = """    if ancestor is None:
+        raise Refusal(ROOT_THROUGH_SYMLINK)"""
+after = """    if False:
+        raise Refusal(ROOT_THROUGH_SYMLINK)"""
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[reached-from-outside]",
+]
+
+[[mutation]]
+name = "a root outside any repository is judged as if git had answered"
+file = "src/stayfixed/committed.py"
+before = """    if code != 0:
+        # Read off the disk"""
+after = """    if False:
+        # Read off the disk"""
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_git_answers_nothing_for_fails_against_its_base[no-repository]",
+  "tests/ledger/test_commands.py::test_a_root_git_answers_nothing_for_fails_against_its_base[git-directory-gone]",
+]
+
+[[mutation]]
+name = "a repository git will not answer for is called no repository"
+file = "src/stayfixed/committed.py"
+before = "        raise Failure(ROOT_UNANSWERED if in_work_tree(lexical) else NOT_A_REPOSITORY)"
+after = "        raise Failure(NOT_A_REPOSITORY)"
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_git_answers_nothing_for_fails_against_its_base[git-directory-gone]",
+]
+
+[[mutation]]
+name = "a project in a subdirectory reads the base's copy at the repository's top"
+file = "src/stayfixed/committed.py"
+before = '    path = f"{prefix}{name}"'
+after = "    path = name"
+reddens = [
+  "tests/ledger/test_commands.py::test_a_ledger_the_base_placed_below_a_directory_named_like_pathspec_magic_is_read_there",
+]
+
+[[mutation]]
+name = "a project under a directory named like pathspec magic reads no copy on the base"
+file = "src/stayfixed/committed.py"
+before = '        "--literal-pathspecs",'
+after = '        "--no-pager",'
+reddens = [
+  "tests/ledger/test_commands.py::test_a_ledger_the_base_placed_below_a_directory_named_like_pathspec_magic_is_read_there",
+]
+
+[[mutation]]
+name = "the base's copy is listed relative to the project root rather than the repository's top"
+file = "src/stayfixed/committed.py"
+before = '        "--full-tree",'
+after = '        "--name-only",'
+reddens = [
+  "tests/ledger/test_commands.py::test_a_ledger_the_base_placed_below_a_directory_named_like_pathspec_magic_is_read_there",
+]
+
+[[mutation]]
 name = "the JSON writer writes back a text past the read cap"
 file = "src/stayfixed/jsonobject.py"
 before = "    if len(text) > fsops.REGULAR_READ_LIMIT:\n        raise _past(label, WRITTEN_PAST, error, limit)"
