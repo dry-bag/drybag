@@ -130,11 +130,11 @@ from __future__ import annotations
 
 import re
 import shlex
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 from typing import NamedTuple
 
-from stayfixed.hints import uvrun
+from stayfixed.hints.runners import is_launcher, names_a_test_run, past_run
 
 _SEPARATORS = frozenset({";", "&&", "||", "|", "&"})
 # `shlex`'s `punctuation_chars` mode emits a RUN of adjacent punctuation as ONE token, so a
@@ -194,9 +194,9 @@ _WORD_BOUNDARY = frozenset({";", "&", "|", "(", ")", "<", ">"})
 # irrelevant to "is this an assignment", so nothing needs to anchor the end.
 _ASSIGNMENT = re.compile(r"\A[A-Za-z_][A-Za-z0-9_]*=")
 # `env pytest`: a bare wrapper token, not the command. Deliberately not a general argv
-# resolver: `env` and `uv run` (`hints/uvrun.py`) are the only launchers read through, and
+# resolver: `env` and `uv run` (`hints/runners.py`) are the only launchers read through, and
 # `poetry run`, `npx`, `sudo` and `time` are not, unless they stand behind `uv run`, where every
-# word before the first the caller's `recognises` reads a command from is the launcher's.
+# word before the first the runner table reads as a test run is the launcher's.
 _SINGLE_WRAPPERS = frozenset({"env"})
 
 
@@ -742,26 +742,22 @@ def pipelines(tokens: list[str]) -> list[list[list[str]]]:
     return result
 
 
-def _launched(
-    segment: Sequence[str], index: int, recognises: Callable[[Sequence[str]], bool]
-) -> int | None:
+def _launched(segment: Sequence[str], index: int) -> int | None:
     """Where the command that the `uv` at `index` launches starts: the first word after `run`
-    that `recognises` reads a command from; `None` where no `run` follows or no such word does."""
-    start = uvrun.past_run(segment, index + 1)
+    the runner table reads as a test run; `None` where no `run` follows or no such word does."""
+    start = past_run(segment, index + 1)
     if start is None:
         return None
     for at in range(start, len(segment)):
-        if recognises(segment[at:]):
+        if names_a_test_run(segment[at:]):
             return at
     return None
 
 
-def command_words(
-    segment: list[str], recognises: Callable[[Sequence[str]], bool] | None = None
-) -> list[str]:
+def command_words(segment: list[str], *, test_runs: bool = False) -> list[str]:
     """This segment's own command and arguments, with any leading environment-assignment
-    tokens and the wrapper prefixes -- `_SINGLE_WRAPPERS`, and, given `recognises`, `uv run`
-    with every word up to the first that `recognises` reads a command from -- stripped off the
+    tokens and the wrapper prefixes -- `_SINGLE_WRAPPERS`, and, given `test_runs`, `uv run`
+    with every word up to the first the runner table reads as a test run -- stripped off the
     front, repeatedly, so `env FOO=1 pytest` and `FOO=1 uv run --locked pytest` both resolve to
     `pytest` as the real command, not to the assignment or the launcher.
 
@@ -769,10 +765,10 @@ def command_words(
     entirely, and neither is contrived: an assignment prefix is the ordinary way to run a
     suite against a checkout that has no venv of its own.
 
-    THE BOUND IS DOCUMENTED, not accidental: a `uv` command in which `recognises` reads no
-    command, or one with no `run`, is left whole and its program is `uv`, and no other launcher
-    is read through. Behind `uv run` every word before the first that `recognises` reads a
-    command from is the launcher's, so a runner named as a uv option's value or as another
+    THE BOUND IS DOCUMENTED, not accidental: a `uv` command in which the table reads no test
+    run, or one with no `run`, is left whole and its program is `uv`, and no other launcher
+    is read through. Behind `uv run` every word before the first the table reads as a test run
+    is the launcher's, so a runner named as a uv option's value or as another
     program's argument (`uv run --with pytest echo`, `uv run grep -m pytest x`) is read as the
     command, and a warn-only caller delivers its note to a run of no test.
     """
@@ -784,8 +780,8 @@ def command_words(
             index += 1
             continue
         name = Path(token).name
-        if recognises is not None and uvrun.is_launcher(name):
-            launched = _launched(segment, index, recognises)
+        if test_runs and is_launcher(name):
+            launched = _launched(segment, index)
             if launched is None:
                 break
             index = launched
