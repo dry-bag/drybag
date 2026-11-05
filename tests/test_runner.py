@@ -21,6 +21,7 @@ from stayfixed.runner import (
     _SubprocessRunner,
     subprocess_runner,
 )
+from tests.gitfixture import SESSION_CONFIG, stand_in_git
 
 PROBE = [
     "sh",
@@ -28,6 +29,15 @@ PROBE = [
     'echo "tty=$( [ -t 0 ] && echo yes || echo no ) '
     'prompt=${GIT_TERMINAL_PROMPT-unset} dir=${GIT_DIR-unset} index=${GIT_INDEX_FILE-unset}"',
 ]
+
+
+def _stub(directory: Path, body: str) -> Path:
+    """An executable `<directory>/git` that runs `body` under `/bin/sh`."""
+    directory.mkdir(parents=True)
+    stub = directory / "git"
+    stub.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
+    stub.chmod(0o755)
+    return stub
 
 
 def test_a_launched_command_gets_no_stdin_and_no_credential_prompt(tmp_path: Path) -> None:
@@ -116,3 +126,38 @@ def test_output_that_is_not_text_is_read_with_replacement_characters_not_raised(
         ["sh", "-c", "printf 'caf\\351'; printf 'x\\351' >&2"], tmp_path
     )
     assert done == Completed(0, "caf\ufffd", "x\ufffd")
+
+
+def _env_seen(done: Completed) -> dict[str, str]:
+    return dict(line.split("=", 1) for line in done.stdout.splitlines() if "=" in line)
+
+
+def test_the_runner_gives_git_the_one_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A clone `setup --overlay create:` makes is a git like every other: a session's
+    # `GIT_CONFIG_GLOBAL` or `GIT_SSH_COMMAND` reaches none of them, its agent and proxy do.
+    # Mutation (oracle): `mutations/`'s "the runner hands git the session's environment" -> this
+    # reddens.
+    stand_in_git(monkeypatch, _stub(tmp_path / "bin", "env"))
+    for name in (SESSION_CONFIG, "GIT_SSH_COMMAND", "GH_TOKEN"):
+        monkeypatch.setenv(name, name.lower())
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/agent.sock")
+
+    seen = _env_seen(_SubprocessRunner().launch(["git", "clone", "x"], tmp_path))
+
+    assert not {SESSION_CONFIG, "GIT_SSH_COMMAND", "GH_TOKEN"} & seen.keys(), seen
+    assert seen["SSH_AUTH_SOCK"] == "/agent.sock" and seen["GIT_TERMINAL_PROMPT"] == "0"
+
+
+def test_other_programs_keep_the_inherited_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `gh` needs its token, and a GitHub Enterprise owner's `GH_HOST`; only what `_ENV_DROP`
+    # names is taken from them.
+    monkeypatch.setenv("GH_HOST", "github.example.com")
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "elsewhere"))
+
+    seen = _env_seen(_SubprocessRunner().launch(["env"], tmp_path))
+
+    assert seen["GH_HOST"] == "github.example.com" and "GIT_DIR" not in seen

@@ -11,6 +11,10 @@ its runner, can; then SIGKILL.
 The group's id is the command's pid, so the order is the point: the exit is watched without
 reaping (`exited`), the group is ended (`kill_group`), and only then is the command reaped, while
 its pid is still taken and so names no group but its own.
+
+`run_bounded` is the bounded launch every git stayfixed starts goes through (`gitenv.git_call`),
+and the note sync's scanner beside it: what a timeout ends is the group, so an ssh or a credential
+helper under git cannot outlive the step that started it.
 """
 
 from __future__ import annotations
@@ -20,6 +24,11 @@ import os
 import signal
 import subprocess
 import time
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+from stayfixed import fsops
 
 # Reaping a command whose group was sent SIGKILL. The signal cannot be caught or ignored, so this
 # is slack for the kernel, not a second bound on the command.
@@ -91,3 +100,56 @@ def end(process: subprocess.Popen[bytes], grace: float) -> None:
     finally:
         kill_group(process)
         process.wait(timeout=KILL_WAIT_SECONDS)
+
+
+@dataclass(frozen=True)
+class Ran:
+    """What a bounded launch gave back: its exit code, its two streams as bytes, and whether it
+    ran out of its time, in which case the code is the signal's and the streams what was read."""
+
+    code: int
+    out: bytes
+    err: bytes
+    timed_out: bool
+
+
+def run_bounded(
+    argv: Sequence[str],
+    *,
+    cwd: Path,
+    env: Mapping[str, str],
+    timeout: float,
+    stdin: bytes | None = None,
+) -> Ran:
+    """Run `argv` in `cwd` with exactly `env`, in a session of its own, for at most `timeout`.
+
+    Standard input is `stdin`, or closed: nothing run here may wait for an answer. Past `timeout`
+    the whole group is sent SIGKILL, and its pipes are read for `KILL_WAIT_SECONDS` more; a
+    descendant that left the group and still holds them is abandoned, its streams empty. A program
+    or directory that is not there is code 127, as a shell says it. No floor: a caller that wants
+    one asks `gitenv`.
+    """
+    try:
+        process = subprocess.Popen(  # noqa: S603 - list form, never a shell; the callers' argv
+            argv,
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.DEVNULL if stdin is None else subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+    except OSError as error:
+        said = f"{argv[0]}: {fsops.said(error)}".encode("utf-8", "surrogateescape")
+        return Ran(127, b"", said, False)
+    try:
+        out, err = process.communicate(input=stdin, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        kill_group(process)
+        try:
+            out, err = process.communicate(timeout=KILL_WAIT_SECONDS)
+        except subprocess.TimeoutExpired:
+            process.wait()
+            out = err = b""
+        return Ran(process.returncode, out, err, True)
+    return Ran(process.returncode, out, err, False)

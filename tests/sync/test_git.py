@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import time
 from pathlib import Path
 
 import pytest
@@ -31,38 +30,10 @@ from tests.sync.conftest import (
 # -- the runner -----------------------------------------------------------------------------------
 
 
-def test_the_runner_kills_the_group_of_a_child_that_outlives_its_timeout(tmp_path: Path) -> None:
-    pidfile = tmp_path / "grandchild.pid"
-
-    ran = G.run(["sh", "-c", f"sleep 300 & echo $! > '{pidfile}'; wait"], cwd=tmp_path, timeout=5)
-
-    assert ran.timed_out is True
-    pid = int(pidfile.read_text(encoding="utf-8"))
-    deadline = time.monotonic() + 30
-    while time.monotonic() < deadline:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            break
-        time.sleep(0.05)
-    else:
-        os.kill(pid, 9)
-        pytest.fail("the grandchild outlived the timeout: only the child was killed, not its group")
-
-
 def test_a_run_that_finishes_in_time_is_not_timed_out(tmp_path: Path) -> None:
     ran = G.run(["sh", "-c", "echo out; echo err >&2; exit 3"], cwd=tmp_path, timeout=SLOW)
 
     assert ran == G.Ran(code=3, out="out\n", err="err\n", timed_out=False)
-
-
-def test_the_runner_reports_a_program_or_directory_that_is_not_there(tmp_path: Path) -> None:
-    missing = G.run([str(tmp_path / "no-such-program")], cwd=tmp_path, timeout=5)
-    assert missing.code == 127 and missing.timed_out is False
-    assert "no-such-program" in missing.err
-
-    nowhere = G.run(["sh", "-c", "true"], cwd=tmp_path / "no-such-directory", timeout=5)
-    assert nowhere.code == 127 and nowhere.err
 
 
 def test_the_runner_decodes_bytes_that_are_not_utf_8_and_gives_them_back(tmp_path: Path) -> None:
@@ -71,12 +42,6 @@ def test_the_runner_decodes_bytes_that_are_not_utf_8_and_gives_them_back(tmp_pat
 
     assert ran.out == "a\udcffb"
     assert ran.out.encode("utf-8", "surrogateescape") == b"a\xffb"
-
-
-def test_stdin_is_what_the_caller_gives_or_nothing(tmp_path: Path) -> None:
-    assert G.run(["cat"], cwd=tmp_path, timeout=SLOW, stdin=b"bytes in\n").out == "bytes in\n"
-    # Nothing the job runs may wait for an answer: with no input given, stdin is empty.
-    assert G.run(["cat"], cwd=tmp_path, timeout=SLOW).out == ""
 
 
 def test_the_runner_hands_on_the_environment_less_what_redirects_git(
@@ -191,7 +156,7 @@ def test_a_git_at_the_overlays_root_never_runs_from_a_relative_path_entry(
 ) -> None:
     # Every call runs in the overlay, so an empty or `.` entry of `PATH` (a dotfile slip) would
     # find a `git` planted at its root, and git would find an `ssh` there the same way.
-    # Mutation (oracle): `mutations/`'s "a relative PATH entry reaches the overlay".
+    # The core's `git_call` holds the same rule (`tests/test_git_run.py`).
     repo = init(tmp_path / "r")
     planted = repo / "git"
     planted.write_text("#!/bin/sh\necho planted\n")

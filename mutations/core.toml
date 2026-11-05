@@ -4628,6 +4628,60 @@ reddens = [
   "tests/prove/test_results.py::test_read_report_reads_no_kind_it_does_not_name",
 ]
 
+# --- the one launch and the one environment every git stayfixed starts is given (`processes`,
+# `gitenv`, `runner`) ---
+
+[[mutation]]
+name = "a timeout ends the child and not its group"
+file = "src/stayfixed/processes.py"
+before = """        kill_group(process)
+        try:
+            out, err = process.communicate(timeout=KILL_WAIT_SECONDS)"""
+after = """        process.kill()
+        try:
+            out, err = process.communicate(timeout=KILL_WAIT_SECONDS)"""
+reddens = ["tests/test_processes.py::test_a_timeout_ends_the_whole_group"]
+
+[[mutation]]
+name = "the child shares the caller's session"
+file = "src/stayfixed/processes.py"
+before = "            start_new_session=True,"
+after = "            start_new_session=False,"
+reddens = ["tests/test_processes.py::test_a_timeout_ends_the_whole_group"]
+
+[[mutation]]
+name = "a relative PATH entry reaches git"
+file = "src/stayfixed/gitenv.py"
+before = '            entry for entry in env["PATH"].split(os.pathsep) if os.path.isabs(entry)'
+after = '            entry for entry in env["PATH"].split(os.pathsep)'
+reddens = [
+  "tests/test_git_run.py::test_a_relative_path_entry_never_reaches_git[]",
+  "tests/test_git_run.py::test_a_relative_path_entry_never_reaches_git[.]",
+]
+
+[[mutation]]
+name = "a session's global git configuration reaches git"
+file = "src/stayfixed/gitenv.py"
+before = '    "PATH", "HOME", "LANG", "LC_ALL", "SYSTEMROOT", "SSH_AUTH_SOCK",'
+after = '    "PATH", "HOME", "LANG", "LC_ALL", "SYSTEMROOT", "SSH_AUTH_SOCK", "GIT_CONFIG_GLOBAL",'
+reddens = ["tests/test_git_run.py::test_git_call_hands_git_only_the_kept_variables"]
+
+[[mutation]]
+name = "the runner hands git the session's environment"
+file = "src/stayfixed/runner.py"
+before = '        if argv[:1] == ["git"]:'
+after = "        if False:"
+reddens = ["tests/test_runner.py::test_the_runner_gives_git_the_one_environment"]
+
+[[mutation]]
+name = "git_call ignores the floor"
+file = "src/stayfixed/gitenv.py"
+before = """        timeout=max(timeout, bound_floor()),
+        stdin=stdin,"""
+after = """        timeout=timeout,
+        stdin=stdin,"""
+reddens = ["tests/test_git_run.py::test_git_call_honours_the_floor"]
+
 # --- ending a command's whole process group (`stayfixed.processes`), which `prove` uses; its tests
 # drive it ---
 
@@ -6289,24 +6343,6 @@ reddens = [
 ]
 
 [[mutation]]
-name = "a timeout ends the child and not its group"
-file = "src/stayfixed/sync/git.py"
-before = "        kill_group(process)"
-after = "        process.kill()"
-reddens = [
-  "tests/sync/test_git.py::test_the_runner_kills_the_group_of_a_child_that_outlives_its_timeout",
-]
-
-[[mutation]]
-name = "the child shares the caller's session"
-file = "src/stayfixed/sync/git.py"
-before = "            start_new_session=True,"
-after = "            start_new_session=False,"
-reddens = [
-  "tests/sync/test_git.py::test_the_runner_kills_the_group_of_a_child_that_outlives_its_timeout",
-]
-
-[[mutation]]
 name = "an inherited repository variable reaches the child"
 file = "src/stayfixed/sync/git.py"
 before = "        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)"
@@ -6329,15 +6365,6 @@ file = "src/stayfixed/sync/git.py"
 before = '    return with_config(env, {"core.askPass": ""})'
 after = "    return env"
 reddens = ["tests/sync/test_git.py::test_no_askpass_is_ever_asked_for_a_password"]
-
-[[mutation]]
-name = "a relative PATH entry reaches the overlay"
-file = "src/stayfixed/sync/git.py"
-before = '        entry for entry in full.get("PATH", "").split(os.pathsep) if os.path.isabs(entry)'
-after = '        entry for entry in full.get("PATH", "").split(os.pathsep)'
-reddens = [
-  "tests/sync/test_git.py::test_a_git_at_the_overlays_root_never_runs_from_a_relative_path_entry",
-]
 
 [[mutation]]
 name = "a variable the caller asked to drop reaches the child"

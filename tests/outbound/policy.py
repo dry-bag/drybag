@@ -324,9 +324,18 @@ _JOB_ENVIRONMENT = (
 # configuration as strong as `git -c`; either is a finding until it is declared here.
 OVERRIDES: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/runner.py", f"_SubprocessRunner.{RUNNER_METHOD}", "env=env"): (
-        "the owner's own environment, less the variables that point git at another repository: "
-        "the `gh`, `git`, `pre-commit` and plugin launches it runs are the owner's own, signed "
-        "in as the owner"
+        "`scrubbed_env()` for a `git`; for every other program the owner's own environment, less "
+        "the variables that point git at another repository: the `gh`, `pre-commit` and plugin "
+        "launches it runs are the owner's own, signed in as the owner"
+    ),
+    # The bounded launch hands on exactly the environment its caller built, read at each caller.
+    ("src/stayfixed/processes.py", "run_bounded", "env=env"): (
+        "exactly what its caller hands it: `git_call`'s and the scanner's, each declared or "
+        "scrubbed where it is built"
+    ),
+    ("src/stayfixed/gitenv.py", "git_call", "env=scrubbed_env() | dict(env or {})"): (
+        "`scrubbed_env()`, with its caller's own settings laid over it: the note sync's, each "
+        "declared where it is built"
     ),
     ("src/stayfixed/doctor/checks.py", "_wrapper", "env=env"): (
         "the environment doctor was handed, less every `CLAUDE_`, `PLUGIN_` and `STAYFIXED_` "

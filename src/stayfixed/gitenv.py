@@ -9,23 +9,27 @@ the session's `GIT_DIR` or `GIT_WORK_TREE` would make every handler in the proce
 different repository than the one the user is sitting in; the memory store's queries decide
 whose notes a session reads, and the same variable would choose another project's.
 
-A leaf module: it imports `stayfixed.errors` and `stayfixed.fsops`, two leaves, and nothing else
-from `stayfixed`, so the hook path pays no area import to reach it, and no caller has to import
-another's area to share the constants.
+A leaf module: it imports `stayfixed.errors`, `stayfixed.fsops` and `stayfixed.processes`, three
+leaves, and nothing else from `stayfixed`, so the hook path pays no area import to reach it, and
+no caller has to import another's area to share the constants.
 
 `git` is the one on `PATH`, handed the environment's `PATH` and `HOME`, so that the machine
-owner's `git`, `safe.directory` and excludes answer. Every other variable is dropped, every
-`GIT_CONFIG_*` and `XDG_CONFIG_HOME` among them, so no inherited variable names another
-repository or a configuration git would otherwise not read. Inside a `named` block it is also
-handed `GIT_DIR` and `GIT_WORK_TREE`, naming the one checkout the block's caller chose.
+owner's `git`, `safe.directory` and excludes answer, and the ssh agent and proxy variables a push
+or a clone needs (`scrubbed_env`): the one environment every git stayfixed starts is given, the
+`Runner`'s included. Every other variable is dropped, every `GIT_CONFIG_*`, `GIT_SSH_COMMAND` and
+`XDG_CONFIG_HOME` among them, so no inherited variable names another repository, a configuration
+git would otherwise not read, or a program to run. Inside a `named` block it is also handed
+`GIT_DIR` and `GIT_WORK_TREE`, naming the one checkout the block's caller chose.
 
 `git_run` is the one runner for every question this project asks git about a repository it works on
 — the hook path's toplevel, the three-valued answer (`git_answer`) the memory store and
 `origin_remote` read and its usability probe, the hooks directory, the dirty count and the commit
 range included. One decoding boundary, and a lossless one, so no byte of git's answer can raise out
-of a command and each site decides only what an answer means to it. The
-`Runner` seam in `stayfixed.runner`, which launches the owner's own commands — `git clone` among
-them — for their exit code and a message, is the other.
+of a command and each site decides only what an answer means to it. `git_call` is the same git for
+a caller that reads its stderr and its timeout too and lays settings of its own over the
+environment (the note sync), started through `processes.run_bounded`, which ends its whole group.
+The `Runner` seam in `stayfixed.runner`, which launches the owner's own commands — `git clone`
+among them — for their exit code and a message, is the other.
 """
 
 from __future__ import annotations
@@ -34,7 +38,7 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
@@ -42,9 +46,15 @@ from pathlib import Path
 
 from stayfixed import fsops
 from stayfixed.errors import Failure, Refusal
+from stayfixed.processes import run_bounded
 
-# Everything else is dropped, an inherited `GIT_DIR` and `GIT_WORK_TREE` above all.
-GIT_ENV_KEEP = ("PATH", "HOME", "LANG", "LC_ALL", "SYSTEMROOT")
+# Everything else is dropped, an inherited `GIT_DIR` and `GIT_WORK_TREE` above all. The ssh agent
+# and the proxy variables curl reads are kept: a push and a clone need them, and neither changes
+# where git reaches, only how it gets there.
+GIT_ENV_KEEP = (
+    "PATH", "HOME", "LANG", "LC_ALL", "SYSTEMROOT", "SSH_AUTH_SOCK",
+    "http_proxy", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY", "no_proxy", "NO_PROXY",
+)  # fmt: skip
 
 # Wall-clock bound on one `git` call: a named cap (CONTRIBUTING.md#named-caps), and no shipped file
 # changes with it. It is the bound for a local, argument-free, read-only query against the
@@ -147,9 +157,18 @@ def named(checkout: Path | None) -> Iterator[None]:
 
 
 def scrubbed_env() -> dict[str, str]:
-    """The variables `GIT_ENV_KEEP` names, as this process has them, and inside a `named` block
-    the repository it names: what `git_run` hands git, and `test attribute` the `tar` it runs."""
+    """The variables `GIT_ENV_KEEP` names, as this process has them, `PATH` with its absolute
+    entries alone, no terminal prompt, and inside a `named` block the repository it names: what
+    every git stayfixed starts is handed, and `test attribute` the `tar` it runs.
+
+    Every git runs in a repository whose contents a clone chose, so an empty or `.` entry of
+    `PATH` (a dotfile slip) would find a `git`, or git an `ssh`, planted at its root."""
     env = {key: os.environ[key] for key in GIT_ENV_KEEP if key in os.environ}
+    if "PATH" in env:
+        env["PATH"] = os.pathsep.join(
+            entry for entry in env["PATH"].split(os.pathsep) if os.path.isabs(entry)
+        )
+    env["GIT_TERMINAL_PROMPT"] = "0"
     if _named is not None:
         env |= {"GIT_DIR": str(_named / ".git"), "GIT_WORK_TREE": str(_named)}
     return env
@@ -236,6 +255,41 @@ def git_run(
     """
     asked = _ask(root, *args, timeout=timeout, stdin=stdin)
     return (-1, "") if isinstance(asked, _NoAnswer) else asked
+
+
+@dataclass(frozen=True)
+class Called:
+    """What `git_call` gave back: git's exit code, both streams decoded as `git_run` decodes its
+    answer, and whether it ran out of its time."""
+
+    code: int
+    out: str
+    err: str
+    timed_out: bool
+
+
+def git_call(
+    root: Path,
+    *args: str,
+    timeout: float,
+    env: Mapping[str, str] | None = None,
+    stdin: bytes | None = None,
+) -> Called:
+    """`git <args>` in `root`, given `scrubbed_env()` with `env` laid over it, for no less than
+    `bound_floor()` and no more than the larger of it and `timeout`; its whole group ended past
+    that (`processes.run_bounded`). Both streams are decoded in `pipe_encoding()` with
+    `surrogateescape`, so a path git prints goes back into the next argv as its own bytes.
+    `stdin` is bytes or closed. A `git` that cannot be started is code 127."""
+    codec = pipe_encoding()
+    ran = run_bounded(
+        ["git", *args],
+        cwd=root,
+        env=scrubbed_env() | dict(env or {}),
+        timeout=max(timeout, bound_floor()),
+        stdin=stdin,
+    )
+    out, err = (data.decode(codec, "surrogateescape") for data in (ran.out, ran.err))
+    return Called(ran.code, out, err, ran.timed_out)
 
 
 class _NoAnswer(Enum):
