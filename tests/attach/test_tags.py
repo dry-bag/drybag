@@ -7,17 +7,12 @@ from pathlib import Path
 from stayfixed.attach.tags import collisions
 from stayfixed.config.classes import Layer, LayerName
 from stayfixed.config.plates import plates
+from tests.tagged import with_tags
 
 
 def _overlay(tmp_path: Path, *tags: str) -> Path:
     """An overlay whose project `p` lists `tags`, each with a `groups/<tag>/` directory."""
-    overlay = tmp_path / "overlay"
-    (overlay / "projects" / "p").mkdir(parents=True)
-    listed = ", ".join(f'"{tag}"' for tag in tags)
-    (overlay / "projects" / "p" / "project.toml").write_text(f"tags = [{listed}]\n", "utf-8")
-    for tag in tags:
-        (overlay / "groups" / tag).mkdir(parents=True)
-    return overlay
+    return with_tags(tmp_path / "overlay", "p", list(tags))
 
 
 def _hold(overlay: Path, plate: str, relative: str) -> None:

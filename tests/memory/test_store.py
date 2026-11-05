@@ -22,6 +22,7 @@ from stayfixed.memory.store import (
 from tests.gitfixture import git
 from tests.pathfaults import ROOT_SEARCHES_EVERYTHING, unsearchable
 from tests.runners import git_that_cannot_run
+from tests.tagged import with_tags
 
 
 def _reason(root: Path, config: Config, *, machine: Path | None = None) -> str | None:
@@ -290,14 +291,9 @@ def test_a_link_into_another_project_inside_the_same_overlay_is_refused(tmp_path
 def a_tagged_overlay(base: Path, *tags: str) -> Path:
     """An overlay whose record of `widget` lists `tags`, each with a `groups/<tag>/memory/` holding
     a note of its own."""
-    overlay = an_overlay(base)
-    record = overlay / "projects" / "widget" / PROJECT_FILE
-    listed = ", ".join(f'"{tag}"' for tag in tags)
-    record.write_text(record.read_text(encoding="utf-8") + f"tags = [{listed}]\n", "utf-8")
+    overlay = with_tags(an_overlay(base), "widget", list(tags), "memory")
     for tag in tags:
-        notes = overlay / "groups" / tag / "memory"
-        notes.mkdir(parents=True)
-        (notes / f"{tag}.md").write_text("x", encoding="utf-8")
+        (overlay / "groups" / tag / "memory" / f"{tag}.md").write_text("x", encoding="utf-8")
     return overlay
 
 

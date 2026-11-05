@@ -46,6 +46,7 @@ from tests.doctor.test_checks import (
 from tests.gitfixture import git as _git
 from tests.parserlimits import LONG_NUMBER, NESTED
 from tests.runners import Recorder
+from tests.tagged import with_tags
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -940,18 +941,6 @@ def test_the_attached_row_reads_the_main_checkouts_pointer_from_every_checkout(
         ), checkout
 
 
-def _tagged(tmp_path: Path, *tags: str) -> Path:
-    """The overlay's record of project `p` listing `tags`, each with a `groups/<tag>/` directory;
-    the overlay's root."""
-    overlay = tmp_path / "overlay"
-    record = overlay / PROJECTS / "p" / PROJECT_RECORD
-    listed = ", ".join(f'"{tag}"' for tag in tags)
-    record.write_text(record.read_text(encoding="utf-8") + f"tags = [{listed}]\n", "utf-8")
-    for tag in tags:
-        (overlay / "groups" / tag).mkdir(parents=True)
-    return overlay
-
-
 def _tag_file(overlay: Path, tag: str, relative: str, text: str = "x\n") -> None:
     path = overlay / "groups" / tag / relative
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -962,7 +951,7 @@ def test_two_tags_holding_one_rule_name_is_a_warning_naming_both_and_the_winner(
     tmp_path: Path,
 ) -> None:
     root = _attached(tmp_path)
-    overlay = _tagged(tmp_path, "a", "b")
+    overlay = with_tags(tmp_path / "overlay", "p", ["a", "b"])
     for tag in ("a", "b"):
         _tag_file(overlay, tag, "claude/rules/x.md")
     clause = "the rule x.md is held by the tags a, b: the later, b, wins"
@@ -973,7 +962,7 @@ def test_two_tags_holding_one_rule_name_is_a_warning_naming_both_and_the_winner(
 
 def test_two_tags_setting_one_key_is_a_warning(tmp_path: Path) -> None:
     root = _attached(tmp_path)
-    overlay = _tagged(tmp_path, "a", "b")
+    overlay = with_tags(tmp_path / "overlay", "p", ["a", "b"])
     for tag in ("a", "b"):
         _tag_file(overlay, tag, "stayfixed.toml", '[memory]\nmode = "overlay"\n')
     clause = "the setting memory.mode is held by the tags a, b: the later, b, wins"
@@ -984,7 +973,7 @@ def test_two_tags_setting_one_key_is_a_warning(tmp_path: Path) -> None:
 
 def test_a_listed_tag_with_no_directory_is_a_warning(tmp_path: Path) -> None:
     root = _attached(tmp_path)
-    _tagged(tmp_path, "a")
+    with_tags(tmp_path / "overlay", "p", ["a"])
     shutil.rmtree(tmp_path / "overlay" / "groups" / "a")
     row = _delivered_row(tmp_path, root)
     assert row.status == WARN and row.remedy == attach_doctor.TAGS_REMEDY
@@ -1006,7 +995,7 @@ def test_doctor_names_a_project_memory_directory_in_the_tag_namespace(tmp_path: 
 
 def test_a_tag_warning_never_hides_a_red_finding(tmp_path: Path) -> None:
     root = _attached(tmp_path)
-    overlay = _tagged(tmp_path, "a", "b")
+    overlay = with_tags(tmp_path / "overlay", "p", ["a", "b"])
     for tag in ("a", "b"):
         _tag_file(overlay, tag, "claude/rules/x.md")
     shutil.rmtree(delivery_directory(_id(root)))

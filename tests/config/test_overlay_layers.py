@@ -20,6 +20,7 @@ from stayfixed.config.session import session_config
 from stayfixed.presets import defaults_of, load_preset
 from stayfixed.printed import quoted
 from tests.gitfixture import git, needs_git
+from tests.tagged import list_tags
 
 pytestmark = needs_git
 
@@ -50,11 +51,7 @@ def overlay(tmp_path: Path, *, common: str = "", sample: str | None = None) -> P
 def tagged(root: Path, listed: list[str], **files: str) -> None:
     """The project `sample`'s record listing `listed`, and `groups/<tag>/stayfixed.toml` for each
     tag in `files`, holding what it is given."""
-    (root / "projects" / "sample").mkdir(parents=True, exist_ok=True)
-    quoted_tags = ", ".join(f'"{tag}"' for tag in listed)
-    (root / "projects" / "sample" / "project.toml").write_text(
-        f"tags = [{quoted_tags}]\n", encoding="utf-8"
-    )
+    list_tags(root, "sample", listed)
     for tag, text in files.items():
         (root / "groups" / tag).mkdir(parents=True)
         (root / "groups" / tag / "stayfixed.toml").write_text(text, encoding="utf-8")

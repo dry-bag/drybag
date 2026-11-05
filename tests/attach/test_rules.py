@@ -14,6 +14,7 @@ from stayfixed import binding
 from stayfixed.attach.rules import SCOPED_LEAD, STANDING_LEAD, scoped_exist, scoped_for, standing
 from stayfixed.config.plates import plates
 from tests.gitfixture import git, needs_git
+from tests.tagged import with_tags
 
 STANDING = "Always say which test proves a change."
 SCOPED = "Files under scoped/ are generated; edit the generator instead."
@@ -154,12 +155,11 @@ def test_whether_a_scoped_rule_exists_decides_the_rendered_entry(tmp_path: Path)
 def _tagged(overlay: Path, **rules: str) -> None:
     """Project `p` listing the tags named by the keywords (in order), each `groups/<tag>/` holding
     the rule file `x.md` with the body given."""
-    record = overlay / "projects" / "p" / "project.toml"
-    record.write_text(f"tags = {list(rules)!r}\n".replace("'", '"'), encoding="utf-8")
+    with_tags(overlay, "p", list(rules), "claude/rules")
     for tag, body in rules.items():
-        directory = overlay / "groups" / tag / "claude" / "rules"
-        directory.mkdir(parents=True, exist_ok=True)
-        (directory / "x.md").write_text(f"{body}\n", encoding="utf-8")
+        (overlay / "groups" / tag / "claude" / "rules" / "x.md").write_text(
+            f"{body}\n", encoding="utf-8"
+        )
 
 
 @needs_git

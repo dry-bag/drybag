@@ -42,9 +42,6 @@ from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from stayfixed.printed import quoted
 from stayfixed.runner import Completed
 from stayfixed.scaffold import EntriesError, Style, drop, extract
-
-# The fixture the binding tests already build, reused rather than copied: one spelling of the
-# overlay layout keeps the two modules from drifting apart about what `--store` names.
 from tests.attach.test_binding import CONFIG, DEFAULT_MEMORY, _machine, _project_and_store
 from tests.cli import cli
 from tests.gitfixture import git as _git
@@ -57,6 +54,10 @@ from tests.runners import Recorder
 # tests/test_install_path.py: it used to exist twice, verbatim including its docstring, and the
 # two copies drifted apart on the one thing that mattered — how much of `.git` to trust.
 from tests.snapshot import assert_snapshot_unchanged, snapshot
+
+# The fixture the binding tests already build, reused rather than copied: one spelling of the
+# overlay layout keeps the two modules from drifting apart about what `--store` names.
+from tests.tagged import with_tags
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -2594,13 +2595,7 @@ def test_attach_from_a_linked_worktree_writes_the_main_checkout_only(tmp_path: P
 def _tagged(store: Path, *tags: str) -> Path:
     """The overlay of `_attachable`, its project listing `tags`, each with a `groups/<tag>/`
     directory; the overlay's root."""
-    overlay = store.parents[2]
-    listed = ", ".join(f'"{tag}"' for tag in tags)
-    (store.parent / PROJECT_RECORD).write_text(f"tags = [{listed}]\n", encoding="utf-8")
-    for tag in tags:
-        (overlay / "groups" / tag / "claude").mkdir(parents=True)
-        (overlay / "groups" / tag / "codex").mkdir(parents=True)
-    return overlay
+    return with_tags(store.parents[2], store.parent.name, list(tags), "claude", "codex")
 
 
 def _tag_grants(overlay: Path, tag: str, *allow: str) -> None:
