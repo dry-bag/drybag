@@ -610,7 +610,6 @@ def _defaulted(section: str, key: Field[Any], defaults: dict[str, Any]) -> bool:
     """Whether `section`'s field `key` has a value when the document gives it none."""
     return (
         key.default is not MISSING
-        or key.default_factory is not MISSING
         or key.name in defaults.get(section, {})
         or f"{section}.{key.name}" in _FILLED
     )

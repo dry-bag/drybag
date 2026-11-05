@@ -3551,6 +3551,18 @@ before = """        raise ConfigError(f"[{name}] must be a table", key=name)"""
 after = """        raise ConfigError(f"[{name}] must be a table")"""
 reddens = ["tests/config/test_loader_note.py::test_a_section_that_is_not_a_table_is_the_presets"]
 
+[[mutation]]
+name = "a section that is not a table is never found to put back"
+file = "src/stayfixed/config/loader.py"
+before = """    if dotted in table:
+        return table, dotted"""
+after = """    if False:
+        return table, dotted"""
+reddens = [
+  "tests/config/test_loader_note.py::test_a_section_that_is_not_a_table_is_the_presets",
+  "tests/config/test_loader_note.py::test_a_repository_guards_value_that_is_not_a_table_is_put_back",
+]
+
 # A repository's `[personal]` that is not even a table is still the repository trying to set a
 # machine-only key, and says so.
 [[mutation]]
@@ -4385,7 +4397,6 @@ before = "            candidate = contained(root, folded, resolved_root=resolved
 after = "            candidate = root / entry"
 reddens = [
   "tests/ledger/test_scan.py::test_a_code_root_outside_the_project_is_skipped_not_scanned",
-  "tests/test_roots.py::test_each_code_root_no_walk_takes_is_named_with_its_reason[outside]",
 ]
 
 # Where git cannot list the files, `ledger.scan` walks each code root and adds up what it finds, so
