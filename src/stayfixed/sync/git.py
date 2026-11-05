@@ -76,6 +76,11 @@ def checked(result: Called, what: str) -> Called:
     return result
 
 
+def ask(repo: Path, deadline: float, env: Mapping[str, str] | None, *args: str) -> Called:
+    """`git <args>` given what is left of a helper's budget; never a timed-out answer."""
+    return timed(git(repo, *args, timeout=left(deadline, "a git call"), env=env), f"git {args[0]}")
+
+
 def with_config(env: Mapping[str, str], entries: Mapping[str, str]) -> dict[str, str]:
     """`env` with `entries` added to the configuration it gives git (`GIT_CONFIG_COUNT`), as
     `git -c` would give them, after any it already gives."""
@@ -146,20 +151,14 @@ def guard(
     `GitTimeout`, never an answer (a timed-out `symbolic-ref` is not a detached `HEAD`).
     """
     deadline = time.monotonic() + timeout
-
-    def ask(*args: str) -> Called:
-        return timed(
-            git(repo, *args, timeout=left(deadline, "a git call"), env=env), "git " + args[0]
-        )
-
-    version = ask("version")
+    version = ask(repo, deadline, env, "version")
     if version.code != 0 or not version_ok(version.out):
         found = version.out.strip() or version.err.strip() or "no answer"
         return Guard(
             "git 2.43 or newer is needed (merge-tree --write-tree --merge-base, GIT_ATTR_SOURCE); "
             f"found: {found}",
         )
-    markers = ask("rev-parse", *_MARKER_PATHS)
+    markers = ask(repo, deadline, env, "rev-parse", *_MARKER_PATHS)
     if markers.code != 0:
         return Guard(f"not a git repository: {markers.err.strip()[:200] or repo}")
     for saying, marker in zip(_IN_PROGRESS.values(), markers.out.splitlines(), strict=False):
@@ -167,16 +166,16 @@ def guard(
             return Guard(f"the overlay is {saying}; the sync waits: finish or abort it")
     # A conflicted `stash pop`, `checkout -m` or `apply --3way` leaves no marker, only unmerged
     # entries and a working tree with conflict markers, which the job would commit as notes.
-    unmerged = ask("ls-files", "--unmerged", "-z")
+    unmerged = ask(repo, deadline, env, "ls-files", "--unmerged", "-z")
     if unmerged.code != 0 or unmerged.out:
         return Guard(UNMERGED)
-    head = ask("symbolic-ref", "-q", "HEAD")
+    head = ask(repo, deadline, env, "symbolic-ref", "-q", "HEAD")
     if head.code != 0:
         return Guard("HEAD is detached; the sync runs only on main: `git switch main`")
     if (branch := head.out.strip().removeprefix("refs/heads/")) != "main":
         return Guard(f"the overlay is on {branch}, not main: `git switch main`")
-    remote = ask("config", "--get", "branch.main.remote").out.strip()
-    merge = ask("config", "--get", "branch.main.merge").out.strip()
+    remote = ask(repo, deadline, env, "config", "--get", "branch.main.remote").out.strip()
+    merge = ask(repo, deadline, env, "config", "--get", "branch.main.merge").out.strip()
     if (remote, merge) != ("origin", "refs/heads/main"):
         if not remote:  # short enough for `doctor`'s line (`printed.CLIPPED_CHARS`)
             fix = "`git remote add origin <url>`, then `git push -u origin main`"

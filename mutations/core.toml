@@ -6352,11 +6352,9 @@ reddens = ["tests/sync/test_run.py::test_the_jobs_git_runs_no_hook"]
 name = "the guard's budget is a hundred times what it was given"
 file = "src/stayfixed/sync/git.py"
 before = '''    deadline = time.monotonic() + timeout
-
-    def ask('''
+    version = ask('''
 after = '''    deadline = time.monotonic() + 100 * timeout
-
-    def ask('''
+    version = ask('''
 reddens = [
   "tests/sync/test_git.py::test_the_helpers_of_one_step_share_its_whole_budget",
 ]

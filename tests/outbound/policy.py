@@ -294,6 +294,14 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
         "`-p` before each parent, a sha git printed"
     ),
     ("src/stayfixed/sync/job.py", "_commit_tree", "*signed"): "`-S`, or nothing",
+    (
+        "src/stayfixed/sync/job.py",
+        "_original",
+        "*(f'--encoding={each}' for each in encodings[:1])",
+    ): (
+        "`--encoding=` with the value attached, one token, which only names how git prints the "
+        "author it was asked for"
+    ),
     ("src/stayfixed/sync/job.py", "replay", "f'--merge-base={commit}^'"): (
         "`--merge-base=` and the parent of a sha git printed"
     ),
