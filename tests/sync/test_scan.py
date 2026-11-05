@@ -281,7 +281,7 @@ def _temporary_index(repo: Path, tmp_path: Path, name: str = "sync.index") -> Pa
 
 
 def _stage_in(repo: Path, index: Path, relative: str) -> None:
-    assert G.git(repo, "add", "--", relative, timeout=SLOW, index_file=index).code == 0
+    assert G.git(repo, "add", "--", relative, index_file=index).code == 0
 
 
 def _leak_staged(repo: Path, tmp_path: Path) -> Path:

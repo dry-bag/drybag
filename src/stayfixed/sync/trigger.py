@@ -19,7 +19,6 @@ never throttled, since no later turn would pick it up.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -27,8 +26,8 @@ from stayfixed import fsops
 from stayfixed.config.overlay import overlay_root
 from stayfixed.hooks.api import HookEvent
 from stayfixed.sync import job
-from stayfixed.sync.git import git
-from stayfixed.sync.rules import MEMORY_PATHSPEC
+from stayfixed.sync.git import JOB_SETTINGS, GitError, git
+from stayfixed.sync.rules import Status, status
 from stayfixed.sync.state import (
     LOCK_FILE,
     SETTLED,
@@ -46,57 +45,29 @@ from stayfixed.sync.state import (
 )
 
 # A named cap: how long each of the trigger's own git questions may take. `hooks/hooks.json`
-# gives the `Stop` entry ten seconds; what the harness allows a `SessionEnd` hook is its own.
-STATUS_TIMEOUT = 5.0
-# How many fields stand before the path in each kind of `git status --porcelain=v2` entry: a
-# change, an unmerged path and an untracked one (renames are off).
-_BEFORE_PATH = {"1": 8, "u": 10, "?": 1}
+# gives the `Stop` entry ten seconds, which hold two of them (the status and the upstream ref)
+# and the interpreter's start-up; what the harness allows a `SessionEnd` hook is its own.
+STATUS_TIMEOUT = 3.0
 
 
-@dataclass(frozen=True)
-class Tree:
-    """What the one `git status` says: the dirty memory paths, commits ahead of `@{u}`, and
-    `HEAD`."""
-
-    paths: tuple[str, ...]
-    ahead: int
-    head: str | None
-
-
-def _tree(overlay: Path) -> Tree | None:
-    """The overlay's memory status and branch line from one `git status`; `None` if it fails.
-    `--no-optional-locks` keeps it from writing the index while the owner's own git may run."""
-    result = git(
-        overlay, "--no-optional-locks", "status", "--porcelain=v2", "--branch", "-z",
-        "--untracked-files=all", "--no-renames", "--", *MEMORY_PATHSPEC, timeout=STATUS_TIMEOUT,
-    )  # fmt: skip
-    if result.timed_out or result.code != 0:
+def _tree(overlay: Path) -> Status | None:
+    """The overlay's memory status and branch line (`rules.status`); `None` if it fails."""
+    try:
+        return status(overlay, timeout=STATUS_TIMEOUT, env=JOB_SETTINGS)
+    except GitError:
         return None
-    paths: list[str] = []
-    ahead, head = 0, None
-    for record in result.out.split("\0"):
-        if record.startswith("# branch.oid "):
-            oid = record.removeprefix("# branch.oid ").strip()
-            head = oid if oid != "(initial)" else None
-        elif record.startswith("# branch.ab "):  # "+<ahead> -<behind>", only with an upstream
-            text = record.removeprefix("# branch.ab ").split()[0].lstrip("+")
-            ahead = int(text) if text.isdigit() else 0
-        elif record and not record.startswith("# "):
-            # An entry under the pathspec: changed, staged, unmerged or untracked.
-            paths.append(record.split(" ", _BEFORE_PATH.get(record[0], 1))[-1])
-    return Tree(tuple(paths), ahead, head)
 
 
 def _upstream(overlay: Path) -> str | None:
     """The sha `origin/main` names now; `None` when it cannot be read."""
     result = git(
         overlay, "rev-parse", "-q", "--verify", "refs/remotes/origin/main^{commit}",
-        timeout=STATUS_TIMEOUT,
+        timeout=STATUS_TIMEOUT, env=JOB_SETTINGS,
     )  # fmt: skip
     return result.out.strip() or None if result.code == 0 and not result.timed_out else None
 
 
-def _backed_off(overlay: Path, state: SyncState, tree: Tree | None, now: datetime) -> bool:
+def _backed_off(overlay: Path, state: SyncState, tree: Status | None, now: datetime) -> bool:
     """Whether a standing hold or failure, and the dirty notes and unpushed commits, are old
     news."""
     if tree is None or tree.head is None or not backed_off(state, tree.head, now):
@@ -106,7 +77,7 @@ def _backed_off(overlay: Path, state: SyncState, tree: Tree | None, now: datetim
     return backed_off(state, tree.head, now, dirty=dirty, upstream=_upstream(overlay))
 
 
-def _triggered(event: str, overlay: Path, d: Path, now: datetime, tree: Tree | None) -> bool:
+def _triggered(event: str, overlay: Path, d: Path, now: datetime, tree: Status | None) -> bool:
     """Whether a `Stop` or `SessionEnd` finds something for a job to do. `SessionEnd` waits out
     the back-off only under a hold, which keeps its notes here whatever runs: no later turn of
     the session would retry a failure a rerun clears."""

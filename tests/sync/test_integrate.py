@@ -19,13 +19,13 @@ from typing import Any
 
 import pytest
 
+from stayfixed.gitenv import FLOOR_VARIABLE
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
 from stayfixed.sync.git import GitTimeout, Ran
 from stayfixed.sync.state import OUTSIDE, Holds, SyncState, read_state
 from tests.gitfixture import git_bytes
 from tests.sync.conftest import (
-    SLOW,
     TAG,
     Overlays,
     commit_all,
@@ -914,6 +914,7 @@ def test_remote_failures_are_classified_from_what_git_and_ssh_print(
 def test_a_fetch_that_hangs_is_a_timeout(
     overlays: Overlays, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.delenv(FLOOR_VARIABLE)
     slow_git(tmp_path, monkeypatch, {"fetch": 30})
     started = time.monotonic()
 
@@ -921,7 +922,7 @@ def test_a_fetch_that_hangs_is_a_timeout(
 
     assert sha is None and outcome is not None and outcome.state == "timeout"
     assert "did not finish within 1 s" in str(outcome.detail)
-    assert time.monotonic() - started < SLOW
+    assert time.monotonic() - started < 30  # the fetch it ended sleeps thirty
 
 
 def test_the_fetch_leaves_the_record_to_the_rewrite_check(overlays: Overlays) -> None:

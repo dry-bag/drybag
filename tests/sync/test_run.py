@@ -161,6 +161,23 @@ def test_no_sleeper_when_nothing_is_pending_at_the_cap(
     assert len(rounds) == 3 and spawned == []
 
 
+def test_the_jobs_git_runs_no_hook(overlays: Overlays) -> None:
+    # The job's `update-ref` and `push` would run the overlay's `reference-transaction` and
+    # `pre-push`: a hook framework building or prompting inside an unattended, bounded job.
+    # Mutation (oracle): `mutations/`'s "the job's git runs the overlay's hooks" -> this reddens.
+    hooks = overlays.a / ".git" / "hooks"
+    for name in ("reference-transaction", "pre-push"):
+        (hooks / name).write_text(f"#!/bin/sh\ntouch '{hooks / name}.ran'\n", encoding="utf-8")
+        (hooks / name).chmod(0o755)
+    write(overlays.a, NOTE, note_text("new"))
+
+    state = job(overlays)
+
+    assert state is not None and state.outcome.state == "ok", state
+    assert NOTE in remote_files(overlays)
+    assert sorted(path.name for path in hooks.glob("*.ran")) == []
+
+
 def test_a_busy_lock_marks_pending_and_returns_the_state(overlays: Overlays) -> None:
     held = Lock.try_acquire(overlays.state_dir / LOCK_FILE)
     assert held is not None

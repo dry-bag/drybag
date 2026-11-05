@@ -620,11 +620,17 @@ never committed, integrated, written or pushed. Nothing configures the list.
 
 **What it never does.** Force-push, stash, rebase, pull, push a tag, rebuild a commit of yours that
 is not memory alone, write a non-memory path of the working tree or of the real index, run a script
-from the overlay's working tree, or ask for a password (`GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS` and
-`SSH_ASKPASS` dropped, `core.askPass` empty, `SSH_ASKPASS_REQUIRE=never`, and `BatchMode=yes`
-for a command that is `ssh` itself). Its `git` runs with your environment less the variables that
-point git at another repository and the relative entries of `PATH`, with attributes read from
-`HEAD` (`GIT_ATTR_SOURCE=HEAD`) and replace refs ignored.
+from the overlay's working tree, run a git hook of the overlay's (`core.hooksPath=/dev/null`), or
+ask for a password (`GIT_TERMINAL_PROMPT=0`, no askpass variable kept, `core.askPass` empty, no
+standard input, and its whole process group ended at the step's bound). What your own git
+configuration names still runs, as it does for your own git: a credential helper,
+`core.sshCommand`, `gpg.program` and `core.fsmonitor`. Its `git` gets the one environment every git
+stayfixed starts is given: `PATH` without its relative entries, `HOME`, `LANG`, `LC_ALL`,
+`SYSTEMROOT`, `SSH_AUTH_SOCK` and the proxy variables (`http_proxy`, `https_proxy`, `HTTPS_PROXY`,
+`all_proxy`, `ALL_PROXY`, `no_proxy`, `NO_PROXY`), and nothing else of the session's, so a
+`GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND` or `GIT_DIR` it sets reaches no git of the job. Over that go
+the job's own settings: attributes read from `HEAD` (`GIT_ATTR_SOURCE=HEAD`), replace refs ignored
+(`GIT_NO_REPLACE_OBJECTS=1`) and `LC_ALL=C`.
 
 **The secret scan.** The overlay's own pinned gitleaks build: the job reads the pin in `HEAD`'s
 `.pre-commit-config.yaml` and pre-commit's cache, takes the build made for that revision, and

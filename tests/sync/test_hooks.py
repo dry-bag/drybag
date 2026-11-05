@@ -21,6 +21,7 @@ from typing import Any, cast
 
 import pytest
 
+from stayfixed import gitenv
 from stayfixed.config.machine import machine_config_path
 from stayfixed.hooks.api import HookEvent, HookResult
 from stayfixed.hooks.commands import run_hook
@@ -338,13 +339,13 @@ def test_the_trigger_check_is_one_git_status(
     sha = head(overlays.a)
     _state(overlays, head_sha=sha, fetched=sha)
     calls: list[list[str]] = []
-    real = G.run
+    real = gitenv.git_call
 
-    def counting(argv: Any, **kwargs: Any) -> G.Ran:
-        calls.append(list(argv))
-        return real(argv, **kwargs)
+    def counting(root: Path, *args: str, **kwargs: Any) -> G.Ran:
+        calls.append(list(args))
+        return real(root, *args, **kwargs)
 
-    monkeypatch.setattr(G, "run", counting)
+    monkeypatch.setattr(G, "git_call", counting)
     for dirty, expected in ((False, "none"), (True, "run")):
         if dirty:
             write(overlays.a, NOTE, "changed\n")
@@ -372,13 +373,13 @@ def _handle(event: HookEvent) -> list[HookResult]:
 def spied(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[object]]:
     """Every git the sync's runner starts and every job spawned, recorded and not run."""
     seen: dict[str, list[object]] = {"git": [], "spawn": []}
-    real = G.run
+    real = gitenv.git_call
 
-    def recorded(argv: Any, **kwargs: Any) -> G.Ran:
-        seen["git"].append(list(argv))
-        return real(argv, **kwargs)
+    def recorded(root: Path, *args: str, **kwargs: Any) -> G.Ran:
+        seen["git"].append(["git", *args])
+        return real(root, *args, **kwargs)
 
-    monkeypatch.setattr(G, "run", recorded)
+    monkeypatch.setattr(G, "git_call", recorded)
     monkeypatch.setattr(J, "spawn", lambda overlay, *, wake=None: seen["spawn"].append(wake))
     return seen
 

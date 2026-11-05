@@ -4664,7 +4664,11 @@ name = "a session's global git configuration reaches git"
 file = "src/stayfixed/gitenv.py"
 before = '    "PATH", "HOME", "LANG", "LC_ALL", "SYSTEMROOT", "SSH_AUTH_SOCK",'
 after = '    "PATH", "HOME", "LANG", "LC_ALL", "SYSTEMROOT", "SSH_AUTH_SOCK", "GIT_CONFIG_GLOBAL",'
-reddens = ["tests/test_git_run.py::test_git_call_hands_git_only_the_kept_variables"]
+reddens = [
+  "tests/test_git_run.py::test_git_call_hands_git_only_the_kept_variables",
+  "tests/sync/test_push.py::test_a_sessions_global_config_cannot_redirect_the_push[pushurl]",
+  "tests/sync/test_push.py::test_a_sessions_global_config_cannot_redirect_the_push[pushInsteadOf]",
+]
 
 [[mutation]]
 name = "the runner hands git the session's environment"
@@ -6306,32 +6310,17 @@ reddens = [
 [[mutation]]
 name = "attributes come from the working tree again"
 file = "src/stayfixed/sync/git.py"
-before = '''        "GIT_ATTR_SOURCE": "HEAD",
-'''
-after = ""
+before = '{"GIT_ATTR_SOURCE": "HEAD", "GIT_NO_REPLACE_OBJECTS": "1", "LC_ALL": "C"}'
+after = '{"GIT_NO_REPLACE_OBJECTS": "1", "LC_ALL": "C"}'
 reddens = [
-  "tests/sync/test_git.py::test_job_env_pins_attributes_and_replace_refs_and_keeps_core_sshcommand",
+  "tests/sync/test_commit.py::test_a_gitattributes_filter_left_in_the_working_tree_changes_nothing_committed",
 ]
-
 [[mutation]]
 name = "a replace ref can disguise a commit again"
 file = "src/stayfixed/sync/git.py"
-before = '''        "GIT_NO_REPLACE_OBJECTS": "1",
-'''
-after = ""
-reddens = [
-  "tests/sync/test_git.py::test_job_env_pins_attributes_and_replace_refs_and_keeps_core_sshcommand",
-]
-
-[[mutation]]
-name = "a wrapper around ssh is given ssh's options"
-file = "src/stayfixed/sync/git.py"
-before = '        "GIT_SSH_COMMAND": command + (SSH_OPTIONS if _is_ssh(command) else ""),'
-after = '        "GIT_SSH_COMMAND": command + SSH_OPTIONS,'
-reddens = [
-  "tests/sync/test_git.py::test_job_env_leaves_a_wrapper_as_is",
-]
-
+before = '{"GIT_ATTR_SOURCE": "HEAD", "GIT_NO_REPLACE_OBJECTS": "1", "LC_ALL": "C"}'
+after = '{"GIT_ATTR_SOURCE": "HEAD", "LC_ALL": "C"}'
+reddens = ["tests/sync/test_push.py::test_a_replace_ref_cannot_disguise_a_commit"]
 [[mutation]]
 name = "a timed-out git call is read as an answer"
 file = "src/stayfixed/sync/git.py"
@@ -6339,42 +6328,22 @@ before = "    if result.timed_out:"
 after = "    if False:"
 reddens = [
   "tests/sync/test_git.py::test_a_checked_call_names_a_failure_and_a_timeout",
-  "tests/sync/test_git.py::test_job_env_and_the_guard_time_out_instead_of_answering",
+  "tests/sync/test_git.py::test_the_guard_times_out_instead_of_answering",
 ]
-
-[[mutation]]
-name = "an inherited repository variable reaches the child"
-file = "src/stayfixed/sync/git.py"
-before = "        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)"
-after = "        if not key.startswith(unset_prefixes)"
-reddens = [
-  "tests/sync/test_git.py::test_git_ignores_inherited_repository_variables",
-  "tests/sync/test_git.py::test_the_runner_hands_on_the_environment_less_what_redirects_git",
-]
-
-[[mutation]]
-name = "the job keeps an inherited askpass"
-file = "src/stayfixed/sync/git.py"
-before = "        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)"
-after = "        if key not in REPOSITORY_VARIABLES and not key.startswith(unset_prefixes)"
-reddens = ["tests/sync/test_git.py::test_no_askpass_is_ever_asked_for_a_password"]
 
 [[mutation]]
 name = "the job keeps the owner's core.askPass"
 file = "src/stayfixed/sync/git.py"
-before = '    return with_config(env, {"core.askPass": ""})'
-after = "    return env"
+before = '{"core.askPass": "", "core.hooksPath": "/dev/null"}'
+after = '{"core.hooksPath": "/dev/null"}'
 reddens = ["tests/sync/test_git.py::test_no_askpass_is_ever_asked_for_a_password"]
 
 [[mutation]]
-name = "a variable the caller asked to drop reaches the child"
+name = "the job's git runs the overlay's hooks"
 file = "src/stayfixed/sync/git.py"
-before = "        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)"
-after = "        if key not in REPOSITORY_VARIABLES | ASKPASS"
-reddens = [
-  "tests/sync/test_git.py::test_the_runner_hands_on_the_environment_less_what_redirects_git",
-]
-
+before = '{"core.askPass": "", "core.hooksPath": "/dev/null"}'
+after = '{"core.askPass": ""}'
+reddens = ["tests/sync/test_run.py::test_the_jobs_git_runs_no_hook"]
 [[mutation]]
 name = "the guard's budget is a hundred times what it was given"
 file = "src/stayfixed/sync/git.py"
@@ -6463,22 +6432,20 @@ reddens = [
 [[mutation]]
 name = "a GITLEAKS_ variable reaches the scan"
 file = "src/stayfixed/sync/scan.py"
-before = '            unset_prefixes=("GITLEAKS_",),'
-after = "            unset_prefixes=(),"
+before = "            env=scrubbed_env() | given,"
+after = "            env=dict(os.environ) | given,"
 reddens = [
   "tests/sync/test_scan.py::test_gitleaks_variables_are_dropped",
   "tests/sync/test_scan.py::test_rules_and_ignores_come_from_head",
 ]
-
 [[mutation]]
 name = "gitleaks reads a log with signature lines"
 file = "src/stayfixed/sync/scan.py"
-before = "            env=with_config(env or {}, SCAN_CONFIG),"
-after = "            env=env,"
+before = "        given = with_config(env or {}, SCAN_CONFIG)"
+after = "        given = dict(env or {})"
 reddens = [
   "tests/sync/test_scan.py::test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour",
 ]
-
 [[mutation]]
 name = "the scan's git colours its patch"
 file = "src/stayfixed/sync/scan.py"

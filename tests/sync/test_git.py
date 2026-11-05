@@ -1,10 +1,8 @@
-"""The sync's git layer: the bounded runner, the job's environment and the guard.
+"""The sync's git layer: its calls through the core's launch, the job's settings and the guard.
 
-Every call the job makes goes through `run`, which starts the child in a session of its own and
-kills the whole group on a timeout, so an ssh or a credential helper under git cannot outlive the
-step that started it. The guard decides whether the overlay is in a shape the job may act on at
-all. Real git on repositories under `tmp_path`; a test about a bound running out passes a small
-one of its own, and every other call a large one, since the machine these run on is rarely idle.
+The guard decides whether the overlay is in a shape the job may act on at all. Real git on
+repositories under `tmp_path`, under the suite's floor; a test about a bound running out removes
+the floor and passes a small bound of its own.
 """
 
 from __future__ import annotations
@@ -15,10 +13,10 @@ from pathlib import Path
 
 import pytest
 
+from stayfixed.gitenv import FLOOR_VARIABLE
 from stayfixed.sync import git as G
 from tests import gitfixture as fx
 from tests.sync.conftest import (
-    SLOW,
     World,
     commit_all,
     git,
@@ -30,46 +28,12 @@ from tests.sync.conftest import (
 # -- the runner -----------------------------------------------------------------------------------
 
 
-def test_a_run_that_finishes_in_time_is_not_timed_out(tmp_path: Path) -> None:
-    ran = G.run(["sh", "-c", "echo out; echo err >&2; exit 3"], cwd=tmp_path, timeout=SLOW)
-
-    assert ran == G.Ran(code=3, out="out\n", err="err\n", timed_out=False)
-
-
-def test_the_runner_decodes_bytes_that_are_not_utf_8_and_gives_them_back(tmp_path: Path) -> None:
+def test_git_decodes_bytes_that_are_not_utf_8_and_gives_them_back(tmp_path: Path) -> None:
     """A path git prints in another encoding survives the round trip into the next argv."""
-    ran = G.run(["printf", r"a\377b"], cwd=tmp_path, timeout=SLOW)
+    ran = G.git(tmp_path, "-c", r"alias.p=!printf 'a\377b'", "p")
 
     assert ran.out == "a\udcffb"
     assert ran.out.encode("utf-8", "surrogateescape") == b"a\xffb"
-
-
-def test_the_runner_hands_on_the_environment_less_what_redirects_git(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """An ssh agent must reach the push, a hook's `GIT_DIR` must not reach anything."""
-    monkeypatch.setenv("SSH_AUTH_SOCK", "/agent.sock")
-    monkeypatch.setenv("GIT_DIR", "/elsewhere/.git")
-    monkeypatch.setenv("GIT_INDEX_FILE", "/elsewhere/index")
-    monkeypatch.setenv("GITLEAKS_CONFIG", "/loosened.toml")
-
-    def seen(**given: object) -> dict[str, str]:
-        ran = G.run(["env"], cwd=tmp_path, timeout=SLOW, **given)  # type: ignore[arg-type]
-        return dict(line.split("=", 1) for line in ran.out.splitlines() if "=" in line)
-
-    plain = seen()
-    assert plain["SSH_AUTH_SOCK"] == "/agent.sock"
-    assert plain["GITLEAKS_CONFIG"] == "/loosened.toml"
-    assert "GIT_DIR" not in plain and "GIT_INDEX_FILE" not in plain
-
-    chosen = seen(
-        env={"GIT_DIR": "given"},
-        index_file=tmp_path / "chosen.index",
-        unset_prefixes=("GITLEAKS_",),
-    )
-    assert chosen["GIT_DIR"] == "given"  # `env` is the one way to set them
-    assert chosen["GIT_INDEX_FILE"] == str(tmp_path / "chosen.index")
-    assert "GITLEAKS_CONFIG" not in chosen
 
 
 def test_git_ignores_inherited_repository_variables(
@@ -83,7 +47,7 @@ def test_git_ignores_inherited_repository_variables(
     monkeypatch.setenv("GIT_DIR", str(elsewhere / ".git"))
     monkeypatch.setenv("GIT_INDEX_FILE", str(tmp_path / "nonexistent-index"))
 
-    assert G.git(repo, "ls-files", timeout=SLOW).out == "common/memory/a.md\n"
+    assert G.git(repo, "ls-files").out == "common/memory/a.md\n"
 
 
 def test_git_uses_the_index_file_it_is_given_for_that_call_only(tmp_path: Path) -> None:
@@ -92,31 +56,13 @@ def test_git_uses_the_index_file_it_is_given_for_that_call_only(tmp_path: Path) 
     commit_all(repo)
     temporary = tmp_path / "index.tmp"
 
-    assert G.git(repo, "read-tree", "--empty", timeout=SLOW, index_file=temporary).code == 0
+    assert G.git(repo, "read-tree", "--empty", index_file=temporary).code == 0
 
-    assert G.git(repo, "ls-files", timeout=SLOW, index_file=temporary).out == ""
-    assert G.git(repo, "ls-files", timeout=SLOW).out == "common/memory/a.md\n"
+    assert G.git(repo, "ls-files", index_file=temporary).out == ""
+    assert G.git(repo, "ls-files").out == "common/memory/a.md\n"
 
 
 # -- the job's environment ------------------------------------------------------------------------
-
-_APPENDED = " -o BatchMode=yes -o ConnectTimeout=10"
-
-
-def test_job_env_pins_attributes_and_replace_refs_and_keeps_core_sshcommand(tmp_path: Path) -> None:
-    repo = init(tmp_path / "r")
-    git(repo, "config", "core.sshCommand", "ssh -i ~/.ssh/k")
-
-    assert G.job_env(repo, timeout=SLOW) == {
-        "GIT_TERMINAL_PROMPT": "0",
-        "SSH_ASKPASS_REQUIRE": "never",
-        "GIT_SSH_COMMAND": "ssh -i ~/.ssh/k" + _APPENDED,
-        "GIT_NO_REPLACE_OBJECTS": "1",  # a replace ref must not show the checks another commit
-        "GIT_ATTR_SOURCE": "HEAD",  # nor a working-tree `.gitattributes` filter another blob
-        "GIT_CONFIG_COUNT": "1",
-        "GIT_CONFIG_KEY_0": "core.askPass",
-        "GIT_CONFIG_VALUE_0": "",
-    }
 
 
 def test_no_askpass_is_ever_asked_for_a_password(
@@ -124,8 +70,9 @@ def test_no_askpass_is_ever_asked_for_a_password(
 ) -> None:
     # git asks an askpass before the terminal, so `GIT_TERMINAL_PROMPT=0` alone does not stop an
     # unattended job popping a password dialog from an editor's `GIT_ASKPASS`, the owner's
-    # `core.askPass` or a desktop's `SSH_ASKPASS`. Mutations (oracle): `mutations/`'s "the job
-    # keeps an inherited askpass" and "the job keeps the owner's core.askPass".
+    # `core.askPass` or a desktop's `SSH_ASKPASS`; the first and the last are not kept by the
+    # core's environment. Mutation (oracle): `mutations/`'s "the job keeps the owner's
+    # core.askPass".
     repo = init(tmp_path / "r")
     asked = tmp_path / "asked"
     askpass = tmp_path / "askpass"
@@ -134,85 +81,34 @@ def test_no_askpass_is_ever_asked_for_a_password(
     for name in ("GIT_ASKPASS", "SSH_ASKPASS"):
         monkeypatch.setenv(name, str(askpass))
     git(repo, "config", "core.askPass", str(askpass))
-    env = G.job_env(repo, timeout=SLOW)
+    env = G.JOB_SETTINGS
     request = b"protocol=https\nhost=example.invalid\n\n"
 
-    filled = G.git(
-        repo, "-c", "credential.helper=", "credential", "fill", timeout=SLOW, env=env, stdin=request
-    )
+    filled = G.git(repo, "-c", "credential.helper=", "credential", "fill", env=env, stdin=request)
 
     assert filled.code != 0 and not asked.exists()
     for name in ("GIT_ASKPASS", "SSH_ASKPASS"):
         monkeypatch.delenv(name)
-    filled = G.git(
-        repo, "-c", "credential.helper=", "credential", "fill", timeout=SLOW, env=env, stdin=request
-    )
+    filled = G.git(repo, "-c", "credential.helper=", "credential", "fill", env=env, stdin=request)
     assert filled.code != 0 and not asked.exists()  # the owner's `core.askPass` is off too
 
 
-@pytest.mark.parametrize("entry", ["", "."])
-def test_a_git_at_the_overlays_root_never_runs_from_a_relative_path_entry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str
-) -> None:
-    # Every call runs in the overlay, so an empty or `.` entry of `PATH` (a dotfile slip) would
-    # find a `git` planted at its root, and git would find an `ssh` there the same way.
-    # The core's `git_call` holds the same rule (`tests/test_git_run.py`).
-    repo = init(tmp_path / "r")
-    planted = repo / "git"
-    planted.write_text("#!/bin/sh\necho planted\n")
-    planted.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{entry}{os.pathsep}{os.environ['PATH']}")
-
-    ran = G.git(repo, "version", timeout=SLOW)
-
-    assert ran.out.startswith("git version"), ran
-    shown = G.run(["sh", "-c", 'printf %s "$PATH"'], cwd=repo, timeout=SLOW).out
-    assert all(os.path.isabs(part) for part in shown.split(os.pathsep)), shown
-
-
-def test_job_env_defaults_to_ssh_and_prefers_the_environment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    repo = init(tmp_path / "r")
-    assert G.job_env(repo, timeout=SLOW)["GIT_SSH_COMMAND"] == "ssh" + _APPENDED
-
-    git(repo, "config", "core.sshCommand", "ssh -i ~/.ssh/k")
-    monkeypatch.setenv("GIT_SSH_COMMAND", "/usr/bin/ssh -p 2222")
-    assert G.job_env(repo, timeout=SLOW)["GIT_SSH_COMMAND"] == "/usr/bin/ssh -p 2222" + _APPENDED
-
-    # `GIT_SSH` names a program, not a command line; git consults it after `core.sshCommand`.
-    monkeypatch.delenv("GIT_SSH_COMMAND")
-    git(repo, "config", "--unset", "core.sshCommand")
-    monkeypatch.setenv("GIT_SSH", "/opt/my tools/plink")
-    assert G.job_env(repo, timeout=SLOW)["GIT_SSH_COMMAND"] == "'/opt/my tools/plink'"
-
-
-def test_job_env_leaves_a_wrapper_as_is(tmp_path: Path) -> None:
-    repo = init(tmp_path / "r")
-    git(repo, "config", "core.sshCommand", "/usr/local/bin/myssh")
-
-    assert G.job_env(repo, timeout=SLOW)["GIT_SSH_COMMAND"] == "/usr/local/bin/myssh"
-
-    git(repo, "config", "core.sshCommand", "env SSH_AUTH_SOCK=/tmp/x ssh")
-    assert G.job_env(repo, timeout=SLOW)["GIT_SSH_COMMAND"] == "env SSH_AUTH_SOCK=/tmp/x ssh"
-
-
-def test_job_env_and_the_guard_time_out_instead_of_answering(
+def test_the_guard_times_out_instead_of_answering(
     world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A guard call that times out is not "detached HEAD"; a config call is not "no setting"."""
-    slow_git(tmp_path, monkeypatch, {"symbolic-ref": 60, "config": 60})
+    """A guard call that times out is not "detached HEAD"."""
+    monkeypatch.delenv(FLOOR_VARIABLE)
+    slow_git(tmp_path, monkeypatch, {"symbolic-ref": 60})
 
     with pytest.raises(G.GitTimeout):
         G.guard(world.a, timeout=4.0)
-    with pytest.raises(G.GitTimeout):
-        G.job_env(world.a, timeout=0.5)
 
 
 def test_the_helpers_of_one_step_share_its_whole_budget(
     world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Each call sleeps less than the budget, so a fresh one per call would let the guard finish."""
+    monkeypatch.delenv(FLOOR_VARIABLE)
     slow_git(tmp_path, monkeypatch, {"version": 1.2, "rev-parse": 1.2, "ls-files": 1.2})
 
     with pytest.raises(G.GitTimeout):
@@ -233,7 +129,7 @@ def _diverge(repo: Path) -> None:
 
 
 def test_the_guard_passes_a_clean_clone(world: World) -> None:
-    assert G.guard(world.a, timeout=SLOW) == G.Guard(ok=True, reason=None)
+    assert G.guard(world.a) == G.Guard(ok=True, reason=None)
 
 
 def test_the_guard_refuses_another_branch_a_detached_head_and_a_rebase(world: World) -> None:
@@ -241,20 +137,20 @@ def test_the_guard_refuses_another_branch_a_detached_head_and_a_rebase(world: Wo
     _diverge(a)
 
     git(a, "checkout", "-q", "topic")
-    refused = G.guard(a, timeout=SLOW)
+    refused = G.guard(a)
     assert refused.ok is False and refused.reason is not None and "topic" in refused.reason
 
     git(a, "checkout", "-q", "--detach", "main")
-    refused = G.guard(a, timeout=SLOW)
+    refused = G.guard(a)
     assert refused.ok is False and refused.reason is not None and "detached" in refused.reason
 
     git(a, "checkout", "-q", "main")
     fx.run_git(a, "rebase", "topic")
     assert (a / ".git" / "rebase-merge").exists() or (a / ".git" / "rebase-apply").exists()
-    refused = G.guard(a, timeout=SLOW)
+    refused = G.guard(a)
     assert refused.ok is False and refused.reason is not None and "rebase" in refused.reason
     git(a, "rebase", "--abort")
-    assert G.guard(a, timeout=SLOW).ok is True
+    assert G.guard(a).ok is True
 
 
 def test_the_guard_refuses_a_merge_and_a_cherry_pick_on_main(world: World) -> None:
@@ -263,16 +159,16 @@ def test_the_guard_refuses_a_merge_and_a_cherry_pick_on_main(world: World) -> No
     _diverge(a)
 
     fx.run_git(a, "merge", "topic")
-    refused = G.guard(a, timeout=SLOW)
+    refused = G.guard(a)
     assert refused.ok is False and refused.reason is not None and "merge" in refused.reason
     git(a, "merge", "--abort")
 
     fx.run_git(a, "cherry-pick", "topic")
-    refused = G.guard(a, timeout=SLOW)
+    refused = G.guard(a)
     assert refused.ok is False and refused.reason is not None and "cherry-pick" in refused.reason
     git(a, "cherry-pick", "--abort")
 
-    assert G.guard(a, timeout=SLOW).ok is True
+    assert G.guard(a).ok is True
 
 
 def test_the_guard_refuses_unmerged_paths_a_stash_pop_left_without_a_marker(world: World) -> None:
@@ -289,17 +185,17 @@ def test_the_guard_refuses_unmerged_paths_a_stash_pop_left_without_a_marker(worl
         (a / ".git" / name).exists() for name in ("MERGE_HEAD", "rebase-merge", "rebase-apply")
     )
 
-    refused = G.guard(a, timeout=SLOW)
+    refused = G.guard(a)
 
     assert refused.ok is False and refused.reason == G.UNMERGED
     git(a, "checkout", "HEAD", "--", "common/memory/first.md")
-    assert G.guard(a, timeout=SLOW).ok is True
+    assert G.guard(a).ok is True
 
 
 def test_the_guard_refuses_main_not_tracking_origin_main(world: World) -> None:
     git(world.a, "branch", "--unset-upstream")
 
-    refused = G.guard(world.a, timeout=SLOW)
+    refused = G.guard(world.a)
 
     assert refused.ok is False and refused.reason is not None and "origin/main" in refused.reason
 
@@ -309,7 +205,7 @@ def test_the_guard_refuses_main_tracking_another_upstream(world: World) -> None:
     git(world.a, "fetch", "-q", "other")
     git(world.a, "branch", "--set-upstream-to=other/main")
 
-    refused = G.guard(world.a, timeout=SLOW)
+    refused = G.guard(world.a)
 
     assert refused.ok is False and refused.reason is not None and "other/main" in refused.reason
 
@@ -318,7 +214,7 @@ def test_the_guard_refuses_a_directory_that_is_not_a_repository(tmp_path: Path) 
     plain = tmp_path / "plain"
     plain.mkdir()
 
-    refused = G.guard(plain, timeout=SLOW)
+    refused = G.guard(plain)
 
     assert refused.ok is False and refused.reason is not None
     assert refused.reason.startswith("not a git repository")
@@ -331,7 +227,7 @@ def test_the_guard_allows_staged_and_unstaged_work_outside_memory(world: World) 
     write(a, "common/claude/hooks/launch.sh", "#!/bin/sh\n# staged\n# and more, unstaged\n")
     write(a, "common/claude/hooks/new.py", "untracked\n")
 
-    assert G.guard(a, timeout=SLOW) == G.Guard(ok=True, reason=None)
+    assert G.guard(a) == G.Guard(ok=True, reason=None)
 
 
 @pytest.mark.parametrize(
@@ -371,7 +267,7 @@ def test_the_guard_skips_a_git_older_than_2_43_with_the_reason(
     (shim / "git").chmod(0o755)
     monkeypatch.setenv("PATH", f"{shim}{os.pathsep}{os.environ['PATH']}")
 
-    refused = G.guard(world.a, timeout=SLOW)
+    refused = G.guard(world.a)
 
     assert refused.ok is False and refused.reason is not None
     assert "2.43" in refused.reason and "GIT_ATTR_SOURCE" in refused.reason
@@ -383,7 +279,7 @@ def test_the_guard_skips_when_there_is_no_git(
 ) -> None:
     monkeypatch.setenv("PATH", str(tmp_path))
 
-    refused = G.guard(world.a, timeout=SLOW)
+    refused = G.guard(world.a)
 
     assert refused.ok is False and refused.reason is not None and "2.43" in refused.reason
 

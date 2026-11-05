@@ -33,7 +33,9 @@ from pathlib import Path
 from typing import Any
 
 from stayfixed import fsops
-from stayfixed.sync.git import GitError, git, run, timed, with_config
+from stayfixed.gitenv import scrubbed_env
+from stayfixed.processes import run_bounded
+from stayfixed.sync.git import GitError, git, timed, with_config
 
 GITLEAKS_REPO = "https://github.com/gitleaks/gitleaks"
 GITLEAKS_HOOK = "gitleaks"
@@ -274,7 +276,10 @@ def _scan(
         if unpinned:
             return CheckResult(False, unpinned, False, None), []
         report = directory / "report.json"
-        result = run(
+        given = with_config(env or {}, SCAN_CONFIG)
+        if index_file is not None:
+            given["GIT_INDEX_FILE"] = str(index_file)
+        result = run_bounded(
             [
                 str(binary),
                 *arguments[:1],
@@ -289,13 +294,12 @@ def _scan(
                 *arguments[1:],
             ],
             cwd=repo if stdin is None else directory,
+            env=scrubbed_env() | given,
             timeout=max(deadline - time.monotonic(), 0.0),
-            env=with_config(env or {}, SCAN_CONFIG),
-            index_file=index_file,
             stdin=stdin,
-            unset_prefixes=("GITLEAKS_",),
         )
         findings = _findings(report)
+    err, out = (data.decode("utf-8", "replace") for data in (result.err, result.out))
     if result.timed_out:
         out = f"gitleaks did not finish within {timeout:g} s"
         return CheckResult(False, out, True, None), []
@@ -303,9 +307,7 @@ def _scan(
         return CheckResult(True, "no leaks found", False, None), []
     if not findings:
         # A failed scan, not a finding: exit 1 with an empty report.
-        detail = (
-            first_lines(result.err) or first_lines(result.out) or f"gitleaks exited {result.code}"
-        )
+        detail = first_lines(err) or first_lines(out) or f"gitleaks exited {result.code}"
         return CheckResult(False, detail, False, None), []
     commit = next((str(item["Commit"]) for item in findings if item.get("Commit")), None)
     # Rule, file and commit only: never the match or the secret, redacted or not.

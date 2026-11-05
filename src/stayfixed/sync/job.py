@@ -32,6 +32,7 @@ from stayfixed import fsops
 from stayfixed.config.overlay import overlay_root
 from stayfixed.sync import scan
 from stayfixed.sync.git import (
+    JOB_SETTINGS,
     UNMERGED,
     GitError,
     GitTimeout,
@@ -39,7 +40,6 @@ from stayfixed.sync.git import (
     checked,
     git,
     guard,
-    job_env,
     timed,
     with_config,
 )
@@ -139,7 +139,6 @@ class JobContext:
     dirty: str | None = None
     refused: list[str] = field(default_factory=list)
     holds: Holds = EMPTY_HOLDS
-    _env: dict[str, str] | None = field(default=None, repr=False)
 
     def limit(self, step: float) -> float:
         """`step`, cut to what is left of the whole job; `JobTimeout` when nothing is."""
@@ -151,11 +150,9 @@ class JobContext:
         return min(step, left)
 
     @property
-    def env(self) -> dict[str, str]:
-        """What every git call of the job is given (`sync.git.job_env`), built once."""
-        if self._env is None:
-            self._env = job_env(self.overlay, timeout=self.limit(self.limits.local))
-        return self._env
+    def env(self) -> Mapping[str, str]:
+        """What every git call of the job is given (`sync.git.JOB_SETTINGS`); it asks nothing."""
+        return JOB_SETTINGS
 
 
 def _outcome(ctx: JobContext, state: str, detail: str | None = None) -> Outcome:
@@ -1015,8 +1012,9 @@ def _one_job(ctx: JobContext) -> SyncState:
         stopped = _outcome(ctx, "hook_failed", f"job: {said}")
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
-    # Not `ctx.env`, which past the deadline would not be built: `rev-parse` asks no remote.
-    head = git(ctx.overlay, "rev-parse", "-q", "--verify", "HEAD", timeout=HEAD_TIMEOUT)
+    head = git(
+        ctx.overlay, "rev-parse", "-q", "--verify", "HEAD", timeout=HEAD_TIMEOUT, env=ctx.env
+    )
     state = SyncState(
         overlay=str(ctx.overlay),
         outcome=_end(ctx, stopped),

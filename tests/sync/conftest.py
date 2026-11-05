@@ -2,11 +2,10 @@
 
 git is never mocked here: the rules under test are about what git lists (renames, merges, the
 pathspec magic), so a fake would only test the fake. Every repository lives under the test's
-`tmp_path`, and `_sealed_git` closes what the root `conftest.py` leaves open (git's system
-configuration, an identity, the variables a hook run would hand on), so the developer's own
-settings cannot reach a test. The scanner is a stand-in script that answers as the real build
-does, and pre-commit's database a SQLite file written here: no test runs `pre-commit` or
-`gitleaks`.
+`tmp_path`, and `_sealed_git` closes what the root `conftest.py` leaves open (an identity, the
+variables a hook run would hand on), so the developer's own settings cannot reach a test. The
+scanner is a stand-in script that answers as the real build does, and pre-commit's database a
+SQLite file written here: no test runs `pre-commit` or `gitleaks`.
 """
 
 from __future__ import annotations
@@ -28,8 +27,9 @@ from stayfixed.sync.job import JobContext, Limits
 from stayfixed.sync.state import state_directory
 from tests import gitfixture as fx
 
-# A bound no test's own git call should reach under the load other sessions put on the machine;
-# the tests about a bound running out pass a small one of their own.
+# A bound no scan should reach under the load other sessions put on the machine: the scanner is no
+# git, so the suite's floor does not lift its bound. Every git call has the floor; the tests about
+# a bound running out remove it and pass a small one of their own.
 SLOW = 120.0
 GITLEAKS_REPO = "https://github.com/gitleaks/gitleaks"
 GITLEAKS_REV = "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"
@@ -54,13 +54,16 @@ _AMBIENT = (
 
 @pytest.fixture(autouse=True)
 def _sealed_git(monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own: Path) -> None:
-    """The sealed environment of `tests.gitfixture` for the `git` the product's runner starts
-    too, in the per-test `HOME` of the root `conftest.py`, with none of the variables a hook run
-    would hand on."""
+    """The sealed environment of `tests.gitfixture` for the fixtures' own `git`, in the per-test
+    `HOME` of the root `conftest.py`, with none of the variables a hook run would hand on; and the
+    fixture's identity in that `HOME`'s `.gitconfig`, where the product's `git`, which inherits
+    no variable that names one, finds it."""
     for name in _AMBIENT:
         monkeypatch.delenv(name, raising=False)
     for name, value in fx.env(_a_home_of_its_own).items():
         monkeypatch.setenv(name, value)
+    with (_a_home_of_its_own / ".gitconfig").open("a", encoding="utf-8") as config:
+        config.write(fx.gitconfig((("user.name", "t"), ("user.email", "t@example.com"))))
 
 
 def git(repo: Path, *args: str) -> str:

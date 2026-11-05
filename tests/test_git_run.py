@@ -386,6 +386,7 @@ GIT_RUN_BOUNDS = (
     "stayfixed.overlay.sync.SYNC_TIMEOUT_SECONDS",
     "stayfixed.guards.commit.LOG_TIMEOUT_SECONDS",
     "stayfixed.hints.hygiene.STATUS_TIMEOUT_SECONDS",
+    "stayfixed.sync.git.LOCAL_TIMEOUT",
 )
 
 

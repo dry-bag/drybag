@@ -189,32 +189,57 @@ def _entries(fields: list[str], start: int, what: str) -> tuple[list[RawEntry], 
 _RAW = ("--raw", "--numstat", "--no-abbrev", "-z", "--no-renames", "--no-color")
 
 
-def dirty_memory(repo: Path, *, timeout: float, env: Mapping[str, str] | None = None) -> list[str]:
-    """Memory paths that differ anywhere between `HEAD`, the index and the working tree.
+# How many fields stand before the path in each kind of `git status --porcelain=v2` entry: a
+# change, an unmerged path and an untracked one (renames are off).
+_BEFORE_PATH = {"1": 8, "u": 10, "?": 1}
 
-    One `git status`, `-z` so a name with a space, a quote or a newline comes back as written, and
-    `--no-optional-locks` so the call never writes the index while the owner's own git may be
-    running. A trigger, not a verdict: a link with a memory name is reported like any note, and the
-    commit step refuses it by its mode.
+
+@dataclass(frozen=True)
+class Status:
+    """What one `git status` says: the dirty memory paths, commits ahead of `@{u}`, and `HEAD`."""
+
+    paths: tuple[str, ...]
+    ahead: int
+    head: str | None
+
+
+def status(repo: Path, *, timeout: float, env: Mapping[str, str] | None) -> Status:
+    """The memory paths that differ anywhere between `HEAD`, the index and the working tree, with
+    the branch line, from one `git status`: the trigger's question and the commit's.
+
+    `-z`, so a name with a space, a quote or a newline comes back as written, and
+    `--no-optional-locks`, so the call never writes the index while the owner's own git may be
+    running. A trigger, not a verdict: a link with a memory name is reported like any note, and
+    the commit step refuses it by its mode.
     """
     result = checked(
         git(
-            repo,
-            "--no-optional-locks",
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--untracked-files=all",
-            "--no-renames",
-            "--",
-            *MEMORY_PATHSPEC,
-            timeout=timeout,
-            env=env,
+            repo, "--no-optional-locks", "status", "--porcelain=v2", "--branch", "-z",
+            "--untracked-files=all", "--no-renames", "--", *MEMORY_PATHSPEC,
+            timeout=timeout, env=env,
         ),
         "git status",
-    )
-    # Each entry is "XY <path>"; with renames off there is never a second, original path.
-    return [entry[3:] for entry in result.out.split("\0") if len(entry) > 3]
+    )  # fmt: skip
+    paths: list[str] = []
+    ahead, head = 0, None
+    for record in result.out.split("\0"):
+        if record.startswith("# branch.oid "):
+            oid = record.removeprefix("# branch.oid ").strip()
+            head = oid if oid != "(initial)" else None
+        elif record.startswith("# branch.ab "):  # "+<ahead> -<behind>", only with an upstream
+            text = record.removeprefix("# branch.ab ").split()[0].lstrip("+")
+            ahead = int(text) if text.isdigit() else 0
+        elif record and not record.startswith("# "):
+            paths.append(record.split(" ", _BEFORE_PATH.get(record[0], 1))[-1])
+    return Status(tuple(paths), ahead, head)
+
+
+def dirty_memory(
+    repo: Path, *, timeout: float = LOCAL_TIMEOUT, env: Mapping[str, str] | None = None
+) -> list[str]:
+    """Memory paths that differ anywhere between `HEAD`, the index and the working tree
+    (`status`)."""
+    return list(status(repo, timeout=timeout, env=env).paths)
 
 
 def commit_entries(

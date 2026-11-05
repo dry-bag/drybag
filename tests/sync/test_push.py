@@ -16,9 +16,11 @@ from pathlib import Path
 
 import pytest
 
+from stayfixed.gitenv import FLOOR_VARIABLE
 from stayfixed.sync import job as J
 from stayfixed.sync.state import LOCK_FILE, STATE_FILE, Lock, Outcome, SyncState, read_state
-from tests.gitfixture import git_bytes
+from tests import gitfixture as fx
+from tests.gitfixture import SESSION_CONFIG, git_bytes
 from tests.sync.conftest import (
     LEAK,
     Overlays,
@@ -95,6 +97,31 @@ def test_the_memory_only_range_is_pushed_as_the_checked_sha(
     assert "common/memory/later.md" not in remote_files(overlays, "common/memory")
     assert state.fetched_sha is not None
     assert state.head == later[0] and not state.holds.any
+
+
+@pytest.mark.parametrize("redirect", ["pushurl", "pushInsteadOf"])
+def test_a_sessions_global_config_cannot_redirect_the_push(
+    overlays: Overlays, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, redirect: str
+) -> None:
+    # A session's own `GIT_CONFIG_GLOBAL`, a project's `env` block, say, would send the notes to a
+    # remote the owner never chose. Mutation (oracle): `mutations/`'s "a session's global git
+    # configuration reaches git" -> this reddens.
+    second = tmp_path / "second.git"
+    fx.git(tmp_path, "init", "-q", "--bare", str(second))
+    entry = {
+        "pushurl": f'[remote "origin"]\n\tpushurl = {second}\n',
+        "pushInsteadOf": f'[url "{second}"]\n\tpushInsteadOf = {overlays.bare}\n',
+    }[redirect]
+    config = tmp_path / "session.gitconfig"
+    config.write_text(entry, encoding="utf-8")
+    monkeypatch.setenv(SESSION_CONFIG, str(config))
+    a_note(overlays)
+
+    state = job(overlays)
+
+    assert state.outcome.state == "ok", state.outcome
+    assert NOTE in remote_files(overlays, "common/memory")
+    assert fx.run_git(second, "rev-parse", "--verify", "-q", "main").returncode != 0
 
 
 def test_a_local_commit_outside_memory_is_held_and_named(overlays: Overlays) -> None:
@@ -469,8 +496,11 @@ def _alive(pid: int) -> bool:
     return True
 
 
-def test_a_hung_remote_times_out_and_releases_the_lock(overlays: Overlays) -> None:
+def test_a_hung_remote_times_out_and_releases_the_lock(
+    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # The hung remote has a child of its own: the whole group goes, not only git.
+    monkeypatch.delenv(FLOOR_VARIABLE)
     pidfile = overlays.bare.parent / "grandchild.pid"
     fake_ssh(overlays, f"sleep 60 &\necho $! > '{pidfile}'\nwait")
     started = time.monotonic()
@@ -497,6 +527,7 @@ def test_the_whole_jobs_limit_records_timeout_and_releases_the_lock(
     overlays: Overlays, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # A git the job's own limit has to end: no step's limit is reached, only the whole job's.
+    monkeypatch.delenv(FLOOR_VARIABLE)
     slow_git(tmp_path, monkeypatch, {"status": 30})
     a_note(overlays)
     started = time.monotonic()
@@ -533,10 +564,11 @@ def git_spy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def test_every_git_call_of_the_job_and_its_scans_runs_non_interactive(
     overlays: Overlays, git_spy: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # `GIT_TERMINAL_PROMPT=0` and the batch ssh command reach every git call the job's runner
-    # makes, the scanner's included, not only fetch and push. The sealed test environment sets
-    # the prompt switch itself, so it is taken out here: the job must set it on its own.
+    # `GIT_TERMINAL_PROMPT=0` reaches every git call the job makes, the scanner's included, and a
+    # session's `GIT_SSH_COMMAND` none. The sealed test environment sets the prompt switch itself,
+    # so it is taken out here: the core's environment must set it on its own.
     monkeypatch.delenv("GIT_TERMINAL_PROMPT")
+    monkeypatch.setenv("GIT_SSH_COMMAND", "ssh -o ProxyCommand=elsewhere")
     push_note(overlays.b, "common/memory/from-b.md", note_text("from-b"))
     a_note(overlays, "common/memory/from-a.md", "from-a")
     git_spy.unlink(missing_ok=True)
@@ -546,21 +578,8 @@ def test_every_git_call_of_the_job_and_its_scans_runs_non_interactive(
     assert state.outcome.state == "ok", state.outcome
     calls = [line.split("\t", 2) for line in git_spy.read_text().splitlines()]
     assert any("diff --cached" in argv and "-U0" in argv for _, _, argv in calls)  # the scanner's
-    batch = ("0", "ssh -o BatchMode=yes -o ConnectTimeout=10")
-    remote = [call for call in calls if call[2].startswith(("push ", "-c fetch.fsckObjects"))]
-    assert len(remote) == 2 and all(tuple(call[:2]) == batch for call in remote), remote
-    # Three local reads cannot carry the job's environment, and none reaches a remote: the lookup
-    # of the ssh command itself, the last read of `HEAD` (made when the job's time may be spent),
-    # and the product's own `git -C <checkout> rev-parse` the pre-render asks of each checkout.
-    local = ["config --get core.sshCommand", "rev-parse -q --verify HEAD"]
-    wrong = [
-        call
-        for call in calls
-        if tuple(call[:2]) != batch
-        and call[2] not in local
-        and not (call[2].startswith("-C ") and call[2].split(" ")[2] == "rev-parse")
-    ]
-    assert wrong == [], "\n".join(map(str, wrong))
+    assert any(argv.startswith("push ") for _, _, argv in calls)
+    assert [call for call in calls if tuple(call[:2]) != ("0", "unset")] == []
 
 
 def test_the_push_is_never_forced_and_carries_no_tags(

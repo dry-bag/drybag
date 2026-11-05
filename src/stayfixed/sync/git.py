@@ -1,49 +1,35 @@
-"""The sync's git layer: a bounded runner, the job's environment and the guard.
+"""The sync's git layer: its calls through the core's launch, the job's own settings and the guard.
 
-Every call the job makes goes through `run`, which ends the child's whole process group on a
-timeout, so an ssh or a credential helper under git cannot outlive the step that started it.
-`gitenv.git_run` cannot serve: it keeps only `PATH` and `HOME`, which loses the ssh agent a push
-needs. This runner inherits the environment less git's repository variables, so a job started
-from inside a git hook still addresses the overlay and its real index. A helper's `timeout` is its
-whole budget: one that makes several calls gives each what is left (`left`). `env` is laid over
-every call a helper makes; the job passes `job_env`.
+Every call the job makes is `gitenv.git_call`: the one environment every git stayfixed starts is
+given, at no less than the suite's floor, its whole process group ended on a timeout, so an ssh or
+a credential helper under git cannot outlive the step that started it. A job started from inside a
+git hook still addresses the overlay and its real index, since no repository variable is kept. A
+helper's `timeout` is its whole budget: one that makes several calls gives each what is left
+(`left`). `env` is laid over every call a helper makes; the job passes `JOB_SETTINGS`.
 """
 
 from __future__ import annotations
 
-import os
 import re
-import shlex
-import subprocess
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 
 from stayfixed import fsops
-from stayfixed.processes import KILL_WAIT_SECONDS, kill_group
+from stayfixed.gitenv import Called, git_call
 
 # A named cap: how long one local query over the overlay's notes (a `log`, `diff` or `status`) may
 # take, for a git that hangs. No shipped file states it.
 LOCAL_TIMEOUT = 30.0
-# What makes ssh fail instead of ask: no prompt, and ten seconds (a named cap, no shipped file
-# states it) to connect.
-SSH_OPTIONS = " -o BatchMode=yes -o ConnectTimeout=10"
 # `merge-tree --write-tree --merge-base` (2.40), `GIT_ATTR_SOURCE` (2.41), which an older git
 # ignores without a word, and a `merge-tree` that reads attributes from it without crashing (2.43).
 MIN_GIT = (2, 43)
-
-# `git rev-parse --local-env-vars`: each redirects git to another repository, index or object store.
-REPOSITORY_VARIABLES = frozenset((
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_CONFIG", "GIT_CONFIG_COUNT",
-    "GIT_CONFIG_PARAMETERS", "GIT_DIR", "GIT_GRAFT_FILE", "GIT_IMPLICIT_WORK_TREE",
-    "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_OBJECT_DIRECTORY", "GIT_PREFIX",
-    "GIT_REPLACE_REF_BASE", "GIT_SHALLOW_FILE", "GIT_WORK_TREE",
-))  # fmt: skip
-# The programs git and ssh ask for a password before the terminal, which no unattended job may
-# start: an editor's terminal sets the first, a desktop the second.
-ASKPASS = frozenset(("GIT_ASKPASS", "SSH_ASKPASS"))
 _VERSION = re.compile(r"git version (\d+)\.(\d+)")
+
+# What one call gave back: `gitenv.git_call`'s answer.
+Ran = Called
 
 
 class GitError(RuntimeError):
@@ -54,87 +40,20 @@ class GitTimeout(GitError):
     """A git call ran out of its time; the job records `timeout`, not a failure."""
 
 
-@dataclass(frozen=True)
-class Ran:
-    code: int
-    out: str
-    err: str
-    timed_out: bool
-
-
-def _text(data: bytes) -> str:
-    # surrogateescape: a path that is not UTF-8 survives the round trip back into an argv.
-    return data.decode("utf-8", "surrogateescape")
-
-
-def run(
-    argv: Sequence[str],
-    *,
-    cwd: Path,
-    timeout: float,
-    env: Mapping[str, str] | None = None,
-    index_file: Path | None = None,
-    stdin: bytes | None = None,
-    unset_prefixes: tuple[str, ...] = (),
-) -> Ran:
-    """Run `argv` in `cwd` with `env` laid over ours, ending its process group on a timeout.
-
-    The inherited repository variables, the askpass programs, and any starting with one of
-    `unset_prefixes`, are dropped first: `env` and `index_file` are the only way to set them.
-    `PATH` keeps only its absolute entries: every call runs in the overlay, where an empty or `.`
-    entry would find a `git` or an `ssh` planted at its root. Standard input is `stdin`, or empty:
-    nothing the job runs may wait for an answer. A program or directory that is not there is code
-    127, as a shell says it.
-    """
-    full = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in REPOSITORY_VARIABLES | ASKPASS and not key.startswith(unset_prefixes)
-    }
-    full.update(env or {})
-    full["PATH"] = os.pathsep.join(
-        entry for entry in full.get("PATH", "").split(os.pathsep) if os.path.isabs(entry)
-    )
-    if index_file is not None:
-        full["GIT_INDEX_FILE"] = str(index_file)
-    try:
-        process = subprocess.Popen(  # noqa: S603 - list form, never a shell; the callers' argv
-            argv,
-            cwd=cwd,
-            env=full,
-            stdin=subprocess.DEVNULL if stdin is None else subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
-    except OSError as error:
-        return Ran(127, "", f"{argv[0]}: {fsops.said(error)}", False)
-    try:
-        out, err = process.communicate(input=stdin, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        kill_group(process)
-        try:
-            out, err = process.communicate(timeout=KILL_WAIT_SECONDS)
-        except subprocess.TimeoutExpired:
-            # A descendant left the group and still holds the pipes: stop reading them.
-            process.wait()
-            out = err = b""
-        return Ran(process.returncode, _text(out), _text(err), True)
-    return Ran(process.returncode, _text(out), _text(err), False)
-
-
 def git(
     repo: Path,
     *args: str,
-    timeout: float,
+    timeout: float = LOCAL_TIMEOUT,
     env: Mapping[str, str] | None = None,
     index_file: Path | None = None,
     stdin: bytes | None = None,
 ) -> Ran:
-    """`git <args>` in `repo`; `index_file` is `GIT_INDEX_FILE` for this call only."""
-    return run(
-        ["git", *args], cwd=repo, timeout=timeout, env=env, index_file=index_file, stdin=stdin
-    )
+    """`git <args>` in `repo` with `env` laid over the core's environment; `index_file` is
+    `GIT_INDEX_FILE` for this call only."""
+    given = dict(env or {})
+    if index_file is not None:
+        given["GIT_INDEX_FILE"] = str(index_file)
+    return git_call(repo, *args, timeout=timeout, env=given, stdin=stdin)
 
 
 def left(deadline: float, what: str) -> float:
@@ -175,45 +94,22 @@ def with_config(env: Mapping[str, str], entries: Mapping[str, str]) -> dict[str,
     return given
 
 
-def _is_ssh(command: str) -> bool:
-    try:
-        words = shlex.split(command)
-    except ValueError:
-        return False
-    return bool(words) and os.path.basename(words[0]) == "ssh"
-
-
-def job_env(repo: Path, *, timeout: float) -> dict[str, str]:
-    """What every git call of the job is given on top of our environment.
-
-    `GIT_TERMINAL_PROMPT=0`, `core.askPass` emptied and `SSH_ASKPASS_REQUIRE=never` (with the
-    askpass variables `run` drops); the ssh command git would use made non-interactive;
-    `GIT_NO_REPLACE_OBJECTS=1`, since a `refs/replace/` entry must not show the checks one commit
-    while the push sends another; and `GIT_ATTR_SOURCE=HEAD`: attributes come from the committed
-    tree, never from a `.gitattributes` a memory writer left in the working tree, where a filter
-    would make the job commit, and the scanner read, something other than the note.
-
-    The command is the one git itself would pick -- `$GIT_SSH_COMMAND`, else `core.sshCommand`,
-    else `$GIT_SSH` (a program path, so quoted), else `ssh` -- and gets `SSH_OPTIONS` only when
-    its program is `ssh`; a wrapper is used as is, its options its own business.
-    """
-    command = os.environ.get("GIT_SSH_COMMAND", "")
-    if not command:
-        configured = timed(
-            git(repo, "config", "--get", "core.sshCommand", timeout=timeout), "git config"
-        )
-        command = configured.out.rstrip("\n") if configured.code == 0 else ""
-    if not command:
-        program = os.environ.get("GIT_SSH", "")
-        command = shlex.quote(program) if program else "ssh"
-    env = {
-        "GIT_TERMINAL_PROMPT": "0",
-        "SSH_ASKPASS_REQUIRE": "never",
-        "GIT_SSH_COMMAND": command + (SSH_OPTIONS if _is_ssh(command) else ""),
-        "GIT_NO_REPLACE_OBJECTS": "1",
-        "GIT_ATTR_SOURCE": "HEAD",
-    }
-    return with_config(env, {"core.askPass": ""})
+# What every git call of the job is given on top of the core's environment, and nothing asked to
+# build it. `GIT_ATTR_SOURCE=HEAD`: attributes come from the committed tree, never from a
+# `.gitattributes` a memory writer left in the working tree, where a filter would make the job
+# commit, and the scanner read, something other than the note. `GIT_NO_REPLACE_OBJECTS=1`: a
+# `refs/replace/` entry must not show the checks one commit while the push sends another.
+# `LC_ALL=C`: the few messages the job matches read English whatever the locale. `core.askPass`
+# emptied: git asks an askpass before the terminal, and the owner's would pop a dialog. And
+# `core.hooksPath=/dev/null`: the job's `update-ref` and `push` run none of the overlay's hooks.
+# No ssh options: a child with no terminal, no stdin, no askpass and a group kill at its step's
+# bound cannot wait for a person.
+JOB_SETTINGS: Mapping[str, str] = MappingProxyType(
+    with_config(
+        {"GIT_ATTR_SOURCE": "HEAD", "GIT_NO_REPLACE_OBJECTS": "1", "LC_ALL": "C"},
+        {"core.askPass": "", "core.hooksPath": "/dev/null"},
+    )
+)
 
 
 @dataclass(frozen=True)
@@ -240,7 +136,9 @@ _IN_PROGRESS = {
 _MARKER_PATHS = tuple(part for name in _IN_PROGRESS for part in ("--git-path", name))
 
 
-def guard(repo: Path, *, timeout: float, env: Mapping[str, str] | None = None) -> Guard:
+def guard(
+    repo: Path, *, timeout: float = LOCAL_TIMEOUT, env: Mapping[str, str] | None = None
+) -> Guard:
     """Whether the overlay is in a shape the sync may act on at all.
 
     Refused, with the reason the state shows: git older than `MIN_GIT`, not a repository, an
