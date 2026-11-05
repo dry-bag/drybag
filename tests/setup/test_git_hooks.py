@@ -74,6 +74,7 @@ def _args(**over: object) -> argparse.Namespace:
         "approval_boundary": False,
         "restore": False,
         "yes": False,
+        "sync": False,
         "uninstall": False,
         "root": ".",
     }

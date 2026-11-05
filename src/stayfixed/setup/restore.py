@@ -33,6 +33,7 @@ from typing import Literal, NamedTuple
 from stayfixed import fsops
 from stayfixed.attach.api import attach
 from stayfixed.command import command_owner
+from stayfixed.config.loader import read_document
 from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.errors import Failure, Refusal
 from stayfixed.harnesses import HARNESSES, lenient_settings
@@ -64,8 +65,7 @@ def listed_projects(overlay: Path, *, home: Path) -> tuple[Listed, ...]:
     `dir` is required and is absolute or led by `~/`, which is read under `home`; every other key
     is ignored, because an overlay's own scripts may read them. `()` when the file is not there.
     A file that cannot be read, is not TOML, whose `projects` is not a table or holds a table
-    whose `dir` is missing, not a string or relative is a `Refusal` naming it. Asked before
-    anything is written, so an input error in the owner's file costs nothing.
+    whose `dir` is missing, not a string or relative is a `Refusal` naming it.
     """
     path = overlay / PROJECTS_FILE
     with fsops.reading(_LABEL, Refusal):
@@ -300,22 +300,20 @@ def restore(
     runner: Runner,
     yes: bool,
 ) -> RestoreReport:
-    """Attach each listed checkout that exists, each under the store its table key names.
-
-    **Adversary and anchor:** a listed checkout's tracked `stayfixed.toml` can claim another of
-    the owner's projects; the store handed to `attach` comes from the table key in
-    `<overlay>/machine/projects.toml`, which no repository writes, and attach refuses a store that
-    is not the checkout's own project's, so such a checkout is refused rather than given another
-    project's notes, rules and delivery.
+    """Attach each listed checkout that exists, each under the store its table key names (the
+    module says why), and a checkout with no `stayfixed.toml` under the project that key names.
 
     A `dir` that is not there is `absent`, reported and skipped; attach's `Refusal` is `refused`
     and its `Failure` `failed`, each with the message as `detail`, and the next project goes on.
 
     With `yes`, each attached project's unreviewed notes are then recorded as reviewed on this
     machine (`promote_share`), counted in the outcome's `promoted`; a project whose notes cannot be
-    recorded is `failed`, attached all the same. **The notes recorded come from the overlay's share
-    for the table key of the owner's projects file, which no repository writes; nothing a checkout
-    holds is read.** Without `yes` nothing is recorded as reviewed, whatever the overlay holds.
+    recorded is `failed`, attached all the same. **The notes recorded are every unreviewed note of
+    the overlay's share for the table key of the owner's projects file, which no repository
+    writes:** `common/memory`, each listed tag's `groups/<tag>/memory` and the project's own groups,
+    notes written on another machine that nobody reviewed included. Only overlay paths are walked,
+    and a group directory that is a link is followed. Without `yes` nothing is recorded as
+    reviewed, whatever the overlay holds.
     """
     marketplaces, ids, listing_notes = listed_plugins(overlay)
     installed, install_notes = install_listed(marketplaces, ids, home=home, runner=runner)
@@ -329,11 +327,11 @@ def restore(
             owner = command_owner(machine) if owner is None else owner
             attached = attach(
                 item.dir,
-                store=permitted_roots(overlay, item.name)[1],
+                store=permitted_roots(overlay, item.name)[-1],
                 machine=machine,
                 runner=runner,
                 owner=owner,
-                project=None,
+                project=item.name if read_document(item.dir) is None else None,
             )
         except Refusal as exc:
             outcomes.append(Outcome(item.name, item.dir, "refused", str(exc), 0))
@@ -365,24 +363,3 @@ def line(outcome: Outcome) -> str:
     said = f"{quoted(outcome.name)} at {quoted(str(outcome.dir))}: {outcome.state}"
     said = f"{said} ({outcome.detail})" if outcome.detail else said
     return f"{said}; {outcome.promoted} note(s) recorded as reviewed" if outcome.promoted else said
-
-
-def overlay_to_restore(overlay: str | None, *, machine: Path) -> Path | None:
-    """The overlay root a restore reads before `setup` has written anything: `--overlay`'s path
-    when it names one that holds an overlay, else, with no `--overlay`, the machine file's recorded
-    root. `None` for `--overlay create:…` and for a path that holds no overlay, which `setup` makes
-    or refuses, and for a machine that records none."""
-    from stayfixed.config.machine import in_owner_home
-    from stayfixed.config.overlay import overlay_root
-    from stayfixed.overlay.api import overlay_fault
-
-    if overlay is None:
-        return overlay_root(machine)
-    named = None if overlay.startswith("create:") else in_owner_home(overlay)
-    if named is None:
-        return None
-    try:
-        candidate = fsops.resolved(named)
-    except OSError:
-        return None  # `setup` refuses a path it cannot resolve, in its own words, before writing
-    return candidate if overlay_fault(candidate) is None else None

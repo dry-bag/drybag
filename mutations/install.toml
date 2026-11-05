@@ -1256,7 +1256,7 @@ reddens = ["tests/setup/test_setup.py::test_setup_recording_an_overlay_leaves_sy
 [[mutation]]
 name = "restore attaches without the store its table key names"
 file = "src/stayfixed/setup/restore.py"
-before = "                store=permitted_roots(overlay, item.name)[1],"
+before = "                store=permitted_roots(overlay, item.name)[-1],"
 after = "                store=None,"
 reddens = [
   "tests/setup/test_restore.py::test_a_checkout_whose_project_is_not_its_table_key_is_refused_and_the_rest_attach",

@@ -2146,9 +2146,9 @@ commands it runs for each plugin `--plugin` names, on each harness with a declar
 `claude plugin install`, `codex plugin marketplace add` and `codex plugin add`), the marketplace
 registrations and installed plugins those commands write into each harness's own configuration;
 with `--restore`, the same `claude plugin marketplace add` and `claude plugin install` for what the
-overlay's `machine/claude/settings.json` lists, and, with `--yes`, the trust record's `reviewed`
-approvals (`trust.json`, beside the machine file) for the notes of the overlay's share for each
-attached project.
+overlay's `machine/claude/settings.json` lists, with `--sync`, `[sync] enabled = true` in the machine
+file, and, with `--yes`, the trust record's `reviewed` approvals (`trust.json`, beside the machine
+file) for the notes of the overlay's share for each attached project.
 `--overlay <path>` naming an overlay writes nothing in its tree: it is recorded, and its
 `pre-commit` git hook is installed through `pre-commit install`. Naming nothing or an
 empty directory, it writes the directory with every file of the template plus `.stayfixed/manifest.json`, the
@@ -2166,9 +2166,10 @@ re-run finishes.
 **Exits** `0` on success, and `2` on each of these refusals:
 
 - `--uninstall`, which is taken only with `--git-hooks` (below), before anything is written;
-- `--restore` with no overlay recorded and none named, or with a projects file it cannot read (see
-  `--restore` above), before anything is written; `--restore` beside `--git-hooks` or
-  `--approval-boundary`; and `--yes` without `--restore`;
+- `--restore` with no overlay recorded and none named, before anything is written; after machine
+  setup ran, an overlay to restore from that is not one or a projects file it cannot read (see
+  `--restore` below), before any attach; `--restore` beside `--git-hooks` or
+  `--approval-boundary`; and `--yes` or `--sync` without `--restore`;
 - `--root`, which names the repository `--git-hooks` installs into, before anything is written;
 - a refused `--overlay`: a path that names nothing under a directory that is missing or that you
   cannot create it in, a path holding something that is not an overlay, a `create:` destination
@@ -2237,23 +2238,27 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
    `plugin(s) installed` and `--json`'s `plugins_installed`, and each note is printed among its
    notes, in its summary line and in `--json`'s `notes`;
 3. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
-   that is not there is reported `absent` and skipped; a checkout `attach` refuses (one whose
-   `stayfixed.toml` names another project than its table key) is `refused`, and one whose attach
+   that is not there is reported `absent` and skipped; a checkout with no `stayfixed.toml` is
+   attached under the project its table key names, as `attach --project` would; a checkout `attach`
+   refuses (one whose `stayfixed.toml` names another project than its table key) is `refused`, and one whose attach
    fails (a plain directory, or a failure part-way) is `failed`, each with attach's own message, and the rest go
    on. The exit code is `1` when a project was refused or failed, and `0` otherwise, `absent`
    included. A run twice attaches nothing new, and a project removed from the file stays attached
    until `stayfixed detach` there.
 
 4. with `--yes` only, the overlay's notes recorded as reviewed on this machine: after each project
-   it attached, every note of the overlay's share for its table key (each group under
-   `projects/<name>/memory/`, and `common/memory`) not already reviewed at its current bytes is
-   recorded in the trust record beside the machine file. Nothing
-   a checkout holds is read, whatever its memory mode, and a note is reviewed wherever the same
-   bytes are read. Without `--yes` nothing is recorded as reviewed, whatever the overlay holds. A project whose notes cannot be recorded (an unreadable
+   it attached, every note of the overlay's share for its table key (`common/memory`, each listed
+   tag's `groups/<tag>/memory`, and each group under `projects/<name>/memory/`) not already
+   reviewed at its current bytes is recorded in the trust record beside the machine file, notes
+   written on another machine that nobody reviewed included. Only overlay paths are walked,
+   whatever the checkout's memory mode, a group directory that is a link is followed, and a note
+   is reviewed wherever the same bytes are read. Without `--yes` nothing is recorded as reviewed, whatever the overlay holds. A project whose notes cannot be recorded (an unreadable
    trust record, which is never overwritten) is reported `failed`, attached all the same. A second
    run with `--yes` records nothing new; a note you recorded is withdrawn by editing or deleting
    it. `--yes` without `--restore` is refused (`2`),
-   naming `--restore`, before anything is written.
+   naming `--restore`, before anything is written;
+5. with `--sync` only, `[sync] enabled = true` in the machine file, which switches the
+   [note sync](#note-sync) on; `--sync` without `--restore` is refused like `--yes`.
 
 Last, it checks the tools and prints what is missing on the first line of its output, above machine
 setup's summary, and refuses nothing: `git`, one of `claude` and `codex`, and a `python3` or a `uv`
@@ -2264,18 +2269,22 @@ project: `<name>` is the overlay project the checkout belongs to (the directory 
 `projects/`), and `dir` is where its main checkout lives, absolute or led by `~/`, which is read
 under `--home`. Every other key is ignored by stayfixed; an overlay's own scripts may read them.
 `dir` missing, not a string or relative, a file that cannot be read or is not TOML, and a
-`projects` that is not a table, are refused (`2`) naming the table, before anything is written. No
+`projects` that is not a table, are refused (`2`) naming the table, after machine setup ran and
+before any attach. No
 file lists nothing. The store `attach` is handed is the one the table key names, and `attach`
 refuses a store that is not the checkout's own project's, so a clone that claims another of your
 projects in its tracked `stayfixed.toml` is refused rather than given that project's notes, rules
 and delivery.
 
-With `--restore`, `--overlay` names the overlay to restore from when it holds one; `--overlay
-create:…` and a path that names nothing make an overlay and list no project. With no `--overlay`
-and no overlay recorded, `--restore` is refused (`2`) naming `--overlay PATH`, before anything is
-written. It is refused beside `--git-hooks` and `--approval-boundary`. `--json` adds `missing` and
-`projects`, each project's `name`, `dir`, `state` (`attached`, `absent`, `refused` or `failed`),
-`detail`, the last attach's own words, and `promoted`, the notes `--yes` recorded.
+With `--restore`, the overlay restored from is the one `--overlay` recorded, rendered or created,
+else the one the machine file records. With no `--overlay` and no overlay recorded, `--restore` is
+refused (`2`) naming `--overlay PATH`, before anything is written; once machine setup ran, an
+overlay to restore from that is not one (a recorded overlay that is gone) is refused (`2`) naming
+it and saying machine setup ran. It is refused beside `--git-hooks` and `--approval-boundary`. The
+summary's overlay clause and `--json`'s `overlay` name the overlay restored from. `--json` adds
+`sync`, whether `--sync` was given, `missing` and `projects`, each project's `name`, `dir`, `state`
+(`attached`, `absent`, `refused` or `failed`), `detail`, the last attach's own words, and
+`promoted`, the notes `--yes` recorded.
 
 What stays an overlay's own script and is not done here: cloning the checkouts, owner-held files,
 excludes, links, commit hooks and the merge of the overlay's settings.

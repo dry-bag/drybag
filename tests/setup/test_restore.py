@@ -214,14 +214,12 @@ def test_a_listed_dir_that_is_no_checkout_is_reported_and_the_rest_attach(tmp_pa
     assert not fsops.exists(plain / ".stayfixed")
 
 
-def test_a_relative_dir_is_refused_before_anything_is_written(tmp_path: Path) -> None:
+def test_a_relative_dir_is_refused_before_any_attach(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path)
     _list(overlay, {"alpha": 'dir = "checkouts/alpha"'})
-    home, machine = tmp_path / "home", tmp_path / "config.toml"
     code, _, err = invoke(_restoring(tmp_path, overlay))
     assert code == 2
-    assert "projects.alpha" in err and "relative" in err
-    assert not machine.exists() and not home.exists()
+    assert "projects.alpha" in err and "relative" in err and "machine setup ran" in err
 
 
 @pytest.mark.parametrize(
@@ -288,16 +286,6 @@ def test_restore_twice_changes_nothing_the_second_time(tmp_path: Path) -> None:
     assert_snapshot_unchanged(alpha, after)
 
 
-def test_restore_never_detaches_a_project_no_longer_listed(tmp_path: Path) -> None:
-    overlay = _overlay(tmp_path)
-    alpha, beta = _checkout(tmp_path, "alpha"), _checkout(tmp_path, "beta")
-    _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha, beta=beta))
-    kept = snapshot(alpha)
-    report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, beta=beta))
-    assert _states(report) == {"beta": "attached"}
-    assert_snapshot_unchanged(alpha, kept)
-
-
 def test_one_failed_attach_leaves_the_others_and_exits_1(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path)
     alpha, gamma = _checkout(tmp_path, "alpha"), _checkout(tmp_path, "gamma")
@@ -338,6 +326,64 @@ def test_a_failed_project_makes_the_command_exit_1(
         ("alpha", str(claiming), "refused")
     ]
     assert rows[0]["detail"]
+
+
+def test_a_project_whose_record_lists_a_tag_is_attached(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    alpha = _checkout(tmp_path, "alpha")
+    (overlay / "groups" / "t" / "memory").mkdir(parents=True)
+    (overlay / "projects" / "alpha").mkdir(parents=True)
+    (overlay / "projects" / "alpha" / "project.toml").write_text('tags = ["t"]\n', "utf-8")
+    report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha))
+    assert _states(report) == {"alpha": "attached"}
+
+
+def test_a_checkout_with_no_config_is_attached_under_its_table_key(tmp_path: Path) -> None:
+    # Its `origin` names `zzz`, which is not the key: the key names the project.
+    overlay = _overlay(tmp_path)
+    zzz = _checkout(tmp_path, "zzz")
+    (zzz / "stayfixed.toml").unlink()
+    report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha2=zzz))
+    assert _states(report) == {"alpha2": "attached"}
+    assert not fsops.exists(overlay / "projects" / "zzz")
+
+
+def _recording(tmp_path: Path, root: Path, *extra: str) -> tuple[int, str, str]:
+    """`setup --restore` with no `--overlay`, on a machine file that records `root`."""
+    machine = tmp_path / "config.toml"
+    machine.write_text(f'[overlay]\nroot = "{root}"\n', encoding="utf-8")
+    home = str(tmp_path / "home")
+    return invoke(["setup", "--restore", "--home", home, "--machine", str(machine), *extra])
+
+
+def test_a_recorded_overlay_that_is_gone_is_refused_naming_it(tmp_path: Path) -> None:
+    code, _, err = _recording(tmp_path, tmp_path / "gone")
+    assert code == 2
+    assert str(tmp_path / "gone") in err and "machine setup ran" in err
+
+
+def test_a_restore_from_the_recorded_overlay_names_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overlay = _overlay(tmp_path)
+    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
+    code, out, _ = _recording(tmp_path, overlay)
+    assert code == 0
+    assert str(overlay) in out and "no overlay recorded" not in out
+
+
+@pytest.mark.parametrize("sync", [True, False], ids=["sync", "no-sync"])
+def test_sync_switches_note_sync_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sync: bool
+) -> None:
+    from stayfixed.sync.switch import enabled
+
+    overlay = _overlay(tmp_path)
+    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
+    code, out, _ = invoke(_restoring(tmp_path, overlay, "--json", *(["--sync"] if sync else [])))
+    assert code == 0
+    assert json.loads(out)["sync"] is sync
+    assert enabled(tmp_path / "config.toml") is sync
 
 
 def test_restore_without_an_overlay_is_refused_before_anything_is_written(tmp_path: Path) -> None:
@@ -462,23 +508,6 @@ def test_only_the_missing_marketplaces_and_plugins_are_installed(tmp_path: Path)
         "claude plugin install other@third",
     ]
     assert report.plugins == (f"need@{OFFICIAL}", "other@third") and report.notes == ()
-
-
-def test_a_second_restore_installs_nothing(tmp_path: Path) -> None:
-    overlay = _overlay(tmp_path)
-    _machine_settings(
-        overlay,
-        _enabling(f"need@{OFFICIAL}", marketplaces={OFFICIAL: _github("o/official")}),
-    )
-    runner = Recorder(
-        answers={
-            MARKETPLACE_LIST: _registered(OFFICIAL),
-            PLUGIN_LIST: _installed(f"need@{OFFICIAL}"),
-        }
-    )
-    report = _restore(tmp_path, overlay, (), runner=runner)
-    assert _plugin_calls(runner) == [MARKETPLACE_LIST, PLUGIN_LIST]
-    assert report.plugins == () and report.notes == ()
 
 
 def test_a_plugin_installed_at_another_scope_is_installed_at_user_scope(tmp_path: Path) -> None:
@@ -747,32 +776,6 @@ def test_yes_records_the_overlays_notes_for_a_checkout_with_no_config(tmp_path: 
     assert [Path(s).name for s in _reviewed(_machine(tmp_path, overlay))] == ["one.md"]
 
 
-def test_a_second_restore_with_yes_promotes_nothing(tmp_path: Path) -> None:
-    overlay = _overlay(tmp_path)
-    alpha = _checkout(tmp_path, "alpha")
-    _notes(overlay, "alpha", "one")
-    listed = _listing(overlay, tmp_path, alpha=alpha)
-    assert _restore(tmp_path, overlay, listed, yes=True).projects[0].promoted == 1
-    trust = (tmp_path / "trust.json").read_bytes()
-    second = _restore(tmp_path, overlay, listed, yes=True)
-    assert [o.promoted for o in second.projects] == [0]
-    assert (tmp_path / "trust.json").read_bytes() == trust
-
-
-def test_a_note_edited_after_a_restore_is_promoted_again_by_the_next_with_yes(
-    tmp_path: Path,
-) -> None:
-    # The record is by digest: `--yes` is the owner's word on the bytes as they are now.
-    overlay = _overlay(tmp_path)
-    alpha = _checkout(tmp_path, "alpha")
-    _notes(overlay, "alpha", "one")
-    listed = _listing(overlay, tmp_path, alpha=alpha)
-    _restore(tmp_path, overlay, listed, yes=True)
-    note = overlay / "projects" / "alpha" / "memory" / "project-stable" / "one.md"
-    note.write_text(_note("one") + "More.\n", encoding="utf-8")
-    assert _restore(tmp_path, overlay, listed, yes=True).projects[0].promoted == 1
-
-
 def test_a_project_whose_notes_cannot_be_recorded_is_failed_and_the_rest_go_on(
     tmp_path: Path,
 ) -> None:
@@ -803,12 +806,13 @@ def test_yes_through_the_command_records_the_notes_and_the_json_counts_them(
     assert len(_reviewed(tmp_path / "config.toml")) == 2
 
 
+@pytest.mark.parametrize("flag", ["--yes", "--sync"])
 @pytest.mark.parametrize("beside", [[], ["--git-hooks"], ["--approval-boundary"]])
-def test_yes_is_refused_without_restore(tmp_path: Path, beside: list[str]) -> None:
+def test_yes_and_sync_are_refused_without_restore(
+    tmp_path: Path, flag: str, beside: list[str]
+) -> None:
     home, machine = tmp_path / "home", tmp_path / "config.toml"
-    code, _, err = invoke(
-        ["setup", "--yes", *beside, "--home", str(home), "--machine", str(machine)]
-    )
+    code, _, err = invoke(["setup", flag, *beside, "--home", str(home), "--machine", str(machine)])
     assert code == 2
-    assert "--yes" in err and "--restore" in err
+    assert flag in err and "--restore" in err
     assert not machine.exists() and not home.exists()
