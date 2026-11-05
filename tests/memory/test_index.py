@@ -1252,6 +1252,28 @@ def test_session_end_harvests_an_appended_line_before_the_sync_runs(
     assert read_note(share / "project-stable" / "m.md").index == "Harvested"
 
 
+def test_a_bound_checkout_with_no_file_is_rendered_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # With no `stayfixed.toml` the session has no configuration; the overlay's layers set the
+    # mode, and the configuration is the one the checkout's binding gives (`bound_config`), as
+    # the unreviewed count reads it. Mutation (oracle): `mutations/`'s "the index render skips a
+    # bound checkout with no stayfixed.toml".
+    root, overlay, _ = _an_attached_checkout(tmp_path)
+    (root / CONFIG_FILE).unlink()
+    layer = overlay / "projects" / "widget" / CONFIG_FILE
+    layer.write_text('[memory]\nmode = "overlay"\n', encoding="utf-8")
+    _on_this_machine(overlay)
+    share = overlay / "projects" / "widget" / "memory"
+    (share / INDEX_NAME).write_text(EMPTY_REGION, encoding="utf-8")
+    (share / "project-stable" / "n.md").write_text(note("n", index="N trigger"), encoding="utf-8")
+
+    assert _a_session(monkeypatch, "SessionStart", root) == 0
+
+    assert capsys.readouterr().err == ""
+    assert "- [N trigger](project-stable/n.md)" in (share / INDEX_NAME).read_text(encoding="utf-8")
+
+
 def test_a_repository_mode_checkout_is_not_rendered(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -3129,6 +3129,17 @@ reddens = [
   "tests/memory/test_index.py::test_session_end_harvests_an_appended_line_before_the_sync_runs",
 ]
 
+# A bound checkout with no `stayfixed.toml` has no session configuration; its index is rendered
+# from the configuration its binding gives, as the unreviewed count reads it, or nobody renders it.
+[[mutation]]
+name = "the index render skips a bound checkout with no stayfixed.toml"
+file = "src/stayfixed/memory/hooks.py"
+before = "    config = _config(event, session)\n    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
+after = "    config = session.config\n    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
+reddens = [
+  "tests/memory/test_index.py::test_a_bound_checkout_with_no_file_is_rendered_too",
+]
+
 # Outside overlay mode the index is the repository's file, which nobody's session rewrites.
 [[mutation]]
 name = "a repository-mode checkout's index is rendered by a hook"

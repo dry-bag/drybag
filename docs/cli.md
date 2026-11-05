@@ -560,9 +560,12 @@ file does not say so runs nothing. The sync has no command and no `stayfixed.tom
 nothing else: a string, a number, a table that is not one or a file that does not load reads as
 off. `[sync]` is machine-only, so a repository's `stayfixed.toml` that holds it is refused and
 switches nothing. `stayfixed setup --overlay` writes it for an overlay it renders or creates and
-leaves it alone for one it records; turn it off by changing it to `false` or removing it. Off, the
-three handlers read the machine file and return: no `git` call and no process, on every turn of every
-session. `doctor`'s `sync` row says which it is.
+leaves it alone for one it records; turn it off by changing it to `false` or removing it. A value
+that is not a bool is said as the machine file's other unusable values are, and reads as off. The
+handlers read it from the configuration the session resolved when it started, so a change reaches
+the next session; the job reads the file again each time it wakes. Off, the three handlers return:
+no `git` call and no process, on every turn of every session. `doctor`'s `sync` row says which it
+is.
 
 **The triggers.** One handler on each of `SessionStart` (not after a compaction, which is the same
 session going on), `Stop` and `SessionEnd`, named `note-sync-start`, `note-sync-stop` and
@@ -706,9 +709,11 @@ each.
 `GIT_ATTR_SOURCE`, which an older git ignores without a word). On an older one it records `skipped` with
 the reason, changes nothing, and `doctor` says why.
 
-**Claude Code and Codex.** The triggers are the entries of `hooks/hooks.json` ([Hooks](#hooks)):
-an event Codex delivers from that file runs the same handlers behind the same per-machine switch,
-and that has not been measured on Codex. There is no cloud mode.
+**Claude Code and Codex.** The triggers are the entries of `hooks/hooks.json` ([Hooks](#hooks)),
+which Codex reads too. A hook process whose environment carries Codex's `PLUGIN_ROOT` starts
+nothing: Codex sets it and Claude Code does not, measured as `src/stayfixed/harnesses.py` cites. A
+repository that sets it in a Claude Code session turns that session's triggers off, never on.
+There is no cloud mode.
 
 ## `stayfixed commit check --range RANGE`
 
@@ -2078,8 +2083,8 @@ the repository `--git-hooks` installs into (below); machine setup reads no repos
 `--root` (`2`) with nothing written, where it used to take the flag and read nothing of it.
 
 `setup` is the only writer of the machine configuration file, and its readers do not change to
-suit it: `[personal]`, `[guards]` and the session `[budgets]` are `config.owner`'s, which every
-command's load and every session read; `[overlay] root` is `config.overlay`'s; and each resolves
+suit it: `[personal]`, `[guards]`, the session `[budgets]` and `[sync]` are `config.owner`'s,
+which every command's load and every session read; `[overlay] root` is `config.overlay`'s; and each resolves
 the file `--machine` names or the default one. A second run merges rather than
 replaces, key by key: a personal value already recorded — by an earlier `setup` or by your own
 hand — is never overwritten by the preset's own default, and an overlay root a previous run

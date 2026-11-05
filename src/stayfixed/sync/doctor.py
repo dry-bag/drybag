@@ -76,9 +76,8 @@ def _sync(context: Context) -> Row:
     from stayfixed.sync import scan
     from stayfixed.sync.git import MIN_GIT, git, version_ok
     from stayfixed.sync.state import SETTLED, StateUnreadable, read_state, state_directory
-    from stayfixed.sync.switch import enabled
 
-    if not enabled(context.machine):
+    if not context.session.owner.sync.enabled:
         where = context.machine or machine_config_path() or "the machine file"
         return Row(SKIP, f"the note sync is off; `[sync] enabled = true` in {where} switches it on")
     overlay = context.overlay_root

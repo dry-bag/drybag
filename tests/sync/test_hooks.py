@@ -17,12 +17,13 @@ import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
 
 from stayfixed import gitenv
 from stayfixed.config.machine import machine_config_path
+from stayfixed.config.session import SessionConfig, session_config
 from stayfixed.hooks.api import HookEvent, HookResult
 from stayfixed.hooks.commands import run_hook
 from stayfixed.sync import git as G
@@ -363,8 +364,9 @@ def _event(world: Overlays, name: str, **raw: object) -> HookEvent:
     )
 
 
-def _handle(event: HookEvent) -> list[HookResult]:
-    session = cast(Any, None)  # no handler of this area reads the session's configuration
+def _handle(event: HookEvent, session: SessionConfig | None = None) -> list[HookResult]:
+    """`event` through each handler, with the session read as the dispatcher reads it now."""
+    session = session_config(None) if session is None else session
     return [handler.run(event, session) for handler in register() if handler.event == event.name]
 
 
@@ -418,6 +420,54 @@ def test_with_sync_on_the_handlers_spawn_the_job(
     [_, wake] = spied["spawn"]
     assert isinstance(wake, datetime) and wake > datetime.now(UTC)
     assert (overlays.state_dir / PENDING_FILE).exists()
+
+
+def test_the_handler_reads_the_switch_from_the_session(
+    overlays: Overlays, spied: dict[str, list[object]]
+) -> None:
+    # The session resolved the machine file once; a handler does not read it again, so the file
+    # changed under a running session moves nothing until the next one reads it.
+    overlays.sync = True
+    overlays.use(overlays.a)
+    write(overlays.a, NOTE, "a note\n")
+    on = session_config(None)
+    overlays.sync = False
+    overlays.use(overlays.a)
+    off = session_config(None)
+
+    _handle(_event(overlays, "Stop"), on)
+    assert spied["spawn"] == [None]
+    overlays.sync = True
+    overlays.use(overlays.a)
+    _handle(_event(overlays, "SessionEnd"), off)
+    assert spied["spawn"] == [None]
+
+
+def test_a_codex_hook_process_starts_nothing(
+    overlays: Overlays, spied: dict[str, list[object]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Codex reads the same `hooks/hooks.json` and sets `PLUGIN_ROOT`, which Claude Code does not.
+    # Mutation (oracle): `mutations/`'s "a Codex session starts the job".
+    overlays.sync = True
+    overlays.use(overlays.a)
+    write(overlays.a, NOTE, "a note\n")
+    monkeypatch.setenv("PLUGIN_ROOT", str(overlays.home / "plugin"))
+    for name in ("SessionStart", "Stop", "SessionEnd"):
+        assert _handle(_event(overlays, name, source="startup")) == [HookResult()]
+    assert spied == {"git": [], "spawn": []}
+
+
+def test_a_claude_code_hook_process_still_starts_the_job(
+    overlays: Overlays, spied: dict[str, list[object]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Claude Code sets its own name for the plugin's root, never Codex's.
+    overlays.sync = True
+    overlays.use(overlays.a)
+    write(overlays.a, NOTE, "a note\n")
+    monkeypatch.delenv("PLUGIN_ROOT", raising=False)
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(overlays.home / "plugin"))
+    assert _handle(_event(overlays, "SessionEnd")) == [HookResult()]
+    assert spied["spawn"] == [None]
 
 
 def test_session_start_records_no_checkout(

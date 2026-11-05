@@ -30,7 +30,9 @@ from functools import cached_property
 from pathlib import Path
 
 from stayfixed import fsops
+from stayfixed.config.machine import machine_config_path
 from stayfixed.config.overlay import overlay_root
+from stayfixed.config.owner import resolve_owner
 from stayfixed.gitenv import answer_bytes
 from stayfixed.sync import scan
 from stayfixed.sync.git import (
@@ -81,7 +83,6 @@ from stayfixed.sync.state import (
     take_pending,
     write_state,
 )
-from stayfixed.sync.switch import enabled
 
 SWAP_MESSAGE = "stayfixed note sync"
 
@@ -964,8 +965,8 @@ def _sleep_until(text: str, now: datetime) -> None:
 
 
 def _switched_on() -> Path | None:
-    """The overlay the machine file records, when it also switches the sync on."""
-    overlay = overlay_root(None) if enabled() else None
+    """The overlay the machine file records, when it also switches the sync on (`Owner.sync`)."""
+    overlay = overlay_root(None) if resolve_owner(machine_config_path()).sync.enabled else None
     return overlay if overlay is not None and fsops.exists(overlay / ".git") else None
 
 

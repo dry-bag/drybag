@@ -3218,8 +3218,8 @@ reddens = ["tests/config/test_owner.py::test_a_machine_with_no_home_is_the_prese
 [[mutation]]
 name = "the owner's layer never reads [guards]"
 file = "src/stayfixed/config/owner.py"
-before = '    tables: dict[str, type[Any]] = {"personal": Personal, "guards": Guards, "budgets": Budgets}'
-after = '    tables: dict[str, type[Any]] = {"personal": Personal, "budgets": Budgets}'
+before = '        "guards": Guards,\n'
+after = ""
 reddens = [
   "tests/config/test_owner.py::test_the_machine_file_switches_the_background_guard_off",
 ]
@@ -5973,10 +5973,14 @@ reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one
 # 1, which a hand edit can easily write, must not start a job that commits and pushes.
 [[mutation]]
 name = "a string 'true' switches sync on"
-file = "src/stayfixed/sync/switch.py"
-before = "    return isinstance(table, dict) and table.get(KEY) is True"
-after = "    return isinstance(table, dict) and bool(table.get(KEY))"
-reddens = ["tests/sync/test_switch.py::test_enabled_only_for_a_true_bool"]
+file = "src/stayfixed/config/owner.py"
+before = '                    found[f"{table}.{key}"] = coerced(f"{table}.{key}", types[key], value)'
+after = '                    found[f"{table}.{key}"] = value'
+reddens = [
+  "tests/config/test_owner.py::test_sync_is_on_only_for_the_bool_true[a-string]",
+  "tests/config/test_owner.py::test_sync_is_on_only_for_the_bool_true[the-string-true]",
+  "tests/config/test_owner.py::test_sync_is_on_only_for_the_bool_true[an-integer]",
+]
 
 # The sync job's state is a file `doctor` and every hook read. A file that is there and cannot be
 # used is not "never ran", and an outcome the job does not have is not one it wrote.
@@ -6900,9 +6904,17 @@ reddens = ["tests/sync/test_hooks.py::test_no_overlay_or_not_a_repository_spawns
 [[mutation]]
 name = "sync off still decides"
 file = "src/stayfixed/sync/hooks.py"
-before = "        if enabled():"
+before = "        if session.owner.sync.enabled:"
 after = "        if True:"
 reddens = ["tests/sync/test_hooks.py::test_with_sync_off_stop_runs_no_git_and_spawns_nothing"]
+
+# Codex reads the same `hooks/hooks.json`; a Codex session starts no job, whatever the switch.
+[[mutation]]
+name = "a Codex session starts the job"
+file = "src/stayfixed/sync/hooks.py"
+before = "        if CODEX.detects is not None and CODEX.detects(os.environ, None):\n            return HookResult()\n"
+after = ""
+reddens = ["tests/sync/test_hooks.py::test_a_codex_hook_process_starts_nothing"]
 
 # The `sync` row of `doctor`: a machine that switched the sync on expects its notes to move, and
 # the job commits and pushes nothing without gitleaks on PATH or on a git below its floor. A row
