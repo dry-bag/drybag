@@ -3039,8 +3039,8 @@ reddens = ["tests/config/test_classes.py::test_a_key_with_no_class_is_a_key_erro
 [[mutation]]
 name = "a refused layer's note prints its key raw"
 file = "src/stayfixed/config/classes.py"
-before = "                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))"
-after = "                notes.append(REFUSED_LAYER_NOTE.format(key=key, layer=layer.said))"
+before = "                    REFUSED_LAYER_NOTE.format(key=clipped(key), layer=said(layer.name, layer.label))"
+after = "                    REFUSED_LAYER_NOTE.format(key=key, layer=said(layer.name, layer.label))"
 reddens = [
   "tests/config/test_classes.py::test_a_refused_layer_note_carries_neither_its_value_nor_a_raw_key",
 ]
@@ -3100,11 +3100,13 @@ reddens = ["tests/config/test_classes.py::test_which_layers_may_set_each_class"]
 [[mutation]]
 name = "a refused layer's value stands where nothing beneath it is set"
 file = "src/stayfixed/config/classes.py"
-before = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))
-                continue"""
-after = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))
+before = """                )
+                continue
+            if key in folds"""
+after = """                )
                 if key in values:
-                    continue"""
+                    continue
+            if key in folds"""
 reddens = ["tests/config/test_classes.py::test_a_key_only_a_refused_layer_sets_has_no_value"]
 
 # A key with no class reaching `resolve` is its caller's defect, and is raised rather than

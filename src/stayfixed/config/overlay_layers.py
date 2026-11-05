@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from stayfixed import fsops
-from stayfixed.config.classes import ALLOWED, Layer, LayerName, class_of
+from stayfixed.config.classes import ALLOWED, Layer, LayerName, class_of, said
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.owner import Guards
 from stayfixed.config.plates import COMMON, Plate, PlateKind, plates
@@ -145,24 +145,24 @@ def _layer(path: Path, name: LayerName, label: str, notes: list[str]) -> Layer |
     """The file at `path` as the layer `name` (`label` the tag a tag's layer is for), or `None`
     with a note where it cannot be read. A tag with no file sets nothing and says nothing: a tag
     is often only notes."""
-    said = Layer(name, {}, label).said
+    layer_said = said(name, label)
     shown = quoted(str(path))
     try:
         text = fsops.read_regular_text(path, limit=READ_LIMIT)
     except FileNotFoundError:
         if name is not LayerName.OVERLAY_TAG:
-            notes.append(NOT_THERE.format(path=shown, layer=said))
+            notes.append(NOT_THERE.format(path=shown, layer=layer_said))
         return None
     except UnicodeDecodeError:
-        notes.append(NOT_UTF8.format(path=shown, layer=said))
+        notes.append(NOT_UTF8.format(path=shown, layer=layer_said))
         return None
     except OSError as exc:
-        notes.append(UNREADABLE.format(path=shown, error=fsops.said(exc), layer=said))
+        notes.append(UNREADABLE.format(path=shown, error=fsops.said(exc), layer=layer_said))
         return None
     try:
         raw = tomllib.loads(text)
     except UNPARSEABLE as exc:
-        notes.append(NOT_TOML.format(path=shown, position=toml_position(exc), layer=said))
+        notes.append(NOT_TOML.format(path=shown, position=toml_position(exc), layer=layer_said))
         return None
     return Layer(name, _values(raw, shown, name, notes), label)
 

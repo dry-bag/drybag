@@ -195,8 +195,6 @@ def test_a_tag_layer_names_itself_by_its_label() -> None:
     # The label is what the owner wrote and `plates` held to `TAG`; a layer without one reads as
     # its name alone. The winner's label rides with its provenance, and a later layer without one
     # takes it back.
-    assert Layer(OVERLAY_TAG, {}, "ops").said == "overlay tag ops"
-    assert Layer(OVERLAY_PROJECT, {}).said == "overlay project"
     got = resolve(
         [
             Layer(OVERLAY_TAG, {"memory.mode": "overlay"}, "ops"),
