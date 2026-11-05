@@ -1099,7 +1099,8 @@ def test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link(
     (tmp_path / "directory").mkdir()
     outside = tmp_path / "outside.txt"
     (tmp_path / "dangling").symlink_to(outside)
-    for name in ("file.txt", "directory", "dangling"):
+    os.mkfifo(tmp_path / "pipe")
+    for name in ("file.txt", "directory", "dangling", "pipe"):
         assert create_within(tmp_path, name, b"owned\n", mode=0o600) is False
     assert (tmp_path / "file.txt").read_bytes() == b"theirs\n"
     assert (tmp_path / "directory").is_dir()

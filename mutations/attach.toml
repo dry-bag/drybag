@@ -1860,6 +1860,38 @@ reddens = [
   "tests/attach/test_checkout.py::test_a_submodule_gets_nothing",
 ]
 
+# A name is placed only where git ignores it, asked before the file exists: a branch's `.gitignore`
+# can re-include a name (`!` outranks `info/exclude`), and a file created first would show in
+# `git status` and go out with the next `git add -A`.
+[[mutation]]
+name = "owner-held files are placed before git is asked whether they are ignored"
+file = "src/stayfixed/attach/checkout.py"
+before = "        withheld = unignored(tree, vacant)"
+after = "        withheld = ()"
+reddens = [
+  "tests/attach/test_checkout.py::test_a_name_a_branch_gitignore_un_ignores_is_withheld_not_placed",
+]
+
+# Where git cannot say what it ignores, nothing is placed: the control fails closed.
+[[mutation]]
+name = "owner-held files are placed where git cannot say what it ignores"
+file = "src/stayfixed/attach/checkout.py"
+before = "    except (Refusal, OSError):\n        return [], []"
+after = "    except (Refusal, OSError):\n        vacant, withheld = _held(source), ()"
+reddens = [
+  "tests/attach/test_checkout.py::test_where_git_cannot_say_what_it_ignores_nothing_is_placed_or_said",
+]
+
+# `CLAUDE.md` placed alone must not send the session to a branch-authored `AGENTS.md`.
+[[mutation]]
+name = "owner-held files point at an AGENTS.md they did not place"
+file = "src/stayfixed/attach/checkout.py"
+before = '    if "AGENTS.md" in placed:'
+after = '    if "AGENTS.md" in placed or "CLAUDE.md" in placed:'
+reddens = [
+  "tests/attach/test_checkout.py::test_the_context_names_what_it_withheld_and_reads_agents_md_only_when_it_placed_it",
+]
+
 # A record that cannot be read lists no tags to a session, and a write run that took it so would
 # take back what the tags delivered: the refusal is what keeps it from untagging by accident.
 [[mutation]]

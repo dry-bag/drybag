@@ -362,9 +362,13 @@ is left alone and never written through. It answers from the machine's binding r
 the repository's `stayfixed.toml`, which the worktree may not have until this places it, and it
 places nothing in the main checkout, in a submodule, in an unbound checkout or on a machine that
 records no overlay. It runs on every `SessionStart` there, so a placed file you delete by hand comes
-back with the next session. It says nothing when it placed nothing; otherwise it names the files placed, asks the
-session to read `AGENTS.md` when that or `CLAUDE.md` is among them, and names the placed files git
-would show, to add to the checkout's `.git/info/exclude`. It asks git only `rev-parse` and
+back with the next session. **A file is placed only where git ignores its name**, asked before any is
+created: a name git would show (`git status`) is not placed but named to the session, which is told to
+add it to the checkout's `.git/info/exclude`, unless the branch's `.gitignore` un-ignores it on
+purpose (a `!` line outranks the exclude file), in which case it stays out. Where git cannot say
+what it ignores, nothing is placed and nothing is said. It says nothing when it placed and withheld
+nothing; otherwise it names the files placed, asks the session to read `AGENTS.md` when that file
+itself is among them, and names the files withheld. It asks git only `rev-parse` and
 `check-ignore --no-index`, neither of which runs a repository's `core.fsmonitor`.
 
 **Writes** inside `stayfixed/` under the data root the harness names — `CLAUDE_PLUGIN_DATA`, or

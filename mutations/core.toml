@@ -5900,7 +5900,6 @@ after = '''    | os.O_NONBLOCK
 '''
 reddens = [
   "tests/test_fsops.py::test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link",
-  "tests/attach/test_checkout.py::test_a_present_name_is_never_overwritten",
 ]
 
 [[mutation]]
