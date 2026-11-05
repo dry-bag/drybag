@@ -22,7 +22,6 @@ from pathlib import Path
 import pytest
 
 from stayfixed.sync import job as J
-from stayfixed.sync import scan
 from stayfixed.sync.state import LOCK_FILE, Lock, Outcome, read_state
 from tests.gitfixture import run_git
 from tests.sync.conftest import (
@@ -687,22 +686,6 @@ def _notice(overlays: Overlays, clone: Path) -> Outcome:
     assert J.commit_memory(ctx) is None
     assert len(ctx.notices) == 1, ctx.notices
     return ctx.notices[0]
-
-
-def test_no_scanner_commits_nothing_and_says_how_to_build_one(overlays: Overlays) -> None:
-    # Mutation (oracle): `mutations/`'s "no scanner, and the commit goes on".
-    a = overlays.a
-    (overlays.home / ".cache" / "pre-commit" / "db.db").unlink()
-    write(a, "common/memory/new.md", "a note\n")
-    before = head(a)
-
-    outcome = _notice(overlays, a)
-
-    assert outcome.state == "scan_unavailable"
-    assert outcome.detail == scan.NO_SCANNER.format(overlay=a)
-    assert "pre-commit install-hooks" in outcome.detail
-    assert head(a) == before
-    assert "?? common/memory/new.md" in memory_status(a)
 
 
 def test_a_failed_scan_or_a_finding_is_hook_failed_naming_the_scanner(overlays: Overlays) -> None:

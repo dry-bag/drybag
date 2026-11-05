@@ -4,16 +4,14 @@ git is never mocked here: the rules under test are about what git lists (renames
 pathspec magic), so a fake would only test the fake. Every repository lives under the test's
 `tmp_path`, and `_sealed_git` closes what the root `conftest.py` leaves open (an identity, the
 variables a hook run would hand on), so the developer's own settings cannot reach a test. The
-scanner is a stand-in script that answers as the real build does, and pre-commit's database a
-SQLite file written here: no test runs `pre-commit` or `gitleaks`.
+scanner is a stand-in script installed as `gitleaks` first on a `PATH` that holds no other one:
+only the test that says so runs the real `gitleaks`.
 """
 
 from __future__ import annotations
 
-import contextlib
 import os
 import shutil
-import sqlite3
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -31,10 +29,7 @@ from tests import gitfixture as fx
 # git, so the suite's floor does not lift its bound. Every git call has the floor; the tests about
 # a bound running out remove it and pass a small one of their own.
 SLOW = 120.0
-GITLEAKS_REPO = "https://github.com/gitleaks/gitleaks"
-GITLEAKS_REV = "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"
 LEAK = "FAKESECRET-0123456789abcdef"
-DEFAULT_RULES = "# the build's own default rules\n"
 # The variables a job started from inside a git hook would inherit, and the ones a test that
 # reads the ssh command or the attributes must find unset.
 _AMBIENT = (
@@ -215,10 +210,10 @@ def slow_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, slow: dict[str, fl
     monkeypatch.setenv("PATH", f"{shim}{os.pathsep}{os.environ['PATH']}")
 
 
-# -- the scanner: the build pre-commit makes, as a script that answers like it ------------------
+# -- the scanner: a script on PATH that answers like gitleaks -----------------------------------
 
 _GITLEAKS = r'''#!{python}
-"""Stand-in gitleaks, answering as the real build does: a JSON report naming rule, file and
+"""Stand-in gitleaks, answering as the real one does: a JSON report naming rule, file and
 commit; exit 1 for a finding and for a failed scan alike (the failed one with an empty report).
 
 Modes, from the file `mode` beside it: `scan` (default), `fail`, `sleep [seconds]` (then scan).
@@ -295,34 +290,30 @@ sys.exit(1 if findings else 0)
 '''
 
 
-def build_gitleaks(directory: Path, environment: str = "default") -> Path:
-    """A stand-in gitleaks where pre-commit would have built it, in `environment`, beside the
-    source's `config/gitleaks.toml` (the default rules the real build embeds)."""
-    (directory / "config").mkdir(parents=True, exist_ok=True)
-    (directory / "config" / "gitleaks.toml").write_text(DEFAULT_RULES, encoding="utf-8")
-    binary = directory / f"golangenv-{environment}" / "bin" / "gitleaks"
-    binary.parent.mkdir(parents=True, exist_ok=True)
+def gitleaks_on_path(directory: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The stand-in installed as `directory/gitleaks`, first on a `PATH` that holds no other
+    `gitleaks` (`path_without_gitleaks`)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    binary = directory / "gitleaks"
     binary.write_text(_GITLEAKS.format(python=sys.executable, secret=LEAK), encoding="utf-8")
     binary.chmod(0o755)
+    path = path_without_gitleaks(directory.parent / "git-only")
+    monkeypatch.setenv("PATH", f"{directory}{os.pathsep}{path}")
     return binary
 
 
-def pre_commit_store(cache: Path, rows: list[tuple[str, str, Path]]) -> Path:
-    """pre-commit's `db.db` under `cache/pre-commit`, with `(repo, rev, path)` rows."""
-    store = cache / "pre-commit"
-    store.mkdir(parents=True, exist_ok=True)
-    with contextlib.closing(sqlite3.connect(store / "db.db")) as db, db:
-        db.execute(
-            "CREATE TABLE IF NOT EXISTS repos (repo TEXT NOT NULL, ref TEXT NOT NULL, "
-            "path TEXT NOT NULL, PRIMARY KEY (repo, ref))"
-        )
-        db.executemany("INSERT INTO repos VALUES (?, ?, ?)", [(r, v, str(p)) for r, v, p in rows])
-    return store
-
-
-def environment_of(cache: Path) -> dict[str, str]:
-    """The environment whose scratch cache holds the database `pre_commit_store` wrote."""
-    return {"XDG_CACHE_HOME": str(cache), "PATH": os.environ.get("PATH", "")}
+def path_without_gitleaks(git_only: Path) -> str:
+    """This process's `PATH` less every directory holding a `gitleaks`, after `git_only`, a
+    directory holding only a `git` that runs this one: a `git` installed beside a `gitleaks` is
+    still found, and that `gitleaks` is not."""
+    entries = [entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+    entries = [entry for entry in entries if Path(entry) != git_only]
+    git_only.mkdir(parents=True, exist_ok=True)
+    real = shutil.which("git", path=os.pathsep.join(entries))
+    (git_only / "git").write_text(f'#!/bin/sh\nexec "{real}" "$@"\n')
+    (git_only / "git").chmod(0o755)
+    kept = [entry for entry in entries if not (Path(entry) / "gitleaks").exists()]
+    return os.pathsep.join([str(git_only), *kept])
 
 
 # -- an overlay the job runs on: notes and the scanner -------------------------------------------
@@ -330,10 +321,6 @@ def environment_of(cache: Path) -> dict[str, str]:
 NOW = datetime(2026, 10, 12, 12, 0, 0, tzinfo=UTC)
 HOST = "testhost"
 TAG = "team"
-PRE_COMMIT_CONFIG = (
-    f"repos:\n  - repo: {GITLEAKS_REPO}\n    rev: {GITLEAKS_REV}\n"
-    "    hooks:\n      - id: gitleaks\n"
-)
 PATHSPEC = [
     ":(top,glob)common/memory/**",
     ":(top,glob)groups/*/memory/**",
@@ -354,8 +341,7 @@ def note_text(name: str, *, index: str | None = None, body: str = "") -> str:
 @dataclass
 class Overlays:
     """Two machines' clones of one overlay remote, `a` and `b`, with what the job reads: the
-    scanner's stand-in (`gitleaks`) where pre-commit's database finds it, and the state
-    directory."""
+    scanner's stand-in (`gitleaks`) first on `PATH`, and the state directory."""
 
     bare: Path
     a: Path
@@ -387,18 +373,13 @@ class Overlays:
 @pytest.fixture
 def overlays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own: Path) -> Overlays:
     home = _a_home_of_its_own
-    monkeypatch.delenv("PRE_COMMIT_HOME", raising=False)
-    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
-    scanner = build_gitleaks(tmp_path / "pre-commit" / "repo")
-    pre_commit_store(
-        home / ".cache", [(GITLEAKS_REPO, GITLEAKS_REV, tmp_path / "pre-commit" / "repo")]
-    )
+    scanner = gitleaks_on_path(tmp_path / "bin", monkeypatch)
     bare = tmp_path / "remote.git"
     bare.mkdir()
     fx.git(bare, "init", "-q", "--bare", "-b", "main")
     seed = init(tmp_path / "seed")
     write(seed, "README.md", "overlay\n")
-    write(seed, ".pre-commit-config.yaml", PRE_COMMIT_CONFIG)
+    write(seed, ".pre-commit-config.yaml", "repos: []\n")
     write(seed, "common/claude/hooks/launch.sh", "#!/bin/sh\n")
     write(seed, "common/claude/hooks/x.py", "print('x')\n")
     write(seed, "common/memory/first.md", note_text("first", index="First trigger"))

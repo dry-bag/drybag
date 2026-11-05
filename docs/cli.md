@@ -632,14 +632,15 @@ stayfixed starts is given: `PATH` without its relative entries, `HOME`, `LANG`, 
 the job's own settings: attributes read from `HEAD` (`GIT_ATTR_SOURCE=HEAD`), replace refs ignored
 (`GIT_NO_REPLACE_OBJECTS=1`) and `LC_ALL=C`.
 
-**The secret scan.** The overlay's own pinned gitleaks build: the job reads the pin in `HEAD`'s
-`.pre-commit-config.yaml` and pre-commit's cache, takes the build made for that revision, and
-never downloads or builds one. Rules and ignores come from `HEAD` too: a `.gitleaks.toml` in the
+**The secret scan.** The `gitleaks` on `PATH`: the `PATH` every git of the job gets, its relative
+entries dropped, looked up once per job. pre-commit's build is not read, nor any other a session's
+environment names, and the job never downloads or builds one. Rules and ignores come from `HEAD`: a `.gitleaks.toml` in the
 working tree is never read, and a `.gitleaksignore` at the overlay's root that differs from the
 committed one stops the scan, since gitleaks reads that one whatever it is told. Every `git`
 gitleaks starts is given `color.ui`, `color.diff` and `log.showSignature` off, since its parser
-reads their patch text. With no build, nothing is committed or pushed (`scan_unavailable`) and the remedy is `pre-commit
-install-hooks` in the overlay; what is already committed upstream still integrates. A finding stops
+reads their patch text. With no `gitleaks` there, nothing is committed or pushed (`scan_unavailable`) and the remedy is to
+install gitleaks on the `PATH` the sessions run with; what is already committed upstream still
+integrates. A finding stops
 the push (`secret_found`) and names the commit.
 
 **Writes.** In the data directory, `$HOME/.local/share/stayfixed/sync/`: `state.json` (the last
@@ -2423,9 +2424,7 @@ note sync on, as `setup --overlay` does for an overlay it makes — the wrapper 
 `git` questions, the `sync` row's `git version` among them — and not one of them leaves this
 machine. The `git` questions are `gitenv`'s five seconds each, and the wrapper probe is this
 area's own thirty seconds. The `sync` row's `git version`, of the overlay's `git`, is bounded at
-five seconds like them, and asked only where the note sync is on; so is its `git cat-file` of the
-pin `HEAD` commits, asked only where pre-commit's database is there, which the fifteen do not
-count.
+five seconds like them, and asked only where the note sync is on.
 
 The summary line carries the counts and the names of whichever status most needs reading, capped
 the way every summary in this CLI is. The rows are in `--json`, under `checks`, one object per
@@ -2448,7 +2447,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning only for files in the note store that are not notes, counted (at most 500,000 entries) | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
 | `pre-commit` | whether the overlay's commit-time secret scan is installed on this machine | the overlay |
 | `overlay-requires` | whether the overlay this machine records requires a stayfixed the running one satisfies — red when this project keeps its notes in that overlay, a warning when it does not — and, where that finds nothing, a warning when another repository's work tree holds the overlay root (a `.git` in a directory above it), naming that directory, since that repository can put files into the overlay | the overlay's `stayfixed-overlay.toml`, `stayfixed.toml`, the directories above the overlay root |
-| `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when no gitleaks build exists for the overlay's pinned hook (nothing is then committed or pushed; `setup --overlay` switches the sync on without building one, and the job fails closed), when a hold stands (the paths or commits, and the review command, which names the recorded sha only when it is a whole one), when the record of the job cannot be read, or when the last outcome is a failure (the outcome and its first line); green otherwise, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, pre-commit's cache and `HEAD`'s `.pre-commit-config.yaml` (`git cat-file`, asked only once that cache holds a database), `~/.local/share/stayfixed/sync/state.json` |
+| `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when no `gitleaks` is on `PATH` (nothing is then committed or pushed; `setup --overlay` switches the sync on without installing one, and the job fails closed), when a hold stands (the paths or commits, and the review command, which names the recorded sha only when it is a whole one), when the record of the job cannot be read, or when the last outcome is a failure (the outcome and its first line); green otherwise, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, `PATH`, `~/.local/share/stayfixed/sync/state.json` |
 
 **How `attached` reads the delivery.** With no ledger, a repository whose `memory.mode` is not
 `overlay` is simply not attached, and the row is green. Once this machine's binding confirms the

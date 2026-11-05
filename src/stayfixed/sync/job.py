@@ -26,6 +26,7 @@ import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from functools import cached_property
 from pathlib import Path
 
 from stayfixed import fsops
@@ -148,6 +149,11 @@ class JobContext:
         if left <= 0:
             raise JobTimeout(f"the job did not finish within {self.limits.job:g} s")
         return min(step, left)
+
+    @cached_property
+    def scanner(self) -> Path | None:
+        """The `gitleaks` on `PATH` (`scan.gitleaks`), looked up once for this job."""
+        return scan.gitleaks()
 
     @property
     def env(self) -> Mapping[str, str]:
@@ -355,10 +361,9 @@ def _move_main(ctx: JobContext, pending: PendingAlign) -> bool:
 
 def _run_checks(ctx: JobContext, index: Path, paths: list[str]) -> Outcome | None:
     """The secret scan of what `index` stages, before any tree is written; the failure, if any."""
-    binary = scan.gitleaks_binary(ctx.home, ctx.overlay, git_env=ctx.env)
+    binary = ctx.scanner
     if binary is None:
-        detail = scan.NO_SCANNER.format(overlay=ctx.overlay)
-        return _outcome(ctx, "scan_unavailable", detail)
+        return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER)
     result = scan.scan_index(
         ctx.overlay, index, binary, ctx.limit(ctx.limits.checks), env=ctx.env, scratch=index.parent
     )
@@ -826,9 +831,9 @@ def _metadata(ctx: JobContext, base: str, tip: str) -> list[tuple[str, str]]:
 
 def _scan_push(ctx: JobContext, upstream: str, tip: str) -> Outcome | None:
     """Both scans of what the push sends, within `Limits.checks` together; the failure, if any."""
-    binary = scan.gitleaks_binary(ctx.home, ctx.overlay, git_env=ctx.env)
+    binary = ctx.scanner
     if binary is None:
-        return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER.format(overlay=ctx.overlay))
+        return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER)
     deadline = time.monotonic() + ctx.limits.checks
     with _scratch(ctx) as scratch:
         result = scan.scan_range(

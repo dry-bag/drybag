@@ -283,7 +283,8 @@ last to find the project root, and reaches no network.
    into a ref of its own, in that same environment; it never asks for a password
    (`GIT_TERMINAL_PROMPT=0`, no askpass, no standard input) and runs none of the overlay's hooks.
    Its **`git push`** goes the same way to the same `origin`: the sha it checked to `main`, never
-   forced and with no tag.
+   forced and with no tag. Its secret scan is the `gitleaks` on that same `PATH`, which reaches no
+   network; pre-commit's build of the overlay's hook is not read.
 2. **`gh`**: `setup --overlay create:` looks up the template, creates the private overlay from it
    with its clone, and asks whether it exists when that clone left nothing. It is asked nothing
    until `setup` has looked at `<home>/<name>`: a file there, or a directory that is not an

@@ -314,11 +314,11 @@ def test_a_failed_range_scan_is_hook_failed_not_secret_found(overlays: Overlays)
 def test_scan_unavailable_still_integrates_upstream_and_pushes_nothing(
     overlays: Overlays,
 ) -> None:
-    # No scanner build, an uncommitted note, an upstream note and an unpushed local one. The commit
-    # step's failure is a notice; fetch and integrate still run, so the upstream note arrives; the
-    # push needs its own scan, so nothing is pushed and the end is `scan_unavailable`.
+    # No gitleaks on PATH, an uncommitted note, an upstream note and an unpushed local one. The
+    # commit step's failure is a notice; fetch and integrate still run, so the upstream note
+    # arrives; the push needs its own scan, so nothing is pushed and the end is `scan_unavailable`.
     a = overlays.a
-    (overlays.home / ".cache" / "pre-commit" / "db.db").unlink()
+    overlays.gitleaks.unlink()
     push_note(overlays.b, "common/memory/from-b.md", note_text("from-b"))
     write(a, "common/memory/local.md", note_text("local"))
     git(a, "add", "common/memory/local.md")
@@ -329,7 +329,7 @@ def test_scan_unavailable_still_integrates_upstream_and_pushes_nothing(
     state = job(overlays)
 
     assert state.outcome.state == "scan_unavailable", state.outcome
-    assert state.outcome.detail is not None and "pre-commit install-hooks" in state.outcome.detail
+    assert state.outcome.detail is not None and "install gitleaks" in state.outcome.detail
     assert (a / "common/memory/from-b.md").read_text() == note_text("from-b")
     assert head(a, "HEAD^") == before  # the local commit, replayed onto upstream's
     assert remote_main(overlays) == before
@@ -338,7 +338,7 @@ def test_scan_unavailable_still_integrates_upstream_and_pushes_nothing(
 
 def test_scan_unavailable_alone_is_the_end_after_a_clean_integration(overlays: Overlays) -> None:
     a = overlays.a
-    (overlays.home / ".cache" / "pre-commit" / "db.db").unlink()
+    overlays.gitleaks.unlink()
     push_note(overlays.b, "common/memory/from-b.md", note_text("from-b"))
     a_note(overlays)
 

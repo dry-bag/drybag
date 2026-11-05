@@ -1,270 +1,130 @@
-"""The secret scan: finding the overlay's pinned gitleaks build, and the three scans.
+"""The secret scan: the gitleaks on `PATH`, and the three scans.
 
 The job commits through a temporary index and never runs `git commit`, so the overlay's
 pre-commit hooks do not run by themselves; this module runs the scan itself. The scanner is the
-build pre-commit already made for the overlay's pinned hook -- found through pre-commit's own
-database, never downloaded -- and it must scan the TEMPORARY index, not the real one. The
-stand-in in `conftest.py` answers as the real build does: `git --pre-commit --staged` reads the
-index `GIT_INDEX_FILE` names, `git --log-opts=A..B` scans a range, `stdin` scans what else a push
-sends, a JSON report names each finding's commit, the exit is 1 for a finding and for a failed
-scan alike, and a failed scan leaves an empty report.
+`gitleaks` the `PATH` of the one git environment finds, never pre-commit's build, and it must scan
+the TEMPORARY index, not the real one. The stand-in in `conftest.py` answers as the real one does:
+`git --pre-commit --staged` reads the index `GIT_INDEX_FILE` names, `git --log-opts=A..B` scans a
+range, `stdin` scans what else a push sends, a JSON report names each finding's commit, the exit
+is 1 for a finding and for a failed scan alike, and a failed scan leaves an empty report.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import shutil
+import sqlite3
 import time
 from pathlib import Path
 
 import pytest
 
-import stayfixed
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
 from stayfixed.sync import scan as S
 from tests.sync.conftest import (
-    DEFAULT_RULES,
-    GITLEAKS_REPO,
-    GITLEAKS_REV,
     LEAK,
     SLOW,
     Overlays,
-    build_gitleaks,
     commit_all,
     context,
     git,
+    gitleaks_on_path,
     head,
     init,
-    pre_commit_store,
+    memory_status,
+    path_without_gitleaks,
     write,
 )
 
-OTHER_REV = "v8.0.0"
-
-
-def _config(
-    overlay: Path,
-    *,
-    rev: str = GITLEAKS_REV,
-    language_version: str | None = None,
-    default_golang: str | None = None,
-) -> Path:
-    version = f"        language_version: {language_version}\n" if language_version else ""
-    defaults = f"default_language_version:\n  golang: {default_golang}\n" if default_golang else ""
-    return _committed_config(
-        overlay,
-        f"# a comment\n{defaults}repos:\n"
-        f"  - repo: {GITLEAKS_REPO}\n"
-        f"    rev: {rev}  # frozen: v8.30.1\n"
-        "    hooks:\n"
-        "      - id: gitleaks\n"
-        f"{version}"
-        "\n  - repo: local\n    hooks:\n      - id: other\n"
-        "        language_version: other\n",
-    )
-
-
-def _committed_config(overlay: Path, text: str | bytes) -> Path:
-    """`overlay` as a repository whose `HEAD` commits `text` as its `.pre-commit-config.yaml`."""
-    init(overlay)
-    config = overlay / ".pre-commit-config.yaml"
-    config.write_bytes(text if isinstance(text, bytes) else text.encode())
-    git(overlay, "add", "--", config.name)
-    git(overlay, "commit", "-q", "--allow-empty", "-m", "config")
-    return overlay
-
-
-class Machine:
-    """A scratch cache holding pre-commit's database, and the environment that names it."""
-
-    def __init__(self, root: Path) -> None:
-        self.home = root / "home"
-        self.cache = root / "cache"
-        self.build_dir = root / "pc" / "repoA"
-        self.env = {"XDG_CACHE_HOME": str(self.cache)}
-
-    def row(self, *rows: tuple[str, str, Path]) -> None:
-        pre_commit_store(self.cache, list(rows))
-
-    def pinned(self, environment: str | None = "default", rev: str = GITLEAKS_REV) -> Path | None:
-        """Register the pinned row, with a build in `environment` when one is named."""
-        self.row((GITLEAKS_REPO, rev, self.build_dir))
-        return None if environment is None else build_gitleaks(self.build_dir, environment)
-
-    def binary(self, overlay: Path) -> Path | None:
-        return S.gitleaks_binary(self.home, overlay, self.env)
+# The `gitleaks` on this machine's `PATH`, when there is one: found before any fixture puts the
+# stand-in first.
+REAL = shutil.which("gitleaks")
 
 
 @pytest.fixture
-def machine(tmp_path: Path) -> Machine:
-    return Machine(tmp_path)
+def scanner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    return gitleaks_on_path(tmp_path / "bin", monkeypatch)
 
 
-# -- finding the build ----------------------------------------------------------------------------
+# -- finding the scanner --------------------------------------------------------------------------
 
 
-def test_the_pin_is_read_from_the_overlays_config(tmp_path: Path) -> None:
-    assert S.gitleaks_pin(_config(tmp_path / "plain")) == (GITLEAKS_REPO, GITLEAKS_REV, None)
-    hook = _config(tmp_path / "hook", language_version="1.22")
-    assert S.gitleaks_pin(hook) == (GITLEAKS_REPO, GITLEAKS_REV, "1.22")
-    # The file's default applies where the hook says nothing, and the hook's own wins.
-    assert S.gitleaks_pin(_config(tmp_path / "d", default_golang="1.21"))[2] == "1.21"  # type: ignore[index]
-    both = _config(tmp_path / "both", default_golang="1.21", language_version="1.22")
-    assert S.gitleaks_pin(both)[2] == "1.22"  # type: ignore[index]
-    # `default` is pre-commit's "not set here": the next step decides.
-    assert S.gitleaks_pin(_config(tmp_path / "e", language_version="default"))[2] is None  # type: ignore[index]
-    # Another repository's hook never lends its `language_version`.
-    assert S.gitleaks_pin(_config(tmp_path / "f"))[2] is None  # type: ignore[index]
-
-
-def test_the_pin_in_the_template_the_overlay_ships_is_understood(tmp_path: Path) -> None:
-    template = Path(stayfixed.__file__).parent / "templates" / "overlay"
-    shipped = (template / ".pre-commit-config.yaml").read_bytes()
-
-    pin = S.gitleaks_pin(_committed_config(tmp_path / "o", shipped))
-
-    assert pin is not None and pin[0] == GITLEAKS_REPO and pin[2] is None
-    assert len(pin[1]) == 40  # a full commit sha: a tag is a name its owner can move
-
-
-def test_a_config_without_gitleaks_or_without_a_file_has_no_pin(tmp_path: Path) -> None:
-    assert S.gitleaks_pin(tmp_path / "not-a-repository") is None
-    overlay = init(tmp_path / "overlay")
-    assert S.gitleaks_pin(overlay) is None  # no commit at all
-    assert (
-        S.gitleaks_pin(_committed_config(overlay, "repos:\n  - repo: local\n    hooks: []\n"))
-        is None
-    )
-    assert S.gitleaks_pin(_committed_config(overlay, b"\xff\xfe")) is None
-
-
-def test_the_pin_is_read_from_head_whatever_the_working_tree_says(tmp_path: Path) -> None:
-    # The rules and ignores come from `HEAD`, so the scanner does too: a working tree that drops
-    # the hook (an agent silencing a false positive) must not make the scan unavailable with a
-    # remedy, `pre-commit install-hooks`, that cannot fix it, nor pick another build by a pin it
-    # rewrote. Mutation (oracle): `mutations/`'s "the scanner's pin is read from the working tree".
-    overlay = _config(tmp_path / "o")
-    config = overlay / ".pre-commit-config.yaml"
-    config.write_text("repos: []\n", encoding="utf-8")
-    assert S.gitleaks_pin(overlay) == (GITLEAKS_REPO, GITLEAKS_REV, None)
-    config.write_text(config.read_text().replace(GITLEAKS_REV, OTHER_REV), encoding="utf-8")
-    assert S.gitleaks_pin(overlay) == (GITLEAKS_REPO, GITLEAKS_REV, None)
-
-
-def test_the_binary_is_found_through_pre_commits_database(machine: Machine, tmp_path: Path) -> None:
-    binary = machine.pinned("default")
-
-    assert machine.binary(_config(tmp_path / "o")) == binary
-
-
-def test_the_cache_follows_the_home_when_no_variable_names_it(tmp_path: Path) -> None:
-    home = tmp_path / "home"
-    directory = tmp_path / "pc" / "repoA"
-    binary = build_gitleaks(directory)
-    pre_commit_store(home / ".cache", [(GITLEAKS_REPO, GITLEAKS_REV, directory)])
-
-    assert S.gitleaks_binary(home, _config(tmp_path / "o"), {}) == binary
-
-
-def test_pre_commit_home_is_honoured(machine: Machine, tmp_path: Path) -> None:
-    binary = machine.pinned("default")
-    moved = tmp_path / "elsewhere"
-    (machine.cache / "pre-commit").rename(moved)
-    overlay = _config(tmp_path / "o")
-
-    assert machine.binary(overlay) is None
-    machine.env["PRE_COMMIT_HOME"] = str(moved)
-    assert machine.binary(overlay) == binary
-
-
-def test_no_row_for_the_pinned_rev_is_no_scanner(machine: Machine, tmp_path: Path) -> None:
-    overlay = _config(tmp_path / "o")
-    assert machine.binary(overlay) is None  # a machine where pre-commit never ran
-
-    other = tmp_path / "pc" / "repoB"
-    build_gitleaks(other)
-    machine.row((GITLEAKS_REPO, OTHER_REV, other))  # an older rev is never a substitute
-    assert machine.binary(overlay) is None
-
-
-def test_the_pinned_rev_row_is_the_one_chosen(machine: Machine, tmp_path: Path) -> None:
-    """Two gitleaks rows, as a machine that upgraded has: only the configured `rev` counts."""
-    older = tmp_path / "pc" / "repoB"
-    pinned = machine.build_dir
-    older_build = build_gitleaks(older)
-    pinned_build = build_gitleaks(pinned)
-    machine.row((GITLEAKS_REPO, OTHER_REV, older), (GITLEAKS_REPO, GITLEAKS_REV, pinned))
-
-    assert machine.binary(_config(tmp_path / "o1")) == pinned_build
-    assert machine.binary(_config(tmp_path / "o2", rev=OTHER_REV)) == older_build
-
-
-def test_an_explicit_version_has_no_substitute(machine: Machine, tmp_path: Path) -> None:
-    machine.pinned("default")
-    build_gitleaks(machine.build_dir, "system")
-    pinned = machine.build_dir
-
-    # The hook's version, or the file's default: that build or nothing.
-    assert machine.binary(_config(tmp_path / "o1", language_version="1.22")) is None
-    assert machine.binary(_config(tmp_path / "o2", default_golang="1.22")) is None
-    versioned = build_gitleaks(pinned, "1.22")
-    assert machine.binary(_config(tmp_path / "o3", language_version="1.22")) == versioned
-    assert machine.binary(_config(tmp_path / "o4", default_golang="1.22")) == versioned
-    # `system` written out is an explicit version too, and `default` is not one.
-    system = pinned / "golangenv-system" / "bin" / "gitleaks"
-    assert machine.binary(_config(tmp_path / "o5", language_version="system")) == system
-
-
-def test_default_then_system(machine: Machine, tmp_path: Path) -> None:
-    overlay = _config(tmp_path / "o")
-    machine.pinned(None)
-    assert machine.binary(overlay) is None  # a row, nothing built
-
-    system = build_gitleaks(machine.build_dir, "system")
-    assert machine.binary(overlay) == system  # the same source at the same rev, built by another go
-    default = build_gitleaks(machine.build_dir, "default")
-    assert machine.binary(overlay) == default  # and `default` first when both are there
-
-
-def test_a_version_that_leaves_the_pinned_row_selects_nothing(
-    machine: Machine, tmp_path: Path
+def test_the_scanner_is_the_gitleaks_on_path(
+    tmp_path: Path, scanner: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A `language_version` with a separator or `..` would name a binary outside the pinned row."""
-    machine.pinned("default")
-    build_gitleaks(tmp_path / "pc" / "evil", "x")  # pc/evil/golangenv-x/bin/gitleaks
+    assert S.gitleaks() == scanner
 
-    for number, version in enumerate(
-        ("default/../../evil/golangenv-x", "../repoA/golangenv-default", "a/b", "a\\b")
-    ):
-        overlay = _config(tmp_path / f"o-{number}", language_version=version)
-        assert machine.binary(overlay) is None, version
-
-
-def test_a_build_linking_out_of_its_row_is_not_it(machine: Machine, tmp_path: Path) -> None:
-    machine.pinned("default")
-    evil = build_gitleaks(tmp_path / "pc" / "evil", "x")
-    (machine.build_dir / "golangenv-1.22").symlink_to(evil.parents[1])
-
-    assert machine.binary(_config(tmp_path / "o", language_version="1.22")) is None
+    # The `PATH` every git is given: a relative entry, which would find one planted at the root
+    # of the repository a hook runs in, is not on it.
+    planted = gitleaks_on_path(tmp_path / "work" / "tools", monkeypatch)
+    monkeypatch.chdir(tmp_path / "work")
+    monkeypatch.setenv("PATH", f"tools{os.pathsep}{path_without_gitleaks(tmp_path / 'g')}")
+    assert planted.exists() and S.gitleaks() is None
 
 
-def test_a_build_that_is_not_executable_is_not_a_scanner(machine: Machine, tmp_path: Path) -> None:
-    binary = machine.pinned("default")
-    assert binary is not None
-    binary.chmod(0o644)
+def test_no_gitleaks_on_path_is_scan_unavailable_with_the_remedy(overlays: Overlays) -> None:
+    # Mutation (oracle): `mutations/`'s "no scanner, and the commit goes on".
+    a = overlays.a
+    overlays.gitleaks.unlink()
+    write(a, "common/memory/new.md", "a note\n")
+    before = head(a)
 
-    assert machine.binary(_config(tmp_path / "o")) is None
+    ctx = context(overlays, a)
+    assert J.commit_memory(ctx) is None
+    assert [(notice.state, notice.detail) for notice in ctx.notices] == [
+        ("scan_unavailable", S.NO_SCANNER)
+    ]
+    assert head(a) == before and "?? common/memory/new.md" in memory_status(a)
+
+    write(a, "common/memory/by-hand.md", "a note committed by hand\n")
+    commit_all(a, "memory: by hand")
+    stopped = J.push(context(overlays, a), head(a, "origin/main"))
+    assert stopped is not None and (stopped.state, stopped.detail) == (
+        "scan_unavailable",
+        S.NO_SCANNER,
+    )
+    assert head(overlays.bare, "main") == before
+    assert S.NO_SCANNER.endswith("install gitleaks on the PATH the sessions run with")
+
+
+def test_a_pre_commit_database_chooses_no_scanner(
+    overlays: Overlays, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A session's `PRE_COMMIT_HOME` naming a database whose row for the overlay's pin is a script
+    # that finds nothing: the scanner is still the `gitleaks` on `PATH`, and the secret is found.
+    a = overlays.a
+    rev = "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"
+    write(
+        a,
+        ".pre-commit-config.yaml",
+        f"repos:\n  - repo: https://github.com/gitleaks/gitleaks\n    rev: {rev}\n"
+        "    hooks:\n      - id: gitleaks\n",
+    )
+    commit_all(a, "pin the hook")
+    blind = write(tmp_path / "pc" / "repo", "golangenv-default/bin/gitleaks", "#!/bin/sh\nexit 0\n")
+    blind.chmod(0o755)
+    store = tmp_path / "pre-commit-home"
+    store.mkdir()
+    with contextlib.closing(sqlite3.connect(store / "db.db")) as db, db:
+        db.execute("CREATE TABLE repos (repo TEXT, ref TEXT, path TEXT)")
+        db.execute(
+            "INSERT INTO repos VALUES (?, ?, ?)",
+            ("https://github.com/gitleaks/gitleaks", rev, str(tmp_path / "pc" / "repo")),
+        )
+    monkeypatch.setenv("PRE_COMMIT_HOME", str(store))
+    write(a, "common/memory/leak.md", f"key = {LEAK}\n")
+
+    ctx = context(overlays, a)
+    assert J.commit_memory(ctx) is None
+
+    assert [notice.state for notice in ctx.notices] == ["hook_failed"]
+    assert "common/memory/leak.md" in str(ctx.notices[0].detail)
 
 
 # -- the scans ------------------------------------------------------------------------------------
-
-
-@pytest.fixture
-def scanner(machine: Machine) -> Path:
-    binary = machine.pinned("default")
-    assert binary is not None
-    return binary
 
 
 def _repo(tmp_path: Path) -> Path:
@@ -412,7 +272,7 @@ def test_rules_and_ignores_come_from_head(
     result = S.scan_index(repo, index, scanner, SLOW)
 
     assert result.ok is False and "common/memory/leak.md" in result.detail
-    assert _seen(scanner)["rules_text"] == DEFAULT_RULES  # none committed: the build's own
+    assert _seen(scanner)["rules_text"] == S.DEFAULTS.decode()  # none committed: the defaults
 
     write(repo, ".gitleaks.toml", "# the owner's committed rules\n")
     git(repo, "add", ".gitleaks.toml")
@@ -458,14 +318,15 @@ def test_a_gitleaksignore_that_cannot_be_read_stops_the_scan(tmp_path: Path, sca
     assert not (scanner.parent / "argv.json").exists()
 
 
-def test_without_committed_rules_or_a_default_the_scan_fails(tmp_path: Path, scanner: Path) -> None:
-    (scanner.parents[2] / "config" / "gitleaks.toml").unlink()
+def test_no_committed_rules_scan_on_gitleaks_defaults(tmp_path: Path, scanner: Path) -> None:
     repo = _repo(tmp_path)
 
     result = S.scan_range(repo, "HEAD", "HEAD", scanner, SLOW)
 
-    assert (result.ok, result.finding_commit) == (False, None)
-    assert "default rules are missing" in result.detail
+    assert result.ok is True, result.detail
+    config = _argv(scanner)[_argv(scanner).index("--config") + 1]
+    assert _seen(scanner)["rules"] == config
+    assert _seen(scanner)["rules_text"] == "[extend]\nuseDefault = true\n"
 
 
 def test_gitleaks_variables_are_dropped(
@@ -503,24 +364,14 @@ def test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour(
     assert json.loads((scanner.parent / "git_config.json").read_text()) == expected
 
 
-# The pinned build pre-commit made on this machine, when it made one: the owner's own cache, read
-# only, located before the suite's scratch `HOME` replaces the real one.
-_CACHE = Path(
-    os.environ.get("PRE_COMMIT_HOME")
-    or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "pre-commit"
-)
-
-
-def test_the_real_pinned_build_finds_a_token_whatever_colour_the_owner_asks_for(
+@pytest.mark.skipif(REAL is None, reason="no gitleaks on PATH")
+def test_the_real_gitleaks_finds_a_token_whatever_colour_the_owner_asks_for(
     overlays: Overlays, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # End to end with the real gitleaks: its parser reads git's patch text, and a coloured one
-    # made the scan pass and the token travel. Skipped where pre-commit built no such hook.
-    environment = {"PRE_COMMIT_HOME": str(_CACHE)}
-    real = S.gitleaks_binary(overlays.home, overlays.a, environment)
-    if real is None:
-        pytest.skip("pre-commit has built no gitleaks for the pinned revision here")
-    monkeypatch.setattr(S, "gitleaks_binary", lambda *args, **kwargs: real)
+    # made the scan pass and the token travel. Skipped where no gitleaks is on PATH.
+    assert REAL is not None
+    monkeypatch.setattr(S, "gitleaks", lambda: Path(REAL))
     a = overlays.a
     git(a, "config", "color.ui", "always")
     token = "ghp_" + "aB3dE5fG7hJ9kL1mN3pQ5rS7tV9wX1yZ3bC5"  # split: no scanner flags this file
@@ -584,9 +435,3 @@ def test_a_finding_in_the_whole_but_in_no_single_commit_names_none(
 
     assert (result.ok, result.finding_commit) == (False, None)
     assert "no one commit" in result.detail
-
-
-def test_no_scanner_has_one_remedy() -> None:
-    detail = S.NO_SCANNER.format(overlay="/home/o/overlay")
-
-    assert detail.endswith("run `pre-commit install-hooks` in /home/o/overlay")

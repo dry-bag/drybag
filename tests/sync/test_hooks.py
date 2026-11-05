@@ -251,10 +251,10 @@ def test_session_end_never_waits_out_a_standing_failure(overlays: Overlays) -> N
 def test_no_scanner_backs_off_once_the_indexes_it_rendered_are_recorded(
     overlays: Overlays,
 ) -> None:
-    # The default on a freshly set-up machine: no build, a note waiting. The first job's render
+    # A machine with no gitleaks on PATH, a note waiting. The first job's render
     # leaves the indexes dirty, which is news once; the second records them, and the next `Stop`
     # waits.
-    (overlays.home / ".cache" / "pre-commit" / "db.db").unlink()
+    overlays.gitleaks.unlink()
     write(overlays.a, "common/memory/waiting.md", "a note\n")
     for _ in range(2):
         state = J.run_job(context(overlays, overlays.a))

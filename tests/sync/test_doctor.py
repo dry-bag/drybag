@@ -2,8 +2,8 @@
 
 Every case runs the whole report through `run_checks`, as a user's `stayfixed doctor` does, with the
 fixtures of the doctor area's own tests. The overlay is a plain repository, the scanner the
-stand-in of this directory's `conftest.py` found through a pre-commit database written under
-`tmp_path`, and the state a file the job's own writer made in the test's `HOME`.
+stand-in of this directory's `conftest.py` on a `PATH` that holds no other `gitleaks`, and the
+state a file the job's own writer made in the test's `HOME`.
 """
 
 from __future__ import annotations
@@ -26,14 +26,7 @@ from stayfixed.sync.state import (
     write_state,
 )
 from tests.doctor.test_checks import _by_name, _checks, _env, _initialised, _overlay
-from tests.sync.conftest import (
-    GITLEAKS_REPO,
-    GITLEAKS_REV,
-    PRE_COMMIT_CONFIG,
-    build_gitleaks,
-    git,
-    pre_commit_store,
-)
+from tests.sync.conftest import gitleaks_on_path, path_without_gitleaks
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -42,14 +35,16 @@ UPSTREAM = "0123456789abcdef0123456789abcdef01234567"
 
 
 class Machine:
-    """A report's inputs: the overlay, the machine file that records it, and the environment that
-    lets pre-commit's database be found."""
+    """A report's inputs: the overlay, the machine file that records it, the environment, and a
+    `PATH` with no `gitleaks` on it until `scanner` puts the stand-in there."""
 
-    def __init__(self, tmp_path: Path) -> None:
+    def __init__(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         self.tmp_path = tmp_path
+        self.monkeypatch = monkeypatch
         self.overlay = _overlay(tmp_path)
         self.file = tmp_path / "machine.toml"
         self.env = _env(tmp_path)
+        monkeypatch.setenv("PATH", path_without_gitleaks(tmp_path / "git-only"))
 
     def write(self, switch: str = "[sync]\nenabled = true\n", *, overlay: bool = True) -> Machine:
         root = f'[overlay]\nroot = "{self.overlay}"\n' if overlay else ""
@@ -57,15 +52,8 @@ class Machine:
         return self
 
     def scanner(self) -> Machine:
-        """The overlay pins gitleaks and pre-commit holds a build of that pin."""
-        (self.overlay / ".pre-commit-config.yaml").write_text(PRE_COMMIT_CONFIG, encoding="utf-8")
-        git(self.overlay, "add", "--", ".pre-commit-config.yaml")
-        git(self.overlay, "commit", "-q", "-m", "the pinned hook")
-        build = self.tmp_path / "gitleaks-source"
-        build_gitleaks(build)
-        cache = self.tmp_path / "cache"
-        pre_commit_store(cache, [(GITLEAKS_REPO, GITLEAKS_REV, build)])
-        self.env = _env(self.tmp_path, XDG_CACHE_HOME=str(cache))
+        """The stand-in on `PATH`."""
+        gitleaks_on_path(self.tmp_path / "bin", self.monkeypatch)
         return self
 
     def state(
@@ -90,22 +78,26 @@ class Machine:
 
 
 @pytest.fixture
-def machine(tmp_path: Path) -> Machine:
-    return Machine(tmp_path).write()
+def machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Machine:
+    return Machine(tmp_path, monkeypatch).write()
 
 
-def test_a_machine_that_does_not_switch_sync_on_skips_naming_the_key(tmp_path: Path) -> None:
+def test_a_machine_that_does_not_switch_sync_on_skips_naming_the_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Off is the ordinary state, so it is a skip with no remedy; it names the file and the key
     # that switch it on, for the reader who wonders why nothing syncs.
-    off = Machine(tmp_path).write("[sync]\nenabled = false\n")
+    off = Machine(tmp_path, monkeypatch).write("[sync]\nenabled = false\n")
     status, detail, remedy = off.row()
     assert (status, remedy) == (SKIP, "")
     assert str(off.file) in detail
     assert "[sync] enabled = true" in detail
 
 
-def test_on_with_no_overlay_recorded_is_a_warning(tmp_path: Path) -> None:
-    status, detail, remedy = Machine(tmp_path).write(overlay=False).row()
+def test_on_with_no_overlay_recorded_is_a_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    status, detail, remedy = Machine(tmp_path, monkeypatch).write(overlay=False).row()
     assert status == WARN
     assert "no overlay" in detail
     assert "stayfixed setup --overlay" in remedy
@@ -141,14 +133,16 @@ def test_git_below_the_floor_is_a_warning_that_says_the_job_does_nothing(
     assert remedy
 
 
-def test_no_scanner_build_is_a_warning_with_the_remedy_the_job_gives(machine: Machine) -> None:
+def test_no_gitleaks_on_path_is_a_warning_with_the_remedy_the_job_gives(machine: Machine) -> None:
     # Mutation (oracle): the row calls a missing scanner green. A warning, not red: `setup
-    # --overlay` switches the sync on without building the hook, so red would fail every freshly
+    # --overlay` switches the sync on without installing gitleaks, so red would fail every freshly
     # set-up machine, while the job itself fails closed.
     status, detail, remedy = machine.row()
     assert status == WARN
-    assert "nothing is committed or pushed" in detail
-    assert remedy == f"run `pre-commit install-hooks` in {machine.overlay}"
+    assert detail == "no gitleaks on PATH, so nothing is committed or pushed"
+    assert remedy == "install gitleaks on the PATH the sessions run with"
+
+    assert machine.scanner().row()[0] == OK
 
 
 def test_an_upstream_hold_is_a_warning_naming_the_paths_and_the_review_command(

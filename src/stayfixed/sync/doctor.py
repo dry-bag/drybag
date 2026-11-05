@@ -1,16 +1,15 @@
 """The note sync's row in `stayfixed doctor`: `sync`.
 
 One row, read off this machine's own records: the switch in the machine file, the git the job
-needs, the scanner build it needs, and the state its last job left. It runs nothing but `git
-version` and, once pre-commit's database is there, `git cat-file` of the pin `HEAD` commits, and
-writes nothing. `doctor`'s core discovers this module by name (CONTRIBUTING.md,
+needs, the `gitleaks` on `PATH` it needs, and the state its last job left. It runs nothing but
+`git version`, and writes nothing. `doctor`'s core discovers this module by name (CONTRIBUTING.md,
 "Areas"); every import sits inside a function body, as in a `hooks.py`, because discovery imports
 it before the report asks anything and the note layout and the job pull in the configuration layer.
 
 The arms, in the order they are asked: off (a skip, the ordinary state), no overlay recorded, git
-below the job's floor, no scanner build, a hold, a last outcome that is a failure, and otherwise
-green. A state recorded for another overlay is not this overlay's: it reads as never run, as the
-job reads it.
+below the job's floor, no gitleaks on `PATH`, a hold, a last outcome that is a failure, and
+otherwise green. A state recorded for another overlay is not this overlay's: it reads as never
+run, as the job reads it.
 """
 
 from __future__ import annotations
@@ -98,8 +97,8 @@ def _sync(context: Context) -> Row:
             f"git {floor} or newer is needed and the job does nothing without it; found: {found}",
             f"install git {floor} or newer",
         )
-    if scan.gitleaks_binary(Path.home(), overlay, context.env) is None:
-        said, _, remedy = scan.NO_SCANNER.format(overlay=overlay).partition("; ")
+    if scan.gitleaks() is None:
+        said, _, remedy = scan.NO_SCANNER.partition("; ")
         return Row(WARN, said, remedy)
     try:
         state = read_state(state_directory())

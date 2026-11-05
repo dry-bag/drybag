@@ -1,30 +1,26 @@
-"""The secret scan: the overlay's pinned gitleaks build, and the three scans the job runs with it.
+"""The secret scan: the gitleaks on `PATH`, and the three scans the job runs with it.
 
 The job commits through a temporary index and never runs `git commit`, so the overlay's pre-commit
-hook does not run by itself; the job runs the scan instead. The scanner is the build `pre-commit
-install-hooks` already made for the overlay's pinned hook, found through pre-commit's own database
-and never downloaded or built here: the row whose `repo` and `rev` are the pin's, in the
-environment the pin's `language_version` names, else `default`, else `system` (the same source at
-the same revision either way). With no build the job records `scan_unavailable` (`NO_SCANNER`).
+hook does not run by itself; the job runs the scan instead. The scanner is the `gitleaks` the
+`PATH` of the one git environment finds (`gitenv.scrubbed_env`, its absolute entries alone),
+looked up once per job; pre-commit's build, or any other a session's environment could name, is
+never read. With none the job records `scan_unavailable` (`NO_SCANNER`).
 
 `gitleaks git --pre-commit --staged` scans the index `GIT_INDEX_FILE` names, `gitleaks git
 --log-opts=A..B` the patches of a range and nothing else, so `gitleaks stdin` scans what else a
 push sends (each commit's author, message and path names). Only the JSON report names a finding's
 commit, and the exit is 1 for a finding and for a failed scan alike, so the report, not the exit
 code, tells them apart. Every scan runs on rules and ignores pinned to `HEAD` (`_pinned`): the
-committed `.gitleaks.toml`, else the build's own default, and the committed `.gitleaksignore`,
+committed `.gitleaks.toml`, else gitleaks' own defaults, and the committed `.gitleaksignore`,
 else none, never a file the working tree holds now or a `GITLEAKS_*` variable of the session. The
-scan is a check against an honest mistake, as the anchor is the pinned build and `HEAD`; an agent
-with a shell can push by hand anyway.
+scan is a check against an honest mistake; an agent with a shell can push by hand anyway.
 """
 
 from __future__ import annotations
 
-import contextlib
 import json
-import os
 import re
-import sqlite3
+import shutil
 import tempfile
 import time
 from collections.abc import Mapping
@@ -35,25 +31,20 @@ from typing import Any
 from stayfixed import fsops
 from stayfixed.gitenv import scrubbed_env
 from stayfixed.processes import run_bounded
-from stayfixed.sync.git import GitError, git, timed, with_config
+from stayfixed.sync.git import git, timed, with_config
 
-GITLEAKS_REPO = "https://github.com/gitleaks/gitleaks"
-GITLEAKS_HOOK = "gitleaks"
-CONFIG = ".pre-commit-config.yaml"
 RULES = ".gitleaks.toml"
 IGNORES = ".gitleaksignore"
+# The rules a scan runs on where `HEAD` commits none: gitleaks' own.
+DEFAULTS = b"[extend]\nuseDefault = true\n"
 NO_SCANNER = (
-    "no gitleaks build for the overlay's pinned hook, so nothing is committed or pushed; "
-    "run `pre-commit install-hooks` in {overlay}"
+    "no gitleaks on PATH, so nothing is committed or pushed; "
+    "install gitleaks on the PATH the sessions run with"
 )
 # What a result shows of a failed scan or a list of findings: lines and characters. Named caps on
 # what reaches the state file; no shipped file states them.
 DETAIL_LINES = 5
 DETAIL_CHARS = 600
-# Named caps, no shipped file states them: how long to wait on a locked pre-commit database or on
-# git reading the committed `.pre-commit-config.yaml`, and how much of that file to read.
-DB_TIMEOUT = 5.0
-CONFIG_BYTES = 1024 * 1024
 # The configuration every git gitleaks starts is given: its `git log -p` and `git diff` print the
 # patch its parser reads, which a signature check or a colour code the owner's configuration asks
 # for leaves with no file to scan, and the scan passing. Its source passes no `--no-color`.
@@ -63,11 +54,6 @@ SCAN_CONFIG = {
     "color.diff": "false",
 }
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-_REPO = re.compile(r"\s*-\s*repo:\s*(.+)$")
-_REV = re.compile(r"\s*rev:\s*(.+)$")
-_HOOK = re.compile(r"\s*-\s*id:\s*(.+)$")
-_VERSION = re.compile(r"\s*(?:-\s*)?language_version:\s*(.+)$")
-_GOLANG = re.compile(r"\s+golang:\s*(.+)$")
 
 
 @dataclass(frozen=True)
@@ -78,101 +64,10 @@ class CheckResult:
     finding_commit: str | None
 
 
-def _scalar(text: str) -> str:
-    """A YAML scalar as the overlay's configuration writes it: bare or quoted, maybe commented."""
-    text = re.sub(r"\s+#.*$", "", text).strip()
-    return text[1:-1] if len(text) >= 2 and text[0] == text[-1] and text[0] in "'\"" else text
-
-
-def gitleaks_pin(
-    overlay: Path, env: Mapping[str, str] | None = None
-) -> tuple[str, str, str | None] | None:
-    """`(repo, rev, language_version)` for the overlay's gitleaks hook, or `None` if it has none.
-
-    Read line by line from `HEAD`'s `.pre-commit-config.yaml`, as the rules and ignores are: a
-    working tree that drops or repins the hook changes nothing until it is committed. The standard
-    library has no YAML, and the file is the overlay's own, written in block style. The version is
-    the hook's `language_version`, else the file's `default_language_version.golang`; `None` when
-    neither says more than `default`, which pre-commit reads as "not set here".
-    """
-    try:
-        committed = blob(overlay, f"HEAD:{CONFIG}", DB_TIMEOUT, env)
-        lines = committed.decode("utf-8").splitlines() if committed else []
-    except (GitError, UnicodeDecodeError):
-        return None
-    if len(committed or b"") > CONFIG_BYTES:
-        return None
-    top = repo = rev = hook = default = hooked = found = None
-    for line in lines:
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        if not line[0].isspace():
-            top = line.split(":", 1)[0].strip()
-        elif top == "default_language_version" and (match := _GOLANG.match(line)):
-            default = _scalar(match[1])
-        elif top == "repos":
-            if match := _REPO.match(line):
-                repo, rev, hook = _scalar(match[1]), None, None
-            elif match := _REV.match(line):
-                rev = _scalar(match[1])
-            elif match := _HOOK.match(line):
-                hook = _scalar(match[1])
-            elif (match := _VERSION.match(line)) and (repo, hook) == (GITLEAKS_REPO, GITLEAKS_HOOK):
-                hooked = _scalar(match[1])
-            if rev and (repo, hook) == (GITLEAKS_REPO, GITLEAKS_HOOK):
-                found = rev
-    if found is None:
-        return None
-    return GITLEAKS_REPO, found, next((v for v in (hooked, default) if v and v != "default"), None)
-
-
-def gitleaks_binary(
-    home: Path,
-    overlay: Path,
-    env: Mapping[str, str] | None = None,
-    *,
-    git_env: Mapping[str, str] | None = None,
-) -> Path | None:
-    """The gitleaks build pre-commit made for the overlay's pinned hook, or `None`.
-
-    The environment is the pin's `language_version`, which has no substitute, else `default`, else
-    `system`: the same source at the same `rev`, built by whichever go was there. `None` when the
-    overlay pins no gitleaks, the database is missing or unreadable, no row has the pinned `repo`
-    and `rev` (a row of another `rev` is never a substitute), or no allowed environment holds an
-    executable build. `env` names pre-commit's cache the way pre-commit reads it; `git_env` is
-    laid over the git that reads the pin, asked only once there is a database.
-    """
-    env = os.environ if env is None else env
-    if env.get("PRE_COMMIT_HOME"):
-        database = Path(env["PRE_COMMIT_HOME"]) / "db.db"
-    else:
-        database = Path(env.get("XDG_CACHE_HOME") or home / ".cache") / "pre-commit" / "db.db"
-    pin = gitleaks_pin(overlay, git_env) if fsops.is_file(database) else None
-    if pin is None:
-        return None
-    repo, rev, version = pin
-    try:
-        with contextlib.closing(
-            sqlite3.connect(f"{database.absolute().as_uri()}?mode=ro", uri=True, timeout=DB_TIMEOUT)
-        ) as db:
-            row = db.execute("SELECT path FROM repos WHERE repo = ? AND ref = ?", (repo, rev))
-            path = row.fetchone()
-    except sqlite3.Error:
-        return None
-    if path is None:
-        return None
-    row_path = os.path.realpath(path[0])
-    for name in [version] if version else ["default", "system"]:
-        binary = Path(path[0]) / f"golangenv-{name}" / "bin" / "gitleaks"
-        # Anchor: the resolved path. A build directory that links out of the row, by a link or by a
-        # `language_version` naming a path, is not it.
-        if (
-            fsops.is_file(binary)
-            and os.access(binary, os.X_OK)
-            and os.path.commonpath((os.path.realpath(binary), row_path)) == row_path
-        ):
-            return binary
-    return None
+def gitleaks() -> Path | None:
+    """The `gitleaks` on the `PATH` every git stayfixed starts is given, or `None`."""
+    found = shutil.which("gitleaks", path=scrubbed_env().get("PATH", ""))
+    return None if found is None else Path(found)
 
 
 def first_lines(text: str) -> str:
@@ -202,7 +97,6 @@ def blob(repo: Path, spec: str, timeout: float, env: Mapping[str, str] | None) -
 
 def _pinned(
     repo: Path,
-    binary: Path,
     directory: Path,
     timeout: float,
     env: Mapping[str, str] | None,
@@ -215,10 +109,9 @@ def _pinned(
     Left to itself, gitleaks reads `--config`, else `$GITLEAKS_CONFIG`, else the scanned
     directory's `.gitleaks.toml`, and its ignore list from `--gitleaks-ignore-path` and from the
     scanned directory: an untracked file or an inherited variable would decide what the unattended
-    scan may miss. With no rules committed, the build's own default (`config/gitleaks.toml` of the
-    pinned source) is named explicitly. A scan whose source is the overlay (`in_repo`) cannot keep
-    gitleaks from reading the root's `.gitleaksignore`, so one that is not the committed file stops
-    it.
+    scan may miss. With no rules committed, a file that extends gitleaks' own defaults is named. A
+    scan whose source is the overlay (`in_repo`) cannot keep gitleaks from reading the root's
+    `.gitleaksignore`, so one that is not the committed file stops it.
     """
     committed = blob(repo, f"HEAD:{IGNORES}", timeout, env)
     if in_repo:
@@ -234,16 +127,8 @@ def _pinned(
                 "whatever it is told: commit it or remove it"
             )
     rules = blob(repo, f"HEAD:{RULES}", timeout, env)
-    if rules is not None:
-        config = directory / RULES
-        config.write_bytes(rules)
-    else:
-        config = binary.parent.parent.parent / "config" / "gitleaks.toml"
-        if not fsops.is_file(config):
-            return (
-                [],
-                f"no {RULES} is committed and the build's default rules are missing: {config}",
-            )
+    config = directory / RULES
+    config.write_bytes(DEFAULTS if rules is None else rules)
     ignores = directory / "ignores"
     ignores.mkdir()
     if committed is not None:
@@ -272,7 +157,7 @@ def _scan(
     deadline = time.monotonic() + timeout
     with tempfile.TemporaryDirectory(prefix="scan-", dir=scratch) as name:
         directory = Path(name)
-        pinned, unpinned = _pinned(repo, binary, directory, timeout, env, in_repo=stdin is None)
+        pinned, unpinned = _pinned(repo, directory, timeout, env, in_repo=stdin is None)
         if unpinned:
             return CheckResult(False, unpinned, False, None), []
         report = directory / "report.json"

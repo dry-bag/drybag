@@ -6358,51 +6358,6 @@ reddens = [
 # The secret scan: each entry breaks one rule of the lookup or of a scan, and the tests named watch it.
 
 [[mutation]]
-name = "the scanner's pin is read from the working tree"
-file = "src/stayfixed/sync/scan.py"
-before = '        committed = blob(overlay, f"HEAD:{CONFIG}", DB_TIMEOUT, env)'
-after = "        committed = fsops.read_regular_bytes(overlay / CONFIG)"
-reddens = ["tests/sync/test_scan.py::test_the_pin_is_read_from_head_whatever_the_working_tree_says"]
-
-[[mutation]]
-name = "a row of another rev is the scanner"
-file = "src/stayfixed/sync/scan.py"
-before = 'row = db.execute("SELECT path FROM repos WHERE repo = ? AND ref = ?", (repo, rev))'
-after = 'row = db.execute("SELECT path FROM repos WHERE repo = ? AND ? = ?", (repo, rev, rev))'
-reddens = [
-  "tests/sync/test_scan.py::test_no_row_for_the_pinned_rev_is_no_scanner",
-  "tests/sync/test_scan.py::test_the_pinned_rev_row_is_the_one_chosen",
-]
-
-[[mutation]]
-name = "an explicit version has a substitute"
-file = "src/stayfixed/sync/scan.py"
-before = '    for name in [version] if version else ["default", "system"]:'
-after = '    for name in [version, "default", "system"] if version else ["default", "system"]:'
-reddens = [
-  "tests/sync/test_scan.py::test_an_explicit_version_has_no_substitute",
-]
-
-[[mutation]]
-name = "system is tried before default"
-file = "src/stayfixed/sync/scan.py"
-before = '    for name in [version] if version else ["default", "system"]:'
-after = '    for name in [version] if version else ["system", "default"]:'
-reddens = [
-  "tests/sync/test_scan.py::test_default_then_system",
-]
-
-[[mutation]]
-name = "a build linking out of its row is the scanner"
-file = "src/stayfixed/sync/scan.py"
-before = '''            and os.path.commonpath((os.path.realpath(binary), row_path)) == row_path
-'''
-after = ""
-reddens = [
-  "tests/sync/test_scan.py::test_a_build_linking_out_of_its_row_is_not_it",
-]
-
-[[mutation]]
 name = "a failed scan is a pass"
 file = "src/stayfixed/sync/scan.py"
 before = '        return CheckResult(False, detail, False, None), []'
@@ -6590,10 +6545,16 @@ reddens = ["tests/sync/test_commit.py::test_signing_asked_for_is_honoured"]
 [[mutation]]
 name = "no scanner, and the commit goes on"
 file = "src/stayfixed/sync/job.py"
-before = '        return _outcome(ctx, "scan_unavailable", detail)'
-after = "        return None"
+before = '''    binary = ctx.scanner
+    if binary is None:
+        return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER)
+    result = scan.scan_index('''
+after = '''    binary = ctx.scanner
+    if binary is None:
+        return None
+    result = scan.scan_index('''
 reddens = [
-  "tests/sync/test_commit.py::test_no_scanner_commits_nothing_and_says_how_to_build_one",
+  "tests/sync/test_scan.py::test_no_gitleaks_on_path_is_scan_unavailable_with_the_remedy",
 ]
 
 [[mutation]]
@@ -6980,14 +6941,14 @@ after = "        if True:"
 reddens = ["tests/sync/test_hooks.py::test_with_sync_off_stop_runs_no_git_and_spawns_nothing"]
 
 # The `sync` row of `doctor`: a machine that switched the sync on expects its notes to move, and
-# the job commits and pushes nothing without a scanner build or on a git below its floor. A row
+# the job commits and pushes nothing without gitleaks on PATH or on a git below its floor. A row
 # green over either says the sync works when it does nothing.
 [[mutation]]
 name = "doctor calls a missing scanner green"
 file = "src/stayfixed/sync/doctor.py"
-before = "    if scan.gitleaks_binary(Path.home(), overlay, context.env) is None:"
+before = "    if scan.gitleaks() is None:"
 after = "    if False:"
-reddens = ["tests/sync/test_doctor.py::test_no_scanner_build_is_a_warning_with_the_remedy_the_job_gives"]
+reddens = ["tests/sync/test_doctor.py::test_no_gitleaks_on_path_is_a_warning_with_the_remedy_the_job_gives"]
 
 [[mutation]]
 name = "doctor puts any recorded sha into a command"
