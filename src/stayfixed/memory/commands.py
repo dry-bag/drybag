@@ -21,9 +21,11 @@ from pathlib import Path
 from stayfixed import fsops
 from stayfixed.areas import SubParsers
 from stayfixed.command import CHECK_HELP, command_owner, common_flags
+from stayfixed.config.loader import CONFIG_FILE, NOT_THERE
+from stayfixed.config.reading import ConfigError
 from stayfixed.config.schema import HARNESS_MODE, Config
-from stayfixed.config.session import bound_config, command_config, session_config
-from stayfixed.errors import Failure, Refusal, resolved_or_none
+from stayfixed.config.session import bound_config, session_config
+from stayfixed.errors import Failure, Refusal
 from stayfixed.findings import listed
 from stayfixed.memory import trust
 from stayfixed.memory.bundles import Bundle, render
@@ -89,11 +91,11 @@ def _store(args: argparse.Namespace) -> tuple[Store, Config]:
     root = Path(args.root).resolve()
     machine = _machine(args)
     owner = command_owner(machine)
-    # `None` is a checkout with no file that this machine does not bind: `load`'s refusal, which
-    # tells it to run `init`.
-    config = bound_config(root, machine=machine, owner=owner) or command_config(
-        root, machine=machine, owner=owner
-    )
+    config = bound_config(root, machine=machine, owner=owner)
+    if config is None:
+        # A checkout with no file that this machine does not bind: `load`'s refusal, which tells
+        # it to run `init`.
+        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
     # `resolved` and not `resolve` + `refusal_reason`: the pair walked the whole resolution
     # twice, four `git` queries with a five-second timeout apiece each time, so a hanging `git`
     # cost a refused command up to forty seconds.
@@ -249,11 +251,8 @@ def run_session_context(args: argparse.Namespace) -> Result:
     root = Path(args.root).resolve()
     machine = _machine(args)
     session = session_config(root, machine=machine)
-    # With no file, the configuration of a checkout this machine binds (`bound_config`), read as
-    # a session reads it: whatever the repository or the machine file holds, it never raises.
-    config = session.config
-    if config is None:
-        config = resolved_or_none(lambda: bound_config(root, machine=machine, owner=session.owner))
+    # With no file, the configuration of a checkout this machine binds, as a session reads it.
+    config = session.acting
     # No project configuration, or memory left to the harness: no store, and nothing to say.
     if config is None or config.memory.mode == HARNESS_MODE:
         return Result("")

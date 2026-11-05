@@ -95,18 +95,19 @@ _TABLES: dict[str, type[Any]] = {
 
 def read(
     root: Path | None, *, machine: Path | None = None
-) -> tuple[tuple[Layer, ...], tuple[str, ...]]:
-    """The overlay's layers for the checkout at `root`, lowest first, and the notes reading them
-    gave. `machine` is the machine file, as `overlay_root` takes it; `root` is `None` for a hook
-    with no project root, which has no binding and gets the common layer only, as an unbound
-    checkout does."""
+) -> tuple[tuple[Layer, ...], tuple[str, ...], str | None]:
+    """The overlay's layers for the checkout at `root`, lowest first, the notes reading them gave,
+    and the project the binding names (`None` where it names none, or where no overlay is
+    recorded, which leaves the binding unasked). `machine` is the machine file, as `overlay_root`
+    takes it; `root` is `None` for a hook with no project root, which has no binding and gets the
+    common layer only, as an unbound checkout does."""
     notes: list[str] = []
     try:
         overlay = overlay_root(machine)
     except MachineConfigError as exc:
-        return (), (MACHINE_UNREAD.format(error=exc),)
+        return (), (MACHINE_UNREAD.format(error=exc),), None
     if overlay is None:
-        return (), (NO_OVERLAY,)
+        return (), (NO_OVERLAY,), None
     project = _bound(root, notes)
     if project is None:
         found: tuple[Plate, ...] = (Plate(PlateKind.COMMON, COMMON, overlay / COMMON),)
@@ -120,7 +121,7 @@ def read(
         layer = _layer(plate.directory / CONFIG_FILE, name, label, notes)
         if layer is not None:
             layers.append(layer)
-    return tuple(layers), tuple(notes)
+    return tuple(layers), tuple(notes), project
 
 
 def _bound(root: Path | None, notes: list[str]) -> str | None:

@@ -7109,3 +7109,27 @@ reddens = [
   "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
   "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
 ]
+
+# A bound checkout with no `stayfixed.toml` has its notes in the overlay when the overlay's layers
+# say so; the handlers that watch the overlay's backup and its unreviewed notes read the session's
+# bound configuration (`SessionConfig.acting`), or they are silent.
+[[mutation]]
+name = "the delivery side is silent in a bound checkout with no stayfixed.toml"
+file = "src/stayfixed/config/session.py"
+before = "        return self.bound if self.config is None else self.config"
+after = "        return self.config"
+reddens = [
+  "tests/attach/test_hooks.py::test_a_bound_checkout_with_no_file_hears_the_overlay_status",
+  "tests/memory/test_commands.py::test_the_unreviewed_count_is_said_in_a_bound_checkout_with_no_file",
+]
+
+# A file the session could not load is a file: its checkout gets no bound configuration, which a
+# handler would otherwise act on in place of the repository's own.
+[[mutation]]
+name = "a session gives a bound configuration to a checkout whose file does not load"
+file = "src/stayfixed/config/session.py"
+before = "    if project is None or read.config is not None or read.project_warnings:"
+after = "    if project is None or read.config is not None:"
+reddens = [
+  "tests/config/test_session.py::test_a_checkout_whose_file_does_not_load_has_no_bound_configuration",
+]

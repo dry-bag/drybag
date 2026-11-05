@@ -155,6 +155,7 @@ def test_no_recorded_overlay_is_no_layer_and_one_note(tmp_path: Path) -> None:
     assert overlay_layers.read(root, machine=tmp_path / "none.toml") == (
         (),
         (overlay_layers.NO_OVERLAY,),
+        None,
     )
 
 
@@ -163,7 +164,7 @@ def test_a_missing_file_is_no_layer_and_one_note(tmp_path: Path) -> None:
     recorded = tmp_path / "overlay"
     recorded.mkdir()
     binding.record(root, "sample", None)
-    layers, notes = overlay_layers.read(root, machine=machine(tmp_path, recorded))
+    layers, notes, _ = overlay_layers.read(root, machine=machine(tmp_path, recorded))
     assert layers == ()
     common = quoted(str(recorded / "common" / "stayfixed.toml"))
     own = quoted(str(recorded / "projects" / "sample" / "stayfixed.toml"))
@@ -206,7 +207,7 @@ def test_an_unbound_checkout_reads_no_tag_layer(tmp_path: Path) -> None:
     root = project(tmp_path)
     recorded = overlay(tmp_path, common=mode("harness"))
     tagged(recorded, ["a"], a=mode("overlay"))
-    layers, _ = overlay_layers.read(root, machine=machine(tmp_path, recorded))
+    layers, _, _ = overlay_layers.read(root, machine=machine(tmp_path, recorded))
     assert [layer.name for layer in layers] == [LayerName.OVERLAY_COMMON]
 
 
@@ -215,7 +216,7 @@ def test_a_tag_file_that_is_not_toml_is_a_note_and_no_layer(tmp_path: Path) -> N
     recorded = overlay(tmp_path, common="", sample="")
     tagged(recorded, ["a"], a="[memory\n")
     binding.record(root, "sample", None)
-    layers, notes = overlay_layers.read(root, machine=machine(tmp_path, recorded))
+    layers, notes, _ = overlay_layers.read(root, machine=machine(tmp_path, recorded))
     assert LayerName.OVERLAY_TAG not in [layer.name for layer in layers]
     path = quoted(str(recorded / "groups" / "a" / "stayfixed.toml"))
     assert any(
@@ -228,7 +229,7 @@ def test_a_tag_the_record_lists_without_a_directory_is_the_plates_note(tmp_path:
     recorded = overlay(tmp_path, common="", sample="")
     tagged(recorded, ["gone"])
     binding.record(root, "sample", None)
-    layers, notes = overlay_layers.read(root, machine=machine(tmp_path, recorded))
+    layers, notes, _ = overlay_layers.read(root, machine=machine(tmp_path, recorded))
     assert [layer.name for layer in layers] == [LayerName.OVERLAY_COMMON, LayerName.OVERLAY_PROJECT]
     assert len(notes) == 1 and "gone" in notes[0]
 

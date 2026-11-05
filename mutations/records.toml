@@ -2355,7 +2355,7 @@ reddens = [
 [[mutation]]
 name = "memory session-context refuses what a session reads"
 file = "src/stayfixed/memory/commands.py"
-before = "    config = session.config\n"
+before = "    config = session.acting\n"
 after = "    config = load(root, machine=machine)\n"
 reddens = ["tests/hooks/test_floor.py::test_memory_session_context_reads_a_newer_key_with_a_note"]
 
