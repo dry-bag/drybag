@@ -48,7 +48,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 SEED = f"# Roadmap\n\nprose above\n\n{MARKER}\n{END_MARKER}\n\nprose below\n"
 TRAIL = """

@@ -431,13 +431,13 @@ def _built(
     project = _build(Project, "project", _merged(raw, defaults, "project"))
     if not PROJECT_NAME.match(project.name):
         raise ConfigError(f"project.name must be {NAME_RULE}", key="project.name")
-    for key in ("base_branch", "release_branch"):
-        # Named, never quoted: the value becomes a git ref and reaches output lines, and it is
-        # the text the grammar refused; git could not have such a branch anyway.
-        if not BRANCH_NAME.match(getattr(project, key)):
-            raise ConfigError(
-                f"project.{key} is not a plain branch name: {BRANCH_RULE}", key=f"project.{key}"
-            )
+    # Named, never quoted: the value becomes a git ref and reaches output lines, and it is the text
+    # the grammar refused; git could not have such a branch anyway.
+    if not BRANCH_NAME.match(project.base_branch):
+        raise ConfigError(
+            f"project.base_branch is not a plain branch name: {BRANCH_RULE}",
+            key="project.base_branch",
+        )
     paths = _build(Paths, "paths", _merged(raw, defaults, "paths"))
     memory = _deduplicated(_build(Memory, "memory", _merged(raw, defaults, "memory")))
     _enum("memory", "mode", memory.mode, MEMORY_MODES)

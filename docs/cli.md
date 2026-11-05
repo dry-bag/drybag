@@ -1078,7 +1078,7 @@ Without it nothing is written, and the refusal (`2`) names `--questions`.
 
 Each answer flag replaces one default and writes one key:
 - `--name` writes `[project] name`;
-- `--base-branch` writes `[project] base_branch` and `release_branch`;
+- `--base-branch` writes `[project] base_branch`;
 - `--agent`, once per harness, writes `[stayfixed] agents`;
 - `--memory-mode` writes `[memory] mode`;
 - `--attribution-check` writes `[commit_messages] attribution_check = true`, which is off unless
@@ -2414,7 +2414,6 @@ agents = ["claude", "codex"]
 [project]
 name = "widget"          # one lowercase path segment
 base_branch = "main"
-release_branch = "main"
 
 [paths]                  # each inside the root, out of .git and .stayfixed, 1024 characters at most
 agents_md = "AGENTS.md"
@@ -2484,9 +2483,9 @@ Every value above is what a key you leave out takes, from the `recommended` pres
 exceptions. `[stayfixed] version` and `[project] name` have no default at all and are yours to
 write: a file without `version` does not load at all (`[stayfixed] is missing required key(s):
 version`). Everything else from `[project] base_branch` down is the preset's default exactly as written. `[project]
-base_branch` and `release_branch` are branch names git accepts, from letters, digits, `.`, `_`,
-`-` and `/` (the grammar `--base-branch` follows); anything else does not
-load, and the refusal names the key and never the value.
+base_branch` is a branch name git accepts, from letters, digits, `.`, `_`, `-` and `/` (the
+grammar `--base-branch` follows); anything else does not load, and the refusal names the key and
+never the value.
 
 **Which command reads which path.** `agents_md` and `roadmap` are the two documents `docs check`
 budgets, and the roadmap is also what `docs trail` writes into; `specs` and `plans` are the two

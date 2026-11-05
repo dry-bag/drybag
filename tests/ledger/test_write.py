@@ -37,7 +37,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 
 # The values every filing below that is not about them passes.

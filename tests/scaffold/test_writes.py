@@ -32,7 +32,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 
 WRITING_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC

@@ -40,7 +40,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 
 [memory]
 mode = "in-repo"
@@ -830,7 +829,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 
 [memory]
 mode = "overlay"
@@ -1002,7 +1000,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 
 [memory]
 mode = "in-repo"

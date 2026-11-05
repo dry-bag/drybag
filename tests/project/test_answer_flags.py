@@ -40,6 +40,6 @@ def test_each_answer_reaches_the_document_this_run_creates(tmp_path: Path) -> No
     )
     config = load(root, machine=tmp_path / "absent.toml")
     assert config.project.name == "gadget"
-    assert (config.project.base_branch, config.project.release_branch) == ("develop", "develop")
+    assert config.project.base_branch == "develop"
     assert config.stayfixed.agents == ("codex",)
     assert config.memory.mode == "in-repo"

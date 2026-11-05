@@ -29,10 +29,10 @@ NAME_RULE = (
 # schema field, every `Budgets.NAMES` entry, every section — is lowercase words joined by
 # underscores, and anything else is counted rather than quoted.
 SECTION_NAME = re.compile(r"^[a-z][a-z_]*\Z")
-# The one grammar for a branch name stayfixed reads or writes: `[project] base_branch` and
-# `release_branch`, which the loader holds to it, `--base-branch`, and a detected base branch. Each
-# is repository-authored or typed, and each reaches a git ref or an output line, where quoting
-# alone would still admit a newline. Inside that character set it refuses what git's own
+# The one grammar for a branch name stayfixed reads or writes: `[project] base_branch`, which the
+# loader holds to it, `--base-branch`, and a detected base branch. Each is repository-authored or
+# typed, and each reaches a git ref or an output line, where quoting alone would still admit a
+# newline. Inside that character set it refuses what git's own
 # branch-name rules refuse (`git check-ref-format --branch`), so nothing names a branch no
 # repository can have: `..`, `//`, a component starting with `.`, a component ending in `.lock`,
 # a trailing `/` or `.`, and the name `HEAD` itself. `@{` and `-` at the start are outside the
@@ -70,7 +70,6 @@ class Stayfixed:
 class Project:
     name: str
     base_branch: str
-    release_branch: str
 
 
 @dataclass(frozen=True)

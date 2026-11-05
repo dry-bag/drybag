@@ -342,7 +342,6 @@ agents = ["claude"]
 [project]
 name = "{name}"
 base_branch = "main"
-release_branch = "main"
 
 [memory]
 mode = "overlay"

@@ -49,7 +49,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 
 # One entry per status, with a title that exercises the cell escaper and a fixed-in value that

@@ -63,8 +63,8 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "the branch `plan check` and `test attribute` compare a change against when no --base "
         "is given",
         "a change into any other branch needs --base on both",
-        "[project] base_branch and release_branch in stayfixed.toml",
-        "edit both in stayfixed.toml",
+        "[project] base_branch in stayfixed.toml",
+        "edit it in stayfixed.toml",
     ),
     "memory.mode": (
         "notes an agent keeps about this repository, read back at the start of a session",

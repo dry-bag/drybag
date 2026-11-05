@@ -23,7 +23,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 
 [memory]
 mode = "local-only"
@@ -184,7 +183,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 
 [memory]
 mode = "overlay"

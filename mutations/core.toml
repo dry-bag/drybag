@@ -1455,17 +1455,17 @@ reddens = [
   "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
 ]
 
-# The loader holds `[project] base_branch` and `release_branch` to the branch grammar: the value
-# becomes `refs/remotes/origin/<it>`, reaches `test attribute`'s and `plan check`'s messages, and
+# The loader holds `[project] base_branch` to the branch grammar: the value becomes
+# `refs/remotes/origin/<it>`, reaches `test attribute`'s and `plan check`'s messages, and
 # `stayfixed gate` blamed `--base` for it.
 [[mutation]]
 name = "a project branch outside the branch grammar loads"
 file = "src/stayfixed/config/loader.py"
-before = "        if not BRANCH_NAME.match(getattr(project, key)):"
-after = "        if False:"
+before = "    if not BRANCH_NAME.match(project.base_branch):"
+after = "    if False:"
 reddens = [
-  "tests/config/test_loader.py::test_a_project_branch_outside_the_branch_grammar_is_refused_by_name[spaced-base_branch]",
-  "tests/config/test_loader.py::test_a_project_branch_outside_the_branch_grammar_is_refused_by_name[range-release_branch]",
+  "tests/config/test_loader.py::test_a_project_branch_outside_the_branch_grammar_is_refused_by_name[spaced]",
+  "tests/config/test_loader.py::test_a_project_branch_outside_the_branch_grammar_is_refused_by_name[range]",
 ]
 
 # `tomllib` reads nested arrays by recursion, so a document nested a few thousand levels deep

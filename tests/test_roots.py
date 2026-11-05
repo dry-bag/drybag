@@ -27,7 +27,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 
 [ledger]
 code_roots = ["src", "tests"]

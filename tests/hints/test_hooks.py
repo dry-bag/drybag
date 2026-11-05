@@ -28,7 +28,6 @@ agents = ["claude"]
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 
 LIST_IMPORTS = (

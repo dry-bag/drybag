@@ -186,7 +186,7 @@ def _answers(parser: argparse.ArgumentParser) -> None:
     answers.add_argument(
         "--base-branch",
         type=grammar(BRANCH_NAME, branch_rule),
-        help="[project] base_branch and release_branch",
+        help="[project] base_branch",
     )
     answers.add_argument(
         "--agent",

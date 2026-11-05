@@ -25,8 +25,8 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > and adapters for Cursor or Hermes — each leaves this list in the
 > change that ships it. The [Quickstart](#quickstart) shows the three keys that are enough to start
 > a project by hand, which `init` reads as your answers — a run that writes the file itself writes
-> `[stayfixed] version` and `agents`, beside `[project] name`, `base_branch` and
-> `release_branch`, and a `[memory]` table only when `--memory-mode` answers it.
+> `[stayfixed] version` and `agents`, beside `[project] name` and `base_branch`, and a `[memory]`
+> table only when `--memory-mode` answers it.
 > [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference; the command list below is held
 > to the parser by a test, so it is complete for what ships.
 

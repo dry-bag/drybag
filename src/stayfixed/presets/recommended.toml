@@ -30,7 +30,6 @@ agents = ["claude", "codex"]
 
 [defaults.project]
 base_branch = "main"
-release_branch = "main"
 
 [defaults.paths]
 agents_md = "AGENTS.md"
