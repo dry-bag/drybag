@@ -675,6 +675,6 @@ def test_the_unreviewed_count_is_said_in_a_bound_checkout_with_no_file(tmp_path:
     assert where is not None
     where.parent.mkdir(parents=True)
     where.write_text((tmp_path / "machine.toml").read_text(encoding="utf-8"), encoding="utf-8")
-    (handler,) = [h for h in register() if h.event == "SessionStart"]
+    (handler,) = [h for h in register() if h.name == "unreviewed-notes"]
     event = HookEvent("SessionStart", "s1", None, None, {}, root, root, {})
     assert handler.run(event, NO_CONFIG).context == UNREVIEWED_COUNT.format(count=1)

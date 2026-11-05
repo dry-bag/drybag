@@ -136,6 +136,9 @@ def test_in_isolation_an_area_with_no_such_submodule_is_never_imported() -> None
     assert "stayfixed.presets" not in imported
     assert "stayfixed.profiles" not in imported
     assert "stayfixed.harnesses" not in imported
+    # The index render's own modules too: `memory.hooks` imports them inside its handler.
+    assert "stayfixed.memory.index" not in imported
+    assert "stayfixed.memory.store" not in imported
 
 
 # The modules an area's `doctor.py` may import at module level: neither costs the report anything,

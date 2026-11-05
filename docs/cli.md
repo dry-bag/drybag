@@ -131,6 +131,15 @@ Exits `2` if `MEMORY.md` is a symlink this store may not follow (the target rule
 overlay mode a symlinked index is refused outright; in overlay mode only a link into *this*
 project's own share of the recorded overlay is honoured).
 
+**A session renders it in overlay mode.** In a checkout with a `stayfixed.toml` whose memory is in
+overlay mode and that this machine binds, the `index-render` hook handler runs this command's write
+on `SessionStart` and on `SessionEnd`, and renders once more when a line arrived while it rendered,
+so each machine's index lists the notes that machine holds. The `SessionEnd` render is the one that
+harvests (step 2) the lines the session appended, on the machine that wrote them, and it runs before
+the [note sync](#note-sync)'s own `SessionEnd` handler starts its job, so the notes it wrote travel
+in that job; the `SessionStart` render lists what the jobs brought in since. It says nothing; a
+failure is one line on stderr and costs no other handler.
+
 **A checkout with no `stayfixed.toml` that this machine binds** reads the memory a repository with
 the file reads: every `memory` command, the bundles and `doctor`'s note-store rows use the preset's
 configuration under the overlay's layers (`common/`, the project's tags, `projects/<name>/`), for
@@ -375,7 +384,9 @@ session, both names hashed to a fixed width,
 with all but the newest fifty session directories removed; and `diagnostics.jsonl`, one JSON line
 per diagnostic record, rotated to `diagnostics.1.jsonl` once it would pass 256 KiB. With no data
 root, or a relative one, nothing is written there and a `once_key` handler is asked on every
-invocation. Three handlers write outside it. `owner-files`, the files above, creates one file in the
+invocation. These handlers write outside it. `index-render`, on `SessionStart` and `SessionEnd`
+in a checkout bound in overlay mode, writes what `stayfixed memory index` writes there: the
+overlay's `MEMORY.md` for the project and each note it harvests a line into. `owner-files`, the files above, creates one file in the
 root of the new linked worktree for each name it places, and nothing else there; nothing removes
 them. `overlay-path-rules`, the path-scoped rules above,
 writes one empty file per session and file it said a rule for, under
@@ -402,7 +413,9 @@ run-hook.sh <stayfixed args…>
 `PostToolUse`, `PostToolUseFailure`, `Stop` and `SessionEnd`, each tool event matched on `Bash`.
 `PostToolUseFailure` is where Claude Code delivers a `Bash` call that exited non-zero, and it
 carries the red-run note (below); Codex reads the same file and ignores that key (measured on
-Codex CLI 0.162.0-alpha.17.2). `Stop` and `SessionEnd` carry the note sync's handlers
+Codex CLI 0.162.0-alpha.17.2). `SessionStart` and `SessionEnd` carry `index-render`, which
+renders a bound overlay checkout's `MEMORY.md`
+([`memory index`](#stayfixed-memory-index)). `Stop` and `SessionEnd` carry the note sync's handlers
 ([Note sync](#note-sync)) and print nothing that blocks: each answers
 `{"hookSpecificOutput": {"hookEventName": …}}` with no `decision`, which on `Stop` would keep the
 turn from ending. An event Codex delivers from that file runs the same handlers behind the same

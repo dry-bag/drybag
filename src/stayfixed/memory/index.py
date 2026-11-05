@@ -553,6 +553,18 @@ def write_index(store: Store, config: Config, text: str) -> Path:
     return path
 
 
+def render_current(store: Store, config: Config) -> Path:
+    """`stayfixed memory index`'s write, in process: the appended lines harvested into their notes,
+    the index rendered and written, and once more when it has drifted already (a line appended
+    while it rendered); the file written."""
+    for _ in range(2):
+        reconciled = reconcile(store, config, write=True)
+        written = write_index(store, config, render_index(reconciled, config, store))
+        if not check_index(store, config, reconcile(store, config, write=False)).drifted:
+            break
+    return written
+
+
 @dataclass(frozen=True)
 class Rerendered:
     """What `rerender_overlay_index` did: the directory of the overlay's copy it wrote
@@ -577,11 +589,7 @@ def rerender_overlay_index(root: Path, *, machine: Path | None) -> Rerendered:
         store = found[0]
         if store.mode != OVERLAY_MODE:
             return Rerendered(None, f"the checkout's memory mode is {store.mode}")
-        for _ in range(2):
-            reconciled = reconcile(store, config, write=True)
-            written = write_index(store, config, render_index(reconciled, config, store))
-            if not check_index(store, config, reconcile(store, config, write=False)).drifted:
-                break
+        written = render_current(store, config)
     except (StayfixedError, OSError) as error:
         return Rerendered(None, str(error).partition("\n")[0] or type(error).__name__)
     return Rerendered(written.parent, None)

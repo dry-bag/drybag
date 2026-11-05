@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import io
 import json
 from pathlib import Path
 
@@ -7,8 +9,11 @@ import pytest
 
 from stayfixed import binding, fsops
 from stayfixed.config.loader import CONFIG_FILE, load
+from stayfixed.config.machine import machine_config_path
 from stayfixed.config.schema import Config
 from stayfixed.errors import Refusal
+from stayfixed.harnesses import project_root_variables
+from stayfixed.hooks.commands import run_hook
 from stayfixed.memory.api import build_composed, rerender_overlay_index
 from stayfixed.memory.index import (
     EXTRA_TITLE,
@@ -28,6 +33,7 @@ from stayfixed.memory.index import (
 from stayfixed.memory.notes import Provenance, read_note
 from stayfixed.memory.store import NO_RECORD, Store
 from tests.cli import cli
+from tests.gitfixture import git
 from tests.memory.test_store import REMOTE, a_config, a_machine_file, a_repo, an_overlay
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
@@ -1204,3 +1210,119 @@ def test_a_machine_file_that_does_not_load_is_a_reason_not_a_raise(tmp_path: Pat
     done = rerender_overlay_index(root, machine=machine)
 
     assert done.overlay_store is None and done.reason
+
+
+# -- the index-render handler: each machine renders its own index ---------------------------------
+
+
+def _on_this_machine(overlay: Path, *, sync: bool = False) -> None:
+    """The machine file under `HOME`, the one a hook reads, recording `overlay` (and the sync)."""
+    path = machine_config_path()
+    assert path is not None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    switch = "[sync]\nenabled = true\n" if sync else ""
+    path.write_text(f'[overlay]\nroot = "{overlay}"\n{switch}', encoding="utf-8")
+
+
+def _a_session(monkeypatch: pytest.MonkeyPatch, event: str, root: Path) -> int:
+    """`stayfixed hook <event>` in this process, for a session opened in `root`, with no harness
+    variable set: the project root is the payload's `cwd`, and the sink writes nothing."""
+    for name in (*project_root_variables(), "CLAUDE_PLUGIN_DATA", "PLUGIN_DATA", "PLUGIN_ROOT"):
+        monkeypatch.delenv(name, raising=False)
+    payload = {"session_id": "s", "cwd": str(root), "source": "startup"}
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
+    return run_hook(argparse.Namespace(event=event))
+
+
+EMPTY_REGION = f"{REGION_BEGIN}\n{REGION_END}\n"
+
+
+def test_session_start_renders_a_bound_overlay_checkouts_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The sync moves no index, so each machine renders its own: a note another machine's job
+    # brought in is in the next session's index. The index is there already, so `attach`'s
+    # render of a missing one is not what wrote it.
+    root, overlay, _ = _an_attached_checkout(tmp_path)
+    _on_this_machine(overlay)
+    share = overlay / "projects" / "widget" / "memory"
+    (share / INDEX_NAME).write_text(EMPTY_REGION, encoding="utf-8")
+    (share / "project-stable" / "n.md").write_text(note("n", index="N trigger"), encoding="utf-8")
+
+    assert _a_session(monkeypatch, "SessionStart", root) == 0
+
+    assert capsys.readouterr().err == ""
+    assert "- [N trigger](project-stable/n.md)" in (share / INDEX_NAME).read_text(encoding="utf-8")
+
+
+def test_session_end_harvests_an_appended_line_before_the_sync_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A line a session appended outside the region is harvested into its note on the machine
+    # that wrote it, before the sync's own `SessionEnd` handler starts the job (area order), so
+    # the note travels in that job. The spawn reads the overlay's status at the moment it is
+    # called. Mutation (declared): "the session end renders no index" -> the note is clean then.
+    root, overlay, _ = _an_attached_checkout(tmp_path)
+    _on_this_machine(overlay, sync=True)
+    share = overlay / "projects" / "widget" / "memory"
+    (share / "project-stable" / "m.md").write_text(note("m"), encoding="utf-8")
+    git(overlay, "init", "-q", "-b", "main")
+    git(overlay, "add", "-A")
+    git(overlay, "commit", "-q", "-m", "notes")
+    (share / INDEX_NAME).write_text(
+        EMPTY_REGION + "\n- [Harvested](project-stable/m.md)\n", encoding="utf-8"
+    )
+    seen: list[str] = []
+
+    def spawn(where: Path, *, wake: object = None) -> None:
+        seen.append(
+            git(where, "status", "--porcelain", "--", "projects/widget/memory/project-stable")
+        )
+
+    monkeypatch.setattr("stayfixed.sync.job.spawn", spawn)
+
+    assert _a_session(monkeypatch, "SessionEnd", root) == 0
+
+    assert capsys.readouterr().err == ""
+    assert [entry.strip() for entry in seen] == ["M projects/widget/memory/project-stable/m.md"]
+    assert read_note(share / "project-stable" / "m.md").index == "Harvested"
+
+
+def test_a_repository_mode_checkout_is_not_rendered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Outside overlay mode the index is the repository's file, which `memory index` renders when
+    # someone runs it. Mutation (declared): "a repository-mode checkout's index is rendered by a
+    # hook" -> this file is rewritten.
+    root = tmp_path / "widget"
+    a_repo(root)
+    a_config(root, "in-repo")
+    base = root / "docs" / "memory"
+    (base / "project-stable").mkdir(parents=True)
+    (base / "project-stable" / "n.md").write_text(note("n", index="N trigger"), encoding="utf-8")
+    (base / INDEX_NAME).write_text(EMPTY_REGION, encoding="utf-8")
+    _on_this_machine(an_overlay(tmp_path))
+
+    for event in ("SessionStart", "SessionEnd"):
+        assert _a_session(monkeypatch, event, root) == 0
+
+    assert capsys.readouterr().err == ""
+    assert (base / INDEX_NAME).read_text(encoding="utf-8") == EMPTY_REGION
+
+
+def test_an_unbound_checkout_is_not_rendered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # An overlay-mode checkout this machine does not bind resolves no store: nothing to render,
+    # and nothing said.
+    root, overlay, _ = _an_attached_checkout(tmp_path, bound=False)
+    _on_this_machine(overlay)
+    share = overlay / "projects" / "widget" / "memory"
+    (share / INDEX_NAME).write_text(EMPTY_REGION, encoding="utf-8")
+    (share / "project-stable" / "n.md").write_text(note("n", index="N trigger"), encoding="utf-8")
+
+    for event in ("SessionStart", "SessionEnd"):
+        assert _a_session(monkeypatch, event, root) == 0
+
+    assert capsys.readouterr().err == ""
+    assert (share / INDEX_NAME).read_text(encoding="utf-8") == EMPTY_REGION
