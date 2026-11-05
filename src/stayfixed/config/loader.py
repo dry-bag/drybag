@@ -323,11 +323,10 @@ def load(root: Path, *, machine: Path | None = None, owner: Owner | None = None)
 def read_document(root: Path, *, limit: int | None = None) -> str | None:
     """`stayfixed.toml` exactly as it is on disk, or `None` when there is none.
 
-    `newline=""` and not `read_text`: this is the text a command hands to `config.owned.rewrite`,
-    which keeps every byte but the values it sets, and universal-newline translation would have
-    rewritten every CRLF in a file somebody else owns before the editor saw it. `contained`
-    first, as for every configured path, so a symlinked `stayfixed.toml` is a refusal; then read
-    to the read cap, a regular file only (`fsops.read_regular_text`), as every reader of a
+    `newline=""` and not `read_text`: the parser judges the file's own text, so a lone `\\r`, which
+    TOML refuses, is not translated into a line break that would load here and nowhere else.
+    `contained` first, as for every configured path, so a symlinked `stayfixed.toml` is a refusal;
+    then read to the read cap, a regular file only (`fsops.read_regular_text`), as every reader of a
     committed file reads one: `limit`, or `fsops.REGULAR_READ_LIMIT` where the caller names none.
     """
     try:

@@ -1128,18 +1128,13 @@ read and kept: the name, the paths, the memory mode, the budgets. The file itsel
 is not replaced. It is a create-once artifact, so a repository that already has one is
 reported `skip_modified` ("create-once, and the file is already there").
 
-The one change is a missing `[stayfixed] version`, the only key stayfixed owns that the loader
-requires. This run writes it into the file in place, leaves every other line as it was, and
-says so in a `note:` line.
-
-The file is then checked as it will be on disk, that key included, before anything is
-written. One the next command could not load fails (`1`) with the loader's own sentence, and
-nothing is written: no `[project] name`, or a `[stayfixed] state` or `enforced` line (keys
-stayfixed no longer has, which the loader refuses as any unknown key).
+Nothing is written into it, whatever it holds. A key it lacks that the loader requires, such as
+`[stayfixed] version` or `[project] name`, or one stayfixed no longer has, is named by the next
+command that loads the file, in the loader's own sentence.
 
 The paths it declares are where the scaffold lands. A repository with no `stayfixed.toml` gets
-one written from the detected values and your answers, headed by a comment naming the one key
-that is stayfixed's to rewrite, `[stayfixed] version`. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
+one written from the detected values and your answers, headed by a comment saying that every key
+left out takes the preset's default. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
 (`1`) naming the file. A repository that already carries `.stayfixed/manifest.json` is refused
 (`2`): `init` writes a scaffold once.
 
@@ -1164,10 +1159,9 @@ between its markers, and every line outside them is kept.
 **Reads** `stayfixed.toml` when there is one, `.stayfixed/manifest.json`, `git` for the name
 and the base branch, and every file an artifact targets.
 
-**Writes**, every one of them through the scaffold engine or `stayfixed.toml`'s key editor, so
-that every target goes through the containment walk and none may leave the project root or
-pass through a symlink:
-- `stayfixed.toml`, or only its missing `[stayfixed] version` when you wrote it;
+**Writes**, every one of them through the scaffold engine, so that every target goes through the
+containment walk and none may leave the project root or pass through a symlink:
+- `stayfixed.toml`, when the repository has none;
 - the documents in the table above, each at its place in the table, and the `stayfixed:ignore`
   region in `.gitignore`;
 - `.stayfixed/manifest.json`.
@@ -1176,11 +1170,10 @@ Exits `0` on success. `1` on a finding: either plan carries refusals — the rep
 names each, nothing was written and no manifest exists — or a `stayfixed.toml` that cannot be read,
 is not UTF-8 text or is not valid TOML, or the merged document the loader itself refuses (an unknown
 section or key, a `[project] name` outside its grammar, a value of the wrong type, a machine
-configuration file that does not load), or a `stayfixed.toml` you wrote that, with its version, the
-loader would refuse on the next command's load. `2` on a refusal above the plans: no `--yes`, an
+configuration file that does not load). `2` on a refusal above the plans: no `--yes`, an
 answer flag over an existing `stayfixed.toml`, an answer outside its grammar or its choices (from the
 parser), a repository already initialised, a detected name outside the grammar that no
-`--name` answers, a `[stayfixed]` table the key editor cannot add a version to, a `stayfixed.toml`
+`--name` answers, a `stayfixed.toml`
 that is a symlink, which is never followed, a `[paths]` value outside the plain-path grammar, naming
 git's control directory or stayfixed's own `.stayfixed/`, or reaching through a component that is a
 symlink — all three refused by the loader before a plan exists — and two artifacts, of one pass or
@@ -1188,9 +1181,7 @@ of either, that resolve to one file (`roadmap` and `bug_index` set to one path),
 with the two artifacts and their `[paths]` keys to separate.
 
 `--json` carries `dry_run`, `adopted`, `once` and `scaffold` (each the plan's own rendered
-report), `writes` (both plans' targets), `stamped`, whether this
-run's plan adds `[stayfixed] version` to a `stayfixed.toml` you wrote — written only by a run that
-is neither a dry run nor refused — and `head_note`, the `note:` line that says `main` replaced an
+report), `writes` (both plans' targets), and `head_note`, the `note:` line that says `main` replaced an
 `origin/HEAD` outside the plain-branch grammar (the branch it named is never printed), that
 `main` stands because a remote is there and no `origin/HEAD` is recorded, or because git could
 not list the remotes, or that, with no remote, the branch checked out other than `main` became

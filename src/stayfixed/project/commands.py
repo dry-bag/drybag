@@ -49,11 +49,6 @@ YES_HELP = (
     "take the defaults `init --questions` shows, with any answer flag below replacing one, and "
     "write the scaffold; without it nothing is written"
 )
-# Fixed text: the verb is one of two this module chooses, and nothing the file says prints.
-STAMPED = (
-    "note: stayfixed.toml carried no [stayfixed] version, the one key stayfixed owns that the "
-    "loader requires; this run {verb} it and leaves every other line as it was"
-)
 # Heads the list of what the run took for each question, which the skip path took unasked. Said
 # of the run, as every other line of the report is, and never in the first person.
 PICKED = "picked:"
@@ -139,10 +134,6 @@ def run_init(args: argparse.Namespace) -> Result:
         lines += [PICKED, *(_picked_line(key, value) for key, value in chosen.items())]
     if report.head_note:
         lines.append(f"note: {report.head_note}")
-    if report.stamped:
-        # Nothing is written by a dry run or a refused one, the stamp included.
-        verb = "would write" if report.dry_run or report.refused else "wrote"
-        lines.append(STAMPED.format(verb=verb))
     data = {
         "dry_run": report.dry_run,
         "adopted": report.adopted,
@@ -150,7 +141,6 @@ def run_init(args: argparse.Namespace) -> Result:
         "scaffold": footprint,
         "writes": [*report.once.writes, *report.footprint.writes],
         "head_note": report.head_note,
-        "stamped": report.stamped,
     }
     return Result("\n".join(lines), data, exit_code=1 if refused else 0)
 

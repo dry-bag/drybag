@@ -1275,27 +1275,6 @@ reddens = [
   "tests/hooks/test_dispatch.py::test_a_once_per_context_handler_that_says_nothing_keeps_its_one_delivery",
 ]
 
-# The one writer into a `stayfixed.toml` somebody else owns: an edit is kept only when reading it
-# back gives exactly the document before it with that one key set. The multi-line case is the one
-# where the returned text still parses, which is the silent failure the read-back exists for.
-[[mutation]]
-name = "the tool-owned key editor returns an edit it never read back"
-file = "src/stayfixed/config/owned.py"
-before = "            proved = tomllib.loads(candidate) == expected"
-after = "            proved = True"
-reddens = [
-  "tests/config/test_owned.py::test_a_table_header_inside_a_multi_line_string_is_not_where_the_key_is",
-]
-
-[[mutation]]
-name = "the tool-owned key editor lets a parse failure quote the document"
-file = "src/stayfixed/config/owned.py"
-before = "    except UNPARSEABLE as exc:"
-after = "    except KeyError as exc:"
-reddens = [
-  "tests/config/test_owned.py::test_a_document_that_does_not_parse_is_refused_by_position_alone",
-]
-
 # Detection asks every value that detects before it falls back to Claude Code's schema: Codex
 # mirrors its own root variable under Claude Code's name, so only a positive answer tells it apart.
 [[mutation]]
@@ -1539,22 +1518,6 @@ reddens = [
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[personal]",
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[overlay-root]",
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[machine]",
-]
-
-[[mutation]]
-name = "the owned-key editor meets a document nested past the parser as an internal error"
-file = "src/stayfixed/config/owned.py"
-before = """
-        expected: dict[str, Any] = tomllib.loads(text)
-    except UNPARSEABLE as exc:
-"""
-after = """
-        expected: dict[str, Any] = tomllib.loads(text)
-    except tomllib.TOMLDecodeError as exc:
-"""
-reddens = [
-  "tests/config/test_deep_toml.py::test_a_reader_answers_a_document_nested_past_the_parser_as_one_that_does_not_parse[owned-rewrite]",
-  "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[owned-rewrite]",
 ]
 
 # Two readers of `stayfixed.toml` followed two rules: `read_document` refuses a symlink, and

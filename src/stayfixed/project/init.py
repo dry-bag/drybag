@@ -10,23 +10,15 @@ manifest is refused: `init` writes a scaffold once.
 
 **Adopted means read, not replaced.** `stayfixed.toml` is a `Kind.ONCE` artifact: created when
 absent, never looked inside again. So on a repository that already carries one the engine
-reports `skip_modified` — "create-once, and the file is already there" — and the file comes
-back byte for byte but for one key. What the hand-written document does is decide the whole
-run: it is parsed, merged under stayfixed's own `version` and the preset's defaults, and
+reports `skip_modified` — "create-once, and the file is already there" — and the file stays byte
+for byte, whatever it holds. What the hand-written document does is decide where the scaffold
+lands: it is parsed, merged under stayfixed's own `version` and the preset's defaults, and
 validated by `loads` before a byte is written, and the `Config` that comes out is what every
-target below is built from.
-
-**The one key is a missing `[stayfixed] version`**, the only tool-owned key the loader
-requires, with its `[stayfixed]` header when the file has none. It is added through
-`config.owned.rewrite`, which keeps every other line, and the file is checked with `loads` as it
-will then be on disk — before any write, dry run included — because the merged document drops
-every `[stayfixed]` key it does not carry over, and
-detects a name the file may lack, and so loads where the next command's `load` would not. The
-other tool-owned keys are written only into a file stayfixed itself creates, which is the only
-file whose header claims them.
+target below is built from. A key the file lacks, or one the loader refuses outside that merge, is
+the next command's to name, when it loads the file.
 
 **Every value in the document this writes is stayfixed's own, the repository's own answer read
-back, or an answer a person gave as a flag.** The tool-owned keys are `config.owned.OWNED`;
+back, or an answer a person gave as a flag.** `[stayfixed] version` is stayfixed's own;
 everything else is copied from a `stayfixed.toml` a person wrote, or — where there is none —
 taken from the answers `Given` carries, each held by the parser to its grammar or its choices,
 or detected under `PROJECT_NAME`'s grammar, which is the one thing `detect` refuses outside of.
@@ -44,25 +36,19 @@ from pathlib import Path
 import stayfixed
 from stayfixed import fsops
 from stayfixed.config.loader import CONFIG_FILE, loads, read_document
-from stayfixed.config.owned import rewrite
 from stayfixed.config.owner import Owner
 from stayfixed.config.paths import contained
 from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.config.schema import Config
 from stayfixed.errors import Failure, Refusal
-from stayfixed.fsops import said, write_within
 from stayfixed.project.detect import CURRENT_BRANCH, DEFAULT_BRANCH, Detected, detect
 from stayfixed.project.templates import project_templates
 from stayfixed.scaffold import MANIFEST_PATH, Manifest, Plan, apply, plan
 from stayfixed.tomlout import dumps
 
-VERSION = ("stayfixed", "version")
 USER_OWNED = ("paths", "memory", "budgets", "ledger", "commit_messages")
 HEAD_KEYS = ("preset",)
-HEADER = (
-    "# Written by `stayfixed init`. Every key you leave out takes the preset's default;\n"
-    "# `[stayfixed] version` is stayfixed's to rewrite in place; every other key is yours.\n\n"
-)
+HEADER = "# Written by `stayfixed init`. Every key you leave out takes the preset's default.\n\n"
 # The pair is spelled literally because the intended reader is an agent relaying this sentence,
 # and `--dry-run` on its own is refused by this same refusal: "pass --yes, and --dry-run to read
 # them first" reads as two alternatives, one of which does not work.
@@ -142,9 +128,6 @@ class InitReport:
     # not; `HEAD_REMOTES_UNKNOWN` when it is the default because git could not list the remotes;
     # `HEAD_CURRENT` when, with no remote at all, it is a checked-out branch other than `main`.
     head_note: str = ""
-    # Whether this run's plan adds `[stayfixed] version` to a `stayfixed.toml` a person wrote. It
-    # is written only by a run that is neither a dry run nor refused.
-    stamped: bool = False
     # The configuration the run wrote or adopted, from which the command says what it picked.
     config: Config | None = None
 
@@ -264,23 +247,6 @@ def _rendered(tables: dict[str, dict[str, object]]) -> str:
     return HEADER + dumps(tables)
 
 
-def _as_on_disk(read: tuple[str, dict[str, object]] | None) -> tuple[str | None, bool]:
-    """The adopted `stayfixed.toml` as every later command will load it, and whether this run
-    writes its missing `[stayfixed] version`; `(None, False)` when this run creates the file.
-
-    `read` is `_existing`'s answer, the text `read_document` gave, so this is the file the write
-    will meet; one without a version then meets the key editor, which refuses a `[stayfixed]` it
-    cannot extend: the refusals the write would meet, met while planning.
-    """
-    if read is None:
-        return None, False
-    text, existing = read
-    head = existing.get("stayfixed")
-    if isinstance(head, dict) and "version" in head:
-        return text, False
-    return rewrite(text, {VERSION: stayfixed.__version__}), True
-
-
 def precheck(root: Path, *, answering: bool) -> None:
     """The refusals `init` and `init --questions` share, before anything beyond the root is read.
 
@@ -312,9 +278,8 @@ def init(
     that says this repository is already initialised, an answer given over a `stayfixed.toml`
     the repository already has, a `stayfixed.toml` that is not TOML, a detected name outside the
     grammar that no `--name` answers, an adopted table holding a key that cannot be written
-    back bare (`_rendered`), a `Config` the loader refuses, an adopted `stayfixed.toml` whose
-    missing version the key editor cannot add or that the loader refuses as it will be on disk
-    (`_as_on_disk`), an artifact at a file another is built to write, in either pass
+    back bare (`_rendered`), a `Config` the loader refuses, an artifact at a file another is built
+    to write, in either pass
     (`templates.Owners`), and finally a refusal in either plan, which is returned rather than
     raised so the report can name the artifact.
 
@@ -329,11 +294,6 @@ def init(
     tables, head_note = _tables(root, existing, given=given)
     document = _rendered(tables)
     config = loads(document, root, machine=machine, owner=owner)
-    on_disk, stamped = _as_on_disk(read)
-    if on_disk is not None:
-        # What the next command loads is the file, not the merged document: that one drops
-        # every `[stayfixed]` key it does not carry over, and detects a name the file may lack.
-        loads(on_disk, root, machine=machine, owner=owner)
     prepared = project_templates(config, document=document)
     once = plan(root, prepared.once)
     footprint = plan(root, prepared.footprint)
@@ -343,17 +303,10 @@ def init(
         existing is not None,
         dry_run,
         head_note,
-        stamped,
         config,
     )
     if dry_run or report.refused:
         return report
-    if stamped and on_disk is not None:
-        # No manifest yet, so there is no record to re-stamp: only the one line is written.
-        try:
-            write_within(root, CONFIG_FILE, on_disk)
-        except OSError as exc:
-            raise Refusal(f"{CONFIG_FILE} cannot be written ({said(exc)})") from exc
     apply(root, once)
     apply(root, footprint)
     return report

@@ -564,49 +564,6 @@ reddens = [
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[answers-over-a-committed-document-init]",
 ]
 
-# An adopted `stayfixed.toml` is checked as every later command will load it: the text on disk,
-# with a missing `[stayfixed] version` added by the key editor while planning, before any network
-# call and any write, dry run included. The stamp is written only by a run that writes, and the
-# report says "wrote" only then.
-[[mutation]]
-name = "an adopted document the next command cannot load is adopted anyway"
-file = "src/stayfixed/project/init.py"
-before = "        loads(on_disk, root, machine=machine, owner=owner)"
-after = "        pass"
-reddens = [
-  "tests/project/test_init.py::test_an_adopted_document_the_loader_would_refuse_is_refused_before_anything_is_written",
-]
-
-[[mutation]]
-name = "the adopted version is checked without being added"
-file = "src/stayfixed/project/init.py"
-before = "    return rewrite(text, {VERSION: stayfixed.__version__}), True"
-after = "    return text, True"
-reddens = ["tests/project/test_init.py::test_a_version_the_editor_cannot_add_is_refused_by_the_dry_run_too"]
-
-[[mutation]]
-name = "an adopted document without a version is left unloadable"
-file = "src/stayfixed/project/init.py"
-before = "            write_within(root, CONFIG_FILE, on_disk)"
-after = "            pass"
-reddens = [
-  "tests/project/test_init.py::test_an_adopted_document_with_no_version_gets_one_and_keeps_every_line",
-]
-
-[[mutation]]
-name = "an adopted document's added version goes unmentioned"
-file = "src/stayfixed/project/commands.py"
-before = "    if report.stamped:"
-after = "    if False:"
-reddens = ["tests/project/test_command.py::test_an_adopted_document_without_a_version_is_named_in_a_note"]
-
-[[mutation]]
-name = "a refused adoption reports its version stamp as written"
-file = "src/stayfixed/project/commands.py"
-before = '        verb = "would write" if report.dry_run or report.refused else "wrote"'
-after = '        verb = "would write" if report.dry_run else "wrote"'
-reddens = ["tests/project/test_command.py::test_a_refused_adoption_says_its_version_would_be_written"]
-
 # The other half of the same line: an adopted file with no `[project] name` is answered by the
 # loader, not by detection, whose remedy (`--name`) is refused over a `stayfixed.toml`.
 [[mutation]]

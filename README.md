@@ -199,7 +199,7 @@ stayfixed writes files. Being specific about which is the point of this section.
 
 | Path | What it is | Written by |
 |---|---|---|
-| `stayfixed.toml` | Your project's configuration, committed | `stayfixed init`, once — into a file you wrote, only a missing `[stayfixed] version`; you after |
+| `stayfixed.toml` | Your project's configuration, committed | `stayfixed init`, once, when there is none; you after |
 | `docs/memory/` (configurable) | The note store, in `in-repo` and `overlay` mode | `stayfixed memory index` |
 | `.stayfixed/local/memory/` | The note store in `local-only` mode — git-ignored | `stayfixed memory index` |
 | `<store>/MEMORY.md` | The rendered routing index. **Generated — do not hand-edit** | `stayfixed memory index` |

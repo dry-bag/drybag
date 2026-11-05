@@ -43,9 +43,9 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 
 - **A `stayfixed.toml` the user wrote answers the questions.** Skip steps 2–4 and 7 and run
   steps 5 and 6 with no answer flag: the dry run, the relay, the explicit final yes, then the write. The
-  file is kept; a missing `[stayfixed] version` is the one thing added, and a `note:` line says so.
-- **A `failed:` line from `init` over a `stayfixed.toml` the user wrote means the next command
-  could not load that file.** Nothing was written. Relay the sentence, fix the file with the
+  file is kept as it is: `init` writes nothing into it.
+- **A `failed:` line from `init` over a `stayfixed.toml` the user wrote means the loader refuses
+  what that file holds.** Nothing was written. Relay the sentence, fix the file with the
   user, and run again.
 - **A repository with `.stayfixed/manifest.json` is refused.** `init` writes a scaffold once.
   Never delete the manifest to get past it.

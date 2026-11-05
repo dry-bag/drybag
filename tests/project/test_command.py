@@ -16,7 +16,6 @@ import pytest
 from stayfixed.cli import build_parser, discover_registrars, run
 from stayfixed.config.loader import load
 from stayfixed.config.schema import NAME_RULE, Config
-from stayfixed.project.commands import STAMPED
 from stayfixed.project.init import (
     HEAD_CURRENT,
     HEAD_DEFAULTED,
@@ -35,7 +34,6 @@ JSON_KEYS = {
     "scaffold",
     "writes",
     "head_note",
-    "stamped",
 }
 
 
@@ -409,37 +407,6 @@ def test_an_answer_over_a_document_the_user_wrote_is_refused(
     assert code == 2 and printed == ""
     assert "--yes" in capsys.readouterr().err
     assert_snapshot_unchanged(root, before)
-
-
-@needs_git
-def test_a_refused_adoption_says_its_version_would_be_written(tmp_path: Path) -> None:
-    # A refused run writes nothing, the stamp included, so its note must not say "wrote".
-    # A directory at the roadmap's place is refused by the footprint pass. Mutation (oracle):
-    # `mutations/`'s "a refused adoption reports its version stamp as written".
-    root = repository(tmp_path)
-    hand_written = '[project]\nname = "widget"\n'
-    (root / "stayfixed.toml").write_text(hand_written, encoding="utf-8")
-    (root / "docs" / "roadmap.md").mkdir(parents=True)
-    code, printed = _run(root, tmp_path, "--yes")
-    assert code == 1, printed
-    assert STAMPED.format(verb="would write") in printed
-    assert STAMPED.format(verb="wrote") not in printed
-    assert (root / "stayfixed.toml").read_text(encoding="utf-8") == hand_written
-    assert not (root / ".stayfixed" / "manifest.json").exists()
-
-
-@needs_git
-def test_an_adopted_document_without_a_version_is_named_in_a_note(tmp_path: Path) -> None:
-    # The one line `init` writes into a file a person wrote is said, in the text and in
-    # `--json`. Mutation (oracle): `mutations/`'s "an adopted document's added version goes
-    # unmentioned".
-    root = repository(tmp_path)
-    (root / "stayfixed.toml").write_text('[project]\nname = "widget"\n', encoding="utf-8")
-    code, printed = _run(root, tmp_path, "--yes", "--dry-run")
-    assert code == 0, printed
-    assert STAMPED.format(verb="would write") in printed
-    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
-    assert json.loads(printed)["stamped"] is True
 
 
 @needs_git

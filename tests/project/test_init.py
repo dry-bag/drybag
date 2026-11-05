@@ -11,11 +11,10 @@ import pytest
 
 import stayfixed
 from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.config.owned import OWNED, OwnedKeyError
 from stayfixed.config.reading import ConfigError
 from stayfixed.errors import Failure, Refusal
 from stayfixed.project.commands import PICKED
-from stayfixed.project.init import HEADER, InitReport, init
+from stayfixed.project.init import InitReport, init
 from stayfixed.project.templates import ONE_FILE
 from stayfixed.scaffold import MANIFEST_PATH, Manifest, Verb
 from tests.cli import cli
@@ -98,23 +97,6 @@ def test_a_local_only_note_is_kept_out_of_git_by_the_region_init_writes(tmp_path
     (root / note).write_text("---\nname: first-note\ndescription: d\n---\n\nbody\n", "utf-8")
     assert run_git(root, "check-ignore", "-q", "--", note).returncode == 0
     assert note not in git(root, "status", "--porcelain", "-uall")
-
-
-@needs_git
-def test_a_created_document_opens_with_a_header_naming_every_tool_owned_key(
-    tmp_path: Path,
-) -> None:
-    # The header is the file's own statement of which keys stayfixed rewrites in place. It once
-    # named two keys while more were stayfixed's to rewrite. Every key of `OWNED` is looked for,
-    # as `key` or as `[table] key` in backticks, and every table it names is named, so a second
-    # owned key or a dropped one reddens here.
-    root = _repo(tmp_path)
-    _init(root, tmp_path)
-    assert (root / CONFIG_FILE).read_text(encoding="utf-8").startswith(HEADER)
-    assert len(OWNED) == 1
-    for table, key in sorted(OWNED):
-        assert re.search(rf"`(?:\[{table}\] )?{key}`", HEADER), (table, key)
-        assert f"`[{table}]" in HEADER, table
 
 
 @needs_git
@@ -330,109 +312,43 @@ def test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_wr
     )
 
 
-@needs_git
-def test_an_adopted_document_with_no_version_gets_one_and_keeps_every_line(
-    tmp_path: Path,
-) -> None:
-    # `[stayfixed] version` is the one key stayfixed owns that the loader requires, so an adopted
-    # file without it was left unloadable by the very run that adopted it. The dry run plans
-    # the stamp and writes nothing; the real run adds that one line through the key editor.
-    # Mutation (oracle): `mutations/`'s "an adopted document without a version is left unloadable".
-    root = _repo(tmp_path)
-    hand_written = '# ours\n[project]\nname = "widget"\n'
-    (root / CONFIG_FILE).write_text(hand_written, encoding="utf-8")
-    dry = _init(root, tmp_path, dry_run=True)
-    assert dry.stamped and dry.adopted
-    assert (root / CONFIG_FILE).read_text(encoding="utf-8") == hand_written
-    report = _init(root, tmp_path)
-    assert report.adopted and report.stamped
-    assert (root / CONFIG_FILE).read_text(encoding="utf-8").startswith(hand_written)
-    assert load(root, machine=tmp_path / "absent.toml").stayfixed.version == stayfixed.__version__
-
-
-REFUSED_HEADS = {
-    # The removed `[stayfixed] state`, which the loader refuses as an unknown key.
-    "spells-state": 'state = "initialised"\n',
-    # The removed `[stayfixed] enforced`, which the loader refuses as an unknown key.
-    "enforced-unknown": 'enforced = ["absent"]\n',
-    "no-project": "",
-    # An empty file parses to `{}`, which is falsy: no table is copied and no head is read, a
-    # path of its own through `_tables` and `_as_on_disk`.
+# What a hand-written file may hold that the next command's load refuses: no version, a key
+# stayfixed no longer has, no `[project]`, nothing at all.
+LEFT_FOR_THE_LOADER = {
+    "no-version": '[project]\nname = "widget"\n',
+    "unknown-key": '[stayfixed]\nversion = "0.1.0"\nenforced = []\n\n[project]\nname = "widget"\n',
+    "no-project": '[stayfixed]\nversion = "0.1.0"\n',
     "empty-file": "",
 }
 
 
 @needs_git
-@pytest.mark.parametrize("case", list(REFUSED_HEADS))
-def test_an_adopted_document_the_loader_would_refuse_is_refused_before_anything_is_written(
+@pytest.mark.parametrize("case", list(LEFT_FOR_THE_LOADER))
+def test_an_adopted_document_is_left_as_it_is_and_the_next_load_names_what_it_lacks(
     tmp_path: Path, case: str
 ) -> None:
-    # The merged document `init` validates drops every `[stayfixed]` key it does not carry over,
-    # and detects a name the file may lack, so each of these passed `init` and left a manifest
-    # over a file no later command could load. The file is now checked as it will be on disk, in
-    # the dry run too.
-    # Mutation (oracle): `mutations/`'s "an adopted document the next command cannot load is adopted
-    # anyway".
+    # `init` reads a `stayfixed.toml` a person wrote for where the scaffold lands and writes
+    # nothing into it: it once added a missing `[stayfixed] version`, and refused a file the next
+    # command could not load. What the file lacks, or holds that stayfixed no longer has, is the
+    # loader's to name when the next command loads it.
     root = _repo(tmp_path)
-    document = ""
-    if case != "empty-file":
-        document = f'[stayfixed]\nversion = "0.1.0"\n{REFUSED_HEADS[case]}'
-        if case != "no-project":
-            document += '\n[project]\nname = "widget"\n'
+    document = LEFT_FOR_THE_LOADER[case]
     (root / CONFIG_FILE).write_text(document, encoding="utf-8")
-    before = snapshot(root)
-    for dry_run in (True, False):
-        with pytest.raises(ConfigError):
-            _init(root, tmp_path, dry_run=dry_run)
-        assert_snapshot_unchanged(root, before)
-        assert not (root / MANIFEST_PATH).exists()
-
-
-@needs_git
-def test_a_version_the_editor_cannot_add_is_refused_by_the_dry_run_too(tmp_path: Path) -> None:
-    # The stamp is computed while planning, so the key editor's refusal of an inline `stayfixed`
-    # table meets the dry run as it would the real one. Mutation (oracle): `mutations/`'s "the
-    # adopted version is checked without being added" -> the loader refuses the version-less text
-    # instead, a `ConfigError` and not an `OwnedKeyError`.
-    root = _repo(tmp_path)
-    (root / CONFIG_FILE).write_text(
-        'stayfixed = { preset = "recommended" }\n\n[project]\nname = "widget"\n',
-        encoding="utf-8",
-    )
-    before = snapshot(root)
-    with pytest.raises(OwnedKeyError):
-        _init(root, tmp_path, dry_run=True)
-    assert_snapshot_unchanged(root, before)
-
-
-@needs_git
-def test_a_symlinked_document_with_no_version_is_refused_by_the_dry_run_too(
-    tmp_path: Path,
-) -> None:
-    # The stamp is computed from what `read_document` read, which refuses a symlinked
-    # `stayfixed.toml`; computing the stamp while planning meets that refusal in the dry run as
-    # well, with nothing written on either side of the link. (No single line:
-    # the refusal is `contained()`'s, whose own entries hold it.)
-    root = _repo(tmp_path)
-    elsewhere = tmp_path / "elsewhere.toml"
-    elsewhere.write_text('[project]\nname = "widget"\n', encoding="utf-8")
-    (root / CONFIG_FILE).symlink_to(elsewhere)
-    before = snapshot(root)
-    for dry_run in (True, False):
-        with pytest.raises(Refusal):
-            _init(root, tmp_path, dry_run=dry_run)
-        assert_snapshot_unchanged(root, before)
-        assert elsewhere.read_text(encoding="utf-8") == '[project]\nname = "widget"\n'
+    report = _init(root, tmp_path)
+    assert report.adopted and not report.refused
+    assert (root / CONFIG_FILE).read_text(encoding="utf-8") == document
+    with pytest.raises(ConfigError):
+        load(root, machine=tmp_path / "absent.toml")
 
 
 @needs_git
 def test_a_symlinked_document_is_refused_even_when_it_carries_its_version(
     tmp_path: Path,
 ) -> None:
-    # A document with its version needs no stamp, and `init` read it by following the link: a
-    # clone's `stayfixed.toml -> /dev/zero` ended the run by exhausting memory. It is read
-    # through `read_document` now, as the loader reads it, once. Mutation (declared):
-    # `_existing` reading the file by following the link -> the dry run reports a plan.
+    # `init` read a document by following the link: a clone's `stayfixed.toml -> /dev/zero` ended
+    # the run by exhausting memory. It is read through `read_document` now, as the loader reads
+    # it, once. Mutation (declared): `_existing` reading the file by following the link -> the dry
+    # run reports a plan.
     root = _repo(tmp_path)
     elsewhere = tmp_path / "elsewhere.toml"
     elsewhere.write_text(
