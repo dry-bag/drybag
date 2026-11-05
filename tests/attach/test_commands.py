@@ -701,39 +701,25 @@ def test_an_overlay_group_whose_hooks_is_null_is_refused_by_check_and_attach_ali
     assert checked.err.endswith(": an entry group's 'hooks' is not a list\n")
 
 
-# Ledgers the real run cannot take, and the code it ends with: one it cannot read is a failure,
-# and one naming what `attach` never writes is a refusal.
-UNREADABLE_LEDGERS = {
-    "not-json": ("{", 1),
-    "not-a-record": (json.dumps({"rules": ["Bash(rm -rf /)"]}), 2),
-    # Longer than every other file either command reads, so the lowered cap stops this one alone.
-    "past-the-cap": (json.dumps({"store": "x" * 1_000_000}), 1),
-}
-
-
-@pytest.mark.parametrize("shape", sorted(UNREADABLE_LEDGERS))
 def test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
-    shape: str,
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # `--check` did not read the ledger, so it answered 0 over a ledger that
-    # stopped the run, and a CI step running it passed where `attach` failed. It reads the ledger
-    # with the run's reader now, so the two end with one code and one line. Mutation (oracle):
+    # `--check` did not read the ledger, so it answered 0 over a ledger that stopped the run, and a
+    # CI step running it passed where `attach` failed. It reads the ledger with the run's reader
+    # now, so the two end with one code and one line. The ledger here is longer than every other
+    # file either command reads, so the lowered cap stops this one alone. Mutation (oracle):
     # `mutations/`'s "check skips the reads the run makes before its first write".
-    text, code = UNREADABLE_LEDGERS[shape]
+    text = json.dumps({"store": "x" * 1_000_000})
     root, store, machine = _granting(tmp_path)
     ledger = ledger_file(root)
     ledger.parent.mkdir(parents=True, exist_ok=True)
     ledger.write_text(text, encoding="utf-8")
-    if shape == "past-the-cap":
-        monkeypatch.setattr(fsops, "REGULAR_READ_LIMIT", len(text) - 1)
+    monkeypatch.setattr(fsops, "REGULAR_READ_LIMIT", len(text) - 1)
     flags = _flags(root, store, machine)
     before = snapshot(tmp_path)
-    assert invoke(["attach", "--check", *flags]) == code
+    assert invoke(["attach", "--check", *flags]) == 1
     checked = capsys.readouterr()
-    assert invoke(["attach", *flags]) == code
+    assert invoke(["attach", *flags]) == 1
     attached = capsys.readouterr()
     assert checked.err == attached.err and checked.err.startswith("stayfixed: ")
     assert_snapshot_unchanged(tmp_path, before)

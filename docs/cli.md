@@ -1825,8 +1825,8 @@ answer, in the order the run meets them:
   read or is not UTF-8; or a file under the overlay's `skills/` or `agents/` cannot be read, is
   not a regular file, is not UTF-8 or is longer than 64 MiB, or a directory there cannot be
   listed.
-- An existing ledger (`stayfixed/attach.json` in the git common directory) cannot be read, is not
-  UTF-8, is not valid JSON or is not a JSON object.
+- An existing ledger (`stayfixed/attach.json` in the git common directory) cannot be read. One that
+  is not valid JSON or not a JSON object records nothing: `attach` carries on and writes a new one.
 - A Codex rule file in the overlay cannot be read or is not UTF-8, or the overlay's `common/codex/`
   or `projects/<name>/codex/` directory holding it cannot be listed.
 - `git worktree list`, which names the main checkout, fails.
@@ -1865,7 +1865,6 @@ It exits `2` on a refusal, in the order the run meets them:
   that read that as none would take back what they delivered. The refusal names the file, and
   `--check` refuses it too. A session reads it as no tags and says so. A record that is absent,
   as before a first attach, is no refusal.
-- An existing ledger naming files, settings keys or directories `attach` could not have written.
 - A `git check-ignore` that cannot answer.
 - A path it places — a `.codex/rules/` copy, or `.claude/settings.local.json` — that the repository tracks, in any ASCII case, as git itself
   matches it, or as the same file as one it tracks in that directory (where the filesystem folds
@@ -1905,10 +1904,11 @@ It reads the ledger, `stayfixed/attach.json` in the git common directory, and ac
 nothing else. A repository with no ledger fails (`1`) naming the missing file rather than guessing
 which allow rules were stayfixed's from their content — that guess is the reason the ledger
 exists, and getting it wrong removes a rule you wrote by hand. A branch cannot write the git
-common directory, and a ledger left in the working tree by an earlier release is not read. Every
-field is held to what `attach` could have put there — `rules` to a single file under
-`.codex/rules/`, `settings_keys` to `autoMemoryDirectory` — and a ledger naming anything else
-(a hand edit, say) is refused (`2`) with nothing removed, rather than obeyed. A ledger claiming
+common directory, and a ledger left in the working tree by an earlier release is not read. A
+ledger that is not valid JSON records nothing: `detach` fails (`1`), says so and removes nothing.
+It removes a `.codex/rules/` copy only from a single file under that directory, a settings key only
+if it is `autoMemoryDirectory`, and a directory only from the closed list `attach` can create;
+anything else a ledger names (a hand edit, say) is skipped. A ledger claiming
 `settings_keys = ["permissions"]` would otherwise have deleted your whole `permissions` block, deny
 rules included.
 

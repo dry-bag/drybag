@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
@@ -44,7 +43,7 @@ from tests.doctor.test_checks import (
     _overlay,
 )
 from tests.gitfixture import git as _git
-from tests.parserlimits import LONG_NUMBER, NESTED
+from tests.parserlimits import LONG_NUMBER
 from tests.runners import Recorder
 from tests.tagged import with_tags
 
@@ -350,57 +349,6 @@ def test_an_attached_checkout_the_overlay_confirms_is_still_green_and_says_the_b
     assert "the binding is bound" in row.detail
 
 
-def test_a_ledger_that_cannot_be_read_is_never_blamed_on_git(
-    tmp_path: Path,
-) -> None:
-    # `_binding_answer` had three answers and needed four. A ledger that is there and will not
-    # parse was joining "no overlay" and "no git" under `unaskable`, so the row said "no `git`,
-    # or a record this process could not read" and the remedy said "run `stayfixed doctor` again
-    # where `git` runs" — about a file `git` has nothing to do with. `skip` never reaches the exit
-    # code either, so a malformed ledger was silent, which is the split `_uncorroborated`'s own
-    # docstring exists to make.
-    #
-    # Mutation (declared): the unreadable ledger answers `UNASKABLE` again -> the row is `skip`,
-    # blames `git`, and every assertion below reddens.
-    root = _attached(tmp_path)
-    ledger_file(root).write_text("this is not json", encoding="utf-8")
-    row = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
-
-    assert row.status == WARN
-    assert f"{LEDGER_NAME} is here and cannot be read as a ledger" in row.detail
-    assert "`git`" not in row.detail and "`git`" not in row.remedy
-    assert LEDGER_NAME in row.remedy
-
-
-# Ledger fields a clone can commit in shapes `attach` never writes, each of which used to raise out
-# of the ledger's reader with something other than its refusal, or to be read as something it is
-# not: a `store` holding a NUL, which `Path.resolve` meets as `ValueError`, and one holding a lone
-# surrogate, which it meets as `UnicodeEncodeError`; a `store` or an entry's event that is not text,
-# which the reader passed through `str()`, so `5` read as the store `5`; and a list field holding a
-# number, which the reader's iteration meets as `TypeError`.
-HOSTILE_FIELDS = {
-    "store-nul": ("store", "/overlay/projects/widget/memory\u0000"),
-    "store-unencodable": ("store", "/overlay/projects/widget/memory\ud800"),
-    "store-not-text": ("store", 5),
-    "entry-event-not-text": ("entries", {"x": 5}),
-    "allow-not-a-list": ("allow", 5),
-    "rules-not-a-list": ("rules", 5),
-    "settings-keys-not-a-list": ("settings_keys", 5),
-    "directories-not-a-list": ("directories", 5),
-    # A list of the right shape naming a file `attach` could not have written: the reader refuses
-    # it, and both of `doctor`'s callers of the reader must read that refusal as a ledger that
-    # cannot be read rather than let it reach the report's guard.
-    "rules-naming-a-workflow": ("rules", [".github/workflows/ci.yml"]),
-}
-
-# Deeper than `str()` follows a nested list, and no deeper than Python 3.14's parser does, so the
-# parser reads the ledger and `str()` is what overflows: measured on 3.14.7, the parser's reach ends
-# between 50,000 and 60,000 levels and `str()`'s between 30,000 and 40,000. Below 3.14 the parser
-# refuses this depth itself, which the `nested` case holds.
-PAST_STR = 45_000
-# The two fields the reader passed through `str()`, each nested `PAST_STR` deep.
-PAST_STR_FIELDS = {"store-past-str": "store", "entry-past-str": "entries"}
-
 # The `attached` row beside a ledger that cannot be read, pasted rather than read back from the
 # code under test.
 UNREADABLE_LEDGER_ATTACHED = Check(
@@ -410,86 +358,6 @@ UNREADABLE_LEDGER_ATTACHED = Check(
     f"and this checkout's attach state is unknown",
     f"remove {LEDGER_NAME}, then run `stayfixed attach --check`",
 )
-
-
-# A ledger `ledger()` cannot read, by its whole bytes.
-UNREADABLE_LEDGERS = {
-    "not-json": "this is not json",
-    "rules-not-a-list": json.dumps({"rules": 5}),
-    "nested": '{"entries": ' + NESTED + "}",
-    "long-number": '{"entries": {"forged-1": ' + LONG_NUMBER + "}}",
-}
-
-
-def _unreadable_own_ledger(root: Path, shape: str) -> None:
-    """Replace the owner's ledger in `root` with `shape`, one `ledger()` cannot read: a field from
-    `HOSTILE_FIELDS`, a field from `PAST_STR_FIELDS`, or whole bytes from `UNREADABLE_LEDGERS`."""
-    recorded = json.loads(ledger_file(root).read_text(encoding="utf-8"))
-    if shape in HOSTILE_FIELDS:
-        key, value = HOSTILE_FIELDS[shape]
-        recorded[key] = value
-        text = json.dumps(recorded)
-    elif shape in PAST_STR_FIELDS:
-        if PAST_STR_FIELDS[shape] == "store":
-            recorded["store"] = "@deep@"
-        else:
-            # A key an earlier release's `attach` recorded, because the reader only ever converted
-            # the event under a key that round-trips through the marker.
-            recorded["entries"] = {"overlay-PreToolUse-1": "@deep@"}
-        text = json.dumps(recorded).replace('"@deep@"', "[" * PAST_STR + "]" * PAST_STR)
-    else:
-        text = UNREADABLE_LEDGERS[shape]
-    ledger_file(root).write_text(text, encoding="utf-8")
-
-
-@pytest.mark.parametrize(
-    "shape",
-    [
-        *sorted(HOSTILE_FIELDS),
-        "not-json",
-        "nested",
-        "long-number",
-        *(
-            pytest.param(
-                shape,
-                marks=pytest.mark.skipif(
-                    sys.version_info < (3, 14), reason="below 3.14 the parser stops first"
-                ),
-            )
-            for shape in sorted(PAST_STR_FIELDS)
-        ),
-    ],
-)
-def test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable(
-    tmp_path: Path, shape: str
-) -> None:
-    # `.gitignore` does not untrack a file a clone committed, so the ledger's path holds whatever a
-    # repository likes. Each of these shapes reached `_guarded` as an exception the area did not
-    # catch, from both rows that read the ledger: red, "this check could not run", exit 1, and the
-    # remedy "report this", on a file a clone chose and an installation with nothing wrong with it.
-    # Not JSON, it raised out of `ledger()`; nested past what `json.loads` follows, it raised
-    # `RecursionError`; holding a number longer than the interpreter converts, a plain `ValueError`;
-    # and on Python 3.14, whose parser follows deeper than `str()` does, a value the reader passed
-    # through `str()` overflowed it. The row now reads the ledger as one that cannot be read,
-    # warns, and says so. The vacuity guard is
-    # `test_an_attached_checkout_the_overlay_confirms_is_still_green_and_says_the_binding`: the
-    # same fixture with its ledger readable is green.
-    #
-    # Mutations (oracle): `mutations/`'s "the attach ledger's reader
-    # takes a store holding a NUL" -> `store-nul` is red again; "the attach ledger's reader takes a
-    # store no path can spell" -> `store-unencodable` is; "the attach ledger's reader reads a store
-    # that is not text" and "the attach ledger's reader reads an entry's event that is not text" ->
-    # the `-not-text` cases read the ledger as one it could read; "the attach ledger's reader
-    # iterates a field that is not a list" -> the list cases are red again; "the JSON object reader
-    # lets a document nested past the parser raise" -> `nested` is; "the JSON object reader lets a
-    # number past the parser's reach raise" -> `long-number` is. The `-past-str` cases skip on the
-    # oracle's 3.13 and were measured by hand on 3.14.7 against the two `-not-text` entries: the
-    # `store` case red again in both rows, the `entries` case read as a ledger that could be read.
-    root = _attached(tmp_path)
-    _unreadable_own_ledger(root, shape)
-    rows = _checks(tmp_path, root, machine=_machine(tmp_path))
-    assert [(row.name, row.detail) for row in rows if row.status == "red"] == []
-    assert _by_name(rows, "attached") == UNREADABLE_LEDGER_ATTACHED
 
 
 def test_one_report_reads_the_ledger_once_and_the_configuration_not_again(
@@ -577,13 +445,15 @@ def test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer
     root = _attached(tmp_path)
     path = ledger_file(root)
     _past_a_name(tmp_path, path.parent if shape == "its-directory" else path)
-    rows = _checks(tmp_path, root, machine=_machine(tmp_path))
-    assert _by_name(rows, "attached") == UNREADABLE_LEDGER_ATTACHED
+    row = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
+    assert row == UNREADABLE_LEDGER_ATTACHED
+    # A ledger that will not read is never blamed on `git`, which has nothing to do with it.
+    assert "`git`" not in row.detail and "`git`" not in row.remedy
 
 
 # Committed shapes at the ledger's path that name no file to read, which the row reads as no
 # ledger, as it always has: nothing there records an attach.
-NAMES_NO_LEDGER = ("a-dangling-link", "a-link-loop", "a-directory")
+NAMES_NO_LEDGER = ("a-dangling-link", "a-link-loop", "a-directory", "not-json", "nested")
 
 
 @pytest.mark.parametrize("shape", NAMES_NO_LEDGER)
@@ -602,8 +472,11 @@ def test_a_ledger_path_that_names_no_file_is_no_ledger_as_before(
         path.symlink_to(tmp_path / "nothing-here")
     elif shape == "a-link-loop":
         path.symlink_to(path)
-    else:
+    elif shape == "a-directory":
         path.mkdir()
+    else:
+        # A file that does not parse as a ledger records nothing (`NotALedger`).
+        path.write_text("this is not json" if shape == "not-json" else "[" * 99999, "utf-8")
     check = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
     assert check == UNATTACHED["overlay"]
 

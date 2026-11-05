@@ -43,11 +43,11 @@ def _ledger_state(root: Path) -> AttachLedger | str:
     `UNREADABLE_LEDGER` when the file is there and cannot be read as a ledger. `root` is the main
     checkout (`_owner`); the ledger is in the git common directory, so any checkout names it.
 
-    Three answers and not two. `ledger()` raises on a file that is not JSON, is not an object,
-    or names something `attach` could not have written. Let through to the report's guard, that
-    would show the row red with the detail "this check could not run: Failure" and a remedy that
-    cannot help. The rows report the file instead. Where git cannot be run, the row cannot say
-    (`UNASKABLE`); in no repository there is no ledger.
+    Three answers and not two. `read_ledger` raises on a file it cannot read, and a file that does
+    not parse as a ledger (`NotALedger`) records nothing, so it answers as no file does. Let
+    through to the report's guard, the first would show the row red with the detail "this check
+    could not run: Failure" and a remedy that cannot help. Where git cannot be run, the row cannot
+    say (`UNASKABLE`); in no repository there is no ledger.
 
     **Whether it is there is `fsops.names_regular_file`'s answer, and a path it cannot answer
     about is unreadable.** Raised past this function to `_guarded`, the error's warning would
@@ -55,9 +55,9 @@ def _ledger_state(root: Path) -> AttachLedger | str:
     that names no file — nothing there, a dangling link or a loop, or something other than a
     regular file — is no ledger.
     """
-    from stayfixed.attach.write import read_ledger
+    from stayfixed.attach.write import NotALedger, read_ledger
     from stayfixed.binding import LEDGER_FILE, common_directory
-    from stayfixed.errors import Failure, Refusal
+    from stayfixed.errors import Failure
     from stayfixed.fsops import names_regular_file
     from stayfixed.gitenv import GitUnavailable
 
@@ -73,7 +73,9 @@ def _ledger_state(root: Path) -> AttachLedger | str:
         return UNREADABLE_LEDGER
     try:
         return read_ledger(path)
-    except (Failure, Refusal):
+    except NotALedger:
+        return NO_LEDGER
+    except Failure:
         return UNREADABLE_LEDGER
 
 

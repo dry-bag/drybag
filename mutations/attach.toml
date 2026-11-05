@@ -97,14 +97,10 @@ reddens = [
 [[mutation]]
 name = "detach deletes whatever file the ledger names"
 file = "src/stayfixed/attach/write.py"
-before = '''    prefix = f"{CODEX_RULES}/"
-    if not rule.startswith(prefix):
-        return False'''
-after = '''    prefix = f"{CODEX_RULES}/"
-    if True:
-        return True'''
+before = '            if path.parent == PurePosixPath(CODEX_RULES) and path.name not in ("", "..")'
+after = "            if True"
 reddens = [
-  "tests/attach/test_detach.py::test_a_ledger_naming_a_file_attach_could_not_have_written_removes_nothing",
+  "tests/attach/test_detach.py::test_a_ledger_naming_a_path_outside_the_rule_copies_removes_none_of_them",
 ]
 
 # The measured widening, and the other half of the same guard. `_withdraw_settings` assigns
@@ -114,8 +110,8 @@ reddens = [
 [[mutation]]
 name = "detach drops whatever settings key the ledger names"
 file = "src/stayfixed/attach/write.py"
-before = '    foreign += sum(1 for key in keys if key != POINTER_KEY)'
-after = '    foreign += 0'
+before = "        settings_keys=tuple(key for key in recorded.settings_keys if key == POINTER_KEY),"
+after = "        settings_keys=recorded.settings_keys,"
 reddens = [
   "tests/attach/test_detach.py::test_a_ledger_claiming_the_permissions_key_never_drops_the_owners_deny_rules",
 ]
@@ -140,33 +136,10 @@ reddens = [
 [[mutation]]
 name = "the ledger is read from the working tree"
 file = "src/stayfixed/attach/write.py"
-before = '''    path = common_directory(root) / LEDGER_FILE
-    return read_ledger(path) if fsops.is_file(path) else None'''
-after = '''    path = root / ".stayfixed/local/attach.json"
-    return read_ledger(path) if fsops.is_file(path) else None'''
+before = "    path = common_directory(root) / LEDGER_FILE\n    try:"
+after = "    path = root / \".stayfixed/local/attach.json\"\n    try:"
 reddens = [
   "tests/attach/test_detach.py::test_a_ledger_a_branch_commits_names_nothing_a_re_attach_or_detach_removes",
-]
-
-# `attach`'s own rule, one door over, and introduced by the commit that wrote the rule down.
-# `ledger()` refuses a ledger naming files or settings keys `attach` could not have written, and
-# `_write_ledger` was the thing that asked for it — from the fourth write of the run. A clone
-# committing such a ledger got the ignore region, the `.codex/rules/` copies and the settings
-# merge written before the exit 2, with the committed ledger still on disk for `doctor._attached`
-# to key on. The mutation puts a write above the read.
-[[mutation]]
-name = "the ledger is read after attach has already written"
-file = "src/stayfixed/attach/write.py"
-before = '''    previous = existing_ledger(root)
-    memory = config.memory.mode == OVERLAY_MODE'''
-# The write is put above the read rather than the read moved below the writes: `previous` is also
-# read by the settings-candidate question above the first write, so moving the read would break
-# the name instead of the order.
-after = '''    fsops.write_within(root, ".stayfixed-probe", "")
-    previous = existing_ledger(root)
-    memory = config.memory.mode == OVERLAY_MODE'''
-reddens = [
-  "tests/attach/test_write.py::test_a_ledger_no_attach_could_have_written_is_refused_before_the_first_write",
 ]
 
 # "An attach and a detach leave the tree byte-for-byte as it was" was false for directories, and
@@ -201,10 +174,10 @@ reddens = [
 [[mutation]]
 name = "the ledger's directory list stops being held to what attach could have created"
 file = "src/stayfixed/attach/write.py"
-before = '    foreign += sum(1 for name in directories if name not in CREATED_DIRS)'
-after = '    foreign += 0'
+before = "    for name in CREATED_DIRS:\n        # `is_dir()` before the call"
+after = "    for name in recorded.directories:\n        # `is_dir()` before the call"
 reddens = [
-  "tests/attach/test_detach.py::test_a_ledger_naming_a_directory_no_attach_creates_is_refused",
+  "tests/attach/test_detach.py::test_a_ledger_naming_a_directory_no_attach_creates_is_skipped",
 ]
 
 # `--check` promises to read the document the real run reads. Filtering a malformed
@@ -904,7 +877,7 @@ file = "src/stayfixed/attach/doctor.py"
 before = "    if isinstance(recorded, str):\n        return recorded"
 after = "    if isinstance(recorded, str):\n        return UNASKABLE"
 reddens = [
-  "tests/attach/test_doctor.py::test_a_ledger_that_cannot_be_read_is_never_blamed_on_git",
+  "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer",
 ]
 
 # The binding's row for a checkout that was never attached, captured from the code before the row
@@ -916,63 +889,6 @@ before = '''            f"memory.mode is overlay and {LEDGER_NAME} does not exis
 after = '''            f"memory.mode is overlay and {LEDGER_NAME} is missing, so nothing records an "'''
 reddens = [
   "tests/attach/test_doctor.py::test_an_unattached_project_reports_attached_as_it_did[overlay]",
-]
-
-# The attach ledger's readers catch the reader's own `Failure` and `Refusal`. A shape `attach`
-# never writes that raised anything else reached `doctor`'s guard, and `attached` read red, "this
-# check could not run", on a file a hand edit could leave: a `store` holding a NUL, which `Path.resolve` meets with `ValueError`, one holding a
-# character no path can spell, which it meets with `UnicodeEncodeError`, and a list field holding a
-# number, which iterating it meets with `TypeError`.
-[[mutation]]
-name = "the attach ledger's reader takes a store holding a NUL"
-file = "src/stayfixed/attach/write.py"
-before = '    if "\0" in store:'
-after = '    if False:'
-reddens = [
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[store-nul]",
-]
-
-[[mutation]]
-name = "the attach ledger's reader takes a store no path can spell"
-file = "src/stayfixed/attach/write.py"
-before = "        os.fsencode(store)"
-after = "        pass"
-reddens = [
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[store-unencodable]",
-]
-
-[[mutation]]
-name = "the attach ledger's reader iterates a field that is not a list"
-file = "src/stayfixed/attach/write.py"
-before = '    if not isinstance(value, list):'
-after = '    if False:'
-reddens = [
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[allow-not-a-list]",
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[rules-not-a-list]",
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[settings-keys-not-a-list]",
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[directories-not-a-list]",
-]
-
-# The two fields the reader used to pass through `str()`: `{"store": 5}` read as the store `5`, and
-# on Python 3.14, whose parser follows deeper nesting than `str()` does, a deeply nested value raised
-# `RecursionError` past every reader's catch. The oracle runs on 3.13, where the nested cases skip,
-# so the entries name the cases that run there; the nested ones were measured by hand on 3.14.
-[[mutation]]
-name = "the attach ledger's reader reads a store that is not text"
-file = "src/stayfixed/attach/write.py"
-before = "    if not isinstance(store, str):\n"
-after = "    store = str(store)\n    if not isinstance(store, str):\n"
-reddens = [
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[store-not-text]",
-]
-
-[[mutation]]
-name = "the attach ledger's reader reads an entry's event that is not text"
-file = "src/stayfixed/attach/write.py"
-before = "    if isinstance(entries, dict) and not all(isinstance(v, str) for v in entries.values()):"
-after = "    if False:"
-reddens = [
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[entry-event-not-text]",
 ]
 
 # The store a ledger names reaches `read_binding` from `doctor`, and Python 3.11 and 3.12 raise
@@ -1457,7 +1373,7 @@ file = "src/stayfixed/attach/check.py"
 before = "    planned = plan_writes(root, config, binding, diff)\n    return _report(binding, planned.diff, source)\n"
 after = "    return _report(binding, diff, source)\n"
 reddens = [
-  "tests/attach/test_commands.py::test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words[not-json]",
+  "tests/attach/test_commands.py::test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words",
   "tests/attach/test_commands.py::test_check_ends_on_an_overlay_rule_that_is_not_utf8_with_the_runs_code_and_line",
   "tests/attach/test_commands.py::test_check_ends_on_each_refusal_past_the_runs_gates_with_the_runs_code_and_line[exclude-block-doubled]",
   "tests/attach/test_commands.py::test_check_ends_on_each_refusal_past_the_runs_gates_with_the_runs_code_and_line[claude-linked-in]",

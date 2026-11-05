@@ -1338,48 +1338,19 @@ def test_an_overlay_hooks_file_with_an_unreadable_shape_is_refused(tmp_path: Pat
         )
 
 
-def test_a_ledger_that_is_not_json_is_a_failure_and_not_an_empty_one(tmp_path: Path) -> None:
-    # An empty ledger reads as "attach added nothing", which makes `detach` a no-op on a
-    # repository that has stayfixed's rules in it — the quiet half of the failure this file is
-    # the only witness to.
-    root, store, machine = _attachable(tmp_path)
-    attach(
-        root,
-        store=store,
-        machine=machine,
-        runner=Recorder(),
-    )
-    ledger_file(root).write_text("{", encoding="utf-8")
-    with pytest.raises(Failure):
-        ledger(root)
-
-
-# `NESTED`, which no reader caught, in two files a clone can commit.
-
-
-def test_a_ledger_nested_past_the_parsers_reach_is_a_failure_and_never_an_internal_error(
+def test_attach_carries_on_over_a_ledger_that_does_not_parse_and_writes_it_whole(
     tmp_path: Path,
 ) -> None:
-    # The ledger is the unreadable ledger it is, and the attach that reads it back answers so
-    # rather than ending in an internal error. Mutation (oracle): `mutations/`'s "the JSON object
-    # reader lets a document nested past the parser raise" -> both raise `RecursionError`.
-    root, store, machine = _attachable(tmp_path)
-    attach(
-        root,
-        store=store,
-        machine=machine,
-        runner=Recorder(),
-    )
-    ledger_file(root).write_text('{"entries": ' + NESTED + "}", encoding="utf-8")
-    with pytest.raises(Failure, match="nested deeper"):
-        ledger(root)
-    with pytest.raises(Failure, match="nested deeper"):
-        attach(
-            root,
-            store=store,
-            machine=machine,
-            runner=Recorder(),
-        )
+    # A file at the ledger's path that is no ledger records nothing: the attach unions from nothing
+    # and leaves a ledger that reads.
+    root, store, machine = _attachable(tmp_path, codex="# a standing rule\n")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    ledger_file(root).write_text("{", encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert ledger(root).rules == (".codex/rules/common.rules",)
+
+
+# `NESTED`, which no reader caught, in a file a clone can commit.
 
 
 def test_a_settings_file_nested_past_the_parsers_reach_is_refused(tmp_path: Path) -> None:
@@ -1400,31 +1371,7 @@ def test_a_settings_file_nested_past_the_parsers_reach_is_refused(tmp_path: Path
         )
 
 
-# `LONG_NUMBER`, which no reader caught, in two files a clone can commit.
-
-
-def test_a_ledger_holding_a_number_past_the_parsers_reach_is_a_failure_and_never_an_internal_error(
-    tmp_path: Path,
-) -> None:
-    # Mutation (oracle): `mutations/`'s "the JSON object reader lets a number past the parser's
-    # reach raise" -> both raise `ValueError`.
-    root, store, machine = _attachable(tmp_path)
-    attach(
-        root,
-        store=store,
-        machine=machine,
-        runner=Recorder(),
-    )
-    ledger_file(root).write_text('{"entries": {"x": ' + LONG_NUMBER + "}}", encoding="utf-8")
-    with pytest.raises(Failure, match="number longer"):
-        ledger(root)
-    with pytest.raises(Failure, match="number longer"):
-        attach(
-            root,
-            store=store,
-            machine=machine,
-            runner=Recorder(),
-        )
+# `LONG_NUMBER`, which no reader caught, in a file a clone can commit.
 
 
 def test_a_settings_file_holding_a_number_past_the_parsers_reach_is_refused(tmp_path: Path) -> None:
@@ -1442,81 +1389,6 @@ def test_a_settings_file_holding_a_number_past_the_parsers_reach_is_refused(tmp_
             machine=machine,
             runner=Recorder(),
         )
-
-
-def _committed_ledger(root: Path, store: Path, **fields: object) -> None:
-    """A ledger in the git common directory that no `attach` of this run wrote, as an earlier run
-    or a hand edit could leave one."""
-    document: dict[str, object] = {
-        "format": 1,
-        "store": str(store),
-        "allow": [],
-        "entries": {},
-        "rules": [],
-        "settings_keys": [],
-    }
-    document.update(fields)
-    ledger_file(root).parent.mkdir(parents=True, exist_ok=True)
-    ledger_file(root).write_text(json.dumps(document), encoding="utf-8")
-
-
-def test_a_ledger_no_attach_could_have_written_is_refused_before_the_first_write(
-    tmp_path: Path,
-) -> None:
-    # The same shape as `test_a_repository_with_no_origin_remote_has_nothing_to_record`, one
-    # door over, and introduced by the commit that wrote that rule down. `ledger()` refuses a
-    # ledger naming files or settings keys `attach` could not have written, and `_write_ledger`
-    # used to be the thing that asked for it — from the fourth write of the run. So a clone
-    # committing such a ledger got `attach` to write the `stayfixed:ignore` region, copy
-    # `.codex/rules/*` and merge `.claude/settings.local.json`, and only then exit 2 — with the
-    # committed ledger still on disk, which `doctor._attached` keys on. `attach --check`, which
-    # used to report clean beforehand, now reads the ledger with the run's reader and refuses too.
-    #
-    # Nothing the repository gains here differs from a successful attach, so this is not a trust
-    # boundary being crossed. What it is, is `docs/cli.md` asserting that every cause of exit 2
-    # happens before the first write while one of them did not.
-    #
-    # Mutation: `mutations/`'s "the ledger is read after attach has already written".
-    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# a standing rule\n")
-    _committed_ledger(root, store, rules=[".github/workflows/ci.yml"])
-    before = snapshot(root)
-    # `snapshot` is a walk, and an empty one satisfies the comparison below on its own.
-    assert before
-    with pytest.raises(Refusal):
-        attach(
-            root,
-            store=store,
-            machine=machine,
-            runner=Recorder(),
-        )
-    assert_snapshot_unchanged(root, before)
-
-
-def test_the_refused_ledger_is_reached_on_a_run_that_would_have_written_three_files(
-    tmp_path: Path,
-) -> None:
-    # The vacuity guard for the case above, and the same one the no-origin refusal's snapshot has: a
-    # refusal that writes nothing proves nothing if the run had nothing to write. The identical
-    # fixture, with a ledger `attach` really could have written, attaches and leaves all three
-    # artifacts the refusal above has to prevent.
-    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# a standing rule\n")
-    _committed_ledger(root, store, rules=[".codex/rules/common.rules"])
-    before = snapshot(root)
-    assert before
-    attached = attach(
-        root,
-        store=store,
-        machine=machine,
-        runner=Recorder(),
-    )
-    after = snapshot(root)
-    assert attached.settings_written
-    assert ".codex/rules/common.rules" in set(after) - set(before)
-    assert SETTINGS in set(after) - set(before)
-    assert before.get(".git/info/exclude") != after.get(".git/info/exclude")
-    # And the union the ledger exists for survived the refusal being hoisted out of the writer:
-    # `_write_ledger` is handed the ledger the caller read once, above every write.
-    assert ledger(root).rules == (".codex/rules/common.rules",)
 
 
 def test_an_overlay_store_the_walk_cannot_enter_is_refused_at_write_time(tmp_path: Path) -> None:

@@ -51,8 +51,8 @@ import datetime
 import json
 import os
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
-from pathlib import Path
+from dataclasses import dataclass, replace
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from stayfixed import fsops, tomlout
@@ -131,8 +131,6 @@ from stayfixed.printed import quoted
 from stayfixed.runner import Runner
 from stayfixed.scaffold import (
     ParserLimitError,
-    mark,
-    marker_id,
     owned_ids,
     settings_text,
     withdraw_entries,
@@ -172,10 +170,8 @@ _INSIDE = ".keep"
 # There are exactly two writes that create a directory here, and each one's parents are on this
 # list: the rule copies under `.codex/rules/`, and `LOCAL_SETTINGS` under `.claude/`.
 #
-# Closed so that a ledger edited by hand cannot extend it. `detach` iterates this tuple and keeps
-# only the members the ledger names, so the ledger can shorten the list and never extend it,
-# and a `["src"]` names nothing this loop will act on. `ledger()` refuses one anyway, on the same
-# standard `rules` and `settings_keys` are held to.
+# Closed so that a ledger edited by hand cannot extend it: `detach` iterates this tuple and keeps
+# only the members the ledger names.
 CREATED_DIRS = (".codex/rules", ".codex", ".claude")
 
 
@@ -238,48 +234,20 @@ class AttachLedger:
 
     **The anchor is the git common directory**, which a branch cannot write: the ledger sat in the
     working tree once, and a branch that committed one made `detach` and every re-attach delete
-    files and withdraw allow rules by strings the branch chose. Nothing is read from that old
-    path now. Still, `detach` deletes files by the strings in `rules` and drops settings keys by
-    the strings in `settings_keys`, and a ledger edited by hand claiming `settings_keys =
-    ["permissions"]` would delete the owner's whole `permissions` block, **deny rules included**.
-
-    So `ledger()` answers one question about every field before `detach` sees it — *what could
-    `attach` possibly have written here?* — and refuses anything outside that answer rather than
-    obeying it. The two fields that name things to destroy are bounded exactly:
-
-    - `rules` may only be `.codex/rules/<file>`, the one place `permissions.codex_rules`
-      enumerates, one path segment deep and never a dotfile; and
-    - `settings_keys` may only be `autoMemoryDirectory`, the pointer at the composed store and the
-      one key `_point` writes.
-
-    `directories` is the third, and is bounded by membership in `CREATED_DIRS`. It records which
-    of those directories this repository did **not** have before the attach, so `detach` can put
-    the tree back as it found it; `rmdir` is the only removal it drives, so a directory holding
-    anything at all survives regardless of what the ledger claims.
-
-    `entries` keys must parse as marker ids, because `_write_ledger` builds them with
-    `scaffold.marker_id` and nothing else can appear there.
-
-    `allow` and `store` are not bounded here, and saying why is part of the rule rather than an
-    omission. An allow rule has no grammar this area owns — the ledger exists *because* a rule
-    cannot be told from the owner's own by its content — and its two consumers, `detach`
-    (`_withdraw_settings`) and every re-attach (`permissions.withdrawing`), only ever remove a rule
-    the settings file already holds. `store` is read by nothing: `detach` derives every path it
-    withdraws from the configuration and the overlay root, never from this field, so it is a
-    record for a human reading the file and for `doctor`, and a value costs nothing — except one
-    holding a NUL, which no path holds and `doctor`'s `Path.resolve` meets with `ValueError`, so
-    that one is a ledger no attach wrote. So is any list field holding something other than a
-    list, which reading it would meet with `TypeError`.
+    files and withdraw allow rules by strings the branch chose. Nothing is read from that old path
+    now, and `attach` is the file's only writer, so the fields are taken as written. A file that
+    does not parse as a ledger records nothing (`NotALedger`). `detach` still removes a rule copy
+    only from one segment under `.codex/rules/`, a settings key only if it is the pointer, and a
+    directory only from `CREATED_DIRS` (`_removable`).
 
     `entries` maps each marker id to its event, which is the shape `scaffold.owned_ids` answers
     in, so `doctor` can compare the two without a translation in between. Only a ledger an earlier
     release wrote holds any: `attach` merges no hook entry now, takes back the ones recorded here,
     and records none.
 
-    `render` is the digest and the parts of the render the last run installed, `None` before the
-    first. It decides one thing, whether `attach` runs `claude plugin` again, and names nothing to
-    destroy: each part is held to a path the contained walk accepts, and it is removed only from
-    under `delivery_directory(id)`, which is derived from the id and never from this file.
+    `render` is the digest of the render the last run installed, `None` before the first. It
+    decides one thing, whether `attach` runs `claude plugin` again, and names nothing to destroy:
+    the render directory is derived from the id (`delivery_directory`).
     """
 
     store: str
@@ -291,58 +259,9 @@ class AttachLedger:
     render: Rendered | None = None
 
 
-def _rule_is_writable(rule: str) -> bool:
-    """Whether `attach` could have written this path: `.codex/rules/<file>` and nothing else.
-
-    `permissions.codex_rules` composes every target as `f"{CODEX_RULES}/{rule.name}"` over a
-    directory listing, so the answer is one path segment under that prefix, never a dotfile and
-    never a nested path. `.github/workflows/ci.yml` and `src/stayfixed/__init__.py` are all
-    inside the root `fsops.remove_within` contains the removal to, which is why containment is
-    not the guard that matters here.
-    """
-    prefix = f"{CODEX_RULES}/"
-    if not rule.startswith(prefix):
-        return False
-    name = rule[len(prefix) :]
-    return bool(name) and "/" not in name and not name.startswith(".")
-
-
-def _listed(raw: dict[str, Any], key: str, path: Path) -> list[Any]:
-    """The ledger's `key`, which `attach` always writes as a list: absent reads as empty, and
-    anything else is a ledger no attach wrote — a `Failure`, the answer every reader of this file
-    already handles, and not the `TypeError` iterating a number would raise past them."""
-    value = raw.get(key, [])
-    if not isinstance(value, list):
-        raise Failure(f"{path} is not a ledger `stayfixed attach` wrote: its {key!r} is not a list")
-    return value
-
-
-def _checked(
-    raw: dict[str, Any], path: Path
-) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-    """`rules`, `settings_keys` and `directories`, or a `Refusal` counting what was never written.
-
-    Counted and never quoted: these strings are repository-authored (principle 5), and a
-    refusal built out of one is still one.
-    """
-    rules = tuple(r for r in _listed(raw, "rules", path) if isinstance(r, str))
-    keys = tuple(k for k in _listed(raw, "settings_keys", path) if isinstance(k, str))
-    # Held to the same standard as the two above rather than merely filtered at the removal
-    # site, so the answer to "is this a record of an attach on this machine?" is one answer.
-    # `detach` also intersects with `CREATED_DIRS` when it walks them, which is the floor under
-    # this; a name outside the list is a ledger no attach wrote, and that is a refusal.
-    directories = tuple(d for d in _listed(raw, "directories", path) if isinstance(d, str))
-    foreign = sum(1 for rule in rules if not _rule_is_writable(rule))
-    foreign += sum(1 for key in keys if key != POINTER_KEY)
-    foreign += sum(1 for name in directories if name not in CREATED_DIRS)
-    if foreign:
-        raise Refusal(
-            f"{path} names {foreign} file(s), settings key(s) or directory(ies) that "
-            f"`stayfixed attach` could never have written, so it is not a record of an attach on "
-            f"this machine; nothing "
-            f"was removed. Delete it, or take it out of the clone that committed it"
-        )
-    return rules, keys, directories
+class NotALedger(Failure):
+    """A file at the ledger's path that does not parse as one. It records nothing: `attach` reads
+    it as no ledger, `detach` removes nothing and says so, and `doctor` reports it as missing."""
 
 
 def ledger(root: Path) -> AttachLedger:
@@ -352,16 +271,11 @@ def ledger(root: Path) -> AttachLedger:
 
 
 def read_ledger(path: Path) -> AttachLedger:
-    """The ledger at `path`, or a `Failure` naming the missing file.
+    """The ledger at `path`, or a `Failure` naming the missing file, or `NotALedger`.
 
     Never a best effort. Guessing which allow rules were stayfixed's from their content is the
     heuristic this file exists to replace, and a `detach` built on a guess removes a rule the
     owner wrote by hand — which is worse than removing none.
-
-    A ledger whose `rules` or `settings_keys` name something `attach` could not have written is
-    a `Refusal` rather than a filtered list: see `AttachLedger`. Filtering would let a committed
-    ledger keep the members it is entitled to and lose only the hostile ones, which is a partial
-    defence reported as a success.
     """
     with fsops.reading(LEDGER_NAME, Failure):
         try:
@@ -373,83 +287,32 @@ def read_ledger(path: Path) -> AttachLedger:
                 f"{LEDGER_NAME} is not there, so nothing records what `stayfixed attach` added "
                 f"to this repository; there is no safe way to guess it from the settings file"
             ) from exc
-    # Empty text fails as JSON: `attach` never writes an empty ledger, so one is no record. Valid
-    # JSON past the parser's reach, which a clone can commit, is unreadable like the arms above,
-    # and said in the words every other refusal of a ledger here uses: not one `attach` wrote.
-    raw = json_object(
-        text,
-        str(path),
-        error=Failure,
-        limit=lambda clause: Failure(
-            f"{path} is not a ledger `stayfixed attach` wrote: it {clause}"
-        ),
-    )
-    rules, keys, directories = _checked(raw, path)
-    store = raw.get("store", "")
-    if not isinstance(store, str):
-        # `attach` writes the store as a string. Anything else is refused rather than passed
-        # through `str()`: `{"store": 5}` would read as the store `5`, and from Python 3.14, whose
-        # parser follows deeper nesting than `str()` does, a deeply nested value raised
-        # `RecursionError` past every reader's catch.
-        raise Failure(f"{path} is not a ledger `stayfixed attach` wrote: its 'store' is not text")
-    if "\0" in store:
-        # `attach` records the store it was handed as a path, and no path holds a NUL; `doctor`
-        # hands this field to `Path.resolve`, which meets one with `ValueError`.
-        raise Failure(f"{path} is not a ledger `stayfixed attach` wrote: its 'store' holds a NUL")
+    # Empty text fails as JSON: `attach` never writes an empty ledger, so one is no record.
+    raw = json_object(text, str(path), error=NotALedger)
     try:
-        os.fsencode(store)
-    except UnicodeEncodeError:
-        # The same reason as the NUL: a lone surrogate (`"\ud800"` in the JSON) is no path this
-        # system can name, and `Path.resolve` meets one with `UnicodeEncodeError`.
-        raise Failure(
-            f"{path} is not a ledger `stayfixed attach` wrote: its 'store' is not a path this "
-            f"system can encode"
-        ) from None
-    render = _render(raw.get("render"), path)
-    entries = raw.get("entries")
-    if isinstance(entries, dict) and not all(isinstance(v, str) for v in entries.values()):
-        # `attach` records each entry's event as a string; refused for the reason `store` is.
-        raise Failure(
-            f"{path} is not a ledger `stayfixed attach` wrote: its 'entries' hold a value that "
-            f"is not text"
+        digest = (raw.get("render") or {}).get("digest")
+        return AttachLedger(
+            store=raw.get("store", ""),
+            allow=tuple(raw.get("allow", ())),
+            entries=dict(raw.get("entries", {})),
+            rules=tuple(raw.get("rules", ())),
+            settings_keys=tuple(raw.get("settings_keys", ())),
+            directories=tuple(raw.get("directories", ())),
+            render=None if digest is None else Rendered(digest),
         )
-    return AttachLedger(
-        store=store,
-        allow=tuple(r for r in _listed(raw, "allow", path) if isinstance(r, str)),
-        entries=(
-            # `mark`/`marker_id` and not a second copy of the marker grammar: `_write_ledger`
-            # builds these keys with `marker_id`, so a key that does not round-trip through the
-            # engine's own pair is one no attach could have recorded. Dropped rather than
-            # refused, because a key names nothing to destroy: what it costs is a provenance
-            # row, and `doctor` reporting an entry as unrecorded is the conservative answer.
-            {k: v for k, v in entries.items() if marker_id(mark("", k)) == k}
-            if isinstance(entries, dict)
-            else {}
-        ),
-        rules=rules,
-        settings_keys=keys,
-        directories=directories,
-        render=render,
-    )
-
-
-def _render(value: object, path: Path) -> Rendered | None:
-    """The ledger's `render`, or `None` where it records none, or a `Failure` for one no attach
-    wrote: `attach` writes a digest."""
-    if value is None:
-        return None
-    digest = value.get("digest") if isinstance(value, dict) else None
-    if not isinstance(digest, str):
-        raise Failure(f"{path} is not a ledger `stayfixed attach` wrote: its 'render' is not one")
-    return Rendered(digest)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise NotALedger(f"{path} is not a ledger `stayfixed attach` wrote") from exc
 
 
 def existing_ledger(root: Path) -> AttachLedger | None:
-    """The ledger, or `None` when there is none: `attach` and `attach --check`, the two callers
-    that may carry on without it, read it here, so the two end with one code on a ledger the run
-    cannot take."""
+    """The ledger, or `None` when there is none or the file records nothing (`NotALedger`):
+    `attach` and `attach --check`, the two callers that may carry on without it, read it here, so
+    the two end with one code."""
     path = common_directory(root) / LEDGER_FILE
-    return read_ledger(path) if fsops.is_file(path) else None
+    try:
+        return read_ledger(path) if fsops.is_file(path) else None
+    except NotALedger:
+        return None
 
 
 def _allow_list(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
@@ -619,16 +482,9 @@ def _write_ledger(
     diff, because every rule is already present, so a ledger written from the diff alone would
     forget what the first one added and leave `detach` nothing to remove.
 
-    **The earlier ledger arrives in the plan and is not read here**, which is a refusal's
-    position and not a refactor. `ledger()` refuses a ledger naming files or settings keys
-    `attach` could not have written, and read here that refusal would fire from the fourth write
-    of the run, with the ignore region, the `.codex/rules/` copies and the settings merge already
-    on disk and the committed ledger still there for `doctor._attached` to read as "attached".
-    That is the shape `attach`'s own docstring says all its refusals must not have. `_plan` reads
-    it once, above every write.
-
-    Reading it once is also the more correct union: `attach` writes the ledger twice in a run,
-    and the second call would otherwise union against the file the first call just wrote.
+    **The earlier ledger arrives in the plan and is not read here**: `attach` writes the ledger
+    twice in a run, and the second call would otherwise union against the file the first call
+    just wrote. `_plan` reads it once, above every write.
     """
     previous, binding = planned.previous, planned.binding
     # The union for the rule files, and for a sharper reason than the one in the docstring. A file
@@ -1415,6 +1271,23 @@ def _refuse_unwithdrawable(
         )
 
 
+def _removable(recorded: AttachLedger) -> AttachLedger:
+    """`recorded` held to what `attach` can have written, the one bound on `detach`'s removals:
+    a rule copy is one segment under `.codex/rules/`, a settings key is the pointer, and a
+    directory is one of `CREATED_DIRS` (`_withdraw_directories` walks that list); anything else
+    the ledger names is skipped."""
+    copies = [PurePosixPath(rule) for rule in recorded.rules]
+    return replace(
+        recorded,
+        rules=tuple(
+            rule
+            for rule, path in zip(recorded.rules, copies, strict=True)
+            if path.parent == PurePosixPath(CODEX_RULES) and path.name not in ("", "..")
+        ),
+        settings_keys=tuple(key for key in recorded.settings_keys if key == POINTER_KEY),
+    )
+
+
 def detach(root: Path, *, runner: Runner) -> Detached:
     """Remove exactly what `attach` added, reading the ledger for what that was, and withdraw the
     rendered plugin and the composed store, whose directories are derived from the binding id and
@@ -1450,7 +1323,10 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     """
     main = main_checkout_or_none(root)
     root = main if main is not None else root
-    recorded = ledger(root)
+    try:
+        recorded = _removable(ledger(root))
+    except NotALedger as exc:
+        raise NotALedger(f"{exc}; it records nothing, so nothing was removed") from exc
     held = owned_ids(local_document(root))
     entries = tuple(sorted(id for id, event in recorded.entries.items() if held.get(id) == event))
     # The rendered plugin, named by the id and installed in the main checkout. Its render directory

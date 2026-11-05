@@ -585,61 +585,48 @@ def _rewrite_ledger(root: Path, **fields: object) -> None:
     ledger_file(root).write_text(json.dumps(document), encoding="utf-8")
 
 
-def test_a_ledger_naming_a_file_attach_could_not_have_written_removes_nothing(
+def test_a_ledger_naming_a_path_outside_the_rule_copies_removes_none_of_them(
     tmp_path: Path,
 ) -> None:
-    # The ledger is a record, not an authority. `fsops.remove_within` contains the removal to
-    # the root — and `.github/workflows/`, `.pre-commit-config.yaml` and every source file are
-    # inside it, so containment is not the guard that matters. The guard is that `attach` only
-    # ever writes `.codex/rules/<file>`, so anything else in `rules` is a repository asking for
-    # a deletion no attach could have earned.
-    #
-    # Mutation: `mutations/`'s "detach deletes whatever file the ledger names" — make
-    # `_rule_is_writable` answer True unconditionally and the workflow file goes.
+    # The ledger is a record, not an authority: `detach` removes a rule copy only from one segment
+    # under `.codex/rules/`, and skips any other path the ledger names. Mutation: `mutations/`'s
+    # "detach deletes whatever file the ledger names" -> the other files go.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
     _attach(root, store, machine)
-    workflow = root / ".github" / "workflows" / "ci.yml"
-    workflow.parent.mkdir(parents=True)
-    workflow.write_text("on: push\n", encoding="utf-8")
-    _rewrite_ledger(root, rules=[".github/workflows/ci.yml", ".codex/rules/common.rules"])
-    before = snapshot(root)
-    # `snapshot` is a walk, and an empty one satisfies the comparison below on its own.
-    assert before
-    with pytest.raises(Refusal):
-        _detach(root)
-    assert_snapshot_unchanged(root, before)
-    assert workflow.is_file()
+    kept = [root / ".github" / "workflows" / "ci.yml", root / ".codex" / "x", tmp_path / "outside"]
+    for path in kept:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("mine\n", encoding="utf-8")
+    named = [".github/workflows/ci.yml", ".codex/rules/../x", "../../outside"]
+    _rewrite_ledger(root, rules=[*named, ".codex/rules/common.rules"])
+    _detach(root)
+    assert [path.is_file() for path in kept] == [True] * 3
+    assert not (root / ".codex" / "rules" / "common.rules").exists()
 
 
-def test_a_ledger_nested_past_the_parsers_reach_removes_nothing(tmp_path: Path) -> None:
-    # A committed ledger nested deeper than `json.loads` follows ended `detach` in an internal
-    # error. It is a ledger that cannot be read, so the run fails before it withdraws anything.
-    # Mutation (oracle): `mutations/`'s "the JSON object reader lets a document nested past the
-    # parser raise" -> `RecursionError`.
+@pytest.mark.parametrize(
+    ("text", "said"),
+    [
+        ("{", "valid JSON"),
+        ('{"entries": ' + NESTED + "}", "nested deeper"),
+        ('{"entries": {"x": ' + LONG_NUMBER + "}}", "number longer"),
+    ],
+)
+def test_a_ledger_that_does_not_parse_removes_nothing_and_says_so(
+    tmp_path: Path, text: str, said: str
+) -> None:
+    # A committed ledger nested deeper than `json.loads` follows, or holding an integer literal
+    # longer than the interpreter converts, once ended `detach` in an internal error. It records
+    # nothing, so the run fails before it withdraws anything. Mutation (oracle): `mutations/`'s
+    # "the JSON object reader lets a document nested past the parser raise" -> `RecursionError`.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
     _attach(root, store, machine)
-    ledger_file(root).write_text('{"entries": ' + NESTED + "}", encoding="utf-8")
+    ledger_file(root).write_text(text, encoding="utf-8")
     before = snapshot(root)
     assert before
-    with pytest.raises(Failure, match="nested deeper"):
-        _detach(root)
-    assert_snapshot_unchanged(root, before)
-
-
-def test_a_ledger_holding_a_number_past_the_parsers_reach_removes_nothing(tmp_path: Path) -> None:
-    # A committed ledger holding an integer literal longer than the interpreter converts ended
-    # `detach` in an internal error, `ValueError`. It is a ledger that cannot be read, so the run
-    # fails before it withdraws anything. Mutation (oracle): `mutations/`'s "the JSON object
-    # reader lets a number past the parser's reach raise" -> `ValueError`.
-    root, store, machine = _bound(tmp_path)
-    _grant(store.parents[2])
-    _attach(root, store, machine)
-    ledger_file(root).write_text('{"entries": {"x": ' + LONG_NUMBER + "}}", encoding="utf-8")
-    before = snapshot(root)
-    assert before
-    with pytest.raises(Failure, match="number longer"):
+    with pytest.raises(Failure, match=f"{said}.*nothing was removed"):
         _detach(root)
     assert_snapshot_unchanged(root, before)
 
@@ -682,7 +669,7 @@ def test_a_ledger_claiming_the_permissions_key_never_drops_the_owners_deny_rules
     # permissions block out — deny rules included. A repository cannot be allowed to remove a
     # deny rule by committing a JSON file, whatever it calls that file.
     #
-    # Mutation: the same entry as above, on the `settings_keys` half — let `_checked` accept a
+    # Mutation: the same entry as above, on the `settings_keys` half — let `_removable` accept a
     # key other than `autoMemoryDirectory` and the deny rule below is gone.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
@@ -693,28 +680,10 @@ def test_a_ledger_claiming_the_permissions_key_never_drops_the_owners_deny_rules
         encoding="utf-8",
     )
     _rewrite_ledger(root, settings_keys=["permissions"])
-    with pytest.raises(Refusal):
-        _detach(root)
+    _detach(root)
     document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
     assert document["permissions"]["deny"] == ["Bash(curl:*)"]
     assert document["permissions"]["allow"] == ["Bash(ls:*)"]
-
-
-def test_the_two_values_attach_really_writes_are_still_acted_on(tmp_path: Path) -> None:
-    # The vacuity guard for both refusals above: a validator that refused everything would pass
-    # them and break the command. A ledger holding exactly what `attach` wrote — one
-    # `.codex/rules/` file and the one pointer key — detaches, and both are withdrawn.
-    root, store, machine = _bound(tmp_path)
-    _grant(store.parents[2])
-    _attach(root, store, machine)
-    from stayfixed.attach.api import ledger as read_ledger
-
-    recorded = read_ledger(root)
-    assert recorded.rules == (".codex/rules/common.rules",)
-    assert recorded.settings_keys == ("autoMemoryDirectory",)
-    _detach(root)
-    assert not (root / ".codex" / "rules" / "common.rules").exists()
-    assert not (root / SETTINGS).exists()
 
 
 def test_a_git_that_cannot_run_is_answered_before_anything_is_withdrawn(
@@ -827,11 +796,9 @@ def test_detach_leaves_a_directory_that_was_there_before_the_attach(tmp_path: Pa
     assert not (root / ".codex" / "rules").exists()
 
 
-def test_a_ledger_naming_a_directory_no_attach_creates_is_refused(tmp_path: Path) -> None:
-    # `directories` drives `rmdir`. It is held to the same closed list `rules` and `settings_keys`
-    # are held to, so a ledger naming `src` is refused with nothing removed rather than obeyed —
-    # even though `rmdir` would have spared a non-empty `src/` anyway. A partial defence reported
-    # as a success is the shape this refusal exists to avoid.
+def test_a_ledger_naming_a_directory_no_attach_creates_is_skipped(tmp_path: Path) -> None:
+    # `directories` drives `rmdir` and is held to the closed list `CREATED_DIRS`, so a ledger
+    # naming `src` leaves it, even though `rmdir` would have spared a non-empty `src/` anyway.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
     _attach(root, store, machine)
@@ -839,12 +806,8 @@ def test_a_ledger_naming_a_directory_no_attach_creates_is_refused(tmp_path: Path
     recorded["directories"] = ["src"]
     ledger_file(root).write_text(json.dumps(recorded), encoding="utf-8")
     (root / "src").mkdir()
-    before = snapshot(root)
-    assert before
-    with pytest.raises(Refusal):
-        _detach(root)
+    assert "src" not in _detach(root).directories_removed
     assert (root / "src").is_dir()
-    assert_snapshot_unchanged(root, before)
 
 
 def test_detach_takes_back_the_exclude_block_and_the_empty_directories(tmp_path: Path) -> None:

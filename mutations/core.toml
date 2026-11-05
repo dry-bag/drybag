@@ -1963,9 +1963,8 @@ after = """
 reddens = [
   "tests/scaffold/test_entries.py::test_a_document_nested_past_the_parsers_reach_refuses_as_one_past_a_limit",
   "tests/attach/test_write.py::test_a_settings_file_nested_past_the_parsers_reach_is_refused",
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[nested]",
-  "tests/attach/test_write.py::test_a_ledger_nested_past_the_parsers_reach_is_a_failure_and_never_an_internal_error",
-  "tests/attach/test_detach.py::test_a_ledger_nested_past_the_parsers_reach_removes_nothing",
+  "tests/attach/test_doctor.py::test_a_ledger_path_that_names_no_file_is_no_ledger_as_before[nested]",
+  "tests/attach/test_detach.py::test_a_ledger_that_does_not_parse_removes_nothing_and_says_so",
 ]
 
 # The same document holding an integer literal longer than the interpreter converts: `json.loads`
@@ -1980,9 +1979,7 @@ after = "    except ZeroDivisionError:"
 reddens = [
   "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_merge",
   "tests/attach/test_write.py::test_a_settings_file_holding_a_number_past_the_parsers_reach_is_refused",
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[long-number]",
-  "tests/attach/test_write.py::test_a_ledger_holding_a_number_past_the_parsers_reach_is_a_failure_and_never_an_internal_error",
-  "tests/attach/test_detach.py::test_a_ledger_holding_a_number_past_the_parsers_reach_removes_nothing",
+  "tests/attach/test_detach.py::test_a_ledger_that_does_not_parse_removes_nothing_and_says_so",
 ]
 
 # stayfixed declares that it makes no network request of its own; that holds only while no module
