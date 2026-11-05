@@ -6360,8 +6360,8 @@ reddens = [
 [[mutation]]
 name = "a failed scan is a pass"
 file = "src/stayfixed/sync/scan.py"
-before = '        return CheckResult(False, detail, False, None), []'
-after = '        return CheckResult(True, detail, False, None), []'
+before = '        return Scanned(False, detail, False, ())'
+after = '        return Scanned(True, detail, False, ())'
 reddens = [
   "tests/sync/test_scan.py::test_a_failed_scan_is_not_a_finding",
 ]
@@ -6377,55 +6377,11 @@ reddens = [
 
 [[mutation]]
 name = "the scan reads the rules from the working tree"
-file = "src/stayfixed/sync/scan.py"
-before = '    return ["--config", str(config), "--gitleaks-ignore-path", str(ignores)], None'
-after = '    return ["--gitleaks-ignore-path", str(ignores)], None'
+file = "src/stayfixed/sync/job.py"
+before = "    return answer_bytes(found.out) if found.code == 0 else None"
+after = "    return fsops.read_regular_bytes(ctx.overlay / scan.RULES)"
 reddens = [
-  "tests/sync/test_scan.py::test_rules_and_ignores_come_from_head",
-]
-
-[[mutation]]
-name = "a GITLEAKS_ variable reaches the scan"
-file = "src/stayfixed/sync/scan.py"
-before = "            env=scrubbed_env() | given,"
-after = "            env=dict(os.environ) | given,"
-reddens = [
-  "tests/sync/test_scan.py::test_gitleaks_variables_are_dropped",
-  "tests/sync/test_scan.py::test_rules_and_ignores_come_from_head",
-]
-[[mutation]]
-name = "gitleaks reads a log with signature lines"
-file = "src/stayfixed/sync/scan.py"
-before = "        given = with_config(env or {}, SCAN_CONFIG)"
-after = "        given = dict(env or {})"
-reddens = [
-  "tests/sync/test_scan.py::test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour",
-]
-[[mutation]]
-name = "the scan's git colours its patch"
-file = "src/stayfixed/sync/scan.py"
-before = '    "color.ui": "false",'
-after = ""
-reddens = [
-  "tests/sync/test_scan.py::test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour",
-]
-
-[[mutation]]
-name = "the scan's git colours its diff"
-file = "src/stayfixed/sync/scan.py"
-before = '    "color.diff": "false",'
-after = ""
-reddens = [
-  "tests/sync/test_scan.py::test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour",
-]
-
-[[mutation]]
-name = "an uncommitted ignore list at the root does not stop a scan"
-file = "src/stayfixed/sync/scan.py"
-before = "        if present is not None and present != committed:"
-after = "        if False:"
-reddens = [
-  "tests/sync/test_scan.py::test_an_uncommitted_gitleaksignore_at_the_root_stops_the_scan",
+  "tests/sync/test_scan.py::test_a_scan_reads_no_file_at_the_overlays_root",
 ]
 
 [[mutation]]
@@ -6434,34 +6390,48 @@ file = "src/stayfixed/sync/scan.py"
 before = '    with tempfile.TemporaryDirectory(prefix="scan-", dir=scratch) as name:'
 after = '    with tempfile.TemporaryDirectory(prefix="scan-") as name:'
 reddens = [
-  "tests/sync/test_scan.py::test_the_report_is_written_under_the_scratch_directory_and_removed",
+  "tests/sync/test_scan.py::test_the_report_and_the_items_are_written_under_the_scratch_directory_and_removed",
 ]
 
 [[mutation]]
-name = "a metadata scan runs at the overlay's root"
+name = "a scan runs at the overlay's root"
 file = "src/stayfixed/sync/scan.py"
-before = "            cwd=repo if stdin is None else directory,"
-after = "            cwd=repo,"
+before = "            cwd=source,"
+after = "            cwd=Path.cwd(),"
 reddens = [
-  "tests/sync/test_scan.py::test_a_metadata_scan_reads_nothing_at_the_overlays_root",
+  "tests/sync/test_scan.py::test_a_scan_reads_no_file_at_the_overlays_root",
 ]
 
 [[mutation]]
 name = "the metadata scan reads nothing"
 file = "src/stayfixed/sync/scan.py"
-before = '    whole = "".join(text for _, text in commits).encode("utf-8", "surrogateescape")'
-after = '    whole = b""'
+before = "            (source / str(number)).write_bytes(data)"
+after = '            (source / str(number)).write_bytes(b"")'
 reddens = [
   "tests/sync/test_scan.py::test_the_metadata_scan_names_the_commit",
 ]
 
+# The items are written under numbers: under the notes' own names, a name a path allowlist names
+# would exempt its note from the scan.
+[[mutation]]
+name = "a scanned file is named after its note"
+file = "src/stayfixed/sync/scan.py"
+before = """        for number, (_, data) in enumerate(items, start=1):
+            (source / str(number)).write_bytes(data)"""
+after = """        for _number, (label, data) in enumerate(items, start=1):
+            (source / label).parent.mkdir(parents=True, exist_ok=True)
+            (source / label).write_bytes(data)"""
+reddens = [
+  "tests/sync/test_scan.py::test_a_note_name_never_exempts_it_from_the_scan",
+]
+
 [[mutation]]
 name = "the metadata scan names no commit"
-file = "src/stayfixed/sync/scan.py"
-before = "        if found:"
-after = "        if False:"
+file = "src/stayfixed/sync/job.py"
+before = '''        (sha, b"\n".join([next(objects).rstrip(b"\n"), *(answer_bytes(e.path) for e in entries)]))'''
+after = '''        ("", b"\n".join([next(objects).rstrip(b"\n"), *(answer_bytes(e.path) for e in entries)]))'''
 reddens = [
-  "tests/sync/test_scan.py::test_the_metadata_scan_names_the_commit",
+  "tests/sync/test_push.py::test_a_secret_outside_any_patch_is_never_pushed",
 ]
 
 # The note sync's commit: built in a temporary index from `HEAD` with the memory pathspecs only,
@@ -6548,11 +6518,11 @@ file = "src/stayfixed/sync/job.py"
 before = '''    binary = ctx.scanner
     if binary is None:
         return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER)
-    result = scan.scan_index('''
+    try:'''
 after = '''    binary = ctx.scanner
     if binary is None:
         return None
-    result = scan.scan_index('''
+    try:'''
 reddens = [
   "tests/sync/test_scan.py::test_no_gitleaks_on_path_is_scan_unavailable_with_the_remedy",
 ]
@@ -6722,39 +6692,39 @@ reddens = [
 [[mutation]]
 name = "the push goes out unscanned"
 file = "src/stayfixed/sync/job.py"
-before = "    failed = _scan_push(ctx, upstream, tip)"
+before = "    failed = _scan_push(ctx, listed)"
 after = "    failed = None"
 reddens = [
-  "tests/sync/test_push.py::test_a_secret_in_the_range_is_secret_found_with_its_sha",
+  "tests/sync/test_push.py::test_a_push_finding_opens_with_its_remedy",
   "tests/sync/test_push.py::test_a_failed_range_scan_is_hook_failed_not_secret_found",
 ]
 
 [[mutation]]
 name = "a failed push scan is taken for a finding"
 file = "src/stayfixed/sync/job.py"
-before = "    if result.finding_commit:"
-after = "    if True:"
+before = "    if oldest is None:  # a failed scan, not a finding"
+after = "    if False:"
 reddens = ["tests/sync/test_push.py::test_a_failed_range_scan_is_hook_failed_not_secret_found"]
 
 [[mutation]]
 name = "a failed push scan lets the push go"
 file = "src/stayfixed/sync/job.py"
-before = '''    return _outcome(ctx, "hook_failed", f"gitleaks: {result.detail}")'''
-after = "    return None"
+before = '''        return _outcome(ctx, "hook_failed", f"gitleaks: {result.detail}")'''
+after = "        return None"
 reddens = ["tests/sync/test_push.py::test_a_failed_range_scan_is_hook_failed_not_secret_found"]
 
 [[mutation]]
 name = "the push scans no commit's metadata"
 file = "src/stayfixed/sync/job.py"
-before = "            blocks = _metadata(ctx, upstream, tip)"
-after = "            blocks = []"
+before = '''    items += [(f"{sha} {each.path}", next(objects)) for sha, each in added]'''
+after = '''    items = [(f"{sha} {each.path}", next(objects)) for sha, each in added]'''
 reddens = ["tests/sync/test_push.py::test_a_secret_outside_any_patch_is_never_pushed"]
 
 [[mutation]]
 name = "the push's metadata scan reads no commit object"
 file = "src/stayfixed/sync/job.py"
-before = '''        (sha, "\n".join([_ok(ctx, "cat-file", "commit", "--end-of-options", sha).rstrip("\n"),'''
-after = '''        (sha, "\n".join(["",'''
+before = '''        (sha, b"\n".join([next(objects).rstrip(b"\n"), *(answer_bytes(e.path) for e in entries)]))'''
+after = '''        (sha, b"\n".join([next(objects) and b"", *(answer_bytes(e.path) for e in entries)]))'''
 reddens = ["tests/sync/test_push.py::test_a_secret_outside_any_patch_is_never_pushed"]
 
 # The job's end: a stop is the end whatever was noted; without one the latest notice is.

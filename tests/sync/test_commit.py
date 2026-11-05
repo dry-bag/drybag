@@ -711,18 +711,16 @@ def test_a_gitattributes_filter_left_in_the_working_tree_changes_nothing_committ
     overlays: Overlays,
 ) -> None:
     # A memory writer's `common/memory/.gitattributes` naming a filter the machine configures:
-    # attributes come from `HEAD`, so the note is committed and scanned as written -- here,
-    # with a secret the scan finds -- never as the filter's output.
+    # attributes come from `HEAD`, so the note is committed as written, never as the filter's
+    # output. Mutation (oracle): `mutations/`'s "attributes come from the working tree again".
     a = overlays.a
     git(a, "config", "filter.hide.clean", "sed s/./x/g")
     write(a, "common/memory/.gitattributes", "* filter=hide\n")
-    write(a, "common/memory/leak.md", f"key = {LEAK}\n")
-    before = head(a)
+    write(a, "common/memory/note.md", "a note as written\n")
 
-    outcome = _notice(overlays, a)
+    assert J.commit_memory(context(overlays, a)) is None
 
-    assert (outcome.state, str(outcome.detail).split(":")[0]) == ("hook_failed", "gitleaks")
-    assert head(a) == before
+    assert git(a, "show", "HEAD:common/memory/note.md") == "a note as written\n"
 
 
 def test_signing_that_needs_a_prompt_is_signing_failed(overlays: Overlays, tmp_path: Path) -> None:

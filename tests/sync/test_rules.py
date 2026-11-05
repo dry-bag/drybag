@@ -64,6 +64,9 @@ _PATHS = {
     ".pre-commit-config.yaml": False,
 }
 
+# The new side of a change the test only judges by its modes and path.
+BLOB = "0" * 40
+
 
 # -- the layout ------------------------------------------------------------------------------------
 
@@ -118,9 +121,9 @@ def test_a_projects_index_is_not_memory(tmp_path: Path) -> None:
     commit_all(repo)
     listed = git(repo, "ls-files", "-z", "--", *R.MEMORY_PATHSPEC).split("\0")
     assert sorted(listed) == ["", "common/memory/MEMORY.md", "projects/p/memory/a.md"]
-    for old, new, status in (("000000", "100644", "A"), ("100644", "100644", "M")):
-        assert R.entry_offends(R.RawEntry(old, new, status, index)) is True, status
-    assert R.entry_offends(R.RawEntry("100644", "000000", "D", index)) is True
+    for status in ("A", "M"):
+        assert R.entry_offends(R.RawEntry("100644", status, index, BLOB)) is True, status
+    assert R.entry_offends(R.RawEntry("000000", "D", index, BLOB)) is True
 
 
 def test_the_pathspecs_are_derived_from_the_layout_in_three_scopes() -> None:
@@ -255,7 +258,8 @@ def test_commit_entries_lists_each_commit_newest_first_with_its_modes(world: Wor
         (first, ["common/memory/one.md"]),
     ]
     entries = dict(R.commit_entries(a, f"{base}..{first}"))[first]
-    assert entries == [R.RawEntry("000000", "100644", "A", "common/memory/one.md")]
+    blob = git(a, "rev-parse", f"{first}:common/memory/one.md").strip()
+    assert entries == [R.RawEntry("100644", "A", "common/memory/one.md", blob)]
 
 
 def test_a_rename_into_memory_lists_its_source(world: World) -> None:
@@ -572,8 +576,8 @@ def test_a_dot_component_or_a_non_md_name_under_memory_is_not_memory_only(
 def test_a_project_or_group_name_that_is_not_a_plain_name_never_moves(path: str) -> None:
     """The rule reaches the scope's own name: `..` and `.git` there pass the pathspec."""
     assert R.is_memory_path(path)
-    assert R.entry_offends(R.RawEntry("000000", "100644", "A", path)) is True
-    assert R.entry_offends(R.RawEntry("100644", "000000", "D", path)) is True
+    assert R.entry_offends(R.RawEntry("100644", "A", path, BLOB)) is True
+    assert R.entry_offends(R.RawEntry("000000", "D", path, BLOB)) is True
 
 
 @pytest.mark.parametrize(
@@ -700,31 +704,29 @@ def test_the_temporary_index_names_every_path_that_is_not_a_note(
 
 
 def test_entry_offends_judges_name_mode_and_content() -> None:
-    plain = R.RawEntry("000000", "100644", "A", "common/memory/a.md")
+    plain = R.RawEntry("100644", "A", "common/memory/a.md", BLOB)
     assert R.entry_offends(plain) is False
-    assert (
-        R.entry_offends(R.RawEntry("000000", "100644", "A", "groups/g/memory/a.md", True)) is True
-    )
-    assert R.entry_offends(R.RawEntry("100644", "000000", "D", "common/memory/a.md", True)) is False
-    assert R.entry_offends(R.RawEntry("000000", "100644", "A", "common/memory/.a.md")) is True
-    assert R.entry_offends(R.RawEntry("100644", "000000", "D", "common/memory/a.txt")) is True
-    assert R.entry_offends(R.RawEntry("000000", "100644", "A", "common/claude/x.md")) is True
+    assert R.entry_offends(R.RawEntry("100644", "A", "groups/g/memory/a.md", BLOB, True)) is True
+    assert R.entry_offends(R.RawEntry("000000", "D", "common/memory/a.md", BLOB, True)) is False
+    assert R.entry_offends(R.RawEntry("100644", "A", "common/memory/.a.md", BLOB)) is True
+    assert R.entry_offends(R.RawEntry("000000", "D", "common/memory/a.txt", BLOB)) is True
+    assert R.entry_offends(R.RawEntry("100644", "A", "common/claude/x.md", BLOB)) is True
 
 
 def test_mode_000000_is_allowed_only_for_a_deletion() -> None:
     """`000000` is git's "nothing here": right for a deletion, wrong for anything else."""
     note = "groups/g/memory/a.md"
-    assert R.entry_offends(R.RawEntry("100644", "000000", "D", note)) is False
+    assert R.entry_offends(R.RawEntry("000000", "D", note, BLOB)) is False
     for status in ("A", "M", "T", "U", "X"):
-        assert R.entry_offends(R.RawEntry("100644", "000000", status, note)) is True, status
-    assert R.entry_offends(R.RawEntry("000000", "100644", "A", note)) is False
+        assert R.entry_offends(R.RawEntry("000000", status, note, BLOB)) is True, status
+    assert R.entry_offends(R.RawEntry("100644", "A", note, BLOB)) is False
 
 
 def test_only_a_regular_file_or_a_deletion_may_move() -> None:
     note = "common/memory/a.md"
-    assert R.entry_offends(R.RawEntry("100644", "100644", "M", note)) is False
+    assert R.entry_offends(R.RawEntry("100644", "M", note, BLOB)) is False
     for mode in ("100755", "120000", "160000", "040000"):
-        assert R.entry_offends(R.RawEntry("100644", mode, "M", note)) is True, mode
+        assert R.entry_offends(R.RawEntry(mode, "M", note, BLOB)) is True, mode
 
 
 def test_an_empty_range_is_memory_only(world: World) -> None:

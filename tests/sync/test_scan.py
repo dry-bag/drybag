@@ -1,12 +1,11 @@
-"""The secret scan: the gitleaks on `PATH`, and the three scans.
+"""The secret scan: the gitleaks on `PATH`, over content alone.
 
-The job commits through a temporary index and never runs `git commit`, so the overlay's
-pre-commit hooks do not run by themselves; this module runs the scan itself. The scanner is the
-`gitleaks` the `PATH` of the one git environment finds, never pre-commit's build, and it must scan
-the TEMPORARY index, not the real one. The stand-in in `conftest.py` answers as the real one does:
-`git --pre-commit --staged` reads the index `GIT_INDEX_FILE` names, `git --log-opts=A..B` scans a
-range, `stdin` scans what else a push sends, a JSON report names each finding's commit, the exit
-is 1 for a finding and for a failed scan alike, and a failed scan leaves an empty report.
+The scanner is the `gitleaks` the `PATH` of the one git environment finds, never pre-commit's
+build. Every scan is `gitleaks dir .` over the items' bytes written as files `1`, `2`, ... in the
+job's scratch, so no note's name and no file at the overlay's root reaches it. The stand-in in
+`conftest.py` answers as the real one does: a JSON report naming each finding's file, exit 1 for
+a finding and for a failed scan alike, an empty report for a failed one; and it skips a file whose
+name holds `allowlisted`, as a path allowlist would.
 """
 
 from __future__ import annotations
@@ -18,12 +17,13 @@ import shutil
 import sqlite3
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from stayfixed.sync import git as G
 from stayfixed.sync import job as J
 from stayfixed.sync import scan as S
+from stayfixed.sync.state import SCRATCH
 from tests.sync.conftest import (
     LEAK,
     SLOW,
@@ -33,7 +33,6 @@ from tests.sync.conftest import (
     git,
     gitleaks_on_path,
     head,
-    init,
     memory_status,
     path_without_gitleaks,
     write,
@@ -124,123 +123,59 @@ def test_a_pre_commit_database_chooses_no_scanner(
     assert "common/memory/leak.md" in str(ctx.notices[0].detail)
 
 
-# -- the scans ------------------------------------------------------------------------------------
-
-
-def _repo(tmp_path: Path) -> Path:
-    repo = init(tmp_path / "repo")
-    write(repo, "common/memory/a.md", "a note\n")
-    commit_all(repo, "base")
-    return repo
-
-
-def _temporary_index(repo: Path, tmp_path: Path, name: str = "sync.index") -> Path:
-    index = tmp_path / name
-    git(repo, "read-tree", "HEAD", "--index-output", str(index))
-    return index
-
-
-def _stage_in(repo: Path, index: Path, relative: str) -> None:
-    assert G.git(repo, "add", "--", relative, index_file=index).code == 0
-
-
-def _leak_staged(repo: Path, tmp_path: Path) -> Path:
-    write(repo, "common/memory/leak.md", f"key = {LEAK}\n")
-    index = _temporary_index(repo, tmp_path)
-    _stage_in(repo, index, "common/memory/leak.md")
-    return index
+# -- the scan -------------------------------------------------------------------------------------
 
 
 def _argv(binary: Path) -> list[str]:
     return json.loads((binary.parent / "argv.json").read_text())  # type: ignore[no-any-return]
 
 
-def _seen(binary: Path) -> dict[str, object]:
+def _seen(binary: Path) -> dict[str, str]:
     return json.loads((binary.parent / "seen.json").read_text())  # type: ignore[no-any-return]
 
 
-def test_a_staged_scan_reads_the_temporary_index_and_finds_the_leak(
-    tmp_path: Path, scanner: Path
-) -> None:
-    repo = _repo(tmp_path)
-    index = _leak_staged(repo, tmp_path)
-
-    result = S.scan_index(repo, index, scanner, SLOW)
-
-    assert (result.ok, result.timed_out) == (False, False)
-    assert "common/memory/leak.md" in result.detail and LEAK not in result.detail
-    args = _argv(scanner)
-    assert args[0] == "git" and {"--pre-commit", "--staged", "--redact"} <= set(args)
-    assert (
-        git(repo, "status", "--porcelain") == "?? common/memory/leak.md\n"
-    )  # the real index never saw it
+def _scan(scanner: Path, tmp_path: Path, items: list[tuple[str, bytes]], **kwargs: Any) -> Any:
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(exist_ok=True)
+    return S.scan(items, scanner, kwargs.get("rules"), kwargs.get("timeout", SLOW), scratch)
 
 
-def test_the_owners_staged_work_is_not_scanned(tmp_path: Path, scanner: Path) -> None:
-    repo = _repo(tmp_path)
-    write(repo, "common/claude/hooks/wip.py", f"token = '{LEAK}'\n")
-    git(repo, "add", "common/claude/hooks/wip.py")  # the owner's staged work, secret and all
-    write(repo, "common/memory/b.md", "a clean note\n")
-    index = _temporary_index(repo, tmp_path)
-    _stage_in(repo, index, "common/memory/b.md")
+def test_a_finding_names_rule_and_label_never_the_secret(tmp_path: Path, scanner: Path) -> None:
+    items = [("common/memory/one.md", b"clean\n"), ("common/memory/leak.md", f"{LEAK}\n".encode())]
 
-    result = S.scan_index(repo, index, scanner, SLOW)
+    result = _scan(scanner, tmp_path, items)
 
-    assert result.ok is True, result.detail
-    assert result.finding_commit is None
+    assert (result.ok, result.timed_out, result.found) == (False, False, ("common/memory/leak.md",))
+    assert result.detail == "fake-secret in common/memory/leak.md"
+    assert _argv(scanner)[:2] == ["dir", "."] and "--redact" in _argv(scanner)
 
-
-def test_a_finding_names_rule_file_and_commit_never_the_secret(
-    tmp_path: Path, scanner: Path
-) -> None:
-    repo = _repo(tmp_path)
-    base = head(repo)
-    write(repo, "common/memory/one.md", "clean\n")
-    commit_all(repo, "one")
-    write(repo, "common/memory/leak.md", f"{LEAK}\n")
-    leaky = commit_all(repo, "leak")
-    write(repo, "common/memory/two.md", "clean\n")
-    tip = commit_all(repo, "two")
-
-    result = S.scan_range(repo, base, tip, scanner, SLOW)
-
-    assert (result.ok, result.finding_commit) == (False, leaky)
-    assert result.detail == f"fake-secret in common/memory/leak.md (commit {leaky})"
-    assert f"--log-opts={base}..{tip}" in _argv(scanner) and "--redact" in _argv(scanner)
-
-    clean = S.scan_range(repo, base, f"{leaky}^", scanner, SLOW)
-    assert (clean.ok, clean.detail, clean.finding_commit) == (True, "no leaks found", None)
+    clean = _scan(scanner, tmp_path, items[:1])
+    assert (clean.ok, clean.detail, clean.found) == (True, "no leaks found", ())
 
 
 def test_a_long_list_of_findings_is_cut_and_counted(tmp_path: Path, scanner: Path) -> None:
-    repo = _repo(tmp_path)
-    base = head(repo)
-    for number in range(S.DETAIL_LINES + 2):
-        write(repo, f"common/memory/leak{number}.md", f"{LEAK}\n")
-    tip = commit_all(repo, "leaks")
+    items = [(f"leak{number}", f"{LEAK}\n".encode()) for number in range(S.DETAIL_LINES + 2)]
 
-    result = S.scan_range(repo, base, tip, scanner, SLOW)
+    result = _scan(scanner, tmp_path, items)
 
+    assert len(result.found) == S.DETAIL_LINES + 2
     assert len(result.detail.splitlines()) == S.DETAIL_LINES + 1
     assert result.detail.splitlines()[-1] == "... 2 more"
 
 
 def test_a_failed_scan_is_not_a_finding(tmp_path: Path, scanner: Path) -> None:
     """Exit 1 with an empty report is a scan that did not run, which must not read as a pass
-    and must not name a commit either."""
+    and must not name a file either."""
     (scanner.parent / "mode").write_text("fail")
-    repo = _repo(tmp_path)
 
-    result = S.scan_range(repo, "HEAD", "HEAD", scanner, SLOW)
+    result = _scan(scanner, tmp_path, [("a", f"{LEAK}\n".encode())])
 
-    assert (result.ok, result.finding_commit, result.timed_out) == (False, None, False)
+    assert (result.ok, result.found, result.timed_out) == (False, (), False)
     assert "failed to scan" in result.detail
 
 
 def test_a_scanner_that_is_not_there_fails_the_scan(tmp_path: Path) -> None:
-    repo = _repo(tmp_path)
-
-    result = S.scan_range(repo, "HEAD", "HEAD", tmp_path / "gone" / "gitleaks", SLOW)
+    result = _scan(tmp_path / "gone" / "gitleaks", tmp_path, [("a", b"a\n")])
 
     assert (result.ok, result.timed_out) == (False, False)
     assert result.detail
@@ -248,190 +183,155 @@ def test_a_scanner_that_is_not_there_fails_the_scan(tmp_path: Path) -> None:
 
 def test_a_scan_that_outlives_its_bound_is_timed_out(tmp_path: Path, scanner: Path) -> None:
     (scanner.parent / "mode").write_text("sleep")
-    repo = _repo(tmp_path)
 
     started = time.monotonic()
-    result = S.scan_range(repo, "HEAD", "HEAD", scanner, 1)
+    result = _scan(scanner, tmp_path, [("a", b"a\n")], timeout=1)
 
     assert (result.ok, result.timed_out) == (False, True)
     assert time.monotonic() - started < 25  # not the stand-in's 30 s
 
 
-def test_rules_and_ignores_come_from_head(
-    tmp_path: Path, scanner: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A confused agent silencing a pre-commit false positive -- an untracked `.gitleaks.toml`,
-    a `GITLEAKS_CONFIG` -- must not also disarm the unattended scan."""
-    repo = _repo(tmp_path)
-    write(repo, ".gitleaks.toml", "allow-all\n")
-    monkeypatch.setenv(
-        "GITLEAKS_CONFIG", str(write(tmp_path / "elsewhere", "rules.toml", "allow-all\n"))
-    )
-    index = _leak_staged(repo, tmp_path)
-
-    result = S.scan_index(repo, index, scanner, SLOW)
-
-    assert result.ok is False and "common/memory/leak.md" in result.detail
-    assert _seen(scanner)["rules_text"] == S.DEFAULTS.decode()  # none committed: the defaults
-
-    write(repo, ".gitleaks.toml", "# the owner's committed rules\n")
-    git(repo, "add", ".gitleaks.toml")
-    git(repo, "commit", "-q", "-m", "rules")
-    write(repo, ".gitleaks.toml", "allow-all\n")  # and loosened again, uncommitted
-
-    assert S.scan_index(repo, index, scanner, SLOW).ok is False
-    assert _seen(scanner)["rules_text"] == "# the owner's committed rules\n"
-
-
-def test_an_uncommitted_gitleaksignore_at_the_root_stops_the_scan(
-    tmp_path: Path, scanner: Path
-) -> None:
-    """gitleaks reads the scanned directory's `.gitleaksignore` whatever it is told, so one that
-    is not the committed file stops the scan instead of silencing it."""
-    repo = _repo(tmp_path)
-    index = _leak_staged(repo, tmp_path)
-    write(repo, ".gitleaksignore", "ignore-all\n")
-
-    result = S.scan_index(repo, index, scanner, SLOW)
-
-    assert (result.ok, result.finding_commit) == (False, None)
-    assert ".gitleaksignore" in result.detail and "not the committed one" in result.detail
-    assert not (scanner.parent / "argv.json").exists()  # never ran
-
-    write(repo, ".gitleaksignore", "# the owner's committed ignores\n")
-    git(repo, "add", ".gitleaksignore")
-    git(repo, "commit", "-q", "-m", "ignores")
-
-    assert S.scan_index(repo, index, scanner, SLOW).ok is False  # the leak is still found
-    assert _seen(scanner)["ignore_text"] == "# the owner's committed ignores\n"
-
-
-def test_a_gitleaksignore_that_cannot_be_read_stops_the_scan(tmp_path: Path, scanner: Path) -> None:
-    repo = _repo(tmp_path)
-    index = _leak_staged(repo, tmp_path)
-    (repo / ".gitleaksignore").mkdir()
-
-    result = S.scan_index(repo, index, scanner, SLOW)
-
-    assert (result.ok, result.finding_commit) == (False, None)
-    assert "cannot be read" in result.detail
-    assert not (scanner.parent / "argv.json").exists()
-
-
 def test_no_committed_rules_scan_on_gitleaks_defaults(tmp_path: Path, scanner: Path) -> None:
-    repo = _repo(tmp_path)
-
-    result = S.scan_range(repo, "HEAD", "HEAD", scanner, SLOW)
-
-    assert result.ok is True, result.detail
+    assert _scan(scanner, tmp_path, [("a", b"a\n")]).ok is True
     config = _argv(scanner)[_argv(scanner).index("--config") + 1]
     assert _seen(scanner)["rules"] == config
     assert _seen(scanner)["rules_text"] == "[extend]\nuseDefault = true\n"
 
-
-def test_gitleaks_variables_are_dropped(
-    tmp_path: Path, scanner: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv(
-        "GITLEAKS_CONFIG", str(write(tmp_path / "elsewhere", "rules.toml", "allow-all\n"))
-    )
-    monkeypatch.setenv("GITLEAKS_LOG_LEVEL", "debug")
-    repo = _repo(tmp_path)
-
-    S.scan_range(repo, "HEAD", "HEAD", scanner, SLOW)
-
-    assert _seen(scanner)["env"] == []
+    _scan(scanner, tmp_path, [("a", b"a\n")], rules=b"# the owner's committed rules\n")
+    assert _seen(scanner)["rules_text"] == "# the owner's committed rules\n"
 
 
-def test_gitleaks_reads_a_patch_with_no_signature_lines_and_no_colour(
+def test_the_report_and_the_items_are_written_under_the_scratch_directory_and_removed(
     tmp_path: Path, scanner: Path
 ) -> None:
-    """Its own `git log -p` and `git diff` give it a patch to parse: a `log.showSignature` in the
-    owner's configuration would put a verification into it, and a `color.ui = always` escape
-    codes, which leave its parser no file to scan and the scan passing. Mutations (oracle):
-    `mutations/`'s "gitleaks reads a log with signature lines", "the scan's git colours its patch"
-    and "the scan's git colours its diff"."""
-    repo = _repo(tmp_path)
-    for key, value in (("log.showSignature", "true"), ("color.ui", "always")):
-        git(repo, "config", key, value)
-    git(repo, "config", "color.diff", "always")
-    index = _temporary_index(repo, tmp_path)
-    expected = {"log.showSignature": "false", "color.ui": "false", "color.diff": "false"}
-
-    S.scan_range(repo, "HEAD", "HEAD", scanner, SLOW, env={"GIT_CONFIG_COUNT": "0"})
-    assert json.loads((scanner.parent / "git_config.json").read_text()) == expected
-    S.scan_index(repo, index, scanner, SLOW)
-    assert json.loads((scanner.parent / "git_config.json").read_text()) == expected
-
-
-@pytest.mark.skipif(REAL is None, reason="no gitleaks on PATH")
-def test_the_real_gitleaks_finds_a_token_whatever_colour_the_owner_asks_for(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # End to end with the real gitleaks: its parser reads git's patch text, and a coloured one
-    # made the scan pass and the token travel. Skipped where no gitleaks is on PATH.
-    assert REAL is not None
-    monkeypatch.setattr(S, "gitleaks", lambda: Path(REAL))
-    a = overlays.a
-    git(a, "config", "color.ui", "always")
-    token = "ghp_" + "aB3dE5fG7hJ9kL1mN3pQ5rS7tV9wX1yZ3bC5"  # split: no scanner flags this file
-    write(a, "common/memory/pasted.md", f"the token is {token}\n")
-
-    state = J._one_job(context(overlays, a))
-
-    assert state.outcome.state != "ok", state.outcome
-    assert "pasted.md" not in git(overlays.bare, "ls-tree", "-r", "--name-only", "main")
-
-
-def test_the_report_is_written_under_the_scratch_directory_and_removed(
-    tmp_path: Path, scanner: Path
-) -> None:
-    repo = _repo(tmp_path)
-    scratch = tmp_path / "scratch"
-    scratch.mkdir()
-
-    S.scan_range(repo, "HEAD", "HEAD", scanner, SLOW, scratch=scratch)
+    # Mutation (oracle): `mutations/`'s "a scan's report is written in TMPDIR".
+    _scan(scanner, tmp_path, [("a", b"a\n")])
 
     args = _argv(scanner)
-    report = Path(args[args.index("--report-path") + 1])
-    assert report.parent.parent == scratch
+    scratch = (tmp_path / "scratch").resolve()
+    assert Path(args[args.index("--report-path") + 1]).resolve().parent.parent == scratch
+    assert Path(_seen(scanner)["source"]).parent.parent == scratch
     assert list(scratch.iterdir()) == []  # the scan's directory went with it
 
 
 def test_the_metadata_scan_names_the_commit(tmp_path: Path, scanner: Path) -> None:
-    repo = _repo(tmp_path)
+    # Mutation (oracle): `mutations/`'s "the metadata scan reads nothing".
     commits = [
-        ("a" * 40, "author A <a@x> 1 +0000\n\nclean\n"),
-        ("b" * 40, f"author B <b@x> 1 +0000\n\ntoken {LEAK}\n"),
+        ("a" * 40, b"author A <a@x> 1 +0000\n\nclean\n"),
+        ("b" * 40, f"author B <b@x> 1 +0000\n\ntoken {LEAK}\n".encode()),
     ]
 
-    result = S.scan_commits(repo, commits, scanner, SLOW)
+    result = _scan(scanner, tmp_path, commits)
 
-    assert (result.ok, result.finding_commit) == (False, "b" * 40)
+    assert (result.ok, result.found) == (False, ("b" * 40,))
     assert "b" * 40 in result.detail and LEAK not in result.detail
-    assert _argv(scanner)[0] == "stdin"
-    assert S.scan_commits(repo, commits[:1], scanner, SLOW).ok is True
 
 
-def test_a_metadata_scan_reads_nothing_at_the_overlays_root(tmp_path: Path, scanner: Path) -> None:
-    repo = _repo(tmp_path)
-    write(repo, ".gitleaksignore", "ignore-all\n")
-    write(repo, ".gitleaks.toml", "allow-all\n")
+@pytest.mark.skipif(REAL is None, reason="no gitleaks on PATH")
+def test_the_real_gitleaks_finds_a_token_under_allowlisted_names(tmp_path: Path) -> None:
+    # The four notes of the plan's measurement: the default rules' path allowlist skips the last
+    # three by name when gitleaks is shown their paths, and the scan shows it none.
+    assert REAL is not None
+    token = "ghp_" + "aB3dE5fG7hJ9kL1mN3pQ5rS7tV9wX1yZ3bC5"  # split: no scanner flags this file
+    names = [
+        "common/memory/plain.md",
+        "common/memory/gitleaks.toml-tips.md",
+        "projects/node_modules/memory/note.md",
+        "projects/a/memory/vendor/bundle/note.md",
+    ]
 
-    result = S.scan_commits(repo, [("b" * 40, f"token {LEAK}\n")], scanner, SLOW)
+    result = _scan(
+        Path(REAL), tmp_path, [(name, f"the token is {token}\n".encode()) for name in names]
+    )
 
-    assert (result.ok, result.finding_commit) == (False, "b" * 40)
+    assert (result.ok, result.timed_out) == (False, False), result.detail
+    assert sorted(result.found) == sorted(names)
+    assert token not in result.detail
 
 
-def test_a_finding_in_the_whole_but_in_no_single_commit_names_none(
-    tmp_path: Path, scanner: Path
+# -- what the job scans ---------------------------------------------------------------------------
+
+
+def _leak_note(overlays: Overlays, name: str = "common/memory/leak.md") -> str:
+    write(overlays.a, name, f"key = {LEAK}\n")
+    return name
+
+
+def _commit_notice(overlays: Overlays) -> Any:
+    ctx = context(overlays, overlays.a)
+    assert J.commit_memory(ctx) is None
+    assert len(ctx.notices) <= 1, ctx.notices
+    return ctx.notices[0] if ctx.notices else None
+
+
+def _push(overlays: Overlays) -> Any:
+    return J.push(context(overlays, overlays.a), head(overlays.a, "origin/main"))
+
+
+def test_a_note_name_never_exempts_it_from_the_scan(overlays: Overlays) -> None:
+    # A note named as a path allowlist names (the stand-in skips such a name, as the real
+    # default rules skip `gitleaks.toml-tips.md`): its bytes are scanned under a neutral name.
+    # Mutation (oracle): `mutations/`'s "a scanned file is named after its note".
+    a, before = overlays.a, head(overlays.bare, "main")
+    name = _leak_note(overlays, "common/memory/allowlisted.md")
+
+    notice = _commit_notice(overlays)
+    assert notice is not None and notice.state == "hook_failed" and name in notice.detail
+
+    git(a, "add", "--", name)
+    leaky = commit_all(a, "memory: by hand")
+    stopped = _push(overlays)
+    assert stopped is not None and stopped.state == "secret_found", stopped
+    assert f"{leaky} {name}" in stopped.detail and LEAK not in stopped.detail
+    assert head(overlays.bare, "main") == before
+
+
+def test_a_scan_reads_no_file_at_the_overlays_root(
+    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    repo = _repo(tmp_path)
-    half = LEAK[: len(LEAK) // 2]
-    # Each commit alone is clean; only the two joined carry the token.
-    commits = [("a" * 40, f"{half}"), ("b" * 40, f"{LEAK[len(half) :]}\n")]
+    # A confused agent silencing a pre-commit false positive -- a working-tree `.gitleaks.toml`
+    # allowing everything, a `.gitleaksignore` -- disarms no scan, from the job's own working
+    # directory, the overlay. Mutations (oracle): `mutations/`'s "a scan runs at the overlay's
+    # root" and "the scan reads the rules from the working tree".
+    a = overlays.a
+    monkeypatch.chdir(a)
+    write(a, ".gitleaks.toml", "allow-all\n")
+    write(a, ".gitleaksignore", "ignore-all\n")
+    name = _leak_note(overlays)
 
-    result = S.scan_commits(repo, commits, scanner, SLOW)
+    notice = _commit_notice(overlays)
 
-    assert (result.ok, result.finding_commit) == (False, None)
-    assert "no one commit" in result.detail
+    assert notice is not None and notice.state == "hook_failed" and name in notice.detail
+    source = Path(_seen(overlays.gitleaks)["source"])
+    assert source.parent.parent == (overlays.state_dir / SCRATCH).resolve()
+
+
+def test_committed_rules_apply(overlays: Overlays) -> None:
+    a = overlays.a
+    write(a, ".gitleaks.toml", "allow-all\n")
+    commit_all(a, "the owner's rules")
+    git(a, "push", "-q", "origin", "main")  # outside memory: pushed by hand, as the owner would
+    name = _leak_note(overlays)
+
+    assert _commit_notice(overlays) is None
+    assert git(a, "log", "-1", "--format=%s").startswith("memory: 1 notes")
+    assert _push(overlays) is None
+    assert name in git(overlays.bare, "ls-tree", "-r", "--name-only", "main")
+
+
+def test_a_textconv_cannot_hide_a_note(overlays: Overlays) -> None:
+    # A `diff` driver whose `textconv` prints nothing shows gitleaks no patch at all; the scan
+    # reads the bytes, not a diff.
+    a = overlays.a
+    (a / ".git" / "info").mkdir(exist_ok=True)
+    (a / ".git" / "info" / "attributes").write_text("*.md diff=hide\n")
+    git(a, "config", "diff.hide.textconv", "true")
+    name = _leak_note(overlays)
+
+    notice = _commit_notice(overlays)
+    assert notice is not None and notice.state == "hook_failed" and name in notice.detail
+
+    git(a, "add", "--", name)
+    commit_all(a, "memory: by hand")
+    stopped = _push(overlays)
+    assert stopped is not None and stopped.state == "secret_found", stopped

@@ -248,17 +248,24 @@ def test_a_rejected_push_is_retried_on_the_next_trigger(
     assert git(overlays.bare, "rev-parse", "main~1").strip() == raced[0]
 
 
-def test_a_secret_in_the_range_is_secret_found_with_its_sha(overlays: Overlays) -> None:
+def test_a_push_finding_opens_with_its_remedy(overlays: Overlays) -> None:
+    # Two commits with a secret, made outside the job (no scan ran): the detail opens with the
+    # rewrite from the older one, which covers both, then names each finding.
     a = overlays.a
     before = remote_main(overlays)
     write(a, "common/memory/leak.md", f"key = {LEAK}\n")
-    leaky = commit_all(a, "memory: by hand")  # committed outside the job: no scan ran
+    oldest = commit_all(a, "memory: by hand")
+    write(a, "common/memory/again.md", f"key = {LEAK}\n")
+    newest = commit_all(a, "memory: by hand again")
 
     state = job(overlays)
 
     assert state.outcome.state == "secret_found"
     assert state.outcome.detail is not None
-    assert f"git rebase -i {leaky}^" in state.outcome.detail
+    lines = state.outcome.detail.splitlines()
+    assert lines[0] == J.REMEDY.format(sha=oldest)
+    assert f"fake-secret in {oldest} common/memory/leak.md" in lines
+    assert f"fake-secret in {newest} common/memory/again.md" in lines
     assert LEAK not in state.outcome.detail
     assert remote_main(overlays) == before
 
@@ -561,12 +568,12 @@ def git_spy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return log
 
 
-def test_every_git_call_of_the_job_and_its_scans_runs_non_interactive(
+def test_every_git_call_of_the_job_runs_non_interactive(
     overlays: Overlays, git_spy: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # `GIT_TERMINAL_PROMPT=0` reaches every git call the job makes, the scanner's included, and a
-    # session's `GIT_SSH_COMMAND` none. The sealed test environment sets the prompt switch itself,
-    # so it is taken out here: the core's environment must set it on its own.
+    # `GIT_TERMINAL_PROMPT=0` reaches every git call the job makes, and a session's
+    # `GIT_SSH_COMMAND` none. The sealed test environment sets the prompt switch itself, so it is
+    # taken out here: the core's environment must set it on its own.
     monkeypatch.delenv("GIT_TERMINAL_PROMPT")
     monkeypatch.setenv("GIT_SSH_COMMAND", "ssh -o ProxyCommand=elsewhere")
     push_note(overlays.b, "common/memory/from-b.md", note_text("from-b"))
@@ -577,7 +584,6 @@ def test_every_git_call_of_the_job_and_its_scans_runs_non_interactive(
 
     assert state.outcome.state == "ok", state.outcome
     calls = [line.split("\t", 2) for line in git_spy.read_text().splitlines()]
-    assert any("diff --cached" in argv and "-U0" in argv for _, _, argv in calls)  # the scanner's
     assert any(argv.startswith("push ") for _, _, argv in calls)
     assert [call for call in calls if tuple(call[:2]) != ("0", "unset")] == []
 

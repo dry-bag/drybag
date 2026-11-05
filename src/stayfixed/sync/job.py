@@ -31,6 +31,7 @@ from pathlib import Path
 
 from stayfixed import fsops
 from stayfixed.config.overlay import overlay_root
+from stayfixed.gitenv import answer_bytes
 from stayfixed.sync import scan
 from stayfixed.sync.git import (
     JOB_SETTINGS,
@@ -359,14 +360,43 @@ def _move_main(ctx: JobContext, pending: PendingAlign) -> bool:
     return False
 
 
-def _run_checks(ctx: JobContext, index: Path, paths: list[str]) -> Outcome | None:
-    """The secret scan of what `index` stages, before any tree is written; the failure, if any."""
+def _committed_rules(ctx: JobContext) -> bytes | None:
+    """`HEAD`'s `.gitleaks.toml`, or `None` when it commits none: never what the working tree
+    holds now. `None` only makes the scan stricter (gitleaks' defaults)."""
+    found = timed(
+        _git(ctx, "cat-file", "blob", "--end-of-options", f"HEAD:{scan.RULES}"), "git cat-file"
+    )
+    return answer_bytes(found.out) if found.code == 0 else None
+
+
+def _objects(ctx: JobContext, names: list[str]) -> list[bytes]:
+    """Each object `names` lists, raw, in order, from one `git cat-file --batch`: no filter, no
+    textconv and no replace ref (`JOB_SETTINGS`) stands between git's bytes and the scan."""
+    asked = "".join(f"{name}\n" for name in names).encode()
+    out = answer_bytes(_ok(ctx, "cat-file", "--batch", stdin=asked))
+    found: list[bytes] = []
+    at = 0
+    for name in names:
+        end = out.find(b"\n", at)
+        header = out[at:end].split(b" ") if end >= 0 else []
+        if len(header) != 3 or not header[2].isdigit():
+            raise GitError(f"git cat-file --batch: no object {name}")
+        found.append(out[end + 1 : end + 1 + int(header[2])])
+        at = end + 2 + int(header[2])
+    return found
+
+
+def _run_checks(ctx: JobContext, scratch: Path, paths: list[str]) -> Outcome | None:
+    """The secret scan of the working-tree bytes of the notes `paths` names, before any tree is
+    written; the failure, if any."""
     binary = ctx.scanner
     if binary is None:
         return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER)
-    result = scan.scan_index(
-        ctx.overlay, index, binary, ctx.limit(ctx.limits.checks), env=ctx.env, scratch=index.parent
-    )
+    try:
+        items = [(path, fsops.read_regular_bytes(ctx.overlay / path)) for path in paths]
+    except OSError as error:
+        return _outcome(ctx, "hook_failed", f"gitleaks: a note cannot be read: {fsops.said(error)}")
+    result = scan.scan(items, binary, _committed_rules(ctx), ctx.limit(ctx.limits.checks), scratch)
     if result.ok:
         return None
     state = "timeout" if result.timed_out else "hook_failed"
@@ -418,7 +448,7 @@ def commit_memory(ctx: JobContext) -> Outcome | None:
         if not paths:
             return None
         new = None
-        failed = _run_checks(ctx, index, paths)
+        failed = _run_checks(ctx, scratch, _staged(ctx, index, old, "d"))
         if failed is None:
             tree = _ok(ctx, "write-tree", index_file=index).strip()
             new, failed = _commit_tree(ctx, tree, [old], _message(ctx, paths))
@@ -813,48 +843,34 @@ def _before_push() -> None:
     """Nothing; the moment between the range's checks and its push (a test seam)."""
 
 
-def _range(ctx: JobContext, base: str, tip: str) -> list[tuple[str, list[RawEntry]]]:
-    return commit_entries(
-        ctx.overlay, f"{base}..{tip}", timeout=ctx.limit(ctx.limits.local), env=ctx.env
-    )
-
-
-def _metadata(ctx: JobContext, base: str, tip: str) -> list[tuple[str, str]]:
-    """`[(sha, text)]` for each commit of `base..tip`: what its push sends besides the patches,
-    the commit object whole (every header, the message) and the name of every path."""
-    return [
-        (sha, "\n".join([_ok(ctx, "cat-file", "commit", "--end-of-options", sha).rstrip("\n"),
-                         *(entry.path for entry in entries)]) + "\n")
-        for sha, entries in _range(ctx, base, tip)
-    ]  # fmt: skip
-
-
-def _scan_push(ctx: JobContext, upstream: str, tip: str) -> Outcome | None:
-    """Both scans of what the push sends, within `Limits.checks` together; the failure, if any."""
+def _scan_push(ctx: JobContext, commits: list[tuple[str, list[RawEntry]]]) -> Outcome | None:
+    """The content scan of what the push of `commits` sends, within `Limits.checks`: each commit's
+    metadata -- the commit object whole, every header and the message, and the name of every path
+    -- and every blob it adds or changes, read by one `git cat-file --batch`; the failure, if any.
+    A finding is `secret_found`, its detail opening with the rewrite from the oldest commit found,
+    which takes every newer one with it."""
     binary = ctx.scanner
     if binary is None:
         return _outcome(ctx, "scan_unavailable", scan.NO_SCANNER)
-    deadline = time.monotonic() + ctx.limits.checks
+    added = [(sha, each) for sha, entries in commits for each in entries if each.status != "D"]
+    objects = iter(_objects(ctx, [sha for sha, _ in commits] + [each.blob for _, each in added]))
+    items = [
+        (sha, b"\n".join([next(objects).rstrip(b"\n"), *(answer_bytes(e.path) for e in entries)]))
+        for sha, entries in commits
+    ]
+    items += [(f"{sha} {each.path}", next(objects)) for sha, each in added]
     with _scratch(ctx) as scratch:
-        result = scan.scan_range(
-            ctx.overlay, upstream, tip, binary, ctx.limit(ctx.limits.checks), ctx.env, scratch
-        )
-        left = deadline - time.monotonic()
-        if result.ok and left <= 0:
-            return _outcome(ctx, "timeout", f"the push's scans took over {ctx.limits.checks:g} s")
-        if result.ok:
-            blocks = _metadata(ctx, upstream, tip)
-            result = scan.scan_commits(
-                ctx.overlay, blocks, binary, ctx.limit(left), ctx.env, scratch
-            )
+        limit = ctx.limit(ctx.limits.checks)
+        result = scan.scan(items, binary, _committed_rules(ctx), limit, scratch)
     if result.timed_out:
         return _outcome(ctx, "timeout", f"gitleaks: {result.detail}")
     if result.ok:
         return None
-    if result.finding_commit:
-        detail = f"{result.detail}\n{REMEDY.format(sha=result.finding_commit)}"
-        return _outcome(ctx, "secret_found", detail)
-    return _outcome(ctx, "hook_failed", f"gitleaks: {result.detail}")
+    named = {label.split(" ", 1)[0] for label in result.found}
+    oldest = next((sha for sha, _ in reversed(commits) if sha in named), None)
+    if oldest is None:  # a failed scan, not a finding
+        return _outcome(ctx, "hook_failed", f"gitleaks: {result.detail}")
+    return _outcome(ctx, "secret_found", f"{REMEDY.format(sha=oldest)}\n{result.detail}")
 
 
 def push(ctx: JobContext, upstream: str) -> Outcome | None:
@@ -869,26 +885,30 @@ def push(ctx: JobContext, upstream: str) -> Outcome | None:
     if _is_ancestor(ctx, tip, upstream):
         ctx.holds = replace(ctx.holds, local_commits=())
         return None
-    pushable, offending = range_is_memory_only(
-        ctx.overlay, upstream, tip, timeout=ctx.limit(ctx.limits.local), env=ctx.env
+    listed = commit_entries(
+        ctx.overlay, f"{upstream}..{tip}", timeout=ctx.limit(ctx.limits.local), env=ctx.env
     )
+    pushable, offending = range_is_memory_only(
+        ctx.overlay, upstream, tip, timeout=ctx.limit(ctx.limits.local), env=ctx.env,
+        commits=listed,
+    )  # fmt: skip
     if not pushable:
-        commits = [
+        held = [
             sha
-            for sha, entries in _range(ctx, upstream, tip)
+            for sha, entries in listed
             if not entries or any(entry_offends(entry) for entry in entries)
         ] or offending
         ctx.remarks.append(
             "local commits outside memory are not pushed; push them by hand when reviewed: "
-            + ", ".join(commits)
+            + ", ".join(held)
         )
-        ctx.holds = replace(ctx.holds, local_commits=tuple(commits))
+        ctx.holds = replace(ctx.holds, local_commits=tuple(held))
         return None
     ctx.holds = replace(ctx.holds, local_commits=())
     if ctx.holds.upstream_paths:
         ctx.remarks.append("not pushed while upstream is held")
         return None
-    failed = _scan_push(ctx, upstream, tip)
+    failed = _scan_push(ctx, listed)
     if failed is not None:
         return failed
     _before_push()

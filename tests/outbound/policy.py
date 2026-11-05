@@ -235,10 +235,9 @@ PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
     # `git [-c core.excludesFile=…] --git-dir=… --work-tree=<empty> check-ignore --no-index
     # --stdin -z`, assembled in `asked`: the owner's own exclude files, asked about.
     ("src/stayfixed/attach/exclude.py", "unhidden_by_owner", "*asked"): NO_ROWS,
-    # The overlay's own pinned gitleaks build, found through pre-commit's database and run on
-    # `git --pre-commit --staged`, `git --log-opts` or `stdin`: it reads the repository and its
-    # input and reaches no network, and a path that is not an executable build is never run.
-    ("src/stayfixed/sync/scan.py", "_scan", "str(binary)"): NO_ROWS,
+    # The `gitleaks` on `PATH`, run as `gitleaks dir .` over files the scan wrote in the job's
+    # scratch: it reads them and its rules, and reaches no network.
+    ("src/stayfixed/sync/scan.py", "scan", "str(binary)"): NO_ROWS,
     # The note sync's detached job: this interpreter, isolated (`-I -c BOOT`), running this
     # package's `sync.job.main`, whose own launches (its `git fetch` and `git push` among them)
     # are walked where they are, in `sync/job.py`.
@@ -342,12 +341,6 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
         _JOB_ENVIRONMENT + ", and the temporary index a call names"
     ),
     ("src/stayfixed/sync/git.py", "ask", "env=env"): _JOB_ENVIRONMENT,
-    ("src/stayfixed/sync/scan.py", "blob", "env=env"): _JOB_ENVIRONMENT,
-    ("src/stayfixed/sync/scan.py", "_scan", "env=scrubbed_env() | given"): (
-        "`scrubbed_env()` with the job's git environment over it, plus `git -c`-style entries "
-        "that keep signature checks and colour out of the patches gitleaks parses, and the "
-        "temporary index a staged scan reads; no `GITLEAKS_` variable of the session is kept"
-    ),
     ("src/stayfixed/sync/job.py", "_git", "env={**ctx.env, **(env or {})}"): (
         _JOB_ENVIRONMENT + ", and for a replayed commit its author and its encoding"
     ),

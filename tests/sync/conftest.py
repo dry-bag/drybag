@@ -213,77 +213,47 @@ def slow_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, slow: dict[str, fl
 # -- the scanner: a script on PATH that answers like gitleaks -----------------------------------
 
 _GITLEAKS = r'''#!{python}
-"""Stand-in gitleaks, answering as the real one does: a JSON report naming rule, file and
-commit; exit 1 for a finding and for a failed scan alike (the failed one with an empty report).
+"""Stand-in gitleaks, answering `gitleaks dir <source>` as the real one does: a JSON report naming
+rule and file; exit 1 for a finding and for a failed scan alike (the failed one with an empty
+report).
 
 Modes, from the file `mode` beside it: `scan` (default), `fail`, `sleep [seconds]` (then scan).
-Its rules and ignores are found as the real one finds them: `--config`, else `$GITLEAKS_CONFIG`,
-else the scanned directory's `.gitleaks.toml`; ignores from `--gitleaks-ignore-path` and from the
-scanned directory's `.gitleaksignore`. Rules holding `allow-all`, or ignores holding
-`ignore-all`, find nothing. What it saw is recorded in `argv.json`, `seen.json` and
-`git_config.json` beside it.
+It reads every file under its source, and skips any whose name holds `allowlisted`, as a path
+allowlist would. Its rules are `--config`, else `$GITLEAKS_CONFIG`, else the source's
+`.gitleaks.toml`, and its ignores the source's `.gitleaksignore`: rules holding `allow-all`, or
+ignores holding `ignore-all`, find nothing. What it saw is recorded in `argv.json` and `seen.json`
+beside it.
 """
-import json, os, subprocess, sys, time
+import json, os, sys, time
 from pathlib import Path
 
 me = Path(__file__)
 args = sys.argv[1:]
 (me.parent / "argv.json").write_text(json.dumps(args))
 (me.parent / "pid").write_text(str(os.getpid()))
-(me.parent / "git_config.json").write_text(json.dumps({{key: subprocess.run(
-    ["git", "config", "--get", key], capture_output=True, text=True).stdout.strip()
-    for key in ("log.showSignature", "color.ui", "color.diff")}}))
 mode_file = me.parent / "mode"
 mode = mode_file.read_text().strip() if mode_file.exists() else "scan"
 report = args[args.index("--report-path") + 1]
 if mode.startswith("sleep"):
     time.sleep(float(mode.split()[1]) if len(mode.split()) > 1 else 30)
-if mode == "fail":
+if mode == "fail" or args[0] != "dir":
     Path(report).write_text("[]")
-    print("ERR failed to scan Git repository error=\"stderr is not empty\"", file=sys.stderr)
+    print("ERR failed to scan", args[0], file=sys.stderr)
     sys.exit(1)
-def value(flag) -> None:
-    return args[args.index(flag) + 1] if flag in args else None
-source = Path(args[-1]) if args[0] == "git" else Path(".")
-rules = value("--config") or os.environ.get("GITLEAKS_CONFIG") or str(source / ".gitleaks.toml")
-ignore = Path(value("--gitleaks-ignore-path") or ".")
-ignore = ignore / ".gitleaksignore" if ignore.is_dir() else ignore
-read = lambda path: Path(path).read_text() if Path(path).is_file() else None
+source = Path(args[1]).resolve()
+rules = args[args.index("--config") + 1] if "--config" in args else (
+    os.environ.get("GITLEAKS_CONFIG") or str(source / ".gitleaks.toml"))
+read = lambda path: Path(path).read_text() if Path(path).is_file() else ""
 (me.parent / "seen.json").write_text(json.dumps({{
-    "rules": rules, "rules_text": read(rules), "ignore_text": read(ignore),
-    "env": sorted(k for k in os.environ if k.startswith("GITLEAKS_")),
-}}))
-ignored = (read(ignore) or "") + (read(source / ".gitleaksignore") or "")
-blind = "allow-all" in (read(rules) or "") or "ignore-all" in ignored
-redact = "--redact" in args
-findings = []
-def found(path, commit) -> None:
-    findings.append({{"RuleID": "fake-secret", "File": path, "Commit": commit,
-                      "Secret": "REDACTED" if redact else "{secret}"}})
-def scan(patch, commit) -> None:
-    path = None
-    for line in patch.splitlines():
-        if line.startswith("+++ b/"):
-            path = line[6:]
-        elif line.startswith("+") and "{secret}" in line:
-            found(path, commit)
-if blind:
-    pass
-elif args[0] == "stdin":
-    for number, line in enumerate(sys.stdin.read().splitlines()):
-        if "{secret}" in line:
-            findings.append({{"RuleID": "fake-secret", "File": "", "Commit": "",
-                              "StartLine": number, "Secret": "REDACTED" if redact else "{secret}"}})
-elif "--pre-commit" in args and "--staged" in args:
-    scan(subprocess.run(["git", "diff", "--cached", "--no-color", "-U0"], capture_output=True,
-                        text=True, check=True).stdout, "")
-else:
-    rng = next(a.split("=", 1)[1] for a in args if a.startswith("--log-opts="))
-    out = subprocess.run(["git", "log", "-p", "-U0", "--no-color", "--format=%x00%H", rng],
-                         capture_output=True, text=True, check=True).stdout
-    for chunk in out.split("\0")[1:]:
-        sha, _, patch = chunk.partition("\n")
-        scan(patch, sha)
+    "source": str(source), "rules": rules, "rules_text": read(rules)}}))
+blind = "allow-all" in read(rules) or "ignore-all" in read(source / ".gitleaksignore")
+findings = [
+    {{"RuleID": "fake-secret", "File": path.relative_to(source).as_posix(), "Commit": "",
+      "Secret": "REDACTED" if "--redact" in args else "{secret}"}}
+    for path in ([] if blind else sorted(source.rglob("*")))
+    if path.is_file() and "allowlisted" not in path.name
+    and "{secret}" in path.read_bytes().decode("utf-8", "replace")
+]
 Path(report).write_text(json.dumps(findings))
 print("INF scan completed", file=sys.stderr)
 sys.exit(1 if findings else 0)

@@ -634,14 +634,22 @@ the job's own settings: attributes read from `HEAD` (`GIT_ATTR_SOURCE=HEAD`), re
 
 **The secret scan.** The `gitleaks` on `PATH`: the `PATH` every git of the job gets, its relative
 entries dropped, looked up once per job. pre-commit's build is not read, nor any other a session's
-environment names, and the job never downloads or builds one. Rules and ignores come from `HEAD`: a `.gitleaks.toml` in the
-working tree is never read, and a `.gitleaksignore` at the overlay's root that differs from the
-committed one stops the scan, since gitleaks reads that one whatever it is told. Every `git`
-gitleaks starts is given `color.ui`, `color.diff` and `log.showSignature` off, since its parser
-reads their patch text. With no `gitleaks` there, nothing is committed or pushed (`scan_unavailable`) and the remedy is to
-install gitleaks on the `PATH` the sessions run with; what is already committed upstream still
-integrates. A finding stops
-the push (`secret_found`) and names the commit.
+environment names, and the job never downloads or builds one. It scans bytes alone, under neutral
+names: before the commit, the working-tree bytes of each note to be committed; before the push,
+every blob the range adds or changes and each commit's metadata (the commit object whole, every
+header and the message, and its path names), read raw by one `git cat-file --batch`, so no
+attribute, filter or `textconv` stands between git's bytes and the scan. Each is written as a file
+named `1`, `2`, ... in the job's `scratch/` and scanned there by `gitleaks dir`, so no name of a note
+reaches gitleaks. The rules are the `.gitleaks.toml` `HEAD` commits, else gitleaks' own defaults
+(`[extend] useDefault = true`); a `.gitleaks.toml` in the working tree is never read. What no longer
+applies: a path allowlist, the defaults' own included, so a note named like `gitleaks.toml-tips.md`
+or under a `node_modules` directory is scanned like any other; and a `.gitleaksignore`, committed
+or not, since its fingerprints name paths the scan never shows. A committed rule set's content
+allowlists (regexes and stopwords) still apply. With no `gitleaks` there, nothing is committed or
+pushed (`scan_unavailable`) and the remedy is to install gitleaks on the `PATH` the sessions run
+with; what is already committed upstream still integrates. A finding stops the push
+(`secret_found`): its detail opens with the rewrite from the oldest commit found, then names each
+finding's rule, commit and path.
 
 **Writes.** In the data directory, `$HOME/.local/share/stayfixed/sync/`: `state.json` (the last
 outcome, the holds, the fetched sha and a digest of the dirty notes, written in one step), `job.lock` and `sleeper.lock` (held

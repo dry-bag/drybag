@@ -9,7 +9,7 @@ plain, non-executable file: a link (120000), an embedded repository (160000) or 
 And only while it is a note: a name ending in `.md` with no component from the group's or
 project's name down that is empty or starts with "." (no `.claude/skills/...`, no
 `.gitattributes`, no project called `..`), and text to git, since a note `git diff --numstat` calls
-binary is one the scanner never reads.
+binary is one no diff of it shows.
 
 A commit is memory-only when it lists at least one path and every path it lists is memory; renames
 are off, so moving `guard.py` into `common/memory/` lists `guard.py` too. A range is memory-only
@@ -138,13 +138,14 @@ DELETED_MODE = "000000"
 
 @dataclass(frozen=True)
 class RawEntry:
-    """One line of `--raw` output: the modes git recorded, the status letter and the path.
-    `binary` is set when `--numstat` printed "-\\t-" for it: git will not show its text."""
+    """One line of `--raw` output: the mode git recorded after the change, the status letter, the
+    path and the sha of the new side (zeros for a deletion). `binary` is set when `--numstat`
+    printed "-\\t-" for it: git will not show its text."""
 
-    old_mode: str
     new_mode: str
     status: str
     path: str
+    blob: str
     binary: bool = False
 
 
@@ -172,7 +173,7 @@ def _entries(fields: list[str], start: int, what: str) -> tuple[list[RawEntry], 
         path = fields[index + 1] if index + 1 < len(fields) else ""
         if len(meta) != 5 or not path:
             raise GitError(f"{what}: not a --raw line: {fields[index]!r}")
-        entries.append(RawEntry(meta[0], meta[1], meta[4], path))
+        entries.append(RawEntry(meta[1], meta[4], path, meta[3]))
         index += 2
     binary: set[str] = set()
     while index < len(fields) and fields[index] != "":
@@ -333,8 +334,10 @@ def range_is_memory_only(
     *,
     timeout: float = LOCAL_TIMEOUT,
     env: Mapping[str, str] | None = None,
+    commits: list[tuple[str, list[RawEntry]]] | None = None,
 ) -> tuple[bool, list[str]]:
-    """Whether `base..tip` may move automatically, and what stops it if not.
+    """Whether `base..tip` may move automatically, and what stops it if not; `commits` is the
+    range as `commit_entries` lists it, when the caller has listed it already.
 
     The offending list holds every path any commit changes that may not move (`entry_offends`),
     the sha of every commit that lists no path (a merge, an empty commit), and every such path of
@@ -349,9 +352,9 @@ def range_is_memory_only(
         if item not in offending:
             offending.append(item)
 
-    for sha, entries in commit_entries(
-        repo, f"{base}..{tip}", timeout=left(deadline, what), env=env
-    ):
+    if commits is None:
+        commits = commit_entries(repo, f"{base}..{tip}", timeout=left(deadline, what), env=env)
+    for sha, entries in commits:
         if not entries:
             offend(sha)
         for entry in entries:
