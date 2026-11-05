@@ -1861,7 +1861,7 @@ It exits `2` on a refusal, in the order the run meets them:
 - A `memory.groups` entry that leaves this project's share of the overlay.
 - The overlay's record of this project, where it is there and cannot be read, is not UTF-8 or is
   not valid TOML (a merge's conflict markers, when two machines first attached the project), or
-  its `tags` is not a list of strings: the record could not say which tags it lists, and a run
+  its `tags` is not a list: the record could not say which tags it lists, and a run
   that read that as none would take back what they delivered. The refusal names the file, and
   `--check` refuses it too. A session reads it as no tags and says so. A record that is absent,
   as before a first attach, is no refusal.
@@ -2465,7 +2465,7 @@ nothing.
 | drift | the overlay's hooks, skills or agents changed since the last render | `warn` | `attach`, which renders the overlay as it is now |
 | overlay unreadable | the overlay's executable parts could not be read | `warn` | `attach --check`, which says why |
 | `origin` moved | this checkout's `origin` is not the one the binding was recorded with | `warn` | `attach`, which records the new one |
-| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting a tag may set (the later tag wins), a listed tag is not a usable name or has no `groups/<tag>/` directory, or a directory of the project's `memory/` starts with `tag-` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | in the overlay, fix each tag, record or directory a note names; for a name two tags hold, rename one of them or reorder `tags` in the project's `project.toml` |
+| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting a tag may set (the later tag wins), a listed tag is not a usable name, is not a string, or has no `groups/<tag>/` directory (each said once, however often it is listed), or a directory of the project's `memory/` starts with `tag-` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | in the overlay, fix each tag, record or directory a note names; for a name two tags hold, rename one of them or reorder `tags` in the project's `project.toml` |
 
 **How `attached` reads the memory pointer.** Where `memory.mode` is `overlay`, the row reads
 `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json`, which Claude Code reads

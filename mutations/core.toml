@@ -5860,6 +5860,27 @@ reddens = [
   "tests/config/test_plates.py::test_plates_are_common_then_tags_in_list_order_then_the_project",
 ]
 
+# An entry of `tags` that is not a string is a note like an ungrammatical name: it must not make the
+# record unreadable, which refuses `attach` and drops the other tags.
+[[mutation]]
+name = "a tags entry that is not a string makes the record unreadable"
+file = "src/stayfixed/config/plates.py"
+before = "    if not isinstance(listed, list):\n        return [], NOT_A_LIST"
+after = "    if not isinstance(listed, list) or not all(isinstance(tag, str) for tag in listed):\n        return [], NOT_A_LIST"
+reddens = [
+  "tests/config/test_plates.py::test_an_entry_that_is_not_a_string_is_a_note_naming_its_position",
+  "tests/attach/test_write.py::test_a_tag_entry_that_is_not_a_string_is_a_note_and_attach_goes_on",
+]
+
+[[mutation]]
+name = "an unusable tag listed twice is noted twice"
+file = "src/stayfixed/config/plates.py"
+before = "        if tag in seen:\n            continue\n        seen.add(tag)\n"
+after = "        if tag in usable:\n            continue\n"
+reddens = [
+  "tests/config/test_plates.py::test_an_unusable_tag_listed_twice_is_noted_once",
+]
+
 # A checkout this machine binds, with no stayfixed.toml, gets the configuration of the project the
 # binding record names (`bound_config`): with none, `attached`, the note store and every memory
 # command said nothing of a delivery and a composed store that were in place.

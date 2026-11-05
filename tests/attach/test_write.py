@@ -2746,6 +2746,16 @@ def test_an_unreadable_project_record_stops_attach_with_nothing_written(tmp_path
     assert "Bash(x)" in _allowed(root)
 
 
+def test_a_tag_entry_that_is_not_a_string_is_a_note_and_attach_goes_on(tmp_path: Path) -> None:
+    # `tags = ["a", 1]` keeps `a`: the entry is skipped like an ungrammatical name, and the run has
+    # no unreadable record to refuse on.
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    (store.parent / PROJECT_RECORD).write_text('tags = ["a", 1]\n', encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE, "Bash(x)"]
+
+
 def test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it(
     tmp_path: Path,
 ) -> None:

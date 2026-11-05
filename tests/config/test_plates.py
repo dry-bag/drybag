@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from stayfixed.config.plates import (
     GROUPS,
     PROJECTS,
@@ -18,6 +16,7 @@ from stayfixed.config.plates import (
     Plate,
     PlateKind,
     plates,
+    record_fault,
     tags,
 )
 from stayfixed.printed import quoted
@@ -110,12 +109,28 @@ def test_a_tag_that_links_to_a_directory_is_a_directory(tmp_path: Path) -> None:
     assert tags(root, PROJECT) == (("linked",), ())
 
 
-@pytest.mark.parametrize("record", ['tags = "a"\n', "tags = [1]\n", 'tags = ["a", 1]\n'])
-def test_tags_that_are_not_a_list_of_strings_are_a_note(tmp_path: Path, record: str) -> None:
-    root = overlay(tmp_path, record, "a")
+def test_tags_that_are_not_a_list_are_a_note(tmp_path: Path) -> None:
+    root = overlay(tmp_path, 'tags = "a"\n', "a")
     used, notes = tags(root, PROJECT)
     assert used == ()
     assert len(notes) == 1 and record_path(root) in notes[0]
+    assert record_fault(root, PROJECT) == notes[0]
+
+
+def test_an_entry_that_is_not_a_string_is_a_note_naming_its_position(tmp_path: Path) -> None:
+    # Like an ungrammatical name: skipped alone, the others still count, and `attach` has no
+    # record fault to refuse on.
+    root = overlay(tmp_path, 'tags = ["ops", 1]\n', "ops")
+    used, notes = tags(root, PROJECT)
+    assert used == ("ops",)
+    assert len(notes) == 1 and record_path(root) in notes[0] and "2" in notes[0]
+    assert record_fault(root, PROJECT) is None
+
+
+def test_an_unusable_tag_listed_twice_is_noted_once(tmp_path: Path) -> None:
+    root = overlay(tmp_path, 'tags = ["Bad", "Bad", "gone", "gone"]\n')
+    used, notes = tags(root, PROJECT)
+    assert used == () and len(notes) == 2
 
 
 def test_an_unparseable_record_gives_no_tags_and_a_note(tmp_path: Path) -> None:
