@@ -31,8 +31,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
+from stayfixed import __version__
 from stayfixed.config.paths import PathEscape, contained
-from stayfixed.config.schema import Config
 from stayfixed.errors import Refusal
 from stayfixed.fsops import (
     UnsafePath,
@@ -100,12 +100,9 @@ def _present_stamp(template: Template, current: str) -> str | None:
     return current
 
 
-def plan(
-    root: Path,
-    config: Config,
-    templates: Sequence[Template],
-) -> Plan:
-    """What applying `templates` under `config` would do, decided and not yet written."""
+def plan(root: Path, templates: Sequence[Template]) -> Plan:
+    """What applying `templates` would do, decided and not yet written. A record is stamped with
+    the running stayfixed's version."""
     manifest = Manifest.read(root)
     resolved_root = root.resolve()
     actions: list[Action] = []
@@ -166,7 +163,7 @@ def plan(
                 location=Location.REPO,
                 target=target,
                 template=template.source,
-                version=config.stayfixed.version,
+                version=__version__,
                 sha256=digest(stamp),
             )
             if current is None:

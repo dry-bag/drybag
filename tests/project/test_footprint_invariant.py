@@ -264,7 +264,7 @@ def _assert_invariant(
     document = read_document(root) or ""
     config = load(root, machine=tmp_path / "absent.toml")
     try:
-        planned = plan(root, config, project_templates(config, document=document).footprint)
+        planned = plan(root, project_templates(config, document=document).footprint)
     except Refusal as refused:
         pytest.fail(f"I3: planning again after a finished init refused: {refused}")
     # A whole file stayfixed did not write is skipped and named on every run, by design.

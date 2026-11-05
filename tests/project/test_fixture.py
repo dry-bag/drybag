@@ -57,8 +57,8 @@ def test_the_smoke_fixture_is_a_project_init_has_nothing_left_to_create_in(tmp_p
     config = load(root, machine=tmp_path / "absent.toml")
     document = (root / CONFIG_FILE).read_text(encoding="utf-8")
     prepared = project_templates(config, document=document)
-    once = plan(root, config, prepared.once)
-    footprint = plan(root, config, prepared.footprint)
+    once = plan(root, prepared.once)
+    footprint = plan(root, prepared.footprint)
     # The walk is stated non-empty first: an empty artifact list would satisfy both assertions
     # below while proving nothing about the fixture at all.
     assert len(prepared.once) + len(prepared.footprint) >= 5
@@ -95,7 +95,7 @@ def test_every_recorded_footprint_artifact_follows_a_template_change(tmp_path: P
 
     recorded = [changed(t) for t in prepared.footprint if t.id in records]
     assert len(recorded) >= 1
-    footprint = plan(root, config, recorded)
+    footprint = plan(root, recorded)
     assert {a.artifact_id: a.reason for a in footprint.actions} == {
         t.id: "refreshed" for t in recorded
     }

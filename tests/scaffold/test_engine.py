@@ -10,9 +10,7 @@ from pathlib import Path
 import pytest
 
 from stayfixed import fsops
-from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.paths import PathEscape
-from stayfixed.config.schema import Config
 from stayfixed.errors import Refusal
 from stayfixed.scaffold import engine
 from stayfixed.scaffold.engine import apply, plan
@@ -26,21 +24,6 @@ from stayfixed.scaffold.manifest import (
 )
 from stayfixed.scaffold.model import Action, Plan, Template, Verb
 from stayfixed.scaffold.regions import Style, upsert
-
-CONFIG = """
-[stayfixed]
-version = "0.1.0"
-preset = "recommended"
-
-[project]
-name = "widget"
-base_branch = "main"
-"""
-
-
-def a_config(tmp_path: Path) -> Config:
-    (tmp_path / CONFIG_FILE).write_text(CONFIG, encoding="utf-8")
-    return load(tmp_path, machine=tmp_path / "absent.toml")
 
 
 def a_template(**overrides: object) -> Template:
@@ -72,7 +55,7 @@ def a_record(**overrides: object) -> Record:
 
 
 def test_an_unrecorded_absent_file_is_created(tmp_path: Path) -> None:
-    result = plan(tmp_path, a_config(tmp_path), [a_template()])
+    result = plan(tmp_path, [a_template()])
     assert [(a.verb, a.target, a.payload) for a in result.actions] == [
         (Verb.CREATE, "AGENTS.md", "BODY\n")
     ]
@@ -80,14 +63,14 @@ def test_an_unrecorded_absent_file_is_created(tmp_path: Path) -> None:
 
 def test_an_unrecorded_present_file_is_never_clobbered(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("someone wrote this\n", encoding="utf-8")
-    result = plan(tmp_path, a_config(tmp_path), [a_template()])
+    result = plan(tmp_path, [a_template()])
     assert [a.verb for a in result.actions] == [Verb.SKIP_MODIFIED]
 
 
 def test_a_recorded_unchanged_file_yields_no_action(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
     Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template()])
+    result = plan(tmp_path, [a_template()])
     assert result.actions == ()
     assert result.unchanged == ("agents-md",)
 
@@ -95,14 +78,14 @@ def test_a_recorded_unchanged_file_yields_no_action(tmp_path: Path) -> None:
 def test_a_recorded_file_the_tool_wrote_is_updated(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
     Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(render=lambda: "NEWER\n")])
+    result = plan(tmp_path, [a_template(render=lambda: "NEWER\n")])
     assert [(a.verb, a.payload) for a in result.actions] == [(Verb.UPDATE, "NEWER\n")]
 
 
 def test_a_hand_edited_file_is_skipped_and_named(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("edited by hand\n", encoding="utf-8")
     Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(render=lambda: "NEWER\n")])
+    result = plan(tmp_path, [a_template(render=lambda: "NEWER\n")])
     assert [(a.verb, a.target) for a in result.actions] == [(Verb.SKIP_MODIFIED, "AGENTS.md")]
 
 
@@ -113,7 +96,7 @@ def test_a_once_artifact_is_never_updated(tmp_path: Path) -> None:
     # yours", which is the statement that is true.
     (tmp_path / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
     template = a_template(id="claude-md", kind=Kind.ONCE, target="CLAUDE.md")
-    result = plan(tmp_path, a_config(tmp_path), [template])
+    result = plan(tmp_path, [template])
     assert [(a.verb, a.target) for a in result.actions] == [(Verb.SKIP_MODIFIED, "CLAUDE.md")]
     assert result.unchanged == ()
     before = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
@@ -127,8 +110,7 @@ def test_a_manifest_naming_a_target_outside_the_root_plans_nothing_for_it(tmp_pa
     root.mkdir()
     (tmp_path / "outside.md").write_text("BODY\n", encoding="utf-8")
     Manifest({}).with_record(a_record(target="../outside.md")).write(root)
-    config = a_config(root)
-    result = plan(root, config, [a_template()])
+    result = plan(root, [a_template()])
     # Said out loud, not silent. The file is still not touched — that is the property — but a
     # record naming a file stayfixed will not remove is something the report has to carry, or
     # the artifact is created at its new target with the old one left on disk and nothing said.
@@ -151,7 +133,7 @@ def test_a_recorded_target_this_template_could_never_produce_is_not_a_relocation
     settings.write_text(before, encoding="utf-8")
     record = a_record(target=".claude/settings.json", sha256=digest(before))
     Manifest({}).with_record(record).write(tmp_path)
-    planned = plan(tmp_path, a_config(tmp_path), [a_template()])
+    planned = plan(tmp_path, [a_template()])
     assert [(a.verb, a.target) for a in planned.actions] == [
         (Verb.SKIP_MODIFIED, ".claude/settings.json"),
         (Verb.CREATE, "AGENTS.md"),
@@ -167,7 +149,7 @@ def test_a_recorded_target_this_template_could_never_produce_is_not_a_relocation
 def test_a_managed_region_is_installed_into_a_file_no_record_covers(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("PROSE\n", encoding="utf-8")
     template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    first = plan(tmp_path, a_config(tmp_path), [template])
+    first = plan(tmp_path, [template])
     assert first.actions[0].verb is Verb.REGION_UPDATE
     assert first.actions[0].payload is not None
     assert first.actions[0].payload.startswith("PROSE\n")
@@ -181,7 +163,7 @@ def test_a_region_already_current_yields_no_action(tmp_path: Path) -> None:
         tmp_path
     )
     template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    assert plan(tmp_path, a_config(tmp_path), [template]).actions == ()
+    assert plan(tmp_path, [template]).actions == ()
 
 
 def test_prose_around_a_region_may_change_without_reading_as_a_hand_edit(tmp_path: Path) -> None:
@@ -191,9 +173,7 @@ def test_prose_around_a_region_may_change_without_reading_as_a_hand_edit(tmp_pat
         tmp_path
     )
     template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R2")
-    assert [a.verb for a in plan(tmp_path, a_config(tmp_path), [template]).actions] == [
-        Verb.REGION_UPDATE
-    ]
+    assert [a.verb for a in plan(tmp_path, [template]).actions] == [Verb.REGION_UPDATE]
 
 
 def test_a_hand_edited_region_body_is_skipped(tmp_path: Path) -> None:
@@ -203,9 +183,7 @@ def test_a_hand_edited_region_body_is_skipped(tmp_path: Path) -> None:
         tmp_path
     )
     template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R2")
-    assert [a.verb for a in plan(tmp_path, a_config(tmp_path), [template]).actions] == [
-        Verb.SKIP_MODIFIED
-    ]
+    assert [a.verb for a in plan(tmp_path, [template]).actions] == [Verb.SKIP_MODIFIED]
 
 
 # --- refusals ------------------------------------------------------------------------------
@@ -213,7 +191,7 @@ def test_a_hand_edited_region_body_is_skipped(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("target", ["../outside.md", "/etc/stayfixed.md", "docs/../../x.md", ""])
 def test_an_escaping_target_is_refused_not_planned(tmp_path: Path, target: str) -> None:
-    result = plan(tmp_path, a_config(tmp_path), [a_template(target=target)])
+    result = plan(tmp_path, [a_template(target=target)])
     assert result.actions == ()
     assert [r.artifact_id for r in result.refusals] == ["agents-md"]
 
@@ -221,7 +199,6 @@ def test_an_escaping_target_is_refused_not_planned(tmp_path: Path, target: str) 
 def test_one_refused_template_does_not_hide_the_others(tmp_path: Path) -> None:
     result = plan(
         tmp_path,
-        a_config(tmp_path),
         [a_template(id="bad", target="../x"), a_template(id="good", target="GOOD.md")],
     )
     assert [a.artifact_id for a in result.actions] == ["good"]
@@ -232,7 +209,6 @@ def test_an_unreadable_file_refuses_only_its_own_artifact(tmp_path: Path) -> Non
     (tmp_path / "AGENTS.md").write_bytes(b"\xff\xfe not utf-8 \xff")
     result = plan(
         tmp_path,
-        a_config(tmp_path),
         [a_template(), a_template(id="good", target="GOOD.md")],
     )
     assert [a.artifact_id for a in result.actions] == ["good"]
@@ -248,9 +224,8 @@ def test_a_file_past_the_read_cap_refuses_only_its_own_artifact(
     # `mutations/`'s "the scaffold engine reads an artifact's file with no bound" -> it is read.
     limit = 4 * 1024
     (tmp_path / "AGENTS.md").write_text("BODY\n" + "#" * limit, encoding="utf-8")
-    config = a_config(tmp_path)
     monkeypatch.setattr(fsops, "REGULAR_READ_LIMIT", limit)
-    result = plan(tmp_path, config, [a_template(), a_template(id="good", target="GOOD.md")])
+    result = plan(tmp_path, [a_template(), a_template(id="good", target="GOOD.md")])
     assert [a.artifact_id for a in result.actions] == ["good"]
     assert [r.artifact_id for r in result.refusals] == ["agents-md"]
     assert "larger than this reader reads" in result.refusals[0].reason
@@ -281,7 +256,7 @@ def test_an_unreadable_artifact_is_named_relative_to_the_project_with_the_reason
         agents.write_text("#" * 8 * 1024, encoding="utf-8")
     else:
         agents.write_bytes(b"\xff\xfe not utf-8 \xff")
-    result = plan(tmp_path, a_config(tmp_path), [a_template()])
+    result = plan(tmp_path, [a_template()])
     assert [r.reason for r in result.refusals] == [reason]
 
 
@@ -292,20 +267,17 @@ def test_a_fifo_at_an_artifacts_place_is_its_refusal_and_never_waited_on(tmp_pat
     # a child under a timeout, so a regression fails this case rather than hanging. Mutation
     # (oracle): `mutations/`'s "the scaffold engine reads an artifact's file with no bound" -> the
     # child waits and this times out.
-    a_config(tmp_path)
     os.mkfifo(tmp_path / "AGENTS.md")
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed.config.loader import load\n"
         "from stayfixed.scaffold.engine import plan\n"
         "from stayfixed.scaffold.manifest import Kind\n"
         "from stayfixed.scaffold.model import Template\n"
         "root = Path(sys.argv[1])\n"
         "template = Template(id='agents-md', kind=Kind.TEMPLATE, target='AGENTS.md',\n"
         "    source='project/AGENTS.md', render=lambda: 'BODY\\n')\n"
-        "config = load(root, machine=root / 'absent.toml')\n"
-        "print([r.artifact_id for r in plan(root, config, [template]).refusals])\n"
+        "print([r.artifact_id for r in plan(root, [template]).refusals])\n"
     )
     try:
         done = subprocess.run(
@@ -332,7 +304,6 @@ def test_a_doubled_region_marker_refuses_only_its_own_artifact(tmp_path: Path) -
     )
     result = plan(
         tmp_path,
-        a_config(tmp_path),
         [
             a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1"),
             a_template(id="good", target="GOOD.md"),
@@ -349,7 +320,7 @@ def test_a_template_naming_no_region_raises_rather_than_becoming_a_refusal(tmp_p
     template = a_template(kind=Kind.MANAGED_REGION, region=None, render=lambda: "R1")
     (tmp_path / "AGENTS.md").write_text("PROSE\n", encoding="utf-8")
     with pytest.raises(Refusal, match="names no region"):
-        plan(tmp_path, a_config(tmp_path), [template])
+        plan(tmp_path, [template])
 
 
 def test_a_file_carrying_only_a_region_end_marker_is_refused_and_left_alone(
@@ -361,7 +332,7 @@ def test_a_file_carrying_only_a_region_end_marker_is_refused_and_left_alone(
     before = "Prose.\n<!-- stayfixed:harness:end -->\n"
     (tmp_path / "AGENTS.md").write_text(before, encoding="utf-8")
     template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    first = plan(tmp_path, a_config(tmp_path), [template])
+    first = plan(tmp_path, [template])
     assert first.actions == ()
     assert [(r.artifact_id, "no beginning" in r.reason) for r in first.refusals] == [
         ("agents-md", True)
@@ -375,16 +346,14 @@ def test_a_file_carrying_only_a_region_end_marker_is_refused_and_left_alone(
 
 
 def test_apply_writes_the_payload_and_records_it(tmp_path: Path) -> None:
-    config = a_config(tmp_path)
-    result = apply(tmp_path, plan(tmp_path, config, [a_template()]))
+    result = apply(tmp_path, plan(tmp_path, [a_template()]))
     assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "BODY\n"
     assert result.written == ("AGENTS.md",)
     assert Manifest.read(tmp_path).get("agents-md") is not None
 
 
 def test_apply_refuses_a_plan_carrying_a_refusal(tmp_path: Path) -> None:
-    config = a_config(tmp_path)
-    planned = plan(tmp_path, config, [a_template(target="../outside.md")])
+    planned = plan(tmp_path, [a_template(target="../outside.md")])
     with pytest.raises(Refusal, match="refused"):
         apply(tmp_path, planned)
 
@@ -392,9 +361,8 @@ def test_apply_refuses_a_plan_carrying_a_refusal(tmp_path: Path) -> None:
 def test_a_symlink_planted_between_plan_and_apply_is_refused(tmp_path: Path) -> None:
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.mkdir()
-    config = a_config(tmp_path)
     (tmp_path / "docs").mkdir()
-    planned = plan(tmp_path, config, [a_template(target="docs/AGENTS.md")])
+    planned = plan(tmp_path, [a_template(target="docs/AGENTS.md")])
     (tmp_path / "docs").rmdir()
     (tmp_path / "docs").symlink_to(outside, target_is_directory=True)
     with pytest.raises(Refusal):
@@ -432,29 +400,25 @@ def test_the_write_refuses_a_symlinked_parent_containment_never_saw(tmp_path: Pa
 
 def test_a_skipped_artifact_is_reported_and_not_written(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("mine\n", encoding="utf-8")
-    config = a_config(tmp_path)
-    result = apply(tmp_path, plan(tmp_path, config, [a_template()]))
+    result = apply(tmp_path, plan(tmp_path, [a_template()]))
     assert result.skipped == ("AGENTS.md",)
     assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "mine\n"
 
 
 def test_no_temporary_file_survives_a_write(tmp_path: Path) -> None:
-    config = a_config(tmp_path)
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    assert sorted(p.name for p in tmp_path.iterdir()) == [".stayfixed", "AGENTS.md", CONFIG_FILE]
+    apply(tmp_path, plan(tmp_path, [a_template()]))
+    assert sorted(p.name for p in tmp_path.iterdir()) == [".stayfixed", "AGENTS.md"]
 
 
 def test_an_updated_file_keeps_the_mode_it_had(tmp_path: Path) -> None:
-    config = a_config(tmp_path)
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
+    apply(tmp_path, plan(tmp_path, [a_template()]))
     os.chmod(tmp_path / "AGENTS.md", 0o664)
-    apply(tmp_path, plan(tmp_path, config, [a_template(render=lambda: "NEWER\n")]))
+    apply(tmp_path, plan(tmp_path, [a_template(render=lambda: "NEWER\n")]))
     assert stat.S_IMODE((tmp_path / "AGENTS.md").stat().st_mode) == 0o664
 
 
 def test_a_created_file_is_readable_by_more_than_its_owner(tmp_path: Path) -> None:
-    config = a_config(tmp_path)
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
+    apply(tmp_path, plan(tmp_path, [a_template()]))
     assert stat.S_IMODE((tmp_path / "AGENTS.md").stat().st_mode) == 0o644
 
 
@@ -468,9 +432,8 @@ def test_a_committed_symlink_at_dot_stayfixed_refuses_before_anything_is_written
     victim = tmp_path / "victim"
     victim.mkdir()
     (root / ".stayfixed").symlink_to(victim, target_is_directory=True)
-    config = a_config(root)
     with pytest.raises(PathEscape, match="symlink"):
-        plan(root, config, [a_template()])
+        plan(root, [a_template()])
     assert list(victim.iterdir()) == []
     assert not (root / "AGENTS.md").exists()
 
@@ -482,8 +445,7 @@ def test_dot_stayfixed_symlinked_after_the_plan_makes_apply_refuse(tmp_path: Pat
     root.mkdir()
     victim = tmp_path / "victim"
     victim.mkdir()
-    config = a_config(root)
-    planned = plan(root, config, [a_template()])
+    planned = plan(root, [a_template()])
     (root / ".stayfixed").symlink_to(victim, target_is_directory=True)
     with pytest.raises(PathEscape, match="symlink"):
         apply(root, planned)
@@ -497,8 +459,7 @@ def test_a_file_where_a_directory_belongs_refuses_rather_than_raising_oserror(
     # No race and no symlink: the user saves a file at `docs` while reading the dry-run report,
     # then confirms. A bare `OSError` here reaches the CLI as a traceback instead of the exit 2
     # a refusal is for.
-    config = a_config(tmp_path)
-    planned = plan(tmp_path, config, [a_template(id="doc", target="docs/README.md")])
+    planned = plan(tmp_path, [a_template(id="doc", target="docs/README.md")])
     (tmp_path / "docs").write_text("a file the user just saved\n", encoding="utf-8")
     with pytest.raises(Refusal):
         apply(tmp_path, planned)
@@ -530,7 +491,7 @@ def test_crlf_endings_outside_a_managed_region_survive_plan_and_apply(tmp_path: 
     before = b"# Title\r\n\r\nProse the tool must never touch.\r\n"
     (tmp_path / "AGENTS.md").write_bytes(before)
     template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    apply(tmp_path, plan(tmp_path, a_config(tmp_path), [template]))
+    apply(tmp_path, plan(tmp_path, [template]))
     assert (tmp_path / "AGENTS.md").read_bytes() == before + (
         b"<!-- stayfixed:harness:begin -->\r\nR1\r\n<!-- stayfixed:harness:end -->\r\n"
     )
@@ -543,11 +504,9 @@ def test_apply_records_the_files_it_wrote_before_a_later_action_refused(tmp_path
     # invisible to `uninstall`.
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.mkdir()
-    config = a_config(tmp_path)
     (tmp_path / "docs").mkdir()
     planned = plan(
         tmp_path,
-        config,
         [
             a_template(id="first", target="A.md", render=lambda: "A\n"),
             a_template(id="second", target="docs/B.md", render=lambda: "B\n"),
@@ -566,8 +525,7 @@ def test_apply_records_the_files_it_wrote_before_a_later_action_refused(tmp_path
 def test_a_plan_carrying_a_refusal_creates_no_manifest_at_all(tmp_path: Path) -> None:
     # The boundary of persisting progress. `apply` refuses a plan carrying a refusal before it
     # reaches the first action, so there is nothing on disk to record and no ledger to create.
-    config = a_config(tmp_path)
-    planned = plan(tmp_path, config, [a_template(target="../outside.md")])
+    planned = plan(tmp_path, [a_template(target="../outside.md")])
     with pytest.raises(Refusal, match="refused"):
         apply(tmp_path, planned)
     assert not (tmp_path / MANIFEST_PATH).exists()
@@ -604,9 +562,8 @@ def test_a_record_at_a_case_variant_of_the_target_is_that_file_and_never_a_reloc
     # record. Asserted on the plan, which is the same string rule on every filesystem.
     # Mutation (oracle): `mutations/`'s "a record at a case variant of the target triggers a
     # relocation" -> the plan holds a `skip_modified` for `agents.md` and this reddens.
-    config = a_config(tmp_path)
     (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
     Manifest({}).with_record(a_record(target="agents.md")).write(tmp_path)
-    planned = plan(tmp_path, config, [a_template()])
+    planned = plan(tmp_path, [a_template()])
     assert planned.actions == ()
     assert planned.unchanged == ("agents-md",)

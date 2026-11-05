@@ -335,8 +335,8 @@ def init(
         # every `[stayfixed]` key it does not carry over, and detects a name the file may lack.
         loads(on_disk, root, machine=machine, owner=owner)
     prepared = project_templates(config, document=document)
-    once = plan(root, config, prepared.once)
-    footprint = plan(root, config, prepared.footprint)
+    once = plan(root, prepared.once)
+    footprint = plan(root, prepared.footprint)
     report = InitReport(
         once,
         footprint,

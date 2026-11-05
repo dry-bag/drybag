@@ -687,16 +687,11 @@ def _holding(table: dict[str, Any], dotted: str) -> tuple[dict[str, Any], str] |
 
 def preset_defaults(project: str, *, preset: str = DEFAULT_PRESET) -> Config:
     """A `Config` built from a preset's `[defaults.*]` alone, for a directory that has no
-    `stayfixed.toml` and never will.
+    `stayfixed.toml`: `init --questions` reads its defaults from it before the file it would load
+    exists, and `session.command_config` builds one for a caller that names the project itself.
 
-    The overlay is a repository stayfixed writes into and does not manage: it has no project
-    configuration, and the scaffold engine needs one (it reads `stayfixed.version` and nothing
-    else). `init --questions` reads its defaults from it too, before the file it would load
-    exists.
-
-    `stayfixed.version` is the one value the preset does not carry and `_build` requires: the
-    engine stamps it into every manifest `Record`, so it comes from `stayfixed.__version__`
-    rather than from a default that would record an empty string.
+    `stayfixed.version` is the one value the preset does not carry and `_build` requires, so it
+    comes from `stayfixed.__version__` rather than from a default that would hold an empty string.
 
     `validate_paths` is deliberately not called. It is about a project root this caller does
     not have, and the `[paths]` values it would check are the preset's own defaults pointing at

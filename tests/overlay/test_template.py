@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from stayfixed import __version__
-from stayfixed.config.loader import preset_defaults
 from stayfixed.hooks.api import EVENTS
 from stayfixed.overlay.identity import NO_RECORD, NOT_A_RECORD, overlay_fault
 from stayfixed.overlay.layout import IDENTITY_RECORD, OVERLAY_FILES
@@ -309,7 +308,7 @@ def test_the_templates_plan_cleanly_into_an_empty_directory(tmp_path: Path) -> N
 
     # The overlay writes through the scaffold engine like every other area, which is what makes
     # `overlay upgrade` the engine's hash-and-skip rule rather than a second implementation of it.
-    planned = plan(tmp_path, preset_defaults("stayfixed-private"), templates())
+    planned = plan(tmp_path, templates())
     assert planned.refusals == ()
     assert len(planned.actions) == len(OVERLAY_FILES)
     apply(tmp_path, planned)
@@ -321,7 +320,7 @@ def test_the_manifest_records_a_comparable_version(tmp_path: Path) -> None:
 
     # `[defaults.stayfixed]` carries no `version`, and the engine stamps one into every Record.
     # A record written with "" is a record `upgrade` and `doctor` can never compare against.
-    apply(tmp_path, plan(tmp_path, preset_defaults("stayfixed-private"), templates()))
+    apply(tmp_path, plan(tmp_path, templates()))
     records = Manifest.read(tmp_path).records
     assert records and {record.version for record in records.values()} == {__version__}
 

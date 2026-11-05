@@ -19,19 +19,8 @@ from typing import Any
 
 import pytest
 
-from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.scaffold import Kind, Style, Template, apply, plan
 from stayfixed.scaffold.manifest import MANIFEST_PATH
-
-CONFIG = """
-[stayfixed]
-version = "0.1.0"
-preset = "recommended"
-
-[project]
-name = "widget"
-base_branch = "main"
-"""
 
 WRITING_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
 
@@ -141,7 +130,6 @@ def templates() -> list[Template]:
 def a_project(tmp_path: Path) -> Path:
     root = tmp_path / "project"
     root.mkdir()
-    (root / CONFIG_FILE).write_text(CONFIG, encoding="utf-8")
     return root
 
 
@@ -151,8 +139,7 @@ def test_apply_touches_exactly_the_paths_the_plan_named(tmp_path: Path) -> None:
     (tmp_path / "sibling" / "untouched.txt").write_text("keep\n", encoding="utf-8")
 
     before = snapshot(tmp_path)
-    config = load(root, machine=tmp_path / "absent.toml")
-    planned = plan(root, config, templates())
+    planned = plan(root, templates())
     apply(root, planned)
     after = snapshot(tmp_path)
 
@@ -170,8 +157,7 @@ def test_no_absolute_path_outside_the_project_root_is_opened_for_writing(
     tmp_path: Path, trace: Trace
 ) -> None:
     root = a_project(tmp_path)
-    config = load(root, machine=tmp_path / "absent.toml")
-    apply(root, plan(root, config, templates()))
+    apply(root, plan(root, templates()))
     assert trace.outside(root) == []
 
 
