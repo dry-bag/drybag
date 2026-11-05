@@ -5893,11 +5893,8 @@ reddens = [
 [[mutation]]
 name = "owner-held files overwrite a present name"
 file = "src/stayfixed/fsops.py"
-before = '''    | os.O_EXCL
-    | os.O_NONBLOCK
-'''
-after = '''    | os.O_NONBLOCK
-'''
+before = "_CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC"
+after = "_CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_CLOEXEC"
 reddens = [
   "tests/test_fsops.py::test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link",
 ]
