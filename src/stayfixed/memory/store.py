@@ -50,7 +50,7 @@ about the whole module rather than about `resolve` alone.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -58,7 +58,7 @@ from stayfixed import fsops
 from stayfixed.binding import Bound, bound_project, short
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.paths import PathEscape, PathUnasked, contained, data_directory
-from stayfixed.config.plates import GROUPS, TAG_LINK_PREFIX, read_record, tags
+from stayfixed.config.plates import TAG_LINK_PREFIX, Plate, PlateKind, plates, read_record
 from stayfixed.config.reading import MachineConfigError
 from stayfixed.config.schema import HARNESS_MODE, LOCAL_ONLY_MODE, OVERLAY_MODE, Config
 from stayfixed.errors import Failure
@@ -381,18 +381,20 @@ def tag_link(tag: str) -> str:
     return TAG_LINK_PREFIX + tag
 
 
-def _tag_notes(overlay: Path, tag: str) -> Path:
-    return overlay / GROUPS / tag / STORE_DIR
+def project_notes(overlay: Path, project: str) -> Path:
+    """This project's own notes in the overlay, the last of `permitted_roots` and the one place it
+    puts new notes, which asks for no tag."""
+    return overlay / PROJECTS / project / STORE_DIR
+
+
+def _notes(held: Sequence[Plate]) -> tuple[Path, ...]:
+    return tuple(plate.directory / STORE_DIR for plate in held)
 
 
 def permitted_roots(overlay: Path, project: str) -> tuple[Path, ...]:
     """This project's whole share of the overlay: the common notes, the notes of each tag its
-    record lists (`config.plates.tags`, in list order) and its own, last."""
-    return (
-        overlay / COMMON,
-        *(_tag_notes(overlay, tag) for tag in tags(overlay, project)[0]),
-        overlay / PROJECTS / project / STORE_DIR,
-    )
+    record lists (`config.plates.plates`, in list order) and its own, last."""
+    return _notes(plates(overlay, project)[0])
 
 
 # The one group whose notes are not this project's, and `common/memory` *is* its store rather
@@ -430,8 +432,9 @@ def reserved_project_groups(overlay: Path, project: str) -> tuple[str, ...]:
         return ()
 
 
-def overlay_group_target(overlay: Path, project: str, group: str) -> Path:
-    """Where one group's notes live inside the overlay.
+def overlay_group_target(held: Sequence[Plate], group: str) -> Path:
+    """Where one group's notes live inside the overlay, among the plates `held`
+    (`config.plates.plates`, read once by the caller).
 
     A rule and deliberately not a probe over what happens to exist: a group directory that is
     not there yet is a first attach, not a reason to link somewhere else. `developer` is the
@@ -440,12 +443,12 @@ def overlay_group_target(overlay: Path, project: str, group: str) -> Path:
     checks the link against.
     """
     if group == COMMON_GROUP:
-        return overlay / COMMON
-    if group.startswith(TAG_LINK_PREFIX):
-        tag = group.removeprefix(TAG_LINK_PREFIX)
-        if tag in tags(overlay, project)[0]:
-            return _tag_notes(overlay, tag)
-    return overlay / PROJECTS / project / STORE_DIR / group
+        return held[0].directory / STORE_DIR
+    tag = group.removeprefix(TAG_LINK_PREFIX) if group.startswith(TAG_LINK_PREFIX) else None
+    for plate in held:
+        if plate.kind is PlateKind.TAG and plate.name == tag:
+            return plate.directory / STORE_DIR
+    return held[-1].directory / STORE_DIR / group
 
 
 def _declared(root: Path, config: Config) -> Path | Unresolved:
@@ -471,9 +474,9 @@ def _group_targets(base: Path, config: Config, overlay: Path | None) -> dict[str
     allowed: tuple[Path, ...] = ()
     linked: list[str] = []
     if overlay is not None:
-        project = config.project.name
-        allowed = permitted_roots(overlay, project)
-        linked = [tag_link(tag) for tag in tags(overlay, project)[0]]
+        held = plates(overlay, config.project.name)[0]
+        allowed = _notes(held)
+        linked = [tag_link(plate.name) for plate in held if plate.kind is PlateKind.TAG]
     # The tags' links last and in the project's list order (`walked_groups`).
     for group in [*config.memory.groups, *linked]:
         try:

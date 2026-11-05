@@ -37,7 +37,7 @@ from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.errors import Failure, Refusal
 from stayfixed.harnesses import HARNESSES, lenient_settings
 from stayfixed.jsonobject import json_object
-from stayfixed.memory.api import permitted_roots, promote_share
+from stayfixed.memory.api import project_notes, promote_share
 from stayfixed.printed import answered, clipped, quoted
 from stayfixed.runner import Completed, Runner
 
@@ -329,7 +329,7 @@ def restore(
             owner = command_owner(machine) if owner is None else owner
             attached = attach(
                 item.dir,
-                store=permitted_roots(overlay, item.name)[1],
+                store=project_notes(overlay, item.name),
                 machine=machine,
                 runner=runner,
                 owner=owner,

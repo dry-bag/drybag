@@ -23,7 +23,7 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         # the resolver and the store it yields, for attach
         "resolve",
         "Store",
-        "permitted_roots",
+        "project_notes",
         # the overlay's per-project layout: attach writes it, overlay renders it
         "PROJECTS",
         "PROJECT_RECORD",

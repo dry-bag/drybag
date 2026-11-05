@@ -3067,8 +3067,8 @@ reddens = [
 [[mutation]]
 name = "permitted roots leave out the tags' notes"
 file = "src/stayfixed/memory/store.py"
-before = "        *(_tag_notes(overlay, tag) for tag in tags(overlay, project)[0]),"
-after = "        *(_tag_notes(overlay, tag) for tag in ()),"
+before = "    return _notes(plates(overlay, project)[0])"
+after = "    return _notes(tuple(p for p in plates(overlay, project)[0] if p.kind is not PlateKind.TAG))"
 reddens = [
   "tests/memory/test_store.py::test_a_tags_memory_is_linked_under_its_tag_name",
 ]

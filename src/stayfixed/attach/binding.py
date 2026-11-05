@@ -10,7 +10,7 @@ equivalent variables "is not a partial defence, it is a redirect with a longer n
    `attach` merges a path on a command line — in a harness where command lines are written by a
    model that has read the repository; and
 2. `--store` must be exactly `<overlay>/projects/<name>/memory`, which is what
-   `permitted_roots(overlay, name)` already calls this project's own share. A store elsewhere
+   `project_notes(overlay, name)` already calls this project's own share. A store elsewhere
    under the overlay would attach and then fail on every session start, because `memory.store`
    holds every linked group to those same two roots — so `attach` would have produced a store
    the hook path refuses, which is the worst of both.
@@ -55,7 +55,7 @@ from stayfixed.memory.api import (
     binding_state,
     link_sources,
     origin_note,
-    permitted_roots,
+    project_notes,
     read_binding_record,
 )
 from stayfixed.printed import quoted
@@ -354,7 +354,7 @@ def _bound(root: Path, config: Config, overlay: Path, *, plated: bool = False) -
     could answer another root if the file changed in between.
     """
     project = config.project.name
-    store = permitted_roots(overlay, project)[-1]
+    store = project_notes(overlay, project)
     try:
         recorded, fault = _recorded(overlay, project), None
     except UnreadableRecord as exc:
@@ -478,7 +478,7 @@ def read_binding(
     overlay = overlay_root(machine)
     if overlay is None:
         raise Refusal(NO_OVERLAY)
-    expected = permitted_roots(overlay, config.project.name)[-1]
+    expected = project_notes(overlay, config.project.name)
     if store is None:
         return _bound(root, config, overlay, plated=True)
     try:
