@@ -6571,9 +6571,31 @@ reddens = ["tests/sync/test_integrate.py::test_a_purge_forced_elsewhere_does_not
 [[mutation]]
 name = "a rewrite hold lasts one job"
 file = "src/stayfixed/sync/job.py"
-before = "    had = set(ctx.holds.upstream_paths) if ctx.holds.upstream_why == REWRITTEN else set()"
-after = "    had: set[str] = set()"
+before = "    had = held(REWRITTEN) | set(_missing(ctx, recorded, upstream))"
+after = "    had = set(_missing(ctx, recorded, upstream))"
 reddens = ["tests/sync/test_integrate.py::test_a_purge_forced_elsewhere_does_not_come_back"]
+
+# The owner's reset or rebase of notes already pushed is theirs: the next job must not replay or
+# fast-forward the purged commits back, and the hold stands past the job whose `HEAD` it was.
+[[mutation]]
+name = "a local purge is replayed"
+file = "src/stayfixed/sync/job.py"
+before = "    if purged:"
+after = "    if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_local_purge_is_held_not_undone",
+  "tests/sync/test_integrate.py::test_a_bare_reset_is_held_not_fast_forwarded",
+]
+
+[[mutation]]
+name = "a local-rewrite hold lasts one job"
+file = "src/stayfixed/sync/job.py"
+before = "    gone = held(LOCAL_REWRITE) | set(_missing(ctx, ctx.last_head, head))"
+after = "    gone = set(_missing(ctx, ctx.last_head, head))"
+reddens = [
+  "tests/sync/test_integrate.py::test_the_local_rewrite_hold_stands_until_pushed_or_rebased[push]",
+  "tests/sync/test_integrate.py::test_the_local_rewrite_hold_stands_until_pushed_or_rebased[rebase]",
+]
 
 [[mutation]]
 name = "the push records nothing of what upstream now has"

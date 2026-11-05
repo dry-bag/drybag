@@ -57,6 +57,7 @@ from stayfixed.sync.rules import (
 )
 from stayfixed.sync.state import (
     EMPTY_HOLDS,
+    LOCAL_REWRITE,
     LOCK_FILE,
     OUTSIDE,
     PENDING_FILE,
@@ -116,7 +117,8 @@ class JobContext:
     (a hold and how to review it); `notices` the ends that do not stop the job (a failed commit
     check, a note left out for a secret); `refused` the memory-named paths left out of a commit
     because they are not notes;
-    `holds` as this job leaves them, changed only by integration and push."""
+    `holds` as this job leaves them, changed only by integration and push; `last_head` the `HEAD`
+    the last job left."""
 
     overlay: Path
     state_dir: Path
@@ -131,6 +133,7 @@ class JobContext:
     dirty: str | None = None
     refused: list[str] = field(default_factory=list)
     holds: Holds = EMPTY_HOLDS
+    last_head: str | None = None
 
     def limit(self, step: float) -> float:
         """`step`, cut to what is left of the whole job; `JobTimeout` when nothing is."""
@@ -477,6 +480,11 @@ REWRITE = (
     "git log -p {sha}..HEAD, then git rebase -i {sha} dropping them to take the rewrite, or git "
     "rebase {sha} and a push to undo it"
 )
+# How the owner settles a rewrite here of notes upstream {sha} still has: keep it, or undo it.
+LOCAL_REVIEW = (
+    "to keep the rewrite, `git push --force-with-lease=refs/heads/main:{sha} origin main` by "
+    "hand; to undo it, `git rebase {sha}`"
+)
 # How the owner reads an upstream {sha} git will not check out, which only upstream can repair.
 UNREADABLE_REVIEW = "git diff --stat HEAD {sha}, then repair upstream"
 _AUTHOR = re.compile(r"author (.*) <([^<>]*)> (\d+ [+-]\d{4})")
@@ -539,16 +547,31 @@ def _hold_upstream(ctx: JobContext, why: str | None, names: Iterable[str], remar
     ctx.holds = replace(ctx.holds, upstream_paths=tuple(names), upstream_why=why)
 
 
-def _dropped(ctx: JobContext, recorded: str | None, upstream: str, local: list[str]) -> list[str]:
-    """The commits of `local` (`upstream..HEAD`) that upstream once had: those of the sha the last
-    job recorded as upstream's that `upstream` lost, and those a standing rewrite hold names. A
-    first fetch, with nothing recorded, has none."""
-    had = set(ctx.holds.upstream_paths) if ctx.holds.upstream_why == REWRITTEN else set()
-    if full_sha(recorded):
-        lost = _git(ctx, "rev-list", "-z", "--end-of-options", str(recorded), f"^{upstream}")
-        if timed(lost, "git rev-list").code == 0:  # a pruned sha: nothing of it is in `HEAD`
-            had.update(_nul(lost.out))
-    return [sha for sha in local if sha in had]
+def _missing(ctx: JobContext, rev: str | None, without: str) -> list[str]:
+    """The commits `rev` has and `without` lacks, newest first; none when `rev` is no sha, or one
+    git cannot find (pruned): nothing of it is in `without`."""
+    if not full_sha(rev):
+        return []
+    found = _git(ctx, "rev-list", "-z", "--end-of-options", str(rev), f"^{without}")
+    return _nul(found.out) if timed(found, "git rev-list").code == 0 else []
+
+
+def _lost(
+    ctx: JobContext, recorded: str | None, upstream: str, head: str, local: list[str]
+) -> tuple[list[str], list[str]]:
+    """What a rewrite on either side dropped. First, the commits of `local` (`upstream..HEAD`)
+    that upstream once had: those of the sha the last job recorded as upstream's that `upstream`
+    lost, and those a standing rewrite hold names. Second, the commits of `HEAD..upstream` that
+    `HEAD` once had: those of the `HEAD` the last job left that `head` lost, and those a standing
+    local-rewrite hold names. A first job, with nothing recorded, has neither."""
+
+    def held(why: str) -> set[str]:
+        return set(ctx.holds.upstream_paths) if ctx.holds.upstream_why == why else set()
+
+    had = held(REWRITTEN) | set(_missing(ctx, recorded, upstream))
+    gone = held(LOCAL_REWRITE) | set(_missing(ctx, ctx.last_head, head))
+    incoming = _missing(ctx, upstream, head) if gone else []
+    return [sha for sha in local if sha in had], [sha for sha in incoming if sha in gone]
 
 
 def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Outcome | None:
@@ -562,7 +585,7 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
     """
     head = _rev(ctx, "HEAD")
     local = _nul(_ok(ctx, "rev-list", "-z", "--reverse", "--end-of-options", f"{upstream}..{head}"))
-    dropped = _dropped(ctx, recorded, upstream, local)
+    dropped, purged = _lost(ctx, recorded, upstream, head, local)
     # Recorded only once the rewrite check has judged it: a job stopped before then leaves the
     # last sha, so the next job still sees what upstream lost.
     ctx.fetched_sha = upstream
@@ -573,6 +596,14 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
             + REWRITE.format(sha=upstream)
         )
         _hold_upstream(ctx, REWRITTEN, dropped, remark)
+        return None
+    if purged:
+        remark = (
+            f"main no longer has {', '.join(purged)}, which origin/main still has; nothing is "
+            "integrated or pushed until the owner settles it by hand: "
+            + LOCAL_REVIEW.format(sha=upstream)
+        )
+        _hold_upstream(ctx, LOCAL_REWRITE, purged, remark)
         return None
     if _is_ancestor(ctx, upstream, head):
         _hold_upstream(ctx, None, (), "")
@@ -820,7 +851,7 @@ def _one_job(ctx: JobContext) -> SyncState:
     another overlay, or one that cannot be read, is not used, and the detail says so."""
     ctx = replace(
         ctx, deadline=time.monotonic() + ctx.limits.job, remarks=[], notices=[], fetched_sha=None,
-        dirty=None, refused=[], holds=EMPTY_HOLDS,
+        dirty=None, refused=[], holds=EMPTY_HOLDS, last_head=None,
     )  # fmt: skip
     scratch = ctx.state_dir / SCRATCH
     shutil.rmtree(scratch, ignore_errors=True)
@@ -835,7 +866,11 @@ def _one_job(ctx: JobContext) -> SyncState:
         )
         previous = None
     if previous is not None:
-        ctx.holds, ctx.fetched_sha = previous.holds, previous.fetched_sha
+        ctx.holds, ctx.fetched_sha, ctx.last_head = (
+            previous.holds,
+            previous.fetched_sha,
+            previous.head,
+        )
     try:
         stopped = _steps(ctx)
     except (JobTimeout, GitTimeout) as error:

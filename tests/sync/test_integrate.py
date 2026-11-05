@@ -24,7 +24,7 @@ from stayfixed.gitenv import FLOOR_VARIABLE
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
 from stayfixed.sync.git import GitTimeout, Ran
-from stayfixed.sync.state import OUTSIDE, Holds, SyncState, read_state
+from stayfixed.sync.state import LOCAL_REWRITE, OUTSIDE, Holds, SyncState, read_state
 from tests.gitfixture import git_bytes
 from tests.sync.conftest import (
     TAG,
@@ -258,16 +258,16 @@ def test_a_job_stopped_before_the_rewrite_check_still_sees_the_purge(
     # would leave the new sha with no hold, and the next job would push the purged note back.
     # Mutation (oracle): `mutations/`'s "the fetch records upstream before the rewrite check".
     leaked = _purged_on_b(overlays)
-    real = J._dropped
+    real = J._lost
     calls = {"n": 0}
 
-    def times_out_once(*args: Any, **kwargs: Any) -> list[str]:
+    def times_out_once(*args: Any, **kwargs: Any) -> tuple[list[str], list[str]]:
         calls["n"] += 1
         if calls["n"] == 1:
             raise GitTimeout("git rev-list timed out")
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(J, "_dropped", times_out_once)
+    monkeypatch.setattr(J, "_lost", times_out_once)
     assert _job(overlays).outcome.state == "timeout"
     second = _job(overlays)
 
@@ -317,6 +317,76 @@ def test_a_purge_of_a_note_this_machine_pushed_does_not_come_back(overlays: Over
 
     assert mine in state.holds.upstream_paths and state.holds.upstream_why == "rewritten"
     assert "mine.md" not in git(overlays.bare, "ls-tree", "-r", "--name-only", "main")
+
+
+def _pushed_from_a(overlays: Overlays) -> str:
+    """A private note this machine's job committed and pushed: its commit's sha."""
+    write(overlays.a, "common/memory/private.md", "private address: 1 Example Road\n")
+    assert _job(overlays).outcome.state == "ok"
+    pushed = head(overlays.a)
+    assert git(overlays.bare, "rev-parse", "main").strip() == pushed
+    return pushed
+
+
+def _held_here(overlays: Overlays, state: SyncState, pushed: str, kept: str) -> None:
+    """The local rewrite hold: `HEAD` as the owner made it, the purged note absent, nothing
+    pushed, and both of the owner's commands named."""
+    a = overlays.a
+    assert head(a) == kept and not (a / "common/memory/private.md").exists()
+    assert git(overlays.bare, "rev-parse", "main").strip() == pushed
+    assert state.outcome.state == "ok"
+    assert state.holds.upstream_paths == (pushed,) and state.holds.upstream_why == LOCAL_REWRITE
+    detail = str(state.outcome.detail)
+    assert f"git push --force-with-lease=refs/heads/main:{pushed} origin main" in detail
+    assert f"git rebase {pushed}" in detail
+
+
+def test_a_local_purge_is_held_not_undone(overlays: Overlays) -> None:
+    # The owner purges a note already pushed, `git reset --hard <sha>~1`, and commits another:
+    # the job must not replay the purged commit back under the owner's (the review's repro).
+    # Mutation (oracle): `mutations/`'s "a local purge is replayed".
+    a = overlays.a
+    pushed = _pushed_from_a(overlays)
+    git(a, "reset", "-q", "--hard", f"{pushed}~1")
+    write(a, "common/memory/other.md", "unrelated\n")
+    kept = commit_all(a, "memory: other")
+
+    _held_here(overlays, _job(overlays), pushed, kept)
+
+
+def test_a_bare_reset_is_held_not_fast_forwarded(overlays: Overlays) -> None:
+    a = overlays.a
+    pushed = _pushed_from_a(overlays)
+    git(a, "reset", "-q", "--hard", f"{pushed}~1")
+    kept = head(a)
+
+    _held_here(overlays, _job(overlays), pushed, kept)
+
+
+@pytest.mark.parametrize("settled", ["push", "rebase"])
+def test_the_local_rewrite_hold_stands_until_pushed_or_rebased(
+    overlays: Overlays, settled: str
+) -> None:
+    # The second job's `HEAD` is the one the first left, so only the standing hold carries the
+    # purged commit. Mutation (oracle): `mutations/`'s "a local-rewrite hold lasts one job".
+    a = overlays.a
+    pushed = _pushed_from_a(overlays)
+    git(a, "reset", "-q", "--hard", f"{pushed}~1")
+    write(a, "common/memory/other.md", "unrelated\n")
+    kept = commit_all(a, "memory: other")
+    for _ in range(2):
+        _held_here(overlays, _job(overlays), pushed, kept)
+
+    if settled == "push":  # the owner keeps the rewrite
+        git(a, "push", "-q", f"--force-with-lease=refs/heads/main:{pushed}", "origin", "main")
+    else:  # the owner undoes it
+        git(a, "rebase", "-q", pushed)
+    state = _job(overlays)
+
+    assert not state.holds.any and state.outcome.state == "ok", state
+    assert git(overlays.bare, "rev-parse", "main").strip() == head(a)
+    assert (a / "common/memory/private.md").exists() is (settled == "rebase")
+    assert (a / "common/memory/other.md").exists()
 
 
 def test_a_first_fetch_records_no_rewrite(overlays: Overlays) -> None:

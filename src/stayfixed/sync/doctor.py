@@ -41,13 +41,14 @@ def _held(holds: Holds, fetched: str | None, overlay: Path) -> Row:
     upstream sha only when it is one: `state.json` is a file, and an agent may run what this
     prints."""
     from stayfixed.doctor.api import WARN, Row
-    from stayfixed.sync.job import REVIEW, REWRITE, UNREADABLE_REVIEW
-    from stayfixed.sync.state import OUTSIDE, REWRITTEN, UNREADABLE, full_sha
+    from stayfixed.sync.job import LOCAL_REVIEW, REVIEW, REWRITE, UNREADABLE_REVIEW
+    from stayfixed.sync.state import LOCAL_REWRITE, OUTSIDE, REWRITTEN, UNREADABLE, full_sha
 
     held = {
         OUTSIDE: ("upstream holds changes outside memory", REVIEW),
         UNREADABLE: ("upstream's tree cannot be checked out here", UNREADABLE_REVIEW),
         REWRITTEN: ("upstream was rewritten and dropped commits this overlay has", REWRITE),
+        LOCAL_REWRITE: ("main no longer has commits that origin/main still has", LOCAL_REVIEW),
     }
     said: list[str] = []
     fixes: list[str] = []

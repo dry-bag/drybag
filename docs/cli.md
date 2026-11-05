@@ -683,7 +683,7 @@ never forced; one only you can clear waits out the back-off above.
 
 **Holds.** A hold is a range the sync refuses to move until you act, and a later outcome never
 clears it; while one stands nothing is integrated or pushed, and the next job clears it once you
-have acted. *Upstream*, for one of three reasons. `HEAD..origin/main` changes something outside
+have acted. *Upstream*, for one of four reasons. `HEAD..origin/main` changes something outside
 memory: read all of it and take it at the sha that was held, `git log -p --no-renames HEAD..<sha>`,
 then `git rebase <sha>`. A change to a project's `MEMORY.md` is such a change: an overlay that
 still commits its indexes is held on the first upstream commit that changes or untracks one, until
@@ -693,7 +693,11 @@ repair upstream. Or upstream was rewritten: the sha the last job recorded as ups
 pushed, is not in the new one, and commits it dropped are still in `HEAD`; they are named, and
 never replayed or pushed back. Read them with `git log -p <sha>..HEAD`, then take the rewrite with
 `git rebase -i <sha>`, dropping them, or undo it with `git rebase <sha>` and a push. A first fetch,
-with nothing recorded, is no rewrite. *Local*: your own commits that are not memory alone (a change
+with nothing recorded, is no rewrite. Or you rewrote notes already pushed, by a reset or a rebase:
+commits the `HEAD` the last job left had, which `HEAD` no longer has and `origin/main` still has,
+are named and held, so `HEAD` stays as you made it and nothing is fast-forwarded or replayed back.
+Keep the rewrite with `git push --force-with-lease=refs/heads/main:<sha> origin main` by hand, or
+undo it with `git rebase <sha>`. *Local*: your own commits that are not memory alone (a change
 outside memory, a merge, an empty commit) keep their shas: they are neither rebuilt nor pushed, and
 upstream is not integrated past them; integrate and push them by hand when reviewed. `doctor` names
 each.

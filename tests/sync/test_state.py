@@ -174,6 +174,13 @@ def test_a_later_outcome_keeps_the_holds(tmp_path: Path) -> None:
     assert after is not None and after.outcome.state == "offline" and after.holds == first.holds
 
 
+def test_a_local_rewrite_hold_round_trips(tmp_path: Path) -> None:
+    held = S.Holds(("5" * 40,), (), S.LOCAL_REWRITE)
+    S.write_state(tmp_path, _state(holds=held))
+    after = S.read_state(tmp_path)
+    assert after is not None and after.holds == held
+
+
 def test_a_hold_is_any_upstream_path_or_local_commit() -> None:
     assert not S.EMPTY_HOLDS.any
     assert replace(S.EMPTY_HOLDS, upstream_paths=("a",)).any

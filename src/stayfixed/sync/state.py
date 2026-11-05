@@ -77,9 +77,11 @@ class Outcome:
     detail: str | None
 
 
-# Why upstream is held: changes outside memory, a tree git will not check out, or a rewrite that
-# dropped commits this overlay still has, which the hold then names in place of paths.
+# Why upstream is held: changes outside memory, a tree git will not check out, a rewrite that
+# dropped commits this overlay still has, or one here that dropped commits upstream still has; a
+# rewrite's hold names the commits in place of paths.
 OUTSIDE, UNREADABLE, REWRITTEN = "outside", "unreadable", "rewritten"
+LOCAL_REWRITE = "rewritten here"
 _SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 
 
@@ -171,7 +173,7 @@ def _parse(data: dict[str, Any]) -> SyncState:
         raise StateUnreadable(f"{STATE_FILE} does not hold the fields the job writes") from None
     if state.outcome.state not in OUTCOMES:
         raise StateUnreadable("outcome.state is not a sync outcome")
-    if state.holds.upstream_why not in (None, OUTSIDE, UNREADABLE, REWRITTEN):
+    if state.holds.upstream_why not in (None, OUTSIDE, UNREADABLE, REWRITTEN, LOCAL_REWRITE):
         raise StateUnreadable("holds.upstream.why is not a reason the job holds for")
     return state
 

@@ -17,6 +17,7 @@ import pytest
 from stayfixed.doctor.api import OK, SKIP, WARN
 from stayfixed.sync.state import (
     EMPTY_HOLDS,
+    LOCAL_REWRITE,
     REWRITTEN,
     UNREADABLE,
     Holds,
@@ -174,6 +175,17 @@ def test_a_rewritten_upstream_names_the_commits_it_dropped(machine: Machine) -> 
     assert status == WARN
     assert "rewritten" in detail and dropped in detail
     assert f"git log -p {UPSTREAM}..HEAD" in remedy and f"git rebase -i {UPSTREAM}" in remedy
+
+
+def test_a_local_rewrite_names_the_commits_and_both_commands(machine: Machine) -> None:
+    purged = "fedcba9876543210fedcba9876543210fedcba98"
+    held = Holds((purged,), (), LOCAL_REWRITE)
+    status, detail, remedy = machine.scanner().state("ok", holds=held, fetched=UPSTREAM).row()
+    assert status == WARN
+    assert "main no longer has" in detail and "origin/main still has" in detail
+    assert purged in detail
+    assert f"git push --force-with-lease=refs/heads/main:{UPSTREAM} origin main" in remedy
+    assert f"git rebase {UPSTREAM}" in remedy
 
 
 @pytest.mark.parametrize("fetched", ["x; touch owned", "HEAD~1", None])
