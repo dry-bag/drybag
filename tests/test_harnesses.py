@@ -258,13 +258,27 @@ LISTED = {
     ("src/stayfixed/overlay/layout.py", "codex"): (1, "(`overlay.layout`"),
     ("src/stayfixed/overlay/api.py", "claude"): (1, "re-exported by `overlay.api`"),
     ("src/stayfixed/overlay/api.py", "codex"): (1, "re-exported by `overlay.api`"),
-    ("src/stayfixed/attach/permissions.py", "claude"): (
+    # The overlay's per-harness directories, and the kind of item a Codex rule file is.
+    ("src/stayfixed/attach/items.py", "claude"): (
         1,
-        "(`attach.permissions`, `attach.write`)",
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
-    ("src/stayfixed/attach/permissions.py", "codex"): (2, "(`attach.permissions`, `attach.write`)"),
-    ("src/stayfixed/attach/write.py", "claude"): (4, "(`attach.permissions`, `attach.write`)"),
-    ("src/stayfixed/attach/write.py", "codex"): (4, "(`attach.permissions`, `attach.write`)"),
+    ("src/stayfixed/attach/items.py", "codex"): (
+        2,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
+    ("src/stayfixed/attach/permissions.py", "codex"): (
+        1,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
+    ("src/stayfixed/attach/write.py", "claude"): (
+        4,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
+    ("src/stayfixed/attach/write.py", "codex"): (
+        4,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
     ("src/stayfixed/hooks/api.py", "claude"): (1, "`hooks.api.DATA_ROOT_VARIABLES`"),
     ("src/stayfixed/hooks/api.py", "plugin_data"): (2, "`hooks.api.DATA_ROOT_VARIABLES`"),
     ("src/stayfixed/doctor/checks.py", "claude"): (
@@ -287,8 +301,6 @@ LISTED = {
 PROSE = {
     # Messages naming the Codex rule files `attach` places, and `--check` would place.
     ("src/stayfixed/attach/check.py", "codex"): 1,
-    # The sentence `doctor` warns with where two tags hold one Codex rule file.
-    ("src/stayfixed/attach/tags.py", "codex"): 1,
     # The instruction file Claude Code reads beside `AGENTS.md`, which `owner-files` asks the
     # session to read now when it placed either.
     ("src/stayfixed/attach/checkout.py", "claude"): 1,
