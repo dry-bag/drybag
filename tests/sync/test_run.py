@@ -33,7 +33,6 @@ from stayfixed.sync.state import (
     Holds,
     Lock,
     Outcome,
-    PendingAlign,
     SyncState,
     iso,
     mark_pending,
@@ -194,7 +193,7 @@ def test_a_busy_lock_marks_pending_and_returns_the_state(overlays: Overlays) -> 
 
 
 def test_a_state_for_another_overlay_is_not_used(overlays: Overlays) -> None:
-    # The overlay moved: holds, the fetched sha and an alignment recorded for the old path are
+    # The overlay moved: the holds and the fetched sha recorded for the old path are
     # not this checkout's, so the job starts afresh and says so.
     elsewhere = overlays.a.parent / "the-old-overlay"
     write_state(
@@ -205,7 +204,6 @@ def test_a_state_for_another_overlay_is_not_used(overlays: Overlays) -> None:
             holds=Holds(("common/claude/hooks/launch.sh",), ("0" * 40,)),
             fetched_sha="1" * 40,
             last_job_at=iso(NOW),
-            pending_align=PendingAlign("2" * 40, "3" * 40, ("common/memory/first.md",)),
         ),
     )
 
@@ -213,7 +211,7 @@ def test_a_state_for_another_overlay_is_not_used(overlays: Overlays) -> None:
 
     assert state is not None and state.outcome.state == "ok", state
     assert state.overlay == str(overlays.a)
-    assert state.holds == EMPTY_HOLDS and state.pending_align is None
+    assert state.holds == EMPTY_HOLDS
     assert state.fetched_sha == head(overlays.a, "refs/stayfixed/fetched")
     assert state.outcome.detail is not None and str(elsewhere) in state.outcome.detail
     assert read_state(overlays.state_dir) == state

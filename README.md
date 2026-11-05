@@ -332,9 +332,9 @@ detection reads the contents; and in one that left trees out as well (`--filter=
 `git ls-tree -r` too. And
 `git archive`, which `stayfixed test attribute` uses to extract `HEAD` and the merge base, runs
 the smudge filters the repository's `.gitattributes` name and your git configuration defines, as
-do the note sync's `git add` and `git checkout-index` over the overlay's notes, which run the
-clean and smudge filters your git configuration defines for the attributes `HEAD` commits
-(`GIT_ATTR_SOURCE=HEAD`) with your whole environment.
+do the note sync's `git commit --only` and `git read-tree -m -u` over the overlay's notes, which
+run the clean and smudge filters your git configuration defines for the attributes `HEAD` commits
+(`GIT_ATTR_SOURCE=HEAD`).
 stayfixed passes `test attribute`'s git your `HOME` and leaves it reading its system configuration and the
 repository's own, so where the system, global or repository-local configuration defines
 `filter.lfs` — as `git lfs install` does in the global one — that is `git-lfs smudge`, which

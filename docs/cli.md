@@ -595,9 +595,7 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    progress, no unmerged paths, `HEAD` on `main`, and `main` tracking `origin/main`. Anything else
    is the outcome `skipped`, with the reason, and nothing changes. Work in progress outside memory
    is no reason: the job never touches it.
-2. **Align.** A job killed after moving `main` and before aligning the real index left that owed, and
-   the next job does it first.
-3. **Commit.** `git commit --only` of exactly the changed notes, with no hook. A new note is added
+2. **Commit.** `git commit --only` of exactly the changed notes, with no hook. A new note is added
    intent-to-add first (`git add -N`), so each is judged by what git would record from the working
    tree. One that may not move (below), or that a link or a file stands above, is left out and named;
    one the secret scan finds something in is left out and named with its remedy (`secret_found`)
@@ -605,12 +603,16 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    moves `main` and updates the real index for those notes alone, so your staged work stays staged
    and your next `git commit` carries no old note back. A signature is made when `commit.gpgsign` is
    set, and never switched off.
-4. **Fetch.** `git fetch origin main` into `refs/stayfixed/fetched`, with `fetch.fsckObjects`.
-5. **Integrate.** When everything `HEAD..` the fetched sha brings is memory, and every local commit
-   is a plain commit of memory alone, the local commits are replayed onto it one by one and `main`
-   moves to the result; a commit that conflicts is `conflict`, `main` unmoved. Anything else is a
-   hold, and `HEAD` stays as it is.
-6. **Push.** The checked sha, `<sha>:refs/heads/main`, never forced and with no tag, after the
+3. **Fetch.** `git fetch origin main` into `refs/stayfixed/fetched`, with `fetch.fsckObjects`.
+4. **Integrate.** When everything `HEAD..` the fetched sha brings is memory, and every local commit
+   is a plain commit of memory alone, the local commits are replayed onto it one by one; a commit
+   that conflicts is `conflict`, `main` unmoved. Then git writes the incoming notes and the real
+   index (`git read-tree -m -u`), keeping your staged work and your untracked files, and only then
+   does `main` move to the result, by a compare-and-swap. A note changed here and not committed yet,
+   an untracked file where a note lands, or a link where git needs a directory makes git refuse
+   before it writes anything (`waiting_clean_tree`, with git's words). Anything else is a hold, and
+   `HEAD` stays as it is.
+5. **Push.** The checked sha, `<sha>:refs/heads/main`, never forced and with no tag, after the
    secret scan of the range and only when every commit in it is memory.
 
 **What moves.** Three globs only: `common/memory/**`, `groups/*/memory/**` and
@@ -661,23 +663,22 @@ finding's rule, commit and path.
 outcome, the holds, the fetched sha and a digest of the dirty notes, written in one step), `job.lock` and `sleeper.lock` (held
 while a job runs and while a sleeper waits), `pending` (a trigger that arrived while a job ran),
 and `scratch/`, which the job removes whole at its start and its end. In the overlay: the objects
-and the commit of step 3, which `git commit --only` writes with `main` and the real index's entries
-of the notes it commits, an intent-to-add entry for each new note (`git add -N`, removed again by
-`git update-index --force-remove` for one left out), `refs/heads/main` (moved by
-`update-ref` against the sha it read), `refs/stayfixed/fetched`, the memory entries of the real index (`git reset`),
-and the notes a move of `main`
-brought in, written through `git checkout-index` from a temporary index where the working tree still holds the old version, or removed, with the empty
-directories above a removed note, where it still holds the old one and no link stands above it; a note you changed by hand since is left as you made
-it. On the remote, `main`, by step 6. Besides `scratch/` and those notes, it removes `pending` when it takes it, and nothing else. When the plugin
-is removed, the triggers go and this directory stays.
+and the commit of step 2, which `git commit --only` writes with `main` and the real index's entries
+of the notes it commits; an intent-to-add entry for each new note (`git add -N`, removed again by
+`git update-index --force-remove` for one left out); the replayed commits of step 4; the real index's
+stat data (`git update-index --refresh`), then the notes it brings in, written, removed (with the
+directories a removal empties) and entered in the real index by `git read-tree -m -u`; `refs/heads/main`, moved by `update-ref` against the sha it read; and
+`refs/stayfixed/fetched`. On the remote, `main`, by step 5. Besides `scratch/` and what git removes
+for step 4, it removes `pending` when it takes it, and nothing else. When the plugin is removed, the
+triggers go and this directory stays.
 
 **Outcomes** (`state.json`, and `doctor`): `ok`; `skipped` (the guard's reasons); `conflict` (a local
-commit conflicts with upstream, and `main` was not moved); `raced` (`main` moved while the job built a commit or integrated); `rejected`
+commit conflicts with upstream, and `main` was not moved); `raced` (another git holds `index.lock`, which the job never removes, or `main` moved while it integrated); `rejected`
 (`origin/main` moved before the push; the next trigger fetches and retries); `offline`,
 `auth_failed` and `timeout` (the remote or a step); `hook_failed` (a step failed, or paths were
 left out of a commit); `scan_unavailable`; `signing_failed`; `secret_found`; `waiting_clean_tree`
-(an incoming note is changed here and not committed yet); `index_stale` (the real index's memory
-entries could not be aligned with `HEAD`). A failure is retried by a later trigger, throttled and
+(git refused to write an incoming note: one changed here, an untracked file or a link in its way).
+A failure is retried by a later trigger, throttled and
 never forced; one only you can clear waits out the back-off above.
 
 **Holds.** A hold is a range the sync refuses to move until you act, and a later outcome never

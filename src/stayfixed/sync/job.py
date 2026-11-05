@@ -1,15 +1,15 @@
 """The note sync's job: commit the overlay's notes, take in upstream's, push its own.
 
 Each step is bounded in time and records what it did in the context the job's state is written
-from: guard; align the real index first where a killed job left that owed; commit the changed
-notes by `git commit --only`; fetch `origin main` into the job's own ref; integrate that sha, only
-when everything it brings is memory, by replay; push the checked range. A project's `MEMORY.md` is
-never among them: each machine renders its own (`sync.rules`).
+from: guard; commit the changed notes by `git commit --only`; fetch `origin main` into the job's
+own ref; integrate that sha, only when everything it brings is memory, by replay; push the checked
+range. A project's `MEMORY.md` is never among them: each machine renders its own (`sync.rules`).
 
 It never writes a non-memory path of the working tree or the real index, stashes, rebases, pulls
-or force-pushes. Every move of `main` is a compare-and-swap recorded before it is made, and is
-followed by aligning the real index's memory entries with the new `HEAD`, or the owner's next
-`git commit` would carry the old notes back.
+or force-pushes. git does every write: `git commit --only` moves `main` and the real index for the
+notes it commits, and an integration has `git read-tree -m -u` write the incoming notes and the
+index before `main` moves by compare-and-swap, so a job killed anywhere leaves a state the next
+job converges from, with nothing recorded.
 """
 
 from __future__ import annotations
@@ -46,13 +46,10 @@ from stayfixed.sync.git import (
     with_config,
 )
 from stayfixed.sync.rules import (
-    MEMORY_PATHSPEC,
     RawEntry,
     commit_entries,
     diff_entries,
-    dirty_memory,
     entry_offends,
-    is_memory_path,
     memory_path,
     range_is_memory_only,
     status,
@@ -71,7 +68,6 @@ from stayfixed.sync.state import (
     Holds,
     Lock,
     Outcome,
-    PendingAlign,
     StateUnreadable,
     SyncState,
     full_sha,
@@ -86,11 +82,6 @@ from stayfixed.sync.state import (
 )
 from stayfixed.sync.switch import enabled
 
-# Named caps on the alignment's wait for an `index.lock` the owner's own git holds: five tries a
-# fifth of a second apart, past which the job records `index_stale`. No shipped file states them.
-ALIGN_RETRIES = 5
-ALIGN_PAUSE_SECONDS = 0.2
-ALIGN_COMMAND = "git reset -q -- " + " ".join(f"'{spec}'" for spec in MEMORY_PATHSPEC)
 SWAP_MESSAGE = "stayfixed note sync"
 
 
@@ -123,8 +114,8 @@ class JobStopped(Exception):
 class JobContext:
     """What one job run carries between its steps. `remarks` are what the end's detail also says
     (a hold and how to review it); `notices` the ends that do not stop the job (a failed commit
-    check, a path not written); `pending` the alignment still
-    owed; `refused` the memory-named paths left out of a commit because they are not notes;
+    check, a note left out for a secret); `refused` the memory-named paths left out of a commit
+    because they are not notes;
     `holds` as this job leaves them, changed only by integration and push."""
 
     overlay: Path
@@ -136,7 +127,6 @@ class JobContext:
     deadline: float | None = None
     remarks: list[str] = field(default_factory=list)
     notices: list[Outcome] = field(default_factory=list)
-    pending: PendingAlign | None = None
     fetched_sha: str | None = None
     dirty: str | None = None
     refused: list[str] = field(default_factory=list)
@@ -199,11 +189,6 @@ def _rev(ctx: JobContext, rev: str) -> str:
     return _ok(ctx, "rev-parse", "--verify", "-q", "--end-of-options", f"{rev}^{{commit}}").strip()
 
 
-def _literal(path: str) -> str:
-    """A pathspec that matches exactly `path`, whatever characters it holds."""
-    return f":(top,literal){path}"
-
-
 def _paths_in(paths: Iterable[str]) -> bytes:
     """`paths` NUL-terminated, for a git command reading them from standard input."""
     return b"".join(path.encode("utf-8", "surrogateescape") + b"\0" for path in paths)
@@ -211,9 +196,9 @@ def _paths_in(paths: Iterable[str]) -> bytes:
 
 @contextlib.contextmanager
 def _scratch(ctx: JobContext) -> Iterator[Path]:
-    """The job's one scratch directory, `scratch/` in the state directory: emptied for one use
-    (temporary indexes, scan reports), removed whole after it, never two uses at
-    once. A fixed name, so a killed job's leftovers are removed by the next."""
+    """The job's one scratch directory, `scratch/` in the state directory: emptied for one use (a
+    scan, a commit's message, a readability check's index), removed whole after it, never two uses
+    at once. A fixed name, so a killed job's leftovers are removed by the next."""
     directory = ctx.state_dir / SCRATCH
     ctx.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     shutil.rmtree(directory, ignore_errors=True)
@@ -224,38 +209,11 @@ def _scratch(ctx: JobContext) -> Iterator[Path]:
         shutil.rmtree(directory, ignore_errors=True)
 
 
-def _blobs(ctx: JobContext, rev: str) -> dict[str, tuple[str, str]]:
-    """`{path: (mode, sha)}` for every memory path in `rev`'s tree."""
-    found: dict[str, tuple[str, str]] = {}
-    for entry in _nul(_ok(ctx, "ls-tree", "-r", "-z", "--full-tree", "--end-of-options", rev)):
-        meta, _, path = entry.partition("\t")
-        mode, _, sha = meta.split(" ")[:3]
-        if is_memory_path(path):
-            found[path] = (mode, sha)
-    return found
-
-
-def _worktree_has(ctx: JobContext, path: str, blob: tuple[str, str] | None) -> bool:
-    """Whether the working tree holds `blob` at `path` (`None`: holds nothing there)."""
-    full = ctx.overlay / path
-    if unsafe_parent(ctx.overlay, path) is not None:
-        return False
-    if blob is None:
-        return not (fsops.exists(full) or fsops.is_symlink(full))
-    if fsops.is_symlink(full) or not fsops.is_file(full):
-        return False
-    return _ok(ctx, "hash-object", "--", path).strip() == blob[1]
-
-
 # -- the commit, by `git commit --only` ------------------------------------------------------------
 
 # How the job hands git a list of paths: NUL-separated on standard input, each matched literally.
 _FROM_STDIN = ("--pathspec-from-file=-", "--pathspec-file-nul")
 _LITERAL = {"GIT_LITERAL_PATHSPECS": "1"}
-
-
-def _before_swap() -> None:
-    """Nothing; the moment between building a commit and moving `main` (a test seam)."""
 
 
 def _refuse(ctx: JobContext, paths: Iterable[str]) -> None:
@@ -316,36 +274,6 @@ def _unmerged_now(ctx: JobContext) -> Outcome | None:
     if found.code != 0 or found.out:
         return _outcome(ctx, "skipped", UNMERGED)
     return None
-
-
-def _record_pending(ctx: JobContext, pending: PendingAlign | None) -> None:
-    """Write `pending` into the state on disk before `main` moves, so a kill after the move is
-    finished by the next job (and `None` back when the move did not happen). The rest of the state
-    is kept as the file has it, or started afresh when it is unreadable or another overlay's."""
-    try:
-        previous = read_state(ctx.state_dir)
-    except StateUnreadable:
-        previous = None  # the job replaces it at its end anyway
-    if previous is None or previous.overlay != str(ctx.overlay):
-        said = "a job was stopped while moving main; the next job finishes it"
-        previous = SyncState(
-            str(ctx.overlay), _outcome(ctx, "skipped", said), EMPTY_HOLDS, None, None, None
-        )
-    write_state(ctx.state_dir, replace(previous, pending_align=pending))
-
-
-def _move_main(ctx: JobContext, pending: PendingAlign) -> bool:
-    """Move `main` from `pending.from_sha` to `pending.to_sha` by compare-and-swap: whether it
-    moved. The record is on disk before the swap, so a kill after it is finished by the next job
-    (`align_first`), and taken back when `main` had moved meanwhile."""
-    _record_pending(ctx, pending)
-    ctx.pending = pending
-    _before_swap()
-    if _swap(ctx, pending.to_sha, pending.from_sha):
-        return True
-    ctx.pending = None
-    _record_pending(ctx, None)
-    return False
 
 
 def _committed_rules(ctx: JobContext) -> bytes | None:
@@ -487,127 +415,6 @@ def commit_memory(ctx: JobContext) -> Outcome | None:
     return unmerged
 
 
-# -- aligning the real index ----------------------------------------------------------------------
-
-
-def _prune_empty(overlay: Path, path: str) -> None:
-    """Remove directories a removal left empty, up to (never including) the memory root."""
-    parsed = memory_path(path)
-    if parsed is None:
-        return
-    parts = path.split("/")[:-1]
-    while len(parts) > len(parsed.root.split("/")):
-        try:
-            fsops.rmdir_within(overlay, "/".join(parts))
-        except OSError:
-            return
-        parts.pop()
-
-
-def _finish_worktree(ctx: JobContext, pending: PendingAlign) -> list[str]:
-    """Write the paths a move of `main` brought in, where the working tree still has the old; the
-    paths it may not write, because a link or a file stands above them.
-
-    Only a path still at its `from` version is written (the owner's later edit wins), checked
-    right before git writes it, never all checked first; only one `HEAD` still has at its `to`
-    version; and only through git (`checkout-index` from a temporary index) or `fsops`, after
-    checking no directory above it is a link.
-    """
-    if not pending.paths or not _is_ancestor(ctx, pending.to_sha, "HEAD"):
-        return []  # nothing to write, or `main` never moved to `to`
-    head, to = _blobs(ctx, "HEAD"), _blobs(ctx, pending.to_sha)
-    before = _blobs(ctx, pending.from_sha)
-    refused: list[str] = []
-    with _scratch(ctx) as scratch:
-        index = scratch / "index"
-        _ok(ctx, "read-tree", "--end-of-options", pending.to_sha, index_file=index)
-        for path in pending.paths:
-            want = to.get(path)
-            if head.get(path) != want or _worktree_has(ctx, path, want):
-                continue
-            if unsafe_parent(ctx.overlay, path) is not None:
-                refused.append(path)
-                continue
-            if not _worktree_has(ctx, path, before.get(path)):
-                continue  # changed by hand since: left for the next commit
-            if want is None:
-                fsops.remove_within(ctx.overlay, path)
-                _prune_empty(ctx.overlay, path)
-            else:
-                write = _paths_in([path])
-                _ok(ctx, "checkout-index", "-f", "-z", "--stdin", index_file=index, stdin=write)
-    return refused
-
-
-def align(ctx: JobContext, pending: PendingAlign | None) -> Outcome | None:
-    """Make the real index's memory entries equal `HEAD`'s; `index_stale`, which stops the job,
-    if it cannot.
-
-    With `pending` (a move of `main` that brought paths in), those paths are first written to the
-    working tree where it still holds their old version. The reset is retried while another git
-    holds `index.lock`. A path that could not be written (a link above it) leaves the index
-    aligned and is a notice, `hook_failed` naming it: the job does not pretend it arrived.
-    """
-    refused = _finish_worktree(ctx, pending) if pending is not None else []
-    result: Ran | None = None
-    for attempt in range(ALIGN_RETRIES + 1):
-        result = _git(ctx, "reset", "-q", "--", *MEMORY_PATHSPEC)
-        if result.code == 0 and not result.timed_out:
-            if refused:
-                detail = "job: not written, a link or a file stands above it: " + ", ".join(refused)
-                ctx.notices.append(_outcome(ctx, "hook_failed", detail))
-            return None
-        if "index.lock" not in result.err or attempt == ALIGN_RETRIES:
-            break
-        time.sleep(ALIGN_PAUSE_SECONDS)
-    said = (
-        (scan.first_lines(result.err).splitlines() or ["no answer"])[0] if result else "no answer"
-    )
-    detail = (
-        f"the index's memory entries could not be aligned with HEAD ({said}); the next job "
-        f"retries first, or run: {ALIGN_COMMAND}"
-    )
-    return _outcome(ctx, "index_stale", detail)
-
-
-def _index_needs_align(ctx: JobContext) -> bool:
-    """The shape a killed job leaves: memory entries of the index differ from `HEAD` while the
-    working tree equals `HEAD` at those paths. The owner's own staging (the tree differs too) is
-    not it."""
-    staged = _nul(
-        _ok(
-            ctx, "--no-optional-locks", "diff", "--cached", "--name-only", "-z", "--no-renames",
-            "HEAD", "--", *MEMORY_PATHSPEC,
-        )
-    )  # fmt: skip
-    if not staged:
-        return False
-    head = _blobs(ctx, "HEAD")
-    return any(_worktree_has(ctx, path, head.get(path)) for path in staged)
-
-
-def _settle(ctx: JobContext, pending: PendingAlign | None) -> Outcome | None:
-    """`align`, then drop `ctx.pending` unless the alignment is still owed (`index_stale`)."""
-    stale = align(ctx, pending)
-    if stale is None:
-        ctx.pending = None
-    return stale
-
-
-def align_first(ctx: JobContext) -> Outcome | None:
-    """Before the commit: finish an alignment a previous job owes (`ctx.pending`, or the shape).
-
-    A record whose move never happened -- the job was killed between writing it and the swap --
-    owes nothing, and is dropped without touching the index: the owner's staged notes stay staged.
-    """
-    pending = ctx.pending
-    if pending is not None and not _is_ancestor(ctx, pending.to_sha, "HEAD"):
-        ctx.pending = pending = None
-    if pending is None and not _index_needs_align(ctx):
-        return None
-    return _settle(ctx, pending)
-
-
 # -- fetch ----------------------------------------------------------------------------------------
 
 # What git and ssh print when the remote cannot be reached, and when it refuses who we are; the
@@ -725,25 +532,6 @@ def _tree_of(ctx: JobContext, rev: str) -> str:
     return _ok(ctx, "rev-parse", "--verify", "-q", "--end-of-options", f"{rev}^{{tree}}").strip()
 
 
-def _blocked(ctx: JobContext, incoming: list[str]) -> list[str]:
-    """The incoming paths the working tree is not ready for: dirty there (or a dirty path above or
-    below one), or reached through a link or a file where git needs a directory."""
-    dirty = dirty_memory(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
-    blocked: list[str] = []
-    for path in incoming:
-        if unsafe_parent(ctx.overlay, path) is not None or fsops.is_symlink(ctx.overlay / path):
-            blocked.append(path)
-            continue
-        if any(
-            entry == path
-            or path.startswith(entry.rstrip("/") + "/")
-            or entry.startswith(path + "/")
-            for entry in dirty
-        ):
-            blocked.append(path)
-    return blocked
-
-
 def _hold_upstream(ctx: JobContext, why: str | None, names: Iterable[str], remark: str) -> None:
     """Hold upstream for `why` on `names`, with `remark`, which says how to review it; `why`
     `None`, with no names, clears the hold."""
@@ -819,15 +607,8 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
     incoming = _nul(
         _ok(ctx, "diff", "--no-renames", "--name-only", "-z", "--end-of-options", head, tip)
     )
-    blocked = _blocked(ctx, incoming)
-    if blocked:
-        detail = (
-            f"incoming notes are changed here and not committed yet ({', '.join(blocked)}); the "
-            "next job commits them first, then integrates"
-        )
-        return _outcome(ctx, "waiting_clean_tree", detail)
-    # A tree git will not put in an index cannot be written to the working tree either: moving
-    # `main` to it would leave an alignment no job can finish. It is held, `main` unmoved.
+    # A tree git will not put in an index is not an index to write: it is held, `main` unmoved,
+    # since only upstream can repair it.
     with _scratch(ctx) as scratch:
         readable = _git(ctx, "read-tree", "--end-of-options", tip, index_file=scratch / "index")
     if timed(readable, "git read-tree").code != 0:
@@ -838,13 +619,27 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
         )
         _hold_upstream(ctx, UNREADABLE, incoming, remark)
         return None
-    pending = PendingAlign(head, tip, tuple(incoming))
     unmerged = _unmerged_now(ctx)
     if unmerged is not None:
         return unmerged
-    if not _move_main(ctx, pending):
-        return _outcome(ctx, "raced", "main moved during the integration; the next job retries")
-    return _settle(ctx, pending)
+    # git writes the incoming notes and the index first, refusing before it writes anything a
+    # note changed here, an untracked file or a link in the way; only then does `main` move. A
+    # kill between the two leaves the notes staged on the old `main`, which the next job commits
+    # and finds upstream already (`replay`). The refresh is `read-tree -u`'s own precondition: a
+    # note rewritten byte for byte would otherwise read as changed here.
+    checked(_locked(ctx, _git(ctx, "update-index", "-q", "--refresh")), "git update-index")
+    written = _locked(ctx, _git(ctx, "read-tree", "-m", "-u", "--end-of-options", head, tip))
+    if timed(written, "git read-tree").code != 0:
+        said = (scan.first_lines(written.err).splitlines() or [f"exit {written.code}"])[0]
+        detail = (
+            f"the incoming notes cannot be written here ({said}); the next job commits a note "
+            "changed here first, and anything else in the way is yours to move"
+        )
+        return _outcome(ctx, "waiting_clean_tree", detail)
+    if not _swap(ctx, tip, head):
+        detail = "main moved meanwhile; the incoming notes are written, and the next job converges"
+        return _outcome(ctx, "raced", detail)
+    return None
 
 
 # -- push the checked range -----------------------------------------------------------------------
@@ -1006,11 +801,11 @@ def _detail(parts: list[str | None]) -> str | None:
 
 
 def _steps(ctx: JobContext) -> Outcome | None:
-    """Guard, align what is owed, commit, fetch, integrate, push; the outcome that stopped it."""
+    """Guard, commit, fetch, integrate, push; the outcome that stopped it."""
     checked_out = guard(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
     if not checked_out.ok:
         return _outcome(ctx, "skipped", checked_out.reason)
-    stopped = align_first(ctx) or commit_memory(ctx)
+    stopped = commit_memory(ctx)
     if stopped is not None:
         return stopped
     recorded = ctx.fetched_sha
@@ -1024,8 +819,8 @@ def _one_job(ctx: JobContext) -> SyncState:
     """The steps once, within the job's limit; the state written for them. A state recorded for
     another overlay, or one that cannot be read, is not used, and the detail says so."""
     ctx = replace(
-        ctx, deadline=time.monotonic() + ctx.limits.job, remarks=[], notices=[], pending=None,
-        fetched_sha=None, dirty=None, refused=[], holds=EMPTY_HOLDS,
+        ctx, deadline=time.monotonic() + ctx.limits.job, remarks=[], notices=[], fetched_sha=None,
+        dirty=None, refused=[], holds=EMPTY_HOLDS,
     )  # fmt: skip
     scratch = ctx.state_dir / SCRATCH
     shutil.rmtree(scratch, ignore_errors=True)
@@ -1040,8 +835,7 @@ def _one_job(ctx: JobContext) -> SyncState:
         )
         previous = None
     if previous is not None:
-        ctx.holds, ctx.pending = previous.holds, previous.pending_align
-        ctx.fetched_sha = previous.fetched_sha
+        ctx.holds, ctx.fetched_sha = previous.holds, previous.fetched_sha
     try:
         stopped = _steps(ctx)
     except (JobTimeout, GitTimeout) as error:
@@ -1062,7 +856,6 @@ def _one_job(ctx: JobContext) -> SyncState:
         holds=ctx.holds,
         fetched_sha=ctx.fetched_sha,
         last_job_at=iso(ctx.now()),
-        pending_align=ctx.pending,
         head=head.out.strip() if head.code == 0 and not head.timed_out else None,
         dirty=ctx.dirty,
     )

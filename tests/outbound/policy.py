@@ -109,10 +109,8 @@ LOCAL = frozenset(
         ("git", "config", "--type=path", "--get"),
         ("git", "diff"),
         ("git", "grep"),
-        # Without `-w` it writes nothing: the empty tree's id, from an empty standard input, and a
-        # working-tree file's id.
+        # Without `-w` it writes nothing: the empty tree's id, from an empty standard input.
         ("git", "hash-object", "-t", "tree", "--stdin"),
-        ("git", "hash-object", "--"),
         ("git", "init"),
         ("git", "log"),
         ("git", "ls-files"),
@@ -129,17 +127,14 @@ LOCAL = frozenset(
         # The note sync's commit and its moves of `main`, all in the overlay: new notes added
         # intent-to-add (`add -N`) and a refused one's entry removed again (`update-index`), the
         # notes committed (`commit --only`, which runs `gpg.program` as the owner's own commit
-        # does, and no hook), `main` moved (`update-ref`), and the real index's memory entries
-        # reset to `HEAD`; the notes a move brought in written from a temporary index
-        # (`checkout-index`), and each local commit replayed onto the fetched sha (`merge-tree`,
-        # `commit-tree`) and checked readable in a temporary index (`read-tree`).
+        # does, and no hook); each local commit replayed onto the fetched sha (`merge-tree`,
+        # `commit-tree`), the result checked readable in a temporary index and the incoming
+        # notes written with the real index (`read-tree`), and `main` moved (`update-ref`).
         ("git", "add"),
-        ("git", "checkout-index"),
         ("git", "commit"),
         ("git", "commit-tree"),
         ("git", "merge-tree"),
         ("git", "read-tree"),
-        ("git", "reset"),
         ("git", "update-index"),
         ("git", "update-ref"),
     }

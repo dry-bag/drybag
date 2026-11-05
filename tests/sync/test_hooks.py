@@ -70,7 +70,6 @@ def _state(
             holds=Holds(upstream, local),
             fetched_sha=fetched,
             last_job_at=at,
-            pending_align=None,
             head=head_sha,
             dirty=notes_mark(world.a, ()),  # the job left no note dirty
         ),
@@ -148,7 +147,7 @@ def test_commits_ahead_of_the_upstream_start_a_job(overlays: Overlays) -> None:
 
 def test_a_standing_outcome_or_hold_starts_a_job(overlays: Overlays) -> None:
     sha = head(overlays.a)
-    for outcome in ("offline", "rejected", "index_stale", "hook_failed"):
+    for outcome in ("offline", "rejected", "raced", "hook_failed"):
         _state(overlays, outcome=outcome, head_sha=sha)
         assert decide(overlays, "Stop") == "run", outcome
     for outcome in ("ok", "skipped"):

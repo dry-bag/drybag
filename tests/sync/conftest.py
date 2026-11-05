@@ -370,15 +370,14 @@ def overlays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own
     return world
 
 
-def context(world: Overlays, clone: Path, *, pending: object = None, **limits: float) -> JobContext:
-    """A `JobContext` for `clone`, owing `pending`, with any step limit overridden."""
+def context(world: Overlays, clone: Path, **limits: float) -> JobContext:
+    """A `JobContext` for `clone`, with any step limit overridden."""
     return JobContext(
         overlay=clone,
         state_dir=world.state_dir,
         home=world.home,
         host=HOST,
         now=lambda: NOW,
-        pending=pending,  # type: ignore[arg-type]
         limits=Limits(**limits),
     )
 

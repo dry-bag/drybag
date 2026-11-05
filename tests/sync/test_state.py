@@ -51,9 +51,6 @@ def _state(**changes: object) -> S.SyncState:
         ),
         fetched_sha="4" * 40,
         last_job_at=_iso(NOW - timedelta(minutes=3)),
-        pending_align=S.PendingAlign(
-            from_sha="5" * 40, to_sha="6" * 40, paths=("common/memory/n.md",)
-        ),
         head=HEAD,
         dirty="d" * 64,
     )
@@ -71,21 +68,23 @@ def test_state_lives_in_the_data_directory() -> None:
     assert S.state_directory() == Path.home() / ".local/share/stayfixed/sync"
 
 
-def test_the_outcomes_are_the_fourteen_in_order() -> None:
+def test_the_outcomes_are_the_thirteen_in_order() -> None:
     assert S.OUTCOMES == (
         "ok", "skipped", "conflict", "raced", "rejected", "offline",
         "auth_failed", "timeout", "hook_failed", "scan_unavailable", "signing_failed",
-        "secret_found", "waiting_clean_tree", "index_stale",
+        "secret_found", "waiting_clean_tree",
     )  # fmt: skip
 
 
-def test_a_resolved_index_state_is_unreadable_and_replaced(overlays: Overlays) -> None:
-    # Indexes are no longer united, so `resolved_index` is no outcome: a state an older job wrote
-    # with it is unreadable, and the next job replaces it and says so.
+@pytest.mark.parametrize("retired", ["resolved_index", "index_stale"])
+def test_a_retired_outcome_is_unreadable_and_replaced(overlays: Overlays, retired: str) -> None:
+    # Indexes are no longer united and the real index no longer aligned, so neither outcome is
+    # one: a state an older job wrote with it is unreadable, and the next job replaces it and
+    # says so.
     d = overlays.state_dir
     S.write_state(d, _state(overlay=str(overlays.a), outcome=S.Outcome("ok", _iso(NOW), None)))
     document = _document(d)
-    document["outcome"]["state"] = "resolved_index"  # type: ignore[index]
+    document["outcome"]["state"] = retired  # type: ignore[index]
     (d / S.STATE_FILE).write_text(json.dumps(document), encoding="utf-8")
 
     with pytest.raises(S.StateUnreadable, match="not a sync outcome"):
@@ -102,8 +101,8 @@ def test_a_state_round_trips_and_carries_its_overlay(tmp_path: Path) -> None:
     assert S.read_state(tmp_path) == state
     assert S.read_state(tmp_path) != _state(overlay="/elsewhere")
     assert stat.S_IMODE((tmp_path / S.STATE_FILE).stat().st_mode) == 0o600
-    # A pending alignment of none, and a state that never fetched, come back as they went.
-    bare = _state(pending_align=None, fetched_sha=None, last_job_at=None, head=None)
+    # A state that never fetched comes back as it went.
+    bare = _state(fetched_sha=None, last_job_at=None, head=None)
     S.write_state(tmp_path, bare)
     assert S.read_state(tmp_path) == bare
 
@@ -113,19 +112,23 @@ def test_the_written_shape_is_the_documented_one(tmp_path: Path) -> None:
     S.write_state(tmp_path, _state())
     data = _document(tmp_path)
     assert set(data) == {
-        "overlay", "outcome", "holds", "fetched_sha", "last_job_at", "pending_align", "head",
-        "dirty",
+        "overlay", "outcome", "holds", "fetched_sha", "last_job_at", "head", "dirty",
     }  # fmt: skip
     assert set(data["outcome"]) == {"state", "at", "detail"}  # type: ignore[call-overload]
     assert data["holds"] == {
         "upstream": {"paths": ["README.md"], "why": "outside"},
         "local": {"commits": ["2" * 40, "3" * 40]},
     }
-    assert data["pending_align"] == {
-        "from": "5" * 40,
-        "to": "6" * 40,
-        "paths": ["common/memory/n.md"],
-    }
+
+
+def test_an_older_jobs_pending_alignment_is_ignored(tmp_path: Path) -> None:
+    # A job before `git commit --only` recorded a move of `main` to finish; nothing reads it now.
+    S.write_state(tmp_path, _state())
+    document = _document(tmp_path)
+    document["pending_align"] = {"from": "5" * 40, "to": "6" * 40, "paths": ["common/memory/n.md"]}
+    (tmp_path / S.STATE_FILE).write_text(json.dumps(document), encoding="utf-8")
+
+    assert S.read_state(tmp_path) == _state()
 
 
 def test_the_directory_is_made_private(tmp_path: Path) -> None:
@@ -469,7 +472,7 @@ def test_back_off_holds_for_a_standing_outcome_on_the_same_notes() -> None:
         state = replace(standing, outcome=replace(standing.outcome, state=outcome))
         assert S.backed_off(state, HEAD, NOW, dirty="m" * 64) is True, outcome
         assert S.backed_off(state, HEAD, NOW, dirty="n" * 64) is False, outcome
-    for outcome in ("offline", "timeout", "rejected", "raced", "index_stale"):
+    for outcome in ("offline", "timeout", "rejected", "raced"):
         state = replace(standing, outcome=replace(standing.outcome, state=outcome))
         assert S.backed_off(state, HEAD, NOW, dirty="m" * 64) is False, outcome
 

@@ -32,7 +32,6 @@ from stayfixed.jsonobject import json_object
 OUTCOMES: tuple[str, ...] = (
     "ok", "skipped", "conflict", "raced", "rejected", "offline", "auth_failed", "timeout",
     "hook_failed", "scan_unavailable", "signing_failed", "secret_found", "waiting_clean_tree",
-    "index_stale",
 )  # fmt: skip
 
 # The outcomes after which the sync has nothing to answer for: the hooks start no job on them and
@@ -104,26 +103,16 @@ EMPTY_HOLDS = Holds((), ())
 
 
 @dataclass(frozen=True)
-class PendingAlign:
-    """A move of `main` recorded before it is made, so a job killed after it aligns the index."""
-
-    from_sha: str
-    to_sha: str
-    paths: tuple[str, ...]
-
-
-@dataclass(frozen=True)
 class SyncState:
     """`overlay` is the root the state was recorded for, as the machine file spells it. `head` is
     the `HEAD` the last job left and `dirty` the `notes_mark` of the memory paths it found dirty,
-    which the back-off compares."""
+    which the back-off compares. A `pending_align` an older job wrote is ignored."""
 
     overlay: str
     outcome: Outcome
     holds: Holds
     fetched_sha: str | None
     last_job_at: str | None
-    pending_align: PendingAlign | None
     head: str | None = None
     dirty: str | None = None
 
@@ -169,16 +158,12 @@ def _parse(data: dict[str, Any]) -> SyncState:
     """The state in `data`, every field of the type the job writes, or `StateUnreadable`."""
     try:
         raw, up, local = data["outcome"], data["holds"]["upstream"], data["holds"]["local"]
-        align = data["pending_align"]
         state = SyncState(
             overlay=_text(data["overlay"]),
             outcome=Outcome(_text(raw["state"]), _time(raw["at"]), _text(raw["detail"], none=True)),
             holds=Holds(_texts(up["paths"]), _texts(local["commits"]), _text(up["why"], none=True)),
             fetched_sha=_text(data["fetched_sha"], none=True),
             last_job_at=_time(data["last_job_at"], none=True),
-            pending_align=None
-            if align is None
-            else PendingAlign(_text(align["from"]), _text(align["to"]), _texts(align["paths"])),
             head=_text(data["head"], none=True),
             dirty=_text(data["dirty"], none=True),
         )
@@ -211,7 +196,6 @@ def write_state(d: Path, s: SyncState) -> None:
     the new, never half."""
     if s.outcome.state not in OUTCOMES:
         raise ValueError(f"{s.outcome.state} is not a sync outcome")
-    align = s.pending_align
     document = {
         "overlay": s.overlay,
         "outcome": {
@@ -225,9 +209,6 @@ def write_state(d: Path, s: SyncState) -> None:
         },
         "fetched_sha": s.fetched_sha,
         "last_job_at": s.last_job_at,
-        "pending_align": None
-        if align is None
-        else {"from": align.from_sha, "to": align.to_sha, "paths": list(align.paths)},
         "head": s.head,
         "dirty": s.dirty,
     }

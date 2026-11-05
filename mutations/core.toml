@@ -6448,7 +6448,7 @@ name = "main moves without a compare-and-swap"
 file = "src/stayfixed/sync/job.py"
 before = '"refs/heads/main", new, old'
 after = '"refs/heads/main", new'
-reddens = ["tests/sync/test_integrate.py::test_main_moved_by_the_owner_during_the_integration_is_raced"]
+reddens = ["tests/sync/test_integrate.py::test_a_moved_main_after_the_write_is_raced_and_converges"]
 
 [[mutation]]
 name = "the unmerged entries are not asked again before the commit"
@@ -6515,7 +6515,7 @@ reddens = ["tests/sync/test_commit.py::test_one_secret_note_waits_and_the_others
 
 # The note sync's integration: the fetched sha read from the job's own ref after a checked fetch,
 # a range outside memory held, local commits replayed (never rebased), and the incoming notes
-# written only where the working tree still has the old version.
+# written by git before `main` moves, never over a note changed here.
 [[mutation]]
 name = "the integration rebases"
 file = "src/stayfixed/sync/job.py"
@@ -6599,20 +6599,34 @@ after = "    if False:"
 reddens = ["tests/sync/test_integrate.py::test_a_tree_git_cannot_check_out_is_held_not_moved_to"]
 
 [[mutation]]
-name = "an incoming note dirty here does not wait"
+name = "a refused read-tree is ignored"
 file = "src/stayfixed/sync/job.py"
-before = "    if blocked:"
+before = '    if timed(written, "git read-tree").code != 0:'
 after = "    if False:"
-reddens = ["tests/sync/test_integrate.py::test_a_dirty_incoming_note_is_waiting_clean_tree"]
+reddens = [
+  "tests/sync/test_integrate.py::test_a_dirty_incoming_note_waits_and_nothing_is_written",
+  "tests/sync/test_integrate.py::test_an_untracked_file_where_a_note_lands_waits",
+  "tests/sync/test_integrate.py::test_a_link_above_an_incoming_note_waits_and_the_link_stays",
+]
 
 [[mutation]]
-name = "a pending write goes over the owner's edit"
+name = "the index is not refreshed before the write"
 file = "src/stayfixed/sync/job.py"
-before = "            if not _worktree_has(ctx, path, before.get(path)):"
-after = "            if False:"
+before = '    checked(_locked(ctx, _git(ctx, "update-index", "-q", "--refresh")), "git update-index")'
+after = "    pass"
 reddens = [
-  "tests/sync/test_integrate.py::test_the_owners_edit_after_the_kill_wins_over_the_pending_write",
+  "tests/sync/test_integrate.py::test_a_note_rewritten_unchanged_does_not_block_its_incoming_version",
 ]
+
+# The order of the move: the notes and the index written first, `main` moved after, so a kill
+# between the two leaves notes staged on the old `main`, never `main` ahead of the working tree.
+[[mutation]]
+name = "main moves before the working tree is written"
+file = "src/stayfixed/sync/job.py"
+before = """    written = _locked(ctx, _git(ctx, "read-tree", "-m", "-u", "--end-of-options", head, tip))"""
+after = """    _swap(ctx, tip, head)
+    written = _locked(ctx, _git(ctx, "read-tree", "-m", "-u", "--end-of-options", head, tip))"""
+reddens = ["tests/sync/test_integrate.py::test_a_kill_between_the_write_and_the_move_converges"]
 
 # The push: it sends the sha its checks read and never a name that may have moved since, never
 # forced, and only after both scans of what it sends; the scan's report, not its exit, decides

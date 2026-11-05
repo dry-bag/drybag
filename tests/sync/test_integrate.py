@@ -3,8 +3,9 @@
 Integration never rebases. The new tip is computed without touching the working tree or the real
 index -- a fast-forward to the fetched sha, or each local commit replayed onto it with `merge-tree
 --write-tree` and `commit-tree` -- and only a range that is memory-only by both rules is integrated
-at all; anything else is an upstream hold. Then the move is recorded, `main` moved by
-compare-and-swap, the incoming notes written through git, and the index aligned.
+at all; anything else is an upstream hold. Then git writes the incoming notes and the index
+(`read-tree -m -u`), refusing before it writes anything a note changed here, an untracked file or
+a link in the way, and only then does `main` move, by compare-and-swap.
 """
 
 from __future__ import annotations
@@ -67,7 +68,7 @@ def test_a_memory_only_upstream_fast_forwards_onto_the_checked_sha(overlays: Ove
 
     assert J.integrate(ctx, fetched(overlays, overlays.a)) is None
 
-    assert not ctx.holds.any and ctx.pending is None
+    assert not ctx.holds.any
     assert head(overlays.a) == u
     assert (overlays.a / "common/memory/from-b.md").read_text() == "from b\n"
     assert memory_status(overlays.a) == "" and staged(overlays.a) == ""
@@ -331,21 +332,78 @@ def test_a_first_fetch_records_no_rewrite(overlays: Overlays) -> None:
 # -- what blocks integration ----------------------------------------------------------------------
 
 
-def test_a_dirty_incoming_note_is_waiting_clean_tree(overlays: Overlays) -> None:
-    # Mutation (oracle): `mutations/`'s "an incoming note dirty here does not wait".
-    a = overlays.a
-    upstream_text = note_text("first", index="First trigger") + "An upstream line.\n"
-    push_note(overlays.b, "common/memory/first.md", upstream_text)
+def test_incoming_notes_are_written_and_the_owners_staging_kept(overlays: Overlays) -> None:
+    # git writes what upstream brings, a removal included, and leaves the owner's staged work,
+    # a staged note it does not bring, and an untracked file as they were.
+    a, b = overlays.a, overlays.b
+    write(b, "common/memory/from-b.md", "from b\n")
+    (b / "common/memory/first.md").unlink()
+    commit_all(b, "memory: from b")
+    git(b, "push", "-q", "origin", "main")
+    write(a, "README.md", "overlay\nstaged line\n")
+    write(a, f"groups/{TAG}/memory/{TAG}-one.md", "staged by the owner\n")
+    git(a, "add", "README.md", f"groups/{TAG}/memory/{TAG}-one.md")
+    write(a, "common/claude/hooks/untracked.py", "print('mine')\n")
+    cached = git(a, "diff", "--cached")
+
+    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
+
+    assert head(a) == head(b)
+    assert (a / "common/memory/from-b.md").read_text() == "from b\n"
+    assert not (a / "common/memory/first.md").exists()
+    assert git(a, "diff", "--cached") == cached
+    assert (a / "common/claude/hooks/untracked.py").read_text() == "print('mine')\n"
+
+
+def test_a_dirty_incoming_note_waits_and_nothing_is_written(overlays: Overlays) -> None:
+    # Mutation (oracle): `mutations/`'s "a refused read-tree is ignored".
+    a, b = overlays.a, overlays.b
+    write(b, "common/memory/first.md", note_text("first", body="An upstream line."))
+    write(b, "common/memory/from-b.md", "from b\n")
+    commit_all(b, "memory: two")
+    git(b, "push", "-q", "origin", "main")
     before = head(a)
     write(a, "common/memory/first.md", note_text("first", index="First trigger (edited here)"))
-    ctx = context(overlays, a)
 
-    outcome = J.integrate(ctx, fetched(overlays, a))
+    outcome = J.integrate(context(overlays, a), fetched(overlays, a))
 
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert "(common/memory/first.md)" in str(outcome.detail)
-    assert head(a) == before and ctx.pending is None
+    assert "'common/memory/first.md' not uptodate" in str(outcome.detail)
+    assert head(a) == before and not (a / "common/memory/from-b.md").exists()
     assert "edited here" in (a / "common/memory/first.md").read_text()
+
+
+def test_a_note_rewritten_unchanged_does_not_block_its_incoming_version(
+    overlays: Overlays,
+) -> None:
+    # An editor that rewrites a note byte for byte leaves the index's stat data stale, which
+    # `read-tree -m -u` reads as a change: the job refreshes the index first. Mutation (oracle):
+    # `mutations/`'s "the index is not refreshed before the write".
+    a = overlays.a
+    path = a / "common/memory/first.md"
+    push_note(overlays.b, "common/memory/first.md", "upstream's first\n")
+    text = path.read_bytes()
+    stat = path.stat()
+    path.write_bytes(text)
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+
+    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
+
+    assert path.read_text() == "upstream's first\n"
+
+
+def test_an_untracked_file_where_a_note_lands_waits(overlays: Overlays) -> None:
+    a = overlays.a
+    push_note(overlays.b, "common/memory/from-b.md", "from b\n")
+    before = head(a)
+    write(a, "common/memory/from-b.md", "written here first\n")
+
+    outcome = J.integrate(context(overlays, a), fetched(overlays, a))
+
+    assert outcome is not None and outcome.state == "waiting_clean_tree"
+    assert "'common/memory/from-b.md' would be overwritten" in str(outcome.detail)
+    assert head(a) == before
+    assert (a / "common/memory/from-b.md").read_text() == "written here first\n"
 
 
 def test_an_index_rendered_here_never_blocks_an_incoming_note(overlays: Overlays) -> None:
@@ -364,7 +422,7 @@ def test_an_index_rendered_here_never_blocks_an_incoming_note(overlays: Overlays
     assert ctx.notices == []
 
 
-def test_a_link_above_an_incoming_path_blocks_and_nothing_escapes(
+def test_a_link_above_an_incoming_note_waits_and_the_link_stays(
     overlays: Overlays, tmp_path: Path
 ) -> None:
     a = overlays.a
@@ -377,8 +435,9 @@ def test_a_link_above_an_incoming_path_blocks_and_nothing_escapes(
     outcome = J.integrate(context(overlays, a), fetched(overlays, a))
 
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert "(projects/zeta/memory/project-stable/n.md)" in str(outcome.detail)
+    assert "'projects/zeta' would be overwritten" in str(outcome.detail)
     assert head(a) == before and list(outside.iterdir()) == []
+    assert (a / "projects" / "zeta").is_symlink()
 
     # A link inside memory, where upstream turns a note into a directory of notes.
     (a / "projects" / "zeta").unlink()
@@ -388,150 +447,89 @@ def test_a_link_above_an_incoming_path_blocks_and_nothing_escapes(
     outcome = J.integrate(context(overlays, a), fetched(overlays, a))
 
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert "common/memory/sub/n.md" in str(outcome.detail) and list(outside.iterdir()) == []
+    assert "common/memory/sub" in str(outcome.detail) and list(outside.iterdir()) == []
+    assert (a / "common/memory/sub").is_symlink()
 
 
-# -- a kill after the swap ------------------------------------------------------------------------
+# -- a kill or a race between the write and the move ----------------------------------------------
 
 
 class _Killed(BaseException):
     """The job dies here: nothing after this point runs, as with SIGKILL."""
 
 
-def _swap_then_die(monkeypatch: pytest.MonkeyPatch) -> None:
-    real_swap = J._swap
+def _upstream_brings_and_drops(overlays: Overlays) -> str:
+    """Upstream adds `from-b.md` and removes `first.md`; the sha `a` fetched."""
+    b = overlays.b
+    write(b, "common/memory/from-b.md", "from b\n")
+    (b / "common/memory/first.md").unlink()
+    commit_all(b, "memory: from b")
+    git(b, "push", "-q", "origin", "main")
+    return fetched(overlays, overlays.a)
 
-    def swap_then_die(ctx: J.JobContext, new: str, old: str) -> bool:
-        assert real_swap(ctx, new, old)
-        raise _Killed
 
-    monkeypatch.setattr(J, "_swap", swap_then_die)
-
-
-def test_a_kill_after_the_swap_is_finished_by_the_next_job(
+def test_a_kill_between_the_write_and_the_move_converges(
     overlays: Overlays, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    a, b = overlays.a, overlays.b
-    push_note(b, "common/memory/from-b.md", "from b\n")
-    (b / "common/memory/first.md").unlink()
-    git(b, "commit", "-q", "-am", "memory: drop first")
-    git(b, "push", "-q", "origin", "main")
-    upstream = fetched(overlays, a)
+    # Killed after `read-tree -m -u` and before `update-ref`: the notes are written and staged,
+    # `main` is unmoved, and nothing is recorded. The next job commits them, finds that commit
+    # upstream already, and moves `main`. Mutation (oracle): `mutations/`'s "main moves before
+    # the working tree is written".
+    a = overlays.a
+    upstream = _upstream_brings_and_drops(overlays)
+    before = head(a)
+
+    def die(*args: object) -> bool:
+        raise _Killed
 
     with monkeypatch.context() as patch, pytest.raises(_Killed):
-        _swap_then_die(patch)
+        patch.setattr(J, "_swap", die)
         J.integrate(context(overlays, a), upstream)
 
-    assert head(a) == upstream
-    state = read_state(overlays.state_dir)
-    assert state is not None and state.pending_align is not None
-    assert state.pending_align.to_sha == upstream
-    assert set(state.pending_align.paths) == {"common/memory/from-b.md", "common/memory/first.md"}
-    assert not (a / "common/memory/from-b.md").exists()  # killed before the write
-
-    assert J.align_first(context(overlays, a, pending=state.pending_align)) is None
-
+    assert head(a) == before
     assert (a / "common/memory/from-b.md").read_text() == "from b\n"
     assert not (a / "common/memory/first.md").exists()
+
+    state = J.run_job(context(overlays, a))
+
+    assert state is not None and state.outcome.state == "ok", state
+    assert head(a) == upstream == head(overlays.bare, "main")
     assert memory_status(a) == "" and staged(a) == ""
 
 
-def test_a_link_appearing_after_a_kill_is_named_by_the_job_that_finishes_it(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    # The pending write meets a link above its path: nothing is written beyond it, and a notice
-    # names it instead of an arrival that did not happen.
-    a = overlays.a
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    push_note(overlays.b, "common/memory/sub/n.md", "a nested note\n")
-    upstream = fetched(overlays, a)
-    with monkeypatch.context() as patch, pytest.raises(_Killed):
-        _swap_then_die(patch)
-        J.integrate(context(overlays, a), upstream)
-    (a / "common/memory/sub").symlink_to(outside, target_is_directory=True)
-    state = read_state(overlays.state_dir)
-    assert state is not None
-    ctx = context(overlays, a, pending=state.pending_align)
-
-    assert J.align_first(ctx) is None
-
-    [notice] = ctx.notices
-    assert notice.state == "hook_failed" and str(notice.detail).endswith(": common/memory/sub/n.md")
-    assert ctx.pending is None and list(outside.iterdir()) == []
-
-
-def test_the_owners_edit_after_the_kill_wins_over_the_pending_write(
+def test_a_moved_main_after_the_write_is_raced_and_converges(
     overlays: Overlays, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Incoming notes are written only where the working tree still has the old version.
-    # Mutation (oracle): `mutations/`'s "a pending write goes over the owner's edit".
+    # The owner commits a note between the write and the move: the compare-and-swap fails, the
+    # owner's commit stays on `main`, and the next job replays it onto upstream. Mutation
+    # (oracle): `mutations/`'s "main moves without a compare-and-swap".
     a = overlays.a
-    push_note(overlays.b, "common/memory/first.md", "upstream's first\n")
-    upstream = fetched(overlays, a)
-    with monkeypatch.context() as patch, pytest.raises(_Killed):
-        _swap_then_die(patch)
-        J.integrate(context(overlays, a), upstream)
-    write(a, "common/memory/first.md", "the owner wrote this meanwhile\n")
-    state = read_state(overlays.state_dir)
-    assert state is not None
-
-    assert J.align_first(context(overlays, a, pending=state.pending_align)) is None
-
-    assert (a / "common/memory/first.md").read_text() == "the owner wrote this meanwhile\n"
-
-
-def test_an_edit_landing_while_incoming_notes_are_written_is_never_overwritten(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Each incoming path is checked right before git writes it, never all checked first and
-    # written later: an agent's edit of a note already checked, made while a later one is
-    # checked, would be overwritten by the batch. The edit stays, for the next commit.
-    a, b = overlays.a, overlays.b
-    write(b, "common/memory/first.md", "upstream's first\n")
-    write(b, "common/memory/zz.md", "a later note\n")
-    commit_all(b, "memory: two")
-    git(b, "push", "-q", "origin", "main")
-    real = J._worktree_has
-
-    def an_agent_edits_first(ctx: J.JobContext, path: str, blob: tuple[str, str] | None) -> bool:
-        if path == "common/memory/zz.md":
-            (a / "common/memory/first.md").write_text("the agent's edit\n", encoding="utf-8")
-        return real(ctx, path, blob)
-
-    monkeypatch.setattr(J, "_worktree_has", an_agent_edits_first)
-
-    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
-
-    assert (a / "common/memory/first.md").read_text() == "the agent's edit\n"
-    assert (a / "common/memory/zz.md").read_text() == "a later note\n"
-
-
-def test_main_moved_by_the_owner_during_the_integration_is_raced(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # The swap compares against the HEAD the integration checked: the owner's commit landing in
-    # between stays on `main`.
-    a = overlays.a
-    push_note(overlays.b, "common/memory/from-b.md", "from b\n")
-    upstream = fetched(overlays, a)
+    upstream = _upstream_brings_and_drops(overlays)
+    real = J._swap
     owner: list[str] = []
 
-    def owner_commits() -> None:
-        write(a, "README.md", "the owner's edit\n")
-        git(a, "commit", "-q", "-m", "owner", "--", "README.md")
+    def the_owner_commits_first(ctx: J.JobContext, new: str, old: str) -> bool:
+        write(a, "common/memory/owner.md", "the owner's note\n")
+        git(a, "add", "--", "common/memory/owner.md")
+        git(a, "commit", "-q", "-m", "memory: the owner's", "--", "common/memory/owner.md")
         owner.append(head(a))
+        return real(ctx, new, old)
 
-    monkeypatch.setattr(J, "_before_swap", owner_commits)
-    ctx = context(overlays, a)
-
-    outcome = J.integrate(ctx, upstream)
+    with monkeypatch.context() as patch:
+        patch.setattr(J, "_swap", the_owner_commits_first)
+        outcome = J.integrate(context(overlays, a), upstream)
 
     assert outcome is not None and outcome.state == "raced"
-    assert head(a) == owner[0] and ctx.pending is None
-    state = read_state(overlays.state_dir)
-    assert state is not None and state.pending_align is None
-    assert not (a / "common/memory/from-b.md").exists()
+    assert head(a) == owner[0]
+    assert (a / "common/memory/from-b.md").exists()
+
+    state = J.run_job(context(overlays, a))
+
+    assert state is not None and state.outcome.state == "ok", state
+    assert git(a, "merge-base", "--is-ancestor", upstream, "HEAD") == ""
+    assert git(a, "show", "HEAD:common/memory/owner.md") == "the owner's note\n"
+    assert head(a) == head(overlays.bare, "main")
+    assert memory_status(a) == "" and staged(a) == ""
 
 
 def test_upstream_moving_after_the_fetch_is_not_integrated(overlays: Overlays) -> None:
@@ -597,10 +595,9 @@ def test_a_tree_git_cannot_check_out_is_held_not_moved_to(overlays: Overlays) ->
 
     assert J.integrate(ctx, crafted) is None
 
-    assert head(a) == before and ctx.pending is None
+    assert head(a) == before
     assert ctx.holds.upstream_paths == (path,)
     assert any("cannot be checked out" in remark for remark in ctx.remarks)
-    assert read_state(overlays.state_dir) is None  # no pending record was ever written
 
 
 def _held(overlays: Overlays, ctx: J.JobContext, before: str) -> set[str]:
@@ -777,7 +774,7 @@ def test_a_note_conflict_is_a_conflict_with_main_unmoved(overlays: Overlays) -> 
 
     assert outcome is not None and outcome.state == "conflict"
     assert "upstream on common/memory/first.md;" in str(outcome.detail)
-    assert head(a) == before and ctx.pending is None
+    assert head(a) == before
     assert (a / "common/memory/first.md").read_text() == "local version\n"
     assert (a / "common/claude/hooks/x.py").read_bytes() == edit
     assert memory_status(a) == "" and staged(a) == ""
