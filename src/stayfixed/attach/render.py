@@ -14,11 +14,11 @@ saw. No other name of a delivered part is predictable, and none of these is ever
 
 **What is rendered.** The union of the `claude/hooks.json` of each plate of the overlay
 (`config.plates`: `common/`, the project's tags in list order, `projects/<project>/`), each event's
-entry groups in plate order, as the overlay wrote them; and `skills/` and `agents/` copied from the
-same directories, a later plate's copy of a file winning over an earlier one's. `<project>` is the
-project this machine's binding record names, which the caller passes. Every source is read before
-anything is written (`read_parts`), so a file that cannot be read stops the run while the render
-is as it was.
+entry groups in plate order, as the overlay wrote them; and the skills and agents of the same
+directories, each copied whole from the plate that wins it (`attach.items`), so no file of a
+losing plate's skill reaches the render. `<project>` is the project this machine's binding record
+names, which the caller passes. Every source is read before anything is written (`read_parts`),
+so a file that cannot be read stops the run while the render is as it was.
 
 **The overlay's path-scoped rules** (`attach.rules`) add one entry: on `PostToolUse`, matching
 `Read|Edit|Write`, `hook PostToolUse` run through whatever launched the stayfixed that renders
@@ -46,14 +46,15 @@ import os
 import stat
 import sys
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
 import stayfixed
 from stayfixed import fsops
-from stayfixed.attach.permissions import HOOKS_FILE, PROJECT_CLAUDE, hook_groups
+from stayfixed.attach.items import AGENT, PROJECT_CLAUDE, SKILL, fold
+from stayfixed.attach.permissions import HOOKS_FILE, hook_groups
 from stayfixed.attach.rules import scoped_exist
 from stayfixed.binding import delivery_directory, short, unwritten
 from stayfixed.config.plates import PlateKind, plates
@@ -68,8 +69,10 @@ MARKETPLACE_FILE = ".claude-plugin/marketplace.json"
 PLUGIN_FILE = f"{PLUGIN_DIRECTORY}/.claude-plugin/plugin.json"
 # The plugin's hook file, by its path inside the plugin directory.
 HOOK_FILE = "hooks/hooks.json"
-# The two directories copied whole from each source, beside the hook file.
-COPIED = ("skills", "agents")
+# The two kinds of item copied whole from the plate that wins each (`attach.items`), beside the hook
+# file, and the directories they are copied into.
+COPIED_KINDS = (SKILL, AGENT)
+COPIED = tuple(kind.directory for kind in COPIED_KINDS)
 # The entry that delivers path-scoped rules: the event, the tools whose input names a file, and the
 # core plugin's hook wrapper, by its path in the plugin root, beside `src/`.
 SCOPED_EVENT = "PostToolUse"
@@ -137,18 +140,24 @@ def _unreadable(sentence: str) -> Failure:
     return Failure(f"{sentence}, so nothing was written")
 
 
-def _copied(source: Path) -> dict[str, Part]:
-    """Every regular file under `source` by its path relative to it, its text with its own line
-    endings and its permission bits, so a skill's script stays executable; dot-named files and
-    directories are left out. The overlay is the owner's, so a path in it prints, through `quoted`
-    since a project's directory carries `project.name`."""
+def _copied(item: Path) -> dict[str, Part]:
+    """Every regular file of `item`, an entry of a plate's `skills/` or `agents/` that is a
+    directory or a file, by its path relative to the directory holding it, its text with its own
+    line endings and its permission bits, so a skill's script stays executable; dot-named files
+    and directories below it are left out. The overlay is the owner's, so a path in it prints,
+    through `quoted` since a project's directory carries `project.name`."""
 
     def refuse(error: OSError) -> None:
         raise error
 
     found: dict[str, Part] = {}
-    with fsops.reading(quoted(str(source)), _unreadable):
-        for directory, names, files in os.walk(source, onerror=refuse):
+    with fsops.reading(quoted(str(item)), _unreadable):
+        walked: Iterable[tuple[str, list[str], list[str]]] = (
+            os.walk(item, onerror=refuse)
+            if fsops.is_dir(item)
+            else [(str(item.parent), [], [item.name])]
+        )
+        for directory, names, files in walked:
             # Pruned in place, which is how `os.walk` is told not to enter a directory.
             names[:] = sorted(name for name in names if not name.startswith("."))
             for name in sorted(files):
@@ -160,8 +169,12 @@ def _copied(source: Path) -> dict[str, Part]:
                     # The permission bits alone: a set-id or sticky bit is not the overlay's to
                     # hand to a file under this machine's data directory.
                     mode = stat.S_IMODE(path.stat().st_mode) & 0o777
-                found[path.relative_to(source).as_posix()] = Part(text, mode)
+                found[path.relative_to(item.parent).as_posix()] = Part(text, mode)
     return found
+
+
+def _unlisted(directory: Path, error: OSError) -> Failure:
+    return _unreadable(fsops.unreadable(quoted(str(directory)), error))
 
 
 def _quoted(path: str) -> str:
@@ -242,12 +255,13 @@ def read_parts(overlay: Path, project: str, *, command: str | None = None) -> di
     copied directories. `command` is the path-scoped rules' command, this process's own
     (`scoped_command`) where it is `None`: `doctor` passes the one the render holds, so a report
     run through another launcher than `attach` was reads no drift for that alone."""
+    found = plates(overlay, project)[0]
     sources = tuple(
         (
             plate.directory / PROJECT_CLAUDE,
             plate.directory if plate.kind is PlateKind.PROJECT else None,
         )
-        for plate in plates(overlay, project)[0]
+        for plate in found
     )
     hooks: dict[str, list[object]] = {}
     for source, owner in sources:
@@ -258,12 +272,10 @@ def read_parts(overlay: Path, project: str, *, command: str | None = None) -> di
     if scoped_exist(overlay, project) and (command := command or scoped_command()) is not None:
         hooks.setdefault(SCOPED_EVENT, []).append(scoped_group(command))
     parts = {HOOK_FILE: Part(json.dumps({"hooks": hooks}, indent=2) + "\n")}
-    for source, _ in sources:
-        for copied in COPIED:
-            directory = source / copied
-            if fsops.is_dir(directory):
-                for relative, part in _copied(directory).items():
-                    parts[f"{copied}/{relative}"] = part
+    for kind in COPIED_KINDS:
+        for item in fold(found, kind, _unlisted).winners.values():
+            for relative, part in _copied(item).items():
+                parts[f"{kind.directory}/{relative}"] = part
     return parts
 
 

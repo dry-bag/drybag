@@ -30,6 +30,7 @@ from typing import Any
 
 from stayfixed import fsops
 from stayfixed.attach.binding import Binding, cannot_exist
+from stayfixed.attach.items import CODEX_RULE, PROJECT_CLAUDE, fold
 from stayfixed.config.plates import PlateKind, plates
 from stayfixed.errors import Failure
 from stayfixed.fsops import read_regular_text
@@ -49,9 +50,6 @@ from stayfixed.scaffold import (
 (LOCAL_SETTINGS,) = CLAUDE.local_settings
 PERMISSIONS_FILE = "permissions.json"
 HOOKS_FILE = "hooks.json"
-# The per-harness subdirectory of a project's own share of the overlay.
-PROJECT_CLAUDE = "claude"
-PROJECT_CODEX = "codex"
 # Where Codex reads standing instructions.
 CODEX_RULES = ".codex/rules"
 
@@ -211,9 +209,9 @@ def codex_rules(binding: Binding) -> tuple[tuple[str, Path], ...]:
     This is **reporting and not gating**, as everything the overlay grants is: the overlay is the
     machine owner's own artifact, so `attach` shows what it places and proceeds.
 
-    Each plate's `codex/` is read in plate order (`config.plates`), so of two files sharing a name
-    the later plate's lands; the pair is returned rather than two lists so the caller cannot pair
-    them up differently from the way the write does.
+    The files are the winners of the plates' fold (`attach.items`), so of two files sharing a
+    name the later plate's lands, in its place; the pair is returned rather than two lists so the
+    caller cannot pair them up differently from the way the write does.
 
     A directory this user cannot list, or one whose entries cannot be asked about (`0o444`: the
     listing works and `stat` of an entry does not), fails as a rule file that cannot be read
@@ -221,25 +219,14 @@ def codex_rules(binding: Binding) -> tuple[tuple[str, Path], ...]:
     cannot read, and one classification. The project's directory carries `project.name`, so the
     path prints through `quoted`.
     """
-    found: dict[str, Path] = {}
-    for plate in plates(binding.overlay, binding.project)[0]:
-        source = plate.directory / PROJECT_CODEX
-        try:
-            if not fsops.is_dir(source):
-                continue
-            rules = [
-                rule
-                for rule in sorted(source.iterdir())
-                if fsops.is_file(rule) and not rule.name.startswith(".")
-            ]
-        except OSError as exc:
-            raise Failure(
-                f"{quoted(str(source))} cannot be listed ({fsops.said(exc)}), "
-                "so nothing was written"
-            ) from exc
-        for rule in rules:
-            found[f"{CODEX_RULES}/{rule.name}"] = rule
-    return tuple(found.items())
+    winners = fold(plates(binding.overlay, binding.project)[0], CODEX_RULE, _unlisted).winners
+    return tuple((f"{CODEX_RULES}/{name}", source) for name, source in winners.items())
+
+
+def _unlisted(source: Path, error: OSError) -> Failure:
+    return Failure(
+        f"{quoted(str(source))} cannot be listed ({fsops.said(error)}), so nothing was written"
+    )
 
 
 def _claude_sources(binding: Binding, name: str) -> tuple[tuple[Path, Path | None], ...]:

@@ -16,7 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.attach.render import render
+from stayfixed.attach.binding import Binding
+from stayfixed.attach.permissions import codex_rules
+from stayfixed.attach.render import read_parts, render
+from stayfixed.attach.rules import read as rules_read
+from stayfixed.attach.tags import collisions
 
 ID = "0123456789abcdef0123456789abcdef"
 COMMON = {"type": "command", "command": "common.sh"}
@@ -264,21 +268,58 @@ def test_a_tag_hook_group_is_rendered_between_common_and_the_project(tmp_path: P
     ]
 
 
-def test_a_tag_skill_is_rendered_and_a_later_plate_wins_its_path(tmp_path: Path) -> None:
+def test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole(tmp_path: Path) -> None:
+    # A skill is the item its directory names: b's `review` replaces a's and common's whole, so no
+    # file of theirs reaches the render, which is what the collision sentence says. Mutation
+    # (oracle): `mutations/`'s "a skill is merged file by file across plates" -> a's `helper.sh`
+    # and common's `check.sh` arrive beside b's `SKILL.md`.
     overlay = _overlay(tmp_path)
     _tagged(overlay, "a", "b")
     for tag in ("a", "b"):
-        (overlay / "groups" / tag / "claude" / "skills" / "review").mkdir(parents=True)
-        (overlay / "groups" / tag / "claude" / "skills" / "review" / "SKILL.md").write_text(
-            f"review from {tag}\n", encoding="utf-8"
-        )
-        (overlay / "groups" / tag / "claude" / "skills" / f"only-{tag}.md").write_text(
-            f"{tag}\n", encoding="utf-8"
-        )
+        skills = overlay / "groups" / tag / "claude" / "skills"
+        (skills / "review").mkdir(parents=True)
+        (skills / "review" / "SKILL.md").write_text(f"review from {tag}\n", encoding="utf-8")
+        (skills / f"only-{tag}.md").write_text(f"{tag}\n", encoding="utf-8")
+    (overlay / "groups" / "a" / "claude" / "skills" / "review" / "helper.sh").write_text(
+        "from a only\n", encoding="utf-8"
+    )
     render(overlay, "p", ID)
     skills = _delivery() / "plugin" / "skills"
-    # The later tag replaces the common skill's file of the same path; a file only a tag holds
-    # arrives beside it.
+    assert sorted(path.name for path in (skills / "review").iterdir()) == ["SKILL.md"]
     assert (skills / "review" / "SKILL.md").read_text() == "review from b\n"
-    assert (skills / "review" / "check.sh").is_file()
     assert (skills / "only-a.md").read_text() == "a\n" and (skills / "only-b.md").is_file()
+    assert collisions(overlay, "p", ()) == (
+        "the skill review is held by the tags a, b: the later, b, wins",
+    )
+
+
+def test_a_rule_a_codex_file_and_a_skill_take_one_winner_and_one_order(tmp_path: Path) -> None:
+    # Each kind is folded alike: the later plate wins the whole item, and the item takes that
+    # plate's place, so the common-only `y` comes before the tag's `x`.
+    overlay = _overlay(tmp_path)
+    _tagged(overlay, "a")
+    for plate, names in (("common", ("x", "y")), ("groups/a", ("x",))):
+        for name in names:
+            for relative in (
+                f"claude/rules/{name}.md",
+                f"codex/{name}.rules",
+                f"claude/skills/{name}/SKILL.md",
+            ):
+                (overlay / plate / relative).parent.mkdir(parents=True, exist_ok=True)
+                (overlay / plate / relative).write_text(f"{plate}\n", encoding="utf-8")
+    (overlay / "common" / "claude" / "skills" / "x" / "extra.md").write_text("", encoding="utf-8")
+    binding = Binding("p", overlay, overlay / "projects" / "p" / "memory", None, None, "")
+    rules = rules_read(overlay, "p")
+    assert [(rule.name, rule.body) for rule in rules] == [("y.md", "common"), ("x.md", "groups/a")]
+    assert [(target, source.parent.parent.name) for target, source in codex_rules(binding)] == [
+        (".codex/rules/y.rules", "common"),
+        (".codex/rules/x.rules", "a"),
+    ]
+    parts = read_parts(overlay, "p")
+    assert [name for name in parts if name.startswith("skills/")] == [
+        "skills/review/SKILL.md",
+        "skills/review/check.sh",
+        "skills/y/SKILL.md",
+        "skills/x/SKILL.md",
+    ]
+    assert parts["skills/x/SKILL.md"].text == "groups/a\n"

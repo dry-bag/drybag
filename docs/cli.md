@@ -1658,8 +1658,9 @@ renamed in a pulled commit moves every worktree's binding — says so on one lin
 `stayfixed-delivery-<id>` holding one plugin, `overlay-<id>`, whose `hooks/hooks.json` is the union
 of the `claude/hooks.json` of `common/`, of each tag the project lists in list order, and of
 `projects/<name>/` — each event's entry groups in that order, as the overlay wrote them — and whose
-`skills/` and `agents/` are copied from the same directories, a later plate's copy of a file
-winning over an earlier one's and each copy keeping its source's permission bits, so a skill's script stays executable. A session runs the plugin from that
+skills and agents, each an entry directly in `skills/` or `agents/` of the same directories, are
+copied whole from the later plate that holds one of the name, no file of an earlier plate's entry
+beside it, each copy keeping its source's permission bits, so a skill's script stays executable. A session runs the plugin from that
 directory in place, so a later `attach` re-renders it there and an edit reaches the next session
 with no reinstall. Each render is written whole into a new directory beside it and swapped into
 place, so a file the overlay no longer holds is gone, whatever an earlier run recorded; the ledger
