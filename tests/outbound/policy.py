@@ -209,6 +209,12 @@ PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
     ("src/stayfixed/setup/run.py", "_install_plugins", "argv"): frozenset(
         {"claude plugin", "codex plugin"}
     ),
+    # `setup --restore`'s `claude plugin marketplace add` and `claude plugin install`, the same
+    # lambdas' `claude` entries, which the same test calls.
+    ("src/stayfixed/setup/restore.py", "install_listed", "add(argument)"): frozenset(
+        {"claude plugin"}
+    ),
+    ("src/stayfixed/setup/restore.py", "install_listed", "argv"): frozenset({"claude plugin"}),
     # `claude plugin marketplace add <render directory> --scope local`, then `claude plugin install
     # overlay-<id>@stayfixed-delivery-<id> --scope local`, each `attach.render`'s table with its
     # slot filled, which `test_the_rendered_plugins_install_reaches_the_rows_its_entries_name`

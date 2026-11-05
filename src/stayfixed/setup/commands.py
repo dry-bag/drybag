@@ -22,19 +22,17 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from stayfixed import fsops
 from stayfixed.areas import SubParsers
 from stayfixed.command import HOME_HELP, SETUP_MACHINE_HELP, SETUP_ROOT_HELP, grammar
+from stayfixed.config.overlay import overlay_root
 from stayfixed.errors import Failure, Refusal
 from stayfixed.presets import DEFAULT_PRESET
 from stayfixed.printed import quoted
 from stayfixed.result import Result
 from stayfixed.runner import Runner, subprocess_runner
-
-if TYPE_CHECKING:
-    from stayfixed.setup.restore import Listed
 
 # Imported at module scope, and not deferred into `run_setup` the way `setup.run.setup` still
 # is: a test that wants to keep this command away from a real `claude`/`codex` binary has to
@@ -154,12 +152,14 @@ _ADVICE_ALONE = (
     "--overlay, --plugin, --restore, --git-hooks or --uninstall; run `stayfixed setup` with those "
     "separately"
 )
-# `--yes` records the overlay's notes as reviewed while restoring, and means nothing to any other
-# form of this command: refused before anything is written, naming the flag that gives it a meaning.
-_YES_ALONE = (
-    "--yes records the overlay's notes as reviewed and is taken only with --restore; run "
-    "`stayfixed setup --restore --yes` for that, and nothing was written"
+# `--yes` records the overlay's notes as reviewed and `--sync` switches note sync on, each while
+# restoring, and neither means anything to any other form of this command: refused before anything
+# is written, naming the flag that gives it a meaning.
+_RESTORE_ONLY = (
+    "{flag} {does} and is taken only with --restore; run `stayfixed setup --restore {flag}` for "
+    "that, and nothing was written"
 )
+_RESTORE_FLAGS = {"yes": "records the overlay's notes as reviewed", "sync": "switches note sync on"}
 # `--restore` restores from an overlay, and with none recorded and none named there is nothing to
 # restore from: refused above the first write, naming the flag that gives it one.
 _RESTORE_NEEDS_AN_OVERLAY = (
@@ -179,20 +179,16 @@ BOUNDARY_ADVICE = (
 
 
 def run_setup(args: argparse.Namespace) -> Result:
-    if args.yes and not args.restore:
-        raise Refusal(_YES_ALONE)
+    for flag, does in _RESTORE_FLAGS.items():
+        if getattr(args, flag) and not args.restore:
+            raise Refusal(_RESTORE_ONLY.format(flag=f"--{flag}", does=does))
+    named = (args.preset, args.overlay, args.plugin)
     if args.approval_boundary:
-        named = (args.preset, args.overlay, args.plugin)
-        switched = (args.git_hooks, args.uninstall)
-        if args.restore:
-            raise Refusal(_ADVICE_ALONE)
-        if any(switched) or any(value is not None for value in named):
+        if args.restore or args.git_hooks or args.uninstall or any(v is not None for v in named):
             raise Refusal(_ADVICE_ALONE)
         return run_boundary_advice(args)
     if args.git_hooks:
-        if args.restore:
-            raise Refusal(_HOOKS_ALONE)
-        if args.preset is not None or args.overlay is not None or args.plugin is not None:
+        if args.restore or any(value is not None for value in named):
             raise Refusal(_HOOKS_ALONE)
         return run_git_hooks(args)
     if args.uninstall:
@@ -213,9 +209,8 @@ def run_setup(args: argparse.Namespace) -> Result:
     # Resolved here rather than in `register()`, so that `stayfixed setup --help` prints the
     # sentence and not whichever home directory the parser happened to be built under.
     home, machine = _home_and_machine(args)
-    chosen, listed = (
-        _restore_input(args, home=home, machine=machine) if args.restore else (None, ())
-    )
+    if args.restore and args.overlay is None and overlay_root(machine) is None:
+        raise Refusal(_RESTORE_NEEDS_AN_OVERLAY)
     runner = subprocess_runner()
     report = setup(
         args.preset or DEFAULT_PRESET,
@@ -235,11 +230,10 @@ def run_setup(args: argparse.Namespace) -> Result:
     }
     if not args.restore:
         return Result(_summary(machine, data), data)
-    # The overlay `setup` recorded, which is the one a run that rendered or created it made.
-    # Never `None`: `_restore_input` refused a run with no overlay in view, and `setup` records one
-    # whenever `--overlay` names a path.
-    overlay = cast(Path, report.overlay or chosen)
-    return _restored(overlay, listed, data, home=home, machine=machine, runner=runner, yes=args.yes)
+    # The overlay `setup` recorded this run, else the one the machine file records. Never `None`:
+    # a run with neither was refused above, and `setup` records one whenever `--overlay` names one.
+    overlay = cast(Path, report.overlay or overlay_root(machine))
+    return _restored(overlay, data, home=home, machine=machine, runner=runner, args=args)
 
 
 def _summary(machine: Path, data: dict[str, Any]) -> str:
@@ -258,52 +252,41 @@ def _summary(machine: Path, data: dict[str, Any]) -> str:
     )
 
 
-def _restore_input(
-    args: argparse.Namespace, *, home: Path, machine: Path
-) -> tuple[Path | None, tuple[Listed, ...]]:
-    """What `--restore` reads before `setup` writes anything: the overlay it restores from and the
-    projects that overlay lists, so an owner's file that cannot be read costs nothing. The overlay
-    is `--overlay`'s path when it names one that holds an overlay, else the machine file's recorded
-    root; `--overlay create:…` and a path that names nothing list nothing, since the run makes the
-    overlay, and no overlay in view at all is refused."""
-    from stayfixed.setup.restore import listed_projects, overlay_to_restore
-
-    overlay = overlay_to_restore(args.overlay, machine=machine)
-    if overlay is None and args.overlay is None:
-        raise Refusal(_RESTORE_NEEDS_AN_OVERLAY)
-    return overlay, () if overlay is None else listed_projects(overlay, home=home)
-
-
 def _restored(
     overlay: Path,
-    listed: tuple[Listed, ...],
     data: dict[str, Any],
     *,
     home: Path,
     machine: Path,
     runner: Runner,
-    yes: bool,
+    args: argparse.Namespace,
 ) -> Result:
-    """`setup --restore`'s result: setup's summary, holding the plugins restore installed and its
-    notes too, then one line per listed project, and exit 1 when one was refused or failed."""
-    from stayfixed.setup.restore import line, restore
+    """`setup --restore` after machine setup ran: the overlay checked and its projects file read,
+    either refused naming it; `--sync` written; then setup's summary, holding the plugins restore
+    installed and its notes too, one line per listed project, and exit 1 when one was refused or
+    failed."""
+    from stayfixed.overlay.api import overlay_fault
+    from stayfixed.setup.machine import write_machine
+    from stayfixed.setup.restore import line, listed_projects, restore
 
-    done = restore(overlay, listed, home=home, machine=machine, runner=runner, yes=yes)
+    try:
+        if (fault := overlay_fault(overlay)) is not None:
+            raise Refusal(fault)
+        listed = listed_projects(overlay, home=home)
+    except Refusal as exc:
+        raise Refusal(f"{exc}; machine setup ran, and nothing was restored") from None
+    if args.sync:
+        write_machine(machine, personal={}, overlay_root=None, machine={}, sync={"enabled": True})
+    done = restore(overlay, listed, home=home, machine=machine, runner=runner, yes=args.yes)
+    data["overlay"] = str(overlay)
+    data["sync"] = args.sync
     data["plugins_installed"] += done.plugins
     data["notes"] += done.notes
     data["missing"] = list(done.missing)
-    data["projects"] = [
-        {
-            "name": o.name,
-            "dir": str(o.dir),
-            "state": o.state,
-            "detail": o.detail,
-            "promoted": o.promoted,
-        }
-        for o in done.projects
-    ]
+    data["projects"] = [{**o._asdict(), "dir": str(o.dir)} for o in done.projects]
     lines = [f"missing tools: {', '.join(done.missing)}"] if done.missing else []
-    lines += [_summary(machine, data), *(line(outcome) for outcome in done.projects)]
+    summary = _summary(machine, data) + ("; note sync switched on" if args.sync else "")
+    lines += [summary, *(line(outcome) for outcome in done.projects)]
     bad = any(outcome.state in ("refused", "failed") for outcome in done.projects)
     return Result("\n".join(lines), data, exit_code=1 if bad else 0)
 
@@ -410,6 +393,11 @@ def register(groups: SubParsers) -> None:
         "--yes",
         action="store_true",
         help="with --restore, record the overlay's notes for each attached project as reviewed",
+    )
+    setup.add_argument(
+        "--sync",
+        action="store_true",
+        help="with --restore, switch note sync on in the machine file",
     )
     setup.add_argument(
         "--git-hooks",

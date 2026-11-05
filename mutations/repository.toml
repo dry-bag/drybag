@@ -466,20 +466,22 @@ reddens = [
 [[mutation]]
 name = "a python3 below the floor leaves the session unaware that stayfixed is off"
 file = "hooks/run-hook.sh"
-before = '    off "$bad" "$bad is not python 3.11 or newer"'
-after = '    skip "$bad is not python 3.11 or newer"'
+before = '  off "$bad" "$bad is not python 3.11 or newer"'
+after = '  skip "$bad is not python 3.11 or newer"'
 reddens = [
   "tests/hooks/test_wrapper.py::test_the_dispatching_session_start_says_the_hooks_are_off[below-the-floor]",
 ]
 
-# `uv python find` runs the executable script a `.python-version` in its working directory names, so
-# uv asked from the project root would let a repository choose the program every hook starts.
+# A relative `PATH` element, a version manager's shim and uv each answer for the directory they run
+# in, so asked from the project root a repository would choose the program every hook starts.
 [[mutation]]
-name = "the hook wrapper asks uv from the project root"
+name = "the hook wrapper asks python3 and uv from the project root"
 file = "hooks/run-hook.sh"
-before = "python=$(cd / && uv python find"
-after = "python=$(uv python find"
+before = "python=$(cd / && {"
+after = "python=$({"
 reddens = [
+  "tests/hooks/test_wrapper.py::test_a_repository_never_chooses_the_interpreter[empty-element]",
+  "tests/hooks/test_wrapper.py::test_a_repository_never_chooses_the_interpreter[shim]",
   "tests/hooks/test_wrapper.py::test_uv_is_asked_from_a_neutral_directory_and_a_repository_script_never_runs",
 ]
 
@@ -601,8 +603,8 @@ reddens = [
 [[mutation]]
 name = "the interpreter probe runs with the environment's PYTHONPATH and user site again"
 file = "hooks/run-hook.sh"
-before = '"$1" -I -c '
-after = '"$1" -c '
+before = 'python3 -I -c '
+after = 'python3 -c '
 reddens = [
   "tests/hooks/test_wrapper.py::test_a_module_the_environment_plants_never_runs[pythonpath]",
   "tests/hooks/test_wrapper.py::test_a_module_the_environment_plants_never_runs[user-site]",
