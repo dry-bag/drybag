@@ -40,11 +40,11 @@ _TOML_POSITION = re.compile(r"\((?:at line \d+, column \d+|at end of document)\)
 NO_POSITION = "(at a position tomllib did not report)"
 # `tomllib` reads nested arrays and inline tables by recursion, so a document nested a few
 # thousand levels deep — `a = [[[…]]]` — raises `RecursionError` and not `TOMLDecodeError`.
-# Uncaught, that is an internal error, the class stayfixed keeps for its own defects, and in a
-# gate run it ended every gate. And an integer literal longer than the interpreter converts
-# (4,300 digits by default, `sys.get_int_max_str_digits`) is valid TOML that `tomllib` answers with
-# a plain `ValueError`, which is not a `TOMLDecodeError`: one line of a committed file ended
-# `doctor`, `gate` and `init` the same way. Every reader of a document somebody else wrote catches
+# Uncaught, that is an internal error, the class stayfixed keeps for its own defects. And an
+# integer literal longer than the interpreter converts (4,300 digits by default,
+# `sys.get_int_max_str_digits`) is valid TOML that `tomllib` answers with a plain `ValueError`,
+# which is not a `TOMLDecodeError`: one line of a committed file ended `doctor` and `init` the
+# same way. Every reader of a document somebody else wrote catches
 # all three. `ValueError` is caught whole, `TOMLDecodeError` being one: no reader's `try` holds
 # anything else that raises it but a decode, whose `UnicodeDecodeError` it catches first or
 # answers as it answers a record that does not parse.

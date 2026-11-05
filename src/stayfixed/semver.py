@@ -1,6 +1,6 @@
 """How one version orders against another, read the one way every reader of a version does.
 
-`upgrade` refuses to move a project backward and `doctor`'s `versions` row points by direction: one
+`doctor`'s `versions` row and a session's note on a newer configuration point by direction: one
 comparison, so the two cannot disagree about which way a recorded version lies. The overlay's
 `requires` reader reads a floor through the same component grammar and decides the floor's own
 triple by `pre_release`, the reading `later` orders a release after, so a pre-release does not meet

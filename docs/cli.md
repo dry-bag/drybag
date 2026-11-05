@@ -228,9 +228,10 @@ unreviewed again and moves no other note. The record is this machine's, so anoth
 promotes for itself. Only a reviewed note is a standing rule
 ([`session-context`](#stayfixed-memory-session-context---bundle-name---part-n)). The record lies
 outside every tree, so repository bytes cannot write it; an agent whose shell can run this command
-can, and against it the record is a label, not a gate (what the record holds against is below). No
-command withdraws an approval: a promoted note is withdrawn by editing it, which changes its
-digest, or by deleting it.
+can, and against it the record is a label, not a gate (what the record holds against is below). An
+approval holds for its bytes wherever they reappear: an edit takes the note out of review, but the
+same bytes written again anywhere, a revert or a copy, are reviewed again. No command withdraws
+an approval; withdrawing one is a hand edit of `trust.json` that removes its entry.
 [`stayfixed setup --restore --yes`](#stayfixed-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
 records the notes of the overlay's share for each project it attaches.
 
@@ -2013,8 +2014,8 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
    a checkout holds is read, whatever its memory mode, and a note is reviewed wherever the same
    bytes are read. Without `--yes` nothing is recorded as reviewed, whatever the overlay holds. A project whose notes cannot be recorded (an unreadable
    trust record, which is never overwritten) is reported `failed`, attached all the same. A second
-   run with `--yes` records nothing new; a note you recorded is withdrawn by editing or deleting
-   it. `--yes` without `--restore` is refused (`2`),
+   run with `--yes` records nothing new; an approval it recorded is withdrawn by a hand edit of
+   `trust.json`. `--yes` without `--restore` is refused (`2`),
    naming `--restore`, before anything is written.
 
 Last, it checks the tools and prints what is missing on the first line of its output, above machine

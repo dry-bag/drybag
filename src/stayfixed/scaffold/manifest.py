@@ -126,8 +126,8 @@ class Manifest:
 
         The question every command that starts from the manifest asks first, and asked as `read`
         asks it, so a committed `.stayfixed` link is refused whatever it points at: into a
-        directory nobody may search, a bare `is_file` met a fault, and `init`, `upgrade` and
-        `uninstall` ended in an internal error that printed the path.
+        directory nobody may search, a bare `is_file` met a fault, and `init` ended in an internal
+        error that printed the path.
         """
         return fsops.is_file(_contained_path(root))
 

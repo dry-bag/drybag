@@ -360,8 +360,8 @@ def loads(
     naming `<root>/stayfixed.toml` would send its owner to a file with nothing wrong in it.
     `personal` is the `[personal]` a load earlier in the same command already read, taken in
     place of reading the machine file again: a caller that holds a `Config` and not the path
-    its machine file came from — a gate, handed `(root, config, base)` — loads a second
-    document with it, and so reads no machine file but the one the command was given. Given
+    its machine file came from — the `bugs` gate, handed `(root, config, base)` — loads a
+    second document with it, and so reads no machine file but the one the command was given. Given
     both, `personal` wins and `machine` is never read. `owner` is the machine owner's layer
     (`config.owner.resolve_owner`), read once by the caller and stood on the document's preset
     (`config.owner.rebased`): its `personal` stands in for the machine file's, as `personal` does,
@@ -454,7 +454,7 @@ def _built(
         # command and a session never run on two sets of budgets. Handed in, it is stood on this
         # document's preset; otherwise read here, `strict`, which refuses only a file that does
         # not load, and said nowhere: saying it is the command's, once (`command.command_owner`),
-        # and said here it was said once a document, three times in one `gate`.
+        # and said here it was said once a document, again for each base copy `bugs check` loads.
         owner = (
             resolve_owner(machine or machine_config_path(), preset=preset_name, strict=True)
             if owner is None
@@ -691,8 +691,8 @@ def preset_defaults(project: str, *, preset: str = DEFAULT_PRESET) -> Config:
 
     The overlay is a repository stayfixed writes into and does not manage: it has no project
     configuration, and the scaffold engine needs one (it reads `stayfixed.version` and nothing
-    else). `init --yes` will want the same constructor for the
-    first write into a project, before the file it would load exists.
+    else). `init --questions` reads its defaults from it too, before the file it would load
+    exists.
 
     `stayfixed.version` is the one value the preset does not carry and `_build` requires: the
     engine stamps it into every manifest `Record`, so it comes from `stayfixed.__version__`

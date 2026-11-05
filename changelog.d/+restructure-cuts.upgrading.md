@@ -15,8 +15,8 @@ and what to use instead:
   whether each bundle fits its slots.
 - `stayfixed trust list` and `stayfixed trust revoke`. `stayfixed memory inventory --json` gives
   each note's `reviewed` state and the `unreviewed` total, and `stayfixed doctor`'s `memory` row the
-  store's unreviewed count; both only read. A promoted note is withdrawn by editing it, which
-  changes its digest, or by deleting it.
+  store's unreviewed count; both only read. A promoted note's approval holds for its bytes
+  wherever they reappear; withdrawing it is a hand edit of `trust.json` beside the machine file.
 - `stayfixed test hygiene`. The red-run note the hook adds after a failed `Bash` call says the same.
 
 Delete these from an existing `stayfixed.toml`, or every command that loads it exits 1 with the
