@@ -1,9 +1,11 @@
 """The pipe hint: a test run piped into a reader loses the run's exit status.
 
 A pipeline's exit status is its last command's unless `pipefail` is set, so
-`pytest | tail -20` exits 0 whatever pytest returned, and a red run reads as green. The agent
-writes the command, so the hint names the remedy and never refuses: a refusal would be a
-convenience it could spell around, and a hint costs a legitimate command nothing.
+`pytest | tail -20` exits 0 whatever pytest returned, and a red run reads as green. In Claude Code
+that status is also why the red-run note stays silent: a piped run exits with the reader's status,
+so it never reaches `PostToolUseFailure`. The agent writes the command, so the hint names the
+remedy and never refuses: a refusal would be a convenience it could spell around, and a hint
+costs a legitimate command nothing.
 
 `notice_for` reads the command's TEXT alone, through `bashscan`. The notice is fixed text and
 names no part of the command, so nothing a repository wrote reaches the context. It speaks when
@@ -20,11 +22,8 @@ The text is searched, not parsed, for the words that keep the status
 comment or in `set +o pipefail` silences the hint. Silent is the cheap error.
 
 DEGRADES TOWARD SILENCE at every seam: a command `bashscan.tokenize` cannot read and one longer
-than `bgcleanup.MAX_COMMAND_CHARS` get no hint. Also recorded:
-
-- `|&` reads as a pipe followed by `&`, which ends the pipeline, so `pytest |& tail` gets no hint
-  (`bashscan.pipelines`).
-- A run launched by a program this module does not unwrap (`timeout 60 pytest`) is not seen.
+than `bgcleanup.MAX_COMMAND_CHARS` get no hint, and neither does a run launched by a program this
+module does not unwrap (`timeout 60 pytest`), nor `pytest |& tail` (`bashscan.pipelines`).
 """
 
 from __future__ import annotations
