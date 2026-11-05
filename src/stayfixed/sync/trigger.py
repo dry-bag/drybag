@@ -77,14 +77,12 @@ def _backed_off(overlay: Path, state: SyncState, tree: Status | None, now: datet
     return backed_off(state, tree.head, now, dirty=dirty, upstream=_upstream(overlay))
 
 
-def _triggered(event: str, overlay: Path, d: Path, now: datetime, tree: Status | None) -> bool:
+def _triggered(
+    event: str, overlay: Path, state: SyncState | None, now: datetime, tree: Status | None
+) -> bool:
     """Whether a `Stop` or `SessionEnd` finds something for a job to do. `SessionEnd` waits out
     the back-off only under a hold, which keeps its notes here whatever runs: no later turn of
     the session would retry a failure a rerun clears."""
-    try:
-        state = read_state(d)
-    except StateUnreadable:
-        return True  # a state nobody can read is not `ok`; the job replaces it
     news = tree is not None and (tree.ahead > 0 or bool(tree.paths))
     if state is None:
         return news
@@ -112,25 +110,24 @@ def decide(
     """`("run", None)`, `("schedule", <wake time>)`, `("pending", None)` or `("none", None)` for
     `event` with the session start's `source`, the overlay at `overlay` and the state directory
     `d`."""
-    if not fsops.exists(overlay / ".git"):
+    if not fsops.exists(overlay / fsops.CONTROL_DIRECTORY):
         return "none", None
+    try:
+        state, unreadable = read_state(d), False
+    except StateUnreadable:  # a state nobody can read is not `ok`; the job replaces it
+        state, unreadable = None, True
     if event == "SessionStart":
         if source == "compact":
             return "none", None
-    elif not _triggered(event, overlay, d, now, _tree(overlay)):
+    elif not (unreadable or _triggered(event, overlay, state, now, _tree(overlay))):
         return "none", None
     if event == "SessionEnd":
         return "run", None
     if _busy(d):
         return "pending", None  # the running job's next round takes it
-    throttle = timedelta(seconds=THROTTLE_SECONDS)
-    try:
-        state = read_state(d)
-    except StateUnreadable:
-        state = None
     last = state.last_job_at if state is not None else None
     if last is not None and throttled(last, now):
-        return "schedule", parse_time(last) + throttle
+        return "schedule", parse_time(last) + timedelta(seconds=THROTTLE_SECONDS)
     return "run", None
 
 

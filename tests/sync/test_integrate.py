@@ -20,11 +20,12 @@ from typing import Any
 
 import pytest
 
-from stayfixed.gitenv import FLOOR_VARIABLE
+from stayfixed.gitenv import FLOOR_VARIABLE, Called
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
-from stayfixed.sync.git import GitTimeout, Ran
+from stayfixed.sync.git import GitTimeout
 from stayfixed.sync.state import LOCAL_REWRITE, OUTSIDE, Holds, SyncState, read_state
+from tests import gitfixture as fx
 from tests.gitfixture import git_bytes
 from tests.sync.conftest import (
     TAG,
@@ -174,12 +175,17 @@ def test_a_replay_keeps_a_non_utf8_message_and_its_encoding(
     message.write_bytes("memory: café au lait\n".encode("latin-1"))
     write(a, "common/memory/from-a.md", "from a\n")
     git(a, "add", "-A")
-    git(a, "-c", "i18n.commitEncoding=ISO-8859-1", "commit", "-q", "-F", str(message))
+    name = "Caf\udce9"  # the byte 0xe9, as the commit's encoding has it
+    fx.git(
+        a, "-c", "i18n.commitEncoding=ISO-8859-1", "commit", "-q", "-F", str(message),
+        GIT_AUTHOR_NAME=name,
+    )  # fmt: skip
 
     assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
 
     raw = git_bytes(a, "cat-file", "commit", "HEAD")
     assert b"\nencoding ISO-8859-1\n" in raw
+    assert b"\nauthor Caf\xe9 <" in raw  # not the UTF-8 spelling `git log` gives by default
     assert raw.endswith(b"\n\nmemory: caf\xe9 au lait\n")
 
 
@@ -626,7 +632,7 @@ def test_the_fetched_sha_is_read_from_the_jobs_own_ref(
     git(b, "push", "-q", "origin", "HEAD~1:refs/heads/side")
     real = G.git
 
-    def and_the_owner_fetches(repo: Path, *args: str, **kwargs: object) -> Ran:
+    def and_the_owner_fetches(repo: Path, *args: str, **kwargs: object) -> Called:
         result = real(repo, *args, **kwargs)  # type: ignore[arg-type]
         if "fetch" in args:
             git(a, "fetch", "-q", "origin", "side")
@@ -971,7 +977,7 @@ def test_a_fetch_offline_refused_or_failed_is_classified(
 def test_remote_failures_are_classified_from_what_git_and_ssh_print(
     overlays: Overlays, said: str, state: str
 ) -> None:
-    result = Ran(code=128, out="", err=said, timed_out=False)
+    result = Called(code=128, out="", err=said, timed_out=False)
 
     outcome = J._remote_failure(context(overlays, overlays.a), result, "git fetch origin main", 30)
 

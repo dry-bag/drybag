@@ -6102,7 +6102,7 @@ file = "src/stayfixed/sync/rules.py"
 before = '    ((f":(top,glob){glob}", *((NOT_AN_INDEX,) if directory == PROJECTS else ())), directory)'
 after = '    ((f":(top){glob}", *((NOT_AN_INDEX,) if directory == PROJECTS else ())), directory)'
 reddens = [
-  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
   "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
 ]
 
@@ -6115,7 +6115,7 @@ before = 'NOT_AN_INDEX = f":(top,exclude,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NA
 after = 'NOT_AN_INDEX = f":(top,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
 reddens = [
   "tests/sync/test_rules.py::test_a_projects_index_is_not_memory",
-  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
   "tests/sync/test_commit.py::test_a_dirty_index_is_never_committed",
 ]
 
@@ -6126,7 +6126,7 @@ before = "            if scope == \"project\" and parts[3:] == [INDEX_NAME]:"
 after = "            if False:"
 reddens = [
   "tests/sync/test_rules.py::test_a_projects_index_is_not_memory",
-  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
   "tests/sync/test_integrate.py::test_an_upstream_index_change_is_held_like_a_path_outside_memory",
 ]
 
@@ -6137,7 +6137,7 @@ before = '''    (GROUPS, f"{GROUPS}/*/{STORE_DIR}/**"),
 '''
 after = ""
 reddens = [
-  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
   "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
 ]
 
@@ -6173,8 +6173,8 @@ reddens = [
 [[mutation]]
 name = "the tree bound diffs nothing"
 file = "src/stayfixed/sync/rules.py"
-before = "    for path in offending_paths(repo, bound, tip, timeout=left(deadline, what), env=env):"
-after = "    for path in ():"
+before = "    for entry in diff_entries(repo, bound, tip, timeout=left(deadline, what), env=env):"
+after = "    for entry in ():"
 reddens = [
   "tests/sync/test_rules.py::test_the_tree_bound_catches_what_commits_hide",
 ]
@@ -6352,9 +6352,11 @@ reddens = ["tests/sync/test_run.py::test_the_jobs_git_runs_no_hook"]
 name = "the guard's budget is a hundred times what it was given"
 file = "src/stayfixed/sync/git.py"
 before = '''    deadline = time.monotonic() + timeout
-    version = ask('''
+
+    def ask('''
 after = '''    deadline = time.monotonic() + 100 * timeout
-    version = ask('''
+
+    def ask('''
 reddens = [
   "tests/sync/test_git.py::test_the_helpers_of_one_step_share_its_whole_budget",
 ]
@@ -6668,6 +6670,24 @@ reddens = [
 ]
 
 [[mutation]]
+name = "a replay re-encodes its commit's author"
+file = "src/stayfixed/sync/job.py"
+before = '''        *(f"--encoding={each}" for each in encodings[:1]), "--end-of-options", commit,'''
+after = '''        "--end-of-options", commit,'''
+reddens = [
+  "tests/sync/test_integrate.py::test_a_replay_keeps_a_non_utf8_message_and_its_encoding",
+]
+
+[[mutation]]
+name = "a remote's refusal reads as a race"
+file = "src/stayfixed/sync/job.py"
+before = '''    return any(len(f) == 3 and f[0] == "!" and f[2].startswith("[rejected]") for f in lines)'''
+after = '''    return any(len(f) == 3 and f[0] == "!" for f in lines)'''
+reddens = [
+  "tests/sync/test_push.py::test_a_rejected_push_is_read_from_the_porcelain_flag",
+]
+
+[[mutation]]
 name = "the push is forced"
 file = "src/stayfixed/sync/job.py"
 before = '''        ctx, "push", "--porcelain", "--no-follow-tags", "origin", f"{tip}:refs/heads/main",'''
@@ -6883,7 +6903,7 @@ reddens = ["tests/sync/test_hooks.py::test_session_end_is_never_throttled"]
 [[mutation]]
 name = "a trigger inside the throttle is dropped"
 file = "src/stayfixed/sync/trigger.py"
-before = '        return "schedule", parse_time(last) + throttle'
+before = '        return "schedule", parse_time(last) + timedelta(seconds=THROTTLE_SECONDS)'
 after = '        return "none", None'
 reddens = ["tests/sync/test_hooks.py::test_a_trigger_inside_the_throttle_is_scheduled"]
 
@@ -6897,7 +6917,7 @@ reddens = ["tests/sync/test_hooks.py::test_a_trigger_during_a_job_only_marks_it_
 [[mutation]]
 name = "the trigger asks an overlay that is not a repository"
 file = "src/stayfixed/sync/trigger.py"
-before = '    if not fsops.exists(overlay / ".git"):'
+before = '    if not fsops.exists(overlay / fsops.CONTROL_DIRECTORY):'
 after = "    if False:"
 reddens = ["tests/sync/test_hooks.py::test_no_overlay_or_not_a_repository_spawns_nothing"]
 
@@ -7011,6 +7031,6 @@ file = "src/stayfixed/config/plates.py"
 before = 'GROUPS = "groups"'
 after = 'GROUPS = "group"'
 reddens = [
-  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
   "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
 ]

@@ -10,6 +10,7 @@ pathspec's `*` crosses `/` without `glob` magic. Every case runs real git on rep
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -96,7 +97,6 @@ def test_the_layout_takes_a_path_apart(
     found = R.memory_path(path)
 
     assert (found if found is None else (found.scope, found.name, found.below)) == parsed
-    assert R.is_memory_path(path) is (parsed is not None)
 
 
 def test_a_scope_knows_its_root() -> None:
@@ -142,7 +142,7 @@ def test_the_pathspecs_are_derived_from_the_layout_in_three_scopes() -> None:
     ) == R.MEMORY_SPECS
 
 
-def test_is_memory_path_agrees_with_git(tmp_path: Path) -> None:
+def test_the_layout_agrees_with_git(tmp_path: Path) -> None:
     """The Python rule and the pathspec git applies must never disagree, path for path."""
     repo = init(tmp_path / "r")
     for path in _PATHS:
@@ -153,11 +153,17 @@ def test_is_memory_path_agrees_with_git(tmp_path: Path) -> None:
     matched = set(git(repo, "ls-files", "-z", "--", *R.MEMORY_PATHSPEC).split("\0")) - {""}
 
     assert every == set(_PATHS)
-    assert matched == {path for path in every if R.is_memory_path(path)}
+    assert matched == {path for path in every if R.memory_path(path) is not None}
     assert matched == {path for path, memory in _PATHS.items() if memory}
 
 
 # -- dirty notes ----------------------------------------------------------------------------------
+
+
+def dirty_memory(
+    repo: Path, *, timeout: float = 30.0, env: Mapping[str, str] | None = None
+) -> list[str]:
+    return list(R.status(repo, timeout=timeout, env=env).paths)
 
 
 def test_dirty_memory_sees_an_untracked_changed_and_deeper_note_in_each_scope(world: World) -> None:
@@ -170,7 +176,7 @@ def test_dirty_memory_sees_an_untracked_changed_and_deeper_note_in_each_scope(wo
     write(a, "projects/p/checkout/memory/stray.md")
     write(a, "groups/g/checkout/memory/stray.md")
 
-    assert sorted(R.dirty_memory(a)) == [
+    assert sorted(dirty_memory(a)) == [
         "common/memory/first.md",
         "common/memory/new.md",
         "groups/g/memory/new.md",
@@ -184,7 +190,7 @@ def test_dirty_memory_sees_a_deleted_and_a_staged_note(world: World) -> None:
     write(a, "groups/g/memory/staged.md")
     git(a, "add", "groups/g/memory/staged.md")
 
-    assert sorted(R.dirty_memory(a)) == [
+    assert sorted(dirty_memory(a)) == [
         "common/memory/first.md",
         "groups/g/memory/staged.md",
     ]
@@ -195,13 +201,13 @@ def test_dirty_memory_hands_odd_names_back_as_written(world: World) -> None:
     write(world.a, odd)
     write(world.a, 'common/memory/"quoted".md')
 
-    assert sorted(R.dirty_memory(world.a)) == sorted([odd, 'common/memory/"quoted".md'])
+    assert sorted(dirty_memory(world.a)) == sorted([odd, 'common/memory/"quoted".md'])
 
 
 def test_dirty_memory_is_empty_when_only_other_paths_changed(world: World) -> None:
     write(world.a, "common/claude/hooks/x.py", "work in progress\n")
 
-    assert R.dirty_memory(world.a) == []
+    assert dirty_memory(world.a) == []
 
 
 def test_one_status_feeds_the_trigger_and_the_commit(world: World) -> None:
@@ -221,7 +227,7 @@ def test_one_status_feeds_the_trigger_and_the_commit(world: World) -> None:
 
     paths = sorted([odd, "common/memory/first.md", "groups/g/memory/staged.md"])
     assert (sorted(status.paths), status.ahead, status.head) == (paths, 1, tip)
-    assert sorted(R.dirty_memory(a, env=G.JOB_SETTINGS)) == paths
+    assert sorted(dirty_memory(a, env=G.JOB_SETTINGS)) == paths
     assert trigger._tree(a) == status
 
 
@@ -229,7 +235,7 @@ def test_dirty_memory_reports_a_link_without_judging_it(world: World) -> None:
     """A trigger, not a verdict: a link is dirty, and the commit step refuses it by its mode."""
     symlink(world.a, "common/memory/link.md", "/etc/passwd")
 
-    assert R.dirty_memory(world.a) == ["common/memory/link.md"]
+    assert dirty_memory(world.a) == ["common/memory/link.md"]
 
 
 # -- commits and ranges ---------------------------------------------------------------------------
@@ -567,14 +573,14 @@ def test_a_dot_component_or_a_non_md_name_under_memory_is_not_memory_only(
     write(a, path, _HOSTILE)
     tip = commit_all(a, "a path that is not a note")
 
-    assert R.is_memory_path(path)  # the pathspec matches it: being a note is what it fails
+    assert R.memory_path(path) is not None  # the pathspec matches it: being a note is what it fails
     assert R.range_is_memory_only(a, base, tip) == (False, [path])
 
 
 @pytest.mark.parametrize("path", _NOT_A_NAME)
 def test_a_project_or_group_name_that_is_not_a_plain_name_never_moves(path: str) -> None:
     """The rule reaches the scope's own name: `..` and `.git` there pass the pathspec."""
-    assert R.is_memory_path(path)
+    assert R.memory_path(path) is not None
     assert R.entry_offends(R.RawEntry("100644", "A", path, BLOB)) is True
     assert R.entry_offends(R.RawEntry("000000", "D", path, BLOB)) is True
 
@@ -622,7 +628,6 @@ def test_a_binary_note_is_not_memory_only_per_commit_and_by_the_bound(world: Wor
         False,
         ["groups/g/memory/blob.md"],
     )
-    assert R.offending_paths(a, base, tip) == ["groups/g/memory/blob.md"]
     assert R.range_is_memory_only(a, added, tip) == (True, [])
 
 
@@ -759,5 +764,5 @@ def test_a_timed_out_git_call_is_a_git_timeout(
     slow_git(tmp_path, monkeypatch, {"status": 30})
 
     with pytest.raises(G.GitTimeout):
-        R.dirty_memory(world.a, timeout=0.5)
+        dirty_memory(world.a, timeout=0.5)
     assert issubclass(G.GitTimeout, G.GitError)

@@ -336,6 +336,25 @@ def test_a_stale_index_lock_is_named_with_its_remedy(machine: Machine) -> None:
     assert machine.state("offline").row()[2] == RETRIED_FIX  # only a raced job names it
 
 
+def test_a_linked_worktree_overlays_lock_is_found_where_git_keeps_it(machine: Machine) -> None:
+    # `.git` is a file there, and the lock lives in the worktree's own directory under the main
+    # one: the row asks git where, and does not guess `<overlay>/.git/index.lock`.
+    git(machine.overlay, "commit", "-q", "--allow-empty", "-m", "first")
+    linked = machine.tmp_path / "linked"
+    git(machine.overlay, "worktree", "add", "-q", "-b", "other", str(linked))
+    machine.overlay = linked
+    machine.write()
+    where = git(linked, "rev-parse", "--path-format=absolute", "--git-path", "index.lock")
+    lock = Path(where.strip())
+    assert lock.parent != linked / ".git" and not (linked / ".git").is_dir()
+    lock.write_text("", encoding="utf-8")
+    old = time.time() - J.Limits().job - 60
+    os.utime(lock, (old, old))
+    status, detail, remedy = machine.scanner().state("raced", "Unable to create index.lock").row()
+    assert status == WARN and str(lock) in detail
+    assert remedy == f"remove {lock} if no git is running"
+
+
 def test_a_machine_that_never_ran_the_job_is_ok(machine: Machine) -> None:
     status, detail, _ = machine.scanner().row()
     assert (status, "has not run" in detail) == (OK, True)

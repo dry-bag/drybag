@@ -112,11 +112,6 @@ def memory_path(path: str) -> MemoryPath | None:
     return None
 
 
-def is_memory_path(path: str) -> bool:
-    """Whether a top-relative path is one the pathspecs match -- by name only."""
-    return memory_path(path) is not None
-
-
 def unsafe_parent(overlay: Path, path: str) -> str | None:
     """The first directory above the top-relative `path` that is a link or not a directory, or
     `None` when each is a real directory or absent. Anchor: what is at each ancestor, unfollowed."""
@@ -239,14 +234,6 @@ def status(repo: Path, *, timeout: float, env: Mapping[str, str] | None) -> Stat
     return Status(tuple(dict.fromkeys(paths)), ahead, head, tuple(untracked))
 
 
-def dirty_memory(
-    repo: Path, *, timeout: float = LOCAL_TIMEOUT, env: Mapping[str, str] | None = None
-) -> list[str]:
-    """Memory paths that differ anywhere between `HEAD`, the index and the working tree
-    (`status`)."""
-    return list(status(repo, timeout=timeout, env=env).paths)
-
-
 def commit_entries(
     repo: Path,
     rev_range: str,
@@ -327,18 +314,6 @@ def diff_entries(
     return entries
 
 
-def offending_paths(
-    repo: Path,
-    *revisions: str,
-    timeout: float = LOCAL_TIMEOUT,
-    env: Mapping[str, str] | None = None,
-) -> list[str]:
-    """Paths of `diff_entries` that may not move, in git's order (`entry_offends`). The tree bound
-    runs it as `<merge base> <tip>`."""
-    entries = diff_entries(repo, *revisions, timeout=timeout, env=env)
-    return [entry.path for entry in entries if entry_offends(entry)]
-
-
 def range_is_memory_only(
     repo: Path,
     base: str,
@@ -388,6 +363,7 @@ def range_is_memory_only(
         bound = checked(empty, "git hash-object").out.strip()
     else:
         bound = checked(merge_base, f"git merge-base {base} {tip}").out.strip()
-    for path in offending_paths(repo, bound, tip, timeout=left(deadline, what), env=env):
-        offend(path)
+    for entry in diff_entries(repo, bound, tip, timeout=left(deadline, what), env=env):
+        if entry_offends(entry):
+            offend(entry.path)
     return not offending, offending

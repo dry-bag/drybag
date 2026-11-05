@@ -18,7 +18,6 @@ import argparse
 import contextlib
 import io
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -33,17 +32,17 @@ from stayfixed import fsops
 from stayfixed.config.machine import machine_config_path
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.owner import resolve_owner
-from stayfixed.gitenv import answer_bytes
+from stayfixed.gitenv import Called, answer_bytes, pipe_encoding
 from stayfixed.sync import scan
 from stayfixed.sync.git import (
     JOB_SETTINGS,
     UNMERGED,
     GitError,
     GitTimeout,
-    Ran,
     checked,
     git,
     guard,
+    left,
     timed,
     with_config,
 )
@@ -140,10 +139,7 @@ class JobContext:
         """`step`, cut to what is left of the whole job; `JobTimeout` when nothing is."""
         if self.deadline is None:
             return step
-        left = self.deadline - time.monotonic()
-        if left <= 0:
-            raise JobTimeout(f"the job did not finish within {self.limits.job:g} s")
-        return min(step, left)
+        return min(step, left(self.deadline, "the job", JobTimeout))
 
     @cached_property
     def scanner(self) -> Path | None:
@@ -167,7 +163,7 @@ def _git(
     index_file: Path | None = None,
     env: Mapping[str, str] | None = None,
     stdin: bytes | None = None,
-) -> Ran:
+) -> Called:
     return git(
         ctx.overlay,
         *args,
@@ -189,13 +185,14 @@ def _nul(text: str) -> list[str]:
     return [item for item in text.split("\0") if item]
 
 
-def _rev(ctx: JobContext, rev: str) -> str:
-    return _ok(ctx, "rev-parse", "--verify", "-q", "--end-of-options", f"{rev}^{{commit}}").strip()
+def _rev(ctx: JobContext, rev: str, kind: str = "commit") -> str:
+    """The sha `rev` names, as a `commit` or a `tree`."""
+    return _ok(ctx, "rev-parse", "--verify", "-q", "--end-of-options", f"{rev}^{{{kind}}}").strip()
 
 
 def _paths_in(paths: Iterable[str]) -> bytes:
     """`paths` NUL-terminated, for a git command reading them from standard input."""
-    return b"".join(path.encode("utf-8", "surrogateescape") + b"\0" for path in paths)
+    return b"".join(answer_bytes(path) + b"\0" for path in paths)
 
 
 @contextlib.contextmanager
@@ -237,7 +234,7 @@ def _signing(ctx: JobContext) -> bool:
     return answer.code == 0 and answer.out.strip() == "true"
 
 
-def _unsigned(ctx: JobContext, result: Ran) -> Outcome:
+def _unsigned(ctx: JobContext, result: Called) -> Outcome:
     """`signing_failed` for a commit git could not sign, with git's words."""
     said = scan.first_lines(result.err) or ("waited for a passphrase" if result.timed_out else "")
     return _outcome(ctx, "signing_failed", f"commit.gpgsign is set and signing failed: {said}")
@@ -329,7 +326,7 @@ def _run_checks(
     return _outcome(ctx, state, f"gitleaks: {result.detail}"), ()
 
 
-def _locked(ctx: JobContext, result: Ran) -> Ran:
+def _locked(ctx: JobContext, result: Called) -> Called:
     """`result`, or the stop `raced` when git names `index.lock`: another git holds the real
     index, or one killed mid-write left the lock. The job cannot tell which, so it never removes
     it, and says git's words."""
@@ -437,7 +434,7 @@ _AUTH = (
 FETCHED_REF = "refs/stayfixed/fetched"
 
 
-def _remote_failure(ctx: JobContext, result: Ran, what: str, limit: float) -> Outcome:
+def _remote_failure(ctx: JobContext, result: Called, what: str, limit: float) -> Outcome:
     """`timeout`, `auth_failed`, `offline`, or `hook_failed` naming the job, for a network call."""
     said = scan.first_lines(result.err) or scan.first_lines(result.out) or f"exit {result.code}"
     if result.timed_out:
@@ -488,26 +485,25 @@ LOCAL_REVIEW = (
 )
 # How the owner reads an upstream {sha} git will not check out, which only upstream can repair.
 UNREADABLE_REVIEW = "git diff --stat HEAD {sha}, then repair upstream"
-_AUTHOR = re.compile(r"author (.*) <([^<>]*)> (\d+ [+-]\d{4})")
 
 
 def _original(ctx: JobContext, commit: str) -> tuple[dict[str, str], bytes]:
     """`commit`'s author, as the environment that names it, and its message as bytes, its
-    `encoding` header given back as a `git -c`-style entry: from the commit object itself, never
-    `git log --format`, which `log.showSignature` prefixes with the signature check."""
-    raw = _ok(ctx, "cat-file", "commit", "--end-of-options", commit)
-    header, _, message = raw.encode("utf-8", "surrogateescape").partition(b"\n\n")
-    env: dict[str, str] = {}
-    for line in header.decode("utf-8", "surrogateescape").split("\n"):
-        if (author := _AUTHOR.fullmatch(line)) is not None:
-            name, email, date = author.groups()
-            env.update(GIT_AUTHOR_NAME=name, GIT_AUTHOR_EMAIL=email, GIT_AUTHOR_DATE=date)
-        elif line.startswith("encoding "):
-            env.update(
-                with_config(ctx.env, {"i18n.commitEncoding": line.removeprefix("encoding ")})
-            )
-    if "GIT_AUTHOR_NAME" not in env:
-        raise GitError(f"commit {commit} has no readable author line")
+    `encoding` header given back as a `git -c`-style entry. The message and the header are the
+    commit object's, raw. The author is git's own answer (`git log`, which `--no-show-signature`
+    keeps from prefixing the signature check whatever `log.showSignature` says), left in the
+    commit's encoding, so that it and the message agree."""
+    raw = answer_bytes(_ok(ctx, "cat-file", "commit", "--end-of-options", commit))
+    header, _, message = raw.partition(b"\n\n")
+    lines = header.decode(pipe_encoding(), "surrogateescape").split("\n")
+    encodings = [line.removeprefix("encoding ") for line in lines if line.startswith("encoding ")]
+    name, email, date = _ok(
+        ctx, "log", "-1", "--no-show-signature", "--format=%an%x00%ae%x00%ad", "--date=raw",
+        *(f"--encoding={each}" for each in encodings[:1]), "--end-of-options", commit,
+    ).rstrip("\n").split("\0")  # fmt: skip
+    env = {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email, "GIT_AUTHOR_DATE": date}
+    if encodings:
+        env.update(with_config(ctx.env, {"i18n.commitEncoding": encodings[0]}))
     return env, message
 
 
@@ -527,7 +523,7 @@ def replay(ctx: JobContext, onto: str, commits: list[str]) -> tuple[str | None, 
         tree, *conflicted = _nul(result.out)
         if result.code == 1:
             return None, conflicted
-        if tree == _tree_of(ctx, tip):
+        if tree == _rev(ctx, tip, "tree"):
             continue  # already upstream: an empty commit would list no path, and be held
         author, message = _original(ctx, commit)
         new, failed = _commit_tree(ctx, tree, [tip], message, env=author)
@@ -535,10 +531,6 @@ def replay(ctx: JobContext, onto: str, commits: list[str]) -> tuple[str | None, 
             raise JobStopped(failed or _outcome(ctx, "hook_failed", "job: no commit made"))
         tip = new
     return tip, []
-
-
-def _tree_of(ctx: JobContext, rev: str) -> str:
-    return _ok(ctx, "rev-parse", "--verify", "-q", "--end-of-options", f"{rev}^{{tree}}").strip()
 
 
 def _hold_upstream(ctx: JobContext, why: str | None, names: Iterable[str], remark: str) -> None:
@@ -715,6 +707,14 @@ def _scan_push(ctx: JobContext, commits: list[tuple[str, list[RawEntry]]]) -> Ou
     return _outcome(ctx, "secret_found", f"{REMEDY.format(sha=oldest)}\n{result.detail}")
 
 
+def _rejected(porcelain: str) -> bool:
+    """Whether `git push --porcelain` refused a ref as not a fast-forward: its line (`<flag>\\t<ref>
+    \\t<summary> (<reason>)`) flagged `!` with the summary `[rejected]`, which git does not
+    translate. The reason after it is prose, and `[remote rejected]` is a remote's refusal."""
+    lines = (line.split("\t", 2) for line in porcelain.splitlines())
+    return any(len(f) == 3 and f[0] == "!" and f[2].startswith("[rejected]") for f in lines)
+
+
 def push(ctx: JobContext, upstream: str) -> Outcome | None:
     """Push `upstream..H`, `H` the sha checked here and never `main`, if it is memory-only; the
     outcome that stops the job, or `None`.
@@ -762,10 +762,7 @@ def push(ctx: JobContext, upstream: str) -> Outcome | None:
     if result.code == 0 and not result.timed_out:
         ctx.fetched_sha = tip  # what upstream now has: the next job's rewrite check starts here
         return None
-    said = (result.out + result.err).lower()
-    if not result.timed_out and any(
-        word in said for word in ("[rejected]", "fetch first", "non-fast-forward")
-    ):
+    if not result.timed_out and _rejected(result.out):
         detail = "origin/main moved before the push; the next trigger fetches and retries"
         return _outcome(ctx, "rejected", detail)
     return _remote_failure(ctx, result, "git push origin", limit)
@@ -966,7 +963,9 @@ def _sleep_until(text: str, now: datetime) -> None:
 def _switched_on() -> Path | None:
     """The overlay the machine file records, when it also switches the sync on (`Owner.sync`)."""
     overlay = overlay_root(None) if resolve_owner(machine_config_path()).sync.enabled else None
-    return overlay if overlay is not None and fsops.exists(overlay / ".git") else None
+    return (
+        overlay if overlay is not None and fsops.exists(overlay / fsops.CONTROL_DIRECTORY) else None
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

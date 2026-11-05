@@ -27,6 +27,7 @@ from typing import Any
 
 from stayfixed import fsops
 from stayfixed.config.paths import data_directory
+from stayfixed.gitenv import answer_bytes
 from stayfixed.jsonobject import json_object
 
 OUTCOMES: tuple[str, ...] = (
@@ -302,7 +303,7 @@ def notes_mark(overlay: Path, paths: Iterable[str]) -> str:
             content = b"=" + fsops.read_bounded_within(overlay, path, MARK_BYTES)[0]
         except OSError:
             content = b"-"  # gone, a link, or not a file: the same mark until that changes
-        digest.update(hashlib.sha256(path.encode("utf-8", "surrogateescape")).digest())
+        digest.update(hashlib.sha256(answer_bytes(path)).digest())
         digest.update(hashlib.sha256(content).digest())
     return digest.hexdigest()
 

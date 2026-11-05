@@ -224,6 +224,26 @@ def test_an_upstream_hold_skips_the_push(
     assert "not pushed while upstream is held" in state.outcome.detail
 
 
+@pytest.mark.parametrize(
+    ("line", "rejected"),
+    [
+        ("!\trefs/heads/main:refs/heads/main\t[rejected] (fetch first)", True),
+        ("!\trefs/heads/main:refs/heads/main\t[rejected] (Aktualisierung abgelehnt)", True),
+        (
+            "!\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)",
+            False,
+        ),
+        ("!\trefs/heads/main:refs/heads/main\t[remote failure] (fetch first)", False),
+        ("*\trefs/heads/main:refs/heads/main\t[new branch]", False),
+        ("fetch first non-fast-forward [rejected]", False),
+    ],
+)
+def test_a_rejected_push_is_read_from_the_porcelain_flag(line: str, rejected: bool) -> None:
+    # The ref line's `!` flag and its `[rejected]` summary are git's own, whatever the locale; the
+    # reason after them is prose, and a word of it decides nothing.
+    assert J._rejected(f"To origin\n{line}\nDone\n") is rejected
+
+
 def test_a_rejected_push_is_retried_on_the_next_trigger(
     overlays: Overlays, monkeypatch: pytest.MonkeyPatch
 ) -> None:

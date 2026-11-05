@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.gitenv import FLOOR_VARIABLE
+from stayfixed.gitenv import FLOOR_VARIABLE, Called
 from stayfixed.sync import git as G
 from tests import gitfixture as fx
 from tests.sync.conftest import (
@@ -129,7 +129,7 @@ def _diverge(repo: Path) -> None:
 
 
 def test_the_guard_passes_a_clean_clone(world: World) -> None:
-    assert G.guard(world.a) == G.Guard(ok=True, reason=None)
+    assert G.guard(world.a) == G.Guard(None)
 
 
 def test_the_guard_refuses_another_branch_a_detached_head_and_a_rebase(world: World) -> None:
@@ -234,7 +234,7 @@ def test_the_guard_allows_staged_and_unstaged_work_outside_memory(world: World) 
     write(a, "common/claude/hooks/launch.sh", "#!/bin/sh\n# staged\n# and more, unstaged\n")
     write(a, "common/claude/hooks/new.py", "untracked\n")
 
-    assert G.guard(a) == G.Guard(ok=True, reason=None)
+    assert G.guard(a) == G.Guard(None)
 
 
 @pytest.mark.parametrize(
@@ -292,10 +292,10 @@ def test_the_guard_skips_when_there_is_no_git(
 
 
 def test_a_checked_call_names_a_failure_and_a_timeout() -> None:
-    ok = G.Ran(0, "out", "", False)
+    ok = Called(0, "out", "", False)
     assert G.checked(ok, "git x") is ok
     with pytest.raises(G.GitTimeout):
-        G.checked(G.Ran(-9, "", "", True), "git x")
+        G.checked(Called(-9, "", "", True), "git x")
     with pytest.raises(G.GitError, match=r"git x failed \(128\): fatal: bad"):
-        G.checked(G.Ran(128, "", "fatal: bad\n", False), "git x")
+        G.checked(Called(128, "", "fatal: bad\n", False), "git x")
     assert not issubclass(G.GitError, G.GitTimeout)

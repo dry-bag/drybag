@@ -2,10 +2,10 @@
 
 One row, read off this machine's own records: the switch in the machine file, the git the job
 needs, the `gitleaks` on `PATH` it needs, and the state its last job left. It runs nothing but
-`git version` and one `lstat`, and writes nothing. `doctor`'s core discovers this module by name
-(CONTRIBUTING.md, "Areas"); every import sits inside a function body, as in a `hooks.py`, because
-discovery imports it before the report asks anything and the note layout and the job pull in the
-configuration layer.
+`git version`, `git rev-parse --git-path` for a `raced` last job and one `lstat`, and writes
+nothing. `doctor`'s core discovers this module by name (CONTRIBUTING.md, "Areas"); every import
+sits inside a function body, as in a `hooks.py`, because discovery imports it before the report
+asks anything and the note layout and the job pull in the configuration layer.
 
 The arms, in the order they are asked: off (a skip, the ordinary state), no overlay recorded, git
 below the job's floor, no gitleaks on `PATH`, a hold, a last outcome other than `ok` (`skipped` is
@@ -133,10 +133,13 @@ def _sync(context: Context) -> Row:
     if outcome.state == "ok":
         return Row(OK, said)
     # A killed git's lock ends every job `raced`, never backed off; the job never removes it.
-    lock = overlay / ".git" / "index.lock"
-    if outcome.state == "raced" and _older_than_a_job(lock):
-        said += f"; {lock} is older than a whole job runs"
-        return Row(WARN, said, f"remove {lock} if no git is running")
+    # Git says where it is: a linked worktree keeps its index under the main repository's `.git`.
+    if outcome.state == "raced":
+        asked = git(overlay, "rev-parse", "--git-path", "index.lock", timeout=VERSION_TIMEOUT)
+        lock = overlay / asked.out.strip()
+        if asked.code == 0 and _older_than_a_job(lock):
+            said += f"; {lock} is older than a whole job runs"
+            return Row(WARN, said, f"remove {lock} if no git is running")
     if outcome.state == "skipped":
         fix = "the job acts once this is resolved; the next session event runs it"
     elif outcome.state in STANDING:

@@ -24,6 +24,7 @@ import pytest
 from stayfixed import gitenv
 from stayfixed.config.machine import machine_config_path
 from stayfixed.config.session import SessionConfig, session_config
+from stayfixed.gitenv import Called
 from stayfixed.hooks.api import HookEvent, HookResult
 from stayfixed.hooks.commands import run_hook
 from stayfixed.sync import git as G
@@ -341,7 +342,7 @@ def test_the_trigger_check_is_one_git_status(
     calls: list[list[str]] = []
     real = gitenv.git_call
 
-    def counting(root: Path, *args: str, **kwargs: Any) -> G.Ran:
+    def counting(root: Path, *args: str, **kwargs: Any) -> Called:
         calls.append(list(args))
         return real(root, *args, **kwargs)
 
@@ -376,7 +377,7 @@ def spied(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[object]]:
     seen: dict[str, list[object]] = {"git": [], "spawn": []}
     real = gitenv.git_call
 
-    def recorded(root: Path, *args: str, **kwargs: Any) -> G.Ran:
+    def recorded(root: Path, *args: str, **kwargs: Any) -> Called:
         seen["git"].append(["git", *args])
         return real(root, *args, **kwargs)
 
