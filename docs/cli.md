@@ -2417,17 +2417,12 @@ base_branch = "main"
 
 [paths]                  # each inside the root, out of .git and .stayfixed, 1024 characters at most
 agents_md = "AGENTS.md"
-architecture = "docs/architecture"
-runbooks = "docs/runbooks"
-adr = "docs/adr"
 specs = "docs/specs"
 plans = "docs/plans"
 bugs = "docs/bugs"
 bug_index = "docs/bug-reports.md"
 roadmap = "docs/roadmap.md"
-roadmap_history = "docs/roadmap-history.md"
 memory = "docs/memory"
-stayfixed = "docs/stayfixed"
 
 [memory]
 mode = "harness"         # harness | overlay | in-repo | local-only — default: harness
@@ -2491,9 +2486,8 @@ never the value.
 budgets, and the roadmap is also what `docs trail` writes into; `specs` and `plans` are the two
 trees `docs trail` lists, and `plans` is where `plan check` looks for the plans a diff touched.
 `bugs` is the ledger's entry directory and `bug_index` its generated index — `bugs new`,
-`bugs index`, `bugs check` and `bugs renumber` all read both. `memory` is the note store. The
-remaining five — `architecture`, `runbooks`, `adr`, `roadmap_history` and `stayfixed` — are read
-for their location alone, and so is every one of the others: `bugs check` treats the first component of
+`bugs index`, `bugs check` and `bugs renumber` all read both. `memory` is the note store. Every
+one of them is also read for its location: `bugs check` treats the first component of
 every `[paths]` value that has more than one — `docs`, for the defaults — as a directory
 documents live in, and therefore as a place a citation of an entry file may be written and must
 resolve. Pointing a path key somewhere unusual widens that sweep; it cannot take a document

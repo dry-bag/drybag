@@ -75,17 +75,12 @@ class Project:
 @dataclass(frozen=True)
 class Paths:
     agents_md: str
-    architecture: str
-    runbooks: str
-    adr: str
     specs: str
     plans: str
     bugs: str
     bug_index: str
     roadmap: str
-    roadmap_history: str
     memory: str
-    stayfixed: str
 
     def as_dict(self) -> dict[str, str]:
         return dict(self.__dict__)

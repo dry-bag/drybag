@@ -1008,7 +1008,7 @@ reddens = [
 # `finally` having already persisted the manifest. The anchor's provenance: both rules are read off
 # the clone's own spelling of its own `stayfixed.toml`, and neither consults anything the clone can
 # move, so a repository cannot choose which of the two answers it gets.
-# Measured: with the charset form restored, `docs//roadmap-history.md`, `docs/architecture/`
+# Measured: with the charset form restored, `docs//roadmap-history.md`, `docs/x/`
 # and `./docs` all match the grammar again. The entries after it take one rule out each.
 [[mutation]]
 name = "the [paths] grammar admits a spelling the write refuses again"

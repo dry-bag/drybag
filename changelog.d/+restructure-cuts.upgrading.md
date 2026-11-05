@@ -51,6 +51,6 @@ committed index stale.
 An earlier `init` or `[artifacts] local` left files this release neither writes nor reads, and you
 may delete each by hand: `.stayfixed/local/artifacts/` and `.stayfixed/local/artifacts.json`; the
 profile's rules, `docs/stayfixed/rules/<profile>.md` and `.claude/rules/stayfixed-<profile>.md`;
-`docs/roadmap-history.md`; `docs/runbooks/bug-reports.md`; and the `.stayfixed/assessment.json`
-line in the `stayfixed:ignore` region. `.stayfixed/manifest.json` keeps its records of the artifacts
+`docs/roadmap-history.md`; the bug runbook, `bug-reports.md` in the runbooks directory under
+`docs/`; and the `.stayfixed/assessment.json` line in the `stayfixed:ignore` region. `.stayfixed/manifest.json` keeps its records of the artifacts
 this release no longer writes, and nothing reads them.

@@ -31,15 +31,11 @@ HOSTILE_PATHS = (
     + """
 [paths]
 agents_md = "../../AGENTS.md"
-architecture = "../etc"
-runbooks = "../runbooks"
-adr = "../../adr"
 specs = "../specs"
 plans = "../plans"
 bugs = "../bugs"
 bug_index = "../bug-reports.md"
 roadmap = "../roadmap.md"
-roadmap_history = "../roadmap-history.md"
 memory = "../memory"
 """
 )
@@ -299,7 +295,7 @@ def test_a_refused_paths_value_leaves_no_manifest_behind(tmp_path: Path) -> None
     root = tmp_path / "widget"
     root.mkdir()
     git(root, "init", "-q", "-b", "main")
-    write_config(root, VALID_HEAD + '\n[paths]\nroadmap_history = "docs//roadmap-history.md"\n')
+    write_config(root, VALID_HEAD + '\n[paths]\nspecs = "docs//roadmap-history.md"\n')
     # `Refusal` and not `PathEscape` around the call, and the type asserted last: with both
     # guards gone the run reaches `apply`, which refuses too — as `UnsafePath`, part-way through
     # the pass. The assertions that must fail then are the ones about what is on disk.

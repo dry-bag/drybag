@@ -267,16 +267,11 @@ def _sample_config(tmp_path: Path) -> Config:
 
 _NOT_EXEMPT = {
     "agents_md",
-    "architecture",
-    "runbooks",
-    "adr",
     "specs",
     "plans",
     "bugs",
     "bug_index",
     "roadmap",
-    "roadmap_history",
-    "stayfixed",
 }
 
 
@@ -508,7 +503,7 @@ def test_a_paths_value_inside_stayfixeds_own_directory_is_refused_and_never_quot
 
 
 def test_a_name_that_merely_resembles_stayfixeds_directory_is_admitted(tmp_path: Path) -> None:
-    # The preset's own `[paths] stayfixed = "docs/stayfixed"` and any other near-miss load.
+    # A directory named like stayfixed's own, and any other near-miss, loads.
     for value in ("docs/stayfixed", ".stayfixed-notes/x.md", "docs/.stayfixedrc"):
         text = (
             '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
