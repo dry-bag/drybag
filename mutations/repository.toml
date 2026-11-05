@@ -846,17 +846,6 @@ reddens = [
   "tests/boundaries/test_delivery.py::test_the_delivery_rule_judges_the_importer_and_the_imported",
 ]
 
-# A pardon is for one statement and the names it takes, so the rule records the names: without
-# them two statements naming one module, or one that takes one more name, read as the row pinned.
-[[mutation]]
-name = "the delivery rule forgets which names a statement takes"
-file = "tests/boundaries/test_delivery.py"
-before = "            taken = [(module, frozenset(alias.name for alias in node.names))]"
-after = "            taken = [(module, frozenset[str]())]"
-reddens = [
-  "tests/boundaries/test_delivery.py::test_the_delivery_rule_judges_the_importer_and_the_imported",
-]
-
 # `from stayfixed import memory` names the area in an alias and the package as its module, so a
 # rule keyed on the module alone would read it as importing nothing from an area.
 [[mutation]]

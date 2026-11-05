@@ -765,10 +765,10 @@ reddens = [
   "tests/overlay/test_create.py::test_a_git_init_that_ran_and_failed_is_said_to_have_failed",
 ]
 
-# A crossing is pinned per statement and per name, so a second statement beside a pinned one is a
-# new crossing even when it names the same module.
+# A crossing is pinned per statement, so a second statement beside a pinned one is a new crossing
+# even when it names the same module.
 [[mutation]]
-name = "setup imports one more name from the guards area in a statement of its own"
+name = "setup adds a second import statement from the guards area beside the pinned one"
 file = "src/stayfixed/setup/commands.py"
 before = "    from stayfixed.guards.api import Found, install, uninstall\n"
 after = "    from stayfixed.guards.api import Found, install, uninstall\n    from stayfixed.guards.api import HOOK_NAME\n"
