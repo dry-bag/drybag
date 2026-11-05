@@ -15,25 +15,23 @@ names come off the overlay's disk and print through `printed.quoted`.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 
 from stayfixed.attach.items import KINDS, fold
 from stayfixed.config.classes import ALLOWED, Layer, LayerName, class_of
-from stayfixed.config.plates import PlateKind, plates
+from stayfixed.config.plates import Plate, PlateKind
 from stayfixed.printed import quoted
 
 HELD = "the {kind} {name} is held by the tags {tags}: the later, {winner}, wins"
 
 
-def collisions(overlay: Path, project: str, layers: Sequence[Layer]) -> tuple[str, ...]:
-    """One sentence for each item name or dotted key two or more of `project`'s tags hold: the
+def collisions(held: Sequence[Plate], layers: Sequence[Layer]) -> tuple[str, ...]:
+    """One sentence for each item name or dotted key two or more tags of the plates `held` hold: the
     kind, the name, the tags in list order and the later one, which wins. The items' holders are
     the plates' fold (`attach.items`), the one the readers take their winners from; a directory
     that cannot be listed holds none here, which `attach` says itself. `layers` are the overlay's
     value layers (`overlay_layers.read`), of which only the tag layers are asked, and of theirs only
     the keys a tag may set."""
     found: list[str] = []
-    held = plates(overlay, project)[0]
     for kind in KINDS:
         for name, holders in fold(held, kind).holders.items():
             tags = [plate.name for plate in holders if plate.kind is PlateKind.TAG]

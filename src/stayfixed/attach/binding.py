@@ -41,6 +41,7 @@ from stayfixed import fsops
 from stayfixed.binding import bound_project
 from stayfixed.config.loader import load
 from stayfixed.config.overlay import overlay_root
+from stayfixed.config.plates import Plate, plates
 from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.config.schema import NAME_RULE, PROJECT_NAME, Config
 from stayfixed.errors import Failure, Refusal
@@ -272,6 +273,11 @@ class Binding:
     # Why the overlay's record could not be read, where it could not: it binds nothing, so this
     # is said and stops nothing, and the record is compared with nothing and never written over.
     fault: str | None = None
+    # The overlay's plates for `project` and the notes reading them gave (`config.plates`): read
+    # once by `read_binding` for the run that reads the overlay's items, and none from
+    # `binding_for`, whose callers read no item.
+    plates: tuple[Plate, ...] = ()
+    plate_notes: tuple[str, ...] = ()
 
 
 class UnreadableRecord(Failure):
@@ -339,8 +345,9 @@ def binding_for(root: Path, config: Config, *, machine: Path | None) -> Binding:
     return _bound(root, config, overlay)
 
 
-def _bound(root: Path, config: Config, overlay: Path) -> Binding:
-    """The binding under an overlay root the caller has already read out of the machine file.
+def _bound(root: Path, config: Config, overlay: Path, *, plated: bool = False) -> Binding:
+    """The binding under an overlay root the caller has already read out of the machine file, with
+    its plates where `plated`.
 
     One read per binding: `read_binding` checks `--store` against the root it read and binds under
     that same root, rather than handing `binding_for` the machine file to read a second time, which
@@ -358,7 +365,10 @@ def _bound(root: Path, config: Config, overlay: Path) -> Binding:
     against = found.origin if found is not None and state == BOUND else recorded
     note = origin_note(against, origin) if state == BOUND or against is not None else None
     earlier = found.project if found is not None else None
-    return Binding(project, overlay, store, origin, recorded, state, note, earlier, fault)
+    held, notes = plates(overlay, project) if plated else ((), ())
+    return Binding(
+        project, overlay, store, origin, recorded, state, note, earlier, fault, held, notes
+    )
 
 
 # The refusals of a repository whose project nothing names, each with `--project` as the way out.
@@ -470,7 +480,7 @@ def read_binding(
         raise Refusal(NO_OVERLAY)
     expected = permitted_roots(overlay, config.project.name)[-1]
     if store is None:
-        return _bound(root, config, overlay)
+        return _bound(root, config, overlay, plated=True)
     try:
         resolved: Path | None = fsops.resolved(store)
     except OSError:
@@ -486,4 +496,4 @@ def read_binding(
             f"{store} is not it. The overlay root comes from the machine configuration and never "
             f"from an argument"
         )
-    return _bound(root, config, overlay)
+    return _bound(root, config, overlay, plated=True)

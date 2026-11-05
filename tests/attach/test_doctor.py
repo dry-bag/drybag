@@ -24,6 +24,7 @@ from stayfixed.attach.render import write as render_write
 from stayfixed.binding import delivery_directory
 from stayfixed.config.layout import ATTACH_LEDGER as LEDGER
 from stayfixed.config.loader import CONFIG_FILE, load
+from stayfixed.config.plates import plates
 from stayfixed.doctor import checks as doctor_checks
 from stayfixed.doctor.api import OK, RED, SKIP, WARN, Check
 from stayfixed.errors import Refusal
@@ -866,7 +867,7 @@ def test_a_launcher_the_path_scoped_rules_run_through_that_is_gone_warns(tmp_pat
     (rules / "scoped.md").write_text("---\npaths: src/**\n---\nA rule.\n", encoding="utf-8")
     gone = tmp_path / "gone" / "run-hook.sh"
     command = f'"{gone}" hook PostToolUse'
-    rendered = render_write(_id(root), read_parts(overlay, "p", command=command))
+    rendered = render_write(_id(root), read_parts(plates(overlay, "p")[0], command=command))
     _ledger_field(root, render={"digest": rendered.digest})
     assert _delivered_row(tmp_path, root) == Check(
         "attached",

@@ -31,7 +31,7 @@ reddens = [
 [[mutation]]
 name = "read_binding reads the machine file a second time for the binding"
 file = "src/stayfixed/attach/binding.py"
-before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay)"
+before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay, plated=True)"
 after = "            f\"from an argument\"\n        )\n    return binding_for(root, config, machine=machine)"
 reddens = [
   "tests/attach/test_binding.py::test_read_binding_reads_the_machine_file_once",
@@ -43,8 +43,8 @@ reddens = [
 [[mutation]]
 name = "the permission diff starts reading the committed settings file"
 file = "src/stayfixed/attach/permissions.py"
-before = '    sources = _claude_sources(binding, PERMISSIONS_FILE)'
-after = '    sources = (*_claude_sources(binding, PERMISSIONS_FILE), (root / ".claude" / "settings.json", None))'
+before = '    sources = claude_sources(binding.plates, PERMISSIONS_FILE)'
+after = '    sources = (*claude_sources(binding.plates, PERMISSIONS_FILE), (root / ".claude" / "settings.json", None))'
 reddens = ["tests/attach/test_binding.py::test_a_committed_settings_file_can_never_contribute_a_rule"]
 
 # `memory.groups` is repository-authored and reaches no guard of its own (`config/paths.py`
@@ -1771,8 +1771,8 @@ reddens = ["tests/attach/test_project_choice.py::test_project_beside_a_stayfixed
 [[mutation]]
 name = "a tag's rule replaces the project's rule of its name"
 file = "src/stayfixed/attach/rules.py"
-before = "    winners = fold(plates(overlay, project)[0], RULE, _unlisted).winners"
-after = "    winners = fold(sorted(plates(overlay, project)[0], key=lambda p: p.kind.value == 'tag'), RULE, _unlisted).winners"
+before = "    winners = fold(held, RULE, unreadable(_unreadable)).winners"
+after = "    winners = fold(sorted(held, key=lambda p: p.kind.value == 'tag'), RULE, unreadable(_unreadable)).winners"
 reddens = ["tests/attach/test_rules.py::test_a_tag_rule_arrives_and_a_later_plate_wins_its_name"]
 
 # A skill is the item its directory names, and the later plate wins it whole: merged file by file,
@@ -1780,8 +1780,8 @@ reddens = ["tests/attach/test_rules.py::test_a_tag_rule_arrives_and_a_later_plat
 [[mutation]]
 name = "a skill is merged file by file across plates"
 file = "src/stayfixed/attach/render.py"
-before = "        for item in fold(found, kind, _unlisted).winners.values():"
-after = "        for item in [p.directory / kind.harness / kind.directory / n for n, held in fold(found, kind, _unlisted).holders.items() for p in held]:"
+before = "        for item in fold(held, kind, unreadable(_unreadable)).winners.values():"
+after = "        for item in [p.directory / kind.harness / kind.directory / n for n, plates in fold(held, kind).holders.items() for p in plates]:"
 reddens = ["tests/attach/test_render.py::test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole"]
 
 # A key whose class does not admit a tag layer is refused in every tag (`classes.resolve`), so no
@@ -1791,7 +1791,7 @@ name = "a setting collision counts a key no tag may set"
 file = "src/stayfixed/attach/tags.py"
 before = "            for key in (key for key in layer.values if layer.name in ALLOWED[class_of(key)]):"
 after = "            for key in layer.values:"
-reddens = ["tests/attach/test_tags.py::test_a_setting_collision_counts_only_a_key_a_tag_may_set"]
+reddens = ["tests/attach/test_tags.py::test_a_setting_two_tag_layers_hold_is_named_and_a_common_one_is_not"]
 
 # The ledger names the allow rules that are `attach`'s: one the overlay stopped granting is taken
 # back, and a re-attach that kept it would leave an untagged tag's permission in force until

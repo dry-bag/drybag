@@ -636,7 +636,7 @@ def _write_ledger(
     rules = tuple(target for target, _ in planned.rules)
     # Only the rules the overlay grants now: one it no longer grants leaves the ledger whether or
     # not the settings file still held it, or a copy the owner types by hand later would be taken.
-    granted = {*planned.diff.added_allow, *planned.diff.already_present}
+    granted = planned.diff.granted
     allow = [rule for rule in previous.allow if rule in granted] if previous else []
     allow += [rule for rule in planned.diff.added_allow if rule not in allow]
     # The same union as `allow` and `rules`, for the same reason sharpened once more: the second
@@ -977,7 +977,7 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     for rule in dropped:
         # The removal's walk, asked here as the writes' is: a link on the way refuses first.
         contained(root, rule, allow_final_symlink=True)
-    parts = read_parts(binding.overlay, binding.project)
+    parts = read_parts(binding.plates)
     return AttachPlan(
         config=config,
         binding=binding,

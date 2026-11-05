@@ -46,18 +46,18 @@ import os
 import stat
 import sys
 import tempfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
 import stayfixed
 from stayfixed import fsops
-from stayfixed.attach.items import AGENT, PROJECT_CLAUDE, SKILL, fold
-from stayfixed.attach.permissions import HOOKS_FILE, hook_groups
+from stayfixed.attach.items import AGENT, SKILL, fold, unreadable
+from stayfixed.attach.permissions import HOOKS_FILE, claude_sources, hook_groups
 from stayfixed.attach.rules import scoped_exist
 from stayfixed.binding import delivery_directory, short, unwritten
-from stayfixed.config.plates import PlateKind, plates
+from stayfixed.config.plates import Plate, plates
 from stayfixed.errors import Failure
 from stayfixed.printed import quoted
 
@@ -69,10 +69,9 @@ MARKETPLACE_FILE = ".claude-plugin/marketplace.json"
 PLUGIN_FILE = f"{PLUGIN_DIRECTORY}/.claude-plugin/plugin.json"
 # The plugin's hook file, by its path inside the plugin directory.
 HOOK_FILE = "hooks/hooks.json"
-# The two kinds of item copied whole from the plate that wins each (`attach.items`), beside the hook
-# file, and the directories they are copied into.
-COPIED_KINDS = (SKILL, AGENT)
-COPIED = tuple(kind.directory for kind in COPIED_KINDS)
+# The directories of the two kinds of item copied whole from the plate that wins each, beside the
+# hook file.
+COPIED = (SKILL.directory, AGENT.directory)
 # The entry that delivers path-scoped rules: the event, the tools whose input names a file, and the
 # core plugin's hook wrapper, by its path in the plugin root, beside `src/`.
 SCOPED_EVENT = "PostToolUse"
@@ -173,10 +172,6 @@ def _copied(item: Path) -> dict[str, Part]:
     return found
 
 
-def _unlisted(directory: Path, error: OSError) -> Failure:
-    return _unreadable(fsops.unreadable(quoted(str(directory)), error))
-
-
 def _quoted(path: str) -> str:
     """`path` in double quotes, as the core plugin's entries quote theirs, with the four characters
     a shell still reads inside them escaped, so it arrives as one word, unexpanded."""
@@ -249,31 +244,23 @@ def scoped_group(command: str) -> dict[str, object]:
     }
 
 
-def read_parts(overlay: Path, project: str, *, command: str | None = None) -> dict[str, Part]:
-    """What the plugin carries, by path relative to the plugin directory, read and nothing
-    written: the hook file's union, the path-scoped rules' entry where there is one, and the
+def read_parts(held: Sequence[Plate], *, command: str | None = None) -> dict[str, Part]:
+    """What the plates `held` give the plugin, by path relative to the plugin directory, read and
+    nothing written: the hook file's union, the path-scoped rules' entry where there is one, and the
     copied directories. `command` is the path-scoped rules' command, this process's own
     (`scoped_command`) where it is `None`: `doctor` passes the one the render holds, so a report
     run through another launcher than `attach` was reads no drift for that alone."""
-    found = plates(overlay, project)[0]
-    sources = tuple(
-        (
-            plate.directory / PROJECT_CLAUDE,
-            plate.directory if plate.kind is PlateKind.PROJECT else None,
-        )
-        for plate in found
-    )
     hooks: dict[str, list[object]] = {}
-    for source, owner in sources:
-        for event, groups in hook_groups(source / HOOKS_FILE, share=owner).items():
+    for source, owner in claude_sources(held, HOOKS_FILE):
+        for event, groups in hook_groups(source, share=owner).items():
             hooks.setdefault(event, []).extend(groups)
     # The rules are read whether or not there is a command, so a rule that cannot be read stops
     # every run alike.
-    if scoped_exist(overlay, project) and (command := command or scoped_command()) is not None:
+    if scoped_exist(held) and (command := command or scoped_command()) is not None:
         hooks.setdefault(SCOPED_EVENT, []).append(scoped_group(command))
     parts = {HOOK_FILE: Part(json.dumps({"hooks": hooks}, indent=2) + "\n")}
-    for kind in COPIED_KINDS:
-        for item in fold(found, kind, _unlisted).winners.values():
+    for kind in (SKILL, AGENT):
+        for item in fold(held, kind, unreadable(_unreadable)).winners.values():
             for relative, part in _copied(item).items():
                 parts[f"{kind.directory}/{relative}"] = part
     return parts
@@ -367,5 +354,6 @@ def remove_tree(directory: Path) -> None:
 
 
 def render(overlay: Path, project: str, id: str) -> RenderRecord:
-    """`read_parts`, then `write`: the overlay's executable parts as the plugin `overlay-<id>`."""
-    return write(id, read_parts(overlay, project))
+    """`read_parts` of `project`'s plates, then `write`: the overlay's executable parts as the
+    plugin `overlay-<id>`."""
+    return write(id, read_parts(plates(overlay, project)[0]))

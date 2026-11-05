@@ -1,13 +1,11 @@
 """The overlay's named items, and the one fold over the plates that settles a name two plates hold.
 
-An item is what a plate holds under a name (`config.plates`): a rule, a `*.md` regular file in
-`claude/rules/`; a Codex rule file, a regular file in `codex/`; a skill or an agent, an entry
-directly in `claude/skills/` or `claude/agents/`, a directory or a file. Dot-names are the
-editor's and the system's, and none is an item. `fold` takes the plates in their order and **the
-later plate wins the whole item, which takes the winning plate's place**: a common-only item comes
-before one a tag replaced. Every reader of an item takes its winners from here (`attach.rules`,
-`permissions.codex_rules`, `render.read_parts`), and `attach.tags` names a name two tags hold from
-its holders, so the order is spelled once. Hook entries and allow rules are not items: they union.
+An item is a rule (a `*.md` regular file in `claude/rules/`), a Codex rule file (a regular file in
+`codex/`), a skill or an agent (an entry directly in `claude/skills/` or `claude/agents/`), named by
+its file or entry name; a dot-name is none. Over the plates in their order (`config.plates`) **the
+later plate wins the whole item, which takes the winning plate's place**. The readers of items
+(`attach.rules`, `permissions.codex_rules`, `render.read_parts`) take the winners, and
+`attach.tags` the holders. Hook entries and allow rules are no items: they union.
 """
 
 from __future__ import annotations
@@ -19,17 +17,19 @@ from pathlib import Path
 
 from stayfixed import fsops
 from stayfixed.config.plates import Plate
+from stayfixed.printed import quoted
 
 # The per-harness subdirectories of a plate.
 PROJECT_CLAUDE = "claude"
 PROJECT_CODEX = "codex"
+# What `fold` raises for a directory it cannot list: each reader's own failure.
+Unlisted = Callable[[Path, OSError], Exception]
 
 
 @dataclass(frozen=True)
 class Kind:
-    """One kind of item: as a sentence says it, the harness directory and the directory inside it
-    the items stand in (`""` for the harness directory itself), the suffix a name carries (`""`
-    for any) and whether only regular files count."""
+    """A kind of item, as a sentence says it, where it stands in a plate (`""`: in `harness`
+    itself), the suffix its name ends in and whether only a regular file is one."""
 
     said: str
     harness: str
@@ -47,21 +47,20 @@ KINDS = (RULE, CODEX_RULE, SKILL, AGENT)
 
 @dataclass(frozen=True)
 class Folded:
-    """`winners`, each name's path in the plate that wins it, in fold order; `holders`, the plates
-    holding each name, in plate order."""
+    """Each name's path in the plate that wins it, in fold order, and the plates holding it."""
 
     winners: dict[str, Path]
     holders: dict[str, tuple[Plate, ...]]
 
 
-def fold(
-    plates: Sequence[Plate],
-    kind: Kind,
-    unlisted: Callable[[Path, OSError], Exception] | None = None,
-) -> Folded:
+def unreadable(refusal: Callable[[str], Exception]) -> Unlisted:
+    """`refusal` of `fsops.unreadable`'s sentence about the directory, as `fsops.reading` raises."""
+    return lambda directory, error: refusal(fsops.unreadable(quoted(str(directory)), error))
+
+
+def fold(plates: Sequence[Plate], kind: Kind, unlisted: Unlisted | None = None) -> Folded:
     """`kind`'s items over `plates`, each plate's in name order. A directory that cannot be listed,
-    or whose entries cannot be asked about, raises what `unlisted` makes of it, each reader's own
-    failure; with no `unlisted` it holds nothing."""
+    or whose entries cannot be asked about, raises `unlisted`'s failure, or holds none without."""
     winners: dict[str, Path] = {}
     holders: dict[str, list[Plate]] = {}
     for plate in plates:
@@ -73,9 +72,7 @@ def fold(
     return Folded(winners, {name: tuple(held) for name, held in holders.items()})
 
 
-def _names(
-    directory: Path, kind: Kind, unlisted: Callable[[Path, OSError], Exception] | None
-) -> list[str]:
+def _names(directory: Path, kind: Kind, unlisted: Unlisted | None) -> list[str]:
     try:
         if not fsops.is_dir(directory):
             return []

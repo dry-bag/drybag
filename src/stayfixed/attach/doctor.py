@@ -207,7 +207,6 @@ def _delivery(
     from stayfixed.attach.write import named_placed, placed_paths
     from stayfixed.binding import delivery_directory, short
     from stayfixed.config.overlay_layers import read as read_layers
-    from stayfixed.config.plates import plates
     from stayfixed.doctor.api import OK, RED, WARN
     from stayfixed.errors import Failure, Refusal
     from stayfixed.gitenv import git_run
@@ -307,7 +306,7 @@ def _delivery(
         )
     if render is not None:
         try:
-            now = digest(id, read_parts(bound.overlay, bound.project, command=command))
+            now = digest(id, read_parts(bound.plates, command=command))
         except (Failure, Refusal, OSError):
             found.append(
                 _Finding(WARN, OVERLAY_UNREAD, f"run `{ATTACH_COMMAND} --check`, which says why")
@@ -324,8 +323,8 @@ def _delivery(
     # Last, so a record that cannot be read answers with its own fault and not with the note that
     # the same record lists no tags.
     said = [
-        *plates(bound.overlay, bound.project)[1],
-        *collisions(bound.overlay, bound.project, read_layers(main, machine=context.machine)[0]),
+        *bound.plate_notes,
+        *collisions(bound.plates, read_layers(main, machine=context.machine)[0]),
         *(
             RESERVED_GROUP.format(name=quoted(name))
             for name in reserved_project_groups(bound.overlay, bound.project)

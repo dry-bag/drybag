@@ -21,6 +21,7 @@ from stayfixed.attach.permissions import codex_rules
 from stayfixed.attach.render import read_parts, render
 from stayfixed.attach.rules import read as rules_read
 from stayfixed.attach.tags import collisions
+from stayfixed.config.plates import plates
 
 ID = "0123456789abcdef0123456789abcdef"
 COMMON = {"type": "command", "command": "common.sh"}
@@ -288,38 +289,26 @@ def test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole(tmp_path: Path)
     assert sorted(path.name for path in (skills / "review").iterdir()) == ["SKILL.md"]
     assert (skills / "review" / "SKILL.md").read_text() == "review from b\n"
     assert (skills / "only-a.md").read_text() == "a\n" and (skills / "only-b.md").is_file()
-    assert collisions(overlay, "p", ()) == (
+    assert collisions(plates(overlay, "p")[0], ()) == (
         "the skill review is held by the tags a, b: the later, b, wins",
     )
 
 
 def test_a_rule_a_codex_file_and_a_skill_take_one_winner_and_one_order(tmp_path: Path) -> None:
-    # Each kind is folded alike: the later plate wins the whole item, and the item takes that
-    # plate's place, so the common-only `y` comes before the tag's `x`.
+    # Each kind is folded alike: the later plate wins the whole item and takes that plate's place,
+    # so the common-only `y` comes before the tag's `x`, and common's `x/extra.md` is not copied.
     overlay = _overlay(tmp_path)
     _tagged(overlay, "a")
-    for plate, names in (("common", ("x", "y")), ("groups/a", ("x",))):
-        for name in names:
-            for relative in (
-                f"claude/rules/{name}.md",
-                f"codex/{name}.rules",
-                f"claude/skills/{name}/SKILL.md",
-            ):
-                (overlay / plate / relative).parent.mkdir(parents=True, exist_ok=True)
-                (overlay / plate / relative).write_text(f"{plate}\n", encoding="utf-8")
+    for plate, name in (("common", "x"), ("common", "y"), ("groups/a", "x")):
+        for relative in ("claude/rules/{}.md", "codex/{}.rules", "claude/skills/{}/SKILL.md"):
+            (overlay / plate / relative.format(name)).parent.mkdir(parents=True, exist_ok=True)
+            (overlay / plate / relative.format(name)).write_text(f"{plate}\n", encoding="utf-8")
     (overlay / "common" / "claude" / "skills" / "x" / "extra.md").write_text("", encoding="utf-8")
-    binding = Binding("p", overlay, overlay / "projects" / "p" / "memory", None, None, "")
-    rules = rules_read(overlay, "p")
-    assert [(rule.name, rule.body) for rule in rules] == [("y.md", "common"), ("x.md", "groups/a")]
-    assert [(target, source.parent.parent.name) for target, source in codex_rules(binding)] == [
-        (".codex/rules/y.rules", "common"),
-        (".codex/rules/x.rules", "a"),
-    ]
-    parts = read_parts(overlay, "p")
-    assert [name for name in parts if name.startswith("skills/")] == [
-        "skills/review/SKILL.md",
-        "skills/review/check.sh",
-        "skills/y/SKILL.md",
-        "skills/x/SKILL.md",
-    ]
-    assert parts["skills/x/SKILL.md"].text == "groups/a\n"
+    held = plates(overlay, "p")[0]
+    binding = Binding("p", overlay, tmp_path, None, None, "", plates=held)
+    rules = [(rule.name, rule.body) for rule in rules_read(held)]
+    codex = [(target, source.read_text()) for target, source in codex_rules(binding)]
+    skills = [(name, part.text) for name, part in read_parts(held).items() if "skills/" in name]
+    assert rules == [("y.md", "common"), ("x.md", "groups/a")]
+    assert codex == [(".codex/rules/y.rules", "common\n"), (".codex/rules/x.rules", "groups/a\n")]
+    assert skills[2:] == [("skills/y/SKILL.md", "common\n"), ("skills/x/SKILL.md", "groups/a\n")]

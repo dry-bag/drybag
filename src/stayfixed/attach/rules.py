@@ -35,15 +35,16 @@ import hashlib
 import os
 import re
 import stat
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from stayfixed import fsops
-from stayfixed.attach.items import RULE, fold
+from stayfixed.attach.items import RULE, fold, unreadable
 from stayfixed.binding import bound_project
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.paths import data_directory
-from stayfixed.config.plates import plates
+from stayfixed.config.plates import Plate, plates
 from stayfixed.errors import Failure
 from stayfixed.printed import printable, quoted
 
@@ -131,12 +132,12 @@ def _parsed(name: str, text: str) -> Rule:
     return Rule(name, None, text.strip())
 
 
-def read(overlay: Path, project: str) -> list[Rule]:
-    """The overlay's rules for `project`: the winners of the plates' fold (`attach.items`), a
+def read(held: Sequence[Plate]) -> list[Rule]:
+    """The overlay's rules in the plates `held`: the winners of the plates' fold (`attach.items`), a
     later plate's rule replacing an earlier plate's of its name and taking its place. A directory
     or a file that cannot be read is a `Failure`."""
     found: list[Rule] = []
-    winners = fold(plates(overlay, project)[0], RULE, _unlisted).winners
+    winners = fold(held, RULE, unreadable(_unreadable)).winners
     for name, path in winners.items():
         with fsops.reading(quoted(str(path)), _unreadable):
             text = fsops.read_regular_text(path, limit=_READ_LIMIT)
@@ -144,14 +145,10 @@ def read(overlay: Path, project: str) -> list[Rule]:
     return found
 
 
-def _unlisted(directory: Path, error: OSError) -> Failure:
-    return _unreadable(fsops.unreadable(quoted(str(directory)), error))
-
-
-def scoped_exist(overlay: Path, project: str) -> bool:
-    """Whether the overlay holds a path-scoped rule for `project`, which decides whether the
-    render carries the `PostToolUse` entry."""
-    return any(rule.paths is not None for rule in read(overlay, project))
+def scoped_exist(held: Sequence[Plate]) -> bool:
+    """Whether the plates `held` hold a path-scoped rule, which decides whether the render carries
+    the `PostToolUse` entry."""
+    return any(rule.paths is not None for rule in read(held))
 
 
 def _bound(root: Path) -> list[Rule]:
@@ -161,7 +158,7 @@ def _bound(root: Path) -> list[Rule]:
     overlay = overlay_root(None) if bound is not None else None
     if bound is None or overlay is None:
         return []
-    return read(overlay, bound.project)
+    return read(plates(overlay, bound.project)[0])
 
 
 def standing(root: Path) -> str:

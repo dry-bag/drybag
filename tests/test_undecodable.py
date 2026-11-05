@@ -30,6 +30,7 @@ from stayfixed.attach.binding import Binding
 from stayfixed.config.layout import ATTACH_LEDGER
 from stayfixed.config.loader import CONFIG_FILE, load, read_document
 from stayfixed.config.overlay import overlay_root
+from stayfixed.config.plates import plates
 from stayfixed.config.reading import ConfigError, MachineConfigError
 from stayfixed.errors import Failure
 from stayfixed.memory import index, store
@@ -121,7 +122,15 @@ RAISING: list[tuple[str, Callable[[Path], Callable[[], object]], type[Exception]
         lambda t: (
             _plant(t / "overlay" / COMMON_CODEX / "rules.md"),
             lambda: write._codex_rule_texts(
-                Binding("widget", t / "overlay", t / "store", None, None, "")
+                Binding(
+                    "widget",
+                    t / "overlay",
+                    t / "store",
+                    None,
+                    None,
+                    "",
+                    plates=plates(t / "overlay", "widget")[0],
+                )
             ),
         )[1],
         Failure,
