@@ -87,6 +87,19 @@ def test_pipelines_group_the_commands_a_pipe_joins() -> None:
     assert bashscan.pipelines(tokens) == [[["a"], ["b"]], [["c"]], [["d"], ["e"]]]
 
 
+@pytest.mark.parametrize(
+    ("command", "grouped"),
+    [("a |; b", [[["a"], ["b"]]]), ("a ;| b", [[["a"]], [["b"]]]), ("a |& b", [[["a"]], [["b"]]])],
+)
+def test_a_fused_pipe_and_separator_group_as_pipelines_and_split_as_segments(
+    command: str, grouped: list[list[list[str]]]
+) -> None:
+    tokens = bashscan.tokenize(command)
+    assert tokens is not None
+    assert bashscan.pipelines(tokens) == grouped
+    assert bashscan.segments(tokens) == [["a"], ["b"]]
+
+
 def test_a_line_break_after_a_pipe_continues_the_pipeline() -> None:
     # `prepare` rewrites the newline to `;`, and bash and zsh read the next line as the pipe's
     # right-hand side.

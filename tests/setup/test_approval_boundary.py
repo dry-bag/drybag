@@ -128,9 +128,11 @@ def test_the_advice_beside_a_flag_that_writes_is_refused(
     # A flag that names something to write has no run to belong to beside advice that writes
     # nothing: refused, rather than dropped behind the person's back or run beside it.
     # `--uninstall` was dropped, exit 0, for a person who asked for a hook to be removed. Mutations
-    # (`mutations/`'s "setup --approval-boundary takes a flag that names a write" -> `preset`,
-    # `overlay` and `plugin` print the advice; "setup --approval-boundary takes --git-hooks" ->
-    # `git-hooks` does; "setup --approval-boundary takes --uninstall" -> `uninstall` does).
+    # (`mutations/`'s "setup --git-hooks and --approval-boundary drop --preset" -> `preset`
+    # prints the advice; "setup --git-hooks and --approval-boundary drop --overlay" -> `overlay`
+    # does; "setup --git-hooks and --approval-boundary drop --plugin" -> `plugin` does;
+    # "setup --approval-boundary takes --git-hooks" -> `git-hooks` does; "setup
+    # --approval-boundary takes --uninstall" -> `uninstall` does).
     machine = tmp_path / "machine" / "config.toml"
     assert invoke(_advice(tmp_path, machine, *flag)) == 2
     assert "--approval-boundary prints what to set and writes nothing" in capsys.readouterr().err

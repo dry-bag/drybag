@@ -84,10 +84,7 @@ def names_a_test_run(words: Sequence[str]) -> bool:
     if not words:
         return False
     program = _program(words[0])
-    return any(
-        len(row) <= len(words) and row[0] == program and tuple(words[1 : len(row)]) == row[1:]
-        for row in RUNNERS
-    )
+    return any(row[0] == program and tuple(words[1 : len(row)]) == row[1:] for row in RUNNERS)
 
 
 # Where `uv run` stops and the command it launches starts, for `bashscan.command_words`, here so

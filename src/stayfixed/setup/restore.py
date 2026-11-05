@@ -21,8 +21,6 @@ failure left.
 
 from __future__ import annotations
 
-import json
-import re
 import shutil
 import tomllib
 from collections.abc import Callable, Sequence
@@ -33,13 +31,15 @@ from typing import Literal, NamedTuple
 from stayfixed import fsops
 from stayfixed.attach.api import attach
 from stayfixed.command import command_owner
+from stayfixed.config.loader import read_document
 from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.errors import Failure, Refusal
 from stayfixed.harnesses import HARNESSES, lenient_settings
 from stayfixed.jsonobject import json_object
 from stayfixed.memory.api import permitted_roots, promote_share
 from stayfixed.printed import answered, clipped, quoted
-from stayfixed.runner import Completed, Runner
+from stayfixed.runner import Runner
+from stayfixed.setup.run import _MARKETPLACE_ADD, _PLUGIN_INSTALL
 
 # The owner's list of the checkouts of the projects this overlay serves, one `[projects.<name>]`
 # table each, under the overlay root. `docs/cli.md` documents it as a product input.
@@ -64,8 +64,7 @@ def listed_projects(overlay: Path, *, home: Path) -> tuple[Listed, ...]:
     `dir` is required and is absolute or led by `~/`, which is read under `home`; every other key
     is ignored, because an overlay's own scripts may read them. `()` when the file is not there.
     A file that cannot be read, is not TOML, whose `projects` is not a table or holds a table
-    whose `dir` is missing, not a string or relative is a `Refusal` naming it. Asked before
-    anything is written, so an input error in the owner's file costs nothing.
+    whose `dir` is missing, not a string or relative is a `Refusal` naming it.
     """
     path = overlay / PROJECTS_FILE
     with fsops.reading(_LABEL, Refusal):
@@ -120,54 +119,23 @@ def missing_tools(which: Callable[[str], str | None] = shutil.which) -> tuple[st
 # `extraKnownMarketplaces` and `enabledPlugins`, and writes nothing from it.
 PLUGINS_FILE = Path("machine") / "claude" / "settings.json"
 _PLUGINS_LABEL = PLUGINS_FILE.as_posix()
-# What a value of the overlay's settings must look like to become an argv element of a `claude
-# plugin` call, each led by a letter or a digit so none can read as an option: the owner wrote the
-# file, but a synced overlay is edited from more than one machine, and a value that could read as an
-# option is a note and not an argument. A plugin id is `<name>@<marketplace>`; a repository is
-# `<owner>/<name>`, optionally `@<ref>`; a git URL is `https://` or `git@` and holds no space.
-_PLUGIN_ID = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*\Z")
-_REPOSITORY = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*\Z")
-_REF = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._/-]*\Z")
-_GIT_URL = re.compile(r"\A(?:https://|git@)[^\s\x00-\x1f]+\Z")
-# The two listings `install_listed` asks, `claude plugin marketplace list --json` and `claude plugin
-# list --json`, are each a JSON array: of the marketplaces registered (`name`) and of the plugins
-# installed (`id`, `scope`), measured under a scratch HOME on Claude Code 2.1.312. A plugin counts
-# as installed here only at this scope, the one a bare `claude plugin install` writes.
-USER_SCOPE = "user"
+# The `extraKnownMarketplaces` source kinds restore carries, each with the one key whose string
+# value is `claude plugin marketplace add`'s argument. A source of another kind, or holding any
+# other key (a `git` source's `ref`, a `github` source's `path` or `sparsePaths`), is a note and is
+# not added: registered without that key, the marketplace would not be the one the file names.
+_CARRIED = {"github": "repo", "git": "url"}
 
 
-def _marketplace_argument(source: object) -> str | None:
-    """The argument `claude plugin marketplace add` takes for an `extraKnownMarketplaces` source of
-    a shape restore adds, or `None`: a GitHub repository with an optional ref, or an `https://` or
-    `git@` git URL."""
-    if not isinstance(source, dict):
-        return None
-    kind = source.get("source")
-    if kind == "github":
-        repo, ref = source.get("repo"), source.get("ref")
-        if not isinstance(repo, str) or not _REPOSITORY.match(repo):
-            return None
-        if ref is None:
-            return repo
-        return f"{repo}@{ref}" if isinstance(ref, str) and _REF.match(ref) else None
-    url = source.get("url")
-    if kind == "git" and isinstance(url, str) and _GIT_URL.match(url):
-        return url
-    return None
+def listed_plugins(overlay: Path) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """`(marketplace add-arguments, plugin ids, notes)` the overlay's copy of Claude Code's user
+    settings names.
 
-
-def listed_plugins(
-    overlay: Path,
-) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...], tuple[str, ...]]:
-    """`(marketplaces as (name, add-argument), plugin ids, notes)` the overlay's copy of Claude
-    Code's user settings names.
-
-    `extraKnownMarketplaces.<name>.source` of a GitHub repository (with an optional `ref`) or of an
-    `https://` or `git@` git URL gives the marketplace; any other shape, or a value that could read
-    as an option, is a note and is not added. `enabledPlugins` entries whose value is `true` and
-    whose id is `<name>@<marketplace>` are the ids. No file lists nothing; one that cannot be read
-    as a JSON object, or whose two keys are not objects, is one note and lists nothing of what it
-    could not read.
+    An `extraKnownMarketplaces.<name>.source` that is exactly `{"source": "github", "repo": R}` or
+    `{"source": "git", "url": U}`, string values, gives `R` or `U`; any other source is a note
+    naming the marketplace and what restore does not carry. Every `enabledPlugins` key whose value
+    is `true` is an id, as written. No file lists nothing; one that cannot be read as a JSON
+    object, or whose two keys are not objects, is one note and lists nothing of what it could not
+    read.
     """
     path = overlay / PLUGINS_FILE
     try:
@@ -181,93 +149,59 @@ def listed_plugins(
     except Failure as exc:
         return (), (), (f"{exc}, so no plugin was installed",)
     notes: list[str] = []
-    marketplaces: list[tuple[str, str]] = []
+    marketplaces: list[str] = []
     known = document.get("extraKnownMarketplaces", {})
     if not isinstance(known, dict):
         notes.append(f"`extraKnownMarketplaces` in {_PLUGINS_LABEL} is not an object")
         known = {}
     for name, entry in known.items():
         source = entry.get("source") if isinstance(entry, dict) else None
-        argument = _marketplace_argument(source)
-        if argument is None:
-            notes.append(
-                f"marketplace {clipped(name)} of {_PLUGINS_LABEL} has a source restore does not "
-                "add (a GitHub repository, or an https or ssh git URL), so it was not added"
+        source = source if isinstance(source, dict) else {}
+        kind = source.get("source")
+        key = _CARRIED.get(kind) if isinstance(kind, str) else None
+        if key is None or not isinstance(source.get(key), str):
+            said = "is not a `github` source with a `repo` or a `git` source with a `url`"
+        elif extra := sorted(set(source) - {"source", key}):
+            said = (
+                f"holds {', '.join(f'`{clipped(k)}`' for k in extra)}, which restore does not carry"
             )
         else:
-            marketplaces.append((name, argument))
+            marketplaces.append(source[key])
+            continue
+        notes.append(f"marketplace {clipped(name)} of {_PLUGINS_LABEL}: its source {said}")
     enabled = document.get("enabledPlugins", {})
     if not isinstance(enabled, dict):
         notes.append(f"`enabledPlugins` in {_PLUGINS_LABEL} is not an object")
         enabled = {}
-    ids = tuple(i for i, on in enabled.items() if on is True and _PLUGIN_ID.match(i))
+    ids = tuple(i for i, on in enabled.items() if on is True)
     return tuple(marketplaces), ids, tuple(notes)
 
 
-def _rows(done: Completed, key: str) -> list[dict[str, object]] | None:
-    """The rows of a `claude plugin … list --json` answer, or `None` when it did not answer a JSON
-    array of objects each holding `key`."""
-    if done.code != 0:
-        return None
-    try:
-        rows = json.loads(done.stdout)
-    except ValueError:
-        return None
-    if not isinstance(rows, list) or not all(isinstance(r, dict) and key in r for r in rows):
-        return None
-    return rows
-
-
 def install_listed(
-    marketplaces: Sequence[tuple[str, str]],
-    ids: Sequence[str],
-    *,
-    home: Path,
-    runner: Runner,
+    marketplaces: Sequence[str], ids: Sequence[str], *, home: Path, runner: Runner
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """`(installed ids, notes)`: add each listed marketplace Claude Code does not have registered
-    (`claude plugin marketplace add <argument>`) and install each id it does not have installed at
-    user scope (`claude plugin install <id>`), after asking its two listings. A non-zero exit is a
-    note naming the argv, never a refusal; so is a listing that answers no array, which stops the
-    installs rather than guess what is there. Nothing listed launches nothing, and without `claude`
-    on `PATH` there is one note. The overlay's list is Claude Code's, so Codex, where it is on
-    `PATH`, gets one note.
-    """
-    if not marketplaces and not ids:
-        return (), ()
-    if shutil.which("claude") is None:
-        return (), ("the overlay lists plugins for Claude Code and `claude` is not on PATH",)
-    known = _rows(
-        runner.launch(["claude", "plugin", "marketplace", "list", "--json"], home), "name"
-    )
-    held = _rows(runner.launch(["claude", "plugin", "list", "--json"], home), "id")
-    if known is None or held is None:
-        return (), ("`claude plugin` listed no marketplaces or plugins, so none was installed",)
-    registered = {row["name"] for row in known}
-    installed_here = {row["id"] for row in held if row.get("scope") == USER_SCOPE}
+    """`(installed ids, notes)`: each marketplace added, then each id installed, with setup's own
+    argv (`_MARKETPLACE_ADD["claude"]` and `_PLUGIN_INSTALL["claude"]` in `setup.run`) and on every
+    run, so what Claude Code answers for one already registered or installed is what is said. A
+    non-zero exit, a missing `claude` included (`Runner` answers `127`), is a note, never a
+    refusal."""
+    add: Callable[[str], list[str]] = _MARKETPLACE_ADD["claude"]
+    install: Callable[[str], list[str]] = _PLUGIN_INSTALL["claude"]
     done: list[str] = []
     notes: list[str] = []
-    for name, argument in marketplaces:
-        if name not in registered:
-            added = runner.launch(["claude", "plugin", "marketplace", "add", argument], home)
-            if added.code != 0:
-                notes.append(_did_not_succeed(f"marketplace add {argument}", added))
+    for argument in marketplaces:
+        added = runner.launch(add(argument), home)
+        if added.code != 0:
+            said = f"{clipped(argument)} ({answered(added)})"
+            notes.append(f"claude: could not register marketplace {said}")
     for plugin in ids:
-        if plugin not in installed_here:
-            ran = runner.launch(["claude", "plugin", "install", plugin], home)
-            if ran.code == 0:
-                done.append(plugin)
-            else:
-                notes.append(_did_not_succeed(f"install {plugin}", ran))
-    if shutil.which("codex") is not None:
-        notes.append(
-            "the overlay's plugin list is Claude Code's, so nothing was installed for Codex"
-        )
+        argv = install(plugin)
+        ran = runner.launch(argv, home)
+        if ran.code == 0:
+            done.append(plugin)
+        else:
+            notes.append(f"claude: {clipped(' '.join(argv))} did not succeed ({answered(ran)})")
     return tuple(done), tuple(notes)
-
-
-def _did_not_succeed(verb: str, done: Completed) -> str:
-    return f"`claude plugin {verb}` did not succeed ({answered(done)})"
 
 
 class Outcome(NamedTuple):
@@ -300,22 +234,20 @@ def restore(
     runner: Runner,
     yes: bool,
 ) -> RestoreReport:
-    """Attach each listed checkout that exists, each under the store its table key names.
-
-    **Adversary and anchor:** a listed checkout's tracked `stayfixed.toml` can claim another of
-    the owner's projects; the store handed to `attach` comes from the table key in
-    `<overlay>/machine/projects.toml`, which no repository writes, and attach refuses a store that
-    is not the checkout's own project's, so such a checkout is refused rather than given another
-    project's notes, rules and delivery.
+    """Attach each listed checkout that exists, each under the store its table key names (the
+    module says why), and a checkout with no `stayfixed.toml` under the project that key names.
 
     A `dir` that is not there is `absent`, reported and skipped; attach's `Refusal` is `refused`
     and its `Failure` `failed`, each with the message as `detail`, and the next project goes on.
 
     With `yes`, each attached project's unreviewed notes are then recorded as reviewed on this
     machine (`promote_share`), counted in the outcome's `promoted`; a project whose notes cannot be
-    recorded is `failed`, attached all the same. **The notes recorded come from the overlay's share
-    for the table key of the owner's projects file, which no repository writes; nothing a checkout
-    holds is read.** Without `yes` nothing is recorded as reviewed, whatever the overlay holds.
+    recorded is `failed`, attached all the same. **The notes recorded are every unreviewed note of
+    the overlay's share for the table key of the owner's projects file, which no repository
+    writes:** `common/memory`, each listed tag's `groups/<tag>/memory` and the project's own groups,
+    notes written on another machine that nobody reviewed included. Only overlay paths are walked,
+    and a group directory that is a link is followed. Without `yes` nothing is recorded as
+    reviewed, whatever the overlay holds.
     """
     marketplaces, ids, listing_notes = listed_plugins(overlay)
     installed, install_notes = install_listed(marketplaces, ids, home=home, runner=runner)
@@ -329,11 +261,11 @@ def restore(
             owner = command_owner(machine) if owner is None else owner
             attached = attach(
                 item.dir,
-                store=permitted_roots(overlay, item.name)[1],
+                store=permitted_roots(overlay, item.name)[-1],
                 machine=machine,
                 runner=runner,
                 owner=owner,
-                project=None,
+                project=item.name if read_document(item.dir) is None else None,
             )
         except Refusal as exc:
             outcomes.append(Outcome(item.name, item.dir, "refused", str(exc), 0))
@@ -365,24 +297,3 @@ def line(outcome: Outcome) -> str:
     said = f"{quoted(outcome.name)} at {quoted(str(outcome.dir))}: {outcome.state}"
     said = f"{said} ({outcome.detail})" if outcome.detail else said
     return f"{said}; {outcome.promoted} note(s) recorded as reviewed" if outcome.promoted else said
-
-
-def overlay_to_restore(overlay: str | None, *, machine: Path) -> Path | None:
-    """The overlay root a restore reads before `setup` has written anything: `--overlay`'s path
-    when it names one that holds an overlay, else, with no `--overlay`, the machine file's recorded
-    root. `None` for `--overlay create:…` and for a path that holds no overlay, which `setup` makes
-    or refuses, and for a machine that records none."""
-    from stayfixed.config.machine import in_owner_home
-    from stayfixed.config.overlay import overlay_root
-    from stayfixed.overlay.api import overlay_fault
-
-    if overlay is None:
-        return overlay_root(machine)
-    named = None if overlay.startswith("create:") else in_owner_home(overlay)
-    if named is None:
-        return None
-    try:
-        candidate = fsops.resolved(named)
-    except OSError:
-        return None  # `setup` refuses a path it cannot resolve, in its own words, before writing
-    return candidate if overlay_fault(candidate) is None else None
