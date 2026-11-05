@@ -37,25 +37,25 @@ before = '        if recognises is not None and uvrun.is_launcher(name):'
 after = '        if False:'
 reddens = [
   "tests/hints/test_bashscan.py::test_command_words_strips_uv_run_with_nothing_before_the_program",
-  "tests/profiles/python/test_hygiene.py::test_a_red_pytest_run_behind_uvs_options_gets_the_same_note",
+  "tests/hints/test_hooks.py::test_the_note_follows_the_runner_table[FOO=1 uv run --locked go test ./...-True]",
 ]
 
 # No option of uv's is read: read as the first word that is no option, `uv run --with
-# pytest-xdist pytest` would launch `pytest-xdist`, which no adapter recognises.
+# pytest-xdist pytest` would launch `pytest-xdist`, which the runner table does not name.
 [[mutation]]
 name = "the command `uv run` launches starts at its first word that is no option"
 file = "src/stayfixed/hints/bashscan.py"
 before = "        if recognises(segment[at:]):"
 after = '        if not segment[at].startswith("-"):'
 reddens = [
-  "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_a_runner_adapter_recognises[with]",
-  "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_a_runner_adapter_recognises[directory]",
+  "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_the_runner_table_names[with]",
+  "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_the_runner_table_names[directory]",
 ]
 
-# A `uv run` in which no adapter recognises a word is read whole: read as all launcher, it is a
-# launch of nothing, and `prove --junit` would read `not proven` for a command it runs as typed.
+# A `uv run` in which the runner table reads no word as a test run is read whole: read as all
+# launcher, it is a launch of nothing.
 [[mutation]]
-name = "a `uv run` no adapter recognises is read as all launcher"
+name = "a `uv run` naming no test run is read as all launcher"
 file = "src/stayfixed/hints/bashscan.py"
 before = """            return at
     return None"""
@@ -63,7 +63,6 @@ after = """            return at
     return len(segment)"""
 reddens = [
   "tests/hints/test_bashscan.py::test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole[no-runner]",
-  "tests/prove/test_junit_flag.py::test_a_launcher_runs_as_typed_under_junit",
 ]
 
 # A uv command with no `run` launches nothing: read from its first word, `uv pip install
@@ -101,18 +100,6 @@ before = '        if name in _SINGLE_WRAPPERS:'
 after = '        if False:'
 reddens = [
   "tests/hints/test_bashscan.py::test_command_words_strips_a_leading_assignment_and_wrapper",
-]
-
-# `read_launch` names the launcher's words apart from the assignments, which a caller that runs
-# the command hands its environment and checks for forging.
-[[mutation]]
-name = "the launch keeps no launcher's words"
-file = "src/stayfixed/hints/bashscan.py"
-before = "            launcher.extend(segment[index:launched])"
-after = "            pass"
-reddens = [
-  "tests/hints/test_bashscan.py::test_read_launch_names_each_word_of_the_launch_by_its_part[uv-env-assignment]",
-  "tests/prove/test_run.py::test_the_adapter_is_handed_the_launcher_s_words_alone[argv0-launch0]",
 ]
 
 # Claude Code delivers a Bash command that exited non-zero to `PostToolUseFailure` and never to
@@ -840,41 +827,8 @@ before = "    attribute = common_flags("
 after = '    test_sub.add_parser("audit-entrypoints"); attribute = common_flags('
 reddens = ["tests/test_cli.py::test_the_test_group_has_attribute_alone"]
 
-# The red-run hint is chosen by the command that failed, so a repository in two stacks that runs
-# both suites in one command gets both stacks' advice. Keeping only the first recognising hint is
-# the shape a "the profile" design would have, and it silently drops the second stack's line.
-[[mutation]]
-name = "only the first recognising hint speaks"
-file = "src/stayfixed/hints/hygiene.py"
-before = "    speaking = [hint for _, hint in hints if hint is not None and _recognises(hint, commands)]"
-after = "    speaking = [hint for _, hint in hints if hint is not None and _recognises(hint, commands)][:1]"
-reddens = ["tests/profiles/test_hints.py::test_two_recognising_hints_both_speak"]
-
-# A hint that raises costs its own line and nothing else. Unguarded, the exception reaches the
-# dispatcher, which records it and drops the handler's whole context: the
-# dirty-tree line and every other stack's line go with the broken one.
-[[mutation]]
-name = "a hint's note is computed outside its guard"
-file = "src/stayfixed/hints/hygiene.py"
-before = """    try:
-        return answer(hint, contained_roots(root, config))[1]
-    except Exception:
-        return None"""
-after = "    return answer(hint, contained_roots(root, config))[1]"
-reddens = ["tests/profiles/test_hints.py::test_a_hint_that_raises_costs_its_note_not_the_dispatch"]
-
-[[mutation]]
-name = "a hint's recognition is asked outside its guard"
-file = "src/stayfixed/hints/hygiene.py"
-before = """    try:
-        return any(hint.recognises(argv) for argv in commands)
-    except Exception:
-        return False"""
-after = "    return any(hint.recognises(argv) for argv in commands)"
-reddens = ["tests/profiles/test_hints.py::test_a_hint_that_raises_costs_its_note_not_the_dispatch"]
-
-# The core names no stack: one stack's runner, artifacts or package manager live in its profile,
-# and a mention in a core module is either moved there or pardoned with its reason.
+# No module names a stack: a mention of one stack's runner, artifacts or package manager is
+# pardoned with its reason or goes.
 [[mutation]]
 name = "the core names pytest again"
 file = "src/stayfixed/hints/hygiene.py"
@@ -884,16 +838,6 @@ LEAD = "Before calling this red a flake, pre-existing, or caused by the branch:"
 reddens = [
   "tests/test_language_neutral.py::test_no_core_module_names_a_stack_it_does_not_pardon",
 ]
-
-# The words miss the core importing a stack's own code, since a module path holds no listed word;
-# the import walk is what catches it.
-[[mutation]]
-name = "the core imports the Python profile's hint"
-file = "src/stayfixed/hints/hygiene.py"
-before = "from stayfixed.profiles.hints import answer, shipped_hints"
-after = """from stayfixed.profiles.hints import answer, shipped_hints
-from stayfixed.profiles.python.hygiene import PythonHint"""
-reddens = ["tests/test_language_neutral.py::test_no_core_module_imports_a_stack_profiles_code"]
 
 # A bytes literal is code too: the walk reads it as Latin-1, so a stack's word spelled as bytes
 # in a core module is a mention like any string.
@@ -907,8 +851,8 @@ reddens = [
   "tests/test_language_neutral.py::test_no_core_module_names_a_stack_it_does_not_pardon",
 ]
 
-# The interpreter and the manifest of one stack are stack words like its runner: a core module that
-# names either is moved into that stack's profile or pardoned with its reason.
+# The interpreter and the manifest of one stack are stack words like its runner: a module that
+# names either is pardoned with its reason or goes.
 [[mutation]]
 name = "the core names the Python interpreter"
 file = "src/stayfixed/hints/hygiene.py"
@@ -934,14 +878,14 @@ reddens = [
 [[mutation]]
 name = "a core module picks one area's commands out of the CLI frame's registrars"
 file = "src/stayfixed/hints/hygiene.py"
-before = "def _note(hint: RedRunHint, root: Path, config: Config) -> str | None:"
+before = "def context_for(command: str, root: Path) -> str | None:"
 after = """def _memory_registrar() -> object:
     from stayfixed.cli import discover_registrars
 
     return [r for r in discover_registrars() if r.__module__ == "stayfixed.memory.commands"]
 
 
-def _note(hint: RedRunHint, root: Path, config: Config) -> str | None:"""
+def context_for(command: str, root: Path) -> str | None:"""
 reddens = ["tests/boundaries/test_discovery.py::test_discovery_is_asked_only_for_the_submodules_it_names"]
 
 [[mutation]]
@@ -1170,61 +1114,6 @@ after = "    config = session.config\n    if event.project_root is None:"
 reddens = [
   "tests/hooks/test_floor.py::test_project_handlers_speak_on_a_file_and_stay_silent_without_one[test_hygiene]",
   "tests/hints/test_hooks.py::test_no_config_silences_the_hygiene_note_and_never_the_guard",
-]
-
-# `uvrun.run_directory`, measured on uv 0.12.19: `--directory`, else `UV_WORKING_DIR`, moves
-# where the program runs, and `prove` judges the command there.
-[[mutation]]
-name = "uv's `--directory` is not read"
-file = "src/stayfixed/hints/uvrun.py"
-before = "            if name == _DIRECTORY:"
-after = "            if False:"
-reddens = [
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[spaced]",
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[equals]",
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[global]",
-  "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[spaced]",
-]
-
-[[mutation]]
-name = "uv's spaced `--directory` value is not read"
-file = "src/stayfixed/hints/uvrun.py"
-before = "                directory = value if equals else _value(words, at)"
-after = "                directory = value"
-reddens = [
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[spaced]",
-]
-
-[[mutation]]
-name = "`UV_WORKING_DIR` is not read"
-file = "src/stayfixed/hints/uvrun.py"
-before = "        moved = directory if directory is not None else environ.get(WORKING_DIR)"
-after = "        moved = directory"
-reddens = [
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[variable]",
-  "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[assigned]",
-  "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[inherited]",
-]
-
-[[mutation]]
-name = "uv's variable wins over its `--directory`"
-file = "src/stayfixed/hints/uvrun.py"
-before = "        moved = directory if directory is not None else environ.get(WORKING_DIR)"
-after = "        moved = environ.get(WORKING_DIR) or directory"
-reddens = [
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[option-over-variable]",
-  "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[over-the-variable]",
-]
-
-[[mutation]]
-name = "a nested `uv run` reads its directory from where the command was typed"
-file = "src/stayfixed/hints/uvrun.py"
-before = "            here = here / moved"
-after = "            here = cwd / moved"
-reddens = [
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[nested]",
-  "tests/hints/test_bashscan.py::test_run_directory_is_where_uv_runs_the_program[nested-variable]",
-  "tests/prove/test_run.py::test_the_command_is_judged_where_its_launcher_runs_it[nested]",
 ]
 
 # `commit strip` leaves a message alone when the person set Claude Code's `attribution.commit`: the

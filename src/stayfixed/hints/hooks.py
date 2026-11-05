@@ -12,8 +12,7 @@ nothing.
 
 Nothing a repository controls is put into `HookResult.context`. The restore hint is built from
 the command's own text — model- or user-authored, never repository bytes — and the hygiene
-notice carries counts and fixed sentences, its own and those a shipped profile's hint renders
-from its counts, never a path from `stayfixed.toml`.
+notice carries a count and fixed sentences, never a path from `stayfixed.toml`.
 
 The guard judges with any configuration and none: a repository with no `stayfixed.toml`, or one
 that does not load, is judged as one that loads, because the guard reads nothing of it but its
@@ -84,9 +83,9 @@ def _pipe_status(event: HookEvent, session: SessionConfig) -> HookResult:
 
 
 def _test_hygiene(event: HookEvent, session: SessionConfig) -> HookResult:
-    """Name what could have falsified a red test run, in the words of the profile whose runner
-    failed. Never a decision: the tool has already run, and a failure here costs the note and not
-    the call. About the project, so silent without its configuration."""
+    """Name what could have falsified a red test run. Never a decision: the tool has already run,
+    and a failure here costs the note and not the call. About the project, so silent without its
+    configuration."""
     config = session.config
     if config is None or event.project_root is None:
         return HookResult()
@@ -97,7 +96,7 @@ def _test_hygiene(event: HookEvent, session: SessionConfig) -> HookResult:
 
     if red_exit(event.raw) is None:
         return HookResult()
-    return HookResult(context=context_for(command, event.project_root, config))
+    return HookResult(context=context_for(command, event.project_root))
 
 
 def register() -> list[Handler]:

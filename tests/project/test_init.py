@@ -514,11 +514,10 @@ def test_init_yes_says_what_it_picked_attribution_off_and_no_plugin(
     assert code == 0, printed
     assert f"\n{PICKED}\n" in printed, printed
     picked = printed.split(f"\n{PICKED}\n", 1)[1].splitlines()
-    assert picked[:7] == [
+    assert picked[:6] == [
         "  project.name: widget",
         "  project.base_branch: main",
         "  memory.mode: harness",
-        "  stayfixed.profile: none",
         "  commit_messages.attribution_check: off",
         "  stayfixed.agents: claude, codex",
         "  plugins: none",

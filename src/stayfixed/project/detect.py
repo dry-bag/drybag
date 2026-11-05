@@ -1,9 +1,8 @@
 """What `init --yes` can read off a repository without asking, and where each value came from.
 
-Four values, each one `git` question or a probe of the root: the name, the base branch, the
-harnesses whose directories the root carries, and the shipped profile whose markers it
-carries. `origin_remote` is `gitenv`'s, so "what is this checkout's origin" is asked one way
-wherever it is asked.
+Three values, each one `git` question or a probe of the root: the name, the base branch and the
+harnesses whose directories the root carries. `origin_remote` is `gitenv`'s, so "what is this
+checkout's origin" is asked one way wherever it is asked.
 
 **Three of them are repository-authored strings, and each is held to a grammar before it is
 returned:** the remote's last path segment and the checkout's directory name to `[project]
@@ -12,7 +11,7 @@ checked out — to `BRANCH_NAME`, git's own rules for a branch. A name outside i
 refused naming the grammar and never the value, or, leniently, returned as `""` and `not
 derivable`, so `init --questions` asks for it rather than suggesting it. A branch outside its
 grammar is reported as the default.
-The agents and the profile are names from stayfixed's own registries.
+The agents are names from stayfixed's own registry.
 
 Each value also says where it came from, in one of this module's fixed phrases, because a
 default is only as good as its source: `origin/HEAD` is set by `git clone`, `git remote
@@ -48,8 +47,6 @@ DIRECTORY_NAME = "directory name"
 ORIGIN_HEAD = "origin/HEAD"
 CURRENT_BRANCH = "current branch"
 HARNESS_DIRECTORIES = "harness directories"
-PROFILE_MARKERS = "profile markers"
-NO_PROFILE_MARKERS = "no profile markers"
 
 
 @dataclass(frozen=True)
@@ -57,9 +54,7 @@ class Detected:
     name: str
     base_branch: str
     agents: tuple[str, ...]
-    # The first shipped profile the root carries markers for, or none.
-    profile: str = ""
-    # Keyed "name", "base_branch", "agents", "profile"; each value one of this module's phrases.
+    # Keyed "name", "base_branch", "agents"; each value one of this module's phrases.
     sources: Mapping[str, str] = field(default_factory=dict)
     # `origin/HEAD` named a branch outside the grammar, so the base branch is the default in its
     # place. A flag and never the name: the name is the text the grammar refused.
@@ -153,15 +148,8 @@ def _agents(root: Path) -> tuple[tuple[str, ...], str]:
     return tuple(h.name for h in HARNESSES), DEFAULT
 
 
-def _profile(root: Path) -> tuple[str, str]:
-    from stayfixed.profiles import detects, load_profile, shipped
-
-    profile = next((name for name in shipped() if detects(load_profile(name), root)), "")
-    return profile, PROFILE_MARKERS if profile else NO_PROFILE_MARKERS
-
-
 def detect(root: Path, *, lenient: bool = False) -> Detected:
-    """The name, the base branch, the harnesses and the profile, each with its source.
+    """The name, the base branch and the harnesses, each with its source.
 
     The refusal is the whole of what this does with a name outside the grammar: the remote's
     last path segment and the checkout's directory name both arrive from outside, so one that is
@@ -178,17 +166,14 @@ def detect(root: Path, *, lenient: bool = False) -> Detected:
         name, name_source = "", NOT_DERIVABLE
     base_branch, branch_source, head_refused, head_unrecorded, remotes_unknown = _base_branch(root)
     agents, agents_source = _agents(root)
-    profile, profile_source = _profile(root)
     return Detected(
         name,
         base_branch,
         agents,
-        profile,
         {
             "name": name_source,
             "base_branch": branch_source,
             "agents": agents_source,
-            "profile": profile_source,
         },
         head_refused=head_refused,
         head_unrecorded=head_unrecorded,

@@ -989,93 +989,15 @@ def test_the_cli_reference_contents_lists_every_section_in_order() -> None:
     # Every `## ` heading after the Contents, in order, each linked by GitHub's anchor: a command
     # section added without its Contents line, or a heading renamed under a stale link, is
     # a reference a reader cannot navigate. The floor is today's count of sections after the
-    # Contents, 30, so a walk that found nothing, or half, cannot pass.
+    # Contents, 29, so a walk that found nothing, or half, cannot pass.
     # Mutation (declared): drop the `memory inventory` Contents line -> the lists differ.
     text = (ROOT / "docs" / "cli.md").read_text(encoding="utf-8")
     _, _, after = text.partition("## Contents\n")
     contents, _, rest = after.partition("\n## ")
     listed = re.findall(r"^- \[(.+)\]\(#([^)]+)\)$", contents, re.MULTILINE)
     headings = re.findall(r"^## (.+)$", "## " + rest, re.MULTILINE)
-    assert len(headings) >= 30, len(headings)
+    assert len(headings) >= 29, len(headings)
     assert listed == [(heading, _anchor(heading)) for heading in headings]
-
-
-# The `prove` section of `docs/cli.md`: its heading to the next `## ` heading.
-_PROVE_SECTION = re.compile(r"^## `stayfixed prove .*?\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL)
-
-
-def _prove_section() -> str:
-    section = _PROVE_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md has no `stayfixed prove` section"
-    return section.group(1)
-
-
-def test_the_prove_section_states_the_bound_word_for_word() -> None:
-    # One source for the bound, which the section quotes as it is. Mutation (declared): the
-    # bound's text changed in `run.py` -> the section no longer holds it.
-    from stayfixed.prove.run import BOUND
-
-    assert f"**What `proved` means.** {BOUND}\n" in _prove_section()
-
-
-def test_the_json_keys_the_prove_section_lists_are_the_receipt_s_fields() -> None:
-    # The section lists `--json`'s keys in order, each with what it holds in parentheses.
-    # Mutation (declared): a field added to the receipt -> the section lists one key fewer.
-    import dataclasses
-
-    from stayfixed.prove.run import Receipt
-
-    section = _prove_section()
-    start = section.index("`--json` carries `verdict`") + len("`--json` carries ")
-    end = section.index("`untracked_more`.", start) + len("`untracked_more`")
-    listed = re.findall(r"`([a-z_]+)`", re.sub(r"\([^()]*\)", "", section[start:end]))
-    assert listed == [field.name for field in dataclasses.fields(Receipt)]
-
-
-# `| what holds | `verdict` | exit | reason(s) |`: a row of the prove section's verdict table.
-_CASCADE_ROW = re.compile(r"^\| [^|]+ \| `([a-z ]+)` \| (\d) \|([^|]*)\|$", re.MULTILINE)
-
-
-def test_the_prove_verdict_table_is_the_cascade_row_for_row() -> None:
-    # The table says it is `CASCADE`, the first row that holds winning: each row its verdict, its
-    # exit code and, where the cascade names one, its reason; a row whose reason is the step's
-    # that stopped the run lists some. Mutation (declared): `mutations/`'s "the cascade's
-    # green-but-exited row is no longer the table's" -> that row's verdict differs.
-    from stayfixed.prove.run import CASCADE, EXIT
-
-    rows = _CASCADE_ROW.findall(_prove_section())
-    # The walk's floor, for the reason the Shared flags test gives.
-    assert len(rows) == len(CASCADE), rows
-    for (verdict, code, reasons), (expected, reason, _) in zip(rows, CASCADE, strict=True):
-        assert (verdict, int(code)) == (expected, EXIT[expected]), (verdict, code)
-        if reason is None:
-            assert reasons.strip(), verdict
-        else:
-            assert reasons.strip() == (f"`{reason}`" if reason else ""), (verdict, reasons)
-
-
-def test_every_reason_constant_is_documented() -> None:
-    # Every reason a receipt can carry, the run's, the readers' and each shipped adapter's, is
-    # named in the section as its code span. Mutation (declared): a reason's text renamed -> the
-    # section no longer names it.
-    import sys
-
-    from stayfixed.profiles.adapters import shipped_adapters
-    from stayfixed.prove.run import WORDS
-
-    core = {reason for reason in WORDS if reason}
-    adapters: set[str] = set()
-    for adapter in shipped_adapters():
-        adapters |= set(sys.modules[type(adapter).__module__].REASONS)
-    # The receipt's line words an adapter's reason by the verdict it stopped the run with, and the
-    # core's by `WORDS`: a reason of both would be worded as the core's.
-    assert core.isdisjoint(adapters), sorted(core & adapters)
-    reasons = core | adapters
-    section = _prove_section()
-    # The walk's floor: the core's reasons alone, so a discovery that found no adapter cannot
-    # pass with nothing of theirs held.
-    assert adapters and len(reasons) > len(core), sorted(reasons)
-    assert [reason for reason in sorted(reasons) if f"`{reason}`" not in section] == []
 
 
 # The "Note sync" section names what the sync keeps and every outcome it records, in words that

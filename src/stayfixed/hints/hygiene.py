@@ -2,22 +2,19 @@
 
 Uncommitted work in the tree produces a red run that no baseline A/B can attribute, because both
 halves of the A/B run inside it: the measurement describes a tree nobody is merging. It has cost
-real time, twice in one branch's retro. It belongs to no stack and is named here; a fault that
-is one stack's own, such as Python's stale bytecode, is named by that stack's profile
-(`stayfixed.profiles.hints`).
+real time, twice in one branch's retro. It belongs to no stack.
 
 Warn-only by construction: the tool has already run, and the verdict this guards is the
 human's next sentence, not the command. Once per context, which the dispatcher's `once_key`
 owns (see `hooks.py`, and `stayfixed.hooks.dispatch`, which decides and banks the one delivery, for
 what that currently means).
 
-Which hints speak is decided by the command that failed, never by configuration: the command is
-split into simple commands with the shared scanner's tokens and segments, each unwrapped as
-`RedRunHint.recognises` describes, and every shipped hint is asked whether it recognises one of
-them. When none does, nothing is said, the dirty-tree line included: the core cannot tell a
-failed test run from a failed `grep`, and the one delivery per context belongs to the first
-failed test run. A command the scanner cannot read is recognised by nobody
-(`simple_commands`).
+Whether the note speaks is decided by the command that failed, never by configuration: the command
+is split into simple commands with the shared scanner's tokens and segments, each unwrapped as
+`bashscan.command_words` describes, and the runner table (`runners.names_a_test_run`) is asked
+whether one of them is a test run. When none is, nothing is said: the one delivery per context
+belongs to the first failed test run, not to a failed `grep`. A command the scanner cannot read is
+no test run (`simple_commands`).
 
 Which harness field says a run was red is read from the documentation, not guessed: the Claude
 Code hooks reference gives the Bash `tool_response` as `stdout`, `stderr`, `interrupted` and
@@ -25,26 +22,20 @@ Code hooks reference gives the Bash `tool_response` as `stdout`, `stderr`, `inte
 `error: "Exit code N\\n…"`. `red_exit` reads both that shape and a `tool_response.exit_code`,
 so the notice is keyed on whichever the harness sends rather than on a field one lacks.
 
-Nothing a repository authored leaves this module. The notice carries the fixed sentences below,
-counts this module computed, and lines a shipped hint rendered from its own counts.
+Nothing a repository authored leaves this module. The notice carries the fixed sentences below and
+a count this module computed.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from stayfixed.gitenv import answer_lines, git_run
 from stayfixed.hints import bashscan
-from stayfixed.profiles.adapters import shipped_adapters
-from stayfixed.profiles.hints import answer, shipped_hints
-from stayfixed.roots import contained_roots
-
-if TYPE_CHECKING:
-    from stayfixed.config.schema import Config
-    from stayfixed.profiles.hints import RedRunHint
+from stayfixed.hints.runners import names_a_test_run
 
 # Anchored TWICE, redundantly: the `\A` here and the `.match` at the call site each pin the read
 # to index 0, so removing either one alone is a no-op -- measured, in both directions -- and only
@@ -70,18 +61,16 @@ DIRTY = (
 def simple_commands(command: str) -> list[list[str]]:
     """Each simple command of `command`, unwrapped to its own program and arguments.
 
-    `[]` for a command the scanner cannot read (`bashscan.tokenize` returns `None`): no hint is
-    asked about text that is not a command line, so such a run gets no note. That under-reports
-    a real failed run whose command the scanner cannot read, the safe direction for a warn-only
-    note, where guessing from a substring would put one stack's advice on another's run.
+    `[]` for a command the scanner cannot read (`bashscan.tokenize` returns `None`): text that is
+    not a command line is no test run, so such a run gets no note. That under-reports a real
+    failed run whose command the scanner cannot read, the safe direction for a warn-only note.
     """
     tokens = bashscan.tokenize(command)
     if tokens is None:
         return []
-    adapters = shipped_adapters()
     found: list[list[str]] = []
     for segment in bashscan.segments(tokens):
-        words = bashscan.command_words(segment, lambda w: any(a.recognises(w) for a in adapters))
+        words = bashscan.command_words(segment, names_a_test_run)
         if words:
             found.append(words)
     return found
@@ -122,54 +111,16 @@ def dirty_count(root: Path) -> int | None:
     return sum(1 for line in answer_lines(out) if line.strip())
 
 
-def notice(dirty: int | None, notes: Sequence[str]) -> str | None:
-    """The dirty-tree sentence when the tree is dirty, then each hint's line, under `LEAD`; or
-    `None` for silence."""
-    lines: list[str] = []
-    if dirty:
-        lines.append(DIRTY.format(count=dirty))
-    lines.extend(notes)
-    if not lines:
+def notice(dirty: int | None) -> str | None:
+    """The dirty-tree sentence under `LEAD` when the tree is dirty, or `None` for silence."""
+    if not dirty:
         return None
-    return LEAD + "\n- " + "\n- ".join(lines)
+    return LEAD + "\n- " + DIRTY.format(count=dirty)
 
 
-# A hint that fails costs its own line and nothing else: one whose module did not load is `None`
-# and skipped, and the two guards below catch everything else, broad on purpose, because an
-# exception out of one stack's hint would reach the dispatcher, which records
-# it and drops the handler's whole context -- the dirty-tree line and every other stack's line
-# with it. They are also silent, and that is a cost rather than a design: a handler has no sink to
-# record into, and nothing else calls `recognises`, so a broken one is visible nowhere. Recording
-# it in the hook's diagnostics would take a sink the handler can reach, a change to the handler
-# contract and not to this module.
-def _recognises(hint: RedRunHint, commands: Sequence[Sequence[str]]) -> bool:
-    try:
-        return any(hint.recognises(argv) for argv in commands)
-    except Exception:
-        return False
-
-
-def _note(hint: RedRunHint, root: Path, config: Config) -> str | None:
-    try:
-        return answer(hint, contained_roots(root, config))[1]
-    except Exception:
+def context_for(command: str, root: Path) -> str | None:
+    """The notice after `command` failed: `None` unless one of its simple commands is a test run
+    the runner table names, and then the dirty-tree line."""
+    if not any(names_a_test_run(words) for words in simple_commands(command)):
         return None
-
-
-def context_for(command: str, root: Path, config: Config) -> str | None:
-    """The notice after `command` failed: `None` unless some shipped hint recognises one of its
-    simple commands, and then the dirty-tree line and the line of each hint that recognised it,
-    in the order `shipped_hints` gives."""
-    commands = simple_commands(command)
-    if not commands:
-        return None
-    hints = shipped_hints()
-    speaking = [hint for _, hint in hints if hint is not None and _recognises(hint, commands)]
-    if not speaking:
-        return None
-    notes: list[str] = []
-    for hint in speaking:
-        note = _note(hint, root, config)
-        if note:
-            notes.append(note)
-    return notice(dirty_count(root), notes)
+    return notice(dirty_count(root))

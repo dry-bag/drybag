@@ -21,17 +21,9 @@ floor, ruff, mypy and `scripts/release.py check`), run on Linux for Python 3.11,
 and a red pull request. The mutation oracle, which is this project's headline obligation and not
 an optional extra, runs in a job of its own on Linux under 3.13 (see [Tests](#tests)). CI runs
 three more steps you can reproduce only from a build (`uv build`, then
-`scripts/check_artifacts.py dist` and an installed-wheel render), one job you cannot reproduce
-without a global install of the harness CLI, the plugin-manifest validator, and one that installs
-the real test runners `stayfixed prove`'s adapters run and runs `-m runners` under
-`STAYFIXED_REQUIRE_RUNNERS=1` (Node, jest, vitest and Go at the versions `ci.yml` pins); a failure
-in the first two is ours to diagnose, not yours. The third you can reproduce with that Node and Go
-on your `PATH`: install jest and vitest with `npm ci --ignore-scripts` of
-`tests/fixtures/prove/node/package.json` and its lockfile in a directory outside the checkout, then
-run `STAYFIXED_RUNNERS_ON_PATH=1 STAYFIXED_NODE_MODULES=<that directory>/node_modules uv run pytest
--n auto -m runners` (`tests/fixtures/prove/README.md` and `tests/prove/real_runners.py` say what
-each variable does). Without `STAYFIXED_RUNNERS_ON_PATH=1` the tests that need `node` or `go` skip,
-whatever is on your `PATH`.
+`scripts/check_artifacts.py dist` and an installed-wheel render), and one job you cannot reproduce
+without a global install of the harness CLI, the plugin-manifest validator; a failure in either is
+ours to diagnose, not yours.
 
 ## What this project is, and what that costs a change
 
@@ -159,7 +151,7 @@ exception kept for a reason outside the code ("Tests" gives it): it groups their
 into files, and a new area needs no row there: its entries go in the group its path falls into.
 
 Today the discovered ones are `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`,
-`ledger`, `memory`, `overlay`, `project`, `prove`, `setup` and `sync`, and every module under
+`ledger`, `memory`, `overlay`, `project`, `setup` and `sync`, and every module under
 `src/stayfixed/` sits on one of three sides, which `src/stayfixed/areas.py` names. **Delivery**
 (`DELIVERY_AREAS`) is the private layer, a machine's setup and the session hints:
 `overlay` renders and upgrades the private overlay; `attach` binds a repository to one, and its
@@ -169,14 +161,12 @@ of the overlay's memory notes (the session triggers, a detached job and its `doc
 on per machine; and `hints` the session hints
 (the background-cleanup hint, the red-run note and the command scanner they share). The **pack**
 (`PACK_PACKAGES`) is the methodology's records and checks: `ledger` keeps the bug ledger, `docs`
-the documentation and plan lints, `guards` the commit-message rules and the test-run checks, and
-`prove` the run of a test command and the verdict its runner's own report supports; `project`
-holds the shipped project templates and `init`, the command that writes a repository's scaffold
-from them; and the stack profiles under `profiles/` are the pack's too, a package and not an
-area. Every other module is the **core**,
+the documentation and plan lints, and `guards` the commit-message rules and the test-run checks;
+and `project` holds the shipped project templates and `init`, the command that writes a
+repository's scaffold from them. Every other module is the **core**,
 which both sides share, `cli.py` and the subpackages that are not areas included: its areas
 (`CORE_AREAS`) are `hooks`, the dispatcher every hook event goes through, and `doctor`, which
-reports on what every other area left behind and repairs none of it. (`config`, `presets`, `profiles`, `release`, `scaffold`, `templates` and
+reports on what every other area left behind and repairs none of it. (`config`, `presets`, `release`, `scaffold`, `templates` and
 `trust` are subpackages and not areas, and `harnesses` is a module — area discovery does not find
 them, because they carry none of `commands.py`, `hooks.py` and `doctor.py`. `release` still
 publishes an `api.py`, which holds what an installed stayfixed reads about its own releases: the
@@ -217,8 +207,7 @@ module, on either side or in the core. The first reads names: no module names `i
 `__import__`, a module's own `__spec__` or `__loader__`, the finders on `sys` (`meta_path`,
 `path_hooks`, `path_importer_cache`), `sys.breakpointhook`, or a builtin that runs text (`exec`,
 `eval`, `compile`, `breakpoint`, `__builtins__`) wherever it is the builtin in that scope, under any
-alias, except `areas.py`'s two imports by name and the profile discovery `DYNAMIC_IMPORTERS` pins
-with its reason. `__builtins__`, which every module carries, is also read off any module
+alias, except `areas.py`'s two imports by name. `__builtins__`, which every module carries, is also read off any module
 (`json.__builtins__`) and in a `from` of any module. Only a function's own binding, a
 comprehension's variable or an import from a module other than `builtins` hides such a builtin, in
 its scope and the scopes it encloses. Python looks a module's or a class body's names up at run
@@ -302,23 +291,9 @@ too, since Python runs each package's `__init__.py` first.
 - Every area is a regular package with an `__init__.py`. `pkgutil.iter_modules` does not yield a
   namespace package, so one without it is invisible to all three discovery paths.
 
-stayfixed is language-neutral outside its stack profiles. A profile under
-`src/stayfixed/profiles/<name>/` is a directory of data — `profile.toml` and `rules.md` — and,
-optionally, a `hygiene.py` whose `HINT` is that stack's advice after its test runner failed
-(`stayfixed.profiles.hints` says what a hint answers, and the command that failed decides which
-hints speak), and an `adapters.py` whose `ADAPTERS` are its test runners' adapters for `stayfixed
-prove` (`stayfixed.profiles.runners` says what an adapter answers). A stack's directory may hold
-code and no profile: a stack whose runner `prove` counts and for which stayfixed ships no rules yet.
-That is where one stack's runner, build artifacts and package manager belong: no module outside a
-profile's own directory names a stack — the machinery directly under `profiles/` included — except
-the pardons `tests/test_language_neutral.py` lists, each with its reason, and a new mention either
-moves into its profile or joins that list with one. None imports a profile's code either: a hint or
-an adapter is found by discovery, and that test refuses an import of it without pardon. That
-discovery is the `profiles` package's own convention, in the style of an area's:
-`stayfixed.profiles.stack_directories` lists each stack directory that ships a given file, a
-`profile.toml`, a `hygiene.py` or an `adapters.py`, and `stack_module` imports one, so adding a
-stack's advice or its runner is adding its directory's file, and no module outside it learns the
-stack's name.
+stayfixed is language-neutral: no module names one stack's runner, build artifacts or package
+manager except the pardons `tests/test_language_neutral.py` lists, each with its reason, and a new
+mention joins that list with one.
 
 The agents are core knowledge too, held in one place. A harness — Claude Code, Codex — is a value in
 `harnesses.HARNESSES`, and the `hooks` area answers through it: `stayfixed hook` asks

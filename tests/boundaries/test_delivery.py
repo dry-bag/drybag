@@ -35,22 +35,9 @@ Direction = tuple[str, str]
 # cutting a crossing is deleting its rows in the same commit. Each row says what removes it.
 # Importing the core is no crossing from either side, and neither is an import within one side.
 CORE_TO_DELIVERY: tuple[Row, ...] = ()
-CORE_TO_PACK: tuple[Row, ...] = (
-    # The scaffold engine checks `[stayfixed] profile` against the profiles that ship, inside the
-    # one function that checks it. Goes with the profiles.
-    ("scaffold/engine.py", "stayfixed.profiles", frozenset()),
-)
-PACK_TO_DELIVERY: tuple[Row, ...] = (
-    # `prove` reads a test command's launch the way the red-run hints read it, at module level.
-    # Goes with `prove`.
-    ("prove/run.py", "stayfixed.hints.api", frozenset({"Launch", "read_launch", "run_directory"})),
-)
+CORE_TO_PACK: tuple[Row, ...] = ()
+PACK_TO_DELIVERY: tuple[Row, ...] = ()
 DELIVERY_TO_PACK: tuple[Row, ...] = (
-    # The red-run note asks every shipped profile's hint and adapter, and names a hint's type
-    # under `if TYPE_CHECKING:`. All three go with the profiles.
-    ("hints/hygiene.py", "stayfixed.profiles.adapters", frozenset({"shipped_adapters"})),
-    ("hints/hygiene.py", "stayfixed.profiles.hints", frozenset({"answer", "shipped_hints"})),
-    ("hints/hygiene.py", "stayfixed.profiles.hints", frozenset({"RedRunHint"})),
     # `stayfixed setup --git-hooks` installs and removes the commit-message hook, inside the one
     # function that runs it. Goes when the commit-hook installer leaves `setup`.
     ("setup/commands.py", "stayfixed.guards.api", frozenset({"Found", "install", "uninstall"})),
@@ -195,9 +182,8 @@ def test_in_isolation_no_core_module_loads_either_side() -> None:
     # module of either side may be among what it loaded: the core loads a side only when a command
     # asks for it.
     #
-    # No declared mutation since the harness registry's import of the profiles went with the
-    # renditions that used it; lifting `scaffold/engine.py`'s in-function import of the profiles to
-    # module level reddens this, measured by hand.
+    # No declared mutation: no core module imports either side, at module level or in a function,
+    # so there is no import to lift.
     source = ROOT / "src" / "stayfixed"
     # Every core module, dotted. `__main__` is left out because importing it runs the CLI: its
     # whole body is `main()`.
@@ -235,8 +221,8 @@ def test_every_area_is_on_exactly_one_side() -> None:
     # listed on neither is the core's, so an area dropped from its side would join the core
     # unseen and be held to the core's rule, and one listed on two sides would be read as the
     # first. So every area discovery finds is listed on exactly one side, `DELIVERY_AREAS` and
-    # `CORE_AREAS` list areas, `PACK_PACKAGES` lists packages (the profiles are one and not an
-    # area), and every listed name names one: an area joins its side in the change that writes it.
+    # `CORE_AREAS` list areas, `PACK_PACKAGES` lists packages, and every listed name names one:
+    # an area joins its side in the change that writes it.
     #
     # Mutations (declared): `mutations/`'s "setup drops out of every side" and "memory stops being
     # a delivery area".
@@ -262,7 +248,7 @@ def test_the_delivery_rule_judges_the_importer_and_the_imported() -> None:
     # module" -> the first arm reddens; "the delivery rule holds a delivery module to the core's
     # rule" -> the second does.
     delivery = frozenset({"attach", "memory", "overlay"})
-    pack = frozenset({"ledger", "profiles"})
+    pack = frozenset({"ledger", "docs"})
     assert _crossings(
         "doctor/commands.py", "def check():\n    from ..memory import api\n", delivery, pack
     ) == [((CORE, DELIVERY), ("doctor/commands.py", "stayfixed.memory", frozenset({"api"})))]
@@ -353,16 +339,8 @@ DISCOVERY_READS = (("area_modules", "import_module"), ("area_imports", "import_m
 
 # Every other place a module imports by a string, one row per reference: the file relative to
 # `src/stayfixed/`, the innermost function, and the name it reaches. Held as a multiset and by
-# equality in both directions, as the crossings are.
-#
-# One row, meant to stay. `profiles/__init__.py`'s `stack_module` imports
-# `stayfixed.profiles.<name>.<module>` for a `name` that `stack_directories` listed from this
-# package's own directories through `importlib.resources` — stack discovery, which CONTRIBUTING's
-# "Areas" describes beside area discovery, and the one import both a red-run hint
-# (`profiles/hints.py`) and a runner adapter (`profiles/adapters.py`) are loaded through. It names
-# no area and no repository path, so it is pinned here rather than moved into `areas.py`, which
-# knows nothing of profiles.
-DYNAMIC_IMPORTERS = (("profiles/__init__.py", "stack_module", "import_module"),)
+# equality in both directions, as the crossings are. None today.
+DYNAMIC_IMPORTERS: tuple[tuple[str, str, str], ...] = ()
 
 
 def _dynamic_imports(tree: ast.Module) -> list[tuple[str, str]]:
@@ -440,7 +418,7 @@ def test_no_core_module_imports_by_a_string_but_discovery() -> None:
     # The delivery rule reads import statements, so a function-level
     # `importlib.import_module("stayfixed.memory.store")` or `__import__(...)` in a core file
     # crossed into the private layer with every boundary test green. A string import is
-    # discovery's alone, and the one other one — profile discovery — is pinned with its reason.
+    # discovery's alone.
     # So were a module's own loader (`type(__spec__.loader)(name, path).exec_module(module)`), a
     # finder on `sys.meta_path`, and `exec` of a string that imports. This reads those names; the
     # standard library's other ways to import by a string are held where they must be imported
@@ -629,10 +607,6 @@ STANDARD_IMPORTS = frozenset(
         "posixpath",
         "pwd",
         "re",
-        # `prove` waits for its command's report on standard output without blocking forever
-        # (`selectors`) and copies it in a thread of its own while the command runs
-        # (`threading`); neither imports a module by a name.
-        "selectors",
         # `binding` draws the binding id (`secrets.token_hex`), which imports no module by a name.
         "secrets",
         "shlex",
@@ -647,7 +621,6 @@ STANDARD_IMPORTS = frozenset(
         "subprocess",
         "sys",
         "tempfile",
-        "threading",
         "time",
         "tomllib",
         "types",
@@ -675,15 +648,6 @@ MACHINERY_IMPORTERS = (
     # Discovery: imports `stayfixed.<area>.<submodule>` by name, and lists the areas.
     ("areas.py", "importlib", frozenset({"import_module"})),
     ("areas.py", "pkgutil", frozenset({"iter_modules"})),
-    # Stack discovery: imports `stayfixed.profiles.<name>.<module>`, pinned in `DYNAMIC_IMPORTERS`.
-    ("profiles/__init__.py", "importlib", frozenset({"import_module"})),
-    # Reads the running interpreter's bytecode magic, the first four bytes of every `.pyc` it would
-    # open; it imports nothing.
-    ("profiles/python/hygiene.py", "importlib.util", frozenset({"util.MAGIC_NUMBER"})),
-    # `prove`'s tee decodes a report on standard output across reads for a caller's stream that
-    # takes text alone: the codec of the literal "utf-8", the interpreter's own and already
-    # loaded, so the lookup imports nothing.
-    ("prove/run.py", "codecs", frozenset({"getincrementaldecoder"})),
 )
 
 
@@ -788,7 +752,7 @@ def test_no_core_module_reaches_the_import_machinery_but_where_pinned() -> None:
     # see is in the comment over `STANDARD_IMPORTS`: it is a tripwire, not a proof.
     #
     # Mutations (declared): `mutations/`'s "a core function imports the note store through
-    # pkgutil.resolve_name", "profile discovery reaches importlib.util as well", "a core function
+    # pkgutil.resolve_name", "a core function
     # opens the note store's resources by its module name", "a core function opens the note
     # store's resources through files imported by name", "a core function imports the note store
     # through pydoc.locate", "a core function unpickles a reference to the note store", "a core

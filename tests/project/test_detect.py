@@ -29,12 +29,10 @@ def test_the_name_comes_from_origin_lower_cased_and_stripped(tmp_path: Path) -> 
         "local",
         "main",
         ("claude", "codex"),
-        "",
         {
             "name": "directory name",
             "base_branch": "current branch",
             "agents": "default",
-            "profile": "no profile markers",
         },
     )
 
@@ -241,12 +239,3 @@ def test_leniently_a_name_outside_the_grammar_is_not_derivable(tmp_path: Path) -
     # and never offers the repository's bytes as the default.
     found = detect(repository(tmp_path, origin="git@github.com:Owner/My+Repo.git"), lenient=True)
     assert (found.name, found.sources["name"]) == ("", "not derivable")
-
-
-@needs_git
-def test_the_profile_is_the_one_whose_markers_the_repository_carries(tmp_path: Path) -> None:
-    root = repository(tmp_path, origin=MIXED_CASE)
-    assert detect(root).profile == ""
-    (root / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
-    found = detect(root)
-    assert found.profile == "python" and found.sources["profile"] == "profile markers"

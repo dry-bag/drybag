@@ -83,7 +83,6 @@ def _given(args: argparse.Namespace) -> Given:
         name=args.name,
         base_branch=args.base_branch,
         agents=listed(args.agent),
-        profile=args.profile,
         memory_mode=args.memory_mode,
         attribution_check=args.attribution_check,
     )
@@ -177,7 +176,6 @@ def _answers(parser: argparse.ArgumentParser) -> None:
         PROJECT_NAME,
     )
     from stayfixed.harnesses import HARNESSES
-    from stayfixed.profiles import shipped
 
     answers = parser.add_argument_group(
         "answers", "each replaces one default; `stayfixed init --questions` lists them"
@@ -195,12 +193,6 @@ def _answers(parser: argparse.ArgumentParser) -> None:
         action="append",
         choices=[h.name for h in HARNESSES],
         help="[stayfixed] agents; once per harness",
-    )
-    answers.add_argument(
-        "--profile",
-        choices=("", *shipped()),
-        metavar="NAME",
-        help="[stayfixed] profile; an empty value for none",
     )
     answers.add_argument("--memory-mode", choices=MEMORY_MODES, help="[memory] mode")
     answers.add_argument(

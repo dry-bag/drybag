@@ -36,14 +36,6 @@ import pytest
 from stayfixed import gitenv
 from tests.floor import SUITE_GIT_FLOOR_SECONDS
 from tests.gitfixture import MAINTENANCE_OFF, gitconfig
-from tests.prove.real_runners import MARK
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    # The `runners` marker, registered here so that `pyproject.toml` stays the release's to edit:
-    # `--strict-markers` refuses a marker nothing registered, a test outside `tests/prove/` (the
-    # ledger's regressions) carries it too, and `tests/prove/real_runners.py` says what it means.
-    config.addinivalue_line("markers", f"{MARK}: runs a real test runner, skipped where none is")
 
 
 @pytest.fixture(autouse=True)

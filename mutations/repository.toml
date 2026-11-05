@@ -1066,18 +1066,8 @@ reddens = [
 [[mutation]]
 name = "Shared flags forgets that `hook` takes neither project flag"
 file = "docs/cli.md"
-before = "Neither flag is taken by `stayfixed commit strip`, `stayfixed hook` and `stayfixed prove`,"
-after = "Neither flag is taken by `stayfixed commit strip` and `stayfixed prove`,"
-reddens = [
-  "tests/test_documents.py::test_shared_flags_names_every_command_that_takes_neither_root_nor_machine",
-]
-
-# `prove` runs where it is typed and reads no configuration, so it takes neither flag either.
-[[mutation]]
-name = "Shared flags forgets that `prove` takes neither project flag"
-file = "docs/cli.md"
-before = "Neither flag is taken by `stayfixed commit strip`, `stayfixed hook` and `stayfixed prove`,"
-after = "Neither flag is taken by `stayfixed commit strip` and `stayfixed hook`,"
+before = "Neither flag is taken by `stayfixed commit strip` and `stayfixed hook`,"
+after = "Neither flag is taken by `stayfixed commit strip`,"
 reddens = [
   "tests/test_documents.py::test_shared_flags_names_every_command_that_takes_neither_root_nor_machine",
 ]
@@ -2501,7 +2491,7 @@ reddens = [
 ]
 
 # The shape check reads more than the patterns a module holds at its top level: a pattern built
-# inside a function from text the source spells, and every shipped profile's `match`. Each entry
+# inside a function from text the source spells. Each entry
 # narrows that reading back the way a walk regresses, and a planted case goes unseen or misread.
 [[mutation]]
 name = "the pattern scan stops at a function's body"
@@ -2597,15 +2587,6 @@ before = "    return spelled, unspelled"
 after = "    return spelled, list(dict.fromkeys(unspelled))"
 reddens = [
   "tests/test_patterns.py::test_the_scan_reads_a_pattern_wherever_the_source_spells_it[two calls of handed text in one function]",
-]
-
-[[mutation]]
-name = "the pattern walk leaves the shipped profiles' locators out"
-file = "tests/test_patterns.py"
-before = "    for name in profiles.shipped(source=source):"
-after = "    for name in ():"
-reddens = [
-  "tests/test_patterns.py::test_the_walk_reads_the_match_of_every_shipped_profiles_locators",
 ]
 
 [[mutation]]
@@ -2786,32 +2767,3 @@ reddens = [
   "tests/test_documents.py::test_the_reference_counts_the_cores_rows_and_the_private_layers_apart",
 ]
 
-# A stack's code may stand in a directory with no profile; a core import of it is a stack import
-# all the same.
-[[mutation]]
-name = "the stack-import walk reads only the shipped profiles"
-file = "tests/test_language_neutral.py"
-before = '            p.name for p in profiles.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))'
-after = '            p.name for p in profiles.iterdir() if (p / "profile.toml").is_file()'
-reddens = [
-  "tests/test_language_neutral.py::test_every_stack_directory_is_read_whether_or_not_it_holds_a_profile",
-]
-
-# The `Stop`-hook recipe in `examples/stop-hook/`. Claude Code's cap on stop-hook continuations
-# resets on every tool call, so without the `stop_hook_active` let-through a tree the agent cannot
-# make green blocks every stop it makes.
-[[mutation]]
-name = "the stop recipe blocks a stop it is already continuing"
-file = "examples/stop-hook/prove_on_stop.py"
-before = '    if event.get("stop_hook_active") is True:'
-after = '    if False:'
-reddens = ["tests/test_stop_hook_recipe.py::test_a_continued_stop_is_let_through_without_a_run"]
-
-# And the verdict it lets through is `proved` alone: widened to every verdict, a failed run ends
-# the agent's turn as if it were green.
-[[mutation]]
-name = "the stop recipe lets a failed run through"
-file = "examples/stop-hook/prove_on_stop.py"
-before = '    if verdict == "proved":'
-after = '    if verdict == "proved" or True:'
-reddens = ["tests/test_stop_hook_recipe.py::test_a_failed_run_blocks_the_stop"]
