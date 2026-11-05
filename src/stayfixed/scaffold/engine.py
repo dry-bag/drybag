@@ -7,19 +7,15 @@ the containment rule testable without a filesystem full of traps.
 Two rules are easy to state and easy to get backwards, so they are stated here once.
 
 *An absent record does not mean "hands off" for every kind.* For a whole file it does: a file
-stayfixed never wrote is somebody's. For a managed region and for keyed entries the file
-belongs to somebody by definition, and an absent record is the ordinary first install — the
-rules for regions and for keyed entries exist for exactly that case. The hand-edit oracle for
-those two kinds is the region body and the marked entries, never the file around them.
+stayfixed never wrote is somebody's. For a managed region the file belongs to somebody by
+definition, and an absent record is the ordinary first install. The hand-edit oracle for a
+region is its body, never the file around it.
 
-*A refusal is an artifact's, not the plan's.* A file that cannot be read, a region whose markers
-no longer say where it ends, a settings document that is not JSON: each is recorded in
-`Plan.refusals` and the remaining templates are still decided. `plan` raises only for input no
-per-artifact report could rescue — the manifest itself, and a malformed
-`Template`, which is a bug in the caller that built it rather than a file a user can put right.
-Both shapes of malformed `Template` raise, symmetrically: a managed region that names no
-region, and keyed entries that name no entries. The second did not, and `entries or {}` turned
-it into a silent uninstall of whatever the user had wired up.
+*A refusal is an artifact's, not the plan's.* A file that cannot be read, or a region whose
+markers no longer say where it ends, is recorded in `Plan.refusals` and the remaining templates
+are still decided. `plan` raises only for input no per-artifact report could rescue — the
+manifest itself, and a malformed `Template`, a managed region that names no region, which is a bug
+in the caller that built it rather than a file a user can put right.
 
 *Containment is not a string check.* `contained()` decides whether a path may be written;
 `fsops.open_within` decides what is actually written to, by walking the path with `O_NOFOLLOW`
@@ -46,7 +42,6 @@ from stayfixed.fsops import (
     write_within,
 )
 from stayfixed.printed import quoted
-from stayfixed.scaffold.entries import ENTRY_MARKER, EntriesError, apply_entries, owned, unmarked
 from stayfixed.scaffold.manifest import Kind, Location, Manifest, Record, digest
 from stayfixed.scaffold.model import WRITING, Action, Applied, Plan, Refused, Template, Verb
 from stayfixed.scaffold.regions import RegionError, extract, upsert
@@ -54,18 +49,8 @@ from stayfixed.scaffold.regions import RegionError, extract, upsert
 # A recorded target this template could not have produced: the file at it is not stayfixed's.
 NOT_PRODUCIBLE = (
     "the manifest records a target this artifact cannot produce, so the file at it is not "
-    "stayfixed's to remove"
+    "stayfixed's"
 )
-_IN_FILE = (Kind.MANAGED_REGION, Kind.KEYED_ENTRIES)
-# The two refusals that belong to one artifact's own file: a region whose markers no longer say
-# where it ends, and a settings document that cannot be parsed. Both are ordinary user state — a
-# bad merge, a half-typed edit — and both are answered per artifact. `Refusal` itself is
-# deliberately not caught: `_payload_and_stamp` raises it for a `MANAGED_REGION` template
-# carrying no region name and for a `KEYED_ENTRIES` template carrying no entries, each a
-# malformed `Template` and so a bug in the caller that built it, not something a user can put
-# right by editing a file.
-_OWN_FILE_REFUSALS = (RegionError, EntriesError)
-_VERB_FOR = {Kind.MANAGED_REGION: Verb.REGION_UPDATE, Kind.KEYED_ENTRIES: Verb.ENTRIES_UPDATE}
 
 
 def _read(path: Path, relative: str) -> tuple[str | None, str | None]:
@@ -95,40 +80,14 @@ def _read(path: Path, relative: str) -> tuple[str | None, str | None]:
 def _payload_and_stamp(template: Template, current: str | None) -> tuple[str, str]:
     """The text `apply` writes, and the text whose digest the manifest records.
 
-    They differ for the two kinds that live inside a file somebody else owns: what is written
-    is the whole file, what is recorded is only stayfixed's own part of it.
+    They differ for a managed region, which lives inside a file somebody else owns: what is
+    written is the whole file, what is recorded is only stayfixed's own part of it.
     """
     if template.kind is Kind.MANAGED_REGION:
         if template.region is None:
             raise Refusal(f"{template.id}: a managed-region template names no region")
         body = template.render()
         return upsert(current or "", template.region, body, template.style), body.rstrip("\r\n")
-    if template.kind is Kind.KEYED_ENTRIES:
-        if template.entries is None:
-            # `{}` means "remove every stayfixed entry", and `Template.entries` defaults to
-            # `None` — so `template.entries or {}` read a caller that forgot one keyword argument
-            # as a caller asking to uninstall the user's hook wiring, reported the result as
-            # `entries_update` / "refreshed", and rewrote the manifest as though it were an
-            # ordinary refresh. The malformed-`Template` rule five lines above is the same
-            # rule: a bug in the caller that built it, raised rather than acted on. `{}` is left
-            # to mean removal, for the caller that genuinely wants it.
-            raise Refusal(f"{template.id}: a keyed-entries template names no entries")
-        if missing := unmarked(template.entries):
-            # The same defect class as the branch above, in the other direction, and it landed
-            # the other way round: `entries=None` silently *uninstalled* the user's wiring,
-            # while entries carrying no `# stayfixed:<id>` marker silently fail to install it.
-            # `owned()` renders the marked entries alone, so with none marked it answers `{}`
-            # for both the payload and what is already on disk, the digests match, and the
-            # artifact is reported `unchanged` — the report says "up to date" about a file
-            # nothing wrote. A caller that did not call `entries.mark` is a bug in that caller,
-            # raised rather than acted on, exactly like a malformed `Template` above.
-            raise Refusal(
-                f"{template.id}: a keyed-entries template carries {len(missing)} entry/entries "
-                f"with no `{ENTRY_MARKER}<id>` marker, so nothing could ever recognise them as "
-                f"stayfixed's own: {', '.join(repr(command) for command in missing)}"
-            )
-        document = apply_entries(current or "", template.entries)
-        return document, owned(document)
     body = template.render()
     return body, body
 
@@ -138,8 +97,6 @@ def _present_stamp(template: Template, current: str) -> str | None:
         if template.region is None:
             return None
         return extract(current, template.region, template.style)
-    if template.kind is Kind.KEYED_ENTRIES:
-        return owned(current)
     return current
 
 
@@ -220,9 +177,9 @@ def plan(
             if present is not None and digest(present) == digest(stamp):
                 unchanged.append(template.id)
                 continue
-            if record is None and template.kind not in _IN_FILE:
-                # A whole file stayfixed never wrote is somebody's; a region or a hook entry
-                # inside a file stayfixed never wrote is the ordinary first install.
+            if record is None and template.kind is not Kind.MANAGED_REGION:
+                # A whole file stayfixed never wrote is somebody's; a region inside a file
+                # stayfixed never wrote is the ordinary first install.
                 actions.append(
                     Action(
                         Verb.SKIP_MODIFIED,
@@ -242,9 +199,9 @@ def plan(
                     Action(Verb.SKIP_MODIFIED, template.id, target, None, "hand-edited", None)
                 )
                 continue
-            verb = _VERB_FOR.get(template.kind, Verb.UPDATE)
+            verb = Verb.REGION_UPDATE if template.kind is Kind.MANAGED_REGION else Verb.UPDATE
             actions.append(Action(verb, template.id, target, payload, "refreshed", new_record))
-        except _OWN_FILE_REFUSALS as exc:
+        except RegionError as exc:
             refusals.append(Refused(template.id, target, str(exc)))
 
     # The conversion to tuples happens here, at the boundary, so the object a user approves
@@ -292,7 +249,7 @@ def apply(root: Path, planned: Plan) -> Applied:
     finally:
         manifest.write(root)
 
-    return Applied(written=tuple(written), removed=(), skipped=tuple(skipped))
+    return Applied(written=tuple(written), skipped=tuple(skipped))
 
 
 def _write(root: Path, target: str, payload: str) -> None:

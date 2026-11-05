@@ -1,9 +1,8 @@
 """The scaffold engine: manifest, regions, keyed entries, plan and apply.
 
 Everything a consumer needs is re-exported here, including the primitives other areas reach for
-directly: `owned_ids` for the ids an
-earlier `attach` recorded in its ledger, `mark` for any caller that builds `Template.entries`,
-`drop` / `apply_entries`, and `withdraw_entries` for `attach` and `detach`, which take back
+directly: `owned_ids` for the ids an earlier `attach` recorded in its ledger, `mark` for the
+entries `attach` writes, `drop`, and `withdraw_entries` for `attach` and `detach`, which take back
 the entries an earlier `attach` recorded and no other. The three refusals a consumer has to
 catch by name are here too: a caller that cannot import `ManifestError`, `RegionError` or
 `EntriesError` from this list has no way to tell a bad merge from a bug except by catching

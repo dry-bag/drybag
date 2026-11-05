@@ -1,30 +1,7 @@
 # The scaffold group: the engine that renders a repository's footprint, the manifest that records
-# it, and the settings documents whose entries it merges.
+# it, and the settings documents whose entries `attach` merges.
 # Which group an entry belongs in is `GROUP_OF` in `scripts/mutation_oracle.py`; what an entry is:
 # CONTRIBUTING.md, "Tests".
-
-# A keyed-entries template that names no entries is an error, never an instruction to remove the
-# user's wiring.
-[[mutation]]
-name = "a keyed-entries template with no entries silently removes them"
-file = "src/stayfixed/scaffold/engine.py"
-before = '        if template.entries is None:'
-after = '        if False:'
-reddens = ["tests/scaffold/test_engine.py::test_a_keyed_entries_template_naming_no_entries_raises"]
-
-# The mirror of `mutations/`'s "a keyed-entries template with no entries silently removes them".
-# `entries=None` silently uninstalled the user's wiring; entries carrying no marker silently fail to
-# install it, because `owned()` renders the marked entries alone and so answers `{}` on both sides
-# of the comparison.
-[[mutation]]
-name = "a keyed-entries template with unmarked entries silently installs nothing"
-file = "src/stayfixed/scaffold/engine.py"
-before = '        if missing := unmarked(template.entries):'
-after = '        if (missing := unmarked(template.entries)) and False:'
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_keyed_entries_template_whose_entries_carry_no_marker_raises",
-  "tests/scaffold/test_engine.py::test_one_unmarked_entry_beside_a_marked_one_is_still_a_refusal",
-]
 
 # An event is a key of a settings document a clone can commit, and the refusal naming it reaches a
 # terminal and a model: printed through `printed.clipped`, never as the document spells it.

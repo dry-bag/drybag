@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
 import os
 import stat
 import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -18,7 +16,6 @@ from stayfixed.config.schema import Config
 from stayfixed.errors import Refusal
 from stayfixed.scaffold import engine
 from stayfixed.scaffold.engine import apply, plan
-from stayfixed.scaffold.entries import mark
 from stayfixed.scaffold.manifest import (
     MANIFEST_PATH,
     Kind,
@@ -71,23 +68,6 @@ def a_record(**overrides: object) -> Record:
     }
     values.update(overrides)
     return Record(**values)  # type: ignore[arg-type]
-
-
-def a_settings_template(entries: dict[str, list[dict[str, Any]]]) -> Template:
-    return a_template(
-        id="claude-hooks",
-        kind=Kind.KEYED_ENTRIES,
-        target=".claude/settings.json",
-        render=lambda: "",
-        entries=entries,
-    )
-
-
-OURS: dict[str, list[dict[str, Any]]] = {
-    "PreToolUse": [
-        {"matcher": "Bash", "hooks": [{"type": "command", "command": mark("ours", "bg-cleanup")}]}
-    ]
-}
 
 
 # --- whole files -------------------------------------------------------------------------
@@ -183,7 +163,7 @@ def test_a_recorded_target_this_template_could_never_produce_is_not_a_relocation
     assert applied.skipped == (".claude/settings.json",)
 
 
-# --- regions and keyed entries, which live inside somebody else's file ---------------------
+# --- regions, which live inside somebody else's file -------------------------------------
 
 
 def test_a_managed_region_is_installed_into_a_file_no_record_covers(tmp_path: Path) -> None:
@@ -228,40 +208,6 @@ def test_a_hand_edited_region_body_is_skipped(tmp_path: Path) -> None:
     assert [a.verb for a in plan(tmp_path, a_config(tmp_path), [template]).actions] == [
         Verb.SKIP_MODIFIED
     ]
-
-
-def test_keyed_entries_are_installed_into_a_file_no_record_covers(tmp_path: Path) -> None:
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(
-        json.dumps(
-            {
-                "hooks": {
-                    "PreToolUse": [
-                        {"matcher": "Bash", "hooks": [{"type": "command", "command": "theirs"}]}
-                    ]
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    result = plan(tmp_path, a_config(tmp_path), [a_settings_template(OURS)])
-    assert result.actions[0].verb is Verb.ENTRIES_UPDATE
-    assert result.actions[0].payload is not None
-    assert "theirs" in result.actions[0].payload
-
-
-def test_an_unrelated_edit_beside_the_entries_is_not_a_hand_edit(tmp_path: Path) -> None:
-    template = a_settings_template(OURS)
-    first = plan(tmp_path, a_config(tmp_path), [template])
-    apply(tmp_path, first)
-    settings = tmp_path / ".claude" / "settings.json"
-    raw = json.loads(settings.read_text(encoding="utf-8"))
-    raw["permissions"] = {"deny": ["Read(./.env)"]}
-    settings.write_text(json.dumps(raw, indent=2), encoding="utf-8")
-    again = plan(tmp_path, a_config(tmp_path), [template])
-    assert again.actions == ()
-    assert again.unchanged == ("claude-hooks",)
 
 
 # --- refusals ------------------------------------------------------------------------------
@@ -396,126 +342,6 @@ def test_a_doubled_region_marker_refuses_only_its_own_artifact(tmp_path: Path) -
     )
     assert [(r.artifact_id, "twice" in r.reason) for r in result.refusals] == [("agents-md", True)]
     assert [(a.artifact_id, a.verb) for a in result.actions] == [("good", Verb.CREATE)]
-
-
-@pytest.mark.parametrize(
-    ("document", "expected"),
-    [
-        ("{not json", "not valid JSON"),
-        ('{"hooks": "not an object"}', "'hooks' is not an object"),
-    ],
-)
-def test_a_settings_document_the_engine_cannot_parse_refuses_only_its_own_artifact(
-    tmp_path: Path, document: str, expected: str
-) -> None:
-    (tmp_path / ".claude").mkdir()
-    (tmp_path / ".claude" / "settings.json").write_text(document, encoding="utf-8")
-    result = plan(
-        tmp_path,
-        a_config(tmp_path),
-        [a_settings_template(OURS), a_template(id="good", target="GOOD.md")],
-    )
-    assert [(r.artifact_id, expected in r.reason) for r in result.refusals] == [
-        ("claude-hooks", True)
-    ]
-    assert [(a.artifact_id, a.verb) for a in result.actions] == [("good", Verb.CREATE)]
-
-
-def test_a_keyed_entries_template_naming_no_entries_raises(tmp_path: Path) -> None:
-    # The symmetric case, and the one that was missing. `Template.entries` defaults to `None`
-    # and `apply_entries(current, {})` means "remove every stayfixed entry", so a caller that
-    # forgot one keyword argument uninstalled the user's hook wiring — reported as
-    # `entries_update` / "refreshed", with the manifest rewritten as an ordinary upgrade.
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(json.dumps({"hooks": OURS}), encoding="utf-8")
-    template = a_settings_template(OURS)
-    with pytest.raises(Refusal, match="names no entries"):
-        plan(tmp_path, a_config(tmp_path), [replace(template, entries=None)])
-
-
-def test_a_keyed_entries_template_whose_entries_carry_no_marker_raises(tmp_path: Path) -> None:
-    # The third face of the same defect, and the one that was silent in the *install*
-    # direction. `_payload_and_stamp` stamps `owned(document)` — the marked entries alone — so
-    # with none of them marked `owned()` answers `{}` for the payload and `{}` for what is
-    # already on disk, the digests match, and `plan` reports the artifact `unchanged`. Measured
-    # before the fix, against a template whose command is `stayfixed hook PreToolUse` and no
-    # `mark()`: actions `[]`, unchanged `('hooks',)`, `apply` wrote nothing, and the user's
-    # `.claude/settings.json` still had no hook wiring in it while the report said up to date.
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(json.dumps({"hooks": OURS}), encoding="utf-8")
-    unmarked_entries: dict[str, list[dict[str, Any]]] = {
-        "PreToolUse": [
-            {
-                "matcher": "Bash",
-                "hooks": [{"type": "command", "command": "stayfixed hook PreToolUse"}],
-            }
-        ]
-    }
-    with pytest.raises(Refusal, match="no `# stayfixed:<id>` marker"):
-        plan(tmp_path, a_config(tmp_path), [a_settings_template(unmarked_entries)])
-
-
-def test_one_unmarked_entry_beside_a_marked_one_is_still_a_refusal(tmp_path: Path) -> None:
-    # Not "no entry is marked" — *any* unmarked entry is one this module's own two rules say
-    # belongs to somebody else, so it would be installed once and then left alone for ever,
-    # while `owned()` stamps only its marked neighbour. A check on the whole mapping rather
-    # than on it being empty is what tells those apart.
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(json.dumps({"hooks": OURS}), encoding="utf-8")
-    mixed: dict[str, list[dict[str, Any]]] = {
-        "PreToolUse": [
-            {
-                "matcher": "Bash",
-                "hooks": [
-                    {"type": "command", "command": mark("ours", "bg-cleanup")},
-                    {"type": "command", "command": "stayfixed hook PreToolUse"},
-                ],
-            }
-        ]
-    }
-    with pytest.raises(Refusal, match="'stayfixed hook PreToolUse'"):
-        plan(tmp_path, a_config(tmp_path), [a_settings_template(mixed)])
-
-
-@pytest.mark.parametrize(
-    "entry",
-    [
-        pytest.param({"type": "command", "command": ["ls"]}, id="command-is-not-a-string"),
-        pytest.param({"type": "command"}, id="no-command-at-all"),
-        pytest.param("stayfixed hook PreToolUse", id="entry-is-not-an-object"),
-    ],
-)
-def test_an_entry_that_cannot_be_keyed_is_refused_rather_than_written(
-    tmp_path: Path, entry: object
-) -> None:
-    # `apply_entries` writes `wanted` into the user's file verbatim, and nothing between a caller
-    # and that write validates its shape — `_entries_of` checks the *document*, not the mapping
-    # coming in. An entry that cannot be keyed is the same bug whatever makes it unkeyable, and
-    # the last case is why the shape guard is a guard rather than decoration: without it
-    # `entry.get` raises `AttributeError` out of `plan` instead of naming the caller's bug.
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(json.dumps({"hooks": OURS}), encoding="utf-8")
-    malformed: dict[str, list[dict[str, Any]]] = {
-        "PreToolUse": [{"matcher": "Bash", "hooks": [entry]}]
-    }
-    with pytest.raises(Refusal, match="no `# stayfixed:<id>` marker"):
-        plan(tmp_path, a_config(tmp_path), [a_settings_template(malformed)])
-
-
-def test_an_empty_entries_mapping_still_means_remove_everything(tmp_path: Path) -> None:
-    # `{}` is left meaning exactly what it meant: the caller that genuinely wants every marked
-    # entry gone. Only `None` — the default nobody chose — became a refusal.
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(json.dumps({"hooks": OURS}), encoding="utf-8")
-    result = plan(tmp_path, a_config(tmp_path), [a_settings_template({})])
-    assert [a.verb for a in result.actions] == [Verb.ENTRIES_UPDATE]
-    apply(tmp_path, result)
-    assert json.loads((settings / "settings.json").read_text(encoding="utf-8")) == {}
 
 
 def test_a_template_naming_no_region_raises_rather_than_becoming_a_refusal(tmp_path: Path) -> None:
@@ -710,24 +536,6 @@ def test_crlf_endings_outside_a_managed_region_survive_plan_and_apply(tmp_path: 
     assert (tmp_path / "AGENTS.md").read_bytes() == before + (
         b"<!-- stayfixed:harness:begin -->\r\nR1\r\n<!-- stayfixed:harness:end -->\r\n"
     )
-
-
-def test_reordering_the_keys_inside_a_marked_entry_is_not_a_hand_edit(tmp_path: Path) -> None:
-    # `owned()`'s canonical rendering is the only thing making this true. Without it, a user who
-    # writes "command" before "type" inside stayfixed's own hook entry has changed no value and
-    # still flips the artifact to `skip_modified` for good.
-    template = a_settings_template(OURS)
-    apply(tmp_path, plan(tmp_path, a_config(tmp_path), [template]))
-    settings = tmp_path / ".claude" / "settings.json"
-    raw = json.loads(settings.read_text(encoding="utf-8"))
-    entry = raw["hooks"]["PreToolUse"][0]["hooks"][0]
-    reordered = dict(reversed(list(entry.items())))
-    assert list(reordered) != list(entry)
-    raw["hooks"]["PreToolUse"][0]["hooks"][0] = reordered
-    settings.write_text(json.dumps(raw, indent=2), encoding="utf-8")
-    again = plan(tmp_path, a_config(tmp_path), [template])
-    assert [(a.verb, a.reason) for a in again.actions] == []
-    assert again.unchanged == ("claude-hooks",)
 
 
 def test_apply_records_the_files_it_wrote_before_a_later_action_refused(tmp_path: Path) -> None:

@@ -48,7 +48,6 @@ class ManifestError(Refusal):
 class Kind(StrEnum):
     TEMPLATE = "template"
     MANAGED_REGION = "managed-region"
-    KEYED_ENTRIES = "keyed-entries"
     ONCE = "once"
 
 
