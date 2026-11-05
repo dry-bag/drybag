@@ -19,13 +19,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from stayfixed import fsops
-from stayfixed.config.machine import machine_config_path
 from stayfixed.config.overlay import overlay_root
-from stayfixed.config.owner import resolve_owner
 from stayfixed.config.paths import PathEscape, contained
 from stayfixed.config.schema import OVERLAY_MODE, Config
-from stayfixed.config.session import command_config
-from stayfixed.errors import Failure, Refusal, StayfixedError
+from stayfixed.errors import Failure, Refusal
 from stayfixed.fsops import TooLarge, read_regular_text, write_atomically
 from stayfixed.memory.notes import (
     UNRANKED,
@@ -41,7 +38,6 @@ from stayfixed.memory.store import (
     Store,
     in_repository,
     permitted_roots,
-    resolved,
     shown,
     stores_holding,
     walked_groups,
@@ -563,33 +559,3 @@ def render_current(store: Store, config: Config) -> Path:
         if not check_index(store, config, reconcile(store, config, write=False)).drifted:
             break
     return written
-
-
-@dataclass(frozen=True)
-class Rerendered:
-    """What `rerender_overlay_index` did: the directory of the overlay's copy it wrote
-    (`overlay_store`), or why it wrote none (`reason`, stayfixed's own words)."""
-
-    overlay_store: Path | None
-    reason: str | None
-
-
-def rerender_overlay_index(root: Path, *, machine: Path | None) -> Rerendered:
-    """`stayfixed memory index` run from the checkout `root`, in process, for the note sync: the
-    checkout's `Config` and store resolved as the command resolves them, the index rendered and
-    written into the overlay's copy, checked, and rendered once more on drift (a line appended
-    while it rendered). Only a checkout bound in overlay mode renders; the machine file's notes
-    are read past, said nowhere, since nobody reads the job's stderr."""
-    path = machine_config_path() if machine is None else machine
-    try:
-        config = command_config(root, machine=machine, owner=resolve_owner(path, strict=True))
-        found = resolved(root, config, machine=machine)
-        if found[0] is None:
-            return Rerendered(None, found[1].said)
-        store = found[0]
-        if store.mode != OVERLAY_MODE:
-            return Rerendered(None, f"the checkout's memory mode is {store.mode}")
-        written = render_current(store, config)
-    except (StayfixedError, OSError) as error:
-        return Rerendered(None, str(error).partition("\n")[0] or type(error).__name__)
-    return Rerendered(written.parent, None)

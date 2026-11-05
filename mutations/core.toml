@@ -6025,16 +6025,6 @@ reddens = [
 ]
 
 [[mutation]]
-name = "a united index is not settled"
-file = "src/stayfixed/sync/state.py"
-before = 'SETTLED = ("ok", "skipped", "resolved_index")'
-after = 'SETTLED = ("ok", "skipped")'
-reddens = [
-  "tests/sync/test_hooks.py::test_a_standing_outcome_or_hold_starts_a_job",
-  "tests/sync/test_doctor.py::test_a_settled_last_outcome_is_ok_and_says_when[resolved_index]",
-]
-
-[[mutation]]
 name = "the back-off outlasts its window"
 file = "src/stayfixed/sync/state.py"
 before = "    return age is not None and age < timedelta(minutes=BACK_OFF_MINUTES)"
@@ -6047,11 +6037,35 @@ reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_a
 [[mutation]]
 name = "the memory pathspecs drop glob magic"
 file = "src/stayfixed/sync/rules.py"
-before = '    (f":(top,glob){glob}", directory) for directory, glob in _SCOPES'
-after = '    (f":(top){glob}", directory) for directory, glob in _SCOPES'
+before = '    ((f":(top,glob){glob}", *((NOT_AN_INDEX,) if directory == PROJECTS else ())), directory)'
+after = '    ((f":(top){glob}", *((NOT_AN_INDEX,) if directory == PROJECTS else ())), directory)'
 reddens = [
   "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
   "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
+]
+
+# Each machine renders its own index, so a project's `MEMORY.md` is not memory: the pathspec
+# leaves it out, and the layout parses it as no note.
+[[mutation]]
+name = "an index is memory again"
+file = "src/stayfixed/sync/rules.py"
+before = 'NOT_AN_INDEX = f":(top,exclude,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
+after = 'NOT_AN_INDEX = f":(top,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
+reddens = [
+  "tests/sync/test_rules.py::test_a_projects_index_is_not_memory",
+  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_commit.py::test_a_dirty_index_is_never_committed",
+]
+
+[[mutation]]
+name = "an index name parses as a note"
+file = "src/stayfixed/sync/rules.py"
+before = "            if scope == \"project\" and parts[3:] == [INDEX_NAME]:"
+after = "            if False:"
+reddens = [
+  "tests/sync/test_rules.py::test_a_projects_index_is_not_memory",
+  "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
+  "tests/sync/test_integrate.py::test_an_upstream_index_change_is_held_like_a_path_outside_memory",
 ]
 
 [[mutation]]
@@ -6506,7 +6520,7 @@ reddens = [
 [[mutation]]
 name = "the sync commit stages the whole tree"
 file = "src/stayfixed/sync/job.py"
-before = '            added = _git(ctx, "add", "-A", "--", spec, index_file=index)'
+before = '            added = _git(ctx, "add", "-A", "--", *specs, index_file=index)'
 after = '            added = _git(ctx, "add", "-A", index_file=index)'
 reddens = ["tests/sync/test_commit.py::test_non_notes_are_never_staged_so_nothing_is_refused"]
 
@@ -6616,19 +6630,9 @@ reddens = [
   "tests/sync/test_commit.py::test_dot_paths_non_md_and_binary_under_memory_are_refused_and_named",
 ]
 
-# The pre-render: a group note re-renders every recorded project, as a shared one does.
-[[mutation]]
-name = "a group note does not re-render the recorded projects"
-file = "src/stayfixed/sync/render.py"
-before = '    shared = any(entry.scope != "project" for entry in parsed)'
-after = '    shared = any(entry.scope == "common" for entry in parsed)'
-reddens = [
-  "tests/sync/test_render.py::test_a_dirty_common_or_group_note_renders_every_recorded_project[group]",
-]
-
 # The note sync's integration: the fetched sha read from the job's own ref after a checked fetch,
-# a range outside memory held, local commits replayed (never rebased), indexes united, and the
-# incoming notes written only where the working tree still has the old version.
+# a range outside memory held, local commits replayed (never rebased), and the incoming notes
+# written only where the working tree still has the old version.
 [[mutation]]
 name = "the integration rebases"
 file = "src/stayfixed/sync/job.py"
@@ -6712,39 +6716,11 @@ after = "    if False:"
 reddens = ["tests/sync/test_integrate.py::test_a_tree_git_cannot_check_out_is_held_not_moved_to"]
 
 [[mutation]]
-name = "the union drops the local-only bullets"
-file = "src/stayfixed/sync/job.py"
-before = "            extra.append(line)"
-after = "            pass"
-reddens = [
-  "tests/sync/test_integrate.py::test_the_union_keeps_upstream_and_adds_the_local_only_bullets",
-  "tests/sync/test_integrate.py::test_two_index_conflicts_are_resolved_by_union_and_re_rendered",
-]
-
-[[mutation]]
 name = "an incoming note dirty here does not wait"
 file = "src/stayfixed/sync/job.py"
 before = "    if blocked:"
 after = "    if False:"
 reddens = ["tests/sync/test_integrate.py::test_a_dirty_incoming_note_is_waiting_clean_tree"]
-
-[[mutation]]
-name = "a dirty index waits like a note"
-file = "src/stayfixed/sync/job.py"
-before = "        if clashes == [path] and parsed is not None and parsed.is_index:"
-after = "        if False:"
-reddens = [
-  "tests/sync/test_integrate.py::test_a_dirty_index_is_united_in_the_working_tree_never_blocking",
-]
-
-[[mutation]]
-name = "the union overwrites a line appended while it was built"
-file = "src/stayfixed/sync/job.py"
-before = "        if _read(full) != local:"
-after = "        if False:"
-reddens = [
-  "tests/sync/test_integrate.py::test_an_index_changed_while_the_union_is_built_is_left_for_the_next_job",
-]
 
 [[mutation]]
 name = "a pending write goes over the owner's edit"
@@ -7003,21 +6979,11 @@ after = "    if False:"
 reddens = ["tests/sync/test_hooks.py::test_no_overlay_or_not_a_repository_spawns_nothing"]
 
 [[mutation]]
-name = "a session start records no checkout"
-file = "src/stayfixed/sync/trigger.py"
-before = '    if event.name == "SessionStart" and event.project_root is not None:'
-after = "    if False:"
-reddens = ["tests/sync/test_hooks.py::test_session_start_records_the_checkout_when_sync_is_on"]
-
-[[mutation]]
 name = "sync off still decides"
 file = "src/stayfixed/sync/hooks.py"
 before = "        if enabled():"
 after = "        if True:"
-reddens = [
-  "tests/sync/test_hooks.py::test_with_sync_off_stop_runs_no_git_and_spawns_nothing",
-  "tests/sync/test_hooks.py::test_session_start_records_the_checkout_when_sync_is_on",
-]
+reddens = ["tests/sync/test_hooks.py::test_with_sync_off_stop_runs_no_git_and_spawns_nothing"]
 
 # The `sync` row of `doctor`: a machine that switched the sync on expects its notes to move, and
 # the job commits and pushes nothing without a scanner build or on a git below its floor. A row

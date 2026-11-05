@@ -1,7 +1,9 @@
 """What the sync may move: the memory-only rules, and only these.
 
 A path is memory when the pathspecs below match it -- `glob` magic, so `*` stays inside one
-directory and `projects/a/checkout/memory/x` is not a note -- and only while git records it as a
+directory and `projects/a/checkout/memory/x` is not a note -- but for a project's `MEMORY.md`,
+which each machine renders for itself and the sync never stages, writes or moves (a range that
+changes one is outside memory), and only while git records it as a
 plain, non-executable file: a link (120000), an embedded repository (160000) or an executable
 (100755) under a memory name is refused, since the name would then point somewhere else or run.
 And only while it is a note: a name ending in `.md` with no component from the group's or
@@ -24,11 +26,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from stayfixed import fsops
 from stayfixed.config.plates import GROUPS
-from stayfixed.memory.api import COMMON, PROJECTS, STORE_DIR
+from stayfixed.memory.api import COMMON, INDEX_NAME, PROJECTS, STORE_DIR
 from stayfixed.sync.git import LOCAL_TIMEOUT, GitError, checked, git, left
 
-INDEX_NAME = "MEMORY.md"
 # Each scope of notes as its literal directory and its glob; the pathspecs, their exclusions and
 # the parse below all derive from the layout.
 _SCOPES = (
@@ -36,12 +38,16 @@ _SCOPES = (
     (GROUPS, f"{GROUPS}/*/{STORE_DIR}/**"),
     (PROJECTS, f"{PROJECTS}/*/{STORE_DIR}/**"),
 )
-# Each pathspec with its literal directory: `git add` refuses a whole pathspec ("beyond a symbolic
-# link") when that directory, or one above it, is a link.
-MEMORY_SPECS: tuple[tuple[str, str], ...] = tuple(
-    (f":(top,glob){glob}", directory) for directory, glob in _SCOPES
+# A project's rendered index, which each machine renders for itself: left out under `projects`.
+NOT_AN_INDEX = f":(top,exclude,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"
+# Each scope's pathspecs with their literal directory: `git add` refuses a whole pathspec ("beyond a
+# symbolic link") when that directory, or one above it, is a link, the exclusion's included, so
+# each is given only with the scope it excludes from.
+MEMORY_SPECS: tuple[tuple[tuple[str, ...], str], ...] = tuple(
+    ((f":(top,glob){glob}", *((NOT_AN_INDEX,) if directory == PROJECTS else ())), directory)
+    for directory, glob in _SCOPES
 )
-MEMORY_PATHSPEC: tuple[str, ...] = tuple(spec for spec, _ in MEMORY_SPECS)
+MEMORY_PATHSPEC: tuple[str, ...] = tuple(spec for specs, _ in MEMORY_SPECS for spec in specs)
 _NAMED_TOPS = {"group": GROUPS, "project": PROJECTS}
 
 
@@ -63,11 +69,6 @@ class MemoryPath:
         return f"{_NAMED_TOPS[self.scope]}/{self.name}/{STORE_DIR}"
 
     @property
-    def is_index(self) -> bool:
-        """A project's rendered `MEMORY.md`, directly in its memory root."""
-        return self.scope == "project" and self.below == (INDEX_NAME,)
-
-    @property
     def is_note(self) -> bool:
         """Whether a file here may move at all, by its name: every component from the group's or
         project's name down is a plain name -- not empty, not `.` or `..`, not starting with "."
@@ -86,8 +87,9 @@ class MemoryPath:
 def memory_path(path: str) -> MemoryPath | None:
     """`path` parsed by the layout, or `None` when the pathspecs do not match it.
 
-    The same match as `MEMORY_PATHSPEC` with `glob` magic: `*` is one non-empty directory name and
-    a final `**` is anything inside. A test holds it equal to git's own. A match is not enough to
+    The same match as `MEMORY_PATHSPEC` with `glob` magic: `*` is one non-empty directory name, a
+    final `**` is anything inside, and a project's own `MEMORY.md` is left out. A test holds it
+    equal to git's own. A match is not enough to
     move a path: being a note (`MemoryPath.is_note`) and what git records it as (`entry_offends`)
     are judged on top. The path is as git lists it, `-z`, so quoted or Cyrillic names arrive as
     written.
@@ -104,6 +106,8 @@ def memory_path(path: str) -> MemoryPath | None:
             and parts[2] == STORE_DIR
             and all(parts[3:])
         ):
+            if scope == "project" and parts[3:] == [INDEX_NAME]:
+                return None
             return MemoryPath(scope, parts[1], tuple(parts[3:]))
     return None
 
@@ -113,9 +117,15 @@ def is_memory_path(path: str) -> bool:
     return memory_path(path) is not None
 
 
-def index_of(project: str) -> str:
-    """The top-relative path of `project`'s rendered index."""
-    return f"{PROJECTS}/{project}/{STORE_DIR}/{INDEX_NAME}"
+def unsafe_parent(overlay: Path, path: str) -> str | None:
+    """The first directory above the top-relative `path` that is a link or not a directory, or
+    `None` when each is a real directory or absent. Anchor: what is at each ancestor, unfollowed."""
+    parts = path.split("/")[:-1]
+    for depth in range(1, len(parts) + 1):
+        current = overlay.joinpath(*parts[:depth])
+        if fsops.is_symlink(current) or (fsops.exists(current) and not fsops.is_dir(current)):
+            return "/".join(parts[:depth])
+    return None
 
 
 # What a memory path may become: a regular, non-executable file, or nothing (a deletion). A link

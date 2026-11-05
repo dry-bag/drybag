@@ -3114,7 +3114,6 @@ file = "src/stayfixed/memory/index.py"
 before = "        reconciled = reconcile(store, config, write=True)"
 after = "        reconciled = reconcile(store, config, write=False)"
 reddens = [
-  "tests/memory/test_index.py::test_rerender_writes_the_overlays_index_from_a_bound_checkout",
   "tests/memory/test_index.py::test_session_end_harvests_an_appended_line_before_the_sync_runs",
 ]
 

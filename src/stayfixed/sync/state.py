@@ -2,9 +2,8 @@
 
 The hooks decide and the job acts; they meet only in `state_directory()`: `state.json`, which the
 job writes and `doctor` reads, `job.lock` held by the running job, `sleeper.lock` held by the one
-sleeper waiting out the throttle, `pending`, a trigger that arrived while the job was busy,
-`checkouts.json`, the project roots this machine's sessions opened, and `scratch/`, which the job
-removes whole.
+sleeper waiting out the throttle, `pending`, a trigger that arrived while the job was busy, and
+`scratch/`, which the job removes whole.
 
 An outcome and a hold are different: the outcome is what the last job did, a hold a range the sync
 refuses to move until its owner acts, and a later outcome (`offline`, say) never clears a hold. A
@@ -31,14 +30,14 @@ from stayfixed.config.paths import data_directory
 from stayfixed.jsonobject import json_object
 
 OUTCOMES: tuple[str, ...] = (
-    "ok", "skipped", "conflict", "resolved_index", "raced", "rejected", "offline", "auth_failed",
-    "timeout", "hook_failed", "scan_unavailable", "signing_failed", "secret_found",
-    "waiting_clean_tree", "index_stale",
+    "ok", "skipped", "conflict", "raced", "rejected", "offline", "auth_failed", "timeout",
+    "hook_failed", "scan_unavailable", "signing_failed", "secret_found", "waiting_clean_tree",
+    "index_stale",
 )  # fmt: skip
 
 # The outcomes after which the sync has nothing to answer for: the hooks start no job on them and
-# `doctor` reports them green. A united index is a success: nothing stopped the job.
-SETTLED = ("ok", "skipped", "resolved_index")
+# `doctor` reports them green.
+SETTLED = ("ok", "skipped")
 # The failures a job run again on the same `HEAD`, upstream and notes usually meets again, so a
 # `Stop` waits them out as it does a hold (`backed_off`); `SessionEnd` retries them.
 STANDING = (
@@ -50,7 +49,6 @@ STATE_FILE = "state.json"
 LOCK_FILE = "job.lock"
 SLEEPER_LOCK_FILE = "sleeper.lock"
 PENDING_FILE = "pending"
-CHECKOUTS_FILE = "checkouts.json"
 SCRATCH = "scratch"
 
 # A trigger that follows a job by less than this does not start another: a session's turns end

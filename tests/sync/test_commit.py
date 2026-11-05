@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from stayfixed.sync import job as J
-from stayfixed.sync import render, scan
+from stayfixed.sync import scan
 from stayfixed.sync.state import LOCK_FILE, Lock, Outcome, read_state
 from tests.gitfixture import run_git
 from tests.sync.conftest import (
@@ -140,7 +140,7 @@ def test_nothing_to_commit_runs_no_scan(overlays: Overlays) -> None:
 
     assert J.commit_memory(context(overlays, a)) is None
 
-    # Dirty, yet nothing to commit: the only change is an index nobody could render.
+    # The only change is an index this machine rendered, which is not memory.
     with open(a / "projects/gamma/memory/MEMORY.md", "a", encoding="utf-8") as index:
         index.write("- [A line](project-stable/gamma-one.md)\n")
 
@@ -148,6 +148,23 @@ def test_nothing_to_commit_runs_no_scan(overlays: Overlays) -> None:
 
     assert head(a) == before
     assert not (overlays.gitleaks.parent / "argv.json").exists()
+
+
+def test_a_dirty_index_is_never_committed(overlays: Overlays) -> None:
+    # A project's `MEMORY.md` is this machine's rendering: beside a note, the commit holds the
+    # note alone, and the index stays as the render left it.
+    a = overlays.a
+    write(a, "projects/alpha/memory/project-stable/two.md", note_text("two"))
+    write(a, "projects/alpha/memory/MEMORY.md", "# alpha's index, rendered here\n")
+    write(a, "projects/gamma/memory/MEMORY.md", "# gamma's index, rendered here\n")
+
+    assert J.commit_memory(context(overlays, a)) is None
+
+    assert committed(a) == [("A", "projects/alpha/memory/project-stable/two.md")]
+    assert sorted(git(a, "status", "--porcelain", "-uall", "--", "projects").splitlines()) == [
+        " M projects/gamma/memory/MEMORY.md",
+        "?? projects/alpha/memory/MEMORY.md",
+    ]
 
 
 def test_link_and_nested_repository_under_memory_are_not_committed(overlays: Overlays) -> None:
@@ -428,13 +445,13 @@ def test_a_stash_pop_conflicting_while_the_job_runs_is_never_committed(
     a = overlays.a
     path = _a_stash_that_conflicts(a)
     write(a, "common/memory/other.md", "a note that starts the job\n")
-    real = render.prerender
+    real = J._run_checks
 
-    def the_owner_pops_meanwhile(*args: object, **kwargs: object) -> dict[str, str]:
+    def the_owner_pops_meanwhile(*args: object, **kwargs: object) -> Outcome | None:
         run_git(a, "stash", "pop")
         return real(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(J, "prerender", the_owner_pops_meanwhile)
+    monkeypatch.setattr(J, "_run_checks", the_owner_pops_meanwhile)
     before = head(a)
     ctx = context(overlays, a)
 
@@ -765,8 +782,4 @@ def test_the_message_counts_notes_and_names_each_scope(overlays: Overlays) -> No
 
     subject, _, body = git(a, "log", "-1", "--format=%B").partition("\n")
     assert subject == f"memory: 3 notes from {HOST}"
-    # A common note renders every recorded project; the indexes are not counted as notes.
-    assert body.split() == ["common", f"groups/{TAG}", "projects/alpha", "projects/beta"]
-    assert {"projects/alpha/memory/MEMORY.md", "projects/beta/memory/MEMORY.md"} <= (
-        _committed_paths(a)
-    )
+    assert body.split() == ["common", f"groups/{TAG}", "projects/alpha"]

@@ -1085,7 +1085,7 @@ _NOTE_SYNC_SECTION = re.compile(r"^## Note sync\n(.*?)(?=^## )", re.MULTILINE | 
 
 
 def test_the_note_sync_section_names_what_the_sync_keeps_and_records() -> None:
-    # Mutation (declared): a sixth outcome in `state.OUTCOMES`, or `CHECKOUTS_FILE` renamed ->
+    # Mutation (declared): a sixth outcome in `state.OUTCOMES`, or `PENDING_FILE` renamed ->
     # reddens naming the word the section lacks.
     from stayfixed.sync import state
 
@@ -1097,7 +1097,6 @@ def test_the_note_sync_section_names_what_the_sync_keeps_and_records() -> None:
         state.LOCK_FILE,
         state.SLEEPER_LOCK_FILE,
         state.PENDING_FILE,
-        state.CHECKOUTS_FILE,
         f"{state.SCRATCH}/",
     )
     absent = [f"`{word}`" for word in (*kept, *state.OUTCOMES) if f"`{word}`" not in text]

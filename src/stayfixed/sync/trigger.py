@@ -28,7 +28,6 @@ from stayfixed.config.overlay import overlay_root
 from stayfixed.hooks.api import HookEvent
 from stayfixed.sync import job
 from stayfixed.sync.git import git
-from stayfixed.sync.render import remember_checkout
 from stayfixed.sync.rules import MEMORY_PATHSPEC
 from stayfixed.sync.state import (
     LOCK_FILE,
@@ -165,14 +164,12 @@ def decide(
 
 
 def trigger(event: HookEvent) -> None:
-    """The handler's work once the sync is on: record a session start's checkout for the
-    pre-render, decide, mark a trigger pending, and spawn the job or a sleeper."""
+    """The handler's work once the sync is on: decide, mark a trigger pending, and spawn the job
+    or a sleeper."""
     overlay = overlay_root(None)
     if overlay is None:
         return
     d = state_directory()
-    if event.name == "SessionStart" and event.project_root is not None:
-        remember_checkout(event.project_root, d)
     source = event.raw.get("source")
     named = source if isinstance(source, str) else None
     decision, wake = decide(event.name, named, overlay, d, datetime.now(UTC))

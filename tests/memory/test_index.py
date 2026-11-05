@@ -14,7 +14,7 @@ from stayfixed.config.schema import Config
 from stayfixed.errors import Refusal
 from stayfixed.harnesses import project_root_variables
 from stayfixed.hooks.commands import run_hook
-from stayfixed.memory.api import build_composed, rerender_overlay_index
+from stayfixed.memory.api import build_composed
 from stayfixed.memory.index import (
     EXTRA_TITLE,
     INDEX_NAME,
@@ -31,7 +31,7 @@ from stayfixed.memory.index import (
     write_index,
 )
 from stayfixed.memory.notes import Provenance, read_note
-from stayfixed.memory.store import NO_RECORD, Store
+from stayfixed.memory.store import Store
 from tests.cli import cli
 from tests.gitfixture import git
 from tests.memory.test_store import REMOTE, a_config, a_machine_file, a_repo, an_overlay
@@ -1175,43 +1175,6 @@ def _an_attached_checkout(tmp_path: Path, *, bound: bool = True) -> tuple[Path, 
     return root, overlay, machine
 
 
-def test_rerender_writes_the_overlays_index_from_a_bound_checkout(tmp_path: Path) -> None:
-    # The note sync renders in process what `stayfixed memory index` renders from the checkout:
-    # into the overlay's copy, harvesting a line a session appended into its note.
-    root, overlay, machine = _an_attached_checkout(tmp_path)
-    share = overlay / "projects" / "widget" / "memory"
-    (share / "project-stable" / "n.md").write_text(note("n", index="N trigger"), encoding="utf-8")
-    (share / "project-stable" / "m.md").write_text(note("m"), encoding="utf-8")
-    (share / INDEX_NAME).write_text("- [Harvested](project-stable/m.md)\n", encoding="utf-8")
-
-    done = rerender_overlay_index(root, machine=machine)
-
-    assert done.reason is None
-    assert done.overlay_store == share.resolve()
-    text = (share / INDEX_NAME).read_text(encoding="utf-8")
-    assert "- [N trigger](project-stable/n.md)" in text and REGION_BEGIN in text
-    assert read_note(share / "project-stable" / "m.md").index == "Harvested"
-    assert not (root / INDEX_NAME).exists()
-
-
-def test_an_unbound_checkout_has_a_reason(tmp_path: Path) -> None:
-    root, overlay, machine = _an_attached_checkout(tmp_path, bound=False)
-
-    done = rerender_overlay_index(root, machine=machine)
-
-    assert done == type(done)(None, NO_RECORD)
-    assert not (overlay / "projects" / "widget" / "memory" / INDEX_NAME).exists()
-
-
-def test_a_machine_file_that_does_not_load_is_a_reason_not_a_raise(tmp_path: Path) -> None:
-    root, _, machine = _an_attached_checkout(tmp_path)
-    machine.write_text("[overlay\n", encoding="utf-8")
-
-    done = rerender_overlay_index(root, machine=machine)
-
-    assert done.overlay_store is None and done.reason
-
-
 # -- the index-render handler: each machine renders its own index ---------------------------------
 
 
@@ -1261,7 +1224,8 @@ def test_session_end_harvests_an_appended_line_before_the_sync_runs(
     # A line a session appended outside the region is harvested into its note on the machine
     # that wrote it, before the sync's own `SessionEnd` handler starts the job (area order), so
     # the note travels in that job. The spawn reads the overlay's status at the moment it is
-    # called. Mutation (declared): "the session end renders no index" -> the note is clean then.
+    # called. Mutation (oracle): `mutations/`'s "the session end renders no index" -> the note
+    # is clean then.
     root, overlay, _ = _an_attached_checkout(tmp_path)
     _on_this_machine(overlay, sync=True)
     share = overlay / "projects" / "widget" / "memory"
@@ -1292,8 +1256,8 @@ def test_a_repository_mode_checkout_is_not_rendered(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # Outside overlay mode the index is the repository's file, which `memory index` renders when
-    # someone runs it. Mutation (declared): "a repository-mode checkout's index is rendered by a
-    # hook" -> this file is rewritten.
+    # someone runs it. Mutation (oracle): `mutations/`'s "a repository-mode checkout's index is
+    # rendered by a hook" -> this file is rewritten.
     root = tmp_path / "widget"
     a_repo(root)
     a_config(root, "in-repo")

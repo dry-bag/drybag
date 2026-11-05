@@ -28,7 +28,6 @@ from stayfixed.sync import git as G
 from stayfixed.sync import job as J
 from stayfixed.sync import trigger as T
 from stayfixed.sync.hooks import register
-from stayfixed.sync.render import checkouts
 from stayfixed.sync.state import (
     BACK_OFF_MINUTES,
     LOCK_FILE,
@@ -151,9 +150,7 @@ def test_a_standing_outcome_or_hold_starts_a_job(overlays: Overlays) -> None:
     for outcome in ("offline", "rejected", "index_stale", "hook_failed"):
         _state(overlays, outcome=outcome, head_sha=sha)
         assert decide(overlays, "Stop") == "run", outcome
-    # A united index is a success: nothing stopped the job. Mutation (oracle): `mutations/`'s "a
-    # united index is not settled".
-    for outcome in ("ok", "skipped", "resolved_index"):
+    for outcome in ("ok", "skipped"):
         _state(overlays, outcome=outcome, head_sha=sha)
         assert decide(overlays, "Stop") == "none", outcome
 
@@ -360,7 +357,7 @@ def test_the_trigger_check_is_one_git_status(
 
 
 def _event(world: Overlays, name: str, **raw: object) -> HookEvent:
-    checkout = world.checkouts["beta"]
+    checkout = world.home  # a session's directory, none the sync reads
     return HookEvent(
         name, "s", None, None, {}, checkout, checkout, {"hook_event_name": name, **raw}
     )
@@ -423,20 +420,17 @@ def test_with_sync_on_the_handlers_spawn_the_job(
     assert (overlays.state_dir / PENDING_FILE).exists()
 
 
-def test_session_start_records_the_checkout_when_sync_is_on(
+def test_session_start_records_no_checkout(
     overlays: Overlays, spied: dict[str, list[object]]
 ) -> None:
-    beta = overlays.checkouts["beta"]
-    (overlays.state_dir / "checkouts.json").unlink()
-    _handle(_event(overlays, "SessionStart", source="startup"))
-    assert checkouts(overlays.state_dir) == []  # off: nothing recorded
-
+    # The job renders no index, so it needs no checkout: each session renders its own.
     overlays.sync = True
     overlays.use(overlays.a)
-    _handle(_event(overlays, "SessionStart", source="compact"))
+    for source in ("startup", "compact"):
+        _handle(_event(overlays, "SessionStart", source=source))
 
-    assert checkouts(overlays.state_dir) == [beta]
-    assert spied["spawn"] == []  # a compaction records and starts nothing
+    assert not (overlays.state_dir / "checkouts.json").exists()
+    assert spied["spawn"] == [None]
 
 
 def test_no_overlay_or_not_a_repository_spawns_nothing(
@@ -478,7 +472,7 @@ def test_stop_and_session_end_print_nothing_that_blocks(
     overlays.use(overlays.a)
     write(overlays.a, NOTE, "a note\n")
     for name in ("Stop", "SessionEnd"):
-        payload = {"session_id": "s", "cwd": str(overlays.checkouts["beta"])}
+        payload = {"session_id": "s", "cwd": str(overlays.home)}
         monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
         assert run_hook(argparse.Namespace(event=name)) == 0
         out, err = capsys.readouterr()
@@ -500,7 +494,7 @@ def test_the_command_prints_nothing_that_blocks_in_a_process_of_its_own(
         for name in ("Stop", "SessionEnd"):
             done = subprocess.run(
                 [sys.executable, "-m", "stayfixed", "hook", name],
-                input=json.dumps({"session_id": "s", "cwd": str(overlays.checkouts["beta"])}),
+                input=json.dumps({"session_id": "s", "cwd": str(overlays.home)}),
                 capture_output=True,
                 text=True,
                 timeout=60,

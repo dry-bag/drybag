@@ -133,8 +133,8 @@ project's own share of the recorded overlay is honoured).
 
 **A session renders it in overlay mode.** In a checkout with a `stayfixed.toml` whose memory is in
 overlay mode and that this machine binds, the `index-render` hook handler runs this command's write
-on `SessionStart` and on `SessionEnd`, and renders once more when a line arrived while it rendered,
-so each machine's index lists the notes that machine holds. The `SessionEnd` render is the one that
+on `SessionStart` and on `SessionEnd`, and renders once more when a line arrived while it rendered:
+the note sync moves no `MEMORY.md`, so each machine renders its own from the notes it holds. The `SessionEnd` render is the one that
 harvests (step 2) the lines the session appended, on the machine that wrote them, and it runs before
 the [note sync](#note-sync)'s own `SessionEnd` handler starts its job, so the notes it wrote travel
 in that job; the `SessionStart` render lists what the jobs brought in since. It says nothing; a
@@ -395,7 +395,7 @@ with no session id, and nothing removes them. And `unreviewed-notes`, which on `
 "N notes are unreviewed" when the set of the store's unreviewed notes differs from the one last
 said, writes one file per store under `$HOME/.local/share/stayfixed/unreviewed/`, named by a hash
 of the store's path and holding a digest of that set; nothing removes them. And the note sync's three handlers, on a machine whose machine file switches
-the sync on and nowhere else, write `checkouts.json` and `pending` under `$HOME/.local/share/stayfixed/sync/` and start the
+the sync on and nowhere else, write `pending` under `$HOME/.local/share/stayfixed/sync/` and start the
 job that writes the rest ([Note sync](#note-sync) names every path). No handler links a memory store into a worktree:
 the harness reads the composed store from every worktree through the main checkout's
 `autoMemoryDirectory` (`stayfixed attach`).
@@ -566,11 +566,10 @@ session. `doctor`'s `sync` row says which it is.
 
 **The triggers.** One handler on each of `SessionStart` (not after a compaction, which is the same
 session going on), `Stop` and `SessionEnd`, named `note-sync-start`, `note-sync-stop` and
-`note-sync-end`. `SessionStart` records the session's project root in `checkouts.json` (at most 64,
-newest first), because an index renders only from a checkout bound to its project, and always
-starts a job, to fetch. `Stop` and `SessionEnd` ask one `git status` of the overlay's memory paths
-and start a job only when a memory path is changed or untracked, when commits wait to be pushed,
-when the last outcome is not `ok`, `skipped` or `resolved_index`, or when a hold stands. While a
+`note-sync-end`. `SessionStart` always starts a job, to fetch. `Stop` and `SessionEnd` ask one
+`git status` of the overlay's memory paths and start a job only when a memory path is changed or
+untracked, when commits wait to be pushed, when the last outcome is not `ok` or `skipped`, or when
+a hold stands. While a
 hold stands, or a failure a rerun usually meets again (`conflict`, `auth_failed`, `hook_failed`,
 `scan_unavailable`, `signing_failed`, `secret_found`, `waiting_clean_tree`), and neither `HEAD`,
 the fetched `origin/main` nor the dirty notes, by name and content, changed since the last job,
@@ -598,24 +597,23 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    is no reason: the job never touches it.
 2. **Align.** A job killed after moving `main` and before aligning the real index left that owed, and
    the next job does it first.
-3. **Pre-render.** The memory indexes render in process, as `stayfixed memory index` renders them,
-   from the checkouts the sessions recorded that are still bound into this overlay: those whose project's notes
-   changed, and every one when a common or a group note changed. A project with no such checkout
-   keeps its `MEMORY.md` out of the commit and the detail names it; its notes still travel.
-4. **Commit.** Every changed memory path goes into one commit built in a temporary index read from
+3. **Commit.** Every changed memory path goes into one commit built in a temporary index read from
    `HEAD`, after the secret scan of what it stages, and `main` moves to it by a compare-and-swap. Then
    the real index's memory entries are reset to `HEAD`, or the next `git commit` of yours would carry
    the old notes back. A signature is made when `commit.gpgsign` is set, and never switched off.
-5. **Fetch.** `git fetch origin main` into `refs/stayfixed/fetched`, with `fetch.fsckObjects`.
-6. **Integrate.** When everything `HEAD..` the fetched sha brings is memory, and every local commit
+4. **Fetch.** `git fetch origin main` into `refs/stayfixed/fetched`, with `fetch.fsckObjects`.
+5. **Integrate.** When everything `HEAD..` the fetched sha brings is memory, and every local commit
    is a plain commit of memory alone, the local commits are replayed onto it one by one and `main`
-   moves to the result; an index that conflicts, or that is changed on both sides, is united line
-   by line and rendered again. Anything else is a hold, and `HEAD` stays as it is.
-7. **Push.** The checked sha, `<sha>:refs/heads/main`, never forced and with no tag, after the
+   moves to the result; a commit that conflicts is `conflict`, `main` unmoved. Anything else is a
+   hold, and `HEAD` stays as it is.
+6. **Push.** The checked sha, `<sha>:refs/heads/main`, never forced and with no tag, after the
    secret scan of the range and only when every commit in it is memory.
 
 **What moves.** Three globs only: `common/memory/**`, `groups/*/memory/**` and
-`projects/*/memory/**`. A path moves as a regular, non-executable `.md` file with no dot component
+`projects/*/memory/**`, less each project's own `MEMORY.md` (`projects/*/memory/MEMORY.md`), which
+never moves: it is a rendering of the notes beside it and of what this machine's sessions appended,
+so each machine renders its own ([`memory index`](#stayfixed-memory-index), on `SessionStart` and
+`SessionEnd`) and the notes travel instead. A path moves as a regular, non-executable `.md` file with no dot component
 from the scope's name down, and only as text; a link, an executable, a dot-file, a file that is not
 Markdown, a nested repository or a file git calls binary is left out of the commit and named. A path outside those globs is
 never committed, integrated, written or pushed. Nothing configures the list.
@@ -641,18 +639,17 @@ the push (`secret_found`) and names the commit.
 **Writes.** In the data directory, `$HOME/.local/share/stayfixed/sync/`: `state.json` (the last
 outcome, the holds, the fetched sha and a digest of the dirty notes, written in one step), `job.lock` and `sleeper.lock` (held
 while a job runs and while a sleeper waits), `pending` (a trigger that arrived while a job ran),
-`checkouts.json` (the project roots above) and `scratch/`, which the job removes whole at its start
-and its end. In the overlay: the objects and the commit of step 4, `refs/heads/main` (moved by
+and `scratch/`, which the job removes whole at its start and its end. In the overlay: the objects
+and the commit of step 3, `refs/heads/main` (moved by
 `update-ref` against the sha it read), `refs/stayfixed/fetched`, the memory entries of the real index (`git reset`),
-the `MEMORY.md` indexes and the `index:` lines the pre-render writes into notes, and the notes a move of `main`
+and the notes a move of `main`
 brought in, written through `git checkout-index` from a temporary index where the working tree still holds the old version, or removed, with the empty
 directories above a removed note, where it still holds the old one and no link stands above it; a note you changed by hand since is left as you made
-it. On the remote, `main`, by step 7. Besides `scratch/` and those notes, it removes `pending` when it takes it, and nothing else. When the plugin
+it. On the remote, `main`, by step 6. Besides `scratch/` and those notes, it removes `pending` when it takes it, and nothing else. When the plugin
 is removed, the triggers go and this directory stays.
 
 **Outcomes** (`state.json`, and `doctor`): `ok`; `skipped` (the guard's reasons); `conflict` (a local
-commit conflicts with upstream, and `main` was not moved); `resolved_index` (indexes united, a
-success); `raced` (`main` moved while the job built a commit or integrated); `rejected`
+commit conflicts with upstream, and `main` was not moved); `raced` (`main` moved while the job built a commit or integrated); `rejected`
 (`origin/main` moved before the push; the next trigger fetches and retries); `offline`,
 `auth_failed` and `timeout` (the remote or a step); `hook_failed` (a step failed, or paths were
 left out of a commit); `scan_unavailable`; `signing_failed`; `secret_found`; `waiting_clean_tree`
@@ -664,7 +661,10 @@ never forced; one only you can clear waits out the back-off above.
 clears it; while one stands nothing is integrated or pushed, and the next job clears it once you
 have acted. *Upstream*, for one of three reasons. `HEAD..origin/main` changes something outside
 memory: read all of it and take it at the sha that was held, `git log -p --no-renames HEAD..<sha>`,
-then `git rebase <sha>`. Its tree is one git will not check out: `git diff --stat HEAD <sha>`, and
+then `git rebase <sha>`. A change to a project's `MEMORY.md` is such a change: an overlay that
+still commits its indexes is held on the first upstream commit that changes or untracks one, until
+you take that commit (the overlay's own untracking commit, once on each machine). Its tree is one
+git will not check out: `git diff --stat HEAD <sha>`, and
 repair upstream. Or upstream was rewritten: the sha the last job recorded as upstream's, fetched or
 pushed, is not in the new one, and commits it dropped are still in `HEAD`; they are named, and
 never replayed or pushed back. Read them with `git log -p <sha>..HEAD`, then take the rewrite with

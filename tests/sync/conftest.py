@@ -23,11 +23,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import binding
 from stayfixed.config.machine import machine_config_path
-from stayfixed.memory.api import build_composed, rerender_overlay_index
 from stayfixed.sync.job import JobContext, Limits
-from stayfixed.sync.render import remember_checkout
 from stayfixed.sync.state import state_directory
 from tests import gitfixture as fx
 
@@ -325,7 +322,7 @@ def environment_of(cache: Path) -> dict[str, str]:
     return {"XDG_CACHE_HOME": str(cache), "PATH": os.environ.get("PATH", "")}
 
 
-# -- an overlay the job runs on: notes, two bound checkouts, the scanner ------------------------
+# -- an overlay the job runs on: notes and the scanner -------------------------------------------
 
 NOW = datetime(2026, 10, 12, 12, 0, 0, tzinfo=UTC)
 HOST = "testhost"
@@ -334,29 +331,11 @@ PRE_COMMIT_CONFIG = (
     f"repos:\n  - repo: {GITLEAKS_REPO}\n    rev: {GITLEAKS_REV}\n"
     "    hooks:\n      - id: gitleaks\n"
 )
-PROJECT_CONFIG = """[stayfixed]
-version = "0.1.0"
-preset = "recommended"
-profile = ""
-agents = ["claude"]
-
-[project]
-name = "{name}"
-base_branch = "main"
-release_branch = "main"
-
-[memory]
-mode = "overlay"
-groups = ["developer", "project-stable"]
-index_extra = []
-"""
-# The projects with a checkout this machine's sessions opened, bound into the overlay; `gamma`
-# has notes in the overlay and no checkout.
-BOUND_PROJECTS = ("alpha", "beta")
 PATHSPEC = [
     ":(top,glob)common/memory/**",
     ":(top,glob)groups/*/memory/**",
     ":(top,glob)projects/*/memory/**",
+    ":(top,exclude,glob)projects/*/memory/MEMORY.md",
 ]
 
 
@@ -372,14 +351,13 @@ def note_text(name: str, *, index: str | None = None, body: str = "") -> str:
 @dataclass
 class Overlays:
     """Two machines' clones of one overlay remote, `a` and `b`, with what the job reads: the
-    checkouts bound into `a` and recorded as opened (`checkouts`), the scanner's stand-in
-    (`gitleaks`) where pre-commit's database finds it, and the state directory."""
+    scanner's stand-in (`gitleaks`) where pre-commit's database finds it, and the state
+    directory."""
 
     bare: Path
     a: Path
     b: Path
     home: Path
-    checkouts: dict[str, Path]
     gitleaks: Path
     state_dir: Path = field(default_factory=state_directory)
     # Whether the machine file `use` writes switches the sync on: the job's `main` and the hooks
@@ -395,31 +373,12 @@ class Overlays:
             target.write_text(mode, encoding="utf-8")
 
     def use(self, clone: Path) -> None:
-        """Make `clone` the overlay this machine records, and bind the checkouts into it."""
+        """Make `clone` the overlay this machine records."""
         machine = machine_config_path()
         assert machine is not None
         machine.parent.mkdir(parents=True, exist_ok=True)
         switch = "\n[sync]\nenabled = true\n" if self.sync else ""
         machine.write_text(f'[overlay]\nroot = "{clone}"\n{switch}', encoding="utf-8")
-        for name, root in self.checkouts.items():
-            build_composed(clone, name, binding.ensure_id(root))
-
-    def render(self, clone: Path, project: str) -> None:
-        """`stayfixed memory index` from `project`'s checkout into `clone`, as its machine would."""
-        self.use(clone)
-        done = rerender_overlay_index(self.checkouts[project], machine=None)
-        assert done.reason is None, done.reason
-        self.use(self.a)
-
-
-def a_checkout(root: Path, name: str) -> Path:
-    """A repository whose `stayfixed.toml` keeps its notes in the overlay, bound to `name`."""
-    init(root)
-    remote = f"git@example.com:acme/{name}.git"
-    git(root, "remote", "add", "origin", remote)
-    write(root, "stayfixed.toml", PROJECT_CONFIG.format(name=name))
-    binding.record(root, name, remote)
-    return root
 
 
 @pytest.fixture
@@ -444,6 +403,7 @@ def overlays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own
     for project in ("alpha", "beta", "gamma"):
         relative = f"projects/{project}/memory/project-stable/{project}-one.md"
         write(seed, relative, note_text(f"{project}-one", index=f"{project} trigger"))
+    # An overlay that still tracks an index, as one did before each machine rendered its own.
     write(seed, "projects/gamma/memory/MEMORY.md", "# gamma's index, rendered elsewhere\n")
     commit_all(seed, "seed")
     git(seed, "push", "-q", str(bare), "main")
@@ -451,15 +411,8 @@ def overlays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own
     for name in ("a", "b"):
         fx.git(tmp_path, "clone", "-q", str(bare), str(tmp_path / name))
         clones.append(tmp_path / name)
-    checkouts = {name: a_checkout(tmp_path / "checkouts" / name, name) for name in BOUND_PROJECTS}
-    world = Overlays(bare, clones[0], clones[1], home, checkouts, scanner)
+    world = Overlays(bare, clones[0], clones[1], home, scanner)
     world.use(world.a)
-    for name in reversed(BOUND_PROJECTS):
-        remember_checkout(checkouts[name], world.state_dir)
-        assert rerender_overlay_index(checkouts[name], machine=None).reason is None
-    commit_all(world.a, "memory: the first render")
-    git(world.a, "push", "-q", "origin", "main")
-    git(world.b, "pull", "-q", "--ff-only")
     return world
 
 

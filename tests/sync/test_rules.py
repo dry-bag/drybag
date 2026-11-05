@@ -43,7 +43,8 @@ _PATHS = {
     "projects/x/memory/a.md": True,
     "projects/x/memory/deep/er/a.md": True,
     "projects/.dot/memory/a.md": True,
-    "projects/x/memory/MEMORY.md": True,
+    "projects/x/memory/MEMORY.md": False,
+    "projects/x/memory/d/MEMORY.md": True,
     "groups/g/checkout/memory/a.md": False,
     "groups/g/y/memory/a.md": False,
     "groups/memory/a.md": False,
@@ -73,7 +74,8 @@ _PATHS = {
         ("common/memory/d/b.md", ("common", None, ("d", "b.md"))),
         ("groups/g/memory/a.md", ("group", "g", ("a.md",))),
         ("groups/g/memory/d/MEMORY.md", ("group", "g", ("d", "MEMORY.md"))),
-        ("projects/x/memory/MEMORY.md", ("project", "x", ("MEMORY.md",))),
+        ("projects/x/memory/d/MEMORY.md", ("project", "x", ("d", "MEMORY.md"))),
+        ("projects/x/memory/MEMORY.md", None),
         ("projects/x/memory/deep/er/a.md", ("project", "x", ("deep", "er", "a.md"))),
         ("groups/g/checkout/memory/a.md", None),
         ("projects/x/y/memory/a.md", None),
@@ -93,24 +95,31 @@ def test_the_layout_takes_a_path_apart(
     assert R.is_memory_path(path) is (parsed is not None)
 
 
-def test_a_scope_knows_its_root_and_its_index() -> None:
+def test_a_scope_knows_its_root() -> None:
     assert R.memory_path("common/memory/a.md").root == "common/memory"  # type: ignore[union-attr]
     assert R.memory_path("groups/g/memory/a.md").root == "groups/g/memory"  # type: ignore[union-attr]
     assert R.memory_path("projects/p/memory/a.md").root == "projects/p/memory"  # type: ignore[union-attr]
-    assert R.index_of("p") == "projects/p/memory/MEMORY.md"
-    assert R.INDEX_NAME == "MEMORY.md"
 
 
-def test_only_a_projects_own_memory_md_is_its_index() -> None:
-    index = R.memory_path("projects/p/memory/MEMORY.md")
-    assert index is not None and index.is_index and index.is_note
-    for path in (
-        "projects/p/memory/sub/MEMORY.md",
-        "groups/g/memory/MEMORY.md",
-        "common/memory/MEMORY.md",
-    ):
-        parsed = R.memory_path(path)
-        assert parsed is not None and not parsed.is_index, path
+def test_a_projects_index_is_not_memory(tmp_path: Path) -> None:
+    # Each machine renders its own index, so the sync never stages, writes or moves one: a
+    # project's `MEMORY.md` is outside memory, by the layout and by git's own match, and a change
+    # to one may not move. A `MEMORY.md` anywhere else is a note like any. Mutation (oracle):
+    # `mutations/`'s "an index is memory again" and `mutations/`'s "an index name parses as a
+    # note".
+    index = "projects/p/memory/MEMORY.md"
+    assert R.memory_path(index) is None
+    for path in ("projects/p/memory/sub/MEMORY.md", "groups/g/memory/MEMORY.md"):
+        assert R.memory_path(path) is not None, path
+    repo = init(tmp_path / "r")
+    for path in (index, "projects/p/memory/a.md", "common/memory/MEMORY.md"):
+        write(repo, path)
+    commit_all(repo)
+    listed = git(repo, "ls-files", "-z", "--", *R.MEMORY_PATHSPEC).split("\0")
+    assert sorted(listed) == ["", "common/memory/MEMORY.md", "projects/p/memory/a.md"]
+    for old, new, status in (("000000", "100644", "A"), ("100644", "100644", "M")):
+        assert R.entry_offends(R.RawEntry(old, new, status, index)) is True, status
+    assert R.entry_offends(R.RawEntry("100644", "000000", "D", index)) is True
 
 
 def test_the_pathspecs_are_derived_from_the_layout_in_three_scopes() -> None:
@@ -118,13 +127,15 @@ def test_the_pathspecs_are_derived_from_the_layout_in_three_scopes() -> None:
         ":(top,glob)common/memory/**",
         ":(top,glob)groups/*/memory/**",
         ":(top,glob)projects/*/memory/**",
+        ":(top,exclude,glob)projects/*/memory/MEMORY.md",
     )
-    # The directory each pathspec's literal part lies in, for a `git add` that a link there
-    # would refuse whole.
+    # The directory each scope's literal part lies in, for a `git add` that a link there would
+    # refuse whole, the exclusion given only with the scope it excludes from.
     assert (
-        tuple(zip(R.MEMORY_PATHSPEC, ("common/memory", "groups", "projects"), strict=True))
-        == R.MEMORY_SPECS
-    )
+        (R.MEMORY_PATHSPEC[:1], "common/memory"),
+        (R.MEMORY_PATHSPEC[1:2], "groups"),
+        (R.MEMORY_PATHSPEC[2:], "projects"),
+    ) == R.MEMORY_SPECS
 
 
 def test_is_memory_path_agrees_with_git(tmp_path: Path) -> None:
@@ -136,13 +147,10 @@ def test_is_memory_path_agrees_with_git(tmp_path: Path) -> None:
 
     every = set(git(repo, "ls-files", "-z").split("\0")) - {""}
     matched = set(git(repo, "ls-files", "-z", "--", *R.MEMORY_PATHSPEC).split("\0")) - {""}
-    not_memory = [spec.replace(":(top", ":(exclude,top") for spec in R.MEMORY_PATHSPEC]
-    excluded = set(git(repo, "ls-files", "-z", "--", *not_memory).split("\0")) - {""}
 
     assert every == set(_PATHS)
     assert matched == {path for path in every if R.is_memory_path(path)}
     assert matched == {path for path, memory in _PATHS.items() if memory}
-    assert excluded == every - matched
 
 
 # -- dirty notes ----------------------------------------------------------------------------------

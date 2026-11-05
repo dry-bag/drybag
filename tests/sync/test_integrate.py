@@ -1,4 +1,4 @@
-"""The job's fetch, its integration of the checked upstream sha by replay, and the index union.
+"""The job's fetch, and its integration of the checked upstream sha by replay.
 
 Integration never rebases. The new tip is computed without touching the working tree or the real
 index -- a fast-forward to the fetched sha, or each local commit replayed onto it with `merge-tree
@@ -22,10 +22,9 @@ import pytest
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
 from stayfixed.sync.git import GitTimeout, Ran
-from stayfixed.sync.state import Holds, SyncState, read_state
+from stayfixed.sync.state import OUTSIDE, Holds, SyncState, read_state
 from tests.gitfixture import git_bytes
 from tests.sync.conftest import (
-    HOST,
     SLOW,
     TAG,
     Overlays,
@@ -57,19 +56,6 @@ def no_rebase_dir(repo: Path) -> bool:
         not (repo / ".git" / "rebase-merge").exists()
         and not (repo / ".git" / "rebase-apply").exists()
     )
-
-
-# -- the union ------------------------------------------------------------------------------------
-
-
-def test_the_union_keeps_upstream_and_adds_the_local_only_bullets() -> None:
-    # Mutation (oracle): `mutations/`'s "the union drops the local-only bullets".
-    upstream = b"# Memory Index\n\n## g\n\n- [Up](g/u.md)\n- [Both](g/b.md)\n"
-    local = b"# Memory Index\n\n## g\n\n- [Both](g/b.md)\n- [Mine](g/m.md)\nprose only local\n"
-
-    assert J.union_index(local, upstream) == upstream + b"- [Mine](g/m.md)\n"
-    assert J.union_index(local, upstream.rstrip(b"\n")) == upstream + b"- [Mine](g/m.md)\n"
-    assert J.union_index(upstream, upstream) == upstream
 
 
 # -- fast-forward and replay ----------------------------------------------------------------------
@@ -362,61 +348,20 @@ def test_a_dirty_incoming_note_is_waiting_clean_tree(overlays: Overlays) -> None
     assert "edited here" in (a / "common/memory/first.md").read_text()
 
 
-def _agent_appends(clone: Path, project: str, name: str, title: str) -> Path:
-    """An agent's new note in `project` and its line appended to the index, both uncommitted."""
-    write(clone, f"projects/{project}/memory/project-stable/{name}.md", note_text(name))
-    index = clone / f"projects/{project}/memory/MEMORY.md"
-    index.write_text(index.read_text() + f"- [{title}](project-stable/{name}.md)\n")
-    return index
-
-
-def test_a_dirty_index_is_united_in_the_working_tree_never_blocking(overlays: Overlays) -> None:
-    # Every incoming shared note re-renders the indexes, so an index an agent appended to and
-    # nobody committed is merged by union, the agent's line kept, and never waited on.
-    # Mutation (oracle): `mutations/`'s "a dirty index waits like a note".
-    a, b = overlays.a, overlays.b
-    write(b, "common/memory/shared.md", note_text("shared", index="Shared"))
-    overlays.render(b, "alpha")
-    commit_all(b, "memory: shared, from b")
-    git(b, "push", "-q", "origin", "main")
-    index = _agent_appends(a, "alpha", "agent-note", "Agent line on a")
+def test_an_index_rendered_here_never_blocks_an_incoming_note(overlays: Overlays) -> None:
+    # The index is this machine's rendering, not a note: dirty here, it is neither waited on nor
+    # written, and the note upstream brings arrives beside it.
+    a = overlays.a
+    push_note(overlays.b, "projects/gamma/memory/project-stable/from-b.md", "from b\n")
+    index = a / "projects/gamma/memory/MEMORY.md"
+    index.write_text("# gamma's index, rendered here\n", encoding="utf-8")
     ctx = context(overlays, a)
 
     assert J.integrate(ctx, fetched(overlays, a)) is None
 
-    assert (a / "common/memory/shared.md").exists()
-    text = index.read_text()
-    assert "- [Agent line on a](project-stable/agent-note.md)" in text  # kept
-    assert "- [Shared](developer/shared.md)" in text  # upstream's rendering, united
-    assert [notice.state for notice in ctx.notices] == ["resolved_index"]
-
-
-def test_an_index_changed_while_the_union_is_built_is_left_for_the_next_job(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # An agent appending its line between the read and the write wins: nothing is overwritten.
-    # Mutation (oracle): `mutations/`'s "the union overwrites a line appended while it was
-    # built".
-    a, b = overlays.a, overlays.b
-    write(b, "common/memory/shared.md", note_text("shared", index="Shared"))
-    overlays.render(b, "alpha")
-    commit_all(b, "memory: shared")
-    git(b, "push", "-q", "origin", "main")
-    index = _agent_appends(a, "alpha", "first-agent", "First agent line")
-    real_union = J.union_index
-
-    def union_then_an_agent_appends(local: bytes, upstream: bytes) -> bytes:
-        index.write_text(index.read_text() + "- [Late line](project-stable/late.md)\n")
-        return real_union(local, upstream)
-
-    monkeypatch.setattr(J, "union_index", union_then_an_agent_appends)
-    ctx = context(overlays, a)
-
-    assert J.integrate(ctx, fetched(overlays, a)) is None
-
-    assert ctx.notices == [] and (a / "common/memory/shared.md").exists()
-    text = index.read_text()
-    assert "First agent line" in text and "Late line" in text and "Shared" not in text
+    assert (a / "projects/gamma/memory/project-stable/from-b.md").exists()
+    assert index.read_text(encoding="utf-8") == "# gamma's index, rendered here\n"
+    assert ctx.notices == []
 
 
 def test_a_link_above_an_incoming_path_blocks_and_nothing_escapes(
@@ -679,6 +624,32 @@ def test_an_upstream_hook_change_is_held(overlays: Overlays) -> None:
     assert not (overlays.a / "common/memory/from-b.md").exists()
 
 
+def test_an_upstream_index_change_is_held_like_a_path_outside_memory(overlays: Overlays) -> None:
+    # An overlay that still tracks its indexes: an upstream commit that changes one is held, with
+    # the review command, until the owner takes it by hand (the overlay's own untracking commit,
+    # once per machine). Nothing is integrated, and the local note is not pushed meanwhile.
+    a, b = overlays.a, overlays.b
+    with open(b / "projects/gamma/memory/MEMORY.md", "a", encoding="utf-8") as index:
+        index.write("- [From b](project-stable/gamma-one.md)\n")
+    write(b, "common/memory/from-b.md", "from b\n")
+    commit_all(b, "an index and a note")
+    git(b, "push", "-q", "origin", "main")
+    remote = head(b)
+    write(a, "common/memory/local.md", "a local note\n")
+    before = commit_all(a, "memory: local")
+    upstream = fetched(overlays, a)
+    ctx = context(overlays, a)
+
+    assert J.integrate(ctx, upstream) is None
+    assert J.push(ctx, upstream) is None
+
+    assert _held(overlays, ctx, before) == {"projects/gamma/memory/MEMORY.md"}
+    assert ctx.holds.upstream_why == OUTSIDE
+    assert any(J.REVIEW.format(sha=upstream) in remark for remark in ctx.remarks)
+    assert not (a / "common/memory/from-b.md").exists()
+    assert git(overlays.bare, "rev-parse", "main").strip() == remote
+
+
 def _review_and_take(remarks: list[str]) -> tuple[list[str], list[str]]:
     """The commands the hold remark gives: the review, and the take."""
     text = "\n".join(remarks)
@@ -819,63 +790,6 @@ def test_a_note_conflict_is_a_conflict_with_main_unmoved(overlays: Overlays) -> 
     assert take == ["git", "rebase", upstream]
 
 
-def _agent_line(clone: Path, project: str, name: str, title: str) -> None:
-    """An agent's new note and its line appended to the index, committed as they are."""
-    write(clone, f"projects/{project}/memory/project-stable/{name}.md", note_text(name))
-    with open(clone / f"projects/{project}/memory/MEMORY.md", "a", encoding="utf-8") as index:
-        index.write(f"- [{title}](project-stable/{name}.md)\n")
-
-
-def _both_sides_append_to_two_indexes(overlays: Overlays) -> None:
-    for project in ("alpha", "beta"):
-        _agent_line(overlays.b, project, f"{project}-from-b", f"{project} line written on b")
-    commit_all(overlays.b, "memory: b's agent lines")
-    git(overlays.b, "push", "-q", "origin", "main")
-    for project in ("alpha", "beta"):
-        _agent_line(overlays.a, project, f"{project}-from-a", f"{project} line written on a")
-    commit_all(overlays.a, "memory: a's agent lines")
-
-
-def test_two_index_conflicts_are_resolved_by_union_and_re_rendered(overlays: Overlays) -> None:
-    a = overlays.a
-    _both_sides_append_to_two_indexes(overlays)
-    upstream = fetched(overlays, a)
-    ctx = context(overlays, a)
-
-    assert J.integrate(ctx, upstream) is None
-
-    [notice] = ctx.notices
-    assert notice.state == "resolved_index"
-    assert str(notice.detail).endswith("united: alpha, beta")
-    for project in ("alpha", "beta"):
-        index = (a / f"projects/{project}/memory/MEMORY.md").read_text()
-        for side in ("a", "b"):
-            title = f"{project} line written on {side}"
-            assert f"- [{title}](project-stable/{project}-from-{side}.md)" in index
-            note = a / f"projects/{project}/memory/project-stable/{project}-from-{side}.md"
-            assert f"index: {title}" in note.read_text()  # harvested by the re-render
-    # The replayed commit sits on the checked sha, and the re-render is committed after it.
-    assert git(a, "rev-parse", "HEAD~2").strip() == upstream
-    assert git(a, "log", "-1", "--format=%s").strip().endswith(f"from {HOST}")
-    assert memory_status(a) == ""
-
-
-def test_an_index_conflict_beside_a_note_conflict_is_a_conflict(overlays: Overlays) -> None:
-    _agent_line(overlays.b, "alpha", "from-b", "line on b")
-    write(overlays.b, "common/memory/first.md", "upstream's version\n")
-    commit_all(overlays.b, "b")
-    git(overlays.b, "push", "-q", "origin", "main")
-    _agent_line(overlays.a, "alpha", "from-a", "line on a")
-    write(overlays.a, "common/memory/first.md", "local version\n")
-    commit_all(overlays.a, "a")
-    before = head(overlays.a)
-
-    outcome = J.integrate(context(overlays, overlays.a), fetched(overlays, overlays.a))
-
-    assert outcome is not None and outcome.state == "conflict" and head(overlays.a) == before
-    assert "on common/memory/first.md, projects/alpha/memory/MEMORY.md;" in str(outcome.detail)
-
-
 # -- what runs ------------------------------------------------------------------------------------
 
 
@@ -912,10 +826,8 @@ def subcommands(log: Path) -> list[list[str]]:
 
 
 def test_no_rebase_ever_runs(overlays: Overlays, git_log: Path) -> None:
-    _agent_line(overlays.b, "alpha", "from-b", "line on b")
-    commit_all(overlays.b, "b")
-    git(overlays.b, "push", "-q", "origin", "main")
-    _agent_line(overlays.a, "alpha", "from-a", "line on a")
+    push_note(overlays.b, "projects/alpha/memory/project-stable/from-b.md", "from b\n")
+    write(overlays.a, "projects/alpha/memory/project-stable/from-a.md", "from a\n")
     commit_all(overlays.a, "a")
     write(overlays.a, "common/memory/dirty.md", "a note to commit\n")
     git_log.unlink(missing_ok=True)
@@ -924,7 +836,7 @@ def test_no_rebase_ever_runs(overlays: Overlays, git_log: Path) -> None:
     assert J.commit_memory(ctx) is None
     assert J.integrate(ctx, fetched(overlays, overlays.a)) is None
 
-    assert [notice.state for notice in ctx.notices] == ["resolved_index"]
+    assert ctx.notices == []
     calls = subcommands(git_log)
     names = {call[0] for call in calls}
     assert {"merge-tree", "commit-tree", "update-ref", "fetch"} <= names

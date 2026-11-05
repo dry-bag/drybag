@@ -416,12 +416,12 @@ def test_without_a_stop_the_end_is_the_latest_notice_refusals_counting_first(
     ctx.notices.append(_said("scan_unavailable", "no gitleaks build"))
     assert J._end(ctx, None).state == "scan_unavailable"
 
-    ctx.notices.append(_said("resolved_index", "united: alpha"))
+    ctx.notices.append(_said("signing_failed", "no passphrase"))
     end = J._end(ctx, None)
-    assert end.state == "resolved_index"
+    assert end.state == "signing_failed"
     assert end.detail is not None
     assert end.detail.splitlines()[:3] == [
-        "united: alpha",
+        "no passphrase",
         "also scan_unavailable: no gitleaks build",
         "also hook_failed: " + J._refusal_detail(["common/memory/link.md"]),
     ]

@@ -1,10 +1,10 @@
 """The note sync's job: commit the overlay's notes, take in upstream's, push its own.
 
 Each step is bounded in time and records what it did in the context the job's state is written
-from: guard; align the real index first where a killed job left that owed; pre-render the indexes
-(`sync.render`); commit memory through a temporary index; fetch `origin main` into the job's own
-ref; integrate that sha, only when everything it brings is memory, by replay; resolve a conflict
-confined to rendered indexes by union; push the checked range.
+from: guard; align the real index first where a killed job left that owed; commit memory through a
+temporary index; fetch `origin main` into the job's own ref; integrate that sha, only when
+everything it brings is memory, by replay; push the checked range. A project's `MEMORY.md` is
+never among them: each machine renders its own (`sync.rules`).
 
 It never writes a non-memory path of the working tree or the real index, stashes, rebases, pulls
 or force-pushes. Every move of `main` is a compare-and-swap recorded before it is made, and is
@@ -43,7 +43,6 @@ from stayfixed.sync.git import (
     timed,
     with_config,
 )
-from stayfixed.sync.render import prerender, unsafe_parent
 from stayfixed.sync.rules import (
     MEMORY_PATHSPEC,
     MEMORY_SPECS,
@@ -51,11 +50,11 @@ from stayfixed.sync.rules import (
     commit_entries,
     dirty_memory,
     entry_offends,
-    index_of,
     is_memory_path,
     memory_path,
     offending_paths,
     range_is_memory_only,
+    unsafe_parent,
 )
 from stayfixed.sync.state import (
     EMPTY_HOLDS,
@@ -121,8 +120,8 @@ class JobStopped(Exception):
 @dataclass
 class JobContext:
     """What one job run carries between its steps. `remarks` are what the end's detail also says
-    (an index left out, a hold and how to review it); `notices` the ends that do not stop the job
-    (a failed commit check, a path not written, indexes united); `pending` the alignment still
+    (a hold and how to review it); `notices` the ends that do not stop the job (a failed commit
+    check, a path not written); `pending` the alignment still
     owed; `refused` the memory-named paths left out of a commit because they are not notes;
     `holds` as this job leaves them, changed only by integration and push."""
 
@@ -138,7 +137,6 @@ class JobContext:
     pending: PendingAlign | None = None
     fetched_sha: str | None = None
     dirty: str | None = None
-    resolved: set[str] = field(default_factory=set)
     refused: list[str] = field(default_factory=list)
     holds: Holds = EMPTY_HOLDS
     _env: dict[str, str] | None = field(default=None, repr=False)
@@ -210,7 +208,7 @@ def _paths_in(paths: Iterable[str]) -> bytes:
 @contextlib.contextmanager
 def _scratch(ctx: JobContext) -> Iterator[Path]:
     """The job's one scratch directory, `scratch/` in the state directory: emptied for one use
-    (temporary indexes, a union's blobs, scan reports), removed whole after it, never two uses at
+    (temporary indexes, scan reports), removed whole after it, never two uses at
     once. A fixed name, so a killed job's leftovers are removed by the next."""
     directory = ctx.state_dir / SCRATCH
     ctx.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -277,9 +275,8 @@ def _staged(ctx: JobContext, index: Path, rev: str, *only: str) -> list[str]:
 
 def _message(ctx: JobContext, paths: list[str]) -> bytes:
     parsed = [entry for entry in map(memory_path, paths) if entry is not None]
-    notes = sum(1 for entry in parsed if not entry.is_index)
     scopes = "\n".join(sorted({entry.root.rpartition("/")[0] for entry in parsed}))
-    return f"memory: {notes} notes from {ctx.host}\n\n{scopes}\n".encode()
+    return f"memory: {len(parsed)} notes from {ctx.host}\n\n{scopes}\n".encode()
 
 
 def _signing(ctx: JobContext) -> bool:
@@ -374,42 +371,34 @@ def _run_checks(ctx: JobContext, index: Path, paths: list[str]) -> Outcome | Non
     return _outcome(ctx, state, f"gitleaks: {result.detail}")
 
 
-def commit_memory(ctx: JobContext, *, also: Iterable[str] = ()) -> Outcome | None:
-    """Pre-render, then commit every memory change; the outcome that stops the job (`raced`,
-    `skipped`, `timeout`, `index_stale`), or `None`.
+def commit_memory(ctx: JobContext) -> Outcome | None:
+    """Commit every memory change; the outcome that stops the job (`raced`, `skipped`, `timeout`,
+    `index_stale`), or `None`.
 
     A failed scan, no scanner or a failed signature does not stop it: what is already committed
     still integrates and pushes. It is a notice, and nothing is committed. Paths that are not
-    notes are left out and named (`_refuse`); the notes beside them are committed. `also` names
-    projects to render whatever changed (a union's, whose lines the render harvests).
+    notes are left out and named (`_refuse`); the notes beside them are committed.
 
-    Built in a temporary index read from `HEAD`. Apart from the indexes the pre-render writes,
-    the working tree and the real index are only read until `main` has moved; after that, only
-    the real index's memory entries are touched (`align`).
+    Built in a temporary index read from `HEAD`. The working tree and the real index are only read
+    until `main` has moved; after that, only the real index's memory entries are touched (`align`).
     """
-    also = tuple(also)
     dirty = dirty_memory(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
     ctx.dirty = notes_mark(ctx.overlay, dirty)  # what a trigger finds unchanged if this fails
-    if not dirty and not also:
+    if not dirty:
         return None
-    ctx.limit(ctx.limits.job)  # the render is in process: only the job's own deadline bounds it
-    left_out = prerender(ctx.overlay, dirty, ctx.state_dir, also=also)
-    for project, reason in sorted(left_out.items()):
-        ctx.remarks.append(f"{index_of(project)} left out of the commit: {reason}")
     old = _rev(ctx, "HEAD")
     with _scratch(ctx) as scratch:
         index = scratch / "index"
         _ok(ctx, "read-tree", "--end-of-options", old, index_file=index)
-        for spec, root in MEMORY_SPECS:
+        for specs, root in MEMORY_SPECS:
             link = unsafe_parent(ctx.overlay, f"{root}/-")
             if link is not None:
                 _refuse(ctx, [link])  # nothing behind it is added, nothing deleted
                 continue
-            added = _git(ctx, "add", "-A", "--", spec, index_file=index)
+            added = _git(ctx, "add", "-A", "--", *specs, index_file=index)
             if added.code == 128 and "did not match any files" in added.err:
                 continue  # nothing under this pathspec at all: an overlay without projects
             checked(added, "git add")
-        _reset_paths(ctx, index, old, [index_of(project) for project in left_out])
         # A link in place of `projects/<p>` or its `memory` hides the notes behind it from
         # `git add -A`, which then stages each as deleted: not the owner's deletions. A literal
         # reset of the link's path puts back everything below it.
@@ -620,7 +609,7 @@ def fetch(ctx: JobContext) -> tuple[str | None, Outcome | None]:
     return _rev(ctx, FETCHED_REF), None
 
 
-# -- integrate by replay, and the index union -----------------------------------------------------
+# -- integrate by replay ---------------------------------------------------------------------------
 
 # How the owner takes a held range or integrates a fetched sha by hand: read all of it, memory
 # included, and take it at the sha that was held and read, never at `origin/main`, which the next
@@ -636,52 +625,6 @@ REWRITE = (
 # How the owner reads an upstream {sha} git will not check out, which only upstream can repair.
 UNREADABLE_REVIEW = "git diff --stat HEAD {sha}, then repair upstream"
 _AUTHOR = re.compile(r"author (.*) <([^<>]*)> (\d+ [+-]\d{4})")
-
-
-def union_index(local: bytes, upstream: bytes) -> bytes:
-    """The upstream index plus every bullet line only the local one has, in local order: a line
-    an agent appended survives whichever side committed first, for the next render to harvest."""
-    present = set(upstream.splitlines())
-    extra: list[bytes] = []
-    for line in local.splitlines():
-        if line.startswith(b"- ") and line not in present:
-            extra.append(line)
-            present.add(line)
-    if not extra:
-        return upstream
-    base = upstream if not upstream or upstream.endswith(b"\n") else upstream + b"\n"
-    return base + b"".join(line + b"\n" for line in extra)
-
-
-def _blob(ctx: JobContext, rev: str, path: str) -> bytes | None:
-    """`path`'s content in `rev`; `None` when `rev` has no such file."""
-    return scan.blob(ctx.overlay, f"{rev}:{path}", ctx.limit(ctx.limits.local), ctx.env)
-
-
-def _entry(ctx: JobContext, path: str, data: bytes) -> bytes:
-    """`data` written as a blob, and the `update-index -z --index-info` line naming it at `path`."""
-    sha = _ok(ctx, "hash-object", "-w", "--stdin", stdin=data).strip()
-    return f"100644 {sha}\t{path}".encode("utf-8", "surrogateescape") + b"\0"
-
-
-def _resolve_by_union(
-    ctx: JobContext, scratch: Path, tree: str, tip: str, commit: str, conflicted: list[str]
-) -> str | None:
-    """`tree` with each conflicted index replaced by its union; `None` if one cannot be."""
-    parsed = [memory_path(path) for path in conflicted]
-    if not conflicted or not all(entry is not None and entry.is_index for entry in parsed):
-        return None
-    entries = b""
-    for path in conflicted:
-        upstream, local = _blob(ctx, tip, path), _blob(ctx, commit, path)
-        if upstream is None or local is None:
-            return None  # deleted on one side: not a pair of renderings to unite
-        entries += _entry(ctx, path, union_index(local, upstream))
-    index = scratch / "union-index"
-    index.unlink(missing_ok=True)
-    _ok(ctx, "read-tree", "--end-of-options", tree, index_file=index)
-    _ok(ctx, "update-index", "-z", "--index-info", index_file=index, stdin=entries)
-    return _ok(ctx, "write-tree", index_file=index).strip()
 
 
 def _original(ctx: JobContext, commit: str) -> tuple[dict[str, str], bytes]:
@@ -707,31 +650,26 @@ def _original(ctx: JobContext, commit: str) -> tuple[dict[str, str], bytes]:
 def replay(ctx: JobContext, onto: str, commits: list[str]) -> tuple[str | None, list[str]]:
     """Replay `commits` (oldest first) onto `onto`: the new tip, or `None` and the paths that
     conflict. Each is `merge-tree --write-tree --merge-base=c^ tip c` and `commit-tree` with `c`'s
-    author and message, so nothing touches the working tree or the real index; a conflict confined
-    to rendered indexes is resolved by union. A failed signature stops the job (`JobStopped`)."""
+    author and message, so nothing touches the working tree or the real index. A failed signature
+    stops the job (`JobStopped`)."""
     tip = onto
-    with _scratch(ctx) as scratch:
-        for commit in commits:
-            result = _git(
-                ctx, "merge-tree", "--write-tree", "-z", "--name-only", "--no-messages",
-                f"--merge-base={commit}^", "--end-of-options", tip, commit,
-            )  # fmt: skip
-            if timed(result, "git merge-tree").code not in (0, 1):
-                checked(result, "git merge-tree")
-            tree, *conflicted = _nul(result.out)
-            if result.code == 1:
-                resolved = _resolve_by_union(ctx, scratch, tree, tip, commit, conflicted)
-                if resolved is None:
-                    return None, conflicted
-                ctx.resolved.update(_projects(conflicted))
-                tree = resolved
-            if tree == _tree_of(ctx, tip):
-                continue  # already upstream: an empty commit would list no path, and be held
-            author, message = _original(ctx, commit)
-            new, failed = _commit_tree(ctx, tree, [tip], message, env=author)
-            if failed is not None or new is None:
-                raise JobStopped(failed or _outcome(ctx, "hook_failed", "job: no commit made"))
-            tip = new
+    for commit in commits:
+        result = _git(
+            ctx, "merge-tree", "--write-tree", "-z", "--name-only", "--no-messages",
+            f"--merge-base={commit}^", "--end-of-options", tip, commit,
+        )  # fmt: skip
+        if timed(result, "git merge-tree").code not in (0, 1):
+            checked(result, "git merge-tree")
+        tree, *conflicted = _nul(result.out)
+        if result.code == 1:
+            return None, conflicted
+        if tree == _tree_of(ctx, tip):
+            continue  # already upstream: an empty commit would list no path, and be held
+        author, message = _original(ctx, commit)
+        new, failed = _commit_tree(ctx, tree, [tip], message, env=author)
+        if failed is not None or new is None:
+            raise JobStopped(failed or _outcome(ctx, "hook_failed", "job: no commit made"))
+        tip = new
     return tip, []
 
 
@@ -739,37 +677,23 @@ def _tree_of(ctx: JobContext, rev: str) -> str:
     return _ok(ctx, "rev-parse", "--verify", "-q", "--end-of-options", f"{rev}^{{tree}}").strip()
 
 
-def _projects(paths: Iterable[str]) -> list[str]:
-    """The projects whose memory `paths` lie in, once each."""
-    found = (memory_path(path) for path in paths)
-    return list(dict.fromkeys(e.name for e in found if e and e.scope == "project" and e.name))
-
-
-def _blocked(ctx: JobContext, incoming: list[str]) -> tuple[list[str], list[str]]:
-    """The incoming paths the working tree is not ready for -- dirty there (or a dirty path above
-    or below one), or reached through a link or a file where git needs a directory -- and the
-    dirty indexes to unite instead once `main` has moved: an index holds no work in progress, only
-    a rendering and lines agents appended, which the union keeps."""
+def _blocked(ctx: JobContext, incoming: list[str]) -> list[str]:
+    """The incoming paths the working tree is not ready for: dirty there (or a dirty path above or
+    below one), or reached through a link or a file where git needs a directory."""
     dirty = dirty_memory(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
     blocked: list[str] = []
-    unite: list[str] = []
     for path in incoming:
         if unsafe_parent(ctx.overlay, path) is not None or fsops.is_symlink(ctx.overlay / path):
             blocked.append(path)
             continue
-        clashes = [
-            entry
-            for entry in dirty
-            if entry == path
+        if any(
+            entry == path
             or path.startswith(entry.rstrip("/") + "/")
             or entry.startswith(path + "/")
-        ]
-        parsed = memory_path(path)
-        if clashes == [path] and parsed is not None and parsed.is_index:
-            unite.append(path)
-        elif clashes:
+            for entry in dirty
+        ):
             blocked.append(path)
-    return blocked, unite
+    return blocked
 
 
 def _hold_upstream(ctx: JobContext, why: str | None, names: Iterable[str], remark: str) -> None:
@@ -791,34 +715,6 @@ def _dropped(ctx: JobContext, recorded: str | None, upstream: str, local: list[s
     return [sha for sha in local if sha in had]
 
 
-def _unite_worktree(ctx: JobContext, tip: str, path: str) -> bool:
-    """Write the union of the index at `path`, as the working tree has it, and `tip`'s into the
-    working tree, through git; whether it was written. Not when `tip` has no such index, nor when
-    the file changed while the union was built (an agent appending its line)."""
-    full = ctx.overlay / path
-    upstream = _blob(ctx, tip, path)
-    if upstream is None or fsops.is_symlink(full) or unsafe_parent(ctx.overlay, path):
-        return False
-    local = _read(full)
-    if local is None:
-        return False
-    with _scratch(ctx) as scratch:
-        index = scratch / "index"
-        entry = _entry(ctx, path, union_index(local, upstream))
-        _ok(ctx, "update-index", "-z", "--index-info", index_file=index, stdin=entry)
-        if _read(full) != local:
-            return False
-        _ok(ctx, "checkout-index", "-f", "-z", "--stdin", index_file=index, stdin=_paths_in([path]))
-    return True
-
-
-def _read(path: Path) -> bytes | None:
-    try:
-        return fsops.read_regular_bytes(path)
-    except OSError:
-        return None
-
-
 def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Outcome | None:
     """Bring the checked sha `upstream` in, if `HEAD..upstream` is memory-only and so is every
     local commit; the outcome that stops the job, or `None`. `recorded` is the sha the last job
@@ -826,10 +722,8 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
 
     The upstream hold in `ctx.holds` is set or cleared here; the local hold is the push's, which
     judges the same local range: the owner's own commits are never rebuilt, so a local range
-    outside memory leaves `HEAD` as it is. Indexes united -- conflicting in a replay, or changed
-    here and not committed -- are re-rendered and committed, and are a notice (`resolved_index`).
+    outside memory leaves `HEAD` as it is.
     """
-    ctx.resolved.clear()
     head = _rev(ctx, "HEAD")
     local = _nul(_ok(ctx, "rev-list", "-z", "--reverse", "--end-of-options", f"{upstream}..{head}"))
     dropped = _dropped(ctx, recorded, upstream, local)
@@ -869,7 +763,6 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
         return None
     tip, conflicted = replay(ctx, upstream, local) if local else (upstream, [])
     if tip is None:
-        ctx.resolved.clear()
         detail = (
             f"a local commit conflicts with upstream on {', '.join(conflicted)}; main was not "
             f"moved. To {by_hand}"
@@ -878,7 +771,7 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
     incoming = _nul(
         _ok(ctx, "diff", "--no-renames", "--name-only", "-z", "--end-of-options", head, tip)
     )
-    blocked, unite = _blocked(ctx, incoming)
+    blocked = _blocked(ctx, incoming)
     if blocked:
         detail = (
             f"incoming notes are changed here and not committed yet ({', '.join(blocked)}); the "
@@ -903,19 +796,7 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
         return unmerged
     if not _move_main(ctx, pending):
         return _outcome(ctx, "raced", "main moved during the integration; the next job retries")
-    stale = _settle(ctx, pending)
-    if stale is not None:
-        return stale
-    for path in unite:
-        if _unite_worktree(ctx, tip, path):
-            ctx.resolved.update(_projects([path]))
-    if not ctx.resolved:
-        return None
-    projects = sorted(ctx.resolved)
-    detail = "indexes changed on both sides were united: " + ", ".join(projects)
-    ctx.notices.append(_outcome(ctx, "resolved_index", detail))
-    # The union's own lines are harvested into their notes, and both committed with this job's.
-    return commit_memory(ctx, also=projects)
+    return _settle(ctx, pending)
 
 
 # -- push the checked range -----------------------------------------------------------------------
@@ -1106,7 +987,7 @@ def _one_job(ctx: JobContext) -> SyncState:
     another overlay, or one that cannot be read, is not used, and the detail says so."""
     ctx = replace(
         ctx, deadline=time.monotonic() + ctx.limits.job, remarks=[], notices=[], pending=None,
-        fetched_sha=None, dirty=None, resolved=set(), refused=[], holds=EMPTY_HOLDS,
+        fetched_sha=None, dirty=None, refused=[], holds=EMPTY_HOLDS,
     )  # fmt: skip
     scratch = ctx.state_dir / SCRATCH
     shutil.rmtree(scratch, ignore_errors=True)

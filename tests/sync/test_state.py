@@ -22,7 +22,9 @@ from pathlib import Path
 
 import pytest
 
+from stayfixed.sync import job as J
 from stayfixed.sync import state as S
+from tests.sync.conftest import Overlays, context
 
 NOW = datetime(2026, 11, 2, 12, 0, 0, tzinfo=UTC)
 HEAD = "7" * 40
@@ -69,12 +71,29 @@ def test_state_lives_in_the_data_directory() -> None:
     assert S.state_directory() == Path.home() / ".local/share/stayfixed/sync"
 
 
-def test_the_outcomes_are_the_fifteen_in_order() -> None:
+def test_the_outcomes_are_the_fourteen_in_order() -> None:
     assert S.OUTCOMES == (
-        "ok", "skipped", "conflict", "resolved_index", "raced", "rejected", "offline",
+        "ok", "skipped", "conflict", "raced", "rejected", "offline",
         "auth_failed", "timeout", "hook_failed", "scan_unavailable", "signing_failed",
         "secret_found", "waiting_clean_tree", "index_stale",
     )  # fmt: skip
+
+
+def test_a_resolved_index_state_is_unreadable_and_replaced(overlays: Overlays) -> None:
+    # Indexes are no longer united, so `resolved_index` is no outcome: a state an older job wrote
+    # with it is unreadable, and the next job replaces it and says so.
+    d = overlays.state_dir
+    S.write_state(d, _state(overlay=str(overlays.a), outcome=S.Outcome("ok", _iso(NOW), None)))
+    document = _document(d)
+    document["outcome"]["state"] = "resolved_index"  # type: ignore[index]
+    (d / S.STATE_FILE).write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(S.StateUnreadable, match="not a sync outcome"):
+        S.read_state(d)
+    state = J.run_job(context(overlays, overlays.a))
+
+    assert state is not None and S.read_state(d) == state
+    assert "the previous state could not be read and was replaced" in str(state.outcome.detail)
 
 
 def test_a_state_round_trips_and_carries_its_overlay(tmp_path: Path) -> None:

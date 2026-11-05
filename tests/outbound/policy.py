@@ -113,8 +113,6 @@ LOCAL = frozenset(
         # working-tree file's id.
         ("git", "hash-object", "-t", "tree", "--stdin"),
         ("git", "hash-object", "--"),
-        # The note sync's union of two indexes, written into the object store.
-        ("git", "hash-object", "-w", "--stdin"),
         ("git", "init"),
         ("git", "log"),
         ("git", "ls-files"),
@@ -132,15 +130,13 @@ LOCAL = frozenset(
         # filled (`read-tree`, `add`, `reset`), written (`write-tree`), committed (`commit-tree`),
         # `main` moved (`update-ref`), and the real index's memory entries reset to `HEAD`; and
         # the notes a move brought in written from a temporary index (`checkout-index`), and
-        # each local commit replayed onto the fetched sha (`merge-tree`, `update-index` with a
-        # union of two indexes).
+        # each local commit replayed onto the fetched sha (`merge-tree`).
         ("git", "add"),
         ("git", "checkout-index"),
         ("git", "commit-tree"),
         ("git", "merge-tree"),
         ("git", "read-tree"),
         ("git", "reset"),
-        ("git", "update-index", "-z", "--index-info"),
         ("git", "update-ref"),
         ("git", "write-tree"),
     }
