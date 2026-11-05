@@ -549,8 +549,7 @@ def _hold_upstream(ctx: JobContext, why: str | None, names: Iterable[str], remar
 
 
 def _missing(ctx: JobContext, rev: str | None, without: str) -> list[str]:
-    """The commits `rev` has and `without` lacks, newest first; none when `rev` is no sha, or one
-    git cannot find (pruned): nothing of it is in `without`."""
+    """The commits `rev` has and `without` lacks; none for no sha, or one git cannot find."""
     if not full_sha(rev):
         return []
     found = _git(ctx, "rev-list", "-z", "--end-of-options", str(rev), f"^{without}")

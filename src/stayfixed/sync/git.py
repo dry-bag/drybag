@@ -161,7 +161,7 @@ def guard(
         return Guard(False, f"not a git repository: {markers.err.strip()[:200] or repo}")
     for saying, marker in zip(_IN_PROGRESS.values(), markers.out.splitlines(), strict=False):
         if fsops.exists(repo / marker):
-            return Guard(False, f"the overlay is {saying}; the sync waits until it is finished")
+            return Guard(False, f"the overlay is {saying}; the sync waits: finish or abort it")
     # A conflicted `stash pop`, `checkout -m` or `apply --3way` leaves no marker, only unmerged
     # entries and a working tree with conflict markers, which the job would commit as notes.
     unmerged = ask(repo, deadline, env, "ls-files", "--unmerged", "-z")
@@ -169,12 +169,15 @@ def guard(
         return Guard(False, UNMERGED)
     head = ask(repo, deadline, env, "symbolic-ref", "-q", "HEAD")
     if head.code != 0:
-        return Guard(False, "HEAD is detached; the sync runs only on main")
+        return Guard(False, "HEAD is detached; the sync runs only on main: `git switch main`")
     if (branch := head.out.strip().removeprefix("refs/heads/")) != "main":
-        return Guard(False, f"the overlay is on {branch}, not main")
+        return Guard(False, f"the overlay is on {branch}, not main: `git switch main`")
     remote = ask(repo, deadline, env, "config", "--get", "branch.main.remote").out.strip()
     merge = ask(repo, deadline, env, "config", "--get", "branch.main.merge").out.strip()
     if (remote, merge) != ("origin", "refs/heads/main"):
-        tracking = f"{remote}/{merge.removeprefix('refs/heads/')}" if remote else "nothing"
+        if not remote:  # short enough for `doctor`'s line (`printed.CLIPPED_CHARS`)
+            fix = "`git remote add origin <url>`, then `git push -u origin main`"
+            return Guard(False, f"main tracks nothing; give the overlay a remote: {fix}")
+        tracking = f"{remote}/{merge.removeprefix('refs/heads/')}"
         return Guard(False, f"main tracks {tracking}, not origin/main")
     return Guard(True, None)

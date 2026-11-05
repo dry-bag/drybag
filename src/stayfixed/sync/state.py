@@ -34,8 +34,8 @@ OUTCOMES: tuple[str, ...] = (
     "hook_failed", "scan_unavailable", "signing_failed", "secret_found", "waiting_clean_tree",
 )  # fmt: skip
 
-# The outcomes after which the sync has nothing to answer for: the hooks start no job on them and
-# `doctor` reports them green.
+# The outcomes after which a trigger has nothing to start a job for. `doctor` reports only `ok`
+# green: a `skipped` job is a sync that is not running.
 SETTLED = ("ok", "skipped")
 # The failures a job run again on the same `HEAD`, upstream and notes usually meets again, so a
 # `Stop` waits them out as it does a hold (`backed_off`); `SessionEnd` retries them.

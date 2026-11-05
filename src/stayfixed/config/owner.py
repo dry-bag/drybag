@@ -7,8 +7,7 @@ machine file's `[personal]`, `[guards]`, `[budgets]` and `[sync]`, resolved thro
 a repository's (`config.machine` says where it is), so it is the last word on a guard: a
 repository's `[guards]` sets the default, the overlay's files move it, and this file's `[guards]`
 wins over all of them in the session's one resolution (`config.session`), where this layer is the
-top one. The sync's switch is read from this layer alone, never from the session's resolution,
-where the overlay's files could move it.
+top one.
 
 Two readers ask, and they differ only over a file that does not load. A command the owner runs
 refuses it (`strict`, which every load of a command asks for), as `config.overlay.overlay_root`
@@ -58,8 +57,8 @@ class Guards:
 
 @dataclass(frozen=True)
 class Sync:
-    """The note sync's switch: off unless the machine file says `[sync] enabled = true`, the bool
-    and nothing else. `[sync]` is machine-only (`config.classes`), so no repository sets it."""
+    """The note sync's switch, on for the machine file's bool `true` alone: read from this layer,
+    never the session's resolution, where the overlay's files could move it."""
 
     enabled: bool = False
 

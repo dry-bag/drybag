@@ -2,14 +2,15 @@
 
 One row, read off this machine's own records: the switch in the machine file, the git the job
 needs, the `gitleaks` on `PATH` it needs, and the state its last job left. It runs nothing but
-`git version`, and writes nothing. `doctor`'s core discovers this module by name (CONTRIBUTING.md,
-"Areas"); every import sits inside a function body, as in a `hooks.py`, because discovery imports
-it before the report asks anything and the note layout and the job pull in the configuration layer.
+`git version` and one `lstat`, and writes nothing. `doctor`'s core discovers this module by name
+(CONTRIBUTING.md, "Areas"); every import sits inside a function body, as in a `hooks.py`, because
+discovery imports it before the report asks anything and the note layout and the job pull in the
+configuration layer.
 
 The arms, in the order they are asked: off (a skip, the ordinary state), no overlay recorded, git
-below the job's floor, no gitleaks on `PATH`, a hold, a last outcome that is a failure, and
-otherwise green. A state recorded for another overlay is not this overlay's: it reads as never
-run, as the job reads it.
+below the job's floor, no gitleaks on `PATH`, a hold, a last outcome other than `ok` (`skipped` is
+the sync not running), and otherwise green. A state recorded for another overlay is not this
+overlay's: it reads as never run, as the job reads it.
 """
 
 from __future__ import annotations
@@ -44,8 +45,10 @@ def _held(holds: Holds, fetched: str | None, overlay: Path) -> Row:
     from stayfixed.sync.job import LOCAL_REVIEW, REVIEW, REWRITE, UNREADABLE_REVIEW
     from stayfixed.sync.state import LOCAL_REWRITE, OUTSIDE, REWRITTEN, UNREADABLE, full_sha
 
+    merged = any(map(full_sha, holds.upstream_paths))
+    merge = ", or a commit that lists no path (a merge)" if merged else ""
     held = {
-        OUTSIDE: ("upstream holds changes outside memory", REVIEW),
+        OUTSIDE: (f"upstream holds changes outside memory{merge}", REVIEW),
         UNREADABLE: ("upstream's tree cannot be checked out here", UNREADABLE_REVIEW),
         REWRITTEN: ("upstream was rewritten and dropped commits this overlay has", REWRITE),
         LOCAL_REWRITE: ("main no longer has commits that origin/main still has", LOCAL_REVIEW),
@@ -66,6 +69,18 @@ def _held(holds: Holds, fetched: str | None, overlay: Path) -> Row:
     return Row(WARN, "; ".join(said), "; ".join(fixes))
 
 
+def _older_than_a_job(path: Path) -> bool:
+    """Whether `path` was last written longer ago than a whole job runs."""
+    import time
+
+    from stayfixed.sync.job import Limits
+
+    try:
+        return time.time() - path.lstat().st_mtime > Limits().job
+    except OSError:
+        return False
+
+
 def _sync(context: Context) -> Row:
     from pathlib import Path
 
@@ -75,7 +90,7 @@ def _sync(context: Context) -> Row:
     from stayfixed.printed import clipped
     from stayfixed.sync import scan
     from stayfixed.sync.git import MIN_GIT, git, version_ok
-    from stayfixed.sync.state import SETTLED, StateUnreadable, read_state, state_directory
+    from stayfixed.sync.state import STANDING, StateUnreadable, read_state, state_directory
 
     if not context.session.owner.sync.enabled:
         where = context.machine or machine_config_path() or "the machine file"
@@ -115,9 +130,20 @@ def _sync(context: Context) -> Row:
     outcome = state.outcome
     first = clipped(outcome.detail.splitlines()[0]) if outcome.detail else ""
     said = f"the last job ended {outcome.at}: {outcome.state}" + (f" ({first})" if first else "")
-    if outcome.state in SETTLED:
+    if outcome.state == "ok":
         return Row(OK, said)
-    return Row(WARN, said, "a later session event retries; the detail says what stopped the job")
+    # A killed git's lock ends every job `raced`, never backed off; the job never removes it.
+    lock = overlay / ".git" / "index.lock"
+    if outcome.state == "raced" and _older_than_a_job(lock):
+        said += f"; {lock} is older than a whole job runs"
+        return Row(WARN, said, f"remove {lock} if no git is running")
+    if outcome.state == "skipped":
+        fix = "the job acts once this is resolved; the next session event runs it"
+    elif outcome.state in STANDING:
+        fix = "a rerun meets this again until you act on what it says"
+    else:
+        fix = "a later session event retries"
+    return Row(WARN, said, fix)
 
 
 def register() -> Contribution:

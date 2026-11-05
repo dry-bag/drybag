@@ -675,14 +675,18 @@ directories a removal empties) and entered in the real index by `git read-tree -
 for step 4, it removes `pending` when it takes it, and nothing else. When the plugin is removed, the
 triggers go and this directory stays.
 
-**Outcomes** (`state.json`, and `doctor`): `ok`; `skipped` (the guard's reasons); `conflict` (a local
+**Outcomes** (`state.json`, and `doctor`): `ok`; `skipped` (the guard's reasons, each ending with
+its remedy: `git switch main`, finish or abort the operation, or give the overlay a remote with
+`git remote add origin <url>` and `git push -u origin main`, as an overlay `setup --overlay`
+rendered needs); `conflict` (a local
 commit conflicts with upstream, and `main` was not moved); `raced` (another git holds `index.lock`, which the job never removes, or `main` moved while it integrated); `rejected`
 (`origin/main` moved before the push; the next trigger fetches and retries); `offline`,
 `auth_failed` and `timeout` (the remote or a step); `hook_failed` (a step failed, or paths were
 left out of a commit); `scan_unavailable`; `signing_failed`; `secret_found`; `waiting_clean_tree`
 (git refused to write an incoming note: one changed here, an untracked file or a link in its way).
 A failure is retried by a later trigger, throttled and
-never forced; one only you can clear waits out the back-off above.
+never forced; one only you can clear waits out the back-off above, and `doctor` says a rerun
+meets it again until you act on what the first line of its detail says.
 
 **Holds.** A hold is a range the sync refuses to move until you act, and a later outcome never
 clears it; while one stands nothing is integrated or pushed, and the next job clears it once you
@@ -2473,7 +2477,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning only for files in the note store that are not notes, counted (at most 500,000 entries) | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
 | `pre-commit` | whether the overlay's commit-time secret scan is installed on this machine | the overlay |
 | `overlay-requires` | whether the overlay this machine records requires a stayfixed the running one satisfies — red when this project keeps its notes in that overlay, a warning when it does not — and, where that finds nothing, a warning when another repository's work tree holds the overlay root (a `.git` in a directory above it), naming that directory, since that repository can put files into the overlay | the overlay's `stayfixed-overlay.toml`, `stayfixed.toml`, the directories above the overlay root |
-| `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when no `gitleaks` is on `PATH` (nothing is then committed or pushed; `setup --overlay` switches the sync on without installing one, and the job fails closed), when a hold stands (the paths or commits, and the review command, which names the recorded sha only when it is a whole one), when the record of the job cannot be read, or when the last outcome is a failure (the outcome and its first line); green otherwise, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, `PATH`, `~/.local/share/stayfixed/sync/state.json` |
+| `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when no `gitleaks` is on `PATH` (nothing is then committed or pushed; `setup --overlay` switches the sync on without installing one, and the job fails closed), when a hold stands (the paths or commits, and the review command, which names the recorded sha only when it is a whole one), when the record of the job cannot be read, or when the last outcome is anything but `ok`, with the outcome and the first line of its detail: for `skipped` the guard's reason and its remedy (the job acts once it is resolved, and the next session event runs it), for a failure a rerun meets again (`conflict`, `auth_failed`, `hook_failed`, `scan_unavailable`, `signing_failed`, `secret_found`, `waiting_clean_tree`) that it does until you act on what the line says, for any other that a later session event retries, and for `raced` beside an `index.lock` in the overlay older than a whole job runs, that lock and to remove it if no git is running; green for `ok`, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, `PATH`, `~/.local/share/stayfixed/sync/state.json` |
 
 **How `attached` reads the delivery.** With no ledger, a repository whose `memory.mode` is not
 `overlay` is simply not attached, and the row is green. Once this machine's binding confirms the

@@ -10,14 +10,20 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from stayfixed.doctor.api import OK, SKIP, WARN
+from stayfixed.setup.api import setup
+from stayfixed.sync import git as G
+from stayfixed.sync import job as J
 from stayfixed.sync.state import (
     EMPTY_HOLDS,
     LOCAL_REWRITE,
+    OUTSIDE,
     REWRITTEN,
     UNREADABLE,
     Holds,
@@ -27,6 +33,8 @@ from stayfixed.sync.state import (
     write_state,
 )
 from tests.doctor.test_checks import _by_name, _checks, _env, _initialised, _overlay
+from tests.gitfixture import git
+from tests.runners import Recorder, real_git
 from tests.sync.conftest import gitleaks_on_path, path_without_gitleaks
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
@@ -235,12 +243,97 @@ def test_the_first_line_of_an_outcome_is_printed_as_data(machine: Machine) -> No
     assert "\x1b" not in detail
 
 
-@pytest.mark.parametrize("outcome", ["ok", "skipped"])
-def test_a_settled_last_outcome_is_ok_and_says_when(machine: Machine, outcome: str) -> None:
-    status, detail, _ = machine.scanner().state(outcome).row()
+def test_an_ok_last_outcome_is_ok_and_says_when(machine: Machine) -> None:
+    status, detail, _ = machine.scanner().state("ok").row()
     assert status == OK
     assert AT in detail
-    assert outcome in detail
+    assert "ok" in detail
+
+
+SKIPPED_FIX = "the job acts once this is resolved; the next session event runs it"
+STANDING_FIX = "a rerun meets this again until you act on what it says"
+RETRIED_FIX = "a later session event retries"
+
+
+def test_a_feature_branch_is_a_warning_with_its_remedy(machine: Machine) -> None:
+    # The guard's refusal is `skipped`: the sync is not running, which green would hide.
+    # Mutation (oracle): `mutations/`'s "doctor calls a guard refusal green".
+    git(machine.overlay, "checkout", "-q", "-b", "feature")
+    reason = G.guard(machine.overlay).reason
+    status, detail, remedy = machine.scanner().state("skipped", reason).row()
+    assert (status, remedy) == (WARN, SKIPPED_FIX)
+    assert "on feature, not main" in detail and "`git switch main`" in detail
+
+
+def test_a_rendered_overlay_with_no_remote_warns_until_it_has_one(
+    machine: Machine, tmp_path: Path
+) -> None:
+    # `setup --overlay <path>` renders an overlay with no remote and switches the sync on: its
+    # job is `skipped` until the owner gives it one, and the row says how.
+    destination = tmp_path / "rendered"
+    setup(
+        "recommended", home=tmp_path / "home", machine=machine.file,
+        runner=Recorder(on_call=real_git), overlay=str(destination),
+    )  # fmt: skip
+    machine.scanner()
+
+    def job() -> None:
+        now = lambda: datetime.now(UTC)  # noqa: E731
+        J.run_job(J.JobContext(destination, state_directory(), tmp_path, "host", now))
+
+    job()
+    status, detail, remedy = machine.row()
+    assert (status, remedy) == (WARN, SKIPPED_FIX)
+    assert "`git remote add origin <url>`, then `git push -u origin main`" in detail
+
+    bare = tmp_path / "remote.git"
+    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(bare))
+    git(destination, "add", "-A")
+    git(destination, "commit", "-q", "--no-verify", "-m", "chore: the rendered overlay")
+    git(destination, "remote", "add", "origin", str(bare))
+    git(destination, "push", "-q", "-u", "origin", "main")
+    job()
+    assert machine.row()[0] == OK
+
+
+@pytest.mark.parametrize("outcome", ["secret_found", "conflict", "signing_failed"])
+def test_a_standing_failure_says_a_rerun_meets_it(machine: Machine, outcome: str) -> None:
+    # Mutation (oracle): `mutations/`'s "doctor promises a retry for a standing failure".
+    status, detail, remedy = machine.scanner().state(outcome, "what it needs\nfindings").row()
+    assert (status, remedy) == (WARN, STANDING_FIX)
+    assert "what it needs" in detail and "findings" not in detail
+
+
+def test_a_retried_failure_says_a_later_event_retries(machine: Machine) -> None:
+    status, _, remedy = machine.scanner().state("offline", "no route to host").row()
+    assert (status, remedy) == (WARN, RETRIED_FIX)
+
+
+def test_an_upstream_merge_is_named_as_one(machine: Machine) -> None:
+    # A commit that lists no path is held by its sha, which is no path outside memory.
+    merge = "fedcba9876543210fedcba9876543210fedcba98"
+    held = Holds((merge, "common/claude/hooks/launch.sh"), (), OUTSIDE)
+    _, detail, _ = machine.scanner().state("ok", holds=held, fetched=UPSTREAM).row()
+    assert "changes outside memory, or a commit that lists no path (a merge)" in detail
+    held = Holds(("common/claude/hooks/launch.sh",), (), OUTSIDE)
+    _, detail, _ = machine.state("ok", holds=held, fetched=UPSTREAM).row()
+    assert "a merge" not in detail
+
+
+def test_a_stale_index_lock_is_named_with_its_remedy(machine: Machine) -> None:
+    # A lock a killed git left makes every job `raced`, which is never backed off; the job never
+    # removes it, since it cannot tell a stale lock from a live one, so the row names it once it
+    # is older than any job runs.
+    lock = machine.overlay / ".git" / "index.lock"
+    lock.write_text("", encoding="utf-8")
+    raced = machine.scanner().state("raced", "fatal: Unable to create '.../index.lock'")
+    assert raced.row()[2] == RETRIED_FIX  # fresh: a git may be running
+    old = time.time() - J.Limits().job - 60
+    os.utime(lock, (old, old))
+    status, detail, remedy = raced.row()
+    assert status == WARN and str(lock) in detail
+    assert remedy == f"remove {lock} if no git is running"
+    assert machine.state("offline").row()[2] == RETRIED_FIX  # only a raced job names it
 
 
 def test_a_machine_that_never_ran_the_job_is_ok(machine: Machine) -> None:

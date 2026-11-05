@@ -136,19 +136,23 @@ def test_the_guard_refuses_another_branch_a_detached_head_and_a_rebase(world: Wo
     a = world.a
     _diverge(a)
 
+    # Each reason ends with its remedy: `doctor` shows the reason, and the owner acts on it.
     git(a, "checkout", "-q", "topic")
     refused = G.guard(a)
     assert refused.ok is False and refused.reason is not None and "topic" in refused.reason
+    assert refused.reason.endswith("`git switch main`")
 
     git(a, "checkout", "-q", "--detach", "main")
     refused = G.guard(a)
     assert refused.ok is False and refused.reason is not None and "detached" in refused.reason
+    assert refused.reason.endswith("`git switch main`")
 
     git(a, "checkout", "-q", "main")
     fx.run_git(a, "rebase", "topic")
     assert (a / ".git" / "rebase-merge").exists() or (a / ".git" / "rebase-apply").exists()
     refused = G.guard(a)
     assert refused.ok is False and refused.reason is not None and "rebase" in refused.reason
+    assert refused.reason.endswith("finish or abort it")
     git(a, "rebase", "--abort")
     assert G.guard(a).ok is True
 
@@ -197,7 +201,10 @@ def test_the_guard_refuses_main_not_tracking_origin_main(world: World) -> None:
 
     refused = G.guard(world.a)
 
-    assert refused.ok is False and refused.reason is not None and "origin/main" in refused.reason
+    assert refused.ok is False and refused.reason is not None and "tracks nothing" in refused.reason
+    assert refused.reason.endswith(
+        "give the overlay a remote: `git remote add origin <url>`, then `git push -u origin main`"
+    )
 
 
 def test_the_guard_refuses_main_tracking_another_upstream(world: World) -> None:

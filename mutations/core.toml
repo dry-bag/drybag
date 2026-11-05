@@ -3218,7 +3218,7 @@ reddens = ["tests/config/test_owner.py::test_a_machine_with_no_home_is_the_prese
 [[mutation]]
 name = "the owner's layer never reads [guards]"
 file = "src/stayfixed/config/owner.py"
-before = '        "guards": Guards,\n'
+before = '        "guards": Guards,'
 after = ""
 reddens = [
   "tests/config/test_owner.py::test_the_machine_file_switches_the_background_guard_off",
@@ -6919,6 +6919,30 @@ reddens = ["tests/sync/test_hooks.py::test_a_codex_hook_process_starts_nothing"]
 # The `sync` row of `doctor`: a machine that switched the sync on expects its notes to move, and
 # the job commits and pushes nothing without gitleaks on PATH or on a git below its floor. A row
 # green over either says the sync works when it does nothing.
+# A `skipped` job is the guard refusing (another branch, no remote, an operation in progress):
+# the sync is not running, and a green row would say it is.
+[[mutation]]
+name = "doctor calls a guard refusal green"
+file = "src/stayfixed/sync/doctor.py"
+before = '    if outcome.state == "ok":'
+after = '    if outcome.state in ("ok", "skipped"):'
+reddens = [
+  "tests/sync/test_doctor.py::test_a_feature_branch_is_a_warning_with_its_remedy",
+  "tests/sync/test_doctor.py::test_a_rendered_overlay_with_no_remote_warns_until_it_has_one",
+]
+
+# A failure a rerun meets again needs its owner; promising a retry for it says the opposite.
+[[mutation]]
+name = "doctor promises a retry for a standing failure"
+file = "src/stayfixed/sync/doctor.py"
+before = "    elif outcome.state in STANDING:"
+after = "    elif False:"
+reddens = [
+  "tests/sync/test_doctor.py::test_a_standing_failure_says_a_rerun_meets_it[secret_found]",
+  "tests/sync/test_doctor.py::test_a_standing_failure_says_a_rerun_meets_it[conflict]",
+  "tests/sync/test_doctor.py::test_a_standing_failure_says_a_rerun_meets_it[signing_failed]",
+]
+
 [[mutation]]
 name = "doctor calls a missing scanner green"
 file = "src/stayfixed/sync/doctor.py"
