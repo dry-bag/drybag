@@ -74,6 +74,7 @@ def _args(**over: object) -> argparse.Namespace:
         "approval_boundary": False,
         "restore": False,
         "yes": False,
+        "sync": False,
         "uninstall": False,
         "root": ".",
     }
@@ -91,9 +92,10 @@ def test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act(
 ) -> None:
     # `--git-hooks` does nothing of machine setup's. Only `--preset` was refused beside it, and
     # `--overlay` was dropped and the hook installed, exit 0. Asked of a real repository, where an
-    # install that is not refused succeeds. Mutations (`mutations/`'s "setup --git-hooks drops
-    # --preset" -> the first case installs; "setup --git-hooks drops --overlay" -> the second
-    # does; "setup --git-hooks drops --plugin" -> the third does).
+    # install that is not refused succeeds. Mutations (`mutations/`'s "setup --git-hooks and
+    # --approval-boundary drop --preset" -> the first case installs; "setup --git-hooks and
+    # --approval-boundary drop --overlay" -> the second does; "setup --git-hooks and
+    # --approval-boundary drop --plugin" -> the third does).
     root = _repo(tmp_path)
     with pytest.raises(Refusal) as refused:
         run_setup(_args(root=str(root), **over))

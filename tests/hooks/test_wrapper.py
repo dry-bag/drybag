@@ -127,14 +127,14 @@ def test_uv_is_asked_from_a_neutral_directory_and_a_repository_script_never_runs
     tmp_path: Path,
 ) -> None:
     # Measured with uv 0.12.19: asked from a project, `uv python find` runs the executable at
-    # `.venv/bin/python` in its working directory or a parent to ask its version, `--no-config`
-    # and an explicit `>=3.11` request included, so a repository that commits one chooses the
-    # program every hook starts. A `.python-version` naming a script is ignored under either flag
-    # and is planted beside it as the file the requirement names. Asked from `/`, uv looks at no
-    # repository. No `python3` on `PATH`: one directory holds a link to the real uv and another a
-    # link named `python3.<minor>` to the interpreter the suite's venv came from, which uv finds
-    # and the wrapper's own `python3` lookup does not. Skips only where no uv is on `PATH`; CI runs
-    # the suite under `uv run`, so it runs there.
+    # `.venv/bin/python` in its working directory or a parent to ask its version, an explicit
+    # `>=3.11` request included, so a repository that commits one chooses the program every hook
+    # starts. A `.python-version` naming a script is ignored, and is planted beside it as the file
+    # the requirement names. Asked from `/`, uv looks at no repository. No `python3` on `PATH`:
+    # one directory holds a link to the real uv and another a link named `python3.<minor>` to the
+    # interpreter the suite's venv came from, which uv finds and the wrapper's own `python3` lookup
+    # does not. Skips only where no uv is on `PATH`; CI runs the suite under `uv run`, so it runs
+    # there.
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("no uv on PATH; CI runs the suite under `uv run`")
@@ -308,31 +308,49 @@ def test_a_zero_exit_passes_through_untouched(tmp_path: Path) -> None:
     assert (result.returncode, result.stderr) == (0, "")
 
 
-def test_the_interpreter_is_the_one_the_project_root_chooses(tmp_path: Path) -> None:
-    # A pyenv, asdf or mise shim answers for the directory it runs in. Probed outside the project
-    # and launched inside it, a shim passed the probe and then ran a sub-floor interpreter. No
-    # mutation entry, since the order now decides only whether the hook runs; measured by hand by
-    # moving the `cd` below the probe, after which the launch exits 2 and this reddens.
+def _executable(path: Path, body: str) -> None:
+    path.write_text(f"#!/bin/sh\n{body}", encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _empty_path_element(project: Path, script: str) -> str:
+    # An empty `PATH` element is the working directory, so a `python3` committed to the project.
+    _executable(project / "python3", script)
+    return f"{os.pathsep}{_path_without_uv()}"
+
+
+def _version_manager_shim(project: Path, script: str) -> str:
+    # A pyenv, asdf or mise shim runs what the `.python-version` where it runs names.
+    _executable(project / "pinned", script)
+    (project / ".python-version").write_text(f"{project / 'pinned'}\n", encoding="utf-8")
+    shims = project.parent / "shims"
+    shims.mkdir()
+    read = 'test -e .python-version && read -r v < .python-version && exec "$v" "$@"'
+    _executable(shims / "python3", f'{read}\nexec "{sys.executable}" "$@"\n')
+    return f"{shims}{os.pathsep}{_path_without_uv()}"
+
+
+@pytest.mark.parametrize(
+    "plant", [_empty_path_element, _version_manager_shim], ids=["empty-element", "shim"]
+)
+def test_a_repository_never_chooses_the_interpreter(
+    tmp_path: Path, plant: Callable[[Path, str], str]
+) -> None:
     project = tmp_path / "project"
     project.mkdir()
-    (project / ".python-version").write_text("3.9\n", encoding="utf-8")
-    shims = tmp_path / "shims"
-    shims.mkdir()
-    shim = shims / "python3"
-    shim.write_text(
-        f'#!/bin/sh\ntest -e .python-version && exit 2\nexec "{sys.executable}" "$@"\n',
-        encoding="utf-8",
-    )
-    shim.chmod(0o755)
+    marker = tmp_path / "planted-ran"
+    path = plant(project, f"echo ran > '{marker}'\nexit 1\n")
     result = _run(
         "hook",
         "PreToolUse",
-        plugin_root=_plugin_root(tmp_path, 0),
+        plugin_root=_plugin_root(tmp_path, 0, echo_cwd=True),
         project=project,
-        path=f"{shims}{os.pathsep}{_path_without_uv()}",
+        path=path,
     )
-    assert result.returncode == 0
-    assert "is not python 3.11 or newer" in result.stderr
+    assert not marker.exists()
+    # The hook still ran, on the real interpreter, in the project root.
+    assert (result.returncode, result.stderr) == (0, "")
+    assert result.stdout.splitlines() == [str(project.resolve())]
 
 
 def test_stayfixed_runs_from_the_project_root(tmp_path: Path) -> None:
