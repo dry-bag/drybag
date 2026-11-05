@@ -53,26 +53,17 @@ def generated_by(register: Register) -> str:
 
 
 def header(register: Register) -> str:
-    """The title and the marker paragraph, which links the runbook and the audits directory
-    each where the register declares one."""
+    """The title and the marker paragraph, which links the audits directory."""
     directory = _relative(register, register.directory)
     marker = (
         f"{generated_by(register)} from `{directory}/{register.ids.prefix}-*.md`; edit the entry\n"
         "files, not this one."
-    )
-    if register.runbook is not None:
-        marker += (
-            " How to file, close and reference an entry:\n"
-            f"[runbook]({_relative(register, register.runbook)})."
-        )
-    if register.audits is not None:
         # Appended to the directory's own link rather than linked on its own: where the ledger
         # directory is the index's directory that link is `.`, and its `./audits/` is what every
         # index already committed for such a layout carries.
-        marker += (
-            f" Audit provenance: [{ledger_path(register.directory, register.audits)}/]"
-            f"({directory}/{register.audits}/)."
-        )
+        f" Audit provenance: [{ledger_path(register.directory, register.audits)}/]"
+        f"({directory}/{register.audits}/)."
+    )
     return f"# {register.title}\n\n{marker}_\n"
 
 

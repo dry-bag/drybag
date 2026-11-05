@@ -690,31 +690,13 @@ reddens = [
 # A register declares what the engine may assume of it: a link it has, a date key, its void status.
 # The bug ledger's own literal, read in place of the declaration, is a second register inheriting it.
 [[mutation]]
-name = "the audits link follows the runbook rather than the register's audits directory"
-file = "src/stayfixed/ledger/index.py"
-before = "    if register.audits is not None:"
-after = "    if register.runbook is not None:"
-reddens = [
-  "tests/ledger/test_register.py::test_the_index_links_only_the_runbook_and_audits_its_register_declares[a-runbook-and-no-audits]",
-]
-
-[[mutation]]
 name = "the audits link is the relative path to the audits directory, not the ledger directory's link"
 file = "src/stayfixed/ledger/index.py"
-before = '''            f"({directory}/{register.audits}/)."'''
-after = '''            f"({_relative(register, f'{register.directory}/{register.audits}')}/)."'''
+before = '''        f"({directory}/{register.audits}/)."'''
+after = '''        f"({_relative(register, f'{register.directory}/{register.audits}')}/)."'''
 reddens = [
   "tests/ledger/test_register.py::test_the_bug_ledgers_header_and_links_keep_their_bytes_on_every_layout[bugs-is-index-dir-readme]",
   "tests/ledger/test_register.py::test_the_bug_ledgers_header_and_links_keep_their_bytes_on_every_layout[bugs-is-index-dir-docs]",
-]
-
-[[mutation]]
-name = "the runbook link follows the register's audits directory"
-file = "src/stayfixed/ledger/index.py"
-before = "    if register.runbook is not None:"
-after = "    if register.audits is not None:"
-reddens = [
-  "tests/ledger/test_register.py::test_the_index_links_only_the_runbook_and_audits_its_register_declares[audits-and-no-runbook]",
 ]
 
 [[mutation]]
