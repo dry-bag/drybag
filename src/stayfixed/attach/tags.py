@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from stayfixed.attach.items import KINDS, fold
-from stayfixed.config.classes import Layer, LayerName
+from stayfixed.config.classes import ALLOWED, Layer, LayerName, class_of
 from stayfixed.config.plates import PlateKind, plates
 from stayfixed.printed import quoted
 
@@ -30,7 +30,8 @@ def collisions(overlay: Path, project: str, layers: Sequence[Layer]) -> tuple[st
     kind, the name, the tags in list order and the later one, which wins. The items' holders are
     the plates' fold (`attach.items`), the one the readers take their winners from; a directory
     that cannot be listed holds none here, which `attach` says itself. `layers` are the overlay's
-    value layers (`overlay_layers.read`), of which only the tag layers are asked."""
+    value layers (`overlay_layers.read`), of which only the tag layers are asked, and of theirs only
+    the keys a tag may set."""
     found: list[str] = []
     held = plates(overlay, project)[0]
     for kind in KINDS:
@@ -41,7 +42,8 @@ def collisions(overlay: Path, project: str, layers: Sequence[Layer]) -> tuple[st
     keys: dict[str, list[str]] = {}
     for layer in layers:
         if layer.name is LayerName.OVERLAY_TAG:
-            for key in layer.values:
+            # Only a key `resolve` admits the tag layer for: of any other no tag wins anything.
+            for key in (key for key in layer.values if layer.name in ALLOWED[class_of(key)]):
                 keys.setdefault(key, []).append(layer.label)
     found.extend(_sentence("setting", key, tags) for key, tags in keys.items() if len(tags) > 1)
     return tuple(found)

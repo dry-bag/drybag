@@ -1784,6 +1784,15 @@ before = "        for item in fold(found, kind, _unlisted).winners.values():"
 after = "        for item in [p.directory / kind.harness / kind.directory / n for n, held in fold(found, kind, _unlisted).holders.items() for p in held]:"
 reddens = ["tests/attach/test_render.py::test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole"]
 
+# A key whose class does not admit a tag layer is refused in every tag (`classes.resolve`), so no
+# tag wins it, and a sentence saying the later one does is false.
+[[mutation]]
+name = "a setting collision counts a key no tag may set"
+file = "src/stayfixed/attach/tags.py"
+before = "            for key in (key for key in layer.values if layer.name in ALLOWED[class_of(key)]):"
+after = "            for key in layer.values:"
+reddens = ["tests/attach/test_tags.py::test_a_setting_collision_counts_only_a_key_a_tag_may_set"]
+
 # The ledger names the allow rules that are `attach`'s: one the overlay stopped granting is taken
 # back, and a re-attach that kept it would leave an untagged tag's permission in force until
 # `detach`.

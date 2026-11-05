@@ -147,7 +147,8 @@ RESERVED_GROUP: Final = (
     "the composed store, so it is not linked"
 )
 TAGS_REMEDY: Final = (
-    "rename one of them in the overlay, or reorder `tags` in the project's `project.toml`"
+    "in the overlay, fix each tag, record or directory a note names; for a name two tags hold, "
+    "rename one of them or reorder `tags` in the project's `project.toml`"
 )
 
 

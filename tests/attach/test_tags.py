@@ -81,3 +81,17 @@ def test_a_name_held_by_a_tag_and_the_project_alone_is_precedence_and_not_named(
     _hold(overlay, "projects/p", "claude/rules/r.md")
     _hold(overlay, "common", "claude/rules/r.md")
     assert collisions(overlay, "p", ()) == ()
+
+
+def test_a_setting_collision_counts_only_a_key_a_tag_may_set(tmp_path: Path) -> None:
+    # `[paths] memory` is the repository's alone: `resolve` refuses both tag layers' values, so
+    # neither wins and there is nothing to name. Mutation (oracle): `mutations/`'s "a setting
+    # collision counts a key no tag may set" -> the refused key is named.
+    overlay = _overlay(tmp_path, "a", "b")
+    layers = tuple(
+        Layer(LayerName.OVERLAY_TAG, {"paths.memory": "x", "memory.mode": "overlay"}, tag)
+        for tag in ("a", "b")
+    )
+    assert collisions(overlay, "p", layers) == (
+        "the setting memory.mode is held by the tags a, b: the later, b, wins",
+    )
