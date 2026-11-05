@@ -15,7 +15,7 @@ those two kinds is the region body and the marked entries, never the file around
 *A refusal is an artifact's, not the plan's.* A file that cannot be read, a region whose markers
 no longer say where it ends, a settings document that is not JSON: each is recorded in
 `Plan.refusals` and the remaining templates are still decided. `plan` raises only for input no
-per-artifact report could rescue — the configured profile, the manifest itself, and a malformed
+per-artifact report could rescue — the manifest itself, and a malformed
 `Template`, which is a bug in the caller that built it rather than a file a user can put right.
 Both shapes of malformed `Template` raise, symmetrically: a managed region that names no
 region, and keyed entries that name no entries. The second did not, and `entries or {}` turned
@@ -36,7 +36,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from stayfixed.config.paths import PathEscape, contained
-from stayfixed.config.schema import PROJECT_NAME, Config
+from stayfixed.config.schema import Config
 from stayfixed.errors import Refusal
 from stayfixed.fsops import (
     UnsafePath,
@@ -56,8 +56,6 @@ NOT_PRODUCIBLE = (
     "the manifest records a target this artifact cannot produce, so the file at it is not "
     "stayfixed's to remove"
 )
-SOURCE_NAME = PROJECT_NAME  # the one name grammar, `config.schema.PROJECT_NAME`
-SOURCE_RULE = "lowercase letters, digits, `.`, `_` and `-`, starting with a letter or digit"
 _IN_FILE = (Kind.MANAGED_REGION, Kind.KEYED_ENTRIES)
 # The two refusals that belong to one artifact's own file: a region whose markers no longer say
 # where it ends, and a settings document that cannot be parsed. Both are ordinary user state — a
@@ -68,36 +66,6 @@ _IN_FILE = (Kind.MANAGED_REGION, Kind.KEYED_ENTRIES)
 # right by editing a file.
 _OWN_FILE_REFUSALS = (RegionError, EntriesError)
 _VERB_FOR = {Kind.MANAGED_REGION: Verb.REGION_UPDATE, Kind.KEYED_ENTRIES: Verb.ENTRIES_UPDATE}
-
-
-def validate_sources(config: Config) -> None:
-    """Contain the two values that name a file inside the *plugin* root, not the project root.
-
-    "Inside the project root" cannot bound them by construction, so each is validated as one
-    path segment and looked up against the listing. The preset half is already enforced by the
-    configuration loader through `presets.load_preset`; the profile half is enforced here,
-    because the loader stores `profile` as a bare string and widening `Config` would change a
-    frozen contract.
-    """
-    profile = config.stayfixed.profile
-    if not profile:
-        return
-    # Named and never quoted, in both refusals: `profile` is repository-authored, and the first
-    # runs exactly for a value outside `SOURCE_NAME`, which can hold ESC and line breaks. The
-    # rule is stated in words and the listing is stayfixed's own, so nothing here is the clone's.
-    if not SOURCE_NAME.match(profile):
-        raise PathEscape(f"[stayfixed] profile is not one path segment ({SOURCE_RULE})")
-    # The package is the one listing: `profiles.shipped` lists a directory under it only when it
-    # holds a `profile.toml`, which answers for an installed wheel and a `src/` checkout alike.
-    from stayfixed import profiles
-
-    shipped = profiles.shipped()
-    if profile not in shipped:
-        known = ", ".join(shipped) or "none"
-        raise PathEscape(
-            "[stayfixed] profile names a profile this version of stayfixed does not ship "
-            f"(available: {known})"
-        )
 
 
 def _read(path: Path, relative: str) -> tuple[str | None, str | None]:
@@ -181,7 +149,6 @@ def plan(
     templates: Sequence[Template],
 ) -> Plan:
     """What applying `templates` under `config` would do, decided and not yet written."""
-    validate_sources(config)
     manifest = Manifest.read(root)
     resolved_root = root.resolve()
     actions: list[Action] = []

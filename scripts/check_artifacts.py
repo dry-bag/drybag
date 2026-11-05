@@ -49,29 +49,6 @@ WHEEL_MUST = (
     # build that dropped it would leave every installed stayfixed unable to initialise anything
     # while the checkout's own suite stayed green.
     *(f"stayfixed/templates/project/{name}" for name in PROJECT_FILES),
-    # The one shipped profile. `stayfixed.profiles` reads it at runtime through
-    # `importlib.resources`, like the presets, so a build that dropped it would refuse
-    # `[stayfixed] profile = "python"` as unshipped on every installed stayfixed.
-    "stayfixed/profiles/python/profile.toml",
-    "stayfixed/profiles/python/rules.md",
-    # Its code. `stayfixed.profiles.hints` finds `hygiene.py` through `importlib.resources` and
-    # imports it, so a build that dropped it would leave every installed stayfixed without the
-    # Python note after a failed pytest run, silently. `__init__.py` with it, so the installed
-    # profile is the regular package the checkout imports.
-    "stayfixed/profiles/python/__init__.py",
-    "stayfixed/profiles/python/hygiene.py",
-    # Its runner adapter. `stayfixed.prove.adapters` finds `adapters.py` through the same walk and
-    # imports it, so a build that dropped it would answer every `stayfixed prove -- pytest` with
-    # `not proven`, no adapter recognising the command.
-    "stayfixed/profiles/python/adapters.py",
-    # The JavaScript stack's runner adapters, jest's, vitest's and `node --test`'s, which ship no
-    # profile: found by the same walk, so a build that dropped them would answer every
-    # `stayfixed prove -- npx jest` with `not proven`. `__init__.py` with them, as above.
-    "stayfixed/profiles/javascript/__init__.py",
-    "stayfixed/profiles/javascript/adapters.py",
-    # The Go stack's runner adapter, `go test`'s, likewise with no profile.
-    "stayfixed/profiles/go/__init__.py",
-    "stayfixed/profiles/go/adapters.py",
 )
 # What a downstream packager needs to verify the sdist, plus the three files the harness runs
 # without an interpreter of ours.
@@ -85,8 +62,6 @@ SDIST_MUST = (
     "hooks/run-hook.sh",
     "hooks/hooks.json",
     "scripts/stayfixed",
-    # Under `examples/**`; `tests/test_stop_hook_recipe.py` runs it.
-    "examples/stop-hook/prove_on_stop.py",
     *(f"mutations/{path.name}" for path in sorted(DECLARATIONS.glob("*.toml"))),
 )
 SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/stayfixed")

@@ -1,10 +1,8 @@
 """`ledger.code_roots`, contained. `config.paths` guards `[paths]` and names this field as one
-the consuming module must check itself, and this module is that check for every consumer:
-`ledger.scan` and the `hints` area's red-run note each import it here, because
-two spellings of which roots a configuration reaches would be two answers.
+the consuming module must check itself, and this module is that check: `ledger.scan` imports it
+here, because two spellings of which roots a configuration reaches would be two answers.
 `dropped_roots` names the entries the walks leave out from the same loop, so
-the entries named and the entries walked cannot disagree. A profile's red-run hint is handed what
-`contained_roots` returns by the note that asks the hint, so a stack's code never imports it."""
+the entries named and the entries walked cannot disagree."""
 
 from __future__ import annotations
 
@@ -35,16 +33,15 @@ def contained_roots(root: Path, config: Config) -> list[Path]:
     `ledger.code_roots` first; this is the call it asks the consuming module to make.
 
     NO DIRECTORY IS RETURNED TWICE, and no directory under another returned one is returned
-    beside it. Every consumer of this list walks each entry and adds up what it
-    finds, so `code_roots = ["src", "src"]` doubled every stale `.pyc` in the count the
-    hygiene notice prints, and `["src", "src/stayfixed"]` doubled the part of the tree they
-    share -- a wrong number in a notice whose whole job is to be believed about a number.
+    beside it. Where git cannot list the files, `ledger.scan` walks each entry and adds up what
+    it finds, so without this `code_roots = ["src", "src/pkg"]` has `bugs check` say of one
+    mention under `src/pkg` that it is "referenced 2 time(s)".
 
     **An entry is folded before it is asked about.** `contained()` refuses a trailing `/`, a
     doubled `/` and a leading `./` since it shares the write's component rule, and that rule is
     right for a target the engine writes. A code root is only walked, and `"src/"` is the way
-    many people write a directory: refused here, it was dropped from the hygiene counts and the
-    citation roots with nothing saying so. `PurePosixPath` folds exactly those
+    many people write a directory: refused here, it was dropped from the mention and citation
+    scans with nothing saying so. `PurePosixPath` folds exactly those
     three spellings and nothing else -- it keeps `..` and an absolute root, which `contained()`
     still refuses.
 

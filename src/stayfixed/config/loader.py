@@ -691,7 +691,7 @@ def preset_defaults(project: str, *, preset: str = DEFAULT_PRESET) -> Config:
     `stayfixed.toml` and never will.
 
     The overlay is a repository stayfixed writes into and does not manage: it has no project
-    configuration, and the scaffold engine needs one (it reads `stayfixed.profile` and nothing
+    configuration, and the scaffold engine needs one (it reads `stayfixed.version` and nothing
     else). `init --yes` will want the same constructor for the
     first write into a project, before the file it would load exists.
 

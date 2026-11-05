@@ -172,7 +172,6 @@ LEGITIMATE = (
             name="widget",
             base_branch="main",
             agents=("claude", "codex"),
-            profile="",
             memory_mode="local-only",
         ),
     ),

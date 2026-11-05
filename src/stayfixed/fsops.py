@@ -359,11 +359,8 @@ REGULAR_READ_LIMIT = 64 * 1024 * 1024
 # A named cap (CONTRIBUTING.md#named-caps): how many directory entries a walk over a repository's
 # tree that looks for something lists, one total across everything that walk lists, before it stops
 # and says it could not tell. One number for every walk that has that answer, each reading it here
-# when it starts: `doctor`'s walk of the note store (`memory.doctor`), and the Python profile's
-# walk for stale bytecode, which runs on a hook's timeout, so the shipped file that changes with
-# it is `hooks/hooks.json` (`profiles/python/hygiene.py` says what was measured against that
-# timeout: listing this many entries took under half a second with a warm cache). `docs/cli.md`
-# states it for both commands.
+# when it starts: `doctor`'s walk of the note store (`memory.doctor`). `docs/cli.md` states it in
+# `doctor`'s `memory` row.
 # The ledger's scan (`ledger.scan`) does not read it: it reads every file under the project's code
 # roots, as git lists them or, where git cannot, as its walk finds them, and a scan that stopped
 # short would pass a reference it never read, so it has no "could not tell" to stop at.

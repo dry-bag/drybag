@@ -11,7 +11,7 @@ from typing import ClassVar
 # how to coerce a value. Every name an annotation uses must stay resolvable from this module's
 # globals at runtime, so a type imported only under `TYPE_CHECKING` would break the loader.
 
-# The one grammar for a name stayfixed answers to: a project, a profile, an overlay owner. Each is
+# The one grammar for a name stayfixed answers to: a project or an overlay owner. Each is
 # one lowercase path segment whose leading class keeps it out of an option's position in an argv.
 # Every other module derives from this spelling rather than keeping its own.
 PROJECT_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]*\Z")
@@ -63,7 +63,6 @@ MEMORY_MODES = (HARNESS_MODE, OVERLAY_MODE, IN_REPO_MODE, LOCAL_ONLY_MODE)
 class Stayfixed:
     version: str
     preset: str
-    profile: str
     agents: tuple[str, ...]
 
 

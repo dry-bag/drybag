@@ -46,9 +46,8 @@ def load_preset(name: str, *, key: str = "[stayfixed] preset") -> dict[str, Any]
         raise Failure(f"{key} is not a plain identifier ({NAME_RULE}); {available()}")
     # Membership in the listing, not `joinpath(...).is_file()`: the filesystem answered that, and
     # on macOS's default case-insensitive one `"RECOMMENDED"` loaded where Linux refused it, so a
-    # configuration checked on one machine failed CI on another. The profile half already asks
-    # its listing; this is the same question, and the identifier check above now only chooses
-    # which refusal a value gets.
+    # configuration checked on one machine failed CI on another. The identifier check above now
+    # only chooses which refusal a value gets.
     if name not in shipped_presets():
         raise Failure(
             f"{key} names a preset this version of stayfixed does not ship; {available()}"

@@ -1,9 +1,0 @@
-{
-  "name": "stayfixed-prove-fixture",
-  "private": true,
-  "type": "commonjs",
-  "dependencies": {
-    "jest": "30.5.2",
-    "vitest": "5.0.5"
-  }
-}

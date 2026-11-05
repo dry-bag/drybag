@@ -25,7 +25,7 @@ from stayfixed.errors import Failure, Refusal
 from stayfixed.fsops import path_key
 from stayfixed.ledger.api import BUG_AUDITS, bug_register, ledger_path, render_index
 from stayfixed.project.layout import PROJECT_FILES
-from stayfixed.scaffold import Kind, Style, Template, validate_sources
+from stayfixed.scaffold import Kind, Style, Template
 from stayfixed.templates import tree
 
 PROJECT = "project"
@@ -212,9 +212,6 @@ def project_templates(config: Config, *, document: str) -> Prepared:
     Nothing here reads the disk for a target: `trail_target` is a location, like every
     `[paths]`-built target, and the engine contains each one when it plans it.
     """
-    # The engine's rule first: an unshipped or malformed profile is refused naming the grammar and
-    # the listing.
-    validate_sources(config)
     p = config.paths
     once = (_computed(CONFIG_ARTIFACT, CONFIG_FILE, lambda: document, kind=Kind.ONCE),)
     # The audits README is where the bug index links it, built from `[paths] bugs` and the name

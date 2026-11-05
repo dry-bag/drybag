@@ -24,7 +24,6 @@ from stayfixed.config.plates import PROJECTS, RECORD
 from stayfixed.config.reading import TOO_DEEP, TOO_LONG, ConfigError, MachineConfigError
 from stayfixed.docs.trail import read_trail
 from stayfixed.errors import Failure
-from stayfixed.profiles.evaluate import _toml_document
 from stayfixed.project import init
 from stayfixed.setup.machine import read_machine
 from tests.parserlimits import LONG_NUMBER
@@ -156,12 +155,6 @@ def test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_long_number(
     assert read(tmp_path, LONG) == answer
 
 
-def test_a_profile_document_holding_a_number_past_the_parser_resolves_to_nothing() -> None:
-    # A repository's `pyproject.toml`, read by a profile's locator: before, the `assess` command
-    # ended in an internal error. Mutation (declared): `ValueError` dropped from `UNPARSEABLE`.
-    assert _toml_document(LONG) is None
-
-
 def test_the_refusal_names_the_file_and_says_why_without_a_position() -> None:
     # The position `tomllib` reports is the actionable half of a parse failure; a document
     # nested past the parser has none, and the message says what it has instead.
@@ -184,4 +177,6 @@ def test_an_integer_of_exactly_the_conversion_limit_still_parses() -> None:
     # The legitimate edge of the readers' widened catch: 4,300 digits is what the interpreter still
     # converts, so such a document parses, and only one past it is a document that does not. No
     # mutation: it pins the interpreter's limit the widened catch relies on, not a line here.
-    assert _toml_document("a = " + "9" * 4_300 + "\n") == {"a": int("9" * 4_300)}
+    import tomllib
+
+    assert tomllib.loads("a = " + "9" * 4_300 + "\n") == {"a": int("9" * 4_300)}

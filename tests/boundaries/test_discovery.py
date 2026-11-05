@@ -134,7 +134,6 @@ def test_in_isolation_an_area_with_no_such_submodule_is_never_imported() -> None
     assert "stayfixed.release" not in imported
     assert "stayfixed.config" not in imported
     assert "stayfixed.presets" not in imported
-    assert "stayfixed.profiles" not in imported
     assert "stayfixed.harnesses" not in imported
 
 

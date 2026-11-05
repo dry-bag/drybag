@@ -217,9 +217,9 @@ def test_an_overlay_with_no_path_scoped_rule_renders_no_post_tool_use_entry(
 
 def test_a_fault_under_the_rendered_entry_is_exit_0(tmp_path: Path) -> None:
     # The entry's command, run as the harness runs it, under a `python3` that passes the wrapper's
-    # version probe and then fails as stayfixed: the wrapper answers exit 0 with one line, where a
-    # launcher run bare would hand its non-zero exit, and on `PostToolUse` an exit 2's stderr, to
-    # the session.
+    # version probe (printing its own path, as the probe asks) and then fails as stayfixed: the
+    # wrapper answers exit 0 with one line, where a launcher run bare would hand its non-zero exit,
+    # and on `PostToolUse` an exit 2's stderr, to the session.
     overlay = _overlay(tmp_path)
     _scoped_rule(overlay)
     render(overlay, "p", ID)
@@ -229,7 +229,9 @@ def test_a_fault_under_the_rendered_entry_is_exit_0(tmp_path: Path) -> None:
     bin = tmp_path / "bin"
     bin.mkdir()
     python = bin / "python3"
-    python.write_text('#!/bin/sh\ncase "$2" in -c) exit 0 ;; esac\nexit 3\n', encoding="utf-8")
+    python.write_text(
+        '#!/bin/sh\ncase "$2" in -c) echo "$0"; exit 0 ;; esac\nexit 3\n', encoding="utf-8"
+    )
     python.chmod(0o755)
     done = subprocess.run(
         ["/bin/sh", "-c", command],

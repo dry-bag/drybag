@@ -26,7 +26,6 @@ memory_index_bytes = 25600
 hook_output_chars = 10000
 
 [defaults.stayfixed]
-profile = ""
 agents = ["claude", "codex"]
 
 [defaults.project]
