@@ -30,8 +30,10 @@ class Template:
     id: str
     kind: Kind
     target: str
-    source: str
     render: Callable[[], str]
+    # The shipped file the bytes come from, which a whole-file template's record keeps as
+    # `Record.template`; the other kinds keep no record, and name none.
+    source: str = ""
     region: str | None = None
     style: Style = Style.MARKDOWN
 

@@ -30,7 +30,6 @@ from tests.snapshot import assert_snapshot_unchanged, snapshot
 JSON_KEYS = {
     "dry_run",
     "adopted",
-    "once",
     "scaffold",
     "writes",
     "head_note",
@@ -60,38 +59,32 @@ def test_without_yes_the_command_refuses_and_names_the_command_that_prints_the_q
 
 
 @needs_git
-def test_a_dry_run_prints_both_reports_and_says_it_wrote_nothing(tmp_path: Path) -> None:
+def test_a_dry_run_prints_the_report_and_says_it_wrote_nothing(tmp_path: Path) -> None:
     root = repository(tmp_path)
     code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
     assert code == 0, printed
     data = json.loads(printed)
     assert set(data) >= JSON_KEYS and data["dry_run"] is True
-    # Renamed with no alias: a script reading the old key finds nothing rather than a stale copy.
-    assert "footprint" not in data
-    # Two reports, not one rendered twice: the write-once pass plans `stayfixed.toml` and the
-    # footprint pass plans the rest, and a summary that showed one of them would hide
-    # whichever half a refusal landed in.
-    assert "stayfixed.toml" in data["once"] and "stayfixed.toml" not in data["scaffold"]
-    assert "docs/roadmap.md" in data["scaffold"]
+    # Gone with no alias: a script reading an old key finds nothing rather than a stale copy.
+    assert "footprint" not in data and "once" not in data
+    assert "stayfixed.toml" in data["scaffold"] and "docs/roadmap.md" in data["scaffold"]
     assert data["adopted"] is False
     assert set(data["writes"]) >= {"stayfixed.toml", "docs/roadmap.md"}
     assert not (root / "stayfixed.toml").exists()
 
 
 @needs_git
-def test_a_real_run_prints_both_reports_in_full(tmp_path: Path) -> None:
+def test_a_real_run_prints_the_report_in_full(tmp_path: Path) -> None:
     # The summary used to be four count lines, so a person without `--json` was told how many files
-    # there were and never which. The skill relays "both reports … each one names every file with
-    # its verdict", which it could not do from counts.
+    # there were and never which. The skill relays the report, which names every file with its
+    # verdict, and it could not do that from counts.
     root = repository(tmp_path)
     code, printed = _run(root, tmp_path, "--yes")
     assert code == 0, printed
     assert printed.startswith("initialised:")
-    assert "write-once:" in printed and "scaffold:" in printed
-    # Per-artifact lines, from both passes, with their verbs — not just the counts.
+    # Per-artifact lines with their verbs — not just the counts.
     assert "create         stayfixed.toml  (new)" in printed
     assert "create         docs/roadmap.md  (new)" in printed
-    assert (root / ".stayfixed" / "manifest.json").is_file()
 
 
 @needs_git
@@ -103,7 +96,7 @@ def test_a_refused_footprint_exits_one_with_the_refused_section_in_that_report(
     code, printed = _run(root, tmp_path, "--yes", "--json")
     assert code == 1, printed
     data = json.loads(printed)
-    assert "REFUSED" in data["scaffold"] and "REFUSED" not in data["once"]
+    assert "REFUSED" in data["scaffold"]
     assert not (root / ".stayfixed").exists()
     # And in plain text, which is the output a person meets on this path: the REFUSED section
     # with the artifact and the engine's reason, and a heading that does not claim otherwise.

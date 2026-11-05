@@ -6,10 +6,11 @@ the containment rule testable without a filesystem full of traps.
 
 Two rules are easy to state and easy to get backwards, so they are stated here once.
 
-*An absent record does not mean "hands off" for every kind.* For a whole file it does: a file
-stayfixed never wrote is somebody's. For a managed region the file belongs to somebody by
-definition, and an absent record is the ordinary first install. The hand-edit oracle for a
-region is its body, never the file around it.
+*Only a whole-file template is recorded.* A file stayfixed never wrote is somebody's, and the
+record is how a refresh tells the two apart. A create-once file is never looked inside again, and
+a managed region lives in a file that belongs to somebody by definition: its oracle is its own
+body, never the file around it, rewritten in place when it differs. Neither keeps a record, so a
+plan of neither reads no manifest and writes none.
 
 *A refusal is an artifact's, not the plan's.* A file that cannot be read, or a region whose
 markers no longer say where it ends, is recorded in `Plan.refusals` and the remaining templates
@@ -103,7 +104,8 @@ def _present_stamp(template: Template, current: str) -> str | None:
 def plan(root: Path, templates: Sequence[Template]) -> Plan:
     """What applying `templates` would do, decided and not yet written. A record is stamped with
     the running stayfixed's version."""
-    manifest = Manifest.read(root)
+    recorded = any(template.kind is Kind.TEMPLATE for template in templates)
+    manifest = Manifest.read(root) if recorded else Manifest({})
     resolved_root = root.resolve()
     actions: list[Action] = []
     refusals: list[Refused] = []
@@ -157,14 +159,18 @@ def plan(root: Path, templates: Sequence[Template]) -> Plan:
                 continue
 
             payload, stamp = _payload_and_stamp(template, current)
-            new_record = Record(
-                id=template.id,
-                kind=template.kind,
-                location=Location.REPO,
-                target=target,
-                template=template.source,
-                version=__version__,
-                sha256=digest(stamp),
+            new_record = (
+                Record(
+                    id=template.id,
+                    kind=template.kind,
+                    location=Location.REPO,
+                    target=target,
+                    template=template.source,
+                    version=__version__,
+                    sha256=digest(stamp),
+                )
+                if template.kind is Kind.TEMPLATE
+                else None
             )
             if current is None:
                 actions.append(Action(Verb.CREATE, template.id, target, payload, "new", new_record))
@@ -216,16 +222,16 @@ def apply(root: Path, planned: Plan) -> Applied:
         detail = "; ".join(f"{r.artifact_id}: {r.reason}" for r in planned.refusals)
         raise Refusal(f"{len(planned.refusals)} path(s) refused: {detail}")
 
-    manifest = Manifest.read(root)
+    manifest = Manifest.read(root) if any(a.record for a in planned.actions) else None
     resolved_root = root.resolve()
     written: list[str] = []
     skipped: list[str] = []
 
-    # The manifest records what is on disk, so it is persisted for the actions that ran even when
-    # a later one refuses. Discarding it would leave a file stayfixed wrote carrying no record,
-    # which every later run reads as somebody else's: `skip_modified` under a false reason. The
-    # refusal still propagates; only the loop is wrapped, because the refusal above it has
-    # written nothing to record.
+    # The manifest, where the plan records anything, records what is on disk, so it is persisted
+    # for the actions that ran even when a later one refuses. Discarding it would leave a file
+    # stayfixed wrote carrying no record, which every later run reads as somebody else's:
+    # `skip_modified` under a false reason. The refusal still propagates; only the loop is
+    # wrapped, because the refusal above it has written nothing to record.
     try:
         for action in planned.actions:
             if action.verb is Verb.SKIP_MODIFIED:
@@ -239,12 +245,11 @@ def apply(root: Path, planned: Plan) -> Applied:
                     raise Refusal(f"{action.artifact_id}: {action.verb} with no payload")
                 _write(root, action.target, action.payload)
                 written.append(action.target)
-                if action.record is not None:
+                if manifest is not None and action.record is not None:
                     manifest = manifest.with_record(action.record)
-                else:
-                    manifest = manifest.without(frozenset({action.artifact_id}))
     finally:
-        manifest.write(root)
+        if manifest is not None:
+            manifest.write(root)
 
     return Applied(written=tuple(written), skipped=tuple(skipped))
 

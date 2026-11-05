@@ -1,9 +1,8 @@
-"""`stayfixed init --yes`: the two engine passes, what it adopts, and what it refuses."""
+"""`stayfixed init --yes`: the engine's plan, what it adopts, and what it refuses."""
 
 from __future__ import annotations
 
 import re
-import shutil
 import tomllib
 from pathlib import Path
 
@@ -15,13 +14,12 @@ from stayfixed.config.reading import ConfigError
 from stayfixed.errors import Failure, Refusal
 from stayfixed.project.commands import PICKED
 from stayfixed.project.init import InitReport, init
-from stayfixed.project.templates import ONE_FILE
-from stayfixed.scaffold import MANIFEST_PATH, Manifest, Verb
+from stayfixed.project.templates import ONE_FILE, read
+from stayfixed.scaffold import Verb
 from tests.cli import cli
 from tests.gitfixture import git, needs_git, run_git
 from tests.parserlimits import LONG_HEX
-from tests.pathfaults import ROOT_SEARCHES_EVERYTHING, unsearchable
-from tests.project.repos import initialised, repository
+from tests.project.repos import repository
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
 
@@ -44,7 +42,7 @@ def _init(
 
 
 @needs_git
-def test_a_bare_repository_gets_the_footprint_and_every_file_is_recorded(tmp_path: Path) -> None:
+def test_a_bare_repository_gets_the_footprint(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     report = _init(root, tmp_path)
     config = load(root, machine=tmp_path / "absent.toml")
@@ -52,16 +50,14 @@ def test_a_bare_repository_gets_the_footprint_and_every_file_is_recorded(tmp_pat
     document = tomllib.loads((root / CONFIG_FILE).read_text(encoding="utf-8"))
     assert document["stayfixed"] == {"version": stayfixed.__version__}
     assert document["project"]["name"] == "widget"
-    records = Manifest.read(root).records
-    assert set(records) == {"config", "ledger-audits", "bug-index", "roadmap", "trail", "gitignore"}
     assert not report.refused
 
 
 @needs_git
 def test_a_fresh_init_leaves_trail_and_ledger_checks_green(tmp_path: Path) -> None:
     # `init --yes` writes `stayfixed.toml`, the roadmap with its trail markers, `trail.toml`, the
-    # generated bug index, the ledger's audits README and the `.gitignore` region, recorded in the
-    # manifest, and nothing else; the checks that read them pass on what it wrote. Without the
+    # generated bug index, the ledger's audits README and the `.gitignore` region, and nothing
+    # else; the checks that read them pass on what it wrote. Without the
     # index, `bugs index --check` reports it stale; without a file under the ledger's directory it
     # refuses the index as orphaned; without the roadmap or the trail, `docs trail --check` fails.
     root = _repo(tmp_path)
@@ -73,7 +69,6 @@ def test_a_fresh_init_leaves_trail_and_ledger_checks_green(tmp_path: Path) -> No
     untracked = git(root, "ls-files", "--others").split()
     assert sorted(untracked) == [
         ".gitignore",
-        ".stayfixed/manifest.json",
         "docs/bug-reports.md",
         "docs/bugs/audits/README.md",
         "docs/roadmap.md",
@@ -151,32 +146,31 @@ def test_an_adopted_key_that_is_not_bare_is_refused_naming_only_its_table(
 
 
 @needs_git
-def test_a_dry_run_writes_nothing_and_reports_both_plans(tmp_path: Path) -> None:
-    # Mutation (oracle): move `apply(root, once)` above the `dry_run` return -> the snapshot
+def test_a_dry_run_writes_nothing_and_reports_the_plan(tmp_path: Path) -> None:
+    # Mutation (oracle): move `apply(root, planned)` above the `dry_run` return -> the snapshot
     # reddens.
     root = _repo(tmp_path)
     before = snapshot(root)
     report = _init(root, tmp_path, dry_run=True)
     assert_snapshot_unchanged(root, before)
-    assert report.dry_run and {a.verb for a in report.once.actions} == {Verb.CREATE}
-    assert {a.verb for a in report.footprint.actions} == {Verb.CREATE}
+    assert report.dry_run and {a.verb for a in report.plan.actions} == {Verb.CREATE}
 
 
 @needs_git
 def test_a_refused_footprint_writes_nothing_at_all(tmp_path: Path) -> None:
-    # A footprint artifact whose place cannot be read refuses that artifact; the write-once pass
-    # is not applied either. Mutation (oracle): apply the once pass before the refusal check ->
-    # the snapshot reddens.
+    # A footprint artifact whose place cannot be read refuses that artifact, and nothing else is
+    # applied either, `stayfixed.toml` included. Mutation (oracle): apply the plan before the
+    # refusal check -> the snapshot reddens.
     root = _repo(tmp_path)
     (root / "docs" / "roadmap.md").mkdir(parents=True)
     before = snapshot(root)
     report = _init(root, tmp_path)
-    assert report.footprint.refusals and not (root / MANIFEST_PATH).exists()
+    assert report.plan.refusals
     assert_snapshot_unchanged(root, before)
 
 
 @needs_git
-def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_replaced(
+def test_an_existing_configuration_is_adopted_and_never_replaced(
     tmp_path: Path,
 ) -> None:
     # An existing configuration is read as the answers rather than replaced: the hand-written file
@@ -201,7 +195,7 @@ def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_repla
     report = _init(root, tmp_path)
     assert report.adopted
     assert (root / CONFIG_FILE).read_text(encoding="utf-8") == hand_written
-    left = {a.artifact_id: a.reason for a in report.once.actions if a.verb is Verb.SKIP_MODIFIED}
+    left = {a.artifact_id: a.reason for a in report.plan.actions if a.verb is Verb.SKIP_MODIFIED}
     assert left["config"] == "create-once, and the file is already there"
     assert (root / "design" / "roadmap.md").is_file()
     assert (root / "design" / "trail.toml").is_file()
@@ -209,42 +203,46 @@ def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_repla
 
 
 @needs_git
-@ROOT_SEARCHES_EVERYTHING
-@pytest.mark.parametrize("link", [".stayfixed", MANIFEST_PATH.as_posix()])
-def test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words(
-    tmp_path: Path, link: str
-) -> None:
-    # A clone commits a link as text and needs no mode: an absolute target under a directory its
-    # user cannot search makes every path through the link a fault to ask about. The manifest was
-    # asked for with a bare existence check, which met that fault, and the command ended in
-    # `internal error: PermissionError` with the manifest's absolute path. The manifest is asked
-    # through `contained` now, as reading it always was, so the link is refused by name.
-    # Mutation (oracle): `mutations/`'s "init asks for the manifest past contained" -> every case
-    # ends in an internal error again.
-    root = initialised(tmp_path)
-    locked = tmp_path / "locked"
-    locked.mkdir()
-    if link == ".stayfixed":
-        shutil.rmtree(root / link)
-    else:
-        (root / link).unlink()
-    (root / link).symlink_to(locked / "x")
-    with unsearchable(locked):
-        code, _, err = cli(root, tmp_path, "init", "--yes")
-    assert code == 2
-    assert err == (
-        f"stayfixed: refused: {str(MANIFEST_PATH)!r} passes through a symlink at {link!r}\n"
-    )
+def test_a_second_init_creates_what_is_missing_and_touches_nothing_else(tmp_path: Path) -> None:
+    # `init` refused a repository it had initialised, and its remedy, `upgrade`, was gone: a
+    # person who deleted one scaffold file had no way to get it back. Every artifact is create-once
+    # but the `.gitignore` region, so a second run writes what is missing and leaves an edited file
+    # as it is. Neither run reads or writes a manifest: one an earlier release committed, damaged
+    # here, is left as it is. Mutations (oracle): `mutations/`'s "init's artifacts are whole-file
+    # templates the engine records", "a create-once artifact or a managed region is recorded in a
+    # manifest" -> the first run writes one; "a plan with nothing to record reads the manifest",
+    # "an apply with nothing to record reads the manifest" -> the second run refuses the damaged
+    # one.
+    root = _repo(tmp_path)
+    assert cli(root, tmp_path, "init", "--yes")[0] == 0
+    assert not (root / ".stayfixed").exists()
+    (root / "docs" / "trail.toml").unlink()
+    edited = (root / "docs" / "roadmap.md").read_bytes() + b"\nours\n"
+    (root / "docs" / "roadmap.md").write_bytes(edited)
+    (root / ".stayfixed").mkdir()
+    (root / ".stayfixed" / "manifest.json").write_text("not json", encoding="utf-8")
+    code, out, err = cli(root, tmp_path, "init", "--yes")
+    assert code == 0, (out, err)
+    assert (root / "docs" / "trail.toml").read_text(encoding="utf-8") == read("trail.toml")
+    assert (root / "docs" / "roadmap.md").read_bytes() == edited
+    assert (root / ".stayfixed" / "manifest.json").read_text(encoding="utf-8") == "not json"
 
 
 @needs_git
-def test_an_initialised_repository_is_refused(tmp_path: Path) -> None:
-    # Mutation (oracle): drop the manifest guard -> the second call plans a second init.
+def test_the_bug_index_is_rendered_only_where_init_writes_it(tmp_path: Path) -> None:
+    # `bug_register` refuses a `[ledger]` value the ledger cannot work with in every command that
+    # builds the register, and in no other. `init` builds it to render an index it is about to
+    # write, so with the index already there a second run goes through, and without it the value is
+    # refused. Mutation (oracle): `mutations/`'s "init builds the bug ledger's register though the
+    # index is already there" -> the second run refuses.
     root = _repo(tmp_path)
-    _init(root, tmp_path)
-    with pytest.raises(Refusal, match="`init` writes a scaffold once") as refused:
+    assert cli(root, tmp_path, "init", "--yes")[0] == 0
+    with (root / CONFIG_FILE).open("a", encoding="utf-8") as config:
+        config.write('\n[ledger]\nevidence_boundary_required_for = ["nonsense"]\n')
+    assert cli(root, tmp_path, "init", "--yes")[0] == 0
+    (root / "docs" / "bug-reports.md").unlink()
+    with pytest.raises(Refusal, match="not a severity"):
         _init(root, tmp_path)
-    assert "ships later" not in str(refused.value)
 
 
 @needs_git

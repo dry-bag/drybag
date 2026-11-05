@@ -169,8 +169,8 @@ def contained(
     return target
 
 
-# stayfixed's own directory in a project: the manifest, `.stayfixed/local/` (attach's ledger, the
-# local-only note store). Spelled here, beside
+# stayfixed's own directory: `.stayfixed/local/` in a project (attach's ledger, the local-only note
+# store), and the scaffold engine's manifest in an overlay. Spelled here, beside
 # the loop that reserves it, because `config` imports no area and the scaffold engine, `attach`
 # and `memory` all import `config`; `tests/config/test_paths.py` holds each of their paths to lie
 # under it, so the two spellings cannot drift apart.

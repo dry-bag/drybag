@@ -215,18 +215,34 @@ reddens = [
   "tests/scaffold/test_engine.py::test_a_recorded_unchanged_file_yields_no_action",
 ]
 
-# A committed link into a directory nobody may search makes every path through it a fault to ask
-# about, so whether the manifest is there is asked through `contained`, which names the link, as
-# reading it always was: a bare existence check met the fault, and `init` ended in an internal
-# error that printed the absolute path.
+# Only a whole-file template is recorded, and `init` builds none: a plan or an apply with nothing to
+# record neither reads `.stayfixed/manifest.json` nor writes one, so a project keeps no manifest and
+# one an earlier release committed, damaged or not, is never read.
 [[mutation]]
-name = "init asks for the manifest past contained"
-file = "src/stayfixed/scaffold/manifest.py"
-before = "        return fsops.is_file(_contained_path(root))"
-after = "        return fsops.is_file(root / MANIFEST_PATH)"
+name = "a create-once artifact or a managed region is recorded in a manifest"
+file = "src/stayfixed/scaffold/engine.py"
+before = "                if template.kind is Kind.TEMPLATE\n"
+after = "                if True\n"
 reddens = [
-  "tests/project/test_init.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed]",
-  "tests/project/test_init.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed/manifest.json]",
+  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
+]
+
+[[mutation]]
+name = "a plan with nothing to record reads the manifest"
+file = "src/stayfixed/scaffold/engine.py"
+before = "    manifest = Manifest.read(root) if recorded else Manifest({})"
+after = "    manifest = Manifest.read(root)"
+reddens = [
+  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
+]
+
+[[mutation]]
+name = "an apply with nothing to record reads the manifest"
+file = "src/stayfixed/scaffold/engine.py"
+before = "    manifest = Manifest.read(root) if any(a.record for a in planned.actions) else None"
+after = "    manifest = Manifest.read(root)"
+reddens = [
+  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
 ]
 
 # `attach` and `detach` take back only the hook entries an earlier attach's ledger records. By the

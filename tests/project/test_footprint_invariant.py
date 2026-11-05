@@ -10,7 +10,7 @@ fresh clone.
   planted where git does not show it — an ignored file, a file under `.git/`, stayfixed's
   out-of-git state — is present with its bytes, and no file has appeared under `.git/`.
 - **I2, the legitimate user is not refused.** The legitimate cases run `init` to the end: no
-  `Refusal` raised, and no refusal returned in the report's plans, which is the other way a
+  `Refusal` raised, and no refusal returned in the report's plan, which is the other way a
   command refuses.
 - **I3, the end state is consistent.** After a finished `init`, the footprint planned again over
   the same tree plans nothing but what it skips and refuses nothing: every artifact the
@@ -191,8 +191,7 @@ def _refusals(report: InitReport) -> list[str]:
     refused (`refused`, the one predicate the CLI's exit code reads too)."""
     if not report.refused:
         return []
-    plans = (report.footprint, report.once)
-    return [f"{r.artifact_id} {r.target}: {r.reason}" for p in plans for r in p.refusals]
+    return [f"{r.artifact_id} {r.target}: {r.reason}" for r in report.plan.refusals]
 
 
 def _outcome(root: Path, tmp_path: Path, given: Given = NO_ANSWERS) -> list[str] | None:
@@ -264,7 +263,7 @@ def _assert_invariant(
     document = read_document(root) or ""
     config = load(root, machine=tmp_path / "absent.toml")
     try:
-        planned = plan(root, project_templates(config, document=document).footprint)
+        planned = plan(root, project_templates(config, document=document))
     except Refusal as refused:
         pytest.fail(f"I3: planning again after a finished init refused: {refused}")
     # A whole file stayfixed did not write is skipped and named on every run, by design.

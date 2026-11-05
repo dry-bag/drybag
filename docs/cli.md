@@ -1067,7 +1067,7 @@ lints it.
 
 ## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
 
-Writes a repository's stayfixed scaffold, once: `stayfixed.toml`, and the files the pack's
+Writes what is missing of a repository's stayfixed scaffold: `stayfixed.toml`, and the files the pack's
 commands read — the roadmap with its trail markers and `trail.toml` beside it for `docs trail`, the
 generated bug index and the bug ledger's audits README for `bugs index` and `bugs check` — and the
 `stayfixed:ignore` region in `.gitignore`, which keeps `.stayfixed/local/` out of git. It is the
@@ -1087,7 +1087,7 @@ Each answer flag replaces one default and writes one key:
 The recommended plugins are not `init`'s to install:
 `init --questions` asks about them, and the answer is `stayfixed setup`'s.
 
-After both reports the run prints `picked:`, one line per question in the order
+After the report the run prints `picked:`, one line per question in the order
 `init --questions` asks them, with the value this run took: the name, the base branch, the memory
 mode, the attribution check (`on` or `off`), and `plugins: none`, since `init` installs none. Taking every default gives the attribution check `off` and no plugin. A value a `stayfixed.toml` you wrote holds outside the plain-path grammar
 prints as `<unprintable; see stayfixed.toml>`.
@@ -1135,53 +1135,54 @@ command that loads the file, in the loader's own sentence.
 The paths it declares are where the scaffold lands. A repository with no `stayfixed.toml` gets
 one written from the detected values and your answers, headed by a comment saying that every key
 left out takes the preset's default. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
-(`1`) naming the file. A repository that already carries `.stayfixed/manifest.json` is refused
-(`2`): `init` writes a scaffold once.
+(`1`) naming the file.
 
-**Two passes, both planned before either is applied.** `stayfixed.toml` is one pass and the rest
-of the scaffold is the other. A refusal in either plan stops the run with nothing written and no
-manifest, and `--dry-run` is that same branch rather than a second code path — it reports both
-plans and writes nothing.
+**Run it again, and it writes what is missing.** Every artifact but the `gitignore` region is
+create-once: a file already at its place, whoever wrote it, is left as it is and reported
+`skip_modified` ("create-once, and the file is already there"). The `gitignore` region goes into a
+`.gitignore` you wrote, between its markers, and is rewritten there whenever its body differs;
+every line outside them is kept. `init` keeps no manifest, and leaves a `.stayfixed/manifest.json`
+an earlier release wrote as it is. The whole footprint is one plan, made before anything is
+applied: a refusal in it stops the run with nothing written, and `--dry-run` is that same branch
+rather than a second code path — it reports the plan and writes nothing.
 
-| id | pass | kind | target | what it holds |
-|---|---|---|---|---|
-| `config` | write-once | once | `stayfixed.toml` | the document this run rendered |
-| `ledger-audits` | scaffold | template | `<bugs>/audits/README.md` | what an audit record is; it keeps the ledger's directory in git |
-| `bug-index` | scaffold | template | `[paths] bug_index` | the generated index, rendered empty |
-| `roadmap` | scaffold | template | `[paths] roadmap` | `Now`, `Next`, and the trail block |
-| `trail` | scaffold | template | `trail.toml` beside the roadmap | one theme, no declared states |
-| `gitignore` | scaffold | managed region | `.gitignore` | `.stayfixed/local/`, where the `local-only` notes and attach's ledger live |
+| id | target | what it holds |
+|---|---|---|
+| `config` | `stayfixed.toml` | the document this run rendered |
+| `ledger-audits` | `<bugs>/audits/README.md` | what an audit record is; it keeps the ledger's directory in git |
+| `bug-index` | `[paths] bug_index` | the generated index, rendered empty |
+| `roadmap` | `[paths] roadmap` | `Now`, `Next`, and the trail block |
+| `trail` | `trail.toml` beside the roadmap | one theme, no declared states |
+| `gitignore` | `.gitignore` | the managed region naming `.stayfixed/local/`, where the `local-only` notes and attach's ledger live |
 
-A file already at an artifact's place that stayfixed did not write is left as it is and reported
-`skip_modified`. The `gitignore` region is the exception: it goes into a `.gitignore` you wrote,
-between its markers, and every line outside them is kept.
+The bug index is rendered only when it is written, so a `[ledger]` value the bug ledger refuses
+(an `evidence_boundary_required_for` level that is no severity) stops a run that creates the index
+and no other.
 
-**Reads** `stayfixed.toml` when there is one, `.stayfixed/manifest.json`, `git` for the name
-and the base branch, and every file an artifact targets.
+**Reads** `stayfixed.toml` when there is one, `git` for the name and the base branch, and every
+file an artifact targets.
 
 **Writes**, every one of them through the scaffold engine, so that every target goes through the
 containment walk and none may leave the project root or pass through a symlink:
 - `stayfixed.toml`, when the repository has none;
 - the documents in the table above, each at its place in the table, and the `stayfixed:ignore`
-  region in `.gitignore`;
-- `.stayfixed/manifest.json`.
+  region in `.gitignore`.
 
-Exits `0` on success. `1` on a finding: either plan carries refusals — the report's REFUSED section
-names each, nothing was written and no manifest exists — or a `stayfixed.toml` that cannot be read,
+Exits `0` on success. `1` on a finding: the plan carries refusals — the report's REFUSED section
+names each, and nothing was written — or a `stayfixed.toml` that cannot be read,
 is not UTF-8 text or is not valid TOML, or the merged document the loader itself refuses (an unknown
 section or key, a `[project] name` outside its grammar, a value of the wrong type, a machine
-configuration file that does not load). `2` on a refusal above the plans: no `--yes`, an
+configuration file that does not load). `2` on a refusal above the plan: no `--yes`, an
 answer flag over an existing `stayfixed.toml`, an answer outside its grammar or its choices (from the
-parser), a repository already initialised, a detected name outside the grammar that no
-`--name` answers, a `stayfixed.toml`
-that is a symlink, which is never followed, a `[paths]` value outside the plain-path grammar, naming
+parser), a detected name outside the grammar that no `--name` answers, a `[ledger]` value the bug
+ledger refuses when the run creates the bug index, a `stayfixed.toml` that is a symlink, which is never followed, a `[paths]` value outside the plain-path grammar, naming
 git's control directory or stayfixed's own `.stayfixed/`, or reaching through a component that is a
-symlink — all three refused by the loader before a plan exists — and two artifacts, of one pass or
-of either, that resolve to one file (`roadmap` and `bug_index` set to one path), which is named
+symlink — all three refused by the loader before a plan exists — and two artifacts that resolve to
+one file (`roadmap` and `bug_index` set to one path), which is named
 with the two artifacts and their `[paths]` keys to separate.
 
-`--json` carries `dry_run`, `adopted`, `once` and `scaffold` (each the plan's own rendered
-report), `writes` (both plans' targets), and `head_note`, the `note:` line that says `main` replaced an
+`--json` carries `dry_run`, `adopted`, `scaffold` (the plan's own rendered report), `writes` (the
+plan's targets), and `head_note`, the `note:` line that says `main` replaced an
 `origin/HEAD` outside the plain-branch grammar (the branch it named is never printed), that
 `main` stands because a remote is there and no `origin/HEAD` is recorded, or because git could
 not list the remotes, or that, with no remote, the branch checked out other than `main` became
@@ -1246,9 +1247,8 @@ base branch as one confirmation, the rest one at a time with their four lines, w
 harness's limits. The flags validate the answers; the schema
 does not.
 
-It is refused (`2`) before anything beyond the root is read, in three cases:
-- the repository already carries `.stayfixed/manifest.json`: `init` writes a scaffold once;
-- it carries a `stayfixed.toml`, which answers these questions itself: edit it, then read the plan
+It is refused (`2`) before anything beyond the root is read, in two cases:
+- the repository carries a `stayfixed.toml`, which answers these questions itself: edit it, then read the plan
   with `stayfixed init --yes --dry-run`;
 - any flag is given but `--root`, `--machine` and `--json`.
 
@@ -2372,15 +2372,12 @@ lists to the real parser.
 
 ## Terms
 
-**Scaffold** means three things on this page, and the sentence says which:
+**Scaffold** means two things on this page, and the sentence says which:
 
-- everything `stayfixed init` writes into a repository: the write-once file (`stayfixed.toml`) and
-  the rest;
-- the rest alone, the second of the two passes `init` plans: the report headed `scaffold:` and the
-  `scaffold` key of its `--json`, beside the write-once pass's `write-once:` report and `once`
-  key;
-- the scaffold engine, which plans and writes both passes and reports every action in the same
-  verbs, `stayfixed overlay upgrade`'s included.
+- everything `stayfixed init` writes into a repository, `stayfixed.toml` included, and the report
+  of it, the `scaffold` key of its `--json`;
+- the scaffold engine, which plans and writes it and reports every action in the same verbs,
+  `stayfixed overlay upgrade`'s included.
 
 ---
 

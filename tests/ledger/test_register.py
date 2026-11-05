@@ -99,8 +99,8 @@ BUG_INDEX = (
     "| [BR-005](bugs/BR-005.md) | renumbered to BR-006 |\n"
 )
 
-# The sha256 of the empty index `init` writes, which is the `bug-index` artifact's digest in a new
-# project's `.stayfixed/manifest.json`; an earlier release's carried the runbook link as well.
+# The sha256 of the empty index `init` writes; an earlier release's carried the runbook link as
+# well.
 EMPTY_INDEX_SHA256 = "dbb9e60518be8f11a8fd3b9c5097e9910534e536d4941d4d23ba7d22d3cac8cf"
 
 DEBT_TEMPLATE = """---
@@ -193,13 +193,13 @@ def test_the_bug_register_renders_the_index_byte_for_byte(tmp_path: Path) -> Non
 
 def test_init_renders_the_empty_index_with_the_same_digest() -> None:
     # Through `init`'s own artifact rather than `render_index([], …)`, so the digest pinned is the
-    # one a manifest records. No mutation entry: every byte of the empty index is also a byte of
+    # one `init` writes. No mutation entry: every byte of the empty index is also a byte of
     # `BUG_INDEX` above, whose test carries the entry; this one adds the path `init` takes.
     prepared = project_templates(
         preset_defaults("widget"),
         document='[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n',
     )
-    (index,) = [t for t in prepared.footprint if t.id == "bug-index"]
+    (index,) = [t for t in prepared if t.id == "bug-index"]
     assert hashlib.sha256(index.render().encode("utf-8")).hexdigest() == EMPTY_INDEX_SHA256
 
 

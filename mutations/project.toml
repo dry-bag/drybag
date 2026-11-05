@@ -285,45 +285,53 @@ reddens = [
   "tests/project/test_detect.py::test_a_name_outside_the_grammar_is_refused_without_being_quoted",
 ]
 
-# Both passes are planned before either is applied, and that is the whole point: a refusal anywhere
-# — a committed `AGENTS.md` whose `harness` region has an end marker and no beginning is the
-# ordinary way one arrives — leaves nothing written and no manifest. The dry run is the same branch,
-# which is what makes `--dry-run` honest rather than a second code path that happens to agree.
+# The footprint is planned before anything is applied, and that is the whole point: a refusal
+# anywhere — a place that cannot be read is the ordinary way one arrives — leaves nothing written.
+# The dry run is the same branch, which is what makes `--dry-run` honest rather than a second code
+# path that happens to agree.
 [[mutation]]
-name = "init applies the write-once pass before it has looked at either plan's refusals"
+name = "init applies its plan before it has looked at the plan's refusals"
 file = "src/stayfixed/project/init.py"
 before = "    if dry_run or report.refused:"
 after = "    if False:"
 reddens = [
-  "tests/project/test_init.py::test_a_dry_run_writes_nothing_and_reports_both_plans",
+  "tests/project/test_init.py::test_a_dry_run_writes_nothing_and_reports_the_plan",
   "tests/project/test_init.py::test_a_refused_footprint_writes_nothing_at_all",
 ]
 
-# The manifest is the record that this repository has been initialised, and it is the only
-# one: a second `init` over an initialised repository would re-plan every artifact against a
-# configuration it rebuilt from scratch. The anchor is `.stayfixed/manifest.json`, whose path is the scaffold area's own constant and is
-# contained against the root before it is read.
+# Every artifact `init` writes is create-once but the `.gitignore` region, so a second run writes
+# what is missing and touches nothing else, and the engine records none of them.
 [[mutation]]
-name = "init runs again over a repository whose manifest says it is already initialised"
-file = "src/stayfixed/project/init.py"
-before = "    if Manifest.present(root):"
-after = "    if False:"
+name = "init's artifacts are whole-file templates the engine records"
+file = "src/stayfixed/project/templates.py"
+before = "    return Template(id=artifact_id, kind=Kind.ONCE, target=target, render=render)"
+after = "    return Template(id=artifact_id, kind=Kind.TEMPLATE, target=target, render=render)"
 reddens = [
-  "tests/project/test_init.py::test_an_initialised_repository_is_refused",
+  "tests/project/test_templates.py::test_every_artifact_is_create_once_but_the_ignore_region",
+  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
 ]
 
-# One refusal, read off one relation (`templates.Owners`), for every pair of artifacts at one
-# file: within a pass, where `scaffold.engine.plan` has no duplicate-target detection and two
-# `[paths]` keys aimed at one file had `apply` write both and the manifest record two digests for
-# one path; and across the two passes. The anchor is this module's artifact list; the refusal
-# names two ids and their keys, never the value.
+# `bug_register` refuses a `[ledger]` value the ledger cannot work with in every command that
+# builds the register and in no other, and `init` builds it only to render an index it writes.
+[[mutation]]
+name = "init builds the bug ledger's register though the index is already there"
+file = "src/stayfixed/project/templates.py"
+before = '        _once("bug-index", p.bug_index, lambda: render_index([], bug_register(config))),'
+after = '        _once("bug-index", p.bug_index, partial(render_index, [], bug_register(config))),'
+reddens = [
+  "tests/project/test_init.py::test_the_bug_index_is_rendered_only_where_init_writes_it",
+]
+
+# One refusal for every pair of artifacts at one file: `scaffold.engine.plan` has no
+# duplicate-target detection, and two `[paths]` keys aimed at one file had `apply` write both. The
+# anchor is this module's artifact list; the refusal names two ids and their keys, never the value.
 [[mutation]]
 name = "an artifact may target a file another artifact is built to write"
 file = "src/stayfixed/project/templates.py"
-before = "    _no_file_of_another(prepared)\n"
+before = "    _no_file_of_another(templates)\n"
 after = ""
 reddens = [
-  "tests/project/test_templates.py::test_no_two_artifacts_of_one_pass_resolve_to_the_same_file",
+  "tests/project/test_templates.py::test_no_two_artifacts_resolve_to_the_same_file",
   "tests/project/test_init.py::test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_write",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-paths-value-at-another-artifact-s-file-case-folded-init]",
 ]
@@ -367,25 +375,6 @@ before = '    (True, False): "refused, and nothing was written:",'
 after = '    (True, False): "initialised:",'
 reddens = [
   "tests/project/test_command.py::test_a_refused_footprint_exits_one_with_the_refused_section_in_that_report",
-]
-
-# Committed provenance. `Template.source` becomes `Record.template` in `.stayfixed/manifest.json`,
-# which is tracked and is where a reader finds out where an artifact's bytes came
-# from. Three artifacts here compute their bytes rather than reading a shipped file, and all three
-# recorded `project/<id>` — a name `PROJECT_FILES` does not carry, that the wheel does not ship,
-# and that `read` refuses by name. Nothing raised, because each one overrides `render`; what was
-# written was a pointer at nothing, and the committed smoke fixture's manifest carried
-# `"template": "project/gitignore"` from the day it was grown. The mutation restores that
-# spelling, and both ends of the rule redden: the two-rule guard over what this module builds, and
-# the fixture's own manifest held to what this build would write for it.
-[[mutation]]
-name = "a computed artifact records a shipped template name the wheel does not ship"
-file = "src/stayfixed/project/templates.py"
-before = '        source=f"{COMPUTED}/{artifact_id}",'
-after = '        source=f"{PROJECT}/{artifact_id}",'
-reddens = [
-  "tests/project/test_templates.py::test_every_source_both_passes_build_is_a_shipped_file_or_is_declared_computed",
-  "tests/project/test_fixture.py::test_the_smoke_fixture_is_a_project_init_has_nothing_left_to_create_in",
 ]
 
 # The `_enum` class, at two more sites: `mutations/`'s "a preset name outside the rule is quoted
@@ -458,26 +447,23 @@ reddens = [
 [[mutation]]
 name = "places are compared case-sensitively for ownership"
 file = "src/stayfixed/project/templates.py"
-before = "            if owner != artifact_id and path_key(place) in {path_key(p) for p in places}"
-after = "            if owner != artifact_id and place in places"
+before = "        first = seen.setdefault(path_key(template.target), template.id)"
+after = "        first = seen.setdefault(template.target, template.id)"
 reddens = [
-  "tests/project/test_templates.py::test_no_two_artifacts_of_one_pass_resolve_to_the_same_file",
+  "tests/project/test_templates.py::test_no_two_artifacts_resolve_to_the_same_file",
   "tests/project/test_init.py::test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_write[case-variant]",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-paths-value-at-another-artifact-s-file-case-folded-init]",
-  "tests/project/test_templates.py::test_one_relation_says_whose_file_a_place_is",
 ]
 
-# One definition of "the command refused" per report (`refused`), and it decides twice: whether
-# the command writes anything, and the heading and exit code it prints. Each half of each
-# definition is dropped once, and a case whose only refusal is that half's reddens: the run goes
-# on to `apply`, whose backstop refuses the plan with exit 2 and the engine's message instead of
-# the report.
-
+# One definition of "the command refused" (`refused`), and it decides twice: whether the command
+# writes anything, and the heading and exit code it prints. Read as never refused, a refused plan
+# goes on to `apply`, whose backstop refuses it with exit 2 and the engine's message instead of the
+# report.
 [[mutation]]
-name = "init's refusal reads only the write-once plan"
+name = "init's report reads no refusal in its plan"
 file = "src/stayfixed/project/init.py"
-before = "        return bool(self.once.refusals or self.footprint.refusals)"
-after = "        return bool(self.once.refusals)"
+before = "        return bool(self.plan.refusals)"
+after = "        return False"
 reddens = ["tests/project/test_command.py::test_a_refused_footprint_exits_one_with_the_refused_section_in_that_report"]
 
 # `init --questions` prints what `detect` returns and carries it as a JSON Schema, so each

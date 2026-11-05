@@ -1,4 +1,4 @@
-"""The machine ledger every scaffolded artifact is recorded in.
+"""The machine ledger every whole-file template the engine writes is recorded in.
 
 The manifest is committed, and it is the only reason `skip_modified` can exist: without a
 recorded hash there is no way to tell a file the tool wrote from a file a person wrote, and every
@@ -60,14 +60,7 @@ class Location(StrEnum):
 class Record:
     """One artifact as the run that wrote it left it.
 
-    `template` is where the bytes came from, and it carries **two namespaces**. `<area>/<name>`
-    names a file the wheel ships and `read` can open — `project/roadmap.md`. `computed/<id>` says
-    there is no shipped file at all and the bytes were built by the area: `project.templates`
-    spells it `COMPUTED` and uses it for the rendered `stayfixed.toml` and the empty bug index.
-    Nothing reads the field yet, and the choice is recorded here rather than left for a later
-    reader to rediscover, because the manifests it will read are being committed now. A reader
-    tells "built" from "shipped" without asking the wheel, and no
-    record claims a file that is not there — which is what three of them did until `7f5a007`.
+    `template` names the shipped file the bytes came from, `overlay/<name>`. Nothing reads it.
     """
 
     id: str
@@ -119,17 +112,6 @@ def _contained_path(root: Path) -> Path:
 class Manifest:
     records: dict[str, Record]
     format: int = FORMAT
-
-    @staticmethod
-    def present(root: Path) -> bool:
-        """Whether `root` holds a manifest, refused (`PathEscape`) when anything redirects it.
-
-        The question every command that starts from the manifest asks first, and asked as `read`
-        asks it, so a committed `.stayfixed` link is refused whatever it points at: into a
-        directory nobody may search, a bare `is_file` met a fault, and `init` ended in an internal
-        error that printed the path.
-        """
-        return fsops.is_file(_contained_path(root))
 
     @classmethod
     def read(cls, root: Path) -> Manifest:
@@ -190,6 +172,3 @@ class Manifest:
 
     def with_record(self, record: Record) -> Manifest:
         return Manifest({**self.records, record.id: record}, self.format)
-
-    def without(self, ids: frozenset[str]) -> Manifest:
-        return Manifest({k: v for k, v in self.records.items() if k not in ids}, self.format)

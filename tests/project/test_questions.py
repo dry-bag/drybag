@@ -28,7 +28,6 @@ from stayfixed.project.questions import (
     card,
     questions,
 )
-from stayfixed.scaffold import MANIFEST_PATH
 from tests.cli import cli
 from tests.gitfixture import git, needs_git
 from tests.project.repos import DOCUMENT, repository
@@ -168,16 +167,12 @@ def test_a_name_outside_the_grammar_is_left_to_ask_and_never_printed(tmp_path: P
 
 @needs_git
 def test_the_questions_are_refused_where_init_would_refuse(tmp_path: Path) -> None:
-    # A `stayfixed.toml` already answers every question, and a manifest means `init` has run:
-    # asking in either case would collect answers nothing could write. Mutation (oracle): the
-    # `stayfixed.toml` check disabled -> the first `raises` reddens.
+    # A `stayfixed.toml` already answers every question, and `init` writes nothing into it:
+    # asking would collect answers nothing could write. Mutation (oracle): the `stayfixed.toml`
+    # check disabled -> the `raises` reddens.
     root = repository(tmp_path)
     (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
     with pytest.raises(Refusal, match=re.escape("already has a stayfixed.toml")):
-        _schema(tmp_path, root)
-    (root / MANIFEST_PATH).parent.mkdir(parents=True)
-    (root / MANIFEST_PATH).write_text("{}", encoding="utf-8")
-    with pytest.raises(Refusal, match="`init` writes a scaffold once"):
         _schema(tmp_path, root)
 
 

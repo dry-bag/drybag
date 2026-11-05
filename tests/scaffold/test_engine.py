@@ -159,9 +159,6 @@ def test_a_managed_region_is_installed_into_a_file_no_record_covers(tmp_path: Pa
 def test_a_region_already_current_yields_no_action(tmp_path: Path) -> None:
     text = upsert("PROSE\n", "harness", "R1", Style.MARKDOWN)
     (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
     template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
     assert plan(tmp_path, [template]).actions == ()
 
@@ -169,21 +166,21 @@ def test_a_region_already_current_yields_no_action(tmp_path: Path) -> None:
 def test_prose_around_a_region_may_change_without_reading_as_a_hand_edit(tmp_path: Path) -> None:
     text = upsert("PROSE\n", "harness", "R1", Style.MARKDOWN) + "a paragraph the user added\n"
     (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
     template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R2")
     assert [a.verb for a in plan(tmp_path, [template]).actions] == [Verb.REGION_UPDATE]
 
 
-def test_a_hand_edited_region_body_is_skipped(tmp_path: Path) -> None:
+def test_a_hand_edited_region_body_is_rewritten_in_place(tmp_path: Path) -> None:
+    # A region keeps no record: its body is the oracle, so one edited by hand is put back, and the
+    # prose around it stays.
     text = upsert("PROSE\n", "harness", "EDITED BY HAND", Style.MARKDOWN)
     (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
     template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R2")
-    assert [a.verb for a in plan(tmp_path, [template]).actions] == [Verb.SKIP_MODIFIED]
+    apply(tmp_path, plan(tmp_path, [template]))
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == upsert(
+        "PROSE\n", "harness", "R2", Style.MARKDOWN
+    )
+    assert not (tmp_path / ".stayfixed").exists()
 
 
 # --- refusals ------------------------------------------------------------------------------

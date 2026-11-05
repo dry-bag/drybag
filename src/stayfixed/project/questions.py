@@ -144,8 +144,8 @@ def _recommended() -> list[str]:
 def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
     """The five questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
 
-    Refused where `init --yes` with an answer would be (`init.precheck`): a manifest, or a
-    `stayfixed.toml` that already answers them. Detection is lenient, so a name outside the
+    Refused where `init --yes` with an answer would be (`init.precheck`): over a `stayfixed.toml`
+    that already answers them. Detection is lenient, so a name outside the
     grammar leaves `project.name` with no `default` rather than refusing the questions.
     """
     from stayfixed.config.loader import preset_defaults

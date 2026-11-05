@@ -1,12 +1,9 @@
-"""`stayfixed init --yes`: the footprint, written by the engine in two passes.
+"""`stayfixed init --yes`: the footprint, written by the engine in one plan.
 
-`stayfixed.toml` is a `Kind.ONCE` artifact in a pass of its own, and the bug index, the roadmap,
-`trail.toml` and the `.gitignore` region are the second. Both are planned before either is
-applied, so a refusal anywhere leaves nothing written and no manifest; the dry run reports both
-plans and writes nothing.
-
-A repository that already holds a `stayfixed.toml` and no manifest is adopted. One that holds a
-manifest is refused: `init` writes a scaffold once.
+Every artifact is `Kind.ONCE` but the `.gitignore` region, which is rewritten in place, so a run
+over a repository that already has a scaffold writes what is missing and touches nothing else, and
+keeps no manifest. The plan is made before anything is applied, so a refusal anywhere leaves
+nothing written; the dry run reports the plan and writes nothing.
 
 **Adopted means read, not replaced.** `stayfixed.toml` is a `Kind.ONCE` artifact: created when
 absent, never looked inside again. So on a repository that already carries one the engine
@@ -43,7 +40,7 @@ from stayfixed.config.schema import Config
 from stayfixed.errors import Failure, Refusal
 from stayfixed.project.detect import CURRENT_BRANCH, DEFAULT_BRANCH, Detected, detect
 from stayfixed.project.templates import project_templates
-from stayfixed.scaffold import MANIFEST_PATH, Manifest, Plan, apply, plan
+from stayfixed.scaffold import Plan, apply, plan
 from stayfixed.tomlout import dumps
 
 USER_OWNED = ("paths", "memory", "budgets", "ledger", "commit_messages")
@@ -56,9 +53,6 @@ NEEDS_YES = (
     "`stayfixed init` writes only with --yes, which takes the defaults `stayfixed init "
     "--questions` shows; an answer flag such as --name changes one of them, and --dry-run "
     "beside --yes reads the plan first"
-)
-ALREADY = (
-    f"{MANIFEST_PATH} exists, so this repository is initialised; `init` writes a scaffold once"
 )
 ANSWER_SHEET = (
     "this repository already has a stayfixed.toml, which answers the questions `init` would ask; "
@@ -119,23 +113,22 @@ NO_ANSWERS = Given()
 
 @dataclass(frozen=True)
 class InitReport:
-    once: Plan
-    footprint: Plan
+    plan: Plan
     adopted: bool
     dry_run: bool
+    # The configuration the run wrote or adopted, from which the command says what it picked.
+    config: Config
     # `HEAD_DEFAULTED` when the detected base branch replaced a remote head outside the grammar;
     # `HEAD_UNRECORDED` when it is the default because a remote is there and `origin/HEAD` is
     # not; `HEAD_REMOTES_UNKNOWN` when it is the default because git could not list the remotes;
     # `HEAD_CURRENT` when, with no remote at all, it is a checked-out branch other than `main`.
     head_note: str = ""
-    # The configuration the run wrote or adopted, from which the command says what it picked.
-    config: Config | None = None
 
     @property
     def refused(self) -> bool:
-        """Whether either plan refused an artifact: the other way than a raised `Refusal` that
-        this command refuses, with nothing written."""
-        return bool(self.once.refusals or self.footprint.refusals)
+        """Whether the plan refused an artifact: the other way than a raised `Refusal` that this
+        command refuses, with nothing written."""
+        return bool(self.plan.refusals)
 
 
 def _existing(root: Path) -> tuple[str, dict[str, object]] | None:
@@ -248,14 +241,12 @@ def _rendered(tables: dict[str, dict[str, object]]) -> str:
 
 
 def precheck(root: Path, *, answering: bool) -> None:
-    """The refusals `init` and `init --questions` share, before anything beyond the root is read.
+    """The refusal `init` and `init --questions` share, before anything beyond the root is read.
 
-    A manifest means `init` has already run. While `answering` — the questions always are, and
-    `init` is whenever an answer flag is given — a `stayfixed.toml` already answers every
-    question, so asking them over it would collect answers that nothing writes.
+    While `answering` — the questions always are, and `init` is whenever an answer flag is given —
+    a `stayfixed.toml` already answers every question, and `init` writes nothing into it, so an
+    answer given over it would be dropped while the run reported it taken.
     """
-    if Manifest.present(root):
-        raise Refusal(ALREADY)
     # `contained` and not a bare `is_file`, which follows a link: a symlinked `stayfixed.toml` is
     # refused as every command refuses it, whatever it points at, and not taken for an answer
     # sheet (a link to a file) or for no file at all (a link to `/dev/zero`).
@@ -272,16 +263,14 @@ def init(
     given: Given = NO_ANSWERS,
     owner: Owner | None = None,
 ) -> InitReport:
-    """Plan both passes, then apply both — or neither.
+    """Plan the footprint, then apply it — or nothing.
 
-    The refusals come in one order and all of them above every write: no `--yes`, a manifest
-    that says this repository is already initialised, an answer given over a `stayfixed.toml`
-    the repository already has, a `stayfixed.toml` that is not TOML, a detected name outside the
-    grammar that no `--name` answers, an adopted table holding a key that cannot be written
-    back bare (`_rendered`), a `Config` the loader refuses, an artifact at a file another is built
-    to write, in either pass
-    (`templates.Owners`), and finally a refusal in either plan, which is returned rather than
-    raised so the report can name the artifact.
+    The refusals come in one order and all of them above every write: no `--yes`, an answer given
+    over a `stayfixed.toml` the repository already has, a `stayfixed.toml` that is not TOML, a
+    detected name outside the grammar that no `--name` answers, an adopted table holding a key
+    that cannot be written back bare (`_rendered`), a `Config` the loader refuses, two artifacts at
+    one file (`templates._no_file_of_another`), and finally a refusal in the plan, which is
+    returned rather than raised so the report can name the artifact.
 
     `owner` is the owner's layer the command resolved, which every load here takes, so the machine
     file is read once and what it read past is said once (`config.loader.loads`' own).
@@ -294,19 +283,9 @@ def init(
     tables, head_note = _tables(root, existing, given=given)
     document = _rendered(tables)
     config = loads(document, root, machine=machine, owner=owner)
-    prepared = project_templates(config, document=document)
-    once = plan(root, prepared.once)
-    footprint = plan(root, prepared.footprint)
-    report = InitReport(
-        once,
-        footprint,
-        existing is not None,
-        dry_run,
-        head_note,
-        config,
-    )
+    planned = plan(root, project_templates(config, document=document))
+    report = InitReport(planned, existing is not None, dry_run, config, head_note)
     if dry_run or report.refused:
         return report
-    apply(root, once)
-    apply(root, footprint)
+    apply(root, planned)
     return report
