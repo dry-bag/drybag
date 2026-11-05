@@ -36,8 +36,8 @@ from stayfixed.config.reading import (
     ConfigError,
     MachineConfigError,
     coerced,
+    read_fault,
     table_types,
-    toml_position,
 )
 from stayfixed.config.schema import (
     MEMORY_MODES,
@@ -63,9 +63,6 @@ NO_OVERLAY = "the machine file records no overlay root, so no overlay layer appl
 # `error` is `read_machine_toml`'s refusal, which names the machine file and never its text.
 MACHINE_UNREAD = "{error}, so no overlay layer applies"
 NOT_THERE = "{path} is not there, so the {layer} layer sets nothing"
-UNREADABLE = "{path} cannot be read ({error}), so the {layer} layer sets nothing"
-NOT_UTF8 = "{path} is not UTF-8 text, so the {layer} layer sets nothing"
-NOT_TOML = "{path} is not valid TOML {position}, so the {layer} layer sets nothing"
 # `cause` is `GitUnavailable`'s own sentence, which names the checkout through `printed`.
 NO_GIT = "{cause}, so the overlay project layer sets nothing"
 UNKNOWN = "{path}: {name} is not a setting this stayfixed reads; it is ignored"
@@ -145,24 +142,15 @@ def _layer(path: Path, name: LayerName, label: str, notes: list[str]) -> Layer |
     """The file at `path` as the layer `name` (`label` the tag a tag's layer is for), or `None`
     with a note where it cannot be read. A tag with no file sets nothing and says nothing: a tag
     is often only notes."""
-    layer_said = said(name, label)
     shown = quoted(str(path))
     try:
-        text = fsops.read_regular_text(path, limit=READ_LIMIT)
+        raw = tomllib.loads(fsops.read_regular_text(path, limit=READ_LIMIT))
     except FileNotFoundError:
         if name is not LayerName.OVERLAY_TAG:
-            notes.append(NOT_THERE.format(path=shown, layer=layer_said))
+            notes.append(NOT_THERE.format(path=shown, layer=said(name, label)))
         return None
-    except UnicodeDecodeError:
-        notes.append(NOT_UTF8.format(path=shown, layer=layer_said))
-        return None
-    except OSError as exc:
-        notes.append(UNREADABLE.format(path=shown, error=fsops.said(exc), layer=layer_said))
-        return None
-    try:
-        raw = tomllib.loads(text)
-    except UNPARSEABLE as exc:
-        notes.append(NOT_TOML.format(path=shown, position=toml_position(exc), layer=layer_said))
+    except (UnicodeDecodeError, OSError, *UNPARSEABLE) as exc:
+        notes.append(read_fault(shown, exc, f"so the {said(name, label)} layer sets nothing"))
         return None
     return Layer(name, _values(raw, shown, name, notes), label)
 

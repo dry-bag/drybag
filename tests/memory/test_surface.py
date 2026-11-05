@@ -28,7 +28,7 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         "PROJECTS",
         "PROJECT_RECORD",
         "STORE_DIR",
-        "COMMON_GROUP",
+        "reserved",
         # the three roots of the overlay's notes, which `sync` builds its pathspecs from
         "COMMON",
         # the index render `sync` runs in process from a bound checkout before it commits, and

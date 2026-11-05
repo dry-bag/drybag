@@ -20,10 +20,10 @@ from stayfixed.attach import binding, write
 from stayfixed.config.loader import loads
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.owned import UnparsedDocument, rewrite
+from stayfixed.config.plates import PROJECTS, RECORD
 from stayfixed.config.reading import TOO_DEEP, TOO_LONG, ConfigError, MachineConfigError
 from stayfixed.docs.trail import read_trail
 from stayfixed.errors import Failure
-from stayfixed.memory import store
 from stayfixed.profiles.evaluate import _toml_document
 from stayfixed.project import init
 from stayfixed.setup.machine import read_machine
@@ -50,7 +50,7 @@ def _file(tmp_path: Path, relative: str, text: str) -> Path:
 
 def _record(tmp_path: Path, text: str) -> Path:
     """The overlay's record of the project `widget`, holding `text`."""
-    return _file(tmp_path, f"overlay/{store.PROJECTS}/widget/{store.PROJECT_RECORD}", text)
+    return _file(tmp_path, f"overlay/{PROJECTS}/widget/{RECORD}", text)
 
 
 def test_the_parser_still_recurses_at_this_depth_and_refuses_this_number() -> None:

@@ -47,6 +47,7 @@ from stayfixed.memory.store import (
     project_notes,
     reserved,
     resolve,
+    share_directories,
     tag_link,
 )
 
@@ -77,10 +78,9 @@ def _sources(overlay: Path, project: str) -> dict[str, Path]:
         target = plate.directory / STORE_DIR
         if plate.kind is PlateKind.TAG and fsops.is_dir(target):
             found[tag_link(plate.name)] = target
-    if fsops.is_dir(share):
-        for entry in sorted(os.listdir(share)):
-            if not entry.startswith(".") and not reserved(entry) and fsops.is_dir(share / entry):
-                found[entry] = share / entry
+    for entry in share_directories(overlay, project):
+        if not reserved(entry):
+            found[entry] = share / entry
     found[INDEX_NAME] = share / INDEX_NAME
     return found
 

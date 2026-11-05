@@ -58,7 +58,16 @@ from stayfixed import fsops
 from stayfixed.binding import Bound, bound_project, short
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.paths import PathEscape, PathUnasked, contained, data_directory
-from stayfixed.config.plates import TAG_LINK_PREFIX, Plate, PlateKind, plates, read_record
+from stayfixed.config.plates import COMMON as COMMON_PLATE
+from stayfixed.config.plates import PROJECTS as PROJECTS
+from stayfixed.config.plates import (
+    RECORD,
+    TAG_LINK_PREFIX,
+    Plate,
+    PlateKind,
+    plates,
+    read_record,
+)
 from stayfixed.config.reading import MachineConfigError
 from stayfixed.config.schema import HARNESS_MODE, LOCAL_ONLY_MODE, OVERLAY_MODE, Config
 from stayfixed.errors import Failure
@@ -66,18 +75,13 @@ from stayfixed.gitenv import git_answer, without_userinfo
 from stayfixed.printed import quoted
 
 LOCAL_STORE = Path(".stayfixed") / "local" / "memory"
-# The overlay's per-project directory, named once: the two call sites below and the `overlay` area
-# all spell it, and a literal at each is the drift `_inside` names: "two spellings of a containment
-# rule is one more place for them to stop agreeing". It lives here, with `COMMON`, because this
-# module is the one that resolves the overlay layout for the hook path; `overlay` imports it from
-# the surface.
-PROJECTS = "projects"
-PROJECT_RECORD = "project.toml"
+# The surface's name for the project record `config.plates` names.
+PROJECT_RECORD = RECORD
 # The one directory under `projects/<name>/` that holds notes, named once: `permitted_roots`
 # builds the path with it, and `attach` states the path's shape with it where it may not print
 # the project's name, and lays out the group directories under it.
 STORE_DIR = "memory"
-COMMON = Path("common") / "memory"
+COMMON = Path(COMMON_PLATE) / STORE_DIR
 # Under the machine's data directory: one composed store per binding id (`memory.composed`).
 STORES = "stores"
 
@@ -412,24 +416,28 @@ def reserved(name: str) -> bool:
     return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX)
 
 
-def reserved_project_groups(overlay: Path, project: str) -> tuple[str, ...]:
-    """The directories under `projects/<project>/memory/` that are not linked because they are in
-    the tag namespace, sorted; `developer` is not among them, having been left out always. None
-    where the share is not there or cannot be listed."""
-    share = overlay / PROJECTS / project / STORE_DIR
+def share_directories(overlay: Path, project: str) -> tuple[str, ...]:
+    """The directories under `projects/<project>/memory/` that are not hidden, sorted; none where
+    the share is not there or cannot be listed."""
+    share = project_notes(overlay, project)
     try:
         return tuple(
             sorted(
                 name
                 for name in os.listdir(share)
-                if name != COMMON_GROUP
-                and reserved(name)
-                and not name.startswith(".")
-                and fsops.is_dir(share / name)
+                if not name.startswith(".") and fsops.is_dir(share / name)
             )
         )
     except OSError:
         return ()
+
+
+def reserved_project_groups(overlay: Path, project: str) -> tuple[str, ...]:
+    """The directories under `projects/<project>/memory/` that are not linked because they are in
+    the tag namespace, sorted; `developer` is not among them, having been left out always."""
+    return tuple(
+        name for name in share_directories(overlay, project) if name.startswith(TAG_LINK_PREFIX)
+    )
 
 
 def overlay_group_target(held: Sequence[Plate], group: str) -> Path:

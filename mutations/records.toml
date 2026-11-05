@@ -3056,8 +3056,8 @@ reddens = [
 [[mutation]]
 name = "the composed store links a project directory in the tag namespace"
 file = "src/stayfixed/memory/composed.py"
-before = "            if not entry.startswith(\".\") and not reserved(entry) and fsops.is_dir(share / entry):"
-after = "            if not entry.startswith(\".\") and fsops.is_dir(share / entry):"
+before = "        if not reserved(entry):"
+after = "        if True:"
 reddens = [
   "tests/memory/test_composed.py::test_a_project_memory_directory_in_the_tag_namespace_is_not_linked",
 ]
@@ -3067,8 +3067,8 @@ reddens = [
 [[mutation]]
 name = "permitted roots leave out the tags' notes"
 file = "src/stayfixed/memory/store.py"
-before = "    return _notes(plates(overlay, project)[0])"
-after = "    return _notes(tuple(p for p in plates(overlay, project)[0] if p.kind is not PlateKind.TAG))"
+before = "        allowed = _notes(held)"
+after = "        allowed = _notes((held[0], held[-1]))"
 reddens = [
   "tests/memory/test_store.py::test_a_tags_memory_is_linked_under_its_tag_name",
 ]

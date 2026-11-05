@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from stayfixed import fsops
-from stayfixed.config.reading import UNPARSEABLE, toml_position
+from stayfixed.config.reading import UNPARSEABLE, read_fault
 from stayfixed.printed import clipped, quoted
 
 COMMON = "common"
@@ -46,9 +46,7 @@ TAG_LINK_PREFIX = "tag-"
 # forty is past every tag a person types. No shipped file states it.
 TAG = re.compile(r"\A[a-z0-9][a-z0-9-]{0,39}\Z")
 
-UNREADABLE = "{path} cannot be read ({error}), so the project lists no tags"
-NOT_UTF8 = "{path} is not UTF-8 text, so the project lists no tags"
-NOT_TOML = "{path} is not valid TOML {position}, so the project lists no tags"
+UNLISTED = "so the project lists no tags"
 NOT_A_LIST = "{path}: tags must be a list, so the project lists no tags"
 NOT_A_STRING = "{path}: the tags entry {position} is not a string; it is skipped"
 NOT_A_TAG = (
@@ -97,12 +95,8 @@ def _listed(overlay: Path, project: str) -> tuple[list[Any], str | None]:
         listed = read_record(record).get("tags")
     except FileNotFoundError:
         return [], None
-    except UnicodeDecodeError:
-        return [], NOT_UTF8.format(path=shown)
-    except OSError as exc:
-        return [], UNREADABLE.format(path=shown, error=fsops.said(exc))
-    except UNPARSEABLE as exc:
-        return [], NOT_TOML.format(path=shown, position=toml_position(exc))
+    except (UnicodeDecodeError, OSError, *UNPARSEABLE) as exc:
+        return [], read_fault(shown, exc, UNLISTED)
     if listed is None:
         return [], None
     if not isinstance(listed, list):

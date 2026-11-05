@@ -14,7 +14,7 @@ area and why — it does not import a private module of this area.
 
 The names imported from outside this area today, by the `attach` and `overlay` areas and by this
 repository's tests: the resolver (`resolve` and `project_notes`), the overlay layout `attach`
-writes and `overlay` renders (`PROJECTS`, `PROJECT_RECORD`, `STORE_DIR`, `COMMON_GROUP`), the
+writes and `overlay` renders (`PROJECTS`, `PROJECT_RECORD`, `STORE_DIR`), the
 note roots `sync`'s pathspecs are built from beside `config.plates.GROUPS` (`COMMON`,
 `PROJECTS`), the index render `sync` runs in process from a bound checkout and what it answers
 (`rerender_overlay_index`, `Rerendered`), the one
@@ -87,7 +87,6 @@ from stayfixed.memory.store import (
     BINDING_STATES,
     BOUND,
     COMMON,
-    COMMON_GROUP,
     PROJECT_RECORD,
     PROJECTS,
     STORE_DIR,
@@ -98,6 +97,7 @@ from stayfixed.memory.store import (
     origin_note,
     project_notes,
     read_binding_record,
+    reserved,
     reserved_project_groups,
     resolve,
 )
@@ -107,7 +107,6 @@ __all__ = [
     "BINDING_STATES",
     "BOUND",
     "COMMON",
-    "COMMON_GROUP",
     "DELIMITER",
     "PROJECTS",
     "PROJECT_RECORD",
@@ -127,6 +126,7 @@ __all__ = [
     "read_binding_record",
     "render_missing_index",
     "rerender_overlay_index",
+    "reserved",
     "reserved_project_groups",
     "resolve",
     "withdraw_composed",

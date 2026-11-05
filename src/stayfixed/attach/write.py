@@ -109,7 +109,7 @@ from stayfixed.binding import (
 )
 from stayfixed.config.owner import Owner
 from stayfixed.config.paths import PathEscape, PathUnasked, contained
-from stayfixed.config.plates import TAG_LINK_PREFIX, read_record, record_fault
+from stayfixed.config.plates import read_record, record_fault
 from stayfixed.config.reading import UNPARSEABLE
 from stayfixed.config.schema import OVERLAY_MODE, Config
 from stayfixed.config.session import command_config
@@ -119,12 +119,12 @@ from stayfixed.gitenv import without_userinfo
 from stayfixed.jsonobject import NESTED, json_object
 from stayfixed.memory.api import (
     BOUND,
-    COMMON_GROUP,
     PROJECT_RECORD,
     PROJECTS,
     STORE_DIR,
     build_composed,
     render_missing_index,
+    reserved,
     withdraw_composed,
 )
 from stayfixed.printed import quoted
@@ -679,7 +679,7 @@ def _group_directories(binding: Binding, config: Config) -> list[str]:
     return [
         f"{PROJECTS}/{binding.project}/{STORE_DIR}/{group}/{_INSIDE}"
         for group in config.memory.groups
-        if group != COMMON_GROUP and not group.startswith(TAG_LINK_PREFIX)
+        if not reserved(group)
     ]
 
 
