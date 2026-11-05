@@ -449,7 +449,7 @@ def _preferences(context: Context) -> Row:
     The session's one resolution (`SessionConfig.resolution`) over the preset, the repository's
     file after the NOTE load, the overlay's common, tag and project files and the machine file gives
     every value and its layer; the row derives none. The value is printed only where it is a
-    boolean, a number or one of stayfixed's own words (`ENUMERATED`): a name list, a profile or a
+    boolean, a number or one of stayfixed's own words (`ENUMERATED`): a name list or a
     personal value is text a repository, an overlay or an owner wrote, and stays out of a row a
     model may read. Runs with no `stayfixed.toml` too, where nothing is the repository's.
 

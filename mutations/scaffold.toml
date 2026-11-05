@@ -116,36 +116,6 @@ reddens = [
   "tests/scaffold/test_manifest.py::test_a_manifest_past_the_parser_is_refused_in_its_own_words[nested]",
 ]
 
-# In the block led by `mutations/`'s "a preset name outside the rule is quoted back again": a value
-# a clone writes into `[stayfixed] preset` or `profile` never reaches a refusal quoted.
-[[mutation]]
-name = "a profile outside one path segment is quoted back again"
-file = "src/stayfixed/scaffold/engine.py"
-before = '        raise PathEscape(f"[stayfixed] profile is not one path segment ({SOURCE_RULE})")'
-after = '        raise PathEscape(f"[stayfixed] profile {profile!r} is not one path segment ({SOURCE_RULE})")'
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_profile_outside_one_path_segment_is_refused_and_never_quoted",
-]
-
-[[mutation]]
-name = "a profile the listing lacks is quoted back again"
-file = "src/stayfixed/scaffold/engine.py"
-before = '            "[stayfixed] profile names a profile this version of stayfixed does not ship "'
-after = '            f"[stayfixed] profile {profile!r} is not shipped with this version of stayfixed "'
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_profile_the_listing_lacks_is_refused_and_never_quoted",
-]
-
-# `[stayfixed] profile` must name a profile this build ships.
-[[mutation]]
-name = "the engine accepts a profile this stayfixed does not ship"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    if profile not in shipped:"
-after = "    if False:"
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_profile_the_listing_lacks_is_refused_and_never_quoted",
-]
-
 # A report prints targets, and a target a committed manifest recorded is repository-authored:
 # only one inside the path grammar may print as itself.
 [[mutation]]

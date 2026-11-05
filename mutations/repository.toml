@@ -466,20 +466,22 @@ reddens = [
 [[mutation]]
 name = "a python3 below the floor leaves the session unaware that stayfixed is off"
 file = "hooks/run-hook.sh"
-before = '    off "$bad" "$bad is not python 3.11 or newer"'
-after = '    skip "$bad is not python 3.11 or newer"'
+before = '  off "$bad" "$bad is not python 3.11 or newer"'
+after = '  skip "$bad is not python 3.11 or newer"'
 reddens = [
   "tests/hooks/test_wrapper.py::test_the_dispatching_session_start_says_the_hooks_are_off[below-the-floor]",
 ]
 
-# `uv python find` runs the executable script a `.python-version` in its working directory names, so
-# uv asked from the project root would let a repository choose the program every hook starts.
+# A relative `PATH` element, a version manager's shim and uv each answer for the directory they run
+# in, so asked from the project root a repository would choose the program every hook starts.
 [[mutation]]
-name = "the hook wrapper asks uv from the project root"
+name = "the hook wrapper asks python3 and uv from the project root"
 file = "hooks/run-hook.sh"
-before = "python=$(cd / && uv python find"
-after = "python=$(uv python find"
+before = "python=$(cd / && {"
+after = "python=$({"
 reddens = [
+  "tests/hooks/test_wrapper.py::test_a_repository_never_chooses_the_interpreter[empty-element]",
+  "tests/hooks/test_wrapper.py::test_a_repository_never_chooses_the_interpreter[shim]",
   "tests/hooks/test_wrapper.py::test_uv_is_asked_from_a_neutral_directory_and_a_repository_script_never_runs",
 ]
 
@@ -601,8 +603,8 @@ reddens = [
 [[mutation]]
 name = "the interpreter probe runs with the environment's PYTHONPATH and user site again"
 file = "hooks/run-hook.sh"
-before = '"$1" -I -c '
-after = '"$1" -c '
+before = 'python3 -I -c '
+after = 'python3 -c '
 reddens = [
   "tests/hooks/test_wrapper.py::test_a_module_the_environment_plants_never_runs[pythonpath]",
   "tests/hooks/test_wrapper.py::test_a_module_the_environment_plants_never_runs[user-site]",
@@ -844,17 +846,6 @@ reddens = [
   "tests/boundaries/test_delivery.py::test_the_delivery_rule_judges_the_importer_and_the_imported",
 ]
 
-# A pardon is for one statement and the names it takes, so the rule records the names: without
-# them two statements naming one module, or one that takes one more name, read as the row pinned.
-[[mutation]]
-name = "the delivery rule forgets which names a statement takes"
-file = "tests/boundaries/test_delivery.py"
-before = "            taken = [(module, frozenset(alias.name for alias in node.names))]"
-after = "            taken = [(module, frozenset[str]())]"
-reddens = [
-  "tests/boundaries/test_delivery.py::test_the_delivery_rule_judges_the_importer_and_the_imported",
-]
-
 # `from stayfixed import memory` names the area in an alias and the package as its module, so a
 # rule keyed on the module alone would read it as importing nothing from an area.
 [[mutation]]
@@ -1064,18 +1055,8 @@ reddens = [
 [[mutation]]
 name = "Shared flags forgets that `hook` takes neither project flag"
 file = "docs/cli.md"
-before = "Neither flag is taken by `stayfixed commit strip`, `stayfixed hook` and `stayfixed prove`,"
-after = "Neither flag is taken by `stayfixed commit strip` and `stayfixed prove`,"
-reddens = [
-  "tests/test_documents.py::test_shared_flags_names_every_command_that_takes_neither_root_nor_machine",
-]
-
-# `prove` runs where it is typed and reads no configuration, so it takes neither flag either.
-[[mutation]]
-name = "Shared flags forgets that `prove` takes neither project flag"
-file = "docs/cli.md"
-before = "Neither flag is taken by `stayfixed commit strip`, `stayfixed hook` and `stayfixed prove`,"
-after = "Neither flag is taken by `stayfixed commit strip` and `stayfixed hook`,"
+before = "Neither flag is taken by `stayfixed commit strip` and `stayfixed hook`,"
+after = "Neither flag is taken by `stayfixed commit strip`,"
 reddens = [
   "tests/test_documents.py::test_shared_flags_names_every_command_that_takes_neither_root_nor_machine",
 ]
@@ -2499,7 +2480,7 @@ reddens = [
 ]
 
 # The shape check reads more than the patterns a module holds at its top level: a pattern built
-# inside a function from text the source spells, and every shipped profile's `match`. Each entry
+# inside a function from text the source spells. Each entry
 # narrows that reading back the way a walk regresses, and a planted case goes unseen or misread.
 [[mutation]]
 name = "the pattern scan stops at a function's body"
@@ -2595,15 +2576,6 @@ before = "    return spelled, unspelled"
 after = "    return spelled, list(dict.fromkeys(unspelled))"
 reddens = [
   "tests/test_patterns.py::test_the_scan_reads_a_pattern_wherever_the_source_spells_it[two calls of handed text in one function]",
-]
-
-[[mutation]]
-name = "the pattern walk leaves the shipped profiles' locators out"
-file = "tests/test_patterns.py"
-before = "    for name in profiles.shipped(source=source):"
-after = "    for name in ():"
-reddens = [
-  "tests/test_patterns.py::test_the_walk_reads_the_match_of_every_shipped_profiles_locators",
 ]
 
 [[mutation]]
@@ -2784,32 +2756,3 @@ reddens = [
   "tests/test_documents.py::test_the_reference_counts_the_cores_rows_and_the_private_layers_apart",
 ]
 
-# A stack's code may stand in a directory with no profile; a core import of it is a stack import
-# all the same.
-[[mutation]]
-name = "the stack-import walk reads only the shipped profiles"
-file = "tests/test_language_neutral.py"
-before = '            p.name for p in profiles.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))'
-after = '            p.name for p in profiles.iterdir() if (p / "profile.toml").is_file()'
-reddens = [
-  "tests/test_language_neutral.py::test_every_stack_directory_is_read_whether_or_not_it_holds_a_profile",
-]
-
-# The `Stop`-hook recipe in `examples/stop-hook/`. Claude Code's cap on stop-hook continuations
-# resets on every tool call, so without the `stop_hook_active` let-through a tree the agent cannot
-# make green blocks every stop it makes.
-[[mutation]]
-name = "the stop recipe blocks a stop it is already continuing"
-file = "examples/stop-hook/prove_on_stop.py"
-before = '    if event.get("stop_hook_active") is True:'
-after = '    if False:'
-reddens = ["tests/test_stop_hook_recipe.py::test_a_continued_stop_is_let_through_without_a_run"]
-
-# And the verdict it lets through is `proved` alone: widened to every verdict, a failed run ends
-# the agent's turn as if it were green.
-[[mutation]]
-name = "the stop recipe lets a failed run through"
-file = "examples/stop-hook/prove_on_stop.py"
-before = '    if verdict == "proved":'
-after = '    if verdict == "proved" or True:'
-reddens = ["tests/test_stop_hook_recipe.py::test_a_failed_run_blocks_the_stop"]

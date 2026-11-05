@@ -1,6 +1,6 @@
 """What `stayfixed init` would ask, as a JSON Schema: `stayfixed init --questions`.
 
-Seven questions, each keyed by the `stayfixed.toml` key its answer writes, but the last, `plugins`,
+Six questions, each keyed by the `stayfixed.toml` key its answer writes, but the last, `plugins`,
 which `stayfixed setup` answers on the machine rather than in the repository. Each carries the
 value `stayfixed init --yes` takes when it is not answered, where that value came from, the flag
 that answers it, and four lines (`TRADE_OFFS`): what the answer gives, what it gives up, what it
@@ -43,7 +43,6 @@ FLAGS = {
     "project.name": "--name",
     "project.base_branch": "--base-branch",
     "memory.mode": "--memory-mode",
-    "stayfixed.profile": "--profile",
     "commit_messages.attribution_check": "--attribution-check",
     "stayfixed.agents": "--agent",
     PLUGINS: "stayfixed setup --plugin",
@@ -73,12 +72,6 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "local-only stay on this machine; an overlay is one more repository to keep",
         "[memory] mode in stayfixed.toml, and the notes wherever the mode keeps them",
         "change [memory] mode in stayfixed.toml; notes already written stay where they are",
-    ),
-    "stayfixed.profile": (
-        "the stack profile this project names",
-        "nothing",
-        "[stayfixed] profile in stayfixed.toml",
-        'set [stayfixed] profile = "" in stayfixed.toml',
     ),
     "commit_messages.attribution_check": (
         "`stayfixed commit check` fails a range whose commit messages end in an AI tool's "
@@ -156,7 +149,7 @@ def _recommended() -> list[str]:
 
 
 def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
-    """The seven questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
+    """The six questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
 
     Refused where `init --yes` with an answer would be (`init.precheck`): a manifest, or a
     `stayfixed.toml` that already answers them. Detection is lenient, so a name outside the
@@ -164,7 +157,6 @@ def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
     """
     from stayfixed.config.loader import preset_defaults
     from stayfixed.harnesses import HARNESSES
-    from stayfixed.profiles import shipped
     from stayfixed.project.detect import DEFAULT, detect
     from stayfixed.project.init import precheck
 
@@ -196,16 +188,6 @@ def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
             # The preset chooses no mode, so the default is the schema's own, `harness`.
             "default": preset.memory.mode,
             "x-stayfixed-source": DEFAULT,
-        },
-        "stayfixed.profile": {
-            "type": "string",
-            "title": "Stack profile",
-            "oneOf": [
-                {"const": "", "title": "No profile"},
-                *({"const": n, "title": n} for n in shipped()),
-            ],
-            "default": found.profile,
-            "x-stayfixed-source": found.sources["profile"],
         },
         "commit_messages.attribution_check": {
             "type": "boolean",

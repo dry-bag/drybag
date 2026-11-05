@@ -372,7 +372,6 @@ def test_the_questions_answered_as_the_skill_answers_them_write_what_yes_writes(
         ("--yes", "--base-branch", "a..b"),
         ("--yes", "--base-branch", "HEAD"),
         ("--yes", "--memory-mode", "cloud"),
-        ("--yes", "--profile", "rust"),
         ("--yes", "--agent", "cursor"),
         ("--questions", "--yes"),
     ],
@@ -382,7 +381,6 @@ def test_the_questions_answered_as_the_skill_answers_them_write_what_yes_writes(
         "branch-git-refuses",
         "branch-head",
         "mode",
-        "profile",
         "agent",
         "questions-and-yes",
     ],
@@ -392,12 +390,9 @@ def test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing(
 ) -> None:
     # A name or a branch is refused naming the rule and never the value, which is text a
     # person may have pasted from anywhere; a choice is refused by `choices`, whose error quotes
-    # only the operator's own argument. `--profile` takes only the names this build ships.
+    # only the operator's own argument.
     # Mutations (oracle): `mutations/`'s "a flag's grammar takes a value outside it as typed:
     # gate --base a short name a tag answers for, init an answer" -> `name` and `branch` redden.
-    # (By hand: `--profile`
-    # without `choices` -> `profile` reddens with no `SystemExit`: the name reaches `init`, and only
-    # the profile loader refuses it, after the parser.)
     root = repository(tmp_path)
     with pytest.raises(SystemExit):
         _run(root, tmp_path, *argv)

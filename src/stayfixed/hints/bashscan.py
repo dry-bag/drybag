@@ -196,7 +196,7 @@ _ASSIGNMENT = re.compile(r"\A[A-Za-z_][A-Za-z0-9_]*=")
 # `env pytest`: a bare wrapper token, not the command. Deliberately not a general argv
 # resolver: `env` and `uv run` (`hints/uvrun.py`) are the only launchers read through, and
 # `poetry run`, `npx`, `sudo` and `time` are not, unless they stand behind `uv run`, where every
-# word before the first a runner adapter recognises is the launcher's.
+# word before the first the caller's `recognises` reads a command from is the launcher's.
 _SINGLE_WRAPPERS = frozenset({"env"})
 
 
@@ -690,27 +690,16 @@ def segments(tokens: list[str]) -> list[list[str]]:
     neither a separator nor a redirect and the write was invisible to both.
     """
 
-    result: list[list[str]] = []
-    current: list[str] = []
-    for token in tokens:
-        for piece in operator_pieces(token):
-            if piece in _SEPARATORS:
-                if current:
-                    result.append(current)
-                current = []
-            else:
-                current.append(piece)
-    if current:
-        result.append(current)
-    return result
+    return [command for pipeline in pipelines(tokens) for command in pipeline]
 
 
 def pipelines(tokens: list[str]) -> list[list[list[str]]]:
     """Each pipeline of a token stream as its simple commands: the commands a `|` joins. `;`,
     `&&`, `||` and `&` end one, and a fused run of punctuation is decomposed first
-    (`operator_pieces`), as `segments` does. A `;` straight after a `|` does not end the
-    pipeline: `prepare` rewrites a line break to `;`, and a line break after `|` continues the
-    pipeline in bash and zsh (a literal `|;` is a syntax error, so no valid command differs).
+    (`operator_pieces`); `segments` is these pipelines' commands, flattened. A `;` straight after
+    a `|` does not end the pipeline: `prepare` rewrites a line break to `;`, and a line break
+    after `|` continues the pipeline in bash and zsh (a literal `|;` is a syntax error, so no
+    valid command differs).
 
     THE BOUND IS DOCUMENTED: `|&` reaches this as the pieces `|` and `&`, and the `&` ends the
     pipeline, so the two commands it joins are read as two pipelines.
@@ -726,7 +715,7 @@ def pipelines(tokens: list[str]) -> list[list[list[str]]]:
                 current.append(piece)
                 after_pipe = False
                 continue
-            if piece == ";" and after_pipe and not current:
+            if piece == ";" and after_pipe:
                 continue
             after_pipe = piece == "|"
             if current:
@@ -740,54 +729,6 @@ def pipelines(tokens: list[str]) -> list[list[list[str]]]:
     if pipeline:
         result.append(pipeline)
     return result
-
-
-class Launch(NamedTuple):
-    """A segment read the way `read_launch` reads it, every word in one part.
-
-    `assignments` is every `NAME=value` word the walk read as one, in order: before a launcher,
-    bare or after `env`. `launcher` is the words of each launcher read through, in order -- `uv`,
-    every word up to the command it launches, an `env` and its assignments among them.
-    `command` is the rest, what `command_words` returns.
-    """
-
-    assignments: tuple[str, ...]
-    launcher: tuple[str, ...]
-    command: tuple[str, ...]
-
-
-def read_launch(
-    segment: Sequence[str], recognises: Callable[[Sequence[str]], bool] | None = None
-) -> Launch:
-    """`segment` split into its assignments, its launcher's words and its command, by the one
-    walk `command_words` documents.
-
-    A caller that runs the command, and not only names its program, needs every part: the
-    assignments go into the environment of what it starts, since nothing but a shell reads them
-    from an argv, and the launcher's words are what it may keep in front of the program.
-    """
-    assigned: list[str] = []
-    launcher: list[str] = []
-    index = 0
-    while index < len(segment):
-        token = segment[index]
-        if _ASSIGNMENT.match(token):
-            assigned.append(token)
-            index += 1
-            continue
-        name = Path(token).name
-        if recognises is not None and uvrun.is_launcher(name):
-            launched = _launched(segment, index, recognises)
-            if launched is None:
-                break
-            launcher.extend(segment[index:launched])
-            index = launched
-            continue
-        if name in _SINGLE_WRAPPERS:
-            index += 1
-            continue
-        break
-    return Launch(tuple(assigned), tuple(launcher), tuple(segment[index:]))
 
 
 def _launched(
@@ -825,4 +766,21 @@ def command_words(
     command, and a warn-only caller delivers its note to a run of no test.
     """
 
-    return list(read_launch(segment, recognises).command)
+    index = 0
+    while index < len(segment):
+        token = segment[index]
+        if _ASSIGNMENT.match(token):
+            index += 1
+            continue
+        name = Path(token).name
+        if recognises is not None and uvrun.is_launcher(name):
+            launched = _launched(segment, index, recognises)
+            if launched is None:
+                break
+            index = launched
+            continue
+        if name in _SINGLE_WRAPPERS:
+            index += 1
+            continue
+        break
+    return segment[index:]

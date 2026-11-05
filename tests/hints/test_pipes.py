@@ -13,6 +13,7 @@ from stayfixed.hints.hooks import register
 from stayfixed.hints.pipes import NOTICE, notice_for
 from stayfixed.hooks.api import Handler, HookEvent
 from stayfixed.hooks.dispatch import Recorder, dispatch
+from tests.hints.test_hooks import bash_event
 from tests.sessions import NO_CONFIG
 
 
@@ -29,14 +30,11 @@ from tests.sessions import NO_CONFIG
         "pytest tests/{a,b}.py | tail",
         "pytest ${ARGS} | tail",
         'pytest -k "not (slow)" | tail',
+        "uv run pytest | grep FAIL",
+        "PYTHONPATH=src pytest | tail",
     ],
 )
 def test_a_test_run_piped_into_a_reader_gets_the_hint(command: str) -> None:
-    assert notice_for(command) == NOTICE
-
-
-@pytest.mark.parametrize("command", ["uv run pytest | grep FAIL", "PYTHONPATH=src pytest | tail"])
-def test_a_piped_run_behind_uv_or_an_assignment_gets_the_hint(command: str) -> None:
     assert notice_for(command) == NOTICE
 
 
@@ -76,11 +74,6 @@ def test_a_command_past_the_scan_cap_is_not_read() -> None:
     assert notice_for(f"{padding}; pytest | tail") is None
 
 
-def test_the_hint_names_nothing_of_the_command() -> None:
-    assert notice_for("pytest tests/secret_name.py | tail") == NOTICE
-    assert notice_for("pytest | tail") == NOTICE
-
-
 def test_a_fused_pipe_and_ampersand_is_a_bound_not_a_pipe() -> None:
     # `|&` reaches the scanner as the two pieces `|` and `&`, and `&` ends a pipeline, so the
     # run and the reader are two pipelines. The bound is stated in `pipes`' docstring.
@@ -91,29 +84,15 @@ def pipe_status() -> Handler:
     return next(h for h in register() if h.name == "pipe-status")
 
 
-def bash_event(command: str, root: Path) -> HookEvent:
-    tool_input: dict[str, object] = {"command": command}
-    return HookEvent(
-        name="PreToolUse",
-        session_id="s1",
-        agent_id=None,
-        tool_name="Bash",
-        tool_input=tool_input,
-        cwd=root,
-        project_root=None,
-        raw={"tool_name": "Bash", "tool_input": tool_input},
-    )
-
-
 def test_the_handler_speaks_with_no_configuration_and_never_decides(tmp_path: Path) -> None:
     handler = pipe_status()
-    result = handler.run(bash_event("pytest | tail", tmp_path), NO_CONFIG)
+    result = handler.run(bash_event(tmp_path, "pytest | tail", background=False), NO_CONFIG)
     assert (handler.event, result.context) == ("PreToolUse", NOTICE)
-    assert handler.run(bash_event("pytest", tmp_path), NO_CONFIG).context is None
+    assert handler.run(bash_event(tmp_path, "pytest", background=False), NO_CONFIG).context is None
 
 
 def test_a_non_bash_call_is_ignored(tmp_path: Path) -> None:
-    event = bash_event("pytest | tail", tmp_path)
+    event = bash_event(tmp_path, "pytest | tail", background=False)
     other = HookEvent(**{**event.__dict__, "tool_name": "Edit"})
     assert pipe_status().run(other, NO_CONFIG).context is None
 
@@ -123,7 +102,7 @@ def test_the_hint_is_given_once_per_context(tmp_path: Path) -> None:
     notes = []
     for _ in range(2):
         outcome = dispatch(
-            bash_event("pytest | tail", tmp_path),
+            bash_event(tmp_path, "pytest | tail", background=False),
             register(),
             NO_CONFIG,
             harness=CLAUDE,

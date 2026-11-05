@@ -16,7 +16,6 @@ carry, the list grows deliberately.
 from stayfixed.scaffold.engine import (
     apply,
     plan,
-    validate_sources,
 )
 from stayfixed.scaffold.entries import (
     EntriesError,
@@ -77,6 +76,5 @@ __all__ = [
     "settings_object",
     "settings_text",
     "upsert",
-    "validate_sources",
     "withdraw_entries",
 ]

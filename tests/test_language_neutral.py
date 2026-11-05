@@ -1,22 +1,15 @@
-"""The core names no language stack: what one stack's runner, artifacts or package manager need
-lives in that stack's profile directory, `src/stayfixed/profiles/<name>/`, so a repository in
-several languages works with no configuration.
+"""stayfixed names no language stack, so a repository in several languages works with no
+configuration.
 
-The walk reads every module under `src/stayfixed/` outside those stack directories with `ast` --
-the profiles' own machinery directly under `profiles/` is core and is read -- so comments and
-docstrings are prose and are never read; string and bytes constants (an f-string's literal parts
-included) and identifiers are code and are. A word counts where it stands alone, letters and
+The walk reads every module under `src/stayfixed/` with `ast`, so comments and docstrings are prose
+and are never read; string and bytes constants (an f-string's literal parts included) and
+identifiers are code and are. A word counts where it stands alone, letters and
 digits on neither side, so `PYTEST`, `is_pytest_run` and `"*.pyc"` are mentions and
 `pipeline` is not.
 
-`STACK_NAMED` is every mention the walk finds, each with the reason it stays in the core, and the
-comparison is equality both ways: a new mention reddens this test, and so does a pardon whose
-mention is gone, so the list never outlives what it excuses.
-
-The words catch a stack named in the core; they do not catch the core importing a stack's own
-code, because `stayfixed.profiles.python.hygiene` holds no listed word. So the same walk also reads
-every import, and a core module that imports from a stack's directory, a profile's or one holding
-code alone, fails on its own.
+`STACK_NAMED` is every mention the walk finds, each with the reason it stays, and the comparison
+is equality both ways: a new mention reddens this test, and so does a pardon whose mention is gone,
+so the list never outlives what it excuses.
 """
 
 from __future__ import annotations
@@ -26,13 +19,8 @@ import re
 from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
-
-from stayfixed.profiles import shipped
-
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "src" / "stayfixed"
-PROFILES = PACKAGE / "profiles"
 
 # One stack's test runner, build artifacts or package manager, for the common stacks. `uv` stands
 # for itself rather than for `uv run`: the walk reads one constant at a time, and the command
@@ -79,10 +67,10 @@ STACK_NAMED = {
     ("src/stayfixed/ledger/scan.py", "pycache"),
     ("src/stayfixed/ledger/scan.py", "pyc"),
     # The command scanner unwraps `uv run <cmd>` to `<cmd>`, as it unwraps `env <cmd>`, up to
-    # the first word a runner adapter recognises; this module is that unwrap and the directory
-    # uv runs the command in, which `hints/bashscan.py` and `prove` call, so neither names a
-    # stack itself. `uv run` is a Python launcher, and it stays beside the shared scanner rather
-    # than in the Python profile because every stack's runner may stand behind it.
+    # the first word the runner table reads as a test run; this module is that unwrap, which
+    # `hints/bashscan.py` calls, so the scanner names no stack itself. `uv run` is a Python
+    # launcher, and it stays beside the shared scanner because every stack's runner may stand
+    # behind it.
     ("src/stayfixed/hints/uvrun.py", "uv"),
     # The table of test-runner program names (`hints/runners.py`) names runners only to say that a
     # command is a test run, never to run, plan or advise one, and it is the one place the hints
@@ -158,14 +146,8 @@ def _code_text(tree: ast.AST) -> Iterator[str]:
             yield node.module
 
 
-def _in_a_stack_directory(path: Path) -> bool:
-    """True under `profiles/<name>/`, where one stack's knowledge belongs; `profiles/hints.py`
-    and the rest of the machinery beside it are core."""
-    return PROFILES in path.parents and path.parent != PROFILES
-
-
 def _core_modules() -> list[Path]:
-    return [path for path in sorted(PACKAGE.rglob("*.py")) if not _in_a_stack_directory(path)]
+    return sorted(PACKAGE.rglob("*.py"))
 
 
 def stack_mentions(modules: list[Path]) -> set[tuple[str, str]]:
@@ -199,14 +181,11 @@ def test_the_walk_reads_words_and_not_fragments() -> None:
 
 
 def _read_the_core(modules: list[Path]) -> None:
-    """A walk that read nothing -- a moved package, a wrong root -- would find no mention and no
-    import and pass. The package's own `__init__.py` and the profiles' machinery beside the stack
-    directories are core for as long as the package exists, so a walk without them is not
-    reading the core. Reddened by making `_core_modules` return `[]`; measured. Without it the
-    import walk would pass on an empty walk, and the mention walk would fail only because
-    `STACK_NAMED` happens not to be empty."""
+    """A walk that read nothing -- a moved package, a wrong root -- would find no mention and
+    pass but for `STACK_NAMED` happening not to be empty. The package's own `__init__.py` is read
+    for as long as the package exists, so a walk without it is not reading it. Reddened by making
+    `_core_modules` return `[]`; measured."""
     assert PACKAGE / "__init__.py" in modules
-    assert PROFILES / "hints.py" in modules
 
 
 def test_no_core_module_names_a_stack_it_does_not_pardon() -> None:
@@ -214,87 +193,3 @@ def test_no_core_module_names_a_stack_it_does_not_pardon() -> None:
     modules = _core_modules()
     _read_the_core(modules)
     assert stack_mentions(modules) == STACK_NAMED
-
-
-def _dotted(path: Path) -> str:
-    parts = path.relative_to(PACKAGE.parent).with_suffix("").parts
-    return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
-
-
-def imported(path: Path, tree: ast.AST) -> Iterator[str]:
-    """Every module `tree` imports, by its absolute name, with a relative import resolved against
-    `path`'s package and `from package import name` read as `package.name` too, since `name` may
-    be a module."""
-    package = _dotted(path) if path.name == "__init__.py" else _dotted(path).rpartition(".")[0]
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            yield from (alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            base = package.split(".")
-            if node.level:
-                base = base[: len(base) - node.level + 1]
-                module = ".".join([*base, node.module] if node.module else base)
-            else:
-                module = node.module or ""
-            yield module
-            yield from (f"{module}.{alias.name}" for alias in node.names)
-
-
-def stack_packages(profiles: Path) -> tuple[str, ...]:
-    """Every stack's directory under `profiles`, a profile or not: a stack may ship a runner's
-    adapters and no profile, and its code is a stack's all the same. `__pycache__` and any other
-    name no stack could have are left out."""
-    return tuple(
-        sorted(
-            p.name for p in profiles.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))
-        )
-    )
-
-
-def stack_imports(modules: list[Path]) -> set[tuple[str, str]]:
-    stacks = tuple(f"stayfixed.profiles.{name}" for name in stack_packages(PROFILES))
-    found: set[tuple[str, str]] = set()
-    for path in modules:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for module in imported(path, tree):
-            if any(module == stack or module.startswith(stack + ".") for stack in stacks):
-                found.add((path.relative_to(ROOT).as_posix(), module))
-    return found
-
-
-@pytest.mark.parametrize(
-    ("source", "module"),
-    [
-        ("import stayfixed.profiles.python.hygiene", "stayfixed.profiles.python.hygiene"),
-        ("from stayfixed.profiles import python", "stayfixed.profiles.python"),
-        ("from .python import hygiene", "stayfixed.profiles.python.hygiene"),
-    ],
-)
-def test_the_import_reader_resolves_every_spelling_of_a_stack_import(
-    source: str, module: str
-) -> None:
-    # Pinned on samples, read as if from the profiles' own machinery, rather than inferred from
-    # the tree, which holds no such import. Reddened by yielding `node.module` alone for an
-    # `ImportFrom` (the second and third cases), and by dropping the relative resolution (the
-    # third); both measured.
-    assert module in set(imported(PROFILES / "hints.py", ast.parse(source)))
-
-
-def test_every_stack_directory_is_read_whether_or_not_it_holds_a_profile(tmp_path: Path) -> None:
-    # A stack may ship its runner's adapters with no `profile.toml` beside them, and a core import
-    # of that code is a stack import all the same; reading `shipped()` alone left it unseen.
-    # Measured by hand: `stack_packages` returning `shipped()` drops `go` here.
-    for name, file in (("python", "profile.toml"), ("go", "adapters.py"), ("__pycache__", "x.pyc")):
-        (tmp_path / name).mkdir()
-        (tmp_path / name / file).write_text("", encoding="utf-8")
-    assert stack_packages(tmp_path) == ("go", "python")
-    assert set(shipped()) <= set(stack_packages(PROFILES))
-
-
-def test_no_core_module_imports_a_stack_profiles_code() -> None:
-    # The core reaches a stack's code only by discovering it (`stayfixed.profiles.hints`), never
-    # by naming it in an import. Oracle: `mutations/`'s "the core imports the Python profile's
-    # hint".
-    modules = _core_modules()
-    _read_the_core(modules)
-    assert stack_imports(modules) == set()

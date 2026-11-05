@@ -671,14 +671,6 @@ OTHER_PREDICATES: dict[tuple[str, str, str], tuple[int, str]] = {
     ("areas.py", "_has_submodule", "is_file"): (2, "the package's own directory"),
     ("overlay/template.py", "templates", "is_dir"): (1, "the wheel's own template tree"),
     ("project/templates.py", "read", "is_dir"): (1, "the wheel's own template tree"),
-    ("profiles/__init__.py", "stack_directories", "is_dir"): (1, "a resource of the package's own"),
-    ("profiles/__init__.py", "stack_directories", "is_file"): (
-        1,
-        "a resource of the package's own",
-    ),
-    ("profiles/__init__.py", "load_profile", "is_file"): (1, "a resource of the package's own"),
-    # `os.DirEntry`'s, which answers alike on every interpreter.
-    ("profiles/python/hygiene.py", "_bytecode", "is_dir"): (1, "an os.DirEntry"),
 }
 
 
@@ -946,7 +938,7 @@ def test_a_bounded_read_under_a_root_follows_no_link_and_reads_only_a_regular_fi
     # Under a root the file is reached as a write reaches it: a link at the last component is
     # refused, and so is one above it, where without a root a link to a regular file is read. A
     # directory is refused as not a regular file. Mutation (declared): `mutations/`'s "a symlinked
-    # .pyc is followed" -> the linked file is read under the root.
+    # note is followed" -> the linked file is read under the root.
     (tmp_path / "real").mkdir()
     (tmp_path / "real" / "file.md").write_bytes(b"x")
     (tmp_path / "real" / "link.md").symlink_to(tmp_path / "real" / "file.md")
@@ -966,8 +958,8 @@ def test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer(tmp_path: P
     # The open under a root never waits, and what it opened is asked whether it is a regular file:
     # a FIFO opened without a writer reads as empty, so it must be refused by its descriptor. In a
     # child under a timeout, so a regression fails this case rather than hanging. Mutations
-    # (declared): `mutations/`'s "a .pyc that is a named pipe is opened waiting for a writer" -> the
-    # child times out; "a .pyc that is not a regular file is read" -> the FIFO reads as empty.
+    # (declared): `mutations/`'s "a note that is a named pipe is opened waiting for a writer" -> the
+    # child times out; "a note that is not a regular file is read" -> the FIFO reads as empty.
     os.mkfifo(tmp_path / "pipe.md")
     probe = (
         "import sys\n"

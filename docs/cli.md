@@ -5,11 +5,8 @@ gives you the one-line version; this is the rest.
 
 Three things hold everywhere:
 
-- **`--json` is accepted anywhere before `--`** and prints one machine-readable object instead of
-  one line. It is not declared per command — the frame strips it from `argv` before parsing. The
-  words after a bare `--` are a command's own and are never read for it: `stayfixed prove --
-  COMMAND --json` hands `--json` to `COMMAND` and prints the line. A command
-  whose result is a list of findings carries it under **`findings`**, named after what the
+- **`--json` is accepted anywhere** and prints one machine-readable object instead of
+  one line. It is not declared per command — the frame strips it from `argv` before parsing. A command whose result is a list of findings carries it under **`findings`**, named after what the
   values are and spelled the same way by every command, whatever its summary line calls them.
   Three commands do: `bugs check`, `docs check` and `plan check`. Every other
   command's keys are its own and are listed with it below — `doctor`'s `checks`, `docs trail`'s
@@ -47,7 +44,6 @@ Three things hold everywhere:
 - [`stayfixed commit check --range RANGE`](#stayfixed-commit-check---range-range)
 - [`stayfixed commit strip FILE`](#stayfixed-commit-strip-file)
 - [`stayfixed test attribute --command CMD [--base REF]`](#stayfixed-test-attribute---command-cmd---base-ref)
-- [`stayfixed prove [--timeout SECONDS] [--junit PATH] -- COMMAND …`](#stayfixed-prove---timeout-seconds---junit-path----command-)
 - [`stayfixed bugs new TITLE --severity S --area A [--source S] [--related ID …] [--no-fetch]`](#stayfixed-bugs-new-title---severity-s---area-a---source-s---related-id----no-fetch)
 - [`stayfixed bugs index [--check]`](#stayfixed-bugs-index---check)
 - [`stayfixed bugs check [--base REF]`](#stayfixed-bugs-check---base-ref)
@@ -56,7 +52,7 @@ Three things hold everywhere:
 - [`stayfixed docs check [--budgets] [--links]`](#stayfixed-docs-check---budgets---links)
 - [`stayfixed docs trail [--check]`](#stayfixed-docs-trail---check)
 - [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
-- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----profile-name---memory-mode-mode---attribution-check---root-path---machine-path)
+- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----memory-mode-mode---attribution-check---root-path---machine-path)
 - [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
 - [`stayfixed overlay upgrade [--root PATH] [--dry-run]`](#stayfixed-overlay-upgrade---root-path---dry-run)
 - [`stayfixed attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
@@ -422,20 +418,9 @@ turn from ending. An event Codex delivers from that file runs the same handlers 
 per-machine switch, and that has not been measured on Codex. `stayfixed hook` dispatches eight
 events, those six and `UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses.
 
-**The red-run note.** The environment faults that make a red test run unattributable:
-uncommitted changes in the tree, which belong to no stack, and whatever each stack's profile knows about its own — for
-Python, `.pyc` files under `[ledger] code_roots` whose recorded source mtime no longer matches
-their source. The note counts the uncommitted changes across the whole repository — a dirty tree
-anywhere makes a red run unattributable — and asks every profile that ships a `hygiene.py`
-(today, Python) for its counts.
-
-A profile's walk is bounded: Python's lists at most 500,000 directory entries under the code
-roots in total, every entry and not only the bytecode, and reads at most 20,000 of the `.pyc`
-files it lists. Reading a `.pyc` costs tens of times listing an entry, so each half has its own
-bound; over 499,990 `.pyc` files sharing one source, the worst tree for both, the walk stopped
-in under 3 s on a laptop with a warm cache, a third of the hook's 10-second timeout. A walk that
-stops at either bound has not seen the tree and reports no count, stale or clean, even when the
-part it saw held no Python. The bounds are fixed; what they walk is not.
+**The red-run note.** The environment fault that makes a red test run unattributable:
+uncommitted changes in the tree. The note counts them across the whole repository — a dirty tree
+anywhere makes a red run unattributable — and says nothing when the tree is clean.
 
 The `PostToolUseFailure` `Bash` hook delivers the note once per context after a red test run:
 Claude Code delivers a command that exited non-zero on that event, with `error` beginning `Exit code
@@ -443,17 +428,15 @@ N`, and an `error` that begins otherwise, or with a run of more than nine digits
 has, gets no note. The same handler is registered on `PostToolUse` too, where no measured harness
 delivers an exit code: Codex delivers a failed command there with none, so the note does not speak,
 and the registration is a placeholder for parity with Codex. The two share one once-per-context key,
-so a context gets at most one note, whichever event carries it. The note is chosen by the command
-that failed rather than by configuration: each simple command of the red run is offered to every
-shipped profile's hint, and the dirty-tree line and the line of each profile whose runner it
-recognises (Python's: `pytest`, or `python -m pytest`) are delivered together. A runner is
-recognised behind environment assignments, an `env` prefix and `uv run`, read as `stayfixed prove`
-reads it, its bound included: the command starts at the first word a runner adapter recognises, so
-a runner named before the real command (`uv run --with pytest echo`, `uv run grep -m pytest x`)
-gets the note, and one named through an alias, or by a path no adapter recognises, does not. A red
-command no profile recognises gets no note. When Python's walk stopped at its bound, its line says
-the walk could not tell whether a stale build was imported, and names neither stale bytecode nor its
-absence.
+so a context gets at most one note, whichever event carries it. The note is given by the command
+that failed rather than by configuration: it speaks when a simple command of the red run starts
+with a test runner's command in the hints' runner table (`pytest`, `python -m pytest`, `cargo test`,
+`go test`, `npm test` and the other common runners), read by the program's file name and never by
+its options. A runner is recognised behind environment assignments, an `env` prefix and `uv run`,
+its bound included: the command starts at the first word the table reads as a test run, so a
+runner named before the real command (`uv run --with pytest echo`, `uv run grep -m pytest x`) gets
+the note, and one named through an alias or another launcher (`poetry run pytest`) does not. A red
+command the table does not name gets no note.
 
 The wrapper exists because a Python process cannot speak for its own absence: a missing script
 exits `2` by CPython accident, and so does a launcher run under an interpreter below stayfixed's
@@ -461,13 +444,15 @@ floor, and on `PreToolUse` Claude Code reads a `2` as a refusal of the call. So 
 three things before stayfixed runs: it unsets an inherited `GIT_DIR` and `GIT_WORK_TREE`, which
 would make every `git` answer about another repository, and changes into the project root
 (`CLAUDE_PROJECT_DIR`, else `git`'s toplevel) so every command's `--root` default is correct; it
-then takes the `python3` on `PATH` there, where a pyenv, asdf or mise shim chooses by the project's
-own pin, and asks it, by running code, to be 3.11 or newer; and it maps exit codes. Where that
-`python3` is missing or older, and uv is on `PATH`, it takes the interpreter `uv python find --no-config
---no-python-downloads '>=3.11'` names, asked from `/` and not from the project root: uv reads
-`.python-version`, `pyproject.toml` and `uv.toml` from its working directory and its parents, and
-runs the `.venv/bin/python` it finds there to ask its version (measured with uv 0.12.19), so a
-repository could choose the program every hook starts, and in `/` it does not.
+takes its interpreter from `PATH` resolved in `/`, which a repository cannot move because it writes
+no file there; and it maps exit codes. The `python3` found from `/` is asked, by running code, to be
+3.11 or newer and to print the binary it really is, which then runs stayfixed from the project
+root. Where that `python3` is missing or older, it takes the interpreter `uv python find '>=3.11'`
+names, also asked from `/`. Asked from the project root, an empty or relative `PATH` element would
+run a `python3` the repository commits, a pyenv, asdf or mise shim would run what the project's own
+pin names, and uv reads `.python-version`, `pyproject.toml` and `uv.toml` from its working
+directory and its parents and runs the `.venv/bin/python` it finds there to ask its version
+(measured with uv 0.12.19).
 
 No handler refuses a call, so stayfixed's non-zero exit is always a fault. `0` passes through
 untouched. Every non-zero exit, and every fault the wrapper finds before `stayfixed` runs — no
@@ -865,216 +850,6 @@ files because the archived tree's own `.gitattributes` excluded them, and `2` wh
 shaped like an option, which is refused above the first subprocess rather than handed to `git` as
 one.
 
-## `stayfixed prove [--timeout SECONDS] [--junit PATH] -- COMMAND …`
-
-Run a test command where it is typed, count only what its runner reported, and say what that
-proves: `proved`, `failed`, `not proven` or `refused`.
-
-```bash
-stayfixed prove -- uv run --locked pytest tests/test_x.py
-stayfixed prove --timeout 600 -- npx vitest run
-stayfixed prove --junit target/surefire-reports/TEST-all.xml -- mvn -q test
-```
-
-**What runs.** The command is everything after `--`, run as typed, never through a shell. `prove`
-reads no configuration, needs no `stayfixed.toml`, and takes neither `--root` nor `--machine`; a
-line with no `--`, or nothing after it, is a usage error (2). It reads the command past its
-`NAME=value` assignments, `env` and `uv run`, as the red-run hint reads a command, and the first
-runner adapter that recognises what is left plans the run: the argv, and where the runner's report
-arrives and in which format. A command no adapter recognises, an `env` given an option among them,
-is `not proven` (`not-recognised`); `--junit` (below) counts the report of a runner no adapter
-knows.
-
-**The `uv run` bound.** Behind `uv` and the first later word `run` (so `uv tool run pytest` and `uv
-pip install run pytest` too), the command starts at the first word an adapter recognises, and every
-word before it goes to uv unchecked, whether a uv option's value, another program and its
-arguments, or an `env` and its assignments. So `uv run --with pytest python -O -m pytest`, `uv run
-python -O -m coverage run -m pytest`, `uv run python -O .venv/bin/pytest`, `uv run pypy3 -O -m
-pytest` and `uv run env PYTHONOPTIMIZE=1 pytest` run with `-O` or `PYTHONOPTIMIZE` unchecked and
-can read `proved`; `uv run grep -m pytest x` runs with the report options added and reads `not
-proven`; and `uv run --with pytest -- pytest -x` hands them to uv, which refuses them (`not
-proven`). A `uv run` in which no adapter recognises a word is read whole, as is a runner named
-through an alias or by a path no adapter recognises, which `--junit` counts.
-
-The run is the command's own words with only the adapter's report options added (the table
-below). Behind a launcher, the command's words are handed to it as typed and the launcher finds
-the runner, so `uv run pytest` runs the `pytest` uv's environment holds; the receipt names the
-launcher. A runner missing behind `uv run` is uv's to report (uv exits 2, "Failed to spawn"): a
-`go test` reads `failed` (`none-ran`), since its report is its output, and the others `not proven`
-(`no-report`), never `entry-not-found`. Without a launcher, the program is found as a shell finds
-it in the run's environment: a word holding a `/` from the directory the command runs in, a bare
-name on its `PATH`, so `PATH=.venv/bin:$PATH pytest` runs the `pytest` it names. The receipt names
-the realpath of the program that ran.
-
-The command runs in the directory `prove` is typed in, or in the one its launcher is told to run it
-in: each `uv` among the launcher's words moves to the directory its `--directory DIR` or
-`--directory=DIR` names, else to `UV_WORKING_DIR`'s (`--project` moves nothing). Only the
-launcher's words are read, so neither moves a command read whole, a `--directory` after the first
-word an adapter recognises is not read, and a launched program's own `--directory` before it is
-read as uv's. That directory is the one judged: the plan is made there, and the project the
-receipt answers for, whose tree's state it names, is its git top-level, or the directory itself
-outside a repository. A command typed in `packages/web` runs in `packages/web`.
-
-**The environment** is built once, as a shell builds it: yours, then each `NAME=value` the command
-spells before its launcher, bare or after an `env`, in order, the last of two for one name
-winning; such an assignment never reaches the argv. It is the whole launched process's, the
-launcher's included. An assignment after `uv run`, bare or after an `env`, is the launcher's word,
-handed to uv as typed: bare (`uv run TYPED=yes pytest`), uv runs it as its program and fails
-("Failed to spawn", exit 2), so no test runs; after an `env`, it is set unchecked (the bound
-above). Two variables are set apart, each its adapter's forging set, and only for a value that
-turns tests off: `PYTHONOPTIMIZE` (pytest) set to anything but empty or `0`, and `UPDATE_SNAPSHOT`
-(vitest) set to anything but empty, `none` or `new`, which vitest reads as `--update`. Assigned by
-the command before its launcher, such a value is `refused` (`assigned-forging`, naming the
-variable); inherited, the variable is removed from the run's environment, which the receipt names
-(`scrubbed`). Every other variable and value is yours, read by the runner as outside `prove`:
-`PYTEST_ADDOPTS`, `NODE_OPTIONS`, `GOFLAGS`, `GOENV` and the rest. A variable an env file sets past
-this reading (`uv run --env-file`, an inherited `UV_ENV_FILE`) is the bound's: it can set
-`PYTHONOPTIMIZE` or `UPDATE_SNAPSHOT`, or a nested launcher's directory, where `prove` does not
-look.
-
-**Input and output.** The runner's standard input is `/dev/null`, never yours, so nothing piped
-into `prove` reaches the run and a test that reads it sees its end. A report the runner writes to a
-file is read from a scratch directory outside the project. A report that is the runner's own
-standard output (`go test`'s event stream) is copied to yours as it arrives, every byte, and only
-the format's own events are counted. Under `--json` the runner's standard output goes to standard
-error instead, every byte, so that standard output holds the one JSON object; without `--json` it
-is yours, and its standard error is yours either way. Text a command prints is never counted.
-
-**The runners.** Each refuses (`refused-option`, naming the option) only what you could type by
-mistake and get a green report for tests that never ran or checked nothing, and says `not proven`
-for a run that would never end (`never-ends`) or runs no test suite (`no-test-run`); every other
-option is free. An option is read in its documented spellings, alone or as `--option=value`, where
-`=false` turns a jest or vitest boolean off (`--update=none` is free, `--update none` refused as
-`--update`); node's options and vitest's `--mergeReports` are read with any `=value`, which Node
-reads as on and vitest as a directory. Another spelling the runner also reads, a cluster of short
-options such as `-cu` among them, is the bound's.
-
-| Runner | Recognised | Added to the command | Refused, or `not proven` | The receipt names |
-|---|---|---|---|---|
-| `pytest` | `pytest`, `py.test` and `python… -m pytest` (the interpreter's own options alone before `-m`), each also behind `poetry run`, `uv run` or `uv run -m` | `--junitxml=<report> -o junit_family=xunit2`, last among pytest's options and before a `--` where there is one, so they win over the command's own and an `addopts` | refused: `--setup-plan` and `--setup-only` (and `--setupplan`, `--setuponly`), which report the tests they only set up as passed; `--trace`, which reports a failing test as passed once its standard input ends; the interpreter's `-O` in any word of its flags before `-m pytest` (`-OO`, `-bO`), which compiles out every `assert` pytest does not rewrite, unless the `uv run` bound puts it among the launcher's words | the console script, the interpreter or the launcher |
-| `jest` | `jest`, bare, after `npx` or `npx --no-install`, or by a path to it (`./node_modules/.bin/jest`, npm's link or pnpm's shim); `node [Node's options] <entry>`, the entry a path into `node_modules/jest` or `jest-cli`, or `node_modules/.bin/jest` | `--json --outputFile=<report>`; the command's own `--json` runs as without it, and its own `--outputFile` leaves jest writing no report (`not proven`) | refused: `-u`/`--updateSnapshot`, and `--collectTests`, which exits 0 reporting a failing test as passed, each also dashed (`--update-snapshot`); `never-ends`: `--watch`, `--watchAll` (`--watch-all`), and Node's `--inspect-brk` and `--inspect-wait`, on the command line or in `NODE_OPTIONS` | the program (`npx`, `node`, or the file the path names) |
-| `vitest` | as `jest`, for `vitest` and `node_modules/vitest` | `run` first where the command's first word is none of vitest's subcommands; `--reporter=json --outputFile=<report>`, and `--reporter=default` where the command names no reporter | refused: `-u`/`--update` but `--update=none`, `--no-update` and `--update=new`; `--mergeReports` or `--merge-reports`, which runs nothing and reports an earlier run's blobs; `--dangerouslyIgnoreUnhandledErrors`, which exits 0 past an error vitest fails the run for; and a rewriting `UPDATE_SNAPSHOT` (above); `never-ends`: the `watch` and `dev` subcommands, `-w`/`--watch`, `--inspect-brk`, `--inspect-wait`; `no-test-run`: `bench`, `list`, `init` and `doctor`, whose detail names `vitest run` | as `jest` |
-| `node --test` | `node` with `--test` among its options | a junit reporter to `<report>` and the spec reporter to standard output, before the command's own options | refused: `--test-update-snapshots` and `--test-rerun-failures`, which reports the tests a state file says passed before as passed, unrun; on the command line or in `NODE_OPTIONS`, which Node reads it from too; `never-ends`: `--watch`, `--watch-path`, and `--inspect-brk` and `--inspect-wait` there or in `NODE_OPTIONS` | `node` |
-| `go test` | `go test …`, the `go` a bare name or a path to one | `-json`, after a leading `-C dir` (which the go command reads only first) and otherwise first | nothing is refused and nothing removed; `-c`, which builds the test binary and runs nothing, is `failed` (`none-ran`), and a `-json=false` of the command's own turns the stream into text (`report-malformed`) | the `go` or the launcher |
-
-A program the command names that is not where it would be found is `not proven`
-(`entry-not-found`), its detail saying what was looked for: a word holding a `/` at that path, a
-bare name on `PATH`; a bare `jest` or `vitest` on no `PATH` entry names `npx jest` and `prove
---junit`. A file `node` is given that is not the runner's entry writes no report (`not proven`).
-`npm test`, `npm run`, `yarn` and `pnpm` are recognised by none; `prove --junit` counts what they
-run. A refusal and a `never-ends` in one command: the refusal wins.
-
-Notes by runner, each what the command does outside `prove` too:
-
-- **pytest.** An option that writes no report (`-p no:junitxml`) is `not proven`, and one that
-  runs no test (`--collect-only`) is `failed`, by themselves. `--pdb`'s debugger reads the end of
-  its standard input and quits, the failure kept in the report.
-- **jest, vitest.** `npx` reads `.npmrc` and puts every `node_modules/.bin` above npm's local
-  prefix on `PATH`: the directory, or inside an npm workspace the workspace's root, whose jest
-  runs before a package's own. Given a runner no `node_modules` holds,
-  it installs one **without asking**: the run's standard input is `/dev/null`, and npm asks only
-  at a terminal, and otherwise warns and installs. Node's options before an entry are any (`node
-  --max-old-space-size=4096 node_modules/jest/bin/jest.js`), and
-  `NODE_OPTIONS=--experimental-vm-modules npx jest`, jest's recipe for ES modules, runs as typed.
-  A run of no test with jest's standard error a pipe, as in most CI jobs, writes no report, so it
-  is `not proven` there and `failed` at a terminal: never `proved`. A vitest subcommand after an
-  option (`vitest --globals related a.js`) is a name filter of `run`, as vitest reads it;
-  `related` gets `--run` where the command does not set it. vitest's own `--outputFile` beside
-  the adapter's leaves no report (`not proven`, `no-report`), and a file-writing reporter of the
-  command's own (`vitest --reporter=junit`) shares the adapter's report file, which then does not
-  parse (`not proven`, `report-malformed`).
-- **node --test.** A testcase Node writes for a whole file that ran no test is not counted unless
-  it failed. A `todo` test is skipped, failing or not, as Node counts it. A reporter of your own
-  given no destination stops Node before any test runs, so the run is `not proven`; give it one
-  (`--test-reporter=spec --test-reporter-destination=stdout`).
-- **go test.** The report is the run's standard output, copied to yours whole; a line a test
-  prints is an `output` event and never a result. The 64 MiB cap counts the events alone: every
-  `output` event read whole is left out of the report counted, an `output` line that does not
-  parse is kept, so its refusal stands, and a refusal's line number, the size it names and
-  `report_digest` are of that kept stream. `GOFLAGS`, `GOENV` (and the `go env -w` settings its
-  file holds), `GOTOOLCHAIN`, `GOROOT`, `GOOS`, `GOARCH` and every flag are yours. A leading `-C
-  dir` moves the go command and not the judgement: the receipt's `directory` is the one typed.
-
-The discovery set of each runner, whose untracked files the receipt names (below):
-
-| Runner | Discovery set |
-|---|---|
-| `pytest` | `conftest.py`, `test_*.py` and `*_test.py`, at any depth |
-| `jest`, `vitest`, `node --test` | jest: `*.test.*`, `*.spec.*`, `__tests__/*`; vitest: `*.test.*`, `*.spec.*`; node: `*.test.*`, `*-test.*`, `*_test.*`, `test-*.*`, `test.*`, `test/*` |
-| `go test` | `*_test.go` |
-
-**`--junit PATH`** is for a runner no adapter knows: no adapter is consulted, the command runs
-as typed (its assignments, `env` and launcher read as above, its program found as above, nothing
-refused or removed), and its report is the JUnit file at `PATH`, read from the directory the command
-runs in and allowed anywhere, inside the project too; a command read whole moves to no directory,
-so `PATH` is read where `prove` is typed whatever its `--directory` or `UV_WORKING_DIR`. Before the run `prove` notes what is at
-`PATH` reaches, followed through a link (nothing, or its inode, size and modification time);
-after it, the file is counted only when `PATH` reaches a regular file the run created or rewrote,
-or a link the run pointed at another file (`latest.xml` at the report it just wrote), and
-otherwise the run is `not proven` (`junit-unchanged`, naming the file by its realpath), so a stale
-or committed report counts nothing. A link the run newly makes to a stale file is the bound's.
-A program the command names that is not there is `not-started`. The verdict is the cascade's.
-`verified` says only whether the run was a `--junit` one: every `--junit` receipt carries
-`verified: false`, one not started too, and every other `verified: true`, a command no adapter
-recognises or one refused among them; the receipt of a `--junit` run, and of a command no adapter
-recognises, carries `runner: null`. The line of a `--junit` run says `runner not verified, ran
-<program>`.
-
-**What `proved` means.** The code under test, any file in the runner's load path, tracked or not, and the environment the runner reads can shape its report, so `proved` means the runner reported green on this tree, for the tests this command selected.
-
-**The verdict**, the first row that holds winning:
-
-| Row | Verdict | Exit | Reason |
-|---|---|---|---|
-| the runner's adapter refuses the command, or the command assigns a variable in the adapter's forging set | `refused` | 2 | the adapter's own (`refused-option`), `assigned-forging` |
-| no adapter recognises the command, its entry point does not resolve, it asks for a run that never ends or one that runs no test suite, it could not start, it was interrupted or passed its time limit, it wrote no report, the run did not write the `--junit` report, or the report does not read | `not proven` | 1 | `not-recognised`, the adapter's own (`entry-not-found`, `never-ends`, `no-test-run`), `not-started`, `interrupted`, `timed-out`, `no-report`, `junit-unchanged`, a report's own |
-| the report holds a failed test | `failed` | 1 | `failing` |
-| the report holds no test | `failed` | 1 | `none-ran` |
-| every test the report holds was skipped | `failed` | 1 | `all-skipped` |
-| the report is green and the command exited non-zero | `not proven` | 1 | `green-but-exited` |
-| otherwise | `proved` | 0 | |
-
-A report does not read when it is past 64 MiB (`report-too-large`), a JSON report is not UTF-8
-(`report-not-utf8`), it does not parse as its format (`report-malformed`), an
-XML report declares a doctype (`report-doctype`), or it names an entity it never declared
-(`report-entity`). Where the refusal names something the report holds, an unknown test status, it is
-escaped and, past 120 characters, cut to its start and its length.
-
-`--timeout` ends the run's whole process group past that many seconds (default: 3600, which bounds
-a suite that hangs and is no suite's budget). So does an interrupt (Ctrl-C) or a `SIGTERM` or
-`SIGHUP` to `prove`, at any point of the run (while the tree's state is taken or the run planned,
-as much as while the command runs): either way the run is `not proven` (`interrupted` or
-`timed-out`), what the command left running in its process group is ended with it, and the
-scratch directory is removed.
-
-**The line** says the verdict and its reason in words, the counts (passed, failed, skipped), the
-runner and the realpath of the program that ran, each variable of your environment the run did
-not get (`removed from the run's environment: PYTHONOPTIMIZE`: one of the adapter's forging set),
-and the untracked files in its discovery set, those git does not ignore first and then the ignored
-ones; twenty and a count of the rest. The tree's state is taken before the run and after it, and is information for
-you, never an input to the verdict. `--json` carries `verdict`, `reason`, `detail` (the variable a
-refused assignment named, or a sentence naming the variable after a launcher; the option or word the
-runner's adapter refused; what was looked for on `entry-not-found`; the option or subcommand on
-`never-ends` and `no-test-run`; the file on `junit-unchanged`; or where a report stopped reading),
-`argv` (the command, the value of every `NAME=value` and `--option=value` word replaced by `…`; a
-single-dash `-name=value`, Go's spelling, and a value passed as the word after its option are kept
-as typed), `directory` (where the command was judged), `runner`, `program`, `verified`
-(false on a `--junit` run, and only there), `scrubbed` (those variables' names, sorted), `counts`,
-`exit_code`, `report_digest` (the SHA-256 of the report counted: of a test event stream, the lines
-kept, never the output printed), `commit`, `dirty_before`, `dirty_after`, `untracked` and
-`untracked_more`.
-
-**The network.** `prove` itself reaches none; what runs may. `uv run` may sync the project's
-environment from its index first, as it does outside `prove`; `go test` may download the modules
-`go.mod` names, from the proxy your go environment names, a `go env -w` setting included; and
-`npx` installs a runner no `node_modules` holds, from the registry your `.npmrc` names, without
-asking, since its standard input is no terminal.
-
-**Reads** the command's report and git's answers about the tree. **Writes** nothing in the project:
-the scratch directory is under the system's temporary directory, is readable by you alone, and is
-removed on every path. What the command itself writes, it writes. **Runs** the command, as the
-README's [What stayfixed sends where](../README.md#what-stayfixed-sends-where) row says.
-
 ## `stayfixed bugs new TITLE --severity S --area A [--source S] [--related ID …] [--no-fetch]`
 
 File a bug: allocate the next free identifier (`1 + max` over every entry in the working tree
@@ -1197,31 +972,34 @@ naming either, still names the renumber.
 
 ## `stayfixed bugs regressions [--timeout SECONDS]`
 
-Run the `regression` of every entry whose `status` is `fixed`, in identifier order, each as
-[`stayfixed prove`](#stayfixed-prove---timeout-seconds---junit-path----command-) runs a command
-and judged as it judges one: from the project root, under the caller's environment, with
-`--timeout` as each run's bound, a whole number of seconds above 0 (default `600`, ten minutes);
-the parser refuses any other value (exit `2`). An entry of any other status is not run,
-whatever it carries: a `rejected` one has no fix to regress, a `partial` one is still open and a
-`void` one is a renumber's pointer. An argv no runner adapter recognises is `not proven`, and
-nothing is started for it.
+Run the `regression` of every entry whose `status` is `fixed`, in identifier order: each argv as
+written, never through a shell, from the project root, under the caller's environment, with its
+standard input `/dev/null` and `--timeout` as each run's bound, a whole number of seconds above 0
+(default `600`, ten minutes); the parser refuses any other value (exit `2`). An entry of any other
+status is not run, whatever it carries: a `rejected` one has no fix to regress, a `partial` one is
+still open and a `void` one is a renumber's pointer.
 
-The line names each run, `<id>: ` and then the receipt's line as `prove` prints it, and ends
-`<n> regression(s), <m> not proved`; with nothing to run, it is `nothing to run: no fixed entry
-carries a regression`. `--json` carries `regressions`, one `{"id", "path", "verdict", "line"}`
-object a run, `path` being the entry file's from the project root, and `not_proved`. The runner's
-standard output goes to standard error in both forms, so under `--json`
-standard output holds the one object. Exits `0` when every run is `proved` or there is none, and
-`1` otherwise, as `prove` does. A Ctrl-C, or a SIGTERM or SIGHUP, during a run ends that run `not
-proven`, and nothing after it starts. A ledger that does not parse fails (`1`).
+Each run's exit code is its verdict, and no test runner's report is read: `passed` (exit 0),
+`failed` (any other exit), `timed-out` (past `--timeout`), `interrupted` (a Ctrl-C, or a SIGTERM
+or SIGHUP to stayfixed, during the run) or `not-run` (the argv could not be started). Each run
+starts in a session of its own, and on a timeout or an interrupt whatever it started in that process
+group is ended with SIGKILL. An interrupted run is the last: nothing after it starts.
+
+The line names each run, `<id>: <verdict>: <detail>`, the detail being the exit code (`exit 3`),
+the bound it ran past, or why it could not start, and ends `<n> regression(s), <m> not passed`;
+with nothing to run, it is `nothing to run: no fixed entry carries a regression`. `--json` carries
+`regressions`, one `{"id", "path", "verdict", "line"}` object a run, `path` being the entry file's
+from the project root and `line` the text after `<id>: `, and `not_passed`. The command's standard
+output goes to standard error in both forms, so under `--json` standard output holds the one
+object. Exits `0` when every run is `passed` or there is none, and `1` otherwise. A ledger that
+does not parse fails (`1`).
 
 The run catches an honest regression and is no control against a hostile one: the argv is read from
 the tree the change wrote, which can rewrite it as easily as the test.
 
-**Reads** the ledger's entry files, and what `prove` reads. **Writes** nothing in the project, as
-`prove` writes nothing there; what each runner writes, it writes. **Runs** each argv, as the
-README's [What stayfixed sends where](../README.md#what-stayfixed-sends-where) row for `prove`
-says.
+**Reads** the ledger's entry files. **Writes** nothing in the project; what each argv writes, it
+writes. **Runs** each argv, as the README's
+[What stayfixed sends where](../README.md#what-stayfixed-sends-where) row for `regression` says.
 
 ## `stayfixed bugs renumber OLD NEW`
 
@@ -1356,7 +1134,7 @@ lints it.
 
 ---
 
-## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--profile NAME] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
+## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
 
 Writes a repository's stayfixed scaffold, once: `stayfixed.toml`, and the files the pack's
 commands read — the roadmap with its trail markers and `trail.toml` beside it for `docs trail`, the
@@ -1372,7 +1150,6 @@ Each answer flag replaces one default and writes one key:
 - `--name` writes `[project] name`;
 - `--base-branch` writes `[project] base_branch` and `release_branch`;
 - `--agent`, once per harness, writes `[stayfixed] agents`;
-- `--profile` writes `[stayfixed] profile`, an empty value meaning none;
 - `--memory-mode` writes `[memory] mode`;
 - `--attribution-check` writes `[commit_messages] attribution_check = true`, which is off unless
   answered.
@@ -1382,7 +1159,7 @@ The recommended plugins are not `init`'s to install:
 
 After both reports the run prints `picked:`, one line per question in the order
 `init --questions` asks them, with the value this run took: the name, the base branch, the memory
-mode, the profile, the attribution check (`on` or `off`), the
+mode, the attribution check (`on` or `off`), the
 agents stayfixed serves among those listed, and `plugins: none`, since
 `init` installs none. Taking every default gives the attribution check `off` and no plugin. A value a `stayfixed.toml` you wrote holds outside the plain-path grammar
 prints as `<unprintable; see stayfixed.toml>`.
@@ -1410,10 +1187,7 @@ When nothing answers, `init` detects:
   so. Only with no remote at all is it the branch checked out, when that is a plain branch name,
   with a `note:` when it is not `main`, else `main`;
 - the agent surfaces from which of `.claude/` and `.codex/` the repository carries, both when
-  it carries neither;
-- `[stayfixed] profile` from the first shipped profile whose markers sit at the root
-  (`python`: `pyproject.toml`, `setup.py`, `setup.cfg`, a requirements file, a `Pipfile` or a
-  lockfile), written only when one is found.
+  it carries neither.
 
 Both name candidates, the remote's segment and the directory name, are repository-authored.
 So one outside `[project] name`'s grammar is refused naming the grammar and the remedy, and
@@ -1460,8 +1234,8 @@ A file already at an artifact's place that stayfixed did not write is left as it
 between its markers, and every line outside them is kept.
 
 **Reads** `stayfixed.toml` when there is one, `.stayfixed/manifest.json`, `git` for the name
-and the base branch, which harness directories the root carries (`.claude/`, `.codex/`), each
-shipped profile's marker files at the root, and every file an artifact targets.
+and the base branch, which harness directories the root carries (`.claude/`, `.codex/`), and
+every file an artifact targets.
 
 **Writes**, every one of them through the scaffold engine or `stayfixed.toml`'s key editor, so
 that every target goes through the containment walk and none may leave the project root or
@@ -1500,7 +1274,7 @@ the base branch; empty otherwise. An answered `--base-branch` replaced nothing, 
 
 ## `stayfixed init --questions [--root PATH] [--machine PATH]`
 
-Prints the values `stayfixed init --yes` would take for the seven things a person may answer, where
+Prints the values `stayfixed init --yes` would take for the six things a person may answer, where
 each came from, and the flag that replaces it: on `init --yes`, but for the recommended plugins,
 which `stayfixed setup` installs on the machine. It writes nothing. The `init` skill asks its
 questions from it, taking every default offered first, and a person reads it to see the defaults
@@ -1514,7 +1288,6 @@ detected:
   project.name: widget (origin remote; --name)
   project.base_branch: main (origin/HEAD; --base-branch)
   memory.mode: harness (default; --memory-mode)
-  stayfixed.profile: python (profile markers; --profile)
   commit_messages.attribution_check: off (the preset's default; --attribution-check)
   stayfixed.agents: claude, codex (default; --agent)
   plugins: none (default; stayfixed setup --plugin)
@@ -1528,20 +1301,19 @@ not a lowercase path segment the source is `not derivable`, and the value prints
 when that names a plain branch under `refs/remotes/origin/`; with no remote at all, from the
 `current branch` when that is a plain branch; otherwise, a remote with no `origin/HEAD` and
 remotes git could not list included, it is the `default`, `main`. The agents come from the `harness
-directories` the root carries; otherwise the `default` is every harness. The profile comes from
-`profile markers`, or there are `no profile markers`. The memory mode is the `default`,
+directories` the root carries; otherwise the `default` is every harness. The memory mode is the `default`,
 `harness`, since the preset chooses none; the attribution check (off) is `the preset's default`; and the plugins are the `default`,
 none, because a third-party plugin runs in every session and is installed only when named. Each
 default is exactly what `stayfixed init --yes` writes when that question is not answered. `origin/HEAD` goes stale after the remote's default branch is
 renamed, because git does not refresh one it has. That is why its source is printed: you can
 catch it.
 
-`--json` carries `questions`: a JSON Schema object (draft 2020-12) with seven `properties`, and
-`required` naming all seven in the order the `init` skill asks them; read the order there, since
+`--json` carries `questions`: a JSON Schema object (draft 2020-12) with six `properties`, and
+`required` naming all six in the order the `init` skill asks them; read the order there, since
 `--json` prints every object's keys sorted, so the properties arrive by name. Each but the last is
 keyed by the
 `stayfixed.toml` key its answer writes: `project.name`, `project.base_branch`, `memory.mode`,
-`stayfixed.profile`, `commit_messages.attribution_check` and `stayfixed.agents`; the last,
+`commit_messages.attribution_check` and `stayfixed.agents`; the last,
 `plugins`, offers the plugins the preset recommends, which `stayfixed setup --plugin` installs. Each property carries four keys: `default`
 (absent for a name that is not derivable), `x-stayfixed-source` (the phrase above),
 `x-stayfixed-flag` (the flag that answers it) and `x-stayfixed-tradeoff`, four lines of fixed
@@ -1566,8 +1338,8 @@ It is refused (`2`) before anything beyond the root is read, in three cases:
 
 `--yes` beside it is a usage error from the parser.
 
-**Reads** `git` for the name and the base branch, which harness directories the root carries, each
-shipped profile's marker files at the root, and the machine configuration, to learn whether it
+**Reads** `git` for the name and the base branch, which harness directories the root carries, and
+the machine configuration, to learn whether it
 records an overlay. A machine file that does not load reads as "not recorded"; `init` reports it
 when it loads it.
 
@@ -2214,9 +1986,9 @@ commands it runs for each plugin `--plugin` names, on each harness with a declar
 `claude plugin install`, `codex plugin marketplace add` and `codex plugin add`), the marketplace
 registrations and installed plugins those commands write into each harness's own configuration;
 with `--restore`, the same `claude plugin marketplace add` and `claude plugin install` for what the
-overlay's `machine/claude/settings.json` lists, and, with `--yes`, the trust record's `reviewed`
-approvals (`trust.json`, beside the machine file) for the notes of the overlay's share for each
-attached project.
+overlay's `machine/claude/settings.json` lists, with `--sync`, `[sync] enabled = true` in the machine
+file, and, with `--yes`, the trust record's `reviewed` approvals (`trust.json`, beside the machine
+file) for the notes of the overlay's share for each attached project.
 `--overlay <path>` naming an overlay writes nothing in its tree: it is recorded, and its
 `pre-commit` git hook is installed through `pre-commit install`. Naming nothing or an
 empty directory, it writes the directory with every file of the template plus `.stayfixed/manifest.json`, the
@@ -2234,9 +2006,10 @@ re-run finishes.
 **Exits** `0` on success, and `2` on each of these refusals:
 
 - `--uninstall`, which is taken only with `--git-hooks` (below), before anything is written;
-- `--restore` with no overlay recorded and none named, or with a projects file it cannot read (see
-  `--restore` above), before anything is written; `--restore` beside `--git-hooks` or
-  `--approval-boundary`; and `--yes` without `--restore`;
+- `--restore` with no overlay recorded and none named, before anything is written; after machine
+  setup ran, an overlay to restore from that is not one or a projects file it cannot read (see
+  `--restore` below), before any attach; `--restore` beside `--git-hooks` or
+  `--approval-boundary`; and `--yes` or `--sync` without `--restore`;
 - `--root`, which names the repository `--git-hooks` installs into, before anything is written;
 - a refused `--overlay`: a path that names nothing under a directory that is missing or that you
   cannot create it in, a path holding something that is not an overlay, a `create:` destination
@@ -2292,36 +2065,39 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
    it);
 2. the plugins the overlay's machine settings enable: `<overlay>/machine/claude/settings.json` is
    the overlay's copy of Claude Code's user settings, and restore reads two keys of it and writes
-   nothing from it. Each `extraKnownMarketplaces.<name>.source` that is `{"source": "github",
-   "repo": "owner/name"}` (with an optional `ref`) or `{"source": "git", "url": …}` with an `https://`
-   or `git@` URL is added with `claude plugin marketplace add <owner/name[@ref] or URL>` when
-   `claude plugin marketplace list --json` does not name it; any other shape, or a value that could
-   read as an option, is a note and is not added. Each `enabledPlugins` entry that is `true` and
-   reads `<name>@<marketplace>` is installed with `claude plugin install <id>` when `claude plugin
-   list --json` does not name it at user scope. A non-zero exit is a note naming the argv, never a
-   refusal; without `claude` on `PATH` there is one note and nothing is launched. The list is Claude
-   Code's: where `codex` is on `PATH`, one note says nothing was installed for it. A second run
-   asks the two listings and installs nothing. The ids installed count among machine setup's
-   `plugin(s) installed` and `--json`'s `plugins_installed`, and each note is printed among its
-   notes, in its summary line and in `--json`'s `notes`;
+   nothing from it. Each `extraKnownMarketplaces.<name>.source` that is exactly `{"source":
+   "github", "repo": R}` or `{"source": "git", "url": U}`, string values, is added with `claude plugin
+   marketplace add R` or `… U`; a source of another kind, or holding any other key (a `git`
+   source's `ref`, a `github` source's `path` or `sparsePaths`), is a note naming the marketplace
+   and what restore does not carry, and is not added. Each `enabledPlugins` key whose value is `true`
+   is installed as written with `claude plugin install <id>`. These are `setup --plugin`'s own argv,
+   and a non-zero exit, a missing `claude` included, is a note quoting what it said, never a
+   refusal. A second restore runs them again, and whatever Claude Code answers for a marketplace
+   already registered or a plugin already installed is what you see. The ids installed count among
+   machine setup's `plugin(s) installed` and `--json`'s `plugins_installed`, and each note is
+   printed among its notes, in its summary line and in `--json`'s `notes`;
 3. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
-   that is not there is reported `absent` and skipped; a checkout `attach` refuses (one whose
-   `stayfixed.toml` names another project than its table key) is `refused`, and one whose attach
+   that is not there is reported `absent` and skipped; a checkout with no `stayfixed.toml` is
+   attached under the project its table key names, as `attach --project` would; a checkout `attach`
+   refuses (one whose `stayfixed.toml` names another project than its table key) is `refused`, and one whose attach
    fails (a plain directory, or a failure part-way) is `failed`, each with attach's own message, and the rest go
    on. The exit code is `1` when a project was refused or failed, and `0` otherwise, `absent`
    included. A run twice attaches nothing new, and a project removed from the file stays attached
    until `stayfixed detach` there.
 
 4. with `--yes` only, the overlay's notes recorded as reviewed on this machine: after each project
-   it attached, every note of the overlay's share for its table key (each group under
-   `projects/<name>/memory/`, and `common/memory`) not already reviewed at its current bytes is
-   recorded in the trust record beside the machine file. Nothing
-   a checkout holds is read, whatever its memory mode, and a note is reviewed wherever the same
-   bytes are read. Without `--yes` nothing is recorded as reviewed, whatever the overlay holds. A project whose notes cannot be recorded (an unreadable
+   it attached, every note of the overlay's share for its table key (`common/memory`, each listed
+   tag's `groups/<tag>/memory`, and each group under `projects/<name>/memory/`) not already
+   reviewed at its current bytes is recorded in the trust record beside the machine file, notes
+   written on another machine that nobody reviewed included. Only overlay paths are walked,
+   whatever the checkout's memory mode, a group directory that is a link is followed, and a note
+   is reviewed wherever the same bytes are read. Without `--yes` nothing is recorded as reviewed, whatever the overlay holds. A project whose notes cannot be recorded (an unreadable
    trust record, which is never overwritten) is reported `failed`, attached all the same. A second
    run with `--yes` records nothing new; a note you recorded is withdrawn by editing or deleting
    it. `--yes` without `--restore` is refused (`2`),
-   naming `--restore`, before anything is written.
+   naming `--restore`, before anything is written;
+5. with `--sync` only, `[sync] enabled = true` in the machine file, which switches the
+   [note sync](#note-sync) on; `--sync` without `--restore` is refused like `--yes`.
 
 Last, it checks the tools and prints what is missing on the first line of its output, above machine
 setup's summary, and refuses nothing: `git`, one of `claude` and `codex`, and a `python3` or a `uv`
@@ -2332,18 +2108,22 @@ project: `<name>` is the overlay project the checkout belongs to (the directory 
 `projects/`), and `dir` is where its main checkout lives, absolute or led by `~/`, which is read
 under `--home`. Every other key is ignored by stayfixed; an overlay's own scripts may read them.
 `dir` missing, not a string or relative, a file that cannot be read or is not TOML, and a
-`projects` that is not a table, are refused (`2`) naming the table, before anything is written. No
+`projects` that is not a table, are refused (`2`) naming the table, after machine setup ran and
+before any attach. No
 file lists nothing. The store `attach` is handed is the one the table key names, and `attach`
 refuses a store that is not the checkout's own project's, so a clone that claims another of your
 projects in its tracked `stayfixed.toml` is refused rather than given that project's notes, rules
 and delivery.
 
-With `--restore`, `--overlay` names the overlay to restore from when it holds one; `--overlay
-create:…` and a path that names nothing make an overlay and list no project. With no `--overlay`
-and no overlay recorded, `--restore` is refused (`2`) naming `--overlay PATH`, before anything is
-written. It is refused beside `--git-hooks` and `--approval-boundary`. `--json` adds `missing` and
-`projects`, each project's `name`, `dir`, `state` (`attached`, `absent`, `refused` or `failed`),
-`detail`, the last attach's own words, and `promoted`, the notes `--yes` recorded.
+With `--restore`, the overlay restored from is the one `--overlay` recorded, rendered or created,
+else the one the machine file records. With no `--overlay` and no overlay recorded, `--restore` is
+refused (`2`) naming `--overlay PATH`, before anything is written; once machine setup ran, an
+overlay to restore from that is not one (a recorded overlay that is gone) is refused (`2`) naming
+it and saying machine setup ran. It is refused beside `--git-hooks` and `--approval-boundary`. The
+summary's overlay clause and `--json`'s `overlay` name the overlay restored from. `--json` adds
+`sync`, whether `--sync` was given, `missing` and `projects`, each project's `name`, `dir`, `state`
+(`attached`, `absent`, `refused` or `failed`), `detail`, the last attach's own words, and
+`promoted`, the notes `--yes` recorded.
 
 What stays an overlay's own script and is not done here: cloning the checkouts, owner-held files,
 excludes, links, commit hooks and the merge of the overlay's settings.
@@ -2673,10 +2453,10 @@ failure.
 
 Every command that reads a project's configuration takes `--root` and `--machine`, with the
 meanings in the first table, whether or not its heading spells them.
-Neither flag is taken by `stayfixed commit strip`, `stayfixed hook` and `stayfixed prove`,
+Neither flag is taken by `stayfixed commit strip` and `stayfixed hook`,
 because none of them reads a project's configuration: the first reads the message file it is
-handed and your own `~/.claude/settings.json`, `hook` finds the project from the harness's own
-event, and `prove` runs its command where it is typed and answers for that directory's repository.
+handed and your own `~/.claude/settings.json`, and `hook` finds the project from the harness's own
+event.
 `overlay upgrade` takes `--root` alone, in the sense the second table gives it, and reads no
 `stayfixed.toml`; `setup` takes both, in its own senses. `tests/test_documents.py` holds both
 lists to the real parser.
@@ -2706,7 +2486,6 @@ why so few of them are trusted with anything.
 [stayfixed]
 version = "0.6.1"        # required; there is no default
 preset = "recommended"
-profile = ""
 agents = ["claude", "codex"]
 
 [project]
@@ -2803,10 +2582,9 @@ and `BR-nnn` in every message. It is interpolated into patterns and filenames, s
 a shape — a capital letter followed by up to seven more capitals or digits — and a prefix
 outside it is a refusal (`2`), not a finding. The number is three digits or more. `code_roots`
 are the trees `bugs check` sweeps for mentions of an identifier, each of which must have an
-entry behind it, and the trees the red-run note
-walks. `src/` and `./src` are read as `src`. An entry that names the repository root itself,
-leaves the repository, passes through a link, a `..` or `.git`, or names no directory is walked
-by none of them and refused by nothing.
+entry behind it. `src/` and `./src` are read as `src`. An entry that names the repository root
+itself, leaves the repository, passes through a link, a `..` or `.git`, or names no directory is
+not walked and is refused by nothing.
 `evidence_boundary_required_for` names the severities whose entries must carry a filled
 `**What this evidence does not establish:**` line, the template's placeholder not counting. Widening it is how a project asks the same of `medium`. Each value must be one of the
 severities, `high`, `medium` and `low`, spelled as the table below spells it. A value that names
@@ -2879,8 +2657,8 @@ Between the repository's file and this one, a session reads the overlay's two, u
 `<overlay>/projects/<name>/stayfixed.toml` for a checkout this machine binds to `<name>` — by the
 binding id `stayfixed attach` records, never by the repository's own `[project] name`, so a clone
 that names one of your projects gets the common file alone. Each may set a `[personal]` value, a
-`[guards]` switch, a preference (`[memory] mode`, `groups` and `index_extra`, `[stayfixed]
-profile`) and a session budget; the project file wins over the common one, and this file over
+`[guards]` switch, a preference (`[memory] mode`, `groups` and `index_extra`) and a session
+budget; the project file wins over the common one, and this file over
 both. They are read the way a session reads `stayfixed.toml`: an unknown name is ignored, and a
 value this stayfixed cannot use is left out so the layer beneath applies; a gate's input or a fact
 about the repository written there is never taken from it. A missing file, an overlay this file

@@ -23,7 +23,6 @@ CONFIG = """
 [stayfixed]
 version = "0.1.0"
 preset = "recommended"
-profile = ""
 agents = ["claude"]
 
 [project]
@@ -158,11 +157,8 @@ def test_discovery_imports_no_guards_module_but_hooks(tmp_path: Path) -> None:
     assert "stayfixed.hints.bashscan" not in imported
     # The test-hygiene notice's modules, named explicitly: `hygiene` imports `bashscan` and
     # `gitenv` at module scope, so a module-level import of it in `hooks.py` would be caught by
-    # the line above too — but only by accident of what it happens to import. The hints it asks
-    # live in the profiles, which read configuration and data files.
+    # the line above too — but only by accident of what it happens to import.
     assert "stayfixed.hints.hygiene" not in imported
-    assert "stayfixed.roots" not in imported
-    assert "stayfixed.profiles" not in imported
     assert "stayfixed.config" not in imported
 
 
@@ -279,8 +275,8 @@ def test_a_red_pytest_over_a_dirty_tree_is_noticed(
 @needs_git
 def test_a_green_run_or_a_non_pytest_command_is_silence(tmp_path: Path) -> None:
     # Reddened by dropping `_test_hygiene`'s `if red_exit(event.raw) is None: return
-    # HookResult()` (the first assertion) and by dropping `context_for`'s `if not speaking:
-    # return None` (the second); both measured.
+    # HookResult()` (the first assertion) and by dropping `context_for`'s `if not
+    # any(names_a_test_run(...)): return None` (the second); both measured.
     root = dirty_project(tmp_path)
     config = load(root, machine=tmp_path / "absent.toml")
     assert (
@@ -297,6 +293,28 @@ def test_a_green_run_or_a_non_pytest_command_is_silence(tmp_path: Path) -> None:
     )
 
 
+@needs_git
+@pytest.mark.parametrize(
+    ("command", "noted"),
+    [
+        ("cargo test -q", True),
+        ("FOO=1 uv run --locked go test ./...", True),
+        ("poetry run pytest", False),
+    ],
+)
+def test_the_note_follows_the_runner_table(tmp_path: Path, command: str, noted: bool) -> None:
+    # Which failed command is a test run is `runners.names_a_test_run`'s answer for one of its
+    # simple commands, unwrapped behind assignments and `uv run` the way the table's other caller
+    # unwraps them, whatever the stack: `cargo test` gets the note, and `poetry run`, a launcher
+    # the scanner does not read through, is no test run.
+    root = dirty_project(tmp_path)
+    config = load(root, machine=tmp_path / "absent.toml")
+    result = hygiene().run(
+        post_event(root, command, {"tool_response": {"exit_code": 1}}), session_of(config)
+    )
+    assert (result.context is not None) is noted
+
+
 # One red run in each event's own shape: an exit code in `tool_response`, which `red_exit` reads
 # on `PostToolUse`, and Claude Code's `error` on `PostToolUseFailure`.
 RED_ON: dict[str, dict[str, object]] = {
@@ -311,13 +329,11 @@ def test_a_hygiene_failure_is_recorded_and_never_costs_the_call(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, event: str
 ) -> None:
     # The dispatcher swallows and records. The handler does not need its own try/except, and
-    # must not have one — a silent swallow is how a broken notice goes unnoticed. The guards
-    # inside `context_for` are narrower: each costs one stack's line and nothing else, and
-    # `tests/profiles/test_hints.py` pins them. The stderr assertion is reddened by giving
-    # `_test_hygiene` its own try/except around `context_for`.
+    # must not have one — a silent swallow is how a broken notice goes unnoticed. The stderr
+    # assertion is reddened by giving `_test_hygiene` its own try/except around `context_for`.
     from stayfixed.hints import hygiene as module
 
-    def broken(command: str, root: Path, config: object) -> str | None:
+    def broken(command: str, root: Path) -> str | None:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(module, "context_for", broken)
@@ -397,8 +413,8 @@ def test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_
 
 
 # One red run, as Claude Code reports a Bash command that exited non-zero: on `PostToolUseFailure`,
-# with no `tool_response`, and the exit code at the head of `error`. The command is one the shipped
-# Python profile recognises, so the note has a runner line beside the dirty-tree line.
+# with no `tool_response`, and the exit code at the head of `error`. The command is a test run the
+# runner table names, so the note speaks.
 RED_RUN = "uv run pytest -q"
 
 

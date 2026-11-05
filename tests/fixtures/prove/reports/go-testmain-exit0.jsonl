@@ -1,3 +1,0 @@
-{"Time":"2026-10-18T02:50:48.807927546Z","Action":"start","Package":"example.com/probe/testmain"}
-{"Time":"2026-10-18T02:50:48.810569299Z","Action":"output","Package":"example.com/probe/testmain","Output":"ok  \texample.com/probe/testmain\t0.002s\n"}
-{"Time":"2026-10-18T02:50:48.810658772Z","Action":"pass","Package":"example.com/probe/testmain","Elapsed":0.003}

@@ -765,10 +765,10 @@ reddens = [
   "tests/overlay/test_create.py::test_a_git_init_that_ran_and_failed_is_said_to_have_failed",
 ]
 
-# A crossing is pinned per statement and per name, so a second statement beside a pinned one is a
-# new crossing even when it names the same module.
+# A crossing is pinned per statement, so a second statement beside a pinned one is a new crossing
+# even when it names the same module.
 [[mutation]]
-name = "setup imports one more name from the guards area in a statement of its own"
+name = "setup adds a second import statement from the guards area beside the pinned one"
 file = "src/stayfixed/setup/commands.py"
 before = "    from stayfixed.guards.api import Found, install, uninstall\n"
 after = "    from stayfixed.guards.api import Found, install, uninstall\n    from stayfixed.guards.api import HOOK_NAME\n"
@@ -1105,21 +1105,10 @@ reddens = [
 ]
 
 [[mutation]]
-name = "setup --approval-boundary takes a flag that names a write"
-file = "src/stayfixed/setup/commands.py"
-before = "        if any(switched) or any(value is not None for value in named):"
-after = "        if any(switched):"
-reddens = [
-  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[preset]",
-  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[overlay]",
-  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[plugin]",
-]
-
-[[mutation]]
 name = "setup --approval-boundary takes --git-hooks"
 file = "src/stayfixed/setup/commands.py"
-before = "        switched = (args.git_hooks, args.uninstall)"
-after = "        switched = (args.uninstall,)"
+before = "        if args.restore or args.git_hooks or args.uninstall or any(v is not None for v in named):"
+after = "        if args.restore or args.uninstall or any(v is not None for v in named):"
 reddens = [
   "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[git-hooks]",
 ]
@@ -1127,8 +1116,8 @@ reddens = [
 [[mutation]]
 name = "setup --approval-boundary takes --uninstall"
 file = "src/stayfixed/setup/commands.py"
-before = "        switched = (args.git_hooks, args.uninstall)"
-after = "        switched = (args.git_hooks,)"
+before = "        if args.restore or args.git_hooks or args.uninstall or any(v is not None for v in named):"
+after = "        if args.restore or args.git_hooks or any(v is not None for v in named):"
 reddens = [
   "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[uninstall]",
 ]
@@ -1153,28 +1142,37 @@ before = "    if args.root is not None:\n        raise Refusal(_ROOT_ALONE)"
 after = "    if False:\n        raise Refusal(_ROOT_ALONE)"
 reddens = ["tests/setup/test_commands.py::test_machine_setup_refuses_root_and_writes_nothing"]
 
-# `--git-hooks` takes no flag that asks machine setup to act: each refuses beside it, where all but
-# `--preset` were dropped and the hook installed.
+# `--git-hooks` and `--approval-boundary` take no flag that asks machine setup to act: each refuses
+# beside either, where beside `--git-hooks` all but `--preset` were dropped and the hook installed.
 [[mutation]]
-name = "setup --git-hooks drops --preset"
+name = "setup --git-hooks and --approval-boundary drop --preset"
 file = "src/stayfixed/setup/commands.py"
-before = "        if args.preset is not None or args.overlay is not None or args.plugin is not None:"
-after = "        if args.overlay is not None or args.plugin is not None:"
-reddens = ["tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[preset]"]
+before = "    named = (args.preset, args.overlay, args.plugin)"
+after = "    named = (args.overlay, args.plugin)"
+reddens = [
+  "tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[preset]",
+  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[preset]",
+]
 
 [[mutation]]
-name = "setup --git-hooks drops --overlay"
+name = "setup --git-hooks and --approval-boundary drop --overlay"
 file = "src/stayfixed/setup/commands.py"
-before = "        if args.preset is not None or args.overlay is not None or args.plugin is not None:"
-after = "        if args.preset is not None or args.plugin is not None:"
-reddens = ["tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[overlay]"]
+before = "    named = (args.preset, args.overlay, args.plugin)"
+after = "    named = (args.preset, args.plugin)"
+reddens = [
+  "tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[overlay]",
+  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[overlay]",
+]
 
 [[mutation]]
-name = "setup --git-hooks drops --plugin"
+name = "setup --git-hooks and --approval-boundary drop --plugin"
 file = "src/stayfixed/setup/commands.py"
-before = "        if args.preset is not None or args.overlay is not None or args.plugin is not None:"
-after = "        if args.preset is not None or args.overlay is not None:"
-reddens = ["tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[plugin]"]
+before = "    named = (args.preset, args.overlay, args.plugin)"
+after = "    named = (args.preset, args.overlay)"
+reddens = [
+  "tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[plugin]",
+  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[plugin]",
+]
 
 # A plugin name is joined to the preset's marketplace into one argv element: one shaped like an
 # option, naming a marketplace of its own or carrying an escape reached `claude plugin install`.
@@ -1256,7 +1254,7 @@ reddens = ["tests/setup/test_setup.py::test_setup_recording_an_overlay_leaves_sy
 [[mutation]]
 name = "restore attaches without the store its table key names"
 file = "src/stayfixed/setup/restore.py"
-before = "                store=permitted_roots(overlay, item.name)[1],"
+before = "                store=permitted_roots(overlay, item.name)[-1],"
 after = "                store=None,"
 reddens = [
   "tests/setup/test_restore.py::test_a_checkout_whose_project_is_not_its_table_key_is_refused_and_the_rest_attach",
@@ -1270,3 +1268,16 @@ file = "src/stayfixed/setup/restore.py"
 before = "        if yes:"
 after = "        if True:"
 reddens = ["tests/setup/test_restore.py::test_without_yes_no_note_is_recorded_as_reviewed"]
+
+# A marketplace source that holds a key restore does not carry (a `git` source's `ref`, a `github`
+# source's `path` or `sparsePaths`) would be registered without it, unpinned or at the root, and
+# so not be the marketplace the overlay's settings name; it is a note and is not added.
+[[mutation]]
+name = "restore adds a marketplace whose source holds a key it does not carry"
+file = "src/stayfixed/setup/restore.py"
+before = '        elif extra := sorted(set(source) - {"source", key}):'
+after = "        elif extra := []:"
+reddens = [
+  "tests/setup/test_restore.py::test_a_marketplace_source_restore_does_not_carry_is_a_note_and_not_added[git-ref]",
+  "tests/setup/test_restore.py::test_a_marketplace_source_restore_does_not_carry_is_a_note_and_not_added[github-path]",
+]

@@ -1,4 +1,4 @@
-"""The harness registry, and the one profile rendering there is: Claude Code's path-scoped rule."""
+"""The harness registry."""
 
 from __future__ import annotations
 
@@ -248,8 +248,7 @@ _HARNESS_MENTION = re.compile(
 LISTED = {
     ("src/stayfixed/setup/run.py", "claude"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
     ("src/stayfixed/setup/run.py", "codex"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
-    ("src/stayfixed/setup/restore.py", "claude"): (10, "`install_listed` in `setup/restore.py`"),
-    ("src/stayfixed/setup/restore.py", "codex"): (2, "`install_listed` in `setup/restore.py`"),
+    ("src/stayfixed/setup/restore.py", "claude"): (5, "`install_listed` in `setup/restore.py`"),
     ("src/stayfixed/attach/render.py", "claude"): (
         6,
         "`PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL`",

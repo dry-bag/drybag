@@ -6,14 +6,9 @@ interpreter imports neither the configuration layer nor the presets, and discove
 area's `hooks` module — so a module-level import here reddens a test that belongs to no area at
 all.
 
-`bg-cleanup` and `pipe-status` only hint: the agent in the session writes the command it judges,
-so a refusal would be a convenience it could spell around, and a hint costs a legitimate command
-nothing.
-
 Nothing a repository controls is put into `HookResult.context`. The restore hint is built from
 the command's own text — model- or user-authored, never repository bytes — and the hygiene
-notice carries counts and fixed sentences, its own and those a shipped profile's hint renders
-from its counts, never a path from `stayfixed.toml`.
+notice carries a count and fixed sentences, never a path from `stayfixed.toml`.
 
 The guard judges with any configuration and none: a repository with no `stayfixed.toml`, or one
 that does not load, is judged as one that loads, because the guard reads nothing of it but its
@@ -42,10 +37,6 @@ BASH = "Bash"
 # appearance and no more.
 ONCE_TEST_HYGIENE = "test-hygiene"
 
-# The pipe hint is worth one appearance too: the next piped run in the context repeats a sentence
-# the agent has read.
-ONCE_PIPE_STATUS = "pipe-status"
-
 
 def bash_command(event: HookEvent) -> str | None:
     """The command of a Bash call, or None for any other tool or a malformed input."""
@@ -73,8 +64,7 @@ def _bg_cleanup(event: HookEvent, session: SessionConfig) -> HookResult:
 
 def _pipe_status(event: HookEvent, session: SessionConfig) -> HookResult:
     """Say that a test run piped into `tail`, `head` or `grep` loses its exit status. Reads the
-    command alone, as `bg-cleanup` does, so it speaks with any configuration and none, and it has
-    no switch."""
+    command alone, so it speaks with any configuration and none, and it has no switch."""
     command = bash_command(event)
     if command is None:
         return HookResult()
@@ -84,9 +74,9 @@ def _pipe_status(event: HookEvent, session: SessionConfig) -> HookResult:
 
 
 def _test_hygiene(event: HookEvent, session: SessionConfig) -> HookResult:
-    """Name what could have falsified a red test run, in the words of the profile whose runner
-    failed. Never a decision: the tool has already run, and a failure here costs the note and not
-    the call. About the project, so silent without its configuration."""
+    """Name what could have falsified a red test run. Never a decision: the tool has already run,
+    and a failure here costs the note and not the call. About the project, so silent without its
+    configuration."""
     config = session.config
     if config is None or event.project_root is None:
         return HookResult()
@@ -97,20 +87,14 @@ def _test_hygiene(event: HookEvent, session: SessionConfig) -> HookResult:
 
     if red_exit(event.raw) is None:
         return HookResult()
-    return HookResult(context=context_for(command, event.project_root, config))
+    return HookResult(context=context_for(command, event.project_root))
 
 
 def register() -> list[Handler]:
     return [
         Handler(name="bg-cleanup", event="PreToolUse", run=_bg_cleanup),
-        # A hint and never a refusal, like `bg-cleanup`: the agent writes the command, so a
-        # refusal would be a convenience it spells around.
-        Handler(
-            name="pipe-status",
-            event="PreToolUse",
-            run=_pipe_status,
-            once_key=ONCE_PIPE_STATUS,
-        ),
+        # Once per context: the next piped run repeats a sentence the agent has read.
+        Handler(name="pipe-status", event="PreToolUse", run=_pipe_status, once_key="pipe-status"),
         # The red-run note, on both events a failed command can arrive on. Claude Code delivers a
         # Bash command that exited non-zero to `PostToolUseFailure`, with `error` beginning
         # `Exit code N`, and never to `PostToolUse`. No measured harness delivers an exit code on

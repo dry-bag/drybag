@@ -39,7 +39,6 @@ EXPORTED = [
     "settings_object",
     "settings_text",
     "upsert",
-    "validate_sources",
     "withdraw_entries",
 ]
 

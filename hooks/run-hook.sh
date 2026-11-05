@@ -30,29 +30,19 @@ test -f "$launcher" && test -r "$launcher" || skip "no readable launcher at $lau
 
 # An inherited GIT_DIR or GIT_WORK_TREE would make every git answer about another repository.
 unset GIT_DIR GIT_WORK_TREE
-# Every entry but `hook` reads its `--root` default, the directory it runs in, as the project, and
-# a version manager's `python3` answers for the directory it runs in, so both are asked from there.
+# Every entry but `hook` reads its `--root` default, the directory it runs in, as the project.
 root=${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}
 test -z "$root" || CDPATH= cd -- "$root" 2>/dev/null || skip "cannot enter the project root $root"
 
-usable() { test -n "$1" && "$1" -I -c 'import sys; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; }
-python=$(command -v python3) || python=
-if ! usable "$python"; then
-  # The program every hook starts comes from `PATH`, which is the person's and the harness's, and
-  # from uv asked in `/` with `--no-config`: uv reads `.python-version`, `pyproject.toml` and
-  # `uv.toml` from its working directory and its parents, and runs the `.venv/bin/python` it finds
-  # there, none of which in `/` is a repository's, so a repository's bytes choose nothing here.
-  # `python3` is asked from the project root, as above, because a version manager's shim answers
-  # for the directory it runs in. The `cd /` runs in the substitution's subshell, so the launcher
-  # still runs in the project root.
-  bad=$python
-  python=
-  if command -v uv >/dev/null 2>&1; then
-    python=$(cd / && uv python find --no-config --no-python-downloads '>=3.11' 2>/dev/null)
-  fi
-  usable "$python" || {
-    test -n "$bad" || off "" "no python3 on PATH"
-    off "$bad" "$bad is not python 3.11 or newer"
-  }
+# The interpreter comes from `PATH` resolved in `/`, which a repository cannot move because it
+# writes no file there: a relative `PATH` element, a version manager's shim and uv each answer for
+# the directory they run in. The `python3` found there prints the binary it really is, which runs
+# the launcher from the project root; uv's answer is that binary already.
+python=$(cd / && { python3 -I -c 'import sys
+sys.exit(1) if sys.version_info < (3, 11) or not sys.executable else print(sys.executable)' ||
+  uv python find '>=3.11'; } 2>/dev/null) || python=
+if test -z "$python"; then
+  bad=$(cd / && command -v python3) || off "" "no python3 on PATH"
+  off "$bad" "$bad is not python 3.11 or newer"
 fi
 "$python" -I "$launcher" "$@" || skip "stayfixed exited $?"

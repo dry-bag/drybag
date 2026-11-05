@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from pathlib import Path
 
 import pytest
 
-from stayfixed.hints import bashscan, uvrun
-from stayfixed.profiles.adapters import shipped_adapters
+from stayfixed.hints import bashscan
+from stayfixed.hints.runners import names_a_test_run
 
 
 def test_quoted_heredoc_bodies_are_stripped_but_the_command_remains() -> None:
@@ -89,6 +88,19 @@ def test_pipelines_group_the_commands_a_pipe_joins() -> None:
     tokens = bashscan.tokenize("a | b; c && d | e")
     assert tokens is not None
     assert bashscan.pipelines(tokens) == [[["a"], ["b"]], [["c"]], [["d"], ["e"]]]
+
+
+@pytest.mark.parametrize(
+    ("command", "grouped"),
+    [("a |; b", [[["a"], ["b"]]]), ("a ;| b", [[["a"]], [["b"]]]), ("a |& b", [[["a"]], [["b"]]])],
+)
+def test_a_fused_pipe_and_separator_group_as_pipelines_and_split_as_segments(
+    command: str, grouped: list[list[list[str]]]
+) -> None:
+    tokens = bashscan.tokenize(command)
+    assert tokens is not None
+    assert bashscan.pipelines(tokens) == grouped
+    assert bashscan.segments(tokens) == [["a"], ["b"]]
 
 
 def test_a_line_break_after_a_pipe_continues_the_pipeline() -> None:
@@ -360,16 +372,10 @@ def test_command_words_strips_a_leading_assignment_and_wrapper() -> None:
     assert bashscan.command_words(["FOO=1", "env", "sleep", "3"]) == ["sleep", "3"]
 
 
-def a_runner(words: Sequence[str]) -> bool:
-    """Whether a shipped runner adapter recognises `words`: what `prove` and the red-run hint ask
-    of each word after `uv run`."""
-    return any(adapter.recognises(words) for adapter in shipped_adapters())
-
-
 def test_command_words_strips_uv_run_with_nothing_before_the_program() -> None:
     """CI's own invocation shape, with nothing between `uv run` and the program it launches.
     Oracle: `mutations/`'s "`uv run` stops being stripped off a segment"."""
-    assert bashscan.command_words(["uv", "run", "pytest"], a_runner) == ["pytest"]
+    assert bashscan.command_words(["uv", "run", "pytest"], names_a_test_run) == ["pytest"]
 
 
 @pytest.mark.parametrize(
@@ -406,23 +412,21 @@ def test_command_words_strips_uv_run_with_nothing_before_the_program() -> None:
         "bound",
     ],
 )
-def test_the_command_uv_runs_starts_at_the_first_word_a_runner_adapter_recognises(
+def test_the_command_uv_runs_starts_at_the_first_word_the_runner_table_names(
     command: str, launcher: str
 ) -> None:
-    """No option of uv's is read to find the command: every word before the first a runner
-    adapter recognises is the launcher's, handed to uv as typed. Oracle: `mutations/`'s "the
-    command `uv run` launches starts at its first word that is no option"."""
+    """No option of uv's is read to find the command: every word before the first the runner
+    table reads as a test run is the launcher's. Oracle: `mutations/`'s "the command `uv run`
+    launches starts at its first word that is no option"."""
     words = command.split()
-    launch = bashscan.read_launch(words, a_runner)
-    assert launch.launcher == tuple(launcher.split())
-    assert launch.command == tuple(words[len(launch.launcher) :])
+    assert bashscan.command_words(words, names_a_test_run) == words[len(launcher.split()) :]
 
 
 @pytest.mark.parametrize(
     ("command", "recognises"),
     [
-        ("uv run --frozen mvn test", a_runner),
-        ("uv pip install pytest", a_runner),
+        ("uv run --frozen ruff check", names_a_test_run),
+        ("uv pip install pytest", names_a_test_run),
         ("uv run pytest", None),
     ],
     ids=["no-runner", "no-run", "no-recogniser"],
@@ -431,32 +435,24 @@ def test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole(
     command: str, recognises: Callable[[Sequence[str]], bool] | None
 ) -> None:
     """Its program is `uv`, which no hint recognises and no guard refuses: no word after `run`
-    that a runner adapter recognises, no `run`, or a caller that asks about no runner, as the
-    background guard does."""
+    that the runner table reads as a test run, no `run`, or a caller that asks about no runner, as
+    the background guard does."""
     assert bashscan.command_words(command.split(), recognises) == command.split()
 
 
-# --- `read_launch`: the same walk, every word of the launch named by its part ------------------
-
-
 @pytest.mark.parametrize(
-    ("command", "assignments", "launcher", "program"),
+    ("command", "program"),
     [
-        ("A=1 env B=2 pytest -q", ["A=1", "B=2"], [], ["pytest", "-q"]),
+        ("A=1 env B=2 pytest -q", ["pytest", "-q"]),
         # Every word before the command is the launcher's, an `env` and its assignments or an
         # assignment-shaped word too, which a shell hands to uv as a word.
-        ("uv run env FORGE=x pytest", [], ["uv", "run", "env", "FORGE=x"], ["pytest"]),
-        ("env A=1 uv run env B=2 pytest", ["A=1"], ["uv", "run", "env", "B=2"], ["pytest"]),
-        (
-            "uv --config-file c.toml run --env-file=.env --with x==1 pytest",
-            [],
-            ["uv", "--config-file", "c.toml", "run", "--env-file=.env", "--with", "x==1"],
-            ["pytest"],
-        ),
-        ("uv run FOO=1 pytest", [], ["uv", "run", "FOO=1"], ["pytest"]),
-        ("uv run -- pytest", [], ["uv", "run", "--"], ["pytest"]),
-        ("uv run --locked mvn test", [], [], "uv run --locked mvn test"),
-        ("env -i A=1 pytest", [], [], ["-i", "A=1", "pytest"]),
+        ("uv run env FORGE=x pytest", ["pytest"]),
+        ("env A=1 uv run env B=2 pytest", ["pytest"]),
+        ("uv --config-file c.toml run --env-file=.env --with x==1 pytest", ["pytest"]),
+        ("uv run FOO=1 pytest", ["pytest"]),
+        ("uv run -- pytest", ["pytest"]),
+        ("uv run --locked ruff check", "uv run --locked ruff check"),
+        ("env -i A=1 pytest", ["-i", "A=1", "pytest"]),
     ],
     ids=[
         "assignments-and-env",
@@ -469,63 +465,8 @@ def test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole(
         "env-option",
     ],
 )
-def test_read_launch_names_each_word_of_the_launch_by_its_part(
-    command: str, assignments: list[str], launcher: list[str], program: list[str] | str
+def test_the_command_starts_past_every_assignment_and_launcher_word(
+    command: str, program: list[str] | str
 ) -> None:
-    """A caller that runs the command needs more than the program: every assignment the shell or
-    `env` would make before the launcher, and the launcher's own words apart from them.
-    `command_words` is the same walk's last part. Oracle: `mutations/`'s "the launch keeps no
-    launcher's words"."""
-    words = command.split()
     expected = program.split() if isinstance(program, str) else program
-    launch = bashscan.read_launch(words, a_runner)
-    assert launch == bashscan.Launch(tuple(assignments), tuple(launcher), tuple(expected))
-    assert bashscan.command_words(words, a_runner) == expected
-
-
-@pytest.mark.parametrize(
-    ("command", "environ", "moved"),
-    [
-        ("pytest", {"UV_WORKING_DIR": "a"}, ""),
-        ("uv run pytest", {}, ""),
-        ("uv run --directory a pytest", {}, "a"),
-        ("uv run --directory=a pytest", {}, "a"),
-        ("uv --directory a run --locked pytest", {}, "a"),
-        ("uv run pytest", {"UV_WORKING_DIR": "a"}, "a"),
-        ("uv run --directory a pytest", {"UV_WORKING_DIR": "b"}, "a"),
-        ("uv run --directory a uv run --directory b pytest", {}, "a/b"),
-        ("uv run --directory a uv run pytest", {"UV_WORKING_DIR": "b"}, "a/b"),
-        ("uv run --directory /abs pytest", {}, "/abs"),
-        ("uv run -m pytest", {"UV_WORKING_DIR": "a"}, "a"),
-        ("uv run --project a pytest", {"UV_PROJECT": "b"}, ""),
-        ("uv run --directory", {}, ""),
-    ],
-    ids=[
-        "no-launcher",
-        "none",
-        "spaced",
-        "equals",
-        "global",
-        "variable",
-        "option-over-variable",
-        "nested",
-        "nested-variable",
-        "absolute",
-        "module",
-        "project",
-        "no-value",
-    ],
-)
-def test_run_directory_is_where_uv_runs_the_program(
-    command: str, environ: dict[str, str], moved: str
-) -> None:
-    """Measured on uv 0.12.19: `--directory`, before `run` or after it, spaced or with `=`, else
-    `UV_WORKING_DIR`, moves where the program runs, the option winning; a `uv run` that a
-    `uv run` launches reads its own from where the outer one moved to; `--project` and
-    `UV_PROJECT` move nothing. Oracle: `mutations/`'s "uv's `--directory` is not read", "uv's
-    spaced `--directory` value is not read", "`UV_WORKING_DIR` is not read", "uv's variable
-    wins over its `--directory`", "a nested `uv run` reads its directory from where the command
-    was typed"."""
-    launcher = bashscan.read_launch(command.split(), a_runner).launcher
-    typed = Path("/typed")
-    assert uvrun.run_directory(launcher, typed, environ) == typed / moved
+    assert bashscan.command_words(command.split(), names_a_test_run) == expected

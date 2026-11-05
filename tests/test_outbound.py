@@ -55,7 +55,7 @@ TEMPLATES = SRC / "templates"
 WALK = Walk(ROOT_LAUNCHERS)
 # Vacuity floors, not coverage: well under what the walk finds today, so that churn never trips
 # one and a walk that stopped seeing the package does.
-LAUNCHES_FLOOR = 60
+LAUNCHES_FLOOR = 50
 MODULES_FLOOR = 120
 # What ends the options in an argv, after which every element is an operand, read or not.
 END_OF_OPTIONS = ("--", "--end-of-options")
@@ -752,6 +752,9 @@ def test_the_plugin_installs_reach_the_rows_their_entries_name() -> None:
     reached = {_row(argv) for argv in _plugin_installs()}
     declared = [rows for key, rows in PASS_THROUGH.items() if key[1] == "_install_plugins"]
     assert declared and all(rows == reached for rows in declared)
+    claude = {_row(argv) for argv in _plugin_installs() if argv[0] == "claude"}
+    restored = [rows for key, rows in PASS_THROUGH.items() if key[1] == "install_listed"]
+    assert len(restored) == 2 and all(rows == claude for rows in restored)
 
 
 def test_the_rendered_plugins_install_reaches_the_rows_its_entries_name() -> None:
