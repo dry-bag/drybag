@@ -486,9 +486,9 @@ def test_state_is_an_unknown_key(tmp_path: Path) -> None:
 
 
 def test_the_name_grammar_is_spelled_once() -> None:
-    # A project, a profile and an overlay owner are named in one grammar, and
-    # every other module derives from `PROJECT_NAME`. Mutation: spell `SOURCE_NAME` out again in
-    # `scaffold/engine.py` and this reddens naming the file.
+    # A project and an overlay owner are named in one grammar, and every other module derives
+    # from `PROJECT_NAME`. Mutation: spell its pattern out again in another module and this
+    # reddens naming the file.
     spelling = PROJECT_NAME.pattern.removeprefix("^").removesuffix("\\Z")
     src = Path(__file__).resolve().parents[2] / "src" / "stayfixed"
     spelled = sorted(

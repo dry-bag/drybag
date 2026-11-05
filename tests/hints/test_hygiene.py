@@ -1,8 +1,6 @@
 """What could have falsified a red run and belongs to no stack, named before the diff is blamed.
 
-A stack's own faults -- Python's stale bytecode -- are its profile's, and are pinned beside it
-(`tests/profiles/python/test_hygiene.py`); which profile speaks after which command is
-`tests/profiles/test_hints.py`'s.
+Which failed command gets the note is `tests/hints/test_hooks.py`'s, through the handler.
 """
 
 from __future__ import annotations
@@ -24,7 +22,6 @@ CONFIG = """
 [stayfixed]
 version = "0.1.0"
 preset = "recommended"
-profile = ""
 agents = ["claude"]
 
 [project]
@@ -61,18 +58,18 @@ def test_a_dirty_tree_is_counted(tmp_path: Path) -> None:
 
 
 @needs_git
-def test_a_clean_tree_with_nothing_from_a_hint_says_nothing(tmp_path: Path) -> None:
-    # Reddened by mutating `notice`'s `if not lines: return None` to `return LEAD`; measured.
+def test_a_clean_tree_says_nothing(tmp_path: Path) -> None:
+    # Reddened by mutating `notice`'s `if not dirty: return None` to `return LEAD`; measured.
     root = repo(tmp_path)
-    assert notice(dirty_count(root), []) is None
+    assert notice(dirty_count(root)) is None
 
 
 @needs_git
 def test_the_notice_carries_counts_and_no_root_names(tmp_path: Path) -> None:
-    # Reddened by mutating `notice`'s `if dirty:` to `if False:`; measured.
+    # Reddened by mutating `notice`'s `if not dirty:` to `if True:`; measured.
     root = repo(tmp_path)
     (root / "src" / "mod.py").write_text("x = 2\n", encoding="utf-8")
-    text = notice(dirty_count(root), [])
+    text = notice(dirty_count(root))
     assert text is not None and "1 uncommitted change(s)" in text
 
 
@@ -85,19 +82,19 @@ def test_a_git_that_cannot_answer_is_none_not_zero(tmp_path: Path) -> None:
     assert dirty_count(root) is None
 
 
-def test_a_command_the_scanner_cannot_read_is_asked_of_no_hint() -> None:
+def test_a_command_the_scanner_cannot_read_is_no_test_run() -> None:
     # The substring fallback is gone on purpose: guessing from the text of a command the scanner
-    # cannot read would hand one stack's advice to whatever the text happens to name. Such a
-    # run gets no note, which under-reports rather than misleads. Reddened by mutating
+    # cannot read would take whatever the text happens to name for a test run. Such a run gets
+    # no note, which under-reports rather than misleads. Reddened by mutating
     # `simple_commands`'s `return []` for an unreadable command to `return [command.split()]`;
     # measured.
     assert simple_commands("pytest 'unbalanced") == []
 
 
 def test_each_simple_command_is_unwrapped_to_its_own_program() -> None:
-    # What every hint is handed: one argv per simple command, past assignments and the
+    # What the runner table is asked: one argv per simple command, past assignments and the
     # scanner's wrappers, in the order the command line gives them; `uv run` up to the first
-    # word a runner adapter recognises. Reddened by mutating `simple_commands`'s `words =
+    # word the table reads as a test run. Reddened by mutating `simple_commands`'s `words =
     # bashscan.command_words(segment, …)` to `words = segment`; measured.
     assert simple_commands("FOO=1 uv run --locked pytest -q && env cargo test -q") == [
         ["pytest", "-q"],

@@ -8,8 +8,8 @@ on the script's own word. The recording of the demo is made from this script's r
 ## What it needs
 
 - `git`, `pytest` and `python3` on `PATH`. The script installs nothing and reaches no network.
-- `claude` (Claude Code) on `PATH` for act 6, which installs the overlay's plugin through it. It
-  needs no signed-in account there: `HOME` is a scratch directory. Without `claude` act 6 is
+- `claude` (Claude Code) on `PATH` for act 2, which installs the overlay's plugin through it. It
+  needs no signed-in account there: `HOME` is a scratch directory. Without `claude` act 2 is
   skipped, and the skip is printed.
 - Python 3.11 or later, standard library only. The script never imports `stayfixed`: it runs the
   program you give it, as a user would.
@@ -27,26 +27,18 @@ The argument is the `stayfixed` program under test. From a checkout, `uv sync` a
 its `pytest` is the one found.
 
 - `--keep` leaves the scratch directory in place and prints its path.
-- `--require-claude` fails the run when act 6 is skipped, so a skip is never read as a pass.
+- `--require-claude` fails the run when act 2 is skipped, so a skip is never read as a pass.
 
 Every command runs with `HOME` inside the scratch directory, `GIT_CONFIG_NOSYSTEM=1` and a fixed
 author, committer and date, so your own configuration changes nothing it does.
-The script exits `0` when no act failed, `1` when one did or when act 6 was skipped under
+The script exits `0` when no act failed, `1` when one did or when act 2 was skipped under
 `--require-claude`, and `2` when the program is not an executable file, cannot start or exits
 non-zero on `--version` (run by its own path, never through `PATH`), or when `git`, `pytest` or
 `python3` is not on `PATH`.
 
 ## The acts
 
-1. `stayfixed prove` reads a green pytest run from the runner's own report: `proved`, 2 passed.
-2. A command that only prints `42 passed` proves nothing: `not proven`, `not-recognised`.
-3. A run whose only test was skipped is `failed`, `all-skipped`, never a pass.
-4. `PYTHONOPTIMIZE=1`, which compiles assertions out, is `refused`, `assigned-forging`.
-5. A fixed bug's regression, which `stayfixed bugs regressions` proves on `main`, fails it on the
+1. A fixed bug's regression, which `stayfixed bugs regressions` passes on `main`, fails it on the
    branch `change` that brings the bug back.
-6. `stayfixed attach` binds the repository to a scratch overlay and delivers this project's skill,
+2. `stayfixed attach` binds the repository to a scratch overlay and delivers this project's skill,
    `demo-canary`, and not the other project's, `other-canary`; `git status` stays empty.
-7. The `Stop`-hook recipe in `../stop-hook/`, given `pytest -q tests/test_total.py`, keeps the
-   agent working on `change` (exit 2, its stderr naming `failed`), lets it stop on `main`
-   (exit 0), and lets a stop through on `change` when `stop_hook_active` says the agent is already
-   working on because of it (exit 0). It prints nothing on stdout on any of the three.

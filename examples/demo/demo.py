@@ -62,14 +62,6 @@ FIXTURE = {
         "def test_total_of_nothing_is_zero():\n"
         "    assert total([]) == 0\n"
     ),
-    "tests/test_skipped.py": (
-        "import pytest\n"
-        "\n"
-        "\n"
-        '@pytest.mark.skip(reason="a test that never runs")\n'
-        "def test_never_runs():\n"
-        "    raise AssertionError\n"
-    ),
 }
 
 
@@ -183,17 +175,16 @@ class Demo:
     def which(self, program: str) -> str | None:
         return shutil.which(program, path=self.env["PATH"])
 
-    def run(self, argv: Sequence[str], *, cwd: Path | None = None, stdin: str | None = None) -> Ran:
+    def run(self, argv: Sequence[str], *, cwd: Path | None = None) -> Ran:
         """Run `argv` in the fixture (or `cwd`) under the act environment, never through a
-        shell, and capture what it printed. Its standard input is `stdin`, or nothing."""
+        shell, and capture what it printed. Its standard input is nothing."""
         try:
             # The argv is this script's own, run as typed and never through a shell.
             done = subprocess.run(  # noqa: S603
                 list(argv),
                 cwd=cwd or self.repo,
                 env=self.env,
-                input=stdin,
-                stdin=subprocess.DEVNULL if stdin is None else None,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -265,46 +256,6 @@ class Demo:
         return document
 
 
-def act_proved(demo: Demo) -> None:
-    demo.stayfixed(
-        ["prove", "--json", "--", "pytest", "-q", "tests/test_total.py"],
-        code=0,
-        fields=[
-            Field("verdict", "proved"),
-            Field("counts.passed", 2),
-            Field("counts.failed", 0),
-        ],
-    )
-
-
-def act_not_recognised(demo: Demo) -> None:
-    demo.stayfixed(
-        ["prove", "--json", "--", "sh", "-c", 'echo "42 passed"'],
-        code=1,
-        fields=[Field("verdict", "not proven"), Field("reason", "not-recognised")],
-    )
-
-
-def act_all_skipped(demo: Demo) -> None:
-    demo.stayfixed(
-        ["prove", "--json", "--", "pytest", "-q", "tests/test_skipped.py"],
-        code=1,
-        fields=[Field("verdict", "failed"), Field("reason", "all-skipped")],
-    )
-
-
-def act_forging(demo: Demo) -> None:
-    demo.stayfixed(
-        ["prove", "--json", "--", "PYTHONOPTIMIZE=1", "pytest", "-q", "tests/test_total.py"],
-        code=2,
-        fields=[
-            Field("verdict", "refused"),
-            Field("reason", "assigned-forging"),
-            Field("detail", "PYTHONOPTIMIZE", "names"),
-        ],
-    )
-
-
 # The project's configuration.
 CONFIGURATION = """\
 [stayfixed]
@@ -371,7 +322,7 @@ def act_regression(demo: Demo) -> None:
     demo.stayfixed(
         ["bugs", "regressions", "--json"],
         code=0,
-        fields=[Field("not_proved", 0), Field("regressions[id=BR-001].verdict", "proved")],
+        fields=[Field("not_passed", 0), Field("regressions[id=BR-001].verdict", "passed")],
     )
     demo.git("add", "-A")
     demo.git("commit", "-q", "-m", "a fixed bug and its regression")
@@ -383,7 +334,7 @@ def act_regression(demo: Demo) -> None:
     demo.stayfixed(
         ["bugs", "regressions", "--json"],
         code=1,
-        fields=[Field("not_proved", 1), Field("regressions[id=BR-001].verdict", "failed")],
+        fields=[Field("not_passed", 1), Field("regressions[id=BR-001].verdict", "failed")],
     )
 
 
@@ -468,64 +419,9 @@ def act_attach(demo: Demo) -> None:
     _clean(demo)
 
 
-# The `Stop`-hook recipe, beside this script's directory, and the test command it is given.
-RECIPE = Path(__file__).resolve().parent.parent / "stop-hook" / "prove_on_stop.py"
-RECIPE_COMMAND = ["pytest", "-q", "tests/test_total.py"]
-
-
-def _stop(demo: Demo, *, branch: str, active: bool, code: int, names: str | None) -> None:
-    """Run the recipe as Claude Code runs it on a stop, on `branch`, and assert its exit code,
-    that its stdout is empty, and, when `names` is given, that its stderr names that verdict."""
-    demo.git("switch", "-q", branch)
-    # The fields of the hooks reference's "Stop input": the common ones, `stop_hook_active`, and
-    # the turn's last message.
-    event = {
-        "session_id": "demo",
-        "transcript_path": str(demo.scratch / "transcript.jsonl"),
-        "cwd": str(demo.repo),
-        "permission_mode": "default",
-        "hook_event_name": "Stop",
-        "stop_hook_active": active,
-        "last_assistant_message": "Done.",
-    }
-    argv = ["python3", "-I", str(RECIPE), "--", *RECIPE_COMMAND]
-    print(f"  on {branch}, stop_hook_active {json.dumps(active)}: $ {shlex.join(argv)}")
-    # Run from the scratch directory: the recipe finds the fixture through the input's `cwd`.
-    ran = demo.run(argv, cwd=demo.scratch, stdin=json.dumps(event))
-    print(f"  exit {ran.code}")
-    problems: list[str] = []
-    if ran.code != code:
-        problems.append(f"exit: expected {code}, got {ran.code}")
-    if ran.stdout:
-        problems.append(f"stdout is not empty: {ran.stdout.strip()[:200]}")
-    if names is not None:
-        if names in ran.stderr.split():
-            print(f"  stderr names {names}")
-        else:
-            problems.append(f"stderr does not name {names}")
-    if problems:
-        tail = ran.stderr.strip().splitlines()[-5:]
-        raise ActFailed("\n".join(problems + [f"stderr: {line}" for line in tail]))
-
-
-def act_stop_hook(demo: Demo) -> None:
-    # Act 5 left the fixture on `change`, whose committed tree brings the bug back; `main` is green.
-    _stop(demo, branch="change", active=False, code=2, names="failed")
-    _stop(demo, branch="main", active=False, code=0, names=None)
-    _stop(demo, branch="change", active=True, code=0, names=None)
-
-
 ACTS: tuple[tuple[str, Callable[[Demo], None]], ...] = (
-    ("a green run is proved, from the runner's own report", act_proved),
-    ("text that only looks like a test report proves nothing", act_not_recognised),
-    ("a run whose every test was skipped is a failure", act_all_skipped),
-    ("a variable that switches assertions off is refused", act_forging),
     ("a fixed bug's regression fails the change that brings it back", act_regression),
     ("attach delivers this project's skill and not another project's", act_attach),
-    (
-        "the Stop hook keeps the agent working on a red tree and lets it stop on a green one",
-        act_stop_hook,
-    ),
 )
 
 

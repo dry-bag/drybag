@@ -24,7 +24,7 @@ UNWRITTEN = (
 _INERT = "nothing to check: no ledger directory and no generated index"
 # What `regressions` says when no fixed entry carries a `regression` to run, and after its runs.
 NO_REGRESSIONS = "nothing to run: no fixed entry carries a regression"
-REGRESSIONS_RAN = "{ran} regression(s), {not_proved} not proved"
+REGRESSIONS_RAN = "{ran} regression(s), {not_passed} not passed"
 # `bugs regressions --timeout`'s grammar, said by the parser's refusal.
 NOT_SECONDS = "--timeout takes a whole number of seconds above 0"
 BASE_HELP = (
@@ -97,34 +97,24 @@ def run_bugs_check(args: argparse.Namespace) -> Result:
 
 
 def run_bugs_regressions(args: argparse.Namespace) -> Result:
-    import sys
-
-    from stayfixed.ledger.regressions import regressions
-    from stayfixed.prove.api import Verdict, line
+    from stayfixed.ledger.regressions import PASSED, regressions
 
     root, config = root_and_config(args)
-    # The runner's output goes to standard error in both forms, so that under `--json` standard
-    # output holds the one object.
-    ran = regressions(root, config, timeout=args.timeout, echo=sys.stderr)
+    ran = regressions(root, config, timeout=args.timeout)
     rows = []
     lines = []
-    for entry, receipt in ran:
-        said = line(receipt)
+    for entry, run in ran:
+        said = f"{run.verdict}: {run.detail}"
         rows.append(
-            {
-                "id": entry.id,
-                "path": entry.path.as_posix(),
-                "verdict": str(receipt.verdict),
-                "line": said,
-            }
+            {"id": entry.id, "path": entry.path.as_posix(), "verdict": run.verdict, "line": said}
         )
         lines.append(f"{printable(entry.id)}: {said}")
-    not_proved = sum(1 for _, receipt in ran if receipt.verdict is not Verdict.PROVED)
-    data = {"regressions": rows, "not_proved": not_proved}
+    not_passed = sum(1 for _, run in ran if run.verdict != PASSED)
+    data = {"regressions": rows, "not_passed": not_passed}
     if not ran:
         return Result(NO_REGRESSIONS, data)
-    lines.append(REGRESSIONS_RAN.format(ran=len(ran), not_proved=not_proved))
-    return Result("\n".join(lines), data, exit_code=1 if not_proved else 0)
+    lines.append(REGRESSIONS_RAN.format(ran=len(ran), not_passed=not_passed))
+    return Result("\n".join(lines), data, exit_code=1 if not_passed else 0)
 
 
 def run_bugs_new(args: argparse.Namespace) -> Result:
@@ -213,7 +203,7 @@ def register(groups: SubParsers) -> None:
     check.set_defaults(func=run_bugs_check)
     regressions = common_flags(
         sub.add_parser(
-            "regressions", help="run each fixed entry's regression and say what its runner proved"
+            "regressions", help="run each fixed entry's regression and say whether its exit was 0"
         )
     )
     regressions.add_argument(

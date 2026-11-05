@@ -16,11 +16,8 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > — `overlay upgrade`, with `setup --overlay` making it; and `attach`,
 > whose `attach` binds a repository to the overlay and whose `detach` takes back what `attach`
 > wrote, keeping the overlay's record of the binding ([CONTRIBUTING.md](https://github.com/stayfixed/stayfixed/blob/main/CONTRIBUTING.md#areas) says
-> where the line between the two runs). The core is language-neutral, and a stack is a **profile**:
-> one stack's test runner, build artifacts and package manager belong to its profile — data, and
-> optionally the advice to give after that stack's test runner fails — so a repository in several
-> languages gets each stack's advice with no configuration. The first profile, `python`, ships:
-> the stale-bytecode line of the note after a failing pytest run is its own. The hooks file that
+> where the line between the two runs). The core is language-neutral, so a repository in several
+> languages needs no configuration. The hooks file that
 > wires all of it into a session ships too, so on Claude Code installing the plugin is enough to make the guards fire and
 > the memory bundles arrive ([what each agent enforces](#what-each-agent-enforces)). The first
 > skills ship with them, and so does one command meant for a machine rather than for you — `hook`,
@@ -28,8 +25,7 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > and adapters for Cursor or Hermes — each leaves this list in the
 > change that ships it. The [Quickstart](#quickstart) shows the three keys that are enough to start
 > a project by hand, which `init` reads as your answers — a run that writes the file itself writes
-> `[stayfixed] version` and `agents`, and `profile` when the repository carries a shipped
-> profile's markers or `--profile` names one, beside `[project] name`, `base_branch` and
+> `[stayfixed] version` and `agents`, beside `[project] name`, `base_branch` and
 > `release_branch`, and a `[memory]` table only when `--memory-mode` answers it.
 > [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference; the command list below is held
 > to the parser by a test, so it is complete for what ships.
@@ -266,7 +262,7 @@ last to find the project root, and reaches no network.
 | `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 3) | when `--plugin` names a plugin, the preset's agents include `codex` and it names a marketplace for it |
 | `pre-commit install` | `stayfixed setup --overlay` | nothing as it installs; GitHub and Go's servers on the first commit after it (note 4) | when it renders an overlay at a path, records an existing one, or with `create:` |
 | `sh -c` | `stayfixed test attribute --command CMD` | wherever `CMD` reaches; stayfixed does not choose | every run: `CMD` in the working tree, then in extracts of `HEAD` and of the merge base |
-| the test command after `stayfixed prove --` | `stayfixed prove -- COMMAND`; `stayfixed bugs regressions`, with each fixed bug entry's `regression` as `COMMAND`, run from the project root | wherever `COMMAND` reaches; stayfixed does not choose: `uv run` may sync the project's environment from its index, `go test` may download the modules `go.mod` names, and `npx` installs a runner no `node_modules` holds, from the registry the project's `.npmrc` names, without asking, since under `prove` its standard input is no terminal; each as outside `prove` | every run, in the directory `prove` is typed in or the one its launcher is told to run `COMMAND` in, once a runner adapter recognises `COMMAND`, or with `--junit` |
+| each fixed bug entry's `regression` | `stayfixed bugs regressions`, each argv run as written from the project root | wherever the argv reaches; stayfixed does not choose: `uv run` may sync the project's environment from its index, `go test` may download the modules `go.mod` names, and `npx` installs a runner no `node_modules` holds, from the registry the project's `.npmrc` names, without asking, since the argv's standard input is no terminal | every run, for each fixed entry that carries one |
 | `.github/workflows/scan.yml` | the overlay's CI on GitHub (note 5) | GitHub, through `gitleaks/gitleaks-action` (note 5) | on every push, pull request and manual run, unless the repository is marked a template |
 | `.github/dependabot.yml` | GitHub's Dependabot, from the file the same commands write into the overlay | GitHub: it looks up new releases of the scan workflow's two pinned actions and opens one grouped pull request in the overlay to move them | monthly, once the file is on GitHub |
 
@@ -384,7 +380,7 @@ stayfixed bugs index                                   # render the generated in
 stayfixed bugs index --check                           # fail if the committed index is stale
 stayfixed bugs check                                   # every rule the ledger holds, one pass
 stayfixed bugs check --base origin/main                # also fail a tree that deleted the ledger or an entry it forked with
-stayfixed bugs regressions                             # run each fixed entry's regression through prove
+stayfixed bugs regressions                             # run each fixed entry's regression; its exit code is the verdict
 stayfixed bugs renumber BR-001 BR-002                  # move an entry; rewrite every mention
 
 # Documentation and plans
@@ -416,9 +412,6 @@ stayfixed setup --git-hooks                            # install the commit-mess
 stayfixed setup --git-hooks --uninstall                # remove it; restore the hook it chained to
 stayfixed setup --approval-boundary                    # print the deny rule and sandbox settings that keep an agent out of the trust record; writes nothing
 
-# Proving a fix
-stayfixed prove -- uv run --locked pytest tests/test_x.py   # run it here; proved, failed, not proven or refused, from the runner's own report
-
 # Diagnosing an installation
 stayfixed doctor                                       # fourteen checks over this installation, one line
 stayfixed doctor --json                                # every check with its status, detail and remedy
@@ -430,8 +423,8 @@ stayfixed hook SessionStart                            # dispatch one harness ho
 Commands that read a project take `--root` (default: the current directory) and `--machine` (read
 a machine configuration file other than the default); `memory` commands and `attach` take
 `--store` as well. The commands that take neither, and the ones that mean something else by
-either, are listed in [Shared flags](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#shared-flags). `--json` is accepted anywhere before `--` and
-prints one machine-readable object instead of one line; the words after `--` are the command's own. The commands that report a list of
+either, are listed in [Shared flags](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#shared-flags). `--json` is accepted anywhere and
+prints one machine-readable object instead of one line. The commands that report a list of
 findings — `bugs check`, `docs check`, `plan check` — all spell it `findings`,
 whatever their summary line calls them; every other command's keys are its own and are listed
 with it in [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md).
