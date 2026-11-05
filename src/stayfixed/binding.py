@@ -116,12 +116,14 @@ def main_checkout_or_none(root: Path) -> Path | None:
     return Path(found[0]).resolve()
 
 
-def read_id(root: Path) -> str | None:
+def read_id(root: Path, *, common: Path | None = None) -> str | None:
     """The binding id of `root`'s repository, or `None` when there is none, `root` is in no
     repository, or what is there is not exactly 32 lowercase hex characters. Raises
-    `GitUnavailable` where git could not be asked: "could not ask" is never "no id"."""
+    `GitUnavailable` where git could not be asked: "could not ask" is never "no id". `common` is
+    the git common directory where the caller already has it from a `rev-parse` of its own, which
+    saves asking again."""
     try:
-        common = common_directory(root)
+        common = common_directory(root) if common is None else common
     except GitUnavailable:
         raise
     except Failure:
@@ -159,14 +161,14 @@ def delivery_directory(id: str) -> Path:
     return data_directory() / DELIVERY / id
 
 
-def bound_project(root: Path) -> Bound | None:
+def bound_project(root: Path, *, common: Path | None = None) -> Bound | None:
     """What this machine records `root`'s id as bound to, or `None` when the checkout has no id or
     the machine no record for it. Never reads `stayfixed.toml`.
 
     A record that cannot be read, or holds no project, binds nothing: it is this machine's own
     file, written only by `record`, so `attach` writes it again. Nor does a `HOME` that names no
     home, under which no record can be kept; `attach` refuses that home before it writes one."""
-    id = read_id(root)
+    id = read_id(root, common=common)
     if id is None:
         return None
     try:

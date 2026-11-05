@@ -369,7 +369,9 @@ purpose (a `!` line outranks the exclude file), in which case it stays out. Wher
 what it ignores, nothing is placed and nothing is said. It says nothing when it placed and withheld
 nothing; otherwise it names the files placed, asks the session to read `AGENTS.md` when that file
 itself is among them, and names the files withheld. It asks git only `rev-parse` and
-`check-ignore --no-index`, neither of which runs a repository's `core.fsmonitor`.
+`check-ignore --no-index`, neither of which runs a repository's `core.fsmonitor`: one `rev-parse`
+finds the linked worktree and the common directory the binding id is read from, so a checkout it
+does not serve costs that one launch, and the `check-ignore` is asked once, only when a name is free.
 
 **Writes** inside `stayfixed/` under the data root the harness names — `CLAUDE_PLUGIN_DATA`, or
 Codex's `PLUGIN_DATA` — and nowhere else of its own: `.probe`, written each time it dispatches to

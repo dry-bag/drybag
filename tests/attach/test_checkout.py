@@ -9,7 +9,9 @@ same world, that the bound linked worktree is placed, so "nothing" is never "not
 from __future__ import annotations
 
 import os
+import shutil
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -155,6 +157,31 @@ def test_an_unbound_worktree_gets_nothing(tmp_path: Path) -> None:
     assert place(stranger, machine=None) == ([], [])
     assert _names(stranger) == {"README.md"}
     assert place(linked, machine=None)[0] == sorted(REGULAR)
+
+
+def test_the_handler_asks_git_once_before_it_knows_a_worktree_is_not_for_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # It runs on every `SessionStart` of every repository: the one `rev-parse` that finds the linked
+    # worktree names the common directory the binding id is read from, so a worktree this machine
+    # does not bind, and a bound one whose project holds no `checkout/`, each cost one launch.
+    _, linked = _world(tmp_path)
+    stranger = tmp_path / "stranger"
+    clone = _repository(tmp_path / "clone")
+    git(clone, "worktree", "add", "-q", str(stranger))
+    shutil.rmtree(tmp_path / "overlay" / "projects" / "p" / "checkout")
+    launched: list[str] = []
+    real = subprocess.Popen
+
+    def spy(argv, *args, **kwargs):  # type: ignore[no-untyped-def]
+        launched.append(str(argv[0]))
+        return real(argv, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "Popen", spy)
+    for tree in (stranger, linked):
+        launched.clear()
+        assert place(tree, machine=None) == ([], [])
+        assert launched == ["git"]
 
 
 def test_the_second_session_says_nothing(tmp_path: Path) -> None:

@@ -68,8 +68,9 @@ WITHHELD = (
 THIS_FILE = "a file with an unprintable name"
 
 
-def linked_worktree(root: Path) -> Path | None:
-    """The toplevel of the linked worktree `root` is in, or `None`.
+def linked_worktree(root: Path) -> tuple[Path, Path] | None:
+    """The toplevel of the linked worktree `root` is in and the git common directory it shares,
+    from one `rev-parse`, or `None`.
 
     A linked worktree is where `git rev-parse` says the git directory is
     `<common>/worktrees/<name>`. The main checkout (its git directory is the common one), a
@@ -87,7 +88,7 @@ def linked_worktree(root: Path) -> Path | None:
     if code != 0 or len(lines) != 3:
         return None
     toplevel, git_dir, common = (Path(line) for line in lines)
-    return toplevel if git_dir.parent == common / _WORKTREES else None
+    return (toplevel, common) if git_dir.parent == common / _WORKTREES else None
 
 
 def _held(source: Path) -> list[str]:
@@ -113,10 +114,13 @@ def place(root: Path, *, machine: Path | None) -> tuple[list[str], list[str]]:
     neither placed nor withheld. A file that cannot be read or created is left out and the rest
     are placed; where git cannot say what is ignored, nothing is placed and nothing is withheld.
     """
-    tree = linked_worktree(root)
-    bound = bound_project(tree) if tree is not None else None
+    found = linked_worktree(root)
+    if found is None:
+        return [], []
+    tree, common = found
+    bound = bound_project(tree, common=common)
     overlay = overlay_root(machine) if bound is not None else None
-    if tree is None or bound is None or overlay is None:
+    if bound is None or overlay is None:
         return [], []
     source = overlay / PROJECTS / bound.project / CHECKOUT
     if not fsops.is_dir(source):

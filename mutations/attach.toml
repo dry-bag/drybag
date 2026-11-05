@@ -1848,6 +1848,18 @@ reddens = [
   "tests/attach/test_checkout.py::test_a_new_linked_worktree_gets_the_regular_files_and_nothing_else",
 ]
 
+# The handler runs on every `SessionStart`: the one `rev-parse` that finds a linked worktree already
+# names the common directory the binding id is read from, and asking again doubles the launches of a
+# checkout it does not serve.
+[[mutation]]
+name = "owner-files asks git for the common directory twice"
+file = "src/stayfixed/attach/checkout.py"
+before = "    bound = bound_project(tree, common=common)"
+after = "    bound = bound_project(tree)"
+reddens = [
+  "tests/attach/test_checkout.py::test_the_handler_asks_git_once_before_it_knows_a_worktree_is_not_for_it",
+]
+
 # The main checkout already holds the owner's files and is the one a clone's `origin` points at;
 # only a linked worktree is new. Without the linked check every session start writes into it.
 [[mutation]]
