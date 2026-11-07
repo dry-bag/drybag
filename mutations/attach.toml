@@ -357,8 +357,8 @@ reddens = [
 [[mutation]]
 name = "attach writes over a tracked placed path"
 file = "src/stayfixed/attach/write.py"
-before = "    if found := exclude.tracked(root, placed):"
-after = "    if found := exclude.tracked(root, ()):"
+before = "    if found := tuple(path for path in placed if path in tracked):"
+after = "    if found := ():"
 reddens = [
   "tests/attach/test_write.py::test_a_tracked_codex_rule_copy_is_refused_before_anything_is_written",
   "tests/attach/test_write.py::test_a_tracked_local_settings_file_is_refused_before_anything_is_written",
@@ -1204,8 +1204,8 @@ reddens = [
 [[mutation]]
 name = "attach encodes the settings merge with a bare json.dumps"
 file = "src/stayfixed/attach/write.py"
-before = '    text = settings_text(raw, LOCAL_SETTINGS) + "\n"'
-after = '    text = json.dumps(raw, indent=2) + "\n"'
+before = '    return settings_text(raw, LOCAL_SETTINGS) + "\n"'
+after = '    return json.dumps(raw, indent=2) + "\n"'
 reddens = [
   "tests/attach/test_write.py::test_a_settings_merge_the_encoder_cannot_write_back_is_refused_before_the_first_write",
 ]

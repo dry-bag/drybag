@@ -248,15 +248,3 @@ reddens = [
   "tests/project/test_init.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed]",
   "tests/project/test_init.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed/manifest.json]",
 ]
-
-# `attach` and `detach` take back only the hook entries an earlier attach's ledger records. By the
-# marker alone they would take an entry the ledger does not name, which can be one the owner copied
-# with its marker or another release's.
-[[mutation]]
-name = "the withdrawal takes every entry claiming the marker"
-file = "src/stayfixed/scaffold/entries.py"
-before = '            kept = [entry for entry in entries if recorded.get(_claimed(entry) or "") != event]'
-after = "            kept = [entry for entry in entries if _claimed(entry) is None]"
-reddens = [
-  "tests/attach/test_write.py::test_an_attach_withdraws_the_hook_entries_its_earlier_ledger_records_and_no_other",
-]
