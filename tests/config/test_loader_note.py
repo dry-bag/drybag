@@ -398,22 +398,22 @@ def _symlinked_docs(tmp_path: Path) -> Path:
 @pytest.mark.parametrize(
     ("paths", "key"),
     [
-        pytest.param("", "paths.architecture", id="preset-value"),
-        pytest.param('architecture = "../x"\n', "paths.architecture", id="reset-then-preset"),
+        pytest.param("", "paths.specs", id="preset-value"),
+        pytest.param('specs = "../x"\n', "paths.specs", id="reset-then-preset"),
         pytest.param('bugs = "../x"\n', "paths.bugs", id="reset-before-the-first-preset"),
     ],
 )
 def test_a_preset_value_a_committed_symlink_breaks_is_named(
     tmp_path: Path, paths: str, key: str
 ) -> None:
-    # A committed `docs` symlink. With no `[paths]`, the preset's own `paths.architecture`
+    # A committed `docs` symlink. With no `[paths]`, the preset's own `paths.specs`
     # passes through it and the document holds no value to remove, so nothing stands in for it.
     # With the document's own value refused, its preset value is asked before anything is
     # removed, and it fails too: the key named is the one the document wrote, never a preset
     # value it did not touch. Mutations (`mutations/`'s "the NOTE path relays the refusal of a key
     # it cannot remove" -> `preset-value`'s `PathEscape` propagates; "a preset value that fails
     # containment is reset to anyway" -> `reset-before-the-first-preset` names
-    # `paths.architecture`). The control below is the one no mutation reddens: it shows the link
+    # `paths.specs`). The control below is the one no mutation reddens: it shows the link
     # is the fault.
     root = _symlinked_docs(tmp_path)
     text = MINIMAL + (f"[paths]\n{paths}" if paths else "")

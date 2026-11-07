@@ -55,6 +55,8 @@ ORIGIN = f"git@github.com:{OWNER}/{PROJECT}.git"
 # The rule the walkthrough puts in the overlay and then asks a session for. Distinctive enough
 # that finding it in the wrapper's stdout cannot be an accident.
 RULE_BODY = "NEVER FORCE-PUSH A SHARED BRANCH; open a pull request instead."
+# The first line of the `.gitignore` region `init` writes, spelled as a project carries it.
+IGNORE_BEGIN = "# stayfixed:ignore:begin\n"
 
 # The note the walkthrough asks a session for, as one spelling. `_install_path` writes it into
 # the overlay on the path a fresh project takes, and `_project(initialised=True)` writes the same
@@ -255,10 +257,10 @@ def _install_path(
     # 0. the project footprint, on the repository that came with notes and a history. `init`
     # adopts the `stayfixed.toml` already there without rewriting it (a `Kind.ONCE` artifact
     # whose file is present is skipped), so the document above is still the document below,
-    # and the manifest is the witness that the footprint pass ran.
+    # and the `.gitignore` region is the witness that the footprint ran.
     if initialised:
         step("init", "--yes", "--root", str(root), "--machine", str(machine))
-        assert (root / ".stayfixed" / "manifest.json").is_file(), "`init` recorded no manifest"
+        assert IGNORE_BEGIN in (root / ".gitignore").read_text("utf-8"), "`init` wrote no region"
     # 1-3. the machine layer, into a scratch machine file and a scratch home. **Two runs**, as
     # the walkthrough had before it was converted: the first writes the machine file with no
     # overlay in it, the second renders the overlay from the shipped template with no network
@@ -574,11 +576,11 @@ def test_doctor_is_green_on_the_attached_fixture(tmp_path: Path) -> None:
 # as a number rather than as a set of argv lists so the failure reads as "the count moved", which
 # is the claim.
 #
-# Fifteen: the wrapper probe and the fourteen `git` questions the `attached`, note-store, `memory`,
+# Sixteen: the wrapper probe and the fifteen `git` questions the `attached`, note-store, `memory`,
 # `preferences` and `sync` rows ask of a bound checkout and its overlay, as `docs/cli.md`'s doctor
 # section lists them; the `sync` row's `git version` is asked because `setup --overlay` switched the
 # note sync on for the overlay this fixture rendered.
-DOCTOR_LAUNCHES = 15
+DOCTOR_LAUNCHES = 16
 
 
 def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
@@ -631,11 +633,11 @@ def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
         True,
     ), attached
     assert len(launched) == DOCTOR_LAUNCHES, launched
-    # And they are the fifteen the paragraph names, not fifteen of something else: one wrapper
-    # probe, and fourteen `git` questions. Asserted by shape rather than by full argv, because
+    # And they are the sixteen the paragraph names, not sixteen of something else: one wrapper
+    # probe, and fifteen `git` questions. Asserted by shape rather than by full argv, because
     # each `git` call carries the temporary checkout or overlay it asks about.
     assert sum(1 for argv in launched if argv[0] == str(WRAPPER)) == 1
-    assert sum(1 for argv in launched if argv[0] == "git") == 14
+    assert sum(1 for argv in launched if argv[0] == "git") == 15
 
 
 def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Path) -> None:
@@ -645,7 +647,7 @@ def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Pat
     # through the wrapper.
     #
     # What would break it: leave the composed store unread and `RULE_BODY` never reaches the
-    # bundle; remove `init`'s footprint and the manifest assertion fails; let any row go red —
+    # bundle; remove `init`'s footprint and the region assertion fails; let any row go red —
     # `overlay-requires`, the last, is the one this branch added and it is answered here against
     # a real overlay rather than a stub.
     walk = _install_path(tmp_path, initialised=True)
@@ -654,7 +656,7 @@ def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Pat
     assert RULE_BODY in done.stdout
     rows = _doctor(walk)
     assert not [row for row in rows if row["status"] == RED]
-    assert (walk.root / ".stayfixed" / "manifest.json").is_file()
+    assert IGNORE_BEGIN in (walk.root / ".gitignore").read_text("utf-8")
 
 
 def test_a_session_before_the_attach_is_told_what_is_missing(tmp_path: Path) -> None:
@@ -680,8 +682,7 @@ def test_a_session_before_the_attach_is_told_what_is_missing(tmp_path: Path) -> 
 
 def test_detach_on_an_initialised_project_leaves_the_footprint(tmp_path: Path) -> None:
     # The footprint's ownership, end to end: the detach that takes back everything `attach` added
-    # leaves what `init` wrote where it is — and the manifest with it, because `detach` never
-    # touches the scaffold ledger.
+    # leaves what `init` wrote where it is.
     walk = _install_path(tmp_path, initialised=True)
     roadmap = walk.root / "docs" / "roadmap.md"
     # Non-vacuous: the file this asserts survives has to be there before the detach.
@@ -689,4 +690,3 @@ def test_detach_on_an_initialised_project_leaves_the_footprint(tmp_path: Path) -
     done = _cli(walk, "detach", "--root", str(walk.root))
     assert done.returncode == 0, done.stderr
     assert roadmap.read_text(encoding="utf-8") == before
-    assert (walk.root / ".stayfixed" / "manifest.json").is_file()

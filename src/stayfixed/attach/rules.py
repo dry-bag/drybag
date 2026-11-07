@@ -4,8 +4,8 @@
 `common/`, each tag of the project (`groups/<tag>/`), then `projects/<project>/`, beside the
 overlay's `permissions.json` and `hooks.json`. A rule whose frontmatter has a `paths:` key is
 path-scoped; any other is a standing rule. The plates come in that order, each in name order, and
-a later plate's rule replaces the earlier plate's rule of the same file name, as a later plate's
-skill does in the render.
+a later plate's rule replaces the earlier plate's rule of the same file name and takes its place,
+as every named item does (`attach.items`).
 
 **For the bound project only.** `<project>` is the one this machine's binding record names for the
 checkout's id (`stayfixed.binding.bound_project`), never a name the repository supplies, so a clone
@@ -35,20 +35,19 @@ import hashlib
 import os
 import re
 import stat
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from stayfixed import fsops
-from stayfixed.attach.permissions import PROJECT_CLAUDE
+from stayfixed.attach.items import RULE, fold
 from stayfixed.binding import bound_project
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.paths import data_directory
-from stayfixed.config.plates import plates
+from stayfixed.config.plates import Plate, plates
 from stayfixed.errors import Failure
 from stayfixed.printed import printable, quoted
 
-RULES = "rules"
-SUFFIX = ".md"
 # Under the machine's data directory: one directory of once-per-file records per session.
 SESSIONS = "sessions"
 STANDING_LEAD = "Standing rules from your stayfixed overlay, for every session in this checkout:"
@@ -133,39 +132,23 @@ def _parsed(name: str, text: str) -> Rule:
     return Rule(name, None, text.strip())
 
 
-def _directory(directory: Path) -> dict[str, Rule]:
-    """Every `*.md` regular file in `directory` by name, dot-named files left out; none where
-    there is no such directory. A file that cannot be read is a `Failure`."""
-    if not fsops.is_dir(directory):
-        return {}
-    found: dict[str, Rule] = {}
-    with fsops.reading(quoted(str(directory)), _unreadable):
-        names = sorted(os.listdir(directory))
-    for name in names:
-        path = directory / name
-        if name.startswith(".") or not name.endswith(SUFFIX) or not fsops.is_file(path):
-            continue
+def read(held: Sequence[Plate]) -> list[Rule]:
+    """The overlay's rules in the plates `held`: the winners of the plates' fold (`attach.items`), a
+    later plate's rule replacing an earlier plate's of its name and taking its place. A directory
+    or a file that cannot be read is a `Failure`."""
+    found: list[Rule] = []
+    winners = fold(held, RULE, _unreadable).winners
+    for name, path in winners.items():
         with fsops.reading(quoted(str(path)), _unreadable):
             text = fsops.read_regular_text(path, limit=_READ_LIMIT)
-        found[name] = _parsed(name, text)
+        found.append(_parsed(name, text))
     return found
 
 
-def read(overlay: Path, project: str) -> list[Rule]:
-    """The overlay's rules for `project`: each plate's in turn (`config.plates`), each in name
-    order, a rule replacing the earlier plate's rule of its name."""
-    rules: dict[str, Rule] = {}
-    for plate in plates(overlay, project)[0]:
-        for name, rule in _directory(plate.directory / PROJECT_CLAUDE / RULES).items():
-            rules.pop(name, None)
-            rules[name] = rule
-    return list(rules.values())
-
-
-def scoped_exist(overlay: Path, project: str) -> bool:
-    """Whether the overlay holds a path-scoped rule for `project`, which decides whether the
-    render carries the `PostToolUse` entry."""
-    return any(rule.paths is not None for rule in read(overlay, project))
+def scoped_exist(held: Sequence[Plate]) -> bool:
+    """Whether the plates `held` hold a path-scoped rule, which decides whether the render carries
+    the `PostToolUse` entry."""
+    return any(rule.paths is not None for rule in read(held))
 
 
 def _bound(root: Path) -> list[Rule]:
@@ -175,7 +158,7 @@ def _bound(root: Path) -> list[Rule]:
     overlay = overlay_root(None) if bound is not None else None
     if bound is None or overlay is None:
         return []
-    return read(overlay, bound.project)
+    return read(plates(overlay, bound.project)[0])
 
 
 def standing(root: Path) -> str:

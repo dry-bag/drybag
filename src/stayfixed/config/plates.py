@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from stayfixed import fsops
-from stayfixed.config.reading import UNPARSEABLE, toml_position
+from stayfixed.config.reading import UNPARSEABLE, read_fault
 from stayfixed.printed import clipped, quoted
 
 COMMON = "common"
@@ -46,10 +46,9 @@ TAG_LINK_PREFIX = "tag-"
 # forty is past every tag a person types. No shipped file states it.
 TAG = re.compile(r"\A[a-z0-9][a-z0-9-]{0,39}\Z")
 
-UNREADABLE = "{path} cannot be read ({error}), so the project lists no tags"
-NOT_UTF8 = "{path} is not UTF-8 text, so the project lists no tags"
-NOT_TOML = "{path} is not valid TOML {position}, so the project lists no tags"
-NOT_A_LIST = "{path}: tags must be a list of strings, so the project lists no tags"
+UNLISTED = "so the project lists no tags"
+NOT_A_LIST = "{path}: tags must be a list, so the project lists no tags"
+NOT_A_STRING = "{path}: the tags entry {position} is not a string; it is skipped"
 NOT_A_TAG = (
     "{path}: the tag {tag} is not 1 to 40 lowercase letters, digits and hyphens, "
     "starting with a letter or digit; it is skipped"
@@ -85,25 +84,22 @@ def read_record(path: Path) -> dict[str, Any]:
     return tomllib.loads(fsops.read_regular_text(path))
 
 
-def _listed(overlay: Path, project: str) -> tuple[list[str], str | None]:
-    """The tags `project`'s record lists, and the note for a record that is present and unusable
-    (`record_fault`): it cannot be read, or `tags` is not a list of strings. No record, or a record
-    with no `tags` key, lists none and is no fault."""
+def _listed(overlay: Path, project: str) -> tuple[list[Any], str | None]:
+    """The entries of the `tags` list `project`'s record holds, and the note for a record that is
+    present and unusable (`record_fault`): it cannot be read, or `tags` is not a list. No record, or
+    a record with no `tags` key, lists none and is no fault. An entry that is not a string is
+    `tags`' to note, not a fault."""
     record = overlay / PROJECTS / project / RECORD
     shown = quoted(str(record))
     try:
         listed = read_record(record).get("tags")
     except FileNotFoundError:
         return [], None
-    except UnicodeDecodeError:
-        return [], NOT_UTF8.format(path=shown)
-    except OSError as exc:
-        return [], UNREADABLE.format(path=shown, error=fsops.said(exc))
-    except UNPARSEABLE as exc:
-        return [], NOT_TOML.format(path=shown, position=toml_position(exc))
+    except (UnicodeDecodeError, OSError, *UNPARSEABLE) as exc:
+        return [], read_fault(shown, exc, UNLISTED)
     if listed is None:
         return [], None
-    if not isinstance(listed, list) or not all(isinstance(tag, str) for tag in listed):
+    if not isinstance(listed, list):
         return [], NOT_A_LIST.format(path=shown)
     return listed, None
 
@@ -117,16 +113,22 @@ def record_fault(overlay: Path, project: str) -> str | None:
 
 def tags(overlay: Path, project: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """The usable tags of `project` in list order, each once, and the notes: `record_fault`, a tag
-    outside `TAG` and a tag with no `groups/<tag>/` directory."""
+    outside `TAG`, an entry that is not a string and a tag with no `groups/<tag>/` directory, each
+    noted once however often it is listed."""
     listed, fault = _listed(overlay, project)
     if fault is not None:
         return (), (fault,)
     shown = quoted(str(overlay / PROJECTS / project / RECORD))
     usable: list[str] = []
     notes: list[str] = []
-    for tag in listed:
-        if tag in usable:
+    seen: set[str] = set()
+    for position, tag in enumerate(listed, 1):
+        if not isinstance(tag, str):
+            notes.append(NOT_A_STRING.format(path=shown, position=position))
             continue
+        if tag in seen:
+            continue
+        seen.add(tag)
         if TAG.match(tag) is None:
             notes.append(NOT_A_TAG.format(path=shown, tag=clipped(tag)))
         elif not _directory(overlay / GROUPS / tag):

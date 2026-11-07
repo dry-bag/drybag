@@ -25,6 +25,7 @@ from stayfixed.attach.hooks import (
     register,
 )
 from stayfixed.config.loader import CONFIG_FILE, load
+from stayfixed.config.session import session_config
 from stayfixed.hooks.api import EVENTS, Handler, HookEvent, HookResult
 from stayfixed.hooks.registry import discover
 from tests.boundaries.test_discovery import LIST_IMPORTS, ROOT
@@ -276,7 +277,7 @@ def test_a_bound_checkout_with_no_file_hears_the_overlay_status(
     git(overlay, "add", "-A")
     git(overlay, "commit", "-qm", "chore: overlay")
     _bind(overlay)
-    assert _status().run(_event(root), NO_CONFIG).context == NO_UPSTREAM.format(dirty=1)
+    assert _status().run(_event(root), session_config(root)).context == NO_UPSTREAM.format(dirty=1)
 
 
 @needs_git

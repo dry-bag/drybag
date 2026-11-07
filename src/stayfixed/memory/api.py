@@ -13,8 +13,8 @@ that needs something absent from this list grows it deliberately, in a commit th
 area and why — it does not import a private module of this area.
 
 The names imported from outside this area today, by the `attach` and `overlay` areas and by this
-repository's tests: the resolver (`resolve` and `permitted_roots`), the overlay layout `attach`
-writes and `overlay` renders (`PROJECTS`, `PROJECT_RECORD`, `STORE_DIR`, `COMMON_GROUP`), the
+repository's tests: the resolver (`resolve` and `project_notes`), the overlay layout `attach`
+writes and `overlay` renders (`PROJECTS`, `RECORD`, `STORE_DIR`), the
 note roots `sync`'s pathspecs are built from beside `config.plates.GROUPS` (`COMMON`,
 `PROJECTS`), and the index's name, which those pathspecs leave out under each project, since each
 machine renders its own (`INDEX_NAME`), the one
@@ -87,17 +87,17 @@ from stayfixed.memory.store import (
     BINDING_STATES,
     BOUND,
     COMMON,
-    COMMON_GROUP,
-    PROJECT_RECORD,
     PROJECTS,
+    RECORD,
     STORE_DIR,
     UNBOUND,
     Store,
     binding_state,
     composed_directory,
     origin_note,
-    permitted_roots,
+    project_notes,
     read_binding_record,
+    reserved,
     reserved_project_groups,
     resolve,
 )
@@ -107,11 +107,10 @@ __all__ = [
     "BINDING_STATES",
     "BOUND",
     "COMMON",
-    "COMMON_GROUP",
     "DELIMITER",
     "INDEX_NAME",
     "PROJECTS",
-    "PROJECT_RECORD",
+    "RECORD",
     "SLOTS",
     "STORE_DIR",
     "UNBOUND",
@@ -122,10 +121,11 @@ __all__ = [
     "link_sources",
     "markers",
     "origin_note",
-    "permitted_roots",
+    "project_notes",
     "promote_share",
     "read_binding_record",
     "render_missing_index",
+    "reserved",
     "reserved_project_groups",
     "resolve",
     "withdraw_composed",

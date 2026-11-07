@@ -34,16 +34,14 @@ from stayfixed.attach.write import (
     Attached,
     attach,
 )
+from stayfixed.binding import LEDGER_FILE, common_directory
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.errors import Failure, Refusal
-from stayfixed.memory.api import PROJECT_RECORD, link_sources
+from stayfixed.memory.api import RECORD, link_sources
 from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from stayfixed.printed import quoted
 from stayfixed.runner import Completed
 from stayfixed.scaffold import EntriesError, Style, drop, extract
-
-# The fixture the binding tests already build, reused rather than copied: one spelling of the
-# overlay layout keeps the two modules from drifting apart about what `--store` names.
 from tests.attach.test_binding import CONFIG, DEFAULT_MEMORY, _machine, _project_and_store
 from tests.cli import cli
 from tests.gitfixture import git as _git
@@ -57,6 +55,10 @@ from tests.runners import Recorder
 # two copies drifted apart on the one thing that mattered — how much of `.git` to trust.
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
+# The fixture the binding tests already build, reused rather than copied: one spelling of the
+# overlay layout keeps the two modules from drifting apart about what `--store` names.
+from tests.tagged import with_tags
+
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
 
@@ -68,7 +70,11 @@ def _never_the_developers_own_claude(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("stayfixed.runner.subprocess_runner", lambda **_: runner)
 
 
-LEDGER = ".stayfixed/local/attach.json"
+def ledger_file(root: Path) -> Path:
+    """The attach ledger of `root`'s repository: in the git common directory, beside the id."""
+    return common_directory(root) / LEDGER_FILE
+
+
 SETTINGS = ".claude/settings.local.json"
 # The settings key that points the harness at the composed store, which every overlay-mode attach
 # writes beside whatever else the case is about.
@@ -184,7 +190,7 @@ def test_an_attach_of_an_overlay_that_grants_nothing_binds_and_writes_only_the_m
     assert attached.binding_recorded
     assert attached.settings_written
     assert list(json.loads((root / SETTINGS).read_text(encoding="utf-8"))) == [POINTER]
-    assert (root / LEDGER).is_file()
+    assert ledger_file(root).is_file()
 
 
 def test_the_screen_names_what_a_render_adds_and_removes_against_the_last_one(
@@ -408,47 +414,6 @@ def test_after_attach_the_local_settings_file_holds_the_allow_rules_and_no_hook_
     )
     document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
     assert document.pop(POINTER) and document == {"permissions": {"allow": [RULE]}}
-    assert ledger(root).entries == {}
-
-
-def test_an_attach_withdraws_the_hook_entries_its_earlier_ledger_records_and_no_other(
-    tmp_path: Path,
-) -> None:
-    # A checkout attached by an earlier release holds the entries that release merged, named by
-    # its ledger. `attach` takes back exactly those, found through the ledger and never by the
-    # marker alone: an entry claiming the marker that no ledger records is left where it is, as is
-    # the owner's own, and a group left with one of them is split rather than dropped.
-    root, store, machine = _attachable(tmp_path)
-    (root / ".claude").mkdir()
-    recorded = {"type": "command", "command": "old.sh  # stayfixed:overlay-SessionStart-1"}
-    unrecorded = {"type": "command", "command": "other.sh  # stayfixed:overlay-SessionStart-2"}
-    mine = {"type": "command", "command": "mine.sh"}
-    (root / SETTINGS).write_text(
-        json.dumps({"hooks": {"SessionStart": [{"hooks": [mine, recorded, unrecorded]}]}}),
-        encoding="utf-8",
-    )
-    (root / ".stayfixed" / "local").mkdir(parents=True)
-    (root / LEDGER).write_text(
-        json.dumps(
-            {
-                "format": 1,
-                "store": str(store),
-                "entries": {"overlay-SessionStart-1": "SessionStart"},
-            }
-        ),
-        encoding="utf-8",
-    )
-    attached = attach(
-        root,
-        store=store,
-        machine=machine,
-        runner=Recorder(),
-    )
-    assert attached.settings_written
-    document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
-    assert document.pop(POINTER)
-    assert document == {"hooks": {"SessionStart": [{"hooks": [mine, unrecorded]}]}}
-    assert ledger(root).entries == {}
 
 
 def test_attach_delivers_whatever_the_memory_mode(tmp_path: Path) -> None:
@@ -463,7 +428,7 @@ def test_attach_delivers_whatever_the_memory_mode(tmp_path: Path) -> None:
     runner = Recorder()
     attach(root, store=store, machine=machine, runner=runner)
     assert [argv[2] for argv, _ in _claude_calls(runner)] == ["marketplace", "install"]
-    assert (root / LEDGER).is_file()
+    assert ledger_file(root).is_file()
 
 
 def test_attach_points_the_harness_at_the_composed_store_in_the_main_checkout(
@@ -588,8 +553,7 @@ def test_a_mode_other_than_overlay_writes_no_memory_pointer(tmp_path: Path) -> N
 def test_a_second_attach_that_changes_nothing_leaves_the_settings_file_alone(
     tmp_path: Path,
 ) -> None:
-    # The guard for the clause above: `owned_ids` widened the early return, and a widening that
-    # went too far would reformat a file the owner owns on every run and report itself as a
+    # A rewrite here would reformat a file the owner owns on every run and report itself as a
     # write. A second attach of an overlay that grants nothing touches nothing: the pointer the
     # first one wrote is already there.
     root, store, machine = _attachable(tmp_path)
@@ -651,8 +615,8 @@ def test_a_record_that_already_binds_this_repository_is_left_alone(tmp_path: Pat
 
 
 def test_the_merged_rules_are_recorded_where_they_can_be_removed_again(tmp_path: Path) -> None:
-    # The ledger lives under .stayfixed/local/, because the committed manifest would
-    # publish a digest of the owner's personal allow rules to collaborators.
+    # The ledger lives in the git common directory, because the committed manifest would publish a
+    # digest of the owner's personal allow rules to collaborators.
     hooks = {"SessionStart": [{"hooks": [ENTRY]}]}
     root, store, machine = _attachable(tmp_path, allow=(RULE,), hooks=hooks)
     attach(
@@ -663,23 +627,22 @@ def test_the_merged_rules_are_recorded_where_they_can_be_removed_again(tmp_path:
     )
     recorded = ledger(root)
     assert recorded.allow == (RULE,)
-    assert recorded.entries == {}
     assert recorded.render is not None
-    assert (root / LEDGER).is_file()
+    assert ledger_file(root).is_file()
 
 
 def test_attach_writes_nothing_into_gitignore_and_leaves_git_status_empty(tmp_path: Path) -> None:
     # The ledger was kept out of git by a `stayfixed:ignore` region `attach` wrote into
     # `.gitignore`, a tracked file, so every first attach left a change every collaborator would
-    # get. Everything `attach` places is hidden through the exclude block now, the ledger with
-    # the rest, and `.gitignore` is not written at all.
+    # get. The ledger is in the git common directory now and the rest is hidden through the
+    # exclude block, and `.gitignore` is not written at all.
     root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
     (root / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
     _committed(root)
     before = (root / ".gitignore").read_bytes()
     _attach_quietly(root, store, machine)
-    # Non-vacuous: the run placed the ledger and the settings file, which git would show.
-    assert (root / LEDGER).is_file() and (root / SETTINGS).is_file()
+    # Non-vacuous: the run placed the settings file, which git would show.
+    assert ledger_file(root).is_file() and (root / SETTINGS).is_file()
     assert _git(root, "status", "--porcelain=v1", "-z", "-uall") == ""
     assert (root / ".gitignore").read_bytes() == before
 
@@ -701,7 +664,7 @@ def test_a_gitignore_that_re_includes_the_settings_file_refuses_before_it_is_wri
         _attach_quietly(root, store, machine)
     assert str(refused.value) == NOT_IGNORED.format(paths=quoted(SETTINGS))
     assert not (root / SETTINGS).exists()
-    assert not (root / LEDGER).exists()
+    assert not ledger_file(root).exists()
     assert not (root / ".codex" / "rules").exists()
 
 
@@ -869,7 +832,7 @@ def test_an_overlay_project_record_that_cannot_be_read_stops_attach_but_not_the_
 
     root, store, machine = _attachable(tmp_path)
     attach(root, store=store, machine=machine, runner=Recorder())
-    record = store.parent / PROJECT_RECORD
+    record = store.parent / RECORD
     record.write_text(CONFLICTED, encoding="utf-8")
     with pytest.raises(Refusal, match="is not valid TOML"):
         attach(root, store=store, machine=machine, runner=Recorder())
@@ -948,7 +911,7 @@ def test_a_memory_group_that_leaves_the_projects_share_is_refused_not_created(
     assert not (store.parents[2].parent / "escape").exists()
     assert_snapshot_unchanged(root, before)
     # The one write that is not under the root, and the one that made `doctor` say `bound`.
-    assert not (store.parent / PROJECT_RECORD).exists()
+    assert not (store.parent / RECORD).exists()
 
 
 @ROOT_SEARCHES_EVERYTHING
@@ -1024,9 +987,9 @@ def test_the_memory_group_refusal_is_reached_on_a_run_that_would_have_written(
     after = snapshot(root)
     added = set(after) - set(before)
     assert attached.settings_written and attached.binding_recorded
-    assert {LEDGER, SETTINGS, ".codex/rules/common.rules"} <= added
+    assert {SETTINGS, ".codex/rules/common.rules"} <= added and ledger_file(root).is_file()
     assert before.get(".git/info/exclude") != after.get(".git/info/exclude")
-    assert (store.parent / PROJECT_RECORD).is_file()
+    assert (store.parent / RECORD).is_file()
     assert (store / "project-stable").is_dir()
 
 
@@ -1087,7 +1050,7 @@ def test_codex_rules_land_under_the_directory_codex_reads(tmp_path: Path) -> Non
     landed = root / ".codex" / "rules" / "common.rules"
     assert landed.read_text(encoding="utf-8") == "# standing rule\n"
     assert ".codex/rules/common.rules" in attached.rules_written
-    assert ledger(root).rules == (".codex/rules/common.rules",)
+    assert list(ledger(root).rules) == [".codex/rules/common.rules"]
 
 
 @ROOT_SEARCHES_EVERYTHING
@@ -1119,7 +1082,7 @@ def test_an_unlistable_codex_directory_fails_and_writes_nothing(
     finally:
         directory.chmod(0o755)
     line = (
-        f"stayfixed: failed: {quoted(str(directory))} cannot be listed (Permission denied), "
+        f"stayfixed: failed: {quoted(str(directory))} cannot be read (Permission denied), "
         "so nothing was written\n"
     )
     assert (checked[0], checked[2]) == (attached[0], attached[2]) == (1, line)
@@ -1233,9 +1196,9 @@ def test_attach_keeps_every_key_and_byte_of_the_record_it_did_not_write(tmp_path
 
     root, store, machine = _attachable(tmp_path)
     original = '# who is on what\ntags = ["a"]\n\n[notes]\nowner = "me"  # kept\n'
-    (store.parent / PROJECT_RECORD).write_text(original, encoding="utf-8")
+    (store.parent / RECORD).write_text(original, encoding="utf-8")
     attach(root, store=store, machine=machine, runner=Recorder())
-    text = (store.parent / PROJECT_RECORD).read_text(encoding="utf-8")
+    text = (store.parent / RECORD).read_text(encoding="utf-8")
     today = datetime.date.today().isoformat()
     assert text == f'remote = "git@example.com:o/p.git"\nfirst_attach = "{today}"\n' + original
     assert tomllib.loads(text)["tags"] == ["a"]
@@ -1244,9 +1207,9 @@ def test_attach_keeps_every_key_and_byte_of_the_record_it_did_not_write(tmp_path
 def test_attach_keeps_the_line_endings_of_the_record_it_did_not_write(tmp_path: Path) -> None:
     root, store, machine = _attachable(tmp_path)
     original = b'tags = ["a"]\r\n'
-    (store.parent / PROJECT_RECORD).write_bytes(original)
+    (store.parent / RECORD).write_bytes(original)
     attach(root, store=store, machine=machine, runner=Recorder())
-    assert (store.parent / PROJECT_RECORD).read_bytes().endswith(original)
+    assert (store.parent / RECORD).read_bytes().endswith(original)
 
 
 def test_attach_writes_no_key_the_record_holds_unusable(tmp_path: Path) -> None:
@@ -1256,9 +1219,9 @@ def test_attach_writes_no_key_the_record_holds_unusable(tmp_path: Path) -> None:
     import tomllib
 
     root, store, machine = _attachable(tmp_path)
-    (store.parent / PROJECT_RECORD).write_text('remote = ""\n', encoding="utf-8")
+    (store.parent / RECORD).write_text('remote = ""\n', encoding="utf-8")
     attach(root, store=store, machine=machine, runner=Recorder())
-    text = (store.parent / PROJECT_RECORD).read_text(encoding="utf-8")
+    text = (store.parent / RECORD).read_text(encoding="utf-8")
     today = datetime.date.today().isoformat()
     assert text == f'first_attach = "{today}"\nremote = ""\n'
     assert tomllib.loads(text)["remote"] == ""
@@ -1267,9 +1230,9 @@ def test_attach_writes_no_key_the_record_holds_unusable(tmp_path: Path) -> None:
 def test_a_record_that_holds_both_keys_is_not_written(tmp_path: Path) -> None:
     root, store, machine = _attachable(tmp_path)
     original = 'first_attach = "2020-02-02"\nremote = "git@example.com:o/p.git"\ntags = []\n'
-    (store.parent / PROJECT_RECORD).write_text(original, encoding="utf-8")
+    (store.parent / RECORD).write_text(original, encoding="utf-8")
     attach(root, store=store, machine=machine, runner=Recorder())
-    assert (store.parent / PROJECT_RECORD).read_text(encoding="utf-8") == original
+    assert (store.parent / RECORD).read_text(encoding="utf-8") == original
 
 
 def test_a_repository_with_no_origin_remote_attaches_and_records_none(tmp_path: Path) -> None:
@@ -1332,48 +1295,19 @@ def test_an_overlay_hooks_file_with_an_unreadable_shape_is_refused(tmp_path: Pat
         )
 
 
-def test_a_ledger_that_is_not_json_is_a_failure_and_not_an_empty_one(tmp_path: Path) -> None:
-    # An empty ledger reads as "attach added nothing", which makes `detach` a no-op on a
-    # repository that has stayfixed's rules in it — the quiet half of the failure this file is
-    # the only witness to.
-    root, store, machine = _attachable(tmp_path)
-    attach(
-        root,
-        store=store,
-        machine=machine,
-        runner=Recorder(),
-    )
-    (root / LEDGER).write_text("{", encoding="utf-8")
-    with pytest.raises(Failure):
-        ledger(root)
-
-
-# `NESTED`, which no reader caught, in two files a clone can commit.
-
-
-def test_a_ledger_nested_past_the_parsers_reach_is_a_failure_and_never_an_internal_error(
+def test_attach_carries_on_over_a_ledger_that_does_not_parse_and_writes_it_whole(
     tmp_path: Path,
 ) -> None:
-    # The ledger is the unreadable ledger it is, and the attach that reads it back answers so
-    # rather than ending in an internal error. Mutation (oracle): `mutations/`'s "the JSON object
-    # reader lets a document nested past the parser raise" -> both raise `RecursionError`.
-    root, store, machine = _attachable(tmp_path)
-    attach(
-        root,
-        store=store,
-        machine=machine,
-        runner=Recorder(),
-    )
-    (root / LEDGER).write_text('{"entries": ' + NESTED + "}", encoding="utf-8")
-    with pytest.raises(Failure, match="nested deeper"):
-        ledger(root)
-    with pytest.raises(Failure, match="nested deeper"):
-        attach(
-            root,
-            store=store,
-            machine=machine,
-            runner=Recorder(),
-        )
+    # A file at the ledger's path that is no ledger records nothing: the attach unions from nothing
+    # and leaves a ledger that reads.
+    root, store, machine = _attachable(tmp_path, codex="# a standing rule\n")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    ledger_file(root).write_text("{", encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert list(ledger(root).rules) == [".codex/rules/common.rules"]
+
+
+# `NESTED`, which no reader caught, in a file a clone can commit.
 
 
 def test_a_settings_file_nested_past_the_parsers_reach_is_refused(tmp_path: Path) -> None:
@@ -1394,31 +1328,7 @@ def test_a_settings_file_nested_past_the_parsers_reach_is_refused(tmp_path: Path
         )
 
 
-# `LONG_NUMBER`, which no reader caught, in two files a clone can commit.
-
-
-def test_a_ledger_holding_a_number_past_the_parsers_reach_is_a_failure_and_never_an_internal_error(
-    tmp_path: Path,
-) -> None:
-    # Mutation (oracle): `mutations/`'s "the JSON object reader lets a number past the parser's
-    # reach raise" -> both raise `ValueError`.
-    root, store, machine = _attachable(tmp_path)
-    attach(
-        root,
-        store=store,
-        machine=machine,
-        runner=Recorder(),
-    )
-    (root / LEDGER).write_text('{"entries": {"x": ' + LONG_NUMBER + "}}", encoding="utf-8")
-    with pytest.raises(Failure, match="number longer"):
-        ledger(root)
-    with pytest.raises(Failure, match="number longer"):
-        attach(
-            root,
-            store=store,
-            machine=machine,
-            runner=Recorder(),
-        )
+# `LONG_NUMBER`, which no reader caught, in a file a clone can commit.
 
 
 def test_a_settings_file_holding_a_number_past_the_parsers_reach_is_refused(tmp_path: Path) -> None:
@@ -1436,85 +1346,6 @@ def test_a_settings_file_holding_a_number_past_the_parsers_reach_is_refused(tmp_
             machine=machine,
             runner=Recorder(),
         )
-
-
-def _committed_ledger(root: Path, store: Path, **fields: object) -> None:
-    """The ledger a clone committed, as a fresh checkout can genuinely hold one.
-
-    `.gitignore` does not untrack a file a clone committed, and the `stayfixed:ignore` region
-    `attach` writes does not either — so this path can be populated before `attach` has ever run
-    here, which is the state both cases below are about.
-    """
-    document: dict[str, object] = {
-        "format": 1,
-        "store": str(store),
-        "allow": [],
-        "entries": {},
-        "rules": [],
-        "settings_keys": [],
-    }
-    document.update(fields)
-    (root / LEDGER).parent.mkdir(parents=True, exist_ok=True)
-    (root / LEDGER).write_text(json.dumps(document), encoding="utf-8")
-
-
-def test_a_ledger_no_attach_could_have_written_is_refused_before_the_first_write(
-    tmp_path: Path,
-) -> None:
-    # The same shape as `test_a_repository_with_no_origin_remote_has_nothing_to_record`, one
-    # door over, and introduced by the commit that wrote that rule down. `ledger()` refuses a
-    # ledger naming files or settings keys `attach` could not have written, and `_write_ledger`
-    # used to be the thing that asked for it — from the fourth write of the run. So a clone
-    # committing such a ledger got `attach` to write the `stayfixed:ignore` region, copy
-    # `.codex/rules/*` and merge `.claude/settings.local.json`, and only then exit 2 — with the
-    # committed ledger still on disk, which `doctor._attached` keys on. `attach --check`, which
-    # used to report clean beforehand, now reads the ledger with the run's reader and refuses too.
-    #
-    # Nothing the repository gains here differs from a successful attach, so this is not a trust
-    # boundary being crossed. What it is, is `docs/cli.md` asserting that every cause of exit 2
-    # happens before the first write while one of them did not.
-    #
-    # Mutation: `mutations/`'s "the ledger is read after attach has already written".
-    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# a standing rule\n")
-    _committed_ledger(root, store, rules=[".github/workflows/ci.yml"])
-    before = snapshot(root)
-    # `snapshot` is a walk, and an empty one satisfies the comparison below on its own.
-    assert before
-    with pytest.raises(Refusal):
-        attach(
-            root,
-            store=store,
-            machine=machine,
-            runner=Recorder(),
-        )
-    assert_snapshot_unchanged(root, before)
-
-
-def test_the_refused_ledger_is_reached_on_a_run_that_would_have_written_three_files(
-    tmp_path: Path,
-) -> None:
-    # The vacuity guard for the case above, and the same one the no-origin refusal's snapshot has: a
-    # refusal that writes nothing proves nothing if the run had nothing to write. The identical
-    # fixture, with a ledger `attach` really could have written, attaches and leaves all three
-    # artifacts the refusal above has to prevent.
-    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# a standing rule\n")
-    _committed_ledger(root, store, rules=[".codex/rules/common.rules"])
-    before = snapshot(root)
-    assert before
-    attached = attach(
-        root,
-        store=store,
-        machine=machine,
-        runner=Recorder(),
-    )
-    after = snapshot(root)
-    assert attached.settings_written
-    assert ".codex/rules/common.rules" in set(after) - set(before)
-    assert SETTINGS in set(after) - set(before)
-    assert before.get(".git/info/exclude") != after.get(".git/info/exclude")
-    # And the union the ledger exists for survived the refusal being hoisted out of the writer:
-    # `_write_ledger` is handed the ledger the caller read once, above every write.
-    assert ledger(root).rules == (".codex/rules/common.rules",)
 
 
 def test_an_overlay_store_the_walk_cannot_enter_is_refused_at_write_time(tmp_path: Path) -> None:
@@ -1580,8 +1411,8 @@ def _status(root: Path) -> list[str]:
 
 
 def _placed() -> list[str]:
-    """Every path `attach` puts into the project for this fixture, the ledger aside: the Codex
-    rule it copies and the settings file."""
+    """Every path `attach` puts into the project for this fixture: the Codex rule it copies and
+    the settings file."""
     return [".codex/rules/common.rules", SETTINGS]
 
 
@@ -1768,13 +1599,11 @@ def test_a_path_the_owners_excludes_re_include_is_still_hidden(tmp_path: Path) -
     root, store, machine = _attachable(tmp_path)
     _committed(root)
     owner = tmp_path / "owner-excludes"
-    owner.write_text(f".stayfixed/\n.claude/*\n!{SETTINGS}\n", encoding="utf-8")
+    owner.write_text(f".claude/*\n!{SETTINGS}\n", encoding="utf-8")
     _git(root, "config", "core.excludesFile", str(owner))
     _attach_quietly(root, store, machine)
     body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
     assert body is not None and f"/{SETTINGS}" in body.split("\n")
-    # What the owner's file hides gets no line of its own.
-    assert f"/{LEDGER}" not in body.split("\n")
     assert _status(root) == []
 
 
@@ -1807,7 +1636,8 @@ def test_a_second_attach_leaves_the_exclude_file_as_the_first_wrote_it(tmp_path:
     # Non-vacuous: the first attach did write the block, so "unchanged" is about a block and not
     # about a file that was never there.
     body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
-    assert body is not None and SETTINGS in body and f"/{LEDGER}" in body.split("\n")
+    assert body is not None and SETTINGS in body
+    assert "/.codex/rules/common.rules" in body.split("\n")
     exclude = _exclude(root).read_bytes()
     _attach_quietly(root, store, machine)
     assert _exclude(root).read_bytes() == exclude
@@ -1871,33 +1701,6 @@ def test_a_run_that_would_write_through_a_symlinked_claude_directory_still_refus
     # Mutation: `mutations/`'s "the exclude block stops holding placed paths to the project".
     assert "symlink" in str(refused.value)
     assert_snapshot_unchanged(root, before)
-
-
-def test_a_symlinked_stayfixed_directory_is_refused_before_anything_is_written(
-    tmp_path: Path,
-) -> None:
-    # The ledger is written under `.stayfixed/local/`, and nothing above the first write held
-    # that path to the project by name: a clone committing `.stayfixed` as a link was refused
-    # only because `git check-ignore` will not answer about a path beyond a symlink, with a
-    # message blaming git. Held to the project first, so the refusal says what is wrong, and
-    # before the ledger is read: a ledger beyond the link is never opened. The exclude block's own
-    # containment also refuses the link, but only after that read.
-    #
-    # Mutation: `mutations/`'s "attach stops holding the ledger's path to the project".
-    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
-    beyond = tmp_path / "elsewhere" / "local" / "attach.json"
-    beyond.parent.mkdir(parents=True)
-    beyond.write_text("{", encoding="utf-8")
-    (root / ".stayfixed").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
-    before = snapshot(root)
-    assert before
-    with pytest.raises(Refusal) as refused:
-        _attach_quietly(root, store, machine)
-    # Named for what it is. Before, the refusal came by accident from `git check-ignore`, which
-    # will not answer about a path beyond a symlink, and blamed git.
-    assert "symlink" in str(refused.value)
-    assert_snapshot_unchanged(root, before)
-    assert beyond.read_text(encoding="utf-8") == "{"
 
 
 # --- a name git would read as more than one exclude line -------------------------------------
@@ -2301,7 +2104,7 @@ def test_a_project_the_overlay_has_no_directory_for_yet_is_attached_and_given_on
     shutil.rmtree(store.parent)
     assert check(root, store=store, machine=machine).exit_code == 0
     _attach_it(root, store, machine)
-    assert (store.parent / PROJECT_RECORD).is_file()
+    assert (store.parent / RECORD).is_file()
     assert store.is_dir()
 
 
@@ -2340,7 +2143,7 @@ def test_a_source_past_the_longest_path_under_a_project_with_no_directory_is_no_
     name = "n" * (longest - reach - 1 - len(str(projects_dir)) - 1)
     assert len(name) < 255
     assert len(str(projects_dir / name)) + reach == longest - 1
-    assert len(str(projects_dir / name / PROJECT_RECORD)) < longest
+    assert len(str(projects_dir / name / RECORD)) < longest
     assert len(str(projects_dir / name / "claude" / "permissions.json")) > longest
     (root / CONFIG_FILE).write_text(CONFIG.format(name=name), encoding="utf-8")
     if projects == "projects-absent":
@@ -2612,22 +2415,16 @@ def test_attach_from_a_linked_worktree_writes_the_main_checkout_only(tmp_path: P
     side = tmp_path / "side"
     _git(root, "worktree", "add", "-q", str(side), "-b", "side")
     attach(side, store=store, machine=machine, runner=Recorder())
-    assert (root / LEDGER).is_file()
+    assert ledger_file(root).is_file()
     assert RULE in json.loads((root / SETTINGS).read_text(encoding="utf-8"))["permissions"]["allow"]
-    assert not (side / LEDGER).exists() and not (side / SETTINGS).exists()
+    assert not (side / SETTINGS).exists()
     assert _status(side) == []
 
 
 def _tagged(store: Path, *tags: str) -> Path:
     """The overlay of `_attachable`, its project listing `tags`, each with a `groups/<tag>/`
     directory; the overlay's root."""
-    overlay = store.parents[2]
-    listed = ", ".join(f'"{tag}"' for tag in tags)
-    (store.parent / PROJECT_RECORD).write_text(f"tags = [{listed}]\n", encoding="utf-8")
-    for tag in tags:
-        (overlay / "groups" / tag / "claude").mkdir(parents=True)
-        (overlay / "groups" / tag / "codex").mkdir(parents=True)
-    return overlay
+    return with_tags(store.parents[2], store.parent.name, list(tags), "claude", "codex")
 
 
 def _tag_grants(overlay: Path, tag: str, *allow: str) -> None:
@@ -2695,7 +2492,7 @@ def test_an_unreadable_tag_file_stops_attach_with_nothing_written(
 
 def _untag(store: Path) -> None:
     """The project's record listing no tag any more; the `groups/` directories stay."""
-    (store.parent / PROJECT_RECORD).write_text("tags = []\n", encoding="utf-8")
+    (store.parent / RECORD).write_text("tags = []\n", encoding="utf-8")
 
 
 def _allowed(root: Path) -> list[str]:
@@ -2759,7 +2556,7 @@ def test_an_unreadable_project_record_stops_attach_with_nothing_written(tmp_path
     root, store, machine = _attachable(tmp_path, allow=(RULE,))
     _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
     attach(root, store=store, machine=machine, runner=Recorder())
-    (store.parent / PROJECT_RECORD).write_text('tags = ["a"\n', encoding="utf-8")
+    (store.parent / RECORD).write_text('tags = ["a"\n', encoding="utf-8")
     data = Path(os.environ["HOME"]) / ".local" / "share" / "stayfixed"
     before = (snapshot(root), snapshot(data))
     for run in (
@@ -2768,31 +2565,102 @@ def test_an_unreadable_project_record_stops_attach_with_nothing_written(tmp_path
     ):
         with pytest.raises(Refusal) as refusal:
             run()
-        assert quoted(str(store.parent / PROJECT_RECORD)) in str(refusal.value)
+        assert quoted(str(store.parent / RECORD)) in str(refusal.value)
     assert (snapshot(root), snapshot(data)) == before
     assert "Bash(x)" in _allowed(root)
 
 
-def test_untagging_removes_the_codex_rule_copies_the_overlay_no_longer_holds(
+def test_a_tag_entry_that_is_not_a_string_is_a_note_and_attach_goes_on(tmp_path: Path) -> None:
+    # `tags = ["a", 1]` keeps `a`: the entry is skipped like an ungrammatical name, and the run has
+    # no unreadable record to refuse on.
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _tag_grants(_tagged(store, "a"), "a", "Bash(x)")
+    (store.parent / RECORD).write_text('tags = ["a", 1]\n', encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _allowed(root) == [RULE, "Bash(x)"]
+
+
+def test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it(
     tmp_path: Path,
 ) -> None:
-    from stayfixed.doctor import checks as doctor_checks
-    from tests.doctor.test_checks import _by_name, _env
+    # The team commits `.codex/rules/common.rules` after `attach` placed it, then the overlay drops
+    # the rule: the next routine `attach` must not delete a file the checkout tracks. It leaves the
+    # copy standing, names it, and forgets it: the file is the team's now.
+    # Mutation: `mutations/`'s "re-attach removes a Codex copy the overlay dropped".
+    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
+    _committed(root)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    copy = ".codex/rules/common.rules"
+    _git(root, "add", "-f", copy)
+    _git(root, "commit", "-qm", "the team keeps the rule")
+    (store.parents[2] / COMMON_CODEX / "common.rules").unlink()
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    assert (root / copy).is_file() and _status(root) == []
+    assert again.rules_left == (copy,)
+    assert copy not in ledger(root).rules
 
-    root, store, machine = _attachable(tmp_path, allow=(RULE,))
-    overlay = _tagged(store, "a")
-    (overlay / "groups" / "a" / "codex" / "a.rules").write_text("# tag\n", encoding="utf-8")
+
+@pytest.mark.parametrize(
+    ("state", "kept"),
+    [("as-written", True), ("edited", False), ("tracked", False), ("deleted", False)],
+)
+def test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written(
+    tmp_path: Path, state: str, kept: bool
+) -> None:
+    # `detach` must still take a stale copy Codex reads as a standing instruction, and must never
+    # take what is no longer attach's. So the name stays recorded only while the file is untracked
+    # and holds the bytes attach wrote. Mutation: `mutations/`'s "re-attach keeps every name the
+    # overlay dropped".
+    root, store, machine = _attachable(tmp_path, codex="# standing rule\n")
+    _committed(root)
     attach(root, store=store, machine=machine, runner=Recorder())
-    assert (root / ".codex" / "rules" / "a.rules").is_file()
-    _untag(store)
+    copy = ".codex/rules/common.rules"
+    if state == "edited":
+        (root / copy).write_text("# the team's now\n", encoding="utf-8")
+    elif state == "tracked":
+        _git(root, "add", "-f", copy)
+        _git(root, "commit", "-qm", "the team keeps the rule")
+    elif state == "deleted":
+        (root / copy).unlink()
+    (store.parents[2] / COMMON_CODEX / "common.rules").unlink()
     attach(root, store=store, machine=machine, runner=Recorder())
-    assert not (root / ".codex" / "rules" / "a.rules").exists()
-    assert ledger(root).rules == ()
-    row = _by_name(
-        doctor_checks.run_checks(root, home=None, machine=machine, env=_env(tmp_path)),
-        "attached",
+    assert (copy in ledger(root).rules) is kept
+
+
+# What a hand can leave in the ledger that parses as an object and is no ledger `attach` wrote.
+NOT_LEDGERS = [
+    {"rules": [1]},
+    {"rules": "abc"},
+    {"rules": {".codex/rules/common.rules": 1}},
+    {"store": 5},
+    {"allow": [1]},
+    {"settings_keys": "autoMemoryDirectory"},
+    {"directories": {}},
+    {"render": "x"},
+]
+
+
+def rewritten(root: Path, fields: Mapping[str, object]) -> None:
+    """The real ledger of `root` with `fields` replaced, so a case differs from a working one in
+    exactly what it is about."""
+    document = json.loads(ledger_file(root).read_text(encoding="utf-8"))
+    ledger_file(root).write_text(json.dumps({**document, **fields}), encoding="utf-8")
+
+
+@pytest.mark.parametrize("fields", NOT_LEDGERS, ids=str)
+def test_attach_writes_a_file_that_is_no_ledger_whole(
+    tmp_path: Path, fields: Mapping[str, object]
+) -> None:
+    # One answer from the reader, and `attach`'s is to write the ledger whole: a run that took
+    # such a field would fail in the middle, or carry it into the file it writes.
+    # Mutation: `mutations/`'s "the ledger reader takes any field".
+    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    rewritten(root, fields)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (
+        isinstance(ledger(root).rules, dict) and ".codex/rules/common.rules" in ledger(root).rules
     )
-    assert row.status == "ok"
 
 
 def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:

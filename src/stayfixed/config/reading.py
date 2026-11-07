@@ -40,11 +40,11 @@ _TOML_POSITION = re.compile(r"\((?:at line \d+, column \d+|at end of document)\)
 NO_POSITION = "(at a position tomllib did not report)"
 # `tomllib` reads nested arrays and inline tables by recursion, so a document nested a few
 # thousand levels deep — `a = [[[…]]]` — raises `RecursionError` and not `TOMLDecodeError`.
-# Uncaught, that is an internal error, the class stayfixed keeps for its own defects, and in a
-# gate run it ended every gate. And an integer literal longer than the interpreter converts
-# (4,300 digits by default, `sys.get_int_max_str_digits`) is valid TOML that `tomllib` answers with
-# a plain `ValueError`, which is not a `TOMLDecodeError`: one line of a committed file ended
-# `doctor`, `gate` and `init` the same way. Every reader of a document somebody else wrote catches
+# Uncaught, that is an internal error, the class stayfixed keeps for its own defects. And an
+# integer literal longer than the interpreter converts (4,300 digits by default,
+# `sys.get_int_max_str_digits`) is valid TOML that `tomllib` answers with a plain `ValueError`,
+# which is not a `TOMLDecodeError`: one line of a committed file ended `doctor` and `init` the
+# same way. Every reader of a document somebody else wrote catches
 # all three. `ValueError` is caught whole, `TOMLDecodeError` being one: no reader's `try` holds
 # anything else that raises it but a decode, whose `UnicodeDecodeError` it catches first or
 # answers as it answers a record that does not parse.
@@ -119,6 +119,23 @@ def toml_position(exc: tomllib.TOMLDecodeError | RecursionError | ValueError) ->
         return TOO_LONG
     found = _TOML_POSITION.search(str(exc))
     return found.group(0) if found is not None else NO_POSITION
+
+
+def read_fault(
+    shown: str,
+    exc: OSError | tomllib.TOMLDecodeError | RecursionError | ValueError,
+    effect: str,
+) -> str:
+    """What a file the owner wrote and a reader could not give says: `shown` (already printed),
+    that it is not UTF-8, cannot be read (`fsops.said`) or is not TOML (`toml_position`), then
+    `effect`, what that means to the reader, e.g. "so the project lists no tags"."""
+    if isinstance(exc, UnicodeDecodeError):
+        what = "is not UTF-8 text"
+    elif isinstance(exc, OSError):
+        what = f"cannot be read ({said(exc)})"
+    else:
+        what = f"is not valid TOML {toml_position(exc)}"
+    return f"{shown} {what}, {effect}"
 
 
 def read_machine_toml(path: Path) -> dict[str, Any] | None:

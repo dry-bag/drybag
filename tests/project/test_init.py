@@ -1,9 +1,8 @@
-"""`stayfixed init --yes`: the two engine passes, what it adopts, and what it refuses."""
+"""`stayfixed init --yes`: the engine's plan, what it adopts, and what it refuses."""
 
 from __future__ import annotations
 
 import re
-import shutil
 import tomllib
 from pathlib import Path
 
@@ -11,18 +10,16 @@ import pytest
 
 import stayfixed
 from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.config.owned import OWNED, OwnedKeyError
 from stayfixed.config.reading import ConfigError
 from stayfixed.errors import Failure, Refusal
-from stayfixed.project.commands import PICKED
-from stayfixed.project.init import HEADER, InitReport, init
-from stayfixed.project.templates import ONE_FILE
-from stayfixed.scaffold import MANIFEST_PATH, Manifest, Verb
+from stayfixed.project.commands import ADOPTED_LEFT, PICKED
+from stayfixed.project.init import InitReport, init
+from stayfixed.project.templates import ONE_FILE, read
+from stayfixed.scaffold import Verb
 from tests.cli import cli
 from tests.gitfixture import git, needs_git, run_git
 from tests.parserlimits import LONG_HEX
-from tests.pathfaults import ROOT_SEARCHES_EVERYTHING, unsearchable
-from tests.project.repos import initialised, repository
+from tests.project.repos import repository
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
 
@@ -45,27 +42,22 @@ def _init(
 
 
 @needs_git
-def test_a_bare_repository_gets_the_footprint_and_every_file_is_recorded(tmp_path: Path) -> None:
+def test_a_bare_repository_gets_the_footprint(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     report = _init(root, tmp_path)
     config = load(root, machine=tmp_path / "absent.toml")
     assert config.project.name == "widget"
     document = tomllib.loads((root / CONFIG_FILE).read_text(encoding="utf-8"))
-    assert document["stayfixed"] == {
-        "version": stayfixed.__version__,
-        "agents": ["claude", "codex"],
-    }
+    assert document["stayfixed"] == {"version": stayfixed.__version__}
     assert document["project"]["name"] == "widget"
-    records = Manifest.read(root).records
-    assert set(records) == {"config", "ledger-audits", "bug-index", "roadmap", "trail", "gitignore"}
     assert not report.refused
 
 
 @needs_git
 def test_a_fresh_init_leaves_trail_and_ledger_checks_green(tmp_path: Path) -> None:
     # `init --yes` writes `stayfixed.toml`, the roadmap with its trail markers, `trail.toml`, the
-    # generated bug index, the ledger's audits README and the `.gitignore` region, recorded in the
-    # manifest, and nothing else; the checks that read them pass on what it wrote. Without the
+    # generated bug index, the ledger's audits README and the `.gitignore` region, and nothing
+    # else; the checks that read them pass on what it wrote. Without the
     # index, `bugs index --check` reports it stale; without a file under the ledger's directory it
     # refuses the index as orphaned; without the roadmap or the trail, `docs trail --check` fails.
     root = _repo(tmp_path)
@@ -77,7 +69,6 @@ def test_a_fresh_init_leaves_trail_and_ledger_checks_green(tmp_path: Path) -> No
     untracked = git(root, "ls-files", "--others").split()
     assert sorted(untracked) == [
         ".gitignore",
-        ".stayfixed/manifest.json",
         "docs/bug-reports.md",
         "docs/bugs/audits/README.md",
         "docs/roadmap.md",
@@ -104,37 +95,28 @@ def test_a_local_only_note_is_kept_out_of_git_by_the_region_init_writes(tmp_path
 
 
 @needs_git
-def test_a_created_document_opens_with_a_header_naming_every_tool_owned_key(
-    tmp_path: Path,
-) -> None:
-    # The header is the file's own statement of which keys stayfixed rewrites in place. It once
-    # named two keys while more were stayfixed's to rewrite. Every key of `OWNED` is looked for,
-    # as `key` or as `[table] key` in backticks, and every table it names is named, so a second
-    # owned key or a dropped one reddens here.
-    root = _repo(tmp_path)
-    _init(root, tmp_path)
-    assert (root / CONFIG_FILE).read_text(encoding="utf-8").startswith(HEADER)
-    assert len(OWNED) == 1
-    for table, key in sorted(OWNED):
-        assert re.search(rf"`(?:\[{table}\] )?{key}`", HEADER), (table, key)
-        assert f"`[{table}]" in HEADER, table
-
-
-@needs_git
+@pytest.mark.parametrize(
+    ("tables", "words"),
+    [
+        (
+            '[project]\nname = "chosen"\n\n[memory]\nmode = "cloud"\n',
+            r"^memory\.mode must be one of",
+        ),
+        ('[project]\nname = "chosen"\nrelease_branch = "x"\n', r"\[project\] has unknown key"),
+    ],
+    ids=["a-value", "a-key-stayfixed-does-not-have"],
+)
 def test_an_adopted_document_s_tables_are_validated_before_anything_is_written(
-    tmp_path: Path,
+    tmp_path: Path, tables: str, words: str
 ) -> None:
     # `init` builds its `Config` from the tables it copies out of a hand-written document, so a
     # table it does not copy is one it never validates, while every later load does: the run
     # wrote a footprint for a document the next command refuses. Mutation: drop `"memory"` from
     # `USER_OWNED` and `init` writes the footprint, so this reddens with DID NOT RAISE.
     root = _repo(tmp_path)
-    hand_written = (
-        '[stayfixed]\nversion = "0.0.1"\n\n[project]\nname = "chosen"\n\n[memory]\nmode = "cloud"\n'
-    )
-    (root / CONFIG_FILE).write_text(hand_written, encoding="utf-8")
+    (root / CONFIG_FILE).write_text(f'[stayfixed]\nversion = "0.0.1"\n\n{tables}', encoding="utf-8")
     before = snapshot(root)
-    with pytest.raises(ConfigError, match=r"^memory\.mode must be one of"):
+    with pytest.raises(ConfigError, match=words):
         _init(root, tmp_path)
     assert_snapshot_unchanged(root, before)
 
@@ -172,32 +154,31 @@ def test_an_adopted_key_that_is_not_bare_is_refused_naming_only_its_table(
 
 
 @needs_git
-def test_a_dry_run_writes_nothing_and_reports_both_plans(tmp_path: Path) -> None:
-    # Mutation (oracle): move `apply(root, once)` above the `dry_run` return -> the snapshot
+def test_a_dry_run_writes_nothing_and_reports_the_plan(tmp_path: Path) -> None:
+    # Mutation (oracle): move `apply(root, planned)` above the `dry_run` return -> the snapshot
     # reddens.
     root = _repo(tmp_path)
     before = snapshot(root)
     report = _init(root, tmp_path, dry_run=True)
     assert_snapshot_unchanged(root, before)
-    assert report.dry_run and {a.verb for a in report.once.actions} == {Verb.CREATE}
-    assert {a.verb for a in report.footprint.actions} == {Verb.CREATE}
+    assert report.dry_run and {a.verb for a in report.plan.actions} == {Verb.CREATE}
 
 
 @needs_git
 def test_a_refused_footprint_writes_nothing_at_all(tmp_path: Path) -> None:
-    # A footprint artifact whose place cannot be read refuses that artifact; the write-once pass
-    # is not applied either. Mutation (oracle): apply the once pass before the refusal check ->
-    # the snapshot reddens.
+    # A footprint artifact whose place cannot be read refuses that artifact, and nothing else is
+    # applied either, `stayfixed.toml` included. Mutation (oracle): apply the plan before the
+    # refusal check -> the snapshot reddens.
     root = _repo(tmp_path)
     (root / "docs" / "roadmap.md").mkdir(parents=True)
     before = snapshot(root)
     report = _init(root, tmp_path)
-    assert report.footprint.refusals and not (root / MANIFEST_PATH).exists()
+    assert report.plan.refusals
     assert_snapshot_unchanged(root, before)
 
 
 @needs_git
-def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_replaced(
+def test_an_existing_configuration_is_adopted_and_never_replaced(
     tmp_path: Path,
 ) -> None:
     # An existing configuration is read as the answers rather than replaced: the hand-written file
@@ -207,7 +188,7 @@ def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_repla
     # `[paths]` this file declares and under none of the preset's.
     #
     # **The engine is the authority on this, not an expectation written ahead of it.** A first
-    # draft of this test asserted that stayfixed's own keys and a detected `agents` were written
+    # draft of this test asserted that stayfixed's own keys were written
     # into the adopted file; `scaffold.engine.plan` skips a `Kind.ONCE` artifact whose
     # file is present, unconditionally and above every `force`, and the two rules above —
     # "created when absent", "read as the answers rather than replaced" — say the same thing the
@@ -222,7 +203,7 @@ def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_repla
     report = _init(root, tmp_path)
     assert report.adopted
     assert (root / CONFIG_FILE).read_text(encoding="utf-8") == hand_written
-    left = {a.artifact_id: a.reason for a in report.once.actions if a.verb is Verb.SKIP_MODIFIED}
+    left = {a.artifact_id: a.reason for a in report.plan.actions if a.verb is Verb.SKIP_MODIFIED}
     assert left["config"] == "create-once, and the file is already there"
     assert (root / "design" / "roadmap.md").is_file()
     assert (root / "design" / "trail.toml").is_file()
@@ -230,42 +211,46 @@ def test_an_existing_configuration_without_a_manifest_is_adopted_and_never_repla
 
 
 @needs_git
-@ROOT_SEARCHES_EVERYTHING
-@pytest.mark.parametrize("link", [".stayfixed", MANIFEST_PATH.as_posix()])
-def test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words(
-    tmp_path: Path, link: str
-) -> None:
-    # A clone commits a link as text and needs no mode: an absolute target under a directory its
-    # user cannot search makes every path through the link a fault to ask about. The manifest was
-    # asked for with a bare existence check, which met that fault, and the command ended in
-    # `internal error: PermissionError` with the manifest's absolute path. The manifest is asked
-    # through `contained` now, as reading it always was, so the link is refused by name.
-    # Mutation (oracle): `mutations/`'s "init asks for the manifest past contained" -> every case
-    # ends in an internal error again.
-    root = initialised(tmp_path)
-    locked = tmp_path / "locked"
-    locked.mkdir()
-    if link == ".stayfixed":
-        shutil.rmtree(root / link)
-    else:
-        (root / link).unlink()
-    (root / link).symlink_to(locked / "x")
-    with unsearchable(locked):
-        code, _, err = cli(root, tmp_path, "init", "--yes")
-    assert code == 2
-    assert err == (
-        f"stayfixed: refused: {str(MANIFEST_PATH)!r} passes through a symlink at {link!r}\n"
-    )
+def test_a_second_init_creates_what_is_missing_and_touches_nothing_else(tmp_path: Path) -> None:
+    # `init` refused a repository it had initialised, and its remedy, `upgrade`, was gone: a
+    # person who deleted one scaffold file had no way to get it back. Every artifact is create-once
+    # but the `.gitignore` region, so a second run writes what is missing and leaves an edited file
+    # as it is. Neither run reads or writes a manifest: one an earlier release committed, damaged
+    # here, is left as it is. Mutations (oracle): `mutations/`'s "init's artifacts are whole-file
+    # templates the engine records", "a create-once artifact or a managed region is recorded in a
+    # manifest" -> the first run writes one; "a plan with nothing to record reads the manifest",
+    # "an apply with nothing to record reads the manifest" -> the second run refuses the damaged
+    # one.
+    root = _repo(tmp_path)
+    assert cli(root, tmp_path, "init", "--yes")[0] == 0
+    assert not (root / ".stayfixed").exists()
+    (root / "docs" / "trail.toml").unlink()
+    edited = (root / "docs" / "roadmap.md").read_bytes() + b"\nours\n"
+    (root / "docs" / "roadmap.md").write_bytes(edited)
+    (root / ".stayfixed").mkdir()
+    (root / ".stayfixed" / "manifest.json").write_text("not json", encoding="utf-8")
+    code, out, err = cli(root, tmp_path, "init", "--yes")
+    assert code == 0, (out, err)
+    assert (root / "docs" / "trail.toml").read_text(encoding="utf-8") == read("trail.toml")
+    assert (root / "docs" / "roadmap.md").read_bytes() == edited
+    assert (root / ".stayfixed" / "manifest.json").read_text(encoding="utf-8") == "not json"
 
 
 @needs_git
-def test_an_initialised_repository_is_refused(tmp_path: Path) -> None:
-    # Mutation (oracle): drop the manifest guard -> the second call plans a second init.
+def test_the_bug_index_is_rendered_only_where_init_writes_it(tmp_path: Path) -> None:
+    # `bug_register` refuses a `[ledger]` value the ledger cannot work with in every command that
+    # builds the register, and in no other. `init` builds it to render an index it is about to
+    # write, so with the index already there a second run goes through, and without it the value is
+    # refused. Mutation (oracle): `mutations/`'s "init builds the bug ledger's register though the
+    # index is already there" -> the second run refuses.
     root = _repo(tmp_path)
-    _init(root, tmp_path)
-    with pytest.raises(Refusal, match="`init` writes a scaffold once") as refused:
+    assert cli(root, tmp_path, "init", "--yes")[0] == 0
+    with (root / CONFIG_FILE).open("a", encoding="utf-8") as config:
+        config.write('\n[ledger]\nevidence_boundary_required_for = ["nonsense"]\n')
+    assert cli(root, tmp_path, "init", "--yes")[0] == 0
+    (root / "docs" / "bug-reports.md").unlink()
+    with pytest.raises(Refusal, match="not a severity"):
         _init(root, tmp_path)
-    assert "ships later" not in str(refused.value)
 
 
 @needs_git
@@ -333,109 +318,61 @@ def test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_wr
     )
 
 
-@needs_git
-def test_an_adopted_document_with_no_version_gets_one_and_keeps_every_line(
-    tmp_path: Path,
-) -> None:
-    # `[stayfixed] version` is the one key stayfixed owns that the loader requires, so an adopted
-    # file without it was left unloadable by the very run that adopted it. The dry run plans
-    # the stamp and writes nothing; the real run adds that one line through the key editor.
-    # Mutation (oracle): `mutations/`'s "an adopted document without a version is left unloadable".
-    root = _repo(tmp_path)
-    hand_written = '# ours\n[project]\nname = "widget"\n'
-    (root / CONFIG_FILE).write_text(hand_written, encoding="utf-8")
-    dry = _init(root, tmp_path, dry_run=True)
-    assert dry.stamped and dry.adopted
-    assert (root / CONFIG_FILE).read_text(encoding="utf-8") == hand_written
-    report = _init(root, tmp_path)
-    assert report.adopted and report.stamped
-    assert (root / CONFIG_FILE).read_text(encoding="utf-8").startswith(hand_written)
-    assert load(root, machine=tmp_path / "absent.toml").stayfixed.version == stayfixed.__version__
-
-
-REFUSED_HEADS = {
-    # The removed `[stayfixed] state`, which the loader refuses as an unknown key.
-    "spells-state": 'state = "initialised"\n',
-    # The removed `[stayfixed] enforced`, which the loader refuses as an unknown key.
-    "enforced-unknown": 'enforced = ["absent"]\n',
-    "no-project": "",
-    # An empty file parses to `{}`, which is falsy: no table is copied and no head is read, a
-    # path of its own through `_tables` and `_as_on_disk`.
-    "empty-file": "",
+# What a hand-written file may hold that the scaffold is not built from, and the sentence the
+# next command's load answers it with: no version, a key or a section stayfixed does not have, a
+# gate's value, no `[project]`, nothing at all.
+HEAD = '[stayfixed]\nversion = "0.1.0"\n'
+PROJECT = '\n[project]\nname = "widget"\n'
+LEFT_FOR_THE_LOADER = {
+    "no-version": (PROJECT, r"\[stayfixed\] is missing required key\(s\): version"),
+    "a-key-of-the-head": (
+        f"{HEAD}agents = []\n{PROJECT}",
+        r"\[stayfixed\] has unknown key\(s\): agents",
+    ),
+    "unknown-section": (f"{HEAD}{PROJECT}\n[foo]\n", r"has unknown section\(s\): foo"),
+    "a-gate-value": (
+        f'{HEAD}{PROJECT}\n[guards]\nbg_cleanup = "nope"\n',
+        r"guards\.bg_cleanup must be true or false",
+    ),
+    "no-project": (HEAD, r"\[project\] is missing required key\(s\): name"),
+    "empty-file": ("", r"is missing required key\(s\)"),
 }
 
 
 @needs_git
-@pytest.mark.parametrize("case", list(REFUSED_HEADS))
-def test_an_adopted_document_the_loader_would_refuse_is_refused_before_anything_is_written(
+@pytest.mark.parametrize("case", list(LEFT_FOR_THE_LOADER))
+def test_an_adopted_document_is_left_as_it_is_and_the_next_load_names_what_it_lacks(
     tmp_path: Path, case: str
 ) -> None:
-    # The merged document `init` validates drops every `[stayfixed]` key it does not carry over,
-    # and detects a name the file may lack, so each of these passed `init` and left a manifest
-    # over a file no later command could load. The file is now checked as it will be on disk, in
-    # the dry run too.
-    # Mutation (oracle): `mutations/`'s "an adopted document the next command cannot load is adopted
-    # anyway".
+    # The one rule, whose other half is
+    # `test_an_adopted_document_s_tables_are_validated_before_anything_is_written`: `init` answers
+    # only for where the scaffold lands. So `[project] release_branch`, in a table the scaffold is
+    # built from, stops it there, and `[stayfixed] agents`, the same leftover in the head, is here:
+    # exit 0 with the file as it was, for the next load to name. The report says so, and it once
+    # printed as picked a name the file does not hold and a note whose `--base-branch` is refused
+    # over the file. Mutations (oracle): `mutations/`'s "a run over an adopted file lists what it
+    # picked" and "a detected base branch's note reaches an adopted file".
     root = _repo(tmp_path)
-    document = ""
-    if case != "empty-file":
-        document = f'[stayfixed]\nversion = "0.1.0"\n{REFUSED_HEADS[case]}'
-        if case != "no-project":
-            document += '\n[project]\nname = "widget"\n'
+    document, sentence = LEFT_FOR_THE_LOADER[case]
     (root / CONFIG_FILE).write_text(document, encoding="utf-8")
-    before = snapshot(root)
-    for dry_run in (True, False):
-        with pytest.raises(ConfigError):
-            _init(root, tmp_path, dry_run=dry_run)
-        assert_snapshot_unchanged(root, before)
-        assert not (root / MANIFEST_PATH).exists()
-
-
-@needs_git
-def test_a_version_the_editor_cannot_add_is_refused_by_the_dry_run_too(tmp_path: Path) -> None:
-    # The stamp is computed while planning, so the key editor's refusal of an inline `stayfixed`
-    # table meets the dry run as it would the real one. Mutation (oracle): `mutations/`'s "the
-    # adopted version is checked without being added" -> the loader refuses the version-less text
-    # instead, a `ConfigError` and not an `OwnedKeyError`.
-    root = _repo(tmp_path)
-    (root / CONFIG_FILE).write_text(
-        'stayfixed = { preset = "recommended" }\n\n[project]\nname = "widget"\n',
-        encoding="utf-8",
-    )
-    before = snapshot(root)
-    with pytest.raises(OwnedKeyError):
-        _init(root, tmp_path, dry_run=True)
-    assert_snapshot_unchanged(root, before)
-
-
-@needs_git
-def test_a_symlinked_document_with_no_version_is_refused_by_the_dry_run_too(
-    tmp_path: Path,
-) -> None:
-    # The stamp is computed from what `read_document` read, which refuses a symlinked
-    # `stayfixed.toml`; computing the stamp while planning meets that refusal in the dry run as
-    # well, with nothing written on either side of the link. (No single line:
-    # the refusal is `contained()`'s, whose own entries hold it.)
-    root = _repo(tmp_path)
-    elsewhere = tmp_path / "elsewhere.toml"
-    elsewhere.write_text('[project]\nname = "widget"\n', encoding="utf-8")
-    (root / CONFIG_FILE).symlink_to(elsewhere)
-    before = snapshot(root)
-    for dry_run in (True, False):
-        with pytest.raises(Refusal):
-            _init(root, tmp_path, dry_run=dry_run)
-        assert_snapshot_unchanged(root, before)
-        assert elsewhere.read_text(encoding="utf-8") == '[project]\nname = "widget"\n'
+    code, out, err = cli(root, tmp_path, "init", "--yes")
+    assert code == 0, (out, err)
+    assert ADOPTED_LEFT in out
+    assert PICKED not in out and "--base-branch" not in out
+    assert (root / CONFIG_FILE).read_text(encoding="utf-8") == document
+    assert (root / "docs" / "roadmap.md").is_file()
+    code, out, err = cli(root, tmp_path, "bugs", "check")
+    assert code == 1 and re.search(sentence, err), (out, err)
 
 
 @needs_git
 def test_a_symlinked_document_is_refused_even_when_it_carries_its_version(
     tmp_path: Path,
 ) -> None:
-    # A document with its version needs no stamp, and `init` read it by following the link: a
-    # clone's `stayfixed.toml -> /dev/zero` ended the run by exhausting memory. It is read
-    # through `read_document` now, as the loader reads it, once. Mutation (declared):
-    # `_existing` reading the file by following the link -> the dry run reports a plan.
+    # `init` read a document by following the link: a clone's `stayfixed.toml -> /dev/zero` ended
+    # the run by exhausting memory. It is read through `read_document` now, as the loader reads
+    # it, once. Mutation (declared): `_existing` reading the file by following the link -> the dry
+    # run reports a plan.
     root = _repo(tmp_path)
     elsewhere = tmp_path / "elsewhere.toml"
     elsewhere.write_text(
@@ -514,11 +451,10 @@ def test_init_yes_says_what_it_picked_attribution_off_and_no_plugin(
     assert code == 0, printed
     assert f"\n{PICKED}\n" in printed, printed
     picked = printed.split(f"\n{PICKED}\n", 1)[1].splitlines()
-    assert picked[:6] == [
+    assert picked[:5] == [
         "  project.name: widget",
         "  project.base_branch: main",
         "  memory.mode: harness",
         "  commit_messages.attribution_check: off",
-        "  stayfixed.agents: claude, codex",
         "  plugins: none",
     ]

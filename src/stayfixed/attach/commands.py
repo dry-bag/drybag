@@ -65,6 +65,7 @@ def run_attach(args: argparse.Namespace) -> Result:
         },
         "allow_added": list(attached.allow_added),
         "allow_withdrawn": list(attached.allow_withdrawn),
+        "rules_left": list(attached.rules_left),
     }
     summary = "; ".join(
         (
@@ -80,12 +81,12 @@ def run_attach(args: argparse.Namespace) -> Result:
 
 def _screen(attached: Attached) -> list[str]:
     """The binding, then what will run that did not before and what no longer will, then the
-    allow rules added and withdrawn: one screen, said as the run proceeds, since the overlay is the
-    owner's and what it grants is shown rather than gated. The binding line names the project it is
-    recorded under: the owner reading which of their projects is delivered here is what the deleted
-    `--trust-remote` and `--yes` were replaced by. Every name prints through `printed`: the project
-    and the remote are the repository's, and a hook's command or an allow rule holds spaces and may
-    hold anything."""
+    allow rules added and withdrawn and the Codex copies it left: one screen, said as the run
+    proceeds, since the overlay is the owner's and what it grants is shown rather than gated. The
+    binding line names the project it is recorded under: the owner reading which of their projects
+    is delivered here is what the deleted `--trust-remote` and `--yes` were replaced by. Every name
+    prints through `printed`: the project and the remote are the repository's, and a hook's command
+    or an allow rule holds spaces and may hold anything."""
     origin = "no origin remote" if attached.origin is None else f"origin {quoted(attached.origin)}"
     lines = [f"binding {attached.binding}: project {quoted(attached.project)}, {origin}"]
     for side in ("added", "removed"):
@@ -98,6 +99,11 @@ def _screen(attached: Attached) -> list[str]:
         lines += [f"agent {side}: {quoted(name)}" for name in carried.agents]
     lines += [f"allow rule added: {clipped(rule)}" for rule in attached.allow_added]
     lines += [f"allow rule withdrawn: {clipped(rule)}" for rule in attached.allow_withdrawn]
+    lines += [
+        f"Codex rule copy no longer in the overlay: {quoted(rule)} (keep or delete it; `stayfixed "
+        "detach` removes it only while it is untracked and holds the bytes attach wrote)"
+        for rule in attached.rules_left
+    ]
     return lines
 
 
@@ -109,18 +115,19 @@ def run_detach(args: argparse.Namespace) -> Result:
     data = {
         # Counts and not the strings, which is the same ruling `attach.check` makes about
         # `already_present` and this module makes about `project.name` two functions up — and it
-        # has to be, or the three are inconsistent again. Every one of these four lists is read
-        # out of `.stayfixed/local/attach.json` or out of `.claude/settings.local.json`, and both
-        # are paths a clone can commit: `.gitignore` does not untrack a committed file. So they
-        # are repository-authored, `--json` is what `skills/attach/SKILL.md` relays to the user,
-        # and a marker id **bounded by a grammar** was already refused here on exactly this
+        # has to be, or the three are inconsistent again. Every one of these three lists is read
+        # out of the ledger or out of `.claude/settings.local.json`, and the settings file is a
+        # path a clone can commit: `.gitignore` does not untrack a committed file. So they are
+        # treated as repository-authored, `--json` is what `skills/attach/SKILL.md` relays to the
+        # user, and a marker id **bounded by a grammar** was already refused here on exactly this
         # reasoning. An allow rule and a settings key are less bounded than that, not more.
         "allow_removed": len(removed.allow_removed),
-        "entries_removed": len(removed.entries_removed),
         "rules_removed": len(removed.rules_removed),
         "settings_keys_removed": len(removed.settings_keys_removed),
         # A count of `CREATED_DIRS`, stayfixed's own closed vocabulary.
         "directories_removed": len(removed.directories_removed),
+        # Named as `attach` names a copy: the overlay's own file names.
+        "rules_left": list(removed.rules_left),
         # A boolean this command computed, so it prints.
         "exclude_block_removed": removed.exclude_block_removed,
         # A boolean this command computed, so it prints.
@@ -134,14 +141,17 @@ def run_detach(args: argparse.Namespace) -> Result:
             "; the composed memory store under this machine's data directory was kept, its links "
             "taken, since it holds files the harness wrote"
         )
-    return Result(
+    line = (
         f"detached: {len(removed.allow_removed)} allow rule(s), "
-        f"{len(removed.entries_removed)} hook entr(ies), "
         f"{len(removed.rules_removed)} Codex rule file(s), "
         f"{len(removed.directories_removed)} directory(ies){withdrawn}; "
-        f"the binding record was left in place",
-        data,
+        f"the binding record was left in place"
     )
+    left = (
+        f"Codex rule copy left: {quoted(rule)} (it does not hold the bytes attach wrote)"
+        for rule in removed.rules_left
+    )
+    return Result("\n".join((line, *left)), data)
 
 
 def register(groups: SubParsers) -> None:

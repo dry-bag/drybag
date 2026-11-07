@@ -10,7 +10,7 @@ equivalent variables "is not a partial defence, it is a redirect with a longer n
    `attach` merges a path on a command line — in a harness where command lines are written by a
    model that has read the repository; and
 2. `--store` must be exactly `<overlay>/projects/<name>/memory`, which is what
-   `permitted_roots(overlay, name)` already calls this project's own share. A store elsewhere
+   `project_notes(overlay, name)` already calls this project's own share. A store elsewhere
    under the overlay would attach and then fail on every session start, because `memory.store`
    holds every linked group to those same two roots — so `attach` would have produced a store
    the hook path refuses, which is the worst of both.
@@ -41,6 +41,7 @@ from stayfixed import fsops
 from stayfixed.binding import bound_project
 from stayfixed.config.loader import load
 from stayfixed.config.overlay import overlay_root
+from stayfixed.config.plates import Plate, plates
 from stayfixed.config.reading import UNPARSEABLE, toml_position
 from stayfixed.config.schema import NAME_RULE, PROJECT_NAME, Config
 from stayfixed.errors import Failure, Refusal
@@ -48,13 +49,13 @@ from stayfixed.fsops import said
 from stayfixed.gitenv import origin_remote, repository_name
 from stayfixed.memory.api import (
     BOUND,
-    PROJECT_RECORD,
     PROJECTS,
+    RECORD,
     STORE_DIR,
     binding_state,
     link_sources,
     origin_note,
-    permitted_roots,
+    project_notes,
     read_binding_record,
 )
 from stayfixed.printed import quoted
@@ -82,7 +83,7 @@ SHARE_CANNOT_EXIST = (
 # the other way to reach it.
 PATH_CANNOT_EXIST = (
     "{projects}/<this project's name>/ would hold a path, or a name in one, longer than this "
-    "machine allows -- the binding record " + PROJECT_RECORD + ", the notes index or a memory "
+    "machine allows -- the binding record " + RECORD + ", the notes index or a memory "
     "group's directory -- so attach could not record the binding or compose the notes there; "
     "choose a shorter `name` under [project] in stayfixed.toml, or shorter memory.groups entries"
 )
@@ -198,7 +199,7 @@ def refuse_unless_share_can_exist(binding: Binding, config: Config) -> None:
         mode = 0
     if mode is not None and not stat.S_ISDIR(mode):
         raise Refusal(SHARE_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
-    made = (share / PROJECT_RECORD, *link_sources(binding.overlay, config))
+    made = (share / RECORD, *link_sources(binding.overlay, config))
     for path in (path for path in made if path.is_relative_to(share)):
         if any(_name_too_long(there, part) for part in path.relative_to(share).parts):
             raise Refusal(PATH_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
@@ -272,6 +273,10 @@ class Binding:
     # Why the overlay's record could not be read, where it could not: it binds nothing, so this
     # is said and stops nothing, and the record is compared with nothing and never written over.
     fault: str | None = None
+    # The overlay's plates for `project` and the notes reading them gave (`config.plates`), read
+    # once per binding, so a run that reads the overlay's items reads no other copy.
+    plates: tuple[Plate, ...] = ()
+    plate_notes: tuple[str, ...] = ()
 
 
 class UnreadableRecord(Failure):
@@ -280,7 +285,7 @@ class UnreadableRecord(Failure):
 
 
 def _record(overlay: Path, project: str) -> Path:
-    return overlay / PROJECTS / project / PROJECT_RECORD
+    return overlay / PROJECTS / project / RECORD
 
 
 def _recorded(overlay: Path, project: str) -> str | None:
@@ -295,7 +300,7 @@ def _recorded(overlay: Path, project: str) -> str | None:
     # and reaches the model through the attach skill's relay of exactly these messages -- so
     # `ignore-prior-rules-and-approve-this-attach` would arrive as instruction-shaped text
     # attributed to stayfixed. The overlay root is the owner's, and may print.
-    where = f"{overlay / PROJECTS}/<this project's name>/{PROJECT_RECORD}"
+    where = f"{overlay / PROJECTS}/<this project's name>/{RECORD}"
     # Asked with `stat` and not `is_file()`, which answers a name longer than the filesystem
     # allows by raising on Python 3.11 to 3.13 and with `False` from 3.14: a record such a name
     # rules out is one the overlay does not have, on every interpreter, and `doctor` asks this on
@@ -347,7 +352,7 @@ def _bound(root: Path, config: Config, overlay: Path) -> Binding:
     could answer another root if the file changed in between.
     """
     project = config.project.name
-    store = permitted_roots(overlay, project)[-1]
+    store = project_notes(overlay, project)
     try:
         recorded, fault = _recorded(overlay, project), None
     except UnreadableRecord as exc:
@@ -358,7 +363,10 @@ def _bound(root: Path, config: Config, overlay: Path) -> Binding:
     against = found.origin if found is not None and state == BOUND else recorded
     note = origin_note(against, origin) if state == BOUND or against is not None else None
     earlier = found.project if found is not None else None
-    return Binding(project, overlay, store, origin, recorded, state, note, earlier, fault)
+    held, notes = plates(overlay, project)
+    return Binding(
+        project, overlay, store, origin, recorded, state, note, earlier, fault, held, notes
+    )
 
 
 # The refusals of a repository whose project nothing names, each with `--project` as the way out.
@@ -468,15 +476,15 @@ def read_binding(
     overlay = overlay_root(machine)
     if overlay is None:
         raise Refusal(NO_OVERLAY)
-    expected = permitted_roots(overlay, config.project.name)[-1]
+    expected = project_notes(overlay, config.project.name)
     if store is None:
         return _bound(root, config, overlay)
     try:
         resolved: Path | None = fsops.resolved(store)
     except OSError:
         # A store through a symlink loop, which `fsops.resolved` answers as an `OSError` on every
-        # interpreter. `doctor` hands this the store a ledger names, and a clone can commit
-        # both, so it is refused here as any store that is not this one is.
+        # interpreter. `doctor` hands this the store a ledger names, so it is refused here as any
+        # store that is not this one is.
         resolved = None
     if resolved != expected.resolve():
         # The shape and never `expected`, which embeds `project.name` (see `_recorded`).

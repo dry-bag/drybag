@@ -20,17 +20,10 @@ from stayfixed.harnesses import (
     Harness,
     Surface,
     detect,
-    select,
 )
 from tests.test_language_neutral import _docstrings
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def test_select_answers_the_listed_harnesses_and_counts_the_rest() -> None:
-    assert select(["claude", "codex"]) == ((CLAUDE, CODEX), 0)
-    assert select(["codex"]) == ((CODEX,), 0)
-    assert select(["claude", "cursor", "x\x1b"]) == ((CLAUDE,), 2)
 
 
 def test_every_harness_is_registered_once_and_codex_reads_only_the_standard() -> None:
@@ -38,8 +31,6 @@ def test_every_harness_is_registered_once_and_codex_reads_only_the_standard() ->
     assert len(names) == len(set(names))
     assert CLAUDE.settings == (".claude/settings.json",)
     assert CODEX.settings == (".codex/hooks.json",)
-    # `project.detect` reads these instead of spelling the directories a second time.
-    assert (CLAUDE.marker_dir, CODEX.marker_dir) == (".claude", ".codex")
 
 
 # What a hook may say about a tool call, in either harness's schema. A harness's `render` shapes
@@ -67,7 +58,6 @@ PAYLOADS: tuple[dict[str, object] | None, ...] = (
 # variable is in none of the inputs above, as a new harness's would be in neither of theirs.
 OTHER = Harness(
     name="other",
-    marker_dir=".other",
     settings=(),
     local_settings=(),
     project_dir_env=None,
@@ -135,7 +125,6 @@ def _keys(value: object) -> set[str]:
 # the event and the context, and nothing promises it emits JSON.
 TEXT = Harness(
     name="text",
-    marker_dir=".text",
     settings=(),
     local_settings=(),
     project_dir_env=None,
@@ -257,13 +246,27 @@ LISTED = {
     ("src/stayfixed/overlay/layout.py", "codex"): (1, "(`overlay.layout`"),
     ("src/stayfixed/overlay/api.py", "claude"): (1, "re-exported by `overlay.api`"),
     ("src/stayfixed/overlay/api.py", "codex"): (1, "re-exported by `overlay.api`"),
-    ("src/stayfixed/attach/permissions.py", "claude"): (
+    # The overlay's per-harness directories, and the kind of item a Codex rule file is.
+    ("src/stayfixed/attach/items.py", "claude"): (
         1,
-        "(`attach.permissions`, `attach.write`)",
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
-    ("src/stayfixed/attach/permissions.py", "codex"): (2, "(`attach.permissions`, `attach.write`)"),
-    ("src/stayfixed/attach/write.py", "claude"): (4, "(`attach.permissions`, `attach.write`)"),
-    ("src/stayfixed/attach/write.py", "codex"): (4, "(`attach.permissions`, `attach.write`)"),
+    ("src/stayfixed/attach/items.py", "codex"): (
+        2,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
+    ("src/stayfixed/attach/permissions.py", "codex"): (
+        1,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
+    ("src/stayfixed/attach/write.py", "claude"): (
+        4,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
+    ("src/stayfixed/attach/write.py", "codex"): (
+        4,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
     ("src/stayfixed/hooks/api.py", "claude"): (1, "`hooks.api.DATA_ROOT_VARIABLES`"),
     ("src/stayfixed/hooks/api.py", "plugin_data"): (2, "`hooks.api.DATA_ROOT_VARIABLES`"),
     ("src/stayfixed/doctor/checks.py", "claude"): (
@@ -286,12 +289,7 @@ LISTED = {
 PROSE = {
     # Messages naming the Codex rule files `attach` places, and `--check` would place.
     ("src/stayfixed/attach/check.py", "codex"): 1,
-    # The sentence `doctor` warns with where two tags hold one Codex rule file.
-    ("src/stayfixed/attach/tags.py", "codex"): 1,
-    # The instruction file Claude Code reads beside `AGENTS.md`, which `owner-files` asks the
-    # session to read now when it placed either.
-    ("src/stayfixed/attach/checkout.py", "claude"): 1,
-    ("src/stayfixed/attach/commands.py", "codex"): 2,
+    ("src/stayfixed/attach/commands.py", "codex"): 4,
     # The advice `setup --approval-boundary` prints, which names the harness whose settings it is.
     ("src/stayfixed/setup/commands.py", "claude"): 1,
     # The commit-trailer guard's names of tools that sign commits as authors: the agent as an

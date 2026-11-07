@@ -690,31 +690,13 @@ reddens = [
 # A register declares what the engine may assume of it: a link it has, a date key, its void status.
 # The bug ledger's own literal, read in place of the declaration, is a second register inheriting it.
 [[mutation]]
-name = "the audits link follows the runbook rather than the register's audits directory"
-file = "src/stayfixed/ledger/index.py"
-before = "    if register.audits is not None:"
-after = "    if register.runbook is not None:"
-reddens = [
-  "tests/ledger/test_register.py::test_the_index_links_only_the_runbook_and_audits_its_register_declares[a-runbook-and-no-audits]",
-]
-
-[[mutation]]
 name = "the audits link is the relative path to the audits directory, not the ledger directory's link"
 file = "src/stayfixed/ledger/index.py"
-before = '''            f"({directory}/{register.audits}/)."'''
-after = '''            f"({_relative(register, f'{register.directory}/{register.audits}')}/)."'''
+before = '''        f"({directory}/{register.audits}/)."'''
+after = '''        f"({_relative(register, f'{register.directory}/{register.audits}')}/)."'''
 reddens = [
   "tests/ledger/test_register.py::test_the_bug_ledgers_header_and_links_keep_their_bytes_on_every_layout[bugs-is-index-dir-readme]",
   "tests/ledger/test_register.py::test_the_bug_ledgers_header_and_links_keep_their_bytes_on_every_layout[bugs-is-index-dir-docs]",
-]
-
-[[mutation]]
-name = "the runbook link follows the register's audits directory"
-file = "src/stayfixed/ledger/index.py"
-before = "    if register.runbook is not None:"
-after = "    if register.audits is not None:"
-reddens = [
-  "tests/ledger/test_register.py::test_the_index_links_only_the_runbook_and_audits_its_register_declares[audits-and-no-runbook]",
 ]
 
 [[mutation]]
@@ -1367,6 +1349,16 @@ before = '    found = bugs_gate(root, config, args.base or "")'
 after = "    found = bugs_gate(root, config)"
 reddens = [
   "tests/ledger/test_commands.py::test_check_with_a_base_answers_for_a_ledger_the_base_carries",
+]
+
+[[mutation]]
+name = "bugs check --base judges a root reached through a symlink at the link's target"
+file = "src/stayfixed/ledger/commands.py"
+before = "        repository_prefix(Path(args.root).absolute())"
+after = "        pass"
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[moved-behind-a-link]",
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[linked-back-to-the-top]",
 ]
 
 # `bugs check` answers with the `bugs` gate's own function, so a step either gains, a filter or a
@@ -2355,7 +2347,7 @@ reddens = [
 [[mutation]]
 name = "memory session-context refuses what a session reads"
 file = "src/stayfixed/memory/commands.py"
-before = "    config = session.config\n"
+before = "    config = session.acting\n"
 after = "    config = load(root, machine=machine)\n"
 reddens = ["tests/hooks/test_floor.py::test_memory_session_context_reads_a_newer_key_with_a_note"]
 
@@ -3095,8 +3087,8 @@ reddens = [
 [[mutation]]
 name = "the composed store links a project directory in the tag namespace"
 file = "src/stayfixed/memory/composed.py"
-before = "            if not entry.startswith(\".\") and not reserved(entry) and fsops.is_dir(share / entry):"
-after = "            if not entry.startswith(\".\") and fsops.is_dir(share / entry):"
+before = "        if not reserved(entry):"
+after = "        if True:"
 reddens = [
   "tests/memory/test_composed.py::test_a_project_memory_directory_in_the_tag_namespace_is_not_linked",
 ]
@@ -3106,8 +3098,8 @@ reddens = [
 [[mutation]]
 name = "permitted roots leave out the tags' notes"
 file = "src/stayfixed/memory/store.py"
-before = "        *(_tag_notes(overlay, tag) for tag in tags(overlay, project)[0]),"
-after = "        *(_tag_notes(overlay, tag) for tag in ()),"
+before = "        allowed = _notes(held)"
+after = "        allowed = _notes((held[0], held[-1]))"
 reddens = [
   "tests/memory/test_store.py::test_a_tags_memory_is_linked_under_its_tag_name",
 ]
@@ -3168,12 +3160,12 @@ reddens = [
   "tests/memory/test_index.py::test_session_end_harvests_an_appended_line_before_the_sync_runs",
 ]
 
-# A bound checkout with no `stayfixed.toml` has no session configuration; its index is rendered
-# from the configuration its binding gives, as the unreviewed count reads it, or nobody renders it.
+# A bound checkout with no `stayfixed.toml` has no file to load; its index is rendered from the
+# session's bound configuration (`SessionConfig.acting`), as the unreviewed count reads it.
 [[mutation]]
 name = "the index render skips a bound checkout with no stayfixed.toml"
 file = "src/stayfixed/memory/hooks.py"
-before = "    config = _config(event, session)\n    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
+before = "    config = session.acting\n    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
 after = "    config = session.config\n    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
 reddens = [
   "tests/memory/test_index.py::test_a_bound_checkout_with_no_file_is_rendered_too",

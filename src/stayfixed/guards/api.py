@@ -18,7 +18,7 @@ which area and why.
 their records) and the failure attribution stay in the modules that define them, each reachable
 there: no other area imports them, and a name published for a consumer that does not exist is a
 claim nothing checks.
-`hooks_dir` and `git_path` are `stayfixed.gitenv`'s, and the code roots `stayfixed.roots`'s.
+`hooks_dir` and `git_path` are `stayfixed.gitenv`'s.
 """
 
 from stayfixed.guards.githooks import (

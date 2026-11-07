@@ -9,14 +9,17 @@ same world, that the bound linked worktree is placed, so "nothing" is never "not
 from __future__ import annotations
 
 import os
+import shutil
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from stayfixed import binding
-from stayfixed.attach.checkout import PLACED, READ_AGENTS, UNIGNORED, place, said
+from stayfixed.attach.checkout import PLACED, READ_AGENTS, WITHHELD, place, said
 from stayfixed.attach.hooks import register
+from stayfixed.errors import Refusal
 from stayfixed.hooks.api import HookEvent
 from tests.gitfixture import git, needs_git
 from tests.sessions import NO_CONFIG
@@ -56,10 +59,23 @@ def _repository(root: Path) -> Path:
     return root
 
 
-def _world(tmp_path: Path) -> tuple[Path, Path]:
-    """A bound main checkout and a new linked worktree of it, with the overlay recorded."""
+def _world(
+    tmp_path: Path, *, hide: tuple[str, ...] = (*REGULAR, *NOT_PLACED), gitignore: str | None = None
+) -> tuple[Path, Path]:
+    """A bound main checkout and a new linked worktree of it, with the overlay recorded. The
+    owner's `info/exclude` hides `hide`, by default every name in the overlay's `checkout/` that a
+    file could be, so only the rules of the handler itself keep one out; and a branch commits
+    `gitignore` where it is given."""
     _overlay(tmp_path)
     main = _repository(tmp_path / "main")
+    (main / ".git" / "info").mkdir(exist_ok=True)
+    (main / ".git" / "info" / "exclude").write_text(
+        "".join(f"/{name}\n" for name in hide), encoding="utf-8"
+    )
+    if gitignore is not None:
+        (main / ".gitignore").write_text(gitignore, encoding="utf-8")
+        git(main, "add", "-A")
+        git(main, "commit", "-qm", "the branch's ignore rules")
     binding.record(main, "p", None)
     linked = tmp_path / "linked"
     git(main, "worktree", "add", "-q", str(linked))
@@ -85,8 +101,8 @@ def test_a_new_linked_worktree_gets_the_regular_files_and_nothing_else(tmp_path:
 
 @pytest.mark.parametrize("kind", ["file", "directory", "dangling link"])
 def test_a_present_name_is_never_overwritten(tmp_path: Path, kind: str) -> None:
-    # Mutation (oracle): `mutations/`'s "owner-held files overwrite a present name" -> the file is
-    # written over, and the directory and the link refuse with an error.
+    # A name with anything at it is neither placed nor reported; the exclusive create under it is
+    # `fsops`'s and held by `tests/test_fsops.py`.
     _, linked = _world(tmp_path)
     target = linked / "AGENTS.md"
     outside = tmp_path / "outside.md"
@@ -143,6 +159,31 @@ def test_an_unbound_worktree_gets_nothing(tmp_path: Path) -> None:
     assert place(linked, machine=None)[0] == sorted(REGULAR)
 
 
+def test_the_handler_asks_git_once_before_it_knows_a_worktree_is_not_for_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # It runs on every `SessionStart` of every repository: the one `rev-parse` that finds the linked
+    # worktree names the common directory the binding id is read from, so a worktree this machine
+    # does not bind, and a bound one whose project holds no `checkout/`, each cost one launch.
+    _, linked = _world(tmp_path)
+    stranger = tmp_path / "stranger"
+    clone = _repository(tmp_path / "clone")
+    git(clone, "worktree", "add", "-q", str(stranger))
+    shutil.rmtree(tmp_path / "overlay" / "projects" / "p" / "checkout")
+    launched: list[str] = []
+    real = subprocess.Popen
+
+    def spy(argv, *args, **kwargs):  # type: ignore[no-untyped-def]
+        launched.append(str(argv[0]))
+        return real(argv, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "Popen", spy)
+    for tree in (stranger, linked):
+        launched.clear()
+        assert place(tree, machine=None) == ([], [])
+        assert launched == ["git"]
+
+
 def test_the_second_session_says_nothing(tmp_path: Path) -> None:
     _, linked = _world(tmp_path)
     (handler,) = (h for h in register() if h.name == "owner-files")
@@ -152,21 +193,60 @@ def test_the_second_session_says_nothing(tmp_path: Path) -> None:
     assert handler.run(event, NO_CONFIG).context is None
 
 
-def test_the_context_names_unignored_files_and_asks_to_read_agents_md(tmp_path: Path) -> None:
-    _, linked = _world(tmp_path)
-    exclude = Path(git(linked, "rev-parse", "--git-path", "info/exclude").strip())
-    exclude = exclude if exclude.is_absolute() else linked / exclude
-    exclude.parent.mkdir(parents=True, exist_ok=True)
-    exclude.write_text("/CLAUDE.md\n", encoding="utf-8")
-    placed, visible = place(linked, machine=None)
-    assert (placed, visible) == (sorted(REGULAR), ["AGENTS.md", "stayfixed.toml"])
-    assert said(placed, visible) == (
-        f"{PLACED.format(names='AGENTS.md, CLAUDE.md, stayfixed.toml')} {READ_AGENTS} "
-        f"{UNIGNORED.format(names='AGENTS.md, stayfixed.toml')}"
+def test_the_context_names_what_it_withheld_and_reads_agents_md_only_when_it_placed_it(
+    tmp_path: Path,
+) -> None:
+    # Mutation (oracle): `mutations/`'s "owner-held files point at an AGENTS.md they did not place"
+    # -> `CLAUDE.md` placed alone points the session at the branch's own `AGENTS.md`.
+    _, linked = _world(tmp_path, hide=("CLAUDE.md",))
+    placed, withheld = place(linked, machine=None)
+    assert (placed, withheld) == (["CLAUDE.md"], ["AGENTS.md", "stayfixed.toml"])
+    assert said(placed, withheld) == (
+        f"{PLACED.format(names='CLAUDE.md')} {WITHHELD.format(names='AGENTS.md, stayfixed.toml')}"
     )
-    # Nothing placed, nothing said; and no instruction to read when neither document is among them.
+    assert said(["AGENTS.md", "CLAUDE.md"], []) == (
+        f"{PLACED.format(names='AGENTS.md, CLAUDE.md')} {READ_AGENTS}"
+    )
+    # Nothing placed and nothing withheld, nothing said.
     assert said([], []) == ""
-    assert said(["stayfixed.toml"], []) == PLACED.format(names="stayfixed.toml")
+
+
+def test_a_name_a_branch_gitignore_un_ignores_is_withheld_not_placed(tmp_path: Path) -> None:
+    # The owner's `info/exclude` hides all three names, and the branch's `.gitignore` re-includes
+    # two: a `!` line outranks the exclude file, so placed they would show in `git status` and go
+    # out with the next `git add -A`. Asked before anything is created, so they are named and not
+    # written; the control fails closed, since a branch can only make fewer files be placed.
+    # Mutation (oracle): `mutations/`'s "owner-held files are placed before git is asked whether
+    # they are ignored".
+    _, linked = _world(tmp_path, gitignore="!/AGENTS.md\n!/CLAUDE.md\n")
+    placed, withheld = place(linked, machine=None)
+    assert (placed, withheld) == (["stayfixed.toml"], ["AGENTS.md", "CLAUDE.md"])
+    assert _names(linked) == {"README.md", ".gitignore", "stayfixed.toml"}
+    assert git(linked, "status", "--porcelain") == ""
+
+
+def test_a_branchs_gitignore_never_makes_a_name_be_placed(tmp_path: Path) -> None:
+    # The branch hides `AGENTS.md`, the owner hides nothing, and the branch's next commit takes the
+    # line out: `?? AGENTS.md`, and `git add -A` stages the owner's private file. Only the owner's
+    # own files open the gate, so a branch can only make fewer files be placed. Mutation (oracle):
+    # `mutations/`'s "a branch's .gitignore opens the owner-files gate".
+    _, linked = _world(tmp_path, hide=(), gitignore="/AGENTS.md\n")
+    placed, withheld = place(linked, machine=None)
+    assert placed == [] and withheld == sorted(REGULAR)
+    assert _names(linked) == {"README.md", ".gitignore"}
+
+
+def test_where_git_cannot_say_what_it_ignores_nothing_is_placed_or_said(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, linked = _world(tmp_path)
+
+    def unanswered(root: Path, relatives: object) -> tuple[str, ...]:
+        raise Refusal("git did not answer")
+
+    monkeypatch.setattr("stayfixed.attach.checkout.unignored", unanswered)
+    assert place(linked, machine=None) == ([], [])
+    assert _names(linked) == {"README.md"}
 
 
 def test_the_handler_needs_no_configuration_and_a_machine_without_an_overlay_places_nothing(

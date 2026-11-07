@@ -5,8 +5,8 @@
 renders its own. At `SessionEnd` it harvests the lines the session appended outside the region
 into their notes before the sync's handler starts the job (areas run in name order), so those
 notes travel in that job; at `SessionStart` it renders what the jobs brought in since. It reads
-the session's own configuration, or with no `stayfixed.toml` the one the checkout's binding gives,
-as `unreviewed-notes` does, and says nothing; a failure costs this handler alone.
+the session's one configuration (`SessionConfig.acting`), as `unreviewed-notes` does, and says
+nothing; a failure costs this handler alone.
 
 `unreviewed-notes` counts the notes the owner has not promoted at their current bytes
 (`memory.reviewed`) and says so on `SessionStart` only when that set differs from the one the last
@@ -27,7 +27,6 @@ from typing import TYPE_CHECKING
 from stayfixed.hooks.api import Handler, HookEvent, HookResult
 
 if TYPE_CHECKING:
-    from stayfixed.config.schema import Config
     from stayfixed.config.session import SessionConfig
 
 # Read by the model as well as the person, so it names the owner as the one who promotes: a line
@@ -46,23 +45,13 @@ def _segment(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
 
 
-def _config(event: HookEvent, session: SessionConfig) -> Config | None:
-    """The session's configuration; with no file, that of a checkout this machine binds, if it
-    binds this one (`bound_config`); `None` with no project root."""
-    root = event.project_root
-    if root is None or session.config is not None:
-        return session.config if root is not None else None
-    from stayfixed.config.session import bound_config
-    from stayfixed.errors import resolved_or_none
-
-    return resolved_or_none(lambda: bound_config(root, machine=None, owner=session.owner))
-
-
 def _unreviewed(event: HookEvent, session: SessionConfig) -> HookResult:
     from stayfixed.config.schema import HARNESS_MODE
 
-    config = _config(event, session)
-    if event.project_root is None or config is None or config.memory.mode == HARNESS_MODE:
+    if event.project_root is None:
+        return HookResult()
+    config = session.acting
+    if config is None or config.memory.mode == HARNESS_MODE:
         return HookResult()
     try:
         from stayfixed import fsops
@@ -100,7 +89,7 @@ def _unreviewed(event: HookEvent, session: SessionConfig) -> HookResult:
 def _render(event: HookEvent, session: SessionConfig) -> HookResult:
     from stayfixed.config.schema import OVERLAY_MODE
 
-    config = _config(event, session)
+    config = session.acting
     if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:
         return HookResult()
     from stayfixed.memory.index import render_current

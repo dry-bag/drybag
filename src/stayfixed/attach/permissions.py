@@ -23,19 +23,19 @@ and `attach.check` reports only how many there were.
 from __future__ import annotations
 
 import stat
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from stayfixed import fsops
 from stayfixed.attach.binding import Binding, cannot_exist
-from stayfixed.config.plates import PlateKind, plates
+from stayfixed.attach.items import CODEX_RULE, PROJECT_CLAUDE, fold
+from stayfixed.config.plates import Plate, PlateKind
 from stayfixed.errors import Failure
 from stayfixed.fsops import read_regular_text
 from stayfixed.harnesses import CLAUDE
 from stayfixed.jsonobject import WRITTEN_PAST
-from stayfixed.printed import quoted
 from stayfixed.scaffold import (
     EntriesError,
     ParserLimitError,
@@ -49,9 +49,6 @@ from stayfixed.scaffold import (
 (LOCAL_SETTINGS,) = CLAUDE.local_settings
 PERMISSIONS_FILE = "permissions.json"
 HOOKS_FILE = "hooks.json"
-# The per-harness subdirectory of a project's own share of the overlay.
-PROJECT_CLAUDE = "claude"
-PROJECT_CODEX = "codex"
 # Where Codex reads standing instructions.
 CODEX_RULES = ".codex/rules"
 
@@ -65,6 +62,11 @@ class PermissionDiff:
     added_allow: tuple[str, ...]
     already_present: tuple[str, ...]
     withdrawn_allow: tuple[str, ...] = ()
+
+    @property
+    def granted(self) -> frozenset[str]:
+        """Every rule the overlay grants, added or already present."""
+        return frozenset((*self.added_allow, *self.already_present))
 
 
 def settings_document(text: str) -> dict[str, Any]:
@@ -211,9 +213,9 @@ def codex_rules(binding: Binding) -> tuple[tuple[str, Path], ...]:
     This is **reporting and not gating**, as everything the overlay grants is: the overlay is the
     machine owner's own artifact, so `attach` shows what it places and proceeds.
 
-    Each plate's `codex/` is read in plate order (`config.plates`), so of two files sharing a name
-    the later plate's lands; the pair is returned rather than two lists so the caller cannot pair
-    them up differently from the way the write does.
+    The files are the winners of the plates' fold (`attach.items`), so of two files sharing a
+    name the later plate's lands, in its place; the pair is returned rather than two lists so the
+    caller cannot pair them up differently from the way the write does.
 
     A directory this user cannot list, or one whose entries cannot be asked about (`0o444`: the
     listing works and `stat` of an entry does not), fails as a rule file that cannot be read
@@ -221,37 +223,24 @@ def codex_rules(binding: Binding) -> tuple[tuple[str, Path], ...]:
     cannot read, and one classification. The project's directory carries `project.name`, so the
     path prints through `quoted`.
     """
-    found: dict[str, Path] = {}
-    for plate in plates(binding.overlay, binding.project)[0]:
-        source = plate.directory / PROJECT_CODEX
-        try:
-            if not fsops.is_dir(source):
-                continue
-            rules = [
-                rule
-                for rule in sorted(source.iterdir())
-                if fsops.is_file(rule) and not rule.name.startswith(".")
-            ]
-        except OSError as exc:
-            raise Failure(
-                f"{quoted(str(source))} cannot be listed ({fsops.said(exc)}), "
-                "so nothing was written"
-            ) from exc
-        for rule in rules:
-            found[f"{CODEX_RULES}/{rule.name}"] = rule
-    return tuple(found.items())
+    winners = fold(binding.plates, CODEX_RULE, _unlisted).winners
+    return tuple((f"{CODEX_RULES}/{name}", source) for name, source in winners.items())
 
 
-def _claude_sources(binding: Binding, name: str) -> tuple[tuple[Path, Path | None], ...]:
-    """The per-harness files this diff reads, one for each plate in plate order, each with the
+def _unlisted(sentence: str) -> Failure:
+    return Failure(f"{sentence}, so nothing was written")
+
+
+def claude_sources(held: Sequence[Plate], name: str) -> tuple[tuple[Path, Path | None], ...]:
+    """The per-harness file `name` of each of the plates `held`, in plate order, each with the
     directory `project.name` picks for it, when it has one (`_read`'s `share`): the project's
-    plate alone."""
+    plate alone. The permission diff and the render's hook union read their sources here."""
     return tuple(
         (
             plate.directory / PROJECT_CLAUDE / name,
             plate.directory if plate.kind is PlateKind.PROJECT else None,
         )
-        for plate in plates(binding.overlay, binding.project)[0]
+        for plate in held
     )
 
 
@@ -286,7 +275,7 @@ def diff_permissions(root: Path, binding: Binding) -> PermissionDiff:
     """What attaching `binding` would add to `root`, without writing a byte."""
     # This line is the whole of the committed-settings rule in the module docstring:
     # `.claude/settings.json` sits one name away from both sources and is not on it.
-    sources = _claude_sources(binding, PERMISSIONS_FILE)
+    sources = claude_sources(binding.plates, PERMISSIONS_FILE)
     granted = [
         rule
         for source, share in sources
@@ -313,8 +302,7 @@ def withdrawing(
     committed `allow` achieves is taking a permission away, one the owner typed included. `detach`
     accepts the same bound.
 
-    What the overlay grants is `diff`'s own: every rule is in `added_allow` or `already_present`,
-    by whether the file held it."""
-    granted = {*diff.added_allow, *diff.already_present}
+    What the overlay grants is `diff`'s own (`PermissionDiff.granted`)."""
+    granted = diff.granted
     taken = tuple(dict.fromkeys(rule for rule in recorded if rule in held and rule not in granted))
     return replace(diff, withdrawn_allow=taken)

@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from stayfixed import fsops
-from stayfixed.config.classes import ALLOWED, Layer, LayerName, class_of
+from stayfixed.config.classes import ALLOWED, Layer, LayerName, class_of, said
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.owner import Guards
 from stayfixed.config.plates import COMMON, Plate, PlateKind, plates
@@ -36,8 +36,8 @@ from stayfixed.config.reading import (
     ConfigError,
     MachineConfigError,
     coerced,
+    read_fault,
     table_types,
-    toml_position,
 )
 from stayfixed.config.schema import (
     MEMORY_MODES,
@@ -63,9 +63,6 @@ NO_OVERLAY = "the machine file records no overlay root, so no overlay layer appl
 # `error` is `read_machine_toml`'s refusal, which names the machine file and never its text.
 MACHINE_UNREAD = "{error}, so no overlay layer applies"
 NOT_THERE = "{path} is not there, so the {layer} layer sets nothing"
-UNREADABLE = "{path} cannot be read ({error}), so the {layer} layer sets nothing"
-NOT_UTF8 = "{path} is not UTF-8 text, so the {layer} layer sets nothing"
-NOT_TOML = "{path} is not valid TOML {position}, so the {layer} layer sets nothing"
 # `cause` is `GitUnavailable`'s own sentence, which names the checkout through `printed`.
 NO_GIT = "{cause}, so the overlay project layer sets nothing"
 UNKNOWN = "{path}: {name} is not a setting this stayfixed reads; it is ignored"
@@ -95,18 +92,19 @@ _TABLES: dict[str, type[Any]] = {
 
 def read(
     root: Path | None, *, machine: Path | None = None
-) -> tuple[tuple[Layer, ...], tuple[str, ...]]:
-    """The overlay's layers for the checkout at `root`, lowest first, and the notes reading them
-    gave. `machine` is the machine file, as `overlay_root` takes it; `root` is `None` for a hook
-    with no project root, which has no binding and gets the common layer only, as an unbound
-    checkout does."""
+) -> tuple[tuple[Layer, ...], tuple[str, ...], str | None]:
+    """The overlay's layers for the checkout at `root`, lowest first, the notes reading them gave,
+    and the project the binding names (`None` where it names none, or where no overlay is
+    recorded, which leaves the binding unasked). `machine` is the machine file, as `overlay_root`
+    takes it; `root` is `None` for a hook with no project root, which has no binding and gets the
+    common layer only, as an unbound checkout does."""
     notes: list[str] = []
     try:
         overlay = overlay_root(machine)
     except MachineConfigError as exc:
-        return (), (MACHINE_UNREAD.format(error=exc),)
+        return (), (MACHINE_UNREAD.format(error=exc),), None
     if overlay is None:
-        return (), (NO_OVERLAY,)
+        return (), (NO_OVERLAY,), None
     project = _bound(root, notes)
     if project is None:
         found: tuple[Plate, ...] = (Plate(PlateKind.COMMON, COMMON, overlay / COMMON),)
@@ -120,7 +118,7 @@ def read(
         layer = _layer(plate.directory / CONFIG_FILE, name, label, notes)
         if layer is not None:
             layers.append(layer)
-    return tuple(layers), tuple(notes)
+    return tuple(layers), tuple(notes), project
 
 
 def _bound(root: Path | None, notes: list[str]) -> str | None:
@@ -144,24 +142,15 @@ def _layer(path: Path, name: LayerName, label: str, notes: list[str]) -> Layer |
     """The file at `path` as the layer `name` (`label` the tag a tag's layer is for), or `None`
     with a note where it cannot be read. A tag with no file sets nothing and says nothing: a tag
     is often only notes."""
-    said = Layer(name, {}, label).said
     shown = quoted(str(path))
     try:
-        text = fsops.read_regular_text(path, limit=READ_LIMIT)
+        raw = tomllib.loads(fsops.read_regular_text(path, limit=READ_LIMIT))
     except FileNotFoundError:
         if name is not LayerName.OVERLAY_TAG:
-            notes.append(NOT_THERE.format(path=shown, layer=said))
+            notes.append(NOT_THERE.format(path=shown, layer=said(name, label)))
         return None
-    except UnicodeDecodeError:
-        notes.append(NOT_UTF8.format(path=shown, layer=said))
-        return None
-    except OSError as exc:
-        notes.append(UNREADABLE.format(path=shown, error=fsops.said(exc), layer=said))
-        return None
-    try:
-        raw = tomllib.loads(text)
-    except UNPARSEABLE as exc:
-        notes.append(NOT_TOML.format(path=shown, position=toml_position(exc), layer=said))
+    except (UnicodeDecodeError, OSError, *UNPARSEABLE) as exc:
+        notes.append(read_fault(shown, exc, f"so the {said(name, label)} layer sets nothing"))
         return None
     return Layer(name, _values(raw, shown, name, notes), label)
 

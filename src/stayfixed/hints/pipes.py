@@ -69,7 +69,7 @@ def notice_for(command: str) -> str | None:
     if tokens is None:
         return None
     for pipeline in bashscan.pipelines(tokens):
-        words = [bashscan.command_words(segment, names_a_test_run) for segment in pipeline]
+        words = [bashscan.command_words(segment, test_runs=True) for segment in pipeline]
         for at, command_words in enumerate(words):
             if names_a_test_run(command_words) and any(_is_reader(w) for w in words[at + 1 :]):
                 return NOTICE

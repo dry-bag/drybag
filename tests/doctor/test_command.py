@@ -185,13 +185,11 @@ def test_doctor_json_carries_no_codex_hooks_row(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # The row no build could answer, a skip on every machine, left the report for the README's
-    # Codex reach table: `doctor --json` carries no `codex-hooks`, even where `[stayfixed] agents`
-    # lists Codex.
+    # Codex reach table: `doctor --json` carries no `codex-hooks`.
     root = tmp_path / "project"
     root.mkdir()
     (root / "stayfixed.toml").write_text(
-        f'[stayfixed]\nversion = "{stayfixed.__version__}"\n'
-        'agents = ["claude", "codex"]\n\n[project]\nname = "p"\n',
+        f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "p"\n',
         encoding="utf-8",
     )
     invoke(["doctor", "--root", str(root), "--home", str(tmp_path / "home"), "--json"])

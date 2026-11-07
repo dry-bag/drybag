@@ -28,12 +28,7 @@ def test_the_name_comes_from_origin_lower_cased_and_stripped(tmp_path: Path) -> 
     assert detect(repository(tmp_path / "c", origin=None, directory="Local")) == Detected(
         "local",
         "main",
-        ("claude", "codex"),
-        {
-            "name": "directory name",
-            "base_branch": "current branch",
-            "agents": "default",
-        },
+        {"name": "directory name", "base_branch": "current branch"},
     )
 
 
@@ -213,14 +208,6 @@ def test_a_checked_out_branch_nothing_can_name_leaves_the_default(
     found = detect(root)
     assert (found.base_branch, found.sources["base_branch"]) == ("main", "default")
     assert not found.head_refused
-
-
-@needs_git
-def test_agents_are_the_surfaces_the_repository_carries(tmp_path: Path) -> None:
-    root = repository(tmp_path, origin=MIXED_CASE)
-    (root / ".codex").mkdir()
-    found = detect(root)
-    assert found.agents == ("codex",) and found.sources["agents"] == "harness directories"
 
 
 @needs_git

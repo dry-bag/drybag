@@ -90,7 +90,7 @@ from stayfixed.config.machine import in_owner_home
 from stayfixed.config.overlay import overlay_root as recorded_root
 from stayfixed.errors import Failure, Refusal
 from stayfixed.fsops import utf_8_name
-from stayfixed.harnesses import BYTE_ORDER_MARK, lenient_settings
+from stayfixed.harnesses import BYTE_ORDER_MARK, HARNESSES, lenient_settings
 from stayfixed.jsonobject import json_object, json_text
 from stayfixed.overlay.api import (
     finish,
@@ -198,11 +198,6 @@ def _new_personal_values(preset: dict[str, Any], machine: Path) -> dict[str, Any
     """
     existing = read_personal(machine)
     return {k: v for k, v in _personal_defaults(preset).items() if k not in existing}
-
-
-def _agents(preset: dict[str, Any]) -> tuple[str, ...]:
-    agents = defaults_of(preset).get("stayfixed", {}).get("agents", [])
-    return tuple(agent for agent in agents if isinstance(agent, str))
 
 
 def _marketplace(preset: dict[str, Any], agent: str) -> tuple[str, str] | None:
@@ -651,7 +646,11 @@ def setup(
     deny_written = _write_user_settings(home, deny_rules, read_personal(machine))
 
     installed, install_notes = _install_plugins(
-        data, _agents(data), tuple(dict.fromkeys(plugins)), home=home, runner=runner
+        data,
+        tuple(harness.name for harness in HARNESSES),
+        tuple(dict.fromkeys(plugins)),
+        home=home,
+        runner=runner,
     )
     notes = list(install_notes)
 

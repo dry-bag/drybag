@@ -523,41 +523,6 @@ def test_no_module_but_fsops_says_an_error_by_its_strerror() -> None:
     assert len(found) == 1 and found[0].startswith("fsops.py:"), found
 
 
-def test_a_path_names_a_regular_file_or_no_file_and_any_other_fault_is_the_callers(
-    tmp_path: Path,
-) -> None:
-    # The probe `attach`'s ledger reader asks: a path that names no file is `False`, and a path it
-    # cannot ask about is raised, because the reader calls it an unreadable ledger.
-    regular = tmp_path / "regular"
-    regular.write_text("{}", encoding="utf-8")
-    assert fsops.names_regular_file(regular) is True
-    # Followed through a link, as `Path.is_file()` follows it.
-    (tmp_path / "to-regular").symlink_to(regular)
-    assert fsops.names_regular_file(tmp_path / "to-regular") is True
-    # Names no file: nothing there, a dangling link, a loop, a component that is not a directory,
-    # and something that is not a regular file. Mutations (oracle): `mutations/`'s "the
-    # regular-file probe is blind to a path that names no file" -> the first four raise; "the
-    # regular-file probe reads a path that is no regular file" -> the directory answers `True`.
-    (tmp_path / "dangling").symlink_to(tmp_path / "nothing-here")
-    (tmp_path / "loop").symlink_to(tmp_path / "loop")
-    (tmp_path / "directory").mkdir()
-    for path in (
-        tmp_path / "absent",
-        tmp_path / "dangling",
-        tmp_path / "loop",
-        regular / "below-a-file",
-        tmp_path / "directory",
-    ):
-        assert fsops.names_regular_file(path) is False, path
-    # A link to a name longer than a file name may be is a path a clone can commit, and it is not
-    # one that names no file: it is the caller's to classify. Mutation (oracle): `mutations/`'s
-    # "the regular-file probe reads a path it cannot ask about as no file" -> `False`.
-    (tmp_path / "past-a-name").symlink_to(tmp_path / ("x" * 300))
-    with pytest.raises(OSError) as raised:
-        fsops.names_regular_file(tmp_path / "past-a-name")
-    assert raised.value.errno not in fsops.NAMES_NO_FILE
-
-
 # What `is_file`, `is_dir`, `exists` and `is_symlink` answer for each shape, in that order, or
 # `OSError` where all four raise.
 PREDICATE_ANSWERS: dict[str, tuple[bool, bool, bool, bool] | type[OSError]] = {
@@ -1091,7 +1056,8 @@ def test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link(
     (tmp_path / "directory").mkdir()
     outside = tmp_path / "outside.txt"
     (tmp_path / "dangling").symlink_to(outside)
-    for name in ("file.txt", "directory", "dangling"):
+    os.mkfifo(tmp_path / "pipe")
+    for name in ("file.txt", "directory", "dangling", "pipe"):
         assert create_within(tmp_path, name, b"owned\n", mode=0o600) is False
     assert (tmp_path / "file.txt").read_bytes() == b"theirs\n"
     assert (tmp_path / "directory").is_dir()

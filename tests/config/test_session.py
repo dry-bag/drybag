@@ -221,7 +221,7 @@ UNUSABLE = [
         "stayfixed.version",
         id="version",
     ),
-    pytest.param(_docs_symlink, "paths.architecture", id="docs-symlink"),
+    pytest.param(_docs_symlink, "paths.specs", id="docs-symlink"),
     pytest.param(lambda root: "project = 1\n" + HEAD, "project", id="project-not-a-table"),
 ]
 
@@ -414,3 +414,13 @@ def test_methodology_hooks_still_answer_nothing_without_a_file(tmp_path: Path) -
     assert bound_config(root, machine=machine, owner=None) is not None
     got = session_config(root, machine=machine)
     assert got.config is None and got.warnings == ()
+    # The delivery side's reading, taken once from the same binding.
+    assert got.bound == bound_config(root, machine=machine, owner=None)
+
+
+@needs_git
+def test_a_checkout_whose_file_does_not_load_has_no_bound_configuration(tmp_path: Path) -> None:
+    root, machine = a_bound_checkout_with_no_file(tmp_path)
+    (root / "stayfixed.toml").write_text("x = [", encoding="utf-8")
+    got = session_config(root, machine=machine)
+    assert got.project_warnings and got.acting is None

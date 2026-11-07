@@ -52,9 +52,9 @@ argued from prose is a surface nobody measured: the first count of this list's i
 covered `src/`, `scripts/` and `tests/` and never read the sentence, and the sentence is what
 kept the names.
 
-The ledger's path is the core's (`config.layout`'s `ATTACH_LEDGER`), because `project` and
-`doctor` name it too; nothing outside delivery imports this area but through the crossings pinned
-in `tests/boundaries/test_delivery.py`.
+The ledger's place is the core's (`binding.LEDGER_FILE`, beside the binding id), because `doctor`
+reads it too; nothing outside delivery imports this area but through the crossings pinned in
+`tests/boundaries/test_delivery.py`.
 """
 
 from stayfixed.attach.binding import Binding, read_binding

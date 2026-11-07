@@ -1,0 +1,1 @@
+A `tags` entry in a project's overlay record that is not a string is now skipped with a note naming its position, like a tag with an unusable name, instead of making `stayfixed attach` refuse and dropping every other tag; an unusable tag listed twice is noted once.

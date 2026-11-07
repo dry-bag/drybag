@@ -92,7 +92,6 @@ TABLE_ROWS = [
     ("ledger.evidence_boundary_required_for", KeyClass.GATE_PARAMETER),
     ("stayfixed.version", KeyClass.REPOSITORY_ONLY),
     ("stayfixed.preset", KeyClass.REPOSITORY_ONLY),
-    ("stayfixed.agents", KeyClass.REPOSITORY_ONLY),
     ("project.name", KeyClass.REPOSITORY_ONLY),
     ("project.base_branch", KeyClass.REPOSITORY_ONLY),
     ("paths.bugs", KeyClass.REPOSITORY_ONLY),
@@ -194,8 +193,6 @@ def test_a_tag_layer_names_itself_by_its_label() -> None:
     # The label is what the owner wrote and `plates` held to `TAG`; a layer without one reads as
     # its name alone. The winner's label rides with its provenance, and a later layer without one
     # takes it back.
-    assert Layer(OVERLAY_TAG, {}, "ops").said == "overlay tag ops"
-    assert Layer(OVERLAY_PROJECT, {}).said == "overlay project"
     got = resolve(
         [
             Layer(OVERLAY_TAG, {"memory.mode": "overlay"}, "ops"),

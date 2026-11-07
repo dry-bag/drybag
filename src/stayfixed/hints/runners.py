@@ -79,9 +79,25 @@ def _program(word: str) -> str:
 
 def names_a_test_run(words: Sequence[str]) -> bool:
     """Whether `words`, one simple command already unwrapped by `bashscan.command_words`, begins
-    with a row of `RUNNERS`. Also the `recognises` callable `command_words` takes, so that
-    `uv run <runner>` unwraps to the runner."""
+    with a row of `RUNNERS`. `command_words` asks it too, so that `uv run <runner>` unwraps to the
+    runner."""
     if not words:
         return False
     program = _program(words[0])
     return any(row[0] == program and tuple(words[1 : len(row)]) == row[1:] for row in RUNNERS)
+
+
+# Where `uv run` stops and the command it launches starts, for `bashscan.command_words`, here so
+# the shared scanner names no stack. None of uv's option grammar is read: the command starts at
+# the first word after `run` the table reads as a test run, and every word before it is uv's.
+def is_launcher(name: str) -> bool:
+    """Whether a command's program, by its bare name, is uv."""
+    return name == "uv"
+
+
+def past_run(segment: Sequence[str], index: int) -> int | None:
+    """Where the words after `run` start in `segment`, read from `index`, just past the word `uv`
+    (`is_launcher`); `None` where no `run` follows, a uv command that launches nothing."""
+    if "run" not in segment[index:]:
+        return None
+    return segment.index("run", index) + 1

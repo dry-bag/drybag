@@ -52,7 +52,7 @@ Three things hold everywhere:
 - [`stayfixed docs check [--budgets] [--links]`](#stayfixed-docs-check---budgets---links)
 - [`stayfixed docs trail [--check]`](#stayfixed-docs-trail---check)
 - [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
-- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---agent-name----memory-mode-mode---attribution-check---root-path---machine-path)
+- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---memory-mode-mode---attribution-check---root-path---machine-path)
 - [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
 - [`stayfixed overlay upgrade [--root PATH] [--dry-run]`](#stayfixed-overlay-upgrade---root-path---dry-run)
 - [`stayfixed attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
@@ -237,9 +237,10 @@ unreviewed again and moves no other note. The record is this machine's, so anoth
 promotes for itself. Only a reviewed note is a standing rule
 ([`session-context`](#stayfixed-memory-session-context---bundle-name---part-n)). The record lies
 outside every tree, so repository bytes cannot write it; an agent whose shell can run this command
-can, and against it the record is a label, not a gate (what the record holds against is below). No
-command withdraws an approval: a promoted note is withdrawn by editing it, which changes its
-digest, or by deleting it.
+can, and against it the record is a label, not a gate (what the record holds against is below). An
+approval holds for its bytes wherever they reappear: an edit takes the note out of review, but the
+same bytes written again anywhere, a revert or a copy, are reviewed again. No command withdraws
+an approval; withdrawing one is a hand edit of `trust.json` that removes its entry.
 [`stayfixed setup --restore --yes`](#stayfixed-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
 records the notes of the overlay's share for each project it attaches.
 
@@ -367,10 +368,18 @@ is left alone and never written through. It answers from the machine's binding r
 the repository's `stayfixed.toml`, which the worktree may not have until this places it, and it
 places nothing in the main checkout, in a submodule, in an unbound checkout or on a machine that
 records no overlay. It runs on every `SessionStart` there, so a placed file you delete by hand comes
-back with the next session. It says nothing when it placed nothing; otherwise it names the files placed, asks the
-session to read `AGENTS.md` when that or `CLAUDE.md` is among them, and names the placed files git
-would show, to add to the checkout's `.git/info/exclude`. It asks git only `rev-parse` and
-`check-ignore --no-index`, neither of which runs a repository's `core.fsmonitor`.
+back with the next session. **A file is placed only where your own excludes hide its name**, the
+checkout's `.git/info/exclude` or your global excludes file, and no `!` line re-includes it, asked
+before any is created. A `.gitignore` does not stand in for them, since a branch's next commit can
+take its line out, so a branch only ever makes fewer files be placed. Any other name is not placed
+but named to the session, which is told to add it to the checkout's `.git/info/exclude`, unless the
+branch's `.gitignore` un-ignores it on purpose (a `!` line outranks the exclude file), in which case
+it stays out. Where git cannot say what it ignores, nothing is placed and nothing is said. It says nothing when it placed and withheld
+nothing; otherwise it names the files placed, asks the session to read `AGENTS.md` when that file
+itself is among them, and names the files withheld. It asks git only `rev-parse`, `config` and
+`check-ignore --no-index`, none of which runs a repository's `core.fsmonitor`: one `rev-parse`
+finds the linked worktree and the common directory the binding id is read from, so a checkout it
+does not serve costs that one launch, and the rest are asked only when a name is free.
 
 **Writes** inside `stayfixed/` under the data root the harness names — `CLAUDE_PLUGIN_DATA`, or
 Codex's `PLUGIN_DATA` — and nowhere else of its own: `.probe`, written each time it dispatches to
@@ -1143,9 +1152,9 @@ lints it.
 
 ---
 
-## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--agent NAME …] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
+## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
 
-Writes a repository's stayfixed scaffold, once: `stayfixed.toml`, and the files the pack's
+Writes what is missing of a repository's stayfixed scaffold: `stayfixed.toml`, and the files the pack's
 commands read — the roadmap with its trail markers and `trail.toml` beside it for `docs trail`, the
 generated bug index and the bug ledger's audits README for `bugs index` and `bugs check` — and the
 `stayfixed:ignore` region in `.gitignore`, which keeps `.stayfixed/local/` out of git. It is the
@@ -1157,8 +1166,7 @@ Without it nothing is written, and the refusal (`2`) names `--questions`.
 
 Each answer flag replaces one default and writes one key:
 - `--name` writes `[project] name`;
-- `--base-branch` writes `[project] base_branch` and `release_branch`;
-- `--agent`, once per harness, writes `[stayfixed] agents`;
+- `--base-branch` writes `[project] base_branch`;
 - `--memory-mode` writes `[memory] mode`;
 - `--attribution-check` writes `[commit_messages] attribution_check = true`, which is off unless
   answered.
@@ -1166,12 +1174,10 @@ Each answer flag replaces one default and writes one key:
 The recommended plugins are not `init`'s to install:
 `init --questions` asks about them, and the answer is `stayfixed setup`'s.
 
-After both reports the run prints `picked:`, one line per question in the order
+After the report the run prints `picked:`, one line per question in the order
 `init --questions` asks them, with the value this run took: the name, the base branch, the memory
-mode, the attribution check (`on` or `off`), the
-agents stayfixed serves among those listed, and `plugins: none`, since
-`init` installs none. Taking every default gives the attribution check `off` and no plugin. A value a `stayfixed.toml` you wrote holds outside the plain-path grammar
-prints as `<unprintable; see stayfixed.toml>`.
+mode, the attribution check (`on` or `off`), and `plugins: none`, since `init` installs none. Taking every default gives the attribution check `off` and no plugin. Over a `stayfixed.toml` you wrote
+the run took nothing, so it prints no list.
 
 The parser refuses a value outside its grammar or its choices (`2`), and it refuses a name or
 a branch by naming the rule, never the value. A branch is a name git accepts as one, written in
@@ -1200,90 +1206,91 @@ When nothing answers, `init` detects:
 
 Both name candidates, the remote's segment and the directory name, are repository-authored.
 So one outside `[project] name`'s grammar is refused naming the grammar and the remedy, and
-never the value, unless `--name` answers it. With a `stayfixed.toml` you wrote, the file answers
-it: one with no `[project] name` fails (`1`) with the loader's own sentence, whatever the
-repository suggests.
+never the value, unless `--name` answers it. With a `stayfixed.toml` you wrote, neither candidate
+is refused: the file answers it, and what it leaves out is the loader's to name.
 
 **A `stayfixed.toml` you wrote is the answer sheet, not an obstacle.** Every key it carries is
 read and kept: the name, the paths, the memory mode, the budgets. The file itself
 is not replaced. It is a create-once artifact, so a repository that already has one is
 reported `skip_modified` ("create-once, and the file is already there").
 
-The one change is a missing `[stayfixed] version`, the only key stayfixed owns that the loader
-requires. This run writes it into the file in place, leaves every other line as it was, and
-says so in a `note:` line.
+Nothing is written into it, whatever it holds, and `init` answers only for where the scaffold
+lands. What the scaffold is built from is read first: the file's `[project]`, `[paths]`, `[memory]`,
+`[budgets]`, `[ledger]` and `[commit_messages]` tables and `[stayfixed] preset`, with the name
+detected for a file with no `[project]` table. A fault there stops the run with nothing written: a
+`[project]` with no name or holding a key stayfixed no longer has, such as `release_branch`, or no
+`[project]` table where no name can be detected.
 
-The file is then checked as it will be on disk, that key included, before anything is
-written. One the next command could not load fails (`1`) with the loader's own sentence, and
-nothing is written: no `[project] name`, or a `[stayfixed] state` or `enforced` line (keys
-stayfixed no longer has, which the loader refuses as any unknown key).
+The rest of the file is no input to the scaffold, and `init` does not judge it. `[stayfixed] agents`,
+the same kind of leftover in another table, a missing `[stayfixed] version`, no `[project]` table,
+a bad value under `[guards]` and a section stayfixed does not have all exit `0`, and the next command
+that loads the file names them, in the loader's own sentence. So `initialised:` says nothing of
+the file: the run prints a `note:` saying the file was left as it is and the next command judges
+it, in place of `picked:`, and no base-branch `note:`, whose `--base-branch` is refused over the
+file.
 
 The paths it declares are where the scaffold lands. A repository with no `stayfixed.toml` gets
-one written from the detected values and your answers, headed by a comment naming the one key
-that is stayfixed's to rewrite, `[stayfixed] version`. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
-(`1`) naming the file. A repository that already carries `.stayfixed/manifest.json` is refused
-(`2`): `init` writes a scaffold once.
+one written from the detected values and your answers, headed by a comment saying that every key
+left out takes the preset's default. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
+(`1`) naming the file.
 
-**Two passes, both planned before either is applied.** `stayfixed.toml` is one pass and the rest
-of the scaffold is the other. A refusal in either plan stops the run with nothing written and no
-manifest, and `--dry-run` is that same branch rather than a second code path — it reports both
-plans and writes nothing.
+**Run it again, and it writes what is missing.** Every artifact but the `gitignore` region is
+create-once: a file already at its place, whoever wrote it, is left as it is and reported
+`skip_modified` ("create-once, and the file is already there"). The `gitignore` region goes into a
+`.gitignore` you wrote, between its markers, and is rewritten there whenever its body differs;
+every line outside them is kept. `init` keeps no manifest, and leaves a `.stayfixed/manifest.json`
+an earlier release wrote as it is. The whole footprint is one plan, made before anything is
+applied: a refusal in it stops the run with nothing written, and `--dry-run` is that same branch
+rather than a second code path — it reports the plan and writes nothing.
 
-| id | pass | kind | target | what it holds |
-|---|---|---|---|---|
-| `config` | write-once | once | `stayfixed.toml` | the document this run rendered |
-| `ledger-audits` | scaffold | template | `<bugs>/audits/README.md` | what an audit record is; it keeps the ledger's directory in git |
-| `bug-index` | scaffold | template | `[paths] bug_index` | the generated index, rendered empty |
-| `roadmap` | scaffold | template | `[paths] roadmap` | `Now`, `Next`, and the trail block |
-| `trail` | scaffold | template | `trail.toml` beside the roadmap | one theme, no declared states |
-| `gitignore` | scaffold | managed region | `.gitignore` | `.stayfixed/local/`, where the `local-only` notes and attach's ledger live |
+| id | target | what it holds |
+|---|---|---|
+| `config` | `stayfixed.toml` | the document this run rendered |
+| `ledger-audits` | `<bugs>/audits/README.md` | what an audit record is; it keeps the ledger's directory in git |
+| `bug-index` | `[paths] bug_index` | the generated index, rendered empty |
+| `roadmap` | `[paths] roadmap` | `Now`, `Next`, and the trail block |
+| `trail` | `trail.toml` beside the roadmap | one theme, no declared states |
+| `gitignore` | `.gitignore` | the managed region naming `.stayfixed/local/`, where the `local-only` notes live |
 
-A file already at an artifact's place that stayfixed did not write is left as it is and reported
-`skip_modified`. The `gitignore` region is the exception: it goes into a `.gitignore` you wrote,
-between its markers, and every line outside them is kept.
+The bug index is rendered only when it is written, so a `[ledger]` value the bug ledger refuses
+(an `evidence_boundary_required_for` level that is no severity) stops a run that creates the index
+and no other.
 
-**Reads** `stayfixed.toml` when there is one, `.stayfixed/manifest.json`, `git` for the name
-and the base branch, which harness directories the root carries (`.claude/`, `.codex/`), and
-every file an artifact targets.
+**Reads** `stayfixed.toml` when there is one, `git` for the name and the base branch, and every
+file an artifact targets.
 
-**Writes**, every one of them through the scaffold engine or `stayfixed.toml`'s key editor, so
-that every target goes through the containment walk and none may leave the project root or
-pass through a symlink:
-- `stayfixed.toml`, or only its missing `[stayfixed] version` when you wrote it;
+**Writes**, every one of them through the scaffold engine, so that every target goes through the
+containment walk and none may leave the project root or pass through a symlink:
+- `stayfixed.toml`, when the repository has none;
 - the documents in the table above, each at its place in the table, and the `stayfixed:ignore`
-  region in `.gitignore`;
-- `.stayfixed/manifest.json`.
+  region in `.gitignore`.
 
-Exits `0` on success. `1` on a finding: either plan carries refusals — the report's REFUSED section
-names each, nothing was written and no manifest exists — or a `stayfixed.toml` that cannot be read,
-is not UTF-8 text or is not valid TOML, or the merged document the loader itself refuses (an unknown
-section or key, a `[project] name` outside its grammar, a value of the wrong type, a machine
-configuration file that does not load), or a `stayfixed.toml` you wrote that, with its version, the
-loader would refuse on the next command's load. `2` on a refusal above the plans: no `--yes`, an
+Exits `0` on success. `1` on a finding: the plan carries refusals — the report's REFUSED section
+names each, and nothing was written — or a `stayfixed.toml` that cannot be read,
+is not UTF-8 text or is not valid TOML, or what the scaffold is built from where the loader refuses
+it (a key those tables do not have, a `[project]` with no name, a `[project] name` outside its
+grammar, a value of the wrong type, a machine configuration file that does not load). `2` on a refusal above the plan: no `--yes`, an
 answer flag over an existing `stayfixed.toml`, an answer outside its grammar or its choices (from the
-parser), a repository already initialised, a detected name outside the grammar that no
-`--name` answers, a `[stayfixed]` table the key editor cannot add a version to, a `stayfixed.toml`
-that is a symlink, which is never followed, a `[paths]` value outside the plain-path grammar, naming
+parser), a detected name outside the grammar that no `--name` answers, a `[ledger]` value the bug
+ledger refuses when the run creates the bug index, a `stayfixed.toml` that is a symlink, which is never followed, a `[paths]` value outside the plain-path grammar, naming
 git's control directory or stayfixed's own `.stayfixed/`, or reaching through a component that is a
-symlink — all three refused by the loader before a plan exists — and two artifacts, of one pass or
-of either, that resolve to one file (`roadmap` and `bug_index` set to one path), which is named
+symlink — all three refused by the loader before a plan exists — and two artifacts that resolve to
+one file (`roadmap` and `bug_index` set to one path), which is named
 with the two artifacts and their `[paths]` keys to separate.
 
-`--json` carries `dry_run`, `adopted`, `once` and `scaffold` (each the plan's own rendered
-report), `writes` (both plans' targets), `stamped`, whether this
-run's plan adds `[stayfixed] version` to a `stayfixed.toml` you wrote — written only by a run that
-is neither a dry run nor refused — and `head_note`, the `note:` line that says `main` replaced an
+`--json` carries `dry_run`, `adopted`, `scaffold` (the plan's own rendered report), `writes` (the
+plan's targets), and `head_note`, the `note:` line that says `main` replaced an
 `origin/HEAD` outside the plain-branch grammar (the branch it named is never printed), that
 `main` stands because a remote is there and no `origin/HEAD` is recorded, or because git could
 not list the remotes, or that, with no remote, the branch checked out other than `main` became
-the base branch; empty otherwise. An answered `--base-branch` replaced nothing, so it leaves
+the base branch; empty otherwise, and over a `stayfixed.toml` you wrote. An answered `--base-branch` replaced nothing, so it leaves
 `head_note` empty.
 
 ---
 
 ## `stayfixed init --questions [--root PATH] [--machine PATH]`
 
-Prints the values `stayfixed init --yes` would take for the six things a person may answer, where
+Prints the values `stayfixed init --yes` would take for the five things a person may answer, where
 each came from, and the flag that replaces it: on `init --yes`, but for the recommended plugins,
 which `stayfixed setup` installs on the machine. It writes nothing. The `init` skill asks its
 questions from it, taking every default offered first, and a person reads it to see the defaults
@@ -1298,7 +1305,6 @@ detected:
   project.base_branch: main (origin/HEAD; --base-branch)
   memory.mode: harness (default; --memory-mode)
   commit_messages.attribution_check: off (the preset's default; --attribution-check)
-  stayfixed.agents: claude, codex (default; --agent)
   plugins: none (default; stayfixed setup --plugin)
 each is answered by the flag its line names, on `stayfixed init --yes` but the plugins'; `stayfixed init --questions --json` carries them as a JSON Schema, each with what it gives, what it gives up, what it leaves and how to undo it
 ```
@@ -1309,20 +1315,19 @@ not a lowercase path segment the source is `not derivable`, and the value prints
 `none; asked`, never as what the repository suggested. The base branch comes from `origin/HEAD`
 when that names a plain branch under `refs/remotes/origin/`; with no remote at all, from the
 `current branch` when that is a plain branch; otherwise, a remote with no `origin/HEAD` and
-remotes git could not list included, it is the `default`, `main`. The agents come from the `harness
-directories` the root carries; otherwise the `default` is every harness. The memory mode is the `default`,
+remotes git could not list included, it is the `default`, `main`. The memory mode is the `default`,
 `harness`, since the preset chooses none; the attribution check (off) is `the preset's default`; and the plugins are the `default`,
 none, because a third-party plugin runs in every session and is installed only when named. Each
 default is exactly what `stayfixed init --yes` writes when that question is not answered. `origin/HEAD` goes stale after the remote's default branch is
 renamed, because git does not refresh one it has. That is why its source is printed: you can
 catch it.
 
-`--json` carries `questions`: a JSON Schema object (draft 2020-12) with six `properties`, and
-`required` naming all six in the order the `init` skill asks them; read the order there, since
+`--json` carries `questions`: a JSON Schema object (draft 2020-12) with five `properties`, and
+`required` naming all five in the order the `init` skill asks them; read the order there, since
 `--json` prints every object's keys sorted, so the properties arrive by name. Each but the last is
 keyed by the
 `stayfixed.toml` key its answer writes: `project.name`, `project.base_branch`, `memory.mode`,
-`commit_messages.attribution_check` and `stayfixed.agents`; the last,
+and `commit_messages.attribution_check`; the last,
 `plugins`, offers the plugins the preset recommends, which `stayfixed setup --plugin` installs. Each property carries four keys: `default`
 (absent for a name that is not derivable), `x-stayfixed-source` (the phrase above),
 `x-stayfixed-flag` (the flag that answers it) and `x-stayfixed-tradeoff`, four lines of fixed
@@ -1339,16 +1344,14 @@ base branch as one confirmation, the rest one at a time with their four lines, w
 harness's limits. The flags validate the answers; the schema
 does not.
 
-It is refused (`2`) before anything beyond the root is read, in three cases:
-- the repository already carries `.stayfixed/manifest.json`: `init` writes a scaffold once;
-- it carries a `stayfixed.toml`, which answers these questions itself: edit it, then read the plan
+It is refused (`2`) before anything beyond the root is read, in two cases:
+- the repository carries a `stayfixed.toml`, which answers these questions itself: edit it, then read the plan
   with `stayfixed init --yes --dry-run`;
 - any flag is given but `--root`, `--machine` and `--json`.
 
 `--yes` beside it is a usage error from the parser.
 
-**Reads** `git` for the name and the base branch, which harness directories the root carries, and
-the machine configuration, to learn whether it
+**Reads** `git` for the name and the base branch, and the machine configuration, to learn whether it
 records an overlay. A machine file that does not load reads as "not recorded"; `init` reports it
 when it loads it.
 
@@ -1467,7 +1470,8 @@ overlay's project file sets applies from the first attach.
 **One place per repository: the main checkout.** Claude Code reads the main checkout's
 `.claude/settings.local.json` from every worktree, and writes a worktree's own answers into it, so
 `attach` run from any worktree acts on the main checkout: it reads that checkout's `stayfixed.toml`
-and writes its settings file, its `.codex/rules/` copies and its ledger. Nothing is placed in a
+and writes its settings file and its `.codex/rules/` copies; its ledger is in the git common
+directory. Nothing is placed in a
 linked worktree, and a worktree created later needs no step of its own.
 
 **`--check` writes nothing.** It opens with the project it would bind and where the name came from —
@@ -1497,7 +1501,7 @@ agent (by its file) the render adds or removes against the render the last run l
 rule this run merges or takes back. A hook's command and an allow rule that do not fit a plain name are printed
 escaped, and cut to their first 120 characters and their length. `--json` carries the same lists
 as `hooks_added`, `hooks_removed`, `skills_added`, `skills_removed`, `agents_added`,
-`agents_removed`, `allow_added` and `allow_withdrawn`, and no remote and no project of their own. A re-attach that
+`agents_removed`, `allow_added`, `allow_withdrawn` and `rules_left`, and no remote and no project of their own. A re-attach that
 binds the checkout to another project than this machine's record named — a `[project] name`
 renamed in a pulled commit moves every worktree's binding — says so on one line naming both.
 `--check`'s line names no project.
@@ -1507,8 +1511,9 @@ renamed in a pulled commit moves every worktree's binding — says so on one lin
 `stayfixed-delivery-<id>` holding one plugin, `overlay-<id>`, whose `hooks/hooks.json` is the union
 of the `claude/hooks.json` of `common/`, of each tag the project lists in list order, and of
 `projects/<name>/` — each event's entry groups in that order, as the overlay wrote them — and whose
-`skills/` and `agents/` are copied from the same directories, a later plate's copy of a file
-winning over an earlier one's and each copy keeping its source's permission bits, so a skill's script stays executable. A session runs the plugin from that
+skills and agents, each an entry directly in `skills/` or `agents/` of the same directories, are
+copied whole from the later plate that holds one of the name, no file of an earlier plate's entry
+beside it, each copy keeping its source's permission bits, so a skill's script stays executable. A session runs the plugin from that
 directory in place, so a later `attach` re-renders it there and an edit reaches the next session
 with no reinstall. Each render is written whole into a new directory beside it and swapped into
 place, so a file the overlay no longer holds is gone, whatever an earlier run recorded; the ledger
@@ -1565,8 +1570,8 @@ and the repository never grants a capability.
 **Writes** a block between `# stayfixed:attach:begin` and `# stayfixed:attach:end` in the
 repository's own exclude file (the one `git rev-parse --git-path info/exclude` names, which every
 worktree shares), written first,
-`.claude/settings.local.json`, `.codex/rules/`, the ledger `.stayfixed/local/attach.json`, the
-binding id `stayfixed/binding` in the git common directory when there is none yet, this machine's
+`.claude/settings.local.json`, `.codex/rules/`, the ledger `stayfixed/attach.json` and the
+binding id `stayfixed/binding` (when there is none yet) in the git common directory, this machine's
 binding record `$HOME/.local/share/stayfixed/bindings/<id>.toml`, the render
 `$HOME/.local/share/stayfixed/delivery/<id>/` (written whole into a directory beside it, then
 swapped into place, the render before removed whole) and, through the two `claude plugin` calls,
@@ -1593,11 +1598,18 @@ entry can; `detach` reads it and nothing else. **A re-attach takes back an allow
 no longer grants**, where the ledger names it and the settings file still holds it: a rule dropped
 from `common/`, from `projects/<name>/` or from a tag you took off the project leaves with the
 next run, each said as `allow rule withdrawn`, and a rule you added by hand, which the ledger does not name, stays.
-The ledger is a file in the checkout that a branch can write, so it is no defence against one: the worst a
-committed `allow` in it achieves is taking a permission away, one you typed included, at the next
-`attach` or `detach`, which both accept. **A re-attach also removes a `.codex/rules/` copy** the ledger
-names that the overlay no longer holds, so a rule file dropped from a plate, or a tag taken off the
-project, is gone from Codex's view with the next run. **`.gitignore` is never written**: it is tracked, so
+The ledger sits in the git common directory beside the binding id, where a branch cannot write it, so
+nothing a branch commits names what a re-attach or `detach` takes back. **An upgrade from a release that
+kept the ledger in `.stayfixed/local/attach.json`** neither reads nor removes that file. Delete it:
+it holds your allow rules, and `git status` shows it once `detach` takes the exclude block. Run
+`attach` again to rebuild the ledger. `detach` does not remove what an attach merged before the
+move, so take those allow rules, hook entries and directories out by hand. **A re-attach removes no `.codex/rules/` copy**: a
+file dropped from a plate, or a tag taken off the project, may since have been committed or edited
+by the team, so the run leaves it and says `Codex rule copy no longer in the overlay: <path>`
+(`rules_left` in `--json`). The ledger records the sha256 of the bytes `attach` wrote to each copy,
+and goes on recording a dropped one only while its file is untracked and holds those bytes, so
+`detach` can still take a file Codex reads as a standing instruction; any other is forgotten, and
+the file is yours. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
 release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
 `init`'s.
@@ -1605,7 +1617,7 @@ release's `attach` wrote there stays until you remove it; `stayfixed init`'s own
 **`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
 writes: [`owner-files`](#hooks) places them in each new linked worktree.
 
-**What it places, it hides from git, unless git hides it already.** The ledger, each
+**What it places, it hides from git, unless git hides it already.** Each
 `.codex/rules/` file and `.claude/settings.local.json`,
 which holds the plugin's entry and so the binding id, are this machine's own, so each one is listed in
 the exclude-file block, one anchored line per path, unless your own excludes already hide it: the
@@ -1618,8 +1630,8 @@ refused before the first write, since no exclude line hides a tracked file. **On
 written, git is asked whether
 each of those paths is ignored** (`git check-ignore --no-index`, every ignore file read), and a path
 it would still show — one a `.gitignore` re-includes with a `!` line, which outranks the exclude
-file — refuses the run before that path, or anything after the block, is written. The binding id is
-placed in the git common directory, which git never tracks, so it is neither listed nor asked about.
+file — refuses the run before that path, or anything after the block, is written. The binding id and
+the ledger are placed in the git common directory, which git never tracks, so neither is listed nor asked about.
 Every one of those paths is the main checkout's, so the two questions are asked of the main
 checkout's own index and `.gitignore` whichever worktree `attach` runs from.
 A `.claude` linked in from elsewhere is refused before the first write, since what lands there names
@@ -1662,8 +1674,8 @@ answer, in the order the run meets them:
   read or is not UTF-8; or a file under the overlay's `skills/` or `agents/` cannot be read, is
   not a regular file, is not UTF-8 or is longer than 64 MiB, or a directory there cannot be
   listed.
-- An existing `.stayfixed/local/attach.json` cannot be read, is not UTF-8, is not valid JSON or is
-  not a JSON object.
+- An existing ledger (`stayfixed/attach.json` in the git common directory) cannot be read. One that
+  is not valid JSON or not a JSON object records nothing: `attach` carries on and writes a new one.
 - A Codex rule file in the overlay cannot be read or is not UTF-8, or the overlay's `common/codex/`
   or `projects/<name>/codex/` directory holding it cannot be listed.
 - `git worktree list`, which names the main checkout, fails.
@@ -1673,8 +1685,7 @@ For `stayfixed.toml`, the overlay's record of this project, its `permissions.jso
 one that is not a regular file once a link to it is followed, such as a link to `/dev/zero` or to
 a FIFO, which is never waited on, and one longer than 64 MiB, which is as far as each of these is
 read. The machine configuration and the overlay's Codex rule files are read whole, and one that is
-not a regular file is passed over as absent. A ledger that is itself a link is refused (`2`) before
-it is read, as a path that passes through a symlink.
+not a regular file is passed over as absent.
 
 Every failure in that list happens before anything is written. One way to exit `1` comes later,
 and leaves behind what was written before it: a store that still does not resolve once the
@@ -1699,15 +1710,12 @@ It exits `2` on a refusal, in the order the run meets them:
 - A `memory.groups` entry that leaves this project's share of the overlay.
 - The overlay's record of this project, where it is there and cannot be read, is not UTF-8 or is
   not valid TOML (a merge's conflict markers, when two machines first attached the project), or
-  its `tags` is not a list of strings: the record could not say which tags it lists, and a run
+  its `tags` is not a list: the record could not say which tags it lists, and a run
   that read that as none would take back what they delivered. The refusal names the file, and
   `--check` refuses it too. A session reads it as no tags and says so. A record that is absent,
   as before a first attach, is no refusal.
-- A `.stayfixed` that is a symlink, or an existing ledger naming files, settings keys or
-  directories `attach` could not have written.
 - A `git check-ignore` that cannot answer.
-- A path it places — the ledger, a `.codex/rules/` copy, or
-  `.claude/settings.local.json` — that the repository tracks, in any ASCII case, as git itself
+- A path it places — a `.codex/rules/` copy, or `.claude/settings.local.json` — that the repository tracks, in any ASCII case, as git itself
   matches it, or as the same file as one it tracks in that directory (where the filesystem folds
   names, a tracked `.CLAUDE/Settings.Local.json`, or on macOS `.claude/ſettings.local.json`, is
   the file `attach` would write), since no exclude line hides a tracked file and what `attach`
@@ -1741,28 +1749,27 @@ Removes exactly what `attach` added, and leaves the binding alone: the binding i
 record of it and the overlay's `projects/<name>/project.toml` stay, so a later `attach` binds the
 same checkout again.
 
-It reads `.stayfixed/local/attach.json` and acts on that and on nothing else *that it is willing
-to believe*. A repository with no ledger fails (`1`) naming the missing file rather than guessing
+It reads the ledger, `stayfixed/attach.json` in the git common directory, and acts on that and on
+nothing else. A repository with no ledger fails (`1`) naming the missing file rather than guessing
 which allow rules were stayfixed's from their content — that guess is the reason the ledger
-exists, and getting it wrong removes a rule you wrote by hand. And the ledger is not an
-authority: `.gitignore` does not untrack a file a clone committed, so this path can arrive in a
-fresh checkout with contents nobody on your machine wrote. Every field is held to what `attach`
-could have put there — `rules` to a single file under `.codex/rules/`, `settings_keys` to
-`autoMemoryDirectory` — and a ledger naming anything else is refused (`2`) with nothing removed,
-rather than obeyed. A ledger claiming `settings_keys = ["permissions"]` would otherwise have
-deleted your whole `permissions` block, deny rules included.
+exists, and getting it wrong removes a rule you wrote by hand. A branch cannot write the git
+common directory, and a ledger left in the working tree by an earlier release is not read. A
+ledger that is not valid JSON records nothing: `detach` fails (`1`), says so and removes nothing.
+It removes a `.codex/rules/` copy only from a single file under that directory, a settings key only
+if it is `autoMemoryDirectory`, and a directory only from the closed list `attach` can create;
+anything else a ledger names (a hand edit, say) is skipped. A ledger claiming
+`settings_keys = ["permissions"]` would otherwise have deleted your whole `permissions` block, deny
+rules included.
 
-**Run it from any checkout of the repository.** `attach` writes its ledger, settings file and
-`.codex/rules/` copies into the main checkout whichever worktree it ran from, so `detach` acts on
-the main checkout too. A ledger an earlier release wrote in a linked worktree is not read.
+**Run it from any checkout of the repository.** `attach` writes its settings file and
+`.codex/rules/` copies into the main checkout whichever worktree it ran from, and its ledger into
+the one git common directory, so `detach` acts on the main checkout too.
 
 **Writes**: it takes the recorded allow rules and the `autoMemoryDirectory` key back out of the
-main checkout's `.claude/settings.local.json`, drops the hook entries an earlier release's `attach`
-merged there —
-the ones its ledger records, under the event it records, and never one by its `# stayfixed:…` marker
-alone (a group that mixes one of those with your own entry is split, never replaced) — and leaves
-the file unwritten when none of those is in it, removes the `.codex/rules/` files it wrote,
-withdraws the overlay's rendered plugin — `claude plugin uninstall overlay-<id>@stayfixed-delivery-<id> --scope
+main checkout's `.claude/settings.local.json`, and leaves the file unwritten when neither is in it,
+removes each `.codex/rules/` copy whose bytes are
+still the ones the ledger's sha256 records (any other copy is left and named, `Codex rule copy left:
+<path>`, `rules_left` in `--json`), withdraws the overlay's rendered plugin — `claude plugin uninstall overlay-<id>@stayfixed-delivery-<id> --scope
 local` where the main checkout's `.claude/settings.local.json` names that plugin under
 `enabledPlugins`, and `claude plugin marketplace remove stayfixed-delivery-<id>` where it names that
 marketplace under `extraKnownMarketplaces`, each run from the main checkout, then the render
@@ -1771,8 +1778,8 @@ there unlinked, then every link in the composed store `$HOME/.local/share/stayfi
 and the directory where nothing else is left (a file there that is not a link is a note the harness
 wrote: it stays, and so does the directory, which the line says and `--json` reports as
 `store_kept: true`) — removes the `stayfixed:attach` block in the repository's exclude file, and deletes
-the ledger, `.stayfixed/local/attach.json`. The render directory and the composed store are derived
-from the binding id and never read from the ledger, so a ledger a clone committed naming another directory removes nothing
+the ledger, `stayfixed/attach.json` in the git common directory. The render directory and the composed store are derived
+from the binding id and never read from the ledger, so a ledger naming another directory removes nothing
 outside it. The plugin goes before the exclude block, so Claude Code takes the plugin's entries,
 which name the id, out of `.claude/settings.local.json` while that file is still hidden. Each call
 is decided by what that file names, never by the ledger or the render directory, and the file is
@@ -1795,8 +1802,8 @@ nothing follows the block. The exclude file is read and written as bytes, so byt
 not UTF-8 are kept as they are. An exclude file that is a symlink is left alone, because `attach`
 never writes through one.
 
-Last, each directory the ledger records `attach` as having created — of `.stayfixed/local/`,
-`.stayfixed/`, `.codex/rules/`, `.codex/` and `.claude/`, in that order — is removed when it is
+Last, each directory the ledger records `attach` as having created — of `.codex/rules/`,
+`.codex/` and `.claude/`, in that order — is removed when it is
 empty, and left standing otherwise. A link tree under `paths.memory` or a harness memory link under
 `~/.claude/projects/` an earlier release made is not touched: remove those by hand.
 
@@ -1820,8 +1827,8 @@ the overlay's, not this checkout's, so a detach leaves it as it is.
 Exits `0` on success. It exits `1` on a failure, in the order the run meets them:
 
 - `git` cannot list this repository's worktrees, which names the main checkout.
-- `.stayfixed/local/attach.json` is not there, cannot be read, is not UTF-8, is not valid JSON or
-  is not a JSON object.
+- The ledger, `stayfixed/attach.json` in the git common directory, is not there, cannot be read,
+  is not UTF-8, is not valid JSON or is not a JSON object.
 - `.claude/settings.local.json` cannot be read or is not UTF-8.
 
 "Cannot be read" means here what it means for `attach`: a link to a device or a FIFO, or a file
@@ -1838,7 +1845,7 @@ It exits `2` on a refusal, in the order the run meets them:
   a directory you cannot write (the refusal names the file).
 - A path the withdrawal writes or removes reached through a directory that became a symlink after
   the attach: `.claude` when the settings file is to be rewritten, `.codex` or `.codex/rules` for
-  a recorded rule copy, `.stayfixed` or `.stayfixed/local` for the ledger. The refusal names the path and
+  a recorded rule copy. The refusal names the path and
   the symlink. A rule copy that is itself a link is not one of these: it is unlinked, and what it
   points at stays.
 - A `.claude/settings.local.json` whose `permissions` is not an object, or whose
@@ -1911,9 +1918,8 @@ lowercase ASCII letters, digits and `-`, led by a letter or a digit, and the par
 other, naming that rule. A third-party plugin runs in every session of its harness, hooks
 included, and none is pinned, so none is installed unasked; the preset's `[plugins] recommended`
 lists the ones `stayfixed init --questions` offers (`superpowers` and `context7` in
-`recommended`). A named plugin is installed per configured harness, from
-`[defaults.stayfixed] agents` (`claude` and `codex` by default) and from the preset's own
-per-harness marketplace table (`[plugins.<harness>]`). For each harness the preset declares a
+`recommended`). A named plugin is installed per harness stayfixed serves (`claude` and `codex`),
+from the preset's own per-harness marketplace table (`[plugins.<harness>]`). For each harness the preset declares a
 marketplace for, `setup` registers it (`claude plugin marketplace add <source>`; idempotent — an already-registered
 source is a no-op reported as such) and then installs each plugin bare (`claude plugin install
 <name>@<marketplace>`; no `--scope` or `-y` — the spike record's own measured output reports
@@ -2102,8 +2108,8 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
    whatever the checkout's memory mode, a group directory that is a link is followed, and a note
    is reviewed wherever the same bytes are read. Without `--yes` nothing is recorded as reviewed, whatever the overlay holds. A project whose notes cannot be recorded (an unreadable
    trust record, which is never overwritten) is reported `failed`, attached all the same. A second
-   run with `--yes` records nothing new; a note you recorded is withdrawn by editing or deleting
-   it. `--yes` without `--restore` is refused (`2`),
+   run with `--yes` records nothing new; an approval it recorded is withdrawn by a hand edit of
+   `trust.json`. `--yes` without `--restore` is refused (`2`),
    naming `--restore`, before anything is written;
 5. with `--sync` only, `[sync] enabled = true` in the machine file, which switches the
    [note sync](#note-sync) on; `--sync` without `--restore` is refused like `--yes`.
@@ -2248,16 +2254,16 @@ position.
 
 **Several subprocesses are run and every one of them only asks.** stayfixed's own
 `hooks/run-hook.sh` with `--version`, and the `git` queries the other rows need — where the overlay keeps its hooks, what this checkout's `origin` is, which the
-binding's row asks, the repository's common directory, where the binding id is kept, which the
-binding's row, the note store's rows and the `preferences` row's read of the overlay's project
-file each ask for themselves, which checkout is the main one (`git worktree list`), whose ledger
-and settings file the binding's row reads, whether this checkout is a registered worktree (its
+binding's row asks, the repository's common directory, where the binding id and the ledger are
+kept, which the binding's row (twice: for the ledger and for the id), the note store's rows and
+the `preferences` row's read of the overlay's project file each ask for themselves, which
+checkout is the main one (`git worktree list`), whose settings file the binding's row reads, whether this checkout is a registered worktree (its
 common and its own git directory), which the `memory` row asks to read the main checkout's settings
 file a linked worktree reads too, whether a path `attach` placed is tracked (`git ls-files`) or ignored (`git check-ignore`) and whether a
 tracked file names the delivery (`git grep`), which the binding's row asks of a bound checkout, and the
 binding's common directory once more, which the binding's row asks to read the overlay's tag layers.
-Fifteen of those are measured on a green attached installation whose machine file switches the
-note sync on, as `setup --overlay` does for an overlay it makes — the wrapper probe and fourteen
+Sixteen of those are measured on a green attached installation whose machine file switches the
+note sync on, as `setup --overlay` does for an overlay it makes — the wrapper probe and fifteen
 `git` questions, the `sync` row's `git version` among them — and not one of them leaves this
 machine. The `git` questions are `gitenv`'s five seconds each, and the wrapper probe is this
 area's own thirty seconds. The `sync` row's `git version`, of the overlay's `git`, is bounded at
@@ -2280,7 +2286,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `cli-path` | whether `stayfixed` resolves on `PATH` | `PATH` |
 | `diagnostics` | how many reasons the hook sink recorded — a count, never a line of the file | `${CLAUDE_PLUGIN_DATA}/stayfixed/diagnostics.jsonl` |
 | `ignored-env` | as information, never a status: `STAYFIXED_CONFIG` set, or `XDG_CONFIG_HOME` set to anything but the `.config` of the home every command reads under (`HOME`, or the password database's where `HOME` is unset), and not honoured by any command; and a `HOME` that is not the home the password database records for this user, since stayfixed follows `HOME` | the environment, the password database |
-| `attached` | the overlay binding, what it delivers, and, where `memory.mode` is `overlay`, the `autoMemoryDirectory` pointer at the composed store, read alike from every checkout (the states are below the table) | the main checkout's `.stayfixed/local/attach.json` and `.claude/settings.local.json`, `~/.local/share/stayfixed/delivery/<id>/`, `~/.local/share/stayfixed/stores/<id>/`, the overlay's executable parts, `git` on the paths `attach` placed |
+| `attached` | the overlay binding, what it delivers, and, where `memory.mode` is `overlay`, the `autoMemoryDirectory` pointer at the composed store, read alike from every checkout (the states are below the table) | the ledger `stayfixed/attach.json` in the git common directory, the main checkout's `.claude/settings.local.json`, `~/.local/share/stayfixed/delivery/<id>/`, `~/.local/share/stayfixed/stores/<id>/`, the overlay's executable parts, `git` on the paths `attach` placed |
 | `bundles` | a bundle that does not fit its slots, and one whose part reaches the cap | the note store |
 | `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning only for files in the note store that are not notes, counted (at most 500,000 entries) | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
 | `pre-commit` | whether the overlay's commit-time secret scan is installed on this machine | the overlay |
@@ -2291,7 +2297,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 `overlay` is simply not attached, and the row is green. Once this machine's binding confirms the
 ledger, the row reads what `attach` left: the render under `~/.local/share/stayfixed/delivery/<id>/`,
 named only by the binding id's first eight characters, and the paths `attach` placed in the main
-checkout, whose ledger every checkout reads. Every state is read, and the first red one answers,
+checkout, beside the ledger every checkout reads. Every state is read, and the first red one answers,
 else the first warning; the row's detail says the delivery's state beside the pointer's, its status
 is the worse of the two, and the worse one's remedy comes first. The overlay's digest is computed with the launcher the render holds, so a report
 run through another launcher than `attach` was reads no drift for that alone, and the digest refuses
@@ -2312,7 +2318,7 @@ nothing.
 | drift | the overlay's hooks, skills or agents changed since the last render | `warn` | `attach`, which renders the overlay as it is now |
 | overlay unreadable | the overlay's executable parts could not be read | `warn` | `attach --check`, which says why |
 | `origin` moved | this checkout's `origin` is not the one the binding was recorded with | `warn` | `attach`, which records the new one |
-| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting name (the later tag wins), a listed tag is not a usable name or has no `groups/<tag>/` directory, or a directory of the project's `memory/` starts with `tag-` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | rename one of them in the overlay, or reorder `tags` in the project's `project.toml` |
+| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting a tag may set (the later tag wins), a listed tag is not a usable name, is not a string, or has no `groups/<tag>/` directory (each said once, however often it is listed), or a directory of the project's `memory/` starts with `tag-` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | in the overlay, fix each tag, record or directory a note names; for a name two tags hold, rename one of them or reorder `tags` in the project's `project.toml` |
 
 **How `attached` reads the memory pointer.** Where `memory.mode` is `overlay`, the row reads
 `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json`, which Claude Code reads
@@ -2474,15 +2480,12 @@ lists to the real parser.
 
 ## Terms
 
-**Scaffold** means three things on this page, and the sentence says which:
+**Scaffold** means two things on this page, and the sentence says which:
 
-- everything `stayfixed init` writes into a repository: the write-once file (`stayfixed.toml`) and
-  the rest;
-- the rest alone, the second of the two passes `init` plans: the report headed `scaffold:` and the
-  `scaffold` key of its `--json`, beside the write-once pass's `write-once:` report and `once`
-  key;
-- the scaffold engine, which plans and writes both passes and reports every action in the same
-  verbs, `stayfixed overlay upgrade`'s included.
+- everything `stayfixed init` writes into a repository, `stayfixed.toml` included, and the report
+  of it, the `scaffold` key of its `--json`;
+- the scaffold engine, which plans and writes it and reports every action in the same verbs,
+  `stayfixed overlay upgrade`'s included.
 
 ---
 
@@ -2495,26 +2498,19 @@ why so few of them are trusted with anything.
 [stayfixed]
 version = "0.6.1"        # required; there is no default
 preset = "recommended"
-agents = ["claude", "codex"]
 
 [project]
 name = "widget"          # one lowercase path segment
 base_branch = "main"
-release_branch = "main"
 
 [paths]                  # each inside the root, out of .git and .stayfixed, 1024 characters at most
 agents_md = "AGENTS.md"
-architecture = "docs/architecture"
-runbooks = "docs/runbooks"
-adr = "docs/adr"
 specs = "docs/specs"
 plans = "docs/plans"
 bugs = "docs/bugs"
 bug_index = "docs/bug-reports.md"
 roadmap = "docs/roadmap.md"
-roadmap_history = "docs/roadmap-history.md"
 memory = "docs/memory"
-stayfixed = "docs/stayfixed"
 
 [memory]
 mode = "harness"         # harness | overlay | in-repo | local-only — default: harness
@@ -2570,17 +2566,16 @@ Every value above is what a key you leave out takes, from the `recommended` pres
 exceptions. `[stayfixed] version` and `[project] name` have no default at all and are yours to
 write: a file without `version` does not load at all (`[stayfixed] is missing required key(s):
 version`). Everything else from `[project] base_branch` down is the preset's default exactly as written. `[project]
-base_branch` and `release_branch` are branch names git accepts, from letters, digits, `.`, `_`,
-`-` and `/` (the grammar `--base-branch` follows); anything else does not
-load, and the refusal names the key and never the value.
+base_branch` is a branch name git accepts, from letters, digits, `.`, `_`, `-` and `/` (the
+grammar `--base-branch` follows); anything else does not load, and the refusal names the key and
+never the value.
 
 **Which command reads which path.** `agents_md` and `roadmap` are the two documents `docs check`
 budgets, and the roadmap is also what `docs trail` writes into; `specs` and `plans` are the two
 trees `docs trail` lists, and `plans` is where `plan check` looks for the plans a diff touched.
 `bugs` is the ledger's entry directory and `bug_index` its generated index — `bugs new`,
-`bugs index`, `bugs check` and `bugs renumber` all read both. `memory` is the note store. The
-remaining five — `architecture`, `runbooks`, `adr`, `roadmap_history` and `stayfixed` — are read
-for their location alone, and so is every one of the others: `bugs check` treats the first component of
+`bugs index`, `bugs check` and `bugs renumber` all read both. `memory` is the note store. Every
+one of them is also read for its location: `bugs check` treats the first component of
 every `[paths]` value that has more than one — `docs`, for the defaults — as a directory
 documents live in, and therefore as a place a citation of an entry file may be written and must
 resolve. Pointing a path key somewhere unusual widens that sweep; it cannot take a document
