@@ -586,7 +586,7 @@ NOT_REACHED = "not verified"
 
 def _reach_table() -> str:
     """The README's table as the harness registry states it: a row per surface, a column per
-    harness under the name `[stayfixed] agents` lists it by, and each cell its tier."""
+    harness under its registry name, and each cell its tier."""
     from stayfixed.harnesses import HARNESSES, Surface
 
     head = "| Surface | " + " | ".join(f"`{harness.name}`" for harness in HARNESSES) + " |"

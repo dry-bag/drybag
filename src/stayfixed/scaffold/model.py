@@ -10,7 +10,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 from stayfixed.scaffold.manifest import Kind, Record
 from stayfixed.scaffold.regions import Style
@@ -20,12 +19,10 @@ class Verb(StrEnum):
     CREATE = "create"
     UPDATE = "update"
     SKIP_MODIFIED = "skip_modified"
-    REMOVE = "remove"
     REGION_UPDATE = "region_update"
-    ENTRIES_UPDATE = "entries_update"
 
 
-WRITING = frozenset({Verb.CREATE, Verb.UPDATE, Verb.REGION_UPDATE, Verb.ENTRIES_UPDATE})
+WRITING = frozenset({Verb.CREATE, Verb.UPDATE, Verb.REGION_UPDATE})
 
 
 @dataclass(frozen=True)
@@ -33,11 +30,12 @@ class Template:
     id: str
     kind: Kind
     target: str
-    source: str
     render: Callable[[], str]
+    # The shipped file the bytes come from, which a whole-file template's record keeps as
+    # `Record.template`; the other kinds keep no record, and name none.
+    source: str = ""
     region: str | None = None
     style: Style = Style.MARKDOWN
-    entries: dict[str, list[dict[str, Any]]] | None = None
 
 
 @dataclass(frozen=True)
@@ -77,11 +75,7 @@ class Plan:
 
     @property
     def writes(self) -> list[str]:
-        return [
-            action.target
-            for action in self.actions
-            if action.verb in WRITING or action.verb is Verb.REMOVE
-        ]
+        return [action.target for action in self.actions if action.verb in WRITING]
 
 
 @dataclass(frozen=True)
@@ -89,5 +83,4 @@ class Applied:
     """What `apply` actually did. Tuples for the same reason `Plan` uses them: it is a report."""
 
     written: tuple[str, ...] = ()
-    removed: tuple[str, ...] = ()
     skipped: tuple[str, ...] = ()

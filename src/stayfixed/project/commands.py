@@ -1,22 +1,21 @@
-"""The project area's command: `init` writes a repository's stayfixed scaffold once.
+"""The project area's command: `init` writes what is missing of a repository's scaffold.
 
-**The summary is both rendered reports, the way `overlay upgrade`'s is.** It was four lines of
+**The summary is the rendered report, the way `overlay upgrade`'s is.** It was four lines of
 counts, with every artifact's verb and the whole REFUSED section reachable only under `--json`
-— so the skill that tells a relayer to pass on "both reports" and "every refused line" was
+— so the skill that tells a relayer to pass on the report and "every refused line" was
 describing output the command did not print, and the exit-1 path is the one a person meets
 without a flag. `scaffold.render_report` is the renderer, and the same text goes into `--json`
-under `once` and `scaffold`, so the two cannot disagree.
+under `scaffold`, so the two cannot disagree.
 
-That is safe on the repository-bytes rule because `render_report` bounds every target it
-prints: one outside `PATH_VALUE`, such as a target a committed manifest recorded, prints as its
-artifact id. The reason beside it is the engine's own fixed vocabulary. The project's name
-reaches none of them.
+That is safe on the repository-bytes rule because every target it prints is a `Template`'s, held
+to `PATH_VALUE` by the loader. The reason beside it is the engine's own fixed vocabulary. The
+project's name reaches none of them.
 
 **Exit 1 on a refusal, not 2.** A refused artifact is a finding the report names, and `apply`
-was never reached: nothing was written, there is no manifest, and re-running after the fix is
-the whole remedy. That is `overlay upgrade`'s rule, and this command follows it so a caller
-scripting over both reads one number. Exit 2 stays what it is everywhere — a refusal raised
-above the plans, such as a missing `--yes` or a repository that is already initialised.
+was never reached: nothing was written, and re-running after the fix is the whole remedy. That
+is `overlay upgrade`'s rule, and this command follows it so a caller scripting over both reads
+one number. Exit 2 stays what it is everywhere — a refusal raised above the plan, such as a
+missing `--yes`.
 """
 
 from __future__ import annotations
@@ -49,15 +48,15 @@ YES_HELP = (
     "take the defaults `init --questions` shows, with any answer flag below replacing one, and "
     "write the scaffold; without it nothing is written"
 )
-# Fixed text: the verb is one of two this module chooses, and nothing the file says prints.
-STAMPED = (
-    "note: stayfixed.toml carried no [stayfixed] version, the one key stayfixed owns that the "
-    "loader requires; this run {verb} it and leaves every other line as it was"
-)
 # Heads the list of what the run took for each question, which the skip path took unasked. Said
 # of the run, as every other line of the report is, and never in the first person.
 PICKED = "picked:"
-PICKED_WITHHELD = "<unprintable; see stayfixed.toml>"
+# Over a `stayfixed.toml` somebody wrote, in place of that list: a run reads the file for where the
+# scaffold lands and for nothing else, so its opening line is no verdict on the file.
+ADOPTED_LEFT = (
+    "stayfixed.toml is left as it is: this run read it only for where the scaffold lands, and the "
+    "next command that loads it judges the file"
+)
 QUESTIONS_HELP = (
     "print the defaults init would take, where each came from and the flag that changes it; "
     "under --json, as a JSON Schema. Writes nothing"
@@ -72,17 +71,12 @@ QUESTIONS_ALONE = (
 
 
 def _given(args: argparse.Namespace) -> Given:
-    """The answer flags as `init` takes them: `None` for a flag not given, and a list flag's
-    values in the order first given, each once."""
+    """The answer flags as `init` takes them: `None` for a flag not given."""
     from stayfixed.project.init import Given
-
-    def listed(values: list[str] | None) -> tuple[str, ...] | None:
-        return None if values is None else tuple(dict.fromkeys(values))
 
     return Given(
         name=args.name,
         base_branch=args.base_branch,
-        agents=listed(args.agent),
         memory_mode=args.memory_mode,
         attribution_check=args.attribution_check,
     )
@@ -98,21 +92,9 @@ def run_questions(args: argparse.Namespace) -> Result:
     return Result(card(schema), {"questions": schema})
 
 
-def _picked_line(key: str, value: object) -> str:
-    """One line of what `init --yes` picked. A value an adopted `stayfixed.toml` wrote prints
-    through `printable`, withheld as `PICKED_WITHHELD` outside the grammar: the file holds it as
-    it is."""
-    from stayfixed.printed import printable
-    from stayfixed.project.questions import shown
-
-    if isinstance(value, str) and value:
-        value = printable(value, PICKED_WITHHELD)
-    return f"  {key}: {shown(value)}"
-
-
 def run_init(args: argparse.Namespace) -> Result:
     from stayfixed.project.init import NO_ANSWERS, init
-    from stayfixed.project.questions import picked
+    from stayfixed.project.questions import picked, shown
 
     if args.questions:
         if args.dry_run or _given(args) != NO_ANSWERS:
@@ -128,34 +110,22 @@ def run_init(args: argparse.Namespace) -> Result:
         given=_given(args),
         owner=command_owner(machine),
     )
-    once, footprint = render_report(report.once), render_report(report.footprint)
+    scaffold = render_report(report.plan)
     refused = report.refused
-    lines = [
-        HEADINGS[(refused, report.dry_run)],
-        "",
-        "write-once:",
-        once,
-        "",
-        "scaffold:",
-        footprint,
-    ]
-    chosen = picked(report.config) if report.config is not None else {}
-    if chosen:
-        lines += [PICKED, *(_picked_line(key, value) for key, value in chosen.items())]
+    lines = [HEADINGS[(refused, report.dry_run)], "", scaffold]
+    if report.adopted:
+        lines.append(f"note: {ADOPTED_LEFT}")
+    else:
+        chosen = picked(report.config)
+        lines += [PICKED, *(f"  {key}: {shown(value)}" for key, value in chosen.items())]
     if report.head_note:
         lines.append(f"note: {report.head_note}")
-    if report.stamped:
-        # Nothing is written by a dry run or a refused one, the stamp included.
-        verb = "would write" if report.dry_run or report.refused else "wrote"
-        lines.append(STAMPED.format(verb=verb))
     data = {
         "dry_run": report.dry_run,
         "adopted": report.adopted,
-        "once": once,
-        "scaffold": footprint,
-        "writes": [*report.once.writes, *report.footprint.writes],
+        "scaffold": scaffold,
+        "writes": report.plan.writes,
         "head_note": report.head_note,
-        "stamped": report.stamped,
     }
     return Result("\n".join(lines), data, exit_code=1 if refused else 0)
 
@@ -175,7 +145,6 @@ def _answers(parser: argparse.ArgumentParser) -> None:
         NAME_RULE,
         PROJECT_NAME,
     )
-    from stayfixed.harnesses import HARNESSES
 
     answers = parser.add_argument_group(
         "answers", "each replaces one default; `stayfixed init --questions` lists them"
@@ -186,13 +155,7 @@ def _answers(parser: argparse.ArgumentParser) -> None:
     answers.add_argument(
         "--base-branch",
         type=grammar(BRANCH_NAME, branch_rule),
-        help="[project] base_branch and release_branch",
-    )
-    answers.add_argument(
-        "--agent",
-        action="append",
-        choices=[h.name for h in HARNESSES],
-        help="[stayfixed] agents; once per harness",
+        help="[project] base_branch",
     )
     answers.add_argument("--memory-mode", choices=MEMORY_MODES, help="[memory] mode")
     answers.add_argument(

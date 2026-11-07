@@ -865,7 +865,7 @@ reddens = [
   "tests/test_harnesses.py::test_every_harness_renders_through_the_canonical_render",
 ]
 
-# The registry's order is the order `init` writes `[stayfixed] agents` in, so it is not the root's
+# The registry's order is a choice about presentation, so it is not the root's
 # precedence: the canonical harness's variable is asked first, and a harness registered ahead of
 # Claude Code cannot move a Claude Code session's root to a variable of its own.
 [[mutation]]
@@ -1008,7 +1008,7 @@ reddens = [
 # `finally` having already persisted the manifest. The anchor's provenance: both rules are read off
 # the clone's own spelling of its own `stayfixed.toml`, and neither consults anything the clone can
 # move, so a repository cannot choose which of the two answers it gets.
-# Measured: with the charset form restored, `docs//roadmap-history.md`, `docs/architecture/`
+# Measured: with the charset form restored, `docs//roadmap-history.md`, `docs/x/`
 # and `./docs` all match the grammar again. The entries after it take one rule out each.
 [[mutation]]
 name = "the [paths] grammar admits a spelling the write refuses again"
@@ -1275,37 +1275,6 @@ reddens = [
   "tests/hooks/test_dispatch.py::test_a_once_per_context_handler_that_says_nothing_keeps_its_one_delivery",
 ]
 
-# The one writer into a `stayfixed.toml` somebody else owns: an edit is kept only when reading it
-# back gives exactly the document before it with that one key set. The multi-line case is the one
-# where the returned text still parses, which is the silent failure the read-back exists for.
-[[mutation]]
-name = "the tool-owned key editor returns an edit it never read back"
-file = "src/stayfixed/config/owned.py"
-before = "            proved = tomllib.loads(candidate) == expected"
-after = "            proved = True"
-reddens = [
-  "tests/config/test_owned.py::test_a_table_header_inside_a_multi_line_string_is_not_where_the_key_is",
-]
-
-[[mutation]]
-name = "the tool-owned key editor lets a parse failure quote the document"
-file = "src/stayfixed/config/owned.py"
-before = "    except UNPARSEABLE as exc:"
-after = "    except KeyError as exc:"
-reddens = [
-  "tests/config/test_owned.py::test_a_document_that_does_not_parse_is_refused_by_position_alone",
-]
-
-# A harness's files are rendered only for a harness the project lists.
-[[mutation]]
-name = "a harness's rendering is applied though the project does not list it"
-file = "src/stayfixed/harnesses.py"
-before = "    chosen = tuple(harness for harness in HARNESSES if harness.name in listed)"
-after = "    chosen = HARNESSES"
-reddens = [
-  "tests/test_harnesses.py::test_select_answers_the_listed_harnesses_and_counts_the_rest",
-]
-
 # Detection asks every value that detects before it falls back to Claude Code's schema: Codex
 # mirrors its own root variable under Claude Code's name, so only a positive answer tells it apart.
 [[mutation]]
@@ -1455,17 +1424,17 @@ reddens = [
   "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
 ]
 
-# The loader holds `[project] base_branch` and `release_branch` to the branch grammar: the value
-# becomes `refs/remotes/origin/<it>`, reaches `test attribute`'s and `plan check`'s messages, and
+# The loader holds `[project] base_branch` to the branch grammar: the value becomes
+# `refs/remotes/origin/<it>`, reaches `test attribute`'s and `plan check`'s messages, and
 # `stayfixed gate` blamed `--base` for it.
 [[mutation]]
 name = "a project branch outside the branch grammar loads"
 file = "src/stayfixed/config/loader.py"
-before = "        if not BRANCH_NAME.match(getattr(project, key)):"
-after = "        if False:"
+before = "    if not BRANCH_NAME.match(project.base_branch):"
+after = "    if False:"
 reddens = [
-  "tests/config/test_loader.py::test_a_project_branch_outside_the_branch_grammar_is_refused_by_name[spaced-base_branch]",
-  "tests/config/test_loader.py::test_a_project_branch_outside_the_branch_grammar_is_refused_by_name[range-release_branch]",
+  "tests/config/test_loader.py::test_a_project_branch_outside_the_branch_grammar_is_refused_by_name[spaced]",
+  "tests/config/test_loader.py::test_a_project_branch_outside_the_branch_grammar_is_refused_by_name[range]",
 ]
 
 # `tomllib` reads nested arrays by recursion, so a document nested a few thousand levels deep
@@ -1549,22 +1518,6 @@ reddens = [
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[personal]",
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[overlay-root]",
   "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[machine]",
-]
-
-[[mutation]]
-name = "the owned-key editor meets a document nested past the parser as an internal error"
-file = "src/stayfixed/config/owned.py"
-before = """
-        expected: dict[str, Any] = tomllib.loads(text)
-    except UNPARSEABLE as exc:
-"""
-after = """
-        expected: dict[str, Any] = tomllib.loads(text)
-    except tomllib.TOMLDecodeError as exc:
-"""
-reddens = [
-  "tests/config/test_deep_toml.py::test_a_reader_answers_a_document_nested_past_the_parser_as_one_that_does_not_parse[owned-rewrite]",
-  "tests/config/test_deep_toml.py::test_a_reader_answers_a_number_past_the_parser_as_a_document_that_does_not_parse[owned-rewrite]",
 ]
 
 # Two readers of `stayfixed.toml` followed two rules: `read_document` refuses a symlink, and
@@ -1978,7 +1931,7 @@ file = "src/stayfixed/jsonobject.py"
 before = "    except ValueError:"
 after = "    except ZeroDivisionError:"
 reddens = [
-  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_merge",
+  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_withdrawal",
   "tests/attach/test_write.py::test_a_settings_file_holding_a_number_past_the_parsers_reach_is_refused",
   "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[long-number]",
   "tests/attach/test_write.py::test_a_ledger_holding_a_number_past_the_parsers_reach_is_a_failure_and_never_an_internal_error",
@@ -2494,7 +2447,7 @@ after = """
     except ZeroDivisionError:
 """
 reddens = [
-  "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested[apply-entries]",
+  "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested",
 ]
 
 # The depth bound sits where every interpreter can write back what it read: above what a harness
@@ -2761,6 +2714,84 @@ before = '    return answer_bytes(text)'
 after = '    return text.encode("utf-8")'
 reddens = [
   "tests/ledger/test_check.py::test_a_base_copy_that_will_not_load_fails_the_check_and_never_reads_as_no_ledger[not-utf8]",
+]
+
+[[mutation]]
+name = "a project root reached through a symlink reads the base at a path it never had"
+file = "src/stayfixed/committed.py"
+before = '    if spelled != prefix.rstrip("\n"):'
+after = "    if False:"
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[moved-behind-a-link]",
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[linked-back-to-the-top]",
+]
+
+[[mutation]]
+name = "the ancestor that resolves to the top is looked for from the nearest end"
+file = "src/stayfixed/committed.py"
+before = "    chain = (*reversed(lexical.parents), lexical)"
+after = "    chain = (lexical, *lexical.parents)"
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[linked-back-to-the-top]",
+]
+
+[[mutation]]
+name = "a root no ancestor of which resolves to the top is read as if one did"
+file = "src/stayfixed/committed.py"
+before = """    if ancestor is None:
+        raise Refusal(ROOT_THROUGH_SYMLINK)"""
+after = """    if False:
+        raise Refusal(ROOT_THROUGH_SYMLINK)"""
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[reached-from-outside]",
+]
+
+[[mutation]]
+name = "a root outside any repository is judged as if git had answered"
+file = "src/stayfixed/committed.py"
+before = """    if code != 0:
+        # Read off the disk"""
+after = """    if False:
+        # Read off the disk"""
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_git_answers_nothing_for_fails_against_its_base[no-repository]",
+  "tests/ledger/test_commands.py::test_a_root_git_answers_nothing_for_fails_against_its_base[git-directory-gone]",
+]
+
+[[mutation]]
+name = "a repository git will not answer for is called no repository"
+file = "src/stayfixed/committed.py"
+before = "        raise Failure(ROOT_UNANSWERED if in_work_tree(lexical) else NOT_A_REPOSITORY)"
+after = "        raise Failure(NOT_A_REPOSITORY)"
+reddens = [
+  "tests/ledger/test_commands.py::test_a_root_git_answers_nothing_for_fails_against_its_base[git-directory-gone]",
+]
+
+[[mutation]]
+name = "a project in a subdirectory reads the base's copy at the repository's top"
+file = "src/stayfixed/committed.py"
+before = '    path = f"{prefix}{name}"'
+after = "    path = name"
+reddens = [
+  "tests/ledger/test_commands.py::test_a_ledger_the_base_placed_below_a_directory_named_like_pathspec_magic_is_read_there",
+]
+
+[[mutation]]
+name = "a project under a directory named like pathspec magic reads no copy on the base"
+file = "src/stayfixed/committed.py"
+before = '        "--literal-pathspecs",'
+after = '        "--no-pager",'
+reddens = [
+  "tests/ledger/test_commands.py::test_a_ledger_the_base_placed_below_a_directory_named_like_pathspec_magic_is_read_there",
+]
+
+[[mutation]]
+name = "the base's copy is listed relative to the project root rather than the repository's top"
+file = "src/stayfixed/committed.py"
+before = '        "--full-tree",'
+after = '        "--name-only",'
+reddens = [
+  "tests/ledger/test_commands.py::test_a_ledger_the_base_placed_below_a_directory_named_like_pathspec_magic_is_read_there",
 ]
 
 [[mutation]]
@@ -3475,6 +3506,18 @@ file = "src/stayfixed/config/loader.py"
 before = """        raise ConfigError(f"[{name}] must be a table", key=name)"""
 after = """        raise ConfigError(f"[{name}] must be a table")"""
 reddens = ["tests/config/test_loader_note.py::test_a_section_that_is_not_a_table_is_the_presets"]
+
+[[mutation]]
+name = "a section that is not a table is never found to put back"
+file = "src/stayfixed/config/loader.py"
+before = """    if dotted in table:
+        return table, dotted"""
+after = """    if False:
+        return table, dotted"""
+reddens = [
+  "tests/config/test_loader_note.py::test_a_section_that_is_not_a_table_is_the_presets",
+  "tests/config/test_loader_note.py::test_a_repository_guards_value_that_is_not_a_table_is_put_back",
+]
 
 # A repository's `[personal]` that is not even a table is still the repository trying to set a
 # machine-only key, and says so.
@@ -4310,7 +4353,6 @@ before = "            candidate = contained(root, folded, resolved_root=resolved
 after = "            candidate = root / entry"
 reddens = [
   "tests/ledger/test_scan.py::test_a_code_root_outside_the_project_is_skipped_not_scanned",
-  "tests/test_roots.py::test_each_code_root_no_walk_takes_is_named_with_its_reason[outside]",
 ]
 
 # Where git cannot list the files, `ledger.scan` walks each code root and adds up what it finds, so

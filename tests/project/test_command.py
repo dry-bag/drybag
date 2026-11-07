@@ -16,14 +16,13 @@ import pytest
 from stayfixed.cli import build_parser, discover_registrars, run
 from stayfixed.config.loader import load
 from stayfixed.config.schema import NAME_RULE, Config
-from stayfixed.project.commands import STAMPED
 from stayfixed.project.init import (
     HEAD_CURRENT,
     HEAD_DEFAULTED,
     HEAD_REMOTES_UNKNOWN,
     HEAD_UNRECORDED,
 )
-from stayfixed.scaffold import Manifest
+from stayfixed.scaffold.manifest import Manifest
 from tests.gitfixture import git, needs_git
 from tests.project.repos import DOCUMENT, repository
 from tests.snapshot import assert_snapshot_unchanged, snapshot
@@ -31,11 +30,9 @@ from tests.snapshot import assert_snapshot_unchanged, snapshot
 JSON_KEYS = {
     "dry_run",
     "adopted",
-    "once",
     "scaffold",
     "writes",
     "head_note",
-    "stamped",
 }
 
 
@@ -62,38 +59,32 @@ def test_without_yes_the_command_refuses_and_names_the_command_that_prints_the_q
 
 
 @needs_git
-def test_a_dry_run_prints_both_reports_and_says_it_wrote_nothing(tmp_path: Path) -> None:
+def test_a_dry_run_prints_the_report_and_says_it_wrote_nothing(tmp_path: Path) -> None:
     root = repository(tmp_path)
     code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
     assert code == 0, printed
     data = json.loads(printed)
     assert set(data) >= JSON_KEYS and data["dry_run"] is True
-    # Renamed with no alias: a script reading the old key finds nothing rather than a stale copy.
-    assert "footprint" not in data
-    # Two reports, not one rendered twice: the write-once pass plans `stayfixed.toml` and the
-    # footprint pass plans the rest, and a summary that showed one of them would hide
-    # whichever half a refusal landed in.
-    assert "stayfixed.toml" in data["once"] and "stayfixed.toml" not in data["scaffold"]
-    assert "docs/roadmap.md" in data["scaffold"]
+    # Gone with no alias: a script reading an old key finds nothing rather than a stale copy.
+    assert "footprint" not in data and "once" not in data
+    assert "stayfixed.toml" in data["scaffold"] and "docs/roadmap.md" in data["scaffold"]
     assert data["adopted"] is False
     assert set(data["writes"]) >= {"stayfixed.toml", "docs/roadmap.md"}
     assert not (root / "stayfixed.toml").exists()
 
 
 @needs_git
-def test_a_real_run_prints_both_reports_in_full(tmp_path: Path) -> None:
+def test_a_real_run_prints_the_report_in_full(tmp_path: Path) -> None:
     # The summary used to be four count lines, so a person without `--json` was told how many files
-    # there were and never which. The skill relays "both reports … each one names every file with
-    # its verdict", which it could not do from counts.
+    # there were and never which. The skill relays the report, which names every file with its
+    # verdict, and it could not do that from counts.
     root = repository(tmp_path)
     code, printed = _run(root, tmp_path, "--yes")
     assert code == 0, printed
     assert printed.startswith("initialised:")
-    assert "write-once:" in printed and "scaffold:" in printed
-    # Per-artifact lines, from both passes, with their verbs — not just the counts.
+    # Per-artifact lines with their verbs — not just the counts.
     assert "create         stayfixed.toml  (new)" in printed
     assert "create         docs/roadmap.md  (new)" in printed
-    assert (root / ".stayfixed" / "manifest.json").is_file()
 
 
 @needs_git
@@ -105,7 +96,7 @@ def test_a_refused_footprint_exits_one_with_the_refused_section_in_that_report(
     code, printed = _run(root, tmp_path, "--yes", "--json")
     assert code == 1, printed
     data = json.loads(printed)
-    assert "REFUSED" in data["scaffold"] and "REFUSED" not in data["once"]
+    assert "REFUSED" in data["scaffold"]
     assert not (root / ".stayfixed").exists()
     # And in plain text, which is the output a person meets on this path: the REFUSED section
     # with the artifact and the engine's reason, and a heading that does not claim otherwise.
@@ -114,21 +105,6 @@ def test_a_refused_footprint_exits_one_with_the_refused_section_in_that_report(
     assert plain.startswith("refused, and nothing was written:")
     assert "REFUSED — nothing will be written" in plain
     assert "docs/roadmap.md  (docs/roadmap.md cannot be read" in plain
-
-
-@needs_git
-def test_a_harness_no_adapter_serves_is_never_named(tmp_path: Path) -> None:
-    # `[stayfixed] agents` is repository-authored, so the report never prints a name no harness
-    # answers to: `picked:` lists the harnesses stayfixed serves among those listed.
-    root = repository(tmp_path)
-    (root / "stayfixed.toml").write_text(
-        '[stayfixed]\nversion = "0.1.0"\nagents = ["claude", "cursor\\u001b[31m"]\n\n'
-        '[project]\nname = "widget"\n',
-        encoding="utf-8",
-    )
-    code, printed = _run(root, tmp_path, "--yes", "--dry-run")
-    assert code == 0, printed
-    assert "cursor" not in printed and "\x1b" not in printed
 
 
 @needs_git
@@ -424,37 +400,6 @@ def test_an_answer_over_a_document_the_user_wrote_is_refused(
     assert code == 2 and printed == ""
     assert "--yes" in capsys.readouterr().err
     assert_snapshot_unchanged(root, before)
-
-
-@needs_git
-def test_a_refused_adoption_says_its_version_would_be_written(tmp_path: Path) -> None:
-    # A refused run writes nothing, the stamp included, so its note must not say "wrote".
-    # A directory at the roadmap's place is refused by the footprint pass. Mutation (oracle):
-    # `mutations/`'s "a refused adoption reports its version stamp as written".
-    root = repository(tmp_path)
-    hand_written = '[project]\nname = "widget"\n'
-    (root / "stayfixed.toml").write_text(hand_written, encoding="utf-8")
-    (root / "docs" / "roadmap.md").mkdir(parents=True)
-    code, printed = _run(root, tmp_path, "--yes")
-    assert code == 1, printed
-    assert STAMPED.format(verb="would write") in printed
-    assert STAMPED.format(verb="wrote") not in printed
-    assert (root / "stayfixed.toml").read_text(encoding="utf-8") == hand_written
-    assert not (root / ".stayfixed" / "manifest.json").exists()
-
-
-@needs_git
-def test_an_adopted_document_without_a_version_is_named_in_a_note(tmp_path: Path) -> None:
-    # The one line `init` writes into a file a person wrote is said, in the text and in
-    # `--json`. Mutation (oracle): `mutations/`'s "an adopted document's added version goes
-    # unmentioned".
-    root = repository(tmp_path)
-    (root / "stayfixed.toml").write_text('[project]\nname = "widget"\n', encoding="utf-8")
-    code, printed = _run(root, tmp_path, "--yes", "--dry-run")
-    assert code == 0, printed
-    assert STAMPED.format(verb="would write") in printed
-    code, printed = _run(root, tmp_path, "--yes", "--dry-run", "--json")
-    assert json.loads(printed)["stamped"] is True
 
 
 @needs_git

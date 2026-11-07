@@ -1,30 +1,7 @@
 # The scaffold group: the engine that renders a repository's footprint, the manifest that records
-# it, and the settings documents whose entries it merges.
+# it, and the settings documents whose entries `attach` merges.
 # Which group an entry belongs in is `GROUP_OF` in `scripts/mutation_oracle.py`; what an entry is:
 # CONTRIBUTING.md, "Tests".
-
-# A keyed-entries template that names no entries is an error, never an instruction to remove the
-# user's wiring.
-[[mutation]]
-name = "a keyed-entries template with no entries silently removes them"
-file = "src/stayfixed/scaffold/engine.py"
-before = '        if template.entries is None:'
-after = '        if False:'
-reddens = ["tests/scaffold/test_engine.py::test_a_keyed_entries_template_naming_no_entries_raises"]
-
-# The mirror of `mutations/`'s "a keyed-entries template with no entries silently removes them".
-# `entries=None` silently uninstalled the user's wiring; entries carrying no marker silently fail to
-# install it, because `owned()` renders the marked entries alone and so answers `{}` on both sides
-# of the comparison.
-[[mutation]]
-name = "a keyed-entries template with unmarked entries silently installs nothing"
-file = "src/stayfixed/scaffold/engine.py"
-before = '        if missing := unmarked(template.entries):'
-after = '        if (missing := unmarked(template.entries)) and False:'
-reddens = [
-  "tests/scaffold/test_engine.py::test_a_keyed_entries_template_whose_entries_carry_no_marker_raises",
-  "tests/scaffold/test_engine.py::test_one_unmarked_entry_beside_a_marked_one_is_still_a_refusal",
-]
 
 # An event is a key of a settings document a clone can commit, and the refusal naming it reaches a
 # terminal and a model: printed through `printed.clipped`, never as the document spells it.
@@ -116,27 +93,6 @@ reddens = [
   "tests/scaffold/test_manifest.py::test_a_manifest_past_the_parser_is_refused_in_its_own_words[nested]",
 ]
 
-# A report prints targets, and a target a committed manifest recorded is repository-authored:
-# only one inside the path grammar may print as itself.
-[[mutation]]
-name = "a report prints a committed manifest's target raw"
-file = "src/stayfixed/scaffold/report.py"
-before = '    return item.target if PATH_VALUE.match(item.target) else f"<{item.artifact_id}>"'
-after = "    return item.target"
-reddens = [
-  "tests/scaffold/test_report.py::test_a_target_outside_the_path_grammar_prints_as_its_artifact_id",
-]
-
-# A record at a case variant of the target is that file where case folds, so the folded trigger is
-# what keeps the engine from naming the artifact's own file as one it cannot produce beside an
-# `unchanged` verdict for it.
-[[mutation]]
-name = "a record at a case variant of the target triggers a relocation"
-file = "src/stayfixed/scaffold/engine.py"
-before = "        if record is not None and path_key(record.target) != path_key(target):"
-after = "        if record is not None and record.target != target:"
-reddens = ["tests/scaffold/test_engine.py::test_a_record_at_a_case_variant_of_the_target_is_that_file_and_never_a_relocation"]
-
 # A refusal returned in a report rather than raised: every recorded artifact refused.
 
 [[mutation]]
@@ -145,8 +101,8 @@ file = "src/stayfixed/scaffold/engine.py"
 before = '        if reason is not None:'
 after = '        if reason is not None or record is not None:'
 reddens = [
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[a-new-file-at-an-ignored-place]",
-  "tests/project/test_footprint_invariant.py::test_the_legitimate_user_runs_every_command_to_the_end[a-symlinked-directory-no-value-uses]",
+  "tests/scaffold/test_engine.py::test_a_recorded_unchanged_file_yields_no_action",
+  "tests/scaffold/test_engine.py::test_a_recorded_file_the_tool_wrote_is_updated",
 ]
 
 # git ends a line at `\n` alone. Read as ending at a lone `\r` too, an exclude file whose last line
@@ -200,27 +156,18 @@ file = "src/stayfixed/scaffold/entries.py"
 before = "    return settings_object(document, numbers=str)"
 after = "    return settings_object(document)"
 reddens = [
-  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_merge",
+  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_withdrawal",
 ]
 
 # In the block led by `mutations/`'s "the JSON writer lets an encode past the interpreter's
 # recursion escape": the settings engine writes back through that one writer.
 [[mutation]]
-name = "the settings engine writes a merge back with a bare encode"
+name = "the settings engine writes a withdrawal back with a bare encode"
 file = "src/stayfixed/scaffold/entries.py"
 before = '    return settings_text(raw) + "\n"'
 after = '    return json.dumps(raw, indent=2) + "\n"'
 reddens = [
-  "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested[apply-entries]",
-]
-
-[[mutation]]
-name = "the settings engine renders its own entries with a bare encode"
-file = "src/stayfixed/scaffold/entries.py"
-before = "    return settings_text(claimed, sort_keys=True)"
-after = "    return json.dumps(claimed, indent=2, sort_keys=True)"
-reddens = [
-  "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested[owned]",
+  "tests/scaffold/test_entries.py::test_a_write_back_the_encoder_cannot_follow_is_refused_as_nested",
 ]
 
 # An artifact the engine cannot read is named relative to the project, its reason in words: the
@@ -247,18 +194,34 @@ reddens = [
   "tests/scaffold/test_engine.py::test_a_recorded_unchanged_file_yields_no_action",
 ]
 
-# A committed link into a directory nobody may search makes every path through it a fault to ask
-# about, so whether the manifest is there is asked through `contained`, which names the link, as
-# reading it always was: a bare existence check met the fault, and `init` ended in an internal
-# error that printed the absolute path.
+# Only a whole-file template is recorded, and `init` builds none: a plan or an apply with nothing to
+# record neither reads `.stayfixed/manifest.json` nor writes one, so a project keeps no manifest and
+# one an earlier release committed, damaged or not, is never read.
 [[mutation]]
-name = "init asks for the manifest past contained"
-file = "src/stayfixed/scaffold/manifest.py"
-before = "        return fsops.is_file(_contained_path(root))"
-after = "        return fsops.is_file(root / MANIFEST_PATH)"
+name = "a create-once artifact or a managed region is recorded in a manifest"
+file = "src/stayfixed/scaffold/engine.py"
+before = "                if template.kind is Kind.TEMPLATE\n"
+after = "                if True\n"
 reddens = [
-  "tests/project/test_init.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed]",
-  "tests/project/test_init.py::test_a_committed_link_into_a_directory_nobody_may_search_is_refused_in_words[.stayfixed/manifest.json]",
+  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
+]
+
+[[mutation]]
+name = "a plan with nothing to record reads the manifest"
+file = "src/stayfixed/scaffold/engine.py"
+before = "    manifest = Manifest.read(root) if recorded else Manifest({})"
+after = "    manifest = Manifest.read(root)"
+reddens = [
+  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
+]
+
+[[mutation]]
+name = "an apply with nothing to record reads the manifest"
+file = "src/stayfixed/scaffold/engine.py"
+before = "    manifest = Manifest.read(root) if any(a.record for a in planned.actions) else None"
+after = "    manifest = Manifest.read(root)"
+reddens = [
+  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
 ]
 
 # `attach` and `detach` take back only the hook entries an earlier attach's ledger records. By the

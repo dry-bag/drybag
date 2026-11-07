@@ -31,12 +31,10 @@ CONFIG = """
 [stayfixed]
 version = "0.1.0"
 preset = "recommended"
-agents = ["claude"]
 
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 
 

@@ -323,11 +323,10 @@ def load(root: Path, *, machine: Path | None = None, owner: Owner | None = None)
 def read_document(root: Path, *, limit: int | None = None) -> str | None:
     """`stayfixed.toml` exactly as it is on disk, or `None` when there is none.
 
-    `newline=""` and not `read_text`: this is the text a command hands to `config.owned.rewrite`,
-    which keeps every byte but the values it sets, and universal-newline translation would have
-    rewritten every CRLF in a file somebody else owns before the editor saw it. `contained`
-    first, as for every configured path, so a symlinked `stayfixed.toml` is a refusal; then read
-    to the read cap, a regular file only (`fsops.read_regular_text`), as every reader of a
+    `newline=""` and not `read_text`: the parser judges the file's own text, so a lone `\\r`, which
+    TOML refuses, is not translated into a line break that would load here and nowhere else.
+    `contained` first, as for every configured path, so a symlinked `stayfixed.toml` is a refusal;
+    then read to the read cap, a regular file only (`fsops.read_regular_text`), as every reader of a
     committed file reads one: `limit`, or `fsops.REGULAR_READ_LIMIT` where the caller names none.
     """
     try:
@@ -360,8 +359,8 @@ def loads(
     naming `<root>/stayfixed.toml` would send its owner to a file with nothing wrong in it.
     `personal` is the `[personal]` a load earlier in the same command already read, taken in
     place of reading the machine file again: a caller that holds a `Config` and not the path
-    its machine file came from — a gate, handed `(root, config, base)` — loads a second
-    document with it, and so reads no machine file but the one the command was given. Given
+    its machine file came from — the `bugs` gate, handed `(root, config, base)` — loads a
+    second document with it, and so reads no machine file but the one the command was given. Given
     both, `personal` wins and `machine` is never read. `owner` is the machine owner's layer
     (`config.owner.resolve_owner`), read once by the caller and stood on the document's preset
     (`config.owner.rebased`): its `personal` stands in for the machine file's, as `personal` does,
@@ -431,13 +430,13 @@ def _built(
     project = _build(Project, "project", _merged(raw, defaults, "project"))
     if not PROJECT_NAME.match(project.name):
         raise ConfigError(f"project.name must be {NAME_RULE}", key="project.name")
-    for key in ("base_branch", "release_branch"):
-        # Named, never quoted: the value becomes a git ref and reaches output lines, and it is
-        # the text the grammar refused; git could not have such a branch anyway.
-        if not BRANCH_NAME.match(getattr(project, key)):
-            raise ConfigError(
-                f"project.{key} is not a plain branch name: {BRANCH_RULE}", key=f"project.{key}"
-            )
+    # Named, never quoted: the value becomes a git ref and reaches output lines, and it is the text
+    # the grammar refused; git could not have such a branch anyway.
+    if not BRANCH_NAME.match(project.base_branch):
+        raise ConfigError(
+            f"project.base_branch is not a plain branch name: {BRANCH_RULE}",
+            key="project.base_branch",
+        )
     paths = _build(Paths, "paths", _merged(raw, defaults, "paths"))
     memory = _deduplicated(_build(Memory, "memory", _merged(raw, defaults, "memory")))
     _enum("memory", "mode", memory.mode, MEMORY_MODES)
@@ -454,7 +453,7 @@ def _built(
         # command and a session never run on two sets of budgets. Handed in, it is stood on this
         # document's preset; otherwise read here, `strict`, which refuses only a file that does
         # not load, and said nowhere: saying it is the command's, once (`command.command_owner`),
-        # and said here it was said once a document, three times in one `gate`.
+        # and said here it was said once a document, again for each base copy `bugs check` loads.
         owner = (
             resolve_owner(machine or machine_config_path(), preset=preset_name, strict=True)
             if owner is None
@@ -610,7 +609,6 @@ def _defaulted(section: str, key: Field[Any], defaults: dict[str, Any]) -> bool:
     """Whether `section`'s field `key` has a value when the document gives it none."""
     return (
         key.default is not MISSING
-        or key.default_factory is not MISSING
         or key.name in defaults.get(section, {})
         or f"{section}.{key.name}" in _FILLED
     )
@@ -688,16 +686,11 @@ def _holding(table: dict[str, Any], dotted: str) -> tuple[dict[str, Any], str] |
 
 def preset_defaults(project: str, *, preset: str = DEFAULT_PRESET) -> Config:
     """A `Config` built from a preset's `[defaults.*]` alone, for a directory that has no
-    `stayfixed.toml` and never will.
+    `stayfixed.toml`: `init --questions` reads its defaults from it before the file it would load
+    exists, and `session.command_config` builds one for a caller that names the project itself.
 
-    The overlay is a repository stayfixed writes into and does not manage: it has no project
-    configuration, and the scaffold engine needs one (it reads `stayfixed.version` and nothing
-    else). `init --yes` will want the same constructor for the
-    first write into a project, before the file it would load exists.
-
-    `stayfixed.version` is the one value the preset does not carry and `_build` requires: the
-    engine stamps it into every manifest `Record`, so it comes from `stayfixed.__version__`
-    rather than from a default that would record an empty string.
+    `stayfixed.version` is the one value the preset does not carry and `_build` requires, so it
+    comes from `stayfixed.__version__` rather than from a default that would hold an empty string.
 
     `validate_paths` is deliberately not called. It is about a project root this caller does
     not have, and the `[paths]` values it would check are the preset's own defaults pointing at

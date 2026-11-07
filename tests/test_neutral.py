@@ -222,8 +222,8 @@ def offending(text: str, forbidden: tuple[tuple[int, str], ...] = FORBIDDEN) -> 
 def _preset_paths() -> tuple[tuple[int, str], ...]:
     """The digests of the default `[paths]` values the preset ships.
 
-    Three of them are in `FORBIDDEN`, because they were the source repository's paths before
-    they were stayfixed's defaults. A public document that could not say where the note store
+    One of them is in `FORBIDDEN`, because it was the source repository's path before it was
+    stayfixed's default. A public document that could not say where the note store
     lives by default would be useless, so the public-document walk exempts exactly the values
     the plugin itself ships — read off the preset at import time, never written here. Source
     code keeps the full table: a module has no reason to spell a default path.
@@ -235,11 +235,11 @@ def _preset_paths() -> tuple[tuple[int, str], ...]:
 
 
 PUBLIC_FORBIDDEN = tuple(entry for entry in FORBIDDEN if entry not in _preset_paths())
-# Three of the preset's default `[paths]` values are also digest-table entries — the ones that
-# were the source repository's paths before they were stayfixed's defaults. Pinned so
-# the exemption cannot quietly grow: a fourth would mean a token was added to the table for a
+# One of the preset's default `[paths]` values is also a digest-table entry — the one that was the
+# source repository's path before it was stayfixed's default. Pinned so the exemption cannot
+# quietly grow: a second would mean a token was added to the table for a
 # path the plugin itself ships, which is a contradiction to resolve, not to exempt.
-PRESET_PATHS_IN_TABLE = 3
+PRESET_PATHS_IN_TABLE = 1
 
 
 # Every top-level directory this repository tracks, measured 2026-09-19 against
@@ -345,7 +345,7 @@ def test_a_coverage_worker_file_is_not_a_file_the_gate_walks(tmp_path: Path) -> 
 # `[paths]` value where they could not before. That is the design and not a slip: a skill is a
 # document a person reads, and the argument that a README which could not say where the note store
 # lives by default would be useless is the same argument one directory over. The denylist proper is
-# unchanged for them — only the three exempted preset defaults move — and the shape arms are not
+# unchanged for them — only the exempted preset default moves — and the shape arms are not
 # table-scoped at all, so a personal address, a bare commit id and a vendor branch are still refused
 # in a skill. Changing it back means changing that rule, not only this function.
 def table_for(path: Path) -> tuple[tuple[int, str], ...]:
@@ -568,7 +568,7 @@ def test_the_exemption_is_exactly_the_presets_default_paths() -> None:
     # is *defined* as that difference, so the subset held for any derivation and reddened for
     # none. The size is the claim with teeth — it is the one a hand-written table breaks.
     # The full table's size is pinned by `test_the_denylist_is_stored_as_digests`; the source
-    # walk still refuses those three, which `test_the_public_table_still_discriminates` shows.
+    # walk still refuses it, which `test_the_public_table_still_discriminates` shows.
 
 
 def test_the_public_table_still_discriminates() -> None:

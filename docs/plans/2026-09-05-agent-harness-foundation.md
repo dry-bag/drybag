@@ -476,8 +476,6 @@ release_branch = "main"
 
 [defaults.paths]
 agents_md = "AGENTS.md"
-architecture = "docs/architecture"
-runbooks = "docs/runbooks"
 adr = "docs/adr"
 specs = "docs/specs"
 plans = "docs/plans"

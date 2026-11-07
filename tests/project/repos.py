@@ -7,13 +7,12 @@ suite's twenty-three `git` helpers once did (`tests/gitfixture.py` says how).
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from pathlib import Path
 
 import stayfixed
 from stayfixed.config.loader import preset_defaults
 from stayfixed.project.init import init
-from stayfixed.scaffold import Manifest
 from tests.gitfixture import git
 
 BEFORE = "# ours, from before stayfixed\n"
@@ -43,16 +42,6 @@ def repository(
         git(root, "remote", "add", "origin", origin)
     (root / "README.md").write_text(BEFORE, encoding="utf-8")
     return root
-
-
-def forge_record(root: Path, artifact_id: str, *, target: str, sha256: str | None = None) -> None:
-    """Rewrite one manifest record's place, and its digest when `sha256` is given, the way a
-    pulled commit can."""
-    manifest = Manifest.read(root)
-    record = manifest.get(artifact_id)
-    assert record is not None, artifact_id
-    forged = replace(record, target=target, sha256=record.sha256 if sha256 is None else sha256)
-    manifest.with_record(forged).write(root)
 
 
 def initialised(

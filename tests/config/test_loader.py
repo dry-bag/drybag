@@ -499,7 +499,6 @@ def test_the_name_grammar_is_spelled_once() -> None:
     assert spelled == ["config/schema.py"]
 
 
-@pytest.mark.parametrize("key", ["base_branch", "release_branch"])
 @pytest.mark.parametrize(
     "value",
     [
@@ -510,15 +509,16 @@ def test_the_name_grammar_is_spelled_once() -> None:
     ],
 )
 def test_a_project_branch_outside_the_branch_grammar_is_refused_by_name(
-    tmp_path: Path, key: str, value: str
+    tmp_path: Path, value: str
 ) -> None:
     # `[project] base_branch` becomes `refs/remotes/origin/<it>`, `test attribute`'s refusal and
     # `plan check`'s messages print it, and the `gate` command blamed `--base`, which nobody passed,
-    # for it. Held here, at the one place both keys are read, to the branch grammar, and refused
+    # for it. Held here, at the one place the key is read, to the branch grammar, and refused
     # naming the key and never the value. Mutation (declared): the check dropped -> nothing is
     # raised.
-    text = MINIMAL + f"{key} = {json.dumps(value)}\n"
-    with pytest.raises(ConfigError, match=rf"project\.{key} is not a plain branch name") as caught:
+    text = MINIMAL + f"base_branch = {json.dumps(value)}\n"
+    refused = r"project\.base_branch is not a plain branch name"
+    with pytest.raises(ConfigError, match=refused) as caught:
         loads(text, tmp_path, machine=tmp_path / "absent.toml")
     assert "RED" not in str(caught.value) and "INJECTED" not in str(caught.value)
 

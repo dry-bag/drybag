@@ -44,7 +44,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from stayfixed.config.loader import preset_defaults
 from stayfixed.overlay.identity import require_overlay
 from stayfixed.overlay.layout import CAPABILITY_FILES, OVERLAY_FILES
 from stayfixed.overlay.template import templates
@@ -89,14 +88,10 @@ def upgrade(root: Path, *, dry_run: bool) -> OverlayUpgrade:
     `decisions` is computed after `apply()` and names the two capability files unconditionally;
     it is a notice, not a gate. The module docstring says why that is safe here and what would
     make it unsafe.
-
-    `project.name` is the instance's directory name and goes nowhere: the engine reads
-    `stayfixed.version` out of a `Config` and nothing else. It is passed
-    because a `Config` has to be complete, not because an overlay is a project.
     """
     require_overlay(root, because=NOT_AN_OVERLAY)
     shipped = templates()
-    planned = plan(root, preset_defaults(root.name), shipped)
+    planned = plan(root, shipped)
     if not dry_run:
         apply(root, planned)
     decisions = tuple(item.id for item in shipped if item.id in CAPABILITY_FILES)

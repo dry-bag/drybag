@@ -33,7 +33,7 @@ reddens = [
 [[mutation]]
 name = "`uv run` stops being stripped off a segment"
 file = "src/stayfixed/hints/bashscan.py"
-before = '        if recognises is not None and uvrun.is_launcher(name):'
+before = '        if test_runs and is_launcher(name):'
 after = '        if False:'
 reddens = [
   "tests/hints/test_bashscan.py::test_command_words_strips_uv_run_with_nothing_before_the_program",
@@ -45,7 +45,7 @@ reddens = [
 [[mutation]]
 name = "the command `uv run` launches starts at its first word that is no option"
 file = "src/stayfixed/hints/bashscan.py"
-before = "        if recognises(segment[at:]):"
+before = "        if names_a_test_run(segment[at:]):"
 after = '        if not segment[at].startswith("-"):'
 reddens = [
   "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_the_runner_table_names[with]",
@@ -69,10 +69,10 @@ reddens = [
 # pytest` would be a pytest run.
 [[mutation]]
 name = "a uv command with no `run` is read as launching its words"
-file = "src/stayfixed/hints/uvrun.py"
-before = """    if _UV_RUN not in segment[index:]:
+file = "src/stayfixed/hints/runners.py"
+before = """    if "run" not in segment[index:]:
         return None"""
-after = """    if _UV_RUN not in segment[index:]:
+after = """    if "run" not in segment[index:]:
         return index"""
 reddens = [
   "tests/hints/test_bashscan.py::test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole[no-run]",

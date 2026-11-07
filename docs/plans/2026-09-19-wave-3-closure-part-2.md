@@ -188,8 +188,8 @@ The commit message carries the before-count from Step 2 and the list of files re
 - Create: `.github/workflows/check.yml`
 - Create: `tests/fixtures/smoke-project/` — and under it, every path below: `keelline.toml`, `AGENTS.md`, `docs/roadmap.md`,
 - Create: `docs/roadmap-history.md`, `docs/bugs/BR-001.md`, `docs/bug-reports.md` (generated),
-- Create: `docs/runbooks/bug-reports.md`, `docs/specs/README.md`, `docs/plans/README.md`,
-- Create: `docs/architecture/README.md`, `docs/adr/README.md`, and whatever else the five gates
+- Create: the bug runbook, `docs/specs/README.md`, `docs/plans/README.md`,
+- Create: the architecture directory's `README.md`, `docs/adr/README.md`, and whatever else the five gates
   need (Step 3 measures it)
 - Create: `tests/test_fixtures.py`
 - Modify: `docs/cli.md` (a `## The reusable workflow` section above `## Shared flags`),
@@ -311,8 +311,8 @@ copy until each exits 0, and commit **what they accepted**: `AGENTS.md` (a headi
 sentences, under every budget), `docs/roadmap.md` with the trail marker line and the end
 marker `docs trail` writes, *docs/bugs/BR-001.md* (one `fixed` entry, severity `low`, with
 its `## Fix` section), *docs/bug-reports.md* produced by `keelline bugs index --root <copy>`
-and copied back, *docs/runbooks/bug-reports.md* (the index's header links it), and a
-`README.md` under `docs/specs/`, `docs/plans/`, `docs/architecture/`, `docs/adr/` so the
+and copied back, the bug runbook (the index's header links it), and a
+`README.md` under `docs/specs/`, `docs/plans/`, the architecture directory and `docs/adr/` so the
 trail and the link walk have directories to list. Every word in the fixture is neutral:
 the whole-tree gate (Task 13) walks it under the public table.
 

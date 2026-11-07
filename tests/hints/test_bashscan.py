@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-
 import pytest
 
 from stayfixed.hints import bashscan
-from stayfixed.hints.runners import names_a_test_run
 
 
 def test_quoted_heredoc_bodies_are_stripped_but_the_command_remains() -> None:
@@ -375,7 +372,7 @@ def test_command_words_strips_a_leading_assignment_and_wrapper() -> None:
 def test_command_words_strips_uv_run_with_nothing_before_the_program() -> None:
     """CI's own invocation shape, with nothing between `uv run` and the program it launches.
     Oracle: `mutations/`'s "`uv run` stops being stripped off a segment"."""
-    assert bashscan.command_words(["uv", "run", "pytest"], names_a_test_run) == ["pytest"]
+    assert bashscan.command_words(["uv", "run", "pytest"], test_runs=True) == ["pytest"]
 
 
 @pytest.mark.parametrize(
@@ -419,25 +416,25 @@ def test_the_command_uv_runs_starts_at_the_first_word_the_runner_table_names(
     table reads as a test run is the launcher's. Oracle: `mutations/`'s "the command `uv run`
     launches starts at its first word that is no option"."""
     words = command.split()
-    assert bashscan.command_words(words, names_a_test_run) == words[len(launcher.split()) :]
+    assert bashscan.command_words(words, test_runs=True) == words[len(launcher.split()) :]
 
 
 @pytest.mark.parametrize(
-    ("command", "recognises"),
+    ("command", "test_runs"),
     [
-        ("uv run --frozen ruff check", names_a_test_run),
-        ("uv pip install pytest", names_a_test_run),
-        ("uv run pytest", None),
+        ("uv run --frozen ruff check", True),
+        ("uv pip install pytest", True),
+        ("uv run pytest", False),
     ],
     ids=["no-runner", "no-run", "no-recogniser"],
 )
 def test_a_uv_command_in_which_no_runner_is_recognised_is_left_whole(
-    command: str, recognises: Callable[[Sequence[str]], bool] | None
+    command: str, test_runs: bool
 ) -> None:
     """Its program is `uv`, which no hint recognises and no guard refuses: no word after `run`
     that the runner table reads as a test run, no `run`, or a caller that asks about no runner, as
     the background guard does."""
-    assert bashscan.command_words(command.split(), recognises) == command.split()
+    assert bashscan.command_words(command.split(), test_runs=test_runs) == command.split()
 
 
 @pytest.mark.parametrize(
@@ -469,4 +466,4 @@ def test_the_command_starts_past_every_assignment_and_launcher_word(
     command: str, program: list[str] | str
 ) -> None:
     expected = program.split() if isinstance(program, str) else program
-    assert bashscan.command_words(command.split(), names_a_test_run) == expected
+    assert bashscan.command_words(command.split(), test_runs=True) == expected

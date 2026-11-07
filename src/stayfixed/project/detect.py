@@ -1,8 +1,7 @@
 """What `init --yes` can read off a repository without asking, and where each value came from.
 
-Three values, each one `git` question or a probe of the root: the name, the base branch and the
-harnesses whose directories the root carries. `origin_remote` is `gitenv`'s, so "what is this
-checkout's origin" is asked one way wherever it is asked.
+Two values, each one `git` question: the name and the base branch. `origin_remote` is
+`gitenv`'s, so "what is this checkout's origin" is asked one way wherever it is asked.
 
 **Three of them are repository-authored strings, and each is held to a grammar before it is
 returned:** the remote's last path segment and the checkout's directory name to `[project]
@@ -11,7 +10,6 @@ checked out — to `BRANCH_NAME`, git's own rules for a branch. A name outside i
 refused naming the grammar and never the value, or, leniently, returned as `""` and `not
 derivable`, so `init --questions` asks for it rather than suggesting it. A branch outside its
 grammar is reported as the default.
-The agents are names from stayfixed's own registry.
 
 Each value also says where it came from, in one of this module's fixed phrases, because a
 default is only as good as its source: `origin/HEAD` is set by `git clone`, `git remote
@@ -25,7 +23,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from stayfixed import fsops
 from stayfixed.config.schema import BRANCH_NAME, NAME_RULE, PROJECT_NAME
 from stayfixed.errors import Refusal
 from stayfixed.gitenv import GitUnavailable, git_run, in_work_tree, origin_remote, repository_name
@@ -46,15 +43,13 @@ ORIGIN_REMOTE = "origin remote"
 DIRECTORY_NAME = "directory name"
 ORIGIN_HEAD = "origin/HEAD"
 CURRENT_BRANCH = "current branch"
-HARNESS_DIRECTORIES = "harness directories"
 
 
 @dataclass(frozen=True)
 class Detected:
     name: str
     base_branch: str
-    agents: tuple[str, ...]
-    # Keyed "name", "base_branch", "agents"; each value one of this module's phrases.
+    # Keyed "name" and "base_branch"; each value one of this module's phrases.
     sources: Mapping[str, str] = field(default_factory=dict)
     # `origin/HEAD` named a branch outside the grammar, so the base branch is the default in its
     # place. A flag and never the name: the name is the text the grammar refused.
@@ -139,17 +134,8 @@ def _base_branch(root: Path) -> tuple[str, str, bool, bool, bool]:
     return DEFAULT_BRANCH, DEFAULT, False, False, False
 
 
-def _agents(root: Path) -> tuple[tuple[str, ...], str]:
-    from stayfixed.harnesses import HARNESSES
-
-    agents = tuple(h.name for h in HARNESSES if fsops.is_dir(root / h.marker_dir))
-    if agents:
-        return agents, HARNESS_DIRECTORIES
-    return tuple(h.name for h in HARNESSES), DEFAULT
-
-
 def detect(root: Path, *, lenient: bool = False) -> Detected:
-    """The name, the base branch and the harnesses, each with its source.
+    """The name and the base branch, each with its source.
 
     The refusal is the whole of what this does with a name outside the grammar: the remote's
     last path segment and the checkout's directory name both arrive from outside, so one that is
@@ -165,16 +151,10 @@ def detect(root: Path, *, lenient: bool = False) -> Detected:
             raise Refusal(NOT_A_NAME)
         name, name_source = "", NOT_DERIVABLE
     base_branch, branch_source, head_refused, head_unrecorded, remotes_unknown = _base_branch(root)
-    agents, agents_source = _agents(root)
     return Detected(
         name,
         base_branch,
-        agents,
-        {
-            "name": name_source,
-            "base_branch": branch_source,
-            "agents": agents_source,
-        },
+        {"name": name_source, "base_branch": branch_source},
         head_refused=head_refused,
         head_unrecorded=head_unrecorded,
         remotes_unknown=remotes_unknown,

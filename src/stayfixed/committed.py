@@ -15,7 +15,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from stayfixed import fsops
 from stayfixed.errors import Failure, Refusal
 from stayfixed.gitenv import NO_ANSWER, answer_bytes, git_run, in_work_tree
 
@@ -26,11 +25,6 @@ ROOT_UNANSWERED = (
     "git gave no answer about the repository the project root is in, so its base cannot be "
     f"read: {NO_ANSWER}, or git refused the repository (a checkout of dubious ownership, a "
     "worktree whose git directory is gone)"
-)
-ROOT_DOT_DOT = (
-    "the project root is given with a `..` component, and `..` after a component that is a link "
-    "is not the directory the spelling names, so the base's stayfixed.toml could be looked for "
-    "in the wrong place; pass the root by its real path, with no `..`"
 )
 ROOT_THROUGH_SYMLINK = (
     "the project root is reached through a symlink, or git spells its path differently from the "
@@ -43,8 +37,6 @@ def repository_prefix(root: Path) -> str:
     """The project root's path inside its repository, `""` at the top or `"a/b/"` below it: git's
     spelling, which is refused unless it is also the caller's."""
     lexical = root.absolute()
-    if ".." in lexical.parts:
-        raise Refusal(ROOT_DOT_DOT)
     code, out = git_run(lexical, "rev-parse", "--show-toplevel", "--show-prefix")
     if code != 0:
         # Read off the disk, as git finds a repository: git refuses a checkout of dubious
@@ -57,10 +49,10 @@ def repository_prefix(root: Path) -> str:
     ancestor = next((path for path in chain if path.resolve() == Path(top)), None)
     if ancestor is None:
         raise Refusal(ROOT_THROUGH_SYMLINK)
-    below = lexical.parts[len(ancestor.parts) :]
-    linked = any(fsops.is_symlink(ancestor.joinpath(*below[: n + 1])) for n in range(len(below)))
-    spelled = "".join(f"{part}/" for part in below)
-    if linked or spelled != prefix.rstrip("\n"):
+    # git spells the prefix by the physical path, so a component that is a link, or a `..`, below
+    # the top is a spelling git does not print.
+    spelled = "".join(f"{part}/" for part in lexical.parts[len(ancestor.parts) :])
+    if spelled != prefix.rstrip("\n"):
         raise Refusal(ROOT_THROUGH_SYMLINK)
     return spelled
 

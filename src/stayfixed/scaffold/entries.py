@@ -1,19 +1,9 @@
 """Keyed entries inside a settings file a person and several tools share.
 
 Keying on a marker inside the command string rather than on position is what lets stayfixed
-replace or withdraw what it installed while a foreign entry beside it — another plugin's, or the
-owner's own — survives untouched and stays visible to `doctor`.
-
-Two rules make "foreign entries untouched" true rather than approximately true. A group that
-mixes a marked entry with an unmarked one is **split**, not replaced: the unmarked half keeps
-its matcher and its position. And what the manifest stamps is `owned(document)` — the marked
-entries alone — never the whole file, so a user adding a `permissions` block beside the hooks
-does not freeze stayfixed's own entries forever.
-
-The second rule is why an *unmarked* entry arriving from a caller is a refusal and not a thing
-to install: unmarked, it is by definition one of the foreign entries those two rules exist to
-leave alone, so nothing downstream can tell stayfixed's own wiring from somebody else's ever
-again. `unmarked()` is that check, and `mark()` is what a caller is supposed to have called.
+withdraw what it installed while a foreign entry beside it — another plugin's, or the owner's own
+— survives untouched and stays visible to `doctor`. A group that mixes a withdrawn entry with one
+that stays is **split**, not dropped: the rest keeps its matcher and its position.
 """
 
 from __future__ import annotations
@@ -56,32 +46,6 @@ def mark(command: str, entry_id: str) -> str:
     return f"{command}  {ENTRY_MARKER}{entry_id}"
 
 
-def unmarked(wanted: dict[str, list[dict[str, Any]]]) -> list[str]:
-    """Every command in a caller's `entries` that carries no `# stayfixed:<id>` marker.
-
-    The marker is not decoration: it is the key this whole module is built on. `owned()`
-    renders the marked entries alone, and the engine stamps that rendering — so entries with
-    no marker make `owned()` answer `{}` on both sides of the comparison, the digests match,
-    and the artifact is reported *unchanged* while the user's settings file was never written
-    and the wiring was never installed.
-
-    Reported as a list rather than a bool so the refusal can name the offending command. The
-    shape is checked on the way past for the same reason the marker is: `apply_entries` writes
-    `wanted` into the user's file verbatim, and nothing between a caller and that write looks at
-    it — `_entries_of` validates the *document*, never the mapping coming in. An entry that is
-    not an object, or whose command is not a string, cannot be keyed either, and `marker_id`
-    raises on a non-string rather than answering about one.
-    """
-    found: list[str] = []
-    for groups in wanted.values():
-        for group in groups:
-            for entry in group.get("hooks") or []:
-                command = entry.get("command") if isinstance(entry, dict) else entry
-                if not isinstance(command, str) or marker_id(command) is None:
-                    found.append(str(command))
-    return found
-
-
 def _past_parser(label: str) -> Callable[[str], ParserLimitError]:
     """The refusal for a settings document past a limit of the parser, named by `label`: a kind of
     its own, for the reason `ParserLimitError` gives."""
@@ -112,7 +76,7 @@ def settings_object(
     )
 
 
-def settings_text(raw: dict[str, Any], label: str = _DOCUMENT, *, sort_keys: bool = False) -> str:
+def settings_text(raw: dict[str, Any], label: str = _DOCUMENT) -> str:
     """A settings document `settings_object` read, as the indented text written back, or the
     refusal `settings_object` gives a document nested past the parser: see `jsonobject.json_text`
     for why one the parser read can still be too deep to write. Public for `attach`, which writes
@@ -123,7 +87,6 @@ def settings_text(raw: dict[str, Any], label: str = _DOCUMENT, *, sort_keys: boo
         error=EntriesError,
         limit=_past_parser(label),
         indent=2,
-        sort_keys=sort_keys,
     )
 
 
@@ -136,7 +99,7 @@ def _hooks_table(raw: dict[str, Any]) -> dict[str, Any]:
 
 def _groups(raw: dict[str, Any], event: str) -> list[dict[str, Any]]:
     """The groups under one event, or a refusal — a shape this module cannot read is never
-    filtered away. `apply_entries` writes the structure it built back over the user's file, so
+    filtered away. `withdraw_entries` writes the structure it built back over the user's file, so
     dropping a group it did not recognise deletes somebody else's hook and says nothing."""
     groups = _hooks_table(raw).get(event, [])
     # The event through `printed.clipped`: it is a key of a document a clone can commit, and this
@@ -169,19 +132,11 @@ def _claimed(entry: dict[str, Any]) -> str | None:
     return marker_id(command) if isinstance(command, str) else None
 
 
-def _without_marked(group: dict[str, Any]) -> dict[str, Any] | None:
-    """The group with stayfixed's own entries removed, or `None` when nothing foreign is left."""
-    kept = [entry for entry in _entries_of(group) if _claimed(entry) is None]
-    if not kept:
-        return None
-    return {**group, "hooks": kept}
-
-
 def _read_entries(document: str) -> Iterator[tuple[str, dict[str, Any], dict[str, Any]]]:
     """Every hook entry in the document with its event and the group holding it, in document
-    order, read as strictly as `apply_entries` reads it: a shape the merge would refuse is refused
-    here too, so a reader reporting on a settings file never accounts for one the engine could not
-    rewrite.
+    order, read as strictly as `withdraw_entries` reads it: a shape the withdrawal would refuse is
+    refused here too, so a reader reporting on a settings file never accounts for one the engine
+    could not rewrite.
 
     Integers are read as their text: no entry's id, event or marker is a number, and one longer
     than the interpreter converts must not keep a reader from the entries beside it. A settings
@@ -209,46 +164,12 @@ def owned_ids(document: str) -> dict[str, str]:
     }
 
 
-def owned(document: str) -> str:
-    """A canonical rendering of only the entries stayfixed claims — what the manifest stamps."""
-    raw = settings_object(document)
-    claimed: dict[str, list[dict[str, Any]]] = {}
-    for event in sorted(_hooks_table(raw)):
-        for group in _groups(raw, event):
-            mine = [entry for entry in _entries_of(group) if _claimed(entry) is not None]
-            if mine:
-                claimed.setdefault(event, []).append({**group, "hooks": mine})
-    return settings_text(claimed, sort_keys=True)
-
-
-def apply_entries(document: str, wanted: dict[str, list[dict[str, Any]]]) -> str:
-    raw = settings_object(document)
-    hooks = dict(_hooks_table(raw))
-    for event in sorted(set(hooks) | set(wanted)):
-        foreign = [kept for group in _groups(raw, event) if (kept := _without_marked(group))]
-        merged = foreign + list(wanted.get(event, []))
-        if merged:
-            hooks[event] = merged
-        else:
-            hooks.pop(event, None)
-    return _with_hooks(raw, hooks)
-
-
-def _with_hooks(raw: dict[str, Any], hooks: dict[str, Any]) -> str:
-    """`raw` written back with `hooks` as its hook table, and with none where it is empty."""
-    if hooks:
-        raw["hooks"] = hooks
-    else:
-        raw.pop("hooks", None)
-    return settings_text(raw) + "\n"
-
-
 def withdraw_entries(document: str, recorded: Mapping[str, str]) -> str:
     """The document without each entry `recorded` names: its marker id, under the event the record
     gives it. Every other entry stays where it is, one claiming the marker that the record does not
     name included, so a caller's record and never the marker alone decides what goes; a group left
-    with no entry is dropped, an event with no group, and `hooks` with no event. Read as strictly
-    as `apply_entries` reads, for the reason `_groups` gives."""
+    with no entry is dropped, an event with no group, and `hooks` with no event. A shape it cannot
+    read is refused, for the reason `_groups` gives."""
     raw = settings_object(document)
     hooks = dict(_hooks_table(raw))
     for event in list(hooks):
@@ -262,4 +183,8 @@ def withdraw_entries(document: str, recorded: Mapping[str, str]) -> str:
             hooks[event] = groups
         else:
             hooks.pop(event)
-    return _with_hooks(raw, hooks)
+    if hooks:
+        raw["hooks"] = hooks
+    else:
+        raw.pop("hooks", None)
+    return settings_text(raw) + "\n"

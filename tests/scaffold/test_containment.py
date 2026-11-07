@@ -19,12 +19,10 @@ VALID_HEAD = """
 [stayfixed]
 version = "0.1.0"
 preset = "recommended"
-agents = ["claude"]
 
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 
 HOSTILE_PATHS = (
@@ -32,15 +30,11 @@ HOSTILE_PATHS = (
     + """
 [paths]
 agents_md = "../../AGENTS.md"
-architecture = "../etc"
-runbooks = "../runbooks"
-adr = "../../adr"
 specs = "../specs"
 plans = "../plans"
 bugs = "../bugs"
 bug_index = "../bug-reports.md"
 roadmap = "../roadmap.md"
-roadmap_history = "../roadmap-history.md"
 memory = "../memory"
 """
 )
@@ -206,7 +200,7 @@ def test_load_preset_names_the_key_its_caller_passes() -> None:
 
 def test_every_escaping_target_yields_zero_actions(tmp_path: Path) -> None:
     write_config(tmp_path, VALID_HEAD)
-    result = plan(tmp_path, load_at(tmp_path), escaping_templates())
+    result = plan(tmp_path, escaping_templates())
     assert result.actions == ()
     assert len(result.refusals) == len(ESCAPES)
 
@@ -218,7 +212,7 @@ def test_nothing_outside_the_root_is_written_even_when_apply_is_called(tmp_path:
     sibling.mkdir()
     write_config(root, VALID_HEAD)
     with pytest.raises(Refusal):
-        apply(root, plan(root, load_at(root), escaping_templates()))
+        apply(root, plan(root, escaping_templates()))
     assert list(sibling.iterdir()) == []
     assert sorted(p.name for p in tmp_path.iterdir()) == ["project", "sibling"]
 
@@ -262,7 +256,7 @@ def test_a_target_that_survives_plan_is_one_apply_can_write(tmp_path: Path) -> N
         templates = [
             Template(id="only", kind=Kind.TEMPLATE, target=target, source="t", render=lambda: "x")
         ]
-        planned = plan(root, load_at(root), templates)
+        planned = plan(root, templates)
         if planned.refusals:
             # A refused plan is allowed, and must have planned nothing and written nothing.
             assert planned.actions == ()
@@ -300,7 +294,7 @@ def test_a_refused_paths_value_leaves_no_manifest_behind(tmp_path: Path) -> None
     root = tmp_path / "widget"
     root.mkdir()
     git(root, "init", "-q", "-b", "main")
-    write_config(root, VALID_HEAD + '\n[paths]\nroadmap_history = "docs//roadmap-history.md"\n')
+    write_config(root, VALID_HEAD + '\n[paths]\nspecs = "docs//roadmap-history.md"\n')
     # `Refusal` and not `PathEscape` around the call, and the type asserted last: with both
     # guards gone the run reaches `apply`, which refuses too — as `UnsafePath`, part-way through
     # the pass. The assertions that must fail then are the ones about what is on disk.
@@ -370,7 +364,7 @@ def test_the_engine_refuses_a_control_directory_target_the_loader_never_sees(
             render=lambda: "x",
         )
     ]
-    result = plan(tmp_path, load_at(tmp_path), templates)
+    result = plan(tmp_path, templates)
     assert result.actions == ()
     assert [r.artifact_id for r in result.refusals] == ["hook"]
     assert "control directory" in result.refusals[0].reason
