@@ -214,18 +214,19 @@ def slow_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, slow: dict[str, fl
 # -- the scanner: a script on PATH that answers like gitleaks -----------------------------------
 
 _GITLEAKS = r'''#!{python}
-"""Stand-in gitleaks, answering `gitleaks dir <source>` as the real one does: a JSON report naming
+"""Stand-in gitleaks, answering `gitleaks git <source>` as the real one does: a JSON report naming
 rule and file; exit 1 for a finding and for a failed scan alike (the failed one with an empty
 report).
 
 Modes, from the file `mode` beside it: `scan` (default), `fail`, `sleep [seconds]` (then scan).
-It reads every file under its source, and skips any whose name holds `allowlisted`, as a path
-allowlist would. Its rules are `--config`, else `$GITLEAKS_CONFIG`, else the source's
-`.gitleaks.toml`, and its ignores the source's `.gitleaksignore`: rules holding `allow-all`, or
-ignores holding `ignore-all`, find nothing. What it saw is recorded in `argv.json` and `seen.json`
+It reads the patch `git log` prints in its source, as the real one does, and skips a file whose
+name holds `allowlisted`, as a path allowlist would. Its rules are `--config`, else
+`$GITLEAKS_CONFIG`, else the source's `.gitleaks.toml`, and its ignores the source's
+`.gitleaksignore`: rules holding `allow-all`, or ignores holding `ignore-all`, find nothing. What it
+saw is recorded in `argv.json` and `seen.json`
 beside it.
 """
-import json, os, sys, time
+import json, os, subprocess, sys, time
 from pathlib import Path
 
 me = Path(__file__)
@@ -237,7 +238,7 @@ mode = mode_file.read_text().strip() if mode_file.exists() else "scan"
 report = args[args.index("--report-path") + 1]
 if mode.startswith("sleep"):
     time.sleep(float(mode.split()[1]) if len(mode.split()) > 1 else 30)
-if mode == "fail" or args[0] != "dir":
+if mode == "fail" or args[0] != "git":
     Path(report).write_text("[]")
     print("ERR failed to scan", args[0], file=sys.stderr)
     sys.exit(1)
@@ -248,12 +249,14 @@ read = lambda path: Path(path).read_text() if Path(path).is_file() else ""
 (me.parent / "seen.json").write_text(json.dumps({{
     "source": str(source), "rules": rules, "rules_text": read(rules)}}))
 blind = "allow-all" in read(rules) or "ignore-all" in read(source / ".gitleaksignore")
+log = ["git", "log", "-p", "-U0", "--format="]
+patch = subprocess.run(log, cwd=source, capture_output=True, check=True).stdout
+parts = [] if blind else patch.decode("utf-8", "replace").split("diff --git a/")[1:]
 findings = [
-    {{"RuleID": "fake-secret", "File": path.relative_to(source).as_posix(), "Commit": "",
+    {{"RuleID": "fake-secret", "File": file, "Commit": "",
       "Secret": "REDACTED" if "--redact" in args else "{secret}"}}
-    for path in ([] if blind else sorted(source.rglob("*")))
-    if path.is_file() and "allowlisted" not in path.name
-    and "{secret}" in path.read_bytes().decode("utf-8", "replace")
+    for file, text in (part.split(" ", 1) for part in parts)
+    if "allowlisted" not in file and "{secret}" in text
 ]
 Path(report).write_text(json.dumps(findings))
 print("INF scan completed", file=sys.stderr)

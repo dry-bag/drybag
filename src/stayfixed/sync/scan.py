@@ -5,14 +5,20 @@ its absolute entries alone), looked up once per job; pre-commit's build, or any 
 environment could name, is never read. With none the job records `scan_unavailable`
 (`NO_SCANNER`).
 
-Every scan reads content only. The items, bytes each with a label, are written as files named `1`,
-`2`, ... in a directory of the job's scratch and scanned by `gitleaks dir .` run there, with
-`--config` naming the committed `.gitleaks.toml` the caller hands in or, with none, a file that
-extends gitleaks' own defaults. No path of the overlay reaches gitleaks, so no path allowlist and
-no `.gitleaksignore` applies, whatever a note is named, and no file at the overlay's root is read;
-a committed rule set's content allowlists still do. The exit is 1 for a finding and for a failed
-scan alike, so the report, not the exit code, tells them apart. The scan is a check against an
-honest mistake; an agent with a shell can push by hand anyway.
+Every scan reads a patch. gitleaks' file sources, `dir` and `stdin`, skip a file by its opening
+bytes, which a note's writer chooses, so the items, bytes each with a label, are committed as files
+named `1`, `2`, ... to a repository in the job's scratch and scanned by `gitleaks git .` run there,
+with `--config` naming the committed `.gitleaks.toml` the caller hands in or, with none, a file that
+extends gitleaks' own defaults. Only the job writes that repository, and neither it nor gitleaks'
+git reads any global or system git file (`SEALED`), so what reaches the scanner is git's patch of
+the bytes; the one thing a patch does not show, what git calls binary, the memory-only rule refuses.
+
+No path of the overlay reaches gitleaks, so no rule can name a note and no file at the overlay's
+root is read, nor a `.gitleaksignore`. A committed rule set applies whole: a path allowlist sees the
+numbered names, so `paths = [".*"]` exempts everything, and `gitleaks:allow` on a line exempts it.
+The exit is 1 for a finding and for a failed scan alike, so the report, not the exit code, tells
+them apart. The scan is a check against an honest mistake; an agent with a shell can push by hand
+anyway.
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ import json
 import re
 import shutil
 import tempfile
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +36,7 @@ from typing import Any
 from stayfixed import fsops
 from stayfixed.gitenv import scrubbed_env
 from stayfixed.processes import run_bounded
+from stayfixed.sync.git import GitError, GitTimeout, checked, git, left, with_config
 
 RULES = ".gitleaks.toml"
 # The rules a scan runs on where `HEAD` commits none: gitleaks' own.
@@ -42,6 +50,19 @@ NO_SCANNER = (
 DETAIL_LINES = 5
 DETAIL_CHARS = 600
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+# What a scan's git is given, with `HOME` its own directory: an owner's `* -diff` or ignore line,
+# which git reads from `HOME` with no configuration naming it, would empty the patch.
+SEALED = with_config(
+    {"GIT_CONFIG_NOSYSTEM": "1", "GIT_ATTR_NOSYSTEM": "1"},
+    {"user.name": "stayfixed scan", "user.email": "scan@localhost"},
+)
+# The one commit of the items that gitleaks reads a patch of. `--allow-empty`: a commit of nothing
+# but deletions leaves no item, and gitleaks refuses a repository with no commit.
+_COMMIT_ITEMS = (
+    ("init", "-q", "--template="),
+    ("add", "."),
+    ("commit", "-q", "--allow-empty", "-m", "scan"),
+)
 
 
 @dataclass(frozen=True)
@@ -86,6 +107,7 @@ def scan(
     for gitleaks' defaults), within `timeout`. The items, the rules and the report, which names
     files, are written in a directory of `scratch` (the job's own) removed with the scan, never in
     `$TMPDIR`. A detail names rule and label, never the match or the secret, redacted or not."""
+    deadline = time.monotonic() + timeout
     with tempfile.TemporaryDirectory(prefix="scan-", dir=scratch) as name:
         directory = Path(name)
         source = directory / "items"
@@ -95,15 +117,22 @@ def scan(
         config = directory / RULES
         config.write_bytes(DEFAULTS if rules is None else rules)
         report = directory / "report.json"
-        result = run_bounded(
-            [
-                str(binary), "dir", ".", "--config", str(config), "--redact", "--no-banner",
-                "--no-color", "--report-format", "json", "--report-path", str(report),
-            ],
-            cwd=source,
-            env=scrubbed_env(),
-            timeout=timeout,
-        )  # fmt: skip
+        env = {**SEALED, "HOME": str(directory)}
+        try:
+            for step in _COMMIT_ITEMS:
+                given = left(deadline, "the scan")
+                checked(git(source, *step, timeout=given, env=env), f"git {step[0]}")
+            result = run_bounded(
+                [
+                    str(binary), "git", ".", "--config", str(config), "--redact", "--no-banner",
+                    "--no-color", "--report-format", "json", "--report-path", str(report),
+                ],
+                cwd=source,
+                env=scrubbed_env() | env,
+                timeout=left(deadline, "the scan"),
+            )  # fmt: skip
+        except GitError as error:
+            return Scanned(False, first_lines(str(error)), isinstance(error, GitTimeout), ())
         findings = _findings(report)
     if result.timed_out:
         return Scanned(False, f"gitleaks did not finish within {timeout:g} s", True, ())

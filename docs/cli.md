@@ -628,18 +628,22 @@ the job's own settings: attributes read from `HEAD` (`GIT_ATTR_SOURCE=HEAD`), re
 
 **The secret scan.** The `gitleaks` on `PATH`: the `PATH` every git of the job gets, its relative
 entries dropped, looked up once per job. pre-commit's build is not read, nor any other a session's
-environment names, and the job never downloads or builds one. It scans bytes alone, under neutral
-names: before the commit, the working-tree bytes of each note to be committed; before the push,
+environment names, and the job never downloads or builds one. It scans a patch of the bytes, under
+neutral names: before the commit, the working-tree bytes of each note to be committed; before the push,
 every blob the range adds or changes and each commit's metadata (the commit object whole, every
 header and the message, and its path names), read raw by one `git cat-file --batch`, so no
-attribute, filter or `textconv` stands between git's bytes and the scan. Each is written as a file
-named `1`, `2`, ... in the job's `scratch/` and scanned there by `gitleaks dir`, so no name of a note
+attribute, filter or `textconv` stands between git's bytes and the scan. Each is committed as a
+file named `1`, `2`, ... to a repository in the job's `scratch/`, which no global or system git file
+configures, and scanned there by `gitleaks git`: gitleaks' file sources, `dir` and `stdin`, skip a
+file by its opening bytes, so a note opening `MZ` or `%PDF-` would pass unread, and a patch has no such
+filter. What git calls binary shows no patch, and the memory-only rule refuses it. No name of a note
 reaches gitleaks. The rules are the `.gitleaks.toml` `HEAD` commits, else gitleaks' own defaults
-(`[extend] useDefault = true`); a `.gitleaks.toml` in the working tree is never read. What no longer
-applies: a path allowlist, the defaults' own included, so a note named like `gitleaks.toml-tips.md`
-or under a `node_modules` directory is scanned like any other; and a `.gitleaksignore`, committed
-or not, since its fingerprints name paths the scan never shows. A committed rule set's content
-allowlists (regexes and stopwords) still apply. With no `gitleaks` there, nothing is committed or
+(`[extend] useDefault = true`); a `.gitleaks.toml` in the working tree is never read. So a path
+pattern cannot name a note: one like `gitleaks.toml-tips.md` or under a `node_modules` directory is
+scanned like any other, and the defaults' path allowlist exempts nothing. A `.gitleaksignore`,
+committed or not, is not read either. A committed rule set still applies whole: its content
+allowlists, and a path pattern that matches the numbered names, so `paths = [".*"]` exempts
+everything. And `gitleaks:allow` on a line exempts that line, as it does anywhere. With no `gitleaks` there, nothing is committed or
 pushed (`scan_unavailable`) and the remedy is to install gitleaks on the `PATH` the sessions run
 with; what is already committed upstream still integrates. A finding before the commit leaves that
 note out (`secret_found`, its detail opening with `remove the secret from <path>; the next job

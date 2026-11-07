@@ -239,9 +239,11 @@ PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
     # `git [-c core.excludesFile=…] --git-dir=… --work-tree=<empty> check-ignore --no-index
     # --stdin -z`, assembled in `asked`: the owner's own exclude files, asked about.
     ("src/stayfixed/attach/exclude.py", "unhidden_by_owner", "*asked"): NO_ROWS,
-    # The `gitleaks` on `PATH`, run as `gitleaks dir .` over files the scan wrote in the job's
-    # scratch: it reads them and its rules, and reaches no network.
+    # The `gitleaks` on `PATH`, run as `gitleaks git .` over a repository the scan wrote in the
+    # job's scratch: it reads that and its rules, and reaches no network.
     ("src/stayfixed/sync/scan.py", "scan", "str(binary)"): NO_ROWS,
+    # `init`, `add` and `commit` of `scan._COMMIT_ITEMS`, in that repository, which has no remote.
+    ("src/stayfixed/sync/scan.py", "scan", "*step"): NO_ROWS,
     # The note sync's detached job: this interpreter, isolated (`-I -c BOOT`), running this
     # package's `sync.job.main`, whose own launches (its `git fetch` and `git push` among them)
     # are walked where they are, in `sync/job.py`.
@@ -348,6 +350,14 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/doctor/checks.py", "_wrapper", "env=env"): (
         "the environment doctor was handed, less every `CLAUDE_`, `PLUGIN_` and `STAYFIXED_` "
         "variable, plus the plugin root and project directory the wrapper needs"
+    ),
+    ("src/stayfixed/sync/scan.py", "scan", "env=env"): (
+        "`scan.SEALED`: no system file, an identity for the scan's own commit, and `HOME` the "
+        "scan's directory, so nothing configures its repository"
+    ),
+    ("src/stayfixed/sync/scan.py", "scan", "env=scrubbed_env() | env"): (
+        "`scrubbed_env()` with `scan.SEALED` over it, for the gitleaks that runs git in the same "
+        "repository"
     ),
     ("src/stayfixed/sync/git.py", "git", "env=given"): (
         _JOB_ENVIRONMENT + ", and the temporary index a call names"

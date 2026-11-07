@@ -4805,6 +4805,30 @@ reddens = [
 ]
 
 [[mutation]]
+name = "a scan reads files, not a patch"
+file = "src/stayfixed/sync/scan.py"
+before = 'str(binary), "git", ".", "--config"'
+after = 'str(binary), "dir", ".", "--config"'
+reddens = ["tests/sync/test_scan.py::test_a_finding_names_rule_and_label_never_the_secret"]
+
+[[mutation]]
+name = "a scan's git reads the owner's home"
+file = "src/stayfixed/sync/scan.py"
+before = '        env = {**SEALED, "HOME": str(directory)}'
+after = "        env = dict(SEALED)"
+reddens = [
+  "tests/sync/test_scan.py::test_the_owners_git_files_hide_nothing_from_a_scan[attributes]",
+  "tests/sync/test_scan.py::test_the_owners_git_files_hide_nothing_from_a_scan[ignore]",
+]
+
+[[mutation]]
+name = "a scan with no item fails on an empty repository"
+file = "src/stayfixed/sync/scan.py"
+before = '    ("commit", "-q", "--allow-empty", "-m", "scan"),'
+after = '    ("commit", "-q", "-m", "scan"),'
+reddens = ["tests/sync/test_scan.py::test_a_scan_of_no_items_passes"]
+
+[[mutation]]
 name = "a scan's report is written in TMPDIR"
 file = "src/stayfixed/sync/scan.py"
 before = '    with tempfile.TemporaryDirectory(prefix="scan-", dir=scratch) as name:'

@@ -1,11 +1,11 @@
-"""The secret scan: the gitleaks on `PATH`, over content alone.
+"""The secret scan: the gitleaks on `PATH`, over a patch of the bytes.
 
 The scanner is the `gitleaks` the `PATH` of the one git environment finds, never pre-commit's
-build. Every scan is `gitleaks dir .` over the items' bytes written as files `1`, `2`, ... in the
-job's scratch, so no note's name and no file at the overlay's root reaches it. The stand-in in
-`conftest.py` answers as the real one does: a JSON report naming each finding's file, exit 1 for
-a finding and for a failed scan alike, an empty report for a failed one; and it skips a file whose
-name holds `allowlisted`, as a path allowlist would.
+build. Every scan is `gitleaks git .` over the items' bytes committed as files `1`, `2`, ... to a
+repository in the job's scratch, so no note's name and no file at the overlay's root reaches it.
+The stand-in in `conftest.py` answers as the real one does: a JSON report naming each finding's
+file, exit 1 for a finding and for a failed scan alike, an empty report for a failed one; and it
+skips a file whose name holds `allowlisted`, as a path allowlist would.
 """
 
 from __future__ import annotations
@@ -41,6 +41,13 @@ from tests.sync.conftest import (
 # The `gitleaks` on this machine's `PATH`, when there is one: found before any fixture puts the
 # stand-in first.
 REAL = shutil.which("gitleaks")
+_TOKEN = "ghp_" + "aB3dE5fG7hJ9kL1mN3pQ5rS7tV9wX1yZ3bC5"  # split: no scanner flags this file
+_BODY = f"the token is {_TOKEN}\n".encode()
+# What gitleaks' file sources take for a binary format, and skip, in a note git calls text.
+_OPENINGS = (
+    b"MZ", b"BZh", b"CWS", b"FWS", b"%PDF-", b"%!PS", b"{\\rtf1", b"!<arch>",
+    b"x" * 128 + b"DICM", b"x" * 257 + b"ustar",
+)  # fmt: skip
 
 
 @pytest.fixture
@@ -147,7 +154,7 @@ def test_a_finding_names_rule_and_label_never_the_secret(tmp_path: Path, scanner
 
     assert (result.ok, result.timed_out, result.found) == (False, False, ("common/memory/leak.md",))
     assert result.detail == "fake-secret in common/memory/leak.md"
-    assert _argv(scanner)[:2] == ["dir", "."] and "--redact" in _argv(scanner)
+    assert _argv(scanner)[:2] == ["git", "."] and "--redact" in _argv(scanner)
 
     clean = _scan(scanner, tmp_path, items[:1])
     assert (clean.ok, clean.detail, clean.found) == (True, "no leaks found", ())
@@ -161,6 +168,11 @@ def test_a_long_list_of_findings_is_cut_and_counted(tmp_path: Path, scanner: Pat
     assert len(result.found) == S.DETAIL_LINES + 2
     assert len(result.detail.splitlines()) == S.DETAIL_LINES + 1
     assert result.detail.splitlines()[-1] == "... 2 more"
+
+
+def test_a_scan_of_no_items_passes(tmp_path: Path, scanner: Path) -> None:
+    # A commit of nothing but deletions: gitleaks refuses a repository with no commit.
+    assert _scan(scanner, tmp_path, []).ok is True
 
 
 def test_a_failed_scan_is_not_a_finding(tmp_path: Path, scanner: Path) -> None:
@@ -228,25 +240,43 @@ def test_the_metadata_scan_names_the_commit(tmp_path: Path, scanner: Path) -> No
 
 
 @pytest.mark.skipif(REAL is None, reason="no gitleaks on PATH")
-def test_the_real_gitleaks_finds_a_token_under_allowlisted_names(tmp_path: Path) -> None:
-    # The four notes of the plan's measurement: the default rules' path allowlist skips the last
-    # three by name when gitleaks is shown their paths, and the scan shows it none.
+def test_the_real_gitleaks_finds_a_token_under_any_name_and_any_opening(tmp_path: Path) -> None:
+    # gitleaks' path allowlist skips three of the names when it is shown them, and its file sources
+    # skip the openings by content; a patch of a commit has neither. CI installs the real scanner.
+    # Mutation (oracle): `mutations/`'s "a scan reads files, not a patch".
     assert REAL is not None
-    token = "ghp_" + "aB3dE5fG7hJ9kL1mN3pQ5rS7tV9wX1yZ3bC5"  # split: no scanner flags this file
     names = [
         "common/memory/plain.md",
         "common/memory/gitleaks.toml-tips.md",
         "projects/node_modules/memory/note.md",
         "projects/a/memory/vendor/bundle/note.md",
     ]
+    items = [(name, _BODY) for name in names] + [
+        (repr(opening), opening + b"\n" + _BODY) for opening in _OPENINGS
+    ]
 
-    result = _scan(
-        Path(REAL), tmp_path, [(name, f"the token is {token}\n".encode()) for name in names]
-    )
+    result = _scan(Path(REAL), tmp_path, items)
 
     assert (result.ok, result.timed_out) == (False, False), result.detail
-    assert sorted(result.found) == sorted(names)
-    assert token not in result.detail
+    assert sorted(result.found) == sorted(label for label, _ in items)
+    assert _TOKEN not in result.detail
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [(".config/git/attributes", "* -diff\n"), (".config/git/ignore", "*\n")],
+    ids=["attributes", "ignore"],
+)
+def test_the_owners_git_files_hide_nothing_from_a_scan(
+    tmp_path: Path, scanner: Path, _a_home_of_its_own: Path, name: str, text: str
+) -> None:
+    # git reads these from `HOME` with no configuration naming them, and either empties the patch.
+    # Mutation (oracle): `mutations/`'s "a scan's git reads the owner's home".
+    write(_a_home_of_its_own, name, text)
+
+    result = _scan(scanner, tmp_path, [("a", f"{LEAK}\n".encode())])
+
+    assert (result.ok, result.found) == (False, ("a",)), result.detail
 
 
 # -- what the job scans ---------------------------------------------------------------------------
@@ -320,8 +350,8 @@ def test_committed_rules_apply(overlays: Overlays) -> None:
 
 
 def test_a_textconv_cannot_hide_a_note(overlays: Overlays) -> None:
-    # A `diff` driver whose `textconv` prints nothing shows gitleaks no patch at all; the scan
-    # reads the bytes, not a diff.
+    # A `diff` driver whose `textconv` prints nothing would show gitleaks no patch of the note;
+    # the scan's own repository has no attributes.
     a = overlays.a
     (a / ".git" / "info").mkdir(exist_ok=True)
     (a / ".git" / "info" / "attributes").write_text("*.md diff=hide\n")
