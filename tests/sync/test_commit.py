@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from stayfixed.gitenv import FLOOR_VARIABLE
 from stayfixed.sync import job as J
 from stayfixed.sync.state import LOCK_FILE, Lock, Outcome
 from tests.gitfixture import run_git
@@ -572,6 +573,28 @@ def test_signing_that_needs_a_prompt_is_signing_failed(overlays: Overlays, tmp_p
     assert outcome.state == "signing_failed" and "gpg" in str(outcome.detail)
     assert head(a) == before
     assert git(a, "config", "commit.gpgsign").strip() == "true"
+
+
+def test_a_signer_that_outlives_its_step_locks_nobody_out(
+    overlays: Overlays, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # git holds `index.lock` while it signs. The job's own bound reaching a signer that waits for a
+    # person must leave what git removes on SIGTERM, not what SIGKILL leaves behind.
+    # Mutation (oracle): `mutations/`'s "a timed-out group gets no SIGTERM".
+    a = overlays.a
+    gpg = write(tmp_path, "gpg", "#!/bin/sh\nexec sleep 300\n")
+    gpg.chmod(0o755)
+    git(a, "config", "commit.gpgsign", "true")
+    git(a, "config", "gpg.program", str(gpg))
+    write(a, "common/memory/new.md", "a note\n")
+    monkeypatch.delenv(FLOOR_VARIABLE)
+    ctx = context(overlays, a, local=3)
+
+    assert J.commit_memory(ctx) is None
+
+    assert [notice.state for notice in ctx.notices] == ["signing_failed"]
+    assert not (a / ".git" / "index.lock").exists()
+    assert run_git(a, "add", "--", "README.md").returncode == 0
 
 
 def test_signing_asked_for_is_honoured(overlays: Overlays, tmp_path: Path) -> None:

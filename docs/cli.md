@@ -706,7 +706,9 @@ no record kept. Inside `git commit --only`, between the move of `main` and the r
 index into place, git leaves `index.lock`; every later index-writing git refuses until it is
 removed, as after any killed `git commit`. The job never removes it (it cannot tell a stale lock
 from a live one): its outcome is `raced`, with git's words, and `doctor` names a lock older than a
-whole job. After the commit and before the push, the commit is whole, and the next job replays it
+whole job. The job's own step bound does not get there: a timed-out step's group is sent SIGTERM,
+on which git removes its lock, and SIGKILL a moment later, so a signature waiting on a person ends
+`signing_failed` with no lock left. Only a signer that ignores SIGTERM reaches the lock above. After the commit and before the push, the commit is whole, and the next job replays it
 onto an upstream that moved and pushes the scanned range. Between `git read-tree -m -u` and the
 move of `main`, the incoming notes are staged on the old `main`; your own commit in that window
 carries them, losing nothing, and the next job commits them, finds upstream already has the tree,

@@ -16,6 +16,18 @@ from stayfixed.processes import Ran, run_bounded
 ENV = {"PATH": os.environ["PATH"]}
 
 
+def _gone(pid: int) -> None:
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.05)
+    os.kill(pid, signal.SIGKILL)  # the one pid this test started
+    pytest.fail("it outlived the timeout: only the child was ended, not its group")
+
+
 def test_a_timeout_ends_the_whole_group(tmp_path: Path) -> None:
     # The grandchild holds the pipes, so a kill of the child alone leaves it running and the
     # reads waiting. Mutations (oracle): `mutations/`'s "a timeout ends the child and not its
@@ -26,16 +38,34 @@ def test_a_timeout_ends_the_whole_group(tmp_path: Path) -> None:
     ran = run_bounded(["sh", "-c", script], cwd=tmp_path, env=ENV, timeout=2)
 
     assert ran.timed_out is True
-    pid = int(pidfile.read_text(encoding="utf-8"))
-    deadline = time.monotonic() + 30
-    while time.monotonic() < deadline:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return
-        time.sleep(0.05)
-    os.kill(pid, signal.SIGKILL)  # the one pid this test started
-    pytest.fail("the grandchild outlived the timeout: only the child was ended, not its group")
+    _gone(int(pidfile.read_text(encoding="utf-8")))
+
+
+def test_a_timeout_lets_the_command_clean_up_first(tmp_path: Path) -> None:
+    # git removes its `index.lock` on SIGTERM and cannot on SIGKILL. Mutation (oracle):
+    # `mutations/`'s "a timed-out group gets no SIGTERM".
+    cleaned = tmp_path / "cleaned"
+    script = f"trap 'touch \"{cleaned}\"; exit 0' TERM; sleep 300 & wait"
+
+    ran = run_bounded(["sh", "-c", script], cwd=tmp_path, env=ENV, timeout=2)
+
+    assert ran.timed_out is True and cleaned.exists()
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "trap '' TERM; sleep 300 & echo $! > pid; wait",
+        "(trap '' TERM; exec sleep 300) > /dev/null 2>&1 < /dev/null & echo $! > pid; wait",
+    ],
+    ids=["the-command", "a-member-holding-no-pipe"],
+)
+def test_what_ignores_sigterm_meets_sigkill(tmp_path: Path, script: str) -> None:
+    # Mutation (oracle): `mutations/`'s "a group that ignores SIGTERM is left".
+    ran = run_bounded(["sh", "-c", script], cwd=tmp_path, env=ENV, timeout=2)
+
+    assert ran.timed_out is True
+    _gone(int((tmp_path / "pid").read_text(encoding="utf-8")))
 
 
 def test_a_program_that_is_not_there_is_127(tmp_path: Path) -> None:

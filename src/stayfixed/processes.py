@@ -8,7 +8,9 @@ group is ended before the command is reaped, while that pid names no group but i
 
 `run_bounded` is the bounded launch every git stayfixed starts goes through (`gitenv.git_call`),
 and the note sync's scanner beside it: what a timeout ends is the group, so an ssh or a credential
-helper under git cannot outlive the step that started it.
+helper under git cannot outlive the step that started it. It sends SIGTERM first, since a git that
+holds `index.lock` removes it on that signal and cannot on SIGKILL. A command that went on SIGTERM
+is reaped by then, and its pid names a group only while a member that ignored the signal keeps it.
 """
 
 from __future__ import annotations
@@ -26,11 +28,14 @@ from stayfixed import fsops
 # Reaping a command whose group was sent SIGKILL. The signal cannot be caught or ignored, so this
 # is slack for the kernel, not a second bound on the command.
 KILL_WAIT_SECONDS = 5
+# How long a timed-out group has to act on SIGTERM before SIGKILL. git acts at once, so only a
+# member that ignores the signal spends it. No shipped file states it.
+TERM_WAIT_SECONDS = 2
 
 
-def kill_group(process: subprocess.Popen[bytes]) -> None:
-    """Send SIGKILL to the command's whole process group; a group with nothing left to end is no
-    fault.
+def kill_group(process: subprocess.Popen[bytes], number: int = signal.SIGKILL) -> None:
+    """Send signal `number` to the command's whole process group; a group with nothing left to end
+    is no fault.
 
     Empty, the group answers `ProcessLookupError`; left with only the exited, unreaped command,
     macOS answers `PermissionError` rather than nothing, as it does for any group of zombies. A
@@ -38,7 +43,7 @@ def kill_group(process: subprocess.Popen[bytes]) -> None:
     and is not ended: the command's own exit still answers for it.
     """
     with contextlib.suppress(ProcessLookupError, PermissionError):
-        os.killpg(process.pid, signal.SIGKILL)
+        os.killpg(process.pid, number)
 
 
 @dataclass(frozen=True)
@@ -63,8 +68,9 @@ def run_bounded(
     """Run `argv` in `cwd` with exactly `env`, in a session of its own, for at most `timeout`.
 
     Standard input is `stdin`, or closed: nothing run here may wait for an answer. Past `timeout`
-    the whole group is sent SIGKILL, and its pipes are read for `KILL_WAIT_SECONDS` more; a
-    descendant that left the group and still holds them is abandoned, its streams empty. A program
+    the whole group is sent SIGTERM, then SIGKILL, its pipes read for `TERM_WAIT_SECONDS` after the
+    first and `KILL_WAIT_SECONDS` after the second; a descendant that left the group and still
+    holds them is abandoned, its streams empty. A program
     or directory that is not there is code 127, as a shell says it. No floor: a caller that wants
     one asks `gitenv`.
     """
@@ -84,11 +90,14 @@ def run_bounded(
     try:
         out, err = process.communicate(input=stdin, timeout=timeout)
     except subprocess.TimeoutExpired:
-        kill_group(process)
-        try:
-            out, err = process.communicate(timeout=KILL_WAIT_SECONDS)
-        except subprocess.TimeoutExpired:
-            process.wait()
-            out = err = b""
+        out = err = b""
+        for number, wait in (
+            (signal.SIGTERM, TERM_WAIT_SECONDS),
+            (signal.SIGKILL, KILL_WAIT_SECONDS),
+        ):
+            kill_group(process, number)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                out, err = process.communicate(timeout=wait)
+        process.wait()
         return Ran(process.returncode, out, err, True)
     return Ran(process.returncode, out, err, False)

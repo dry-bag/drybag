@@ -4742,13 +4742,29 @@ reddens = [
 [[mutation]]
 name = "a timeout ends the child and not its group"
 file = "src/stayfixed/processes.py"
-before = """        kill_group(process)
-        try:
-            out, err = process.communicate(timeout=KILL_WAIT_SECONDS)"""
-after = """        process.kill()
-        try:
-            out, err = process.communicate(timeout=KILL_WAIT_SECONDS)"""
-reddens = ["tests/test_processes.py::test_a_timeout_ends_the_whole_group"]
+before = "            kill_group(process, number)"
+after = "            process.send_signal(number)"
+reddens = ["tests/test_processes.py::test_what_ignores_sigterm_meets_sigkill[a-member-holding-no-pipe]"]
+
+[[mutation]]
+name = "a timed-out group gets no SIGTERM"
+file = "src/stayfixed/processes.py"
+before = "            (signal.SIGTERM, TERM_WAIT_SECONDS),\n"
+after = ""
+reddens = [
+  "tests/test_processes.py::test_a_timeout_lets_the_command_clean_up_first",
+  "tests/sync/test_commit.py::test_a_signer_that_outlives_its_step_locks_nobody_out",
+]
+
+[[mutation]]
+name = "a group that ignores SIGTERM is left"
+file = "src/stayfixed/processes.py"
+before = "            (signal.SIGKILL, KILL_WAIT_SECONDS),\n"
+after = ""
+reddens = [
+  "tests/test_processes.py::test_what_ignores_sigterm_meets_sigkill[the-command]",
+  "tests/test_processes.py::test_what_ignores_sigterm_meets_sigkill[a-member-holding-no-pipe]",
+]
 
 [[mutation]]
 name = "the child shares the caller's session"
