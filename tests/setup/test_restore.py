@@ -365,14 +365,14 @@ def test_a_restore_from_the_recorded_overlay_names_it(
 def test_sync_switches_note_sync_on(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sync: bool
 ) -> None:
-    from stayfixed.sync.switch import enabled
+    from stayfixed.setup.machine import read_machine
 
     overlay = _overlay(tmp_path)
     monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
     code, out, _ = invoke(_restoring(tmp_path, overlay, "--json", *(["--sync"] if sync else [])))
     assert code == 0
     assert json.loads(out)["sync"] is sync
-    assert enabled(tmp_path / "config.toml") is sync
+    assert (read_machine(tmp_path / "config.toml").get("sync") == {"enabled": True}) is sync
 
 
 def test_restore_without_an_overlay_is_refused_before_anything_is_written(tmp_path: Path) -> None:

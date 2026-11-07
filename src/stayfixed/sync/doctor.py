@@ -1,16 +1,16 @@
 """The note sync's row in `stayfixed doctor`: `sync`.
 
 One row, read off this machine's own records: the switch in the machine file, the git the job
-needs, the scanner build it needs, and the state its last job left. It runs nothing but `git
-version` and, once pre-commit's database is there, `git cat-file` of the pin `HEAD` commits, and
-writes nothing. `doctor`'s core discovers this module by name (CONTRIBUTING.md,
-"Areas"); every import sits inside a function body, as in a `hooks.py`, because discovery imports
-it before the report asks anything and the note layout and the job pull in the configuration layer.
+needs, the `gitleaks` on `PATH` it needs, and the state its last job left. It runs nothing but
+`git version`, `git rev-parse --git-path` for a `raced` last job and one `lstat`, and writes
+nothing. `doctor`'s core discovers this module by name (CONTRIBUTING.md, "Areas"); every import
+sits inside a function body, as in a `hooks.py`, because discovery imports it before the report
+asks anything and the note layout and the job pull in the configuration layer.
 
 The arms, in the order they are asked: off (a skip, the ordinary state), no overlay recorded, git
-below the job's floor, no scanner build, a hold, a last outcome that is a failure, and otherwise
-green. A state recorded for another overlay is not this overlay's: it reads as never run, as the
-job reads it.
+below the job's floor, no gitleaks on `PATH`, a hold, a last outcome other than `ok` (`skipped` is
+the sync not running), and otherwise green. A state recorded for another overlay is not this
+overlay's: it reads as never run, as the job reads it.
 """
 
 from __future__ import annotations
@@ -23,9 +23,6 @@ if TYPE_CHECKING:
     from stayfixed.doctor.api import Context, Contribution, Row
     from stayfixed.sync.state import Holds
 
-# A named cap: how long `git version` may take. The five seconds the report's other git queries
-# get; no shipped file states it.
-VERSION_TIMEOUT = 5.0
 # How many names of a hold the row prints before it counts the rest.
 SHOWN = 3
 
@@ -42,13 +39,16 @@ def _held(holds: Holds, fetched: str | None, overlay: Path) -> Row:
     upstream sha only when it is one: `state.json` is a file, and an agent may run what this
     prints."""
     from stayfixed.doctor.api import WARN, Row
-    from stayfixed.sync.job import REVIEW, REWRITE, UNREADABLE_REVIEW
-    from stayfixed.sync.state import OUTSIDE, REWRITTEN, UNREADABLE, full_sha
+    from stayfixed.sync.job import LOCAL_REVIEW, REVIEW, REWRITE, UNREADABLE_REVIEW
+    from stayfixed.sync.state import LOCAL_REWRITE, OUTSIDE, REWRITTEN, UNREADABLE, full_sha
 
+    merged = any(map(full_sha, holds.upstream_paths))
+    merge = ", or a commit that lists no path (a merge)" if merged else ""
     held = {
-        OUTSIDE: ("upstream holds changes outside memory", REVIEW),
+        OUTSIDE: (f"upstream holds changes outside memory{merge}", REVIEW),
         UNREADABLE: ("upstream's tree cannot be checked out here", UNREADABLE_REVIEW),
         REWRITTEN: ("upstream was rewritten and dropped commits this overlay has", REWRITE),
+        LOCAL_REWRITE: ("main no longer has commits that origin/main still has", LOCAL_REVIEW),
     }
     said: list[str] = []
     fixes: list[str] = []
@@ -66,19 +66,31 @@ def _held(holds: Holds, fetched: str | None, overlay: Path) -> Row:
     return Row(WARN, "; ".join(said), "; ".join(fixes))
 
 
+def _older_than_a_job(path: Path) -> bool:
+    """Whether `path` was last written longer ago than a whole job runs."""
+    import time
+
+    from stayfixed.sync.job import Limits
+
+    try:
+        return time.time() - path.lstat().st_mtime > Limits().job
+    except OSError:
+        return False
+
+
 def _sync(context: Context) -> Row:
     from pathlib import Path
 
     from stayfixed import fsops
     from stayfixed.config.machine import machine_config_path
     from stayfixed.doctor.api import OK, SKIP, WARN, Row
+    from stayfixed.gitenv import GIT_TIMEOUT_SECONDS
     from stayfixed.printed import clipped
     from stayfixed.sync import scan
     from stayfixed.sync.git import MIN_GIT, git, version_ok
-    from stayfixed.sync.state import SETTLED, StateUnreadable, read_state, state_directory
-    from stayfixed.sync.switch import enabled
+    from stayfixed.sync.state import STANDING, StateUnreadable, read_state, state_directory
 
-    if not enabled(context.machine):
+    if not context.session.owner.sync.enabled:
         where = context.machine or machine_config_path() or "the machine file"
         return Row(SKIP, f"the note sync is off; `[sync] enabled = true` in {where} switches it on")
     overlay = context.overlay_root
@@ -89,7 +101,7 @@ def _sync(context: Context) -> Row:
             "directory, so the job has nothing to sync",
             "record the overlay with `stayfixed setup --overlay <path>`",
         )
-    version = git(overlay, "version", timeout=VERSION_TIMEOUT)
+    version = git(overlay, "version", timeout=GIT_TIMEOUT_SECONDS)
     if version.code != 0 or not version_ok(version.out):
         found = clipped(version.out.strip() or version.err.strip() or "no answer")
         floor = ".".join(map(str, MIN_GIT))
@@ -98,8 +110,8 @@ def _sync(context: Context) -> Row:
             f"git {floor} or newer is needed and the job does nothing without it; found: {found}",
             f"install git {floor} or newer",
         )
-    if scan.gitleaks_binary(Path.home(), overlay, context.env) is None:
-        said, _, remedy = scan.NO_SCANNER.format(overlay=overlay).partition("; ")
+    if scan.gitleaks() is None:
+        said, _, remedy = scan.NO_SCANNER.partition("; ")
         return Row(WARN, said, remedy)
     try:
         state = read_state(state_directory())
@@ -116,9 +128,23 @@ def _sync(context: Context) -> Row:
     outcome = state.outcome
     first = clipped(outcome.detail.splitlines()[0]) if outcome.detail else ""
     said = f"the last job ended {outcome.at}: {outcome.state}" + (f" ({first})" if first else "")
-    if outcome.state in SETTLED:
+    if outcome.state == "ok":
         return Row(OK, said)
-    return Row(WARN, said, "a later session event retries; the detail says what stopped the job")
+    # A killed git's lock ends every job `raced`, never backed off; the job never removes it.
+    # Git says where it is: a linked worktree keeps its index under the main repository's `.git`.
+    if outcome.state == "raced":
+        asked = git(overlay, "rev-parse", "--git-path", "index.lock", timeout=GIT_TIMEOUT_SECONDS)
+        lock = overlay / asked.out.strip()
+        if asked.code == 0 and _older_than_a_job(lock):
+            said += f"; {lock} is older than a whole job runs"
+            return Row(WARN, said, f"remove {lock} if no git is running")
+    if outcome.state == "skipped":
+        fix = "the job acts once this is resolved; the next session event runs it"
+    elif outcome.state in STANDING:
+        fix = "a rerun meets this again until you act on what it says"
+    else:
+        fix = "a later session event retries"
+    return Row(WARN, said, fix)
 
 
 def register() -> Contribution:

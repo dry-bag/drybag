@@ -175,6 +175,36 @@ def test_a_table_that_is_not_a_table_is_a_note(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("text", "expected", "noted"),
+    [
+        pytest.param("", False, False, id="absent"),
+        pytest.param('[sync]\nenabled = "yes"\n', False, True, id="a-string"),
+        pytest.param('[sync]\nenabled = "true"\n', False, True, id="the-string-true"),
+        pytest.param("[sync]\nenabled = 1\n", False, True, id="an-integer"),
+        pytest.param("[sync]\nenabled = false\n", False, False, id="false"),
+        pytest.param("[sync]\nenabled = true\n", True, False, id="true"),
+    ],
+)
+def test_sync_is_on_only_for_the_bool_true(
+    tmp_path: Path, text: str, expected: bool, noted: bool
+) -> None:
+    # A hand edit easily writes a string or a number, which must not start a job that commits and
+    # pushes; it costs that key, with a note. Mutation (`mutations/`'s "a string 'true' switches
+    # sync on"): the value is not held to its type and the string cases redden.
+    got = resolve_owner(machine_file(tmp_path, text))
+    assert got.sync.enabled is expected
+    assert bool(got.notes) is noted
+
+
+def test_a_machine_file_that_does_not_load_leaves_sync_off(tmp_path: Path) -> None:
+    for text in ("[sync\nenabled = true\n", "[sync]\nenabled = true\nenabled = 1\n"):
+        assert resolve_owner(machine_file(tmp_path, text)).sync.enabled is False
+    path = tmp_path / "m.toml"
+    path.write_bytes(b"[sync]\nenabled = true\n\xff\xfe")
+    assert resolve_owner(path).sync.enabled is False
+
+
 def test_a_broken_machine_file_is_the_preset_and_names_the_file(tmp_path: Path) -> None:
     path = machine_file(tmp_path, "[[[")
     with pytest.raises(MachineConfigError) as raised:

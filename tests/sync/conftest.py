@@ -2,42 +2,38 @@
 
 git is never mocked here: the rules under test are about what git lists (renames, merges, the
 pathspec magic), so a fake would only test the fake. Every repository lives under the test's
-`tmp_path`, and `_sealed_git` closes what the root `conftest.py` leaves open (git's system
-configuration, an identity, the variables a hook run would hand on), so the developer's own
-settings cannot reach a test. The scanner is a stand-in script that answers as the real build
-does, and pre-commit's database a SQLite file written here: no test runs `pre-commit` or
-`gitleaks`.
+`tmp_path`, and `_sealed_git` closes what the root `conftest.py` leaves open (an identity, the
+variables a hook run would hand on), so the developer's own settings cannot reach a test. The
+scanner is a stand-in script installed as `gitleaks` first on a `PATH` that holds no other one:
+only the test that says so runs the real `gitleaks`.
 """
 
 from __future__ import annotations
 
-import contextlib
 import os
 import shutil
-import sqlite3
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from stayfixed import binding
 from stayfixed.config.machine import machine_config_path
-from stayfixed.memory.api import build_composed, rerender_overlay_index
+from stayfixed.sync import job as J
 from stayfixed.sync.job import JobContext, Limits
-from stayfixed.sync.render import remember_checkout
+from stayfixed.sync.rules import MEMORY_PATHSPEC
 from stayfixed.sync.state import state_directory
 from tests import gitfixture as fx
 
-# A bound no test's own git call should reach under the load other sessions put on the machine;
-# the tests about a bound running out pass a small one of their own.
+# A bound no scan should reach under the load other sessions put on the machine: the scanner is no
+# git, so the suite's floor does not lift its bound. Every git call has the floor; the tests about
+# a bound running out remove it and pass a small one of their own.
 SLOW = 120.0
-GITLEAKS_REPO = "https://github.com/gitleaks/gitleaks"
-GITLEAKS_REV = "83d9cd684c87d95d656c1458ef04895a7f1cbd8e"
 LEAK = "FAKESECRET-0123456789abcdef"
-DEFAULT_RULES = "# the build's own default rules\n"
 # The variables a job started from inside a git hook would inherit, and the ones a test that
 # reads the ssh command or the attributes must find unset.
 _AMBIENT = (
@@ -57,13 +53,16 @@ _AMBIENT = (
 
 @pytest.fixture(autouse=True)
 def _sealed_git(monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own: Path) -> None:
-    """The sealed environment of `tests.gitfixture` for the `git` the product's runner starts
-    too, in the per-test `HOME` of the root `conftest.py`, with none of the variables a hook run
-    would hand on."""
+    """The sealed environment of `tests.gitfixture` for the fixtures' own `git`, in the per-test
+    `HOME` of the root `conftest.py`, with none of the variables a hook run would hand on; and the
+    fixture's identity in that `HOME`'s `.gitconfig`, where the product's `git`, which inherits
+    no variable that names one, finds it."""
     for name in _AMBIENT:
         monkeypatch.delenv(name, raising=False)
     for name, value in fx.env(_a_home_of_its_own).items():
         monkeypatch.setenv(name, value)
+    with (_a_home_of_its_own / ".gitconfig").open("a", encoding="utf-8") as config:
+        config.write(fx.gitconfig((("user.name", "t"), ("user.email", "t@example.com"))))
 
 
 def git(repo: Path, *args: str) -> str:
@@ -204,6 +203,18 @@ def push_note(clone: Path, relative: str, text: str, message: str = "memory: ups
     return head(clone)
 
 
+def after_step(monkeypatch: pytest.MonkeyPatch, step: str, then: Callable[[], object]) -> None:
+    """`then` each time the job's function `step` returns: a moment between its steps."""
+    real = getattr(J, step)
+
+    def and_then(*args: Any) -> Any:
+        result = real(*args)
+        then()
+        return result
+
+    monkeypatch.setattr(J, step, and_then)
+
+
 def slow_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, slow: dict[str, float]) -> None:
     """A `git` first on PATH that sleeps before the subcommands named in `slow`, seconds each."""
     real = shutil.which("git")
@@ -215,18 +226,20 @@ def slow_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, slow: dict[str, fl
     monkeypatch.setenv("PATH", f"{shim}{os.pathsep}{os.environ['PATH']}")
 
 
-# -- the scanner: the build pre-commit makes, as a script that answers like it ------------------
+# -- the scanner: a script on PATH that answers like gitleaks -----------------------------------
 
 _GITLEAKS = r'''#!{python}
-"""Stand-in gitleaks, answering as the real build does: a JSON report naming rule, file and
-commit; exit 1 for a finding and for a failed scan alike (the failed one with an empty report).
+"""Stand-in gitleaks, answering `gitleaks git <source>` as the real one does: a JSON report naming
+rule and file; exit 1 for a finding and for a failed scan alike (the failed one with an empty
+report).
 
 Modes, from the file `mode` beside it: `scan` (default), `fail`, `sleep [seconds]` (then scan).
-Its rules and ignores are found as the real one finds them: `--config`, else `$GITLEAKS_CONFIG`,
-else the scanned directory's `.gitleaks.toml`; ignores from `--gitleaks-ignore-path` and from the
-scanned directory's `.gitleaksignore`. Rules holding `allow-all`, or ignores holding
-`ignore-all`, find nothing. What it saw is recorded in `argv.json`, `seen.json` and
-`git_config.json` beside it.
+It reads the patch `git log` prints in its source, as the real one does, and skips a file whose
+name holds `allowlisted`, as a path allowlist would. Its rules are `--config`, else
+`$GITLEAKS_CONFIG`, else the source's `.gitleaks.toml`, and its ignores the source's
+`.gitleaksignore`: rules holding `allow-all`, or ignores holding `ignore-all`, find nothing. What it
+saw is recorded in `argv.json` and `seen.json`
+beside it.
 """
 import json, os, subprocess, sys, time
 from pathlib import Path
@@ -235,126 +248,68 @@ me = Path(__file__)
 args = sys.argv[1:]
 (me.parent / "argv.json").write_text(json.dumps(args))
 (me.parent / "pid").write_text(str(os.getpid()))
-(me.parent / "git_config.json").write_text(json.dumps({{key: subprocess.run(
-    ["git", "config", "--get", key], capture_output=True, text=True).stdout.strip()
-    for key in ("log.showSignature", "color.ui", "color.diff")}}))
 mode_file = me.parent / "mode"
 mode = mode_file.read_text().strip() if mode_file.exists() else "scan"
 report = args[args.index("--report-path") + 1]
 if mode.startswith("sleep"):
     time.sleep(float(mode.split()[1]) if len(mode.split()) > 1 else 30)
-if mode == "fail":
+if mode == "fail" or args[0] != "git":
     Path(report).write_text("[]")
-    print("ERR failed to scan Git repository error=\"stderr is not empty\"", file=sys.stderr)
+    print("ERR failed to scan", args[0], file=sys.stderr)
     sys.exit(1)
-def value(flag) -> None:
-    return args[args.index(flag) + 1] if flag in args else None
-source = Path(args[-1]) if args[0] == "git" else Path(".")
-rules = value("--config") or os.environ.get("GITLEAKS_CONFIG") or str(source / ".gitleaks.toml")
-ignore = Path(value("--gitleaks-ignore-path") or ".")
-ignore = ignore / ".gitleaksignore" if ignore.is_dir() else ignore
-read = lambda path: Path(path).read_text() if Path(path).is_file() else None
+source = Path(args[1]).resolve()
+rules = args[args.index("--config") + 1] if "--config" in args else (
+    os.environ.get("GITLEAKS_CONFIG") or str(source / ".gitleaks.toml"))
+read = lambda path: Path(path).read_text() if Path(path).is_file() else ""
 (me.parent / "seen.json").write_text(json.dumps({{
-    "rules": rules, "rules_text": read(rules), "ignore_text": read(ignore),
-    "env": sorted(k for k in os.environ if k.startswith("GITLEAKS_")),
-}}))
-ignored = (read(ignore) or "") + (read(source / ".gitleaksignore") or "")
-blind = "allow-all" in (read(rules) or "") or "ignore-all" in ignored
-redact = "--redact" in args
-findings = []
-def found(path, commit) -> None:
-    findings.append({{"RuleID": "fake-secret", "File": path, "Commit": commit,
-                      "Secret": "REDACTED" if redact else "{secret}"}})
-def scan(patch, commit) -> None:
-    path = None
-    for line in patch.splitlines():
-        if line.startswith("+++ b/"):
-            path = line[6:]
-        elif line.startswith("+") and "{secret}" in line:
-            found(path, commit)
-if blind:
-    pass
-elif args[0] == "stdin":
-    for number, line in enumerate(sys.stdin.read().splitlines()):
-        if "{secret}" in line:
-            findings.append({{"RuleID": "fake-secret", "File": "", "Commit": "",
-                              "StartLine": number, "Secret": "REDACTED" if redact else "{secret}"}})
-elif "--pre-commit" in args and "--staged" in args:
-    scan(subprocess.run(["git", "diff", "--cached", "--no-color", "-U0"], capture_output=True,
-                        text=True, check=True).stdout, "")
-else:
-    rng = next(a.split("=", 1)[1] for a in args if a.startswith("--log-opts="))
-    out = subprocess.run(["git", "log", "-p", "-U0", "--no-color", "--format=%x00%H", rng],
-                         capture_output=True, text=True, check=True).stdout
-    for chunk in out.split("\0")[1:]:
-        sha, _, patch = chunk.partition("\n")
-        scan(patch, sha)
+    "source": str(source), "rules": rules, "rules_text": read(rules)}}))
+blind = "allow-all" in read(rules) or "ignore-all" in read(source / ".gitleaksignore")
+log = ["git", "log", "-p", "-U0", "--format="]
+patch = subprocess.run(log, cwd=source, capture_output=True, check=True).stdout
+parts = [] if blind else patch.decode("utf-8", "replace").split("diff --git a/")[1:]
+findings = [
+    {{"RuleID": "fake-secret", "File": file, "Commit": "",
+      "Secret": "REDACTED" if "--redact" in args else "{secret}"}}
+    for file, text in (part.split(" ", 1) for part in parts)
+    if "allowlisted" not in file and "{secret}" in text
+]
 Path(report).write_text(json.dumps(findings))
 print("INF scan completed", file=sys.stderr)
 sys.exit(1 if findings else 0)
 '''
 
 
-def build_gitleaks(directory: Path, environment: str = "default") -> Path:
-    """A stand-in gitleaks where pre-commit would have built it, in `environment`, beside the
-    source's `config/gitleaks.toml` (the default rules the real build embeds)."""
-    (directory / "config").mkdir(parents=True, exist_ok=True)
-    (directory / "config" / "gitleaks.toml").write_text(DEFAULT_RULES, encoding="utf-8")
-    binary = directory / f"golangenv-{environment}" / "bin" / "gitleaks"
-    binary.parent.mkdir(parents=True, exist_ok=True)
+def gitleaks_on_path(directory: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The stand-in installed as `directory/gitleaks`, first on a `PATH` that holds no other
+    `gitleaks` (`path_without_gitleaks`)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    binary = directory / "gitleaks"
     binary.write_text(_GITLEAKS.format(python=sys.executable, secret=LEAK), encoding="utf-8")
     binary.chmod(0o755)
+    path = path_without_gitleaks(directory.parent / "git-only")
+    monkeypatch.setenv("PATH", f"{directory}{os.pathsep}{path}")
     return binary
 
 
-def pre_commit_store(cache: Path, rows: list[tuple[str, str, Path]]) -> Path:
-    """pre-commit's `db.db` under `cache/pre-commit`, with `(repo, rev, path)` rows."""
-    store = cache / "pre-commit"
-    store.mkdir(parents=True, exist_ok=True)
-    with contextlib.closing(sqlite3.connect(store / "db.db")) as db, db:
-        db.execute(
-            "CREATE TABLE IF NOT EXISTS repos (repo TEXT NOT NULL, ref TEXT NOT NULL, "
-            "path TEXT NOT NULL, PRIMARY KEY (repo, ref))"
-        )
-        db.executemany("INSERT INTO repos VALUES (?, ?, ?)", [(r, v, str(p)) for r, v, p in rows])
-    return store
+def path_without_gitleaks(git_only: Path) -> str:
+    """This process's `PATH` less every directory holding a `gitleaks`, after `git_only`, a
+    directory holding only a `git` that runs this one: a `git` installed beside a `gitleaks` is
+    still found, and that `gitleaks` is not."""
+    entries = [entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+    entries = [entry for entry in entries if Path(entry) != git_only]
+    git_only.mkdir(parents=True, exist_ok=True)
+    real = shutil.which("git", path=os.pathsep.join(entries))
+    (git_only / "git").write_text(f'#!/bin/sh\nexec "{real}" "$@"\n')
+    (git_only / "git").chmod(0o755)
+    kept = [entry for entry in entries if not (Path(entry) / "gitleaks").exists()]
+    return os.pathsep.join([str(git_only), *kept])
 
 
-def environment_of(cache: Path) -> dict[str, str]:
-    """The environment whose scratch cache holds the database `pre_commit_store` wrote."""
-    return {"XDG_CACHE_HOME": str(cache), "PATH": os.environ.get("PATH", "")}
-
-
-# -- an overlay the job runs on: notes, two bound checkouts, the scanner ------------------------
+# -- an overlay the job runs on: notes and the scanner -------------------------------------------
 
 NOW = datetime(2026, 10, 12, 12, 0, 0, tzinfo=UTC)
 HOST = "testhost"
 TAG = "team"
-PRE_COMMIT_CONFIG = (
-    f"repos:\n  - repo: {GITLEAKS_REPO}\n    rev: {GITLEAKS_REV}\n"
-    "    hooks:\n      - id: gitleaks\n"
-)
-PROJECT_CONFIG = """[stayfixed]
-version = "0.1.0"
-preset = "recommended"
-
-[project]
-name = "{name}"
-base_branch = "main"
-
-[memory]
-mode = "overlay"
-groups = ["developer", "project-stable"]
-index_extra = []
-"""
-# The projects with a checkout this machine's sessions opened, bound into the overlay; `gamma`
-# has notes in the overlay and no checkout.
-BOUND_PROJECTS = ("alpha", "beta")
-PATHSPEC = [
-    ":(top,glob)common/memory/**",
-    ":(top,glob)groups/*/memory/**",
-    ":(top,glob)projects/*/memory/**",
-]
 
 
 def note_text(name: str, *, index: str | None = None, body: str = "") -> str:
@@ -369,14 +324,12 @@ def note_text(name: str, *, index: str | None = None, body: str = "") -> str:
 @dataclass
 class Overlays:
     """Two machines' clones of one overlay remote, `a` and `b`, with what the job reads: the
-    checkouts bound into `a` and recorded as opened (`checkouts`), the scanner's stand-in
-    (`gitleaks`) where pre-commit's database finds it, and the state directory."""
+    scanner's stand-in (`gitleaks`) first on `PATH`, and the state directory."""
 
     bare: Path
     a: Path
     b: Path
     home: Path
-    checkouts: dict[str, Path]
     gitleaks: Path
     state_dir: Path = field(default_factory=state_directory)
     # Whether the machine file `use` writes switches the sync on: the job's `main` and the hooks
@@ -392,48 +345,24 @@ class Overlays:
             target.write_text(mode, encoding="utf-8")
 
     def use(self, clone: Path) -> None:
-        """Make `clone` the overlay this machine records, and bind the checkouts into it."""
+        """Make `clone` the overlay this machine records."""
         machine = machine_config_path()
         assert machine is not None
         machine.parent.mkdir(parents=True, exist_ok=True)
         switch = "\n[sync]\nenabled = true\n" if self.sync else ""
         machine.write_text(f'[overlay]\nroot = "{clone}"\n{switch}', encoding="utf-8")
-        for name, root in self.checkouts.items():
-            build_composed(clone, name, binding.ensure_id(root))
-
-    def render(self, clone: Path, project: str) -> None:
-        """`stayfixed memory index` from `project`'s checkout into `clone`, as its machine would."""
-        self.use(clone)
-        done = rerender_overlay_index(self.checkouts[project], machine=None)
-        assert done.reason is None, done.reason
-        self.use(self.a)
-
-
-def a_checkout(root: Path, name: str) -> Path:
-    """A repository whose `stayfixed.toml` keeps its notes in the overlay, bound to `name`."""
-    init(root)
-    remote = f"git@example.com:acme/{name}.git"
-    git(root, "remote", "add", "origin", remote)
-    write(root, "stayfixed.toml", PROJECT_CONFIG.format(name=name))
-    binding.record(root, name, remote)
-    return root
 
 
 @pytest.fixture
 def overlays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own: Path) -> Overlays:
     home = _a_home_of_its_own
-    monkeypatch.delenv("PRE_COMMIT_HOME", raising=False)
-    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
-    scanner = build_gitleaks(tmp_path / "pre-commit" / "repo")
-    pre_commit_store(
-        home / ".cache", [(GITLEAKS_REPO, GITLEAKS_REV, tmp_path / "pre-commit" / "repo")]
-    )
+    scanner = gitleaks_on_path(tmp_path / "bin", monkeypatch)
     bare = tmp_path / "remote.git"
     bare.mkdir()
     fx.git(bare, "init", "-q", "--bare", "-b", "main")
     seed = init(tmp_path / "seed")
     write(seed, "README.md", "overlay\n")
-    write(seed, ".pre-commit-config.yaml", PRE_COMMIT_CONFIG)
+    write(seed, ".pre-commit-config.yaml", "repos: []\n")
     write(seed, "common/claude/hooks/launch.sh", "#!/bin/sh\n")
     write(seed, "common/claude/hooks/x.py", "print('x')\n")
     write(seed, "common/memory/first.md", note_text("first", index="First trigger"))
@@ -441,6 +370,7 @@ def overlays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own
     for project in ("alpha", "beta", "gamma"):
         relative = f"projects/{project}/memory/project-stable/{project}-one.md"
         write(seed, relative, note_text(f"{project}-one", index=f"{project} trigger"))
+    # An overlay that still tracks an index, as one did before each machine rendered its own.
     write(seed, "projects/gamma/memory/MEMORY.md", "# gamma's index, rendered elsewhere\n")
     commit_all(seed, "seed")
     git(seed, "push", "-q", str(bare), "main")
@@ -448,27 +378,18 @@ def overlays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own
     for name in ("a", "b"):
         fx.git(tmp_path, "clone", "-q", str(bare), str(tmp_path / name))
         clones.append(tmp_path / name)
-    checkouts = {name: a_checkout(tmp_path / "checkouts" / name, name) for name in BOUND_PROJECTS}
-    world = Overlays(bare, clones[0], clones[1], home, checkouts, scanner)
+    world = Overlays(bare, clones[0], clones[1], home, scanner)
     world.use(world.a)
-    for name in reversed(BOUND_PROJECTS):
-        remember_checkout(checkouts[name], world.state_dir)
-        assert rerender_overlay_index(checkouts[name], machine=None).reason is None
-    commit_all(world.a, "memory: the first render")
-    git(world.a, "push", "-q", "origin", "main")
-    git(world.b, "pull", "-q", "--ff-only")
     return world
 
 
-def context(world: Overlays, clone: Path, *, pending: object = None, **limits: float) -> JobContext:
-    """A `JobContext` for `clone`, owing `pending`, with any step limit overridden."""
+def context(world: Overlays, clone: Path, **limits: float) -> JobContext:
+    """A `JobContext` for `clone`, with any step limit overridden."""
     return JobContext(
         overlay=clone,
         state_dir=world.state_dir,
-        home=world.home,
         host=HOST,
         now=lambda: NOW,
-        pending=pending,  # type: ignore[arg-type]
         limits=Limits(**limits),
     )
 
@@ -481,7 +402,7 @@ def committed(repo: Path, rev: str = "HEAD") -> list[tuple[str, str]]:
 
 
 def memory_status(repo: Path) -> str:
-    return git(repo, "status", "--porcelain", "--no-renames", "--", *PATHSPEC)
+    return git(repo, "status", "--porcelain", "--no-renames", "--", *MEMORY_PATHSPEC)
 
 
 def staged(repo: Path, *pathspec: str) -> str:

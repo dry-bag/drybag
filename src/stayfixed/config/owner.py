@@ -1,11 +1,13 @@
-"""The machine owner's layer: personal values, the guards' switches and the session budgets.
+"""The machine owner's layer: personal values, the guards' switches, the session budgets and the
+note sync's switch.
 
-The preset's `[defaults.personal]`, `Guards()` and no session budget, overridden by the machine
-file's `[personal]`, `[guards]` and `[budgets]`, resolved through `classes.resolve` as the layers
-`PRESET` and `MACHINE_FILE`. The machine file is the owner's, never a repository's
-(`config.machine` says where it is), so it is the last word on a guard: a repository's `[guards]`
-sets the default, the overlay's files move it, and this file's `[guards]` wins over all of them
-in the session's one resolution (`config.session`), where this layer is the top one.
+The preset's `[defaults.personal]`, `Guards()`, no session budget and `Sync()`, overridden by the
+machine file's `[personal]`, `[guards]`, `[budgets]` and `[sync]`, resolved through
+`classes.resolve` as the layers `PRESET` and `MACHINE_FILE`. The machine file is the owner's, never
+a repository's (`config.machine` says where it is), so it is the last word on a guard: a
+repository's `[guards]` sets the default, the overlay's files move it, and this file's `[guards]`
+wins over all of them in the session's one resolution (`config.session`), where this layer is the
+top one.
 
 Two readers ask, and they differ only over a file that does not load. A command the owner runs
 refuses it (`strict`, which every load of a command asks for), as `config.overlay.overlay_root`
@@ -54,6 +56,14 @@ class Guards:
 
 
 @dataclass(frozen=True)
+class Sync:
+    """The note sync's switch, on for the machine file's bool `true` alone: read from this layer,
+    never the session's resolution, where the overlay's files could move it."""
+
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
 class Owner:
     """The owner's resolved values, where each came from, and what could not be used."""
 
@@ -73,6 +83,7 @@ class Owner:
     # the parser's position or the error's class and never the file's text; `None` for a file
     # that loads or is not there. Only a reader that is not `strict` gets an `Owner` with one.
     unloaded: str | None = None
+    sync: Sync = Sync()
 
 
 # A machine file that does not load. `error` is `read_machine_toml`'s refusal, which names the file
@@ -149,6 +160,7 @@ def _over(upper: Mapping[str, object], preset: str, unloaded: str | None) -> Own
         f"personal.{key}": value for key, value in defaults_of(shipped).get("personal", {}).items()
     }
     lower.update({f"guards.{item.name}": item.default for item in fields(Guards)})
+    lower.update({f"sync.{item.name}": item.default for item in fields(Sync)})
     layers = [Layer(LayerName.PRESET, lower), Layer(LayerName.MACHINE_FILE, dict(upper))]
     resolution = resolve(layers)
     values = resolution.values
@@ -170,6 +182,7 @@ def _over(upper: Mapping[str, object], preset: str, unloaded: str | None) -> Own
         preset=preset,
         layer=MappingProxyType(dict(upper)),
         unloaded=unloaded,
+        sync=Sync(**_section(values, "sync")),
     )
 
 
@@ -190,7 +203,8 @@ def _section(values: Mapping[str, object], section: str) -> dict[str, Any]:
 
 
 def _machine_values(raw: dict[str, Any], machine: Path, notes: list[str]) -> dict[str, object]:
-    """The machine file's `[personal]`, `[guards]` and session `[budgets]` as dotted keys.
+    """The machine file's `[personal]`, `[guards]`, session `[budgets]` and `[sync]` as dotted
+    keys.
 
     Every other table is another reader's (`[overlay]`, `[machine]`) or nobody's, and is not this
     function's to judge. A problem is a note, and costs only its own key, or its own table when the
@@ -204,7 +218,12 @@ def _machine_values(raw: dict[str, Any], machine: Path, notes: list[str]) -> dic
 
     found: dict[str, object] = {}
     # Each table this layer reads, with the schema class `reading.table_types` holds its keys to.
-    tables: dict[str, type[Any]] = {"personal": Personal, "guards": Guards, "budgets": Budgets}
+    tables: dict[str, type[Any]] = {
+        "personal": Personal,
+        "guards": Guards,
+        "budgets": Budgets,
+        "sync": Sync,
+    }
     for table, cls in tables.items():
         if table not in raw:
             continue

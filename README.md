@@ -266,21 +266,19 @@ last to find the project root, and reaches no network.
 
 1. **`git fetch`** asks the project's own `origin` for identifiers filed on branches this checkout
    has not fetched, with `--no-recurse-submodules`, so a submodule's remote is not asked. stayfixed
-   passes git only `PATH`, `HOME`, `LANG`, `LC_ALL` and `SYSTEMROOT` from your environment, and
-   what it drops changes how the fetch connects. ssh finds no agent through
-   `SSH_AUTH_SOCK`, though it still uses its key files under `~/.ssh` and any `IdentityFile` or
-   `IdentityAgent` your `~/.ssh/config` names, and `GIT_SSH_COMMAND` is not used. Without
-   `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY`, in either case, a fetch over HTTPS goes direct unless
-   your git configuration sets `http.proxy` or the remote's `remote.<name>.proxy`. Without
+   passes every git it starts only `PATH` (its absolute entries), `HOME`, `LANG`, `LC_ALL`,
+   `SYSTEMROOT`, `SSH_AUTH_SOCK` and the proxy variables (`http_proxy`, `https_proxy`,
+   `HTTPS_PROXY`, `all_proxy`, `ALL_PROXY`, `no_proxy`, `NO_PROXY`) from your environment, so your
+   ssh agent and proxy settings apply, and `GIT_SSH_COMMAND` is not used. Without
    `XDG_CONFIG_HOME` and `GIT_CONFIG_GLOBAL`, git reads your global configuration from
    `~/.gitconfig` and `~/.config/git/config` alone: a global configuration either variable points
    elsewhere, and the credential helpers it names, are not read, while the helpers the configuration
-   git does read names are used. The note sync's fetch is the other way round: it asks the overlay's
-   `origin` for `main` alone, into a ref of its own, with your whole environment less the variables
-   that point git at another repository, so your ssh agent and proxy settings apply; it never asks
-   for a password (`GIT_TERMINAL_PROMPT=0`, and an `ssh` given `BatchMode=yes`). Its **`git
-   push`** goes the same way to the same `origin`: the sha it checked to `main`, never forced and
-   with no tag.
+   git does read names are used. The note sync's fetch asks the overlay's `origin` for `main` alone,
+   into a ref of its own, in that same environment; it never asks for a password
+   (`GIT_TERMINAL_PROMPT=0`, no askpass, no standard input) and runs none of the overlay's hooks.
+   Its **`git push`** goes the same way to the same `origin`: the sha it checked to `main`, never
+   forced and with no tag. Its secret scan is the `gitleaks` on that same `PATH`, which reaches no
+   network; pre-commit's build of the overlay's hook is not read.
 2. **`gh`**: `setup --overlay create:` looks up the template, creates the private overlay from it
    with its clone, and asks whether it exists when that clone left nothing. It is asked nothing
    until `setup` has looked at `<home>/<name>`: a file there, or a directory that is not an
@@ -328,9 +326,9 @@ detection reads the contents; and in one that left trees out as well (`--filter=
 `git ls-tree -r` too. And
 `git archive`, which `stayfixed test attribute` uses to extract `HEAD` and the merge base, runs
 the smudge filters the repository's `.gitattributes` name and your git configuration defines, as
-do the note sync's `git add` and `git checkout-index` over the overlay's notes, which run the
-clean and smudge filters your git configuration defines for the attributes `HEAD` commits
-(`GIT_ATTR_SOURCE=HEAD`) with your whole environment.
+do the note sync's `git commit --only` and `git read-tree -m -u` over the overlay's notes, which
+run the clean and smudge filters your git configuration defines for the attributes `HEAD` commits
+(`GIT_ATTR_SOURCE=HEAD`).
 stayfixed passes `test attribute`'s git your `HOME` and leaves it reading its system configuration and the
 repository's own, so where the system, global or repository-local configuration defines
 `filter.lfs` — as `git lfs install` does in the global one — that is `git-lfs smudge`, which

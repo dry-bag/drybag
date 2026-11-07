@@ -16,8 +16,8 @@ The names imported from outside this area today, by the `attach` and `overlay` a
 repository's tests: the resolver (`resolve` and `project_notes`), the overlay layout `attach`
 writes and `overlay` renders (`PROJECTS`, `RECORD`, `STORE_DIR`), the
 note roots `sync`'s pathspecs are built from beside `config.plates.GROUPS` (`COMMON`,
-`PROJECTS`), the index render `sync` runs in process from a bound checkout and what it answers
-(`rerender_overlay_index`, `Rerendered`), the one
+`PROJECTS`), and the index's name, which those pathspecs leave out under each project, since each
+machine renders its own (`INDEX_NAME`), the one
 reader of the overlay's project record, which `attach` reads it with and answers its own way when
 it cannot (`read_binding_record`), the binding's one classifier and the states it answers in
 (`binding_state`, `UNBOUND` and `BOUND`, which `attach`'s own doctor row reads), which `attach`
@@ -63,10 +63,10 @@ kept in silence is what made this pass necessary:
 reachable from this area's own module, which is what `memory/commands.py` and
 this area's tests use; an area that comes to need one grows this list by the rule above.
 
-- **The index group** — `INDEX_NAME`, `index_source`, `write_index`, `render_index`,
+- **The index group** — `index_source`, `write_index`, `render_index`, `render_current`,
   `check_index`, `reconcile`, `Reconciliation`, `IndexCheck`. `attach`, which creates the
-  symlinked index, calls none of them; the index is a command (`memory index`) and the areas
-  that want one run it.
+  symlinked index, calls none of them; the index is a command (`memory index`), and this area's
+  own `index-render` hook runs it.
 - **The notes group** — `read_note`, `render_note`, `with_index`, `write_note`, `NoteError`,
   `NoteType` — and nothing outside this area imports them.
 - **The inventory group** — `inventory`, `totals`, `Entry` — and nothing outside this area
@@ -82,7 +82,7 @@ from stayfixed.memory.bundles import SLOTS
 from stayfixed.memory.composed import build as build_composed
 from stayfixed.memory.composed import link_sources, promote_share, render_missing_index
 from stayfixed.memory.composed import withdraw as withdraw_composed
-from stayfixed.memory.index import Rerendered, rerender_overlay_index
+from stayfixed.memory.index import INDEX_NAME
 from stayfixed.memory.store import (
     BINDING_STATES,
     BOUND,
@@ -108,12 +108,12 @@ __all__ = [
     "BOUND",
     "COMMON",
     "DELIMITER",
+    "INDEX_NAME",
     "PROJECTS",
     "RECORD",
     "SLOTS",
     "STORE_DIR",
     "UNBOUND",
-    "Rerendered",
     "Store",
     "binding_state",
     "build_composed",
@@ -125,7 +125,6 @@ __all__ = [
     "promote_share",
     "read_binding_record",
     "render_missing_index",
-    "rerender_overlay_index",
     "reserved",
     "reserved_project_groups",
     "resolve",

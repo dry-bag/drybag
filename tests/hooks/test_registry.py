@@ -70,14 +70,16 @@ def test_a_session_start_runs_no_step_that_links_memory() -> None:
     # The harness reaches the composed store through `autoMemoryDirectory` in the main checkout's
     # settings file, which every worktree reads, so no `SessionStart` step links a store into a
     # worktree: the shipped handlers there are the owner-held files a new linked worktree lacks
-    # (`owner-files`, first), the overlay's status line and its standing rules, the count of the
-    # store's unreviewed notes, which writes nothing in any checkout, and the note sync's trigger,
-    # which writes only in the data directory.
+    # (`owner-files`, first), the overlay's status line and its standing rules, the index render,
+    # which writes the overlay's index and notes, the count of the store's unreviewed notes, which
+    # writes nothing in any checkout, and the note sync's trigger, which writes only in the data
+    # directory.
     names = [handler.name for handler in discover() if handler.event == "SessionStart"]
     assert names == [
         "owner-files",
         "overlay-status",
         "overlay-rules",
+        "index-render",
         "unreviewed-notes",
         "note-sync-start",
     ]

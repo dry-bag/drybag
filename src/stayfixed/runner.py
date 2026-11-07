@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from stayfixed.gitenv import scrubbed_env
+
 # The shell's own code for "command not found", used here for a binary that could not be
 # launched at all, so a caller has one number to read rather than an exception to catch.
 NOT_FOUND = 127
@@ -37,12 +39,13 @@ TIMED_OUT = 124
 # template, and the clone that follows comes down the wire. Tune this for a hung process, not for a
 # slow link.
 NETWORK_TIMEOUT_SECONDS = 300
-# Inherit the environment rather than scrub it: these are the machine owner's own authenticated
-# commands, and `gh` needs its token and `git` its ssh-agent to work at all. What is dropped is
-# what points git at a *different* repository, or a different index or object store, than the
-# directory it was given -- which is exactly what a clone into a fresh directory must not
-# inherit. `gitenv.scrubbed_env()` reaches the same end from the other side, with a five-key
-# allowlist; this seam cannot, because the owner's own authentication is the point of it.
+# A `git` is given `gitenv.scrubbed_env()`, the one environment every git stayfixed starts gets:
+# its ssh agent and proxies are kept there, and a session's `GIT_CONFIG_GLOBAL` or
+# `GIT_SSH_COMMAND` is not. Every other program inherits the environment rather than have it
+# scrubbed: these are the machine owner's own authenticated commands, and `gh` needs its token to
+# work at all. What is dropped from them is what points git at a *different* repository, or a
+# different index or object store, than the directory it was given -- which is exactly what a
+# program that runs git for us (`gh repo create --clone`, `pre-commit`) must not inherit.
 #
 # **This list is a trade-off and is not exhaustive, and the comment that said it was the two
 # that redirect git was wrong.** `GH_HOST` and `GH_CONFIG_DIR` redirect `gh` the same way and
@@ -105,7 +108,10 @@ class _SubprocessRunner:
 
     def launch(self, argv: list[str], cwd: Path) -> Completed:
         bound = NETWORK_TIMEOUT_SECONDS
-        env = {key: value for key, value in os.environ.items() if key not in _ENV_DROP}
+        if argv[:1] == ["git"]:
+            env = scrubbed_env()
+        else:
+            env = {key: value for key, value in os.environ.items() if key not in _ENV_DROP}
         env.update(_ENV_FORCE)
         try:
             done = subprocess.run(  # noqa: S603 - list form, never a shell; see the module docstring

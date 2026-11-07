@@ -31,10 +31,8 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         "reserved",
         # the three roots of the overlay's notes, which `sync` builds its pathspecs from
         "COMMON",
-        # the index render `sync` runs in process from a bound checkout before it commits, and
-        # what that render answers
-        "rerender_overlay_index",
-        "Rerendered",
+        # the index's name, which `sync`'s pathspecs leave out under each project
+        "INDEX_NAME",
         # the one reader of the overlay's project record, which attach reads with a policy of its
         # own
         "read_binding_record",

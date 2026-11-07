@@ -40,7 +40,8 @@ def test_runtime_modules_import_only_the_standard_library() -> None:
 
 def test_the_runner_is_a_leaf_and_not_an_area() -> None:
     # `runner.py` is a leaf: it sits beside `fsops.py`, `gitenv.py` and `tomlout.py` and imports
-    # nothing from `stayfixed`. Pinned as an import check rather than by walking the tree, because
+    # nothing from `stayfixed` but `gitenv`, another leaf, whose environment its `git` is given.
+    # Pinned as an import check rather than by walking the tree, because
     # the surface rule's walk treats a leaf as invisible on purpose. No mutation: adding a
     # stayfixed import to a leaf is a review finding the standard-library walk above does not
     # catch, and this is the one line that does.
@@ -58,7 +59,7 @@ def test_the_runner_is_a_leaf_and_not_an_area() -> None:
     # found no imports at all, or a filter that stopped matching — satisfies the filter below
     # without reading a single name. `runner.py` imports five stdlib modules.
     assert imported
-    assert not [name for name in imported if name.startswith("stayfixed")], imported
+    assert not [n for n in imported if n.startswith("stayfixed") and n != "stayfixed.gitenv"]
 
 
 def _package_imports(where: str, text: str, packages: frozenset[str]) -> set[tuple[str, str]]:

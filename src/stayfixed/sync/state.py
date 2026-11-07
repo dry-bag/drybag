@@ -2,9 +2,8 @@
 
 The hooks decide and the job acts; they meet only in `state_directory()`: `state.json`, which the
 job writes and `doctor` reads, `job.lock` held by the running job, `sleeper.lock` held by the one
-sleeper waiting out the throttle, `pending`, a trigger that arrived while the job was busy,
-`checkouts.json`, the project roots this machine's sessions opened, and `scratch/`, which the job
-removes whole.
+sleeper waiting out the throttle, `pending`, a trigger that arrived while the job was busy, and
+`scratch/`, which the job removes whole.
 
 An outcome and a hold are different: the outcome is what the last job did, a hold a range the sync
 refuses to move until its owner acts, and a later outcome (`offline`, say) never clears a hold. A
@@ -28,17 +27,17 @@ from typing import Any
 
 from stayfixed import fsops
 from stayfixed.config.paths import data_directory
+from stayfixed.gitenv import answer_bytes
 from stayfixed.jsonobject import json_object
 
 OUTCOMES: tuple[str, ...] = (
-    "ok", "skipped", "conflict", "resolved_index", "raced", "rejected", "offline", "auth_failed",
-    "timeout", "hook_failed", "scan_unavailable", "signing_failed", "secret_found",
-    "waiting_clean_tree", "index_stale",
+    "ok", "skipped", "conflict", "raced", "rejected", "offline", "auth_failed", "timeout",
+    "hook_failed", "scan_unavailable", "signing_failed", "secret_found", "waiting_clean_tree",
 )  # fmt: skip
 
-# The outcomes after which the sync has nothing to answer for: the hooks start no job on them and
-# `doctor` reports them green. A united index is a success: nothing stopped the job.
-SETTLED = ("ok", "skipped", "resolved_index")
+# The outcomes after which a trigger has nothing to start a job for. `doctor` reports only `ok`
+# green: a `skipped` job is a sync that is not running.
+SETTLED = ("ok", "skipped")
 # The failures a job run again on the same `HEAD`, upstream and notes usually meets again, so a
 # `Stop` waits them out as it does a hold (`backed_off`); `SessionEnd` retries them.
 STANDING = (
@@ -50,7 +49,6 @@ STATE_FILE = "state.json"
 LOCK_FILE = "job.lock"
 SLEEPER_LOCK_FILE = "sleeper.lock"
 PENDING_FILE = "pending"
-CHECKOUTS_FILE = "checkouts.json"
 SCRATCH = "scratch"
 
 # A trigger that follows a job by less than this does not start another: a session's turns end
@@ -80,9 +78,11 @@ class Outcome:
     detail: str | None
 
 
-# Why upstream is held: changes outside memory, a tree git will not check out, or a rewrite that
-# dropped commits this overlay still has, which the hold then names in place of paths.
+# Why upstream is held: changes outside memory, a tree git will not check out, a rewrite that
+# dropped commits this overlay still has, or one here that dropped commits upstream still has; a
+# rewrite's hold names the commits in place of paths.
 OUTSIDE, UNREADABLE, REWRITTEN = "outside", "unreadable", "rewritten"
+LOCAL_REWRITE = "rewritten here"
 _SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 
 
@@ -106,28 +106,21 @@ EMPTY_HOLDS = Holds((), ())
 
 
 @dataclass(frozen=True)
-class PendingAlign:
-    """A move of `main` recorded before it is made, so a job killed after it aligns the index."""
-
-    from_sha: str
-    to_sha: str
-    paths: tuple[str, ...]
-
-
-@dataclass(frozen=True)
 class SyncState:
     """`overlay` is the root the state was recorded for, as the machine file spells it. `head` is
     the `HEAD` the last job left and `dirty` the `notes_mark` of the memory paths it found dirty,
-    which the back-off compares."""
+    which the back-off compares. `agreed` is the sha `main` and upstream last agreed on, written
+    only when a job verified them equal, which the local rewrite check starts from. A
+    `pending_align` an older job wrote is ignored."""
 
     overlay: str
     outcome: Outcome
     holds: Holds
     fetched_sha: str | None
     last_job_at: str | None
-    pending_align: PendingAlign | None
     head: str | None = None
     dirty: str | None = None
+    agreed: str | None = None
 
 
 def state_directory() -> Path:
@@ -171,24 +164,21 @@ def _parse(data: dict[str, Any]) -> SyncState:
     """The state in `data`, every field of the type the job writes, or `StateUnreadable`."""
     try:
         raw, up, local = data["outcome"], data["holds"]["upstream"], data["holds"]["local"]
-        align = data["pending_align"]
         state = SyncState(
             overlay=_text(data["overlay"]),
             outcome=Outcome(_text(raw["state"]), _time(raw["at"]), _text(raw["detail"], none=True)),
             holds=Holds(_texts(up["paths"]), _texts(local["commits"]), _text(up["why"], none=True)),
             fetched_sha=_text(data["fetched_sha"], none=True),
             last_job_at=_time(data["last_job_at"], none=True),
-            pending_align=None
-            if align is None
-            else PendingAlign(_text(align["from"]), _text(align["to"]), _texts(align["paths"])),
             head=_text(data["head"], none=True),
             dirty=_text(data["dirty"], none=True),
+            agreed=_text(data["agreed"], none=True),
         )
     except (KeyError, TypeError, ValueError):
         raise StateUnreadable(f"{STATE_FILE} does not hold the fields the job writes") from None
     if state.outcome.state not in OUTCOMES:
         raise StateUnreadable("outcome.state is not a sync outcome")
-    if state.holds.upstream_why not in (None, OUTSIDE, UNREADABLE, REWRITTEN):
+    if state.holds.upstream_why not in (None, OUTSIDE, UNREADABLE, REWRITTEN, LOCAL_REWRITE):
         raise StateUnreadable("holds.upstream.why is not a reason the job holds for")
     return state
 
@@ -213,7 +203,6 @@ def write_state(d: Path, s: SyncState) -> None:
     the new, never half."""
     if s.outcome.state not in OUTCOMES:
         raise ValueError(f"{s.outcome.state} is not a sync outcome")
-    align = s.pending_align
     document = {
         "overlay": s.overlay,
         "outcome": {
@@ -227,11 +216,9 @@ def write_state(d: Path, s: SyncState) -> None:
         },
         "fetched_sha": s.fetched_sha,
         "last_job_at": s.last_job_at,
-        "pending_align": None
-        if align is None
-        else {"from": align.from_sha, "to": align.to_sha, "paths": list(align.paths)},
         "head": s.head,
         "dirty": s.dirty,
+        "agreed": s.agreed,
     }
     d.mkdir(parents=True, exist_ok=True, mode=0o700)
     with fsops.open_directory(d) as directory:
@@ -321,7 +308,7 @@ def notes_mark(overlay: Path, paths: Iterable[str]) -> str:
             content = b"=" + fsops.read_bounded_within(overlay, path, MARK_BYTES)[0]
         except OSError:
             content = b"-"  # gone, a link, or not a file: the same mark until that changes
-        digest.update(hashlib.sha256(path.encode("utf-8", "surrogateescape")).digest())
+        digest.update(hashlib.sha256(answer_bytes(path)).digest())
         digest.update(hashlib.sha256(content).digest())
     return digest.hexdigest()
 

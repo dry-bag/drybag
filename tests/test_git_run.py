@@ -13,7 +13,7 @@ import pytest
 
 from stayfixed import gitenv
 from stayfixed.gitenv import NO_ANSWER, git_run
-from tests.gitfixture import plant_path, stand_in_git
+from tests.gitfixture import SESSION_CONFIG, plant_path, stand_in_git
 
 SRC = Path(__file__).resolve().parents[1] / "src"
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
@@ -320,6 +320,62 @@ def test_the_floor_variable_is_capped(
     assert git_run(tmp_path, "rev-parse") == (0, "")
 
 
+def _seen_by_git(root: Path) -> dict[str, str]:
+    """The environment a `git` started by `git_call` hands a shell alias of its own."""
+    called = gitenv.git_call(root, "-c", "alias.e=!env", "e", timeout=60)
+    assert called.code == 0, called
+    return dict(line.split("=", 1) for line in called.out.splitlines() if "=" in line)
+
+
+@needs_git
+def test_git_call_hands_git_only_the_kept_variables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Whatever the session that fired carries, a per-project `GIT_CONFIG_GLOBAL` with a `pushurl`
+    # above all, reaches no git stayfixed starts; the agent and the proxy a push needs still do.
+    # Mutation (oracle): `mutations/`'s "a session's global git configuration reaches git" -> this
+    # reddens.
+    for name in (SESSION_CONFIG, "GIT_DIR", "PRE_COMMIT_HOME", "GIT_SSH_COMMAND"):
+        monkeypatch.setenv(name, str(tmp_path / name))
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/agent.sock")
+    monkeypatch.setenv("https_proxy", "http://proxy.invalid:3128")
+
+    seen = _seen_by_git(tmp_path)
+
+    for name in (SESSION_CONFIG, "GIT_DIR", "PRE_COMMIT_HOME", "GIT_SSH_COMMAND"):
+        assert name not in seen, name
+    assert seen["SSH_AUTH_SOCK"] == "/agent.sock"
+    assert seen["https_proxy"] == "http://proxy.invalid:3128"
+    assert seen["GIT_TERMINAL_PROMPT"] == "0"
+
+
+@needs_git
+@pytest.mark.parametrize("entry", ["", "."])
+def test_a_relative_path_entry_never_reaches_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str
+) -> None:
+    # Every git runs in a repository a clone chose the contents of, so an empty or `.` entry of
+    # `PATH` (a dotfile slip) would find a `git` planted at its root, and git an `ssh` there the
+    # same way. Mutation (oracle): `mutations/`'s "a relative PATH entry reaches git" -> this
+    # reddens.
+    _stub(tmp_path, "echo planted")
+    monkeypatch.setenv("PATH", f"{entry}{os.pathsep}{os.environ['PATH']}")
+
+    assert gitenv.git_call(tmp_path, "version", timeout=60).out.startswith("git version")
+    shown = _seen_by_git(tmp_path)["PATH"]
+    assert all(os.path.isabs(part) for part in shown.split(os.pathsep)), shown
+
+
+def test_git_call_honours_the_floor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The suite's floor lifts `git_call`'s bounds as it lifts `git_run`'s, so the note sync's tests
+    # pass no bound of their own. A `git` that answers after half a second, under a bound a fifth
+    # of that, still answers. Mutation (oracle): `mutations/`'s "git_call ignores the floor" ->
+    # this reddens.
+    _a_git_that_sleeps(tmp_path, monkeypatch, 0.5)
+    called = gitenv.git_call(tmp_path, "rev-parse", timeout=0.1)
+    assert (called.code, called.timed_out) == (0, False)
+
+
 # Every named bound a product `git` runs under. The suite's floor lifts each one past git's
 # latency, so a bound shrunk below it — `QUERY_TIMEOUT_SECONDS = 0.001` — passed every test
 # that runs through it, and only an owner's machine would have met a `git` never given the time.
@@ -372,14 +428,18 @@ def _spelled(expression: ast.expr | None) -> str | None:
     return None
 
 
+# The two runners a bound is handed to, `git_run` and `git_call`.
+GIT_LAUNCHES = frozenset({"git_run", "git_call"})
+
+
 def test_every_bound_a_git_run_call_passes_is_one_the_table_pins() -> None:
     # The table above is only as good as its list: a call given a bound of its own that no row
     # names — a new constant, or a literal below a second — would slip past it as the two above
-    # did past the suite. So every `git_run(..., timeout=...)` under `src/` is read: a literal
-    # must be at least a second, a name must be a row, and a parameter passed through must
-    # default to one. And every row must be reached, so none outlives its constant. Mutation
-    # (oracle): `mutations/`'s "the status query's bound is a literal below git's latency" -> this
-    # reddens.
+    # did past the suite. So every `timeout=` a `git_run` or `git_call` under `src/` is given is
+    # read: a literal must be at least a second, a name must be a row, and a parameter passed
+    # through must default to one. And every row must be reached, so none outlives its constant.
+    # Mutation (oracle): `mutations/`'s "the status query's bound is a literal below git's latency"
+    # -> this reddens.
     pinned = {bound.rsplit(".", 1)[1] for bound in GIT_RUN_BOUNDS}
     reached = {"GIT_TIMEOUT_SECONDS"}  # `git_run`'s own default, for a call that passes none
     unpinned = []
@@ -392,7 +452,7 @@ def test_every_bound_a_git_run_call_passes_is_one_the_table_pins() -> None:
             for node in ast.walk(function)
         }
         for call in ast.walk(tree):
-            if not (isinstance(call, ast.Call) and _spelled(call.func) == "git_run"):
+            if not (isinstance(call, ast.Call) and _spelled(call.func) in GIT_LAUNCHES):
                 continue
             given = next((k.value for k in call.keywords if k.arg == "timeout"), None)
             where = f"{path.relative_to(SRC)}:{call.lineno}"

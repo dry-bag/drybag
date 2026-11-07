@@ -16,12 +16,15 @@ from pathlib import Path
 
 import pytest
 
+from stayfixed.gitenv import FLOOR_VARIABLE
 from stayfixed.sync import job as J
 from stayfixed.sync.state import LOCK_FILE, STATE_FILE, Lock, Outcome, SyncState, read_state
-from tests.gitfixture import git_bytes
+from tests import gitfixture as fx
+from tests.gitfixture import SESSION_CONFIG, git_bytes
 from tests.sync.conftest import (
     LEAK,
     Overlays,
+    after_step,
     commit_all,
     context,
     git,
@@ -85,7 +88,7 @@ def test_the_memory_only_range_is_pushed_as_the_checked_sha(
         write(a, "common/memory/later.md", note_text("later"))
         later.append(commit_all(a, "memory: later"))
 
-    monkeypatch.setattr(J, "_before_push", a_commit_lands_after_the_check)
+    after_step(monkeypatch, "_scan_push", a_commit_lands_after_the_check)
 
     state = job(overlays)
 
@@ -95,6 +98,31 @@ def test_the_memory_only_range_is_pushed_as_the_checked_sha(
     assert "common/memory/later.md" not in remote_files(overlays, "common/memory")
     assert state.fetched_sha is not None
     assert state.head == later[0] and not state.holds.any
+
+
+@pytest.mark.parametrize("redirect", ["pushurl", "pushInsteadOf"])
+def test_a_sessions_global_config_cannot_redirect_the_push(
+    overlays: Overlays, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, redirect: str
+) -> None:
+    # A session's own `GIT_CONFIG_GLOBAL`, a project's `env` block, say, would send the notes to a
+    # remote the owner never chose. Mutation (oracle): `mutations/`'s "a session's global git
+    # configuration reaches git" -> this reddens.
+    second = tmp_path / "second.git"
+    fx.git(tmp_path, "init", "-q", "--bare", str(second))
+    entry = {
+        "pushurl": f'[remote "origin"]\n\tpushurl = {second}\n',
+        "pushInsteadOf": f'[url "{second}"]\n\tpushInsteadOf = {overlays.bare}\n',
+    }[redirect]
+    config = tmp_path / "session.gitconfig"
+    config.write_text(entry, encoding="utf-8")
+    monkeypatch.setenv(SESSION_CONFIG, str(config))
+    a_note(overlays)
+
+    state = job(overlays)
+
+    assert state.outcome.state == "ok", state.outcome
+    assert NOTE in remote_files(overlays, "common/memory")
+    assert fx.run_git(second, "rev-parse", "--verify", "-q", "main").returncode != 0
 
 
 def test_a_local_commit_outside_memory_is_held_and_named(overlays: Overlays) -> None:
@@ -185,7 +213,7 @@ def test_an_upstream_hold_skips_the_push(
     git(b, "push", "-q", "origin", "main")
     a_note(overlays)
     attempts: list[int] = []
-    monkeypatch.setattr(J, "_before_push", lambda: attempts.append(1))
+    after_step(monkeypatch, "_scan_push", lambda: attempts.append(1))
 
     state = job(overlays)
 
@@ -195,6 +223,26 @@ def test_an_upstream_hold_skips_the_push(
     assert git(overlays.a, "log", "-1", "--format=%s").startswith("memory: 1 notes")
     assert state.outcome.detail is not None
     assert "not pushed while upstream is held" in state.outcome.detail
+
+
+@pytest.mark.parametrize(
+    ("line", "rejected"),
+    [
+        ("!\trefs/heads/main:refs/heads/main\t[rejected] (fetch first)", True),
+        ("!\trefs/heads/main:refs/heads/main\t[rejected] (Aktualisierung abgelehnt)", True),
+        (
+            "!\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)",
+            False,
+        ),
+        ("!\trefs/heads/main:refs/heads/main\t[remote failure] (fetch first)", False),
+        ("*\trefs/heads/main:refs/heads/main\t[new branch]", False),
+        ("fetch first non-fast-forward [rejected]", False),
+    ],
+)
+def test_a_rejected_push_is_read_from_the_porcelain_flag(line: str, rejected: bool) -> None:
+    # The ref line's `!` flag and its `[rejected]` summary are git's own, whatever the locale; the
+    # reason after them is prose, and a word of it decides nothing.
+    assert J._rejected(f"To origin\n{line}\nDone\n") is rejected
 
 
 def test_a_rejected_push_is_retried_on_the_next_trigger(
@@ -207,7 +255,7 @@ def test_a_rejected_push_is_retried_on_the_next_trigger(
         raced.append(push_note(overlays.b, "common/memory/from-b.md", note_text("from-b")))
 
     with monkeypatch.context() as patch:
-        patch.setattr(J, "_before_push", another_machine_pushes)
+        after_step(patch, "_scan_push", another_machine_pushes)
         state = job(overlays)
 
     assert state.outcome.state == "rejected", state.outcome
@@ -221,17 +269,24 @@ def test_a_rejected_push_is_retried_on_the_next_trigger(
     assert git(overlays.bare, "rev-parse", "main~1").strip() == raced[0]
 
 
-def test_a_secret_in_the_range_is_secret_found_with_its_sha(overlays: Overlays) -> None:
+def test_a_push_finding_opens_with_its_remedy(overlays: Overlays) -> None:
+    # Two commits with a secret, made outside the job (no scan ran): the detail opens with the
+    # rewrite from the older one, which covers both, then names each finding.
     a = overlays.a
     before = remote_main(overlays)
     write(a, "common/memory/leak.md", f"key = {LEAK}\n")
-    leaky = commit_all(a, "memory: by hand")  # committed outside the job: no scan ran
+    oldest = commit_all(a, "memory: by hand")
+    write(a, "common/memory/again.md", f"key = {LEAK}\n")
+    newest = commit_all(a, "memory: by hand again")
 
     state = job(overlays)
 
     assert state.outcome.state == "secret_found"
     assert state.outcome.detail is not None
-    assert f"git rebase -i {leaky}^" in state.outcome.detail
+    lines = state.outcome.detail.splitlines()
+    assert lines[0] == J.REMEDY.format(sha=oldest)
+    assert f"fake-secret in {oldest} common/memory/leak.md" in lines
+    assert f"fake-secret in {newest} common/memory/again.md" in lines
     assert LEAK not in state.outcome.detail
     assert remote_main(overlays) == before
 
@@ -287,11 +342,11 @@ def test_a_failed_range_scan_is_hook_failed_not_secret_found(overlays: Overlays)
 def test_scan_unavailable_still_integrates_upstream_and_pushes_nothing(
     overlays: Overlays,
 ) -> None:
-    # No scanner build, an uncommitted note, an upstream note and an unpushed local one. The commit
-    # step's failure is a notice; fetch and integrate still run, so the upstream note arrives; the
-    # push needs its own scan, so nothing is pushed and the end is `scan_unavailable`.
+    # No gitleaks on PATH, an uncommitted note, an upstream note and an unpushed local one. The
+    # commit step's failure is a notice; fetch and integrate still run, so the upstream note
+    # arrives; the push needs its own scan, so nothing is pushed and the end is `scan_unavailable`.
     a = overlays.a
-    (overlays.home / ".cache" / "pre-commit" / "db.db").unlink()
+    overlays.gitleaks.unlink()
     push_note(overlays.b, "common/memory/from-b.md", note_text("from-b"))
     write(a, "common/memory/local.md", note_text("local"))
     git(a, "add", "common/memory/local.md")
@@ -302,7 +357,7 @@ def test_scan_unavailable_still_integrates_upstream_and_pushes_nothing(
     state = job(overlays)
 
     assert state.outcome.state == "scan_unavailable", state.outcome
-    assert state.outcome.detail is not None and "pre-commit install-hooks" in state.outcome.detail
+    assert state.outcome.detail is not None and "install gitleaks" in state.outcome.detail
     assert (a / "common/memory/from-b.md").read_text() == note_text("from-b")
     assert head(a, "HEAD^") == before  # the local commit, replayed onto upstream's
     assert remote_main(overlays) == before
@@ -311,7 +366,7 @@ def test_scan_unavailable_still_integrates_upstream_and_pushes_nothing(
 
 def test_scan_unavailable_alone_is_the_end_after_a_clean_integration(overlays: Overlays) -> None:
     a = overlays.a
-    (overlays.home / ".cache" / "pre-commit" / "db.db").unlink()
+    overlays.gitleaks.unlink()
     push_note(overlays.b, "common/memory/from-b.md", note_text("from-b"))
     a_note(overlays)
 
@@ -331,7 +386,7 @@ def test_a_failed_commit_scan_then_offline_is_offline_naming_both(overlays: Over
     assert state.outcome.state == "offline", state.outcome
     detail = state.outcome.detail
     assert detail is not None and "Could not resolve hostname" in detail
-    assert "also hook_failed: gitleaks" in detail
+    assert "also secret_found: remove the secret from common/memory/leak.md" in detail
     assert LEAK not in detail
 
 
@@ -378,9 +433,8 @@ def test_a_refused_link_with_a_rejected_push_is_rejected_and_names_the_link(
     a = overlays.a
     (a / "common/memory/pw.md").symlink_to("/etc/passwd")
     a_note(overlays, "common/memory/from-a.md", "from-a")
-    monkeypatch.setattr(
-        J, "_before_push", lambda: push_note(overlays.b, "common/memory/race.md", "race\n")
-    )
+    race = lambda: push_note(overlays.b, "common/memory/race.md", "race\n")  # noqa: E731
+    after_step(monkeypatch, "_scan_push", race)
 
     state = job(overlays)
 
@@ -416,12 +470,12 @@ def test_without_a_stop_the_end_is_the_latest_notice_refusals_counting_first(
     ctx.notices.append(_said("scan_unavailable", "no gitleaks build"))
     assert J._end(ctx, None).state == "scan_unavailable"
 
-    ctx.notices.append(_said("resolved_index", "united: alpha"))
+    ctx.notices.append(_said("signing_failed", "no passphrase"))
     end = J._end(ctx, None)
-    assert end.state == "resolved_index"
+    assert end.state == "signing_failed"
     assert end.detail is not None
     assert end.detail.splitlines()[:3] == [
-        "united: alpha",
+        "no passphrase",
         "also scan_unavailable: no gitleaks build",
         "also hook_failed: " + J._refusal_detail(["common/memory/link.md"]),
     ]
@@ -469,8 +523,11 @@ def _alive(pid: int) -> bool:
     return True
 
 
-def test_a_hung_remote_times_out_and_releases_the_lock(overlays: Overlays) -> None:
+def test_a_hung_remote_times_out_and_releases_the_lock(
+    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # The hung remote has a child of its own: the whole group goes, not only git.
+    monkeypatch.delenv(FLOOR_VARIABLE)
     pidfile = overlays.bare.parent / "grandchild.pid"
     fake_ssh(overlays, f"sleep 60 &\necho $! > '{pidfile}'\nwait")
     started = time.monotonic()
@@ -497,6 +554,7 @@ def test_the_whole_jobs_limit_records_timeout_and_releases_the_lock(
     overlays: Overlays, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # A git the job's own limit has to end: no step's limit is reached, only the whole job's.
+    monkeypatch.delenv(FLOOR_VARIABLE)
     slow_git(tmp_path, monkeypatch, {"status": 30})
     a_note(overlays)
     started = time.monotonic()
@@ -530,13 +588,14 @@ def git_spy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return log
 
 
-def test_every_git_call_of_the_job_and_its_scans_runs_non_interactive(
+def test_every_git_call_of_the_job_runs_non_interactive(
     overlays: Overlays, git_spy: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # `GIT_TERMINAL_PROMPT=0` and the batch ssh command reach every git call the job's runner
-    # makes, the scanner's included, not only fetch and push. The sealed test environment sets
-    # the prompt switch itself, so it is taken out here: the job must set it on its own.
+    # `GIT_TERMINAL_PROMPT=0` reaches every git call the job makes, and a session's
+    # `GIT_SSH_COMMAND` none. The sealed test environment sets the prompt switch itself, so it is
+    # taken out here: the core's environment must set it on its own.
     monkeypatch.delenv("GIT_TERMINAL_PROMPT")
+    monkeypatch.setenv("GIT_SSH_COMMAND", "ssh -o ProxyCommand=elsewhere")
     push_note(overlays.b, "common/memory/from-b.md", note_text("from-b"))
     a_note(overlays, "common/memory/from-a.md", "from-a")
     git_spy.unlink(missing_ok=True)
@@ -545,22 +604,8 @@ def test_every_git_call_of_the_job_and_its_scans_runs_non_interactive(
 
     assert state.outcome.state == "ok", state.outcome
     calls = [line.split("\t", 2) for line in git_spy.read_text().splitlines()]
-    assert any("diff --cached" in argv and "-U0" in argv for _, _, argv in calls)  # the scanner's
-    batch = ("0", "ssh -o BatchMode=yes -o ConnectTimeout=10")
-    remote = [call for call in calls if call[2].startswith(("push ", "-c fetch.fsckObjects"))]
-    assert len(remote) == 2 and all(tuple(call[:2]) == batch for call in remote), remote
-    # Three local reads cannot carry the job's environment, and none reaches a remote: the lookup
-    # of the ssh command itself, the last read of `HEAD` (made when the job's time may be spent),
-    # and the product's own `git -C <checkout> rev-parse` the pre-render asks of each checkout.
-    local = ["config --get core.sshCommand", "rev-parse -q --verify HEAD"]
-    wrong = [
-        call
-        for call in calls
-        if tuple(call[:2]) != batch
-        and call[2] not in local
-        and not (call[2].startswith("-C ") and call[2].split(" ")[2] == "rev-parse")
-    ]
-    assert wrong == [], "\n".join(map(str, wrong))
+    assert any(argv.startswith("push ") for _, _, argv in calls)
+    assert [call for call in calls if tuple(call[:2]) != ("0", "unset")] == []
 
 
 def test_the_push_is_never_forced_and_carries_no_tags(
@@ -568,9 +613,9 @@ def test_the_push_is_never_forced_and_carries_no_tags(
 ) -> None:
     a_note(overlays, "common/memory/from-a.md", "from-a")
     with monkeypatch.context() as patch:
-        patch.setattr(
-            J,
-            "_before_push",
+        after_step(
+            patch,
+            "_scan_push",
             lambda: push_note(overlays.b, "common/memory/from-b.md", note_text("from-b")),
         )
         assert job(overlays).outcome.state == "rejected"

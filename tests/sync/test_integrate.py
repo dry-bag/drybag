@@ -1,10 +1,11 @@
-"""The job's fetch, its integration of the checked upstream sha by replay, and the index union.
+"""The job's fetch, and its integration of the checked upstream sha by replay.
 
 Integration never rebases. The new tip is computed without touching the working tree or the real
 index -- a fast-forward to the fetched sha, or each local commit replayed onto it with `merge-tree
 --write-tree` and `commit-tree` -- and only a range that is memory-only by both rules is integrated
-at all; anything else is an upstream hold. Then the move is recorded, `main` moved by
-compare-and-swap, the incoming notes written through git, and the index aligned.
+at all; anything else is an upstream hold. Then git writes the incoming notes and the index
+(`read-tree -m -u`), refusing before it writes anything a note changed here, an untracked file or
+a link in the way, and only then does `main` move, by compare-and-swap.
 """
 
 from __future__ import annotations
@@ -14,19 +15,20 @@ import re
 import shlex
 import stat
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from stayfixed.gitenv import FLOOR_VARIABLE, Called
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
-from stayfixed.sync.git import GitTimeout, Ran
-from stayfixed.sync.state import Holds, SyncState, read_state
+from stayfixed.sync.git import GitTimeout
+from stayfixed.sync.state import LOCAL_REWRITE, OUTSIDE, Holds, SyncState, read_state
+from tests import gitfixture as fx
 from tests.gitfixture import git_bytes
 from tests.sync.conftest import (
-    HOST,
-    SLOW,
     TAG,
     Overlays,
     commit_all,
@@ -59,19 +61,6 @@ def no_rebase_dir(repo: Path) -> bool:
     )
 
 
-# -- the union ------------------------------------------------------------------------------------
-
-
-def test_the_union_keeps_upstream_and_adds_the_local_only_bullets() -> None:
-    # Mutation (oracle): `mutations/`'s "the union drops the local-only bullets".
-    upstream = b"# Memory Index\n\n## g\n\n- [Up](g/u.md)\n- [Both](g/b.md)\n"
-    local = b"# Memory Index\n\n## g\n\n- [Both](g/b.md)\n- [Mine](g/m.md)\nprose only local\n"
-
-    assert J.union_index(local, upstream) == upstream + b"- [Mine](g/m.md)\n"
-    assert J.union_index(local, upstream.rstrip(b"\n")) == upstream + b"- [Mine](g/m.md)\n"
-    assert J.union_index(upstream, upstream) == upstream
-
-
 # -- fast-forward and replay ----------------------------------------------------------------------
 
 
@@ -81,7 +70,7 @@ def test_a_memory_only_upstream_fast_forwards_onto_the_checked_sha(overlays: Ove
 
     assert J.integrate(ctx, fetched(overlays, overlays.a)) is None
 
-    assert not ctx.holds.any and ctx.pending is None
+    assert not ctx.holds.any
     assert head(overlays.a) == u
     assert (overlays.a / "common/memory/from-b.md").read_text() == "from b\n"
     assert memory_status(overlays.a) == "" and staged(overlays.a) == ""
@@ -187,12 +176,17 @@ def test_a_replay_keeps_a_non_utf8_message_and_its_encoding(
     message.write_bytes("memory: café au lait\n".encode("latin-1"))
     write(a, "common/memory/from-a.md", "from a\n")
     git(a, "add", "-A")
-    git(a, "-c", "i18n.commitEncoding=ISO-8859-1", "commit", "-q", "-F", str(message))
+    name = "Caf\udce9"  # the byte 0xe9, as the commit's encoding has it
+    fx.git(
+        a, "-c", "i18n.commitEncoding=ISO-8859-1", "commit", "-q", "-F", str(message),
+        GIT_AUTHOR_NAME=name,
+    )  # fmt: skip
 
     assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
 
     raw = git_bytes(a, "cat-file", "commit", "HEAD")
     assert b"\nencoding ISO-8859-1\n" in raw
+    assert b"\nauthor Caf\xe9 <" in raw  # not the UTF-8 spelling `git log` gives by default
     assert raw.endswith(b"\n\nmemory: caf\xe9 au lait\n")
 
 
@@ -271,16 +265,16 @@ def test_a_job_stopped_before_the_rewrite_check_still_sees_the_purge(
     # would leave the new sha with no hold, and the next job would push the purged note back.
     # Mutation (oracle): `mutations/`'s "the fetch records upstream before the rewrite check".
     leaked = _purged_on_b(overlays)
-    real = J._dropped
+    real = J._lost
     calls = {"n": 0}
 
-    def times_out_once(*args: Any, **kwargs: Any) -> list[str]:
+    def times_out_once(*args: Any, **kwargs: Any) -> tuple[list[str], list[str]]:
         calls["n"] += 1
         if calls["n"] == 1:
             raise GitTimeout("git rev-list timed out")
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(J, "_dropped", times_out_once)
+    monkeypatch.setattr(J, "_lost", times_out_once)
     assert _job(overlays).outcome.state == "timeout"
     second = _job(overlays)
 
@@ -332,6 +326,189 @@ def test_a_purge_of_a_note_this_machine_pushed_does_not_come_back(overlays: Over
     assert "mine.md" not in git(overlays.bare, "ls-tree", "-r", "--name-only", "main")
 
 
+def _pushed_from_a(overlays: Overlays) -> str:
+    """A private note this machine's job committed and pushed: its commit's sha."""
+    write(overlays.a, "common/memory/private.md", "private address: 1 Example Road\n")
+    assert _job(overlays).outcome.state == "ok"
+    pushed = head(overlays.a)
+    assert git(overlays.bare, "rev-parse", "main").strip() == pushed
+    return pushed
+
+
+def _held_here(overlays: Overlays, state: SyncState, pushed: str, kept: str) -> None:
+    """The local rewrite hold: `HEAD` as the owner made it, the purged note absent, nothing
+    pushed, and both of the owner's commands named."""
+    a = overlays.a
+    assert head(a) == kept and not (a / "common/memory/private.md").exists()
+    assert git(overlays.bare, "rev-parse", "main").strip() == pushed
+    assert state.outcome.state == "ok"
+    assert state.holds.upstream_paths == (pushed,) and state.holds.upstream_why == LOCAL_REWRITE
+    detail = str(state.outcome.detail)
+    assert f"git push --force-with-lease=refs/heads/main:{pushed} origin main" in detail
+    assert f"git rebase {pushed}" in detail
+
+
+def test_a_local_purge_is_held_not_undone(overlays: Overlays) -> None:
+    # The owner purges a note already pushed, `git reset --hard <sha>~1`, and commits another:
+    # the job must not replay the purged commit back under the owner's (the review's repro).
+    # Mutation (oracle): `mutations/`'s "a local purge is replayed".
+    a = overlays.a
+    pushed = _pushed_from_a(overlays)
+    git(a, "reset", "-q", "--hard", f"{pushed}~1")
+    write(a, "common/memory/other.md", "unrelated\n")
+    kept = commit_all(a, "memory: other")
+
+    _held_here(overlays, _job(overlays), pushed, kept)
+
+
+def test_a_bare_reset_is_held_not_fast_forwarded(overlays: Overlays) -> None:
+    a = overlays.a
+    pushed = _pushed_from_a(overlays)
+    git(a, "reset", "-q", "--hard", f"{pushed}~1")
+    kept = head(a)
+
+    _held_here(overlays, _job(overlays), pushed, kept)
+
+
+@pytest.mark.parametrize("settled", ["push", "rebase"])
+def test_the_local_rewrite_hold_stands_until_pushed_or_rebased(
+    overlays: Overlays, settled: str
+) -> None:
+    # A holding job leaves the record as it found it, so each job judges the purge again.
+    a = overlays.a
+    pushed = _pushed_from_a(overlays)
+    git(a, "reset", "-q", "--hard", f"{pushed}~1")
+    write(a, "common/memory/other.md", "unrelated\n")
+    kept = commit_all(a, "memory: other")
+    for _ in range(2):
+        _held_here(overlays, _job(overlays), pushed, kept)
+
+    if settled == "push":  # the owner keeps the rewrite
+        git(a, "push", "-q", f"--force-with-lease=refs/heads/main:{pushed}", "origin", "main")
+    else:  # the owner undoes it
+        git(a, "rebase", "-q", pushed)
+    state = _job(overlays)
+
+    assert not state.holds.any and state.outcome.state == "ok", state
+    assert git(overlays.bare, "rev-parse", "main").strip() == head(a)
+    assert (a / "common/memory/private.md").exists() is (settled == "rebase")
+    assert (a / "common/memory/other.md").exists()
+
+
+def _offline(overlays: Overlays) -> None:
+    git(overlays.a, "remote", "set-url", "origin", str(overlays.a / "no-such-remote"))
+
+
+def _online(overlays: Overlays) -> None:
+    git(overlays.a, "remote", "set-url", "origin", str(overlays.bare))
+
+
+def _in_a_rebase(overlays: Overlays) -> None:
+    edit = "sequence.editor=sed -i.bak s/^pick/edit/"
+    git(overlays.a, "-c", edit, "rebase", "-q", "-i", "HEAD~1")
+
+
+def _rebase_abandoned(overlays: Overlays) -> None:
+    git(overlays.a, "rebase", "--abort")
+
+
+def _on_a_branch(overlays: Overlays) -> None:
+    git(overlays.a, "switch", "-q", "-c", "elsewhere")
+
+
+def _back_on_main(overlays: Overlays) -> None:
+    git(overlays.a, "switch", "-q", "main")
+
+
+@pytest.mark.parametrize(
+    ("stop", "resume"),
+    [(_offline, _online), (_in_a_rebase, _rebase_abandoned), (_on_a_branch, _back_on_main)],
+    ids=["offline", "rebase", "branch"],
+)
+def test_a_job_that_never_reaches_integration_does_not_lose_a_purge(
+    overlays: Overlays,
+    stop: Callable[[Overlays], None],
+    resume: Callable[[Overlays], None],
+) -> None:
+    # A job that stops early does not touch what `main` and upstream last agreed on, so the next
+    # job still judges the purge.
+    a = overlays.a
+    pushed = _pushed_from_a(overlays)
+    git(a, "reset", "-q", "--hard", f"{pushed}~1")
+    write(a, "common/memory/other.md", "unrelated\n")
+    kept = commit_all(a, "memory: other")
+
+    stop(overlays)
+    assert _job(overlays).outcome.state != "ok"
+    resume(overlays)
+
+    _held_here(overlays, _job(overlays), pushed, kept)
+
+
+def test_a_purge_of_an_integrated_note_is_held(overlays: Overlays) -> None:
+    # Integrated, not pushed from here: `main` found equal to upstream is the agreement too.
+    a = overlays.a
+    incoming = push_note(overlays.b, "common/memory/from-b.md", "from b\n")
+    assert _job(overlays).outcome.state == "ok"
+    git(a, "reset", "-q", "--hard", f"{incoming}~1")
+
+    _held_here(overlays, _job(overlays), incoming, head(a))
+
+
+def test_a_collected_unpushed_tip_does_not_lose_a_purge(overlays: Overlays) -> None:
+    # The record is a sha upstream has, so the fetch brings it back whatever `gc` collected here.
+    a = overlays.a
+    pushed = _pushed_from_a(overlays)
+    _offline(overlays)
+    write(a, "common/memory/unpushed.md", "not pushed\n")
+    assert _job(overlays).outcome.state != "ok"
+    _online(overlays)
+    git(a, "reset", "-q", "--hard", f"{pushed}~1")
+    git(a, "reflog", "expire", "--expire=now", "--all")
+    git(a, "gc", "-q", "--prune=now")
+
+    _held_here(overlays, _job(overlays), pushed, head(a))
+
+
+def test_a_commit_only_seen_detached_is_no_rewrite_here(overlays: Overlays) -> None:
+    # `HEAD` on upstream's commit during a skipped job: `main` never had it, so the next job
+    # integrates it. Mutation (oracle): `mutations/`'s "any job records what main and upstream
+    # agreed on".
+    a = overlays.a
+    incoming = push_note(overlays.b, "common/memory/from-b.md", "from b\n")
+    git(a, "fetch", "-q", "origin")
+    git(a, "switch", "-q", "--detach", "origin/main")
+    ctx = context(overlays, a)
+    assert J.push(ctx, head(a)) is None and ctx.agreed is None  # `HEAD` is not `main`
+    assert _job(overlays).outcome.state == "skipped"
+    git(a, "switch", "-q", "main")
+
+    state = _job(overlays)
+
+    assert not state.holds.any and state.outcome.state == "ok", state
+    assert head(a) == incoming
+
+
+def test_a_hold_keeps_its_reason_across_an_abandoned_rebase(overlays: Overlays) -> None:
+    # The printed `git rebase <sha>` stops on a conflict, a job is skipped there, and the owner
+    # aborts: still the outside hold, never the offer to force-push over upstream's commits.
+    a, b = overlays.a, overlays.b
+    write(a, "common/memory/first.md", "edited here\n")
+    commit_all(a, "memory: here")
+    write(b, "README.md", "changed upstream\n")
+    write(b, "common/memory/first.md", "edited upstream\n")
+    upstream = commit_all(b, "outside memory")
+    git(b, "push", "-q", "origin", "main")
+    held = _job(overlays)
+    assert held.holds.upstream_why == OUTSIDE, held
+
+    assert fx.run_git(a, "rebase", upstream).returncode != 0
+    assert _job(overlays).outcome.state == "skipped"
+    _rebase_abandoned(overlays)
+
+    assert _job(overlays).holds == held.holds
+
+
 def test_a_first_fetch_records_no_rewrite(overlays: Overlays) -> None:
     # No sha recorded yet: an upstream this machine never fetched cannot have lost anything.
     push_note(overlays.b, "common/memory/from-b.md", "from b\n")
@@ -345,81 +522,97 @@ def test_a_first_fetch_records_no_rewrite(overlays: Overlays) -> None:
 # -- what blocks integration ----------------------------------------------------------------------
 
 
-def test_a_dirty_incoming_note_is_waiting_clean_tree(overlays: Overlays) -> None:
-    # Mutation (oracle): `mutations/`'s "an incoming note dirty here does not wait".
-    a = overlays.a
-    upstream_text = note_text("first", index="First trigger") + "An upstream line.\n"
-    push_note(overlays.b, "common/memory/first.md", upstream_text)
+def test_incoming_notes_are_written_and_the_owners_staging_kept(overlays: Overlays) -> None:
+    # git writes what upstream brings, a removal included, and leaves the owner's staged work,
+    # a staged note it does not bring, and an untracked file as they were.
+    a, b = overlays.a, overlays.b
+    write(b, "common/memory/from-b.md", "from b\n")
+    (b / "common/memory/first.md").unlink()
+    commit_all(b, "memory: from b")
+    git(b, "push", "-q", "origin", "main")
+    write(a, "README.md", "overlay\nstaged line\n")
+    write(a, f"groups/{TAG}/memory/{TAG}-one.md", "staged by the owner\n")
+    git(a, "add", "README.md", f"groups/{TAG}/memory/{TAG}-one.md")
+    write(a, "common/claude/hooks/untracked.py", "print('mine')\n")
+    cached = git(a, "diff", "--cached")
+
+    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
+
+    assert head(a) == head(b)
+    assert (a / "common/memory/from-b.md").read_text() == "from b\n"
+    assert not (a / "common/memory/first.md").exists()
+    assert git(a, "diff", "--cached") == cached
+    assert (a / "common/claude/hooks/untracked.py").read_text() == "print('mine')\n"
+
+
+def test_a_dirty_incoming_note_waits_and_nothing_is_written(overlays: Overlays) -> None:
+    # Mutation (oracle): `mutations/`'s "a refused read-tree is ignored".
+    a, b = overlays.a, overlays.b
+    write(b, "common/memory/first.md", note_text("first", body="An upstream line."))
+    write(b, "common/memory/from-b.md", "from b\n")
+    commit_all(b, "memory: two")
+    git(b, "push", "-q", "origin", "main")
     before = head(a)
     write(a, "common/memory/first.md", note_text("first", index="First trigger (edited here)"))
-    ctx = context(overlays, a)
 
-    outcome = J.integrate(ctx, fetched(overlays, a))
+    outcome = J.integrate(context(overlays, a), fetched(overlays, a))
 
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert "(common/memory/first.md)" in str(outcome.detail)
-    assert head(a) == before and ctx.pending is None
+    assert "'common/memory/first.md' not uptodate" in str(outcome.detail)
+    assert head(a) == before and not (a / "common/memory/from-b.md").exists()
     assert "edited here" in (a / "common/memory/first.md").read_text()
 
 
-def _agent_appends(clone: Path, project: str, name: str, title: str) -> Path:
-    """An agent's new note in `project` and its line appended to the index, both uncommitted."""
-    write(clone, f"projects/{project}/memory/project-stable/{name}.md", note_text(name))
-    index = clone / f"projects/{project}/memory/MEMORY.md"
-    index.write_text(index.read_text() + f"- [{title}](project-stable/{name}.md)\n")
-    return index
-
-
-def test_a_dirty_index_is_united_in_the_working_tree_never_blocking(overlays: Overlays) -> None:
-    # Every incoming shared note re-renders the indexes, so an index an agent appended to and
-    # nobody committed is merged by union, the agent's line kept, and never waited on.
-    # Mutation (oracle): `mutations/`'s "a dirty index waits like a note".
-    a, b = overlays.a, overlays.b
-    write(b, "common/memory/shared.md", note_text("shared", index="Shared"))
-    overlays.render(b, "alpha")
-    commit_all(b, "memory: shared, from b")
-    git(b, "push", "-q", "origin", "main")
-    index = _agent_appends(a, "alpha", "agent-note", "Agent line on a")
-    ctx = context(overlays, a)
-
-    assert J.integrate(ctx, fetched(overlays, a)) is None
-
-    assert (a / "common/memory/shared.md").exists()
-    text = index.read_text()
-    assert "- [Agent line on a](project-stable/agent-note.md)" in text  # kept
-    assert "- [Shared](developer/shared.md)" in text  # upstream's rendering, united
-    assert [notice.state for notice in ctx.notices] == ["resolved_index"]
-
-
-def test_an_index_changed_while_the_union_is_built_is_left_for_the_next_job(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
+def test_a_note_rewritten_unchanged_does_not_block_its_incoming_version(
+    overlays: Overlays,
 ) -> None:
-    # An agent appending its line between the read and the write wins: nothing is overwritten.
-    # Mutation (oracle): `mutations/`'s "the union overwrites a line appended while it was
-    # built".
-    a, b = overlays.a, overlays.b
-    write(b, "common/memory/shared.md", note_text("shared", index="Shared"))
-    overlays.render(b, "alpha")
-    commit_all(b, "memory: shared")
-    git(b, "push", "-q", "origin", "main")
-    index = _agent_appends(a, "alpha", "first-agent", "First agent line")
-    real_union = J.union_index
+    # An editor that rewrites a note byte for byte leaves the index's stat data stale, which
+    # `read-tree -m -u` reads as a change: the job refreshes the index first. Mutation (oracle):
+    # `mutations/`'s "the index is not refreshed before the write".
+    a = overlays.a
+    path = a / "common/memory/first.md"
+    push_note(overlays.b, "common/memory/first.md", "upstream's first\n")
+    text = path.read_bytes()
+    stat = path.stat()
+    path.write_bytes(text)
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
 
-    def union_then_an_agent_appends(local: bytes, upstream: bytes) -> bytes:
-        index.write_text(index.read_text() + "- [Late line](project-stable/late.md)\n")
-        return real_union(local, upstream)
+    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
 
-    monkeypatch.setattr(J, "union_index", union_then_an_agent_appends)
+    assert path.read_text() == "upstream's first\n"
+
+
+def test_an_untracked_file_where_a_note_lands_waits(overlays: Overlays) -> None:
+    a = overlays.a
+    push_note(overlays.b, "common/memory/from-b.md", "from b\n")
+    before = head(a)
+    write(a, "common/memory/from-b.md", "written here first\n")
+
+    outcome = J.integrate(context(overlays, a), fetched(overlays, a))
+
+    assert outcome is not None and outcome.state == "waiting_clean_tree"
+    assert "'common/memory/from-b.md' would be overwritten" in str(outcome.detail)
+    assert head(a) == before
+    assert (a / "common/memory/from-b.md").read_text() == "written here first\n"
+
+
+def test_an_index_rendered_here_never_blocks_an_incoming_note(overlays: Overlays) -> None:
+    # The index is this machine's rendering, not a note: dirty here, it is neither waited on nor
+    # written, and the note upstream brings arrives beside it.
+    a = overlays.a
+    push_note(overlays.b, "projects/gamma/memory/project-stable/from-b.md", "from b\n")
+    index = a / "projects/gamma/memory/MEMORY.md"
+    index.write_text("# gamma's index, rendered here\n", encoding="utf-8")
     ctx = context(overlays, a)
 
     assert J.integrate(ctx, fetched(overlays, a)) is None
 
-    assert ctx.notices == [] and (a / "common/memory/shared.md").exists()
-    text = index.read_text()
-    assert "First agent line" in text and "Late line" in text and "Shared" not in text
+    assert (a / "projects/gamma/memory/project-stable/from-b.md").exists()
+    assert index.read_text(encoding="utf-8") == "# gamma's index, rendered here\n"
+    assert ctx.notices == []
 
 
-def test_a_link_above_an_incoming_path_blocks_and_nothing_escapes(
+def test_a_link_above_an_incoming_note_waits_and_the_link_stays(
     overlays: Overlays, tmp_path: Path
 ) -> None:
     a = overlays.a
@@ -432,8 +625,9 @@ def test_a_link_above_an_incoming_path_blocks_and_nothing_escapes(
     outcome = J.integrate(context(overlays, a), fetched(overlays, a))
 
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert "(projects/zeta/memory/project-stable/n.md)" in str(outcome.detail)
+    assert "'projects/zeta' would be overwritten" in str(outcome.detail)
     assert head(a) == before and list(outside.iterdir()) == []
+    assert (a / "projects" / "zeta").is_symlink()
 
     # A link inside memory, where upstream turns a note into a directory of notes.
     (a / "projects" / "zeta").unlink()
@@ -443,150 +637,89 @@ def test_a_link_above_an_incoming_path_blocks_and_nothing_escapes(
     outcome = J.integrate(context(overlays, a), fetched(overlays, a))
 
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert "common/memory/sub/n.md" in str(outcome.detail) and list(outside.iterdir()) == []
+    assert "common/memory/sub" in str(outcome.detail) and list(outside.iterdir()) == []
+    assert (a / "common/memory/sub").is_symlink()
 
 
-# -- a kill after the swap ------------------------------------------------------------------------
+# -- a kill or a race between the write and the move ----------------------------------------------
 
 
 class _Killed(BaseException):
     """The job dies here: nothing after this point runs, as with SIGKILL."""
 
 
-def _swap_then_die(monkeypatch: pytest.MonkeyPatch) -> None:
-    real_swap = J._swap
+def _upstream_brings_and_drops(overlays: Overlays) -> str:
+    """Upstream adds `from-b.md` and removes `first.md`; the sha `a` fetched."""
+    b = overlays.b
+    write(b, "common/memory/from-b.md", "from b\n")
+    (b / "common/memory/first.md").unlink()
+    commit_all(b, "memory: from b")
+    git(b, "push", "-q", "origin", "main")
+    return fetched(overlays, overlays.a)
 
-    def swap_then_die(ctx: J.JobContext, new: str, old: str) -> bool:
-        assert real_swap(ctx, new, old)
-        raise _Killed
 
-    monkeypatch.setattr(J, "_swap", swap_then_die)
-
-
-def test_a_kill_after_the_swap_is_finished_by_the_next_job(
+def test_a_kill_between_the_write_and_the_move_converges(
     overlays: Overlays, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    a, b = overlays.a, overlays.b
-    push_note(b, "common/memory/from-b.md", "from b\n")
-    (b / "common/memory/first.md").unlink()
-    git(b, "commit", "-q", "-am", "memory: drop first")
-    git(b, "push", "-q", "origin", "main")
-    upstream = fetched(overlays, a)
+    # Killed after `read-tree -m -u` and before `update-ref`: the notes are written and staged,
+    # `main` is unmoved, and nothing is recorded. The next job commits them, finds that commit
+    # upstream already, and moves `main`. Mutation (oracle): `mutations/`'s "main moves before
+    # the working tree is written".
+    a = overlays.a
+    upstream = _upstream_brings_and_drops(overlays)
+    before = head(a)
+
+    def die(*args: object) -> bool:
+        raise _Killed
 
     with monkeypatch.context() as patch, pytest.raises(_Killed):
-        _swap_then_die(patch)
+        patch.setattr(J, "_swap", die)
         J.integrate(context(overlays, a), upstream)
 
-    assert head(a) == upstream
-    state = read_state(overlays.state_dir)
-    assert state is not None and state.pending_align is not None
-    assert state.pending_align.to_sha == upstream
-    assert set(state.pending_align.paths) == {"common/memory/from-b.md", "common/memory/first.md"}
-    assert not (a / "common/memory/from-b.md").exists()  # killed before the write
-
-    assert J.align_first(context(overlays, a, pending=state.pending_align)) is None
-
+    assert head(a) == before
     assert (a / "common/memory/from-b.md").read_text() == "from b\n"
     assert not (a / "common/memory/first.md").exists()
+
+    state = J.run_job(context(overlays, a))
+
+    assert state is not None and state.outcome.state == "ok", state
+    assert head(a) == upstream == head(overlays.bare, "main")
     assert memory_status(a) == "" and staged(a) == ""
 
 
-def test_a_link_appearing_after_a_kill_is_named_by_the_job_that_finishes_it(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    # The pending write meets a link above its path: nothing is written beyond it, and a notice
-    # names it instead of an arrival that did not happen.
-    a = overlays.a
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    push_note(overlays.b, "common/memory/sub/n.md", "a nested note\n")
-    upstream = fetched(overlays, a)
-    with monkeypatch.context() as patch, pytest.raises(_Killed):
-        _swap_then_die(patch)
-        J.integrate(context(overlays, a), upstream)
-    (a / "common/memory/sub").symlink_to(outside, target_is_directory=True)
-    state = read_state(overlays.state_dir)
-    assert state is not None
-    ctx = context(overlays, a, pending=state.pending_align)
-
-    assert J.align_first(ctx) is None
-
-    [notice] = ctx.notices
-    assert notice.state == "hook_failed" and str(notice.detail).endswith(": common/memory/sub/n.md")
-    assert ctx.pending is None and list(outside.iterdir()) == []
-
-
-def test_the_owners_edit_after_the_kill_wins_over_the_pending_write(
+def test_a_moved_main_after_the_write_is_raced_and_converges(
     overlays: Overlays, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Incoming notes are written only where the working tree still has the old version.
-    # Mutation (oracle): `mutations/`'s "a pending write goes over the owner's edit".
+    # The owner commits a note between the write and the move: the compare-and-swap fails, the
+    # owner's commit stays on `main`, and the next job replays it onto upstream. Mutation
+    # (oracle): `mutations/`'s "main moves without a compare-and-swap".
     a = overlays.a
-    push_note(overlays.b, "common/memory/first.md", "upstream's first\n")
-    upstream = fetched(overlays, a)
-    with monkeypatch.context() as patch, pytest.raises(_Killed):
-        _swap_then_die(patch)
-        J.integrate(context(overlays, a), upstream)
-    write(a, "common/memory/first.md", "the owner wrote this meanwhile\n")
-    state = read_state(overlays.state_dir)
-    assert state is not None
-
-    assert J.align_first(context(overlays, a, pending=state.pending_align)) is None
-
-    assert (a / "common/memory/first.md").read_text() == "the owner wrote this meanwhile\n"
-
-
-def test_an_edit_landing_while_incoming_notes_are_written_is_never_overwritten(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Each incoming path is checked right before git writes it, never all checked first and
-    # written later: an agent's edit of a note already checked, made while a later one is
-    # checked, would be overwritten by the batch. The edit stays, for the next commit.
-    a, b = overlays.a, overlays.b
-    write(b, "common/memory/first.md", "upstream's first\n")
-    write(b, "common/memory/zz.md", "a later note\n")
-    commit_all(b, "memory: two")
-    git(b, "push", "-q", "origin", "main")
-    real = J._worktree_has
-
-    def an_agent_edits_first(ctx: J.JobContext, path: str, blob: tuple[str, str] | None) -> bool:
-        if path == "common/memory/zz.md":
-            (a / "common/memory/first.md").write_text("the agent's edit\n", encoding="utf-8")
-        return real(ctx, path, blob)
-
-    monkeypatch.setattr(J, "_worktree_has", an_agent_edits_first)
-
-    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
-
-    assert (a / "common/memory/first.md").read_text() == "the agent's edit\n"
-    assert (a / "common/memory/zz.md").read_text() == "a later note\n"
-
-
-def test_main_moved_by_the_owner_during_the_integration_is_raced(
-    overlays: Overlays, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # The swap compares against the HEAD the integration checked: the owner's commit landing in
-    # between stays on `main`.
-    a = overlays.a
-    push_note(overlays.b, "common/memory/from-b.md", "from b\n")
-    upstream = fetched(overlays, a)
+    upstream = _upstream_brings_and_drops(overlays)
+    real = J._swap
     owner: list[str] = []
 
-    def owner_commits() -> None:
-        write(a, "README.md", "the owner's edit\n")
-        git(a, "commit", "-q", "-m", "owner", "--", "README.md")
+    def the_owner_commits_first(ctx: J.JobContext, new: str, old: str) -> bool:
+        write(a, "common/memory/owner.md", "the owner's note\n")
+        git(a, "add", "--", "common/memory/owner.md")
+        git(a, "commit", "-q", "-m", "memory: the owner's", "--", "common/memory/owner.md")
         owner.append(head(a))
+        return real(ctx, new, old)
 
-    monkeypatch.setattr(J, "_before_swap", owner_commits)
-    ctx = context(overlays, a)
-
-    outcome = J.integrate(ctx, upstream)
+    with monkeypatch.context() as patch:
+        patch.setattr(J, "_swap", the_owner_commits_first)
+        outcome = J.integrate(context(overlays, a), upstream)
 
     assert outcome is not None and outcome.state == "raced"
-    assert head(a) == owner[0] and ctx.pending is None
-    state = read_state(overlays.state_dir)
-    assert state is not None and state.pending_align is None
-    assert not (a / "common/memory/from-b.md").exists()
+    assert head(a) == owner[0]
+    assert (a / "common/memory/from-b.md").exists()
+
+    state = J.run_job(context(overlays, a))
+
+    assert state is not None and state.outcome.state == "ok", state
+    assert git(a, "merge-base", "--is-ancestor", upstream, "HEAD") == ""
+    assert git(a, "show", "HEAD:common/memory/owner.md") == "the owner's note\n"
+    assert head(a) == head(overlays.bare, "main")
+    assert memory_status(a) == "" and staged(a) == ""
 
 
 def test_upstream_moving_after_the_fetch_is_not_integrated(overlays: Overlays) -> None:
@@ -613,7 +746,7 @@ def test_the_fetched_sha_is_read_from_the_jobs_own_ref(
     git(b, "push", "-q", "origin", "HEAD~1:refs/heads/side")
     real = G.git
 
-    def and_the_owner_fetches(repo: Path, *args: str, **kwargs: object) -> Ran:
+    def and_the_owner_fetches(repo: Path, *args: str, **kwargs: object) -> Called:
         result = real(repo, *args, **kwargs)  # type: ignore[arg-type]
         if "fetch" in args:
             git(a, "fetch", "-q", "origin", "side")
@@ -652,10 +785,9 @@ def test_a_tree_git_cannot_check_out_is_held_not_moved_to(overlays: Overlays) ->
 
     assert J.integrate(ctx, crafted) is None
 
-    assert head(a) == before and ctx.pending is None
+    assert head(a) == before
     assert ctx.holds.upstream_paths == (path,)
     assert any("cannot be checked out" in remark for remark in ctx.remarks)
-    assert read_state(overlays.state_dir) is None  # no pending record was ever written
 
 
 def _held(overlays: Overlays, ctx: J.JobContext, before: str) -> set[str]:
@@ -677,6 +809,32 @@ def test_an_upstream_hook_change_is_held(overlays: Overlays) -> None:
 
     assert "common/claude/hooks/launch.sh" in _held(overlays, ctx, before)
     assert not (overlays.a / "common/memory/from-b.md").exists()
+
+
+def test_an_upstream_index_change_is_held_like_a_path_outside_memory(overlays: Overlays) -> None:
+    # An overlay that still tracks its indexes: an upstream commit that changes one is held, with
+    # the review command, until the owner takes it by hand (the overlay's own untracking commit,
+    # once per machine). Nothing is integrated, and the local note is not pushed meanwhile.
+    a, b = overlays.a, overlays.b
+    with open(b / "projects/gamma/memory/MEMORY.md", "a", encoding="utf-8") as index:
+        index.write("- [From b](project-stable/gamma-one.md)\n")
+    write(b, "common/memory/from-b.md", "from b\n")
+    commit_all(b, "an index and a note")
+    git(b, "push", "-q", "origin", "main")
+    remote = head(b)
+    write(a, "common/memory/local.md", "a local note\n")
+    before = commit_all(a, "memory: local")
+    upstream = fetched(overlays, a)
+    ctx = context(overlays, a)
+
+    assert J.integrate(ctx, upstream) is None
+    assert J.push(ctx, upstream) is None
+
+    assert _held(overlays, ctx, before) == {"projects/gamma/memory/MEMORY.md"}
+    assert ctx.holds.upstream_why == OUTSIDE
+    assert any(J.REVIEW.format(sha=upstream) in remark for remark in ctx.remarks)
+    assert not (a / "common/memory/from-b.md").exists()
+    assert git(overlays.bare, "rev-parse", "main").strip() == remote
 
 
 def _review_and_take(remarks: list[str]) -> tuple[list[str], list[str]]:
@@ -806,7 +964,7 @@ def test_a_note_conflict_is_a_conflict_with_main_unmoved(overlays: Overlays) -> 
 
     assert outcome is not None and outcome.state == "conflict"
     assert "upstream on common/memory/first.md;" in str(outcome.detail)
-    assert head(a) == before and ctx.pending is None
+    assert head(a) == before
     assert (a / "common/memory/first.md").read_text() == "local version\n"
     assert (a / "common/claude/hooks/x.py").read_bytes() == edit
     assert memory_status(a) == "" and staged(a) == ""
@@ -817,63 +975,6 @@ def test_a_note_conflict_is_a_conflict_with_main_unmoved(overlays: Overlays) -> 
     review, take = _review_and_take([str(outcome.detail)])
     assert review == ["git", "log", "-p", "--no-renames", f"HEAD..{upstream}"]
     assert take == ["git", "rebase", upstream]
-
-
-def _agent_line(clone: Path, project: str, name: str, title: str) -> None:
-    """An agent's new note and its line appended to the index, committed as they are."""
-    write(clone, f"projects/{project}/memory/project-stable/{name}.md", note_text(name))
-    with open(clone / f"projects/{project}/memory/MEMORY.md", "a", encoding="utf-8") as index:
-        index.write(f"- [{title}](project-stable/{name}.md)\n")
-
-
-def _both_sides_append_to_two_indexes(overlays: Overlays) -> None:
-    for project in ("alpha", "beta"):
-        _agent_line(overlays.b, project, f"{project}-from-b", f"{project} line written on b")
-    commit_all(overlays.b, "memory: b's agent lines")
-    git(overlays.b, "push", "-q", "origin", "main")
-    for project in ("alpha", "beta"):
-        _agent_line(overlays.a, project, f"{project}-from-a", f"{project} line written on a")
-    commit_all(overlays.a, "memory: a's agent lines")
-
-
-def test_two_index_conflicts_are_resolved_by_union_and_re_rendered(overlays: Overlays) -> None:
-    a = overlays.a
-    _both_sides_append_to_two_indexes(overlays)
-    upstream = fetched(overlays, a)
-    ctx = context(overlays, a)
-
-    assert J.integrate(ctx, upstream) is None
-
-    [notice] = ctx.notices
-    assert notice.state == "resolved_index"
-    assert str(notice.detail).endswith("united: alpha, beta")
-    for project in ("alpha", "beta"):
-        index = (a / f"projects/{project}/memory/MEMORY.md").read_text()
-        for side in ("a", "b"):
-            title = f"{project} line written on {side}"
-            assert f"- [{title}](project-stable/{project}-from-{side}.md)" in index
-            note = a / f"projects/{project}/memory/project-stable/{project}-from-{side}.md"
-            assert f"index: {title}" in note.read_text()  # harvested by the re-render
-    # The replayed commit sits on the checked sha, and the re-render is committed after it.
-    assert git(a, "rev-parse", "HEAD~2").strip() == upstream
-    assert git(a, "log", "-1", "--format=%s").strip().endswith(f"from {HOST}")
-    assert memory_status(a) == ""
-
-
-def test_an_index_conflict_beside_a_note_conflict_is_a_conflict(overlays: Overlays) -> None:
-    _agent_line(overlays.b, "alpha", "from-b", "line on b")
-    write(overlays.b, "common/memory/first.md", "upstream's version\n")
-    commit_all(overlays.b, "b")
-    git(overlays.b, "push", "-q", "origin", "main")
-    _agent_line(overlays.a, "alpha", "from-a", "line on a")
-    write(overlays.a, "common/memory/first.md", "local version\n")
-    commit_all(overlays.a, "a")
-    before = head(overlays.a)
-
-    outcome = J.integrate(context(overlays, overlays.a), fetched(overlays, overlays.a))
-
-    assert outcome is not None and outcome.state == "conflict" and head(overlays.a) == before
-    assert "on common/memory/first.md, projects/alpha/memory/MEMORY.md;" in str(outcome.detail)
 
 
 # -- what runs ------------------------------------------------------------------------------------
@@ -912,10 +1013,8 @@ def subcommands(log: Path) -> list[list[str]]:
 
 
 def test_no_rebase_ever_runs(overlays: Overlays, git_log: Path) -> None:
-    _agent_line(overlays.b, "alpha", "from-b", "line on b")
-    commit_all(overlays.b, "b")
-    git(overlays.b, "push", "-q", "origin", "main")
-    _agent_line(overlays.a, "alpha", "from-a", "line on a")
+    push_note(overlays.b, "projects/alpha/memory/project-stable/from-b.md", "from b\n")
+    write(overlays.a, "projects/alpha/memory/project-stable/from-a.md", "from a\n")
     commit_all(overlays.a, "a")
     write(overlays.a, "common/memory/dirty.md", "a note to commit\n")
     git_log.unlink(missing_ok=True)
@@ -924,7 +1023,7 @@ def test_no_rebase_ever_runs(overlays: Overlays, git_log: Path) -> None:
     assert J.commit_memory(ctx) is None
     assert J.integrate(ctx, fetched(overlays, overlays.a)) is None
 
-    assert [notice.state for notice in ctx.notices] == ["resolved_index"]
+    assert ctx.notices == []
     calls = subcommands(git_log)
     names = {call[0] for call in calls}
     assert {"merge-tree", "commit-tree", "update-ref", "fetch"} <= names
@@ -992,7 +1091,7 @@ def test_a_fetch_offline_refused_or_failed_is_classified(
 def test_remote_failures_are_classified_from_what_git_and_ssh_print(
     overlays: Overlays, said: str, state: str
 ) -> None:
-    result = Ran(code=128, out="", err=said, timed_out=False)
+    result = Called(code=128, out="", err=said, timed_out=False)
 
     outcome = J._remote_failure(context(overlays, overlays.a), result, "git fetch origin main", 30)
 
@@ -1002,6 +1101,7 @@ def test_remote_failures_are_classified_from_what_git_and_ssh_print(
 def test_a_fetch_that_hangs_is_a_timeout(
     overlays: Overlays, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.delenv(FLOOR_VARIABLE)
     slow_git(tmp_path, monkeypatch, {"fetch": 30})
     started = time.monotonic()
 
@@ -1009,7 +1109,7 @@ def test_a_fetch_that_hangs_is_a_timeout(
 
     assert sha is None and outcome is not None and outcome.state == "timeout"
     assert "did not finish within 1 s" in str(outcome.detail)
-    assert time.monotonic() - started < SLOW
+    assert time.monotonic() - started < 30  # the fetch it ended sleeps thirty
 
 
 def test_the_fetch_leaves_the_record_to_the_rewrite_check(overlays: Overlays) -> None:

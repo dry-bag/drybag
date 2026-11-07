@@ -17,18 +17,20 @@ import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
 
+from stayfixed import gitenv
 from stayfixed.config.machine import machine_config_path
+from stayfixed.config.session import SessionConfig, session_config
+from stayfixed.gitenv import Called
 from stayfixed.hooks.api import HookEvent, HookResult
 from stayfixed.hooks.commands import run_hook
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
 from stayfixed.sync import trigger as T
 from stayfixed.sync.hooks import register
-from stayfixed.sync.render import checkouts
 from stayfixed.sync.state import (
     BACK_OFF_MINUTES,
     LOCK_FILE,
@@ -70,7 +72,6 @@ def _state(
             holds=Holds(upstream, local),
             fetched_sha=fetched,
             last_job_at=at,
-            pending_align=None,
             head=head_sha,
             dirty=notes_mark(world.a, ()),  # the job left no note dirty
         ),
@@ -148,12 +149,10 @@ def test_commits_ahead_of_the_upstream_start_a_job(overlays: Overlays) -> None:
 
 def test_a_standing_outcome_or_hold_starts_a_job(overlays: Overlays) -> None:
     sha = head(overlays.a)
-    for outcome in ("offline", "rejected", "index_stale", "hook_failed"):
+    for outcome in ("offline", "rejected", "raced", "hook_failed"):
         _state(overlays, outcome=outcome, head_sha=sha)
         assert decide(overlays, "Stop") == "run", outcome
-    # A united index is a success: nothing stopped the job. Mutation (oracle): `mutations/`'s "a
-    # united index is not settled".
-    for outcome in ("ok", "skipped", "resolved_index"):
+    for outcome in ("ok", "skipped"):
         _state(overlays, outcome=outcome, head_sha=sha)
         assert decide(overlays, "Stop") == "none", outcome
 
@@ -250,21 +249,6 @@ def test_session_end_never_waits_out_a_standing_failure(overlays: Overlays) -> N
     assert decide(overlays, "SessionEnd") == "run"
 
 
-def test_no_scanner_backs_off_once_the_indexes_it_rendered_are_recorded(
-    overlays: Overlays,
-) -> None:
-    # The default on a freshly set-up machine: no build, a note waiting. The first job's render
-    # leaves the indexes dirty, which is news once; the second records them, and the next `Stop`
-    # waits.
-    (overlays.home / ".cache" / "pre-commit" / "db.db").unlink()
-    write(overlays.a, "common/memory/waiting.md", "a note\n")
-    for _ in range(2):
-        state = J.run_job(context(overlays, overlays.a))
-        assert state is not None and state.outcome.state == "scan_unavailable", state
-
-    assert decide(overlays, "Stop", at=NOW + timedelta(minutes=3)) == "none"
-
-
 def test_a_real_jobs_upstream_hold_backs_off_the_next_stop(overlays: Overlays) -> None:
     # The back-off compares `origin/main` with the sha the job fetched. The job fetches into a ref
     # of its own, so `origin/main` moves only by git's opportunistic update of the tracking ref;
@@ -341,13 +325,13 @@ def test_the_trigger_check_is_one_git_status(
     sha = head(overlays.a)
     _state(overlays, head_sha=sha, fetched=sha)
     calls: list[list[str]] = []
-    real = G.run
+    real = gitenv.git_call
 
-    def counting(argv: Any, **kwargs: Any) -> G.Ran:
-        calls.append(list(argv))
-        return real(argv, **kwargs)
+    def counting(root: Path, *args: str, **kwargs: Any) -> Called:
+        calls.append(list(args))
+        return real(root, *args, **kwargs)
 
-    monkeypatch.setattr(G, "run", counting)
+    monkeypatch.setattr(G, "git_call", counting)
     for dirty, expected in ((False, "none"), (True, "run")):
         if dirty:
             write(overlays.a, NOTE, "changed\n")
@@ -360,14 +344,15 @@ def test_the_trigger_check_is_one_git_status(
 
 
 def _event(world: Overlays, name: str, **raw: object) -> HookEvent:
-    checkout = world.checkouts["beta"]
+    checkout = world.home  # a session's directory, none the sync reads
     return HookEvent(
         name, "s", None, None, {}, checkout, checkout, {"hook_event_name": name, **raw}
     )
 
 
-def _handle(event: HookEvent) -> list[HookResult]:
-    session = cast(Any, None)  # no handler of this area reads the session's configuration
+def _handle(event: HookEvent, session: SessionConfig | None = None) -> list[HookResult]:
+    """`event` through each handler, with the session read as the dispatcher reads it now."""
+    session = session_config(None) if session is None else session
     return [handler.run(event, session) for handler in register() if handler.event == event.name]
 
 
@@ -375,13 +360,13 @@ def _handle(event: HookEvent) -> list[HookResult]:
 def spied(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[object]]:
     """Every git the sync's runner starts and every job spawned, recorded and not run."""
     seen: dict[str, list[object]] = {"git": [], "spawn": []}
-    real = G.run
+    real = gitenv.git_call
 
-    def recorded(argv: Any, **kwargs: Any) -> G.Ran:
-        seen["git"].append(list(argv))
-        return real(argv, **kwargs)
+    def recorded(root: Path, *args: str, **kwargs: Any) -> Called:
+        seen["git"].append(["git", *args])
+        return real(root, *args, **kwargs)
 
-    monkeypatch.setattr(G, "run", recorded)
+    monkeypatch.setattr(G, "git_call", recorded)
     monkeypatch.setattr(J, "spawn", lambda overlay, *, wake=None: seen["spawn"].append(wake))
     return seen
 
@@ -423,20 +408,52 @@ def test_with_sync_on_the_handlers_spawn_the_job(
     assert (overlays.state_dir / PENDING_FILE).exists()
 
 
-def test_session_start_records_the_checkout_when_sync_is_on(
+def test_the_handler_reads_the_switch_from_the_session(
     overlays: Overlays, spied: dict[str, list[object]]
 ) -> None:
-    beta = overlays.checkouts["beta"]
-    (overlays.state_dir / "checkouts.json").unlink()
-    _handle(_event(overlays, "SessionStart", source="startup"))
-    assert checkouts(overlays.state_dir) == []  # off: nothing recorded
-
+    # The session resolved the machine file once; a handler does not read it again, so the file
+    # changed under a running session moves nothing until the next one reads it.
     overlays.sync = True
     overlays.use(overlays.a)
-    _handle(_event(overlays, "SessionStart", source="compact"))
+    write(overlays.a, NOTE, "a note\n")
+    on = session_config(None)
+    overlays.sync = False
+    overlays.use(overlays.a)
+    off = session_config(None)
 
-    assert checkouts(overlays.state_dir) == [beta]
-    assert spied["spawn"] == []  # a compaction records and starts nothing
+    _handle(_event(overlays, "Stop"), on)
+    assert spied["spawn"] == [None]
+    overlays.sync = True
+    overlays.use(overlays.a)
+    _handle(_event(overlays, "SessionEnd"), off)
+    assert spied["spawn"] == [None]
+
+
+def test_a_codex_hook_process_starts_nothing(
+    overlays: Overlays, spied: dict[str, list[object]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Codex reads the same `hooks/hooks.json` and sets `PLUGIN_ROOT`, which Claude Code does not.
+    # Mutation (oracle): `mutations/`'s "a Codex session starts the job".
+    overlays.sync = True
+    overlays.use(overlays.a)
+    write(overlays.a, NOTE, "a note\n")
+    monkeypatch.setenv("PLUGIN_ROOT", str(overlays.home / "plugin"))
+    for name in ("SessionStart", "Stop", "SessionEnd"):
+        assert _handle(_event(overlays, name, source="startup")) == [HookResult()]
+    assert spied == {"git": [], "spawn": []}
+
+
+def test_a_claude_code_hook_process_still_starts_the_job(
+    overlays: Overlays, spied: dict[str, list[object]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Claude Code sets its own name for the plugin's root, never Codex's.
+    overlays.sync = True
+    overlays.use(overlays.a)
+    write(overlays.a, NOTE, "a note\n")
+    monkeypatch.delenv("PLUGIN_ROOT", raising=False)
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(overlays.home / "plugin"))
+    assert _handle(_event(overlays, "SessionEnd")) == [HookResult()]
+    assert spied["spawn"] == [None]
 
 
 def test_no_overlay_or_not_a_repository_spawns_nothing(
@@ -478,7 +495,7 @@ def test_stop_and_session_end_print_nothing_that_blocks(
     overlays.use(overlays.a)
     write(overlays.a, NOTE, "a note\n")
     for name in ("Stop", "SessionEnd"):
-        payload = {"session_id": "s", "cwd": str(overlays.checkouts["beta"])}
+        payload = {"session_id": "s", "cwd": str(overlays.home)}
         monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
         assert run_hook(argparse.Namespace(event=name)) == 0
         out, err = capsys.readouterr()
@@ -500,7 +517,7 @@ def test_the_command_prints_nothing_that_blocks_in_a_process_of_its_own(
         for name in ("Stop", "SessionEnd"):
             done = subprocess.run(
                 [sys.executable, "-m", "stayfixed", "hook", name],
-                input=json.dumps({"session_id": "s", "cwd": str(overlays.checkouts["beta"])}),
+                input=json.dumps({"session_id": "s", "cwd": str(overlays.home)}),
                 capture_output=True,
                 text=True,
                 timeout=60,

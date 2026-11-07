@@ -1,4 +1,12 @@
-"""What a session hears about the store's unreviewed notes: one count line, when the set is news.
+"""The store's hooks: the index each machine renders for itself, and the unreviewed-notes count.
+
+`index-render` renders the index of a checkout bound in overlay mode, on `SessionStart` and on
+`SessionEnd`, as `stayfixed memory index` does: the note sync moves no index, so each machine
+renders its own. At `SessionEnd` it harvests the lines the session appended outside the region
+into their notes before the sync's handler starts the job (areas run in name order), so those
+notes travel in that job; at `SessionStart` it renders what the jobs brought in since. It reads
+the session's one configuration (`SessionConfig.acting`), as `unreviewed-notes` does, and says
+nothing; a failure costs this handler alone.
 
 `unreviewed-notes` counts the notes the owner has not promoted at their current bytes
 (`memory.reviewed`) and says so on `SessionStart` only when that set differs from the one the last
@@ -78,5 +86,24 @@ def _unreviewed(event: HookEvent, session: SessionConfig) -> HookResult:
         return HookResult()
 
 
+def _render(event: HookEvent, session: SessionConfig) -> HookResult:
+    from stayfixed.config.schema import OVERLAY_MODE
+
+    config = session.acting
+    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:
+        return HookResult()
+    from stayfixed.memory.index import render_current
+    from stayfixed.memory.store import resolved
+
+    store = resolved(event.project_root, config, machine=None)[0]
+    if store is not None:
+        render_current(store, config)
+    return HookResult()
+
+
 def register() -> list[Handler]:
-    return [Handler(name="unreviewed-notes", event="SessionStart", run=_unreviewed)]
+    return [
+        Handler(name="index-render", event="SessionStart", run=_render),
+        Handler(name="index-render", event="SessionEnd", run=_render),
+        Handler(name="unreviewed-notes", event="SessionStart", run=_unreviewed),
+    ]

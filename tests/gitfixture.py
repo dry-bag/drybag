@@ -73,6 +73,11 @@ from stayfixed import gitenv
 # The one spelling of the skip, published here because five modules had written it out.
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
+# The variable a session sets to give every git it starts a configuration of its own, a `pushurl`
+# or an `insteadOf` among them. Spelled here, the one module that may name it, for the tests that
+# set it in the process to show that no git stayfixed starts reads it.
+SESSION_CONFIG = "GIT_CONFIG_GLOBAL"
+
 # What survives from the ambient environment. `PATH` for the reason in the module docstring;
 # the rest is what makes `git` able to run and report at all on the three platforms. Everything
 # else is dropped, `GIT_DIR` and `GIT_WORK_TREE` above all — the same rule

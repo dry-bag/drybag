@@ -235,7 +235,7 @@ def test_the_count_line_is_said_once_for_a_new_set_and_not_again_for_the_same_se
 
     root = _project(tmp_path)
     config = load(root, machine=tmp_path / "absent.toml")
-    (handler,) = [h for h in register() if h.event == "SessionStart"]
+    (handler,) = [h for h in register() if h.name == "unreviewed-notes"]
     event = HookEvent("SessionStart", "s1", None, None, {}, root, root, {})
 
     def said() -> str | None:
