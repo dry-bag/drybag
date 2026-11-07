@@ -45,7 +45,7 @@ def test_a_command_that_runs_no_tests_is_not_named(command: str) -> None:
 )
 def test_a_runner_behind_a_launcher_or_an_assignment_is_named(command: str) -> None:
     [segment] = bashscan.segments(bashscan.tokenize(command) or [])
-    assert names_a_test_run(bashscan.command_words(segment, names_a_test_run))
+    assert names_a_test_run(bashscan.command_words(segment, test_runs=True))
 
 
 def test_an_option_between_the_program_and_its_subcommand_is_no_match() -> None:

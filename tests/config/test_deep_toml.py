@@ -19,7 +19,6 @@ import pytest
 from stayfixed.attach import binding, write
 from stayfixed.config.loader import loads
 from stayfixed.config.overlay import overlay_root
-from stayfixed.config.owned import UnparsedDocument, rewrite
 from stayfixed.config.plates import PROJECTS, RECORD
 from stayfixed.config.reading import TOO_DEEP, TOO_LONG, ConfigError, MachineConfigError
 from stayfixed.docs.trail import read_trail
@@ -72,11 +71,6 @@ READERS = [
         lambda t, d: loads(FINE, t, machine=_file(t, "machine.toml", d)),
         MachineConfigError,
         id="personal",
-    ),
-    pytest.param(
-        lambda t, d: rewrite(d, {("stayfixed", "version"): "0.2.0"}),
-        UnparsedDocument,
-        id="owned-rewrite",
     ),
     pytest.param(
         lambda t, d: read_trail(_file(t, "docs/trail.toml", d), "docs/trail.toml"),

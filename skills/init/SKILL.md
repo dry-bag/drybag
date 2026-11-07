@@ -1,6 +1,6 @@
 ---
 name: init
-description: Take a repository onto stayfixed — show what it detected, ask the questions a person may answer, and write stayfixed.toml with the roadmap, trail and bug-ledger files the checks read and the .gitignore region that keeps .stayfixed/local/ out of git. Use when a project has no .stayfixed/manifest.json yet, or the user asks to initialise stayfixed in it.
+description: Take a repository onto stayfixed — show what it detected, ask the questions a person may answer, and write stayfixed.toml with the roadmap, trail and bug-ledger files the checks read and the .gitignore region that keeps .stayfixed/local/ out of git. Use when a project has no stayfixed.toml yet, when a file of its scaffold is missing, or when the user asks to initialise stayfixed in it.
 ---
 
 # Initialising a project
@@ -11,8 +11,8 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 
 ## Walk
 
-1. Run `stayfixed init --questions --json`. It refuses a repository that already has
-   `.stayfixed/manifest.json` or a `stayfixed.toml` (see the first rule). Otherwise `questions.properties` holds six questions, asked in the order
+1. Run `stayfixed init --questions --json`. It refuses a repository that already has a
+   `stayfixed.toml` (see the first rule). Otherwise `questions.properties` holds five questions, asked in the order
    `questions.required` lists them, each with its `default` (what `stayfixed init --yes` alone
    would write), its `x-stayfixed-source`, its `x-stayfixed-flag` and its
    `x-stayfixed-tradeoff`: four lines, what the answer gives (`get`), what it gives up
@@ -29,7 +29,7 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 5. Build the command: `--yes --dry-run`, then each answer that differs from its default as its
    `x-stayfixed-flag`, once per item for a list, such as
    `stayfixed init --yes --dry-run --name widget --memory-mode in-repo`. Leave the plugins out:
-   they are not `init`'s. Run it and relay both reports, the `picked:` list
+   they are not `init`'s. Run it and relay the report, the `picked:` list
    and every `note:` line. Ask for a final yes. **Silence, a timeout or an empty answer is a
    no.**
 6. On a yes, run the same command without `--dry-run`, and relay the real run the same way.
@@ -43,12 +43,13 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 
 - **A `stayfixed.toml` the user wrote answers the questions.** Skip steps 2–4 and 7 and run
   steps 5 and 6 with no answer flag: the dry run, the relay, the explicit final yes, then the write. The
-  file is kept; a missing `[stayfixed] version` is the one thing added, and a `note:` line says so.
-- **A `failed:` line from `init` over a `stayfixed.toml` the user wrote means the next command
-  could not load that file.** Nothing was written. Relay the sentence, fix the file with the
+  file is kept as it is: `init` writes nothing into it, and answers only for where the scaffold
+  lands. There is no `picked:` list to relay; relay the `note:` that says the next command judges
+  the file, and never pass `initialised:` on as a verdict on it.
+- **A `failed:` line from `init` over a `stayfixed.toml` the user wrote means the loader refuses
+  what the scaffold is built from.** Nothing was written. Relay the sentence, fix the file with the
   user, and run again.
-- **A repository with `.stayfixed/manifest.json` is refused.** `init` writes a scaffold once.
-  Never delete the manifest to get past it.
+- **Run again, `init` writes only what is missing.** A file already there is reported
+  `skip_modified` and left as it is, edited or not; only the `.gitignore` region is put back.
 - **Nothing is written when anything is refused.** Relay every `REFUSED` line, fix the cause
   with the user, and run again.
-- **Never hand-edit `.stayfixed/manifest.json`.** It is the tool's.

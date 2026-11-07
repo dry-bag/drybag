@@ -6,15 +6,8 @@ from stayfixed.scaffold.manifest import Kind
 from stayfixed.scaffold.model import Action, Plan, Refused, Template, Verb
 
 
-def test_the_six_verbs_are_exactly_the_frozen_set() -> None:
-    assert {v.value for v in Verb} == {
-        "create",
-        "update",
-        "skip_modified",
-        "remove",
-        "region_update",
-        "entries_update",
-    }
+def test_the_four_verbs_are_exactly_the_frozen_set() -> None:
+    assert {v.value for v in Verb} == {"create", "update", "skip_modified", "region_update"}
 
 
 def test_writes_lists_the_targets_apply_would_touch() -> None:
@@ -22,7 +15,7 @@ def test_writes_lists_the_targets_apply_would_touch() -> None:
         actions=(
             Action(Verb.CREATE, "a", "AGENTS.md", "x", "new", None),
             Action(Verb.SKIP_MODIFIED, "b", "docs/x.md", None, "hand-edited", None),
-            Action(Verb.REMOVE, "c", "docs/y.md", None, "retired", None),
+            Action(Verb.REGION_UPDATE, "c", "docs/y.md", "y", "refreshed", None),
         ),
         refusals=(Refused("d", "../outside", "escapes the root"),),
         unchanged=("e",),
@@ -55,6 +48,6 @@ def test_a_plan_cannot_be_changed_after_it_is_rendered() -> None:
     )
     with pytest.raises(AttributeError):
         planned.actions.append(  # type: ignore[attr-defined]
-            Action(Verb.REMOVE, "z", "/etc/passwd", None, "smuggled", None)
+            Action(Verb.UPDATE, "z", "/etc/passwd", "x", "smuggled", None)
         )
     assert len(planned.actions) == 1

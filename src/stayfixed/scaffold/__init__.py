@@ -1,13 +1,12 @@
 """The scaffold engine: manifest, regions, keyed entries, plan and apply.
 
 Everything a consumer needs is re-exported here, including the primitives other areas reach for
-directly: `mark` for any caller that builds `Template.entries`, and `drop` / `apply_entries`. The
-three refusals a consumer has to catch by name are here too: a caller that cannot import
-`ManifestError`, `RegionError` or `EntriesError` from this list has no way to tell a bad merge from
-a bug except by catching `Refusal` whole; `ParserLimitError`, an `EntriesError` too, is the valid
-JSON past a limit of the parser that `attach` must tell from a malformed document. Importing a
-private module of this package from another area is a review finding; if an area needs something
-this list does not carry, the list grows deliberately.
+directly, such as `drop`. The three refusals a consumer has to catch by name are here too: a caller
+that cannot import `ManifestError`, `RegionError` or `EntriesError` from this list has no way to
+tell a bad merge from a bug except by catching `Refusal` whole; `ParserLimitError`, an
+`EntriesError` too, is the valid JSON past a limit of the parser that `attach` must tell from a
+malformed document. Importing a private module of this package from another area is a review
+finding; if an area needs something this list does not carry, the list grows deliberately.
 """
 
 from stayfixed.scaffold.engine import (
@@ -17,10 +16,8 @@ from stayfixed.scaffold.engine import (
 from stayfixed.scaffold.entries import (
     EntriesError,
     ParserLimitError,
-    apply_entries,
     mark,
     marker_id,
-    owned,
     settings_object,
     settings_text,
 )
@@ -29,14 +26,13 @@ from stayfixed.scaffold.manifest import (
     MANIFEST_PATH,
     Kind,
     Location,
-    Manifest,
     ManifestError,
     Record,
     digest,
 )
 from stayfixed.scaffold.model import Action, Applied, Plan, Refused, Template, Verb
 from stayfixed.scaffold.regions import RegionError, Style, drop, extract, upsert
-from stayfixed.scaffold.report import printable, render_report
+from stayfixed.scaffold.report import render_report
 
 __all__ = [
     "FORMAT",
@@ -46,7 +42,6 @@ __all__ = [
     "EntriesError",
     "Kind",
     "Location",
-    "Manifest",
     "ManifestError",
     "ParserLimitError",
     "Plan",
@@ -57,15 +52,12 @@ __all__ = [
     "Template",
     "Verb",
     "apply",
-    "apply_entries",
     "digest",
     "drop",
     "extract",
     "mark",
     "marker_id",
-    "owned",
     "plan",
-    "printable",
     "render_report",
     "settings_object",
     "settings_text",

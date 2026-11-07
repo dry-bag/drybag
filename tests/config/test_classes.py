@@ -92,7 +92,6 @@ TABLE_ROWS = [
     ("ledger.evidence_boundary_required_for", KeyClass.GATE_PARAMETER),
     ("stayfixed.version", KeyClass.REPOSITORY_ONLY),
     ("stayfixed.preset", KeyClass.REPOSITORY_ONLY),
-    ("stayfixed.agents", KeyClass.REPOSITORY_ONLY),
     ("project.name", KeyClass.REPOSITORY_ONLY),
     ("project.base_branch", KeyClass.REPOSITORY_ONLY),
     ("paths.bugs", KeyClass.REPOSITORY_ONLY),

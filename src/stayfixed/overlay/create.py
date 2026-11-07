@@ -27,7 +27,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from stayfixed import fsops
-from stayfixed.config.loader import preset_defaults
 from stayfixed.errors import Failure, Refusal
 from stayfixed.jsonobject import json_object
 from stayfixed.overlay.identity import overlay_fault, segment
@@ -125,7 +124,7 @@ def render_template(root: Path, name: str) -> Path:
     #
     # `plan` reads and decides and writes nothing, and it is happy with a root that does not
     # exist yet: `Manifest.read` finds no file and every artifact reads as absent.
-    planned = plan(target, preset_defaults(name), templates())
+    planned = plan(target, templates())
     # The engine writes through `fsops` and walks every component with `O_NOFOLLOW`, but it
     # cannot open a root that is not there yet. `mkdirs_within` creates a target's *parents*, so
     # the instance directory is asked for as the parent of the first file that goes into it —

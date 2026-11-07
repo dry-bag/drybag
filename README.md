@@ -25,8 +25,8 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > and adapters for Cursor or Hermes — each leaves this list in the
 > change that ships it. The [Quickstart](#quickstart) shows the three keys that are enough to start
 > a project by hand, which `init` reads as your answers — a run that writes the file itself writes
-> `[stayfixed] version` and `agents`, beside `[project] name`, `base_branch` and
-> `release_branch`, and a `[memory]` table only when `--memory-mode` answers it.
+> `[stayfixed] version`, beside `[project] name` and `base_branch`, and a `[memory]` table only
+> when `--memory-mode` answers it.
 > [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference; the command list below is held
 > to the parser by a test, so it is complete for what ships.
 
@@ -78,8 +78,8 @@ stayfixed reaches an agent in three ways, and they do not hold alike on every ag
 **session notices** add context and refuse nothing (the background-cleanup hints, the pipe-status hint, the test-hygiene
 note, the standing rules, the volatile notes); the **repository gates** — the bug, documentation,
 plan, commit and trail checks — run in CI; and the **methodology** is
-the skills. Each column is an agent under the name `[stayfixed] agents`
-lists it by: `claude` is Claude Code and `codex` is Codex.
+the skills. Each column is an agent under its name in stayfixed's registry: `claude` is Claude
+Code and `codex` is Codex.
 
 | Surface | `claude` | `codex` |
 |---|---|---|
@@ -161,15 +161,14 @@ name = "widget"          # one lowercase path segment
 groups = ["developer"]   # the preset names four; the store below has one
 ```
 
-`stayfixed init --yes` writes that file for you — the name from `origin`, the base branch, the
-agent surfaces this repository carries — along with the roadmap, its `trail.toml`, and the bug
+`stayfixed init --yes` writes that file for you — the name from `origin` and the base branch — along with the roadmap, its `trail.toml`, and the bug
 ledger's index and audits README, which `docs trail` and `bugs check` read.
 `stayfixed init --questions` shows each value it would take and where it came from, and a flag
 on `--yes` replaces any of them. Read it before it runs; a `stayfixed.toml` you wrote yourself
 is read as your answers rather than replaced:
 
 ```bash
-stayfixed init --yes --dry-run   # both plans, every file named, nothing written
+stayfixed init --yes --dry-run   # the plan, every file named, nothing written
 stayfixed init --yes
 ```
 
@@ -200,15 +199,14 @@ stayfixed writes files. Being specific about which is the point of this section.
 
 | Path | What it is | Written by |
 |---|---|---|
-| `stayfixed.toml` | Your project's configuration, committed | `stayfixed init`, once — into a file you wrote, only a missing `[stayfixed] version`; you after |
+| `stayfixed.toml` | Your project's configuration, committed | `stayfixed init`, once, when there is none; you after |
 | `docs/memory/` (configurable) | The note store, in `in-repo` and `overlay` mode | `stayfixed memory index` |
 | `.stayfixed/local/memory/` | The note store in `local-only` mode — git-ignored | `stayfixed memory index` |
 | `<store>/MEMORY.md` | The rendered routing index. **Generated — do not hand-edit** | `stayfixed memory index` |
 | `docs/bugs/` and `docs/bug-reports.md` (configurable) | One file per bug, and the generated index over them | `stayfixed init` writes the empty index and `docs/bugs/audits/README.md`; `stayfixed bugs new`, `bugs index` and `bugs renumber` after |
 | `docs/roadmap.md` (configurable) | The forward track; `docs trail` owns only the listing between its two markers | `stayfixed init` writes it; `stayfixed docs trail` rewrites the listing |
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | `stayfixed init`, once; you after |
-| `.stayfixed/manifest.json` | The ledger of every scaffolded artifact | the scaffold engine |
-| `.gitignore`, the `stayfixed:ignore` region | The block that keeps `.stayfixed/local/` out of git, recorded in the manifest. `attach` and `detach` never touch `.gitignore` | `stayfixed init` |
+| `.gitignore`, the `stayfixed:ignore` region | The block that keeps `.stayfixed/local/` out of git. `attach` and `detach` never touch `.gitignore` | `stayfixed init` |
 | `~/.config/stayfixed/config.toml` | Machine-level settings: `[personal]`; `[guards]`, where `bg_cleanup = false` switches the background guard off on this machine, whatever a repository's `stayfixed.toml` sets as its default; `[budgets]`, the four budgets that bound what a session loads; `[overlay]`; `[sync]`, whose `enabled = true` `setup --overlay` writes for an overlay it makes; and `[machine]`. `~` is `HOME`, as the harness reads it ([docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration)) | you, or `stayfixed setup` |
 | `~/.config/stayfixed/trust.json` | Every approval recorded on this machine, as a versioned record of kinds and subjects, under the same home, the notes you promoted among them (kind `reviewed`) | `stayfixed memory promote`, which records a note |
 | `hooks/hooks.json` and `hooks/run-hook.sh` | The zero-config wiring both harnesses read, and the wrapper they execute. **Shipped in the plugin; never written into a project** | nothing — they are part of the plugin |
@@ -258,8 +256,8 @@ last to find the project root, and reaches no network.
 | `git push` | the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the overlay's `origin` (note 1) | the note sync, when the commits on `main` that `origin` lacks are all notes and pass the secret scan |
 | `gh` | `stayfixed setup --overlay create:<owner>/<name>` | GitHub's API, as the account `gh` acts for, and the clones it makes over git (note 2) | note 2 |
 | `git clone` | `stayfixed setup --overlay create:<owner>/<name>` | `git@github.com:<owner>/<name>.git`, the overlay just created | when `gh repo create --clone` reported success and left nothing at the destination |
-| `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed setup --restore`, `stayfixed attach` and `stayfixed detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `setup --restore`, the marketplaces and plugins your overlay's `machine/claude/settings.json` names; for `attach` and `detach`, nothing past this machine (note 3) | `setup` when `--plugin` names a plugin, the preset's agents include `claude` and it names a marketplace for it; `setup --restore` when that file lists a marketplace or an enabled plugin; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
-| `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 3) | when `--plugin` names a plugin, the preset's agents include `codex` and it names a marketplace for it |
+| `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed setup --restore`, `stayfixed attach` and `stayfixed detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `setup --restore`, the marketplaces and plugins your overlay's `machine/claude/settings.json` names; for `attach` and `detach`, nothing past this machine (note 3) | `setup` when `--plugin` names a plugin and the preset names a marketplace for Claude Code; `setup --restore` when that file lists a marketplace or an enabled plugin; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
+| `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 3) | when `--plugin` names a plugin and the preset names a marketplace for Codex |
 | `pre-commit install` | `stayfixed setup --overlay` | nothing as it installs; GitHub and Go's servers on the first commit after it (note 4) | when it renders an overlay at a path, records an existing one, or with `create:` |
 | `sh -c` | `stayfixed test attribute --command CMD` | wherever `CMD` reaches; stayfixed does not choose | every run: `CMD` in the working tree, then in extracts of `HEAD` and of the merge base |
 | each fixed bug entry's `regression` | `stayfixed bugs regressions`, each argv run as written from the project root | wherever the argv reaches; stayfixed does not choose: `uv run` may sync the project's environment from its index, `go test` may download the modules `go.mod` names, and `npx` installs a runner no `node_modules` holds, from the registry the project's `.npmrc` names, without asking, since the argv's standard input is no terminal | every run, for each fixed entry that carries one |
@@ -344,7 +342,7 @@ address, and `core.fsmonitor` runs a program when git looks for changed files.
 ## The threat model, in one paragraph
 
 **A repository is untrusted input.** A clone you have not read can commit a `stayfixed.toml`, a
-`MEMORY.md`, a `.stayfixed/manifest.json`, a `.claude/settings.json` `env` block and a tree of
+`MEMORY.md`, a `.claude/settings.json` `env` block and a tree of
 symlinks, and every one of those reaches stayfixed before you do. So a note counts as yours only
 once you promote it (`stayfixed memory promote`), which records its digest in `trust.json` outside
 every tree; until then, and again after any edit, it reaches the model as the harness delivers the
@@ -362,9 +360,9 @@ parser, and every registered command has a line — a test holds both.
 ```text
 # Initialising a project
 stayfixed init --questions                             # each default, where it came from, the flag that changes it
-stayfixed init --yes --dry-run                         # both reports, nothing written
+stayfixed init --yes --dry-run                         # the plan, nothing written
 stayfixed init --yes --dry-run --name widget           # the plan with one default replaced
-stayfixed init --yes                                   # write the scaffold and record every file
+stayfixed init --yes                                   # write what is missing of the scaffold
 
 # Memory
 stayfixed memory index                                 # render MEMORY.md from the notes

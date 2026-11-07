@@ -1,6 +1,6 @@
 """What `stayfixed init` would ask, as a JSON Schema: `stayfixed init --questions`.
 
-Six questions, each keyed by the `stayfixed.toml` key its answer writes, but the last, `plugins`,
+Five questions, each keyed by the `stayfixed.toml` key its answer writes, but the last, `plugins`,
 which `stayfixed setup` answers on the machine rather than in the repository. Each carries the
 value `stayfixed init --yes` takes when it is not answered, where that value came from, the flag
 that answers it, and four lines (`TRADE_OFFS`): what the answer gives, what it gives up, what it
@@ -44,7 +44,6 @@ FLAGS = {
     "project.base_branch": "--base-branch",
     "memory.mode": "--memory-mode",
     "commit_messages.attribution_check": "--attribution-check",
-    "stayfixed.agents": "--agent",
     PLUGINS: "stayfixed setup --plugin",
 }
 PROPERTIES = tuple(FLAGS)
@@ -63,8 +62,8 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "the branch `plan check` and `test attribute` compare a change against when no --base "
         "is given",
         "a change into any other branch needs --base on both",
-        "[project] base_branch and release_branch in stayfixed.toml",
-        "edit both in stayfixed.toml",
+        "[project] base_branch in stayfixed.toml",
+        "edit it in stayfixed.toml",
     ),
     "memory.mode": (
         "notes an agent keeps about this repository, read back at the start of a session",
@@ -81,12 +80,6 @@ TRADE_OFFS: dict[str, tuple[str, str, str, str]] = {
         "set attribution.commit to text, which the hook then leaves for `commit check` to fail",
         "[commit_messages] attribution_check in stayfixed.toml",
         "set it to false in stayfixed.toml",
-    ),
-    "stayfixed.agents": (
-        "the coding agents this project lists",
-        "nothing",
-        "[stayfixed] agents in stayfixed.toml",
-        "edit [stayfixed] agents in stayfixed.toml",
     ),
     PLUGINS: (
         "the plugins the recommended preset names, {plugins}, in every Claude Code session",
@@ -149,14 +142,13 @@ def _recommended() -> list[str]:
 
 
 def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
-    """The six questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
+    """The five questions `init` asks at `root`, as a JSON Schema object (draft 2020-12).
 
-    Refused where `init --yes` with an answer would be (`init.precheck`): a manifest, or a
-    `stayfixed.toml` that already answers them. Detection is lenient, so a name outside the
+    Refused where `init --yes` with an answer would be (`init.precheck`): over a `stayfixed.toml`
+    that already answers them. Detection is lenient, so a name outside the
     grammar leaves `project.name` with no `default` rather than refusing the questions.
     """
     from stayfixed.config.loader import preset_defaults
-    from stayfixed.harnesses import HARNESSES
     from stayfixed.project.detect import DEFAULT, detect
     from stayfixed.project.init import precheck
 
@@ -195,14 +187,6 @@ def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
             "default": preset.commit_messages.attribution_check,
             "x-stayfixed-source": PRESET,
         },
-        "stayfixed.agents": {
-            "type": "array",
-            "title": "Coding agents",
-            "items": {"type": "string", "enum": [h.name for h in HARNESSES]},
-            "minItems": 1,
-            "default": list(found.agents),
-            "x-stayfixed-source": found.sources["agents"],
-        },
         PLUGINS: {
             "type": "array",
             "title": "Recommended plugins to install on this machine",
@@ -231,10 +215,7 @@ def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
 
 def picked(config: Config) -> dict[str, Any]:
     """What a run of `init --yes` took for each question, in `PROPERTIES`' order, read off the
-    configuration it wrote or adopted: `init` installs no plugin, and the agents are the harnesses
-    stayfixed serves among those listed, since a name none answers to is counted, never printed."""
-    from stayfixed.harnesses import select
-
+    configuration it wrote: `init` installs no plugin."""
     values: dict[str, Any] = {}
     for key in PROPERTIES:
         if key == PLUGINS:
@@ -242,9 +223,7 @@ def picked(config: Config) -> dict[str, Any]:
             continue
         table, name = key.split(".")
         value = getattr(getattr(config, table), name)
-        values[key] = list(value) if isinstance(value, tuple) else value
-    served, _ = select(config.stayfixed.agents)
-    values["stayfixed.agents"] = [harness.name for harness in served]
+        values[key] = value
     return values
 
 

@@ -121,7 +121,6 @@ CLASSES: Mapping[str, KeyClass] = MappingProxyType(
         "ledger.evidence_boundary_required_for": KeyClass.GATE_PARAMETER,
         "stayfixed.version": KeyClass.REPOSITORY_ONLY,
         "stayfixed.preset": KeyClass.REPOSITORY_ONLY,
-        "stayfixed.agents": KeyClass.REPOSITORY_ONLY,
         "project.*": KeyClass.REPOSITORY_ONLY,
         "paths.*": KeyClass.REPOSITORY_ONLY,
         "ledger.id_prefix": KeyClass.REPOSITORY_ONLY,

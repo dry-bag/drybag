@@ -188,10 +188,9 @@ class Register:
     `.stayfixed`), or the shipped preset's own defaults (`preset_defaults`), which this package
     writes and a repository cannot. The engine does not check their spelling again, and still
     resolves each through `contained`, which refuses a symlink the tree holds when the engine
-    reads or writes. `runbook` is a root-relative file and `audits` one plain directory name
-    under `directory`, each `None` for a register without one, and the index links each it has.
-    The bug ledger has no runbook, and its `audits` is `BUG_AUDITS`, with no separator of its own,
-    where `init` writes the audits README. A register built from anything else is a defect."""
+    reads or writes. `audits` is one plain directory name under `directory`, which the index
+    links: the bug ledger's is `BUG_AUDITS`, with no separator of its own, where `init` writes the
+    audits README. A register built from anything else is a defect."""
 
     name: str  # "bugs": the command group, and the noun in messages
     title: str  # "Bug reports": the index's heading
@@ -202,10 +201,9 @@ class Register:
     # The levels whose entries need a filled evidence line: the bug ledger's are `[ledger]
     # evidence_boundary_required_for`.
     evidence_boundary_for: tuple[str, ...]
-    runbook: str | None  # a root-relative file the index links; the bug ledger has none
     # the bug ledger's `BUG_AUDITS`: the subdirectory of `directory` holding audit records, which
     # the index links.
-    audits: str | None
+    audits: str
 
 
 _BUG_TEMPLATE = f"""---
@@ -333,6 +331,5 @@ def located_bug_register(config: Config) -> Register:
         ids=Identifiers(config.ledger.id_prefix),
         schema=BUG_SCHEMA,
         evidence_boundary_for=tuple(config.ledger.evidence_boundary_required_for),
-        runbook=None,
         audits=BUG_AUDITS,
     )

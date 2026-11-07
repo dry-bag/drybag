@@ -221,7 +221,7 @@ UNUSABLE = [
         "stayfixed.version",
         id="version",
     ),
-    pytest.param(_docs_symlink, "paths.architecture", id="docs-symlink"),
+    pytest.param(_docs_symlink, "paths.specs", id="docs-symlink"),
     pytest.param(lambda root: "project = 1\n" + HEAD, "project", id="project-not-a-table"),
 ]
 

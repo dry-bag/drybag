@@ -55,6 +55,8 @@ ORIGIN = f"git@github.com:{OWNER}/{PROJECT}.git"
 # The rule the walkthrough puts in the overlay and then asks a session for. Distinctive enough
 # that finding it in the wrapper's stdout cannot be an accident.
 RULE_BODY = "NEVER FORCE-PUSH A SHARED BRANCH; open a pull request instead."
+# The first line of the `.gitignore` region `init` writes, spelled as a project carries it.
+IGNORE_BEGIN = "# stayfixed:ignore:begin\n"
 
 # The note the walkthrough asks a session for, as one spelling. `_install_path` writes it into
 # the overlay on the path a fresh project takes, and `_project(initialised=True)` writes the same
@@ -255,10 +257,10 @@ def _install_path(
     # 0. the project footprint, on the repository that came with notes and a history. `init`
     # adopts the `stayfixed.toml` already there without rewriting it (a `Kind.ONCE` artifact
     # whose file is present is skipped), so the document above is still the document below,
-    # and the manifest is the witness that the footprint pass ran.
+    # and the `.gitignore` region is the witness that the footprint ran.
     if initialised:
         step("init", "--yes", "--root", str(root), "--machine", str(machine))
-        assert (root / ".stayfixed" / "manifest.json").is_file(), "`init` recorded no manifest"
+        assert IGNORE_BEGIN in (root / ".gitignore").read_text("utf-8"), "`init` wrote no region"
     # 1-3. the machine layer, into a scratch machine file and a scratch home. **Two runs**, as
     # the walkthrough had before it was converted: the first writes the machine file with no
     # overlay in it, the second renders the overlay from the shipped template with no network
@@ -645,7 +647,7 @@ def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Pat
     # through the wrapper.
     #
     # What would break it: leave the composed store unread and `RULE_BODY` never reaches the
-    # bundle; remove `init`'s footprint and the manifest assertion fails; let any row go red —
+    # bundle; remove `init`'s footprint and the region assertion fails; let any row go red —
     # `overlay-requires`, the last, is the one this branch added and it is answered here against
     # a real overlay rather than a stub.
     walk = _install_path(tmp_path, initialised=True)
@@ -654,7 +656,7 @@ def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Pat
     assert RULE_BODY in done.stdout
     rows = _doctor(walk)
     assert not [row for row in rows if row["status"] == RED]
-    assert (walk.root / ".stayfixed" / "manifest.json").is_file()
+    assert IGNORE_BEGIN in (walk.root / ".gitignore").read_text("utf-8")
 
 
 def test_a_session_before_the_attach_is_told_what_is_missing(tmp_path: Path) -> None:
@@ -680,8 +682,7 @@ def test_a_session_before_the_attach_is_told_what_is_missing(tmp_path: Path) -> 
 
 def test_detach_on_an_initialised_project_leaves_the_footprint(tmp_path: Path) -> None:
     # The footprint's ownership, end to end: the detach that takes back everything `attach` added
-    # leaves what `init` wrote where it is — and the manifest with it, because `detach` never
-    # touches the scaffold ledger.
+    # leaves what `init` wrote where it is.
     walk = _install_path(tmp_path, initialised=True)
     roadmap = walk.root / "docs" / "roadmap.md"
     # Non-vacuous: the file this asserts survives has to be there before the detach.
@@ -689,4 +690,3 @@ def test_detach_on_an_initialised_project_leaves_the_footprint(tmp_path: Path) -
     done = _cli(walk, "detach", "--root", str(walk.root))
     assert done.returncode == 0, done.stderr
     assert roadmap.read_text(encoding="utf-8") == before
-    assert (walk.root / ".stayfixed" / "manifest.json").is_file()

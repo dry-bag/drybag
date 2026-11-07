@@ -14,7 +14,6 @@ EXPORTED = [
     "EntriesError",
     "Kind",
     "Location",
-    "Manifest",
     "ManifestError",
     "ParserLimitError",
     "Plan",
@@ -25,15 +24,12 @@ EXPORTED = [
     "Template",
     "Verb",
     "apply",
-    "apply_entries",
     "digest",
     "drop",
     "extract",
     "mark",
     "marker_id",
-    "owned",
     "plan",
-    "printable",
     "render_report",
     "settings_object",
     "settings_text",
@@ -42,7 +38,7 @@ EXPORTED = [
 
 
 def test_the_three_refusals_a_consumer_catches_by_name_are_exported() -> None:
-    # `Manifest.read` raises `ManifestError`, `drop` raises `RegionError`, and `apply_entries`
+    # `Manifest.read` raises `ManifestError`, `drop` raises `RegionError`, and `settings_object`
     # raises `EntriesError`. The package docstring makes importing a private
     # module of it from another area a review finding, so while these three were absent from the
     # list a consumer had to choose between that finding and catching `Refusal` whole — which
@@ -55,9 +51,9 @@ def test_the_three_refusals_a_consumer_catches_by_name_are_exported() -> None:
 
 
 def test_a_document_past_a_limit_of_the_parser_is_an_entries_refusal_of_its_own_kind() -> None:
-    # `apply_entries` raises `ParserLimitError` for valid JSON past a limit of the parser. `doctor`
-    # tells it from a malformed document by name, and every caller that catches `EntriesError`
-    # still catches it.
+    # `settings_object` raises `ParserLimitError` for valid JSON past a limit of the parser.
+    # `doctor` tells it from a malformed document by name, and every caller that catches
+    # `EntriesError` still catches it.
     assert "ParserLimitError" in scaffold.__all__
     assert issubclass(ParserLimitError, EntriesError)
 

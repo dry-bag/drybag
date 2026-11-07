@@ -7,11 +7,10 @@ re-rendered in place and installed on every run, both `claude plugin` calls bein
 file keeps only the allow rules the ledger names, and the plugin's `enabledPlugins` and
 `extraKnownMarketplaces` entries, which Claude Code writes.
 
-*Not the scaffold engine's `plan`/`apply` for the settings file.* The engine stamps a digest of
-the document into the **committed** `.stayfixed/manifest.json`, which would publish a digest of
-the owner's personal allow rules to every collaborator. The pure functions are called
-instead — document string in, document string out, no manifest — and the ledger below takes
-the manifest's place. This is the one place where refusing an existing mechanism is right.
+*Not the scaffold engine's `plan`/`apply` for the settings file.* The engine writes whole files
+and marked regions and has no kind that edits entries inside a settings document, so the pure
+functions are called instead — document string in, document string out, no manifest — and the
+ledger below records what was written.
 
 An allow rule cannot carry a marker — `scaffold.mark` appends to a *command* — so it has exactly
 **one** witness, the ledger in the git common directory (`binding.LEDGER_FILE`), and `detach` is
@@ -1134,7 +1133,7 @@ def _emptied(raw: dict[str, Any]) -> dict[str, Any]:
 
     An empty `permissions.allow` is not what the file looked like before `attach`, and the round
     trip this command promises is measured in bytes: `tests/attach/test_detach.py` snapshots
-    every file under the root and compares. `apply_entries` already does the same for `hooks`.
+    every file under the root and compares.
     """
     permissions = raw.get("permissions")
     if isinstance(permissions, dict):

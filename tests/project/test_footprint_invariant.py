@@ -10,7 +10,7 @@ fresh clone.
   planted where git does not show it — an ignored file, a file under `.git/`, stayfixed's
   out-of-git state — is present with its bytes, and no file has appeared under `.git/`.
 - **I2, the legitimate user is not refused.** The legitimate cases run `init` to the end: no
-  `Refusal` raised, and no refusal returned in the report's plans, which is the other way a
+  `Refusal` raised, and no refusal returned in the report's plan, which is the other way a
   command refuses.
 - **I3, the end state is consistent.** After a finished `init`, the footprint planned again over
   the same tree plans nothing but what it skips and refuses nothing: every artifact the
@@ -37,7 +37,7 @@ import pytest
 
 from stayfixed.config.loader import CONFIG_FILE, load, read_document
 from stayfixed.errors import Refusal
-from stayfixed.project.init import ANSWER_SHEET, NO_ANSWERS, Given, InitReport, init
+from stayfixed.project.init import NO_ANSWERS, Given, InitReport, init
 from stayfixed.project.templates import project_templates
 from stayfixed.scaffold import Verb, plan
 from tests.gitfixture import git, needs_git
@@ -66,9 +66,6 @@ class Case:
     given: Given = NO_ANSWERS
     # Whether the clone commits the case's `stayfixed.toml`; a fresh clone has none.
     written: bool = True
-    # The one refusal a hostile case must meet, where another guard would also refuse it and so
-    # hide the one the row is about.
-    refusal: str | None = None
 
     def document(self, *, with_paths: bool) -> str:
         text = DOCUMENT
@@ -131,16 +128,6 @@ HOSTILE = (
         paths={"roadmap": "docs/Bug-Reports.md"},
         plant={"docs/Bug-Reports.md": FOREIGN},
     ),
-    # Answers over a document the clone committed would rewrite what the committer chose; they
-    # are refused before anything is read beyond the root.
-    Case(
-        "answers-over-a-committed-document",
-        paths={"roadmap": ".env"},
-        ignore=(".env",),
-        plant={".env": FOREIGN},
-        given=Given(memory_mode="local-only"),
-        refusal=ANSWER_SHEET,
-    ),
 )
 
 LEGITIMATE = (
@@ -171,7 +158,6 @@ LEGITIMATE = (
         given=Given(
             name="widget",
             base_branch="main",
-            agents=("claude", "codex"),
             memory_mode="local-only",
         ),
     ),
@@ -193,8 +179,7 @@ def _refusals(report: InitReport) -> list[str]:
     refused (`refused`, the one predicate the CLI's exit code reads too)."""
     if not report.refused:
         return []
-    plans = (report.footprint, report.once)
-    return [f"{r.artifact_id} {r.target}: {r.reason}" for p in plans for r in p.refusals]
+    return [f"{r.artifact_id} {r.target}: {r.reason}" for r in report.plan.refusals]
 
 
 def _outcome(root: Path, tmp_path: Path, given: Given = NO_ANSWERS) -> list[str] | None:
@@ -266,7 +251,7 @@ def _assert_invariant(
     document = read_document(root) or ""
     config = load(root, machine=tmp_path / "absent.toml")
     try:
-        planned = plan(root, config, project_templates(config, document=document).footprint)
+        planned = plan(root, project_templates(config, document=document))
     except Refusal as refused:
         pytest.fail(f"I3: planning again after a finished init refused: {refused}")
     # A whole file stayfixed did not write is skipped and named on every run, by design.
@@ -294,9 +279,6 @@ def test_no_hostile_input_reaches_a_file_git_hides(
     hidden = _hidden(root, case)
     git_before = _git_files(root)
     refused = _outcome(root, tmp_path, case.given)
-    if case.refusal is not None:
-        # Without it the answers row would pass on another guard's refusal alone.
-        assert refused == [case.refusal], refused
     _assert_invariant(root, tmp_path, hidden, git_before, finished=refused is None)
 
 

@@ -25,26 +25,17 @@ memory_index_lines = 200
 memory_index_bytes = 25600
 hook_output_chars = 10000
 
-[defaults.stayfixed]
-agents = ["claude", "codex"]
-
 [defaults.project]
 base_branch = "main"
-release_branch = "main"
 
 [defaults.paths]
 agents_md = "AGENTS.md"
-architecture = "docs/architecture"
-runbooks = "docs/runbooks"
-adr = "docs/adr"
 specs = "docs/specs"
 plans = "docs/plans"
 bugs = "docs/bugs"
 bug_index = "docs/bug-reports.md"
 roadmap = "docs/roadmap.md"
-roadmap_history = "docs/roadmap-history.md"
 memory = "docs/memory"
-stayfixed = "docs/stayfixed"
 
 [defaults.memory]
 groups = ["developer", "project-stable", "project-volatile", "specs"]

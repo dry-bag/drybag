@@ -1,8 +1,8 @@
 """The trust package's import surface: the machine's one record of approvals.
 
-No command lists or withdraws an approval: a note promoted through `memory promote` is withdrawn
-by editing it, which changes its digest, or by deleting it. The `memory` area keeps its reviewed
-notes in the record under kind `reviewed`, with no approval kind registered for it: it reads
+No command lists or withdraws an approval; withdrawing one is a hand edit of `trust.json`. The
+`memory` area keeps its reviewed notes in the record under kind `reviewed`, with no approval kind
+registered for it: it reads
 `recorded`, with the `Approval` it answers in and the `UnreadableTrust` it refuses with, and
 `memory promote` writes through `approve_all`. A consumer that needs another reader or writer
 grows this list in a commit that names it.

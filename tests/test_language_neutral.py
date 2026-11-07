@@ -24,7 +24,7 @@ PACKAGE = ROOT / "src" / "stayfixed"
 
 # One stack's test runner, build artifacts or package manager, for the common stacks. `uv` stands
 # for itself rather than for `uv run`: the walk reads one constant at a time, and the command
-# scanner's `uv run` reading (`hints/uvrun.py`) spells its wrapper as the two words `"uv"` and
+# scanner's `uv run` reading (`hints/runners.py`) spells its wrapper as the two words `"uv"` and
 # `"run"`.
 STACK_WORDS = (
     "python",
@@ -66,15 +66,13 @@ STACK_NAMED = {
     ("src/stayfixed/ledger/scan.py", "venv"),
     ("src/stayfixed/ledger/scan.py", "pycache"),
     ("src/stayfixed/ledger/scan.py", "pyc"),
-    # The command scanner unwraps `uv run <cmd>` to `<cmd>`, as it unwraps `env <cmd>`, up to
-    # the first word the runner table reads as a test run; this module is that unwrap, which
-    # `hints/bashscan.py` calls, so the scanner names no stack itself. `uv run` is a Python
-    # launcher, and it stays beside the shared scanner because every stack's runner may stand
-    # behind it.
-    ("src/stayfixed/hints/uvrun.py", "uv"),
     # The table of test-runner program names (`hints/runners.py`) names runners only to say that a
     # command is a test run, never to run, plan or advise one, and it is the one place the hints
-    # look this up, so no other hint names a stack to recognise a run.
+    # look this up, so no other hint names a stack to recognise a run. It also holds the unwrap of
+    # `uv run <cmd>` to `<cmd>` up to the first word the table reads as a test run, which
+    # `hints/bashscan.py` calls, so the scanner names no stack itself: `uv run` is a Python
+    # launcher every stack's runner may stand behind.
+    ("src/stayfixed/hints/runners.py", "uv"),
     ("src/stayfixed/hints/runners.py", "cargo"),
     ("src/stayfixed/hints/runners.py", "gradle"),
     ("src/stayfixed/hints/runners.py", "jest"),

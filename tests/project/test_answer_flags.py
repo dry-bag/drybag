@@ -24,9 +24,7 @@ def _init(
 
 @needs_git
 def test_each_answer_reaches_the_document_this_run_creates(tmp_path: Path) -> None:
-    # Each flag replaces one default. Mutation (by hand): `_tables` ignores `given.agents` ->
-    # the agents assertion reddens (the repository carries no harness directory, so the
-    # default is both).
+    # Each flag replaces one default.
     root = repository(tmp_path)
     _init(
         root,
@@ -34,12 +32,10 @@ def test_each_answer_reaches_the_document_this_run_creates(tmp_path: Path) -> No
         Given(
             name="gadget",
             base_branch="develop",
-            agents=("codex",),
             memory_mode="in-repo",
         ),
     )
     config = load(root, machine=tmp_path / "absent.toml")
     assert config.project.name == "gadget"
-    assert (config.project.base_branch, config.project.release_branch) == ("develop", "develop")
-    assert config.stayfixed.agents == ("codex",)
+    assert config.project.base_branch == "develop"
     assert config.memory.mode == "in-repo"

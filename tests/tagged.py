@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from stayfixed.tomlout import quoted
+from stayfixed.tomlout import dumps
 
 
 def list_tags(overlay: Path, project: str, tags: list[str]) -> None:
@@ -15,8 +15,7 @@ def list_tags(overlay: Path, project: str, tags: list[str]) -> None:
     record.parent.mkdir(parents=True, exist_ok=True)
     held = record.read_text(encoding="utf-8").splitlines(keepends=True) if record.exists() else []
     kept = "".join(line for line in held if not line.startswith("tags = "))
-    listed = ", ".join(quoted(tag) for tag in tags)
-    record.write_text(f"{kept}tags = [{listed}]\n", encoding="utf-8")
+    record.write_text(kept + dumps({"": {"tags": tags}}), encoding="utf-8")
 
 
 def with_tags(overlay: Path, project: str, tags: list[str], *inside: str) -> Path:

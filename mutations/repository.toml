@@ -1311,19 +1311,6 @@ reddens = [
 # is held by `tests/test_command.py`'s `EXCEPTIONS` table, which `mutations/`'s "one --check spells
 # its own help string again" already proves load-bearing.
 
-# A committed record's digest is what `upgrade` compares the bytes on disk with before it refreshes
-# a file. The rename rewrote four of the smoke fixture's scaffold files and kept their digests, so
-# after any template change `upgrade` would have skipped them as hand-edited. The mutation puts one
-# of those digests back.
-[[mutation]]
-name = "a fixture record keeps a digest from before its file changed"
-file = "tests/fixtures/smoke-project/.stayfixed/manifest.json"
-before = '"sha256": "a1f6f86c5e8ee8f9e1582ac4b6265c018cacece703f5f77c6e55d37d848e51a1"'
-after = '"sha256": "f779bb0afc2767eb685323322262c83af0db6f81a218a212efc46bf69bcaf164"'
-reddens = [
-  "tests/project/test_fixture.py::test_every_recorded_footprint_artifact_follows_a_template_change",
-]
-
 # The hermetic default the helper's own docstring promises. `machine=None` is not "no machine
 # file" to the code under test: it resolves to `Path.home()/.config/stayfixed/config.toml`, the
 # process `HOME`, which the `env` dict this helper passes cannot reach. Every case that omitted
@@ -2069,8 +2056,8 @@ before = '            if read is not None and _launcher(read, source.names, laun
 after = '            if False:'
 reddens = ["tests/test_outbound.py::test_a_launch_of_any_shape_is_found[getattr-literal]"]
 
-# `getattr(os, "O_NOFOLLOW", 0)` and `hasattr(os, "waitid")` use `os` for one attribute that is no
-# launcher; read as handing the module on, they are findings the tree's own `fsops` makes.
+# `getattr(os, "O_NOFOLLOW", 0)` uses `os` for one attribute that is no launcher; read as handing
+# the module on, it is a finding the tree's own `fsops` makes.
 [[mutation]]
 name = "a module getattr or hasattr reads by a literal name is taken for handed on"
 file = "tests/outbound/walk.py"
