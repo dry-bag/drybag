@@ -259,7 +259,7 @@ def test_a_feature_branch_is_a_warning_with_its_remedy(machine: Machine) -> None
     # The guard's refusal is `skipped`: the sync is not running, which green would hide.
     # Mutation (oracle): `mutations/`'s "doctor calls a guard refusal green".
     git(machine.overlay, "checkout", "-q", "-b", "feature")
-    reason = G.guard(machine.overlay).reason
+    reason = G.guard(machine.overlay)
     status, detail, remedy = machine.scanner().state("skipped", reason).row()
     assert (status, remedy) == (WARN, SKIPPED_FIX)
     assert "on feature, not main" in detail and "`git switch main`" in detail
@@ -279,7 +279,7 @@ def test_a_rendered_overlay_with_no_remote_warns_until_it_has_one(
 
     def job() -> None:
         now = lambda: datetime.now(UTC)  # noqa: E731
-        J.run_job(J.JobContext(destination, state_directory(), tmp_path, "host", now))
+        J.run_job(J.JobContext(destination, state_directory(), "host", now))
 
     job()
     status, detail, remedy = machine.row()

@@ -289,16 +289,16 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from stayfixed.sync import job as J
-ctx = J.JobContext(overlay=Path(sys.argv[1]), state_dir=Path(sys.argv[2]), home=Path(sys.argv[3]),
+ctx = J.JobContext(overlay=Path(sys.argv[1]), state_dir=Path(sys.argv[2]),
                    host="testhost", now=lambda: datetime.now(UTC),
-                   limits=J.Limits(checks=float(sys.argv[4])))
+                   limits=J.Limits(checks=float(sys.argv[3])))
 outcome = J.commit_memory(ctx)
 print(outcome.state if outcome else "none")
 """
 
 
 def _start_job(overlays: Overlays, checks: float) -> subprocess.Popen[str]:
-    argv = [str(overlays.a), str(overlays.state_dir), str(overlays.home), str(checks)]
+    argv = [str(overlays.a), str(overlays.state_dir), str(checks)]
     return subprocess.Popen(
         [sys.executable, "-c", _KILL_RUNNER, *argv],
         stdout=subprocess.PIPE,

@@ -5,7 +5,7 @@ given, at no less than the suite's floor, its whole process group ended on a tim
 a credential helper under git cannot outlive the step that started it. A job started from inside a
 git hook still addresses the overlay and its real index, since no repository variable is kept. A
 helper's `timeout` is its whole budget: one that makes several calls gives each what is left
-(`left`). `env` is laid over every call a helper makes; the job passes `JOB_SETTINGS`.
+(`left`). Each call is given `JOB_SETTINGS` on top.
 """
 
 from __future__ import annotations
@@ -13,16 +13,12 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
 from stayfixed import fsops
-from stayfixed.gitenv import Called, git_call
+from stayfixed.gitenv import QUERY_TIMEOUT_SECONDS, Called, git_call
 
-# A named cap: how long one local query over the overlay's notes (a `log`, `diff` or `status`) may
-# take, for a git that hangs. No shipped file states it.
-LOCAL_TIMEOUT = 30.0
 # `merge-tree --write-tree --merge-base` (2.40), `GIT_ATTR_SOURCE` (2.41), which an older git
 # ignores without a word, and a `merge-tree` that reads attributes from it without crashing (2.43).
 MIN_GIT = (2, 43)
@@ -40,25 +36,21 @@ class GitTimeout(GitError):
 def git(
     repo: Path,
     *args: str,
-    timeout: float = LOCAL_TIMEOUT,
+    timeout: float = QUERY_TIMEOUT_SECONDS,
     env: Mapping[str, str] | None = None,
-    index_file: Path | None = None,
     stdin: bytes | None = None,
 ) -> Called:
-    """`git <args>` in `repo` with `env` laid over the core's environment; `index_file` is
-    `GIT_INDEX_FILE` for this call only."""
-    given = dict(env or {})
-    if index_file is not None:
-        given["GIT_INDEX_FILE"] = str(index_file)
-    return git_call(repo, *args, timeout=timeout, env=given, stdin=stdin)
+    """`git <args>` in `repo` with `JOB_SETTINGS`, and `env` over them, laid over the core's
+    environment."""
+    return git_call(repo, *args, timeout=timeout, env={**JOB_SETTINGS, **(env or {})}, stdin=stdin)
 
 
-def left(deadline: float, what: str, error: type[Exception] = GitTimeout) -> float:
-    """What is left of a budget (`deadline`, a `time.monotonic` instant) for its next call; `error`
-    (the job's own, for the whole job) when nothing is."""
+def left(deadline: float, what: str) -> float:
+    """What is left of a budget (`deadline`, a `time.monotonic` instant) for its next call;
+    `GitTimeout` when nothing is."""
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        raise error(f"{what} did not finish in time")
+        raise GitTimeout(f"{what} did not finish in time")
     return remaining
 
 
@@ -76,9 +68,15 @@ def checked(result: Called, what: str) -> Called:
     return result
 
 
-def ask(repo: Path, deadline: float, env: Mapping[str, str] | None, *args: str) -> Called:
+def ask(repo: Path, deadline: float, *args: str) -> Called:
     """`git <args>` given what is left of a helper's budget; never a timed-out answer."""
-    return timed(git(repo, *args, timeout=left(deadline, "a git call"), env=env), f"git {args[0]}")
+    return timed(git(repo, *args, timeout=left(deadline, "a git call")), f"git {args[0]}")
+
+
+def rev_or_none(repo: Path, rev: str, *, timeout: float) -> str | None:
+    """The sha `rev` names now; `None` when it cannot be read."""
+    found = git(repo, "rev-parse", "-q", "--verify", "--end-of-options", rev, timeout=timeout)
+    return found.out.strip() or None if found.code == 0 and not found.timed_out else None
 
 
 def with_config(env: Mapping[str, str], entries: Mapping[str, str]) -> dict[str, str]:
@@ -110,17 +108,6 @@ JOB_SETTINGS: Mapping[str, str] = MappingProxyType(
 )
 
 
-@dataclass(frozen=True)
-class Guard:
-    """`reason` is why the sync may not act, or `None`."""
-
-    reason: str | None
-
-    @property
-    def ok(self) -> bool:
-        return self.reason is None
-
-
 def version_ok(text: str) -> bool:
     """Whether `git version` output names `MIN_GIT` or newer; an unreadable answer is not."""
     match = _VERSION.search(text)
@@ -139,10 +126,8 @@ _IN_PROGRESS = {
 _MARKER_PATHS = tuple(part for name in _IN_PROGRESS for part in ("--git-path", name))
 
 
-def guard(
-    repo: Path, *, timeout: float = LOCAL_TIMEOUT, env: Mapping[str, str] | None = None
-) -> Guard:
-    """Whether the overlay is in a shape the sync may act on at all.
+def guard(repo: Path, *, timeout: float = QUERY_TIMEOUT_SECONDS) -> str | None:
+    """Why the overlay is not in a shape the sync may act on at all, or `None`.
 
     Refused, with the reason the state shows: git older than `MIN_GIT`, not a repository, an
     operation in progress, unmerged paths, `HEAD` not on `main`, or `main` not tracking
@@ -151,35 +136,35 @@ def guard(
     `GitTimeout`, never an answer (a timed-out `symbolic-ref` is not a detached `HEAD`).
     """
     deadline = time.monotonic() + timeout
-    version = ask(repo, deadline, env, "version")
+    version = ask(repo, deadline, "version")
     if version.code != 0 or not version_ok(version.out):
         found = version.out.strip() or version.err.strip() or "no answer"
-        return Guard(
+        return (
             "git 2.43 or newer is needed (merge-tree --write-tree --merge-base, GIT_ATTR_SOURCE); "
-            f"found: {found}",
+            f"found: {found}"
         )
-    markers = ask(repo, deadline, env, "rev-parse", *_MARKER_PATHS)
+    markers = ask(repo, deadline, "rev-parse", *_MARKER_PATHS)
     if markers.code != 0:
-        return Guard(f"not a git repository: {markers.err.strip()[:200] or repo}")
+        return f"not a git repository: {markers.err.strip()[:200] or repo}"
     for saying, marker in zip(_IN_PROGRESS.values(), markers.out.splitlines(), strict=False):
         if fsops.exists(repo / marker):
-            return Guard(f"the overlay is {saying}; the sync waits: finish or abort it")
+            return f"the overlay is {saying}; the sync waits: finish or abort it"
     # A conflicted `stash pop`, `checkout -m` or `apply --3way` leaves no marker, only unmerged
     # entries and a working tree with conflict markers, which the job would commit as notes.
-    unmerged = ask(repo, deadline, env, "ls-files", "--unmerged", "-z")
+    unmerged = ask(repo, deadline, "ls-files", "--unmerged", "-z")
     if unmerged.code != 0 or unmerged.out:
-        return Guard(UNMERGED)
-    head = ask(repo, deadline, env, "symbolic-ref", "-q", "HEAD")
+        return UNMERGED
+    head = ask(repo, deadline, "symbolic-ref", "-q", "HEAD")
     if head.code != 0:
-        return Guard("HEAD is detached; the sync runs only on main: `git switch main`")
+        return "HEAD is detached; the sync runs only on main: `git switch main`"
     if (branch := head.out.strip().removeprefix("refs/heads/")) != "main":
-        return Guard(f"the overlay is on {branch}, not main: `git switch main`")
-    remote = ask(repo, deadline, env, "config", "--get", "branch.main.remote").out.strip()
-    merge = ask(repo, deadline, env, "config", "--get", "branch.main.merge").out.strip()
+        return f"the overlay is on {branch}, not main: `git switch main`"
+    remote = ask(repo, deadline, "config", "--get", "branch.main.remote").out.strip()
+    merge = ask(repo, deadline, "config", "--get", "branch.main.merge").out.strip()
     if (remote, merge) != ("origin", "refs/heads/main"):
         if not remote:  # short enough for `doctor`'s line (`printed.CLIPPED_CHARS`)
             fix = "`git remote add origin <url>`, then `git push -u origin main`"
-            return Guard(f"main tracks nothing; give the overlay a remote: {fix}")
+            return f"main tracks nothing; give the overlay a remote: {fix}"
         tracking = f"{remote}/{merge.removeprefix('refs/heads/')}"
-        return Guard(f"main tracks {tracking}, not origin/main")
-    return Guard(None)
+        return f"main tracks {tracking}, not origin/main"
+    return None

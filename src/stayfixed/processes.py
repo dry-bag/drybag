@@ -22,6 +22,7 @@ import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import AnyStr, Generic
 
 from stayfixed import fsops
 
@@ -47,13 +48,14 @@ def kill_group(process: subprocess.Popen[bytes], number: int = signal.SIGKILL) -
 
 
 @dataclass(frozen=True)
-class Ran:
-    """What a bounded launch gave back: its exit code, its two streams as bytes, and whether it
-    ran out of its time, in which case the code is the signal's and the streams what was read."""
+class Ran(Generic[AnyStr]):
+    """What a bounded launch gave back: its exit code, its two streams, as bytes or decoded, and
+    whether it ran out of its time, in which case the code is the signal's and the streams what
+    was read."""
 
     code: int
-    out: bytes
-    err: bytes
+    out: AnyStr
+    err: AnyStr
     timed_out: bool
 
 
@@ -64,7 +66,7 @@ def run_bounded(
     env: Mapping[str, str],
     timeout: float,
     stdin: bytes | None = None,
-) -> Ran:
+) -> Ran[bytes]:
     """Run `argv` in `cwd` with exactly `env`, in a session of its own, for at most `timeout`.
 
     Standard input is `stdin`, or closed: nothing run here may wait for an answer. Past `timeout`

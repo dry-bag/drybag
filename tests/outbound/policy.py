@@ -298,10 +298,8 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/sync/job.py", "_commit", "str(message)"): (
         "the value of `-F`, a file in the job's own scratch directory"
     ),
-    ("src/stayfixed/sync/job.py", "_commit_tree", "*parented"): (
-        "`-p` before each parent, a sha git printed"
-    ),
-    ("src/stayfixed/sync/job.py", "_commit_tree", "*signed"): "`-S`, or nothing",
+    ("src/stayfixed/sync/job.py", "replay", "parent"): "the value of `-p`, a sha git printed",
+    ("src/stayfixed/sync/job.py", "replay", "*signed"): "`-S`, or nothing",
     (
         "src/stayfixed/sync/job.py",
         "_original",
@@ -351,7 +349,7 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
         "the environment doctor was handed, less every `CLAUDE_`, `PLUGIN_` and `STAYFIXED_` "
         "variable, plus the plugin root and project directory the wrapper needs"
     ),
-    ("src/stayfixed/sync/scan.py", "scan", "env=env"): (
+    ("src/stayfixed/sync/scan.py", "_step", "env=env"): (
         "`scan.SEALED`: no system file, an identity for the scan's own commit, and `HOME` the "
         "scan's directory, so nothing configures its repository"
     ),
@@ -359,20 +357,19 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
         "`scrubbed_env()` with `scan.SEALED` over it, for the gitleaks that runs git in the same "
         "repository"
     ),
-    ("src/stayfixed/sync/git.py", "git", "env=given"): (
-        _JOB_ENVIRONMENT + ", and the temporary index a call names"
+    ("src/stayfixed/sync/git.py", "git", "env={**JOB_SETTINGS, **(env or {})}"): (
+        _JOB_ENVIRONMENT + ", and what a call lays over it, each declared where it is built"
     ),
-    ("src/stayfixed/sync/git.py", "ask", "env=env"): _JOB_ENVIRONMENT,
-    ("src/stayfixed/sync/job.py", "_git", "env={**ctx.env, **(env or {})}"): (
-        _JOB_ENVIRONMENT + ", and for a replayed commit its author and its encoding"
+    ("src/stayfixed/sync/job.py", "_git", "env=env"): (
+        "a call's own: the literal pathspecs a list asks for, a replayed commit's author, or the "
+        "temporary index a readability check names"
     ),
-    ("src/stayfixed/sync/job.py", "_commit_tree", "env=env"): (
+    ("src/stayfixed/sync/job.py", "replay", "env=author"): (
         "a replayed commit's own author, and its encoding as one `git -c`-style entry"
     ),
-    ("src/stayfixed/sync/rules.py", "status", "env=env"): _JOB_ENVIRONMENT,
-    ("src/stayfixed/sync/job.py", "_one_job", "env=ctx.env"): _JOB_ENVIRONMENT,
-    ("src/stayfixed/sync/trigger.py", "_upstream", "env=JOB_SETTINGS"): _JOB_ENVIRONMENT,
-    ("src/stayfixed/sync/rules.py", "commit_entries", "env=env"): _JOB_ENVIRONMENT,
+    ("src/stayfixed/sync/job.py", "integrate", "env=probe"): (
+        "`GIT_INDEX_FILE`, a file in the job's own scratch directory"
+    ),
     ("src/stayfixed/sync/rules.py", "diff_entries", "env=literal"): (
         _JOB_ENVIRONMENT + ", and `GIT_LITERAL_PATHSPECS=1` when it names the paths"
     ),
@@ -382,5 +379,4 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
     ("src/stayfixed/sync/job.py", "_commit", "env=_LITERAL"): (
         "`GIT_LITERAL_PATHSPECS=1` alone, over the job's own: each note's path matched as written"
     ),
-    ("src/stayfixed/sync/rules.py", "range_is_memory_only", "env=env"): _JOB_ENVIRONMENT,
 }

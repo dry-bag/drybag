@@ -39,7 +39,7 @@ from stayfixed.sync.state import (
     read_state,
     write_state,
 )
-from tests.sync.conftest import NOW, Overlays, context, git, head, note_text, write
+from tests.sync.conftest import NOW, Overlays, after_step, context, git, head, note_text, write
 
 NOTE = "common/memory/new.md"
 
@@ -74,7 +74,7 @@ def test_a_trigger_during_the_release_runs_a_second_round(
             mark_pending(overlays.state_dir)
         released.append(1)
 
-    monkeypatch.setattr(J, "_released", a_trigger_lands_during_the_release)
+    after_step(monkeypatch, "_one_job", a_trigger_lands_during_the_release)
 
     state = job(overlays)
 
@@ -101,7 +101,7 @@ def test_busy_lock_marks_pending_and_the_job_loops(
         return real_fetch(ctx)
 
     monkeypatch.setattr(J, "fetch", a_second_session_ends_meanwhile)
-    monkeypatch.setattr(J, "_released", lambda: rounds.append(1))
+    after_step(monkeypatch, "_one_job", lambda: rounds.append(1))
     a = overlays.a
     write(a, NOTE, note_text("new"))
 
@@ -126,7 +126,7 @@ def test_the_loop_stops_after_two_more_rounds(
         rounds.append(1)
         mark_pending(overlays.state_dir)
 
-    monkeypatch.setattr(J, "_released", always_pending)
+    after_step(monkeypatch, "_one_job", always_pending)
     monkeypatch.setattr(J, "spawn", lambda overlay, *, wake=None: spawned.append((overlay, wake)))
 
     state = job(overlays)
@@ -151,7 +151,7 @@ def test_no_sleeper_when_nothing_is_pending_at_the_cap(
         if len(rounds) < 3:
             mark_pending(overlays.state_dir)
 
-    monkeypatch.setattr(J, "_released", pending_twice)
+    after_step(monkeypatch, "_one_job", pending_twice)
     monkeypatch.setattr(J, "spawn", lambda overlay, *, wake=None: spawned.append(overlay))
 
     job(overlays)

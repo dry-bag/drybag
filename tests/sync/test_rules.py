@@ -10,12 +10,11 @@ pathspec's `*` crosses `/` without `glob` magic. Every case runs real git on rep
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 
-from stayfixed.gitenv import FLOOR_VARIABLE
+from stayfixed.gitenv import FLOOR_VARIABLE, QUERY_TIMEOUT_SECONDS
 from stayfixed.sync import git as G
 from stayfixed.sync import rules as R
 from stayfixed.sync import trigger
@@ -127,13 +126,6 @@ def test_the_pathspecs_are_derived_from_the_layout_in_three_scopes() -> None:
         ":(top,glob)projects/*/memory/**",
         ":(top,exclude,glob)projects/*/memory/MEMORY.md",
     )
-    # The directory each scope's literal part lies in, for a `git add` that a link there would
-    # refuse whole, the exclusion given only with the scope it excludes from.
-    assert (
-        (R.MEMORY_PATHSPEC[:1], "common/memory"),
-        (R.MEMORY_PATHSPEC[1:2], "groups"),
-        (R.MEMORY_PATHSPEC[2:], "projects"),
-    ) == R.MEMORY_SPECS
 
 
 def test_the_layout_agrees_with_git(tmp_path: Path) -> None:
@@ -154,10 +146,8 @@ def test_the_layout_agrees_with_git(tmp_path: Path) -> None:
 # -- dirty notes ----------------------------------------------------------------------------------
 
 
-def dirty_memory(
-    repo: Path, *, timeout: float = 30.0, env: Mapping[str, str] | None = None
-) -> list[str]:
-    return list(R.status(repo, timeout=timeout, env=env).paths)
+def dirty_memory(repo: Path, *, timeout: float = 30.0) -> list[str]:
+    return list(R.status(repo, timeout=timeout).paths)
 
 
 def test_dirty_memory_sees_an_untracked_changed_and_deeper_note_in_each_scope(world: World) -> None:
@@ -217,11 +207,10 @@ def test_one_status_feeds_the_trigger_and_the_commit(world: World) -> None:
     git(a, "add", "groups/g/memory/staged.md")
     write(a, "common/claude/hooks/x.py", "not memory\n")
 
-    status = R.status(a, timeout=G.LOCAL_TIMEOUT, env=G.JOB_SETTINGS)
+    status = R.status(a, timeout=QUERY_TIMEOUT_SECONDS)
 
     paths = sorted([odd, "common/memory/first.md", "groups/g/memory/staged.md"])
     assert (sorted(status.paths), status.ahead, status.head) == (paths, 1, tip)
-    assert sorted(dirty_memory(a, env=G.JOB_SETTINGS)) == paths
     assert trigger._tree(a) == status
 
 
@@ -612,16 +601,17 @@ def test_a_note_made_binary_by_attributes_is_not_memory_only(world: World) -> No
     )
 
 
-def test_a_gitattributes_in_the_working_tree_makes_its_siblings_binary(world: World) -> None:
-    """The working tree's attributes are git's -- and gitleaks' -- whether committed or not: a
-    refused `.gitattributes` saying `-diff` also keeps the notes it covers from moving."""
+def test_a_gitattributes_in_the_working_tree_is_refused_and_reaches_no_sibling(
+    world: World,
+) -> None:
+    """Attributes are read from `HEAD` (`JOB_SETTINGS`), so a `-diff` in the working tree is only
+    itself refused: the note it would cover moves, and the scan reads it."""
     a = world.a
     write(a, "groups/g/memory/.gitattributes", "* -diff\n")
     write(a, "groups/g/memory/covered.md", "token: FAKE\n")
 
     assert _judged(a, "groups/g/memory/.gitattributes", "groups/g/memory/covered.md") == [
         "groups/g/memory/.gitattributes",
-        "groups/g/memory/covered.md",
     ]
 
 

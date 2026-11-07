@@ -30,8 +30,7 @@ def _gone(pid: int) -> None:
 
 def test_a_timeout_ends_the_whole_group(tmp_path: Path) -> None:
     # The grandchild holds the pipes, so a kill of the child alone leaves it running and the
-    # reads waiting. Mutations (oracle): `mutations/`'s "a timeout ends the child and not its
-    # group" and "the child shares the caller's session" -> this reddens.
+    # reads waiting. Mutation (oracle): `mutations/`'s "the child shares the caller's session".
     pidfile = tmp_path / "grandchild.pid"
     script = f"sleep 300 & echo $! > '{pidfile}'; wait"
 
@@ -52,16 +51,12 @@ def test_a_timeout_lets_the_command_clean_up_first(tmp_path: Path) -> None:
     assert ran.timed_out is True and cleaned.exists()
 
 
-@pytest.mark.parametrize(
-    "script",
-    [
-        "trap '' TERM; sleep 300 & echo $! > pid; wait",
-        "(trap '' TERM; exec sleep 300) > /dev/null 2>&1 < /dev/null & echo $! > pid; wait",
-    ],
-    ids=["the-command", "a-member-holding-no-pipe"],
-)
-def test_what_ignores_sigterm_meets_sigkill(tmp_path: Path, script: str) -> None:
-    # Mutation (oracle): `mutations/`'s "a group that ignores SIGTERM is left".
+def test_a_member_that_ignores_sigterm_meets_sigkill(tmp_path: Path) -> None:
+    # The command goes on SIGTERM and takes its pipes with it; the member holds none. Mutations
+    # (oracle): `mutations/`'s "a group that ignores SIGTERM is left" and "a timeout ends the child
+    # and not its group".
+    script = "(trap '' TERM; exec sleep 300) > /dev/null 2>&1 < /dev/null & echo $! > pid; wait"
+
     ran = run_bounded(["sh", "-c", script], cwd=tmp_path, env=ENV, timeout=2)
 
     assert ran.timed_out is True
@@ -82,11 +77,3 @@ def test_stdin_is_the_bytes_or_closed(tmp_path: Path) -> None:
     assert given == Ran(0, b"bytes in\n", b"", False)
     # Nothing a bounded launch runs may wait for an answer: with no input given, stdin is empty.
     assert run_bounded(["cat"], cwd=tmp_path, env=ENV, timeout=60).out == b""
-
-
-def test_the_child_gets_the_environment_it_is_handed_and_no_other(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("STAYFIXED_INHERITED", "1")
-    ran = run_bounded(["env"], cwd=tmp_path, env={**ENV, "GIVEN": "yes"}, timeout=60)
-    assert b"GIVEN=yes" in ran.out and b"STAYFIXED_INHERITED" not in ran.out

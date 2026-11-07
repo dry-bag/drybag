@@ -26,7 +26,7 @@ from stayfixed import fsops
 from stayfixed.config.overlay import overlay_root
 from stayfixed.hooks.api import HookEvent
 from stayfixed.sync import job
-from stayfixed.sync.git import JOB_SETTINGS, GitError, git
+from stayfixed.sync.git import GitError, rev_or_none
 from stayfixed.sync.rules import Status, status
 from stayfixed.sync.state import (
     LOCK_FILE,
@@ -53,18 +53,9 @@ STATUS_TIMEOUT = 3.0
 def _tree(overlay: Path) -> Status | None:
     """The overlay's memory status and branch line (`rules.status`); `None` if it fails."""
     try:
-        return status(overlay, timeout=STATUS_TIMEOUT, env=JOB_SETTINGS)
+        return status(overlay, timeout=STATUS_TIMEOUT)
     except GitError:
         return None
-
-
-def _upstream(overlay: Path) -> str | None:
-    """The sha `origin/main` names now; `None` when it cannot be read."""
-    result = git(
-        overlay, "rev-parse", "-q", "--verify", "refs/remotes/origin/main^{commit}",
-        timeout=STATUS_TIMEOUT, env=JOB_SETTINGS,
-    )  # fmt: skip
-    return result.out.strip() or None if result.code == 0 and not result.timed_out else None
 
 
 def _backed_off(overlay: Path, state: SyncState, tree: Status | None, now: datetime) -> bool:
@@ -74,7 +65,8 @@ def _backed_off(overlay: Path, state: SyncState, tree: Status | None, now: datet
         return False
     # Only now are the notes and the upstream ref worth reading: the owner's own fetch is news.
     dirty = notes_mark(overlay, tree.paths)
-    return backed_off(state, tree.head, now, dirty=dirty, upstream=_upstream(overlay))
+    upstream = rev_or_none(overlay, "refs/remotes/origin/main^{commit}", timeout=STATUS_TIMEOUT)
+    return backed_off(state, tree.head, now, dirty=dirty, upstream=upstream)
 
 
 def _triggered(

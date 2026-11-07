@@ -24,6 +24,7 @@ from tests.gitfixture import SESSION_CONFIG, git_bytes
 from tests.sync.conftest import (
     LEAK,
     Overlays,
+    after_step,
     commit_all,
     context,
     git,
@@ -87,7 +88,7 @@ def test_the_memory_only_range_is_pushed_as_the_checked_sha(
         write(a, "common/memory/later.md", note_text("later"))
         later.append(commit_all(a, "memory: later"))
 
-    monkeypatch.setattr(J, "_before_push", a_commit_lands_after_the_check)
+    after_step(monkeypatch, "_scan_push", a_commit_lands_after_the_check)
 
     state = job(overlays)
 
@@ -212,7 +213,7 @@ def test_an_upstream_hold_skips_the_push(
     git(b, "push", "-q", "origin", "main")
     a_note(overlays)
     attempts: list[int] = []
-    monkeypatch.setattr(J, "_before_push", lambda: attempts.append(1))
+    after_step(monkeypatch, "_scan_push", lambda: attempts.append(1))
 
     state = job(overlays)
 
@@ -254,7 +255,7 @@ def test_a_rejected_push_is_retried_on_the_next_trigger(
         raced.append(push_note(overlays.b, "common/memory/from-b.md", note_text("from-b")))
 
     with monkeypatch.context() as patch:
-        patch.setattr(J, "_before_push", another_machine_pushes)
+        after_step(patch, "_scan_push", another_machine_pushes)
         state = job(overlays)
 
     assert state.outcome.state == "rejected", state.outcome
@@ -432,9 +433,8 @@ def test_a_refused_link_with_a_rejected_push_is_rejected_and_names_the_link(
     a = overlays.a
     (a / "common/memory/pw.md").symlink_to("/etc/passwd")
     a_note(overlays, "common/memory/from-a.md", "from-a")
-    monkeypatch.setattr(
-        J, "_before_push", lambda: push_note(overlays.b, "common/memory/race.md", "race\n")
-    )
+    race = lambda: push_note(overlays.b, "common/memory/race.md", "race\n")  # noqa: E731
+    after_step(monkeypatch, "_scan_push", race)
 
     state = job(overlays)
 
@@ -613,9 +613,9 @@ def test_the_push_is_never_forced_and_carries_no_tags(
 ) -> None:
     a_note(overlays, "common/memory/from-a.md", "from-a")
     with monkeypatch.context() as patch:
-        patch.setattr(
-            J,
-            "_before_push",
+        after_step(
+            patch,
+            "_scan_push",
             lambda: push_note(overlays.b, "common/memory/from-b.md", note_text("from-b")),
         )
         assert job(overlays).outcome.state == "rejected"

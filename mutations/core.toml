@@ -4113,7 +4113,7 @@ reddens = [
 [[mutation]]
 name = "a timed-out regression's children run on after it reported"
 file = "src/stayfixed/processes.py"
-before = "        os.killpg(process.pid, signal.SIGKILL)"
+before = "        os.killpg(process.pid, number)"
 after = "        process.kill()"
 reddens = ["tests/ledger/test_regressions.py::test_a_timed_out_regression_ends_its_whole_group"]
 
@@ -4525,8 +4525,8 @@ reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_a
 [[mutation]]
 name = "the memory pathspecs drop glob magic"
 file = "src/stayfixed/sync/rules.py"
-before = '    ((f":(top,glob){glob}", *((NOT_AN_INDEX,) if directory == PROJECTS else ())), directory)'
-after = '    ((f":(top){glob}", *((NOT_AN_INDEX,) if directory == PROJECTS else ())), directory)'
+before = '    f":(top,glob){GROUPS}/*/{STORE_DIR}/**",'
+after = '    f":(top){GROUPS}/*/{STORE_DIR}/**",'
 reddens = [
   "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
   "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
@@ -4535,7 +4535,7 @@ reddens = [
 [[mutation]]
 name = "a group's notes are not memory"
 file = "src/stayfixed/sync/rules.py"
-before = '''    (GROUPS, f"{GROUPS}/*/{STORE_DIR}/**"),
+before = '''    f":(top,glob){GROUPS}/*/{STORE_DIR}/**",
 '''
 after = ""
 reddens = [
@@ -4575,7 +4575,7 @@ reddens = [
 [[mutation]]
 name = "the tree bound diffs nothing"
 file = "src/stayfixed/sync/rules.py"
-before = "    for entry in diff_entries(repo, bound, tip, timeout=left(deadline, what), env=env):"
+before = "    for entry in diff_entries(repo, bound, tip, timeout=left(deadline, what)):"
 after = "    for entry in ():"
 reddens = [
   "tests/sync/test_rules.py::test_the_tree_bound_catches_what_commits_hide",
@@ -4744,7 +4744,7 @@ name = "a timeout ends the child and not its group"
 file = "src/stayfixed/processes.py"
 before = "            kill_group(process, number)"
 after = "            process.send_signal(number)"
-reddens = ["tests/test_processes.py::test_what_ignores_sigterm_meets_sigkill[a-member-holding-no-pipe]"]
+reddens = ["tests/test_processes.py::test_a_member_that_ignores_sigterm_meets_sigkill"]
 
 [[mutation]]
 name = "a timed-out group gets no SIGTERM"
@@ -4761,10 +4761,7 @@ name = "a group that ignores SIGTERM is left"
 file = "src/stayfixed/processes.py"
 before = "            (signal.SIGKILL, KILL_WAIT_SECONDS),\n"
 after = ""
-reddens = [
-  "tests/test_processes.py::test_what_ignores_sigterm_meets_sigkill[the-command]",
-  "tests/test_processes.py::test_what_ignores_sigterm_meets_sigkill[a-member-holding-no-pipe]",
-]
+reddens = ["tests/test_processes.py::test_a_member_that_ignores_sigterm_meets_sigkill"]
 
 [[mutation]]
 name = "the child shares the caller's session"
@@ -4832,10 +4829,7 @@ name = "a scan's git reads the owner's home"
 file = "src/stayfixed/sync/scan.py"
 before = '        env = {**SEALED, "HOME": str(directory)}'
 after = "        env = dict(SEALED)"
-reddens = [
-  "tests/sync/test_scan.py::test_the_owners_git_files_hide_nothing_from_a_scan[attributes]",
-  "tests/sync/test_scan.py::test_the_owners_git_files_hide_nothing_from_a_scan[ignore]",
-]
+reddens = ["tests/sync/test_scan.py::test_the_owners_git_files_hide_nothing_from_a_scan"]
 
 [[mutation]]
 name = "a scan with no item fails on an empty repository"
@@ -4890,7 +4884,7 @@ reddens = ["tests/sync/test_integrate.py::test_a_moved_main_after_the_write_is_r
 [[mutation]]
 name = "the sync's commits are never signed"
 file = "src/stayfixed/sync/job.py"
-before = '    signed = ("-S",) if _signing(ctx) else ()'
+before = '    signed = ("-S",) if commits and _signing(ctx) else ()'
 after = "    signed = ()"
 reddens = [
   "tests/sync/test_integrate.py::test_a_replay_keeps_the_author_of_a_signed_commit_under_show_signature",
@@ -4929,7 +4923,7 @@ reddens = [
 [[mutation]]
 name = "the integration rebases"
 file = "src/stayfixed/sync/job.py"
-before = "    tip, conflicted = replay(ctx, upstream, local) if local else (upstream, [])"
+before = "    tip, conflicted = replay(ctx, upstream, local)"
 after = '    tip, conflicted = (checked(_git(ctx, "rebase", "-q", upstream), "git rebase") and _rev(ctx, "HEAD"), []) if local else (upstream, [])'
 reddens = [
   "tests/sync/test_integrate.py::test_a_local_memory_commit_is_replayed_onto_the_checked_sha",
@@ -4981,7 +4975,7 @@ reddens = ["tests/sync/test_integrate.py::test_a_purge_forced_elsewhere_does_not
 [[mutation]]
 name = "a rewrite hold lasts one job"
 file = "src/stayfixed/sync/job.py"
-before = "    had = held(REWRITTEN) | set(_missing(ctx, recorded, upstream))"
+before = "    had = {*held, *_missing(ctx, recorded, upstream)}"
 after = "    had = set(_missing(ctx, recorded, upstream))"
 reddens = ["tests/sync/test_integrate.py::test_a_purge_forced_elsewhere_does_not_come_back"]
 
@@ -5213,7 +5207,7 @@ reddens = [
 [[mutation]]
 name = "the back-off ignores a moved upstream ref"
 file = "src/stayfixed/sync/trigger.py"
-before = "    return backed_off(state, tree.head, now, dirty=dirty, upstream=_upstream(overlay))"
+before = "    return backed_off(state, tree.head, now, dirty=dirty, upstream=upstream)"
 after = "    return backed_off(state, tree.head, now, dirty=dirty)"
 reddens = [
   "tests/sync/test_hooks.py::test_the_back_off_ends_when_the_upstream_ref_moves",
@@ -5471,7 +5465,7 @@ reddens = [
 name = "any job records what main and upstream agreed on"
 file = "src/stayfixed/sync/job.py"
 before = "        agreed=ctx.agreed,"
-after = "        agreed=head.out.strip(),"
+after = '        agreed=rev_or_none(ctx.overlay, "HEAD", timeout=HEAD_TIMEOUT),'
 reddens = [
   "tests/sync/test_integrate.py::test_a_job_that_never_reaches_integration_does_not_lose_a_purge[offline]",
   "tests/sync/test_integrate.py::test_a_job_that_never_reaches_integration_does_not_lose_a_purge[rebase]",

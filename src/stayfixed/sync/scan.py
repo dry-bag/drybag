@@ -28,15 +28,15 @@ import re
 import shutil
 import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from stayfixed import fsops
-from stayfixed.gitenv import scrubbed_env
+from stayfixed.gitenv import QUERY_TIMEOUT_SECONDS, git_call, scrubbed_env
 from stayfixed.processes import run_bounded
-from stayfixed.sync.git import GitError, GitTimeout, checked, git, left, with_config
+from stayfixed.sync.git import GitError, GitTimeout, checked, left, with_config
 
 RULES = ".gitleaks.toml"
 # The rules a scan runs on where `HEAD` commits none: gitleaks' own.
@@ -96,6 +96,12 @@ def _findings(report: Path) -> list[dict[str, Any]]:
     return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
 
 
+def _step(
+    source: Path, env: Mapping[str, str], *args: str, timeout: float = QUERY_TIMEOUT_SECONDS
+) -> None:
+    checked(git_call(source, *args, timeout=timeout, env=env), f"git {args[0]}")
+
+
 def scan(
     items: Sequence[tuple[str, bytes]],
     binary: Path,
@@ -120,8 +126,7 @@ def scan(
         env = {**SEALED, "HOME": str(directory)}
         try:
             for step in _COMMIT_ITEMS:
-                given = left(deadline, "the scan")
-                checked(git(source, *step, timeout=given, env=env), f"git {step[0]}")
+                _step(source, env, *step, timeout=left(deadline, "the scan"))
             result = run_bounded(
                 [
                     str(binary), "git", ".", "--config", str(config), "--redact", "--no-banner",

@@ -23,9 +23,6 @@ if TYPE_CHECKING:
     from stayfixed.doctor.api import Context, Contribution, Row
     from stayfixed.sync.state import Holds
 
-# A named cap: how long `git version` may take. The five seconds the report's other git queries
-# get; no shipped file states it.
-VERSION_TIMEOUT = 5.0
 # How many names of a hold the row prints before it counts the rest.
 SHOWN = 3
 
@@ -87,6 +84,7 @@ def _sync(context: Context) -> Row:
     from stayfixed import fsops
     from stayfixed.config.machine import machine_config_path
     from stayfixed.doctor.api import OK, SKIP, WARN, Row
+    from stayfixed.gitenv import GIT_TIMEOUT_SECONDS
     from stayfixed.printed import clipped
     from stayfixed.sync import scan
     from stayfixed.sync.git import MIN_GIT, git, version_ok
@@ -103,7 +101,7 @@ def _sync(context: Context) -> Row:
             "directory, so the job has nothing to sync",
             "record the overlay with `stayfixed setup --overlay <path>`",
         )
-    version = git(overlay, "version", timeout=VERSION_TIMEOUT)
+    version = git(overlay, "version", timeout=GIT_TIMEOUT_SECONDS)
     if version.code != 0 or not version_ok(version.out):
         found = clipped(version.out.strip() or version.err.strip() or "no answer")
         floor = ".".join(map(str, MIN_GIT))
@@ -135,7 +133,7 @@ def _sync(context: Context) -> Row:
     # A killed git's lock ends every job `raced`, never backed off; the job never removes it.
     # Git says where it is: a linked worktree keeps its index under the main repository's `.git`.
     if outcome.state == "raced":
-        asked = git(overlay, "rev-parse", "--git-path", "index.lock", timeout=VERSION_TIMEOUT)
+        asked = git(overlay, "rev-parse", "--git-path", "index.lock", timeout=GIT_TIMEOUT_SECONDS)
         lock = overlay / asked.out.strip()
         if asked.code == 0 and _older_than_a_job(lock):
             said += f"; {lock} is older than a whole job runs"

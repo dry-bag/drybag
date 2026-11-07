@@ -262,17 +262,13 @@ def test_the_real_gitleaks_finds_a_token_under_any_name_and_any_opening(tmp_path
     assert _TOKEN not in result.detail
 
 
-@pytest.mark.parametrize(
-    ("name", "text"),
-    [(".config/git/attributes", "* -diff\n"), (".config/git/ignore", "*\n")],
-    ids=["attributes", "ignore"],
-)
 def test_the_owners_git_files_hide_nothing_from_a_scan(
-    tmp_path: Path, scanner: Path, _a_home_of_its_own: Path, name: str, text: str
+    tmp_path: Path, scanner: Path, _a_home_of_its_own: Path
 ) -> None:
     # git reads these from `HOME` with no configuration naming them, and either empties the patch.
     # Mutation (oracle): `mutations/`'s "a scan's git reads the owner's home".
-    write(_a_home_of_its_own, name, text)
+    write(_a_home_of_its_own, ".config/git/attributes", "* -diff\n")
+    write(_a_home_of_its_own, ".config/git/ignore", "*\n")
 
     result = _scan(scanner, tmp_path, [("a", f"{LEAK}\n".encode())])
 

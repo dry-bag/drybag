@@ -549,13 +549,12 @@ def write_index(store: Store, config: Config, text: str) -> Path:
     return path
 
 
-def render_current(store: Store, config: Config) -> Path:
+def render_current(store: Store, config: Config) -> None:
     """`stayfixed memory index`'s write, in process: the appended lines harvested into their notes,
     the index rendered and written, and once more when it has drifted already (a line appended
-    while it rendered); the file written."""
+    while it rendered)."""
     for _ in range(2):
         reconciled = reconcile(store, config, write=True)
-        written = write_index(store, config, render_index(reconciled, config, store))
+        write_index(store, config, render_index(reconciled, config, store))
         if not check_index(store, config, reconcile(store, config, write=False)).drifted:
             break
-    return written

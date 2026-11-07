@@ -14,13 +14,16 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from stayfixed.config.machine import machine_config_path
+from stayfixed.sync import job as J
 from stayfixed.sync.job import JobContext, Limits
 from stayfixed.sync.rules import MEMORY_PATHSPEC
 from stayfixed.sync.state import state_directory
@@ -200,6 +203,18 @@ def push_note(clone: Path, relative: str, text: str, message: str = "memory: ups
     return head(clone)
 
 
+def after_step(monkeypatch: pytest.MonkeyPatch, step: str, then: Callable[[], object]) -> None:
+    """`then` each time the job's function `step` returns: a moment between its steps."""
+    real = getattr(J, step)
+
+    def and_then(*args: Any) -> Any:
+        result = real(*args)
+        then()
+        return result
+
+    monkeypatch.setattr(J, step, and_then)
+
+
 def slow_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, slow: dict[str, float]) -> None:
     """A `git` first on PATH that sleeps before the subcommands named in `slow`, seconds each."""
     real = shutil.which("git")
@@ -373,7 +388,6 @@ def context(world: Overlays, clone: Path, **limits: float) -> JobContext:
     return JobContext(
         overlay=clone,
         state_dir=world.state_dir,
-        home=world.home,
         host=HOST,
         now=lambda: NOW,
         limits=Limits(**limits),

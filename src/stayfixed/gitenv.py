@@ -46,7 +46,7 @@ from pathlib import Path
 
 from stayfixed import fsops
 from stayfixed.errors import Failure, Refusal
-from stayfixed.processes import run_bounded
+from stayfixed.processes import Ran, run_bounded
 
 # Everything else is dropped, an inherited `GIT_DIR` and `GIT_WORK_TREE` above all. The ssh agent
 # and the proxy variables curl reads are kept: a push and a clone need them, and neither changes
@@ -257,15 +257,8 @@ def git_run(
     return (-1, "") if isinstance(asked, _NoAnswer) else asked
 
 
-@dataclass(frozen=True)
-class Called:
-    """What `git_call` gave back: git's exit code, both streams decoded as `git_run` decodes its
-    answer, and whether it ran out of its time."""
-
-    code: int
-    out: str
-    err: str
-    timed_out: bool
+# What `git_call` gives back: both streams decoded as `git_run` decodes its answer.
+Called = Ran[str]
 
 
 def git_call(

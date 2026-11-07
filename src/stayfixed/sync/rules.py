@@ -22,32 +22,25 @@ of `memory`, which no repository byte reaches.
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 from stayfixed import fsops
 from stayfixed.config.plates import GROUPS
+from stayfixed.gitenv import QUERY_TIMEOUT_SECONDS
 from stayfixed.memory.api import COMMON, INDEX_NAME, PROJECTS, STORE_DIR
-from stayfixed.sync.git import LOCAL_TIMEOUT, GitError, checked, git, left
+from stayfixed.sync.git import GitError, checked, git, left
 
-# Each scope of notes as its literal directory and its glob; the pathspecs, their exclusions and
-# the parse below all derive from the layout.
-_SCOPES = (
-    (COMMON.as_posix(), f"{COMMON.as_posix()}/**"),
-    (GROUPS, f"{GROUPS}/*/{STORE_DIR}/**"),
-    (PROJECTS, f"{PROJECTS}/*/{STORE_DIR}/**"),
-)
 # A project's rendered index, which each machine renders for itself: left out under `projects`.
 NOT_AN_INDEX = f":(top,exclude,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"
-# Each scope's pathspecs with their literal directory: `git add` refuses a whole pathspec ("beyond a
-# symbolic link") when that directory, or one above it, is a link, the exclusion's included, so
-# each is given only with the scope it excludes from.
-MEMORY_SPECS: tuple[tuple[tuple[str, ...], str], ...] = tuple(
-    ((f":(top,glob){glob}", *((NOT_AN_INDEX,) if directory == PROJECTS else ())), directory)
-    for directory, glob in _SCOPES
+# The pathspecs of the notes, their exclusion and the parse below all derive from the layout.
+MEMORY_PATHSPEC: tuple[str, ...] = (
+    f":(top,glob){COMMON.as_posix()}/**",
+    f":(top,glob){GROUPS}/*/{STORE_DIR}/**",
+    f":(top,glob){PROJECTS}/*/{STORE_DIR}/**",
+    NOT_AN_INDEX,
 )
-MEMORY_PATHSPEC: tuple[str, ...] = tuple(spec for specs, _ in MEMORY_SPECS for spec in specs)
 _NAMED_TOPS = {"group": GROUPS, "project": PROJECTS}
 
 
@@ -201,7 +194,7 @@ class Status:
     untracked: tuple[str, ...] = ()
 
 
-def status(repo: Path, *, timeout: float, env: Mapping[str, str] | None) -> Status:
+def status(repo: Path, *, timeout: float) -> Status:
     """The memory paths that differ anywhere between `HEAD`, the index and the working tree, with
     the branch line, from one `git status`: the trigger's question and the commit's.
 
@@ -214,7 +207,7 @@ def status(repo: Path, *, timeout: float, env: Mapping[str, str] | None) -> Stat
         git(
             repo, "--no-optional-locks", "status", "--porcelain=v2", "--branch", "-z",
             "--untracked-files=all", "--no-renames", "--", *MEMORY_PATHSPEC,
-            timeout=timeout, env=env,
+            timeout=timeout,
         ),
         "git status",
     )  # fmt: skip
@@ -238,8 +231,7 @@ def commit_entries(
     repo: Path,
     rev_range: str,
     *,
-    timeout: float = LOCAL_TIMEOUT,
-    env: Mapping[str, str] | None = None,
+    timeout: float = QUERY_TIMEOUT_SECONDS,
 ) -> list[tuple[str, list[RawEntry]]]:
     """`[(sha, entries)]` for every commit in `rev_range`, newest first, modes included.
 
@@ -259,7 +251,6 @@ def commit_entries(
             rev_range,
             "--",
             timeout=timeout,
-            env=env,
         ),
         what,
     )
@@ -288,8 +279,7 @@ def diff_entries(
     repo: Path,
     *revisions: str,
     paths: Sequence[str] = (),
-    timeout: float = LOCAL_TIMEOUT,
-    env: Mapping[str, str] | None = None,
+    timeout: float = QUERY_TIMEOUT_SECONDS,
 ) -> list[RawEntry]:
     """The changes of `git diff --raw <revisions>`, in git's order; with `paths`, of exactly those
     paths (literal pathspecs), never of the whole tree.
@@ -299,7 +289,7 @@ def diff_entries(
     whether it is text, judged before any commit is made.
     """
     what = f"git diff {' '.join(revisions)}"
-    literal = {**(env or {}), "GIT_LITERAL_PATHSPECS": "1"} if paths else env
+    literal = {"GIT_LITERAL_PATHSPECS": "1"} if paths else None
     result = checked(
         git(
             repo, "diff", *_RAW, "--no-ext-diff", *revisions, "--", *paths,
@@ -319,8 +309,7 @@ def range_is_memory_only(
     base: str,
     tip: str,
     *,
-    timeout: float = LOCAL_TIMEOUT,
-    env: Mapping[str, str] | None = None,
+    timeout: float = QUERY_TIMEOUT_SECONDS,
     commits: list[tuple[str, list[RawEntry]]] | None = None,
 ) -> tuple[bool, list[str]]:
     """Whether `base..tip` may move automatically, and what stops it if not; `commits` is the
@@ -340,14 +329,14 @@ def range_is_memory_only(
             offending.append(item)
 
     if commits is None:
-        commits = commit_entries(repo, f"{base}..{tip}", timeout=left(deadline, what), env=env)
+        commits = commit_entries(repo, f"{base}..{tip}", timeout=left(deadline, what))
     for sha, entries in commits:
         if not entries:
             offend(sha)
         for entry in entries:
             if entry_offends(entry):
                 offend(entry.path)
-    merge_base = git(repo, "merge-base", base, tip, timeout=left(deadline, what), env=env)
+    merge_base = git(repo, "merge-base", base, tip, timeout=left(deadline, what))
     if merge_base.code == 1 and not merge_base.timed_out:
         # No common history: everything in the tip is new, so measure from the empty tree.
         empty = git(
@@ -357,13 +346,12 @@ def range_is_memory_only(
             "tree",
             "--stdin",
             timeout=left(deadline, what),
-            env=env,
             stdin=b"",
         )
         bound = checked(empty, "git hash-object").out.strip()
     else:
         bound = checked(merge_base, f"git merge-base {base} {tip}").out.strip()
-    for entry in diff_entries(repo, bound, tip, timeout=left(deadline, what), env=env):
+    for entry in diff_entries(repo, bound, tip, timeout=left(deadline, what)):
         if entry_offends(entry):
             offend(entry.path)
     return not offending, offending

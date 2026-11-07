@@ -43,6 +43,7 @@ from stayfixed.sync.git import (
     git,
     guard,
     left,
+    rev_or_none,
     timed,
     with_config,
 )
@@ -89,18 +90,15 @@ SWAP_MESSAGE = "stayfixed note sync"
 @dataclass(frozen=True)
 class Limits:
     """Wall-clock limits in seconds, each a named cap no shipped file states: the network calls,
-    both commit checks together, both push scans together, the whole job, and any other single
-    git call. Injectable, so a test can wait one second where the job waits sixty."""
+    one scan, the whole job, and any other single git call. A step past its limit is ended as
+    `processes.run_bounded` ends one. Injectable, so a test can wait one second where the job
+    waits sixty."""
 
     fetch: float = 30.0
     push: float = 30.0
     checks: float = 60.0
     job: float = 180.0
     local: float = 30.0
-
-
-class JobTimeout(Exception):
-    """The whole job ran out of time; the job records `timeout` with this message."""
 
 
 class JobStopped(Exception):
@@ -122,7 +120,6 @@ class JobContext:
 
     overlay: Path
     state_dir: Path
-    home: Path
     host: str
     now: Callable[[], datetime]
     limits: Limits = field(default_factory=Limits)
@@ -136,20 +133,15 @@ class JobContext:
     agreed: str | None = None
 
     def limit(self, step: float) -> float:
-        """`step`, cut to what is left of the whole job; `JobTimeout` when nothing is."""
+        """`step`, cut to what is left of the whole job; `GitTimeout` when nothing is."""
         if self.deadline is None:
             return step
-        return min(step, left(self.deadline, "the job", JobTimeout))
+        return min(step, left(self.deadline, "the job"))
 
     @cached_property
     def scanner(self) -> Path | None:
         """The `gitleaks` on `PATH` (`scan.gitleaks`), looked up once for this job."""
         return scan.gitleaks()
-
-    @property
-    def env(self) -> Mapping[str, str]:
-        """What every git call of the job is given (`sync.git.JOB_SETTINGS`); it asks nothing."""
-        return JOB_SETTINGS
 
 
 def _outcome(ctx: JobContext, state: str, detail: str | None = None) -> Outcome:
@@ -160,7 +152,6 @@ def _git(
     ctx: JobContext,
     *args: str,
     timeout: float | None = None,
-    index_file: Path | None = None,
     env: Mapping[str, str] | None = None,
     stdin: bytes | None = None,
 ) -> Called:
@@ -168,17 +159,14 @@ def _git(
         ctx.overlay,
         *args,
         timeout=ctx.limit(ctx.limits.local if timeout is None else timeout),
-        env={**ctx.env, **(env or {})},
-        index_file=index_file,
+        env=env,
         stdin=stdin,
     )
 
 
-def _ok(
-    ctx: JobContext, *args: str, index_file: Path | None = None, stdin: bytes | None = None
-) -> str:
+def _ok(ctx: JobContext, *args: str, stdin: bytes | None = None) -> str:
     """`git <args>` that must succeed; its standard output."""
-    return checked(_git(ctx, *args, index_file=index_file, stdin=stdin), f"git {args[0]}").out
+    return checked(_git(ctx, *args, stdin=stdin), f"git {args[0]}").out
 
 
 def _nul(text: str) -> list[str]:
@@ -238,25 +226,6 @@ def _unsigned(ctx: JobContext, result: Called) -> Outcome:
     """`signing_failed` for a commit git could not sign, with git's words."""
     said = scan.first_lines(result.err) or ("waited for a passphrase" if result.timed_out else "")
     return _outcome(ctx, "signing_failed", f"commit.gpgsign is set and signing failed: {said}")
-
-
-def _commit_tree(
-    ctx: JobContext,
-    tree: str,
-    parents: list[str],
-    message: bytes,
-    env: Mapping[str, str] | None = None,
-) -> tuple[str | None, Outcome | None]:
-    """`git commit-tree` with `message` on standard input, signed when `commit.gpgsign` says so:
-    the sha, or `signing_failed`. Signing asked for is never switched off."""
-    signed = ("-S",) if _signing(ctx) else ()
-    parented = tuple(part for parent in parents for part in ("-p", parent))
-    result = _git(
-        ctx, "commit-tree", *parented, *signed, "--end-of-options", tree, env=env, stdin=message
-    )
-    if signed and (result.timed_out or result.code != 0):
-        return None, _unsigned(ctx, result)
-    return checked(result, "git commit-tree").out.strip(), None
 
 
 def _swap(ctx: JobContext, new: str, old: str) -> bool:
@@ -381,7 +350,7 @@ def commit_memory(ctx: JobContext) -> Outcome | None:
     note left out is removed again. A failed scan, no scanner or a failed signature keeps every
     note out and does not stop the job: what is already committed still integrates and pushes.
     """
-    found = status(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
+    found = status(ctx.overlay, timeout=ctx.limit(ctx.limits.local))
     ctx.dirty = notes_mark(ctx.overlay, found.paths)  # what a trigger finds unchanged if this fails
     notes: list[str] = []
     for path in found.paths:
@@ -397,7 +366,7 @@ def commit_memory(ctx: JobContext) -> Outcome | None:
         intent = _git(ctx, "add", "-N", *_FROM_STDIN, env=_LITERAL, stdin=_paths_in(added))
         checked(_locked(ctx, intent), "git add")
     limit = ctx.limit(ctx.limits.local)
-    entries = diff_entries(ctx.overlay, "HEAD", paths=notes, timeout=limit, env=ctx.env)
+    entries = diff_entries(ctx.overlay, "HEAD", paths=notes, timeout=limit)
     _refuse(ctx, [entry.path for entry in entries if entry_offends(entry)])
     kept = [entry for entry in entries if not entry_offends(entry)]
     with _scratch(ctx) as scratch:
@@ -503,15 +472,17 @@ def _original(ctx: JobContext, commit: str) -> tuple[dict[str, str], bytes]:
     ).rstrip("\n").split("\0")  # fmt: skip
     env = {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email, "GIT_AUTHOR_DATE": date}
     if encodings:
-        env.update(with_config(ctx.env, {"i18n.commitEncoding": encodings[0]}))
+        env.update(with_config(JOB_SETTINGS, {"i18n.commitEncoding": encodings[0]}))
     return env, message
 
 
 def replay(ctx: JobContext, onto: str, commits: list[str]) -> tuple[str | None, list[str]]:
     """Replay `commits` (oldest first) onto `onto`: the new tip, or `None` and the paths that
     conflict. Each is `merge-tree --write-tree --merge-base=c^ tip c` and `commit-tree` with `c`'s
-    author and message, so nothing touches the working tree or the real index. A failed signature
-    stops the job (`JobStopped`)."""
+    author and message, signed when `commit.gpgsign` says so, so nothing touches the working tree
+    or the real index. A failed signature stops the job (`JobStopped`): signing asked for is never
+    switched off."""
+    signed = ("-S",) if commits and _signing(ctx) else ()
     tip = onto
     for commit in commits:
         result = _git(
@@ -526,10 +497,14 @@ def replay(ctx: JobContext, onto: str, commits: list[str]) -> tuple[str | None, 
         if tree == _rev(ctx, tip, "tree"):
             continue  # already upstream: an empty commit would list no path, and be held
         author, message = _original(ctx, commit)
-        new, failed = _commit_tree(ctx, tree, [tip], message, env=author)
-        if failed is not None or new is None:
-            raise JobStopped(failed or _outcome(ctx, "hook_failed", "job: no commit made"))
-        tip = new
+        parent = tip  # bound once, so the outbound walk can read it before `--end-of-options`
+        made = _git(
+            ctx, "commit-tree", "-p", parent, *signed, "--end-of-options", tree, env=author,
+            stdin=message,
+        )  # fmt: skip
+        if signed and (made.timed_out or made.code != 0):
+            raise JobStopped(_unsigned(ctx, made))
+        tip = checked(made, "git commit-tree").out.strip()
     return tip, []
 
 
@@ -599,7 +574,7 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
         _hold_upstream(ctx, None, (), "")
         return None
     memory_only, offending = range_is_memory_only(
-        ctx.overlay, head, upstream, timeout=ctx.limit(ctx.limits.local), env=ctx.env
+        ctx.overlay, head, upstream, timeout=ctx.limit(ctx.limits.local)
     )
     if not memory_only:
         remark = (
@@ -610,15 +585,15 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
         return None
     _hold_upstream(ctx, None, (), "")
     by_hand = f"integrate {upstream} by hand: {REVIEW.format(sha=upstream)}"
-    owned = range_is_memory_only(
-        ctx.overlay, upstream, head, timeout=ctx.limit(ctx.limits.local), env=ctx.env
-    )[0]
+    owned = range_is_memory_only(ctx.overlay, upstream, head, timeout=ctx.limit(ctx.limits.local))[
+        0
+    ]
     if not owned:
         ctx.remarks.append(
             f"upstream is not integrated past local commits outside memory; {by_hand}"
         )
         return None
-    tip, conflicted = replay(ctx, upstream, local) if local else (upstream, [])
+    tip, conflicted = replay(ctx, upstream, local)
     if tip is None:
         detail = (
             f"a local commit conflicts with upstream on {', '.join(conflicted)}; main was not "
@@ -631,7 +606,8 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
     # A tree git will not put in an index is not an index to write: it is held, `main` unmoved,
     # since only upstream can repair it.
     with _scratch(ctx) as scratch:
-        readable = _git(ctx, "read-tree", "--end-of-options", tip, index_file=scratch / "index")
+        probe = {"GIT_INDEX_FILE": str(scratch / "index")}
+        readable = _git(ctx, "read-tree", "--end-of-options", tip, env=probe)
     if timed(readable, "git read-tree").code != 0:
         remark = (
             f"upstream's tree cannot be checked out ({scan.first_lines(readable.err)}); nothing is "
@@ -669,10 +645,6 @@ REMEDY = (
     "rewrite this commit locally: `git rebase -i {sha}^` and edit it; the job pushes the "
     "rewritten range"
 )
-
-
-def _before_push() -> None:
-    """Nothing; the moment between the range's checks and its push (a test seam)."""
 
 
 def _scan_push(ctx: JobContext, commits: list[tuple[str, list[RawEntry]]]) -> Outcome | None:
@@ -727,11 +699,9 @@ def push(ctx: JobContext, upstream: str) -> Outcome | None:
         ctx.holds = replace(ctx.holds, local_commits=())
         ctx.agreed = tip if tip == upstream else ctx.agreed
         return None
-    listed = commit_entries(
-        ctx.overlay, f"{upstream}..{tip}", timeout=ctx.limit(ctx.limits.local), env=ctx.env
-    )
+    listed = commit_entries(ctx.overlay, f"{upstream}..{tip}", timeout=ctx.limit(ctx.limits.local))
     pushable, offending = range_is_memory_only(
-        ctx.overlay, upstream, tip, timeout=ctx.limit(ctx.limits.local), env=ctx.env,
+        ctx.overlay, upstream, tip, timeout=ctx.limit(ctx.limits.local),
         commits=listed,
     )  # fmt: skip
     if not pushable:
@@ -753,7 +723,6 @@ def push(ctx: JobContext, upstream: str) -> Outcome | None:
     failed = _scan_push(ctx, listed)
     if failed is not None:
         return failed
-    _before_push()
     limit = ctx.limit(ctx.limits.push)
     result = _git(
         ctx, "push", "--porcelain", "--no-follow-tags", "origin", f"{tip}:refs/heads/main",
@@ -830,9 +799,9 @@ def _detail(parts: list[str | None]) -> str | None:
 
 def _steps(ctx: JobContext) -> Outcome | None:
     """Guard, commit, fetch, integrate, push; the outcome that stopped it."""
-    checked_out = guard(ctx.overlay, timeout=ctx.limit(ctx.limits.local), env=ctx.env)
-    if not checked_out.ok:
-        return _outcome(ctx, "skipped", checked_out.reason)
+    refused = guard(ctx.overlay, timeout=ctx.limit(ctx.limits.local))
+    if refused is not None:
+        return _outcome(ctx, "skipped", refused)
     stopped = commit_memory(ctx)
     if stopped is not None:
         return stopped
@@ -870,34 +839,25 @@ def _one_job(ctx: JobContext) -> SyncState:
         )
     try:
         stopped = _steps(ctx)
-    except (JobTimeout, GitTimeout) as error:
+    except GitTimeout as error:
         stopped = _outcome(ctx, "timeout", str(error))
     except JobStopped as stop:
         stopped = stop.outcome
     except Exception as error:  # every failure becomes state, never a traceback
         said = scan.first_lines(str(error)) or type(error).__name__
         stopped = _outcome(ctx, "hook_failed", f"job: {said}")
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
-    head = git(
-        ctx.overlay, "rev-parse", "-q", "--verify", "HEAD", timeout=HEAD_TIMEOUT, env=ctx.env
-    )
     state = SyncState(
         overlay=str(ctx.overlay),
         outcome=_end(ctx, stopped),
         holds=ctx.holds,
         fetched_sha=ctx.fetched_sha,
         last_job_at=iso(ctx.now()),
-        head=head.out.strip() if head.code == 0 and not head.timed_out else None,
+        head=rev_or_none(ctx.overlay, "HEAD", timeout=HEAD_TIMEOUT),
         dirty=ctx.dirty,
         agreed=ctx.agreed,
     )
     write_state(ctx.state_dir, state)
     return state
-
-
-def _released() -> None:
-    """Nothing; the moment right after a job released its lock (a test seam)."""
 
 
 def run_job(ctx: JobContext) -> SyncState | None:
@@ -920,7 +880,6 @@ def run_job(ctx: JobContext) -> SyncState | None:
         with lock:
             take_pending(ctx.state_dir)  # this round covers every trigger so far
             state = _one_job(ctx)
-        _released()
         if round_number == LOOPS:
             if fsops.exists(ctx.state_dir / PENDING_FILE) and state.last_job_at is not None:
                 wake = parse_time(state.last_job_at) + timedelta(seconds=THROTTLE_SECONDS)
@@ -971,14 +930,12 @@ def _switched_on() -> Path | None:
 
 def main(argv: list[str] | None = None) -> int:
     """`[--sleep-until ISO]`: the detached job. Exits 0 whatever happens, and runs no job while
-    the machine file does not switch the sync on, read again when a sleeper wakes."""
+    the machine file does not switch the sync on, read once a sleeper has woken."""
     try:
         parser = argparse.ArgumentParser(prog="stayfixed-sync", add_help=False)
         parser.add_argument("--sleep-until")
         with contextlib.redirect_stderr(io.StringIO()):
             args = parser.parse_args(argv)
-        if _switched_on() is None:
-            return 0
         state_dir = state_directory()
         if args.sleep_until:
             sleeper = Lock.try_acquire(state_dir / SLEEPER_LOCK_FILE)
@@ -990,7 +947,7 @@ def main(argv: list[str] | None = None) -> int:
         if overlay is None:
             return 0
         host = os.uname().nodename.split(".")[0] or "unknown"
-        context = JobContext(overlay, state_dir, Path.home(), host, lambda: datetime.now(UTC))
+        context = JobContext(overlay, state_dir, host, lambda: datetime.now(UTC))
         run_job(context)
     except (Exception, SystemExit):  # noqa: S110 - the job exits 0 whatever happens
         pass
