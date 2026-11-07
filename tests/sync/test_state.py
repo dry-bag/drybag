@@ -53,6 +53,7 @@ def _state(**changes: object) -> S.SyncState:
         last_job_at=_iso(NOW - timedelta(minutes=3)),
         head=HEAD,
         dirty="d" * 64,
+        agreed="5" * 40,
     )
     return replace(state, **changes)  # type: ignore[arg-type]
 
@@ -100,7 +101,7 @@ def test_the_written_shape_is_the_documented_one(tmp_path: Path) -> None:
     S.write_state(tmp_path, _state())
     data = _document(tmp_path)
     assert set(data) == {
-        "overlay", "outcome", "holds", "fetched_sha", "last_job_at", "head", "dirty",
+        "overlay", "outcome", "holds", "fetched_sha", "last_job_at", "head", "dirty", "agreed",
     }  # fmt: skip
     assert set(data["outcome"]) == {"state", "at", "detail"}  # type: ignore[call-overload]
     assert data["holds"] == {

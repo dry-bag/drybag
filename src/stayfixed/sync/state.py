@@ -109,7 +109,9 @@ EMPTY_HOLDS = Holds((), ())
 class SyncState:
     """`overlay` is the root the state was recorded for, as the machine file spells it. `head` is
     the `HEAD` the last job left and `dirty` the `notes_mark` of the memory paths it found dirty,
-    which the back-off compares. A `pending_align` an older job wrote is ignored."""
+    which the back-off compares. `agreed` is the sha `main` and upstream last agreed on, written
+    only when a job verified them equal, which the local rewrite check starts from. A
+    `pending_align` an older job wrote is ignored."""
 
     overlay: str
     outcome: Outcome
@@ -118,6 +120,7 @@ class SyncState:
     last_job_at: str | None
     head: str | None = None
     dirty: str | None = None
+    agreed: str | None = None
 
 
 def state_directory() -> Path:
@@ -169,6 +172,7 @@ def _parse(data: dict[str, Any]) -> SyncState:
             last_job_at=_time(data["last_job_at"], none=True),
             head=_text(data["head"], none=True),
             dirty=_text(data["dirty"], none=True),
+            agreed=_text(data["agreed"], none=True),
         )
     except (KeyError, TypeError, ValueError):
         raise StateUnreadable(f"{STATE_FILE} does not hold the fields the job writes") from None
@@ -214,6 +218,7 @@ def write_state(d: Path, s: SyncState) -> None:
         "last_job_at": s.last_job_at,
         "head": s.head,
         "dirty": s.dirty,
+        "agreed": s.agreed,
     }
     d.mkdir(parents=True, exist_ok=True, mode=0o700)
     with fsops.open_directory(d) as directory:

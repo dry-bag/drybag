@@ -4948,8 +4948,8 @@ reddens = ["tests/sync/test_integrate.py::test_a_purge_forced_elsewhere_does_not
 [[mutation]]
 name = "the push records nothing of what upstream now has"
 file = "src/stayfixed/sync/job.py"
-before = "        ctx.fetched_sha = tip  # what upstream now has: the next job's rewrite check starts here"
-after = "        pass"
+before = "        ctx.fetched_sha = ctx.agreed = tip  # the next job's rewrite checks start from what it has"
+after = "        ctx.agreed = tip"
 reddens = [
   "tests/sync/test_integrate.py::test_a_purge_of_a_note_this_machine_pushed_does_not_come_back",
 ]
@@ -5415,7 +5415,8 @@ after = "        stops_all = said is not None"
 reddens = ["tests/sync/test_commit.py::test_one_secret_note_waits_and_the_others_commit"]
 
 # The owner's reset or rebase of notes already pushed is theirs: the next job must not replay or
-# fast-forward the purged commits back, and the hold stands past the job whose `HEAD` it was.
+# fast-forward the purged commits back. The check starts from the sha `main` and upstream last
+# agreed on, which only a job that verified them equal writes.
 [[mutation]]
 name = "a local purge is replayed"
 file = "src/stayfixed/sync/job.py"
@@ -5427,14 +5428,38 @@ reddens = [
 ]
 
 [[mutation]]
-name = "a local-rewrite hold lasts one job"
+name = "any job records what main and upstream agreed on"
 file = "src/stayfixed/sync/job.py"
-before = "    gone = held(LOCAL_REWRITE) | set(_missing(ctx, ctx.last_head, head))"
-after = "    gone = set(_missing(ctx, ctx.last_head, head))"
+before = "        agreed=ctx.agreed,"
+after = "        agreed=head.out.strip(),"
 reddens = [
-  "tests/sync/test_integrate.py::test_the_local_rewrite_hold_stands_until_pushed_or_rebased[push]",
-  "tests/sync/test_integrate.py::test_the_local_rewrite_hold_stands_until_pushed_or_rebased[rebase]",
+  "tests/sync/test_integrate.py::test_a_job_that_never_reaches_integration_does_not_lose_a_purge[offline]",
+  "tests/sync/test_integrate.py::test_a_job_that_never_reaches_integration_does_not_lose_a_purge[rebase]",
+  "tests/sync/test_integrate.py::test_a_job_that_never_reaches_integration_does_not_lose_a_purge[branch]",
+  "tests/sync/test_integrate.py::test_a_commit_only_seen_detached_is_no_rewrite_here",
+  "tests/sync/test_integrate.py::test_a_hold_keeps_its_reason_across_an_abandoned_rebase",
 ]
+
+[[mutation]]
+name = "a push records no agreement"
+file = "src/stayfixed/sync/job.py"
+before = "        ctx.fetched_sha = ctx.agreed = tip  # the next job's rewrite checks start from what it has"
+after = "        ctx.fetched_sha = tip"
+reddens = ["tests/sync/test_integrate.py::test_a_local_purge_is_held_not_undone"]
+
+[[mutation]]
+name = "main found equal to upstream records no agreement"
+file = "src/stayfixed/sync/job.py"
+before = "        ctx.agreed = tip if tip == upstream else ctx.agreed"
+after = "        pass"
+reddens = ["tests/sync/test_integrate.py::test_a_purge_of_an_integrated_note_is_held"]
+
+[[mutation]]
+name = "the agreement is read off HEAD, not main"
+file = "src/stayfixed/sync/job.py"
+before = '    tip = _rev(ctx, "refs/heads/main")'
+after = '    tip = _rev(ctx, "HEAD")'
+reddens = ["tests/sync/test_integrate.py::test_a_commit_only_seen_detached_is_no_rewrite_here"]
 
 [[mutation]]
 name = "a refused read-tree is ignored"

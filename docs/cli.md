@@ -648,7 +648,7 @@ commits it`), and the notes beside it commit. A finding stops the push
 finding's rule, commit and path.
 
 **Writes.** In the data directory, `$HOME/.local/share/stayfixed/sync/`: `state.json` (the last
-outcome, the holds, the fetched sha and a digest of the dirty notes, written in one step), `job.lock` and `sleeper.lock` (held
+outcome, the holds, the fetched sha, the sha `main` and upstream last agreed on and a digest of the dirty notes, written in one step), `job.lock` and `sleeper.lock` (held
 while a job runs and while a sleeper waits), `pending` (a trigger that arrived while a job ran),
 and `scratch/`, which the job removes whole at its start and its end. In the overlay: the objects
 and the commit of step 2, which `git commit --only` writes with `main` and the real index's entries
@@ -686,8 +686,11 @@ pushed, is not in the new one, and commits it dropped are still in `HEAD`; they 
 never replayed or pushed back. Read them with `git log -p <sha>..HEAD`, then take the rewrite with
 `git rebase -i <sha>`, dropping them, or undo it with `git rebase <sha>` and a push. A first fetch,
 with nothing recorded, is no rewrite. Or you rewrote notes already pushed, by a reset or a rebase:
-commits the `HEAD` the last job left had, which `HEAD` no longer has and `origin/main` still has,
-are named and held, so `HEAD` stays as you made it and nothing is fast-forwarded or replayed back.
+commits of the sha `main` and `origin/main` last agreed on (`agreed`, which a job writes only when
+it verified them equal on `main`, after a push or finding them so), which `main` no longer has and
+`origin/main` still has, are named and held, so `main` stays as you made it and nothing is
+fast-forwarded or replayed back. A job that stops early, offline or mid-rebase, does not move that
+record.
 Keep the rewrite with `git push --force-with-lease=refs/heads/main:<sha> origin main` by hand, or
 undo it with `git rebase <sha>`. *Local*: your own commits that are not memory alone (a change
 outside memory, a merge, an empty commit) keep their shas: they are neither rebuilt nor pushed, and

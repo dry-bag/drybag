@@ -117,8 +117,8 @@ class JobContext:
     (a hold and how to review it); `notices` the ends that do not stop the job (a failed commit
     check, a note left out for a secret); `refused` the memory-named paths left out of a commit
     because they are not notes;
-    `holds` as this job leaves them, changed only by integration and push; `last_head` the `HEAD`
-    the last job left."""
+    `holds` as this job leaves them, changed only by integration and push; `agreed` the sha `main`
+    and upstream last agreed on, changed only by a push that verified them equal."""
 
     overlay: Path
     state_dir: Path
@@ -133,7 +133,7 @@ class JobContext:
     dirty: str | None = None
     refused: list[str] = field(default_factory=list)
     holds: Holds = EMPTY_HOLDS
-    last_head: str | None = None
+    agreed: str | None = None
 
     def limit(self, step: float) -> float:
         """`step`, cut to what is left of the whole job; `JobTimeout` when nothing is."""
@@ -554,14 +554,12 @@ def _lost(
     """What a rewrite on either side dropped. First, the commits of `local` (`upstream..HEAD`)
     that upstream once had: those of the sha the last job recorded as upstream's that `upstream`
     lost, and those a standing rewrite hold names. Second, the commits of `HEAD..upstream` that
-    `HEAD` once had: those of the `HEAD` the last job left that `head` lost, and those a standing
-    local-rewrite hold names. A first job, with nothing recorded, has neither."""
+    `HEAD` once had: those of the sha `main` and upstream last agreed on that `head` lost. A first
+    job, with nothing recorded, has neither."""
 
-    def held(why: str) -> set[str]:
-        return set(ctx.holds.upstream_paths) if ctx.holds.upstream_why == why else set()
-
-    had = held(REWRITTEN) | set(_missing(ctx, recorded, upstream))
-    gone = held(LOCAL_REWRITE) | set(_missing(ctx, ctx.last_head, head))
+    held = ctx.holds.upstream_paths if ctx.holds.upstream_why == REWRITTEN else ()
+    had = {*held, *_missing(ctx, recorded, upstream)}
+    gone = set(_missing(ctx, ctx.agreed, head))
     incoming = _missing(ctx, upstream, head) if gone else []
     return [sha for sha in local if sha in had], [sha for sha in incoming if sha in gone]
 
@@ -721,11 +719,13 @@ def push(ctx: JobContext, upstream: str) -> Outcome | None:
 
     The local range is judged even when an upstream hold skips the push, so both holds are
     recorded at once; one that is not memory-only is a local hold naming its commits. Every byte
-    pushed is scanned first. Never forced, and no tag follows.
+    pushed is scanned first. Never forced, and no tag follows. `main` equal to `upstream`, found
+    here or made so by the push, is what `ctx.agreed` records.
     """
-    tip = _rev(ctx, "HEAD")
+    tip = _rev(ctx, "refs/heads/main")
     if _is_ancestor(ctx, tip, upstream):
         ctx.holds = replace(ctx.holds, local_commits=())
+        ctx.agreed = tip if tip == upstream else ctx.agreed
         return None
     listed = commit_entries(
         ctx.overlay, f"{upstream}..{tip}", timeout=ctx.limit(ctx.limits.local), env=ctx.env
@@ -760,7 +760,7 @@ def push(ctx: JobContext, upstream: str) -> Outcome | None:
         timeout=limit,
     )  # fmt: skip
     if result.code == 0 and not result.timed_out:
-        ctx.fetched_sha = tip  # what upstream now has: the next job's rewrite check starts here
+        ctx.fetched_sha = ctx.agreed = tip  # the next job's rewrite checks start from what it has
         return None
     if not result.timed_out and _rejected(result.out):
         detail = "origin/main moved before the push; the next trigger fetches and retries"
@@ -848,7 +848,7 @@ def _one_job(ctx: JobContext) -> SyncState:
     another overlay, or one that cannot be read, is not used, and the detail says so."""
     ctx = replace(
         ctx, deadline=time.monotonic() + ctx.limits.job, remarks=[], notices=[], fetched_sha=None,
-        dirty=None, refused=[], holds=EMPTY_HOLDS, last_head=None,
+        dirty=None, refused=[], holds=EMPTY_HOLDS, agreed=None,
     )  # fmt: skip
     scratch = ctx.state_dir / SCRATCH
     shutil.rmtree(scratch, ignore_errors=True)
@@ -863,10 +863,10 @@ def _one_job(ctx: JobContext) -> SyncState:
         )
         previous = None
     if previous is not None:
-        ctx.holds, ctx.fetched_sha, ctx.last_head = (
+        ctx.holds, ctx.fetched_sha, ctx.agreed = (
             previous.holds,
             previous.fetched_sha,
-            previous.head,
+            previous.agreed,
         )
     try:
         stopped = _steps(ctx)
@@ -890,6 +890,7 @@ def _one_job(ctx: JobContext) -> SyncState:
         last_job_at=iso(ctx.now()),
         head=head.out.strip() if head.code == 0 and not head.timed_out else None,
         dirty=ctx.dirty,
+        agreed=ctx.agreed,
     )
     write_state(ctx.state_dir, state)
     return state

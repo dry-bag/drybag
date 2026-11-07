@@ -15,6 +15,7 @@ import re
 import shlex
 import stat
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -373,8 +374,7 @@ def test_a_bare_reset_is_held_not_fast_forwarded(overlays: Overlays) -> None:
 def test_the_local_rewrite_hold_stands_until_pushed_or_rebased(
     overlays: Overlays, settled: str
 ) -> None:
-    # The second job's `HEAD` is the one the first left, so only the standing hold carries the
-    # purged commit. Mutation (oracle): `mutations/`'s "a local-rewrite hold lasts one job".
+    # A holding job leaves the record as it found it, so each job judges the purge again.
     a = overlays.a
     pushed = _pushed_from_a(overlays)
     git(a, "reset", "-q", "--hard", f"{pushed}~1")
@@ -393,6 +393,120 @@ def test_the_local_rewrite_hold_stands_until_pushed_or_rebased(
     assert git(overlays.bare, "rev-parse", "main").strip() == head(a)
     assert (a / "common/memory/private.md").exists() is (settled == "rebase")
     assert (a / "common/memory/other.md").exists()
+
+
+def _offline(overlays: Overlays) -> None:
+    git(overlays.a, "remote", "set-url", "origin", str(overlays.a / "no-such-remote"))
+
+
+def _online(overlays: Overlays) -> None:
+    git(overlays.a, "remote", "set-url", "origin", str(overlays.bare))
+
+
+def _in_a_rebase(overlays: Overlays) -> None:
+    edit = "sequence.editor=sed -i.bak s/^pick/edit/"
+    git(overlays.a, "-c", edit, "rebase", "-q", "-i", "HEAD~1")
+
+
+def _rebase_abandoned(overlays: Overlays) -> None:
+    git(overlays.a, "rebase", "--abort")
+
+
+def _on_a_branch(overlays: Overlays) -> None:
+    git(overlays.a, "switch", "-q", "-c", "elsewhere")
+
+
+def _back_on_main(overlays: Overlays) -> None:
+    git(overlays.a, "switch", "-q", "main")
+
+
+@pytest.mark.parametrize(
+    ("stop", "resume"),
+    [(_offline, _online), (_in_a_rebase, _rebase_abandoned), (_on_a_branch, _back_on_main)],
+    ids=["offline", "rebase", "branch"],
+)
+def test_a_job_that_never_reaches_integration_does_not_lose_a_purge(
+    overlays: Overlays,
+    stop: Callable[[Overlays], None],
+    resume: Callable[[Overlays], None],
+) -> None:
+    # A job that stops early does not touch what `main` and upstream last agreed on, so the next
+    # job still judges the purge.
+    a = overlays.a
+    pushed = _pushed_from_a(overlays)
+    git(a, "reset", "-q", "--hard", f"{pushed}~1")
+    write(a, "common/memory/other.md", "unrelated\n")
+    kept = commit_all(a, "memory: other")
+
+    stop(overlays)
+    assert _job(overlays).outcome.state != "ok"
+    resume(overlays)
+
+    _held_here(overlays, _job(overlays), pushed, kept)
+
+
+def test_a_purge_of_an_integrated_note_is_held(overlays: Overlays) -> None:
+    # Integrated, not pushed from here: `main` found equal to upstream is the agreement too.
+    a = overlays.a
+    incoming = push_note(overlays.b, "common/memory/from-b.md", "from b\n")
+    assert _job(overlays).outcome.state == "ok"
+    git(a, "reset", "-q", "--hard", f"{incoming}~1")
+
+    _held_here(overlays, _job(overlays), incoming, head(a))
+
+
+def test_a_collected_unpushed_tip_does_not_lose_a_purge(overlays: Overlays) -> None:
+    # The record is a sha upstream has, so the fetch brings it back whatever `gc` collected here.
+    a = overlays.a
+    pushed = _pushed_from_a(overlays)
+    _offline(overlays)
+    write(a, "common/memory/unpushed.md", "not pushed\n")
+    assert _job(overlays).outcome.state != "ok"
+    _online(overlays)
+    git(a, "reset", "-q", "--hard", f"{pushed}~1")
+    git(a, "reflog", "expire", "--expire=now", "--all")
+    git(a, "gc", "-q", "--prune=now")
+
+    _held_here(overlays, _job(overlays), pushed, head(a))
+
+
+def test_a_commit_only_seen_detached_is_no_rewrite_here(overlays: Overlays) -> None:
+    # `HEAD` on upstream's commit during a skipped job: `main` never had it, so the next job
+    # integrates it. Mutation (oracle): `mutations/`'s "any job records what main and upstream
+    # agreed on".
+    a = overlays.a
+    incoming = push_note(overlays.b, "common/memory/from-b.md", "from b\n")
+    git(a, "fetch", "-q", "origin")
+    git(a, "switch", "-q", "--detach", "origin/main")
+    ctx = context(overlays, a)
+    assert J.push(ctx, head(a)) is None and ctx.agreed is None  # `HEAD` is not `main`
+    assert _job(overlays).outcome.state == "skipped"
+    git(a, "switch", "-q", "main")
+
+    state = _job(overlays)
+
+    assert not state.holds.any and state.outcome.state == "ok", state
+    assert head(a) == incoming
+
+
+def test_a_hold_keeps_its_reason_across_an_abandoned_rebase(overlays: Overlays) -> None:
+    # The printed `git rebase <sha>` stops on a conflict, a job is skipped there, and the owner
+    # aborts: still the outside hold, never the offer to force-push over upstream's commits.
+    a, b = overlays.a, overlays.b
+    write(a, "common/memory/first.md", "edited here\n")
+    commit_all(a, "memory: here")
+    write(b, "README.md", "changed upstream\n")
+    write(b, "common/memory/first.md", "edited upstream\n")
+    upstream = commit_all(b, "outside memory")
+    git(b, "push", "-q", "origin", "main")
+    held = _job(overlays)
+    assert held.holds.upstream_why == OUTSIDE, held
+
+    assert fx.run_git(a, "rebase", upstream).returncode != 0
+    assert _job(overlays).outcome.state == "skipped"
+    _rebase_abandoned(overlays)
+
+    assert _job(overlays).holds == held.holds
 
 
 def test_a_first_fetch_records_no_rewrite(overlays: Overlays) -> None:
