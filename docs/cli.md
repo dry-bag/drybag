@@ -358,16 +358,18 @@ is left alone and never written through. It answers from the machine's binding r
 the repository's `stayfixed.toml`, which the worktree may not have until this places it, and it
 places nothing in the main checkout, in a submodule, in an unbound checkout or on a machine that
 records no overlay. It runs on every `SessionStart` there, so a placed file you delete by hand comes
-back with the next session. **A file is placed only where git ignores its name**, asked before any is
-created: a name git would show (`git status`) is not placed but named to the session, which is told to
-add it to the checkout's `.git/info/exclude`, unless the branch's `.gitignore` un-ignores it on
-purpose (a `!` line outranks the exclude file), in which case it stays out. Where git cannot say
-what it ignores, nothing is placed and nothing is said. It says nothing when it placed and withheld
+back with the next session. **A file is placed only where your own excludes hide its name**, the
+checkout's `.git/info/exclude` or your global excludes file, and no `!` line re-includes it, asked
+before any is created. A `.gitignore` does not stand in for them, since a branch's next commit can
+take its line out, so a branch only ever makes fewer files be placed. Any other name is not placed
+but named to the session, which is told to add it to the checkout's `.git/info/exclude`, unless the
+branch's `.gitignore` un-ignores it on purpose (a `!` line outranks the exclude file), in which case
+it stays out. Where git cannot say what it ignores, nothing is placed and nothing is said. It says nothing when it placed and withheld
 nothing; otherwise it names the files placed, asks the session to read `AGENTS.md` when that file
-itself is among them, and names the files withheld. It asks git only `rev-parse` and
-`check-ignore --no-index`, neither of which runs a repository's `core.fsmonitor`: one `rev-parse`
+itself is among them, and names the files withheld. It asks git only `rev-parse`, `config` and
+`check-ignore --no-index`, none of which runs a repository's `core.fsmonitor`: one `rev-parse`
 finds the linked worktree and the common directory the binding id is read from, so a checkout it
-does not serve costs that one launch, and the `check-ignore` is asked once, only when a name is free.
+does not serve costs that one launch, and the rest are asked only when a name is free.
 
 **Writes** inside `stayfixed/` under the data root the harness names — `CLAUDE_PLUGIN_DATA`, or
 Codex's `PLUGIN_DATA` — and nowhere else of its own: `.probe`, written each time it dispatches to
@@ -1526,13 +1528,16 @@ from `common/`, from `projects/<name>/` or from a tag you took off the project l
 next run, each said as `allow rule withdrawn`, and a rule you added by hand, which the ledger does not name, stays.
 The ledger sits in the git common directory beside the binding id, where a branch cannot write it, so
 nothing a branch commits names what a re-attach or `detach` takes back. **An upgrade from a release that
-kept the ledger in `.stayfixed/local/attach.json`** neither reads nor removes that file: delete it,
-run `attach` again to rebuild the ledger, and note that `detach` does not remove the allow rules and
-the directories an attach merged before the move, so take those out by hand. **A re-attach removes no `.codex/rules/` copy**: a
+kept the ledger in `.stayfixed/local/attach.json`** neither reads nor removes that file. Delete it:
+it holds your allow rules, and `git status` shows it once `detach` takes the exclude block. Run
+`attach` again to rebuild the ledger. `detach` does not remove what an attach merged before the
+move, so take those allow rules, hook entries and directories out by hand. **A re-attach removes no `.codex/rules/` copy**: a
 file dropped from a plate, or a tag taken off the project, may since have been committed or edited
-by the team, so the run leaves it, keeps it on the ledger and says `Codex rule copy no longer in the
-overlay: <path>` (`rules_left` in `--json`); remove it, or run `detach`, which removes every copy `attach`
-placed. **`.gitignore` is never written**: it is tracked, so
+by the team, so the run leaves it and says `Codex rule copy no longer in the overlay: <path>`
+(`rules_left` in `--json`). The ledger records the sha256 of the bytes `attach` wrote to each copy,
+and goes on recording a dropped one only while its file is untracked and holds those bytes, so
+`detach` can still take a file Codex reads as a standing instruction; any other is forgotten, and
+the file is yours. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
 release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
 `init`'s.
@@ -1693,8 +1698,9 @@ main checkout's `.claude/settings.local.json`, drops the hook entries an earlier
 merged there —
 the ones its ledger records, under the event it records, and never one by its `# stayfixed:…` marker
 alone (a group that mixes one of those with your own entry is split, never replaced) — and leaves
-the file unwritten when none of those is in it, removes the `.codex/rules/` files it wrote,
-withdraws the overlay's rendered plugin — `claude plugin uninstall overlay-<id>@stayfixed-delivery-<id> --scope
+the file unwritten when none of those is in it, removes each `.codex/rules/` copy whose bytes are
+still the ones the ledger's sha256 records (any other copy is left and named, `Codex rule copy left:
+<path>`, `rules_left` in `--json`), withdraws the overlay's rendered plugin — `claude plugin uninstall overlay-<id>@stayfixed-delivery-<id> --scope
 local` where the main checkout's `.claude/settings.local.json` names that plugin under
 `enabledPlugins`, and `claude plugin marketplace remove stayfixed-delivery-<id>` where it names that
 marketplace under `extraKnownMarketplaces`, each run from the main checkout, then the render

@@ -97,8 +97,8 @@ reddens = [
 [[mutation]]
 name = "detach deletes whatever file the ledger names"
 file = "src/stayfixed/attach/write.py"
-before = '            if path.parent == PurePosixPath(CODEX_RULES) and path.name not in ("", "..")'
-after = "            if True"
+before = "            if (path := PurePosixPath(rule)).parent == PurePosixPath(CODEX_RULES)\n            and path.name != \"..\"\n"
+after = "            if True\n"
 reddens = [
   "tests/attach/test_detach.py::test_a_ledger_naming_a_path_outside_the_rule_copies_removes_none_of_them",
 ]
@@ -136,8 +136,8 @@ reddens = [
 [[mutation]]
 name = "the ledger is read from the working tree"
 file = "src/stayfixed/attach/write.py"
-before = "    path = common_directory(root) / LEDGER_FILE\n    try:"
-after = "    path = root / \".stayfixed/local/attach.json\"\n    try:"
+before = "        return read_ledger(common_directory(root) / LEDGER_FILE)\n    except NotALedger:"
+after = "        return read_ledger(root / \".stayfixed/local/attach.json\")\n    except NotALedger:"
 reddens = [
   "tests/attach/test_detach.py::test_a_ledger_a_branch_commits_names_nothing_a_re_attach_or_detach_removes",
 ]
@@ -1084,16 +1084,18 @@ reddens = [
 
 # The ledger, or the directory above it, can be a symbolic link to a name longer than a file
 # name may be. Raised past every catch to `_guarded`, `ENAMETOOLONG` puts its warning in place of the
-# whole row. `fsops.names_regular_file` raises it on every interpreter, and the ledger reads as one
-# that cannot be read.
+# whole row. The ledger reader raises `NotALedger` for it on every interpreter, and the ledger reads
+# as one that cannot be read.
 [[mutation]]
 name = "a ledger doctor cannot ask about reads as no ledger"
 file = "src/stayfixed/attach/doctor.py"
-before = "    except OSError:\n        return UNREADABLE_LEDGER"
-after = "    except OSError:\n        return NO_LEDGER"
+before = "    except NotALedger:\n        return UNREADABLE_LEDGER"
+after = "    except NotALedger:\n        return NO_LEDGER"
 reddens = [
   "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer[the-ledger]",
   "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer[its-directory]",
+  "tests/attach/test_doctor.py::test_a_ledger_that_does_not_parse_warns_and_never_reads_as_no_ledger",
+  "tests/attach/test_doctor.py::test_a_ledger_of_the_wrong_shape_warns_as_one_that_does_not_parse",
 ]
 
 # `attached` asks whether there is a ledger through the reading `register()` creates. Asked with
@@ -1249,9 +1251,9 @@ reddens = [
 name = "the attach ledger is read through any link"
 file = "src/stayfixed/attach/write.py"
 before = """            text = fsops.read_regular_text(path)
-        except FileNotFoundError as exc:"""
+        except FileNotFoundError:"""
 after = """            text = path.read_text(encoding="utf-8")
-        except FileNotFoundError as exc:"""
+        except FileNotFoundError:"""
 reddens = ["tests/attach/test_detach.py::test_a_ledger_linked_to_a_device_stops_detach_and_is_never_read"]
 
 # In the block led by `mutations/`'s "the JSON writer lets an encode past the interpreter's
@@ -1317,8 +1319,8 @@ reddens = [
 [[mutation]]
 name = "the ledger refusal of a file that is not UTF-8 prints the path it opened"
 file = "src/stayfixed/attach/write.py"
-before = "    with fsops.reading(LEDGER_NAME, Failure):"
-after = "    with fsops.reading(path, Failure):"
+before = "    with fsops.reading(LEDGER_NAME, NotALedger):"
+after = "    with fsops.reading(path, NotALedger):"
 reddens = ["tests/attach/test_detach.py::test_a_ledger_that_is_not_utf8_is_named_as_the_project_names_it"]
 
 [[mutation]]
@@ -1373,7 +1375,6 @@ file = "src/stayfixed/attach/check.py"
 before = "    planned = plan_writes(root, config, binding, diff)\n    return _report(binding, planned.diff, source)\n"
 after = "    return _report(binding, diff, source)\n"
 reddens = [
-  "tests/attach/test_commands.py::test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words",
   "tests/attach/test_commands.py::test_check_ends_on_an_overlay_rule_that_is_not_utf8_with_the_runs_code_and_line",
   "tests/attach/test_commands.py::test_check_ends_on_each_refusal_past_the_runs_gates_with_the_runs_code_and_line[exclude-block-doubled]",
   "tests/attach/test_commands.py::test_check_ends_on_each_refusal_past_the_runs_gates_with_the_runs_code_and_line[claude-linked-in]",
@@ -1720,9 +1721,8 @@ reddens = [
   "tests/attach/test_write.py::test_a_recorded_rule_removed_by_hand_is_not_an_error",
 ]
 
-# A Codex copy the overlay stopped holding may since have been committed or edited by the team, and
-# the ledger is how a re-attach would know which copies are stayfixed's: so a re-attach leaves
-# every copy and names it, and `detach` is what removes one.
+# A Codex copy the overlay stopped holding may since have been committed or edited by the team, so
+# a re-attach removes none: it names each, and `detach` removes the ones the ledger still records.
 [[mutation]]
 name = "re-attach removes a Codex copy the overlay dropped"
 file = "src/stayfixed/attach/write.py"
@@ -1732,15 +1732,52 @@ reddens = [
   "tests/attach/test_write.py::test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it",
 ]
 
-# The ledger keeps every Codex copy any attach placed, or a copy the overlay has since dropped is
-# left in `.codex/rules/` with nothing to name it to `detach`.
+# The ledger keeps a Codex copy the overlay has since dropped while it is untracked and as written,
+# or the copy is left in `.codex/rules/` with nothing to name it to `detach`.
 [[mutation]]
 name = "the ledger forgets a Codex copy the overlay dropped"
 file = "src/stayfixed/attach/write.py"
-before = "    rules = list(previous.rules) if previous is not None else []\n"
-after = "    rules = []\n"
+before = "    rules = {**planned.kept, **{t:"
+after = "    rules = {**{t:"
 reddens = [
   "tests/attach/test_detach.py::test_detach_removes_a_rule_file_the_overlay_has_since_deleted",
+]
+
+# Any other dropped name is no longer attach's: kept, doctor reads a file the team committed as one
+# attach placed, and `detach` reaches a file attach never wrote.
+[[mutation]]
+name = "re-attach keeps every name the overlay dropped"
+file = "src/stayfixed/attach/write.py"
+before = "        if rule not in tracked and _as_written(root / rule, sha)\n"
+after = "        if True\n"
+reddens = [
+  "tests/attach/test_write.py::test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written[edited-False]",
+  "tests/attach/test_write.py::test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written[tracked-False]",
+  "tests/attach/test_write.py::test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written[deleted-False]",
+  "tests/attach/test_doctor.py::test_a_copy_the_team_committed_is_no_finding_once_the_overlay_dropped_it",
+]
+
+# The digest is the removal's anchor: what is at a recorded name is a branch's or the owner's, and
+# an uncommitted edit cannot be got back.
+[[mutation]]
+name = "detach removes a copy whatever its bytes"
+file = "src/stayfixed/attach/write.py"
+before = "        if _as_written(root / rule, sha):\n            fsops.remove_within(root, rule)"
+after = "        if fsops.is_file(root / rule):\n            fsops.remove_within(root, rule)"
+reddens = [
+  "tests/attach/test_detach.py::test_detach_leaves_and_names_a_copy_that_does_not_hold_what_attach_wrote",
+]
+
+# `read_ledger` answers a well-shaped ledger or `NotALedger`, and no consumer guards a field, so a
+# field of another shape reaches each of them as an internal error or as a run on nonsense.
+[[mutation]]
+name = "the ledger reader takes any field"
+file = "src/stayfixed/attach/write.py"
+before = "    if not _well_shaped(raw):\n"
+after = "    if False:\n"
+reddens = [
+  "tests/attach/test_write.py::test_attach_writes_a_file_that_is_no_ledger_whole",
+  "tests/attach/test_detach.py::test_a_ledger_of_the_wrong_shape_removes_nothing_and_says_so",
 ]
 
 # An allow rule taken back is said on the screen the way a granted one is.
@@ -1788,16 +1825,27 @@ reddens = [
   "tests/attach/test_checkout.py::test_a_submodule_gets_nothing",
 ]
 
-# A name is placed only where git ignores it, asked before the file exists: a branch's `.gitignore`
-# can re-include a name (`!` outranks `info/exclude`), and a file created first would show in
-# `git status` and go out with the next `git add -A`.
+# A name is placed only where the owner's files hide it, asked before the file exists: a branch's
+# `.gitignore` can re-include a name (`!` outranks `info/exclude`), and a file created first would
+# show in `git status` and go out with the next `git add -A`.
 [[mutation]]
 name = "owner-held files are placed before git is asked whether they are ignored"
 file = "src/stayfixed/attach/checkout.py"
-before = "        withheld = unignored(tree, vacant)"
-after = "        withheld = ()"
+before = "        shown = {*unignored(tree, vacant), *unhidden_by_owner(tree, vacant)}"
+after = "        shown = {*unhidden_by_owner(tree, vacant)}"
 reddens = [
   "tests/attach/test_checkout.py::test_a_name_a_branch_gitignore_un_ignores_is_withheld_not_placed",
+]
+
+# A branch's `.gitignore` can hide a name and its next commit show it, so only the owner's own
+# files open the gate and a branch can make fewer files be placed, never more.
+[[mutation]]
+name = "a branch's .gitignore opens the owner-files gate"
+file = "src/stayfixed/attach/checkout.py"
+before = "        shown = {*unignored(tree, vacant), *unhidden_by_owner(tree, vacant)}"
+after = "        shown = {*unignored(tree, vacant)}"
+reddens = [
+  "tests/attach/test_checkout.py::test_a_branchs_gitignore_never_makes_a_name_be_placed",
 ]
 
 # Where git cannot say what it ignores, nothing is placed: the control fails closed.
@@ -1805,7 +1853,7 @@ reddens = [
 name = "owner-held files are placed where git cannot say what it ignores"
 file = "src/stayfixed/attach/checkout.py"
 before = "    except (Refusal, OSError):\n        return [], []"
-after = "    except (Refusal, OSError):\n        vacant, withheld = _held(source), ()"
+after = "    except (Refusal, OSError):\n        vacant, shown = _held(source), set()"
 reddens = [
   "tests/attach/test_checkout.py::test_where_git_cannot_say_what_it_ignores_nothing_is_placed_or_said",
 ]

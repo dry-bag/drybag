@@ -225,6 +225,17 @@ def test_a_name_a_branch_gitignore_un_ignores_is_withheld_not_placed(tmp_path: P
     assert git(linked, "status", "--porcelain") == ""
 
 
+def test_a_branchs_gitignore_never_makes_a_name_be_placed(tmp_path: Path) -> None:
+    # The branch hides `AGENTS.md`, the owner hides nothing, and the branch's next commit takes the
+    # line out: `?? AGENTS.md`, and `git add -A` stages the owner's private file. Only the owner's
+    # own files open the gate, so a branch can only make fewer files be placed. Mutation (oracle):
+    # `mutations/`'s "a branch's .gitignore opens the owner-files gate".
+    _, linked = _world(tmp_path, hide=(), gitignore="/AGENTS.md\n")
+    placed, withheld = place(linked, machine=None)
+    assert placed == [] and withheld == sorted(REGULAR)
+    assert _names(linked) == {"README.md", ".gitignore"}
+
+
 def test_where_git_cannot_say_what_it_ignores_nothing_is_placed_or_said(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

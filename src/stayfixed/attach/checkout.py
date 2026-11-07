@@ -9,9 +9,12 @@ except `LITTER`, `NEVER` and any name starting `NEVER_PREFIXES` (in any case: a 
 reads `.ENV` as `.env`); a subdirectory or a link there is skipped. Each is created exclusively
 (`fsops.create_within`), with the source's permission bits, only where nothing is at the name: a
 file the branch tracks is already there, so the branch wins, and a file, directory or link at a
-name is never replaced, followed or written through. **Only a name git ignores is placed.** Git is
-asked which of the names to place it ignores *before* any is created, and the others are named to
-the session and left out: they would show in `git status` and go out with the next `git add -A`.
+name is never replaced, followed or written through. **Only a name the owner's own files hide is
+placed**, this repository's `info/exclude` or the global excludes file, and only where no `!` line
+re-includes it. Git is asked *before* any is created, and the others are named to the session and
+left out: they would show in `git status`, now or once a branch's next commit takes a line out of
+its `.gitignore`, and go out with the next `git add -A`. `NEVER` is hygiene and not a control: it
+stops no party, it keeps the owner's own files of those names out of a worktree by mistake.
 
 **Where.** Only a linked worktree (`linked_worktree`) that this machine
 binds to a project, in the overlay the machine file records. `attach` itself places nothing in the
@@ -22,13 +25,13 @@ owner's worktree. The anchor is the binding id in the repository's git common di
 machine's record of it (`binding.bound_project`), which a clone carries neither of and a branch
 cannot write, and the overlay root, which comes from the machine file. A branch can commit a file
 or a link at a target name; the name is then "there" and nothing is written. A branch can also
-commit a `.gitignore` that re-includes a name (`!/AGENTS.md` outranks `info/exclude`); the anchor of
-the ignore question is git's own evaluation of it, asked before the file exists, so the branch can
-only make fewer files be placed and never more. Where git cannot answer, nothing is placed and
-nothing is said. The git questions are
-`rev-parse` and `check-ignore --no-index`, neither of which refreshes the index, so a repository's
-`core.fsmonitor` does not run. Who must not be refused: a repository that tracks `AGENTS.md` --
-the worktree has it from the branch, nothing is placed and nothing is said.
+commit a `.gitignore`. Its anchor against that is the owner's two files, which a branch cannot
+write (`exclude.unhidden_by_owner`), and git's own evaluation for a `!` line (`!/AGENTS.md`
+outranks `info/exclude`), so the branch can only make fewer files be placed and never more. Where
+git cannot answer, nothing is placed and nothing is said. The git questions are
+`rev-parse`, `config` and `check-ignore --no-index`, none of which refreshes the index, so a
+repository's `core.fsmonitor` does not run. Who must not be refused: a repository that tracks
+`AGENTS.md` -- the worktree has it from the branch, nothing is placed and nothing is said.
 """
 
 from __future__ import annotations
@@ -38,7 +41,7 @@ import stat
 from pathlib import Path
 
 from stayfixed import fsops
-from stayfixed.attach.exclude import unignored
+from stayfixed.attach.exclude import unhidden_by_owner, unignored
 from stayfixed.binding import bound_project
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.plates import PROJECTS
@@ -47,8 +50,8 @@ from stayfixed.gitenv import answer_lines, git_run
 from stayfixed.printed import printable
 
 CHECKOUT = "checkout"
-# Never placed: the machine's own settings and anything that holds secrets, whatever the owner put
-# in `checkout/`.
+# Never placed, as hygiene: the machine's own settings and anything that holds secrets, whatever
+# the owner put in `checkout/`.
 NEVER = ("settings.local.json",)
 NEVER_PREFIXES = (".env",)
 LITTER = (".DS_Store",)
@@ -106,8 +109,8 @@ def _held(source: Path) -> list[str]:
 
 def place(root: Path, *, machine: Path | None) -> tuple[list[str], list[str]]:
     """Place the owner-held files in the linked worktree `root` is in, and return the names placed
-    and the names withheld, those no ignore pattern hides (`exclude.unignored`), which are not
-    created.
+    and the names withheld, which are not created: those a `!` line re-includes or no ignore file
+    hides (`exclude.unignored`), and those only a `.gitignore` hides (`exclude.unhidden_by_owner`).
 
     `([], [])` where `root` is not in a linked worktree, this machine binds it to no project, it
     records no overlay, or the project has no `checkout/` directory. A name with anything at it is
@@ -131,12 +134,12 @@ def place(root: Path, *, machine: Path | None) -> tuple[list[str], list[str]]:
             for name in _held(source)
             if not fsops.is_symlink(tree / name) and not fsops.exists(tree / name)
         ]
-        withheld = unignored(tree, vacant)
+        shown = {*unignored(tree, vacant), *unhidden_by_owner(tree, vacant)}
     except (Refusal, OSError):
         return [], []
     placed: list[str] = []
     for name in vacant:
-        if name in withheld:
+        if name in shown:
             continue
         try:
             data = fsops.read_regular_bytes(source / name)
@@ -145,7 +148,7 @@ def place(root: Path, *, machine: Path | None) -> tuple[list[str], list[str]]:
                 placed.append(name)
         except OSError:
             continue
-    return placed, list(withheld)
+    return placed, [name for name in vacant if name in shown]
 
 
 def said(placed: list[str], withheld: list[str]) -> str:
