@@ -316,7 +316,8 @@ def test_the_templates_plan_cleanly_into_an_empty_directory(tmp_path: Path) -> N
 
 
 def test_the_manifest_records_a_comparable_version(tmp_path: Path) -> None:
-    from stayfixed.scaffold import Manifest, apply, plan
+    from stayfixed.scaffold import apply, plan
+    from stayfixed.scaffold.manifest import Manifest
 
     # `[defaults.stayfixed]` carries no `version`, and the engine stamps one into every Record.
     # A record written with "" is a record `upgrade` and `doctor` can never compare against.

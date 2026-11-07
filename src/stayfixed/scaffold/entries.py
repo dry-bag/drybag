@@ -164,15 +164,6 @@ def owned_ids(document: str) -> dict[str, str]:
     }
 
 
-def _with_hooks(raw: dict[str, Any], hooks: dict[str, Any]) -> str:
-    """`raw` written back with `hooks` as its hook table, and with none where it is empty."""
-    if hooks:
-        raw["hooks"] = hooks
-    else:
-        raw.pop("hooks", None)
-    return settings_text(raw) + "\n"
-
-
 def withdraw_entries(document: str, recorded: Mapping[str, str]) -> str:
     """The document without each entry `recorded` names: its marker id, under the event the record
     gives it. Every other entry stays where it is, one claiming the marker that the record does not
@@ -192,4 +183,8 @@ def withdraw_entries(document: str, recorded: Mapping[str, str]) -> str:
             hooks[event] = groups
         else:
             hooks.pop(event)
-    return _with_hooks(raw, hooks)
+    if hooks:
+        raw["hooks"] = hooks
+    else:
+        raw.pop("hooks", None)
+    return settings_text(raw) + "\n"

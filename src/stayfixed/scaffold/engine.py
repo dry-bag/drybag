@@ -37,21 +37,14 @@ from stayfixed.config.paths import PathEscape, contained
 from stayfixed.errors import Refusal
 from stayfixed.fsops import (
     UnsafePath,
-    path_key,
     read_regular_text,
     unreadable,
     write_within,
 )
 from stayfixed.printed import quoted
 from stayfixed.scaffold.manifest import Kind, Location, Manifest, Record, digest
-from stayfixed.scaffold.model import WRITING, Action, Applied, Plan, Refused, Template, Verb
+from stayfixed.scaffold.model import Action, Applied, Plan, Refused, Template, Verb
 from stayfixed.scaffold.regions import RegionError, extract, upsert
-
-# A recorded target this template could not have produced: the file at it is not stayfixed's.
-NOT_PRODUCIBLE = (
-    "the manifest records a target this artifact cannot produce, so the file at it is not "
-    "stayfixed's"
-)
 
 
 def _read(path: Path, relative: str) -> tuple[str | None, str | None]:
@@ -120,16 +113,6 @@ def plan(root: Path, templates: Sequence[Template]) -> Plan:
             continue
 
         record = manifest.get(template.id)
-        if record is not None and path_key(record.target) != path_key(target):
-            # The manifest is committed, so `record.target` is repository-controlled: a record
-            # naming another place than the one this template produces describes no file of
-            # stayfixed's to touch. It is named, never followed, and the artifact is judged at its
-            # own place as if nothing recorded it.
-            actions.append(
-                Action(Verb.SKIP_MODIFIED, template.id, record.target, None, NOT_PRODUCIBLE, None)
-            )
-            record = None
-
         current, reason = _read(path, target)
         if reason is not None:
             refusals.append(Refused(template.id, target, reason))
@@ -234,19 +217,16 @@ def apply(root: Path, planned: Plan) -> Applied:
     # wrapped, because the refusal above it has written nothing to record.
     try:
         for action in planned.actions:
-            if action.verb is Verb.SKIP_MODIFIED:
+            if action.payload is None:
                 skipped.append(action.target)
                 continue
             # Re-validate the string against the live tree, then stop using the string: the
             # write happens through a descriptor `open_within` walked with O_NOFOLLOW.
             contained(root, action.target, resolved_root=resolved_root)
-            if action.verb in WRITING:
-                if action.payload is None:
-                    raise Refusal(f"{action.artifact_id}: {action.verb} with no payload")
-                _write(root, action.target, action.payload)
-                written.append(action.target)
-                if manifest is not None and action.record is not None:
-                    manifest = manifest.with_record(action.record)
+            _write(root, action.target, action.payload)
+            written.append(action.target)
+            if manifest is not None and action.record is not None:
+                manifest = manifest.with_record(action.record)
     finally:
         if manifest is not None:
             manifest.write(root)

@@ -93,27 +93,6 @@ reddens = [
   "tests/scaffold/test_manifest.py::test_a_manifest_past_the_parser_is_refused_in_its_own_words[nested]",
 ]
 
-# A report prints targets, and a target a committed manifest recorded is repository-authored:
-# only one inside the path grammar may print as itself.
-[[mutation]]
-name = "a report prints a committed manifest's target raw"
-file = "src/stayfixed/scaffold/report.py"
-before = '    return item.target if PATH_VALUE.match(item.target) else f"<{item.artifact_id}>"'
-after = "    return item.target"
-reddens = [
-  "tests/scaffold/test_report.py::test_a_target_outside_the_path_grammar_prints_as_its_artifact_id",
-]
-
-# A record at a case variant of the target is that file where case folds, so the folded trigger is
-# what keeps the engine from naming the artifact's own file as one it cannot produce beside an
-# `unchanged` verdict for it.
-[[mutation]]
-name = "a record at a case variant of the target triggers a relocation"
-file = "src/stayfixed/scaffold/engine.py"
-before = "        if record is not None and path_key(record.target) != path_key(target):"
-after = "        if record is not None and record.target != target:"
-reddens = ["tests/scaffold/test_engine.py::test_a_record_at_a_case_variant_of_the_target_is_that_file_and_never_a_relocation"]
-
 # A refusal returned in a report rather than raised: every recorded artifact refused.
 
 [[mutation]]

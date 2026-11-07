@@ -104,45 +104,6 @@ def test_a_once_artifact_is_never_updated(tmp_path: Path) -> None:
     assert (tmp_path / "CLAUDE.md").read_text(encoding="utf-8") == before
 
 
-def test_a_manifest_naming_a_target_outside_the_root_plans_nothing_for_it(tmp_path: Path) -> None:
-    # The manifest is committed, so `record.target` is repository-controlled input.
-    root = tmp_path / "project"
-    root.mkdir()
-    (tmp_path / "outside.md").write_text("BODY\n", encoding="utf-8")
-    Manifest({}).with_record(a_record(target="../outside.md")).write(root)
-    result = plan(root, [a_template()])
-    # Said out loud, not silent. The file is still not touched — that is the property — but a
-    # record naming a file stayfixed will not remove is something the report has to carry, or
-    # the artifact is created at its new target with the old one left on disk and nothing said.
-    assert [a.verb for a in result.actions] == [Verb.SKIP_MODIFIED, Verb.CREATE]
-    assert result.actions[0].target == "../outside.md"
-    assert (tmp_path / "outside.md").exists()
-
-
-def test_a_recorded_target_this_template_could_never_produce_is_not_a_relocation(
-    tmp_path: Path,
-) -> None:
-    # Both halves of "is this file ours" come out of the committed manifest: the recorded target
-    # and the recorded hash. So without a guard, naming any file in the root and stamping it with
-    # the bytes it is committed with is enough to make `plan` emit a REMOVE for it — and a
-    # mismatch between the recorded target and the template's is all it takes.
-    victim = tmp_path / ".claude"
-    victim.mkdir()
-    settings = victim / "settings.json"
-    before = '{"permissions": {"deny": ["Read(./.env)"]}}\n'
-    settings.write_text(before, encoding="utf-8")
-    record = a_record(target=".claude/settings.json", sha256=digest(before))
-    Manifest({}).with_record(record).write(tmp_path)
-    planned = plan(tmp_path, [a_template()])
-    assert [(a.verb, a.target) for a in planned.actions] == [
-        (Verb.SKIP_MODIFIED, ".claude/settings.json"),
-        (Verb.CREATE, "AGENTS.md"),
-    ]
-    applied = apply(tmp_path, planned)
-    assert settings.read_text(encoding="utf-8") == before
-    assert applied.skipped == (".claude/settings.json",)
-
-
 # --- regions, which live inside somebody else's file -------------------------------------
 
 
@@ -548,19 +509,3 @@ def test_the_containment_docstring_claims_the_property_the_walk_actually_holds()
     prose = " ".join((engine.__doc__ or "").split())
     assert "it cannot redirect the write" in prose
     assert "there is no window in which a component can become a symlink" not in prose
-
-
-def test_a_record_at_a_case_variant_of_the_target_is_that_file_and_never_a_relocation(
-    tmp_path: Path,
-) -> None:
-    # A record at `agents.md` for an artifact at `AGENTS.md`, as a case-only `[paths]` edit leaves
-    # it. Where case folds they are one file, and a relocation "from" `agents.md` removed the
-    # artifact's own file (`relocated`) beside an `unchanged` verdict for it, then dropped its
-    # record. Asserted on the plan, which is the same string rule on every filesystem.
-    # Mutation (oracle): `mutations/`'s "a record at a case variant of the target triggers a
-    # relocation" -> the plan holds a `skip_modified` for `agents.md` and this reddens.
-    (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
-    Manifest({}).with_record(a_record(target="agents.md")).write(tmp_path)
-    planned = plan(tmp_path, [a_template()])
-    assert planned.actions == ()
-    assert planned.unchanged == ("agents-md",)

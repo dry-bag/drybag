@@ -22,7 +22,7 @@ from stayfixed.project.init import (
     HEAD_REMOTES_UNKNOWN,
     HEAD_UNRECORDED,
 )
-from stayfixed.scaffold import Manifest
+from stayfixed.scaffold.manifest import Manifest
 from tests.gitfixture import git, needs_git
 from tests.project.repos import DOCUMENT, repository
 from tests.snapshot import assert_snapshot_unchanged, snapshot
