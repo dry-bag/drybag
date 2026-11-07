@@ -900,5 +900,51 @@ Merge `origin/next`, re-run the gates, open the pull request into `next` with th
 
 ## Findings
 
-Filled during execution: each wave's head, its net size against the estimate, what the review
-changed.
+**Each wave's head and net, against its estimate** (`src` / tests, lines):
+
+| Wave | Head | Net | Estimate | Over on `src` |
+|---|---|---|---|---|
+| A | `ca883a2` | −232 / −234 | −200 / −390 | no |
+| B | `8495ddf` | +16 / +107 | −55 / −30 | **71** |
+| C | `c2e5cfe` | −237 / −328 | −200 / −300 | no |
+| D | `175ac68` | −198 / −108 | −190 / −300 | no |
+| E | `ecf5965` | +64 / +197 | −10 / +50 | **74** |
+| F | `008cf75` | −22 / −146 | −40 / −215 | 18 |
+
+**Two waves passed this plan's stop and did not report it.** "More than 50 lines above its estimate
+stops and reports before it commits": B ended 71 over and E 74 over, and neither stopped or recorded
+it. B's overrun is `processes.run_bounded` and the one allowlist in core, which are what close the
+session's environment and the sync's own runner; E's is the rewrite hold and `doctor`'s rows, and
+its tests carry the same growth. Each change justifies itself and the plan's total came to −609
+`src` against about −695. What failed is the process: the stop did not fire, and this section stayed
+a placeholder until the re-review asked for it.
+
+**What the reviews changed.** The review of #162 was this plan's input, 32 findings. The scoped
+re-review of this branch, on `23cfa62`, stopped it, and one fix round answered:
+
+- **The rewrite hold (second finding at that seam, redesigned).** It compared against `state.head`,
+  which every job writes whatever step it reached and whatever `HEAD` then is. A job that stopped
+  early lost a purge (offline, mid-rebase, on a branch, or a collected unpushed tip), and one on
+  another `HEAD` held on a commit `main` never had, offering a force-push over it. The hold now
+  starts from `agreed`, the sha `main` and upstream last agreed on, written only when a job verified
+  them equal on `main`. `head` stays for the back-off, its only reader. The hold needs commits to
+  name, so a purge upstream also made is no hold: the job integrates it.
+- **The scan (second finding at that seam, redesigned).** Task 6's premise was wrong: `gitleaks dir`
+  skips a file by its opening bytes, so a note opening `MZ` or `%PDF-` passed both scans with `ok`.
+  Both scans now run `gitleaks git` over a repository the job builds from the bytes, under numbered
+  names, whose git reads no global or system file. `HOME` is the scan's own directory as well as the
+  system files being off: git reads `~/.config/git/attributes` with no configuration naming it, and
+  `* -diff` there would empty the patch. CI installs a pinned gitleaks 8.30.1, so the test over those
+  openings runs there and not only on a developer's machine.
+- **The job's own step bound left `index.lock`.** `run_bounded` now sends the group SIGTERM, then
+  SIGKILL. git removes its lock on the first, and the job still never removes one.
+- **Deletions from that review:** the seams `_before_push` and `_released`, the `Guard` wrapper,
+  `JobTimeout`, `JobContext.home`, `_commit_tree`, the sync's two restated timeouts, the second list
+  of memory pathspecs, the `env=` every helper carried (`git` now lays `JOB_SETTINGS` itself), and
+  the tests that held nothing else. Left, each a rewrite more than a deletion: `Ran` and `Called` as
+  one record, `_ask` onto `run_bounded`, one mapping of a scan's outcome, one read of a rev or none.
+- **Left as follow-ups:** the convergence exceptions after a kill, a planted gitfile reaching
+  `index-render`, a case-variant index name, the clipped `conflict` line, `PATH=.`, one unreadable
+  note ending the job, `_message`'s encoding and the overlay's CI scan. The migration step for an
+  overlay that tracks its indexes (`git rm --cached -q` on each machine before taking the untracking
+  commit, with the changelog and `docs/cli.md`) goes to the cutover's list of overlay changes.
