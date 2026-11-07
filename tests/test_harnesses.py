@@ -300,7 +300,7 @@ LISTED = {
 PROSE = {
     # Messages naming the Codex rule files `attach` places, and `--check` would place.
     ("src/stayfixed/attach/check.py", "codex"): 1,
-    ("src/stayfixed/attach/commands.py", "codex"): 3,
+    ("src/stayfixed/attach/commands.py", "codex"): 4,
     # The advice `setup --approval-boundary` prints, which names the harness whose settings it is.
     ("src/stayfixed/setup/commands.py", "claude"): 1,
     # The commit-trailer guard's names of tools that sign commits as authors: the agent as an

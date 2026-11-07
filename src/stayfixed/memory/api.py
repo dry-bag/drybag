@@ -78,7 +78,6 @@ this area's tests use; an area that comes to need one grows this list by the rul
   `bundles` row is this area's own (`memory/doctor.py`) and reads `memory.bundles` directly.
 """
 
-from stayfixed.config.plates import RECORD
 from stayfixed.memory.bundles import SLOTS
 from stayfixed.memory.composed import build as build_composed
 from stayfixed.memory.composed import link_sources, promote_share, render_missing_index
@@ -89,6 +88,7 @@ from stayfixed.memory.store import (
     BOUND,
     COMMON,
     PROJECTS,
+    RECORD,
     STORE_DIR,
     UNBOUND,
     Store,

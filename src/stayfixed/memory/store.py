@@ -60,6 +60,7 @@ from stayfixed.config.overlay import overlay_root
 from stayfixed.config.paths import PathEscape, PathUnasked, contained, data_directory
 from stayfixed.config.plates import COMMON as COMMON_PLATE
 from stayfixed.config.plates import PROJECTS as PROJECTS
+from stayfixed.config.plates import RECORD as RECORD
 from stayfixed.config.plates import (
     TAG_LINK_PREFIX,
     Plate,
