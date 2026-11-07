@@ -7,9 +7,9 @@ describing output the command did not print, and the exit-1 path is the one a pe
 without a flag. `scaffold.render_report` is the renderer, and the same text goes into `--json`
 under `scaffold`, so the two cannot disagree.
 
-That is safe on the repository-bytes rule because `render_report` bounds every target it
-prints: one outside `PATH_VALUE` prints as its artifact id. The reason beside it is the engine's
-own fixed vocabulary. The project's name reaches none of them.
+That is safe on the repository-bytes rule because every target it prints is a `Template`'s, held
+to `PATH_VALUE` by the loader. The reason beside it is the engine's own fixed vocabulary. The
+project's name reaches none of them.
 
 **Exit 1 on a refusal, not 2.** A refused artifact is a finding the report names, and `apply`
 was never reached: nothing was written, and re-running after the fix is the whole remedy. That
@@ -51,7 +51,12 @@ YES_HELP = (
 # Heads the list of what the run took for each question, which the skip path took unasked. Said
 # of the run, as every other line of the report is, and never in the first person.
 PICKED = "picked:"
-PICKED_WITHHELD = "<unprintable; see stayfixed.toml>"
+# Over a `stayfixed.toml` somebody wrote, in place of that list: a run reads the file for where the
+# scaffold lands and for nothing else, so its opening line is no verdict on the file.
+ADOPTED_LEFT = (
+    "stayfixed.toml is left as it is: this run read it only for where the scaffold lands, and the "
+    "next command that loads it judges the file"
+)
 QUESTIONS_HELP = (
     "print the defaults init would take, where each came from and the flag that changes it; "
     "under --json, as a JSON Schema. Writes nothing"
@@ -87,21 +92,9 @@ def run_questions(args: argparse.Namespace) -> Result:
     return Result(card(schema), {"questions": schema})
 
 
-def _picked_line(key: str, value: object) -> str:
-    """One line of what `init --yes` picked. A value an adopted `stayfixed.toml` wrote prints
-    through `printable`, withheld as `PICKED_WITHHELD` outside the grammar: the file holds it as
-    it is."""
-    from stayfixed.printed import printable
-    from stayfixed.project.questions import shown
-
-    if isinstance(value, str) and value:
-        value = printable(value, PICKED_WITHHELD)
-    return f"  {key}: {shown(value)}"
-
-
 def run_init(args: argparse.Namespace) -> Result:
     from stayfixed.project.init import NO_ANSWERS, init
-    from stayfixed.project.questions import picked
+    from stayfixed.project.questions import picked, shown
 
     if args.questions:
         if args.dry_run or _given(args) != NO_ANSWERS:
@@ -120,9 +113,11 @@ def run_init(args: argparse.Namespace) -> Result:
     scaffold = render_report(report.plan)
     refused = report.refused
     lines = [HEADINGS[(refused, report.dry_run)], "", scaffold]
-    chosen = picked(report.config)
-    if chosen:
-        lines += [PICKED, *(_picked_line(key, value) for key, value in chosen.items())]
+    if report.adopted:
+        lines.append(f"note: {ADOPTED_LEFT}")
+    else:
+        chosen = picked(report.config)
+        lines += [PICKED, *(f"  {key}: {shown(value)}" for key, value in chosen.items())]
     if report.head_note:
         lines.append(f"note: {report.head_note}")
     data = {

@@ -12,7 +12,7 @@ import stayfixed
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.reading import ConfigError
 from stayfixed.errors import Failure, Refusal
-from stayfixed.project.commands import PICKED
+from stayfixed.project.commands import ADOPTED_LEFT, PICKED
 from stayfixed.project.init import InitReport, init
 from stayfixed.project.templates import ONE_FILE, read
 from stayfixed.scaffold import Verb
@@ -95,20 +95,28 @@ def test_a_local_only_note_is_kept_out_of_git_by_the_region_init_writes(tmp_path
 
 
 @needs_git
+@pytest.mark.parametrize(
+    ("tables", "words"),
+    [
+        (
+            '[project]\nname = "chosen"\n\n[memory]\nmode = "cloud"\n',
+            r"^memory\.mode must be one of",
+        ),
+        ('[project]\nname = "chosen"\nrelease_branch = "x"\n', r"\[project\] has unknown key"),
+    ],
+    ids=["a-value", "a-key-stayfixed-does-not-have"],
+)
 def test_an_adopted_document_s_tables_are_validated_before_anything_is_written(
-    tmp_path: Path,
+    tmp_path: Path, tables: str, words: str
 ) -> None:
     # `init` builds its `Config` from the tables it copies out of a hand-written document, so a
     # table it does not copy is one it never validates, while every later load does: the run
     # wrote a footprint for a document the next command refuses. Mutation: drop `"memory"` from
     # `USER_OWNED` and `init` writes the footprint, so this reddens with DID NOT RAISE.
     root = _repo(tmp_path)
-    hand_written = (
-        '[stayfixed]\nversion = "0.0.1"\n\n[project]\nname = "chosen"\n\n[memory]\nmode = "cloud"\n'
-    )
-    (root / CONFIG_FILE).write_text(hand_written, encoding="utf-8")
+    (root / CONFIG_FILE).write_text(f'[stayfixed]\nversion = "0.0.1"\n\n{tables}', encoding="utf-8")
     before = snapshot(root)
-    with pytest.raises(ConfigError, match=r"^memory\.mode must be one of"):
+    with pytest.raises(ConfigError, match=words):
         _init(root, tmp_path)
     assert_snapshot_unchanged(root, before)
 
@@ -310,13 +318,24 @@ def test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_wr
     )
 
 
-# What a hand-written file may hold that the next command's load refuses: no version, a key
-# stayfixed no longer has, no `[project]`, nothing at all.
+# What a hand-written file may hold that the scaffold is not built from, and the sentence the
+# next command's load answers it with: no version, a key or a section stayfixed does not have, a
+# gate's value, no `[project]`, nothing at all.
+HEAD = '[stayfixed]\nversion = "0.1.0"\n'
+PROJECT = '\n[project]\nname = "widget"\n'
 LEFT_FOR_THE_LOADER = {
-    "no-version": '[project]\nname = "widget"\n',
-    "unknown-key": '[stayfixed]\nversion = "0.1.0"\nenforced = []\n\n[project]\nname = "widget"\n',
-    "no-project": '[stayfixed]\nversion = "0.1.0"\n',
-    "empty-file": "",
+    "no-version": (PROJECT, r"\[stayfixed\] is missing required key\(s\): version"),
+    "a-key-of-the-head": (
+        f"{HEAD}agents = []\n{PROJECT}",
+        r"\[stayfixed\] has unknown key\(s\): agents",
+    ),
+    "unknown-section": (f"{HEAD}{PROJECT}\n[foo]\n", r"has unknown section\(s\): foo"),
+    "a-gate-value": (
+        f'{HEAD}{PROJECT}\n[guards]\nbg_cleanup = "nope"\n',
+        r"guards\.bg_cleanup must be true or false",
+    ),
+    "no-project": (HEAD, r"\[project\] is missing required key\(s\): name"),
+    "empty-file": ("", r"is missing required key\(s\)"),
 }
 
 
@@ -325,18 +344,25 @@ LEFT_FOR_THE_LOADER = {
 def test_an_adopted_document_is_left_as_it_is_and_the_next_load_names_what_it_lacks(
     tmp_path: Path, case: str
 ) -> None:
-    # `init` reads a `stayfixed.toml` a person wrote for where the scaffold lands and writes
-    # nothing into it: it once added a missing `[stayfixed] version`, and refused a file the next
-    # command could not load. What the file lacks, or holds that stayfixed no longer has, is the
-    # loader's to name when the next command loads it.
+    # The one rule, whose other half is
+    # `test_an_adopted_document_s_tables_are_validated_before_anything_is_written`: `init` answers
+    # only for where the scaffold lands. So `[project] release_branch`, in a table the scaffold is
+    # built from, stops it there, and `[stayfixed] agents`, the same leftover in the head, is here:
+    # exit 0 with the file as it was, for the next load to name. The report says so, and it once
+    # printed as picked a name the file does not hold and a note whose `--base-branch` is refused
+    # over the file. Mutations (oracle): `mutations/`'s "a run over an adopted file lists what it
+    # picked" and "a detected base branch's note reaches an adopted file".
     root = _repo(tmp_path)
-    document = LEFT_FOR_THE_LOADER[case]
+    document, sentence = LEFT_FOR_THE_LOADER[case]
     (root / CONFIG_FILE).write_text(document, encoding="utf-8")
-    report = _init(root, tmp_path)
-    assert report.adopted and not report.refused
+    code, out, err = cli(root, tmp_path, "init", "--yes")
+    assert code == 0, (out, err)
+    assert ADOPTED_LEFT in out
+    assert PICKED not in out and "--base-branch" not in out
     assert (root / CONFIG_FILE).read_text(encoding="utf-8") == document
-    with pytest.raises(ConfigError):
-        load(root, machine=tmp_path / "absent.toml")
+    assert (root / "docs" / "roadmap.md").is_file()
+    code, out, err = cli(root, tmp_path, "bugs", "check")
+    assert code == 1 and re.search(sentence, err), (out, err)
 
 
 @needs_git

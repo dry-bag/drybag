@@ -43,9 +43,11 @@ harness's limits. Never run this skill in a forked context: a subagent cannot as
 
 - **A `stayfixed.toml` the user wrote answers the questions.** Skip steps 2–4 and 7 and run
   steps 5 and 6 with no answer flag: the dry run, the relay, the explicit final yes, then the write. The
-  file is kept as it is: `init` writes nothing into it.
+  file is kept as it is: `init` writes nothing into it, and answers only for where the scaffold
+  lands. There is no `picked:` list to relay; relay the `note:` that says the next command judges
+  the file, and never pass `initialised:` on as a verdict on it.
 - **A `failed:` line from `init` over a `stayfixed.toml` the user wrote means the loader refuses
-  what that file holds.** Nothing was written. Relay the sentence, fix the file with the
+  what the scaffold is built from.** Nothing was written. Relay the sentence, fix the file with the
   user, and run again.
 - **Run again, `init` writes only what is missing.** A file already there is reported
   `skip_modified` and left as it is, edited or not; only the `.gitignore` region is put back.

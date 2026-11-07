@@ -17,7 +17,10 @@ ignored and exits 0, and a session's hooks load the file the same way:
 `stayfixed init` writes nothing into a `stayfixed.toml` you wrote. It no longer adds a missing
 `[stayfixed] version`: the next command that loads the file
 exits 1 naming what it lacks, `[stayfixed] is missing required key(s): version` for this
-key, and the remedy is the line written by hand. A `stayfixed.toml` `init` creates no longer says
+key, and the remedy is the line written by hand. `init` answers only for where the scaffold
+lands, so over a file the next command refuses for anything else it exits 0: it prints no `picked:`
+list over a file you wrote, and a note that the file was left as it is for the next command to
+judge. A `stayfixed.toml` `init` creates no longer says
 in its header that stayfixed rewrites `[stayfixed] version`, since no command does.
 
 `stayfixed init` can be run again on a repository it has initialised, and writes only what is

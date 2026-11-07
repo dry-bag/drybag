@@ -1091,8 +1091,8 @@ The recommended plugins are not `init`'s to install:
 
 After the report the run prints `picked:`, one line per question in the order
 `init --questions` asks them, with the value this run took: the name, the base branch, the memory
-mode, the attribution check (`on` or `off`), and `plugins: none`, since `init` installs none. Taking every default gives the attribution check `off` and no plugin. A value a `stayfixed.toml` you wrote holds outside the plain-path grammar
-prints as `<unprintable; see stayfixed.toml>`.
+mode, the attribution check (`on` or `off`), and `plugins: none`, since `init` installs none. Taking every default gives the attribution check `off` and no plugin. Over a `stayfixed.toml` you wrote
+the run took nothing, so it prints no list.
 
 The parser refuses a value outside its grammar or its choices (`2`), and it refuses a name or
 a branch by naming the rule, never the value. A branch is a name git accepts as one, written in
@@ -1121,18 +1121,28 @@ When nothing answers, `init` detects:
 
 Both name candidates, the remote's segment and the directory name, are repository-authored.
 So one outside `[project] name`'s grammar is refused naming the grammar and the remedy, and
-never the value, unless `--name` answers it. With a `stayfixed.toml` you wrote, the file answers
-it: one with no `[project] name` fails (`1`) with the loader's own sentence, whatever the
-repository suggests.
+never the value, unless `--name` answers it. With a `stayfixed.toml` you wrote, neither candidate
+is refused: the file answers it, and what it leaves out is the loader's to name.
 
 **A `stayfixed.toml` you wrote is the answer sheet, not an obstacle.** Every key it carries is
 read and kept: the name, the paths, the memory mode, the budgets. The file itself
 is not replaced. It is a create-once artifact, so a repository that already has one is
 reported `skip_modified` ("create-once, and the file is already there").
 
-Nothing is written into it, whatever it holds. A key it lacks that the loader requires, such as
-`[stayfixed] version` or `[project] name`, or one stayfixed no longer has, is named by the next
-command that loads the file, in the loader's own sentence.
+Nothing is written into it, whatever it holds, and `init` answers only for where the scaffold
+lands. What the scaffold is built from is read first: the file's `[project]`, `[paths]`, `[memory]`,
+`[budgets]`, `[ledger]` and `[commit_messages]` tables and `[stayfixed] preset`, with the name
+detected for a file with no `[project]` table. A fault there stops the run with nothing written: a
+`[project]` with no name or holding a key stayfixed no longer has, such as `release_branch`, or no
+`[project]` table where no name can be detected.
+
+The rest of the file is no input to the scaffold, and `init` does not judge it. `[stayfixed] agents`,
+the same kind of leftover in another table, a missing `[stayfixed] version`, no `[project]` table,
+a bad value under `[guards]` and a section stayfixed does not have all exit `0`, and the next command
+that loads the file names them, in the loader's own sentence. So `initialised:` says nothing of
+the file: the run prints a `note:` saying the file was left as it is and the next command judges
+it, in place of `picked:`, and no base-branch `note:`, whose `--base-branch` is refused over the
+file.
 
 The paths it declares are where the scaffold lands. A repository with no `stayfixed.toml` gets
 one written from the detected values and your answers, headed by a comment saying that every key
@@ -1172,9 +1182,9 @@ containment walk and none may leave the project root or pass through a symlink:
 
 Exits `0` on success. `1` on a finding: the plan carries refusals — the report's REFUSED section
 names each, and nothing was written — or a `stayfixed.toml` that cannot be read,
-is not UTF-8 text or is not valid TOML, or the merged document the loader itself refuses (an unknown
-section or key, a `[project] name` outside its grammar, a value of the wrong type, a machine
-configuration file that does not load). `2` on a refusal above the plan: no `--yes`, an
+is not UTF-8 text or is not valid TOML, or what the scaffold is built from where the loader refuses
+it (a key those tables do not have, a `[project]` with no name, a `[project] name` outside its
+grammar, a value of the wrong type, a machine configuration file that does not load). `2` on a refusal above the plan: no `--yes`, an
 answer flag over an existing `stayfixed.toml`, an answer outside its grammar or its choices (from the
 parser), a detected name outside the grammar that no `--name` answers, a `[ledger]` value the bug
 ledger refuses when the run creates the bug index, a `stayfixed.toml` that is a symlink, which is never followed, a `[paths]` value outside the plain-path grammar, naming
@@ -1188,7 +1198,7 @@ plan's targets), and `head_note`, the `note:` line that says `main` replaced an
 `origin/HEAD` outside the plain-branch grammar (the branch it named is never printed), that
 `main` stands because a remote is there and no `origin/HEAD` is recorded, or because git could
 not list the remotes, or that, with no remote, the branch checked out other than `main` became
-the base branch; empty otherwise. An answered `--base-branch` replaced nothing, so it leaves
+the base branch; empty otherwise, and over a `stayfixed.toml` you wrote. An answered `--base-branch` replaced nothing, so it leaves
 `head_note` empty.
 
 ---

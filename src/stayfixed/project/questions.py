@@ -215,7 +215,7 @@ def questions(root: Path, *, machine: Path | None) -> dict[str, Any]:
 
 def picked(config: Config) -> dict[str, Any]:
     """What a run of `init --yes` took for each question, in `PROPERTIES`' order, read off the
-    configuration it wrote or adopted: `init` installs no plugin."""
+    configuration it wrote: `init` installs no plugin."""
     values: dict[str, Any] = {}
     for key in PROPERTIES:
         if key == PLUGINS:

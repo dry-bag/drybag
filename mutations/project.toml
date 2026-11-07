@@ -427,6 +427,28 @@ reddens = [
   "tests/scaffold/test_containment.py::test_a_preset_name_with_a_non_ascii_letter_is_refused_by_the_rule",
 ]
 
+
+# `init` answers only for where the scaffold lands, so over a file somebody wrote its report states
+# nothing the file does not hold: no list of what it took, and no note whose `--base-branch` is
+# refused over the file.
+[[mutation]]
+name = "a run over an adopted file lists what it picked"
+file = "src/stayfixed/project/commands.py"
+before = "    if report.adopted:"
+after = "    if False:"
+reddens = [
+  "tests/project/test_init.py::test_an_adopted_document_is_left_as_it_is_and_the_next_load_names_what_it_lacks[no-project]",
+]
+
+[[mutation]]
+name = "a detected base branch's note reaches an adopted file"
+file = "src/stayfixed/project/init.py"
+before = '        head_note = _head_note(found) if existing is None and given.base_branch is None else ""'
+after = '        head_note = _head_note(found) if given.base_branch is None else ""'
+reddens = [
+  "tests/project/test_init.py::test_an_adopted_document_is_left_as_it_is_and_the_next_load_names_what_it_lacks[no-project]",
+]
+
 # `init` renders the tables it copies out of a hand-written `stayfixed.toml` before the loader
 # sees them, and the serialiser quotes a key it cannot write bare. The refusal names the table
 # and never the key, which is repository-authored text no grammar has bounded.

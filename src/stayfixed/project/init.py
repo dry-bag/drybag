@@ -9,10 +9,12 @@ nothing written; the dry run reports the plan and writes nothing.
 absent, never looked inside again. So on a repository that already carries one the engine
 reports `skip_modified` — "create-once, and the file is already there" — and the file stays byte
 for byte, whatever it holds. What the hand-written document does is decide where the scaffold
-lands: it is parsed, merged under stayfixed's own `version` and the preset's defaults, and
-validated by `loads` before a byte is written, and the `Config` that comes out is what every
-target below is built from. A key the file lacks, or one the loader refuses outside that merge, is
-the next command's to name, when it loads the file.
+lands: it is parsed, its `[project]`, its `USER_OWNED` tables and its `preset` are merged under
+stayfixed's own `version` and the preset's defaults, and that is validated by `loads` before a
+byte is written, and the `Config` that comes out is what every target below is built from. That
+is all `init` answers for. The rest of the file is no input to the scaffold, so a run over a file
+the next command refuses still exits 0, and the report says the file was left for that command to
+judge and states nothing it does not hold.
 
 **Every value in the document this writes is stayfixed's own, the repository's own answer read
 back, or an answer a person gave as a flag.** `[stayfixed] version` is stayfixed's own;
@@ -44,7 +46,6 @@ from stayfixed.scaffold import Plan, apply, plan
 from stayfixed.tomlout import dumps
 
 USER_OWNED = ("paths", "memory", "budgets", "ledger", "commit_messages")
-HEAD_KEYS = ("preset",)
 HEADER = "# Written by `stayfixed init`. Every key you leave out takes the preset's default.\n\n"
 # The pair is spelled literally because the intended reader is an agent relaying this sentence,
 # and `--dry-run` on its own is refused by this same refusal: "pass --yes, and --dry-run to read
@@ -116,7 +117,7 @@ class InitReport:
     plan: Plan
     adopted: bool
     dry_run: bool
-    # The configuration the run wrote or adopted, from which the command says what it picked.
+    # The configuration the scaffold was built from; over a document the run wrote, what it picked.
     config: Config
     # `HEAD_DEFAULTED` when the detected base branch replaced a remote head outside the grammar;
     # `HEAD_UNRECORDED` when it is the default because a remote is there and `origin/HEAD` is
@@ -131,8 +132,8 @@ class InitReport:
         return bool(self.plan.refusals)
 
 
-def _existing(root: Path) -> tuple[str, dict[str, object]] | None:
-    """The `stayfixed.toml` already in the repository, as its text and parsed, or `None`.
+def _existing(root: Path) -> dict[str, object] | None:
+    """The `stayfixed.toml` already in the repository, parsed, or `None`.
 
     Read through `read_document`, the loader's reader, so a symlinked file is a
     refusal and is never followed: a clone's link to `/dev/zero` would end the run by exhausting
@@ -149,7 +150,7 @@ def _existing(root: Path) -> tuple[str, dict[str, object]] | None:
     if text is None:
         return None
     try:
-        return text, tomllib.loads(text)
+        return tomllib.loads(text)
     except UNPARSEABLE as exc:
         raise Failure(f"{CONFIG_FILE} is not valid TOML {toml_position(exc)}") from None
 
@@ -163,9 +164,13 @@ def _tables(
 
     **Detection runs only when no `[project]` table answers for the repository**, and not merely
     when some key of the head is absent; **it is lenient when `--name` answers the name, the one
-    value it refuses, or when an adopted file leaves it out**, which the loader then refuses
-    with its own sentence. `detect` is the one call here that can refuse — a directory name or a
-    remote's last segment outside `PROJECT_NAME` — and the remedy for that refusal is to answer it
+    value it refuses, or when an adopted file leaves it out**. There what it finds only places the
+    scaffold and reaches no report, and the note stays empty, since `--base-branch` is refused over
+    the file: the next command that loads the file refuses the missing name with the loader's
+    sentence, and with no name found `loads` gives that sentence here, before the scaffold, since
+    nothing names the project to build a `Config` from. `detect` is the one call here that can
+    refuse — a directory name or a remote's last segment outside `PROJECT_NAME` — and the remedy
+    for that refusal is to answer it
     with `--name`, or to write `[project] name` into `stayfixed.toml` by hand and run `init` again.
     A branch that consulted `detect` for anything the preset can default would make that second
     remedy dead: the repository whose name cannot be guessed would go on being refused after doing
@@ -178,8 +183,8 @@ def _tables(
     head: dict[str, object] = {"version": stayfixed.__version__}
     tables: dict[str, dict[str, object]] = {"stayfixed": head}
     old_head = existing.get("stayfixed") if existing else None
-    if isinstance(old_head, dict):
-        head.update({k: old_head[k] for k in HEAD_KEYS if k in old_head})
+    if isinstance(old_head, dict) and "preset" in old_head:
+        head["preset"] = old_head["preset"]
     if existing:
         for name in ("project", *USER_OWNED):
             table = existing.get(name)
@@ -190,7 +195,7 @@ def _tables(
         # Lenient where something else answers the name: `--name`, or an adopted file, whose
         # missing `[project] name` is the loader's to refuse, since `--name` cannot reach it.
         found = detect(root, lenient=given.name is not None or existing is not None)
-        head_note = _head_note(found) if given.base_branch is None else ""
+        head_note = _head_note(found) if existing is None and given.base_branch is None else ""
         name = given.name or found.name
         branch = given.base_branch or found.base_branch
         tables["project"] = {"base_branch": branch}
@@ -278,8 +283,7 @@ def init(
     if not yes:
         raise Refusal(NEEDS_YES)
     precheck(root, answering=given != NO_ANSWERS)
-    read = _existing(root)
-    existing = read[1] if read is not None else None
+    existing = _existing(root)
     tables, head_note = _tables(root, existing, given=given)
     document = _rendered(tables)
     config = loads(document, root, machine=machine, owner=owner)
