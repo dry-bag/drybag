@@ -1093,7 +1093,7 @@ def test_codex_rules_land_under_the_directory_codex_reads(tmp_path: Path) -> Non
     landed = root / ".codex" / "rules" / "common.rules"
     assert landed.read_text(encoding="utf-8") == "# standing rule\n"
     assert ".codex/rules/common.rules" in attached.rules_written
-    assert ledger(root).rules == (".codex/rules/common.rules",)
+    assert list(ledger(root).rules) == [".codex/rules/common.rules"]
 
 
 @ROOT_SEARCHES_EVERYTHING
@@ -1347,7 +1347,7 @@ def test_attach_carries_on_over_a_ledger_that_does_not_parse_and_writes_it_whole
     attach(root, store=store, machine=machine, runner=Recorder())
     ledger_file(root).write_text("{", encoding="utf-8")
     attach(root, store=store, machine=machine, runner=Recorder())
-    assert ledger(root).rules == (".codex/rules/common.rules",)
+    assert list(ledger(root).rules) == [".codex/rules/common.rules"]
 
 
 # `NESTED`, which no reader caught, in a file a clone can commit.
@@ -2627,8 +2627,8 @@ def test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it(
     tmp_path: Path,
 ) -> None:
     # The team commits `.codex/rules/common.rules` after `attach` placed it, then the overlay drops
-    # the rule: the next routine `attach` must not delete a file the checkout tracks. It leaves
-    # every copy standing, keeps it in the ledger for `detach`, and names it.
+    # the rule: the next routine `attach` must not delete a file the checkout tracks. It leaves the
+    # copy standing, names it, and forgets it: the file is the team's now.
     # Mutation: `mutations/`'s "re-attach removes a Codex copy the overlay dropped".
     root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
     _committed(root)
@@ -2640,7 +2640,70 @@ def test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it(
     again = attach(root, store=store, machine=machine, runner=Recorder())
     assert (root / copy).is_file() and _status(root) == []
     assert again.rules_left == (copy,)
-    assert ledger(root).rules == (copy,)
+    assert copy not in ledger(root).rules
+
+
+@pytest.mark.parametrize(
+    ("state", "kept"),
+    [("as-written", True), ("edited", False), ("tracked", False), ("deleted", False)],
+)
+def test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written(
+    tmp_path: Path, state: str, kept: bool
+) -> None:
+    # `detach` must still take a stale copy Codex reads as a standing instruction, and must never
+    # take what is no longer attach's. So the name stays recorded only while the file is untracked
+    # and holds the bytes attach wrote. Mutation: `mutations/`'s "re-attach keeps every name the
+    # overlay dropped".
+    root, store, machine = _attachable(tmp_path, codex="# standing rule\n")
+    _committed(root)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    copy = ".codex/rules/common.rules"
+    if state == "edited":
+        (root / copy).write_text("# the team's now\n", encoding="utf-8")
+    elif state == "tracked":
+        _git(root, "add", "-f", copy)
+        _git(root, "commit", "-qm", "the team keeps the rule")
+    elif state == "deleted":
+        (root / copy).unlink()
+    (store.parents[2] / COMMON_CODEX / "common.rules").unlink()
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (copy in ledger(root).rules) is kept
+
+
+# What a hand can leave in the ledger that parses as an object and is no ledger `attach` wrote.
+NOT_LEDGERS = [
+    {"rules": [1]},
+    {"rules": "abc"},
+    {"rules": {".codex/rules/common.rules": 1}},
+    {"store": 5},
+    {"allow": [1]},
+    {"settings_keys": "autoMemoryDirectory"},
+    {"directories": {}},
+    {"render": "x"},
+]
+
+
+def rewritten(root: Path, fields: Mapping[str, object]) -> None:
+    """The real ledger of `root` with `fields` replaced, so a case differs from a working one in
+    exactly what it is about."""
+    document = json.loads(ledger_file(root).read_text(encoding="utf-8"))
+    ledger_file(root).write_text(json.dumps({**document, **fields}), encoding="utf-8")
+
+
+@pytest.mark.parametrize("fields", NOT_LEDGERS, ids=str)
+def test_attach_writes_a_file_that_is_no_ledger_whole(
+    tmp_path: Path, fields: Mapping[str, object]
+) -> None:
+    # One answer from the reader, and `attach`'s is to write the ledger whole: a run that took
+    # such a field would fail in the middle, or carry it into the file it writes.
+    # Mutation: `mutations/`'s "the ledger reader takes any field".
+    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    rewritten(root, fields)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (
+        isinstance(ledger(root).rules, dict) and ".codex/rules/common.rules" in ledger(root).rules
+    )
 
 
 def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:

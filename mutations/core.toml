@@ -2269,42 +2269,6 @@ reddens = [
   "tests/test_undecodable.py::test_a_file_without_read_permission_cannot_be_read_and_says_so[setup]",
 ]
 
-# `fsops.names_regular_file` is the one place a path that names no file is told from one that cannot
-# be asked about, for `attach`'s ledger reader. A path a clone can commit that names no file --
-# nothing there, a dangling link, a loop -- is no ledger to the reader, and the reader may not call
-# it one it cannot read.
-[[mutation]]
-name = "the regular-file probe is blind to a path that names no file"
-file = "src/stayfixed/fsops.py"
-before = "        if exc.errno in NAMES_NO_FILE:"
-after = "        if False:"
-reddens = [
-  "tests/attach/test_doctor.py::test_a_ledger_path_that_names_no_file_is_no_ledger_as_before[a-dangling-link]",
-  "tests/attach/test_doctor.py::test_a_ledger_path_that_names_no_file_is_no_ledger_as_before[a-link-loop]",
-]
-
-# Something other than a regular file -- a directory -- names no file to read, whichever reader asks.
-[[mutation]]
-name = "the regular-file probe reads a path that is no regular file"
-file = "src/stayfixed/fsops.py"
-before = "    return stat.S_ISREG(mode)"
-after = "    return True"
-reddens = [
-  "tests/attach/test_doctor.py::test_a_ledger_path_that_names_no_file_is_no_ledger_as_before[a-directory]",
-]
-
-# Any other fault is the caller's to classify, and the probe raises it rather than answering for
-# the caller: read as no file, a symbolic link to a name longer than a file name may be hides a
-# ledger from `attached`.
-[[mutation]]
-name = "the regular-file probe reads a path it cannot ask about as no file"
-file = "src/stayfixed/fsops.py"
-before = "        if exc.errno in NAMES_NO_FILE:"
-after = "        if True:"
-reddens = [
-  "tests/test_fsops.py::test_a_path_names_a_regular_file_or_no_file_and_any_other_fault_is_the_callers",
-]
-
 # `fsops`' four path predicates answer one way on every interpreter, where `pathlib`'s raise on a
 # fault up to Python 3.13 and answer `False` from 3.14. A name or a path longer than the system
 # takes reaches no file, as a dangling link and a loop do: raised, it ended `attach` over an
@@ -2313,8 +2277,8 @@ reddens = [
 [[mutation]]
 name = "the path predicates read a name longer than the system takes as a fault"
 file = "src/stayfixed/fsops.py"
-before = "REACHES_NO_FILE = NAMES_NO_FILE | {errno.ENAMETOOLONG}"
-after = "REACHES_NO_FILE = NAMES_NO_FILE"
+before = "errno.ELOOP, errno.ENAMETOOLONG})"
+after = "errno.ELOOP})"
 reddens = [
   "tests/test_fsops.py::test_the_path_predicates_answer_each_fault_alike_on_every_interpreter[a-name-longer-than-a-name]",
   "tests/test_fsops.py::test_the_path_predicates_answer_each_fault_alike_on_every_interpreter[past-the-longest-path]",

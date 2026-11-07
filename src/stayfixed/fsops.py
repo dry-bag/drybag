@@ -173,40 +173,13 @@ def utf_8_name(name: str) -> bool:
     return True
 
 
-# The faults of a `stat` that say its path names no file: nothing there, a component that is not
-# a directory, a symbolic link loop. `Path.is_file()` answers `False` for these, raises most other
-# faults up to Python 3.13 and answers `False` for any from 3.14, and neither will do for a path a
-# clone can commit. A symbolic link to a name longer than a file name may be raises `ENAMETOOLONG`:
-# raised past a caller's catch, it costs a `doctor` row its verdict; answered `False`, it skips a
-# file that is there. So `stat` is asked, these three are no file, and any other fault is a file
-# the caller cannot read.
-NAMES_NO_FILE = frozenset({errno.ENOENT, errno.ENOTDIR, errno.ELOOP})
-
-
-def names_regular_file(path: Path) -> bool:
-    """Whether `path`, followed through symbolic links, names a regular file.
-
-    `False` when it names no file — one of `NAMES_NO_FILE`, or something other than a regular
-    file, such as a directory — and any other `OSError` raised, because what a path that cannot
-    be asked about means is the caller's to say: a reader that must account for every file calls
-    it one it is blind to, and one reading a record a clone can commit calls the record unreadable.
-    """
-    try:
-        mode = path.stat().st_mode
-    except OSError as exc:
-        if exc.errno in NAMES_NO_FILE:
-            return False
-        raise
-    return stat.S_ISREG(mode)
-
-
-# `NAMES_NO_FILE`, and a name or a whole path longer than the system takes. The kernel refuses the
-# last before it looks anything up, so it gets the answer a dangling link and a loop get: nothing a
-# reader that names the path whole can open is there. A clone reaches it with a committed link
-# whose target holds a name longer than a file name may be, which makes every path through the
-# link one, and a repository-chosen string joined into a path reaches it too. `names_regular_file`
-# keeps it apart for the readers that must count such a link as a file they cannot read.
-REACHES_NO_FILE = NAMES_NO_FILE | {errno.ENAMETOOLONG}
+# The faults of a `stat` that say its path reaches no file: nothing there, a component that is not
+# a directory, a symbolic link loop, and a name or a whole path longer than the system takes. The
+# kernel refuses the last before it looks anything up, so it gets the answer a dangling link and a
+# loop get: nothing a reader that names the path whole can open is there. A clone reaches it with a
+# committed link whose target holds a name longer than a file name may be, which makes every path
+# through the link one, and a repository-chosen string joined into a path reaches it too.
+REACHES_NO_FILE = frozenset({errno.ENOENT, errno.ENOTDIR, errno.ELOOP, errno.ENAMETOOLONG})
 
 
 def _reached_mode(path: Path, *, follow: bool) -> int | None:
@@ -224,12 +197,12 @@ def _reached_mode(path: Path, *, follow: bool) -> int | None:
 
 
 # `Path.is_file()`, `is_dir()`, `exists()` and `is_symlink()`, answered alike on every interpreter.
-# `pathlib`'s own answer `False` for `NAMES_NO_FILE` and raise any other fault up to Python 3.13,
-# and answer `False` for every fault from 3.14 (`os.path`'s rule), so one path a clone can shape
-# was an internal error on one interpreter and a quiet "nothing there" on the other, and the suite
-# proved only the interpreter it ran on. These choose: `REACHES_NO_FILE` is nothing there, as it
-# was on 3.14, and any other fault -- a directory that cannot be searched, an I/O error -- raises,
-# as it did up to 3.13, because "cannot tell" is not "no". Each follows links as its `pathlib`
+# `pathlib`'s own answer `False` for a path that names no file and raise any other fault up to
+# Python 3.13, and answer `False` for every fault from 3.14 (`os.path`'s rule), so one path a clone
+# can shape was an internal error on one interpreter and a quiet "nothing there" on the other, and
+# the suite proved only the interpreter it ran on. These choose: `REACHES_NO_FILE` is nothing there,
+# as it was on 3.14, and any other fault -- a directory that cannot be searched, an I/O error --
+# raises, as it did up to 3.13, because "cannot tell" is not "no". Each follows links as its `pathlib`
 # namesake does: `is_symlink` asks `lstat`, the other three `stat`.
 
 

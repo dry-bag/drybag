@@ -48,6 +48,7 @@ and `stayfixed.binding` and `attach.render` for this machine's binding record an
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 import os
 from collections.abc import Iterable, Mapping
@@ -210,8 +211,8 @@ class Attached:
     `added` and `removed` are the executable diff against the render the last run left, and
     `allow_added` the allow rules this run merged and `allow_withdrawn` those it took back; all
     four are the overlay's. `rules_left` is each `.codex/rules/` copy an earlier attach placed that
-    the overlay no longer holds and that is still there: a re-attach removes no Codex copy, so
-    `detach` or the owner does.
+    the overlay no longer holds and that is still there: a re-attach removes no Codex copy, and
+    `detach` removes one only while the ledger records it (`_write_ledger`).
     """
 
     settings_written: bool
@@ -235,10 +236,15 @@ class AttachLedger:
     **The anchor is the git common directory**, which a branch cannot write: the ledger sat in the
     working tree once, and a branch that committed one made `detach` and every re-attach delete
     files and withdraw allow rules by strings the branch chose. Nothing is read from that old path
-    now, and `attach` is the file's only writer, so the fields are taken as written. A file that
-    does not parse as a ledger records nothing (`NotALedger`). `detach` still removes a rule copy
-    only from one segment under `.codex/rules/`, a settings key only if it is the pointer, and a
-    directory only from `CREATED_DIRS` (`_removable`).
+    now, and `attach` is the file's only writer. `read_ledger` answers this shape or `NotALedger`,
+    so no consumer guards a field. `detach` still removes a rule copy only from one segment under
+    `.codex/rules/`, a settings key only if it is the pointer, and a directory only from
+    `CREATED_DIRS` (`_removable`).
+
+    `rules` maps each `.codex/rules/` copy to the sha256 of the bytes `attach` wrote there. The
+    name says where and the digest what: `detach` removes a copy only while its bytes match, since
+    what is at the name is a branch's or the owner's, and a branch that writes those exact bytes
+    loses nothing to the removal.
 
     `entries` maps each marker id to its event, which is the shape `scaffold.owned_ids` answers
     in, so `doctor` can compare the two without a translation in between. Only a ledger an earlier
@@ -253,64 +259,84 @@ class AttachLedger:
     store: str
     allow: tuple[str, ...]
     entries: dict[str, str]
-    rules: tuple[str, ...]
+    rules: dict[str, str]
     settings_keys: tuple[str, ...]
     directories: tuple[str, ...] = ()
     render: Rendered | None = None
 
 
 class NotALedger(Failure):
-    """A file at the ledger's path that does not parse as one. It records nothing: `attach` reads
-    it as no ledger, `detach` removes nothing and says so, and `doctor` reports it as missing."""
+    """A file at the ledger's path that is not one `attach` wrote: it cannot be read, does not
+    parse, or holds a field of another shape. It records nothing: `attach` writes the ledger whole,
+    `detach` removes nothing and says so, and `doctor` warns."""
 
 
 def ledger(root: Path) -> AttachLedger:
     """The ledger this repository's last `attach` wrote (`read_ledger` of the file in the git
     common directory), or a `Failure` naming the missing file."""
-    return read_ledger(common_directory(root) / LEDGER_FILE)
+    recorded = read_ledger(common_directory(root) / LEDGER_FILE)
+    if recorded is None:
+        raise Failure(
+            f"{LEDGER_NAME} is not there, so nothing records what `stayfixed attach` added "
+            f"to this repository; there is no safe way to guess it from the settings file"
+        )
+    return recorded
 
 
-def read_ledger(path: Path) -> AttachLedger:
-    """The ledger at `path`, or a `Failure` naming the missing file, or `NotALedger`.
+def _strings(value: object) -> bool:
+    return isinstance(value, list) and all(isinstance(each, str) for each in value)
+
+
+def _well_shaped(raw: dict[str, Any]) -> bool:
+    """Whether every field of `raw` has the shape `_write_ledger` gives it."""
+    render = raw.get("render")
+    return (
+        isinstance(raw.get("store"), str)
+        and all(_strings(raw.get(key)) for key in ("allow", "settings_keys", "directories"))
+        and all(
+            isinstance(raw.get(key), dict) and _strings(list(raw[key].values()))
+            for key in ("entries", "rules")
+        )
+        and (render is None or (isinstance(render, dict) and isinstance(render.get("digest"), str)))
+    )
+
+
+def read_ledger(path: Path) -> AttachLedger | None:
+    """The well-shaped ledger at `path`, `None` where no file is there, or `NotALedger`: the one
+    answer every consumer takes.
 
     Never a best effort. Guessing which allow rules were stayfixed's from their content is the
     heuristic this file exists to replace, and a `detach` built on a guess removes a rule the
     owner wrote by hand — which is worse than removing none.
     """
-    with fsops.reading(LEDGER_NAME, Failure):
+    with fsops.reading(LEDGER_NAME, NotALedger):
         try:
             # A regular file only (`fsops.read_regular_text`): a link to `/dev/zero` read until
             # memory ran out.
             text = fsops.read_regular_text(path)
-        except FileNotFoundError as exc:
-            raise Failure(
-                f"{LEDGER_NAME} is not there, so nothing records what `stayfixed attach` added "
-                f"to this repository; there is no safe way to guess it from the settings file"
-            ) from exc
+        except FileNotFoundError:
+            return None
     # Empty text fails as JSON: `attach` never writes an empty ledger, so one is no record.
     raw = json_object(text, str(path), error=NotALedger)
-    try:
-        digest = (raw.get("render") or {}).get("digest")
-        return AttachLedger(
-            store=raw.get("store", ""),
-            allow=tuple(raw.get("allow", ())),
-            entries=dict(raw.get("entries", {})),
-            rules=tuple(raw.get("rules", ())),
-            settings_keys=tuple(raw.get("settings_keys", ())),
-            directories=tuple(raw.get("directories", ())),
-            render=None if digest is None else Rendered(digest),
-        )
-    except (AttributeError, TypeError, ValueError) as exc:
-        raise NotALedger(f"{path} is not a ledger `stayfixed attach` wrote") from exc
+    if not _well_shaped(raw):
+        raise NotALedger(f"{path} is not a ledger `stayfixed attach` wrote")
+    render = raw.get("render")
+    return AttachLedger(
+        store=raw["store"],
+        allow=tuple(raw["allow"]),
+        entries=raw["entries"],
+        rules=raw["rules"],
+        settings_keys=tuple(raw["settings_keys"]),
+        directories=tuple(raw["directories"]),
+        render=None if render is None else Rendered(render["digest"]),
+    )
 
 
 def existing_ledger(root: Path) -> AttachLedger | None:
-    """The ledger, or `None` when there is none or the file records nothing (`NotALedger`):
-    `attach` and `attach --check`, the two callers that may carry on without it, read it here, so
-    the two end with one code."""
-    path = common_directory(root) / LEDGER_FILE
+    """The ledger, or `None` when there is none or the file is `NotALedger`, which `attach` then
+    writes whole. `attach` and `attach --check` both read it here."""
     try:
-        return read_ledger(path) if fsops.is_file(path) else None
+        return read_ledger(common_directory(root) / LEDGER_FILE)
     except NotALedger:
         return None
 
@@ -446,6 +472,19 @@ def _absent_directories(root: Path) -> tuple[str, ...]:
     return tuple(name for name in CREATED_DIRS if not _reached_directory(root / name))
 
 
+def _digest(data: bytes) -> str:
+    """What the ledger records of the bytes `attach` wrote to a rule copy."""
+    return hashlib.sha256(data).hexdigest()
+
+
+def _as_written(path: Path, digest: str) -> bool:
+    """Whether the file at `path` holds the bytes `digest` records; what cannot be read does not."""
+    try:
+        return _digest(fsops.read_regular_bytes(path)) == digest
+    except OSError:
+        return False
+
+
 def _reached_directory(path: Path) -> bool:
     """`fsops.is_dir`, and `True` for a path no write of this run can reach; see above."""
     try:
@@ -487,14 +526,9 @@ def _write_ledger(
     just wrote. `_plan` reads it once, above every write.
     """
     previous, binding = planned.previous, planned.binding
-    # The union for the rule files, and for a sharper reason than the one in the docstring. A file
-    # deleted from the overlay between two attaches is not written this time and so drops out of a
-    # ledger built from this run alone, while the copy from the first attach is still in
-    # `.codex/rules/`, where Codex reads it as a standing instruction. `detach` would then leave an
-    # agent-steering file behind. A re-attach removes no copy, since the team may have committed
-    # or edited it since (`Attached.rules_left` names it instead), so it stays recorded.
-    rules = list(previous.rules) if previous is not None else []
-    rules += [target for target, _ in planned.rules if target not in rules]
+    # What this run wrote, and the copies `plan_writes` kept: a file deleted from the overlay is
+    # not written this time, while its copy is still where Codex reads it as a standing instruction.
+    rules = {**planned.kept, **{t: _digest(text.encode("utf-8")) for t, text in planned.rules}}
     # Only the rules the overlay grants now: one it no longer grants leaves the ledger whether or
     # not the settings file still held it, or a copy the owner types by hand later would be taken.
     granted = planned.diff.granted
@@ -663,6 +697,8 @@ class AttachPlan:
     hidden: exclude.ExcludeWrite | None
     # Each `.codex/rules/` target and the text to copy there.
     rules: tuple[tuple[str, str], ...]
+    # Each copy the overlay no longer holds that the ledger goes on recording, with its digest.
+    kept: dict[str, str]
     # What the rendered plugin carries, read from the overlay (`render.read_parts`).
     parts: dict[str, Part]
 
@@ -816,11 +852,22 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         diff = withdrawing(diff, previous.allow, _allow_list(settings_document(document))[1])
     merged = _merged_settings(document, diff, previous)
     written = merged != document
-    placed = placed_paths(target for target, _ in codex_rules(binding))
+    targets = tuple(target for target, _ in codex_rules(binding))
+    placed = placed_paths(targets)
+    recorded = previous.rules if previous is not None else {}
+    dropped = {rule: sha for rule, sha in recorded.items() if rule not in targets}
+    tracked = exclude.tracked(root, (*placed, *dropped))
     # One rule for every placed path: none tracked, asked here above every write, and each ignored,
     # asked once the block stands (`_carry_out`).
-    if found := exclude.tracked(root, placed):
+    if found := tuple(path for path in placed if path in tracked):
         raise Refusal(exclude.TRACKED.format(paths=named_placed(found)))
+    # A re-attach removes no copy. It goes on recording one the overlay dropped only while the file
+    # is untracked and as attach wrote it, so `detach` can take it; any other is no longer attach's.
+    kept = {
+        rule: sha
+        for rule, sha in dropped.items()
+        if rule not in tracked and _as_written(root / rule, sha)
+    }
     # What git already hides decides the `info/exclude` block: a line for each path `attach` places
     # that the owner's own excludes do not hide (`exclude.unhidden_by_owner`). It can refuse — git
     # cannot answer, a path leaves the project, the exclude file is a symlink — and each refusal is
@@ -846,6 +893,7 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         placed=placed,
         hidden=hidden,
         rules=rules,
+        kept=kept,
         parts=parts,
     )
 
@@ -1100,6 +1148,8 @@ class Detached:
     settings_keys_removed: tuple[str, ...]
     directories_removed: tuple[str, ...] = ()
     exclude_block_removed: bool = False
+    # Each recorded copy still there that does not hold what `attach` wrote.
+    rules_left: tuple[str, ...] = ()
     # The rendered plugin's render directory was removed, Claude Code having been told to forget
     # whatever of it the main checkout's settings file named.
     delivery_removed: bool = False
@@ -1276,14 +1326,14 @@ def _removable(recorded: AttachLedger) -> AttachLedger:
     a rule copy is one segment under `.codex/rules/`, a settings key is the pointer, and a
     directory is one of `CREATED_DIRS` (`_withdraw_directories` walks that list); anything else
     the ledger names is skipped."""
-    copies = [PurePosixPath(rule) for rule in recorded.rules]
     return replace(
         recorded,
-        rules=tuple(
-            rule
-            for rule, path in zip(recorded.rules, copies, strict=True)
-            if path.parent == PurePosixPath(CODEX_RULES) and path.name not in ("", "..")
-        ),
+        rules={
+            rule: sha
+            for rule, sha in recorded.rules.items()
+            if (path := PurePosixPath(rule)).parent == PurePosixPath(CODEX_RULES)
+            and path.name != ".."
+        },
         settings_keys=tuple(key for key in recorded.settings_keys if key == POINTER_KEY),
     )
 
@@ -1348,10 +1398,13 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     _refuse_unwithdrawable(root, recorded, settings)
     allow_removed = _withdraw_settings(root, settings)
     rules_removed: list[str] = []
-    for rule in recorded.rules:
-        if fsops.is_file(root / rule):
+    rules_left: list[str] = []
+    for rule, sha in recorded.rules.items():
+        if _as_written(root / rule, sha):
             fsops.remove_within(root, rule)
             rules_removed.append(rule)
+        elif fsops.exists(root / rule) or fsops.is_symlink(root / rule):
+            rules_left.append(rule)
     # Before the exclude block goes: Claude Code takes the plugin's entries, which name the id, out
     # of the settings file the block hides, and it does so after this run's own withdrawal from
     # that file, which would otherwise write them back. A file that still names the id stops the
@@ -1378,6 +1431,7 @@ def detach(root: Path, *, runner: Runner) -> Detached:
         recorded.settings_keys,
         directories,
         hidden is not None,
+        tuple(rules_left),
         removed,
         store_kept,
     )

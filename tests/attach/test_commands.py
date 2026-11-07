@@ -188,6 +188,32 @@ def test_a_re_attach_names_each_codex_rule_copy_the_overlay_no_longer_holds(
     assert json.loads(capsys.readouterr().out)["rules_left"] == [".codex/rules/common.rules"]
 
 
+def test_the_line_about_a_dropped_copy_says_when_detach_removes_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The line was "remove it, or run `stayfixed detach`", and that command then took an uncommitted
+    # edit with it.
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    _overlay_grants(store, codex="# standing rule\n")
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
+    capsys.readouterr()
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    assert "only while it is untracked and holds the bytes attach wrote" in capsys.readouterr().out
+
+
+def test_detach_names_a_copy_it_left(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    _overlay_grants(store, codex="# standing rule\n")
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    (root / ".codex" / "rules" / "common.rules").write_text("# edited\n", encoding="utf-8")
+    capsys.readouterr()
+    assert invoke(["detach", "--root", str(root)]) == 0
+    assert f"Codex rule copy left: {quoted('.codex/rules/common.rules')}" in capsys.readouterr().out
+
+
 def test_an_origin_carrying_credentials_is_neither_printed_nor_recorded_with_them(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -699,30 +725,6 @@ def test_an_overlay_group_whose_hooks_is_null_is_refused_by_check_and_attach_ali
     attached = capsys.readouterr()
     assert checked.err == attached.err
     assert checked.err.endswith(": an entry group's 'hooks' is not a list\n")
-
-
-def test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # `--check` did not read the ledger, so it answered 0 over a ledger that stopped the run, and a
-    # CI step running it passed where `attach` failed. It reads the ledger with the run's reader
-    # now, so the two end with one code and one line. The ledger here is longer than every other
-    # file either command reads, so the lowered cap stops this one alone. Mutation (oracle):
-    # `mutations/`'s "check skips the reads the run makes before its first write".
-    text = json.dumps({"store": "x" * 1_000_000})
-    root, store, machine = _granting(tmp_path)
-    ledger = ledger_file(root)
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    ledger.write_text(text, encoding="utf-8")
-    monkeypatch.setattr(fsops, "REGULAR_READ_LIMIT", len(text) - 1)
-    flags = _flags(root, store, machine)
-    before = snapshot(tmp_path)
-    assert invoke(["attach", "--check", *flags]) == 1
-    checked = capsys.readouterr()
-    assert invoke(["attach", *flags]) == 1
-    attached = capsys.readouterr()
-    assert checked.err == attached.err and checked.err.startswith("stayfixed: ")
-    assert_snapshot_unchanged(tmp_path, before)
 
 
 def _check_then_attach(

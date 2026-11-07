@@ -39,44 +39,25 @@ UNREADABLE_LEDGER: Final = "unreadable-ledger"
 
 
 def _ledger_state(root: Path) -> AttachLedger | str:
-    """This repository's attach ledger, `NO_LEDGER` when the path names no file, or
-    `UNREADABLE_LEDGER` when the file is there and cannot be read as a ledger. `root` is the main
-    checkout (`_owner`); the ledger is in the git common directory, so any checkout names it.
-
-    Three answers and not two. `read_ledger` raises on a file it cannot read, and a file that does
-    not parse as a ledger (`NotALedger`) records nothing, so it answers as no file does. Let
-    through to the report's guard, the first would show the row red with the detail "this check
-    could not run: Failure" and a remedy that cannot help. Where git cannot be run, the row cannot
-    say (`UNASKABLE`); in no repository there is no ledger.
-
-    **Whether it is there is `fsops.names_regular_file`'s answer, and a path it cannot answer
-    about is unreadable.** Raised past this function to `_guarded`, the error's warning would
-    stand in for the whole row; read as no ledger, a file that is there would be skipped. A path
-    that names no file — nothing there, a dangling link or a loop, or something other than a
-    regular file — is no ledger.
+    """This repository's attach ledger, `NO_LEDGER` when no file is there, or `UNREADABLE_LEDGER`
+    for `read_ledger`'s `NotALedger`. `root` is the main checkout (`_owner`); the ledger is in the
+    git common directory, so any checkout names it. Where git cannot be run, the row cannot say
+    (`UNASKABLE`); in no repository there is no ledger.
     """
     from stayfixed.attach.write import NotALedger, read_ledger
     from stayfixed.binding import LEDGER_FILE, common_directory
     from stayfixed.errors import Failure
-    from stayfixed.fsops import names_regular_file
     from stayfixed.gitenv import GitUnavailable
 
     try:
-        path = common_directory(root) / LEDGER_FILE
-        if not names_regular_file(path):
-            return NO_LEDGER
+        recorded = read_ledger(common_directory(root) / LEDGER_FILE)
+    except NotALedger:
+        return UNREADABLE_LEDGER
     except GitUnavailable:
         return UNASKABLE
     except Failure:
         return NO_LEDGER
-    except OSError:
-        return UNREADABLE_LEDGER
-    try:
-        return read_ledger(path)
-    except NotALedger:
-        return NO_LEDGER
-    except Failure:
-        return UNREADABLE_LEDGER
+    return NO_LEDGER if recorded is None else recorded
 
 
 class _Ledger:

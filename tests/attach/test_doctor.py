@@ -20,6 +20,7 @@ from stayfixed.attach.api import LOCAL_SETTINGS
 from stayfixed.attach.check import check as attach_check
 from stayfixed.attach.render import MARKETPLACE_FILE, read_parts
 from stayfixed.attach.render import write as render_write
+from stayfixed.attach.write import attach
 from stayfixed.binding import LEDGER_NAME, delivery_directory
 from stayfixed.config.loader import CONFIG_FILE, load
 from stayfixed.config.plates import plates
@@ -27,9 +28,15 @@ from stayfixed.doctor import checks as doctor_checks
 from stayfixed.doctor.api import OK, RED, SKIP, WARN, Check
 from stayfixed.errors import Refusal
 from stayfixed.memory.api import PROJECT_RECORD, PROJECTS
-from stayfixed.overlay.api import COMMON_CLAUDE
+from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from stayfixed.printed import quoted
-from tests.attach.test_write import ledger_file
+from tests.attach.test_write import (
+    NOT_LEDGERS,
+    _attachable,
+    _committed,
+    ledger_file,
+    rewritten,
+)
 from tests.doctor.test_checks import (
     LOCAL_ONLY,
     OVERLAY,
@@ -451,34 +458,57 @@ def test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer
     assert "`git`" not in row.detail and "`git`" not in row.remedy
 
 
-# Committed shapes at the ledger's path that name no file to read, which the row reads as no
-# ledger, as it always has: nothing there records an attach.
-NAMES_NO_LEDGER = ("a-dangling-link", "a-link-loop", "a-directory", "not-json", "nested")
-
-
-@pytest.mark.parametrize("shape", NAMES_NO_LEDGER)
-def test_a_ledger_path_that_names_no_file_is_no_ledger_as_before(
-    tmp_path: Path, shape: str
-) -> None:
-    # The vacuity guard for the case above: asking with `stat` must not turn every path that holds
-    # no ledger into one that cannot be read. Mutations (oracle): `mutations/`'s "the regular-file
-    # probe is blind to a path that names no file" -> the dangling link and the loop say the
-    # ledger cannot be read; "the regular-file probe reads a path that is no regular file" -> the
-    # directory does.
+def test_a_dangling_link_at_the_ledgers_path_is_no_ledger(tmp_path: Path) -> None:
+    # The vacuity guard for the case above: not every path that holds no ledger is one that cannot
+    # be read.
     root = _attached(tmp_path)
     path = ledger_file(root)
     path.unlink()
-    if shape == "a-dangling-link":
-        path.symlink_to(tmp_path / "nothing-here")
-    elif shape == "a-link-loop":
-        path.symlink_to(path)
-    elif shape == "a-directory":
-        path.mkdir()
-    else:
-        # A file that does not parse as a ledger records nothing (`NotALedger`).
-        path.write_text("this is not json" if shape == "not-json" else "[" * 99999, "utf-8")
+    path.symlink_to(tmp_path / "nothing-here")
     check = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
     assert check == UNATTACHED["overlay"]
+
+
+@pytest.mark.parametrize("text", ["this is not json", "[" * 99999])
+def test_a_ledger_that_does_not_parse_warns_and_never_reads_as_no_ledger(
+    tmp_path: Path, text: str
+) -> None:
+    # Green here while `detach` exited on the same file: one answer from the reader, and `doctor`'s
+    # is the warning. Mutation (oracle): `mutations/`'s "a ledger doctor cannot ask about reads as
+    # no ledger".
+    root = _attached(tmp_path)
+    ledger_file(root).write_text(text, encoding="utf-8")
+    assert _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached") == (
+        UNREADABLE_LEDGER_ATTACHED
+    )
+
+
+@pytest.mark.parametrize("fields", NOT_LEDGERS, ids=str)
+def test_a_ledger_of_the_wrong_shape_warns_as_one_that_does_not_parse(
+    tmp_path: Path, fields: dict[str, object]
+) -> None:
+    root = _attached(tmp_path)
+    rewritten(root, fields)
+    assert _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached") == (
+        UNREADABLE_LEDGER_ATTACHED
+    )
+
+
+def test_a_copy_the_team_committed_is_no_finding_once_the_overlay_dropped_it(
+    tmp_path: Path,
+) -> None:
+    # Red for good, with a remedy that took the team's file out of the index: the row is about a
+    # name attach still vouches for, and a re-attach forgets this one.
+    root, store, machine = _attachable(tmp_path, codex="# standing rule\n")
+    _committed(root)
+    run = Recorder()
+    attach(root, store=store, machine=machine, runner=run)
+    _git(root, "add", "-f", ".codex/rules/common.rules")
+    _git(root, "commit", "-qm", "the team keeps the rule")
+    (store.parents[2] / COMMON_CODEX / "common.rules").unlink()
+    attach(root, store=store, machine=machine, runner=run)
+    row = _by_name(_checks(tmp_path, root, machine=machine), "attached")
+    assert row.status != RED and "tracks" not in row.detail
 
 
 @pytest.mark.parametrize(

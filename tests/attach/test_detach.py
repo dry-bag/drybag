@@ -7,6 +7,7 @@ the owner wrote by hand — which is worse than removing none.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -23,7 +24,7 @@ from stayfixed.printed import quoted
 from stayfixed.project.init import init
 from stayfixed.scaffold.regions import Style, extract
 from tests.attach.test_binding import CONFIG, _machine
-from tests.attach.test_write import SETTINGS, ledger_file
+from tests.attach.test_write import NOT_LEDGERS, SETTINGS, ledger_file, rewritten
 from tests.gitfixture import git
 from tests.parserlimits import LONG_NUMBER, NESTED, PAST_ENCODING, overflowing_indent
 from tests.runners import Recorder, claude_code, git_that_cannot_run
@@ -95,6 +96,45 @@ def test_detach_removes_exactly_what_attach_added(tmp_path: Path) -> None:
     assert_snapshot_changed(root, before)
     _detach(root)
     assert_snapshot_unchanged(root, before)
+
+
+COPY = ".codex/rules/common.rules"
+
+
+def test_detach_leaves_and_names_a_copy_that_does_not_hold_what_attach_wrote(
+    tmp_path: Path,
+) -> None:
+    # The anchor is the digest in the git common directory, which a branch cannot write: what is at
+    # the name is the branch's or the owner's, and an uncommitted edit cannot be got back. Mutation
+    # (oracle): `mutations/`'s "detach removes a copy whatever its bytes".
+    root, store, machine = _bound(tmp_path)
+    _grant(store.parents[2])
+    _attach(root, store, machine)
+    (root / COPY).write_text("# edited\n", encoding="utf-8")
+    detached = _detach(root)
+    assert (root / COPY).read_text(encoding="utf-8") == "# edited\n"
+    assert (detached.rules_removed, detached.rules_left) == ((), (COPY,))
+
+
+@pytest.mark.parametrize("committed", [True, False], ids=["committed", "hand-written"])
+def test_detach_leaves_a_file_at_a_name_attach_stopped_recording(
+    tmp_path: Path, committed: bool
+) -> None:
+    # The overlay drops the file and the owner deletes the copy as attach's line says, so a later
+    # file of that name was never attach's.
+    root, store, machine = _bound(tmp_path)
+    overlay = store.parents[2]
+    _grant(overlay)
+    _attach(root, store, machine)
+    (overlay / "common" / "codex" / "common.rules").unlink()
+    (root / COPY).unlink()
+    _attach(root, store, machine)
+    (root / COPY).write_text("# rule\n", encoding="utf-8")
+    if committed:
+        git(root, "add", "-f", COPY)
+        git(root, "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-qm", "the team's")
+    assert _detach(root).rules_removed == ()
+    assert (root / COPY).is_file()
 
 
 def _render_of(root: Path) -> tuple[str, Path]:
@@ -231,7 +271,14 @@ def _branch_ledger(root: Path, store: Path, **fields: object) -> Path:
     checkout."""
     path = root / ".stayfixed" / "local" / "attach.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    document = {"format": 1, "store": str(store), "entries": {}, "settings_keys": []}
+    document = {
+        "format": 1,
+        "store": str(store),
+        "entries": {},
+        "rules": {},
+        "settings_keys": [],
+        "directories": [],
+    }
     path.write_text(json.dumps({**document, **fields}), encoding="utf-8")
     return path
 
@@ -251,7 +298,8 @@ def test_a_ledger_a_branch_commits_names_nothing_a_re_attach_or_detach_removes(
     document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
     document["permissions"]["allow"].append(typed)
     (root / SETTINGS).write_text(json.dumps(document), encoding="utf-8")
-    _branch_ledger(root, store, allow=[typed], rules=[".codex/rules/mine.rules"], directories=[])
+    digest = hashlib.sha256(mine.read_bytes()).hexdigest()
+    _branch_ledger(root, store, allow=[typed], rules={".codex/rules/mine.rules": digest})
     _attach(root, store, machine)
     _detach(root)
     assert mine.is_file()
@@ -265,7 +313,7 @@ def test_a_ledger_left_in_the_working_tree_is_neither_read_nor_removed(tmp_path:
     # directory and fails, and a later attach and detach pass the old file by.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
-    old = _branch_ledger(root, store, allow=[RULE], rules=[], directories=[])
+    old = _branch_ledger(root, store, allow=[RULE])
     with pytest.raises(Failure):
         _detach(root)
     _attach(root, store, machine)
@@ -382,7 +430,7 @@ def test_detach_in_a_bare_repositorys_worktree_withdraws_this_checkouts_own_part
     side = tmp_path / "side"
     git(bare, "worktree", "add", "-q", str(side), "main")
     ledger_file(side).parent.mkdir(parents=True)
-    ledgered = {"format": 1, "store": str(store), "allow": [RULE], "entries": {}, "rules": []}
+    ledgered = {"format": 1, "store": str(store), "allow": [RULE], "entries": {}, "rules": {}}
     ledgered |= {"settings_keys": [], "directories": []}
     ledger_file(side).write_text(json.dumps(ledgered), encoding="utf-8")
     (side / ".claude").mkdir()
@@ -559,7 +607,8 @@ def test_detach_leaves_the_binding_record_in_place(tmp_path: Path) -> None:
 def test_detach_removes_a_rule_file_the_overlay_has_since_deleted(tmp_path: Path) -> None:
     # `attach` stays reversible by `detach`, and the ledger is the only record of what was placed.
     # A re-attach removes no Codex copy, so one the overlay dropped between two attaches is still in
-    # `.codex/rules/`, where Codex reads it as a standing instruction, and stays on the ledger.
+    # `.codex/rules/`, where Codex reads it as a standing instruction, and it stays on the ledger
+    # while it is as attach wrote it.
     # Mutation: `mutations/`'s "the ledger forgets a Codex copy the overlay dropped".
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
@@ -573,24 +622,12 @@ def test_detach_removes_a_rule_file_the_overlay_has_since_deleted(tmp_path: Path
     assert not landed.exists()
 
 
-def _rewrite_ledger(root: Path, **fields: object) -> None:
-    """The ledger a clone committed: `attach`'s own, with fields replaced.
-
-    Built from a real one rather than by hand so that the case differs from a working detach in
-    exactly the field under test. `.gitignore` does not untrack a file a clone committed, which
-    is what makes this a state a fresh checkout can be in rather than a contrivance.
-    """
-    document = json.loads(ledger_file(root).read_text(encoding="utf-8"))
-    document.update(fields)
-    ledger_file(root).write_text(json.dumps(document), encoding="utf-8")
-
-
 def test_a_ledger_naming_a_path_outside_the_rule_copies_removes_none_of_them(
     tmp_path: Path,
 ) -> None:
     # The ledger is a record, not an authority: `detach` removes a rule copy only from one segment
-    # under `.codex/rules/`, and skips any other path the ledger names. Mutation: `mutations/`'s
-    # "detach deletes whatever file the ledger names" -> the other files go.
+    # under `.codex/rules/`, and skips any other path the ledger names, whatever digest it gives.
+    # Mutation: `mutations/`'s "detach deletes whatever file the ledger names" -> the others go.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
     _attach(root, store, machine)
@@ -599,7 +636,9 @@ def test_a_ledger_naming_a_path_outside_the_rule_copies_removes_none_of_them(
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("mine\n", encoding="utf-8")
     named = [".github/workflows/ci.yml", ".codex/rules/../x", "../../outside"]
-    _rewrite_ledger(root, rules=[*named, ".codex/rules/common.rules"])
+    recorded = json.loads(ledger_file(root).read_text(encoding="utf-8"))["rules"]
+    mine = hashlib.sha256(b"mine\n").hexdigest()
+    rewritten(root, {"rules": {**recorded, **dict.fromkeys(named, mine)}})
     _detach(root)
     assert [path.is_file() for path in kept] == [True] * 3
     assert not (root / ".codex" / "rules" / "common.rules").exists()
@@ -627,6 +666,23 @@ def test_a_ledger_that_does_not_parse_removes_nothing_and_says_so(
     before = snapshot(root)
     assert before
     with pytest.raises(Failure, match=f"{said}.*nothing was removed"):
+        _detach(root)
+    assert_snapshot_unchanged(root, before)
+
+
+@pytest.mark.parametrize("fields", NOT_LEDGERS, ids=str)
+def test_a_ledger_of_the_wrong_shape_removes_nothing_and_says_so(
+    tmp_path: Path, fields: dict[str, object]
+) -> None:
+    # `{"rules": [1]}` ended in `internal error: TypeError` and `{"rules": "abc"}` ran a whole
+    # detach. The reader says "not a ledger" and `detach` takes that one answer.
+    root, store, machine = _bound(tmp_path)
+    _grant(store.parents[2])
+    _attach(root, store, machine)
+    rewritten(root, fields)
+    before = snapshot(root)
+    assert before
+    with pytest.raises(Failure, match=r"not a ledger.*nothing was removed"):
         _detach(root)
     assert_snapshot_unchanged(root, before)
 
@@ -679,7 +735,7 @@ def test_a_ledger_claiming_the_permissions_key_never_drops_the_owners_deny_rules
         json.dumps({"permissions": {"allow": ["Bash(ls:*)"], "deny": ["Bash(curl:*)"]}}),
         encoding="utf-8",
     )
-    _rewrite_ledger(root, settings_keys=["permissions"])
+    rewritten(root, {"settings_keys": ["permissions"]})
     _detach(root)
     document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
     assert document["permissions"]["deny"] == ["Bash(curl:*)"]
@@ -1256,7 +1312,10 @@ def test_a_ledger_linked_to_a_device_stops_detach_and_is_never_read(tmp_path: Pa
     before = snapshot(root)
     with pytest.raises(Failure) as refused:
         _detach(root)
-    assert str(refused.value) == f"{LEDGER_NAME} cannot be read (not a regular file)"
+    assert str(refused.value) == (
+        f"{LEDGER_NAME} cannot be read (not a regular file); it records nothing, so nothing was "
+        "removed"
+    )
     assert_snapshot_unchanged(root, before)
 
 
@@ -1271,7 +1330,9 @@ def test_a_ledger_that_is_not_utf8_is_named_as_the_project_names_it(tmp_path: Pa
     before = snapshot(root)
     with pytest.raises(Failure) as refused:
         _detach(root)
-    assert str(refused.value) == f"{LEDGER_NAME} is not UTF-8 text"
+    assert str(refused.value) == (
+        f"{LEDGER_NAME} is not UTF-8 text; it records nothing, so nothing was removed"
+    )
     assert_snapshot_unchanged(root, before)
 
 

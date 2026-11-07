@@ -253,8 +253,9 @@ def _attached(tmp_path: Path) -> Path:
                 "store": str(overlay / PROJECTS / "p" / "memory"),
                 "allow": [],
                 "entries": {},
-                "rules": [],
+                "rules": {},
                 "settings_keys": ["autoMemoryDirectory"],
+                "directories": [],
                 "render": {"digest": rendered.digest},
             }
         ),

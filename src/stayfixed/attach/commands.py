@@ -100,8 +100,8 @@ def _screen(attached: Attached) -> list[str]:
     lines += [f"allow rule added: {clipped(rule)}" for rule in attached.allow_added]
     lines += [f"allow rule withdrawn: {clipped(rule)}" for rule in attached.allow_withdrawn]
     lines += [
-        f"Codex rule copy no longer in the overlay: {quoted(rule)} "
-        "(remove it, or run `stayfixed detach`)"
+        f"Codex rule copy no longer in the overlay: {quoted(rule)} (keep or delete it; `stayfixed "
+        "detach` removes it only while it is untracked and holds the bytes attach wrote)"
         for rule in attached.rules_left
     ]
     return lines
@@ -127,6 +127,8 @@ def run_detach(args: argparse.Namespace) -> Result:
         "settings_keys_removed": len(removed.settings_keys_removed),
         # A count of `CREATED_DIRS`, stayfixed's own closed vocabulary.
         "directories_removed": len(removed.directories_removed),
+        # Named as `attach` names a copy: the overlay's own file names.
+        "rules_left": list(removed.rules_left),
         # A boolean this command computed, so it prints.
         "exclude_block_removed": removed.exclude_block_removed,
         # A boolean this command computed, so it prints.
@@ -140,14 +142,18 @@ def run_detach(args: argparse.Namespace) -> Result:
             "; the composed memory store under this machine's data directory was kept, its links "
             "taken, since it holds files the harness wrote"
         )
-    return Result(
+    line = (
         f"detached: {len(removed.allow_removed)} allow rule(s), "
         f"{len(removed.entries_removed)} hook entr(ies), "
         f"{len(removed.rules_removed)} Codex rule file(s), "
         f"{len(removed.directories_removed)} directory(ies){withdrawn}; "
-        f"the binding record was left in place",
-        data,
+        f"the binding record was left in place"
     )
+    left = (
+        f"Codex rule copy left: {quoted(rule)} (it does not hold the bytes attach wrote)"
+        for rule in removed.rules_left
+    )
+    return Result("\n".join((line, *left)), data)
 
 
 def register(groups: SubParsers) -> None:
