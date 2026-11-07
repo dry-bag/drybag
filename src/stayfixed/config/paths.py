@@ -184,8 +184,8 @@ def names_stayfixed_directory(relative: str) -> bool:
     two reasons. Any depth:
     a package inside a monorepo initialised on its own keeps its own `.stayfixed/local/`, and a
     parent project's `[paths]` value must not reach that either. Any case: the default
-    filesystems on macOS and Windows fold case, so `.stayfixed/local/attach.json` is the same
-    file.
+    filesystems on macOS and Windows fold case, so `.stayfixed/local/memory` is the same
+    directory.
     """
     return names_component(relative, STAYFIXED_DIRECTORY)
 
@@ -253,11 +253,11 @@ def validate_path_values(values: Mapping[str, str], root: Path) -> dict[str, Pat
             )
         if names_stayfixed_directory(relative):
             # Named and never quoted. `.stayfixed/` is where stayfixed keeps its manifest and, under
-            # `.stayfixed/local/`, state git never sees: attach's ledger and the local-only notes.
-            # A `[paths]` value is committed, and while the scaffold inserted a `MANAGED_REGION`
-            # into whatever file `agents_md` named, exempt from the "exists and stayfixed did not
-            # write it" guard, a pulled commit setting `agents_md = ".stayfixed/local/attach.json"`
-            # had a scaffold refresh rewrite the ledger in a directory git cannot restore.
+            # `.stayfixed/local/`, state git never sees: the local-only notes. A `[paths]` value is
+            # committed, and while the scaffold inserted a `MANAGED_REGION` into whatever file
+            # `agents_md` named, exempt from the "exists and stayfixed did not write it" guard, a
+            # pulled commit setting `agents_md` to a file there had a scaffold refresh rewrite it
+            # in a directory git cannot restore.
             #
             # The anchor is the project root the CLI resolved and `STAYFIXED_DIRECTORY` above, a
             # constant in the installed package; the clone authors the value and nothing else.

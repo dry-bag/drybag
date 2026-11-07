@@ -121,6 +121,23 @@ def toml_position(exc: tomllib.TOMLDecodeError | RecursionError | ValueError) ->
     return found.group(0) if found is not None else NO_POSITION
 
 
+def read_fault(
+    shown: str,
+    exc: OSError | tomllib.TOMLDecodeError | RecursionError | ValueError,
+    effect: str,
+) -> str:
+    """What a file the owner wrote and a reader could not give says: `shown` (already printed),
+    that it is not UTF-8, cannot be read (`fsops.said`) or is not TOML (`toml_position`), then
+    `effect`, what that means to the reader, e.g. "so the project lists no tags"."""
+    if isinstance(exc, UnicodeDecodeError):
+        what = "is not UTF-8 text"
+    elif isinstance(exc, OSError):
+        what = f"cannot be read ({said(exc)})"
+    else:
+        what = f"is not valid TOML {toml_position(exc)}"
+    return f"{shown} {what}, {effect}"
+
+
 def read_machine_toml(path: Path) -> dict[str, Any] | None:
     """The machine file at `path` as `tomllib` parses it, or `None` when no file is there.
 

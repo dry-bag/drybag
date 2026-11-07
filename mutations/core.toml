@@ -1142,11 +1142,10 @@ reddens = [
   "tests/config/test_paths.py::test_a_paths_value_naming_gits_control_directory_is_refused_and_never_quoted",
 ]
 
-# stayfixed's own directory, reserved the same way. `.stayfixed/local/` holds attach's ledger and
-# the local-only notes, state git never sees, and `agents-md` is a region inserted into whatever
-# file `[paths] agents_md` names. Measured before the rule: a committed
-# `agents_md = ".stayfixed/local/attach.json"` had `upgrade` exit 0 with `region_update
-# .stayfixed/local/attach.json (refreshed)`. The anchor is the resolved root and the
+# stayfixed's own directory, reserved the same way. `.stayfixed/local/` holds the local-only notes,
+# state git never sees, and `agents-md` is a region inserted into whatever file `[paths]
+# agents_md` names. Measured before the rule: a committed `agents_md` naming a file there had
+# `upgrade` exit 0 with `region_update` on it. The anchor is the resolved root and the
 # `STAYFIXED_DIRECTORY` constant in the installed package; a clone authors only the value.
 [[mutation]]
 name = "a [paths] value may name stayfixed's own directory"
@@ -1155,8 +1154,8 @@ before = "        if names_stayfixed_directory(relative):"
 after = "        if False:"
 reddens = [
   "tests/config/test_paths.py::test_a_paths_value_inside_stayfixeds_own_directory_is_refused_and_never_quoted",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-attach-s-ledger-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-attach-s-ledger-case-folded-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-a-local-state-file-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-a-local-state-file-case-folded-init]",
 ]
 
 # The case half, on its own. A rule that matched `.git` exactly would be green on every test
@@ -1171,7 +1170,7 @@ reddens = [
   "tests/test_fsops.py::test_gits_control_directory_is_reserved_at_every_depth_and_in_any_case",
   "tests/config/test_paths.py::test_contained_refuses_gits_control_directory_at_any_depth_and_in_any_case",
   "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-git-s-hook-case-folded-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-attach-s-ledger-case-folded-init]",
+  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-a-local-state-file-case-folded-init]",
 ]
 
 # The call site, which is what regressed. A TOML key is arbitrary quoted text, so this message
@@ -1916,26 +1915,23 @@ after = """
 reddens = [
   "tests/scaffold/test_entries.py::test_a_document_nested_past_the_parsers_reach_refuses_as_one_past_a_limit",
   "tests/attach/test_write.py::test_a_settings_file_nested_past_the_parsers_reach_is_refused",
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[nested]",
-  "tests/attach/test_write.py::test_a_ledger_nested_past_the_parsers_reach_is_a_failure_and_never_an_internal_error",
-  "tests/attach/test_detach.py::test_a_ledger_nested_past_the_parsers_reach_removes_nothing",
+  "tests/attach/test_doctor.py::test_a_ledger_that_does_not_parse_warns_and_never_reads_as_no_ledger",
+  "tests/attach/test_detach.py::test_a_ledger_that_does_not_parse_removes_nothing_and_says_so",
 ]
 
 # The same document holding an integer literal longer than the interpreter converts: `json.loads`
 # raises a plain `ValueError`, which is neither of the two errors above. Each reader refuses it as
 # it refuses the nesting — a committed ledger holding one read red, "this check could not run", in
-# `doctor`'s `attached` row — and `owned_ids` reads the number as its text, below.
+# `doctor`'s `attached` row.
 [[mutation]]
 name = "the JSON object reader lets a number past the parser's reach raise"
 file = "src/stayfixed/jsonobject.py"
 before = "    except ValueError:"
 after = "    except ZeroDivisionError:"
 reddens = [
-  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_withdrawal",
+  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_refused",
   "tests/attach/test_write.py::test_a_settings_file_holding_a_number_past_the_parsers_reach_is_refused",
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[long-number]",
-  "tests/attach/test_write.py::test_a_ledger_holding_a_number_past_the_parsers_reach_is_a_failure_and_never_an_internal_error",
-  "tests/attach/test_detach.py::test_a_ledger_holding_a_number_past_the_parsers_reach_removes_nothing",
+  "tests/attach/test_detach.py::test_a_ledger_that_does_not_parse_removes_nothing_and_says_so",
 ]
 
 # stayfixed declares that it makes no network request of its own; that holds only while no module
@@ -2226,42 +2222,6 @@ reddens = [
   "tests/test_undecodable.py::test_a_file_without_read_permission_cannot_be_read_and_says_so[setup]",
 ]
 
-# `fsops.names_regular_file` is the one place a path that names no file is told from one that cannot
-# be asked about, for `attach`'s ledger reader. A path a clone can commit that names no file --
-# nothing there, a dangling link, a loop -- is no ledger to the reader, and the reader may not call
-# it one it cannot read.
-[[mutation]]
-name = "the regular-file probe is blind to a path that names no file"
-file = "src/stayfixed/fsops.py"
-before = "        if exc.errno in NAMES_NO_FILE:"
-after = "        if False:"
-reddens = [
-  "tests/attach/test_doctor.py::test_a_ledger_path_that_names_no_file_is_no_ledger_as_before[a-dangling-link]",
-  "tests/attach/test_doctor.py::test_a_ledger_path_that_names_no_file_is_no_ledger_as_before[a-link-loop]",
-]
-
-# Something other than a regular file -- a directory -- names no file to read, whichever reader asks.
-[[mutation]]
-name = "the regular-file probe reads a path that is no regular file"
-file = "src/stayfixed/fsops.py"
-before = "    return stat.S_ISREG(mode)"
-after = "    return True"
-reddens = [
-  "tests/attach/test_doctor.py::test_a_ledger_path_that_names_no_file_is_no_ledger_as_before[a-directory]",
-]
-
-# Any other fault is the caller's to classify, and the probe raises it rather than answering for
-# the caller: read as no file, a symbolic link to a name longer than a file name may be hides a
-# ledger from `attached`.
-[[mutation]]
-name = "the regular-file probe reads a path it cannot ask about as no file"
-file = "src/stayfixed/fsops.py"
-before = "        if exc.errno in NAMES_NO_FILE:"
-after = "        if True:"
-reddens = [
-  "tests/test_fsops.py::test_a_path_names_a_regular_file_or_no_file_and_any_other_fault_is_the_callers",
-]
-
 # `fsops`' four path predicates answer one way on every interpreter, where `pathlib`'s raise on a
 # fault up to Python 3.13 and answer `False` from 3.14. A name or a path longer than the system
 # takes reaches no file, as a dangling link and a loop do: raised, it ended `attach` over an
@@ -2270,8 +2230,8 @@ reddens = [
 [[mutation]]
 name = "the path predicates read a name longer than the system takes as a fault"
 file = "src/stayfixed/fsops.py"
-before = "REACHES_NO_FILE = NAMES_NO_FILE | {errno.ENAMETOOLONG}"
-after = "REACHES_NO_FILE = NAMES_NO_FILE"
+before = "errno.ELOOP, errno.ENAMETOOLONG})"
+after = "errno.ELOOP})"
 reddens = [
   "tests/test_fsops.py::test_the_path_predicates_answer_each_fault_alike_on_every_interpreter[a-name-longer-than-a-name]",
   "tests/test_fsops.py::test_the_path_predicates_answer_each_fault_alike_on_every_interpreter[past-the-longest-path]",
@@ -3056,8 +3016,8 @@ reddens = ["tests/config/test_classes.py::test_a_key_with_no_class_is_a_key_erro
 [[mutation]]
 name = "a refused layer's note prints its key raw"
 file = "src/stayfixed/config/classes.py"
-before = "                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))"
-after = "                notes.append(REFUSED_LAYER_NOTE.format(key=key, layer=layer.said))"
+before = "                    REFUSED_LAYER_NOTE.format(key=clipped(key), layer=said(layer.name, layer.label))"
+after = "                    REFUSED_LAYER_NOTE.format(key=key, layer=said(layer.name, layer.label))"
 reddens = [
   "tests/config/test_classes.py::test_a_refused_layer_note_carries_neither_its_value_nor_a_raw_key",
 ]
@@ -3117,11 +3077,13 @@ reddens = ["tests/config/test_classes.py::test_which_layers_may_set_each_class"]
 [[mutation]]
 name = "a refused layer's value stands where nothing beneath it is set"
 file = "src/stayfixed/config/classes.py"
-before = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))
-                continue"""
-after = """                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))
+before = """                )
+                continue
+            if key in folds"""
+after = """                )
                 if key in values:
-                    continue"""
+                    continue
+            if key in folds"""
 reddens = ["tests/config/test_classes.py::test_a_key_only_a_refused_layer_sets_has_no_value"]
 
 # A key with no class reaching `resolve` is its caller's defect, and is raised rather than
@@ -4188,11 +4150,11 @@ reddens = ["tests/test_fsops.py::test_an_append_to_a_fifo_with_no_reader_is_refu
 [[mutation]]
 name = "bound_project falls back to the repository's project name"
 file = "src/stayfixed/binding.py"
-before = """    id = read_id(root)
+before = """    id = read_id(root, common=common)
     if id is None:
         return None
 """
-after = """    id = read_id(root)
+after = """    id = read_id(root, common=common)
     if id is None:
         name = tomllib.loads((root / "stayfixed.toml").read_text())["project"]["name"]
         return Bound(name, None, root)
@@ -4394,6 +4356,27 @@ reddens = [
   "tests/config/test_plates.py::test_plates_are_common_then_tags_in_list_order_then_the_project",
 ]
 
+# An entry of `tags` that is not a string is a note like an ungrammatical name: it must not make the
+# record unreadable, which refuses `attach` and drops the other tags.
+[[mutation]]
+name = "a tags entry that is not a string makes the record unreadable"
+file = "src/stayfixed/config/plates.py"
+before = "    if not isinstance(listed, list):\n        return [], NOT_A_LIST"
+after = "    if not isinstance(listed, list) or not all(isinstance(tag, str) for tag in listed):\n        return [], NOT_A_LIST"
+reddens = [
+  "tests/config/test_plates.py::test_an_entry_that_is_not_a_string_is_a_note_naming_its_position",
+  "tests/attach/test_write.py::test_a_tag_entry_that_is_not_a_string_is_a_note_and_attach_goes_on",
+]
+
+[[mutation]]
+name = "an unusable tag listed twice is noted twice"
+file = "src/stayfixed/config/plates.py"
+before = "        if tag in seen:\n            continue\n        seen.add(tag)\n"
+after = "        if tag in usable:\n            continue\n"
+reddens = [
+  "tests/config/test_plates.py::test_an_unusable_tag_listed_twice_is_noted_once",
+]
+
 # A checkout this machine binds, with no stayfixed.toml, gets the configuration of the project the
 # binding record names (`bound_config`): with none, `attached`, the note store and every memory
 # command said nothing of a delivery and a composed store that were in place.
@@ -4427,14 +4410,10 @@ reddens = [
 [[mutation]]
 name = "owner-held files overwrite a present name"
 file = "src/stayfixed/fsops.py"
-before = '''    | os.O_EXCL
-    | os.O_NONBLOCK
-'''
-after = '''    | os.O_NONBLOCK
-'''
+before = "_CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC"
+after = "_CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_CLOEXEC"
 reddens = [
   "tests/test_fsops.py::test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link",
-  "tests/attach/test_checkout.py::test_a_present_name_is_never_overwritten",
 ]
 
 # The note sync switches on for a bool `true` and for nothing else: a string "true" or the integer
@@ -5618,4 +5597,28 @@ after = 'GROUPS = "group"'
 reddens = [
   "tests/sync/test_rules.py::test_is_memory_path_agrees_with_git",
   "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
+]
+
+# A bound checkout with no `stayfixed.toml` has its notes in the overlay when the overlay's layers
+# say so; the handlers that watch the overlay's backup and its unreviewed notes read the session's
+# bound configuration (`SessionConfig.acting`), or they are silent.
+[[mutation]]
+name = "the delivery side is silent in a bound checkout with no stayfixed.toml"
+file = "src/stayfixed/config/session.py"
+before = "        return self.bound if self.config is None else self.config"
+after = "        return self.config"
+reddens = [
+  "tests/attach/test_hooks.py::test_a_bound_checkout_with_no_file_hears_the_overlay_status",
+  "tests/memory/test_commands.py::test_the_unreviewed_count_is_said_in_a_bound_checkout_with_no_file",
+]
+
+# A file the session could not load is a file: its checkout gets no bound configuration, which a
+# handler would otherwise act on in place of the repository's own.
+[[mutation]]
+name = "a session gives a bound configuration to a checkout whose file does not load"
+file = "src/stayfixed/config/session.py"
+before = "    if project is None or read.config is not None or read.project_warnings:"
+after = "    if project is None or read.config is not None:"
+reddens = [
+  "tests/config/test_session.py::test_a_checkout_whose_file_does_not_load_has_no_bound_configuration",
 ]

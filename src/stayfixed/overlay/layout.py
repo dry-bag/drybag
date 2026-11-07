@@ -4,19 +4,15 @@ A leaf module on purpose. `attach` needs to know where a project's record and a 
 notes sit inside the overlay, and it must be able to ask without importing a command module or
 the scaffold engine; keeping the names here is what makes that possible.
 
-`PROJECTS` and `PROJECT_RECORD` are **not** redefined here: they come from `stayfixed.memory.api`,
-because `memory.store` already resolves this layout for the hook path and two spellings of one
-layout is one more place for them to stop agreeing. `memory.store.COMMON` stays where it is for
-the same reason in reverse — it is `Path("common") / "memory"`, that module's *path into* the
-overlay rather than this module's *name for* a directory, and defining either in terms of the
-other is how they would drift.
+`COMMON` and `PROJECTS` are **not** redefined here: they come from `stayfixed.config.plates`,
+the core's one spelling of the overlay's directories, which `memory.store` and
+`config.overlay_layers` read too.
 """
 
 from __future__ import annotations
 
-from stayfixed.memory.api import PROJECTS
+from stayfixed.config.plates import COMMON, PROJECTS
 
-COMMON = "common"
 COMMON_MEMORY = f"{COMMON}/memory"
 COMMON_CLAUDE = f"{COMMON}/claude"
 COMMON_CODEX = f"{COMMON}/codex"

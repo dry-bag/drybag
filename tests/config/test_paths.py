@@ -474,19 +474,19 @@ def test_contained_refuses_gits_control_directory_at_any_depth_and_in_any_case(
 @pytest.mark.parametrize(
     "value",
     [
-        ".stayfixed/local/attach.json",
+        ".stayfixed/local/state.json",
         ".stayfixed/manifest.json",
         ".stayfixed/local/memory/developer/x.md",
-        "packages/api/.stayfixed/local/attach.json",
+        "packages/api/.stayfixed/local/state.json",
         ".stayfixed",
     ],
 )
 def test_a_paths_value_inside_stayfixeds_own_directory_is_refused_and_never_quoted(
     tmp_path: Path, value: str
 ) -> None:
-    # `.stayfixed/local/` holds attach's ledger and the local-only notes, state git never sees.
-    # `agents-md` is a `MANAGED_REGION` inserted into whatever file `agents_md` names, so a
-    # committed `agents_md = ".stayfixed/local/attach.json"` had `upgrade` rewrite the ledger.
+    # `.stayfixed/local/` holds the local-only notes, state git never sees. `agents-md` is a
+    # `MANAGED_REGION` inserted into whatever file `agents_md` names, so a committed `agents_md`
+    # naming a file there had `upgrade` rewrite it.
     # Case and depth for the reasons `.git` has them: a case-folding filesystem, and a nested
     # package initialised on its own. The refusal names the key, never the value.
     # Mutation (oracle): `mutations/`'s "a [paths] value may name stayfixed's own directory".
@@ -516,12 +516,10 @@ def test_every_file_stayfixed_keeps_in_its_own_directory_is_under_the_reserved_n
     # `config` spells `.stayfixed` because it imports no area; the areas that keep files there
     # spell their own paths. This holds each of them under the reserved name, so a rename on
     # either side reddens here instead of leaving an area's state unprotected.
-    from stayfixed.config.layout import ATTACH_LEDGER as LEDGER
     from stayfixed.memory.store import LOCAL_STORE
     from stayfixed.scaffold import MANIFEST_PATH
 
     for path in (
-        LEDGER,
         MANIFEST_PATH.as_posix(),
         LOCAL_STORE.as_posix(),
     ):

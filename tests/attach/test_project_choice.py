@@ -19,7 +19,7 @@ from stayfixed import binding
 from stayfixed.attach.binding import BY_FILE, BY_FLAG, BY_OVERLAY, BY_RECORD, BY_REMOTE
 from stayfixed.cli import build_parser, discover_registrars, run
 from stayfixed.doctor.api import NO_CONFIG_SKIP, OK, SKIP, Check, run_checks
-from stayfixed.memory.api import PROJECT_RECORD, PROJECTS
+from stayfixed.memory.api import PROJECTS, RECORD
 from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX, COMMON_MEMORY
 from tests.attach.test_binding import _machine, _project_and_store
 from tests.attach.test_write import SETTINGS
@@ -64,7 +64,7 @@ def _recorded(overlay: Path, name: str, remote: str) -> Path:
     """An overlay project whose binding record names `remote`; its directory."""
     home = overlay / PROJECTS / name
     home.mkdir(parents=True)
-    (home / PROJECT_RECORD).write_text(f'remote = "{remote}"\n', encoding="utf-8")
+    (home / RECORD).write_text(f'remote = "{remote}"\n', encoding="utf-8")
     return home
 
 
@@ -94,7 +94,7 @@ def test_a_later_attach_takes_the_project_this_machines_binding_records(tmp_path
     # machine's binding".
     root, overlay, machine = _clone(tmp_path, origin="git@example.com:o/widget.git")
     assert invoke(["attach", "--project", "mine", *_flags(root, machine)]) == 0
-    (overlay / PROJECTS / "mine" / PROJECT_RECORD).unlink()
+    (overlay / PROJECTS / "mine" / RECORD).unlink()
     assert invoke(["attach", *_flags(root, machine)]) == 0
     assert _bound_to(root) == "mine"
 
@@ -137,7 +137,7 @@ def test_with_nothing_recorded_the_project_is_the_last_segment_of_origin_lower_c
     root, overlay, machine = _clone(tmp_path, origin=origin)
     assert invoke(["attach", *_flags(root, machine)]) == 0
     assert _bound_to(root) == "widget-kit"
-    record = overlay / PROJECTS / "widget-kit" / PROJECT_RECORD
+    record = overlay / PROJECTS / "widget-kit" / RECORD
     assert origin in record.read_text(encoding="utf-8")
 
 
@@ -303,7 +303,7 @@ def test_check_names_the_project_and_where_its_name_came_from(
         else:
             assert invoke(["attach", "--project", name, *_flags(root, machine)]) == 0
             capsys.readouterr()
-            (overlay / PROJECTS / name / PROJECT_RECORD).unlink()
+            (overlay / PROJECTS / name / RECORD).unlink()
     line, data = _checked(capsys, root, machine, *extra)
     assert line.startswith(f"project {name} ({source}); ")
     assert (data["project"], data["project_source"]) == (name, source)

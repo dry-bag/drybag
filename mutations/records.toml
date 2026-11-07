@@ -2347,7 +2347,7 @@ reddens = [
 [[mutation]]
 name = "memory session-context refuses what a session reads"
 file = "src/stayfixed/memory/commands.py"
-before = "    config = session.config\n"
+before = "    config = session.acting\n"
 after = "    config = load(root, machine=machine)\n"
 reddens = ["tests/hooks/test_floor.py::test_memory_session_context_reads_a_newer_key_with_a_note"]
 
@@ -3087,8 +3087,8 @@ reddens = [
 [[mutation]]
 name = "the composed store links a project directory in the tag namespace"
 file = "src/stayfixed/memory/composed.py"
-before = "            if not entry.startswith(\".\") and not reserved(entry) and fsops.is_dir(share / entry):"
-after = "            if not entry.startswith(\".\") and fsops.is_dir(share / entry):"
+before = "        if not reserved(entry):"
+after = "        if True:"
 reddens = [
   "tests/memory/test_composed.py::test_a_project_memory_directory_in_the_tag_namespace_is_not_linked",
 ]
@@ -3098,8 +3098,8 @@ reddens = [
 [[mutation]]
 name = "permitted roots leave out the tags' notes"
 file = "src/stayfixed/memory/store.py"
-before = "        *(_tag_notes(overlay, tag) for tag in tags(overlay, project)[0]),"
-after = "        *(_tag_notes(overlay, tag) for tag in ()),"
+before = "        allowed = _notes(held)"
+after = "        allowed = _notes((held[0], held[-1]))"
 reddens = [
   "tests/memory/test_store.py::test_a_tags_memory_is_linked_under_its_tag_name",
 ]

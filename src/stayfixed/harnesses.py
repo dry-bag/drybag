@@ -51,8 +51,8 @@ package that names a harness is pardoned there, each pardon by one of these item
 - The overlay spells each harness's half by name: `common/claude` and `common/codex`
   (`overlay.layout`, re-exported by `overlay.api`), and the per-project `claude` and `codex`
   directories, `.codex/rules` and the directories it creates in a project, which `attach` reads
-  and writes (`attach.permissions`, `attach.write`). They are the overlay's layout as much as a
-  harness's.
+  and writes (`attach.items`, `attach.permissions`, `attach.write`). They are the overlay's layout
+  as much as a harness's.
 - `memory session-context` writes a bundle to a `SessionStart` entry's stdout as it is, never
   through a `render`, so a harness that reads that event's output in another shape is an edit
   there.

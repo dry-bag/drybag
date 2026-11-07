@@ -151,6 +151,11 @@ def class_of(key: str) -> KeyClass:
     return CLASSES[wildcard]
 
 
+def said(name: LayerName, label: str = "") -> str:
+    """A layer as a person reads it: `overlay tag ops`, or its name where it has no label."""
+    return f"{name} {label}" if label else str(name)
+
+
 @dataclass(frozen=True)
 class Layer:
     """One layer's values, keyed by dotted key. `label` tells apart the layers of one name: the
@@ -161,11 +166,6 @@ class Layer:
     values: Mapping[str, object]
     label: str = ""
 
-    @property
-    def said(self) -> str:
-        """The layer as a person reads it: `overlay tag ops`, or its name where it has no label."""
-        return f"{self.name} {self.label}" if self.label else str(self.name)
-
 
 @dataclass(frozen=True)
 class Resolution:
@@ -175,15 +175,13 @@ class Resolution:
     values: Mapping[str, object]
     provenance: Mapping[str, LayerName]
     notes: tuple[str, ...]
-    # The label of the layer a value came from, for the keys whose layer has one.
+    # The label of the layer a value came from (empty where its layer has none).
     labels: Mapping[str, str] = field(default_factory=dict)
 
     def said(self, key: str) -> str:
-        """The layer `key`'s value came from as `Layer.said` reads it; `KeyError` where no layer
-        set `key`."""
-        layer = self.provenance[key]
-        label = self.labels.get(key)
-        return f"{layer} {label}" if label else str(layer)
+        """The layer `key`'s value came from, as `said` reads it; `KeyError` where no layer set
+        `key`."""
+        return said(self.provenance[key], self.labels.get(key, ""))
 
 
 def resolve(
@@ -207,17 +205,16 @@ def resolve(
     for layer in sorted(stack, key=lambda layer: _RANK[layer.name]):
         for key, value in layer.values.items():
             if layer.name not in ALLOWED[class_of(key)]:
-                notes.append(REFUSED_LAYER_NOTE.format(key=clipped(key), layer=layer.said))
+                notes.append(
+                    REFUSED_LAYER_NOTE.format(key=clipped(key), layer=said(layer.name, layer.label))
+                )
                 continue
             if key in folds and key in values:
                 values[key] = folds[key](values[key], value)
             else:
                 values[key] = value
             provenance[key] = layer.name
-            if layer.label:
-                labels[key] = layer.label
-            else:
-                labels.pop(key, None)
+            labels[key] = layer.label
     return Resolution(
         values=MappingProxyType(values),
         provenance=MappingProxyType(provenance),

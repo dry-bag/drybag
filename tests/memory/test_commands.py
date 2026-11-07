@@ -659,9 +659,9 @@ def test_the_unreviewed_count_is_said_in_a_bound_checkout_with_no_file(tmp_path:
     # The `SessionStart` handler reads the configuration the memory commands read: with no file it
     # said nothing of a store the machine binds and the owner has notes in.
     from stayfixed.config.machine import machine_config_path
+    from stayfixed.config.session import session_config
     from stayfixed.hooks.api import HookEvent
     from stayfixed.memory.hooks import UNREVIEWED_COUNT, register
-    from tests.sessions import NO_CONFIG
 
     root = _bound_without_file(tmp_path)
     # A hook reads the machine file at its place under `HOME` (the suite's scratch one).
@@ -671,4 +671,4 @@ def test_the_unreviewed_count_is_said_in_a_bound_checkout_with_no_file(tmp_path:
     where.write_text((tmp_path / "machine.toml").read_text(encoding="utf-8"), encoding="utf-8")
     (handler,) = [h for h in register() if h.event == "SessionStart"]
     event = HookEvent("SessionStart", "s1", None, None, {}, root, root, {})
-    assert handler.run(event, NO_CONFIG).context == UNREVIEWED_COUNT.format(count=1)
+    assert handler.run(event, session_config(root)).context == UNREVIEWED_COUNT.format(count=1)

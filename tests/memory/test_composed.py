@@ -9,6 +9,7 @@ from pathlib import Path
 from stayfixed.config.paths import data_directory
 from stayfixed.memory.composed import build, withdraw
 from stayfixed.memory.store import composed_directory as store_directory
+from tests.tagged import with_tags
 
 # A binding id as `secrets.token_hex(16)` draws one; the store is named by it and nothing else.
 ID = "0123456789abcdef0123456789abcdef"
@@ -68,11 +69,7 @@ def a_tagged_overlay(tmp_path: Path, *tags: str, memory: bool = True) -> tuple[P
     """`an_overlay` whose record of `p` lists `tags`, each with a `groups/<tag>/` directory and,
     where `memory`, its `memory/` too."""
     overlay, share = an_overlay(tmp_path)
-    listed = ", ".join(f'"{tag}"' for tag in tags)
-    (overlay / "projects" / "p" / "project.toml").write_text(f"tags = [{listed}]\n", "utf-8")
-    for tag in tags:
-        (overlay / "groups" / tag / ("memory" if memory else "")).mkdir(parents=True)
-    return overlay, share
+    return with_tags(overlay, "p", list(tags), *(("memory",) if memory else ())), share
 
 
 def test_a_tags_memory_is_linked_under_its_tag_name(tmp_path: Path) -> None:

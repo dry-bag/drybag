@@ -144,7 +144,7 @@ session, so they need no attach.
 |---|---|---|---|---|---|---|
 | tag (add to `tags`) | next session (T2) | next session (T3) | next attach; `doctor` digest drift until then (T3) | next attach adds (existing) | next attach links `tag-<t>` (T6); index drifts until `memory index` (existing `--check`) | unaffected |
 | change a tag's content | next session | next session | next attach; digest drift | next attach adds | notes live through the link | unaffected |
-| untag | next session | next session | next attach drops them (render takes back what the overlay no longer holds) | next attach takes back (T4) | next attach unlinks (`build` keeps exactly the current set, T6); index drifts until `memory index` | unaffected |
+| untag | next session | next session | next attach drops them from the render (it takes back what the overlay no longer holds); a Codex rule copy stays, is named by the next attach and removed by `detach` | next attach takes back (T4) | next attach unlinks (`build` keeps exactly the current set, T6); index drifts until `memory index` | unaffected |
 | rename a tag (rename `groups/<a>` and the list entry) | as untag + tag | as untag + tag | as untag + tag | as untag + tag | link `tag-a` → `tag-b`; the notes' reviewed records are keyed by path, so they read as unreviewed again once (stated in `docs/cli.md`) | unaffected |
 | a listed tag with no `groups/<t>/` | skipped, note | skipped | skipped | skipped | no link | — |
 | list order changed | later tag wins (T2) | later tag's rule wins its name (T3) | later tag's file wins its path; hooks union in the new order (T3) | union, unchanged | index sections follow list order after `memory index` | — |
@@ -158,14 +158,15 @@ session, so they need no attach.
 ## Review focus
 
 1. A repository with a tracked `AGENTS.md`: a new worktree has it from the branch, so nothing is
-   placed and nothing is said (T11, `test_a_tracked_name_is_left_to_the_branch`).
+   placed and nothing is said (T11, `test_a_present_name_is_never_overwritten[file]`).
 2. An owner who hand-edits `project.toml` with comments and a `tags` list before the project's first
    attach on a second machine: every byte survives (T1).
 3. A tag that is also a project's memory directory name: both reach the session, under two names
    (T6, `test_a_tag_and_a_project_group_of_one_name_both_link`).
 4. A checkout nothing binds and with no `stayfixed.toml`: still refused with the `init` remedy by
    every memory command (T8).
-5. A worktree of a bare repository, a submodule, and the main checkout: nothing placed (T11).
+5. A submodule and the main checkout: nothing placed (T11). A linked worktree of a bare repository is
+   a linked worktree like any other.
 
 ## Launch graph
 
@@ -228,12 +229,13 @@ T5 consumes T2 (`Layer.label`) and T3; T6 consumes T1 (`plates`, `tags_of`); T7 
   - `test_a_tag_outside_the_grammar_is_skipped_with_a_note` — `"../x"`, `"X"`, `""`, 41 chars: no
     plate; one note each, naming the tag through `printed.quoted`.
   - `test_a_tag_with_no_directory_is_skipped_with_a_note`.
-  - `test_tags_that_are_not_a_list_of_strings_are_a_note` — `tags = "a"`, `tags = [1]`.
+  - `test_tags_that_are_not_a_list_are_a_note` — `tags = "a"`;
+    `test_an_entry_that_is_not_a_string_is_a_note_naming_its_position` — `tags = ["ops", 1]` keeps
+    `ops`; `test_an_unusable_tag_listed_twice_is_noted_once`.
   - `test_an_unparseable_record_gives_no_tags_and_a_note`.
   - `test_no_record_gives_no_tags_and_no_note`.
-  - `test_the_repository_cannot_name_a_tag` — the checkout's `stayfixed.toml` carries
-    `[project] tags = ["a"]` (or any spelling): the loader refuses or ignores it as an unknown key,
-    and `plates` for the bound project lists no tag. (Holds the anchor: tags come from the record.)
+  - The anchor, that tags come from the overlay's record and never from the checkout, is held by
+    `test_an_unbound_checkout_reads_no_tag_layer` (`tests/config/test_overlay_layers.py`).
   In `tests/attach/test_write.py`:
   - `test_attach_keeps_every_key_and_byte_of_the_record_it_did_not_write` — a record holding a
     comment, `tags = ["a"]` and a `[notes]` table and no `remote`: after `attach`, the file is
@@ -316,14 +318,14 @@ T5 consumes T2 (`Layer.label`) and T3; T6 consumes T1 (`plates`, `tags_of`); T7 
   - `test_two_tags_hold_one_rule_name_and_the_later_wins`.
   - `test_a_tag_hook_group_is_rendered_between_common_and_the_project` — each plate's `hooks.json`
     has one `SessionStart` group → three groups, in plate order.
-  - `test_a_tag_skill_is_rendered_and_a_later_plate_wins_its_path`.
+  - `test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole`.
   - `test_a_tag_codex_rule_is_placed_and_a_later_plate_wins_its_name`.
   - `test_a_tag_allow_rule_is_added` — `groups/a/claude/permissions.json` allow `Bash(x)` → in
     `diff_permissions(...).added_allow`.
   - `test_an_unreadable_tag_file_stops_attach_with_nothing_written` — a tag's `hooks.json` mode
     `0o000`: `attach` fails, the render directory and the settings file are as they were.
-  - `test_a_clone_naming_the_project_hears_no_tag_rule` — an unbound clone whose `stayfixed.toml`
-    names the project: `standing(root)` is empty (holds the anchor through the new reader).
+  - `test_an_unbound_checkout_gets_no_rule` — an unbound clone whose `stayfixed.toml` names the
+    project: `standing(root)` is empty (holds the anchor through the new reader).
 - [ ] **Step 2:** run; fail.
 - [ ] **Step 3:** implement each reader as one loop over `plates(...)[0]`, later entries replacing
   earlier ones by name (rules, Codex) or path (skills, agents), hooks and allow rules appended in
@@ -388,7 +390,7 @@ recorded rule (removed by hand) — nothing to take, no error.
 - [ ] **Step 1: failing tests:**
   - `test_two_tags_holding_one_rule_name_is_a_warning_naming_both_and_the_winner`.
   - `test_two_tags_setting_one_key_is_a_warning`.
-  - `test_a_tag_and_the_project_holding_one_name_is_no_finding`.
+  - `test_a_name_held_by_a_tag_and_the_project_alone_is_precedence_and_not_named`.
   - `test_a_listed_tag_with_no_directory_is_a_warning` (the `plates` note).
   - `test_a_tag_warning_never_hides_a_red_finding` — overlay gone and a collision → red.
 - [ ] **Step 2:** run; fail.
@@ -445,7 +447,7 @@ reach anything outside those roots.
     and tag `a` → `tag-a` points into `groups/a/memory`, not the project.
   - `test_a_tag_and_a_project_group_of_one_name_both_link` — tag `specs` and `projects/p/memory/specs/`
     → `specs` and `tag-specs`, two links.
-  - `test_a_link_outside_the_permitted_roots_is_unavailable` — a store link `tag-a` pointed at
+  - `test_a_link_outside_the_permitted_roots_is_not_read` — a store link `tag-a` pointed at
     `groups/b/memory` while only `a` is listed → `unavailable`.
   - `test_doctor_names_a_project_memory_directory_in_the_tag_namespace` — the warning finding.
 - [ ] **Step 2:** run; fail.
@@ -549,7 +551,7 @@ which a clone carries neither of. Must not refuse: a checkout the owner bound wi
   overlay's layers"`. An unbound checkout keeps `WARN`, `NOT_INITIALISED` and its remedy.
 
 - [ ] **Step 1: failing tests:** `test_a_bound_checkout_without_a_file_is_ok_and_names_the_overlay`;
-  `test_an_unbound_checkout_without_a_file_still_warns_with_the_init_remedy`.
+  `test_no_stayfixed_toml_is_a_warning_and_no_row_is_red`.
 - [ ] **Step 2:** run; fail. **Step 3:** implement. **Step 4:** focused green; mypy; ruff.
 - [ ] **Step 5:** no mutation entry (a report row refuses nothing).
 - [ ] **Step 6:** commit `fix(doctor): a bound checkout with no stayfixed.toml is not told to init`.
@@ -594,23 +596,27 @@ which a clone carries neither of. Must not refuse: a checkout the owner bound wi
   `attach.exclude.unignored`, `gitenv.git_run`.
 - Produces:
   - `fsops.create_within(root: Path, target: str, data: bytes, *, mode: int) -> bool` — create
-    `root/target` with `O_CREAT | O_EXCL | O_NOFOLLOW` through the `open_within` walk; `False` where a
+    `root/target` with `O_CREAT | O_EXCL` through the `open_within` walk; `False` where a
     name is already there (`FileExistsError`), never writing through a link; a write that fails after
     the create removes what it created.
   - `checkout.CHECKOUT = "checkout"`, `checkout.NEVER = ("settings.local.json",)`,
     `checkout.NEVER_PREFIXES = (".env",)`, `checkout.LITTER = (".DS_Store",)`.
-  - `checkout.linked_worktree(root: Path) -> Path | None` — the toplevel where `git rev-parse
-    --path-format=absolute --show-toplevel --git-dir --git-common-dir` says the git directory is
-    `<common>/worktrees/<name>`, `<common>` is named `.git`, and the toplevel is not `<common>`'s
-    parent; `None` otherwise (main checkout, submodule, bare repository's worktree, separate git dir,
-    no answer).
+  - `checkout.linked_worktree(root: Path) -> tuple[Path, Path] | None` — the toplevel and the git
+    common directory, from the one `git rev-parse --path-format=absolute --show-toplevel --git-dir
+    --git-common-dir`, where the git directory is `<common>/worktrees/<name>`; `None` otherwise (main
+    checkout, submodule, no answer). A linked worktree of a bare repository or of a repository with a
+    separate git directory is one. `binding.bound_project(tree, common=common)` answers the binding
+    from that common directory, so a checkout the handler does not serve costs one launch.
   - `checkout.place(root: Path, *, machine: Path | None) -> tuple[list[str], list[str]]` — the names
-    placed and, of those, the ones `exclude.unignored` reports; `([], [])` when not a linked worktree,
-    not bound, no overlay recorded, or no `checkout/` directory.
-  - Handler `owner-files` (`SessionStart`, no `once_key`): `place(event.project_root, ...)`; context
-    only when something was placed: the names, "read AGENTS.md now" when `AGENTS.md` or `CLAUDE.md` is
-    among them, and the unignored names with "add them to the checkout's `.git/info/exclude`". Any
-    exception → empty result.
+    placed and the names withheld. Git is asked (`exclude.unignored`) which of the names with nothing
+    at them it ignores *before* any file is created, and only those are placed; the others are
+    withheld. `([], [])` when not a linked worktree, not bound, no overlay recorded, no `checkout/`
+    directory, or git cannot say what it ignores.
+  - Handler `owner-files` (`SessionStart`, no `once_key`): `said(*place(event.project_root, ...))`;
+    context only when something was placed or withheld: the names placed, "read AGENTS.md now" when
+    `AGENTS.md` itself was placed, and the withheld names with "add them to the checkout's
+    `.git/info/exclude`" unless the branch's `.gitignore` un-ignores them on purpose. Any exception →
+    empty result.
 
 Adversary and anchor: the adversary is a repository (a clone, or a branch checked out in the
 owner's worktree). The anchor is the binding id in the repository's git common directory and this
@@ -628,12 +634,13 @@ the worktree has it from the branch, nothing is placed, nothing is said.
     `AGENTS.md`, `CLAUDE.md`, `stayfixed.toml`; bytes and mode bits equal to the sources.
   - `test_a_present_name_is_never_overwritten` — a file, a directory and a dangling symlink at
     `AGENTS.md` each stay as they were, and the symlink's target is not created.
-  - `test_a_tracked_name_is_left_to_the_branch`.
-  - `test_the_main_checkout_gets_nothing`; `test_a_worktree_of_a_bare_repository_gets_nothing`;
-    `test_a_submodule_gets_nothing`.
+  - `test_the_main_checkout_gets_nothing`; `test_a_submodule_gets_nothing`.
   - `test_an_unbound_worktree_gets_nothing` — same `origin` as the bound project, no binding id.
   - `test_the_second_session_says_nothing`.
-  - `test_the_context_names_unignored_files_and_asks_to_read_agents_md`.
+  - `test_the_context_names_what_it_withheld_and_reads_agents_md_only_when_it_placed_it`;
+    `test_a_name_a_branch_gitignore_un_ignores_is_withheld_not_placed`;
+    `test_where_git_cannot_say_what_it_ignores_nothing_is_placed_or_said`;
+    `test_the_handler_asks_git_once_before_it_knows_a_worktree_is_not_for_it`.
   - `test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link` (`tests/test_fsops.py`).
 - [ ] **Step 2:** run; fail.
 - [ ] **Step 3:** implement.

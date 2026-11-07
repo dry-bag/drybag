@@ -16,7 +16,18 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.attach.render import render
+from stayfixed.attach.binding import Binding
+from stayfixed.attach.permissions import codex_rules
+from stayfixed.attach.render import RenderRecord, read_parts, write
+from stayfixed.attach.rules import read as rules_read
+from stayfixed.attach.tags import collisions
+from stayfixed.config.plates import plates
+from tests.tagged import with_tags
+
+
+def render(overlay: Path, project: str, id: str) -> RenderRecord:
+    return write(id, read_parts(plates(overlay, project)[0]))
+
 
 ID = "0123456789abcdef0123456789abcdef"
 COMMON = {"type": "command", "command": "common.sh"}
@@ -239,19 +250,9 @@ def test_a_fault_under_the_rendered_entry_is_exit_0(tmp_path: Path) -> None:
     assert done.stderr == "stayfixed: stayfixed exited 3; continuing open\n"
 
 
-def _tagged(overlay: Path, *tags: str) -> None:
-    """Project `p` listing `tags`, each with its `groups/<tag>/claude` directory."""
-    listed = ", ".join(f'"{tag}"' for tag in tags)
-    (overlay / "projects" / "p" / "project.toml").write_text(
-        f"tags = [{listed}]\n", encoding="utf-8"
-    )
-    for tag in tags:
-        (overlay / "groups" / tag / "claude").mkdir(parents=True)
-
-
 def test_a_tag_hook_group_is_rendered_between_common_and_the_project(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path)
-    _tagged(overlay, "a")
+    with_tags(overlay, "p", ["a"], "claude")
     tagged = {"type": "command", "command": "tag.sh"}
     (overlay / "groups" / "a" / "claude" / "hooks.json").write_text(
         json.dumps({"hooks": {"SessionStart": [{"hooks": [tagged]}]}}), encoding="utf-8"
@@ -266,21 +267,46 @@ def test_a_tag_hook_group_is_rendered_between_common_and_the_project(tmp_path: P
     ]
 
 
-def test_a_tag_skill_is_rendered_and_a_later_plate_wins_its_path(tmp_path: Path) -> None:
+def test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole(tmp_path: Path) -> None:
+    # A skill is the item its directory names: b's `review` replaces a's and common's whole, so no
+    # file of theirs reaches the render, which is what the collision sentence says. Mutation
+    # (oracle): `mutations/`'s "a skill is merged file by file across plates" -> a's `helper.sh`
+    # and common's `check.sh` arrive beside b's `SKILL.md`.
     overlay = _overlay(tmp_path)
-    _tagged(overlay, "a", "b")
+    with_tags(overlay, "p", ["a", "b"], "claude")
     for tag in ("a", "b"):
-        (overlay / "groups" / tag / "claude" / "skills" / "review").mkdir(parents=True)
-        (overlay / "groups" / tag / "claude" / "skills" / "review" / "SKILL.md").write_text(
-            f"review from {tag}\n", encoding="utf-8"
-        )
-        (overlay / "groups" / tag / "claude" / "skills" / f"only-{tag}.md").write_text(
-            f"{tag}\n", encoding="utf-8"
-        )
+        skills = overlay / "groups" / tag / "claude" / "skills"
+        (skills / "review").mkdir(parents=True)
+        (skills / "review" / "SKILL.md").write_text(f"review from {tag}\n", encoding="utf-8")
+        (skills / f"only-{tag}.md").write_text(f"{tag}\n", encoding="utf-8")
+    (overlay / "groups" / "a" / "claude" / "skills" / "review" / "helper.sh").write_text(
+        "from a only\n", encoding="utf-8"
+    )
     render(overlay, "p", ID)
     skills = _delivery() / "plugin" / "skills"
-    # The later tag replaces the common skill's file of the same path; a file only a tag holds
-    # arrives beside it.
+    assert sorted(path.name for path in (skills / "review").iterdir()) == ["SKILL.md"]
     assert (skills / "review" / "SKILL.md").read_text() == "review from b\n"
-    assert (skills / "review" / "check.sh").is_file()
     assert (skills / "only-a.md").read_text() == "a\n" and (skills / "only-b.md").is_file()
+    assert collisions(plates(overlay, "p")[0], ()) == (
+        "the skill review is held by the tags a, b: the later, b, wins",
+    )
+
+
+def test_a_rule_a_codex_file_and_a_skill_take_one_winner_and_one_order(tmp_path: Path) -> None:
+    # Each kind is folded alike: the later plate wins the whole item and takes that plate's place,
+    # so the common-only `y` comes before the tag's `x`, and common's `x/extra.md` is not copied.
+    overlay = _overlay(tmp_path)
+    with_tags(overlay, "p", ["a"], "claude")
+    for plate, name in (("common", "x"), ("common", "y"), ("groups/a", "x")):
+        for relative in ("claude/rules/{}.md", "codex/{}.rules", "claude/skills/{}/SKILL.md"):
+            (overlay / plate / relative.format(name)).parent.mkdir(parents=True, exist_ok=True)
+            (overlay / plate / relative.format(name)).write_text(f"{plate}\n", encoding="utf-8")
+    (overlay / "common" / "claude" / "skills" / "x" / "extra.md").write_text("", encoding="utf-8")
+    held = plates(overlay, "p")[0]
+    binding = Binding("p", overlay, tmp_path, None, None, "", plates=held)
+    rules = [(rule.name, rule.body) for rule in rules_read(held)]
+    codex = [(target, source.read_text()) for target, source in codex_rules(binding)]
+    skills = [(name, part.text) for name, part in read_parts(held).items() if "skills/" in name]
+    assert rules == [("y.md", "common"), ("x.md", "groups/a")]
+    assert codex == [(".codex/rules/y.rules", "common\n"), (".codex/rules/x.rules", "groups/a\n")]
+    assert skills[2:] == [("skills/y/SKILL.md", "common\n"), ("skills/x/SKILL.md", "groups/a\n")]

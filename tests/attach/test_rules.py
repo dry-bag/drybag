@@ -12,7 +12,9 @@ from pathlib import Path
 
 from stayfixed import binding
 from stayfixed.attach.rules import SCOPED_LEAD, STANDING_LEAD, scoped_exist, scoped_for, standing
+from stayfixed.config.plates import plates
 from tests.gitfixture import git, needs_git
+from tests.tagged import with_tags
 
 STANDING = "Always say which test proves a change."
 SCOPED = "Files under scoped/ are generated; edit the generator instead."
@@ -141,24 +143,23 @@ def test_paths_are_read_in_each_frontmatter_form(tmp_path: Path) -> None:
 
 def test_whether_a_scoped_rule_exists_decides_the_rendered_entry(tmp_path: Path) -> None:
     overlay = tmp_path / "overlay"
-    assert not scoped_exist(overlay, "p")
+    assert not scoped_exist(plates(overlay, "p")[0])
     rules = overlay / "common" / "claude" / "rules"
     rules.mkdir(parents=True)
     (rules / "standing.md").write_text("Standing.\n", encoding="utf-8")
-    assert not scoped_exist(overlay, "p")
+    assert not scoped_exist(plates(overlay, "p")[0])
     (rules / "scoped.md").write_text('---\npaths: ["a/**"]\n---\nScoped.\n', encoding="utf-8")
-    assert scoped_exist(overlay, "p")
+    assert scoped_exist(plates(overlay, "p")[0])
 
 
 def _tagged(overlay: Path, **rules: str) -> None:
     """Project `p` listing the tags named by the keywords (in order), each `groups/<tag>/` holding
     the rule file `x.md` with the body given."""
-    record = overlay / "projects" / "p" / "project.toml"
-    record.write_text(f"tags = {list(rules)!r}\n".replace("'", '"'), encoding="utf-8")
+    with_tags(overlay, "p", list(rules), "claude/rules")
     for tag, body in rules.items():
-        directory = overlay / "groups" / tag / "claude" / "rules"
-        directory.mkdir(parents=True, exist_ok=True)
-        (directory / "x.md").write_text(f"{body}\n", encoding="utf-8")
+        (overlay / "groups" / tag / "claude" / "rules" / "x.md").write_text(
+            f"{body}\n", encoding="utf-8"
+        )
 
 
 @needs_git

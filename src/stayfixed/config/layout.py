@@ -3,19 +3,13 @@
 Every module asks this one for a derived location rather than spelling it.
 
 A local run's default base is derived here (`local_base`), because the three areas that default
-one cannot import each other, and so is the attach ledger's path: the paths are the core's to
-name, and the core may not import `attach`; the crossings still pinned are listed in
-`tests/boundaries/test_delivery.py`.
+one cannot import each other: the paths are the core's to name, and the core may not import
+`attach`; the crossings still pinned are listed in `tests/boundaries/test_delivery.py`.
 """
 
 from __future__ import annotations
 
 from stayfixed.config.schema import Config
-
-# Where `attach` records what it added to a project, among stayfixed's local state;
-# `attach` itself hides it through the repository's `info/exclude`. The core names
-# the path and never reads the ledger: `doctor` reports on it.
-ATTACH_LEDGER = ".stayfixed/local/attach.json"
 
 
 def local_base(config: Config) -> str:

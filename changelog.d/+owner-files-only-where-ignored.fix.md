@@ -1,0 +1,1 @@
+The `owner-files` hook now places an owner-held file in a new linked worktree only where your own excludes hide its name and no `!` line re-includes it, asked before the file is created; a branch's `.gitignore` never makes a file be placed, any other name is named to the session and left out, and `CLAUDE.md` placed alone no longer sends the session to read `AGENTS.md`.

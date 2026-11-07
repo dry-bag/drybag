@@ -20,7 +20,7 @@ from stayfixed.cli import build_parser, discover_registrars, run
 from stayfixed.config.schema import Config
 from stayfixed.printed import quoted
 from tests.attach.test_binding import _machine, _project_and_store
-from tests.attach.test_write import ENTRY, LEDGER, RULE, SETTINGS, _overlay_grants, _wide
+from tests.attach.test_write import ENTRY, RULE, SETTINGS, _overlay_grants, _wide, ledger_file
 from tests.runners import Recorder
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
@@ -155,7 +155,7 @@ def test_an_attach_after_an_added_hook_entry_proceeds_and_shows_the_binding_and_
     assert f"binding {binding.short(made)}: project p, origin {origin}" in out
     assert f"hook entry added: PostToolUse {quoted(ENTRY['command'])}" in out
     assert f"allow rule added: {quoted(RULE)}" in out
-    assert (root / LEDGER).is_file()
+    assert ledger_file(root).is_file()
 
 
 def test_a_re_attach_names_each_allow_rule_it_takes_back(
@@ -169,6 +169,49 @@ def test_a_re_attach_names_each_allow_rule_it_takes_back(
     capsys.readouterr()
     assert invoke(["attach", *_flags(root, store, machine)]) == 0
     assert f"allow rule withdrawn: {quoted(RULE)}" in capsys.readouterr().out
+
+
+def test_a_re_attach_names_each_codex_rule_copy_the_overlay_no_longer_holds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    _overlay_grants(store, codex="# standing rule\n")
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
+    capsys.readouterr()
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    out = capsys.readouterr().out
+    assert f"Codex rule copy no longer in the overlay: {quoted('.codex/rules/common.rules')}" in out
+    assert (root / ".codex" / "rules" / "common.rules").is_file()
+    assert invoke(["attach", "--json", *_flags(root, store, machine)]) == 0
+    assert json.loads(capsys.readouterr().out)["rules_left"] == [".codex/rules/common.rules"]
+
+
+def test_the_line_about_a_dropped_copy_says_when_detach_removes_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The line was "remove it, or run `stayfixed detach`", and that command then took an uncommitted
+    # edit with it.
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    _overlay_grants(store, codex="# standing rule\n")
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
+    capsys.readouterr()
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    assert "only while it is untracked and holds the bytes attach wrote" in capsys.readouterr().out
+
+
+def test_detach_names_a_copy_it_left(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    _overlay_grants(store, codex="# standing rule\n")
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    (root / ".codex" / "rules" / "common.rules").write_text("# edited\n", encoding="utf-8")
+    capsys.readouterr()
+    assert invoke(["detach", "--root", str(root)]) == 0
+    assert f"Codex rule copy left: {quoted('.codex/rules/common.rules')}" in capsys.readouterr().out
 
 
 def test_an_origin_carrying_credentials_is_neither_printed_nor_recorded_with_them(
@@ -212,7 +255,7 @@ def test_attach_takes_no_yes(tmp_path: Path, capsys: pytest.CaptureFixture[str])
         invoke(["attach", "--yes", *_flags(root, store, machine)])
     assert raised.value.code == 2
     assert "unrecognized arguments: --yes" in capsys.readouterr().err
-    assert not (root / LEDGER).exists()
+    assert not ledger_file(root).exists()
 
 
 def test_attach_with_no_origin_attaches_and_says_the_binding_records_none(
@@ -284,7 +327,7 @@ def test_detach_undoes_an_attach_through_the_command_surface(tmp_path: Path) -> 
     machine = _machine(tmp_path, overlay=store.parents[2])
     assert invoke(["attach", *_flags(root, store, machine)]) == 0
     assert invoke(["detach", "--root", str(root)]) == 0
-    assert not (root / LEDGER).exists()
+    assert not ledger_file(root).exists()
     assert not (root / SETTINGS).exists()
 
 
@@ -322,7 +365,7 @@ def test_nothing_the_ledger_holds_reaches_detachs_line_or_its_json(
     # `test_the_attach_screen_and_check_name_the_project_quoted`, and the
     # rule is the same rule. `run_detach` used to put `allow_removed`, `rules_removed` and
     # `settings_keys_removed` into `Result.data` as full strings — and every one of them is read
-    # out of `.stayfixed/local/attach.json` or `.claude/settings.local.json`, both paths a clone
+    # out of the ledger or `.claude/settings.local.json`, and the settings file is a path a clone
     # can commit, because `.gitignore` does not untrack a committed file.
     # `skills/attach/SKILL.md` tells the model to relay what detach removed, so an allow rule
     # shaped like an instruction arrived attributed to stayfixed.
@@ -332,8 +375,6 @@ def test_nothing_the_ledger_holds_reaches_detachs_line_or_its_json(
     # allow rule is less bounded than that, not more, so counts here or the three disagree.
     #
     # Mutation: `mutations/`'s "detach prints the ledger's own strings".
-    from stayfixed.config.layout import ATTACH_LEDGER as LEDGER_PATH
-
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     _overlay_grants(store, allow=(HOSTILE_RULE,))
     machine = _machine(tmp_path, overlay=store.parents[2])
@@ -341,7 +382,7 @@ def test_nothing_the_ledger_holds_reaches_detachs_line_or_its_json(
     capsys.readouterr()
     # Non-vacuous: the rule really is in both the ledger and the settings file, so this detach
     # has something to report about it.
-    assert HOSTILE_RULE in (root / LEDGER_PATH).read_text(encoding="utf-8")
+    assert HOSTILE_RULE in ledger_file(root).read_text(encoding="utf-8")
     assert HOSTILE_RULE in (root / SETTINGS).read_text(encoding="utf-8")
 
     assert invoke(["detach", "--root", str(root), "--json"]) == 0
@@ -418,7 +459,7 @@ def test_a_name_whose_binding_record_is_past_the_longest_path_is_refused_by_chec
     # path past the longest one" -> `--check` exits 0 again.
     from stayfixed.attach.binding import PATH_CANNOT_EXIST
     from stayfixed.config.loader import CONFIG_FILE
-    from stayfixed.memory.api import PROJECT_RECORD
+    from stayfixed.memory.api import RECORD
     from tests.attach.test_binding import CONFIG
 
     longest = os.pathconf(tmp_path, "PC_PATH_MAX")
@@ -435,7 +476,7 @@ def test_a_name_whose_binding_record_is_past_the_longest_path_is_refused_by_chec
     name = "n" * (longest - 10 - len(str(projects)) - 1)
     assert len(name) < 255
     assert len(str(projects / name)) == longest - 10
-    assert len(str(projects / name / PROJECT_RECORD)) > longest
+    assert len(str(projects / name / RECORD)) > longest
     (root / CONFIG_FILE).write_text(CONFIG.format(name=name), encoding="utf-8")
     flags = _flags(root, projects / name / "memory", machine)
     refused = f"stayfixed: refused: {PATH_CANNOT_EXIST.format(projects=projects)}"
@@ -475,7 +516,7 @@ def test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_
     # path past the longest one" -> `--check` exits 0 again, and `attach` writes.
     from stayfixed.attach.binding import PATH_CANNOT_EXIST
     from stayfixed.config.loader import CONFIG_FILE, load
-    from stayfixed.memory.api import PROJECT_RECORD, link_sources
+    from stayfixed.memory.api import RECORD, link_sources
     from tests.attach.test_binding import CONFIG
 
     longest = os.pathconf(tmp_path, "PC_PATH_MAX")
@@ -501,10 +542,10 @@ def test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_
         path for path in link_sources(overlay, load(root, machine=machine)) if share in path.parents
     ]
     reach = max(len(str(path)) for path in made) - len(str(share))
-    assert reach > len(str(share / PROJECT_RECORD)) - len(str(share))
+    assert reach > len(str(share / RECORD)) - len(str(share))
     name = "n" * (longest - reach - len(str(projects)) - 1)
     assert len(name) < 255
-    assert len(str(projects / name / PROJECT_RECORD)) < longest
+    assert len(str(projects / name / RECORD)) < longest
     configure(name)
     flags = _flags(root, projects / name / "memory", machine)
     refused = f"stayfixed: refused: {PATH_CANNOT_EXIST.format(projects=projects)}"
@@ -684,50 +725,6 @@ def test_an_overlay_group_whose_hooks_is_null_is_refused_by_check_and_attach_ali
     attached = capsys.readouterr()
     assert checked.err == attached.err
     assert checked.err.endswith(": an entry group's 'hooks' is not a list\n")
-
-
-# Ledgers the real run cannot take, and the code it ends with: one it cannot read is a failure,
-# one naming what `attach` never writes is a refusal, and one that is itself a link is refused
-# before it is read, as a path that passes through a symlink.
-UNREADABLE_LEDGERS = {
-    "not-json": ("{", 1),
-    "not-a-record": (json.dumps({"rules": ["Bash(rm -rf /)"]}), 2),
-    # Longer than every other file either command reads, so the lowered cap stops this one alone.
-    "past-the-cap": (json.dumps({"store": "x" * 1_000_000}), 1),
-    "a-link": ("", 2),
-}
-
-
-@pytest.mark.parametrize("shape", sorted(UNREADABLE_LEDGERS))
-def test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
-    shape: str,
-) -> None:
-    # `--check` did not read `.stayfixed/local/attach.json`, so it answered 0 over a ledger that
-    # stopped the run, and a CI step running it passed where `attach` failed. It reads the ledger
-    # with the run's reader now, so the two end with one code and one line. Mutation (oracle):
-    # `mutations/`'s "check skips the reads the run makes before its first write".
-    text, code = UNREADABLE_LEDGERS[shape]
-    root, store, machine = _granting(tmp_path)
-    ledger = root / LEDGER
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    if shape == "a-link":
-        (tmp_path / "elsewhere.json").write_text("{}", encoding="utf-8")
-        ledger.symlink_to(tmp_path / "elsewhere.json")
-    else:
-        ledger.write_text(text, encoding="utf-8")
-    if shape == "past-the-cap":
-        monkeypatch.setattr(fsops, "REGULAR_READ_LIMIT", len(text) - 1)
-    flags = _flags(root, store, machine)
-    before = snapshot(tmp_path)
-    assert invoke(["attach", "--check", *flags]) == code
-    checked = capsys.readouterr()
-    assert invoke(["attach", *flags]) == code
-    attached = capsys.readouterr()
-    assert checked.err == attached.err and checked.err.startswith("stayfixed: ")
-    assert_snapshot_unchanged(tmp_path, before)
 
 
 def _check_then_attach(

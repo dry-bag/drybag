@@ -69,6 +69,7 @@ from stayfixed.config.owner import Guards, Owner, rebased, resolve_owner
 from stayfixed.config.paths import PathEscape
 from stayfixed.config.reading import UNPARSEABLE, ConfigError, coerced, table_types
 from stayfixed.config.schema import Budgets, Config, Memory, Personal, Stayfixed
+from stayfixed.errors import resolved_or_none
 from stayfixed.presets import defaults_of, load_preset
 from stayfixed.printed import printable
 from stayfixed.semver import later
@@ -160,6 +161,12 @@ class SessionConfig:
     noted: tuple[str, ...] = ()
     document: Mapping[str, Any] = field(default_factory=dict)
     resolution: Resolution = field(default_factory=lambda: Resolution({}, {}, ()))
+    bound: Config | None = None
+
+    @property
+    def acting(self) -> Config | None:
+        """The configuration the delivery side acts on: the project's file, else the bound one."""
+        return self.bound if self.config is None else self.config
 
     @property
     def warnings(self) -> tuple[str, ...]:
@@ -181,8 +188,23 @@ def session_config(root: Path | None, *, machine: Path | None = None) -> Session
     no project configuration.
     """
     path = machine if machine is not None else machine_config_path()
-    overlays, notes = overlay_layers.read(root, machine=path)
-    return _resolved(_read(root, path), overlays, notes)
+    overlays, notes, project = overlay_layers.read(root, machine=path)
+    read = _read(root, path)
+    resolved = _resolved(read, overlays, notes)
+    if project is None or read.config is not None or read.project_warnings:
+        return resolved
+    # No file, and this machine binds the checkout: `bound_config`'s answer, from the layers and
+    # the project already read.
+    return replace(
+        resolved,
+        bound=resolved_or_none(
+            lambda: (
+                _resolved(
+                    SessionConfig(preset_defaults(project), read.owner), overlays, notes
+                ).config
+            )
+        ),
+    )
 
 
 def command_config(
@@ -210,7 +232,7 @@ def command_config(
         config, raw = preset_defaults(unnamed()), {}
     preset = preset_named(raw)
     held = resolve_owner(path, preset=preset) if owner is None else rebased(owner, preset)
-    overlays, notes = overlay_layers.read(root, machine=path)
+    overlays, notes, _ = overlay_layers.read(root, machine=path)
     resolved = _resolved(SessionConfig(config, held, document=raw), overlays, notes).config
     return config if resolved is None else resolved
 

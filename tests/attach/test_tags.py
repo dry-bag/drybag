@@ -6,17 +6,13 @@ from pathlib import Path
 
 from stayfixed.attach.tags import collisions
 from stayfixed.config.classes import Layer, LayerName
+from stayfixed.config.plates import plates
+from tests.tagged import with_tags
 
 
 def _overlay(tmp_path: Path, *tags: str) -> Path:
     """An overlay whose project `p` lists `tags`, each with a `groups/<tag>/` directory."""
-    overlay = tmp_path / "overlay"
-    (overlay / "projects" / "p").mkdir(parents=True)
-    listed = ", ".join(f'"{tag}"' for tag in tags)
-    (overlay / "projects" / "p" / "project.toml").write_text(f"tags = [{listed}]\n", "utf-8")
-    for tag in tags:
-        (overlay / "groups" / tag).mkdir(parents=True)
-    return overlay
+    return with_tags(tmp_path / "overlay", "p", list(tags))
 
 
 def _hold(overlay: Path, plate: str, relative: str) -> None:
@@ -39,7 +35,7 @@ def test_each_kind_of_item_is_named_with_its_tags_in_list_order_and_the_winner(
         _hold(overlay, f"groups/{tag}", "claude/rules/.hidden.md")
         _hold(overlay, f"groups/{tag}", "claude/rules/notes.txt")
     _hold(overlay, "groups/a", "claude/rules/only-a.md")
-    found = collisions(overlay, "p", ())
+    found = collisions(plates(overlay, "p")[0], ())
     assert sorted(found) == sorted(
         f"the {kind} {name} is held by the tags b, a: the later, a, wins"
         for kind, name in (
@@ -52,14 +48,20 @@ def test_each_kind_of_item_is_named_with_its_tags_in_list_order_and_the_winner(
 
 
 def test_a_setting_two_tag_layers_hold_is_named_and_a_common_one_is_not(tmp_path: Path) -> None:
+    # `[paths] memory` is the repository's alone: `resolve` refuses it in both tags, so no tag wins
+    # it. Mutation (oracle): `mutations/`'s "a setting collision counts a key no tag may set".
     layers = (
         Layer(LayerName.OVERLAY_COMMON, {"memory.mode": "overlay"}),
-        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "local-only", "personal.x": 1}, "a"),
-        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "b"),
+        Layer(
+            LayerName.OVERLAY_TAG,
+            {"memory.mode": "local-only", "personal.x": 1, "paths.memory": "x"},
+            "a",
+        ),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay", "paths.memory": "x"}, "b"),
         Layer(LayerName.OVERLAY_PROJECT, {"memory.mode": "overlay", "personal.x": 2}),
     )
     overlay = _overlay(tmp_path, "a", "b")
-    assert collisions(overlay, "p", layers) == (
+    assert collisions(plates(overlay, "p")[0], layers) == (
         "the setting memory.mode is held by the tags a, b: the later, b, wins",
     )
 
@@ -69,7 +71,7 @@ def test_a_name_off_the_overlays_disk_prints_quoted(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path, "a", "b")
     for tag in ("a", "b"):
         _hold(overlay, f"groups/{tag}", "claude/rules/x\n::error::y.md")
-    (sentence,) = collisions(overlay, "p", ())
+    (sentence,) = collisions(plates(overlay, "p")[0], ())
     assert "\n" not in sentence and "\\n::error::y.md" in sentence
 
 
@@ -80,4 +82,4 @@ def test_a_name_held_by_a_tag_and_the_project_alone_is_precedence_and_not_named(
     _hold(overlay, "groups/a", "claude/rules/r.md")
     _hold(overlay, "projects/p", "claude/rules/r.md")
     _hold(overlay, "common", "claude/rules/r.md")
-    assert collisions(overlay, "p", ()) == ()
+    assert collisions(plates(overlay, "p")[0], ()) == ()

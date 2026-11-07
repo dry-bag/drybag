@@ -29,6 +29,7 @@ from tests.doctor.test_checks import (
     _initialised,
     _machine,
 )
+from tests.tagged import with_tags
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -253,9 +254,7 @@ def test_the_note_store_rows_read_a_bound_checkouts_configuration(tmp_path: Path
 
     root = _bound_without_file(tmp_path)
     overlay = tmp_path / "overlay"
-    record = overlay / "projects" / "widget" / "project.toml"
-    record.write_text(record.read_text(encoding="utf-8") + 'tags = ["a"]\n', encoding="utf-8")
-    (overlay / "groups" / "a" / "memory").mkdir(parents=True)
+    with_tags(overlay, "widget", ["a"], "memory")
     (overlay / "groups" / "a" / "memory" / "t.md").write_text(BARE_NOTE, encoding="utf-8")
     (_composed(root) / "tag-a").symlink_to(overlay / "groups" / "a" / "memory")
     rows = {row.name: row for row in _checks(tmp_path, root, machine=tmp_path / "machine.toml")}
