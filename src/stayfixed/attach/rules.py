@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from stayfixed import fsops
-from stayfixed.attach.items import RULE, fold, unreadable
+from stayfixed.attach.items import RULE, fold
 from stayfixed.binding import bound_project
 from stayfixed.config.overlay import overlay_root
 from stayfixed.config.paths import data_directory
@@ -137,7 +137,7 @@ def read(held: Sequence[Plate]) -> list[Rule]:
     later plate's rule replacing an earlier plate's of its name and taking its place. A directory
     or a file that cannot be read is a `Failure`."""
     found: list[Rule] = []
-    winners = fold(held, RULE, unreadable(_unreadable)).winners
+    winners = fold(held, RULE, _unreadable).winners
     for name, path in winners.items():
         with fsops.reading(quoted(str(path)), _unreadable):
             text = fsops.read_regular_text(path, limit=_READ_LIMIT)

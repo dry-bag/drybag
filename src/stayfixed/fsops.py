@@ -202,8 +202,8 @@ def _reached_mode(path: Path, *, follow: bool) -> int | None:
 # can shape was an internal error on one interpreter and a quiet "nothing there" on the other, and
 # the suite proved only the interpreter it ran on. These choose: `REACHES_NO_FILE` is nothing there,
 # as it was on 3.14, and any other fault -- a directory that cannot be searched, an I/O error --
-# raises, as it did up to 3.13, because "cannot tell" is not "no". Each follows links as its `pathlib`
-# namesake does: `is_symlink` asks `lstat`, the other three `stat`.
+# raises, as it did up to 3.13, because "cannot tell" is not "no". Each follows links as its
+# `pathlib` namesake does: `is_symlink` asks `lstat`, the other three `stat`.
 
 
 def is_file(path: Path) -> bool:

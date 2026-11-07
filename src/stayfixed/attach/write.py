@@ -5,9 +5,7 @@ allow rules of its own to it, so no in-band marker survives there. The overlay's
 skills and agents are rendered into a local plugin named by the binding id (`attach.render`),
 re-rendered in place and installed on every run, both `claude plugin` calls being idempotent; the
 file keeps only the allow rules the ledger names, and the plugin's `enabledPlugins` and
-`extraKnownMarketplaces` entries, which Claude Code writes. A checkout an earlier release attached
-holds the entries that release merged, named by its ledger's `entries`: `attach` takes back
-exactly those, through `scaffold.withdraw_entries`, and records none.
+`extraKnownMarketplaces` entries, which Claude Code writes.
 
 *Not the scaffold engine's `plan`/`apply` for the settings file.* The engine stamps a digest of
 the document into the **committed** `.stayfixed/manifest.json`, which would publish a digest of
@@ -120,8 +118,8 @@ from stayfixed.gitenv import without_userinfo
 from stayfixed.jsonobject import NESTED, json_object
 from stayfixed.memory.api import (
     BOUND,
-    PROJECT_RECORD,
     PROJECTS,
+    RECORD,
     STORE_DIR,
     build_composed,
     render_missing_index,
@@ -130,12 +128,7 @@ from stayfixed.memory.api import (
 )
 from stayfixed.printed import quoted
 from stayfixed.runner import Runner
-from stayfixed.scaffold import (
-    ParserLimitError,
-    owned_ids,
-    settings_text,
-    withdraw_entries,
-)
+from stayfixed.scaffold import ParserLimitError, settings_text
 
 LEDGER_FORMAT = 1
 # The one settings key `attach` writes: the harness's memory directory, which in overlay mode names
@@ -246,11 +239,6 @@ class AttachLedger:
     what is at the name is a branch's or the owner's, and a branch that writes those exact bytes
     loses nothing to the removal.
 
-    `entries` maps each marker id to its event, which is the shape `scaffold.owned_ids` answers
-    in, so `doctor` can compare the two without a translation in between. Only a ledger an earlier
-    release wrote holds any: `attach` merges no hook entry now, takes back the ones recorded here,
-    and records none.
-
     `render` is the digest of the render the last run installed, `None` before the first. It
     decides one thing, whether `attach` runs `claude plugin` again, and names nothing to destroy:
     the render directory is derived from the id (`delivery_directory`).
@@ -258,7 +246,6 @@ class AttachLedger:
 
     store: str
     allow: tuple[str, ...]
-    entries: dict[str, str]
     rules: dict[str, str]
     settings_keys: tuple[str, ...]
     directories: tuple[str, ...] = ()
@@ -293,10 +280,8 @@ def _well_shaped(raw: dict[str, Any]) -> bool:
     return (
         isinstance(raw.get("store"), str)
         and all(_strings(raw.get(key)) for key in ("allow", "settings_keys", "directories"))
-        and all(
-            isinstance(raw.get(key), dict) and _strings(list(raw[key].values()))
-            for key in ("entries", "rules")
-        )
+        and isinstance(raw.get("rules"), dict)
+        and _strings(list(raw["rules"].values()))
         and (render is None or (isinstance(render, dict) and isinstance(render.get("digest"), str)))
     )
 
@@ -324,7 +309,6 @@ def read_ledger(path: Path) -> AttachLedger | None:
     return AttachLedger(
         store=raw["store"],
         allow=tuple(raw["allow"]),
-        entries=raw["entries"],
         rules=raw["rules"],
         settings_keys=tuple(raw["settings_keys"]),
         directories=tuple(raw["directories"]),
@@ -349,18 +333,10 @@ def _allow_list(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     return dict(raw.get("permissions", {})), allow
 
 
-def _merged_settings(document: str, diff: PermissionDiff, previous: AttachLedger | None) -> str:
-    """The local settings document with the overlay's allow rules appended in order, the rules it
-    no longer grants (`diff.withdrawn_allow`) taken out, and the hook entries an earlier attach
-    recorded taken back out (`scaffold.withdraw_entries`).
-
-    Only the entries and rules the earlier ledger names, and only where the file still holds them:
-    the ledger and never the marker alone says which are stayfixed's.
-    """
-    recorded = previous.entries if previous is not None else {}
-    held = owned_ids(document) if recorded else {}
-    withdrawn = {id: event for id, event in recorded.items() if held.get(id) == event}
-    if not diff.added_allow and not diff.withdrawn_allow and not withdrawn:
+def _merged_settings(document: str, diff: PermissionDiff) -> str:
+    """The local settings document with the overlay's allow rules appended in order and the rules
+    it no longer grants (`diff.withdrawn_allow`) taken out."""
+    if not diff.added_allow and not diff.withdrawn_allow:
         # Nothing to add or take back, so nothing is touched. A rewrite here would reformat a file
         # the owner owns, on a run that changed nothing, and report itself as a write.
         return document
@@ -374,8 +350,7 @@ def _merged_settings(document: str, diff: PermissionDiff, previous: AttachLedger
     if diff.withdrawn_allow:
         # As `detach` leaves it: an allow list the take-back emptied is not what the file held.
         raw = _emptied(raw)
-    text = settings_text(raw, LOCAL_SETTINGS) + "\n"
-    return withdraw_entries(text, withdrawn) if withdrawn else text
+    return settings_text(raw, LOCAL_SETTINGS) + "\n"
 
 
 def _codex_rule_texts(binding: Binding) -> tuple[tuple[str, str], ...]:
@@ -423,7 +398,7 @@ def _record_project(binding: Binding, remote: str | None) -> None:
     """
     if binding.recorded is not None or binding.fault is not None:
         return
-    relative = f"{PROJECTS}/{binding.project}/{PROJECT_RECORD}"
+    relative = f"{PROJECTS}/{binding.project}/{RECORD}"
     record = binding.overlay / relative
     held = _record_table(record)
     if held is None:
@@ -544,9 +519,6 @@ def _write_ledger(
         "format": LEDGER_FORMAT,
         "store": str(binding.store),
         "allow": allow,
-        # No hook entry is merged any more, and the settings file this run writes has taken back
-        # every one the earlier ledger recorded.
-        "entries": {},
         "rules": rules,
         "settings_keys": list(settings_keys),
         "directories": [name for name in CREATED_DIRS if name in made],
@@ -850,7 +822,7 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     document = local_document(root)
     if previous is not None:
         diff = withdrawing(diff, previous.allow, _allow_list(settings_document(document))[1])
-    merged = _merged_settings(document, diff, previous)
+    merged = _merged_settings(document, diff)
     written = merged != document
     targets = tuple(target for target, _ in codex_rules(binding))
     placed = placed_paths(targets)
@@ -1143,7 +1115,6 @@ class Detached:
     """What one `detach` withdrew. The binding record is not on this list, on purpose."""
 
     allow_removed: tuple[str, ...]
-    entries_removed: tuple[str, ...]
     rules_removed: tuple[str, ...]
     settings_keys_removed: tuple[str, ...]
     directories_removed: tuple[str, ...] = ()
@@ -1189,14 +1160,8 @@ class SettingsWithdrawal:
 
 
 def _planned_settings(root: Path, recorded: AttachLedger) -> SettingsWithdrawal:
-    """Take exactly the recorded rules, the recorded entries and the pointer key back out.
-
-    The allow rules come from the ledger and never from a guess at their content: that is the
-    whole reason the ledger exists. So do the hook entries an earlier release merged, through
-    `scaffold.withdraw_entries`, which takes the ones the ledger names and never one by its marker
-    alone — foreign entries keep their matcher and their position, and a group that mixes the two
-    is split rather than dropped.
-    """
+    """Take exactly the recorded rules and the pointer key back out. The allow rules come from the
+    ledger and never from a guess at their content: that is the whole reason the ledger exists."""
     document = local_document(root)
     if not document.strip():
         return SettingsWithdrawal((), None)
@@ -1215,8 +1180,8 @@ def _planned_settings(root: Path, recorded: AttachLedger) -> SettingsWithdrawal:
             raw.pop(key, None)
         # Through `settings_text`, as every write-back of a parsed settings document: on Python
         # 3.12 an indented encode stops near 994 levels, under what the parser read.
-        emptied = settings_text(_emptied(raw), LOCAL_SETTINGS) + "\n"
-        remaining = json.loads(withdraw_entries(emptied, recorded.entries))
+        remaining = _emptied(raw)
+        emptied = settings_text(remaining, LOCAL_SETTINGS) + "\n"
         unchanged = remaining == held
     except RecursionError:
         raise ParserLimitError(f"{LOCAL_SETTINGS} {NESTED}") from None
@@ -1224,8 +1189,7 @@ def _planned_settings(root: Path, recorded: AttachLedger) -> SettingsWithdrawal:
         return SettingsWithdrawal(removed, None)
     # `{}` is not what the file looked like before `attach`; a file holding nothing is one this
     # command created and is the last thing it takes away.
-    text = settings_text(remaining, LOCAL_SETTINGS) + "\n" if remaining else ""
-    return SettingsWithdrawal(removed, text)
+    return SettingsWithdrawal(removed, emptied if remaining else "")
 
 
 def _withdraw_settings(root: Path, planned: SettingsWithdrawal) -> tuple[str, ...]:
@@ -1364,8 +1328,7 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     **What it may refuse on, and when.** Everything structural this function can know before its
     first withdrawal is asked before it: the main checkout, which is the only question here that
     needs `git` besides the id, the ledger (which refuses one no attach could have written), the
-    settings document's own shape through
-    `owned_ids`, the exclude block, what the settings file becomes (`_planned_settings`), and every
+    exclude block, what the settings file becomes (`_planned_settings`), and every
     path the withdrawal writes or removes, walked the way the write or removal walks it
     (`_refuse_unwithdrawable`). What is left after the first withdrawal is exactly what cannot
     precede it — a write that fails, and a component that changed between the check and the
@@ -1377,8 +1340,6 @@ def detach(root: Path, *, runner: Runner) -> Detached:
         recorded = _removable(ledger(root))
     except NotALedger as exc:
         raise NotALedger(f"{exc}; it records nothing, so nothing was removed") from exc
-    held = owned_ids(local_document(root))
-    entries = tuple(sorted(id for id, event in recorded.entries.items() if held.get(id) == event))
     # The rendered plugin, named by the id and installed in the main checkout. Its render directory
     # is derived from the id and never read from the ledger, whose `store` and `render` a clone can
     # commit; asked here, before the first withdrawal, since the id is read through `git`.
@@ -1426,7 +1387,6 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     directories = _withdraw_directories(root, recorded)
     return Detached(
         allow_removed,
-        entries,
         tuple(rules_removed),
         recorded.settings_keys,
         directories,

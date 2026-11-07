@@ -1969,14 +1969,14 @@ reddens = [
 # The same document holding an integer literal longer than the interpreter converts: `json.loads`
 # raises a plain `ValueError`, which is neither of the two errors above. Each reader refuses it as
 # it refuses the nesting — a committed ledger holding one read red, "this check could not run", in
-# `doctor`'s `attached` row — and `owned_ids` reads the number as its text, below.
+# `doctor`'s `attached` row.
 [[mutation]]
 name = "the JSON object reader lets a number past the parser's reach raise"
 file = "src/stayfixed/jsonobject.py"
 before = "    except ValueError:"
 after = "    except ZeroDivisionError:"
 reddens = [
-  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_merge",
+  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_refused_by_a_merge",
   "tests/attach/test_write.py::test_a_settings_file_holding_a_number_past_the_parsers_reach_is_refused",
   "tests/attach/test_detach.py::test_a_ledger_that_does_not_parse_removes_nothing_and_says_so",
 ]

@@ -1694,11 +1694,8 @@ rules included.
 the one git common directory, so `detach` acts on the main checkout too.
 
 **Writes**: it takes the recorded allow rules and the `autoMemoryDirectory` key back out of the
-main checkout's `.claude/settings.local.json`, drops the hook entries an earlier release's `attach`
-merged there —
-the ones its ledger records, under the event it records, and never one by its `# stayfixed:…` marker
-alone (a group that mixes one of those with your own entry is split, never replaced) — and leaves
-the file unwritten when none of those is in it, removes each `.codex/rules/` copy whose bytes are
+main checkout's `.claude/settings.local.json`, and leaves the file unwritten when neither is in it,
+removes each `.codex/rules/` copy whose bytes are
 still the ones the ledger's sha256 records (any other copy is left and named, `Codex rule copy left:
 <path>`, `rules_left` in `--json`), withdraws the overlay's rendered plugin — `claude plugin uninstall overlay-<id>@stayfixed-delivery-<id> --scope
 local` where the main checkout's `.claude/settings.local.json` names that plugin under

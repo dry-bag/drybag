@@ -115,14 +115,13 @@ def run_detach(args: argparse.Namespace) -> Result:
     data = {
         # Counts and not the strings, which is the same ruling `attach.check` makes about
         # `already_present` and this module makes about `project.name` two functions up — and it
-        # has to be, or the three are inconsistent again. Every one of these four lists is read
+        # has to be, or the three are inconsistent again. Every one of these three lists is read
         # out of the ledger or out of `.claude/settings.local.json`, and the settings file is a
         # path a clone can commit: `.gitignore` does not untrack a committed file. So they are
         # treated as repository-authored, `--json` is what `skills/attach/SKILL.md` relays to the
         # user, and a marker id **bounded by a grammar** was already refused here on exactly this
         # reasoning. An allow rule and a settings key are less bounded than that, not more.
         "allow_removed": len(removed.allow_removed),
-        "entries_removed": len(removed.entries_removed),
         "rules_removed": len(removed.rules_removed),
         "settings_keys_removed": len(removed.settings_keys_removed),
         # A count of `CREATED_DIRS`, stayfixed's own closed vocabulary.
@@ -144,7 +143,6 @@ def run_detach(args: argparse.Namespace) -> Result:
         )
     line = (
         f"detached: {len(removed.allow_removed)} allow rule(s), "
-        f"{len(removed.entries_removed)} hook entr(ies), "
         f"{len(removed.rules_removed)} Codex rule file(s), "
         f"{len(removed.directories_removed)} directory(ies){withdrawn}; "
         f"the binding record was left in place"

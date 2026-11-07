@@ -31,7 +31,7 @@ reddens = [
 [[mutation]]
 name = "read_binding reads the machine file a second time for the binding"
 file = "src/stayfixed/attach/binding.py"
-before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay, plated=True)"
+before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay)"
 after = "            f\"from an argument\"\n        )\n    return binding_for(root, config, machine=machine)"
 reddens = [
   "tests/attach/test_binding.py::test_read_binding_reads_the_machine_file_once",
@@ -1074,8 +1074,8 @@ reddens = [
 [[mutation]]
 name = "attach and --check ask only the binding record whether it can exist"
 file = "src/stayfixed/attach/binding.py"
-before = "    made = (share / PROJECT_RECORD, *link_sources(binding.overlay, config))\n"
-after = "    made = (share / PROJECT_RECORD,)\n"
+before = "    made = (share / RECORD, *link_sources(binding.overlay, config))\n"
+after = "    made = (share / RECORD,)\n"
 reddens = [
   "tests/attach/test_commands.py::test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_by_check_too[the-index]",
   "tests/attach/test_commands.py::test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_by_check_too[a-group]",
@@ -1425,11 +1425,8 @@ reddens = [
 [[mutation]]
 name = "an overlay codex directory that cannot be listed is an internal error"
 file = "src/stayfixed/attach/permissions.py"
-before = '''def _unlisted(source: Path, error: OSError) -> Failure:
-    return Failure('''
-after = '''def _unlisted(source: Path, error: OSError) -> Failure:
-    return error
-    return Failure('''
+before = "    winners = fold(binding.plates, CODEX_RULE, _unlisted).winners"
+after = "    winners = fold(binding.plates, CODEX_RULE, OSError).winners"
 reddens = [
   "tests/attach/test_write.py::test_an_unlistable_codex_directory_fails_and_writes_nothing[common-unlistable]",
   "tests/attach/test_write.py::test_an_unlistable_codex_directory_fails_and_writes_nothing[common-unsearchable]",
@@ -1675,8 +1672,8 @@ reddens = ["tests/attach/test_project_choice.py::test_project_beside_a_stayfixed
 [[mutation]]
 name = "a tag's rule replaces the project's rule of its name"
 file = "src/stayfixed/attach/rules.py"
-before = "    winners = fold(held, RULE, unreadable(_unreadable)).winners"
-after = "    winners = fold(sorted(held, key=lambda p: p.kind.value == 'tag'), RULE, unreadable(_unreadable)).winners"
+before = "    winners = fold(held, RULE, _unreadable).winners"
+after = "    winners = fold(sorted(held, key=lambda p: p.kind.value == 'tag'), RULE, _unreadable).winners"
 reddens = ["tests/attach/test_rules.py::test_a_tag_rule_arrives_and_a_later_plate_wins_its_name"]
 
 # A skill is the item its directory names, and the later plate wins it whole: merged file by file,
@@ -1684,7 +1681,7 @@ reddens = ["tests/attach/test_rules.py::test_a_tag_rule_arrives_and_a_later_plat
 [[mutation]]
 name = "a skill is merged file by file across plates"
 file = "src/stayfixed/attach/render.py"
-before = "        for item in fold(held, kind, unreadable(_unreadable)).winners.values():"
+before = "        for item in fold(held, kind, _unreadable).winners.values():"
 after = "        for item in [p.directory / kind.harness / kind.directory / n for n, plates in fold(held, kind).holders.items() for p in plates]:"
 reddens = ["tests/attach/test_render.py::test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole"]
 

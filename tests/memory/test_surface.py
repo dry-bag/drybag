@@ -26,7 +26,7 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         "project_notes",
         # the overlay's per-project layout: attach writes it, overlay renders it
         "PROJECTS",
-        "PROJECT_RECORD",
+        "RECORD",
         "STORE_DIR",
         "reserved",
         # the three roots of the overlay's notes, which `sync` builds its pathspecs from

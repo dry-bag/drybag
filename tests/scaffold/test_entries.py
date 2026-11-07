@@ -12,7 +12,6 @@ from stayfixed.scaffold.entries import (
     mark,
     marker_id,
     owned,
-    owned_ids,
 )
 from tests.parserlimits import LONG_NUMBER, NESTED, PAST_ENCODING, overflowing
 
@@ -139,11 +138,6 @@ def test_owned_is_insensitive_to_the_key_order_inside_an_entry() -> None:
     assert owned(json.dumps(raw)) == owned(installed)
 
 
-def test_owned_ids_reports_event_by_id() -> None:
-    before = document(("PreToolUse", mark("a.sh", "bg-cleanup")))
-    assert owned_ids(before) == {"bg-cleanup": "PreToolUse"}
-
-
 def test_a_malformed_document_refuses() -> None:
     with pytest.raises(EntriesError):
         apply_entries("{not json", {})
@@ -156,8 +150,6 @@ def test_a_document_nested_past_the_parsers_reach_refuses_as_one_past_a_limit() 
     # Mutation (oracle): `mutations/`'s "the JSON object reader lets a document nested past the
     # parser raise" -> both raise `RecursionError`.
     nested = '{"hooks": ' + NESTED + "}"
-    with pytest.raises(ParserLimitError, match="nested deeper"):
-        owned_ids(nested)
     with pytest.raises(ParserLimitError, match="nested deeper"):
         apply_entries(nested, {})
 
@@ -198,17 +190,13 @@ def test_a_real_settings_document_sits_far_inside_the_depth_bound() -> None:
     assert json.loads(apply_entries(marked, {})) == {}
 
 
-def test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_merge() -> None:
-    # `owned_ids` answers ids and events, which no number can be part of, so it reads a number as
-    # its text and answers for the entries beside one. `apply_entries` writes the document back,
-    # and a number it cannot hold it cannot write back unchanged, so it refuses. The `ValueError`
-    # used to leave the engine past every caller's catch. Mutations (oracle): `mutations/`'s "the
-    # settings engine refuses a number past the parser's reach in a document it reads for ids" ->
-    # `owned_ids` refuses; "the JSON object reader lets a number past the parser's reach raise" ->
-    # `apply_entries` raises `ValueError`.
+def test_a_number_past_the_parsers_reach_is_refused_by_a_merge() -> None:
+    # `apply_entries` writes the document back, and a number it cannot hold it cannot write back
+    # unchanged, so it refuses. The `ValueError` used to leave the engine past every caller's
+    # catch. Mutation (oracle): `mutations/`'s "the JSON object reader lets a number past the
+    # parser's reach raise" -> `apply_entries` raises `ValueError`.
     marked = json.loads(document(("PreToolUse", mark("a.sh", "bg-cleanup"))))
     long = json.dumps(marked)[:-1] + ', "n": ' + LONG_NUMBER + "}"
-    assert owned_ids(long) == {"bg-cleanup": "PreToolUse"}
     with pytest.raises(ParserLimitError, match="number longer"):
         apply_entries(long, {})
 
@@ -240,14 +228,6 @@ def test_a_group_whose_hooks_value_is_not_a_list_refuses_rather_than_vanishing()
     }
     with pytest.raises(EntriesError, match="not a list"):
         apply_entries(json.dumps(raw), wanted("PreToolUse", "bg-cleanup", "new.sh"))
-
-
-def test_owned_ids_refuses_the_shapes_apply_entries_refuses() -> None:
-    # The provenance list reads the same structure. Under-reporting it silently would have
-    # `doctor` claim stayfixed owns nothing in a file it does own.
-    raw = {"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": 7}]}}
-    with pytest.raises(EntriesError, match="not a list"):
-        owned_ids(json.dumps(raw))
 
 
 def test_an_entry_that_is_not_an_object_refuses_rather_than_vanishing() -> None:

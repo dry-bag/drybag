@@ -19,7 +19,7 @@ again. `unmarked()` is that check, and `mark()` is what a caller is supposed to 
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable
 from typing import Any
 
 from stayfixed.errors import Refusal
@@ -88,11 +88,8 @@ def _past_parser(label: str) -> Callable[[str], ParserLimitError]:
     return lambda clause: ParserLimitError(f"{label} {clause}")
 
 
-def settings_object(
-    document: str, label: str = _DOCUMENT, *, numbers: Callable[[str], object] = int
-) -> dict[str, Any]:
-    """The document as an object, with each integer literal handed to `numbers`, and empty text
-    as an empty one. `label` names it in every refusal.
+def settings_object(document: str, label: str = _DOCUMENT) -> dict[str, Any]:
+    """The document as an object, and empty text as an empty one. `label` names it in every refusal.
 
     Public because `attach` reads the settings file it merges into, and the overlay's files it
     merges from, by this rule: one reader, so a document the engine would refuse is one `attach`
@@ -103,13 +100,7 @@ def settings_object(
     # A settings document may be one a clone committed, so valid JSON past the parser's reach is
     # refused rather than left to escape the callers that catch the refusal, and refused as a
     # limit and not as a shape: see `ParserLimitError`.
-    return json_object(
-        document,
-        label,
-        error=EntriesError,
-        limit=_past_parser(label),
-        numbers=numbers,
-    )
+    return json_object(document, label, error=EntriesError, limit=_past_parser(label))
 
 
 def settings_text(raw: dict[str, Any], label: str = _DOCUMENT, *, sort_keys: bool = False) -> str:
@@ -177,38 +168,6 @@ def _without_marked(group: dict[str, Any]) -> dict[str, Any] | None:
     return {**group, "hooks": kept}
 
 
-def _read_entries(document: str) -> Iterator[tuple[str, dict[str, Any], dict[str, Any]]]:
-    """Every hook entry in the document with its event and the group holding it, in document
-    order, read as strictly as `apply_entries` reads it: a shape the merge would refuse is refused
-    here too, so a reader reporting on a settings file never accounts for one the engine could not
-    rewrite.
-
-    Integers are read as their text: no entry's id, event or marker is a number, and one longer
-    than the interpreter converts must not keep a reader from the entries beside it. A settings
-    file is one a clone can commit, and the harness reads such a number.
-    """
-    raw = _entry_document(document)
-    for event in _hooks_table(raw):
-        for group in _groups(raw, event):
-            for entry in _entries_of(group):
-                yield event, group, entry
-
-
-def _entry_document(document: str) -> dict[str, Any]:
-    """The settings document as every walk for entries reads it: integers as their text, for the
-    reason `_read_entries` gives."""
-    return settings_object(document, numbers=str)
-
-
-def owned_ids(document: str) -> dict[str, str]:
-    """Every id stayfixed claims in this document, mapped to its event."""
-    return {
-        claimed: event
-        for event, _, entry in _read_entries(document)
-        if (claimed := _claimed(entry)) is not None
-    }
-
-
 def owned(document: str) -> str:
     """A canonical rendering of only the entries stayfixed claims — what the manifest stamps."""
     raw = settings_object(document)
@@ -241,25 +200,3 @@ def _with_hooks(raw: dict[str, Any], hooks: dict[str, Any]) -> str:
     else:
         raw.pop("hooks", None)
     return settings_text(raw) + "\n"
-
-
-def withdraw_entries(document: str, recorded: Mapping[str, str]) -> str:
-    """The document without each entry `recorded` names: its marker id, under the event the record
-    gives it. Every other entry stays where it is, one claiming the marker that the record does not
-    name included, so a caller's record and never the marker alone decides what goes; a group left
-    with no entry is dropped, an event with no group, and `hooks` with no event. Read as strictly
-    as `apply_entries` reads, for the reason `_groups` gives."""
-    raw = settings_object(document)
-    hooks = dict(_hooks_table(raw))
-    for event in list(hooks):
-        groups = []
-        for group in _groups(raw, event):
-            entries = _entries_of(group)
-            kept = [entry for entry in entries if recorded.get(_claimed(entry) or "") != event]
-            if kept:
-                groups.append(group if len(kept) == len(entries) else {**group, "hooks": kept})
-        if groups:
-            hooks[event] = groups
-        else:
-            hooks.pop(event)
-    return _with_hooks(raw, hooks)

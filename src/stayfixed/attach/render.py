@@ -53,11 +53,11 @@ from typing import NamedTuple
 
 import stayfixed
 from stayfixed import fsops
-from stayfixed.attach.items import AGENT, SKILL, fold, unreadable
+from stayfixed.attach.items import AGENT, SKILL, fold
 from stayfixed.attach.permissions import HOOKS_FILE, claude_sources, hook_groups
 from stayfixed.attach.rules import scoped_exist
 from stayfixed.binding import delivery_directory, short, unwritten
-from stayfixed.config.plates import Plate, plates
+from stayfixed.config.plates import Plate
 from stayfixed.errors import Failure
 from stayfixed.printed import quoted
 
@@ -260,7 +260,7 @@ def read_parts(held: Sequence[Plate], *, command: str | None = None) -> dict[str
         hooks.setdefault(SCOPED_EVENT, []).append(scoped_group(command))
     parts = {HOOK_FILE: Part(json.dumps({"hooks": hooks}, indent=2) + "\n")}
     for kind in (SKILL, AGENT):
-        for item in fold(held, kind, unreadable(_unreadable)).winners.values():
+        for item in fold(held, kind, _unreadable).winners.values():
             for relative, part in _copied(item).items():
                 parts[f"{kind.directory}/{relative}"] = part
     return parts
@@ -351,9 +351,3 @@ def remove_tree(directory: Path) -> None:
             else:
                 fsops.rmdir_within(directory, relative)
     fsops.rmdir_within(directory.parent, directory.name)
-
-
-def render(overlay: Path, project: str, id: str) -> RenderRecord:
-    """`read_parts` of `project`'s plates, then `write`: the overlay's executable parts as the
-    plugin `overlay-<id>`."""
-    return write(id, read_parts(plates(overlay, project)[0]))

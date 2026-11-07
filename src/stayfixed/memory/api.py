@@ -14,7 +14,7 @@ area and why — it does not import a private module of this area.
 
 The names imported from outside this area today, by the `attach` and `overlay` areas and by this
 repository's tests: the resolver (`resolve` and `project_notes`), the overlay layout `attach`
-writes and `overlay` renders (`PROJECTS`, `PROJECT_RECORD`, `STORE_DIR`), the
+writes and `overlay` renders (`PROJECTS`, `RECORD`, `STORE_DIR`), the
 note roots `sync`'s pathspecs are built from beside `config.plates.GROUPS` (`COMMON`,
 `PROJECTS`), the index render `sync` runs in process from a bound checkout and what it answers
 (`rerender_overlay_index`, `Rerendered`), the one
@@ -78,6 +78,7 @@ this area's tests use; an area that comes to need one grows this list by the rul
   `bundles` row is this area's own (`memory/doctor.py`) and reads `memory.bundles` directly.
 """
 
+from stayfixed.config.plates import RECORD
 from stayfixed.memory.bundles import SLOTS
 from stayfixed.memory.composed import build as build_composed
 from stayfixed.memory.composed import link_sources, promote_share, render_missing_index
@@ -87,7 +88,6 @@ from stayfixed.memory.store import (
     BINDING_STATES,
     BOUND,
     COMMON,
-    PROJECT_RECORD,
     PROJECTS,
     STORE_DIR,
     UNBOUND,
@@ -109,7 +109,7 @@ __all__ = [
     "COMMON",
     "DELIMITER",
     "PROJECTS",
-    "PROJECT_RECORD",
+    "RECORD",
     "SLOTS",
     "STORE_DIR",
     "UNBOUND",

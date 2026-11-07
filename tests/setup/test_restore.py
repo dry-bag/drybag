@@ -39,6 +39,7 @@ from tests.attach.test_write import ledger_file
 from tests.gitfixture import git
 from tests.runners import Recorder
 from tests.snapshot import assert_snapshot_unchanged, snapshot
+from tests.tagged import with_tags
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -321,9 +322,7 @@ def test_a_failed_project_makes_the_command_exit_1(
 def test_a_project_whose_record_lists_a_tag_is_attached(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path)
     alpha = _checkout(tmp_path, "alpha")
-    (overlay / "groups" / "t" / "memory").mkdir(parents=True)
-    (overlay / "projects" / "alpha").mkdir(parents=True)
-    (overlay / "projects" / "alpha" / "project.toml").write_text('tags = ["t"]\n', "utf-8")
+    with_tags(overlay, "alpha", ["t"], "memory")
     report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha))
     assert _states(report) == {"alpha": "attached"}
 

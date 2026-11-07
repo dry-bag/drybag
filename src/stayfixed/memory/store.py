@@ -61,7 +61,6 @@ from stayfixed.config.paths import PathEscape, PathUnasked, contained, data_dire
 from stayfixed.config.plates import COMMON as COMMON_PLATE
 from stayfixed.config.plates import PROJECTS as PROJECTS
 from stayfixed.config.plates import (
-    RECORD,
     TAG_LINK_PREFIX,
     Plate,
     PlateKind,
@@ -76,7 +75,6 @@ from stayfixed.printed import quoted
 
 LOCAL_STORE = Path(".stayfixed") / "local" / "memory"
 # The surface's name for the project record `config.plates` names.
-PROJECT_RECORD = RECORD
 # The one directory under `projects/<name>/` that holds notes, named once: `permitted_roots`
 # builds the path with it, and `attach` states the path's shape with it where it may not print
 # the project's name, and lays out the group directories under it.

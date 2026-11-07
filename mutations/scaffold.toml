@@ -191,18 +191,6 @@ reddens = [
   "tests/scaffold/test_surface.py::test_a_document_past_a_limit_of_the_parser_is_an_entries_refusal_of_its_own_kind",
 ]
 
-# `owned_ids` answers ids and events, which no number is part of, so it reads every integer as its
-# text. Read with the interpreter's limit, a committed settings file holding a number past that
-# limit was refused rather than read for the ids in it.
-[[mutation]]
-name = "the settings engine refuses a number past the parser's reach in a document it reads for ids"
-file = "src/stayfixed/scaffold/entries.py"
-before = "    return settings_object(document, numbers=str)"
-after = "    return settings_object(document)"
-reddens = [
-  "tests/scaffold/test_entries.py::test_a_number_past_the_parsers_reach_is_read_for_ids_and_refused_by_a_merge",
-]
-
 # In the block led by `mutations/`'s "the JSON writer lets an encode past the interpreter's
 # recursion escape": the settings engine writes back through that one writer.
 [[mutation]]

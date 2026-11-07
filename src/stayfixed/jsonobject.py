@@ -54,9 +54,8 @@ def json_object(
     error: Callable[[str], Exception],
     limit: Callable[[str], Exception] | None = None,
     shape: Callable[[str], Exception] | None = None,
-    numbers: Callable[[str], object] = int,
 ) -> dict[str, Any]:
-    """`text` parsed as a JSON object, with each integer literal handed to `numbers`.
+    """`text` parsed as a JSON object.
 
     `label` names the document in every sentence: `<label> is not valid JSON: <why>`, `<label>
     is not a JSON object`, and `<label>` before `NESTED` or `LONG_NUMBER` for valid JSON past the
@@ -71,7 +70,7 @@ def json_object(
     answers that before it asks, and one for which it is no record at all lets it fail as JSON.
     """
     try:
-        raw = json.loads(text, parse_int=numbers)
+        raw = json.loads(text)
     except json.JSONDecodeError as exc:
         raise error(f"{label} is not valid JSON: {exc}") from exc
     except RecursionError:

@@ -22,8 +22,6 @@ from stayfixed.printed import quoted
 # The per-harness subdirectories of a plate.
 PROJECT_CLAUDE = "claude"
 PROJECT_CODEX = "codex"
-# What `fold` raises for a directory it cannot list: each reader's own failure.
-Unlisted = Callable[[Path, OSError], Exception]
 
 
 @dataclass(frozen=True)
@@ -53,26 +51,24 @@ class Folded:
     holders: dict[str, tuple[Plate, ...]]
 
 
-def unreadable(refusal: Callable[[str], Exception]) -> Unlisted:
-    """`refusal` of `fsops.unreadable`'s sentence about the directory, as `fsops.reading` raises."""
-    return lambda directory, error: refusal(fsops.unreadable(quoted(str(directory)), error))
-
-
-def fold(plates: Sequence[Plate], kind: Kind, unlisted: Unlisted | None = None) -> Folded:
+def fold(
+    plates: Sequence[Plate], kind: Kind, refusal: Callable[[str], Exception] | None = None
+) -> Folded:
     """`kind`'s items over `plates`, each plate's in name order. A directory that cannot be listed,
-    or whose entries cannot be asked about, raises `unlisted`'s failure, or holds none without."""
+    or whose entries cannot be asked about, raises `refusal` of `fsops.unreadable`'s sentence, as
+    `fsops.reading` does, or holds none without one."""
     winners: dict[str, Path] = {}
     holders: dict[str, list[Plate]] = {}
     for plate in plates:
         directory = plate.directory / kind.harness / kind.directory
-        for name in _names(directory, kind, unlisted):
+        for name in _names(directory, kind, refusal):
             winners.pop(name, None)
             winners[name] = directory / name
             holders.setdefault(name, []).append(plate)
     return Folded(winners, {name: tuple(held) for name, held in holders.items()})
 
 
-def _names(directory: Path, kind: Kind, unlisted: Unlisted | None) -> list[str]:
+def _names(directory: Path, kind: Kind, refusal: Callable[[str], Exception] | None) -> list[str]:
     try:
         if not fsops.is_dir(directory):
             return []
@@ -84,6 +80,6 @@ def _names(directory: Path, kind: Kind, unlisted: Unlisted | None) -> list[str]:
             and (not kind.files or fsops.is_file(directory / name))
         ]
     except OSError as exc:
-        if unlisted is None:
+        if refusal is None:
             return []
-        raise unlisted(directory, exc) from exc
+        raise refusal(fsops.unreadable(quoted(str(directory)), exc)) from exc

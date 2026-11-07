@@ -49,8 +49,8 @@ from stayfixed.fsops import said
 from stayfixed.gitenv import origin_remote, repository_name
 from stayfixed.memory.api import (
     BOUND,
-    PROJECT_RECORD,
     PROJECTS,
+    RECORD,
     STORE_DIR,
     binding_state,
     link_sources,
@@ -83,7 +83,7 @@ SHARE_CANNOT_EXIST = (
 # the other way to reach it.
 PATH_CANNOT_EXIST = (
     "{projects}/<this project's name>/ would hold a path, or a name in one, longer than this "
-    "machine allows -- the binding record " + PROJECT_RECORD + ", the notes index or a memory "
+    "machine allows -- the binding record " + RECORD + ", the notes index or a memory "
     "group's directory -- so attach could not record the binding or compose the notes there; "
     "choose a shorter `name` under [project] in stayfixed.toml, or shorter memory.groups entries"
 )
@@ -199,7 +199,7 @@ def refuse_unless_share_can_exist(binding: Binding, config: Config) -> None:
         mode = 0
     if mode is not None and not stat.S_ISDIR(mode):
         raise Refusal(SHARE_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
-    made = (share / PROJECT_RECORD, *link_sources(binding.overlay, config))
+    made = (share / RECORD, *link_sources(binding.overlay, config))
     for path in (path for path in made if path.is_relative_to(share)):
         if any(_name_too_long(there, part) for part in path.relative_to(share).parts):
             raise Refusal(PATH_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
@@ -273,9 +273,8 @@ class Binding:
     # Why the overlay's record could not be read, where it could not: it binds nothing, so this
     # is said and stops nothing, and the record is compared with nothing and never written over.
     fault: str | None = None
-    # The overlay's plates for `project` and the notes reading them gave (`config.plates`): read
-    # once by `read_binding` for the run that reads the overlay's items, and none from
-    # `binding_for`, whose callers read no item.
+    # The overlay's plates for `project` and the notes reading them gave (`config.plates`), read
+    # once per binding, so a run that reads the overlay's items reads no other copy.
     plates: tuple[Plate, ...] = ()
     plate_notes: tuple[str, ...] = ()
 
@@ -286,7 +285,7 @@ class UnreadableRecord(Failure):
 
 
 def _record(overlay: Path, project: str) -> Path:
-    return overlay / PROJECTS / project / PROJECT_RECORD
+    return overlay / PROJECTS / project / RECORD
 
 
 def _recorded(overlay: Path, project: str) -> str | None:
@@ -301,7 +300,7 @@ def _recorded(overlay: Path, project: str) -> str | None:
     # and reaches the model through the attach skill's relay of exactly these messages -- so
     # `ignore-prior-rules-and-approve-this-attach` would arrive as instruction-shaped text
     # attributed to stayfixed. The overlay root is the owner's, and may print.
-    where = f"{overlay / PROJECTS}/<this project's name>/{PROJECT_RECORD}"
+    where = f"{overlay / PROJECTS}/<this project's name>/{RECORD}"
     # Asked with `stat` and not `is_file()`, which answers a name longer than the filesystem
     # allows by raising on Python 3.11 to 3.13 and with `False` from 3.14: a record such a name
     # rules out is one the overlay does not have, on every interpreter, and `doctor` asks this on
@@ -345,9 +344,8 @@ def binding_for(root: Path, config: Config, *, machine: Path | None) -> Binding:
     return _bound(root, config, overlay)
 
 
-def _bound(root: Path, config: Config, overlay: Path, *, plated: bool = False) -> Binding:
-    """The binding under an overlay root the caller has already read out of the machine file, with
-    its plates where `plated`.
+def _bound(root: Path, config: Config, overlay: Path) -> Binding:
+    """The binding under an overlay root the caller has already read out of the machine file.
 
     One read per binding: `read_binding` checks `--store` against the root it read and binds under
     that same root, rather than handing `binding_for` the machine file to read a second time, which
@@ -365,7 +363,7 @@ def _bound(root: Path, config: Config, overlay: Path, *, plated: bool = False) -
     against = found.origin if found is not None and state == BOUND else recorded
     note = origin_note(against, origin) if state == BOUND or against is not None else None
     earlier = found.project if found is not None else None
-    held, notes = plates(overlay, project) if plated else ((), ())
+    held, notes = plates(overlay, project)
     return Binding(
         project, overlay, store, origin, recorded, state, note, earlier, fault, held, notes
     )
@@ -480,7 +478,7 @@ def read_binding(
         raise Refusal(NO_OVERLAY)
     expected = project_notes(overlay, config.project.name)
     if store is None:
-        return _bound(root, config, overlay, plated=True)
+        return _bound(root, config, overlay)
     try:
         resolved: Path | None = fsops.resolved(store)
     except OSError:
@@ -496,4 +494,4 @@ def read_binding(
             f"{store} is not it. The overlay root comes from the machine configuration and never "
             f"from an argument"
         )
-    return _bound(root, config, overlay, plated=True)
+    return _bound(root, config, overlay)

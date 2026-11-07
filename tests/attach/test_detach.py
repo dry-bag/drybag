@@ -274,7 +274,6 @@ def _branch_ledger(root: Path, store: Path, **fields: object) -> Path:
     document = {
         "format": 1,
         "store": str(store),
-        "entries": {},
         "rules": {},
         "settings_keys": [],
         "directories": [],
@@ -430,7 +429,7 @@ def test_detach_in_a_bare_repositorys_worktree_withdraws_this_checkouts_own_part
     side = tmp_path / "side"
     git(bare, "worktree", "add", "-q", str(side), "main")
     ledger_file(side).parent.mkdir(parents=True)
-    ledgered = {"format": 1, "store": str(store), "allow": [RULE], "entries": {}, "rules": {}}
+    ledgered = {"format": 1, "store": str(store), "allow": [RULE], "rules": {}}
     ledgered |= {"settings_keys": [], "directories": []}
     ledger_file(side).write_text(json.dumps(ledgered), encoding="utf-8")
     (side / ".claude").mkdir()

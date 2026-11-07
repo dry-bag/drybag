@@ -459,7 +459,7 @@ def test_a_name_whose_binding_record_is_past_the_longest_path_is_refused_by_chec
     # path past the longest one" -> `--check` exits 0 again.
     from stayfixed.attach.binding import PATH_CANNOT_EXIST
     from stayfixed.config.loader import CONFIG_FILE
-    from stayfixed.memory.api import PROJECT_RECORD
+    from stayfixed.memory.api import RECORD
     from tests.attach.test_binding import CONFIG
 
     longest = os.pathconf(tmp_path, "PC_PATH_MAX")
@@ -476,7 +476,7 @@ def test_a_name_whose_binding_record_is_past_the_longest_path_is_refused_by_chec
     name = "n" * (longest - 10 - len(str(projects)) - 1)
     assert len(name) < 255
     assert len(str(projects / name)) == longest - 10
-    assert len(str(projects / name / PROJECT_RECORD)) > longest
+    assert len(str(projects / name / RECORD)) > longest
     (root / CONFIG_FILE).write_text(CONFIG.format(name=name), encoding="utf-8")
     flags = _flags(root, projects / name / "memory", machine)
     refused = f"stayfixed: refused: {PATH_CANNOT_EXIST.format(projects=projects)}"
@@ -516,7 +516,7 @@ def test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_
     # path past the longest one" -> `--check` exits 0 again, and `attach` writes.
     from stayfixed.attach.binding import PATH_CANNOT_EXIST
     from stayfixed.config.loader import CONFIG_FILE, load
-    from stayfixed.memory.api import PROJECT_RECORD, link_sources
+    from stayfixed.memory.api import RECORD, link_sources
     from tests.attach.test_binding import CONFIG
 
     longest = os.pathconf(tmp_path, "PC_PATH_MAX")
@@ -542,10 +542,10 @@ def test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_
         path for path in link_sources(overlay, load(root, machine=machine)) if share in path.parents
     ]
     reach = max(len(str(path)) for path in made) - len(str(share))
-    assert reach > len(str(share / PROJECT_RECORD)) - len(str(share))
+    assert reach > len(str(share / RECORD)) - len(str(share))
     name = "n" * (longest - reach - len(str(projects)) - 1)
     assert len(name) < 255
-    assert len(str(projects / name / PROJECT_RECORD)) < longest
+    assert len(str(projects / name / RECORD)) < longest
     configure(name)
     flags = _flags(root, projects / name / "memory", machine)
     refused = f"stayfixed: refused: {PATH_CANNOT_EXIST.format(projects=projects)}"

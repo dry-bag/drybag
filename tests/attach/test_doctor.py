@@ -27,7 +27,7 @@ from stayfixed.config.plates import plates
 from stayfixed.doctor import checks as doctor_checks
 from stayfixed.doctor.api import OK, RED, SKIP, WARN, Check
 from stayfixed.errors import Refusal
-from stayfixed.memory.api import PROJECT_RECORD, PROJECTS
+from stayfixed.memory.api import PROJECTS, RECORD
 from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from stayfixed.printed import quoted
 from tests.attach.test_write import (
@@ -112,7 +112,7 @@ def test_an_overlay_recording_another_remote_leaves_a_bound_checkout_attached(
     # The binding is this machine's record of the checkout's id now, so a record naming another
     # remote -- written from another machine, or before `origin` moved -- changes nothing here.
     root = _attached(tmp_path)
-    (tmp_path / "overlay" / PROJECTS / "p" / PROJECT_RECORD).write_text(
+    (tmp_path / "overlay" / PROJECTS / "p" / RECORD).write_text(
         'remote = "git@github.com:somebody/else.git"\nfirst_attach = "2026-09-18"\n',
         encoding="utf-8",
     )
@@ -335,10 +335,10 @@ def test_an_overlay_record_this_process_cannot_read_is_a_warning_beside_the_bind
     # where the parser stopped, never the file's text.
     root = _attached(tmp_path)
     overlay = _overlay(tmp_path)
-    (overlay / PROJECTS / "p" / PROJECT_RECORD).write_text("remote = [", encoding="utf-8")
+    (overlay / PROJECTS / "p" / RECORD).write_text("remote = [", encoding="utf-8")
     row = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
     assert row.status == WARN
-    assert f"{PROJECT_RECORD} is not valid TOML" in row.detail and "attached;" in row.detail
+    assert f"{RECORD} is not valid TOML" in row.detail and "attached;" in row.detail
     assert row.remedy == attach_doctor.RECORD_REPAIR
 
 
@@ -568,18 +568,18 @@ def test_an_owner_whose_own_binding_record_will_not_parse_is_told_where_to_look(
     # `attach --check` ended in an internal error. Mutation (declared): `ValueError` dropped from
     # `UNPARSEABLE`.
     root = _attached(tmp_path)
-    record_path = tmp_path / "overlay" / PROJECTS / "p" / PROJECT_RECORD
+    record_path = tmp_path / "overlay" / PROJECTS / "p" / RECORD
     text = UNPARSEABLE_RECORD if record == "unterminated" else f"x = {LONG_NUMBER}\n"
     record_path.write_text(text, encoding="utf-8")
     machine = _machine(tmp_path)
     rows = _checks(tmp_path, root, machine=machine)
     attached = _by_name(rows, "attached")
-    assert attached.status == WARN and f"/{PROJECT_RECORD} is not valid TOML" in attached.detail
+    assert attached.status == WARN and f"/{RECORD} is not valid TOML" in attached.detail
     for name in ("bundles", "memory"):
         assert "could not run" not in _by_name(rows, name).detail
     store = tmp_path / "overlay" / PROJECTS / "p" / "memory"
     (tmp_path / "home").mkdir(exist_ok=True)
-    with pytest.raises(Refusal, match=f"/{PROJECT_RECORD}.* is not valid TOML"):
+    with pytest.raises(Refusal, match=f"/{RECORD}.* is not valid TOML"):
         attach_check(root, store=store, machine=machine)
 
 

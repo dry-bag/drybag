@@ -36,7 +36,6 @@ from stayfixed.errors import Failure
 from stayfixed.fsops import read_regular_text
 from stayfixed.harnesses import CLAUDE
 from stayfixed.jsonobject import WRITTEN_PAST
-from stayfixed.printed import quoted
 from stayfixed.scaffold import (
     EntriesError,
     ParserLimitError,
@@ -228,10 +227,8 @@ def codex_rules(binding: Binding) -> tuple[tuple[str, Path], ...]:
     return tuple((f"{CODEX_RULES}/{name}", source) for name, source in winners.items())
 
 
-def _unlisted(source: Path, error: OSError) -> Failure:
-    return Failure(
-        f"{quoted(str(source))} cannot be listed ({fsops.said(error)}), so nothing was written"
-    )
+def _unlisted(sentence: str) -> Failure:
+    return Failure(f"{sentence}, so nothing was written")
 
 
 def claude_sources(held: Sequence[Plate], name: str) -> tuple[tuple[Path, Path | None], ...]:

@@ -18,11 +18,16 @@ import pytest
 
 from stayfixed.attach.binding import Binding
 from stayfixed.attach.permissions import codex_rules
-from stayfixed.attach.render import read_parts, render
+from stayfixed.attach.render import RenderRecord, read_parts, write
 from stayfixed.attach.rules import read as rules_read
 from stayfixed.attach.tags import collisions
 from stayfixed.config.plates import plates
 from tests.tagged import with_tags
+
+
+def render(overlay: Path, project: str, id: str) -> RenderRecord:
+    return write(id, read_parts(plates(overlay, project)[0]))
+
 
 ID = "0123456789abcdef0123456789abcdef"
 COMMON = {"type": "command", "command": "common.sh"}
