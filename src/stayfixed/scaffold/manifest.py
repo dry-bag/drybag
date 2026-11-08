@@ -47,8 +47,6 @@ class ManifestError(Refusal):
 
 class Kind(StrEnum):
     TEMPLATE = "template"
-    MANAGED_REGION = "managed-region"
-    ONCE = "once"
 
 
 class Location(StrEnum):

@@ -5,7 +5,7 @@
 see, and none was ignored, so every `git status` listed them and a `git add -A` committed the
 owner's personal rules. `.gitignore` is the wrong place to
 hide them: it is committed, so the hiding would itself be a change every collaborator gets, and
-`attach` writes nothing there (`init`'s own region is `init`'s). `info/exclude` is the
+`attach` writes nothing there. `info/exclude` is the
 repository's own exclude file, which no clone carries, and git resolves it in the common
 directory, so one block covers the main checkout and every worktree.
 

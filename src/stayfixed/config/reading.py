@@ -43,7 +43,7 @@ NO_POSITION = "(at a position tomllib did not report)"
 # Uncaught, that is an internal error, the class stayfixed keeps for its own defects. And an
 # integer literal longer than the interpreter converts (4,300 digits by default,
 # `sys.get_int_max_str_digits`) is valid TOML that `tomllib` answers with a plain `ValueError`,
-# which is not a `TOMLDecodeError`: one line of a committed file ended `doctor` and `init` the
+# which is not a `TOMLDecodeError`: one line of a committed file ended `doctor` the
 # same way. Every reader of a document somebody else wrote catches
 # all three. `ValueError` is caught whole, `TOMLDecodeError` being one: no reader's `try` holds
 # anything else that raises it but a decode, whose `UnicodeDecodeError` it catches first or

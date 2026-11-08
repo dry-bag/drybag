@@ -30,7 +30,7 @@ from pathlib import Path
 
 from stayfixed.errors import Failure
 from stayfixed.overlay.layout import OVERLAY_FILES
-from stayfixed.scaffold import Kind, Template
+from stayfixed.scaffold import Template
 from stayfixed.templates import tree
 
 OVERLAY = "overlay"
@@ -41,11 +41,10 @@ def template_root() -> Path:
 
     A path is always returned, existing or not, so a caller that cannot find the tree can name
     where it looked instead of handling a `None`. `templates()` is the one place that becomes a
-    refusal a user can act on. `stayfixed.templates.tree` is the one resolver both this tree and
-    `project/`'s answer through, so the two cannot come to disagree about where "shipped"
-    is — `resources.files` answers a `Path` for every filesystem install, which is every install
-    this project supports; `fsops` contains writes with `dir_fd=` and `O_NOFOLLOW`, so a
-    zip-imported stayfixed could not write an overlay in any case.
+    refusal a user can act on. `stayfixed.templates.tree` is the resolver — `resources.files`
+    answers a `Path` for every filesystem install, which is every install this project supports;
+    `fsops` contains writes with `dir_fd=` and `O_NOFOLLOW`, so a zip-imported stayfixed could not
+    write an overlay in any case.
     """
     return tree(OVERLAY)
 
@@ -57,7 +56,7 @@ def _render(path: Path) -> str:
 def templates() -> list[Template]:
     """One whole-file `Template` per shipped file, rendered from the tree at apply time.
 
-    Every artifact is `Kind.TEMPLATE`: the overlay is a repository stayfixed creates outright,
+    Every artifact is a whole-file template: the overlay is a repository stayfixed creates outright,
     so there is no file of somebody else's to merge a region or a keyed entry into. That is
     what makes `overlay upgrade` the engine's hash-and-skip rule rather than a second copy of
     it — an untouched file is refreshed, an edited one is skipped and named.
@@ -71,7 +70,6 @@ def templates() -> list[Template]:
     return [
         Template(
             id=relative,
-            kind=Kind.TEMPLATE,
             target=relative,
             source=f"{OVERLAY}/{relative}",
             render=partial(_render, root / relative),

@@ -33,7 +33,6 @@ import zipfile
 from pathlib import Path
 
 from stayfixed.overlay.api import OVERLAY_FILES
-from stayfixed.project.api import PROJECT_FILES
 from stayfixed.scaffold import MANIFEST_PATH
 
 # The mutation declarations, one file per group. The sdist must carry the files this checkout
@@ -44,11 +43,6 @@ DECLARATIONS = Path(__file__).resolve().parents[1] / "mutations"
 WHEEL_MUST = (
     "stayfixed/presets/recommended.toml",
     *(f"stayfixed/templates/overlay/{relative}" for relative in OVERLAY_FILES),
-    # The project footprint's own tree. `init` reads it at runtime through
-    # `stayfixed.templates.tree`, exactly as `setup --overlay <path>` reads the tree above, so a
-    # build that dropped it would leave every installed stayfixed unable to initialise anything
-    # while the checkout's own suite stayed green.
-    *(f"stayfixed/templates/project/{name}" for name in PROJECT_FILES),
 )
 # What a downstream packager needs to verify the sdist, plus the three files the harness runs
 # without an interpreter of ours.

@@ -151,7 +151,7 @@ exception kept for a reason outside the code ("Tests" gives it): it groups their
 into files, and a new area needs no row there: its entries go in the group its path falls into.
 
 Today the discovered ones are `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`,
-`memory`, `overlay`, `project`, `setup` and `sync`, and every module under
+`memory`, `overlay`, `setup` and `sync`, and every module under
 `src/stayfixed/` sits on one of three sides, which `src/stayfixed/areas.py` names. **Delivery**
 (`DELIVERY_AREAS`) is the private layer, a machine's setup and the session hints:
 `overlay` renders and upgrades the private overlay; `attach` binds a repository to one, and its
@@ -161,9 +161,8 @@ of the overlay's memory notes (the session triggers, a detached job and its `doc
 on per machine; and `hints` the session hints
 (the background-cleanup hint, the red-run note and the command scanner they share). The **pack**
 (`PACK_PACKAGES`) is the methodology's records and checks: `docs`
-the documentation and plan lints, and `guards` the commit-message rules and the test-run checks;
-and `project` holds the shipped project templates and `init`, the command that writes a
-repository's scaffold from them. Every other module is the **core**,
+the documentation and plan lints, and `guards` the commit-message rules and the test-run checks.
+Every other module is the **core**,
 which both sides share, `cli.py` and the subpackages that are not areas included: its areas
 (`CORE_AREAS`) are `hooks`, the dispatcher every hook event goes through, and `doctor`, which
 reports on what every other area left behind and repairs none of it. (`config`, `presets`, `release`, `scaffold`, `templates` and

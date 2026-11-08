@@ -17,8 +17,8 @@ once every key has a recorded value. The settings file's `pluginConfigs` follows
 from its own side: a value it already holds is kept, whoever wrote it.
 
 **A plugin is installed only when it is named.** A third-party plugin runs in every session of its
-harness, its hooks included, and the preset pins none, so the preset only recommends them
-(`[plugins] recommended`, which `init --questions` offers) and `setup --plugin NAME` installs one.
+harness, its hooks included, and the preset pins none, so `setup --plugin NAME`
+installs one and the README recommends them.
 
 **Marketplaces are registered before anything is installed from them, and per-plugin sources are
 never guessed.** The first draft attempted `claude plugin install superpowers@obra` on a fresh

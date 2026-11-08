@@ -36,8 +36,7 @@ SECTION_NAME = re.compile(r"^[a-z][a-z_]*\Z")
 # branch-name rules refuse (`git check-ref-format --branch`), so nothing names a branch no
 # repository can have: `..`, `//`, a component starting with `.`, a component ending in `.lock`,
 # a trailing `/` or `.`, and the name `HEAD` itself. `@{` and `-` at the start are outside the
-# set already. The lookaheads end on `$`, which ECMA-262 reads as the end too, so
-# `init --questions` can hand the pattern to a JSON Schema client.
+# set already.
 BRANCH_NAME = re.compile(
     r"^(?!HEAD$)(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[./]$)"
     r"[A-Za-z0-9][A-Za-z0-9._/-]*\Z"

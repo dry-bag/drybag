@@ -635,7 +635,6 @@ def test_vacant_raises_for_a_directory_it_cannot_list(
 OTHER_PREDICATES: dict[tuple[str, str, str], tuple[int, str]] = {
     ("areas.py", "_has_submodule", "is_file"): (2, "the package's own directory"),
     ("overlay/template.py", "templates", "is_dir"): (1, "the wheel's own template tree"),
-    ("project/templates.py", "read", "is_dir"): (1, "the wheel's own template tree"),
 }
 
 

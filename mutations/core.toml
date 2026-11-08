@@ -97,7 +97,6 @@ reddens = [
   "tests/docs/test_plans.py::test_a_touched_plan_named_in_bytes_that_are_not_utf_8_is_listed_and_linted",
   "tests/test_git_answers.py::test_the_hook_path_reads_a_checkout_path_that_is_not_utf_8_as_that_path",
   "tests/test_git_answers.py::test_an_origin_url_that_is_not_utf_8_is_answered_as_itself",
-  "tests/test_git_answers.py::test_init_questions_on_an_origin_url_that_is_not_utf_8_asks_and_does_not_crash",
   "tests/test_git_answers.py::test_a_hooks_path_that_is_not_utf_8_is_the_directory_git_names",
   "tests/test_git_answers.py::test_a_dirty_name_that_is_not_utf_8_is_counted_and_not_raised",
 ]
@@ -953,8 +952,7 @@ reddens = [
 # source for at least five of its own faults — a duplicate table, a duplicate inline-table key, a
 # redefined namespace, an invalid character, an overwritten value. A TOML key is arbitrary quoted
 # text, so interpolating the exception whole put unbounded repository bytes into a `ConfigError`
-# and, through `project.init._existing`, into a refusal the `init` skill is instructed to relay to a
-# model and stop on. Only the position prints, and the fallback reports an absent suffix rather than
+# and into a refusal the `attach` skill is instructed to relay to a model and stop on. Only the position prints, and the fallback reports an absent suffix rather than
 # the message — a fallback to `str(exc)` is the one change that would reopen this silently. The
 # sibling leak in the same loader function, the unknown-section list, is bounded to `SECTION_NAME`;
 # this completes it, and one extractor serves all three call sites.
@@ -966,7 +964,6 @@ after = "    return str(exc)"
 reddens = [
   "tests/config/test_loader.py::test_a_document_that_will_not_parse_reports_only_where_the_parser_stopped",
   "tests/config/test_loader.py::test_a_parse_failure_with_no_position_says_so_rather_than_quoting_the_message",
-  "tests/project/test_init.py::test_a_configuration_that_will_not_parse_never_quotes_its_own_keys",
   "tests/docs/test_trail.py::test_a_trail_file_that_will_not_parse_never_quotes_its_own_keys",
 ]
 
@@ -1123,8 +1120,6 @@ before = "        if names_stayfixed_directory(relative):"
 after = "        if False:"
 reddens = [
   "tests/config/test_paths.py::test_a_paths_value_inside_stayfixeds_own_directory_is_refused_and_never_quoted",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-a-local-state-file-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-a-local-state-file-case-folded-init]",
 ]
 
 # The case half, on its own. A rule that matched `.git` exactly would be green on every test
@@ -1138,13 +1133,11 @@ after = "    return any(part == name for part in relative.split(\"/\"))"
 reddens = [
   "tests/test_fsops.py::test_gits_control_directory_is_reserved_at_every_depth_and_in_any_case",
   "tests/config/test_paths.py::test_contained_refuses_gits_control_directory_at_any_depth_and_in_any_case",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-git-s-hook-case-folded-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-a-local-state-file-case-folded-init]",
 ]
 
 # The call site, which is what regressed. A TOML key is arbitrary quoted text, so this message
 # joined a repository's own bytes straight into a `ConfigError` — raw ESC and raw newlines into
-# a terminal and into a refusal the `init` skill is instructed to relay to a model. Reachable on
+# a terminal and into a refusal the `attach` skill is instructed to relay to a model. Reachable on
 # all nine tables, and two functions from the helper written in that file for this rule. The
 # *missing*-key message beside it is built from schema field names and is deliberately not
 # bounded.
@@ -1286,21 +1279,14 @@ reddens = [
   "tests/test_harnesses.py::test_a_harness_can_key_a_set_and_a_dict",
 ]
 
-# The footprint commands' hidden-write invariant (`tests/project/test_footprint_invariant.py`) is
-# also named by other entries whose guards it holds. Its own are `mutations/`'s "git's control
-# directory is named by no path", the shared `.git` predicate both call sites ask, and the guards
-# made to refuse more than they should, which the legitimate cases catch: `mutations/`'s "the
-# engine refuses every recorded artifact".
-
+# The shared `.git` predicate both call sites ask.
 [[mutation]]
 name = "git's control directory is named by no path"
 file = "src/stayfixed/fsops.py"
 before = '    return names_component(relative, CONTROL_DIRECTORY)'
 after = '    return False'
 reddens = [
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-git-s-hook-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[roadmap-onto-git-s-hook-case-folded-init]",
-  "tests/project/test_footprint_invariant.py::test_no_hostile_input_reaches_a_file_git_hides[a-new-file-under-git-init]",
+  "tests/config/test_paths.py::test_contained_refuses_gits_control_directory_at_any_depth_and_in_any_case",
 ]
 
 # A file a person or a repository owns that is not UTF-8 is its reader's own failure, never an
@@ -1327,7 +1313,7 @@ after = """    except KeyError:
         raise MachineConfigError(NOT_UTF8.format(path=path)) from None"""
 reddens = [
   "tests/test_undecodable.py::test_an_undecodable_file_is_its_readers_own_failure[the machine file, under the loader]",
-  "tests/test_undecodable.py::test_a_command_meeting_an_undecodable_file_fails_and_does_not_crash[init-machine]",
+  "tests/test_undecodable.py::test_a_command_meeting_an_undecodable_file_fails_and_does_not_crash[docs-check-machine]",
 ]
 
 [[mutation]]
@@ -1350,18 +1336,17 @@ reddens = [
   "tests/docs/test_plans.py::test_a_tag_named_like_the_tracking_branch_does_not_choose_the_default_base",
 ]
 
-# A flag with a grammar refuses a value outside it at the parser: `gate --base` a short name a tag
-# could answer for, and `init` an answer outside its set.
+# A flag with a grammar refuses a value outside it at the parser.
 [[mutation]]
-name = "a flag's grammar takes a value outside it as typed: gate --base a short name a tag answers for, init an answer"
+name = "a flag's grammar takes a value outside it as typed"
 file = "src/stayfixed/command.py"
 before = '        if not pattern.match(value):'
 after = '        if False:'
 reddens = [
-  "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
+  "tests/setup/test_commands.py::test_the_parser_refuses_a_plugin_name_outside_its_grammar_and_writes_nothing",
 ]
 
-# `[project] base_branch` and `--base-branch` follow git's own branch-name rules, so no command
+# `[project] base_branch` follows git's own branch-name rules, so no command
 # compares against a branch no repository can have. Each rule dropped once.
 [[mutation]]
 name = "the gate branch grammar takes a '..' git refuses"
@@ -1369,8 +1354,7 @@ file = "src/stayfixed/config/schema.py"
 before = '''    r"^(?!HEAD$)(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[./]$)"'''
 after = '''    r"^(?!HEAD$)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[./]$)"'''
 reddens = [
-  "tests/project/test_templates.py::test_the_gate_branch_grammar_refuses_what_git_refuses",
-  "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
+  "tests/config/test_loader.py::test_the_gate_branch_grammar_refuses_what_git_refuses",
 ]
 
 [[mutation]]
@@ -1379,7 +1363,7 @@ file = "src/stayfixed/config/schema.py"
 before = '''    r"^(?!HEAD$)(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[./]$)"'''
 after = '''    r"^(?!HEAD$)(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*[./]$)"'''
 reddens = [
-  "tests/project/test_templates.py::test_the_gate_branch_grammar_refuses_what_git_refuses",
+  "tests/config/test_loader.py::test_the_gate_branch_grammar_refuses_what_git_refuses",
 ]
 
 [[mutation]]
@@ -1388,8 +1372,7 @@ file = "src/stayfixed/config/schema.py"
 before = '''    r"^(?!HEAD$)(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[./]$)"'''
 after = '''    r"^(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[./]$)"'''
 reddens = [
-  "tests/project/test_templates.py::test_the_gate_branch_grammar_refuses_what_git_refuses",
-  "tests/project/test_command.py::test_the_parser_refuses_an_answer_outside_its_grammar_and_writes_nothing",
+  "tests/config/test_loader.py::test_the_gate_branch_grammar_refuses_what_git_refuses",
 ]
 
 # The loader holds `[project] base_branch` to the branch grammar: the value becomes
@@ -2495,8 +2478,6 @@ before = "        return _integer(value, where)"
 after = "        return str(value)"
 reddens = [
   "tests/test_tomlout.py::test_an_integer_past_the_conversion_limit_round_trips_in_hexadecimal",
-  "tests/project/test_init.py::test_an_adopted_document_holding_a_hex_integer_of_any_length_is_the_configurations_error[integer-key]",
-  "tests/project/test_init.py::test_an_adopted_document_holding_a_hex_integer_of_any_length_is_the_configurations_error[string-key]",
   "tests/setup/test_machine.py::test_a_hand_written_hex_integer_of_any_length_survives_the_rewrite",
 ]
 
@@ -4194,7 +4175,7 @@ reddens = [
 
 # A checkout nothing on this machine binds has no project to build a configuration for: without the
 # guard, the call ends on an error instead of `None`, and each reader that skips on `None` (doctor's
-# rows, the memory commands' `init` remedy) ends red on it.
+# rows, the memory commands' refusal) ends red on it.
 [[mutation]]
 name = "bound_config answers for an unbound checkout"
 file = "src/stayfixed/config/session.py"

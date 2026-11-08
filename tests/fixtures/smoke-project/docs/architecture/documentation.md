@@ -10,9 +10,8 @@ current.
 **The always-loaded instruction file has budgets.** It is read into every session, so it stays
 a map: what this repository is, and links out. The numbers come from the preset, and
 `stayfixed.toml`'s `[budgets]` table is where you lower one — a freshly initialised file has no
-such table, so there is nothing to read there until you write it. Where `stayfixed init` created
-the instruction file, its opening paragraph states them; where the file was already there, `init`
-added only its own region, and `stayfixed docs check` names a budget's limit when it is exceeded.
+such table, so there is nothing to read there until you write it. `stayfixed docs check` names a
+budget's limit when it is exceeded.
 `stayfixed docs check` enforces whichever is in force, and the way to satisfy one is to move
 detail into the document that owns it rather than to raise the number.
 

@@ -297,7 +297,7 @@ def test_a_symlinked_configuration_is_one_that_does_not_load_whatever_it_points_
 ) -> None:
     # The presence check asked `is_file()`, which follows the link: a link to a regular file
     # reached `load` and its refusal, one to `/dev/zero` was reported as no stayfixed.toml at all,
-    # with `stayfixed init --yes` as the remedy. Both are the session's whole fallback now, red in
+    # with a hand-written file as the remedy. Both are the session's whole fallback now, red in
     # its words. Mutation (`mutations/`'s "a session lets a symlinked stayfixed.toml raise"): the
     # report ends in the refusal.
     root = tmp_path / "project"

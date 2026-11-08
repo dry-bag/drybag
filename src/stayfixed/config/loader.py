@@ -149,7 +149,9 @@ class TooLargeDocument(ConfigError):
     tells apart by this type to say what it means for the session (`config.session`)."""
 
 
-NOT_THERE = "{path} does not exist; run `stayfixed init` first"
+NOT_THERE = (
+    "{path} does not exist; write one: `[stayfixed] version` and `[project] name` are enough"
+)
 
 
 def _table(raw: dict[str, Any], name: str) -> dict[str, Any]:
@@ -170,7 +172,7 @@ def _named(unknown: list[str], noun: str) -> str:
     **Every name in a `stayfixed.toml` is repository-authored, not only the table names.** A TOML
     key is arbitrary quoted text, so `[paths] "docs\u001b[31m\nIGNORE ALL PRIOR RULES" = 1` puts raw
     ESC and raw newlines into `[paths] has unknown key(s): ...` — a refusal the terminal renders
-    and the `init` skill relays to a model — on all nine tables, unless the keys are held to the
+    and the `attach` skill relays to a model — on all nine tables, unless the keys are held to the
     same rule as the section list.
 
     `SECTION_NAME` is the grammar both callers use, and it is a deliberate re-reading rather than
@@ -232,7 +234,7 @@ def _enum(section: str, key: str, value: str, allowed: tuple[str, ...]) -> None:
 
     The key this guards, `memory.mode`, is a repository-authored string bounded by no grammar, so
     a clone can write anything at all into it, and the refusal reaches a terminal and a model
-    through the `init` and `attach` skills' relay. `; got {value!r}` therefore put unbounded
+    through the `attach` skill's relay. `; got {value!r}` therefore put unbounded
     repository bytes into it, as it did for the `ci.mode` an earlier stayfixed read:
     `ci.mode must be one of reusable, uvx, none; got '\\x1b[2JIGNORE PRIOR RULES'`. `!r` escapes
     the control characters, which makes it milder than a raw-bytes leak and not a different
@@ -347,8 +349,8 @@ def loads(
 ) -> Config:
     """Build a `Config` from `text` as `stayfixed.toml`'s contents, without reading a file.
 
-    `load` is "read the file, then `loads`"; `init --yes` needs a `Config` for a document it
-    has not written to disk yet, so the parse-and-validate half is this function on its own.
+    `load` is "read the file, then `loads`"; a session has the text already, so the
+    parse-and-validate half is this function on its own.
     `owner` is the machine owner's layer (`config.owner.resolve_owner`), read once by the caller
     and stood on the document's preset (`config.owner.rebased`): its `personal` stands in for the
     machine file's, and its session budgets are folded into `[budgets]` as configured values that
@@ -664,8 +666,8 @@ def _holding(table: dict[str, Any], dotted: str) -> tuple[dict[str, Any], str] |
 
 def preset_defaults(project: str, *, preset: str = DEFAULT_PRESET) -> Config:
     """A `Config` built from a preset's `[defaults.*]` alone, for a directory that has no
-    `stayfixed.toml`: `init --questions` reads its defaults from it before the file it would load
-    exists, and `session.command_config` builds one for a caller that names the project itself.
+    `stayfixed.toml`: `session.command_config` builds one for a caller that names the project
+    itself.
 
     `stayfixed.version` is the one value the preset does not carry and `_build` requires, so it
     comes from `stayfixed.__version__` rather than from a default that would hold an empty string.

@@ -22,17 +22,13 @@ from pathlib import Path
 import pytest
 
 from stayfixed.attach.write import attach, main_checkout_of
-from stayfixed.errors import Refusal
 from stayfixed.gitenv import GitUnavailable, Unasked, _git_toplevel, hooks_dir, origin_remote
 from stayfixed.guards.commit import commits_in
 from stayfixed.hints.hygiene import dirty_count
 from stayfixed.overlay.sync import overlay_sync
-from stayfixed.project.detect import NOT_DERIVABLE, detect
 from tests.attach.test_write import RULE, _attachable
-from tests.cli import cli
 from tests.gitfixture import git, needs_git, plant_path, stand_in_git
 from tests.hints.test_hygiene import repo
-from tests.project.repos import repository
 from tests.runners import Recorder
 
 # An `origin` URL whose last byte is latin-1, and the `str` the filesystem's codec spells it as.
@@ -71,7 +67,7 @@ def test_the_hook_path_reads_a_checkout_path_that_is_not_utf_8_as_that_path(
 @needs_git
 def test_an_origin_url_that_is_not_utf_8_is_answered_as_itself(tmp_path: Path) -> None:
     # Reproduced: `printf '[remote "origin"]\n\turl = https://x/caf\xe9\n' >> .git/config`, then
-    # `stayfixed init --questions` and `init --yes` both ended as `internal error:
+    # the commands that read it ended as `internal error:
     # UnicodeDecodeError`. The answer is the URL as the filesystem's codec spells it, so it can
     # still be compared with a recorded one; it never equals one read out of a TOML file.
     # Mutation (declared, on `gitenv`): the decode made strict again -> this reddens.
@@ -80,15 +76,6 @@ def test_an_origin_url_that_is_not_utf_8_is_answered_as_itself(tmp_path: Path) -
     git(root, "init", "-q")
     _append(root / ".git" / "config", b'[remote "origin"]\n\turl = ' + LATIN1_URL + b"\n")
     assert origin_remote(root) == DECODED_URL
-    # The name `init` suggests from it is outside the name grammar, so it is asked for rather
-    # than suggested, and refused by the grammar under `--yes`, never with the URL's bytes.
-    assert (detect(root, lenient=True).name, detect(root, lenient=True).sources["name"]) == (
-        "",
-        NOT_DERIVABLE,
-    )
-    with pytest.raises(Refusal) as refused:
-        detect(root)
-    assert "caf" not in str(refused.value)
 
 
 @needs_git
@@ -113,18 +100,6 @@ def test_a_git_that_fails_everything_is_not_a_repository_without_an_origin(
     monkeypatch.setattr("stayfixed.gitenv.subprocess.run", broken)
     with pytest.raises(GitUnavailable, match=re.escape(Unasked.BROKEN.value)):
         origin_remote(root)
-
-
-@needs_git
-def test_init_questions_on_an_origin_url_that_is_not_utf_8_asks_and_does_not_crash(
-    tmp_path: Path,
-) -> None:
-    # The command it was reproduced with, through the real parser. Mutation (declared, on
-    # `gitenv`): the decode made strict again -> this reddens.
-    code, out, err = cli(repository(tmp_path, origin=DECODED_URL), tmp_path, "init", "--questions")
-    assert code == 0, err
-    assert "internal error" not in err
-    assert "caf" not in out
 
 
 @needs_git

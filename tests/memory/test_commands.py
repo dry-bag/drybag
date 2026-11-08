@@ -624,7 +624,7 @@ def _bound_without_file(tmp_path: Path, *, layer: str = '[memory]\nmode = "overl
 
 @needs_git
 def test_memory_index_renders_in_a_bound_checkout_with_no_file(tmp_path: Path) -> None:
-    # Every memory command refused such a checkout with "run `stayfixed init`", though `attach`
+    # Every memory command refused such a checkout as having no configuration, though `attach`
     # had bound it and its overlay's layers say where the memory is. Mutation: `mutations/`'s
     # "bound_config answers for an unbound checkout" is the other side of this seam.
     root = _bound_without_file(tmp_path)
@@ -639,7 +639,7 @@ def test_an_unbound_checkout_with_no_file_is_still_told_to_init(
 ) -> None:
     # The same checkout and overlay, but nothing on this machine binds it: a clone gains no
     # configuration from the overlay it never attached to, so every command that needs a store
-    # still refuses with `init` as the way out.
+    # still refuses, naming the file it lacks.
     root = _bound_without_file(tmp_path)
     id = binding.read_id(root)
     assert id is not None
@@ -651,7 +651,7 @@ def test_an_unbound_checkout_with_no_file_is_still_told_to_init(
         ["promote", "--changed"],
     ):
         assert invoke(["memory", *argv, *common(root)]) == 1, argv
-        assert "stayfixed init" in capsys.readouterr().err, argv
+        assert "does not exist; write one" in capsys.readouterr().err, argv
 
 
 @needs_git

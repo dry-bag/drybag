@@ -94,7 +94,6 @@ def test_the_preset_names_the_plugins_and_the_deny_rules() -> None:
     # superpowers is named because `README.md` says so: stayfixed is not a replacement for
     # superpowers, and the recommended preset recommends it.
     preset = load_preset("recommended")
-    assert any("superpowers" in name for name in preset["plugins"]["recommended"])
     assert any(".env" in rule for rule in preset["deny"]["global"])
 
 

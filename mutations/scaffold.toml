@@ -145,38 +145,8 @@ reddens = [
 [[mutation]]
 name = "an artifact whose bytes are already the template's is planned again"
 file = "src/stayfixed/scaffold/engine.py"
-before = "            if present is not None and digest(present) == digest(stamp):"
-after = "            if False:"
+before = "        if digest(current) == digest(body):"
+after = "        if False:"
 reddens = [
   "tests/scaffold/test_engine.py::test_a_recorded_unchanged_file_yields_no_action",
-]
-
-# Only a whole-file template is recorded, and `init` builds none: a plan or an apply with nothing to
-# record neither reads `.stayfixed/manifest.json` nor writes one, so a project keeps no manifest and
-# one an earlier release committed, damaged or not, is never read.
-[[mutation]]
-name = "a create-once artifact or a managed region is recorded in a manifest"
-file = "src/stayfixed/scaffold/engine.py"
-before = "                if template.kind is Kind.TEMPLATE\n"
-after = "                if True\n"
-reddens = [
-  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
-]
-
-[[mutation]]
-name = "a plan with nothing to record reads the manifest"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    manifest = Manifest.read(root) if recorded else Manifest({})"
-after = "    manifest = Manifest.read(root)"
-reddens = [
-  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
-]
-
-[[mutation]]
-name = "an apply with nothing to record reads the manifest"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    manifest = Manifest.read(root) if any(a.record for a in planned.actions) else None"
-after = "    manifest = Manifest.read(root)"
-reddens = [
-  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
 ]

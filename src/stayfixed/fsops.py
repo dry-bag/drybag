@@ -123,19 +123,6 @@ def reading(label: object, refusal: Callable[[str], Exception]) -> Iterator[None
         raise refusal(unreadable(label, exc)) from None
 
 
-def path_key(relative: str) -> str:
-    """The form in which two root-relative paths are compared for identity: case-folded.
-
-    The default filesystems on macOS and Windows fold case, so `claude.md` and `CLAUDE.md` are
-    one file there, and a rule that asks "is this the same file" by exact string equality answers
-    no for a pair the disk answers yes for. It is a pure string rule, the same on every
-    filesystem, so a case-sensitive machine refuses and withholds exactly what a folding one
-    must, and the tests that hold it redden on Linux too. Where a comparison must stay exact (a
-    `--force` path, an exemption that only relaxes a guard), its caller says why.
-    """
-    return relative.casefold()
-
-
 def names_component(relative: str, name: str) -> bool:
     """Whether any component of `relative` is `name`, spelled in any case.
 

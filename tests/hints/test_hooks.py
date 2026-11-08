@@ -76,7 +76,7 @@ def test_every_handler_declares_a_known_event() -> None:
 
 def test_no_config_silences_the_hygiene_note_and_never_the_guard(tmp_path: Path) -> None:
     # With no stayfixed.toml the guard was silent too, by design, so a repository that had not
-    # run `stayfixed init` was not guarded. It judges with any configuration now, none included,
+    # write a `stayfixed.toml` was not guarded. It judges with any configuration now, none included,
     # and the hygiene note, which is about the project, stays silent. Mutation (`mutations/`'s
     # "the hygiene note judges with no project configuration"): the note raises on `None`.
     verdicts = {

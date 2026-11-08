@@ -1,6 +1,6 @@
 """A `stayfixed.toml` that is a symlink, met by every command family that loads the configuration.
 
-There were two readers of the file: `init` went through `read_document`, which refuses a symlink,
+There were two readers of the file: one went through `read_document`, which refuses a symlink,
 and every other command through a plain `read_text`, which follows one. A clone's `stayfixed.toml ->
 /dev/zero` then kept `plan check` reading until the machine ran out of memory.
 `load` now reads through `read_document`, so each family below is refused before anything is read.
@@ -53,31 +53,6 @@ def test_every_command_family_refuses_a_symlinked_stayfixed_toml(
     tmp_path: Path, argv: list[str]
 ) -> None:
     code, out, err = cli(_linked(tmp_path), tmp_path, *argv)
-    assert code == 2, err
-    assert f"{CONFIG_FILE!r} passes through a symlink" in err
-    assert out == ""
-
-
-@pytest.mark.parametrize("target", ["regular-file", "/dev/zero"])
-@pytest.mark.parametrize(
-    "argv",
-    [
-        pytest.param(["init", "--questions"], id="init-questions"),
-        pytest.param(["init", "--yes", "--dry-run", "--name", "widget"], id="init-answering"),
-    ],
-)
-def test_init_refuses_a_symlinked_stayfixed_toml_whatever_it_points_at(
-    tmp_path: Path, argv: list[str], target: str
-) -> None:
-    # `init`'s answer-sheet check asked `is_file()`, which follows the link: a link to a regular
-    # file was refused as an answer sheet, and `--questions` over a link to `/dev/zero` read it
-    # as no file and asked its questions, exit 0. Mutation (declared): the bare `is_file()`
-    # again -> the regular file is refused in the answer sheet's words, `/dev/zero` exits 0.
-    root = _linked(tmp_path)
-    if target != "regular-file":
-        (root / CONFIG_FILE).unlink()
-        (root / CONFIG_FILE).symlink_to(target)
-    code, out, err = cli(root, tmp_path, *argv)
     assert code == 2, err
     assert f"{CONFIG_FILE!r} passes through a symlink" in err
     assert out == ""

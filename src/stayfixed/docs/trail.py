@@ -143,9 +143,8 @@ def read_trail(path: Path, where: str) -> Trail:
     except UNPARSEABLE as exc:
         # Through `config.reading.toml_position`: `tomllib`'s message embeds the source for
         # several of its faults — a duplicate table is reported with the table's name in it —
-        # and a TOML key is arbitrary quoted text. `trail.toml` is one of the twelve files
-        # `stayfixed init` ships, so every repository `init` touches has one that this function
-        # parses, which is what makes the leak reachable here.
+        # and a TOML key is arbitrary quoted text. A `trail.toml` is a file a repository
+        # commits, which is what makes the leak reachable here.
         raise Failure(f"{shown} is not valid TOML {toml_position(exc)}") from None
     themes: list[tuple[str, ThemePattern]] = []
     # `[[theme]]` is an array of tables, so `theme` is a list — but the whole file is

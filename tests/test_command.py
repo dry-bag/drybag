@@ -21,8 +21,7 @@ from stayfixed.command import (
 )
 from stayfixed.config.owner import IGNORED_NOTE, MACHINE_FILE_NOTE, UNKNOWN_KEY
 from tests.cli import cli, subparsers
-from tests.gitfixture import needs_git
-from tests.project.repos import initialised, repository
+from tests.gitfixture import needs_git, repository
 
 SHARED = {
     "--root": ROOT_HELP,
@@ -135,14 +134,15 @@ DOCUMENT = f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname
 def test_a_command_says_a_machine_file_note_once_however_many_documents_it_loads(
     tmp_path: Path,
 ) -> None:
-    # The note was said by every load, so once a document: twice in `init --yes`, which adopts a
-    # file it loads as merged and as on disk, one per copy it read. The command resolves the
-    # owner's layer once (`command.command_owner`) and every load takes it. Mutation (`mutations/`'s
-    # "a command keeps quiet about what it read past in the machine file"): none; no one-line edit
-    # puts the side effect back into the load, and with it there each case is said again.
+    # The note was said by every load, so once a document, one per copy read. The command resolves
+    # the owner's layer once (`command.command_owner`) and every load takes it. Mutation
+    # (`mutations/`'s "a command keeps quiet about what it read past in the machine file"): none; no
+    # one-line edit puts the side effect back into the load, and with it there each case is said
+    # again.
     root = repository(tmp_path)
     (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
-    argv = ("init", "--yes", "--json")
+    (root / "AGENTS.md").write_text("# Agents\n\n## Current status\n", encoding="utf-8")
+    argv = ("docs", "check", "--json")
     machine = tmp_path / "machine.toml"
     machine.write_text(UNREAD_KEY, encoding="utf-8")
     code, out, err = cli(root, tmp_path, *argv, machine=machine)
@@ -157,7 +157,8 @@ def test_a_command_refuses_a_machine_file_that_does_not_load(tmp_path: Path) -> 
     # else: nothing of it can be read past key by key. Read as a session reads it, the command
     # says the session's note, which quotes the same refusal, and exits 0. Mutation
     # (`mutations/`'s "a command reads the owner's layer as a session does"): exit 0.
-    root = initialised(tmp_path)
+    root = repository(tmp_path)
+    (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
     machine = tmp_path / "machine.toml"
     machine.write_text("[personal\nx = 1\n", encoding="utf-8")
     code, _, err = cli(root, tmp_path, "docs", "check", machine=machine)

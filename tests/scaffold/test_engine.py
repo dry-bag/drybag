@@ -23,13 +23,11 @@ from stayfixed.scaffold.manifest import (
     digest,
 )
 from stayfixed.scaffold.model import Action, Plan, Template, Verb
-from stayfixed.scaffold.regions import Style, upsert
 
 
 def a_template(**overrides: object) -> Template:
     base = Template(
         id="agents-md",
-        kind=Kind.TEMPLATE,
         target="AGENTS.md",
         source="project/AGENTS.md",
         render=lambda: "BODY\n",
@@ -89,59 +87,7 @@ def test_a_hand_edited_file_is_skipped_and_named(tmp_path: Path) -> None:
     assert [(a.verb, a.target) for a in result.actions] == [(Verb.SKIP_MODIFIED, "AGENTS.md")]
 
 
-def test_a_once_artifact_is_never_updated(tmp_path: Path) -> None:
-    # `skip_modified` and not `unchanged`: a file that is present with no record is `skip_modified`
-    # for a `template` or a `once` kind, and `unchanged` renders as "up to date" for a file
-    # stayfixed deliberately never looks inside again. The user needs "left alone because it is
-    # yours", which is the statement that is true.
-    (tmp_path / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
-    template = a_template(id="claude-md", kind=Kind.ONCE, target="CLAUDE.md")
-    result = plan(tmp_path, [template])
-    assert [(a.verb, a.target) for a in result.actions] == [(Verb.SKIP_MODIFIED, "CLAUDE.md")]
-    assert result.unchanged == ()
-    before = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
-    assert apply(tmp_path, result).skipped == ("CLAUDE.md",)
-    assert (tmp_path / "CLAUDE.md").read_text(encoding="utf-8") == before
-
-
 # --- regions, which live inside somebody else's file -------------------------------------
-
-
-def test_a_managed_region_is_installed_into_a_file_no_record_covers(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("PROSE\n", encoding="utf-8")
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    first = plan(tmp_path, [template])
-    assert first.actions[0].verb is Verb.REGION_UPDATE
-    assert first.actions[0].payload is not None
-    assert first.actions[0].payload.startswith("PROSE\n")
-    assert "R1" in first.actions[0].payload
-
-
-def test_a_region_already_current_yields_no_action(tmp_path: Path) -> None:
-    text = upsert("PROSE\n", "harness", "R1", Style.MARKDOWN)
-    (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    assert plan(tmp_path, [template]).actions == ()
-
-
-def test_prose_around_a_region_may_change_without_reading_as_a_hand_edit(tmp_path: Path) -> None:
-    text = upsert("PROSE\n", "harness", "R1", Style.MARKDOWN) + "a paragraph the user added\n"
-    (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R2")
-    assert [a.verb for a in plan(tmp_path, [template]).actions] == [Verb.REGION_UPDATE]
-
-
-def test_a_hand_edited_region_body_is_rewritten_in_place(tmp_path: Path) -> None:
-    # A region keeps no record: its body is the oracle, so one edited by hand is put back, and the
-    # prose around it stays.
-    text = upsert("PROSE\n", "harness", "EDITED BY HAND", Style.MARKDOWN)
-    (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R2")
-    apply(tmp_path, plan(tmp_path, [template]))
-    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == upsert(
-        "PROSE\n", "harness", "R2", Style.MARKDOWN
-    )
-    assert not (tmp_path / ".stayfixed").exists()
 
 
 # --- refusals ------------------------------------------------------------------------------
@@ -233,7 +179,7 @@ def test_a_fifo_at_an_artifacts_place_is_its_refusal_and_never_waited_on(tmp_pat
         "from stayfixed.scaffold.manifest import Kind\n"
         "from stayfixed.scaffold.model import Template\n"
         "root = Path(sys.argv[1])\n"
-        "template = Template(id='agents-md', kind=Kind.TEMPLATE, target='AGENTS.md',\n"
+        "template = Template(id='agents-md', target='AGENTS.md',\n"
         "    source='project/AGENTS.md', render=lambda: 'BODY\\n')\n"
         "print([r.artifact_id for r in plan(root, [template]).refusals])\n"
     )
@@ -248,56 +194,6 @@ def test_a_fifo_at_an_artifacts_place_is_its_refusal_and_never_waited_on(tmp_pat
     except subprocess.TimeoutExpired:
         pytest.fail("the engine waited on a FIFO at an artifact's place")
     assert done.stdout == "['agents-md']\n", done.stderr
-
-
-def test_a_doubled_region_marker_refuses_only_its_own_artifact(tmp_path: Path) -> None:
-    # A bad merge, not an internal bug. The engine answers it with a refusal for this one artifact,
-    # and `render_report`'s REFUSED section exists to name exactly these — which it can only do if a
-    # plan is returned at all.
-    (tmp_path / "AGENTS.md").write_text(
-        "PROSE\n"
-        "<!-- stayfixed:harness:begin -->\nfirst\n<!-- stayfixed:harness:end -->\n"
-        "<!-- stayfixed:harness:begin -->\nsecond\n<!-- stayfixed:harness:end -->\n",
-        encoding="utf-8",
-    )
-    result = plan(
-        tmp_path,
-        [
-            a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1"),
-            a_template(id="good", target="GOOD.md"),
-        ],
-    )
-    assert [(r.artifact_id, "twice" in r.reason) for r in result.refusals] == [("agents-md", True)]
-    assert [(a.artifact_id, a.verb) for a in result.actions] == [("good", Verb.CREATE)]
-
-
-def test_a_template_naming_no_region_raises_rather_than_becoming_a_refusal(tmp_path: Path) -> None:
-    # The boundary of what `plan` converts into a per-artifact refusal. A `MANAGED_REGION`
-    # template carrying no region name is a malformed `Template`, so it is a bug in the caller
-    # that built it; recording it beside the user's own bad merges would hide it.
-    template = a_template(kind=Kind.MANAGED_REGION, region=None, render=lambda: "R1")
-    (tmp_path / "AGENTS.md").write_text("PROSE\n", encoding="utf-8")
-    with pytest.raises(Refusal, match="names no region"):
-        plan(tmp_path, [template])
-
-
-def test_a_file_carrying_only_a_region_end_marker_is_refused_and_left_alone(
-    tmp_path: Path,
-) -> None:
-    # A begin line somebody deleted, or a merge that kept one side's end marker. Read as "region
-    # absent", the first run appended a fresh block and wrote a second end marker itself, and
-    # every run after that refused a file stayfixed had broken — `uninstall` included.
-    before = "Prose.\n<!-- stayfixed:harness:end -->\n"
-    (tmp_path / "AGENTS.md").write_text(before, encoding="utf-8")
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    first = plan(tmp_path, [template])
-    assert first.actions == ()
-    assert [(r.artifact_id, "no beginning" in r.reason) for r in first.refusals] == [
-        ("agents-md", True)
-    ]
-    with pytest.raises(Refusal):
-        apply(tmp_path, first)
-    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == before
 
 
 # --- apply ----------------------------------------------------------------------------------
@@ -441,20 +337,6 @@ def test_a_directory_that_cannot_be_created_refuses_rather_than_raising_oserror(
     assert not (tmp_path / "docs" / "specs").exists()
 
 
-def test_crlf_endings_outside_a_managed_region_survive_plan_and_apply(tmp_path: Path) -> None:
-    # `regions.py` promises to return every byte outside its own markers unchanged, and
-    # `test_regions.py` proves it by calling `upsert` directly. This measures the same property
-    # where a user meets it: a universal-newline read rewrites every ending in the file before
-    # `upsert` is ever reached, so the promise is kept or broken here, not there.
-    before = b"# Title\r\n\r\nProse the tool must never touch.\r\n"
-    (tmp_path / "AGENTS.md").write_bytes(before)
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    apply(tmp_path, plan(tmp_path, [template]))
-    assert (tmp_path / "AGENTS.md").read_bytes() == before + (
-        b"<!-- stayfixed:harness:begin -->\r\nR1\r\n<!-- stayfixed:harness:end -->\r\n"
-    )
-
-
 def test_apply_records_the_files_it_wrote_before_a_later_action_refused(tmp_path: Path) -> None:
     # The ledger describes the disk, so it cannot be discarded for actions that already ran. A
     # file stayfixed wrote and did not record reads as somebody else's on every later run:
@@ -490,15 +372,6 @@ def test_a_plan_carrying_a_refusal_creates_no_manifest_at_all(tmp_path: Path) ->
 
 
 # --- the two rules the module docstring is read for ------------------------------------------
-
-
-def test_the_module_docstring_names_every_input_plan_raises_for() -> None:
-    # A consumer reads this docstring to decide what to catch. It named two inputs while the
-    # module raises for three: a `MANAGED_REGION` template carrying no region name is a malformed
-    # `Template`, and the test above pins that `plan` deliberately does not soften it into a
-    # per-artifact refusal.
-    prose = " ".join((engine.__doc__ or "").split())
-    assert "and a malformed `Template`" in prose
 
 
 def test_the_containment_docstring_claims_the_property_the_walk_actually_holds() -> None:

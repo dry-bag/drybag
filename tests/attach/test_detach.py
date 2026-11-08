@@ -21,7 +21,6 @@ from stayfixed.attach.write import Attached, Detached, attach, detach
 from stayfixed.binding import LEDGER_NAME
 from stayfixed.errors import Failure, Refusal
 from stayfixed.printed import quoted
-from stayfixed.project.init import init
 from stayfixed.scaffold.regions import Style, extract
 from tests.attach.test_binding import CONFIG, _machine
 from tests.attach.test_write import NOT_LEDGERS, SETTINGS, ledger_file, rewritten
@@ -460,14 +459,11 @@ def test_detach_keeps_the_allow_rule_claude_code_added_to_a_rewritten_settings_f
     assert document["permissions"]["allow"] == ["Bash(git tag *)"]
 
 
-def test_a_real_detach_after_init_leaves_the_tree_init_left(tmp_path: Path) -> None:
-    # An `init` footprint, a real attach that merged a rule and a hook entry, a detach, and the
-    # tree is the one `init` left, with no ledger behind. Mutation: `mutations/`'s "detach leaves
+def test_a_real_detach_leaves_the_tree_the_attach_found(tmp_path: Path) -> None:
+    # A real attach that merged a rule and a hook entry, a detach, and the tree is the one the
+    # attach found, with no ledger behind. Mutation: `mutations/`'s "detach leaves
     # its ledger behind".
     root, store, machine = _bound(tmp_path)
-    init(root, machine=machine, yes=True, dry_run=False)
-    git(root, "add", "-A")
-    git(root, "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-qm", "footprint")
     initialised = snapshot(root)
     _grant(store.parents[2], allow=(RULE,), hooks=True)
     _attach(root, store, machine)

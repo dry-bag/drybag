@@ -290,7 +290,6 @@ def test_the_arms_follow_where_a_file_lives() -> None:
         "README.md",
         "RELEASING.md",
         "skills/README.md",
-        "src/stayfixed/templates/project/AGENTS.md",
         "tests/fixtures/smoke-project/docs/plans/README.md",
         "tests/fixtures/hostile-project/stayfixed.toml",
     ):

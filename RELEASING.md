@@ -241,7 +241,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
      **The first release is this rule with nothing to compare against.** There is no previous
      tag, so every `Fixed` entry in 0.1.0 described a bug no user could have met, and read as a
      warning about the release it shipped in. Fold them all into the features they repair
-     (`init`, `attach`, `doctor` and `overlay` each accumulated several), and do the same to a
+     (`attach`, `doctor` and `overlay` each accumulated several), and do the same to a
      `Changed` entry that changed something never released.
 
    - **Lead with what the user sees.** Open each entry with the outcome, then say why or how.

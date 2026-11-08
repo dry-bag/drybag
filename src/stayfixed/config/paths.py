@@ -17,7 +17,7 @@ value may be written *here*. The same two unguarded fields above are unguarded b
 component, a trailing slash and a leading `./` out of existence; `fsops` splits the raw string
 and refuses all three. So `plan()` found nothing wrong with `docs//roadmap-history.md` and
 `apply()` raised on it after ten artifacts and the manifest were already written, leaving a
-repository `init` would not touch again. The two spellings agreed for four review rounds, which
+repository nothing would touch again. The two spellings agreed for four review rounds, which
 is what a duplicated rule does until it does not.
 `checked_components` is the single spelling now; the import goes subpackage-to-leaf, so `fsops`
 stays the leaf the hook path depends on it being.

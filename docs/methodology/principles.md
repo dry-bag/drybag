@@ -176,7 +176,7 @@ repository does [S10]. Neither has a way to introduce a rule into a codebase tha
 it two hundred times, which is where every existing project starts.
 
 **Backing:** thin. This is a design argument from experience with one repository's adoption of
-its own rules. Nothing external states it, and no repository has yet adopted through `init` and
+its own rules. Nothing external states it, and no repository has yet
 had its advisory period's findings counted. The label changes when one has.
 
 ## 8. A personal overlay is a versioned plugin, not a dotfiles sync

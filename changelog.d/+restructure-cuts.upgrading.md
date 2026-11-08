@@ -6,11 +6,11 @@ and what to use instead:
   `commit check`) still report each finding, and your own CI runs the ones you choose. The reusable
   workflow `check.yml` went with `gate`: a caller pinned to an earlier commit keeps running that
   commit's workflow, and one pinned to a later commit no longer finds the file, so delete the caller
-  workflow (`init` wrote it as `.github/workflows/stayfixed.yml`). Nothing writes
+  workflow, `.github/workflows/stayfixed.yml`. Nothing writes
   `.stayfixed/assessment.json` any more; delete it.
-- `stayfixed upgrade` and `stayfixed uninstall`. A file `init` wrote is yours to edit by hand. To
-  take a repository off stayfixed, delete the files `init` wrote and the `stayfixed:ignore` region
-  of `.gitignore` (not the file, unless `init` created it).
+- `stayfixed upgrade` and `stayfixed uninstall`. A file an earlier release wrote is yours to edit by
+  hand. To take a repository off stayfixed, delete those files and the `stayfixed:ignore` region of
+  `.gitignore`.
 - `stayfixed memory refs` and `stayfixed memory fit`. `stayfixed doctor`'s `bundles` row still says
   whether each bundle fits its slots.
 - `stayfixed trust list` and `stayfixed trust revoke`. `stayfixed memory inventory --json` gives
@@ -30,14 +30,9 @@ settings it ignored and exits 0, and a session's hooks load the file the same wa
 - the whole `[artifacts]` table;
 - `[commit_messages] types`; `attribution_check` stays.
 
-`stayfixed init` now writes three files and the `.gitignore` region: `stayfixed.toml`,
-`docs/roadmap.md` with its trail markers, `docs/trail.toml`, and the `stayfixed:ignore` region, which keeps
-`.stayfixed/local/` out of git. It writes no `AGENTS.md`, `CLAUDE.md` or workflow, and
-`init --json` carries no `skipped` key. Its `--local`, `--commit-type` and `--no-ci` flags are gone,
-and `init --questions` no longer asks about CI or commit types. `stayfixed doctor` has no `ci-ref`
-row any more: it went with `[ci]`.
+`stayfixed doctor` has no `ci-ref` row any more: it went with `[ci]`.
 
-An earlier `init` or `[artifacts] local` left files this release neither writes nor reads, and you
+An earlier scaffold or `[artifacts] local` left files this release neither writes nor reads, and you
 may delete each by hand: `.stayfixed/local/artifacts/` and `.stayfixed/local/artifacts.json`; the
 profile's rules, `docs/stayfixed/rules/<profile>.md` and `.claude/rules/stayfixed-<profile>.md`;
 `docs/roadmap-history.md`; the bug runbook, `bug-reports.md` in the runbooks directory under

@@ -547,16 +547,15 @@ def test_a_trail_message_names_the_project_relative_path(tmp_path: Path, content
 
 
 def test_a_trail_file_that_will_not_parse_never_quotes_its_own_keys(tmp_path: Path) -> None:
-    """A repository-authored key never prints raw, and here it is reachable: `trail.toml` is one
-    of the twelve files `stayfixed init` ships.
+    """A repository-authored key never prints raw, and here it is reachable: `trail.toml` is a
+    file a repository commits, and `read_trail` parses it.
 
-    So every repository `init` touches has one that `read_trail` parses, and `tomllib`'s own
-    message embeds the source for several of its faults — a duplicate table is reported with the
-    table's name in it, and a TOML key is arbitrary quoted text. Only the position prints,
-    through `config.reading.toml_position`.
+    `tomllib`'s own message embeds the source for several of its faults — a duplicate table is
+    reported with the table's name in it, and a TOML key is arbitrary quoted text. Only the position
+    prints, through `config.reading.toml_position`.
 
     Mutation: the shared one, "a tomllib message is quoted back whole" — that entry names this
-    test beside the three in `tests/config` and `tests/project`, because breaking `toml_position`
+    test beside the ones in `tests/config`, because breaking `toml_position`
     reddens this call site's assertion the same way.
     """
     root, config = corpus(tmp_path, trail=None)

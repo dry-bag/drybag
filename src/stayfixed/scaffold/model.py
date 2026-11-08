@@ -11,31 +11,25 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
-from stayfixed.scaffold.manifest import Kind, Record
-from stayfixed.scaffold.regions import Style
+from stayfixed.scaffold.manifest import Record
 
 
 class Verb(StrEnum):
     CREATE = "create"
     UPDATE = "update"
     SKIP_MODIFIED = "skip_modified"
-    REGION_UPDATE = "region_update"
 
 
-WRITING = frozenset({Verb.CREATE, Verb.UPDATE, Verb.REGION_UPDATE})
+WRITING = frozenset({Verb.CREATE, Verb.UPDATE})
 
 
 @dataclass(frozen=True)
 class Template:
     id: str
-    kind: Kind
     target: str
     render: Callable[[], str]
-    # The shipped file the bytes come from, which a whole-file template's record keeps as
-    # `Record.template`; the other kinds keep no record, and name none.
+    # The shipped file the bytes come from, which the template's record keeps as `Record.template`.
     source: str = ""
-    region: str | None = None
-    style: Style = Style.MARKDOWN
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,6 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > without its private layer: the methodology's gates, the records they check, and a machine's setup.
 > It holds the documentation and plan lints; the guards over a shell call, a commit
 > message and a test run; the scaffolding engine that writes files into a repository;
-> `stayfixed init`, which writes a repository's scaffold from the shipped project templates;
 > `stayfixed setup`, which configures a
 > machine from a preset; and `stayfixed doctor`, which reports on the result. The **delivery** areas
 > are the private layer: `memory`, the note store; `overlay`, the private overlay
@@ -23,9 +22,7 @@ the platform lets them. One plugin for Claude Code and Codex, one Python package
 > which dispatches one harness event. **Not yet:** the memory MCP server, a hold-the-line baseline,
 > and adapters for Cursor or Hermes — each leaves this list in the
 > change that ships it. The [Quickstart](#quickstart) shows the three keys that are enough to start
-> a project by hand, which `init` reads as your answers — a run that writes the file itself writes
-> `[stayfixed] version`, beside `[project] name` and `base_branch`, and a `[memory]` table only
-> when `--memory-mode` answers it.
+> a project by hand.
 > [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference; the command list below is held
 > to the parser by a test, so it is complete for what ships.
 
@@ -57,7 +54,7 @@ containment or a data-loss path ships with the mutation that reddens its test, a
 is a routing table of hand-written lines, not a summary. The principles behind all of it, with dated sources and an honest note where the
 backing is thin, are in [docs/methodology/README.md](https://github.com/stayfixed/stayfixed/blob/main/docs/methodology/README.md).
 
-**This is not a replacement for superpowers.** `stayfixed init` recommends it, and
+**This is not a replacement for superpowers.** stayfixed recommends it, and
 [context7](https://github.com/upstash/context7), and `stayfixed setup --plugin superpowers
 --plugin context7` installs them on Claude Code — both ship in Anthropic's own official
 marketplace, so `setup` needs no separate registration step for either. Neither is installed
@@ -156,16 +153,6 @@ name = "widget"          # one lowercase path segment
 groups = ["developer"]   # the preset names four; the store below has one
 ```
 
-`stayfixed init --yes` writes that file for you — the name from `origin` and the base branch — along with the roadmap and its `trail.toml`, which `docs trail` reads.
-`stayfixed init --questions` shows each value it would take and where it came from, and a flag
-on `--yes` replaces any of them. Read it before it runs; a `stayfixed.toml` you wrote yourself
-is read as your answers rather than replaced:
-
-```bash
-stayfixed init --yes --dry-run   # the plan, every file named, nothing written
-stayfixed init --yes
-```
-
 The default memory mode keeps notes under `.stayfixed/local/memory/`, git-ignored, one
 directory per group. Write one note and render the index:
 
@@ -183,8 +170,8 @@ Add `.stayfixed/local/` to `.gitignore` if it is not there already.
 
 The other commands in [Commands](#commands) expect more of a repository than those three keys
 create: `docs trail` wants a `docs/roadmap.md`, `docs check` an
-`AGENTS.md`. `stayfixed init --yes` writes the first; `AGENTS.md` is yours to write, and `docs
-check` names it until you do. In a repository you would rather grow by hand, add each path as you
+`AGENTS.md`. Both are yours to write ([docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#stayfixed-docs-trail---check) gives the roadmap's shape), and `docs
+check` names `AGENTS.md` until you do. In a repository you would rather grow by hand, add each path as you
 start using the command that reads it — [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration) lists every default.
 
 ## What it writes, and where
@@ -193,13 +180,12 @@ stayfixed writes files. Being specific about which is the point of this section.
 
 | Path | What it is | Written by |
 |---|---|---|
-| `stayfixed.toml` | Your project's configuration, committed | `stayfixed init`, once, when there is none; you after |
+| `stayfixed.toml` | Your project's configuration, committed | you |
 | `docs/memory/` (configurable) | The note store, in `in-repo` and `overlay` mode | `stayfixed memory index` |
 | `.stayfixed/local/memory/` | The note store in `local-only` mode — git-ignored | `stayfixed memory index` |
 | `<store>/MEMORY.md` | The rendered routing index. **Generated — do not hand-edit** | `stayfixed memory index` |
-| `docs/roadmap.md` (configurable) | The forward track; `docs trail` owns only the listing between its two markers | `stayfixed init` writes it; `stayfixed docs trail` rewrites the listing |
-| `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | `stayfixed init`, once; you after |
-| `.gitignore`, the `stayfixed:ignore` region | The block that keeps `.stayfixed/local/` out of git. `attach` and `detach` never touch `.gitignore` | `stayfixed init` |
+| `docs/roadmap.md` (configurable) | The forward track; `docs trail` owns only the listing between its two markers | you; `stayfixed docs trail` rewrites the listing |
+| `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | you |
 | `~/.config/stayfixed/config.toml` | Machine-level settings: `[personal]`; `[guards]`, where `bg_cleanup = false` switches the background guard off on this machine, whatever a repository's `stayfixed.toml` sets as its default; `[budgets]`, the four budgets that bound what a session loads; `[overlay]`; `[sync]`, whose `enabled = true` `setup --overlay` writes for an overlay it makes; and `[machine]`. `~` is `HOME`, as the harness reads it ([docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration)) | you, or `stayfixed setup` |
 | `~/.config/stayfixed/trust.json` | Every approval recorded on this machine, as a versioned record of kinds and subjects, under the same home, the notes you promoted among them (kind `reviewed`) | `stayfixed memory promote`, which records a note |
 | `hooks/hooks.json` and `hooks/run-hook.sh` | The zero-config wiring both harnesses read, and the wrapper they execute. **Shipped in the plugin; never written into a project** | nothing — they are part of the plugin |
@@ -348,12 +334,6 @@ One line per command; `docs/cli.md` has the rest. Every line here parses against
 parser, and every registered command has a line — a test holds both.
 
 ```text
-# Initialising a project
-stayfixed init --questions                             # each default, where it came from, the flag that changes it
-stayfixed init --yes --dry-run                         # the plan, nothing written
-stayfixed init --yes --dry-run --name widget           # the plan with one default replaced
-stayfixed init --yes                                   # write what is missing of the scaffold
-
 # Memory
 stayfixed memory index                                 # render MEMORY.md from the notes
 stayfixed memory index --check                         # report drift, write nothing

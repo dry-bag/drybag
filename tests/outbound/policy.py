@@ -139,9 +139,6 @@ LOCAL = frozenset(
         ("git", "update-ref"),
     }
 )
-# Local only as the whole argv: `git remote` alone lists the remotes' names, and anything after it
-# is a form to read first.
-LOCAL_WHOLE = frozenset({("git", "remote")})
 # The global options a launch may put before git's subcommand, and whether each takes the next
 # argument as its value. None of them changes which program git runs or where it reaches, except
 # `-c`, whose value is configuration: it is held to `GIT_CONFIG_KEYS`. Any other option there is a
@@ -284,9 +281,6 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
     ),
     ("src/stayfixed/gitenv.py", "git_path", "name"): (
         "the value of `--git-path`, always one of its callers' constants"
-    ),
-    ("src/stayfixed/project/detect.py", "_symbolic", "ref"): (
-        "`HEAD` or `refs/remotes/origin/HEAD`, its callers' constants"
     ),
     ("src/stayfixed/sync/git.py", "guard", "*_MARKER_PATHS"): (
         "the module's own constant: `--git-path` and the name of each in-progress marker"

@@ -56,7 +56,6 @@ ORIGIN = f"git@github.com:{OWNER}/{PROJECT}.git"
 # that finding it in the wrapper's stdout cannot be an accident.
 RULE_BODY = "NEVER FORCE-PUSH A SHARED BRANCH; open a pull request instead."
 # The first line of the `.gitignore` region `init` writes, spelled as a project carries it.
-IGNORE_BEGIN = "# stayfixed:ignore:begin\n"
 
 # The note the walkthrough asks a session for, as one spelling. `_install_path` writes it into
 # the overlay on the path a fresh project takes, and `_project(initialised=True)` writes the same
@@ -79,17 +78,10 @@ groups = ["developer", "project-stable"]
 
 
 def _project(tmp_path: Path, *, mode: str, initialised: bool = False) -> Path:
-    """The repository the walkthrough starts from; `initialised`, the shape the owner's has.
-
-    **`initialised` does not run `init` here.** It builds the repository `init` is run *over*:
-    notes already in `paths.memory` as real directories, and one commit, so the history predates
-    stayfixed. `stayfixed init --yes` is `_install_path`'s step 0, which
-    is where the launcher environment lives. The flag keeps the name `_install_path` gives it,
-    because renaming one of the pair would split them.
-
-    The commit matters because `init` then writes its footprint on top of a tree that was already
-    committed, which is the order an adopting project meets it in, and the notes moved later are
-    notes that were tracked before stayfixed arrived.
+    """The repository the walkthrough starts from; `initialised`, the shape the owner's has:
+    notes already in `paths.memory` as real directories, a hand-written roadmap, and one commit,
+    so the history predates stayfixed and the notes moved later are notes that were tracked before
+    it arrived.
     """
     root = tmp_path / "project"
     root.mkdir(parents=True, exist_ok=True)
@@ -101,6 +93,7 @@ def _project(tmp_path: Path, *, mode: str, initialised: bool = False) -> Path:
         note = root / "docs" / "memory" / "project-stable" / "no-force-push.md"
         note.parent.mkdir(parents=True, exist_ok=True)
         note.write_text(NOTE, encoding="utf-8")
+        (root / "docs" / "roadmap.md").write_text("# Roadmap\n", encoding="utf-8")
         git(root, "add", "-A")
         git(
             root,
@@ -221,7 +214,7 @@ def _install_path(
     another repository's work tree holds it, since that repository can put files into it.
 
     `initialised` walks the same steps over a repository that already has its notes in
-    `paths.memory` and has had `stayfixed init` run over it, which is the shape the owner's own
+    `paths.memory` and a hand-written roadmap, which is the shape the owner's own
     repository is in. Step 4 then has one more beat before it: the notes are moved by hand into
     the overlay — the owner's act, which no command performs — since the composed store reads
     the overlay and never `paths.memory`. Step 5 is skipped there, because the moved note is the
@@ -229,10 +222,6 @@ def _install_path(
 
     `attach=False` stops before step 4 and answers the unattached state, which is what a
     session's first `SessionStart` sees on a project nobody has bound yet.
-
-    `init` runs here rather than in `_project`, which has no launcher environment: `_cli` needs
-    the scratch home, the fake `PATH` and the plugin data root, and those are built from this
-    function's locals. It runs before step 1 because it is the state the repository arrives in.
     """
     home = tmp_path / "home"
     data = tmp_path / "plugin-data"
@@ -254,13 +243,6 @@ def _install_path(
         assert done.returncode == 0, f"`{' '.join(argv)}`: {done.stderr}"
         return done
 
-    # 0. the project footprint, on the repository that came with notes and a history. `init`
-    # adopts the `stayfixed.toml` already there without rewriting it (a `Kind.ONCE` artifact
-    # whose file is present is skipped), so the document above is still the document below,
-    # and the `.gitignore` region is the witness that the footprint ran.
-    if initialised:
-        step("init", "--yes", "--root", str(root), "--machine", str(machine))
-        assert IGNORE_BEGIN in (root / ".gitignore").read_text("utf-8"), "`init` wrote no region"
     # 1-3. the machine layer, into a scratch machine file and a scratch home. **Two runs**, as
     # the walkthrough had before it was converted: the first writes the machine file with no
     # overlay in it, the second renders the overlay from the shipped template with no network
@@ -640,14 +622,14 @@ def test_doctor_launches_the_number_of_subprocesses_it_says_it_does(
     assert sum(1 for argv in launched if argv[0] == "git") == 15
 
 
-def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Path) -> None:
+def test_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Path) -> None:
     # The whole slice, in the order the owner walks it and on the repository shape they
-    # actually have: a project with notes already in it, `stayfixed init` run over it, the notes
+    # actually have: a project with notes already in it, the notes
     # moved by hand into the overlay, the attach taken, and a session reading the moved note back
     # through the wrapper.
     #
     # What would break it: leave the composed store unread and `RULE_BODY` never reaches the
-    # bundle; remove `init`'s footprint and the region assertion fails; let any row go red —
+    # bundle; let any row go red —
     # `overlay-requires`, the last, is the one this branch added and it is answered here against
     # a real overlay rather than a stub.
     walk = _install_path(tmp_path, initialised=True)
@@ -656,7 +638,6 @@ def test_init_then_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Pat
     assert RULE_BODY in done.stdout
     rows = _doctor(walk)
     assert not [row for row in rows if row["status"] == RED]
-    assert IGNORE_BEGIN in (walk.root / ".gitignore").read_text("utf-8")
 
 
 def test_a_session_before_the_attach_is_told_what_is_missing(tmp_path: Path) -> None:
@@ -681,8 +662,8 @@ def test_a_session_before_the_attach_is_told_what_is_missing(tmp_path: Path) -> 
 
 
 def test_detach_on_an_initialised_project_leaves_the_footprint(tmp_path: Path) -> None:
-    # The footprint's ownership, end to end: the detach that takes back everything `attach` added
-    # leaves what `init` wrote where it is.
+    # The detach that takes back everything `attach` added leaves the project's own files where
+    # they are.
     walk = _install_path(tmp_path, initialised=True)
     roadmap = walk.root / "docs" / "roadmap.md"
     # Non-vacuous: the file this asserts survives has to be there before the detach.

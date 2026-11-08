@@ -13,14 +13,10 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     # substituted line. Measured by hand instead — re-exporting `trail.TRAIL_FILE` reddens this
     # test and this test alone.
     #
-    # Outside this area, `project` imports `trail_target`; the other names below have no importer
-    # and stay on the argument written beside them in `api.py`.
+    # The names below have no importer and stay on the argument written beside them in `api.py`.
     required = {
         # two checks this area is, one call each
         "check_budgets",
         "check_links",
-        # the install path: `project` ships `trail.toml`
-        # beside the roadmap and must put it where `docs trail` reads it, a location only
-        "trail_target",
     }
     assert required == set(docs.__all__)

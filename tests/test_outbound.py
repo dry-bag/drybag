@@ -24,7 +24,6 @@ from tests.outbound.policy import (
     GIT_PROGRAM_OPTIONS,
     GIT_REMOTE_OPTIONS,
     LOCAL,
-    LOCAL_WHOLE,
     NATIVE_MODULES,
     NETWORK,
     NETWORK_MODULES,
@@ -148,7 +147,7 @@ def _local(command: Argv, options: Argv) -> bool:
             for part in options
         ):
             return False
-    return any(command[: len(prefix)] == prefix for prefix in LOCAL) or command in LOCAL_WHOLE
+    return any(command[: len(prefix)] == prefix for prefix in LOCAL)
 
 
 def classify(launch: Launch) -> tuple[frozenset[str] | None, set[Key]]:
@@ -564,7 +563,7 @@ def test_every_table_entry_names_a_live_launch() -> None:
     # A classification no launch uses is a promise about nothing, as a dead declaration is. The
     # plugin installs' argvs are built by lambdas, so they are counted from the lambdas. The entry
     # in `mutations/` that names this test puts a dead row in `NETWORK`. By hand, each reddening
-    # its assertion: `("git", "show")` joins `LOCAL`; `("git", "stash")` joins `LOCAL_WHOLE`;
+    # its assertion: `("git", "show")` joins `LOCAL`;
     # `--bare` joins `GIT_GLOBAL_OPTIONS`; `core.sshCommand` joins `GIT_CONFIG_KEYS`.
     commands: list[Argv] = [
         split[1]
@@ -579,7 +578,6 @@ def test_every_table_entry_names_a_live_launch() -> None:
 
     assert [prefix for prefix in NETWORK if not live(prefix)] == []
     assert [prefix for prefix in LOCAL if not live(prefix)] == []
-    assert [whole for whole in LOCAL_WHOLE if whole not in commands] == []
     assert [o for o in GIT_GLOBAL_OPTIONS if not any(o in argv for argv in launched)] == []
     settings = {
         str(value).partition("=")[0]

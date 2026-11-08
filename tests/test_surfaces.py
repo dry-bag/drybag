@@ -101,7 +101,6 @@ def test_every_package_with_a_surface_is_walked() -> None:
         "hooks",
         "memory",
         "overlay",
-        "project",
         "release",
         "setup",
         "trust",

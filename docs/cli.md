@@ -47,8 +47,6 @@ Three things hold everywhere:
 - [`stayfixed docs check [--budgets] [--links]`](#stayfixed-docs-check---budgets---links)
 - [`stayfixed docs trail [--check]`](#stayfixed-docs-trail---check)
 - [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
-- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---memory-mode-mode---attribution-check---root-path---machine-path)
-- [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
 - [`stayfixed overlay upgrade [--root PATH] [--dry-run]`](#stayfixed-overlay-upgrade---root-path---dry-run)
 - [`stayfixed attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
 - [`stayfixed detach [--root PATH] [--machine PATH]`](#stayfixed-detach---root-path---machine-path)
@@ -135,8 +133,8 @@ failure is one line on stderr and costs no other handler.
 the file reads: every `memory` command, the bundles and `doctor`'s note-store rows use the preset's
 configuration under the overlay's layers (`common/`, the project's tags, `projects/<name>/`), for
 the project this machine's binding record names, which is how a public clone you cannot commit to
-gets its notes. A checkout nothing on this machine binds is still refused (`1`) with `stayfixed
-init` as the way out, and the bundles print nothing for it. A `stayfixed.toml` is read first when
+gets its notes. A checkout nothing on this machine binds is still refused (`1`), naming the
+`stayfixed.toml` it lacks, and the bundles print nothing for it. A `stayfixed.toml` is read first when
 there is one.
 
 **One store in overlay mode.** There the store is the composed store `stayfixed attach` builds,
@@ -916,6 +914,21 @@ a question git gives no answer to — which documents it ignores or tracks, when
 runs past its time limit or refuses the checkout — fails (`1`) with nothing written, rather than
 listing every document on disk; outside one, every document is listed.
 
+Nothing writes the roadmap or `trail.toml` for you, and without them the command has nothing to
+check. Write the roadmap (`[paths] roadmap`, `docs/roadmap.md` by default) by hand, with a line
+`## Design and plan trail` and, below it, a line `<!-- end design and plan trail -->`, between
+which `docs trail` writes the listing,
+and `trail.toml` beside it, one theme to start with and a state for each document not plainly
+delivered:
+
+```toml
+[[theme]]
+label = "Everything"
+pattern = ".*"
+
+[states]
+```
+
 **Writes** `[paths] roadmap`.
 
 ## `stayfixed plan check [--base REF] [PATH …]`
@@ -954,207 +967,6 @@ are not in the diff; the line counts them and `--json` names them, and naming on
 lints it.
 
 **Writes** nothing.
-
----
-
-## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
-
-Writes what is missing of a repository's stayfixed scaffold: `stayfixed.toml`, and the files the pack's
-commands read — the roadmap with its trail markers and `trail.toml` beside it for `docs trail` — and
-the `stayfixed:ignore` region in `.gitignore`, which keeps `.stayfixed/local/` out of git. It is the
-only command that writes `stayfixed.toml`. It writes no `AGENTS.md`: `docs check` names a missing
-one until the project writes its own.
-
-**`--yes` is required, and it means "take the defaults `stayfixed init --questions` shows".**
-Without it nothing is written, and the refusal (`2`) names `--questions`.
-
-Each answer flag replaces one default and writes one key:
-- `--name` writes `[project] name`;
-- `--base-branch` writes `[project] base_branch`;
-- `--memory-mode` writes `[memory] mode`;
-- `--attribution-check` writes `[commit_messages] attribution_check = true`, which is off unless
-  answered.
-
-The recommended plugins are not `init`'s to install:
-`init --questions` asks about them, and the answer is `stayfixed setup`'s.
-
-After the report the run prints `picked:`, one line per question in the order
-`init --questions` asks them, with the value this run took: the name, the base branch, the memory
-mode, the attribution check (`on` or `off`), and `plugins: none`, since `init` installs none. Taking every default gives the attribution check `off` and no plugin. Over a `stayfixed.toml` you wrote
-the run took nothing, so it prints no list.
-
-The parser refuses a value outside its grammar or its choices (`2`), and it refuses a name or
-a branch by naming the rule, never the value. A branch is a name git accepts as one, written in
-letters, digits, `.`, `_`, `-` and `/` and led by a letter or digit: no `..`, `//`, component
-starting with `.` or ending in `.lock`, no trailing `/` or `.`, and not `HEAD`. The same
-grammar holds a detected base branch. Answer flags reach only a
-`stayfixed.toml` this run creates. Over one the repository already has, they are refused
-(`2`), because that file is the answer. Passing a default as its flag loads as the same
-configuration as not passing it.
-
-When nothing answers, `init` detects:
-- the project's name from `origin`'s last path segment, lower-cased and with `.git` stripped,
-  else from the checkout's directory name;
-- the base branch from `refs/remotes/origin/HEAD`, read as the full ref with exactly
-  `refs/remotes/origin/` stripped, when that is a plain branch name, else `main` with a `note:`
-  saying so. A repository with a remote and no `origin/HEAD` — one created locally and pushed,
-  until `git clone`, `git remote set-head`, or a `git fetch` from git 2.48 on records one, or one
-  whose only remote is another name, such as `upstream`, pushed or cloned with `-o upstream` —
-  gives `main`, with a `note:` naming `--base-branch`, and `git remote set-head origin --auto`
-  where the remote is `origin`: the branch checked out there is typically the feature branch the
-  adoption is made on. Where git cannot list the remotes, it gives `main` with a `note:` saying
-  so. Only with no remote at all is it the branch checked out, when that is a plain branch name,
-  with a `note:` when it is not `main`, else `main`;
-- the agent surfaces from which of `.claude/` and `.codex/` the repository carries, both when
-  it carries neither.
-
-Both name candidates, the remote's segment and the directory name, are repository-authored.
-So one outside `[project] name`'s grammar is refused naming the grammar and the remedy, and
-never the value, unless `--name` answers it. With a `stayfixed.toml` you wrote, neither candidate
-is refused: the file answers it, and what it leaves out is the loader's to name.
-
-**A `stayfixed.toml` you wrote is the answer sheet, not an obstacle.** Every key it carries is
-read and kept: the name, the paths, the memory mode, the budgets. The file itself
-is not replaced. It is a create-once artifact, so a repository that already has one is
-reported `skip_modified` ("create-once, and the file is already there").
-
-Nothing is written into it, whatever it holds, and `init` answers only for where the scaffold
-lands. What the scaffold is built from is read first: the file's `[project]`, `[paths]`, `[memory]`,
-`[budgets]` and `[commit_messages]` tables and `[stayfixed] preset`, with the name
-detected for a file with no `[project]` table. A fault there stops the run with nothing written: a
-`[project]` with no name or holding a key stayfixed no longer has, such as `release_branch`, or no
-`[project]` table where no name can be detected.
-
-The rest of the file is no input to the scaffold, and `init` does not judge it. `[stayfixed] agents`,
-the same kind of leftover in another table, a missing `[stayfixed] version`, no `[project]` table,
-a bad value under `[guards]` and a section stayfixed does not have all exit `0`, and the next command
-that loads the file names them, in the loader's own sentence. So `initialised:` says nothing of
-the file: the run prints a `note:` saying the file was left as it is and the next command judges
-it, in place of `picked:`, and no base-branch `note:`, whose `--base-branch` is refused over the
-file.
-
-The paths it declares are where the scaffold lands. A repository with no `stayfixed.toml` gets
-one written from the detected values and your answers, headed by a comment saying that every key
-left out takes the preset's default. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
-(`1`) naming the file.
-
-**Run it again, and it writes what is missing.** Every artifact but the `gitignore` region is
-create-once: a file already at its place, whoever wrote it, is left as it is and reported
-`skip_modified` ("create-once, and the file is already there"). The `gitignore` region goes into a
-`.gitignore` you wrote, between its markers, and is rewritten there whenever its body differs;
-every line outside them is kept. `init` keeps no manifest, and leaves a `.stayfixed/manifest.json`
-an earlier release wrote as it is. The whole footprint is one plan, made before anything is
-applied: a refusal in it stops the run with nothing written, and `--dry-run` is that same branch
-rather than a second code path — it reports the plan and writes nothing.
-
-| id | target | what it holds |
-|---|---|---|
-| `config` | `stayfixed.toml` | the document this run rendered |
-| `roadmap` | `[paths] roadmap` | `Now`, `Next`, and the trail block |
-| `trail` | `trail.toml` beside the roadmap | one theme, no declared states |
-| `gitignore` | `.gitignore` | the managed region naming `.stayfixed/local/`, where the `local-only` notes live |
-
-**Reads** `stayfixed.toml` when there is one, `git` for the name and the base branch, and every
-file an artifact targets.
-
-**Writes**, every one of them through the scaffold engine, so that every target goes through the
-containment walk and none may leave the project root or pass through a symlink:
-- `stayfixed.toml`, when the repository has none;
-- the documents in the table above, each at its place in the table, and the `stayfixed:ignore`
-  region in `.gitignore`.
-
-Exits `0` on success. `1` on a finding: the plan carries refusals — the report's REFUSED section
-names each, and nothing was written — or a `stayfixed.toml` that cannot be read,
-is not UTF-8 text or is not valid TOML, or what the scaffold is built from where the loader refuses
-it (a key those tables do not have, a `[project]` with no name, a `[project] name` outside its
-grammar, a value of the wrong type, a machine configuration file that does not load). `2` on a refusal above the plan: no `--yes`, an
-answer flag over an existing `stayfixed.toml`, an answer outside its grammar or its choices (from the
-parser), a detected name outside the grammar that no `--name` answers, a `stayfixed.toml` that is a symlink, which is never followed, a `[paths]` value outside the plain-path grammar, naming
-git's control directory or stayfixed's own `.stayfixed/`, or reaching through a component that is a
-symlink — all three refused by the loader before a plan exists — and two artifacts that resolve to
-one file (`roadmap` set to `.gitignore`), which is named
-with the two artifacts and their `[paths]` keys to separate.
-
-`--json` carries `dry_run`, `adopted`, `scaffold` (the plan's own rendered report), `writes` (the
-plan's targets), and `head_note`, the `note:` line that says `main` replaced an
-`origin/HEAD` outside the plain-branch grammar (the branch it named is never printed), that
-`main` stands because a remote is there and no `origin/HEAD` is recorded, or because git could
-not list the remotes, or that, with no remote, the branch checked out other than `main` became
-the base branch; empty otherwise, and over a `stayfixed.toml` you wrote. An answered `--base-branch` replaced nothing, so it leaves
-`head_note` empty.
-
----
-
-## `stayfixed init --questions [--root PATH] [--machine PATH]`
-
-Prints the values `stayfixed init --yes` would take for the five things a person may answer, where
-each came from, and the flag that replaces it: on `init --yes`, but for the recommended plugins,
-which `stayfixed setup` installs on the machine. It writes nothing. The `init` skill asks its
-questions from it, taking every default offered first, and a person reads it to see the defaults
-before choosing any.
-
-The summary is one line per question, `<key>: <default> (<where it came from>; <flag>)`, then
-one line saying how each is answered:
-
-```text
-detected:
-  project.name: widget (origin remote; --name)
-  project.base_branch: main (origin/HEAD; --base-branch)
-  memory.mode: harness (default; --memory-mode)
-  commit_messages.attribution_check: off (the preset's default; --attribution-check)
-  plugins: none (default; stayfixed setup --plugin)
-each is answered by the flag its line names, on `stayfixed init --yes` but the plugins'; `stayfixed init --questions --json` carries them as a JSON Schema, each with what it gives, what it gives up, what it leaves and how to undo it
-```
-
-Where a value came from is one of a fixed set of phrases. The name comes from the
-`origin remote`'s last path segment or, with no origin, the `directory name`; when that one is
-not a lowercase path segment the source is `not derivable`, and the value prints as
-`none; asked`, never as what the repository suggested. The base branch comes from `origin/HEAD`
-when that names a plain branch under `refs/remotes/origin/`; with no remote at all, from the
-`current branch` when that is a plain branch; otherwise, a remote with no `origin/HEAD` and
-remotes git could not list included, it is the `default`, `main`. The memory mode is the `default`,
-`harness`, since the preset chooses none; the attribution check (off) is `the preset's default`; and the plugins are the `default`,
-none, because a third-party plugin runs in every session and is installed only when named. Each
-default is exactly what `stayfixed init --yes` writes when that question is not answered. `origin/HEAD` goes stale after the remote's default branch is
-renamed, because git does not refresh one it has. That is why its source is printed: you can
-catch it.
-
-`--json` carries `questions`: a JSON Schema object (draft 2020-12) with five `properties`, and
-`required` naming all five in the order the `init` skill asks them; read the order there, since
-`--json` prints every object's keys sorted, so the properties arrive by name. Each but the last is
-keyed by the
-`stayfixed.toml` key its answer writes: `project.name`, `project.base_branch`, `memory.mode`,
-and `commit_messages.attribution_check`; the last,
-`plugins`, offers the plugins the preset recommends, which `stayfixed setup --plugin` installs. Each property carries four keys: `default`
-(absent for a name that is not derivable), `x-stayfixed-source` (the phrase above),
-`x-stayfixed-flag` (the flag that answers it) and `x-stayfixed-tradeoff`, four lines of fixed
-text: `get`, what the answer gives; `give_up`, what it costs; `trace`, what it leaves behind; and
-`undo`, how to take it back. A choice is a `oneOf` of `const` and `title`, `items.enum` for a list
-of choices, or `boolean`. The two free-text properties carry `pattern`, the grammar their flag
-enforces.
-
-The schema is modelled on MCP elicitation's flat form schema. A client may send it as a
-`requestedSchema` once it drops `pattern` and the `x-stayfixed-*` keys, which that subset does not
-carry. Harness ask tools take lists of questions and options rather than a schema, so the `init`
-skill turns the properties into questions: every default at once first, then the name and the
-base branch as one confirmation, the rest one at a time with their four lines, within each
-harness's limits. The flags validate the answers; the schema
-does not.
-
-It is refused (`2`) before anything beyond the root is read, in two cases:
-- the repository carries a `stayfixed.toml`, which answers these questions itself: edit it, then read the plan
-  with `stayfixed init --yes --dry-run`;
-- any flag is given but `--root`, `--machine` and `--json`.
-
-`--yes` beside it is a usage error from the parser.
-
-**Reads** `git` for the name and the base branch, and the machine configuration, to learn whether it
-records an overlay. A machine file that does not load reads as "not recorded"; `init` reports it
-when it loads it.
-
-**Writes** nothing.
-
-Exits `0` with the questions printed; `2` on a refusal.
 
 ---
 
@@ -1408,8 +1220,7 @@ and goes on recording a dropped one only while its file is untracked and holds t
 `detach` can still take a file Codex reads as a standing instruction; any other is forgotten, and
 the file is yours. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
-release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
-`init`'s.
+release wrote there stays until you remove it.
 
 **`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
 writes: [`owner-files`](#hooks) places them in each new linked worktree.
@@ -1608,8 +1419,7 @@ empty, and left standing otherwise. A link tree under `paths.memory` or a harnes
 is not on the ledger, and `detach` leaves it, as it leaves any file in a worktree you may have edited.
 
 **`.gitignore` is never touched.** `attach` writes nothing there, so `detach` takes nothing out:
-a `stayfixed:ignore` region `stayfixed init` wrote is the scaffold's, and one an earlier release's
-`attach` wrote stays until you remove it.
+a `stayfixed:ignore` region an earlier release wrote stays until you remove it.
 
 **Directories come back too.** `attach` records which of `.stayfixed/local/`, `.stayfixed/`,
 `.codex/rules/`, `.codex/` and `.claude/` this repository did not have before it ran, and `detach`
@@ -1713,9 +1523,7 @@ person outside the agent's sandbox as the one to run it, and never ends in a tra
 **Plugins are installed only when named**, with `--plugin NAME` once per plugin: a plugin name is
 lowercase ASCII letters, digits and `-`, led by a letter or a digit, and the parser refuses any
 other, naming that rule. A third-party plugin runs in every session of its harness, hooks
-included, and none is pinned, so none is installed unasked; the preset's `[plugins] recommended`
-lists the ones `stayfixed init --questions` offers (`superpowers` and `context7` in
-`recommended`). A named plugin is installed per harness stayfixed serves (`claude` and `codex`),
+included, and none is pinned, so none is installed unasked. A named plugin is installed per harness stayfixed serves (`claude` and `codex`),
 from the preset's own per-harness marketplace table (`[plugins.<harness>]`). For each harness the preset declares a
 marketplace for, `setup` registers it (`claude plugin marketplace add <source>`; idempotent — an already-registered
 source is a no-op reported as such) and then installs each plugin bare (`claude plugin install
@@ -2075,7 +1883,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 
 | Check | What it answers | What it reads |
 |---|---|---|
-| `not-initialised` | whether there is a `stayfixed.toml` here, and how much of it a session can use: with none, a warning that the session guards and `doctor` work without one and memory stays the coding agent's own, and that `stayfixed init` adds the rest, except in a checkout this machine binds, where it is ok and says the configuration comes from the overlay's layers; with one that loaded with settings ignored or put back to the preset's, a warning naming at most three of their keys and counting the rest, never their values; red only for one a session drops whole, in the words of the session's warning | `stayfixed.toml` |
+| `not-initialised` | whether there is a `stayfixed.toml` here, and how much of it a session can use: with none, a warning that the session guards and `doctor` work without one and memory stays the coding agent's own, and that a `stayfixed.toml` adds the rest, except in a checkout this machine binds, where it is ok and says the configuration comes from the overlay's layers; with one that loaded with settings ignored or put back to the preset's, a warning naming at most three of their keys and counting the rest, never their values; red only for one a session drops whole, in the words of the session's warning | `stayfixed.toml` |
 | `versions` | whether the project's `[stayfixed] version` is the stayfixed running; with no project configuration, which stayfixed runs | `stayfixed.toml`, the package |
 | `wrapper` | whether the wrapper can actually reach stayfixed on this machine: red when it writes a fault to stderr or cannot be run; under a root the environment named, which it never runs, red when the wrapper is not executable and a skip otherwise; a stale `hooks/hooks.json`, an edited wrapper that still runs or a changed `scripts/stayfixed` is not reported | one `run-hook.sh --version`, and only under the plugin root this stayfixed is part of; under a named root, `hooks/run-hook.sh`'s mode |
 | `budgets` | every budget set above the preset, named raised, and every one set below it, named lowered | `stayfixed.toml`, the machine file, the preset |
@@ -2187,8 +1995,8 @@ which lets `wrapper` read the wrapper's executable bit even though it still will
 holds. With no `stayfixed.toml`, `not-initialised` **warns**, the three rows above that read the
 project configuration skip, and no row is red for it: a default install, where the guards and
 this report already work, exits `0`. In a checkout this machine binds, `not-initialised` is **ok**
-instead and says the configuration comes from the overlay's layers, with no remedy, since `init` is
-not what that checkout lacks. A `stayfixed.toml` that loads with settings ignored or put
+instead and says the configuration comes from the overlay's layers, with no remedy, since no file is
+what that checkout lacks. A `stayfixed.toml` that loads with settings ignored or put
 back to the preset's warns, naming at most three of their keys and counting the rest. Only one a session drops whole is **red**: a
 symbolic link, whatever it points at, a file that is not UTF-8, cannot be read or is not TOML, or
 one holding a key nothing can stand in for; the row says which in the session's own words and
@@ -2277,12 +2085,8 @@ lists to the real parser.
 
 ## Terms
 
-**Scaffold** means two things on this page, and the sentence says which:
-
-- everything `stayfixed init` writes into a repository, `stayfixed.toml` included, and the report
-  of it, the `scaffold` key of its `--json`;
-- the scaffold engine, which plans and writes it and reports every action in the same verbs,
-  `stayfixed overlay upgrade`'s included.
+**Scaffold** means the scaffold engine, which plans and writes the overlay's files and reports
+every action in the same verbs, `stayfixed overlay upgrade`'s included.
 
 ---
 

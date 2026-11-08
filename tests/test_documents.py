@@ -337,7 +337,7 @@ _NAMES_AS_THEY_WERE = ("docs/plans/", "changelog.d/", "mutations/", "CHANGELOG.m
 _NAMING_SUFFIXES = (".md", ".yml", ".yaml", ".toml", ".py")
 # A vacuity floor, not a count: the walk read 877 mentions when it was written, and a regex
 # that matched nothing would satisfy the check below it.
-NAMED_COMMANDS_FLOOR = 500
+NAMED_COMMANDS_FLOOR = 400
 
 
 def named_commands(relative: str, text: str) -> list[str]:
@@ -395,7 +395,7 @@ def test_the_command_name_walk_discriminates() -> None:
         f"{tick}stayfixed plan check{tick}, {tick}stayfixed hook <event>{tick}",
         f"{tick}stayfixed <group>{tick}, {tick}stayfixed …{tick}, {tick}stayfixed {{name}}{tick}",
         f'"{tick}stayfixed memory "\n    "index --check{tick}"',
-        f"{tick}stayfixed --version{tick}, {run} stayfixed init --yes",
+        f"{tick}stayfixed --version{tick}, {run} stayfixed plan check",
     ]
     for text in fine:
         named = named_commands("x.py", text)

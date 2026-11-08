@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from stayfixed.scaffold import Kind, Style, Template, apply, plan
+from stayfixed.scaffold import Template, apply, plan
 from stayfixed.scaffold.manifest import MANIFEST_PATH
 
 WRITING_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
@@ -105,21 +105,9 @@ def trace(monkeypatch: pytest.MonkeyPatch) -> Iterator[Trace]:
 
 def templates() -> list[Template]:
     return [
-        Template(
-            id="agents", kind=Kind.TEMPLATE, target="AGENTS.md", source="t", render=lambda: "A\n"
-        ),
-        Template(
-            id="ignore",
-            kind=Kind.MANAGED_REGION,
-            target=".gitignore",
-            source="t",
-            render=lambda: ".stayfixed/local/",
-            region="ignores",
-            style=Style.HASH,
-        ),
+        Template(id="agents", target="AGENTS.md", source="t", render=lambda: "A\n"),
         Template(
             id="doc",
-            kind=Kind.TEMPLATE,
             target="docs/specs/README.md",
             source="t",
             render=lambda: "S\n",
@@ -143,10 +131,10 @@ def test_apply_touches_exactly_the_paths_the_plan_named(tmp_path: Path) -> None:
     apply(root, planned)
     after = snapshot(tmp_path)
 
-    # The three targets `templates()` names, spelled out. Deriving them from `planned.writes`
+    # The two targets `templates()` names, spelled out. Deriving them from `planned.writes`
     # made this assertion agree with a planner that produced no actions at all: `apply` would
     # write only the manifest, and `changed` and `expected` would both be that one path.
-    targets = {"AGENTS.md", ".gitignore", "docs/specs/README.md"}
+    targets = {"AGENTS.md", "docs/specs/README.md"}
     assert set(planned.writes) == targets
     changed = {path for path in set(before) | set(after) if before.get(path) != after.get(path)}
     expected = {f"project/{target}" for target in targets} | {f"project/{MANIFEST_PATH}"}

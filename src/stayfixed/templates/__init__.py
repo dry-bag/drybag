@@ -1,9 +1,8 @@
-"""Where the shipped template trees are, for the two areas that render one.
+"""Where the shipped template tree is.
 
-`setup --overlay <path>` renders `overlay/` and `init` renders `project/`; both are read at
-runtime, so the copy that answers is the one an installed stayfixed carries under its module
-root (`overlay/template.py` records why there is no checkout fallback). One resolver, so the
-two areas cannot come to disagree about where "shipped" is.
+`setup --overlay <path>` renders `overlay/`, read at runtime, so the copy that answers is the one
+an installed stayfixed carries under its module root (`overlay/template.py` records why there is
+no checkout fallback).
 """
 
 from __future__ import annotations
