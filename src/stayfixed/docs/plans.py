@@ -92,12 +92,14 @@ from stayfixed.docs.hygiene import read_document
 from stayfixed.errors import Failure, Refusal
 from stayfixed.findings import Finding
 from stayfixed.gitenv import NO_ANSWER, ForkUnknown, fork_points, git_run
-from stayfixed.identifiers import BUG_FIXES
 from stayfixed.prose import blank_fences, path_references, present_within, resolves_within
 
 if TYPE_CHECKING:
     from stayfixed.config.schema import Config
 
+# A plan's claim to fix a bug, which owes a `Premise:` line. The prefix is fixed at `BR`, and three
+# digits or more because fewer is a different shape: a heading or a number never an identifier.
+BUG_FIXES = re.compile(r"\bFixes\s+BR-\d{3,}\b")
 # A line declaring paths: a dash, after blanks on its own line. Led by `^\s*`, the pattern reached
 # the same dash from every line start in the blank lines above it, reading them again from each:
 # 0.33 s over 16,000 of them, and four times as long at each doubling. A match from a line above

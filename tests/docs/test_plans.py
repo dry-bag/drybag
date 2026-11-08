@@ -18,6 +18,7 @@ import pytest
 from stayfixed.config.loader import load
 from stayfixed.config.schema import Config
 from stayfixed.docs.plans import (
+    BUG_FIXES,
     BaseUnresolvable,
     asserted_outcomes,
     lint,
@@ -229,6 +230,20 @@ def test_a_fixes_claim_is_read_with_the_fixed_prefix(tmp_path: Path) -> None:
     root, config = project(tmp_path)
     assert rules(root, config, plan(root, SCOPE + "Fixes BR-042.\n")) == ["premise-missing"]
     assert rules(root, config, plan(root, SCOPE + "Fixes DF-042.\n")) == []
+
+
+def test_a_fixes_claim_takes_three_digits_or_more() -> None:
+    # Two digits is a different shape, and a lint that accepts it asks a plan for a premise over a
+    # number that was never an identifier. Oracle: `mutations/`'s "a Fixes claim accepts fewer than
+    # three digits".
+    assert BUG_FIXES.search("Fixes BR-042.") is not None
+    assert BUG_FIXES.search("Fixes BR-2345") is not None
+    assert BUG_FIXES.search("Fixes BR-42.") is None
+
+
+def test_a_fixes_claim_is_bounded_by_word_edges() -> None:
+    assert BUG_FIXES.search("Prefixes BR-042") is None
+    assert BUG_FIXES.search("Fixes BR-0421x") is None
 
 
 # Plans the rules read in time quadratic in their length, each with the rules it must end in:

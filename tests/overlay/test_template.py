@@ -453,14 +453,6 @@ def test_the_template_ships_a_dependabot_configuration_for_its_pinned_actions() 
     assert ".github/dependabot.yml" in OVERLAY_FILES
 
 
-def test_the_overlay_tree_is_the_shared_resolvers_answer() -> None:
-    # One resolver for both shipped trees. Mutation (comment): make `template_root`
-    # join the path itself -> equal today, and the two drift the day one changes.
-    from stayfixed.templates import tree
-
-    assert template_root() == tree("overlay")
-
-
 # --- the rendered overlay is valid, reachable and honest ---------------------------------------
 
 

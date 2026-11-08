@@ -24,14 +24,13 @@ from stayfixed.scaffold.entries import (
 from stayfixed.scaffold.manifest import (
     FORMAT,
     MANIFEST_PATH,
-    Kind,
     Location,
     ManifestError,
     Record,
     digest,
 )
 from stayfixed.scaffold.model import Action, Applied, Plan, Refused, Template, Verb
-from stayfixed.scaffold.regions import RegionError, Style, drop, extract, upsert
+from stayfixed.scaffold.regions import RegionError, drop, extract, upsert
 from stayfixed.scaffold.report import render_report
 
 __all__ = [
@@ -40,7 +39,6 @@ __all__ = [
     "Action",
     "Applied",
     "EntriesError",
-    "Kind",
     "Location",
     "ManifestError",
     "ParserLimitError",
@@ -48,7 +46,6 @@ __all__ = [
     "Record",
     "Refused",
     "RegionError",
-    "Style",
     "Template",
     "Verb",
     "apply",

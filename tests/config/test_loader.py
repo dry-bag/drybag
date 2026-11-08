@@ -127,6 +127,8 @@ def test_enumerated_values_are_validated(tmp_path: Path, text: str, key: str) ->
         MINIMAL + "\n[budgets]\nagents_md_lines = -5\n",
         MINIMAL + '\n[budgets]\nagents_md_lines = "many"\n',
         MINIMAL + '\n[commit_messages]\nattribution_check = "yes"\n',
+        # A string iterates, so a loader that took this would hold one group per character.
+        MINIMAL + '\n[memory]\ngroups = "src"\n',
     ],
 )
 def test_value_types_and_ranges_are_validated(tmp_path: Path, text: str) -> None:

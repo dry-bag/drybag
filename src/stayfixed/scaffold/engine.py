@@ -37,7 +37,7 @@ from stayfixed.fsops import (
     write_within,
 )
 from stayfixed.printed import quoted
-from stayfixed.scaffold.manifest import Kind, Location, Manifest, Record, digest
+from stayfixed.scaffold.manifest import KIND, Location, Manifest, Record, digest
 from stayfixed.scaffold.model import Action, Applied, Plan, Refused, Template, Verb
 
 
@@ -89,7 +89,7 @@ def plan(root: Path, templates: Sequence[Template]) -> Plan:
         body = template.render()
         new_record = Record(
             id=template.id,
-            kind=Kind.TEMPLATE,
+            kind=KIND,
             location=Location.REPO,
             target=target,
             template=template.source,

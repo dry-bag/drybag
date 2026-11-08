@@ -14,7 +14,6 @@ from stayfixed.jsonobject import LONG_NUMBER, NESTED
 from stayfixed.scaffold.manifest import (
     FORMAT,
     MANIFEST_PATH,
-    Kind,
     Location,
     Manifest,
     ManifestError,
@@ -27,7 +26,7 @@ from tests import parserlimits
 def a_record(**overrides: object) -> Record:
     values: dict[str, object] = {
         "id": "agents-md",
-        "kind": Kind.TEMPLATE,
+        "kind": "template",
         "location": Location.REPO,
         "target": "AGENTS.md",
         "template": "project/AGENTS.md",

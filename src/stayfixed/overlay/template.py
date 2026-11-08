@@ -26,12 +26,12 @@ repository-root walk would have found it.
 from __future__ import annotations
 
 from functools import partial
+from importlib import resources
 from pathlib import Path
 
 from stayfixed.errors import Failure
 from stayfixed.overlay.layout import OVERLAY_FILES
 from stayfixed.scaffold import Template
-from stayfixed.templates import tree
 
 OVERLAY = "overlay"
 
@@ -41,12 +41,12 @@ def template_root() -> Path:
 
     A path is always returned, existing or not, so a caller that cannot find the tree can name
     where it looked instead of handling a `None`. `templates()` is the one place that becomes a
-    refusal a user can act on. `stayfixed.templates.tree` is the resolver — `resources.files`
-    answers a `Path` for every filesystem install, which is every install this project supports;
-    `fsops` contains writes with `dir_fd=` and `O_NOFOLLOW`, so a zip-imported stayfixed could not
-    write an overlay in any case.
+    refusal a user can act on. `resources.files` answers a `Path` for every filesystem install,
+    which is every install this project supports; `fsops` contains writes with `dir_fd=` and
+    `O_NOFOLLOW`, so a zip-imported stayfixed could not write an overlay in any case.
     """
-    return tree(OVERLAY)
+    package = resources.files("stayfixed").joinpath("templates", OVERLAY)
+    return package if isinstance(package, Path) else Path(str(package))
 
 
 def _render(path: Path) -> str:

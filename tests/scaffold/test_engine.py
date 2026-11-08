@@ -16,7 +16,6 @@ from stayfixed.scaffold import engine
 from stayfixed.scaffold.engine import apply, plan
 from stayfixed.scaffold.manifest import (
     MANIFEST_PATH,
-    Kind,
     Location,
     Manifest,
     Record,
@@ -38,7 +37,7 @@ def a_template(**overrides: object) -> Template:
 def a_record(**overrides: object) -> Record:
     values: dict[str, object] = {
         "id": "agents-md",
-        "kind": Kind.TEMPLATE,
+        "kind": "template",
         "location": Location.REPO,
         "target": "AGENTS.md",
         "template": "project/AGENTS.md",
@@ -85,6 +84,17 @@ def test_a_hand_edited_file_is_skipped_and_named(tmp_path: Path) -> None:
     Manifest({}).with_record(a_record()).write(tmp_path)
     result = plan(tmp_path, [a_template(render=lambda: "NEWER\n")])
     assert [(a.verb, a.target) for a in result.actions] == [(Verb.SKIP_MODIFIED, "AGENTS.md")]
+
+
+def test_a_crlf_copy_of_a_recorded_file_is_hand_edited_and_never_unchanged(tmp_path: Path) -> None:
+    # The digest is of the bytes on disk. A read that translated line endings would hash this copy
+    # as the template's own `BODY\n`, and a file that differs from what stayfixed wrote would be
+    # reported as unchanged.
+    (tmp_path / "AGENTS.md").write_bytes(b"BODY\r\n")
+    Manifest({}).with_record(a_record()).write(tmp_path)
+    result = plan(tmp_path, [a_template()])
+    assert result.unchanged == ()
+    assert [(a.verb, a.reason) for a in result.actions] == [(Verb.SKIP_MODIFIED, "hand-edited")]
 
 
 # --- regions, which live inside somebody else's file -------------------------------------
@@ -176,7 +186,6 @@ def test_a_fifo_at_an_artifacts_place_is_its_refusal_and_never_waited_on(tmp_pat
         "import sys\n"
         "from pathlib import Path\n"
         "from stayfixed.scaffold.engine import plan\n"
-        "from stayfixed.scaffold.manifest import Kind\n"
         "from stayfixed.scaffold.model import Template\n"
         "root = Path(sys.argv[1])\n"
         "template = Template(id='agents-md', target='AGENTS.md',\n"

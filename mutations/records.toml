@@ -1213,3 +1213,11 @@ after = "    if event.project_root is None or config is None:"
 reddens = [
   "tests/memory/test_index.py::test_a_repository_mode_checkout_is_not_rendered",
 ]
+
+# A claim on fewer than three digits is not a bug identifier.
+[[mutation]]
+name = "a Fixes claim accepts fewer than three digits"
+file = "src/stayfixed/docs/plans.py"
+before = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d{3,}\b")'
+after = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d+\b")'
+reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_takes_three_digits_or_more"]

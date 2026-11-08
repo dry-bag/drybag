@@ -258,24 +258,11 @@ def stand_in_git(monkeypatch: pytest.MonkeyPatch, stand_in: Path) -> None:
     monkeypatch.setenv("PATH", f"{stand_in.parent}{os.pathsep}{os.environ.get('PATH', '')}")
 
 
-def no_git(monkeypatch: pytest.MonkeyPatch, nowhere: Path) -> None:
-    """Have no `git` the product can launch, for the length of one test: `PATH` names only
-    `nowhere`, a directory with no `git` in it."""
-    monkeypatch.setenv("PATH", str(nowhere))
-
-
-def repository(
-    tmp_path: Path,
-    *,
-    origin: str | None = "git@github.com:owner/widget.git",
-    directory: str = "widget",
-) -> Path:
-    """A git repository at `tmp_path / directory` holding only a README, with `origin` as its
-    origin remote, or none when `origin` is `None`."""
-    root = tmp_path / directory
+def repository(tmp_path: Path) -> Path:
+    """A git repository at `tmp_path / "widget"` holding only a README, with an `origin` remote."""
+    root = tmp_path / "widget"
     root.mkdir(parents=True)
     git(root, "init", "-q", "-b", "main")
-    if origin is not None:
-        git(root, "remote", "add", "origin", origin)
+    git(root, "remote", "add", "origin", "git@github.com:owner/widget.git")
     (root / "README.md").write_text("# ours, from before stayfixed\n", encoding="utf-8")
     return root

@@ -67,14 +67,6 @@ before = '            os.fsync(stream.fileno())'
 after = ''
 reddens = ["tests/test_fsops.py::test_the_bytes_are_fsynced_before_the_rename"]
 
-# A claim on fewer than three digits is not a bug identifier.
-[[mutation]]
-name = "a Fixes claim accepts fewer than three digits"
-file = "src/stayfixed/identifiers.py"
-before = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d{3,}\b")'
-after = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d+\b")'
-reddens = ["tests/test_identifiers.py::test_a_fixes_claim_takes_three_digits_or_more"]
-
 # A non-zero exit is an answer some callers need (`check-ignore` says 1 for "nothing matched").
 [[mutation]]
 name = "the git runner collapses every non-zero exit into could-not-run"
@@ -2291,7 +2283,7 @@ reddens = [
   "tests/scaffold/test_entries.py::test_the_object_reader_refuses_a_value_past_its_depth_bound",
 ]
 
-# The readers of files a repository commits and a reader globs (bug ledger entries, notes, the
+# The readers of files a repository commits and a reader globs (notes, the
 # trust digest's notes and `MEMORY.md`, plans) followed a committed link to whatever it named: a
 # link to `/dev/zero` read until memory ran out, in CI too, and one to `/dev/stdin` or a FIFO
 # waited forever. `open_regular` reads a regular file only, through a link as before.
@@ -2455,8 +2447,7 @@ after = """        if False:
 reddens = ["tests/test_fsops.py::test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer"]
 
 # `tomllib` converts a hex, octal or binary literal of any length, and `str` of one past 4,300
-# digits raises: `init --yes` re-rendering an adopted `stayfixed.toml`, and `setup` rewriting the
-# owner's machine file, ended in an internal error on one such line. The serialiser spells it in
+# digits raises: `setup` rewriting the owner's machine file ended in an internal error on one such line. The serialiser spells it in
 # hexadecimal, which TOML reads back.
 [[mutation]]
 name = "the TOML writer spells every integer in decimal"

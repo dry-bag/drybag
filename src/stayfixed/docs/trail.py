@@ -99,8 +99,7 @@ def trail_target(config: Config) -> str:
     """Where `trail.toml` sits for `config`, beside the roadmap, as a project-relative path.
 
     Only a location, read off `[paths] roadmap` without touching the disk: whether it may be read
-    or written is `contained()`'s to say, which `trail_path` asks and the scaffold engine asks of
-    every target it plans.
+    or written is `contained()`'s to say, which `trail_path` asks.
     """
     return str(PurePosixPath(config.paths.roadmap).parent / TRAIL_FILE)
 
@@ -269,8 +268,6 @@ def _documents(root: Path, config: Config) -> list[tuple[str, str, Path]]:
     found: list[tuple[str, str, Path]] = []
     for configured in (config.paths.specs, config.paths.plans):
         directory = contained(root, configured)
-        if not fsops.is_dir(directory):
-            continue
         for path in sorted(directory.glob("*.md")):
             row = f"{PurePosixPath(configured).name}/{path.name}"
             found.append((row, relpath(f"{configured}/{path.name}", roadmap_dir), path))

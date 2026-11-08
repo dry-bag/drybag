@@ -238,17 +238,16 @@ last to find the project root, and reaches no network.
 | `.github/workflows/scan.yml` | the overlay's CI on GitHub (note 5) | GitHub, through `gitleaks/gitleaks-action` (note 5) | on every push, pull request and manual run, unless the repository is marked a template |
 | `.github/dependabot.yml` | GitHub's Dependabot, from the file the same commands write into the overlay | GitHub: it looks up new releases of the scan workflow's two pinned actions and opens one grouped pull request in the overlay to move them | monthly, once the file is on GitHub |
 
-1. **`git fetch`** asks the project's own `origin` for identifiers filed on branches this checkout
-   has not fetched, with `--no-recurse-submodules`, so a submodule's remote is not asked. stayfixed
-   passes every git it starts only `PATH` (its absolute entries), `HOME`, `LANG`, `LC_ALL`,
-   `SYSTEMROOT`, `SSH_AUTH_SOCK` and the proxy variables (`http_proxy`, `https_proxy`,
+1. **`git fetch`**: stayfixed passes every git it starts only `PATH` (its absolute entries),
+   `HOME`, `LANG`, `LC_ALL`, `SYSTEMROOT`, `SSH_AUTH_SOCK` and the proxy variables (`http_proxy`, `https_proxy`,
    `HTTPS_PROXY`, `all_proxy`, `ALL_PROXY`, `no_proxy`, `NO_PROXY`) from your environment, so your
    ssh agent and proxy settings apply, and `GIT_SSH_COMMAND` is not used. Without
    `XDG_CONFIG_HOME` and `GIT_CONFIG_GLOBAL`, git reads your global configuration from
    `~/.gitconfig` and `~/.config/git/config` alone: a global configuration either variable points
    elsewhere, and the credential helpers it names, are not read, while the helpers the configuration
    git does read names are used. The note sync's fetch asks the overlay's `origin` for `main` alone,
-   into a ref of its own, in that same environment; it never asks for a password
+   with `--no-recurse-submodules` so a submodule's remote is not asked, into a ref of its own, in
+   that same environment; it never asks for a password
    (`GIT_TERMINAL_PROMPT=0`, no askpass, no standard input) and runs none of the overlay's hooks.
    Its **`git push`** goes the same way to the same `origin`: the sha it checked to `main`, never
    forced and with no tag. Its secret scan is the `gitleaks` on that same `PATH`, which reaches no

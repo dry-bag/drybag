@@ -12,7 +12,7 @@ description: Sweep the working-memory store — inventory by size, verify anchor
    merged and the files it names are in the tree. This is the sweep's
    own job and nothing does it for you. A pointer to nothing is worse than the retelling it replaced.
 3. **Rewrite to rule plus pointer.** Keep the rule, one line of why, how to apply, and a bare
-   identifier for the evidence. History belongs to the ledger, the roadmap or the retro.
+   identifier for the evidence. History belongs to the roadmap or the retro.
 4. **Merge on close coupling.** Two notes firing on the same trigger, or each needing the
    other to be usable, are one note. A fact mechanized elsewhere is deleted, not kept.
 5. **Regenerate the index.** Run `stayfixed memory index`, then `stayfixed memory index --check`.

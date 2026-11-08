@@ -1,7 +1,7 @@
 """What a consumer asks for, and what the engine answers.
 
-`Template` is a description, not a file: the areas that own template *content*
-(`templates/`, `overlay/`) build these, and this area never reads the plugin's own directory.
+`Template` is a description, not a file: `overlay/`, which owns the template *content*, builds
+these, and this area never reads the plugin's own directory.
 That is what keeps the engine testable without shipping any template at all.
 """
 

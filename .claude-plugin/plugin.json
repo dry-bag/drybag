@@ -10,7 +10,7 @@
     "preset": {
       "type": "string",
       "title": "Preset",
-      "description": "Preset applied by setup and init.",
+      "description": "Preset applied by setup.",
       "default": "recommended"
     }
   }

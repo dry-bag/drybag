@@ -171,15 +171,6 @@ def test_areas_are_discovered_from_the_package() -> None:
     assert "stayfixed.doctor.commands" in names
 
 
-def _subcommands(group: str) -> set[str]:
-    """The commands the real parser registers under `stayfixed <group>`."""
-    groups = subparsers(build_parser(discover_registrars()))
-    assert groups is not None
-    nested = subparsers(groups.choices[group])
-    assert nested is not None
-    return set(nested.choices)
-
-
 def _exploding(args: argparse.Namespace) -> Result:
     raise KeyError("no such key")
 

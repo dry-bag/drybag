@@ -65,7 +65,7 @@ from stayfixed.config.paths import contained
 from stayfixed.errors import Refusal
 from stayfixed.gitenv import git_path, git_run
 from stayfixed.printed import quoted
-from stayfixed.scaffold import RegionError, Style, drop, extract, upsert
+from stayfixed.scaffold import RegionError, drop, extract, upsert
 
 # What `git rev-parse --git-path` is asked for, and the region's name in it: the block reads
 # `# stayfixed:attach:begin` ... `# stayfixed:attach:end`.
@@ -344,7 +344,7 @@ def planned_block(root: Path, relatives: Sequence[str]) -> ExcludeWrite | None:
     kept = _patterns(earlier)
     new = (line for line in lines if line not in kept)
     body = "\n".join([EXCLUDE_NOTE, *records, *kept, *new])
-    updated = upsert(current, EXCLUDE_REGION, body, Style.HASH)
+    updated = upsert(current, EXCLUDE_REGION, body)
     if updated == current:
         return None
     if not fsops.creatable(path):
@@ -354,14 +354,14 @@ def planned_block(root: Path, relatives: Sequence[str]) -> ExcludeWrite | None:
 
 def _named(
     path: Path,
-    region: Callable[[str, str, Style], str | None],
+    region: Callable[[str, str], str | None],
     text: str,
 ) -> str | None:
     """`extract` or `drop` of the block, with the file named in a refusal: "region 'attach' is
     opened or closed twice" said which region and never which file, and `.git/info/exclude` is
     not one a person opens often."""
     try:
-        return region(text, EXCLUDE_REGION, Style.HASH)
+        return region(text, EXCLUDE_REGION)
     except RegionError as exc:
         raise RegionError(f"{quoted(str(path))}: {exc}") from exc
 
@@ -395,7 +395,7 @@ def withdrawn_block(root: Path) -> ExcludeWrite | None:
     if not fsops.creatable(path):
         raise Refusal(UNWRITABLE.format(path=quoted(str(path))))
     records = _lines(body)
-    remaining = drop(current, EXCLUDE_REGION, Style.HASH)
+    remaining = drop(current, EXCLUDE_REGION)
     # Nothing follows the block exactly when what is left is what came before it.
     if EXCLUDE_ENDED in records and current.startswith(remaining):
         remaining = remaining.removesuffix(_added_ending(remaining))

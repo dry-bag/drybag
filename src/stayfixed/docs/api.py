@@ -10,7 +10,7 @@ whole area — and with it the configuration layer — into every `discover()` c
 `scripts/` and `tests/`: this area's own tests reach `stayfixed.docs.plans`,
 `stayfixed.docs.hygiene` and `stayfixed.docs.trail` directly, and every other area runs the
 commands.
-So every other name below is here on an argument rather than on a caller, and the argument is
+So every name below is here on an argument rather than on a caller, and the argument is
 written beside it — a surface that survives a trim with no explanation is what made the trim
 necessary.
 

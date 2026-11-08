@@ -3,13 +3,12 @@
 The count line names every outcome including the zeros, so "nothing was skipped" is something
 the report says rather than something the reader has to notice is missing.
 
-Every target it prints is a `Template`'s: a `[paths]` value the loader has held to the path
-grammar, a file name under one, or a name out of a tree this package ships.
+Every target it prints is a `Template`'s: a name out of a tree this package ships.
 """
 
 from __future__ import annotations
 
-from stayfixed.scaffold.model import WRITING, Plan, Verb
+from stayfixed.scaffold.model import Plan, Verb
 
 
 def render_report(planned: Plan) -> str:
@@ -21,7 +20,7 @@ def render_report(planned: Plan) -> str:
         lines.append("REFUSED — nothing will be written while any of these stands:")
         lines += [f"  {r.target}  ({r.reason})" for r in planned.refusals]
     created = sum(1 for a in planned.actions if a.verb is Verb.CREATE)
-    updated = sum(1 for a in planned.actions if a.verb in WRITING and a.verb is not Verb.CREATE)
+    updated = sum(1 for a in planned.actions if a.verb is Verb.UPDATE)
     skipped = sum(1 for a in planned.actions if a.verb is Verb.SKIP_MODIFIED)
     lines.append("")
     lines.append(

@@ -28,10 +28,10 @@ CI gate belongs in neither, and the note is deleted.
 2. One fact per note, with `name`, `description` and `metadata.type` frontmatter
    (`user`, `feedback`, `project` or `reference`) and an `index:` line.
 3. **Write the rule, not the incident.** The shortest thing that changes what the next
-   session does: the rule, one line of why, how to apply it, and a bare pointer (a ledger
+   session does: the rule, one line of why, how to apply it, and a bare pointer (an issue
    identifier, a pull request number) to where the evidence already lives. Retelling the
-   incident duplicates the entry, the roadmap or the retro that owns it, and length is a
-   cost paid every session for an injected note. Ledger identifiers are written plain:
+   incident duplicates the roadmap or the retro that owns it, and length is a
+   cost paid every session for an injected note. Identifiers are written plain:
    `[[wiki-links]]` address notes, so a bracketed identifier is a permanent dangling edge.
 4. Update an existing note instead of adding a near-duplicate, and **merge on close
    coupling, not only on duplication**: two notes that fire on the same trigger, or that

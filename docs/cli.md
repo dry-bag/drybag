@@ -871,7 +871,7 @@ already hold an old plan the change puts back. Five rules, each from a retrospec
 backticked path resolves unless the line says `(create)` or `(delete)`, or the plan declares it
 on a `Create:`, `Test:` or `Delete:` line; no step is phrased as already knowing its answer
 (`confirm that nothing …`, `verify no …`, `check that it does not …`); a `**Scope:**` line
-with content is present; a plan claiming `Fixes <PREFIX>-nnn` carries a `**Premise:**` line with
+with content is present; a plan claiming `Fixes BR-nnn` (no other prefix is judged) carries a `**Premise:**` line with
 content; and a mutation's outcome stated as fact in the present tense (`-> the test reddens`,
 `watch it go red`, `reddens 8 assertions`) is a finding unless its own sentence marks it an
 expectation. Without `PATH`, the first rule reads only the lines the change wrote — those that
