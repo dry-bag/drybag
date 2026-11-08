@@ -25,7 +25,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 from tests.gitfixture import git, needs_git
-from tests.plugintree import PLUGIN_FILES, TEN, plugin_source
+from tests.plugintree import NINE, PLUGIN_FILES, plugin_source
 from tests.scriptload import plugin_tree, release
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -531,7 +531,7 @@ def test_the_payload_is_the_generated_plugin_tree() -> None:
     outside = [
         path
         for path, _ in entries
-        if not any(path == entry or path.startswith(entry + "/") for entry in TEN)
+        if not any(path == entry or path.startswith(entry + "/") for entry in NINE)
     ]
     assert outside == []
 

@@ -1,7 +1,7 @@
 """`scripts/plugin_tree.py`: the plugin's paths read from a commit, as members, manifest and tree.
 
 Every case builds a scratch repository and commits into it, because the subject is what a commit
-holds and not what a disk does. The ten paths are spelled out in `tests/plugintree.py`, which
+holds and not what a disk does. The nine paths are spelled out in `tests/plugintree.py`, which
 builds every source here, and never read from the script's `PLUGIN_PATHS`; the manifest's first
 line and every commit text are spelled here and never read from the script: an expectation read
 from the subject is the subject compared with itself.
@@ -27,10 +27,10 @@ from stayfixed.errors import Refusal
 from tests.gitfixture import git, git_bytes, needs_git, plant_path
 from tests.plugintree import (
     MARKETPLACE,
+    NINE,
     PLUGIN_FILES,
     PLUGIN_URL,
     REPOSITORY,
-    TEN,
     commit,
     hashed,
     literal,
@@ -64,7 +64,7 @@ def listed(root: Path, rev: str = "HEAD", **kwargs: bool) -> dict[str, tuple[byt
 
 
 def test_members_lists_every_plugin_path_with_its_mode_and_nothing_else(tmp_path: Path) -> None:
-    # Mutation (declared): `"agents"` dropped from `PLUGIN_PATHS` -> its file is missing here. The
+    # Mutation (declared): `"skills"` dropped from `PLUGIN_PATHS` -> its file is missing here. The
     # neighbours are kept out by git's pathspec in this listing; the prefix rule's own mutation
     # reddens `test_exact_refuses_a_path_outside_the_plugin`, which reads the whole tree.
     root = plugin_source(
@@ -77,7 +77,6 @@ def test_members_lists_every_plugin_path_with_its_mode_and_nothing_else(tmp_path
         (".codex-plugin/plugin.json", "100644"),
         ("LICENSE", "100644"),
         ("README.md", "100644"),
-        ("agents/navigator.md", "100644"),
         ("hooks/hooks.json", "100644"),
         ("hooks/run-hook.sh", "100755"),
         ("scripts/stayfixed", "100755"),
@@ -85,9 +84,9 @@ def test_members_lists_every_plugin_path_with_its_mode_and_nothing_else(tmp_path
         ("src/stayfixed/__init__.py", "100644"),
     ]
     assert {m.path: m.content for m in members} == {p: c for p, (c, _) in PLUGIN_FILES.items()}
-    # Every path named is one of the ten or under one, and the ten are the script's.
-    assert all(any(m.path == p or m.path.startswith(p + "/") for p in TEN) for m in members)
-    assert plugin_tree.PLUGIN_PATHS == TEN
+    # Every path named is one of the nine or under one, and the nine are the script's.
+    assert all(any(m.path == p or m.path.startswith(p + "/") for p in NINE) for m in members)
+    assert plugin_tree.PLUGIN_PATHS == NINE
 
 
 def test_members_read_the_commit_and_not_the_disk(tmp_path: Path) -> None:
@@ -674,7 +673,7 @@ def test_the_plugin_commit_is_what_git_computes(tmp_path: Path) -> None:
     assert git(git_dir, "cat-file", "commit", made.commit) == literal(tree, None)
     assert made.commit == hashed(git_dir, literal(tree, None))
     assert written(git_dir, made.commit) == PLUGIN_FILES
-    assert (made.rev, made.version, made.files, made.tree) == (head, "1.2.3", 11, tree)
+    assert (made.rev, made.version, made.files, made.tree) == (head, "1.2.3", 10, tree)
     assert (made.parent, made.pinned) == (None, None)
 
 
@@ -1238,7 +1237,7 @@ def test_require_pin_exits_1_when_the_pin_is_another_commit(
         pinned,
         pinned,
     )
-    assert (report["tree"], report["files"], report["parent"]) == (tree, 11, None)
+    assert (report["tree"], report["files"], report["parent"]) == (tree, 10, None)
 
     # The release after it, its pin left as it was: the parent and the pin are the same commit.
     git(root, "commit", "-q", "--allow-empty", "-m", "a release that did not pin")

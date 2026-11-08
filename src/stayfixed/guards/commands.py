@@ -1,4 +1,4 @@
-"""The `commit` and `test` groups."""
+"""The `commit` group."""
 
 from __future__ import annotations
 
@@ -176,27 +176,6 @@ def run_commit_strip(args: argparse.Namespace) -> Result:
     return Result(f"stripped {count} attribution line(s) from {path}", {"stripped": count})
 
 
-def run_test_attribute(args: argparse.Namespace) -> Result:
-    from stayfixed.config.layout import local_base
-    from stayfixed.guards.attribute import attribute
-    from stayfixed.runner import subprocess_runner
-
-    root, config = _root_and_config(args)
-    base = args.base or local_base(config)
-    result = attribute(root, command=args.command, base=base, runner=subprocess_runner())
-    data = {
-        "runs": {
-            "head_ambient": result.head_ambient,
-            "head_clean": result.head_clean,
-            "base_clean": result.base_clean,
-        },
-        "base": result.base,
-        "merge_base": result.merge_base,
-        "verdict": result.verdict,
-    }
-    return Result(result.verdict, data)
-
-
 def register(groups: SubParsers) -> None:
     commit = groups.add_parser("commit", help="commit-message rules")
     commit_sub = commit.add_subparsers(dest="command", metavar="<command>")
@@ -208,22 +187,3 @@ def register(groups: SubParsers) -> None:
     strip = commit_sub.add_parser("strip", help="strip attribution lines from a message file")
     strip.add_argument("file", help="the commit-message file git handed the hook")
     strip.set_defaults(func=run_commit_strip)
-
-    test = groups.add_parser("test", help="test-suite hygiene")
-    test_sub = test.add_subparsers(dest="command", metavar="<command>")
-    attribute = common_flags(
-        test_sub.add_parser(
-            "attribute", help="attribute a failing command to the change or to the environment"
-        )
-    )
-    attribute.add_argument(
-        "--command",
-        required=True,
-        help="the exact failing command, including the environment sync it needs",
-    )
-    attribute.add_argument(
-        "--base",
-        default=None,
-        help="ref to compare against (default: refs/remotes/origin/<project.base_branch>)",
-    )
-    attribute.set_defaults(func=run_test_attribute)

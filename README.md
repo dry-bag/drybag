@@ -213,11 +213,8 @@ stayfixed makes no network request of its own and sends no telemetry: none of it
 one of Python's network modules. The table has two kinds of row. Most are programs stayfixed
 starts, each only when a command its row's **Run by** names runs, and as your user; stayfixed
 installs none of them. The last two are files stayfixed writes that GitHub runs; stayfixed runs
-none of them. stayfixed's skills and its agent start nothing themselves: what your coding agent
-runs on their advice — through `stayfixed test attribute --command` or
-its own shell — is a command it chose, and reaches what that command reaches. The
-`uv sync --locked && uv run --locked pytest …` the `attribute-failure` skill suggests, for one,
-can reach the package index in each of the three trees `test attribute` runs it in.
+none of them. stayfixed's skills start nothing themselves: what your coding agent runs on their
+advice, through its own shell, is a command it chose, and reaches what that command reaches.
 
 `tests/test_outbound.py` walks the Python package and holds the **Program** column, in both
 directions, to the package's launches that can reach a network and the files its templates write
@@ -238,7 +235,6 @@ last to find the project root, and reaches no network.
 | `claude plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted), `stayfixed setup --restore`, `stayfixed attach` and `stayfixed detach` | for `setup`, the marketplace the preset names for Claude Code, and the named plugins' sources; for `setup --restore`, the marketplaces and plugins your overlay's `machine/claude/settings.json` names; for `attach` and `detach`, nothing past this machine (note 3) | `setup` when `--plugin` names a plugin and the preset names a marketplace for Claude Code; `setup --restore` when that file lists a marketplace or an enabled plugin; `attach` on every run; `detach` where the main checkout's `.claude/settings.local.json` names the plugin or its marketplace and no other checkout of the repository is attached |
 | `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 3) | when `--plugin` names a plugin and the preset names a marketplace for Codex |
 | `pre-commit install` | `stayfixed setup --overlay` | nothing as it installs; GitHub and Go's servers on the first commit after it (note 4) | when it renders an overlay at a path, records an existing one, or with `create:` |
-| `sh -c` | `stayfixed test attribute --command CMD` | wherever `CMD` reaches; stayfixed does not choose | every run: `CMD` in the working tree, then in extracts of `HEAD` and of the merge base |
 | `.github/workflows/scan.yml` | the overlay's CI on GitHub (note 5) | GitHub, through `gitleaks/gitleaks-action` (note 5) | on every push, pull request and manual run, unless the repository is marked a template |
 | `.github/dependabot.yml` | GitHub's Dependabot, from the file the same commands write into the overlay | GitHub: it looks up new releases of the scan workflow's two pinned actions and opens one grouped pull request in the overlay to move them | monthly, once the file is on GitHub |
 
@@ -299,19 +295,10 @@ Two kinds of git read the table counts as local can reach a network, and they ar
 stayfixed's own reads meet. In a partial clone (`git clone --filter=…`), git fetches an object the
 clone left out from the remote it came from when a command needs to read it, so any read that
 needs such an object can reach that remote. For example, in a clone that left file contents out
-(`--filter=blob:none`), `git cat-file`, `git grep`, `git archive` and `git diff`, whose rename
-detection reads the contents; and in one that left trees out as well (`--filter=tree:0`),
-`git ls-tree -r` too. And
-`git archive`, which `stayfixed test attribute` uses to extract `HEAD` and the merge base, runs
-the smudge filters the repository's `.gitattributes` name and your git configuration defines, as
-do the note sync's `git commit --only` and `git read-tree -m -u` over the overlay's notes, which
-run the clean and smudge filters your git configuration defines for the attributes `HEAD` commits
-(`GIT_ATTR_SOURCE=HEAD`).
-stayfixed passes `test attribute`'s git your `HOME` and leaves it reading its system configuration and the
-repository's own, so where the system, global or repository-local configuration defines
-`filter.lfs` — as `git lfs install` does in the global one — that is `git-lfs smudge`, which
-downloads the LFS objects of those two commits it does not have from the LFS server the repository
-configures, one a committed `.lfsconfig` can name. Beyond those two, your own git configuration
+(`--filter=blob:none`), `git cat-file`, `git grep` and `git diff`, whose rename detection reads
+the contents. And the note sync's `git commit --only` and `git read-tree -m -u` over the overlay's
+notes run the clean and smudge filters your git configuration defines for the attributes `HEAD`
+commits (`GIT_ATTR_SOURCE=HEAD`). Beyond those two, your own git configuration
 can redirect a read or run a program of its own: `url.<base>.insteadOf` rewrites a remote's
 address, and `core.fsmonitor` runs a program when git looks for changed files.
 
@@ -352,7 +339,6 @@ stayfixed plan check --base origin/main docs/plans/example.md
 # Guards
 stayfixed commit check --range origin/main..HEAD       # attribution lines in commit messages
 stayfixed commit strip .git/COMMIT_EDITMSG             # take the attribution block out of a message file
-stayfixed test attribute --command "uv sync --locked && uv run --locked pytest tests/x.py::t"   # the change, or the environment: three runs, one verdict
 
 # The private overlay
 stayfixed overlay upgrade --root ../stayfixed-private --dry-run  # what a release would refresh
@@ -436,12 +422,10 @@ one an agent or the harness wrote, and one edited since you promoted it all arri
 inside the delimited region, labelled, and never as a standing rule. A session hears one line,
 "N notes are unreviewed", when that set has changed since the last session.
 
-## Skills and agents
+## Skills
 
-`skills/` ships one ported skill (`memory-sweep`), five authored ones
-(`sweep-defect-class`, `review-plan-three-lenses`, `attribute-failure`,
-`run-correctness-audit`, `retro-to-guard`), and thin wrappers for the commands the CLI
-registers; `agents/` ships a read-only `code-navigator`. Every skill is written in action
+`skills/` ships one ported skill (`memory-sweep`) and thin wrappers for the commands the CLI
+registers. Every skill is written in action
 language — never a harness tool's name — with the per-harness mapping in
 [skills/README.md](skills/README.md), and every `stayfixed …` invocation in a skill is
 parsed against the real parser by a test. A wrapper written ahead of its command is listed in

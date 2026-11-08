@@ -93,7 +93,6 @@ before = '    answer = completed.stdout.decode(codec, "surrogateescape")'
 after = '    answer = completed.stdout.decode(codec)'
 reddens = [
   "tests/test_git_run.py::test_a_path_the_locale_cannot_decode_is_answered_and_not_raised",
-  "tests/guards/test_attribute.py::test_a_tracked_name_that_is_not_utf_8_does_not_switch_off_the_export_rule_check",
   "tests/docs/test_plans.py::test_a_touched_plan_named_in_bytes_that_are_not_utf_8_is_listed_and_linted",
   "tests/test_git_answers.py::test_the_hook_path_reads_a_checkout_path_that_is_not_utf_8_as_that_path",
   "tests/test_git_answers.py::test_an_origin_url_that_is_not_utf_8_is_answered_as_itself",
@@ -102,9 +101,8 @@ reddens = [
 ]
 
 # The other way to read a byte that is not UTF-8, and the one that fails open: as no answer.
-# Four callers read that as "nothing" and passed what they exist to refuse — `setup` recorded a
-# sibling checkout of the project as the trust anchor, `test attribute` skipped the export-rule
-# comparison, the docs trail's ignore filter listed a local-only document in the roadmap, and
+# Three callers read that as "nothing" and passed what they exist to refuse — `setup` recorded a
+# sibling checkout of the project as the trust anchor, the docs trail's ignore filter listed a local-only document in the roadmap, and
 # `assess` reported could-not-look over a committed `.env` — and the plan gate failed every run
 # of a repository holding one such plan name.
 [[mutation]]
@@ -119,7 +117,6 @@ after = """    try:
     return completed.returncode, answer"""
 reddens = [
   "tests/test_git_run.py::test_a_path_the_locale_cannot_decode_is_answered_and_not_raised",
-  "tests/guards/test_attribute.py::test_a_tracked_name_that_is_not_utf_8_does_not_switch_off_the_export_rule_check",
   "tests/docs/test_plans.py::test_a_touched_plan_named_in_bytes_that_are_not_utf_8_is_listed_and_linted",
 ]
 
@@ -146,10 +143,6 @@ before = '    answer = completed.stdout.decode(codec, "surrogateescape")'
 after = '    answer = completed.stdout.decode(codec, "surrogateescape") + completed.stderr.decode(codec)[:0]'
 reddens = [
   "tests/test_git_run.py::test_git_s_own_diagnostics_are_never_decoded_into_a_failure",
-  "tests/guards/test_attribute.py::test_git_diagnostics_this_process_cannot_decode_still_reach_a_verdict[merge-base]",
-  "tests/guards/test_attribute.py::test_git_diagnostics_this_process_cannot_decode_still_reach_a_verdict[archive]",
-  "tests/guards/test_attribute.py::test_git_diagnostics_this_process_cannot_decode_still_reach_a_verdict[ls-tree]",
-  "tests/guards/test_attribute.py::test_a_base_git_names_in_bytes_that_are_not_text_keeps_git_s_own_exit_code",
 ]
 
 # Text mode translated line endings in git's answer: a `\r` in a name printed raw by a `-z`
@@ -179,8 +172,7 @@ reddens = [
 ]
 
 # A launched program's output is a message or a grammar's input, never a path, so a byte that
-# is not text reads as U+FFFD. Strict, one such byte in a test run's output ended `test
-# attribute` as an internal error.
+# is not text reads as U+FFFD. Strict, one such byte ended the command as an internal error.
 [[mutation]]
 name = "the runner decodes a launched program's output strictly again"
 file = "src/stayfixed/runner.py"
@@ -1376,7 +1368,7 @@ reddens = [
 ]
 
 # The loader holds `[project] base_branch` to the branch grammar: the value becomes
-# `refs/remotes/origin/<it>`, reaches `test attribute`'s and `plan check`'s messages, and
+# `refs/remotes/origin/<it>`, reaches `plan check`'s messages, and
 # `stayfixed gate` blamed `--base` for it.
 [[mutation]]
 name = "a project branch outside the branch grammar loads"
@@ -1717,7 +1709,7 @@ reddens = [
   "tests/config/test_paths.py::test_contained_asks_no_ancestor_below_the_first_that_is_not_there",
 ]
 
-# The fork points, asked once for `plan`, `bugs` and `test attribute`. A history the change shapes
+# The fork points, asked once for `plan`. A history the change shapes
 # itself can have several merge bases, and the one git picks alone, the newest by date, can already
 # hold what the change puts back or deletes.
 [[mutation]]
@@ -1728,7 +1720,6 @@ after = """    code, out = git_run(root, "merge-base", base, "HEAD")"""
 reddens = [
   "tests/test_fork_points.py::test_every_merge_base_is_named_in_git_s_order",
   "tests/docs/test_plans.py::test_a_plan_is_linted_whichever_of_several_merge_bases_git_would_pick",
-  "tests/guards/test_attribute.py::test_several_merge_bases_leave_the_attribution_undetermined",
 ]
 
 # In a shallow clone the fork point can be cut off and an older commit be what git names.
@@ -1742,7 +1733,6 @@ after = """    if False:
 reddens = [
   "tests/test_fork_points.py::test_a_shallow_clone_is_not_known",
   "tests/docs/test_plans.py::test_a_shallow_clone_is_a_base_that_will_not_resolve_never_an_older_fork_point",
-  "tests/guards/test_attribute.py::test_a_shallow_clone_leaves_the_attribution_undetermined",
 ]
 
 # Whether the clone is shallow is a question too, and one git does not answer is not "not shallow".
@@ -1761,8 +1751,6 @@ reddens = [
   "tests/test_fork_points.py::test_a_shallow_check_git_does_not_answer_is_not_known[refused]",
   "tests/docs/test_plans.py::test_a_shallow_check_git_does_not_answer_never_reads_as_a_full_clone[no-answer]",
   "tests/docs/test_plans.py::test_a_shallow_check_git_does_not_answer_never_reads_as_a_full_clone[refused]",
-  "tests/guards/test_attribute.py::test_a_shallow_check_git_does_not_answer_leaves_the_attribution_undetermined[no-answer]",
-  "tests/guards/test_attribute.py::test_a_shallow_check_git_does_not_answer_leaves_the_attribution_undetermined[refused]",
 ]
 
 # A base that shares no commit with HEAD has no fork point, and none to compare with would pass
@@ -1790,7 +1778,6 @@ after = """    if code < 0:
 reddens = [
   "tests/test_fork_points.py::test_a_merge_base_git_does_not_give_is_not_known[missing-ref]",
   "tests/docs/test_plans.py::test_a_base_that_will_not_resolve_is_raised_never_an_ok",
-  "tests/guards/test_attribute.py::test_a_base_git_names_in_bytes_that_are_not_text_keeps_git_s_own_exit_code",
 ]
 
 # A git a signal ended answered nothing, whatever negative number `subprocess` gives it: read as a

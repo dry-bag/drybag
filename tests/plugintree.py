@@ -1,4 +1,4 @@
-"""The builders of a source repository holding the plugin's ten paths, for the tests reading one.
+"""The builders of a source repository holding the plugin's nine paths, for the tests reading one.
 
 `scripts/plugin_tree.py`'s own tests, the payload walk (`tests/test_payload.py`) and the release
 check's tag tests (`tests/scripts/test_release.py`) each built such a repository with a copy of
@@ -6,7 +6,7 @@ these, and the copies had drifted: three spellings of the paths, two of the file
 and a payload test importing its builder from another test module. Here once, as
 `tests/gitfixture.py` is for the `git` they run.
 
-The ten paths and the files under them are spelled out here and never read from the script's
+The nine paths and the files under them are spelled out here and never read from the script's
 `PLUGIN_PATHS`: an expectation read from the subject is the subject compared with itself. Every
 `git` goes through `tests.gitfixture.git`, the sealed runner, so the developer's configuration
 never shapes a fixture; a test that means the owner's configuration writes it into the test
@@ -30,9 +30,9 @@ from types import EllipsisType
 
 from tests.gitfixture import git, git_bytes
 
-# The nine paths the runtime reads and the directory's listing icon, as the plugin's tree must
+# The eight paths the runtime reads and the directory's listing icon, as the plugin's tree must
 # hold them.
-TEN = (
+NINE = (
     ".claude-plugin/plugin.json",
     ".claude-plugin/icon.png",
     ".codex-plugin/plugin.json",
@@ -40,11 +40,10 @@ TEN = (
     "scripts/stayfixed",
     "src/stayfixed",
     "skills",
-    "agents",
     "README.md",
     "LICENSE",
 )
-# One file under each of the ten, with its git mode: the wrapper and the launcher are executable,
+# One file under each of the nine, with its git mode: the wrapper and the launcher are executable,
 # and both manifests name the version a plugin commit's message carries.
 PLUGIN_FILES: dict[str, tuple[bytes, str]] = {
     ".claude-plugin/plugin.json": (b'{"name": "stayfixed", "version": "1.2.3"}\n', "100644"),
@@ -55,7 +54,6 @@ PLUGIN_FILES: dict[str, tuple[bytes, str]] = {
     "scripts/stayfixed": (b"#!/usr/bin/env python3\n", "100755"),
     "src/stayfixed/__init__.py": (b'__version__ = "1.2.3"\n', "100644"),
     "skills/close-bug/SKILL.md": (b"# close a bug\n", "100644"),
-    "agents/navigator.md": (b"# navigator\n", "100644"),
     "README.md": (b"# stayfixed\n", "100644"),
     "LICENSE": (b"MIT\n", "100644"),
 }
@@ -88,8 +86,8 @@ def plugin_source(tmp_path: Path, files: dict[str, tuple[bytes, str]] | None = N
     return root
 
 
-def plugin_tree_id(root: Path, rev: str = "HEAD", paths: tuple[str, ...] = TEN) -> str:
-    """The tree git writes for `paths` (the ten) at `rev` and nothing else, through an index of
+def plugin_tree_id(root: Path, rev: str = "HEAD", paths: tuple[str, ...] = NINE) -> str:
+    """The tree git writes for `paths` (the nine) at `rev` and nothing else, through an index of
     its own: the tree a plugin commit of `rev` names, computed without the script."""
     with tempfile.TemporaryDirectory() as scratch:
         index = str(Path(scratch) / "index")
@@ -173,7 +171,7 @@ def tool_source(
     *,
     plugin_tree: bytes | None = None,
     extra: dict[str, tuple[bytes, str]] | None = None,
-    paths: tuple[str, ...] = TEN,
+    paths: tuple[str, ...] = NINE,
 ) -> Path:
     """A release's source at `tmp_path / "source"`: `PLUGIN_FILES`, this branch's own
     `scripts/plugin_tree.py` (or `plugin_tree`) and `src/stayfixed`, and `extra`, in one commit
@@ -217,4 +215,4 @@ def released(
     write(root, {".claude-plugin/plugin.json": manifest, ".codex-plugin/plugin.json": manifest})
     write(root, {**(files or {}), MARKETPLACE: pinned_marketplace(None, version)})
     commit(root, f"release {version}")
-    return _pin_and_tag(root, version, parent, TEN)
+    return _pin_and_tag(root, version, parent, NINE)

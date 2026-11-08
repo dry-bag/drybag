@@ -15,8 +15,8 @@ Three things this looks at, each of which was an inline CI step or nothing at al
   which is why no test in `tests/` can see this.
 * **The sdist.** A packager for Homebrew, Debian or nixpkgs cannot run a single test against
   an sdist that ships only `src/`, which is the artefact they most need to verify for a
-  security-sensitive tool. `skills/` and `agents/` are here because
-  `tests/skills/test_skills.py` reads those trees directly. And `tar` preserves the mode: a
+  security-sensitive tool. `skills/` is here because
+  `tests/skills/test_skills.py` reads that tree directly. And `tar` preserves the mode: a
   wrapper unpacked at 0644 exits 126 for every hook entry, which Claude Code reads as a
   permission error rather than as a broken install.
 * **A rendered overlay.** `setup --overlay <path>` at a path that names nothing is the one working
@@ -50,7 +50,6 @@ SDIST_MUST = (
     "tests/test_fsops.py",
     "CHANGELOG.md",
     "skills/README.md",
-    "agents/code-navigator.md",
     # `pyproject.toml` carries these under `hooks/**` and `scripts/**`, so this is a claim about
     # the build and not a new packaging rule.
     "hooks/run-hook.sh",

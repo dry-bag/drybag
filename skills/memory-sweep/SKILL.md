@@ -8,8 +8,8 @@ description: Sweep the working-memory store — inventory by size, verify anchor
 1. **Inventory.** Run `stayfixed memory inventory --json`: every note with its word count,
    type, provenance and staleness. Sort by words, descending; the tail above ~400 words is
    where the value is.
-2. **Verify anchors before cutting.** For each note, open the ledger entry behind every
-   identifier it names and confirm the pull requests it cites are merged. This is the sweep's
+2. **Verify anchors before cutting.** For each note, confirm the pull requests it cites are
+   merged and the files it names are in the tree. This is the sweep's
    own job and nothing does it for you. A pointer to nothing is worse than the retelling it replaced.
 3. **Rewrite to rule plus pointer.** Keep the rule, one line of why, how to apply, and a bare
    identifier for the evidence. History belongs to the ledger, the roadmap or the retro.

@@ -26,9 +26,9 @@ from stayfixed.runner import NOT_FOUND, Completed, subprocess_runner
 from tests.cli import subparsers
 from tests.gitfixture import git, git_bytes, needs_git
 from tests.plugintree import (
+    NINE,
     PLUGIN_FILES,
     PLUGIN_URL,
-    TEN,
     commit,
     hashed,
     literal,
@@ -668,7 +668,7 @@ def _at(tmp_path: Path, version: str) -> Path:
     )
 
 
-# A file under each of the plugin's ten paths (`tests/plugintree.py`'s `TEN`) that `repo` does
+# A file under each of the plugin's nine paths (`tests/plugintree.py`'s `NINE`) that `repo` does
 # not already write: the two manifests and `src/stayfixed/__init__.py` are version sources it
 # writes.
 BESIDE_THE_SOURCES = {
@@ -677,18 +677,17 @@ BESIDE_THE_SOURCES = {
         ".claude-plugin/icon.png",
         "hooks/hooks.json",
         "scripts/stayfixed",
-        "agents/navigator.md",
         "README.md",
         "LICENSE",
     )
 }
 # How many of the plugin tree's files `_with_plugin_paths` writes outside `skills/`: the three
-# sources under the plugin's paths and the six files above.
+# sources under the plugin's paths and the five files above.
 OUTSIDE_SKILLS = 3 + len(BESIDE_THE_SOURCES)
 
 
 def _with_plugin_paths(root: Path, *, skills: int = 1, pin: bool = True) -> Path:
-    """`root` as a git checkout whose `HEAD` holds a file under each of the plugin's ten paths,
+    """`root` as a git checkout whose `HEAD` holds a file under each of the plugin's nine paths,
     `skills` of them under `skills/`, and everything else `root` holds; under `pin`, a commit on
     top whose marketplace pins the plugin commit its tree makes.
 
@@ -698,7 +697,7 @@ def _with_plugin_paths(root: Path, *, skills: int = 1, pin: bool = True) -> Path
     """
     write(root, BESIDE_THE_SOURCES)
     write(root, {f"skills/s{index}/SKILL.md": (b"x\n", "100644") for index in range(skills)})
-    assert all((root / path).exists() for path in TEN)
+    assert all((root / path).exists() for path in NINE)
     if not (root / ".git").exists():
         git(root, "init", "-q", "-b", "main")
     commit(root, "tree")
@@ -709,7 +708,7 @@ def _with_plugin_paths(root: Path, *, skills: int = 1, pin: bool = True) -> Path
 
 def _plugin_commit_of(root: Path, parent: str | None = None) -> str:
     """The plugin commit of `root`'s `HEAD` whose parent is `parent`: computed by git, over the
-    tree of the ten paths and the commit's text spelled out, never by the script."""
+    tree of the nine paths and the commit's text spelled out, never by the script."""
     version = json.loads((root / ".claude-plugin" / "plugin.json").read_text())["version"]
     return hashed(root, literal(plugin_tree_id(root), parent, version))
 

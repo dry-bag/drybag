@@ -950,34 +950,6 @@ def test_every_sentence_that_counts_the_names_doctor_shows_is_the_cap() -> None:
     assert [_NUMBER_WORDS[word] for word in found] == [NAMES_SHOWN] * 3
 
 
-# The five verdict sentences are `VERDICTS` in `stayfixed.guards.attribute` and are reproduced by
-# hand in `docs/cli.md`'s table; every test that had them read the expectation back out of
-# `VERDICTS`, which is shape 9 of the `sweep-defect-class` skill's own reference — both sides move
-# together under any reword. This is the same rule the Shared flags tables are held to, one section
-# over.
-_ATTRIBUTE_SECTION = re.compile(
-    r"^## `stayfixed test attribute[^\n]*\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL
-)
-# `| fails | passes | — | `sentence` |`: the three code columns, then the sentence in backticks.
-_VERDICT_ROW = re.compile(r"^\| (?:fails|passes) \| [^|]+ \| [^|]+ \| `(.+?)` \|$", re.MULTILINE)
-
-
-def test_the_verdict_table_is_the_shipped_sentences_and_not_a_second_spelling() -> None:
-    # Mutation: reword one sentence in `docs/cli.md`'s table — reddens naming the row.
-    from stayfixed.guards.attribute import VERDICTS
-
-    section = _ATTRIBUTE_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md has no `stayfixed test attribute` section"
-    rows = _VERDICT_ROW.findall(section.group(1))
-    # The walk's floor before anything is compared, for the reason the Shared flags test gives:
-    # a regex that matched nothing would make the comparison below vacuously true, and a
-    # section that lost its table would look exactly like one that never had it.
-    assert len(rows) == len(VERDICTS), rows
-    assert tuple(rows) == VERDICTS, [
-        (row, sentence) for row, sentence in zip(rows, VERDICTS, strict=True) if row != sentence
-    ]
-
-
 def _anchor(heading: str) -> str:
     """GitHub's anchor for a heading: lower-cased, every character but a letter, a digit, a
     space, `-` and `_` dropped, and each space a hyphen."""

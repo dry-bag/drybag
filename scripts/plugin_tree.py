@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The plugin's tree: the ten paths it is published with, read from a commit of this repository.
+"""The plugin's tree: the nine paths it is published with, read from a commit of this repository.
 
     uv run python scripts/plugin_tree.py manifest --root DIR --rev REV [--exact]
                                          [--manifest-file FILE]
@@ -75,7 +75,7 @@ except ImportError as exc:
     sys.exit(2)
 
 # What the plugin's runtime reads, and nothing else: the two manifests, the hooks and their
-# wrapper, the launcher and the package it puts on `sys.path`, the skills and agents the harness
+# wrapper, the launcher and the package it puts on `sys.path`, the skills the harness
 # loads, and the two files every published repository carries. One more path the runtime never
 # reads: the icon the plugin directory takes for the listing, once, at the first submission.
 PLUGIN_PATHS: tuple[str, ...] = (
@@ -86,7 +86,6 @@ PLUGIN_PATHS: tuple[str, ...] = (
     "scripts/stayfixed",
     "src/stayfixed",
     "skills",
-    "agents",
     "README.md",
     "LICENSE",
 )

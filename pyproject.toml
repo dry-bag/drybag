@@ -49,10 +49,9 @@ module-root = "src"
 source-include = [
   "tests/**",
   "scripts/**",
-  # `tests/skills/test_skills.py` reads these two trees directly, so an sdist without them
-  # ships a test module that cannot pass.
+  # `tests/skills/test_skills.py` reads this tree directly, so an sdist without it ships a test
+  # module that cannot pass.
   "skills/**",
-  "agents/**",
   # The same rule for the plugin root's two static files: `tests/hooks/test_wrapper.py` and
   # `tests/hooks/test_hooks_json.py` read them directly, and `hooks/run-hook.sh` is the file
   # both harnesses actually execute — an sdist without it ships a plugin that cannot fire.

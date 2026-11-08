@@ -16,9 +16,8 @@ def local_base(config: Config) -> str:
     """The base a local run compares against when none is given: the remote-tracking ref of
     `[project] base_branch`, named in full.
 
-    One spelling for every command that defaults one — `plan check` and `test attribute` — because
-    git resolves a short `origin/<b>` through `refs/tags/` first, so a tag of that spelling would
-    stand in for the branch, and two spellings of one default would let two commands judge different
-    commits. The loader holds the branch to `BRANCH_NAME`, so the name is one git can have.
+    Named in full because git resolves a short `origin/<b>` through `refs/tags/` first, so a tag of
+    that spelling would stand in for the branch. The loader holds the branch to `BRANCH_NAME`, so
+    the name is one git can have.
     """
     return f"refs/remotes/origin/{config.project.base_branch}"

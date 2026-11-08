@@ -509,8 +509,8 @@ def test_the_name_grammar_is_spelled_once() -> None:
 def test_a_project_branch_outside_the_branch_grammar_is_refused_by_name(
     tmp_path: Path, value: str
 ) -> None:
-    # `[project] base_branch` becomes `refs/remotes/origin/<it>`, `test attribute`'s refusal and
-    # `plan check`'s messages print it, and the `gate` command blamed `--base`, which nobody passed,
+    # `[project] base_branch` becomes `refs/remotes/origin/<it>`, `plan check`'s messages print
+    # it, and the `gate` command blamed `--base`, which nobody passed,
     # for it. Held here, at the one place the key is read, to the branch grammar, and refused
     # naming the key and never the value. Mutation (declared): the check dropped -> nothing is
     # raised.

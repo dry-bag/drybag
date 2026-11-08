@@ -2,7 +2,7 @@
 pushed to the plugin's own repository, and nothing else.
 
 Every case starts from `tests/plugintree.py`'s `tool_source`: one commit holding a file under each
-of the plugin's ten paths, this branch's `scripts/plugin_tree.py` and `src/stayfixed`, and a
+of the plugin's nine paths, this branch's `scripts/plugin_tree.py` and `src/stayfixed`, and a
 marketplace pinning the plugin commit its tree makes, tagged `v1.2.3` (annotated). The default one
 is built once per session and cloned per case; a case that changes the tag's own code patches its
 clone, or builds its own when the pin has to change with it. A bare repository in `tmp_path` stands
@@ -39,9 +39,9 @@ from stayfixed.runner import Completed, subprocess_runner
 from tests.gitfixture import git, git_bytes, needs_git, run_git
 from tests.plugintree import (
     MARKETPLACE,
+    NINE,
     PLUGIN_FILES,
     REPOSITORY,
-    TEN,
     commit,
     hashed,
     literal,
@@ -264,7 +264,7 @@ def patched(old: bytes, new: bytes) -> bytes:
     return SCRIPT.replace(old, new)
 
 
-def manifest_of(root: Path, tag: str = TAG, paths: tuple[str, ...] = TEN) -> str:
+def manifest_of(root: Path, tag: str = TAG, paths: tuple[str, ...] = NINE) -> str:
     """The manifest of `paths` at `tag`, computed by the test from git's own listing and blobs:
     the format line, then `<mode> <sha256> <path>` per file, by path."""
     rows = []
@@ -480,13 +480,13 @@ def test_the_previous_release_is_replaced_whole(source: Path, tmp_path: Path) ->
     # holds the fast-forward end to end: the earlier release's file is gone from the new tree.
     remote = bare_remote(tmp_path)
     first, _ = publish(source, remote, tmp_path / "first")
-    (source / "agents" / "navigator.md").unlink()
-    pin = released(source, "1.2.4", files={"agents/other.md": (b"# other\n", "100644")})
+    (source / "skills" / "close-bug" / "SKILL.md").unlink()
+    pin = released(source, "1.2.4", files={"skills/other/SKILL.md": (b"# other\n", "100644")})
     done, _ = publish(source, remote, tmp_path / "second", tag="v1.2.4")
     assert done.commit == pin
     assert git(remote, "rev-parse", f"{pin}^").strip() == first.commit
     assert listed(remote, "v1.2.4", exact=True) == listed(source, "v1.2.4")
-    assert "agents/navigator.md" not in listed(remote, "v1.2.4", exact=True)
+    assert "skills/close-bug/SKILL.md" not in listed(remote, "v1.2.4", exact=True)
     assert refs(remote) == {
         "refs/heads/main": pin,
         f"refs/tags/{TAG}": first.commit,
@@ -742,16 +742,16 @@ def test_a_tool_file_that_is_not_regular_is_refused(source: Path, tmp_path: Path
 
 def test_the_tag_s_own_plugin_tree_builds_the_commit(tmp_path: Path) -> None:
     # Mutation (declared): `mutations/`'s "the publisher runs the checkout's plugin_tree.py" ->
-    # the checkout's copy reads ten paths, so its commit is not the pin and the run is rejected
+    # the checkout's copy reads nine paths, so its commit is not the pin and the run is rejected
     # when the commit is built, before any manifest is compared.
-    eleven = (*TEN, "commands")
+    ten = (*NINE, "commands")
     script = patched(b'    "LICENSE",\n)', b'    "LICENSE",\n    "commands",\n)')
     extra = {"commands/a.md": (b"# a command\n", "100644")}
-    source = tool_source(tmp_path, plugin_tree=script, extra=extra, paths=eleven)
+    source = tool_source(tmp_path, plugin_tree=script, extra=extra, paths=ten)
     scratch = tmp_path / "scratch"
     done, _ = publish(source, bare_remote(tmp_path), scratch, yes=False)
     assert (done.outcome, done.commit) == ("would-push", pinned_at(source, TAG))
-    expected = manifest_of(source, TAG, eleven)
+    expected = manifest_of(source, TAG, ten)
     assert (scratch / "plugin-tree.txt").read_text(encoding="utf-8") == expected
     line = "100644 dcf4a2ae11e48a937801393a5a5521068b50366476f099740f5576f081a659a2 commands/a.md\n"
     assert line in expected
@@ -1616,14 +1616,14 @@ def test_a_tool_that_refuses_is_refused(source: Path, tmp_path: Path) -> None:
     # The tag's own `plugin_tree.py` refusing is exit 2 (Ruling 8: CI ran the same code green).
     # Mutation (declared): `mutations/`'s "the publisher reads a tool that refused as an answer"
     # -> the refusal's object is read as `commit`'s, and refused for its format instead.
-    git(source, "rm", "-r", "-q", "agents")
+    git(source, "rm", "-r", "-q", "skills")
     git(source, "commit", "-q", "--amend", "--no-edit")
     git(source, "tag", "-f", "-a", TAG, "-m", TAG)
     with pytest.raises(Refusal) as refused:
         publish(source, bare_remote(tmp_path), tmp_path / "scratch")
     said = str(refused.value)
     assert "commit exited 2" in said, said
-    assert "agents is missing" in said, said
+    assert "skills is missing" in said, said
 
 
 @pytest.mark.parametrize("gone", ["git-dir", "manifest"])

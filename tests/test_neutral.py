@@ -250,7 +250,6 @@ TRACKED_TREES = (
     ".claude-plugin",
     ".codex-plugin",
     ".github",
-    "agents",
     "changelog.d",
     "docs",
     "hooks",
@@ -372,8 +371,8 @@ def test_the_gate_reads_the_whole_tree() -> None:
     files = tracked_files()
     names = {str(p.relative_to(ROOT)) for p in files}
     # No `.github/` name here: that tree is outside `source-include`, and this floor has to
-    # hold in the unpacked sdist the fallback walk exists for. `skills/` and `agents/` are
-    # inside it, so they are named like the rest.
+    # hold in the unpacked sdist the fallback walk exists for. `skills/` is
+    # inside it, so it is named like the rest.
     for wanted in (
         "README.md",
         "src/stayfixed/cli.py",
@@ -382,7 +381,6 @@ def test_the_gate_reads_the_whole_tree() -> None:
         "scripts/stayfixed",
         "tests/test_fsops.py",
         "skills/README.md",
-        "agents/code-navigator.md",
     ):
         assert wanted in names, wanted
     # The mutation declarations by their directory and not by a group file's name, which is

@@ -936,11 +936,11 @@ reddens = [
 # (58 files) took `tests/test_neutral.py` from 358 passed to 300 passed, 0 failed. The 58
 # parametrised cases stopped existing and no assertion said so. The fix is not a higher floor.
 [[mutation]]
-name = "the whole-tree gate loses four top-level trees and stays green"
+name = "the whole-tree gate loses three top-level trees and stays green"
 file = "tests/test_neutral.py"
 before = "        return sorted(ROOT / n for n in names if (ROOT / n).is_file())"
 after = """
-        dropped = {".github", "skills", "agents", "changelog.d"}
+        dropped = {".github", "skills", "changelog.d"}
         return sorted(
             ROOT / n
             for n in names
@@ -1883,18 +1883,6 @@ reddens = [
   "tests/test_outbound.py::test_a_local_subcommand_in_a_form_that_reaches_a_remote_is_unclassified[unread-configuration]",
 ]
 
-# `git archive --remote=<url>` asks a remote; a local subcommand carrying such an option must not
-# pass as local.
-[[mutation]]
-name = "a remote option no longer takes a git call out of the local table"
-file = "tests/outbound/policy.py"
-before = 'GIT_REMOTE_OPTIONS = ("--remote", "--upload-pack", "--receive-pack", "--exec")'
-after = 'GIT_REMOTE_OPTIONS: tuple[str, ...] = ()'
-reddens = [
-  "tests/test_outbound.py::test_a_local_subcommand_in_a_form_that_reaches_a_remote_is_unclassified[archive-remote]",
-  "tests/test_outbound.py::test_a_local_subcommand_in_a_form_that_reaches_a_remote_is_unclassified[archive-remote-late]",
-]
-
 # `git -c core.sshCommand=…` or `-c core.fsmonitor=…` runs a program of its own, so a setting
 # outside the listed keys must take a launch out of every table.
 [[mutation]]
@@ -1933,7 +1921,7 @@ reddens = [
 
 # A runner launches through `.launch`, and the walk knows that call by the method's name alone,
 # whatever holds the runner: a parameter, an attribute, a subscript or a call's result. Known by
-# nothing, every runner launch goes unseen, and with it every `gh`, `git clone` and `sh -c` row.
+# nothing, every runner launch goes unseen, and with it every `gh` and `git clone` row.
 [[mutation]]
 name = "the outbound walk stops knowing a runner's launch by its method's name"
 file = "tests/outbound/walk.py"
@@ -2172,17 +2160,6 @@ reddens = [
   "tests/test_outbound.py::test_a_launch_of_any_shape_is_found[constant-shadowed]",
 ]
 
-# The `sh -c` row says stayfixed does not choose the command, which holds only for the user's own,
-# unread one; a script the package spells out itself must be a finding.
-[[mutation]]
-name = "every sh -c is its row again"
-file = "tests/test_outbound.py"
-before = '        if prefix not in USER_COMMANDS or (users and isinstance(users[0], Unread)):'
-after = '        if True:'
-reddens = [
-  "tests/test_outbound.py::test_sh_c_is_its_row_only_for_the_users_command[a-script-stayfixed-spells-out]",
-]
-
 # `executable=` replaces the program and `env=` can carry git's configuration, so a launch read as
 # a local `git status` could run or reach anything; not read, neither is seen.
 [[mutation]]
@@ -2226,8 +2203,8 @@ reddens = [
 [[mutation]]
 name = "a program-running option no longer takes a git call out of the local table"
 file = "tests/test_outbound.py"
-before = '            and (part.startswith(GIT_REMOTE_OPTIONS) or _runs_a_program(part, subcommand))'
-after = '            and part.startswith(GIT_REMOTE_OPTIONS)'
+before = '        if any(isinstance(part, str) and _runs_a_program(part, subcommand) for part in options):'
+after = '        if False:'
 reddens = [
   "tests/test_outbound.py::test_a_local_subcommand_in_a_form_that_reaches_a_remote_is_unclassified[grep-pager]",
   "tests/test_outbound.py::test_a_local_subcommand_in_a_form_that_reaches_a_remote_is_unclassified[cat-file-filters]",

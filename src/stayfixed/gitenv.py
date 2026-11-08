@@ -158,7 +158,7 @@ def named(checkout: Path | None) -> Iterator[None]:
 def scrubbed_env() -> dict[str, str]:
     """The variables `GIT_ENV_KEEP` names, as this process has them, `PATH` with its absolute
     entries alone, no terminal prompt, and inside a `named` block the repository it names: what
-    every git stayfixed starts is handed, and `test attribute` the `tar` it runs.
+    every git stayfixed starts is handed.
 
     Every git runs in a repository whose contents a clone chose, so an empty or `.` entry of
     `PATH` (a dotfile slip) would find a `git`, or git an `ssh`, planted at its root."""

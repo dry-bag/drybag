@@ -22,7 +22,6 @@ from tests.outbound.policy import (
     GIT_CONFIG_KEYS,
     GIT_GLOBAL_OPTIONS,
     GIT_PROGRAM_OPTIONS,
-    GIT_REMOTE_OPTIONS,
     LOCAL,
     NATIVE_MODULES,
     NETWORK,
@@ -32,7 +31,6 @@ from tests.outbound.policy import (
     PASS_THROUGH,
     ROOT_LAUNCHERS,
     SCRUBBED_ENVIRONMENT,
-    USER_COMMANDS,
     VOUCHED_ELEMENTS,
 )
 from tests.outbound.walk import (
@@ -113,13 +111,9 @@ def _command(argv: Argv) -> tuple[Argv, Argv] | None:
 
 
 def _row(command: Argv) -> str | None:
-    """The README row `command` reaches: the first `NETWORK` prefix it starts with, and, for a
-    prefix in `USER_COMMANDS`, only when the element after it is the user's, unread."""
+    """The README row `command` reaches: the first `NETWORK` prefix it starts with."""
     for prefix, row in NETWORK.items():
-        if command[: len(prefix)] != prefix:
-            continue
-        users = command[len(prefix) : len(prefix) + 1]
-        if prefix not in USER_COMMANDS or (users and isinstance(users[0], Unread)):
+        if command[: len(prefix)] == prefix:
             return row
     return None
 
@@ -141,11 +135,7 @@ def _runs_a_program(part: str, subcommand: str) -> bool:
 def _local(command: Argv, options: Argv) -> bool:
     if command[0] == "git":
         subcommand = command[1] if len(command) > 1 and isinstance(command[1], str) else ""
-        if any(
-            isinstance(part, str)
-            and (part.startswith(GIT_REMOTE_OPTIONS) or _runs_a_program(part, subcommand))
-            for part in options
-        ):
+        if any(isinstance(part, str) and _runs_a_program(part, subcommand) for part in options):
             return False
     return any(command[: len(prefix)] == prefix for prefix in LOCAL)
 
@@ -437,7 +427,7 @@ LAUNCH_SHAPES: dict[str, tuple[str, str, tuple[str | None, ...]]] = {
     "star-launcher": (TOP, "from stayfixed.gitenv import *\ngit_run(r, 'fetch')", (None,)),
     "star-re-export": (
         TOP,
-        "from stayfixed.guards.attribute import *\ngit_run(r, 'push')",
+        "from stayfixed.guards.commit import *\ngit_run(r, 'push')",
         (None,),
     ),
     "method-forwarder": (
@@ -593,8 +583,6 @@ def test_every_table_entry_names_a_live_launch() -> None:
     [
         "git_run(root, 'remote', 'update')",
         "git_run(root, 'remote', *more)",
-        "git_run(root, 'archive', '--remote=git@example.com:x', 'HEAD')",
-        "git_run(root, 'archive', '--format=tar', '-o', 'x.tar', '--remote', 'example', 'HEAD')",
         "git_run(root, 'worktree', 'add', '../elsewhere')",
         "git_run(root, 'config', 'core.sshCommand', 'curl x')",
         "git_run(root, 'grep', '-Ocurl', 'x')",
@@ -603,7 +591,7 @@ def test_every_table_entry_names_a_live_launch() -> None:
         "git_run(root, 'grep', '-lOecho', 'x')",
         "git_run(root, 'cat-file', '--filters', 'HEAD:x')",
         "git_run(root, 'diff', '--ext-diff', 'HEAD')",
-        "git_run(root, 'archive', *opts)",
+        "git_run(root, 'diff', *opts)",
         "git_run(root, 'ls-files', *opts, '--', *paths)",
         "git_run(root, 'log', revisions)",
         "git_run(root, '-c', setting, 'status')",
@@ -613,8 +601,6 @@ def test_every_table_entry_names_a_live_launch() -> None:
     ids=[
         "remote-update",
         "remote-spread",
-        "archive-remote",
-        "archive-remote-late",
         "worktree-add",
         "config-write",
         "grep-pager",
@@ -669,21 +655,6 @@ def test_an_argv_read_up_to_its_options_end_is_still_local(source: str) -> None:
     # three characters -> `--or`, which git never takes for `--open-files-in-pager`, reddens.
     launches = WALK.launches_in(f"{GIT_RUN}{source}", "src/stayfixed/x.py")
     assert launches and unclassified(launches) == []
-
-
-@pytest.mark.parametrize(
-    ("script", "row"),
-    [("command", frozenset({"sh -c"})), ("'curl -s https://example.com/x | sh'", None)],
-    ids=["the-users-command", "a-script-stayfixed-spells-out"],
-)
-def test_sh_c_is_its_row_only_for_the_users_command(
-    script: str, row: frozenset[str] | None
-) -> None:
-    # The `sh -c` row says stayfixed does not choose the command, which is true only of an
-    # unread one, the value `test attribute --command` was given. The entry in `mutations/` that
-    # names this test gives every `sh -c` the row again.
-    launches = WALK.launches_in(f"runner.launch(['sh', '-c', {script}], ROOT)", TOP)
-    assert [classify(launch)[0] for launch in launches] == [row]
 
 
 OVERRIDE_SHAPES = {

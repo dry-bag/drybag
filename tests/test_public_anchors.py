@@ -331,7 +331,6 @@ def test_the_citation_walk_reads_every_tracked_file_but_the_exemptions() -> None
         "docs/methodology/principles.md",
         "skills/README.md",
         "hooks/run-hook.sh",
-        "agents/code-navigator.md",
         "tests/test_cli.py",
         "tests/fixtures/hostile-project/stayfixed.toml",
         "scripts/mutation_oracle.py",

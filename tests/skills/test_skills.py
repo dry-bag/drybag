@@ -18,7 +18,6 @@ from stayfixed.overlay.template import template_root
 
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS = ROOT / "skills"
-AGENTS = ROOT / "agents"
 # The plugin's own skill_lines lint: a SKILL.md is an entry point, and detail belongs in
 # `references/`. Not a config key — it bounds a file this repository ships, not a project's.
 SKILL_MAX_LINES = 80
@@ -81,19 +80,12 @@ def split(path: Path) -> tuple[dict[str, str], str]:
 
 def test_the_walk_finds_the_ported_skills() -> None:
     # The mutation guard for the parametrised tests below: an empty `skills/` passes them all.
-    # Every skill `skills/` ships is named, not only the one ported one — deleting the five
+    # Every skill `skills/` ships is named, not only the one ported one — deleting the three
     # wrappers would otherwise leave NOT_YET_SHIPPED describing commands no skill names, with
     # the suite still green. Subsets, not equalities: `skills-author` grows this directory.
     names = {path.parent.name for path in skills()}
     assert {"memory-sweep"} <= names
     assert {"attach", "setup", "doctor"} <= names
-    assert {
-        "sweep-defect-class",
-        "review-plan-three-lenses",
-        "attribute-failure",
-        "run-correctness-audit",
-        "retro-to-guard",
-    } <= names
     # The same guard for the wider walk: a `references/` that goes quiet takes its own
     # invocation cases with it.
     walked = documents()
@@ -191,9 +183,3 @@ def test_every_reference_file_is_linked_from_its_skill(path: Path) -> None:
     body = path.read_text(encoding="utf-8")
     for reference in sorted((path.parent / "references").glob("*.md")):
         assert f"references/{reference.name}" in body, reference
-
-
-def test_the_agent_file_carries_its_frontmatter_and_names_no_product() -> None:
-    fields, body = split(AGENTS / "code-navigator.md")
-    assert fields["name"] == "code-navigator" and "tools" in fields
-    assert "if one is installed" in body  # the capability, not the product
