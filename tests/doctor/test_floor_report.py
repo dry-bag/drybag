@@ -2,7 +2,7 @@
 (`src/stayfixed/doctor/checks.py`).
 
 A default install has no `stayfixed.toml`, and the guards and `doctor` work there, so the report
-warns that the rest needs `stayfixed init` and is red about nothing. The report reads the
+warns that the rest needs a `stayfixed.toml` and is red about nothing. The report reads the
 configuration the way a session does (`config.session`): a file that loads with notes is a warning
 listing the keys, and only a file that falls back whole is red, in the session's words."""
 
@@ -68,7 +68,7 @@ def test_no_stayfixed_toml_is_a_warning_and_no_row_is_red(tmp_path: Path) -> Non
 
 
 def test_a_bound_checkout_without_a_file_is_ok_and_names_the_overlay(tmp_path: Path) -> None:
-    # The warning told such a checkout to run `init`, though this machine binds it and its
+    # The warning told such a checkout to write a file, though this machine binds it and its
     # configuration is the overlay's layers: nothing is missing, so the row is ok with no remedy.
     from tests.memory.test_commands import _bound_without_file
 

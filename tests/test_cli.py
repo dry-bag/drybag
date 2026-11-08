@@ -171,22 +171,6 @@ def test_areas_are_discovered_from_the_package() -> None:
     assert "stayfixed.doctor.commands" in names
 
 
-def _subcommands(group: str) -> set[str]:
-    """The commands the real parser registers under `stayfixed <group>`."""
-    groups = subparsers(build_parser(discover_registrars()))
-    assert groups is not None
-    nested = subparsers(groups.choices[group])
-    assert nested is not None
-    return set(nested.choices)
-
-
-def test_the_test_group_has_attribute_alone() -> None:
-    # The test group holds what a failure is attributed to; the command that explained a red run
-    # and an audit that read one stack's test files and that no gate ran are not among them.
-    # Mutation: registering an `audit-entrypoints` parser in the test group reddens this.
-    assert _subcommands("test") == {"attribute"}
-
-
 def _exploding(args: argparse.Namespace) -> Result:
     raise KeyError("no such key")
 

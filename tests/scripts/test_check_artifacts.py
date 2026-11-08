@@ -13,7 +13,6 @@ from types import ModuleType
 import pytest
 
 from stayfixed.overlay.api import OVERLAY_FILES
-from stayfixed.project.api import PROJECT_FILES
 from stayfixed.scaffold import MANIFEST_PATH
 from tests.gitfixture import needs_git
 from tests.runners import Recorder, real_git
@@ -31,7 +30,6 @@ def _wheel(path: Path, *, without: str | None = None) -> Path:
     names = [
         "stayfixed/presets/recommended.toml",
         *(f"stayfixed/templates/overlay/{r}" for r in OVERLAY_FILES),
-        *(f"stayfixed/templates/project/{n}" for n in PROJECT_FILES),
     ]
     with zipfile.ZipFile(path, "w") as archive:
         for name in names:
@@ -67,13 +65,6 @@ def test_a_template_file_missing_from_the_wheel_is_named(tmp_path: Path) -> None
     missing = f"stayfixed/templates/overlay/{OVERLAY_FILES[-1]}"
     findings = module.check_wheel(_wheel(tmp_path / "k.whl", without=missing))
     assert findings == [f"wheel: missing {missing}"]
-    # Both trees, because both are read at runtime by `resources.files` and `WHEEL_MUST` is
-    # what says so: the overlay's tree answers `setup --overlay <path>` and the project's
-    # answers `stayfixed init`, and a build that dropped either is invisible to every other test.
-    absent = f"stayfixed/templates/project/{PROJECT_FILES[-1]}"
-    assert module.check_wheel(_wheel(tmp_path / "p.whl", without=absent)) == [
-        f"wheel: missing {absent}"
-    ]
 
 
 def test_a_wrapper_that_lost_its_executable_bit_in_the_sdist_is_named(tmp_path: Path) -> None:

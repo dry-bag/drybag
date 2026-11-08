@@ -11,9 +11,7 @@ from stayfixed.config.reading import ConfigError
 from stayfixed.config.schema import Config
 from stayfixed.errors import Failure, Refusal
 from stayfixed.presets import load_preset
-from stayfixed.project.init import init
-from stayfixed.scaffold import Kind, Template, apply, plan
-from tests.gitfixture import git, needs_git
+from stayfixed.scaffold import Template, apply, plan
 
 VALID_HEAD = """
 [stayfixed]
@@ -32,8 +30,6 @@ HOSTILE_PATHS = (
 agents_md = "../../AGENTS.md"
 specs = "../specs"
 plans = "../plans"
-bugs = "../bugs"
-bug_index = "../bug-reports.md"
 roadmap = "../roadmap.md"
 memory = "../memory"
 """
@@ -46,11 +42,6 @@ HOSTILE_FIELDS_SCAFFOLD_NEVER_READS = (
 mode = "local-only"
 groups = ["../secret"]
 index_extra = ["../../elsewhere/index.md"]
-
-[ledger]
-id_prefix = "BR"
-code_roots = ["../../../../etc", "/etc/passwd"]
-evidence_boundary_required_for = ["high"]
 """
 )
 
@@ -66,7 +57,7 @@ def write_config(root: Path, text: str) -> None:
 
 def escaping_templates() -> list[Template]:
     return [
-        Template(id=f"a{i}", kind=Kind.TEMPLATE, target=target, source="t", render=lambda: "x")
+        Template(id=f"a{i}", target=target, source="t", render=lambda: "x")
         for i, target in enumerate(ESCAPES)
     ]
 
@@ -253,9 +244,7 @@ def test_a_target_that_survives_plan_is_one_apply_can_write(tmp_path: Path) -> N
         root = tmp_path / f"root-{index}"
         root.mkdir()
         write_config(root, VALID_HEAD)
-        templates = [
-            Template(id="only", kind=Kind.TEMPLATE, target=target, source="t", render=lambda: "x")
-        ]
+        templates = [Template(id="only", target=target, source="t", render=lambda: "x")]
         planned = plan(root, templates)
         if planned.refusals:
             # A refused plan is allowed, and must have planned nothing and written nothing.
@@ -264,86 +253,6 @@ def test_a_target_that_survives_plan_is_one_apply_can_write(tmp_path: Path) -> N
             continue
         apply(root, planned)  # must not raise: this is the whole of the round trip
         assert (root / target).read_text(encoding="utf-8") == "x", target
-
-
-def _init(root: Path) -> None:
-    init(
-        root,
-        machine=root / "absent.toml",
-        yes=True,
-        dry_run=False,
-    )
-
-
-@needs_git
-def test_a_refused_paths_value_leaves_no_manifest_behind(tmp_path: Path) -> None:
-    """The end-to-end consequence, through `init` and the `[paths]` table a clone commits.
-
-    Hostile in exactly one value, and that value is the one the fix is about: every other key is the
-    preset's, so no older `..` rule can be what refuses it. Before the fix this run wrote nine files
-    and the manifest and then raised inside `apply`, leaving a repository `init` refuses for ever.
-
-    **No single-edit mutation reddens this, and that is measured rather than assumed.** Two
-    guards stand in front of the write — the `[paths]` grammar and `contained()`'s component
-    rule — and each refuses the value alone, which is the point of having both. With both of
-    `mutations/`'s "the [paths] grammar admits a spelling the write refuses again" and "contained
-    normalises the value away, so plan stops agreeing with apply" applied together, this run
-    reaches `apply` and the manifest assertion reddens. The oracle proves each guard separately
-    through the siblings those entries name.
-    """
-    root = tmp_path / "widget"
-    root.mkdir()
-    git(root, "init", "-q", "-b", "main")
-    write_config(root, VALID_HEAD + '\n[paths]\nspecs = "docs//roadmap-history.md"\n')
-    # `Refusal` and not `PathEscape` around the call, and the type asserted last: with both
-    # guards gone the run reaches `apply`, which refuses too — as `UnsafePath`, part-way through
-    # the pass. The assertions that must fail then are the ones about what is on disk.
-    with pytest.raises(Refusal) as caught:
-        _init(root)
-    assert not (root / ".stayfixed").exists()
-    assert sorted(p.name for p in root.iterdir()) == [".git", CONFIG_FILE]
-    assert isinstance(caught.value, PathEscape)
-
-
-# --- git's control directory ------------------------------------------------------------------
-
-
-@needs_git
-def test_a_paths_value_inside_the_control_directory_is_refused_before_any_write(
-    tmp_path: Path,
-) -> None:
-    """A reserved `.git` component, end to end through `init`, with the developer's hook on disk.
-
-    The `agents-md` artifact is a `MANAGED_REGION`, which the engine's "exists and stayfixed did
-    not write it" guard exempts, so this reached `region_update` and `fsops._mode_of` carried the
-    existing 0755 onto the replacement. Driven through `init` rather than `load` so that the
-    hook's bytes and mode are something the run could actually have changed.
-
-    Two guards again, the `[paths]` loop and the walk's own copy of the rule, and either alone
-    refuses. With both of `mutations/`'s "a [paths] value may name git's control directory
-    again" and "the walk writes inside git's control directory again" applied, the hook is rewritten
-    and this reddens; each alone is proven by the siblings those entries name.
-    """
-    root = tmp_path / "widget"
-    root.mkdir()
-    git(root, "init", "-q", "-b", "main")
-    hook = root / ".git" / "hooks" / "pre-commit"
-    hook.write_text("#!/bin/sh\necho real hook\n", encoding="utf-8")
-    hook.chmod(0o755)
-    write_config(root, VALID_HEAD + '\n[paths]\nagents_md = ".git/hooks/pre-commit"\n')
-    # Caught rather than `pytest.raises`, so that a run which does not refuse still reaches the
-    # assertions about the hook: that is the damage, and the missing exception is not.
-    try:
-        _init(root)
-    except PathEscape as exc:
-        refused: PathEscape | None = exc
-    else:
-        refused = None
-    assert hook.read_text(encoding="utf-8") == "#!/bin/sh\necho real hook\n"
-    assert hook.stat().st_mode & 0o777 == 0o755
-    assert not (root / ".stayfixed").exists()
-    assert sorted(p.name for p in root.iterdir()) == [".git", CONFIG_FILE]
-    assert refused is not None and "control directory" in str(refused)
 
 
 def test_the_engine_refuses_a_control_directory_target_the_loader_never_sees(
@@ -358,7 +267,6 @@ def test_the_engine_refuses_a_control_directory_target_the_loader_never_sees(
     templates = [
         Template(
             id="hook",
-            kind=Kind.TEMPLATE,
             target=".git/hooks/pre-commit",
             source="t",
             render=lambda: "x",
@@ -374,12 +282,11 @@ def test_the_engine_refuses_a_control_directory_target_the_loader_never_sees(
 
 
 def test_two_of_the_fixtures_own_fields_reach_no_guard_in_scaffold(tmp_path: Path) -> None:
-    """`ledger.code_roots` and `memory.index_extra` are contained targets as well, and `scaffold`
+    """`memory.index_extra` and `memory.groups` are contained targets as well, and `scaffold`
     consumes neither: `config/paths.py`'s docstring hands them to whichever area first reads them,
-    which is `ledger` and `memory`. Pinned here so the day one of them starts refusing, this
+    which is `memory`. Pinned here so the day one of them starts refusing, this
     assertion is the reminder that every contained target these fixtures name is finally guarded."""
     write_config(tmp_path, HOSTILE_FIELDS_SCAFFOLD_NEVER_READS)
     config = load_at(tmp_path)
-    assert config.ledger.code_roots == ("../../../../etc", "/etc/passwd")
     assert config.memory.index_extra == ("../../elsewhere/index.md",)
     assert config.memory.groups == ("../secret",)

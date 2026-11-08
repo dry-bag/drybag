@@ -43,7 +43,7 @@ NO_POSITION = "(at a position tomllib did not report)"
 # Uncaught, that is an internal error, the class stayfixed keeps for its own defects. And an
 # integer literal longer than the interpreter converts (4,300 digits by default,
 # `sys.get_int_max_str_digits`) is valid TOML that `tomllib` answers with a plain `ValueError`,
-# which is not a `TOMLDecodeError`: one line of a committed file ended `doctor` and `init` the
+# which is not a `TOMLDecodeError`: one line of a committed file ended `doctor` the
 # same way. Every reader of a document somebody else wrote catches
 # all three. `ValueError` is caught whole, `TOMLDecodeError` being one: no reader's `try` holds
 # anything else that raises it but a decode, whose `UnicodeDecodeError` it catches first or
@@ -66,7 +66,7 @@ INTEGER_LIMIT = 2**31
 class ConfigError(Failure):
     """A stayfixed.toml that cannot be trusted as written.
 
-    `key` is the dotted key a refusal of one key is about — `memory.mode`, `paths.bugs`, a
+    `key` is the dotted key a refusal of one key is about — `memory.mode`, `paths.specs`, a
     section's name for a section that is not a table — and `None` for a refusal of the whole
     document. It is the key the NOTE path decides about, removing it or naming it
     (`loads_noting`); it is never printed, so it may be any text the document chose.

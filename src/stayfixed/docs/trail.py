@@ -72,11 +72,10 @@ _UNINTERPOLABLE = (
     "{path}: a {what} is written into the generated listing verbatim, so it must be a single "
     "line and must carry neither `{marker}` nor the end-of-trail comment"
 )
-# `{row!r}` is repository-authored text in a message, for `ledger.index.FOREIGN_CONTENT`'s
-# reason: this reaches the terminal of the person who ran the command against their own
-# repository, and naming the file is the whole of what makes "rename it" actionable. `!r` keeps
-# a name holding a newline or a carriage return on one line, and spells a byte that is not UTF-8
-# as its escape.
+# `{row!r}` is repository-authored text in a message: this reaches the terminal of the person who
+# ran the command against their own repository, and naming the file is the whole of what makes
+# "rename it" actionable. `!r` keeps a name holding a newline or a carriage return on one line, and
+# spells a byte that is not UTF-8 as its escape.
 _UNLISTABLE = (
     "{row!r} cannot be written into the {roadmap} listing: a document's name becomes both the "
     "row and the link verbatim, so it must be a single line of UTF-8 text and must carry neither "
@@ -100,8 +99,7 @@ def trail_target(config: Config) -> str:
     """Where `trail.toml` sits for `config`, beside the roadmap, as a project-relative path.
 
     Only a location, read off `[paths] roadmap` without touching the disk: whether it may be read
-    or written is `contained()`'s to say, which `trail_path` asks and the scaffold engine asks of
-    every target it plans.
+    or written is `contained()`'s to say, which `trail_path` asks.
     """
     return str(PurePosixPath(config.paths.roadmap).parent / TRAIL_FILE)
 
@@ -144,9 +142,8 @@ def read_trail(path: Path, where: str) -> Trail:
     except UNPARSEABLE as exc:
         # Through `config.reading.toml_position`: `tomllib`'s message embeds the source for
         # several of its faults — a duplicate table is reported with the table's name in it —
-        # and a TOML key is arbitrary quoted text. `trail.toml` is one of the twelve files
-        # `stayfixed init` ships, so every repository `init` touches has one that this function
-        # parses, which is what makes the leak reachable here.
+        # and a TOML key is arbitrary quoted text. A `trail.toml` is a file a repository
+        # commits, which is what makes the leak reachable here.
         raise Failure(f"{shown} is not valid TOML {toml_position(exc)}") from None
     themes: list[tuple[str, ThemePattern]] = []
     # `[[theme]]` is an array of tables, so `theme` is a list — but the whole file is
@@ -271,8 +268,6 @@ def _documents(root: Path, config: Config) -> list[tuple[str, str, Path]]:
     found: list[tuple[str, str, Path]] = []
     for configured in (config.paths.specs, config.paths.plans):
         directory = contained(root, configured)
-        if not fsops.is_dir(directory):
-            continue
         for path in sorted(directory.glob("*.md")):
             row = f"{PurePosixPath(configured).name}/{path.name}"
             found.append((row, relpath(f"{configured}/{path.name}", roadmap_dir), path))

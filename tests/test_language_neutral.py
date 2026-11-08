@@ -54,18 +54,6 @@ _MENTION = re.compile(
 )
 
 STACK_NAMED = {
-    # The ledger scan's exclusions. `EXCLUDED_DIRNAMES` (`node_modules`, `.git`, `.venv`, `dist`,
-    # `build`, `__pycache__`) are directories neither the mention scan nor the sweep walks into,
-    # because they hold vendored, installed or generated trees in which nobody filed a reference;
-    # `BINARY_SUFFIXES` (images, a PDF, audio, web fonts, `.zip` and `.pyc`) are files no
-    # identifier can be read out of. The lists are not even-handed across stacks: they name
-    # Python's and Node's trees and Python's bytecode suffix, and no other stack's (no `target/`,
-    # no `vendor/`), so another stack's generated tree is scanned where these are skipped. What
-    # they decide is which files the ledger reads, never which stack's runner is asked or advised.
-    ("src/stayfixed/ledger/scan.py", "node_modules"),
-    ("src/stayfixed/ledger/scan.py", "venv"),
-    ("src/stayfixed/ledger/scan.py", "pycache"),
-    ("src/stayfixed/ledger/scan.py", "pyc"),
     # The table of test-runner program names (`hints/runners.py`) names runners only to say that a
     # command is a test run, never to run, plan or advise one, and it is the one place the hints
     # look this up, so no other hint names a stack to recognise a run. It also holds the unwrap of

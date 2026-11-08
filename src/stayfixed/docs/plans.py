@@ -92,12 +92,14 @@ from stayfixed.docs.hygiene import read_document
 from stayfixed.errors import Failure, Refusal
 from stayfixed.findings import Finding
 from stayfixed.gitenv import NO_ANSWER, ForkUnknown, fork_points, git_run
-from stayfixed.ledger.api import bug_register
 from stayfixed.prose import blank_fences, path_references, present_within, resolves_within
 
 if TYPE_CHECKING:
     from stayfixed.config.schema import Config
 
+# A plan's claim to fix a bug, which owes a `Premise:` line. The prefix is fixed at `BR`, and three
+# digits or more because fewer is a different shape: a heading or a number never an identifier.
+BUG_FIXES = re.compile(r"\bFixes\s+BR-\d{3,}\b")
 # A line declaring paths: a dash, after blanks on its own line. Led by `^\s*`, the pattern reached
 # the same dash from every line start in the blank lines above it, reading them again from each:
 # 0.33 s over 16,000 of them, and four times as long at each doubling. A match from a line above
@@ -411,7 +413,7 @@ def _has_premise(prose: str) -> bool:
 
 
 def _lint_one(
-    path: Path, where: str, root: Path, *, fixes: re.Pattern[str], judged: set[int] | None = None
+    path: Path, where: str, root: Path, *, judged: set[int] | None = None
 ) -> list[Finding]:
     """Every finding one plan carries, with the line numbers of the file as it is on disk.
 
@@ -424,7 +426,7 @@ def _lint_one(
     # Per plan, not per line: these are properties of the document, not of one line in it.
     if not _SCOPE_LINE.search(prose):
         found.append(Finding("scope-missing", where, None, _SCOPE_MISSING))
-    if fixes.search(prose) and not _has_premise(prose):
+    if BUG_FIXES.search(prose) and not _has_premise(prose):
         found.append(Finding("premise-missing", where, None, _PREMISE_MISSING))
     declared: set[str] = set()
     for line in _DECLARES.findall(prose):
@@ -483,9 +485,8 @@ def lint(root: Path, config: Config, *, plans: list[Path], base: str | None = No
     else:
         selected = sorted(plans_dir.glob("*.md")) if fsops.is_dir(plans_dir) else []
     findings: list[Finding] = []
-    fixes = bug_register(config).ids.fixes
     for path in sorted(selected):
         judged = written_lines(root, base, path) if diff_scoped else None
         where = path.relative_to(root).as_posix()
-        findings.extend(_lint_one(path, where, root, fixes=fixes, judged=judged))
+        findings.extend(_lint_one(path, where, root, judged=judged))
     return Lint(findings, sorted(selected), sorted(unlinted))

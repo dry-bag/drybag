@@ -1,7 +1,7 @@
 """The one seam between stayfixed and the programs it launches.
 
-Everything the areas that launch a program (`overlay`, `attach`, `setup`, `test attribute`, and
-the release scripts) do that leaves this process — asking GitHub for a repository, cloning
+Everything the areas that launch a program (`overlay`, `attach`, `setup`, and the release
+scripts) do that leaves this process — asking GitHub for a repository, cloning
 one, installing a commit hook — goes through `Runner.launch`, so a test asserts *the argv it would
 have run* against a stub instead of shelling out to `gh`, `git` or `pre-commit`. Mocking
 `subprocess.run` would hide the argv, which is the only part of these calls that can be wrong in
@@ -82,8 +82,7 @@ _ENV_FORCE = {"GIT_TERMINAL_PROMPT": "0"}
 # does with the output — quotes it in a message, matches it against a grammar (`gh`'s JSON), or
 # ignores it for an exit code — and on none of them comparing it with a path or opening one,
 # which is what `gitenv.git_run`'s lossless reading is for. Read strictly, one such byte would end
-# the command as an internal error — `test attribute` over a test run whose output quotes a
-# latin-1 filename, for one. U+FFFD prints, and a UTF-8 file can hold it.
+# the command as an internal error. U+FFFD prints, and a UTF-8 file can hold it.
 _DECODE_ERRORS = "replace"
 
 

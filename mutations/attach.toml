@@ -695,8 +695,8 @@ reddens = [
   "tests/attach/test_write.py::test_a_settings_file_an_earlier_attach_wrote_is_hidden_by_the_next_one",
 ]
 
-# In the block led by `mutations/`'s "a hash region reads a lone carriage return as a line end": git
-# ends a line at `\n` alone.
+# git ends a line at `\n` alone: read as ended, a last line `/zz\r` had the block's first marker
+# glued onto it, and git lost the pattern.
 [[mutation]]
 name = "the exclude block reads a lone carriage return as a line end"
 file = "src/stayfixed/attach/exclude.py"
@@ -1348,7 +1348,7 @@ name = "detach leaves its ledger behind"
 file = "src/stayfixed/attach/write.py"
 before = "    fsops.remove_within(common_directory(root), LEDGER_FILE)\n"
 after = ""
-reddens = ["tests/attach/test_detach.py::test_a_real_detach_after_init_leaves_the_tree_init_left"]
+reddens = ["tests/attach/test_detach.py::test_a_real_detach_leaves_the_tree_the_attach_found"]
 
 # `write` imports `permissions` at module level, so `permissions` importing the writer back, even
 # inside a function where no import fails, is a cycle in the layering: the one `--check` made while

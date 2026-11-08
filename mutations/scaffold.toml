@@ -85,32 +85,12 @@ reddens = [
   "tests/scaffold/test_engine.py::test_a_recorded_file_the_tool_wrote_is_updated",
 ]
 
-# git ends a line at `\n` alone. Read as ending at a lone `\r` too, an exclude file whose last line
-# was `/zz\r` counted as ended, the block's begin marker was glued onto it, and `zz` showed in
-# `git status` while the repository was attached.
-[[mutation]]
-name = "a hash region reads a lone carriage return as a line end"
-file = "src/stayfixed/scaffold/regions.py"
-before = '    return line.endswith("\n") if style is Style.HASH else line.endswith(("\n", "\r"))'
-after = '    return line.endswith(("\n", "\r"))'
-reddens = [
-  "tests/scaffold/test_regions.py::test_a_hash_region_reads_lines_where_git_does",
-  "tests/attach/test_detach.py::test_an_exclude_file_ending_in_a_lone_carriage_return_keeps_its_last_pattern",
-]
-
-[[mutation]]
-name = "a hash region finds a marker across a lone carriage return"
-file = "src/stayfixed/scaffold/regions.py"
-before = "    pattern = _GIT_LINE if style is Style.HASH else _LINE"
-after = "    pattern = _LINE"
-reddens = ["tests/scaffold/test_regions.py::test_a_hash_region_reads_lines_where_git_does"]
-
 # git drops one `\r` before the `\n` that ends a line. A file holding `\r\n` whose last line ended
 # `/zz\r` got `\r\n` appended, git read `/zz\r`, and `zz` showed while attached.
 [[mutation]]
 name = "a hash region ends a line after a lone carriage return with the file's own ending"
 file = "src/stayfixed/scaffold/regions.py"
-before = '            lone_cr = style is Style.HASH and head[-1].endswith("\r")'
+before = '            lone_cr = head[-1].endswith("\r")'
 after = "            lone_cr = False"
 reddens = [
   "tests/attach/test_write.py::test_the_exclude_block_hides_what_git_hid_and_gives_every_file_back",
@@ -145,38 +125,19 @@ reddens = [
 [[mutation]]
 name = "an artifact whose bytes are already the template's is planned again"
 file = "src/stayfixed/scaffold/engine.py"
-before = "            if present is not None and digest(present) == digest(stamp):"
-after = "            if False:"
+before = "        if digest(current) == digest(body):"
+after = "        if False:"
 reddens = [
   "tests/scaffold/test_engine.py::test_a_recorded_unchanged_file_yields_no_action",
 ]
 
-# Only a whole-file template is recorded, and `init` builds none: a plan or an apply with nothing to
-# record neither reads `.stayfixed/manifest.json` nor writes one, so a project keeps no manifest and
-# one an earlier release committed, damaged or not, is never read.
+# The digest is of the bytes on disk. A read that translated line endings hashed a CRLF copy as the
+# template's own text, and a file that differs from what stayfixed wrote reported as unchanged.
 [[mutation]]
-name = "a create-once artifact or a managed region is recorded in a manifest"
+name = "the scaffold engine reads a CRLF copy of an artifact as the template's own text"
 file = "src/stayfixed/scaffold/engine.py"
-before = "                if template.kind is Kind.TEMPLATE\n"
-after = "                if True\n"
+before = '        return read_regular_text(path, newline=""), None'
+after = "        return read_regular_text(path), None"
 reddens = [
-  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
-]
-
-[[mutation]]
-name = "a plan with nothing to record reads the manifest"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    manifest = Manifest.read(root) if recorded else Manifest({})"
-after = "    manifest = Manifest.read(root)"
-reddens = [
-  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
-]
-
-[[mutation]]
-name = "an apply with nothing to record reads the manifest"
-file = "src/stayfixed/scaffold/engine.py"
-before = "    manifest = Manifest.read(root) if any(a.record for a in planned.actions) else None"
-after = "    manifest = Manifest.read(root)"
-reddens = [
-  "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
+  "tests/scaffold/test_engine.py::test_a_crlf_copy_of_a_recorded_file_is_hand_edited_and_never_unchanged",
 ]

@@ -23,7 +23,6 @@ from stayfixed.config.plates import PROJECTS, RECORD
 from stayfixed.config.reading import TOO_DEEP, TOO_LONG, ConfigError, MachineConfigError
 from stayfixed.docs.trail import read_trail
 from stayfixed.errors import Failure
-from stayfixed.project import init
 from stayfixed.setup.machine import read_machine
 from tests.parserlimits import LONG_NUMBER
 from tests.scriptload import release
@@ -94,9 +93,6 @@ READERS = [
         lambda t, d: script._pyproject(_file(t, "pyproject.toml", d).parent),
         script.MalformedSource,
         id="versions-pyproject",
-    ),
-    pytest.param(
-        lambda t, d: init._existing(_file(t, "stayfixed.toml", d).parent), Failure, id="init"
     ),
     pytest.param(
         lambda t, d: read_machine(_file(t, "machine.toml", d)), MachineConfigError, id="machine"

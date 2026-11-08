@@ -41,7 +41,7 @@ from stayfixed.memory.api import RECORD, link_sources
 from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from stayfixed.printed import quoted
 from stayfixed.runner import Completed
-from stayfixed.scaffold import EntriesError, Style, drop, extract
+from stayfixed.scaffold import EntriesError, drop, extract
 from tests.attach.test_binding import CONFIG, DEFAULT_MEMORY, _machine, _project_and_store
 from tests.cli import cli
 from tests.gitfixture import git as _git
@@ -1439,7 +1439,7 @@ def test_attach_leaves_nothing_for_git_status(tmp_path: Path) -> None:
         assert (root / placed).is_file(), placed
         assert _check_ignore(root, placed), placed
     assert _status(root) == []
-    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
+    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION)
     assert body is not None and SETTINGS in body
 
 
@@ -1534,7 +1534,7 @@ def test_a_committed_gitignore_does_not_stand_in_for_the_exclude_block(tmp_path:
     (root / ".gitignore").write_text(".claude/\n.codex/\n", encoding="utf-8")
     _committed(root)
     _attach_quietly(root, store, machine)
-    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
+    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION)
     assert body is not None
     for placed in _placed():
         assert f"/{placed}" in body.split("\n"), placed
@@ -1560,7 +1560,7 @@ def test_a_path_the_owners_global_excludes_hide_gets_no_line_whatever_the_gitign
     ignore.parent.mkdir(parents=True)
     ignore.write_text(f"{SETTINGS}\n", encoding="utf-8")
     _attach_quietly(root, store, machine)
-    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
+    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION)
     # Non-vacuous: the run wrote the settings file, and a block for what nobody else hides.
     assert (root / SETTINGS).is_file()
     assert body is not None and "/.codex/rules/common.rules" in body.split("\n")
@@ -1586,7 +1586,7 @@ def test_a_gitignore_a_sparse_checkout_leaves_out_does_not_stand_in_for_the_bloc
     # Non-vacuous: git still reads the left-out file, so the rule copy's directory is ignored.
     assert _check_ignore(root, ".codex/rules/common.rules")
     _attach_quietly(root, store, machine)
-    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
+    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION)
     assert body is not None
     assert "/.codex/rules/common.rules" in body.split("\n")
 
@@ -1602,7 +1602,7 @@ def test_a_path_the_owners_excludes_re_include_is_still_hidden(tmp_path: Path) -
     owner.write_text(f".claude/*\n!{SETTINGS}\n", encoding="utf-8")
     _git(root, "config", "core.excludesFile", str(owner))
     _attach_quietly(root, store, machine)
-    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
+    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION)
     assert body is not None and f"/{SETTINGS}" in body.split("\n")
     assert _status(root) == []
 
@@ -1618,13 +1618,13 @@ def test_the_block_keeps_what_an_earlier_attach_hid_when_the_grant_changes(
     root, store, machine = _attachable(tmp_path)
     _committed(root)
     _attach_quietly(root, store, machine)
-    first = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
+    first = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION)
     # Non-vacuous: the first block names the settings file and not the rule copy.
     assert first is not None and f"/{SETTINGS}" in first
     assert ".codex/rules/common.rules" not in first
     _overlay_grants(store, codex="# a standing rule\n")
     _attach_quietly(root, store, machine)
-    second = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
+    second = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION)
     assert second is not None and "/.codex/rules/common.rules" in second.split("\n")
     assert _status(root) == []
 
@@ -1635,7 +1635,7 @@ def test_a_second_attach_leaves_the_exclude_file_as_the_first_wrote_it(tmp_path:
     _attach_quietly(root, store, machine)
     # Non-vacuous: the first attach did write the block, so "unchanged" is about a block and not
     # about a file that was never there.
-    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
+    body = extract(_exclude(root).read_text(encoding="utf-8"), EXCLUDE_REGION)
     assert body is not None and SETTINGS in body
     assert "/.codex/rules/common.rules" in body.split("\n")
     exclude = _exclude(root).read_bytes()
@@ -1737,7 +1737,7 @@ def test_an_earlier_blocks_line_is_kept_whole_whatever_it_holds(tmp_path: Path) 
         f"# stayfixed:attach:begin\n{earlier}\n# stayfixed:attach:end\n", encoding="utf-8"
     )
     _attach_quietly(root, store, machine)
-    body = extract(exclude.read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH)
+    body = extract(exclude.read_text(encoding="utf-8"), EXCLUDE_REGION)
     # Non-vacuous: this attach did rewrite the block, adding the paths it placed.
     assert body is not None and f"/{SETTINGS}" in body
     assert earlier in body.split("\n")
@@ -1909,9 +1909,7 @@ def test_a_settings_file_an_earlier_attach_wrote_is_hidden_by_the_next_one(
     _committed(root)
     _attach_quietly(root, store, machine)
     exclude = _exclude(root)
-    exclude.write_text(
-        drop(exclude.read_text(encoding="utf-8"), EXCLUDE_REGION, Style.HASH), encoding="utf-8"
-    )
+    exclude.write_text(drop(exclude.read_text(encoding="utf-8"), EXCLUDE_REGION), encoding="utf-8")
     assert not _check_ignore(root, SETTINGS)
     _attach_quietly(root, store, machine)
     assert _check_ignore(root, SETTINGS)

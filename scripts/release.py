@@ -7,7 +7,7 @@
 
 These commands only ever checked or wrote the stayfixed repository itself, so they live beside it
 rather than in the installed CLI. What shipped code does read stays in `stayfixed.release`: the
-tag a version is released under (`init` pins it). `RELEASING.md` is the process these commands
+tag a version is released under. `RELEASING.md` is the process these commands
 serve.
 
 The commands go through the CLI frame's `run`, so they keep its contract: `--json` anywhere on

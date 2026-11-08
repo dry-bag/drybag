@@ -1,8 +1,7 @@
 # Who reads what: the configuration loader (`stayfixed.config`) reads [budgets], [native_caps] and
 # [defaults.*] into a project's configuration; `stayfixed.setup`
 # reads [plugins.<harness>] and [deny] when it installs a machine, and [defaults.personal] and
-# [defaults.stayfixed] for its own answers; `stayfixed init --questions` reads [plugins]
-# recommended.
+# [defaults.stayfixed] for its own answers.
 #
 # There is deliberately no [rules] table, and nothing reads one: this preset imposes no standing
 # rule on anyone. A standing rule is the user's own note carrying `metadata.startup` in their
@@ -32,19 +31,12 @@ base_branch = "main"
 agents_md = "AGENTS.md"
 specs = "docs/specs"
 plans = "docs/plans"
-bugs = "docs/bugs"
-bug_index = "docs/bug-reports.md"
 roadmap = "docs/roadmap.md"
 memory = "docs/memory"
 
 [defaults.memory]
 groups = ["developer", "project-stable", "project-volatile", "specs"]
 index_extra = []
-
-[defaults.ledger]
-id_prefix = "BR"
-code_roots = ["src", "tests", "scripts"]
-evidence_boundary_required_for = ["high"]
 
 [defaults.commit_messages]
 attribution_check = false
@@ -53,8 +45,7 @@ attribution_check = false
 preset = "recommended"
 
 [plugins]
-# Recommended, and installed only when named: `stayfixed init --questions` offers these, and
-# `stayfixed setup --plugin NAME` installs one, through each harness's own plugin command. A
+# Installed only when named: `stayfixed setup --plugin NAME` installs one, through each harness's own plugin command. A
 # `setup` that names none installs none. Third-party skills are listed as recommendations in the
 # README, never vendored.
 #
@@ -63,12 +54,6 @@ preset = "recommended"
 # allow rules — a wider grant than the allow rule stayfixed's own author is forbidden to ship.
 # Which is why none is installed unless the owner names it. A pin belongs here when the
 # marketplaces expose a version selector to pin to.
-#
-# Bare plugin names, not `name@marketplace`: which marketplace installs which plugin is a
-# per-harness fact (a plugin can ship in different marketplaces under different names on
-# different harnesses), so it is declared once per harness below rather than folded into a
-# selector string that only ever worked for one of them.
-recommended = ["superpowers", "context7"]
 
 [plugins.claude]
 # Verified 2026-09-18 against the real `claude` CLI and `gh api repos/anthropics/claude-plugins-official`:

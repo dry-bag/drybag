@@ -8,7 +8,7 @@ Three things hold everywhere:
 - **`--json` is accepted anywhere** and prints one machine-readable object instead of
   one line. It is not declared per command — the frame strips it from `argv` before parsing. A command whose result is a list of findings carries it under **`findings`**, named after what the
   values are and spelled the same way by every command, whatever its summary line calls them.
-  Three commands do: `bugs check`, `docs check` and `plan check`. Every other
+  Two commands do: `docs check` and `plan check`. Every other
   command's keys are its own and are listed with it below — `doctor`'s `checks`, `docs trail`'s
   `undeclared`, and the two of `docs trail`'s keys that are
   not lists at all, `written` and `stale`. `--json` escapes every non-ASCII character as
@@ -43,17 +43,9 @@ Three things hold everywhere:
 - [Note sync](#note-sync)
 - [`stayfixed commit check --range RANGE`](#stayfixed-commit-check---range-range)
 - [`stayfixed commit strip FILE`](#stayfixed-commit-strip-file)
-- [`stayfixed test attribute --command CMD [--base REF]`](#stayfixed-test-attribute---command-cmd---base-ref)
-- [`stayfixed bugs new TITLE --severity S --area A [--source S] [--related ID …] [--no-fetch]`](#stayfixed-bugs-new-title---severity-s---area-a---source-s---related-id----no-fetch)
-- [`stayfixed bugs index [--check]`](#stayfixed-bugs-index---check)
-- [`stayfixed bugs check [--base REF]`](#stayfixed-bugs-check---base-ref)
-- [`stayfixed bugs regressions [--timeout SECONDS]`](#stayfixed-bugs-regressions---timeout-seconds)
-- [`stayfixed bugs renumber OLD NEW`](#stayfixed-bugs-renumber-old-new)
 - [`stayfixed docs check [--budgets] [--links]`](#stayfixed-docs-check---budgets---links)
 - [`stayfixed docs trail [--check]`](#stayfixed-docs-trail---check)
 - [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
-- [`stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`](#stayfixed-init---yes---dry-run---name-name---base-branch-branch---memory-mode-mode---attribution-check---root-path---machine-path)
-- [`stayfixed init --questions [--root PATH] [--machine PATH]`](#stayfixed-init---questions---root-path---machine-path)
 - [`stayfixed overlay upgrade [--root PATH] [--dry-run]`](#stayfixed-overlay-upgrade---root-path---dry-run)
 - [`stayfixed attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
 - [`stayfixed detach [--root PATH] [--machine PATH]`](#stayfixed-detach---root-path---machine-path)
@@ -140,8 +132,8 @@ failure is one line on stderr and costs no other handler.
 the file reads: every `memory` command, the bundles and `doctor`'s note-store rows use the preset's
 configuration under the overlay's layers (`common/`, the project's tags, `projects/<name>/`), for
 the project this machine's binding record names, which is how a public clone you cannot commit to
-gets its notes. A checkout nothing on this machine binds is still refused (`1`) with `stayfixed
-init` as the way out, and the bundles print nothing for it. A `stayfixed.toml` is read first when
+gets its notes. A checkout nothing on this machine binds is still refused (`1`), naming the
+`stayfixed.toml` it lacks, and the bundles print nothing for it. A `stayfixed.toml` is read first when
 there is one.
 
 **One store in overlay mode.** There the store is the composed store `stayfixed attach` builds,
@@ -797,267 +789,6 @@ hook is `stayfixed setup --git-hooks`, and removing it — restoring whatever it
 
 **Writes** `FILE`.
 
-## `stayfixed test attribute --command CMD [--base REF]`
-
-Run one failing command three times and say what the three exit codes mean. The three trees:
-
-1. **The working tree as it is** — the command runs with `--root` as its directory, exactly
-   where you are.
-2. **`HEAD`'s committed tree** — extracted with `git archive` into a scratch directory.
-3. **The merge-base with the base branch** — extracted the same way. The merge-base, not the
-   base's tip: a base branch that advanced after the fork would otherwise carry commits that
-   are not "before this change" into the before side.
-
-That merge base has to be one commit. When `git merge-base --all REF HEAD` names several — a
-history the change merged into from both sides of a base merge has them — each is as much
-"before this change" as the others and a failure can pass on one and fail on another, so the
-attribution is undetermined and the command says so, counting them and naming up to eight,
-rather than extract the one git would pick alone. Merge the base into the change, which makes
-its tip the one merge base, or pass `--base` naming the commit you mean. A shallow clone is
-undetermined too, since the commit `HEAD` forked from can be cut off there and an older one stand
-in for it, and so is a clone git cannot say is shallow or not. All of it is decided before
-anything runs.
-
-`--base` defaults to `refs/remotes/origin/<[project] base_branch>`, named in full so that no tag of
-the short spelling stands in for it; pass it to compare against another ref.
-
-**Writes** nothing, and nothing in it runs `git checkout`, `git stash` or `git reset`: the two
-committed trees are extracted into a temporary directory that is removed before the command
-returns, and your checkout is never moved between commits or restored from one.
-
-**Your command is another matter, and the distinction is the whole safety property.** Run 1
-executes it *in the working tree*, so whatever it writes there, it writes — the example above
-leaves a lockfile, a virtual environment, `.pytest_cache` and `__pycache__` behind exactly as
-running it by hand would. What this command guarantees is that it does not move your checkout
-to another commit to get its "before" reading, not that the three runs leave no trace.
-
-**The command is yours, and so is its environment.** `--command` takes the exact failing
-command *including the sync it needs to be meaningful* — `uv sync --locked && uv run --locked
-pytest tests/x.py::t` for a Python project, the equivalent for another stack. That sync is the
-whole of what makes runs 2 and 3 comparable; a command that does not sync compares two drifted
-environments and the verdict is worth nothing. It is also what makes this command the same tool
-for every language.
-
-The verdict, from runs 2 and 3 first and run 1 only when both passed:
-
-| `HEAD` | merge-base | working tree | Verdict |
-|---|---|---|---|
-| fails | fails | — | `pre-existing: the failure is on the merge-base too, so it is not this change` |
-| fails | passes | — | `this change: HEAD fails and the merge-base passes` |
-| passes | fails | — | `this change fixed a pre-existing failure: HEAD passes and the merge-base fails` |
-| passes | passes | fails | `environmental: HEAD passes when synced and fails in the working tree as it is` |
-| passes | passes | passes | `not reproduced: all three runs passed` |
-
-Five sentences, and the four `HEAD`/merge-base cases are exhaustive: there is no sixth verdict
-and no fall-through. A run that **did not execute** — the launcher's wall-clock cap, or a
-command it could not start at all — is a failure naming which of the three it was, never a
-verdict. That matters more than it sounds: a cold sync in a fresh extraction is the likeliest
-thing to hit the cap, and two timed-out runs scored as exit codes would read as "fails on
-both", which is the one wrong answer a tool feeding a ledger entry must not give. Narrow the
-command to the failing test rather than asking for a wider cap.
-
-`--json` carries `summary` (the line the command would have printed), `runs` (`head_ambient`,
-`head_clean`, `base_clean` — the three exit codes in the order they were run), `base` (the ref
-asked for), `merge_base` (the commit actually extracted) and `verdict`. Record the last four
-where the failure is discussed: a verdict without its inputs cannot be re-run.
-
-Exits `0` with a verdict, `1` when the merge-base cannot be resolved (`is
-refs/remotes/origin/main fetched?`), when the attribution is undetermined (several merge bases, or
-a shallow clone), when `git archive` fails, or when an archive is missing tracked
-files because the archived tree's own `.gitattributes` excluded them, and `2` when `--base` is
-shaped like an option, which is refused above the first subprocess rather than handed to `git` as
-one.
-
-## `stayfixed bugs new TITLE --severity S --area A [--source S] [--related ID …] [--no-fetch]`
-
-File a bug: allocate the next free identifier (`1 + max` over every entry in the working tree
-and every entry ever added on any ref, after a bounded `git fetch origin` unless `--no-fetch`),
-write `<paths.bugs>/<PREFIX>-nnn.md` from the template, and regenerate the index. Every
-rejection happens before the first write: a title or source the flat frontmatter subset cannot
-hold is quoted for you; a `--related` value that is not an identifier, an index carrying content
-this tool did not generate (`2`), and an allocated identifier whose file already exists (`1`,
-naming `bugs check`) each leave the tree exactly as it was. A skipped fetch is reported on the
-result line, not hidden. An index that cannot be written once the entry is filed exits `1`,
-naming the filed entry, the reason and any skipped fetch, and saying to run `bugs index` once it
-can be written, not `bugs new` again, which would file it twice.
-
-The entry carries the keys `id`, `title`, `status`, `severity`, `area`, `found`, `source`,
-`fixed_in` and `related`. An entry may also carry `regression`, the argv that reproduces the bug:
-an inline list of double-quoted items, like `regression: ["pytest", "-k", "total and not slow"]`,
-each item read with the two escapes a quoted title takes (`\"` and `\\`), separated by a comma.
-Spaces may surround each item and each comma; a tab may not. `regression:`, `regression: []` and
-`regression: [ ]` are the empty list. `bugs check` reports any other shape as `unreadable-entry`,
-as it does an empty item and an item holding a control character below U+0020, or DEL.
-`bugs renumber` leaves a `regression` exactly as written, while its sweep renames a test whose name
-carries the old identifier in a scanned file, so it names each entry whose argv still names the old
-identifier as one that may need editing by hand. [`bugs regressions`](#stayfixed-bugs-regressions---timeout-seconds)
-runs it once the entry is `fixed`. `bugs new` does not write one yet.
-
-**Writes** the entry file (creating `<paths.bugs>` for the first entry) and `<paths.bug_index>`;
-and, unless `--no-fetch`, whatever the `git fetch --quiet --no-recurse-submodules origin` it runs
-before allocating writes into the repository — the remote-tracking refs, `FETCH_HEAD` and the
-fetched objects — even when a rejection that follows the allocation leaves the working tree as it
-was.
-
-## `stayfixed bugs index [--check]`
-
-Render `<paths.bug_index>` from the entry files alone. `--check` exits `1` when the committed
-index differs from that rendering and writes nothing. Either form refuses (`2`) while the write
-would destroy something: a line the index holds that this tool did not generate (a hand-written
-section, an operator's note, or a table row with no entry file behind it — recover it into an
-entry file first), or a generated index whose entry directory is gone (restore the files; the
-index carries nothing of its own). A row is judged by the entry it links and not by its shape,
-so a row whose entry file went missing in a merge — the last record that bug existed — is not
-something regenerating may delete. A reworded
-header is a stale index, not foreign content. The first paragraph names the generator, and that
-paragraph is recognised structurally rather than by an exact string, so an index left by an
-older generated format is still read as generated rather than refused as hand-written content.
-An index that cannot be written exits `1` with the reason.
-
-**Writes** `<paths.bug_index>`.
-
-## `stayfixed bugs check [--base REF]`
-
-Every rule the ledger holds, in one pass: each entry parses under the flat frontmatter subset
-and its `id:` matches its filename; no entry restates `**Status:**`/`**Severity:**` in its
-body; every severity in `[ledger] evidence_boundary_required_for` carries a filled `**What this
-evidence does not establish:**` line (the template's placeholder does not count); no identifier
-is claimed by two files; every `related:` identifier has an entry; the index carries nothing
-this tool did not generate, and is current; every `<PREFIX>-nnn` mentioned under the top-level
-files and `[ledger] code_roots` has an entry (a `void` entry counts); every citation of an entry
-*file* — from those roots and from the directories the `[paths]` values live under — names a
-file that exists. Exits `1` with the count and up to eight `path:line [rule]` labels on the
-line; `--json` carries every finding with its `detail`, which may quote the repository and is
-why it is not on the line. Before a ledger exists — no `[paths] bugs` directory *and* no
-generated index — every mention of an identifier and every citation of an entry file dangles, and
-with `--base <ref>` a ledger the change forked with (its `[paths] bugs` or `bug_index`) is one
-`ledger-removed` finding: with none of them it prints `nothing to check` and exits `0`, so the
-check can be required before the first entry, and a change that deletes the ledger answers for the
-ledger and for everything that refers to it. Once a ledger exists its entries are append-only:
-with `--base`, each `<PREFIX>-nnn.md` the change forked with directly under `[paths] bugs` whose
-exact name the tree's directory does not hold is an `entry-removed` finding, whatever still
-mentions the identifier and whatever a file's fixtures marker says, so emptying the directory and
-regenerating the index deletes the ledger as surely as removing it, and renaming an entry in case
-alone deletes it too, on a filesystem that folds case as on one that does not. Other files under
-the directory — a `README.md`, a subdirectory's notes — are not entries and may go. An entry
-moves with `bugs renumber`, which leaves a `void` entry at the old number and so removes nothing.
-
-What the change forked with is the ledger at every commit `git merge-base --all <ref> HEAD`
-names, their entries taken together. An entry the base filed after the branch forked is not one
-the branch deleted. A deletion is still named on a branch behind its base, on the merge commit CI
-checks out, and on a history with several merge bases, where the one git would pick alone can
-predate the entry while a merge deletes it all the same. Entries are append-only, so on a base
-that kept its entries, taking them together refuses no branch that deleted nothing. An entry
-removed from the base itself, by a direct push, is still named on a criss-crossed branch whose
-merge bases include one from before the removal: restore it on the base.
-
-Each of those commits' ledger is read where that commit's own `stayfixed.toml` put it: its
-`[paths] bugs`, `bug_index` and `[ledger] id_prefix`, and nothing of how it judges an entry, so a
-base carrying an `evidence_boundary_required_for` level the ledger now refuses does not stop the
-change that corrects it. The copy is found at the project root's path inside the repository and
-loaded through the loader, against the tree's disk. So a root reached through a symlink, or
-spelled otherwise than git spells it, is refused (`2`). The entries are compared by file name with the tree's directory. A
-change that moves the ledger by `[paths]` answers for every entry it did not carry along, one that
-changes `id_prefix` answers for every entry under the old prefix, and a deleted ledger is named at
-the paths the base kept it at. A commit with no `stayfixed.toml` at the project's path is read at
-the tree's paths, as the change that adds the configuration decides for itself. A copy that does not
-load fails (`1`); one whose load meets a refusal, or whose `id_prefix` the identifiers refuse,
-refuses (`2`); neither is read as a base with no ledger. A refusal prints
-the base as data, and a refused prefix clipped to its first 120 characters and its length.
-
-`--base` is what the `bugs` gate passes, the base it judges against. A base git cannot list, one
-that shares no commit with `HEAD`, any base in a shallow clone, where the commits `HEAD` forked
-from can be cut off and the merge base git sees be an older one, and any base in a clone git
-cannot say is shallow or not, fail (`1`) rather than read as a base with no ledger; under a gate
-that is the gate not running: fetch the whole history (`fetch-depth: 0`). Without `--base` the
-tree alone is judged.
-
-A generated index with no directory behind it is a deleted ledger and exits `1`. Git enumerates
-the files where the root is the top of a checkout (tracked plus untracked-not-ignored), and a
-walk stands in elsewhere. A file whose first 2 KiB carry `stayfixed:ledger:fixtures` holds sample
-identifiers and is neither scanned nor swept.
-
-A stale index is sent to `bugs index`, except the one a `bugs renumber OLD NEW` killed before its
-last write leaves: when `NEW` holds `OLD`'s text, or `OLD` is the pointer that move titles toward
-`NEW`, and the index is exactly the one rendered before the move, the line names `run: stayfixed
-bugs renumber OLD NEW`, which finishes it; where several moves explain it, as for two entries that
-differ only in `id:`, it names each and says only the one started finishes it. The sweep may already
-have rewritten other entries, so each line is compared with the found index's line both as it was
-and with `OLD` rewritten to `NEW`: a void pointer an earlier move left toward `OLD`, or a title
-naming either, still names the renumber.
-
-**Writes** nothing.
-
-## `stayfixed bugs regressions [--timeout SECONDS]`
-
-Run the `regression` of every entry whose `status` is `fixed`, in identifier order: each argv as
-written, never through a shell, from the project root, under the caller's environment, with its
-standard input `/dev/null` and `--timeout` as each run's bound, a whole number of seconds above 0
-(default `600`, ten minutes); the parser refuses any other value (exit `2`). An entry of any other
-status is not run, whatever it carries: a `rejected` one has no fix to regress, a `partial` one is
-still open and a `void` one is a renumber's pointer.
-
-Each run's exit code is its verdict, and no test runner's report is read: `passed` (exit 0),
-`failed` (any other exit), `timed-out` (past `--timeout`), `interrupted` (a Ctrl-C, or a SIGTERM
-or SIGHUP to stayfixed, during the run) or `not-run` (the argv could not be started). Each run
-starts in a session of its own, and on a timeout or an interrupt whatever it started in that process
-group is ended with SIGKILL. An interrupted run is the last: nothing after it starts.
-
-The line names each run, `<id>: <verdict>: <detail>`, the detail being the exit code (`exit 3`),
-the bound it ran past, or why it could not start, and ends `<n> regression(s), <m> not passed`;
-with nothing to run, it is `nothing to run: no fixed entry carries a regression`. `--json` carries
-`regressions`, one `{"id", "path", "verdict", "line"}` object a run, `path` being the entry file's
-from the project root and `line` the text after `<id>: `, and `not_passed`. The command's standard
-output goes to standard error in both forms, so under `--json` standard output holds the one
-object. Exits `0` when every run is `passed` or there is none, and `1` otherwise. A ledger that
-does not parse fails (`1`).
-
-The run catches an honest regression and is no control against a hostile one: the argv is read from
-the tree the change wrote, which can rewrite it as easily as the test.
-
-**Reads** the ledger's entry files. **Writes** nothing in the project; what each argv writes, it
-writes. **Runs** each argv, as the README's
-[What stayfixed sends where](../README.md#what-stayfixed-sends-where) row for `regression` says.
-
-## `stayfixed bugs renumber OLD NEW`
-
-Move an entry to a free identifier: `NEW` gets the entry with its `id:` rewritten, `OLD` becomes
-a `void` pointer at the new number, every scanned file that mentions `OLD` is rewritten, and the
-index is regenerated. Both endpoints are written first, then the sweep, so an interruption leaves
-`OLD` resolving to the pointer rather than to nothing. The sweep knows the endpoints, the index
-and the entries by the file, not by how its path is spelt, so a ledger directory committed in
-another case than it is configured in, on a filesystem that folds case, is still one directory.
-
-A run that was killed part-way is finished by running the same move again. The re-run recognises
-the move's own half-done state: `NEW` holding exactly `OLD`'s text with the `id:` line rewritten,
-or `OLD` byte for byte the pointer this move writes to `NEW`, whose title is only held to start
-`renumbered to NEW — `, so a `NEW` retitled since is still finished. It makes the writes still
-missing and leaves the tree an uninterrupted run would have left, when resumed the same day: a
-pointer written by the resume carries the day it is written. A re-run of a move that finished —
-the pointer in place and the index fresh — changes nothing and says `OLD was already moved to
-NEW; nothing to do`, and `--json`'s `moved` is `false`, so a mention of `OLD` written since stays
-as it was written. `bugs check` names this command while an interrupted move left the index stale.
-
-Rejects `OLD` equal to `NEW`, a missing `OLD`, and any other occupied `NEW` (`1`); the last says
-how to finish by hand a move whose `NEW` was edited after the kill, which the re-run can no longer
-tell from an entry of its own. Raises the index refusals of `bugs index` (`2`) before touching
-anything. A file the sweep could not read or write is listed and the command exits `1` naming it,
-because once the pointer exists a stale mention in that file looks intentional to `bugs check`
-forever. The line counts them and names up to eight; `--json`'s `unswept` carries every one, each
-an object with `path` and `reason`. The path is relative to the root, and the reason is the error
-in words, naming no absolute path; a refusal of stayfixed's own may repeat the root-relative path.
-The moved entry's own body is the operator's to rewrite and is not swept, and neither is any
-entry's `regression`, which is left exactly as written. The same sweep renames a test whose name
-carries `OLD` in a scanned file, a test file under `[ledger] code_roots` included, but renames no
-file, so an argv naming `OLD` may then select nothing, or name a path that is still right. The
-line names each entry file whose `regression` still names `OLD`, the moved entry included, as one
-that may need editing by hand, up to eight; `--json`'s `lists_naming_old` carries every one,
-relative to the root and sorted. They do not change the exit code. A write of the
-move's own that fails — `NEW`, the pointer at `OLD` or the index — exits `1` naming the file and
-the reason, and says that running the same move again once the file can be written finishes it.
-
-**Writes** the two entry files, every rewritten file, and `<paths.bug_index>`.
-
 ## `stayfixed docs check [--budgets] [--links]`
 
 Two checks, both enforced, and no flag runs both (exit `1`, `FAIL:`):
@@ -1111,6 +842,21 @@ a question git gives no answer to — which documents it ignores or tracks, when
 runs past its time limit or refuses the checkout — fails (`1`) with nothing written, rather than
 listing every document on disk; outside one, every document is listed.
 
+Nothing writes the roadmap or `trail.toml` for you, and without them the command has nothing to
+check. Write the roadmap (`[paths] roadmap`, `docs/roadmap.md` by default) by hand, with a line
+`## Design and plan trail` and, below it, a line `<!-- end design and plan trail -->`, between
+which `docs trail` writes the listing,
+and `trail.toml` beside it, one theme to start with and a state for each document not plainly
+delivered:
+
+```toml
+[[theme]]
+label = "Everything"
+pattern = ".*"
+
+[states]
+```
+
 **Writes** `[paths] roadmap`.
 
 ## `stayfixed plan check [--base REF] [PATH …]`
@@ -1125,7 +871,7 @@ already hold an old plan the change puts back. Five rules, each from a retrospec
 backticked path resolves unless the line says `(create)` or `(delete)`, or the plan declares it
 on a `Create:`, `Test:` or `Delete:` line; no step is phrased as already knowing its answer
 (`confirm that nothing …`, `verify no …`, `check that it does not …`); a `**Scope:**` line
-with content is present; a plan claiming `Fixes <PREFIX>-nnn` carries a `**Premise:**` line with
+with content is present; a plan claiming `Fixes BR-nnn` (no other prefix is judged) carries a `**Premise:**` line with
 content; and a mutation's outcome stated as fact in the present tense (`-> the test reddens`,
 `watch it go red`, `reddens 8 assertions`) is a finding unless its own sentence marks it an
 expectation. Without `PATH`, the first rule reads only the lines the change wrote — those that
@@ -1149,215 +895,6 @@ are not in the diff; the line counts them and `--json` names them, and naming on
 lints it.
 
 **Writes** nothing.
-
----
-
-## `stayfixed init --yes [--dry-run] [--name NAME] [--base-branch BRANCH] [--memory-mode MODE] [--attribution-check] [--root PATH] [--machine PATH]`
-
-Writes what is missing of a repository's stayfixed scaffold: `stayfixed.toml`, and the files the pack's
-commands read — the roadmap with its trail markers and `trail.toml` beside it for `docs trail`, the
-generated bug index and the bug ledger's audits README for `bugs index` and `bugs check` — and the
-`stayfixed:ignore` region in `.gitignore`, which keeps `.stayfixed/local/` out of git. It is the
-only command that writes `stayfixed.toml`. It writes no `AGENTS.md`: `docs check` names a missing
-one until the project writes its own.
-
-**`--yes` is required, and it means "take the defaults `stayfixed init --questions` shows".**
-Without it nothing is written, and the refusal (`2`) names `--questions`.
-
-Each answer flag replaces one default and writes one key:
-- `--name` writes `[project] name`;
-- `--base-branch` writes `[project] base_branch`;
-- `--memory-mode` writes `[memory] mode`;
-- `--attribution-check` writes `[commit_messages] attribution_check = true`, which is off unless
-  answered.
-
-The recommended plugins are not `init`'s to install:
-`init --questions` asks about them, and the answer is `stayfixed setup`'s.
-
-After the report the run prints `picked:`, one line per question in the order
-`init --questions` asks them, with the value this run took: the name, the base branch, the memory
-mode, the attribution check (`on` or `off`), and `plugins: none`, since `init` installs none. Taking every default gives the attribution check `off` and no plugin. Over a `stayfixed.toml` you wrote
-the run took nothing, so it prints no list.
-
-The parser refuses a value outside its grammar or its choices (`2`), and it refuses a name or
-a branch by naming the rule, never the value. A branch is a name git accepts as one, written in
-letters, digits, `.`, `_`, `-` and `/` and led by a letter or digit: no `..`, `//`, component
-starting with `.` or ending in `.lock`, no trailing `/` or `.`, and not `HEAD`. The same
-grammar holds a detected base branch. Answer flags reach only a
-`stayfixed.toml` this run creates. Over one the repository already has, they are refused
-(`2`), because that file is the answer. Passing a default as its flag loads as the same
-configuration as not passing it.
-
-When nothing answers, `init` detects:
-- the project's name from `origin`'s last path segment, lower-cased and with `.git` stripped,
-  else from the checkout's directory name;
-- the base branch from `refs/remotes/origin/HEAD`, read as the full ref with exactly
-  `refs/remotes/origin/` stripped, when that is a plain branch name, else `main` with a `note:`
-  saying so. A repository with a remote and no `origin/HEAD` — one created locally and pushed,
-  until `git clone`, `git remote set-head`, or a `git fetch` from git 2.48 on records one, or one
-  whose only remote is another name, such as `upstream`, pushed or cloned with `-o upstream` —
-  gives `main`, with a `note:` naming `--base-branch`, and `git remote set-head origin --auto`
-  where the remote is `origin`: the branch checked out there is typically the feature branch the
-  adoption is made on. Where git cannot list the remotes, it gives `main` with a `note:` saying
-  so. Only with no remote at all is it the branch checked out, when that is a plain branch name,
-  with a `note:` when it is not `main`, else `main`;
-- the agent surfaces from which of `.claude/` and `.codex/` the repository carries, both when
-  it carries neither.
-
-Both name candidates, the remote's segment and the directory name, are repository-authored.
-So one outside `[project] name`'s grammar is refused naming the grammar and the remedy, and
-never the value, unless `--name` answers it. With a `stayfixed.toml` you wrote, neither candidate
-is refused: the file answers it, and what it leaves out is the loader's to name.
-
-**A `stayfixed.toml` you wrote is the answer sheet, not an obstacle.** Every key it carries is
-read and kept: the name, the paths, the memory mode, the budgets. The file itself
-is not replaced. It is a create-once artifact, so a repository that already has one is
-reported `skip_modified` ("create-once, and the file is already there").
-
-Nothing is written into it, whatever it holds, and `init` answers only for where the scaffold
-lands. What the scaffold is built from is read first: the file's `[project]`, `[paths]`, `[memory]`,
-`[budgets]`, `[ledger]` and `[commit_messages]` tables and `[stayfixed] preset`, with the name
-detected for a file with no `[project]` table. A fault there stops the run with nothing written: a
-`[project]` with no name or holding a key stayfixed no longer has, such as `release_branch`, or no
-`[project]` table where no name can be detected.
-
-The rest of the file is no input to the scaffold, and `init` does not judge it. `[stayfixed] agents`,
-the same kind of leftover in another table, a missing `[stayfixed] version`, no `[project]` table,
-a bad value under `[guards]` and a section stayfixed does not have all exit `0`, and the next command
-that loads the file names them, in the loader's own sentence. So `initialised:` says nothing of
-the file: the run prints a `note:` saying the file was left as it is and the next command judges
-it, in place of `picked:`, and no base-branch `note:`, whose `--base-branch` is refused over the
-file.
-
-The paths it declares are where the scaffold lands. A repository with no `stayfixed.toml` gets
-one written from the detected values and your answers, headed by a comment saying that every key
-left out takes the preset's default. A file that cannot be read, is not UTF-8 text or is not valid TOML is a failure
-(`1`) naming the file.
-
-**Run it again, and it writes what is missing.** Every artifact but the `gitignore` region is
-create-once: a file already at its place, whoever wrote it, is left as it is and reported
-`skip_modified` ("create-once, and the file is already there"). The `gitignore` region goes into a
-`.gitignore` you wrote, between its markers, and is rewritten there whenever its body differs;
-every line outside them is kept. `init` keeps no manifest, and leaves a `.stayfixed/manifest.json`
-an earlier release wrote as it is. The whole footprint is one plan, made before anything is
-applied: a refusal in it stops the run with nothing written, and `--dry-run` is that same branch
-rather than a second code path — it reports the plan and writes nothing.
-
-| id | target | what it holds |
-|---|---|---|
-| `config` | `stayfixed.toml` | the document this run rendered |
-| `ledger-audits` | `<bugs>/audits/README.md` | what an audit record is; it keeps the ledger's directory in git |
-| `bug-index` | `[paths] bug_index` | the generated index, rendered empty |
-| `roadmap` | `[paths] roadmap` | `Now`, `Next`, and the trail block |
-| `trail` | `trail.toml` beside the roadmap | one theme, no declared states |
-| `gitignore` | `.gitignore` | the managed region naming `.stayfixed/local/`, where the `local-only` notes live |
-
-The bug index is rendered only when it is written, so a `[ledger]` value the bug ledger refuses
-(an `evidence_boundary_required_for` level that is no severity) stops a run that creates the index
-and no other.
-
-**Reads** `stayfixed.toml` when there is one, `git` for the name and the base branch, and every
-file an artifact targets.
-
-**Writes**, every one of them through the scaffold engine, so that every target goes through the
-containment walk and none may leave the project root or pass through a symlink:
-- `stayfixed.toml`, when the repository has none;
-- the documents in the table above, each at its place in the table, and the `stayfixed:ignore`
-  region in `.gitignore`.
-
-Exits `0` on success. `1` on a finding: the plan carries refusals — the report's REFUSED section
-names each, and nothing was written — or a `stayfixed.toml` that cannot be read,
-is not UTF-8 text or is not valid TOML, or what the scaffold is built from where the loader refuses
-it (a key those tables do not have, a `[project]` with no name, a `[project] name` outside its
-grammar, a value of the wrong type, a machine configuration file that does not load). `2` on a refusal above the plan: no `--yes`, an
-answer flag over an existing `stayfixed.toml`, an answer outside its grammar or its choices (from the
-parser), a detected name outside the grammar that no `--name` answers, a `[ledger]` value the bug
-ledger refuses when the run creates the bug index, a `stayfixed.toml` that is a symlink, which is never followed, a `[paths]` value outside the plain-path grammar, naming
-git's control directory or stayfixed's own `.stayfixed/`, or reaching through a component that is a
-symlink — all three refused by the loader before a plan exists — and two artifacts that resolve to
-one file (`roadmap` and `bug_index` set to one path), which is named
-with the two artifacts and their `[paths]` keys to separate.
-
-`--json` carries `dry_run`, `adopted`, `scaffold` (the plan's own rendered report), `writes` (the
-plan's targets), and `head_note`, the `note:` line that says `main` replaced an
-`origin/HEAD` outside the plain-branch grammar (the branch it named is never printed), that
-`main` stands because a remote is there and no `origin/HEAD` is recorded, or because git could
-not list the remotes, or that, with no remote, the branch checked out other than `main` became
-the base branch; empty otherwise, and over a `stayfixed.toml` you wrote. An answered `--base-branch` replaced nothing, so it leaves
-`head_note` empty.
-
----
-
-## `stayfixed init --questions [--root PATH] [--machine PATH]`
-
-Prints the values `stayfixed init --yes` would take for the five things a person may answer, where
-each came from, and the flag that replaces it: on `init --yes`, but for the recommended plugins,
-which `stayfixed setup` installs on the machine. It writes nothing. The `init` skill asks its
-questions from it, taking every default offered first, and a person reads it to see the defaults
-before choosing any.
-
-The summary is one line per question, `<key>: <default> (<where it came from>; <flag>)`, then
-one line saying how each is answered:
-
-```text
-detected:
-  project.name: widget (origin remote; --name)
-  project.base_branch: main (origin/HEAD; --base-branch)
-  memory.mode: harness (default; --memory-mode)
-  commit_messages.attribution_check: off (the preset's default; --attribution-check)
-  plugins: none (default; stayfixed setup --plugin)
-each is answered by the flag its line names, on `stayfixed init --yes` but the plugins'; `stayfixed init --questions --json` carries them as a JSON Schema, each with what it gives, what it gives up, what it leaves and how to undo it
-```
-
-Where a value came from is one of a fixed set of phrases. The name comes from the
-`origin remote`'s last path segment or, with no origin, the `directory name`; when that one is
-not a lowercase path segment the source is `not derivable`, and the value prints as
-`none; asked`, never as what the repository suggested. The base branch comes from `origin/HEAD`
-when that names a plain branch under `refs/remotes/origin/`; with no remote at all, from the
-`current branch` when that is a plain branch; otherwise, a remote with no `origin/HEAD` and
-remotes git could not list included, it is the `default`, `main`. The memory mode is the `default`,
-`harness`, since the preset chooses none; the attribution check (off) is `the preset's default`; and the plugins are the `default`,
-none, because a third-party plugin runs in every session and is installed only when named. Each
-default is exactly what `stayfixed init --yes` writes when that question is not answered. `origin/HEAD` goes stale after the remote's default branch is
-renamed, because git does not refresh one it has. That is why its source is printed: you can
-catch it.
-
-`--json` carries `questions`: a JSON Schema object (draft 2020-12) with five `properties`, and
-`required` naming all five in the order the `init` skill asks them; read the order there, since
-`--json` prints every object's keys sorted, so the properties arrive by name. Each but the last is
-keyed by the
-`stayfixed.toml` key its answer writes: `project.name`, `project.base_branch`, `memory.mode`,
-and `commit_messages.attribution_check`; the last,
-`plugins`, offers the plugins the preset recommends, which `stayfixed setup --plugin` installs. Each property carries four keys: `default`
-(absent for a name that is not derivable), `x-stayfixed-source` (the phrase above),
-`x-stayfixed-flag` (the flag that answers it) and `x-stayfixed-tradeoff`, four lines of fixed
-text: `get`, what the answer gives; `give_up`, what it costs; `trace`, what it leaves behind; and
-`undo`, how to take it back. A choice is a `oneOf` of `const` and `title`, `items.enum` for a list
-of choices, or `boolean`. The two free-text properties carry `pattern`, the grammar their flag
-enforces.
-
-The schema is modelled on MCP elicitation's flat form schema. A client may send it as a
-`requestedSchema` once it drops `pattern` and the `x-stayfixed-*` keys, which that subset does not
-carry. Harness ask tools take lists of questions and options rather than a schema, so the `init`
-skill turns the properties into questions: every default at once first, then the name and the
-base branch as one confirmation, the rest one at a time with their four lines, within each
-harness's limits. The flags validate the answers; the schema
-does not.
-
-It is refused (`2`) before anything beyond the root is read, in two cases:
-- the repository carries a `stayfixed.toml`, which answers these questions itself: edit it, then read the plan
-  with `stayfixed init --yes --dry-run`;
-- any flag is given but `--root`, `--machine` and `--json`.
-
-`--yes` beside it is a usage error from the parser.
-
-**Reads** `git` for the name and the base branch, and the machine configuration, to learn whether it
-records an overlay. A machine file that does not load reads as "not recorded"; `init` reports it
-when it loads it.
-
-**Writes** nothing.
-
-Exits `0` with the questions printed; `2` on a refusal.
 
 ---
 
@@ -1611,8 +1148,7 @@ and goes on recording a dropped one only while its file is untracked and holds t
 `detach` can still take a file Codex reads as a standing instruction; any other is forgotten, and
 the file is yours. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
-release's `attach` wrote there stays until you remove it; `stayfixed init`'s own region is
-`init`'s.
+release wrote there stays until you remove it.
 
 **`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
 writes: [`owner-files`](#hooks) places them in each new linked worktree.
@@ -1811,8 +1347,7 @@ empty, and left standing otherwise. A link tree under `paths.memory` or a harnes
 is not on the ledger, and `detach` leaves it, as it leaves any file in a worktree you may have edited.
 
 **`.gitignore` is never touched.** `attach` writes nothing there, so `detach` takes nothing out:
-a `stayfixed:ignore` region `stayfixed init` wrote is the scaffold's, and one an earlier release's
-`attach` wrote stays until you remove it.
+a `stayfixed:ignore` region an earlier release wrote stays until you remove it.
 
 **Directories come back too.** `attach` records which of `.stayfixed/local/`, `.stayfixed/`,
 `.codex/rules/`, `.codex/` and `.claude/` this repository did not have before it ran, and `detach`
@@ -1916,9 +1451,7 @@ person outside the agent's sandbox as the one to run it, and never ends in a tra
 **Plugins are installed only when named**, with `--plugin NAME` once per plugin: a plugin name is
 lowercase ASCII letters, digits and `-`, led by a letter or a digit, and the parser refuses any
 other, naming that rule. A third-party plugin runs in every session of its harness, hooks
-included, and none is pinned, so none is installed unasked; the preset's `[plugins] recommended`
-lists the ones `stayfixed init --questions` offers (`superpowers` and `context7` in
-`recommended`). A named plugin is installed per harness stayfixed serves (`claude` and `codex`),
+included, and none is pinned, so none is installed unasked. A named plugin is installed per harness stayfixed serves (`claude` and `codex`),
 from the preset's own per-harness marketplace table (`[plugins.<harness>]`). For each harness the preset declares a
 marketplace for, `setup` registers it (`claude plugin marketplace add <source>`; idempotent — an already-registered
 source is a no-op reported as such) and then installs each plugin bare (`claude plugin install
@@ -2278,7 +1811,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 
 | Check | What it answers | What it reads |
 |---|---|---|
-| `not-initialised` | whether there is a `stayfixed.toml` here, and how much of it a session can use: with none, a warning that the session guards and `doctor` work without one and memory stays the coding agent's own, and that `stayfixed init` adds the rest, except in a checkout this machine binds, where it is ok and says the configuration comes from the overlay's layers; with one that loaded with settings ignored or put back to the preset's, a warning naming at most three of their keys and counting the rest, never their values; red only for one a session drops whole, in the words of the session's warning | `stayfixed.toml` |
+| `not-initialised` | whether there is a `stayfixed.toml` here, and how much of it a session can use: with none, a warning that the session guards and `doctor` work without one and memory stays the coding agent's own, and that a `stayfixed.toml` adds the rest, except in a checkout this machine binds, where it is ok and says the configuration comes from the overlay's layers; with one that loaded with settings ignored or put back to the preset's, a warning naming at most three of their keys and counting the rest, never their values; red only for one a session drops whole, in the words of the session's warning | `stayfixed.toml` |
 | `versions` | whether the project's `[stayfixed] version` is the stayfixed running; with no project configuration, which stayfixed runs | `stayfixed.toml`, the package |
 | `wrapper` | whether the wrapper can actually reach stayfixed on this machine: red when it writes a fault to stderr or cannot be run; under a root the environment named, which it never runs, red when the wrapper is not executable and a skip otherwise; a stale `hooks/hooks.json`, an edited wrapper that still runs or a changed `scripts/stayfixed` is not reported | one `run-hook.sh --version`, and only under the plugin root this stayfixed is part of; under a named root, `hooks/run-hook.sh`'s mode |
 | `budgets` | every budget set above the preset, named raised, and every one set below it, named lowered | `stayfixed.toml`, the machine file, the preset |
@@ -2390,8 +1923,8 @@ which lets `wrapper` read the wrapper's executable bit even though it still will
 holds. With no `stayfixed.toml`, `not-initialised` **warns**, the three rows above that read the
 project configuration skip, and no row is red for it: a default install, where the guards and
 this report already work, exits `0`. In a checkout this machine binds, `not-initialised` is **ok**
-instead and says the configuration comes from the overlay's layers, with no remedy, since `init` is
-not what that checkout lacks. A `stayfixed.toml` that loads with settings ignored or put
+instead and says the configuration comes from the overlay's layers, with no remedy, since no file is
+what that checkout lacks. A `stayfixed.toml` that loads with settings ignored or put
 back to the preset's warns, naming at most three of their keys and counting the rest. Only one a session drops whole is **red**: a
 symbolic link, whatever it points at, a file that is not UTF-8, cannot be read or is not TOML, or
 one holding a key nothing can stand in for; the row says which in the session's own words and
@@ -2447,7 +1980,7 @@ in a parser, which is the whole point of the rule.
 | `--check` | report drift instead of writing, and fail if there is any |
 
 `--check` is the CI half of `--dry-run`: both read and write nothing, and `--check` fails when
-anything differs. `stayfixed bugs index`, `stayfixed docs trail` and `stayfixed memory index` all
+anything differs. `stayfixed docs trail` and `stayfixed memory index` both
 take it with that meaning.
 
 Three commands mean something else by a shared name, `setup` by two. Each of the four is a
@@ -2480,12 +2013,8 @@ lists to the real parser.
 
 ## Terms
 
-**Scaffold** means two things on this page, and the sentence says which:
-
-- everything `stayfixed init` writes into a repository, `stayfixed.toml` included, and the report
-  of it, the `scaffold` key of its `--json`;
-- the scaffold engine, which plans and writes it and reports every action in the same verbs,
-  `stayfixed overlay upgrade`'s included.
+**Scaffold** means the scaffold engine, which plans and writes the overlay's files and reports
+every action in the same verbs, `stayfixed overlay upgrade`'s included.
 
 ---
 
@@ -2507,8 +2036,6 @@ base_branch = "main"
 agents_md = "AGENTS.md"
 specs = "docs/specs"
 plans = "docs/plans"
-bugs = "docs/bugs"
-bug_index = "docs/bug-reports.md"
 roadmap = "docs/roadmap.md"
 memory = "docs/memory"
 
@@ -2516,11 +2043,6 @@ memory = "docs/memory"
 mode = "harness"         # harness | overlay | in-repo | local-only — default: harness
 groups = ["developer", "project-stable", "project-volatile", "specs"]
 index_extra = []         # extra pointers rendered into MEMORY.md
-
-[ledger]
-id_prefix = "BR"         # a capital letter, then up to seven more capitals or digits
-code_roots = ["src", "tests", "scripts"]
-evidence_boundary_required_for = ["high"]
 
 [budgets]                # the base branch raises or lowers any budget, the machine file a session's
 agents_md_lines = 300
@@ -2573,40 +2095,7 @@ never the value.
 **Which command reads which path.** `agents_md` and `roadmap` are the two documents `docs check`
 budgets, and the roadmap is also what `docs trail` writes into; `specs` and `plans` are the two
 trees `docs trail` lists, and `plans` is where `plan check` looks for the plans a diff touched.
-`bugs` is the ledger's entry directory and `bug_index` its generated index — `bugs new`,
-`bugs index`, `bugs check` and `bugs renumber` all read both. `memory` is the note store. Every
-one of them is also read for its location: `bugs check` treats the first component of
-every `[paths]` value that has more than one — `docs`, for the defaults — as a directory
-documents live in, and therefore as a place a citation of an entry file may be written and must
-resolve. Pointing a path key somewhere unusual widens that sweep; it cannot take a document
-outside it, because a value that leaves the root is refused before any command runs.
-
-**`[ledger]`.** `id_prefix` is the one definition of what an identifier looks like: `BR-001`,
-and `BR-nnn` in every message. It is interpolated into patterns and filenames, so it is held to
-a shape — a capital letter followed by up to seven more capitals or digits — and a prefix
-outside it is a refusal (`2`), not a finding. The number is three digits or more. `code_roots`
-are the trees `bugs check` sweeps for mentions of an identifier, each of which must have an
-entry behind it. `src/` and `./src` are read as `src`. An entry that names the repository root
-itself, leaves the repository, passes through a link, a `..` or `.git`, or names no directory is
-not walked and is refused by nothing.
-`evidence_boundary_required_for` names the severities whose entries must carry a filled
-`**What this evidence does not establish:**` line, the template's placeholder not counting. Widening it is how a project asks the same of `medium`. Each value must be one of the
-severities, `high`, `medium` and `low`, spelled as the table below spells it. A value that names
-none would require the line of no entry, so it is a refusal (`2`), counted and not quoted, of
-every command that reads the ledger — `bugs`, `plan check` and `init` among them. An empty list is the project asking it of no severity.
-
-**The two ledger vocabularies**, neither of them configurable — they are the entry contract, and
-a value outside either is a finding (`1`) naming the file:
-
-| Field | Values |
-|---|---|
-| `status:` | `open`, `partial`, `fixed`, `rejected`, `void` |
-| `severity:` | `high`, `medium`, `low` |
-
-`void` is the one that is not a state of a bug: it records a number that was allocated and never
-carried one — what `bugs renumber` leaves behind at the old identifier — and it is the only
-status that needs neither `severity:` nor `area:`. `severity` is `bugs new`'s required
-`--severity`, and `--area` beside it is free text that becomes the entry's Area column.
+`memory` is the note store.
 
 **`[budgets]`.** The first five are the documentation budgets `docs check` enforces:
 `agents_md_lines`, `agents_md_words` and `status_lines` over the always-loaded document and its

@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+import stayfixed
 from stayfixed import fsops
 from stayfixed.attach import binding, permissions, write
 from stayfixed.attach.binding import Binding
@@ -37,15 +38,14 @@ from stayfixed.overlay import identity
 from stayfixed.overlay.api import COMMON_CODEX
 from stayfixed.overlay.layout import IDENTITY_RECORD
 from stayfixed.printed import quoted
-from stayfixed.project.init import _existing
 from stayfixed.setup.machine import read_machine
 from stayfixed.setup.run import _read_document
 from stayfixed.trust.record import UnreadableTrust, recorded
 from tests.cli import cli
-from tests.gitfixture import git, needs_git
-from tests.project.repos import DOCUMENT, repository
+from tests.gitfixture import git, needs_git, repository
 from tests.scriptload import release
 
+DOCUMENT = f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n'
 # The repository's release script, whose version check is one more reader below.
 script = release()
 
@@ -74,7 +74,6 @@ RAISING: list[tuple[str, Callable[[Path], Callable[[], object]], type[Exception]
         lambda t: (_config(t), lambda: read_document(t))[1],
         ConfigError,
     ),
-    ("stayfixed.toml, as init adopts it", lambda t: (_config(t), lambda: _existing(t))[1], Failure),
     (
         "the machine file, under the loader",
         lambda t: (
@@ -225,11 +224,10 @@ def test_an_undecodable_worktree_back_pointer_is_no_registered_worktree(tmp_path
 @pytest.mark.parametrize(
     ("argv", "planted"),
     [
-        (("init", "--yes", "--dry-run"), "machine"),
-        (("init", "--yes", "--dry-run"), CONFIG_FILE),
-        (("bugs", "check"), CONFIG_FILE),
+        (("docs", "check"), "machine"),
+        (("docs", "check"), CONFIG_FILE),
     ],
-    ids=["init-machine", "init-stayfixed-toml", "bugs-check-stayfixed-toml"],
+    ids=["docs-check-machine", "docs-check-stayfixed-toml"],
 )
 def test_a_command_meeting_an_undecodable_file_fails_and_does_not_crash(
     tmp_path: Path, argv: tuple[str, ...], planted: str
@@ -240,23 +238,11 @@ def test_a_command_meeting_an_undecodable_file_fails_and_does_not_crash(
     machine = _plant(tmp_path / "machine.toml") if planted == "machine" else None
     if planted == CONFIG_FILE:
         _config(root)
+    else:
+        (root / CONFIG_FILE).write_text(DOCUMENT, encoding="utf-8")
     code, _, stderr = cli(root, tmp_path, *argv, machine=machine)
     assert code == 1
     assert "failed:" in stderr and "not UTF-8 text" in stderr and "internal error" not in stderr
-
-
-@needs_git
-def test_the_questions_read_an_undecodable_machine_file_as_recording_no_overlay(
-    tmp_path: Path,
-) -> None:
-    # The machine file changes one title of the questions and nothing else, so a broken one
-    # reads as recording no overlay, however it is broken.
-    root = repository(tmp_path)
-    code, _, stderr = cli(
-        root, tmp_path, "init", "--questions", machine=_plant(tmp_path / "m.toml")
-    )
-    assert code == 0
-    assert "internal error" not in stderr
 
 
 # The neighbour the same probe found: `stayfixed.toml` and the machine file are the first thing
@@ -316,7 +302,7 @@ def test_a_file_without_read_permission_cannot_be_read_and_says_so(
                 read_machine(machine)
         else:
             with pytest.raises(Failure, match=r"cannot be read \(Permission denied\)"):
-                _existing(tmp_path)
+                read_document(tmp_path)
     finally:
         locked.chmod(0o644)
 

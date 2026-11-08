@@ -165,14 +165,14 @@ def _named_root(env: Mapping[str, str]) -> Path | None:
 
 # A repository with no `stayfixed.toml`: what works there, and what adds the rest. A warning and
 # never red, because it is the state of every repository the plugin is installed beside before
-# anyone runs `init`, and the guards and this report work in it.
+# anyone writes one, and the guards and this report work in it.
 NOT_INITIALISED = (
     f"there is no {CONFIG_FILE} here; the session guards and `stayfixed doctor` work without one "
-    "and memory stays the coding agent's own, and `stayfixed init` adds the rest"
+    "and memory stays the coding agent's own, and one adds the rest"
 )
-NOT_INITIALISED_REMEDY = "run `stayfixed init --yes`"
+NOT_INITIALISED_REMEDY = f"write a {CONFIG_FILE} with `[stayfixed] version` and `[project] name`"
 # A checkout with no `stayfixed.toml` that this machine binds (`Context.attach_config`): its
-# configuration is the overlay's layers over the preset, so `init` is not what it lacks.
+# configuration is the overlay's layers over the preset, so no file is what it lacks.
 BOUND_WITHOUT_FILE = (
     f"there is no {CONFIG_FILE} here; this machine binds the checkout, so its configuration comes "
     "from the overlay's layers"

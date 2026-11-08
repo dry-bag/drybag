@@ -1,6 +1,5 @@
 """Contracts for the plan lint: references resolve, steps are non-leading, mutation outcomes are
-expectations, Scope/Premise are present. stayfixed:ledger:fixtures — `BR-` strings here are
-sample data.
+expectations, Scope/Premise are present.
 """
 
 from __future__ import annotations
@@ -11,7 +10,6 @@ import re
 import shutil
 import subprocess
 import sys
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +18,7 @@ import pytest
 from stayfixed.config.loader import load
 from stayfixed.config.schema import Config
 from stayfixed.docs.plans import (
+    BUG_FIXES,
     BaseUnresolvable,
     asserted_outcomes,
     lint,
@@ -210,7 +209,7 @@ def test_a_plan_without_a_scope_line_fails_and_a_bare_marker_does_not_count(
 
 
 def test_a_fixes_claim_needs_a_premise_line_with_content(tmp_path: Path) -> None:
-    # The prefix comes from `[ledger] id_prefix`. Mutation: replace `[^\S\n]*\S` with `\s*\S`
+    # Mutation: replace `[^\S\n]*\S` with `\s*\S`
     # in the premise rule — the bare-marker case reddens.
     root, config = project(tmp_path)
     assert rules(root, config, plan(root, SCOPE + "Fixes BR-042.\n")) == ["premise-missing"]
@@ -226,14 +225,25 @@ def test_a_fixes_claim_needs_a_premise_line_with_content(tmp_path: Path) -> None
     assert rules(root, config, plan(root, SCOPE + "```\nFixes BR-042\n```\n")) == []
 
 
-def test_a_fixes_claim_names_the_bug_ledgers_configured_prefix(tmp_path: Path) -> None:
-    # The identifiers are the bug ledger's, as `[ledger] id_prefix` configures them. Mutation
-    # (oracle): the rule reads the default prefix whatever the project configures -> the `DF`
-    # claim needs no premise and the `BR` one does.
+def test_a_fixes_claim_is_read_with_the_fixed_prefix(tmp_path: Path) -> None:
+    # No project configures the prefix any more, so only `BR` obliges a plan to carry a premise.
     root, config = project(tmp_path)
-    config = replace(config, ledger=replace(config.ledger, id_prefix="DF"))
-    assert rules(root, config, plan(root, SCOPE + "Fixes DF-042.\n")) == ["premise-missing"]
-    assert rules(root, config, plan(root, SCOPE + "Fixes BR-042.\n")) == []
+    assert rules(root, config, plan(root, SCOPE + "Fixes BR-042.\n")) == ["premise-missing"]
+    assert rules(root, config, plan(root, SCOPE + "Fixes DF-042.\n")) == []
+
+
+def test_a_fixes_claim_takes_three_digits_or_more() -> None:
+    # Two digits is a different shape, and a lint that accepts it asks a plan for a premise over a
+    # number that was never an identifier. Oracle: `mutations/`'s "a Fixes claim accepts fewer than
+    # three digits".
+    assert BUG_FIXES.search("Fixes BR-042.") is not None
+    assert BUG_FIXES.search("Fixes BR-2345") is not None
+    assert BUG_FIXES.search("Fixes BR-42.") is None
+
+
+def test_a_fixes_claim_is_bounded_by_word_edges() -> None:
+    assert BUG_FIXES.search("Prefixes BR-042") is None
+    assert BUG_FIXES.search("Fixes BR-0421x") is None
 
 
 # Plans the rules read in time quadratic in their length, each with the rules it must end in:

@@ -1,9 +1,0 @@
-{
-  "lists_naming_old": [],
-  "moved": true,
-  "new": "BR-009",
-  "old": "BR-002",
-  "summary": "BR-002 -> BR-009; a void pointer remains at docs/bugs/BR-002.md",
-  "unswept": [],
-  "void": "docs/bugs/BR-002.md"
-}

@@ -36,8 +36,7 @@ SECTION_NAME = re.compile(r"^[a-z][a-z_]*\Z")
 # branch-name rules refuse (`git check-ref-format --branch`), so nothing names a branch no
 # repository can have: `..`, `//`, a component starting with `.`, a component ending in `.lock`,
 # a trailing `/` or `.`, and the name `HEAD` itself. `@{` and `-` at the start are outside the
-# set already. The lookaheads end on `$`, which ECMA-262 reads as the end too, so
-# `init --questions` can hand the pattern to a JSON Schema client.
+# set already.
 BRANCH_NAME = re.compile(
     r"^(?!HEAD$)(?!.*\.\.)(?!.*//)(?!.*/\.)(?!.*\.lock(?:/|$))(?!.*[./]$)"
     r"[A-Za-z0-9][A-Za-z0-9._/-]*\Z"
@@ -76,8 +75,6 @@ class Paths:
     agents_md: str
     specs: str
     plans: str
-    bugs: str
-    bug_index: str
     roadmap: str
     memory: str
 
@@ -141,13 +138,6 @@ class NativeCaps:
 
 
 @dataclass(frozen=True)
-class Ledger:
-    id_prefix: str
-    code_roots: tuple[str, ...]
-    evidence_boundary_required_for: tuple[str, ...]
-
-
-@dataclass(frozen=True)
 class CommitMessages:
     attribution_check: bool
 
@@ -167,6 +157,5 @@ class Config:
     memory: Memory
     budgets: Budgets
     native_caps: NativeCaps
-    ledger: Ledger
     commit_messages: CommitMessages
     personal: Personal

@@ -56,6 +56,7 @@ def _initialised_project(tmp_path: Path) -> Path:
 # exits 0 with `{"isTemplate":true}`, and a repository that does not exist exits 1 with GraphQL's
 # "Could not resolve to a Repository". `create:` asks it once to choose whose template to
 # generate from, so a `create:` run has to have the probe answered.
+PLUGINS = ("superpowers", "context7")
 _OCTOS_PROBE = "gh repo view octo/stayfixed-overlay-template"
 _A_TEMPLATE = Completed(0, '{"isTemplate":true}\n', "")
 _NO_SUCH_REPOSITORY = Completed(
@@ -288,13 +289,13 @@ def test_every_plugin_install_is_one_recorded_argv(tmp_path: Path) -> None:
         machine=tmp_path / "config.toml",
         runner=runner,
         overlay=None,
-        plugins=preset["plugins"]["recommended"],
+        plugins=PLUGINS,
     )
     claude = preset["plugins"]["claude"]
     add = ["claude", "plugin", "marketplace", "add", claude["source"]]
     installs = [
         ["claude", "plugin", "install", f"{selector}@{claude['marketplace']}"]
-        for selector in preset["plugins"]["recommended"]
+        for selector in PLUGINS
     ]
     # **Order, not membership.** `… in runner.calls` is a set question, and the thing this test is
     # named for is a sequence: the reviewer swapped the two loops in `_install_plugins` so every
@@ -344,7 +345,7 @@ def test_a_selector_the_marketplace_does_not_carry_is_a_note_naming_the_argv(
     # questions rather than one asked twice.
     preset = load_preset("recommended")
     claude = preset["plugins"]["claude"]
-    selector = preset["plugins"]["recommended"][0]
+    selector = PLUGINS[0]
     full = f"{selector}@{claude['marketplace']}"
     runner = Recorder(
         answers={
@@ -357,13 +358,13 @@ def test_a_selector_the_marketplace_does_not_carry_is_a_note_naming_the_argv(
         machine=tmp_path / "config.toml",
         runner=runner,
         overlay=None,
-        plugins=preset["plugins"]["recommended"],
+        plugins=PLUGINS,
     )
     assert ["claude", "plugin", "marketplace", "add", claude["source"]] in runner.calls
     assert ["claude", "plugin", "install", full] in runner.calls
     assert selector not in report.plugins_installed
     # The other selector still installs: one failure is one note, never an abandoned run.
-    assert preset["plugins"]["recommended"][1] in report.plugins_installed
+    assert PLUGINS[1] in report.plugins_installed
     assert any(f"claude plugin install {full}" in note for note in report.notes), report.notes
     assert any("no plugin named" in note for note in report.notes), report.notes
 
@@ -396,17 +397,17 @@ def test_codex_gets_a_note_naming_the_unverified_plugins_rather_than_silence(
     # A harness this preset cannot install for on a verified path is a reported note, never silence
     # and never a failure. `setup` installs for every registered harness, so an ordinary run
     # reaches this for every machine that has Codex configured.
-    preset = load_preset("recommended")
+    load_preset("recommended")
     report = setup(
         "recommended",
         home=tmp_path / "home",
         machine=tmp_path / "config.toml",
         runner=Recorder(),
         overlay=None,
-        plugins=preset["plugins"]["recommended"],
+        plugins=PLUGINS,
     )
     expected = (
-        f"codex: no verified marketplace for {', '.join(preset['plugins']['recommended'])}; "
+        f"codex: no verified marketplace for {', '.join(PLUGINS)}; "
         f"install manually if this harness supports it (see README)"
     )
     assert expected in report.notes

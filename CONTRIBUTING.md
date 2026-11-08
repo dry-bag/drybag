@@ -151,7 +151,7 @@ exception kept for a reason outside the code ("Tests" gives it): it groups their
 into files, and a new area needs no row there: its entries go in the group its path falls into.
 
 Today the discovered ones are `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`,
-`ledger`, `memory`, `overlay`, `project`, `setup` and `sync`, and every module under
+`memory`, `overlay`, `setup` and `sync`, and every module under
 `src/stayfixed/` sits on one of three sides, which `src/stayfixed/areas.py` names. **Delivery**
 (`DELIVERY_AREAS`) is the private layer, a machine's setup and the session hints:
 `overlay` renders and upgrades the private overlay; `attach` binds a repository to one, and its
@@ -160,10 +160,9 @@ keeps the notes; `setup` a machine's configuration; `sync` the unattended commit
 of the overlay's memory notes (the session triggers, a detached job and its `doctor` row), switched
 on per machine; and `hints` the session hints
 (the background-cleanup hint, the red-run note and the command scanner they share). The **pack**
-(`PACK_PACKAGES`) is the methodology's records and checks: `ledger` keeps the bug ledger, `docs`
-the documentation and plan lints, and `guards` the commit-message rules and the test-run checks;
-and `project` holds the shipped project templates and `init`, the command that writes a
-repository's scaffold from them. Every other module is the **core**,
+(`PACK_PACKAGES`) is the methodology's records and checks: `docs`
+the documentation and plan lints, and `guards` the commit-message rules.
+Every other module is the **core**,
 which both sides share, `cli.py` and the subpackages that are not areas included: its areas
 (`CORE_AREAS`) are `hooks`, the dispatcher every hook event goes through, and `doctor`, which
 reports on what every other area left behind and repairs none of it. (`config`, `presets`, `release`, `scaffold`, `templates` and
@@ -308,8 +307,8 @@ harness still touches outside the registry is listed in the module docstring of
 `src/stayfixed/harnesses.py`, and `tests/test_harnesses.py` holds that list to every string in the
 package that names a harness.
 
-Two top-level trees are documents rather than areas. `skills/` holds the Agent Skills this
-plugin ships and `agents/` the agent files; [skills/README.md](skills/README.md) is their
+One top-level tree is documents rather than an area. `skills/` holds the Agent Skills this
+plugin ships; [skills/README.md](skills/README.md) is their
 contract — a skill body is **action language** and never names a harness tool, a `SKILL.md` is
 capped at 80 lines with the detail in `<skill>/references/`, and every `stayfixed …` invocation
 in a skill must parse against the real parser or be listed in `NOT_YET_SHIPPED` against the
@@ -432,7 +431,7 @@ pull request.
 A pull request that changes only documents, or Python comments, narrows further: the suite runs on
 that one configuration alone, and the oracle, the plugin validator and the install smoke skip. A
 document is a path under `docs/` or `changelog.d/`, or a Markdown file at the root; Markdown under
-`skills/` or `agents/` is code, since the plugin validator reads it, and so is a docstring. Tests
+`skills/` is code, since the plugin validator reads it, and so is a docstring. Tests
 read documents and comments, and ruff, mypy and coverage read the comments that steer them, so the
 suite still runs once. `scripts/ci_scope.py`, run by the `changes` job in `ci.yml` and `smoke.yml`,
 decides it, and decides it closed: a renamed file counts under the name it left, a Python file

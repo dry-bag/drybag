@@ -177,7 +177,7 @@ jobs:
         if: env.FULL == 'true'
         # The harness copies what the source names into its cache, and only a comparison says it
         # copied all of it and added nothing: the hooks, `doctor` and the scenario below read part
-        # of the tree, and the skills, the agents, `README.md` and `LICENSE` have no reader in this
+        # of the tree, and the skills, `README.md` and `LICENSE` have no reader in this
         # job. `.git` is a clone's own, not a file of the plugin's. `.in_use` is the harness's:
         # claude 2.1.261 writes it into the installed root on both runner OSes, measured on this
         # job's first run over the rendered tree, 2026-10-10, where it was the only difference.

@@ -34,7 +34,7 @@ namespace, which `attach`'s doctor row names (`reserved_project_groups`), and th
 `resolved` have no reader outside this area and are not here. The overlay root the machine file
 records and the checkout's
 `origin` are the core's to answer (`config.overlay.overlay_root`, `gitenv.origin_remote` and
-`gitenv.GitUnavailable`), because `init` asks them too and may not import this area; the
+`gitenv.GitUnavailable`), and the core may not import this area; the
 crossings still pinned are listed in `tests/boundaries/test_delivery.py`.
 
 **`promote_share`** is imported by `setup --restore --yes` (`setup.restore`), which records the

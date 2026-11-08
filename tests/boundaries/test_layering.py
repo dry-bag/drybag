@@ -144,18 +144,18 @@ def test_the_package_graph_reads_imports_that_run_and_finds_every_cycle() -> Non
     # hand: reading function bodies, reading `if TYPE_CHECKING:` bodies or dropping the
     # own-package filter each reddens the first assertion, and a `_cycles` that kept components
     # of one package, or read reachability one way only, reddens the second.
-    packages = frozenset({"config", "findings", "guards", "printed", "ledger"})
+    packages = frozenset({"config", "findings", "guards", "printed", "docs"})
     text = (
         "from stayfixed.findings import listed\n"
         "if TYPE_CHECKING:\n    from stayfixed.config.schema import Config\n"
         "else:\n    import stayfixed.printed\n"
         "def f():\n    from stayfixed.guards.api import contained_roots\n"
-        "from . import sibling\nfrom stayfixed.ledger import scan\n"
+        "from . import sibling\nfrom stayfixed.docs import plans\n"
         "from stayfixed import nothing_here\n"
     )
-    assert _package_imports("ledger/check.py", text, packages) == {
-        ("ledger", "findings"),
-        ("ledger", "printed"),
+    assert _package_imports("docs/check.py", text, packages) == {
+        ("docs", "findings"),
+        ("docs", "printed"),
     }
     edges = {("a", "b"), ("b", "c"), ("c", "a"), ("c", "d"), ("d", "e"), ("e", "d"), ("f", "a")}
     assert _cycles(edges) == [["a", "b", "c"], ["d", "e"]]

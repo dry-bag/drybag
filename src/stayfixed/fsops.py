@@ -123,19 +123,6 @@ def reading(label: object, refusal: Callable[[str], Exception]) -> Iterator[None
         raise refusal(unreadable(label, exc)) from None
 
 
-def path_key(relative: str) -> str:
-    """The form in which two root-relative paths are compared for identity: case-folded.
-
-    The default filesystems on macOS and Windows fold case, so `claude.md` and `CLAUDE.md` are
-    one file there, and a rule that asks "is this the same file" by exact string equality answers
-    no for a pair the disk answers yes for. It is a pure string rule, the same on every
-    filesystem, so a case-sensitive machine refuses and withholds exactly what a folding one
-    must, and the tests that hold it redden on Linux too. Where a comparison must stay exact (a
-    `--force` path, an exemption that only relaxes a guard), its caller says why.
-    """
-    return relative.casefold()
-
-
 def names_component(relative: str, name: str) -> bool:
     """Whether any component of `relative` is `name`, spelled in any case.
 
@@ -322,7 +309,7 @@ class TooLarge(OSError):
 # regular file can be endless: on Linux `/proc/self/pagemap` is `S_ISREG` with a size of 0 and
 # reads on for as long as anyone asks, and a committed link to it passes every check above the
 # read. So the read asks for one byte past the cap, and a file that has it is refused as too
-# large. Far above any file these readers take -- a bug-ledger entry, a note, `MEMORY.md` (whose
+# large. Far above any file these readers take -- a note, `MEMORY.md` (whose
 # own budget, `memory_index_bytes`, is 25,600), a plan, a settings file, `.gitignore`, each a few
 # kilobytes -- and far under what would exhaust a machine's memory. A file stayfixed writes
 # itself is held under it too: a JSON document written back indented grows by its depth on every
@@ -335,9 +322,6 @@ REGULAR_READ_LIMIT = 64 * 1024 * 1024
 # and says it could not tell. One number for every walk that has that answer, each reading it here
 # when it starts: `doctor`'s walk of the note store (`memory.doctor`). `docs/cli.md` states it in
 # `doctor`'s `memory` row.
-# The ledger's scan (`ledger.scan`) does not read it: it reads every file under the project's code
-# roots, as git lists them or, where git cannot, as its walk finds them, and a scan that stopped
-# short would pass a reference it never read, so it has no "could not tell" to stop at.
 WALK_ENTRIES = 500_000
 
 # The open `open_regular` makes: it follows a link at the last component, because `attach` links

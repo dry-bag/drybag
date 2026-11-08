@@ -62,15 +62,13 @@ GIT_ENV_KEEP = (
 # nor grows with the repository: it guards against a `git` binary that hangs outright, and is
 # generous for that without leaving a hook blocked for long. A caller whose query is not that shape
 # passes its own wider bound instead and says why beside it —
-# `stayfixed.ledger.write.FETCH_TIMEOUT_SECONDS` for one that reaches the network,
 # `QUERY_TIMEOUT_SECONDS` below for one that is merely slow, since a `log --all` over a long history
 # is not a five-second `rev-parse`. Tune this number for the hang, not for a remote and not for a
 # long history.
 GIT_TIMEOUT_SECONDS = 5
 # The wider bound on one local query that grows with the repository — a `log --all`, a `grep`
 # over a long history, a listing of every tracked file — which neither reaches the network nor
-# may be read as "nothing found" when it runs out: the ledger and the inventory's probes each
-# read its `-1` as no answer.
+# may be read as "nothing found" when it runs out: the note sync's job records a timeout instead.
 QUERY_TIMEOUT_SECONDS = 30
 
 # The one input that raises the least bound `git_run` gives a call, whatever bound its caller
@@ -159,7 +157,7 @@ def named(checkout: Path | None) -> Iterator[None]:
 def scrubbed_env() -> dict[str, str]:
     """The variables `GIT_ENV_KEEP` names, as this process has them, `PATH` with its absolute
     entries alone, no terminal prompt, and inside a `named` block the repository it names: what
-    every git stayfixed starts is handed, and `test attribute` the `tar` it runs.
+    every git stayfixed starts is handed.
 
     Every git runs in a repository whose contents a clone chose, so an empty or `.` entry of
     `PATH` (a dotfile slip) would find a `git`, or git an `ssh`, planted at its root."""
@@ -485,7 +483,7 @@ def git_answer(root: Path, *args: str) -> GitAnswer:
     """git's one-line answer to `args` asked in `root`, through `_ask`, `git_run`'s own call.
 
     Scrubbed and decoded losslessly as `git_run` is, so an `origin` URL holding a byte that is not
-    UTF-8 is still an answer `init --questions` and `init --yes` can read: the answer is what git
+    UTF-8 is still an answer `attach` can read: the answer is what git
     printed, a path as the filesystem spells it, less its line ending alone — never `strip()`, for
     `answer_lines`'s reason.
 
@@ -544,9 +542,8 @@ def without_userinfo(url: str) -> str:
 
 def repository_name(url: str) -> str:
     """The name a remote `url` gives its repository: the last segment of its path, `:` read as the
-    scp form's `/`, lower-cased and with one `.git` taken off. `init` writes it as `[project] name`
-    and `attach` binds a repository with no `stayfixed.toml` under it, so the two derive one name
-    from one remote; each holds it to the name rule itself."""
+    scp form's `/`, lower-cased and with one `.git` taken off. `attach` binds a repository with no
+    `stayfixed.toml` under it by this name, and holds it to the name rule itself."""
     segment = url.rstrip("/").replace(":", "/").rsplit("/", 1)[-1]
     # Lower-cased first, so `Widget.GIT` loses its suffix as `Widget.git` does.
     return segment.lower().removesuffix(".git")
@@ -555,8 +552,8 @@ def repository_name(url: str) -> str:
 def origin_remote(root: Path) -> str | None:
     """This checkout's `origin` URL, or `None` when `git` ran and there is no such remote.
 
-    Public because `attach` notes it beside the binding and `init` derives a name
-    from it, and neither may reach for a `subprocess.run` of its own: `git_run` scrubs `GIT_DIR`
+    Public because `attach` notes it beside the binding and derives a name
+    from it, and may not reach for a `subprocess.run` of its own: `git_run` scrubs `GIT_DIR`
     and `GIT_WORK_TREE`, and an inherited one would make the answer one about a different
     repository than the session is in. Two areas asking one question two ways is how they stop
     agreeing.

@@ -21,8 +21,7 @@ from stayfixed.attach.write import Attached, Detached, attach, detach
 from stayfixed.binding import LEDGER_NAME
 from stayfixed.errors import Failure, Refusal
 from stayfixed.printed import quoted
-from stayfixed.project.init import init
-from stayfixed.scaffold.regions import Style, extract
+from stayfixed.scaffold.regions import extract
 from tests.attach.test_binding import CONFIG, _machine
 from tests.attach.test_write import NOT_LEDGERS, SETTINGS, ledger_file, rewritten
 from tests.gitfixture import git
@@ -460,14 +459,11 @@ def test_detach_keeps_the_allow_rule_claude_code_added_to_a_rewritten_settings_f
     assert document["permissions"]["allow"] == ["Bash(git tag *)"]
 
 
-def test_a_real_detach_after_init_leaves_the_tree_init_left(tmp_path: Path) -> None:
-    # An `init` footprint, a real attach that merged a rule and a hook entry, a detach, and the
-    # tree is the one `init` left, with no ledger behind. Mutation: `mutations/`'s "detach leaves
+def test_a_real_detach_leaves_the_tree_the_attach_found(tmp_path: Path) -> None:
+    # A real attach that merged a rule and a hook entry, a detach, and the tree is the one the
+    # attach found, with no ledger behind. Mutation: `mutations/`'s "detach leaves
     # its ledger behind".
     root, store, machine = _bound(tmp_path)
-    init(root, machine=machine, yes=True, dry_run=False)
-    git(root, "add", "-A")
-    git(root, "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-qm", "footprint")
     initialised = snapshot(root)
     _grant(store.parents[2], allow=(RULE,), hooks=True)
     _attach(root, store, machine)
@@ -874,9 +870,9 @@ def test_detach_takes_back_the_exclude_block_and_the_empty_directories(tmp_path:
     _attach(root, store, machine)
     exclude = root / ".git" / "info" / "exclude"
     # Non-vacuous: the block exists before the detach.
-    assert extract(exclude.read_text(encoding="utf-8"), "attach", Style.HASH) is not None
+    assert extract(exclude.read_text(encoding="utf-8"), "attach") is not None
     _detach(root)
-    assert extract(exclude.read_text(encoding="utf-8"), "attach", Style.HASH) is None
+    assert extract(exclude.read_text(encoding="utf-8"), "attach") is None
     assert _directories(root) == before
 
 
@@ -915,7 +911,7 @@ def test_an_exclude_file_attach_created_is_removed_by_detach(tmp_path: Path) -> 
     _exclude_file(root).unlink(missing_ok=True)
     _attach(root, store, machine)
     # Non-vacuous: the attach did create the file for its block.
-    assert extract(_exclude_file(root).read_text(encoding="utf-8"), "attach", Style.HASH)
+    assert extract(_exclude_file(root).read_text(encoding="utf-8"), "attach")
     _detach(root)
     assert not _exclude_file(root).exists()
 
@@ -926,7 +922,7 @@ def test_an_exclude_file_that_was_there_and_empty_stays_there_and_empty(tmp_path
     _grant(store.parents[2], allow=(RULE,))
     _exclude_file(root).write_bytes(b"")
     _attach(root, store, machine)
-    assert extract(_exclude_file(root).read_text(encoding="utf-8"), "attach", Style.HASH)
+    assert extract(_exclude_file(root).read_text(encoding="utf-8"), "attach")
     _detach(root)
     assert _exclude_file(root).read_bytes() == b""
 
@@ -1118,9 +1114,8 @@ def test_an_exclude_file_ending_in_a_lone_carriage_return_keeps_its_last_pattern
     # marker was glued onto that line and `zz` showed in `git status` while the repository was
     # attached. The file comes back byte for byte on detach.
     #
-    # Mutations: `mutations/`'s "a hash region reads a lone carriage return as a line end",
-    # "the exclude block reads a lone carriage return as a line end" and "detach leaves the
-    # newline it added after a lone carriage return".
+    # Mutations: `mutations/`'s "the exclude block reads a lone carriage return as a line end"
+    # and "detach leaves the newline it added after a lone carriage return".
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
     held = b"/qq\n/zz\r"

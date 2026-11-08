@@ -12,7 +12,7 @@ its own, counts as code: the step it runs in fails under `bash -e`, writes no an
 reading it runs whole.
 
 A document is a path under `docs/` or `changelog.d/`, or a Markdown file at the repository's root.
-Markdown under `skills/` or `agents/` is not one: the plugin validator reads it. A Python change is
+Markdown under `skills/` is not one: the plugin validator reads it. A Python change is
 to comments alone when both sides tokenize to the same tokens once comments and blank lines are
 dropped: a docstring is a string and counts as code, and a file added, deleted or that does not
 tokenize counts as code.

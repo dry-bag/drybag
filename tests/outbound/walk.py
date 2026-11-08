@@ -46,8 +46,7 @@ return nothing:
 - aliasing: a launcher named as `Annotated` metadata, which code reading the annotation could
   call;
 - values computed at run time: an argv element held in a variable is `Unread`, and the walk
-  does not follow where its value came from, so `sh -c` handed a script the package builds from
-  strings (`" ".join(["curl", url])`) is taken for the user's command, the `sh -c` row's;
+  does not follow where its value came from;
 - launches and connections the standard library makes on the package's behalf, at import or
   when called: `uuid.getnode()` can run `ifconfig`, `platform.architecture()` runs `file`,
   `xml.sax` fetches an external entity through `urllib.request`, `pydoc.browse` serves HTTP and

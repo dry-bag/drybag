@@ -2,9 +2,9 @@
 
 `Recorder` answers any program from a script. A module states what its runner answers at the
 call site, as keyword arguments, and keeps no private runner class of its own unless the question
-it asks is not "record the argv and answer from a script": `tests/guards/test_attribute.py`'s
-`_Coded` (answers by the tree it is run in) and `tests/scripts/test_publish_template.py`'s
-`_GitHub` (models a repository's state) are the two that are not, and each says why.
+it asks is not "record the argv and answer from a script":
+`tests/scripts/test_publish_template.py`'s `_GitHub` (models a repository's state) is the one
+that is not, and says why.
 
 `git_that_cannot_run` is here too, though it is no `Runner`: the product runs `git` through
 `gitenv.git_run` rather than a `Runner`, and a `git` that cannot be launched is a double every

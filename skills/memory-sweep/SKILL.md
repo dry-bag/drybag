@@ -8,13 +8,11 @@ description: Sweep the working-memory store — inventory by size, verify anchor
 1. **Inventory.** Run `stayfixed memory inventory --json`: every note with its word count,
    type, provenance and staleness. Sort by words, descending; the tail above ~400 words is
    where the value is.
-2. **Verify anchors before cutting.** For each note, open the ledger entry behind every
-   identifier it names and confirm the pull requests it cites are merged. This is the sweep's
-   own job and nothing does it for you: the ledger's scan reads the repository's tracked files
-   and skips symlinks, so a store that is git-ignored or linked in is invisible to
-   `stayfixed bugs check`. A pointer to nothing is worse than the retelling it replaced.
+2. **Verify anchors before cutting.** For each note, confirm the pull requests it cites are
+   merged and the files it names are in the tree. This is the sweep's
+   own job and nothing does it for you. A pointer to nothing is worse than the retelling it replaced.
 3. **Rewrite to rule plus pointer.** Keep the rule, one line of why, how to apply, and a bare
-   identifier for the evidence. History belongs to the ledger, the roadmap or the retro.
+   identifier for the evidence. History belongs to the roadmap or the retro.
 4. **Merge on close coupling.** Two notes firing on the same trigger, or each needing the
    other to be usable, are one note. A fact mechanized elsewhere is deleted, not kept.
 5. **Regenerate the index.** Run `stayfixed memory index`, then `stayfixed memory index --check`.

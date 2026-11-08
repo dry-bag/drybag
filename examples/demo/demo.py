@@ -10,7 +10,7 @@ cannot pass on the script's word.
 Every command runs with `HOME` inside the scratch directory, `GIT_CONFIG_NOSYSTEM=1`, fixed
 author and committer names, emails and dates, and a `bin/` directory first on `PATH` that holds a
 link named `stayfixed` to `STAYFIXED`, so a configured `["stayfixed", ...]` runs the program under
-test. Nothing reaches the network: `pytest`, `git` and `python3` come from the caller's `PATH`.
+test. Nothing reaches the network: `git` and `python3` come from the caller's `PATH`.
 
 Exit 0 when no act failed, 1 when one did, 2 on a usage error.
 """
@@ -45,23 +45,9 @@ IDENTITY = "Demo Author"
 EMAIL = "demo@example.com"
 DATE = "2026-01-01T00:00:00+00:00"
 
-# The fixture repository, by its path inside it. `conftest.py` at the root is what makes pytest
-# put the root on the import path, so the tests import `total` without an install.
+# The fixture repository, by its path inside it.
 FIXTURE = {
-    ".gitignore": "__pycache__/\n.pytest_cache/\n",
-    "conftest.py": "# Here so that pytest puts this directory on the import path.\n",
     "total.py": ('def total(items):\n    """The sum of every item."""\n    return sum(items)\n'),
-    "tests/test_total.py": (
-        "from total import total\n"
-        "\n"
-        "\n"
-        "def test_total_adds_every_item():\n"
-        "    assert total([1, 2, 3]) == 6\n"
-        "\n"
-        "\n"
-        "def test_total_of_nothing_is_zero():\n"
-        "    assert total([]) == 0\n"
-    ),
 }
 
 
@@ -264,78 +250,6 @@ version = "{version}"
 [project]
 name = "demo"
 """
-BUG_TITLE = "total drops the last item"
-# The argv the ledger entry carries, which `bugs regressions` runs once the entry is fixed.
-REGRESSION = ["pytest", "-q", "tests/test_total.py"]
-# The change that brings the bug back.
-FIXED = "    return sum(items)\n"
-BROKEN = "    return sum(items[:-1])\n"
-
-
-def _close(demo: Demo, relative: str) -> None:
-    """Close the entry `bugs new` filed as the close-bug skill says: `fixed`, `fixed_in` quoted
-    around its backticks, the regression that reproduces it and a `## Fix` section."""
-    path = demo.repo / relative
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise ActFailed(f"the entry bugs new named cannot be read: {error}") from error
-    closed = text
-    for before, after in (
-        ("\nstatus: open\n", "\nstatus: fixed\n"),
-        ("\nfixed_in:\n", f'\nfixed_in: "`main`"\nregression: {json.dumps(REGRESSION)}\n'),
-    ):
-        if closed.count(before) != 1:
-            raise ActFailed(f"the entry bugs new wrote has no single {before.strip()!r} line")
-        closed = closed.replace(before, after)
-    closed += (
-        "\n## Fix\n\n"
-        "`total` sums every item again. `tests/test_total.py` covers it, and is this entry's"
-        " regression.\n"
-    )
-    path.write_text(closed, encoding="utf-8")
-
-
-def act_regression(demo: Demo) -> None:
-    # On `main`: the configuration, and a bug filed, fixed and given its regression.
-    demo.write("stayfixed.toml", CONFIGURATION.format(version=demo.version))
-    demo.git("add", "stayfixed.toml")
-    demo.git("commit", "-q", "-m", "the project's configuration")
-    filed = demo.stayfixed(
-        [
-            "bugs",
-            "new",
-            BUG_TITLE,
-            "--severity",
-            "medium",
-            "--area",
-            "total",
-            "--no-fetch",
-            "--json",
-        ],
-        code=0,
-        fields=[Field("id", "BR-001"), Field("path", "docs/bugs/BR-001.md")],
-    )
-    _close(demo, str(filed["path"]))
-    demo.stayfixed(["bugs", "index", "--json"], code=0, fields=[])
-    demo.stayfixed(["bugs", "check", "--json"], code=0, fields=[Field("findings", [])])
-    demo.stayfixed(
-        ["bugs", "regressions", "--json"],
-        code=0,
-        fields=[Field("not_passed", 0), Field("regressions[id=BR-001].verdict", "passed")],
-    )
-    demo.git("add", "-A")
-    demo.git("commit", "-q", "-m", "a fixed bug and its regression")
-    # On `change`: the bug comes back, and its regression fails the change.
-    demo.git("switch", "-q", "-c", "change")
-    source = (demo.repo / "total.py").read_text(encoding="utf-8")
-    demo.write("total.py", source.replace(FIXED, BROKEN))
-    demo.git("commit", "-q", "-a", "-m", "total drops the last item again")
-    demo.stayfixed(
-        ["bugs", "regressions", "--json"],
-        code=1,
-        fields=[Field("not_passed", 1), Field("regressions[id=BR-001].verdict", "failed")],
-    )
 
 
 # The private overlay `attach` binds the fixture to: this project's skill, and another project's
@@ -420,7 +334,6 @@ def act_attach(demo: Demo) -> None:
 
 
 ACTS: tuple[tuple[str, Callable[[Demo], None]], ...] = (
-    ("a fixed bug's regression fails the change that brings it back", act_regression),
     ("attach delivers this project's skill and not another project's", act_attach),
 )
 
@@ -429,8 +342,9 @@ def build_fixture(demo: Demo) -> None:
     demo.git("init", "-q", "-b", "main")
     for relative, text in FIXTURE.items():
         demo.write(relative, text)
+    demo.write("stayfixed.toml", CONFIGURATION.format(version=demo.version))
     demo.git("add", "-A")
-    demo.git("commit", "-q", "-m", "a total and its tests")
+    demo.git("commit", "-q", "-m", "a total and the project's configuration")
 
 
 def _first_line(ran: Ran) -> str:
@@ -461,7 +375,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"usage error: {program} is not an executable file", file=sys.stderr)
         return 2
     caller_path = os.environ.get("PATH", os.defpath)
-    for needed in ("pytest", "git", "python3"):
+    for needed in ("git", "python3"):
         if shutil.which(needed, path=caller_path) is None:
             print(f"usage error: {needed} is not on PATH", file=sys.stderr)
             return 2
@@ -493,12 +407,8 @@ def _run(demo: Demo, options: argparse.Namespace, started: float) -> int:
         print(f"usage error: {program} --version exited {version.code}", file=sys.stderr)
         return 2
     demo.version = _first_line(version).split()[-1]
-    pytest = demo.which("pytest") or ""
-    pytest_version = demo.run(["pytest", "--version"])
     print(f"stayfixed: {os.path.realpath(options.stayfixed)}")
     print(f"stayfixed --version: {_first_line(version)}")
-    print(f"pytest: {pytest}")
-    print(f"pytest --version: {_first_line(pytest_version)}")
     if options.keep:
         print(f"scratch directory, kept: {demo.scratch}")
 

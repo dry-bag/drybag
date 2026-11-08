@@ -11,13 +11,8 @@ closed vocabulary, and — for the severe ones — a line saying what the eviden
 establish. The index over those files is generated, refuses to overwrite content it did not
 write, and is never the place a fact is entered.
 
-**What stayfixed does.** `bugs new` allocates the next identifier across every ref, `bugs
-index` renders the index as a pure function of the entries, `bugs check` sweeps the code
-roots for identifiers with no entry behind them and entries whose evidence boundary is the
-template's placeholder, and `bugs renumber` moves an entry and rewrites every mention, leaving a
-`void` entry at the old number. Against the base a change is judged on, `bugs check` reports an
-entry the change forked with and deleted: an identifier once allocated keeps its file. The
-identifier grammar is one definition, read from the project's configuration.
+**What stayfixed does.** Nothing any more: the bug ledger left this package for a tool of its own,
+snagbook. `plan check` still holds a plan that claims `Fixes BR-nnn` to a premise.
 
 **Why a file.** An issue tracker records a conversation; a file records a claim a later
 session can falsify. The "what this evidence does not establish" line is the part that
@@ -169,7 +164,7 @@ not take. A gate should run advisory until the repository has been brought to th
 where it would pass, and only then enforce — and the decision to enforce should be read from
 the base branch, never from the change under review.
 
-**What stayfixed does today.** It enforces no gate itself: its checks — `bugs check`, `docs
+**What stayfixed does today.** It enforces no gate itself: its checks — `docs
 check`, `plan check`, `commit check` and `docs trail --check` — are commands a project runs in its
 own CI, and which of them may fail a change is that CI's decision. What it does not do is hold the
 line inside a check — fail new findings while grandfathering old ones — which current linters do
@@ -181,7 +176,7 @@ repository does [S10]. Neither has a way to introduce a rule into a codebase tha
 it two hundred times, which is where every existing project starts.
 
 **Backing:** thin. This is a design argument from experience with one repository's adoption of
-its own rules. Nothing external states it, and no repository has yet adopted through `init` and
+its own rules. Nothing external states it, and no repository has yet
 had its advisory period's findings counted. The label changes when one has.
 
 ## 8. A personal overlay is a versioned plugin, not a dotfiles sync

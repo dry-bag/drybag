@@ -72,8 +72,8 @@ repository" first.** That is `0.3.0`, not only the first release ever: until
 **The plugin is published from a repository of its own.** The marketplace entry here fetches it
 from `stayfixed/stayfixed-plugin`, a `url` source pinned to the release's tag by `ref` and to the
 plugin commit by `sha` (section 1), and that repository's root is the tree `scripts/plugin_tree.py`
-generates from a commit of this one: the nine paths the plugin's runtime reads — the two plugin
-manifests, `hooks/`, `scripts/stayfixed`, `src/stayfixed/`, `skills/`, `agents/`, `README.md` and
+generates from a commit of this one: the eight paths the plugin's runtime reads — the two plugin
+manifests, `hooks/`, `scripts/stayfixed`, `src/stayfixed/`, `skills/`, `README.md` and
 `LICENSE` — and the listing icon, `.claude-plugin/icon.png`, which the directory takes once, at
 the first submission, and nothing else. Its only tags are the `vX.Y.Z` step 7 pushes there; it
 carries no `stayfixed--vX.Y.Z`, which nothing there reads. Its `main` is the plugin commit
@@ -87,7 +87,7 @@ count is the generated tree's: `tests/test_payload.py` holds it on every pull re
 `scripts/release.py check --tag` again on the commit a release is cut from, before `release.yml`
 builds. Not a subfolder of this repository: the same page holds every version of a plugin in a
 subfolder whose hook runs a non-shell file or a shell script that calls other files, and
-`hooks/run-hook.sh` runs the Python launcher. A file the runtime needs outside those ten paths
+`hooks/run-hook.sh` runs the Python launcher. A file the runtime needs outside those nine paths
 is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository never holds it.
 
 1. **Be on `main`, current, and green.** The release workflow builds from the tag, so anything
@@ -241,7 +241,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
      **The first release is this rule with nothing to compare against.** There is no previous
      tag, so every `Fixed` entry in 0.1.0 described a bug no user could have met, and read as a
      warning about the release it shipped in. Fold them all into the features they repair
-     (`init`, `attach`, `doctor` and `overlay` each accumulated several), and do the same to a
+     (`attach`, `doctor` and `overlay` each accumulated several), and do the same to a
      `Changed` entry that changed something never released.
 
    - **Lead with what the user sees.** Open each entry with the outcome, then say why or how.
@@ -788,7 +788,7 @@ parent. Everything it refuses, it refuses before writing: a tree that script can
 commit of, a marketplace on disk that cannot take the `sha`, a remote that cannot be listed, and a
 `main` that is not the parent (section 5). Two runs write the same file.
 
-**`scripts/plugin_tree.py`** names the plugin's ten paths once, in `PLUGIN_PATHS`, reads them
+**`scripts/plugin_tree.py`** names the plugin's nine paths once, in `PLUGIN_PATHS`, reads them
 from a commit and never from the disk, and writes the manifest a release attests and the plugin
 commit a release pins, `--no-parent` only ever for a scratch repository; its module docstring
 and `--help` are its reference.

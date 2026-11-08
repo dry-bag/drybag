@@ -15,8 +15,8 @@ Three things this looks at, each of which was an inline CI step or nothing at al
   which is why no test in `tests/` can see this.
 * **The sdist.** A packager for Homebrew, Debian or nixpkgs cannot run a single test against
   an sdist that ships only `src/`, which is the artefact they most need to verify for a
-  security-sensitive tool. `skills/` and `agents/` are here because
-  `tests/skills/test_skills.py` reads those trees directly. And `tar` preserves the mode: a
+  security-sensitive tool. `skills/` is here because
+  `tests/skills/test_skills.py` reads that tree directly. And `tar` preserves the mode: a
   wrapper unpacked at 0644 exits 126 for every hook entry, which Claude Code reads as a
   permission error rather than as a broken install.
 * **A rendered overlay.** `setup --overlay <path>` at a path that names nothing is the one working
@@ -33,7 +33,6 @@ import zipfile
 from pathlib import Path
 
 from stayfixed.overlay.api import OVERLAY_FILES
-from stayfixed.project.api import PROJECT_FILES
 from stayfixed.scaffold import MANIFEST_PATH
 
 # The mutation declarations, one file per group. The sdist must carry the files this checkout
@@ -44,11 +43,6 @@ DECLARATIONS = Path(__file__).resolve().parents[1] / "mutations"
 WHEEL_MUST = (
     "stayfixed/presets/recommended.toml",
     *(f"stayfixed/templates/overlay/{relative}" for relative in OVERLAY_FILES),
-    # The project footprint's own tree. `init` reads it at runtime through
-    # `stayfixed.templates.tree`, exactly as `setup --overlay <path>` reads the tree above, so a
-    # build that dropped it would leave every installed stayfixed unable to initialise anything
-    # while the checkout's own suite stayed green.
-    *(f"stayfixed/templates/project/{name}" for name in PROJECT_FILES),
 )
 # What a downstream packager needs to verify the sdist, plus the three files the harness runs
 # without an interpreter of ours.
@@ -56,7 +50,6 @@ SDIST_MUST = (
     "tests/test_fsops.py",
     "CHANGELOG.md",
     "skills/README.md",
-    "agents/code-navigator.md",
     # `pyproject.toml` carries these under `hooks/**` and `scripts/**`, so this is a claim about
     # the build and not a new packaging rule.
     "hooks/run-hook.sh",

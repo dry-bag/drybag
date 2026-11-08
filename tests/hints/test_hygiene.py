@@ -26,9 +26,6 @@ preset = "recommended"
 [project]
 name = "widget"
 base_branch = "main"
-
-[ledger]
-code_roots = ["src", "tests"]
 """
 
 

@@ -75,7 +75,7 @@ ROOT_LAUNCHERS: dict[tuple[str, str], Launcher] = {
 # Where each program a launch runs can reach, by the argv prefix that decides it, git's global
 # options taken out: the README row that declares it, by the row's first code span. A launch whose
 # prefix is here is the row's whatever follows the prefix, because the row discloses the program
-# and not one form of it — except a prefix in `USER_COMMANDS`.
+# and not one form of it.
 NETWORK: dict[tuple[str, ...], str] = {
     ("gh",): "gh",
     ("git", "clone"): "git clone",
@@ -84,24 +84,17 @@ NETWORK: dict[tuple[str, ...], str] = {
     ("claude", "plugin"): "claude plugin",
     ("codex", "plugin"): "codex plugin",
     ("pre-commit", "install"): "pre-commit install",
-    ("sh", "-c"): "sh -c",
 }
-# The prefixes whose row is the user's own command, which stayfixed does not choose: `sh -c` runs
-# the command `test attribute --command` names. Such a launch is its row only when the element
-# after the prefix is unread — the user's value; a script the package spells out itself is
-# stayfixed's choice, and a finding.
-USER_COMMANDS = frozenset({("sh", "-c")})
 # The programs a launch runs that reach nothing past this machine, by argv prefix, each as narrow
 # as the subcommand's other forms require: `git remote` and `git worktree` have forms that ask a
 # remote or change one, and `git config` has forms that write a setting a later launch obeys, so
 # only the forms in use are listed. A launch is local only when every element before its options
-# end is read, or vouched for in `VOUCHED_ELEMENTS`, none is in `GIT_REMOTE_OPTIONS`, and none is
-# among its subcommand's `GIT_PROGRAM_OPTIONS`. A launch in neither table is a finding: it has to
+# end is read, or vouched for in `VOUCHED_ELEMENTS`, and none is among its subcommand's
+# `GIT_PROGRAM_OPTIONS`. A launch in neither table is a finding: it has to
 # be read and put in one.
 LOCAL = frozenset(
     {
         ("git", "--version"),
-        ("git", "archive"),
         ("git", "cat-file"),
         ("git", "check-ignore"),
         ("git", "config", "--get"),
@@ -114,7 +107,6 @@ LOCAL = frozenset(
         ("git", "init"),
         ("git", "log"),
         ("git", "ls-files"),
-        ("git", "ls-tree"),
         ("git", "merge-base"),
         ("git", "remote", "get-url"),
         ("git", "rev-list"),
@@ -123,7 +115,6 @@ LOCAL = frozenset(
         ("git", "symbolic-ref"),
         ("git", "version"),
         ("git", "worktree", "list"),
-        ("tar", "-xf"),
         # The note sync's commit and its moves of `main`, all in the overlay: new notes added
         # intent-to-add (`add -N`) and a refused one's entry removed again (`update-index`), the
         # notes committed (`commit --only`, which runs `gpg.program` as the owner's own commit
@@ -139,30 +130,19 @@ LOCAL = frozenset(
         ("git", "update-ref"),
     }
 )
-# Local only as the whole argv: `git remote` alone lists the remotes' names, and anything after it
-# is a form to read first.
-LOCAL_WHOLE = frozenset({("git", "remote")})
 # The global options a launch may put before git's subcommand, and whether each takes the next
 # argument as its value. None of them changes which program git runs or where it reaches, except
 # `-c`, whose value is configuration: it is held to `GIT_CONFIG_KEYS`. Any other option there is a
 # finding, because the subcommand the tables match would then follow something unread.
 # `--no-optional-locks` keeps a `status` from writing the index it refreshes.
-GIT_GLOBAL_OPTIONS = {"-c": True, "--literal-pathspecs": False, "--no-optional-locks": False}
-# The configuration a launch may set with `git -c`: each changes how git prints a name or how
-# strictly it checks what it receives (the note sync's fetch), and never what it runs or where it
-# reaches, as `core.sshCommand`, `core.fsmonitor` or `url.<base>.insteadOf` would.
-GIT_CONFIG_KEYS = frozenset({"core.quotePath", "fetch.fsckObjects"})
-# Options with which a git command that otherwise reads the local repository asks a remote instead
-# (`git archive --remote=<url>`). Wherever one appears before the options end, the launch is not
-# local. Matched by the start of the whole name, since `git archive` takes neither of its two
-# abbreviated: `--rem=<url>` exits 128 ("Unexpected option --remote"), and beside `--remote` an
-# abbreviated `--exec` is handed to the remote side, which refuses it. `--exec` names a program only
-# beside `--remote`, which is matched already, so for `archive` it is redundant and costs nothing.
-# The other two are options of subcommands that reach a remote whatever they are given.
-GIT_REMOTE_OPTIONS = ("--remote", "--upload-pack", "--receive-pack", "--exec")
+GIT_GLOBAL_OPTIONS = {"-c": True, "--no-optional-locks": False}
+# The configuration a launch may set with `git -c`: each changes how strictly git checks what it
+# receives (the note sync's fetch), and never what it runs or where it reaches, as
+# `core.sshCommand`, `core.fsmonitor` or `url.<base>.insteadOf` would.
+GIT_CONFIG_KEYS = frozenset({"fetch.fsckObjects"})
 # Options with which a local git subcommand runs a program: `grep -O` opens the matches in one,
 # `--textconv` runs a configured conversion and `--ext-diff` an external diff, either of which can
-# fetch, as Git LFS's does, and `cat-file --filters` runs the smudge filters `archive` does. By
+# fetch, as Git LFS's does, and `cat-file --filters` runs smudge filters. By
 # subcommand, since an option means something else under another one: `git diff -O<file>` orders
 # its output. Each is matched as git parses it. A long one matches by any prefix of its name, since
 # git takes a prefix for the one option it begins (`grep --open-files-in=echo` is
@@ -191,9 +171,6 @@ NO_ROWS: frozenset[str] = frozenset()
 # in it is bound once in its function and never mutated, so the same expression handed again after
 # a rebinding is a finding too. The comment says what each runs; a reviewer reads it.
 PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
-    # A fixed bug entry's `regression`, the argv as the entry wrote it, which `bugs regressions`
-    # runs from the project root.
-    ("src/stayfixed/ledger/regressions.py", "_run", "list(argv)"): frozenset({"regression"}),
     # `claude plugin marketplace add` and `codex plugin marketplace add`, then `claude plugin
     # install` and `codex plugin add`, each built by a lambda in `_MARKETPLACE_ADD` or
     # `_PLUGIN_INSTALL`, which `test_the_plugin_installs_reach_the_rows_their_entries_name` calls.
@@ -275,22 +252,11 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
         "a merge base git printed, or the base `touched_plans` refused when it starts with `-`, "
         "which `lint` runs before it asks for any plan's lines"
     ),
-    ("src/stayfixed/ledger/check.py", "_base_ledger", "fork"): "a merge base git printed",
-    ("src/stayfixed/guards/attribute.py", "_extract", "str(archive)"): (
-        "the value of `git archive -o` and of `tar -f`, a path under the temporary directory "
-        "this run made"
-    ),
-    ("src/stayfixed/guards/attribute.py", "_extract", "ref"): (
-        "`HEAD`, or the merge base git printed"
-    ),
     ("src/stayfixed/guards/commit.py", "commits_in", "rev_range"): (
         "refused when it starts with `-`, and closed by the `--` after it"
     ),
     ("src/stayfixed/gitenv.py", "git_path", "name"): (
         "the value of `--git-path`, always one of its callers' constants"
-    ),
-    ("src/stayfixed/project/detect.py", "_symbolic", "ref"): (
-        "`HEAD` or `refs/remotes/origin/HEAD`, its callers' constants"
     ),
     ("src/stayfixed/sync/git.py", "guard", "*_MARKER_PATHS"): (
         "the module's own constant: `--git-path` and the name of each in-progress marker"

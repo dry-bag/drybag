@@ -78,9 +78,8 @@ DECLARATIONS = ROOT / "mutations"
 # the same ruling.
 GROUP_OF: tuple[tuple[str, str], ...] = (
     ("src/stayfixed/attach/", "attach"),
-    ("src/stayfixed/project/", "project"),
-    ("src/stayfixed/templates/", "project"),
-    ("src/stayfixed/presets/", "project"),
+    ("src/stayfixed/templates/", "templates"),
+    ("src/stayfixed/presets/", "templates"),
     ("src/stayfixed/scaffold/", "scaffold"),
     ("src/stayfixed/guards/", "guards"),
     ("src/stayfixed/hints/", "guards"),
@@ -89,7 +88,6 @@ GROUP_OF: tuple[tuple[str, str], ...] = (
     ("src/stayfixed/doctor/", "doctor"),
     ("src/stayfixed/memory/", "records"),
     ("src/stayfixed/docs/", "records"),
-    ("src/stayfixed/ledger/", "records"),
     ("src/stayfixed/", "core"),
     ("scripts/publish_plugin.py", "publish"),
     ("scripts/", "tooling"),

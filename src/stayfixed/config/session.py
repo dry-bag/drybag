@@ -78,7 +78,7 @@ from stayfixed.semver import later
 # `hooks/hooks.json` gives each entry, and a `PreToolUse` hook that runs past them loses its guard,
 # so what the parse and the NOTE load cost,
 # each in proportion to the file, is bounded by the file before either starts: a 2.8 MB file kept a
-# hook fourteen seconds. A `stayfixed.toml` that `init` writes is a few hundred bytes, and one that
+# hook fourteen seconds. A minimal `stayfixed.toml` is a few hundred bytes, and one that
 # spells out every setting is a few kilobytes; 256 KiB is still dozens of times the second. A
 # command reads the file to `fsops.REGULAR_READ_LIMIT`.
 SESSION_READ_LIMIT = 256 * 1024

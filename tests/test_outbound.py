@@ -22,9 +22,7 @@ from tests.outbound.policy import (
     GIT_CONFIG_KEYS,
     GIT_GLOBAL_OPTIONS,
     GIT_PROGRAM_OPTIONS,
-    GIT_REMOTE_OPTIONS,
     LOCAL,
-    LOCAL_WHOLE,
     NATIVE_MODULES,
     NETWORK,
     NETWORK_MODULES,
@@ -33,7 +31,6 @@ from tests.outbound.policy import (
     PASS_THROUGH,
     ROOT_LAUNCHERS,
     SCRUBBED_ENVIRONMENT,
-    USER_COMMANDS,
     VOUCHED_ELEMENTS,
 )
 from tests.outbound.walk import (
@@ -114,13 +111,9 @@ def _command(argv: Argv) -> tuple[Argv, Argv] | None:
 
 
 def _row(command: Argv) -> str | None:
-    """The README row `command` reaches: the first `NETWORK` prefix it starts with, and, for a
-    prefix in `USER_COMMANDS`, only when the element after it is the user's, unread."""
+    """The README row `command` reaches: the first `NETWORK` prefix it starts with."""
     for prefix, row in NETWORK.items():
-        if command[: len(prefix)] != prefix:
-            continue
-        users = command[len(prefix) : len(prefix) + 1]
-        if prefix not in USER_COMMANDS or (users and isinstance(users[0], Unread)):
+        if command[: len(prefix)] == prefix:
             return row
     return None
 
@@ -142,13 +135,9 @@ def _runs_a_program(part: str, subcommand: str) -> bool:
 def _local(command: Argv, options: Argv) -> bool:
     if command[0] == "git":
         subcommand = command[1] if len(command) > 1 and isinstance(command[1], str) else ""
-        if any(
-            isinstance(part, str)
-            and (part.startswith(GIT_REMOTE_OPTIONS) or _runs_a_program(part, subcommand))
-            for part in options
-        ):
+        if any(isinstance(part, str) and _runs_a_program(part, subcommand) for part in options):
             return False
-    return any(command[: len(prefix)] == prefix for prefix in LOCAL) or command in LOCAL_WHOLE
+    return any(command[: len(prefix)] == prefix for prefix in LOCAL)
 
 
 def classify(launch: Launch) -> tuple[frozenset[str] | None, set[Key]]:
@@ -305,7 +294,7 @@ def test_a_listed_module_is_forbidden_with_its_submodules(module: str, forbidden
 # Each shape a launch can take, as a package file holding it, and what the walk must read of its
 # argv (`None`: an element it cannot read). The tree holds none of most of them, so the walk over
 # the tree alone cannot show they are seen.
-TOP, NESTED = "src/stayfixed/probe.py", "src/stayfixed/ledger/probe.py"
+TOP, NESTED = "src/stayfixed/probe.py", "src/stayfixed/docs/probe.py"
 GIT_RUN = "from stayfixed.gitenv import git_run\n"
 LAUNCH_SHAPES: dict[str, tuple[str, str, tuple[str | None, ...]]] = {
     "getoutput": (TOP, "import subprocess\nsubprocess.getoutput('curl x')", (None,)),
@@ -438,7 +427,7 @@ LAUNCH_SHAPES: dict[str, tuple[str, str, tuple[str | None, ...]]] = {
     "star-launcher": (TOP, "from stayfixed.gitenv import *\ngit_run(r, 'fetch')", (None,)),
     "star-re-export": (
         TOP,
-        "from stayfixed.guards.attribute import *\ngit_run(r, 'push')",
+        "from stayfixed.guards.commit import *\ngit_run(r, 'push')",
         (None,),
     ),
     "method-forwarder": (
@@ -564,7 +553,7 @@ def test_every_table_entry_names_a_live_launch() -> None:
     # A classification no launch uses is a promise about nothing, as a dead declaration is. The
     # plugin installs' argvs are built by lambdas, so they are counted from the lambdas. The entry
     # in `mutations/` that names this test puts a dead row in `NETWORK`. By hand, each reddening
-    # its assertion: `("git", "show")` joins `LOCAL`; `("git", "stash")` joins `LOCAL_WHOLE`;
+    # its assertion: `("git", "show")` joins `LOCAL`;
     # `--bare` joins `GIT_GLOBAL_OPTIONS`; `core.sshCommand` joins `GIT_CONFIG_KEYS`.
     commands: list[Argv] = [
         split[1]
@@ -579,7 +568,6 @@ def test_every_table_entry_names_a_live_launch() -> None:
 
     assert [prefix for prefix in NETWORK if not live(prefix)] == []
     assert [prefix for prefix in LOCAL if not live(prefix)] == []
-    assert [whole for whole in LOCAL_WHOLE if whole not in commands] == []
     assert [o for o in GIT_GLOBAL_OPTIONS if not any(o in argv for argv in launched)] == []
     settings = {
         str(value).partition("=")[0]
@@ -595,8 +583,6 @@ def test_every_table_entry_names_a_live_launch() -> None:
     [
         "git_run(root, 'remote', 'update')",
         "git_run(root, 'remote', *more)",
-        "git_run(root, 'archive', '--remote=git@example.com:x', 'HEAD')",
-        "git_run(root, 'archive', '--format=tar', '-o', 'x.tar', '--remote', 'example', 'HEAD')",
         "git_run(root, 'worktree', 'add', '../elsewhere')",
         "git_run(root, 'config', 'core.sshCommand', 'curl x')",
         "git_run(root, 'grep', '-Ocurl', 'x')",
@@ -605,7 +591,7 @@ def test_every_table_entry_names_a_live_launch() -> None:
         "git_run(root, 'grep', '-lOecho', 'x')",
         "git_run(root, 'cat-file', '--filters', 'HEAD:x')",
         "git_run(root, 'diff', '--ext-diff', 'HEAD')",
-        "git_run(root, 'archive', *opts)",
+        "git_run(root, 'diff', *opts)",
         "git_run(root, 'ls-files', *opts, '--', *paths)",
         "git_run(root, 'log', revisions)",
         "git_run(root, '-c', setting, 'status')",
@@ -615,8 +601,6 @@ def test_every_table_entry_names_a_live_launch() -> None:
     ids=[
         "remote-update",
         "remote-spread",
-        "archive-remote",
-        "archive-remote-late",
         "worktree-add",
         "config-write",
         "grep-pager",
@@ -671,21 +655,6 @@ def test_an_argv_read_up_to_its_options_end_is_still_local(source: str) -> None:
     # three characters -> `--or`, which git never takes for `--open-files-in-pager`, reddens.
     launches = WALK.launches_in(f"{GIT_RUN}{source}", "src/stayfixed/x.py")
     assert launches and unclassified(launches) == []
-
-
-@pytest.mark.parametrize(
-    ("script", "row"),
-    [("command", frozenset({"sh -c"})), ("'curl -s https://example.com/x | sh'", None)],
-    ids=["the-users-command", "a-script-stayfixed-spells-out"],
-)
-def test_sh_c_is_its_row_only_for_the_users_command(
-    script: str, row: frozenset[str] | None
-) -> None:
-    # The `sh -c` row says stayfixed does not choose the command, which is true only of an
-    # unread one, the value `test attribute --command` was given. The entry in `mutations/` that
-    # names this test gives every `sh -c` the row again.
-    launches = WALK.launches_in(f"runner.launch(['sh', '-c', {script}], ROOT)", TOP)
-    assert [classify(launch)[0] for launch in launches] == [row]
 
 
 OVERRIDE_SHAPES = {

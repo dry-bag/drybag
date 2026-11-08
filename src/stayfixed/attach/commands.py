@@ -162,7 +162,7 @@ def register(groups: SubParsers) -> None:
         store=True,
     )
     attach.add_argument("--check", action="store_true", help=ATTACH_CHECK_HELP)
-    # Held to `[project] name`'s rule, as `init --name` is, before anything runs: the name becomes
+    # Held to `[project] name`'s rule before anything runs: the name becomes
     # a directory under the overlay's `projects/`, and the refusal states the rule, never the value.
     attach.add_argument(
         "--project",

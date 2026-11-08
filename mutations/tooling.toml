@@ -1836,10 +1836,10 @@ reddens = ["tests/scripts/test_release.py::test_a_root_the_check_cannot_read_is_
 [[mutation]]
 name = "the plugin tree drops a path the runtime reads"
 file = "scripts/plugin_tree.py"
-before = """    "skills",
-    "agents",
+before = """    "src/stayfixed",
+    "skills",
     "README.md","""
-after = """    "skills",
+after = """    "src/stayfixed",
     "README.md","""
 reddens = [
   "tests/scripts/test_plugin_tree.py::test_members_lists_every_plugin_path_with_its_mode_and_nothing_else",

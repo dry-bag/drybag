@@ -296,9 +296,6 @@ PROSE = {
     # author of a commit, not as a harness stayfixed runs under.
     ("src/stayfixed/guards/commit.py", "claude"): 2,
     ("src/stayfixed/guards/commit.py", "codex"): 2,
-    # The recommended plugins question's lines, which say where `setup` installs them and how to
-    # take one out: Claude Code is the one harness with a verified marketplace for them.
-    ("src/stayfixed/project/questions.py", "claude"): 3,
 }
 
 

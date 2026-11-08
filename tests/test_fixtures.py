@@ -62,7 +62,6 @@ def _invoke(root: Path, tmp_path: Path, argv: list[str]) -> tuple[int, str]:
     "argv",
     [
         ["docs", "check"],
-        ["bugs", "check"],
         ["docs", "trail", "--check"],
         ["plan", "check", "--base", "HEAD~1"],
         ["commit", "check", "--range", "HEAD~1..HEAD"],
@@ -89,11 +88,10 @@ def test_every_gate_the_workflow_runs_passes_on_the_smoke_fixture(
 @pytest.mark.parametrize(
     ("argv", "examined"),
     [
-        (["bugs", "check"], {"checked": True, "findings": []}),
         (["commit", "check", "--range", "HEAD~1..HEAD"], {"commits": 1, "violations": []}),
         (["docs", "trail", "--check"], {"stale": False}),
     ],
-    ids=("bugs check", "commit check", "docs trail --check"),
+    ids=("commit check", "docs trail --check"),
 )
 def test_the_gates_on_the_fixture_report_what_they_examined(
     tmp_path: Path, argv: list[str], examined: dict[str, object]
@@ -102,16 +100,13 @@ def test_the_gates_on_the_fixture_report_what_they_examined(
     # the `plan check` one was: `exit 0` is also what a gate that examined nothing produces,
     # and the author closed that for one row and not for the rest. Measured on this tree, each
     # guard torn out on its own and `tests/test_fixtures.py` run:
-    #   `ledger/check.py`'s `uninitialised()` -> `return True`, so `bugs check` takes its inert
-    #     arm and reports `{"checked": False}` having read no ledger — 30 passed;
     #   `guards/commit.py`'s `commits = commits_in(root, rev_range)` -> `commits = []`, so the
     #     range is empty and the gate says "OK: 0 commit message(s) checked" — 30 passed.
     # The quantity each row is about is what is asserted here, so those two now redden.
     # `docs trail --check` carries `stale` for the same reason; its own guard is held by the
     # hand-measured fixture mutation named above.
     #
-    # Mutations (declared): the bug ledger reports itself uninitialised; the commit gate reads
-    # an empty range.
+    # Mutation (declared): the commit gate reads an empty range.
     import json
 
     root = _copy_as_repository(tmp_path)

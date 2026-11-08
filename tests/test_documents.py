@@ -309,7 +309,7 @@ def registered_commands() -> set[str]:
 # when this test was written, and the number is here so that a walk which found nothing — or
 # half of them — cannot satisfy the subset check above it. A change that ships a command raises
 # the parser's count and leaves this alone.
-REGISTERED_COMMANDS_FLOOR = 20
+REGISTERED_COMMANDS_FLOOR = 15
 
 
 def test_the_parser_registers_what_this_test_expects_to_walk() -> None:
@@ -317,7 +317,7 @@ def test_the_parser_registers_what_this_test_expects_to_walk() -> None:
     # `_SubParsersAction` is a private name, so the day argparse renames it this reddens
     # instead of `registered_commands()` returning an empty set that satisfies `<=`.
     found = registered_commands()
-    assert {"memory index", "bugs check", "docs check", "plan check", "hook"} <= found
+    assert {"memory index", "docs check", "plan check", "hook"} <= found
     assert len(found) >= REGISTERED_COMMANDS_FLOOR
 
 
@@ -337,7 +337,7 @@ _NAMES_AS_THEY_WERE = ("docs/plans/", "changelog.d/", "mutations/", "CHANGELOG.m
 _NAMING_SUFFIXES = (".md", ".yml", ".yaml", ".toml", ".py")
 # A vacuity floor, not a count: the walk read 877 mentions when it was written, and a regex
 # that matched nothing would satisfy the check below it.
-NAMED_COMMANDS_FLOOR = 500
+NAMED_COMMANDS_FLOOR = 400
 
 
 def named_commands(relative: str, text: str) -> list[str]:
@@ -395,7 +395,7 @@ def test_the_command_name_walk_discriminates() -> None:
         f"{tick}stayfixed plan check{tick}, {tick}stayfixed hook <event>{tick}",
         f"{tick}stayfixed <group>{tick}, {tick}stayfixed …{tick}, {tick}stayfixed {{name}}{tick}",
         f'"{tick}stayfixed memory "\n    "index --check{tick}"',
-        f"{tick}stayfixed --version{tick}, {run} stayfixed init --yes",
+        f"{tick}stayfixed --version{tick}, {run} stayfixed plan check",
     ]
     for text in fine:
         named = named_commands("x.py", text)
@@ -434,7 +434,7 @@ def test_every_registered_command_has_a_readme_row() -> None:
 
 
 def test_every_readme_row_parses() -> None:
-    # Mutation: change the `bugs new` row's `--severity high` to `--severity critical` →
+    # Mutation: change the `memory index` row's `--check` to `--verify` →
     # reddens naming the line. Not `--sev high`, which parses: argparse accepts any
     # unambiguous prefix of a long option, so an abbreviated flag is the one mistake in a
     # row this test cannot catch.
@@ -487,8 +487,8 @@ def command_functions() -> dict[str, object]:
 def test_the_readme_names_every_command_whose_json_carries_findings() -> None:
     # Mutation: drop `docs check` from the README sentence -> reddens naming it.
     # The floor first: a walk that resolved no functions would make the comparison below
-    # vacuously true, and a regex that stopped matching would look the same. Three emit the key
-    # today: `bugs check`, `docs check` and `plan check`.
+    # vacuously true, and a regex that stopped matching would look the same. Two emit the key
+    # today: `docs check` and `plan check`.
     functions = command_functions()
     assert len(functions) >= REGISTERED_COMMANDS_FLOOR, sorted(functions)
     emitting = {
@@ -496,7 +496,7 @@ def test_the_readme_names_every_command_whose_json_carries_findings() -> None:
         for name, func in functions.items()
         if '"findings":' in inspect.getsource(func)  # type: ignore[arg-type]
     }
-    assert len(emitting) >= 3, sorted(emitting)
+    assert len(emitting) >= 2, sorted(emitting)
     match = _FINDINGS_SENTENCE.search(README.read_text(encoding="utf-8"))
     assert match is not None, "README's --json paragraph no longer names the findings commands"
     named = set(re.findall(r"`([^`]+)`", match.group(1)))
@@ -785,7 +785,7 @@ def test_shared_flags_names_every_command_that_takes_neither_root_nor_machine() 
     }
     # The walk's floor, for the reason the command-table test gives: a walk that found nothing
     # would make every comparison below vacuously true.
-    assert len(options) >= 20, sorted(options)
+    assert len(options) >= 15, sorted(options)
     neither = {name for name, flags in options.items() if not flags & _PROJECT_FLAGS}
     assert named == neither, (sorted(named), sorted(neither))
     overlay = {name for name in options if name.startswith("overlay ")} - neither
@@ -950,34 +950,6 @@ def test_every_sentence_that_counts_the_names_doctor_shows_is_the_cap() -> None:
     assert [_NUMBER_WORDS[word] for word in found] == [NAMES_SHOWN] * 3
 
 
-# The five verdict sentences are `VERDICTS` in `stayfixed.guards.attribute` and are reproduced by
-# hand in `docs/cli.md`'s table; every test that had them read the expectation back out of
-# `VERDICTS`, which is shape 9 of the `sweep-defect-class` skill's own reference — both sides move
-# together under any reword. This is the same rule the Shared flags tables are held to, one section
-# over.
-_ATTRIBUTE_SECTION = re.compile(
-    r"^## `stayfixed test attribute[^\n]*\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL
-)
-# `| fails | passes | — | `sentence` |`: the three code columns, then the sentence in backticks.
-_VERDICT_ROW = re.compile(r"^\| (?:fails|passes) \| [^|]+ \| [^|]+ \| `(.+?)` \|$", re.MULTILINE)
-
-
-def test_the_verdict_table_is_the_shipped_sentences_and_not_a_second_spelling() -> None:
-    # Mutation: reword one sentence in `docs/cli.md`'s table — reddens naming the row.
-    from stayfixed.guards.attribute import VERDICTS
-
-    section = _ATTRIBUTE_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md has no `stayfixed test attribute` section"
-    rows = _VERDICT_ROW.findall(section.group(1))
-    # The walk's floor before anything is compared, for the reason the Shared flags test gives:
-    # a regex that matched nothing would make the comparison below vacuously true, and a
-    # section that lost its table would look exactly like one that never had it.
-    assert len(rows) == len(VERDICTS), rows
-    assert tuple(rows) == VERDICTS, [
-        (row, sentence) for row, sentence in zip(rows, VERDICTS, strict=True) if row != sentence
-    ]
-
-
 def _anchor(heading: str) -> str:
     """GitHub's anchor for a heading: lower-cased, every character but a letter, a digit, a
     space, `-` and `_` dropped, and each space a hyphen."""
@@ -989,14 +961,14 @@ def test_the_cli_reference_contents_lists_every_section_in_order() -> None:
     # Every `## ` heading after the Contents, in order, each linked by GitHub's anchor: a command
     # section added without its Contents line, or a heading renamed under a stale link, is
     # a reference a reader cannot navigate. The floor is today's count of sections after the
-    # Contents, 29, so a walk that found nothing, or half, cannot pass.
+    # Contents, 22, so a walk that found nothing, or half, cannot pass.
     # Mutation (declared): drop the `memory inventory` Contents line -> the lists differ.
     text = (ROOT / "docs" / "cli.md").read_text(encoding="utf-8")
     _, _, after = text.partition("## Contents\n")
     contents, _, rest = after.partition("\n## ")
     listed = re.findall(r"^- \[(.+)\]\(#([^)]+)\)$", contents, re.MULTILINE)
     headings = re.findall(r"^## (.+)$", "## " + rest, re.MULTILINE)
-    assert len(headings) >= 29, len(headings)
+    assert len(headings) >= 22, len(headings)
     assert listed == [(heading, _anchor(heading)) for heading in headings]
 
 

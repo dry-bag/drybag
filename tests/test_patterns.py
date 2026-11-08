@@ -508,7 +508,6 @@ def test_no_pattern_repeats_a_group_in_a_shape_python_3_11_4_misreads() -> None:
     assert len(patterns) > 50  # a walk-based assertion states its walk is non-empty
     spelled, unspelled = _built_by_package()
     assert len(spelled) > 50
-    assert len([where for where in spelled if ".<module>:" not in where]) > 5
     found = {name: said for name, pattern in patterns.items() if (said := _offences_of(pattern))}
     assert found | _offences_in(spelled) == {}
     assert Counter(unspelled) == Counter(place for place, _ in _HANDED)

@@ -2,7 +2,7 @@
 
 The overlay itself is the private layer's, and this module reads nothing of it: only
 `[overlay] root`, the machine file's record of where it is, which the note store, `attach`,
-`doctor` and `init --questions` all ask for. Beside `config.reading` rather than in
+and `doctor` all ask for. Beside `config.reading` rather than in
 `config.machine`, because `config.reading` is what reads the file (`read_machine_toml`), for this
 reader and the owner's layer alike.
 """

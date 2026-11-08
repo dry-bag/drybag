@@ -1,7 +1,7 @@
 [project]
 name = "stayfixed"
 version = "0.6.1"
-description = "A methodology harness for coding agents: a bug ledger that lives in the repository, working memory whose notes count once reviewed, and fail-closed guards, packaged as one plugin for Claude Code and Codex."
+description = "A methodology harness for coding agents: working memory whose notes count once reviewed, and fail-closed guards, packaged as one plugin for Claude Code and Codex."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -49,10 +49,9 @@ module-root = "src"
 source-include = [
   "tests/**",
   "scripts/**",
-  # `tests/skills/test_skills.py` reads these two trees directly, so an sdist without them
-  # ships a test module that cannot pass.
+  # `tests/skills/test_skills.py` reads this tree directly, so an sdist without it ships a test
+  # module that cannot pass.
   "skills/**",
-  "agents/**",
   # The same rule for the plugin root's two static files: `tests/hooks/test_wrapper.py` and
   # `tests/hooks/test_hooks_json.py` read them directly, and `hooks/run-hook.sh` is the file
   # both harnesses actually execute — an sdist without it ships a plugin that cannot fire.

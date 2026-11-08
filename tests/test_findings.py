@@ -18,7 +18,7 @@ def test_a_label_is_the_path_the_line_and_the_rule_and_never_the_detail() -> Non
 
 
 def test_listed_caps_the_tail_and_says_how_many_it_dropped() -> None:
-    # A check over a neglected ledger reports findings by the hundred and the remediation is one
+    # A check over a neglected tree reports findings by the hundred and the remediation is one
     # command for the whole set; the tail is length, not information, and printing it pushes that
     # command off the end of the line. Mutation: drop the cap — the first assertion reddens.
     items = [f"item-{n}" for n in range(LISTED_LIMIT + 3)]
@@ -35,8 +35,8 @@ def test_labels_renders_findings_through_the_same_cap() -> None:
 
 
 def test_a_path_outside_the_grammar_never_reaches_a_label_raw() -> None:
-    # The label is printed on stdout by `bugs check`, `docs check` and
-    # `plan check`, and in CI a line that starts `::error::` is an instruction to the runner.
+    # The label is printed on stdout by `docs check` and `plan check`, and in CI a line that starts
+    # `::error::` is an instruction to the runner.
     # Mutation: print `self.path` in `labelled` — this reddens.
     label = Finding("dead-link", f"docs/{CRAFTED}.md", 3, "d").label
     assert_never_raw(label)
