@@ -1,14 +1,14 @@
 [project]
 name = "drybag"
 version = "0.6.1"
-description = "A methodology harness for coding agents: working memory whose notes count once reviewed, and fail-closed guards, packaged as one plugin for Claude Code and Codex."
+description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check, packaged as one plugin for Claude Code and Codex."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Nezhinskiy" }]
 dependencies = []
-keywords = ["claude-code", "codex", "agent", "plugin", "memory", "methodology"]
+keywords = ["claude-code", "codex", "agent", "plugin", "memory", "overlay", "sync"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

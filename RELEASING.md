@@ -15,8 +15,8 @@ your own authenticated checkout → the `pypi` approval, whose two jobs first ch
 repository's tag names the pinned commit and then release the PyPI upload and the GitHub Release,
 attached to `vX.Y.Z` only and never to the floating `v1`, which immutable releases would freeze →
 `main` moves to the release commit → `scripts/publish_template.py`, which renders
-`templates/overlay/` and pushes it to the template repository from your own authenticated
-checkout → from `1.0.0` on, the `v1` alias moves →
+`templates/overlay/` and pushes it to `dry-bag/drybag-overlay-template`, the template repository,
+from your own authenticated checkout → from `1.0.0` on, the `v1` alias moves →
 the release returns to `dev` (section 5). Both pushes to a second repository are yours, so the
 public repository's CI holds no credential that can write one.
 
@@ -43,7 +43,7 @@ holds it, because it is computed from the release commit alone: the plugin tree,
 committer and date, a message naming the version, and as its parent the `sha` the release
 commit's first parent pins — the plugin commit pushed last, the previous release's or a stopped
 release's (section 5), which is what the plugin repository's `main` must hold — or none for
-`0.3.0`, the first release the plugin repository holds. `scripts/release.py pin` writes it
+the first release an empty plugin repository holds. `scripts/release.py pin` writes it
 (section 2, step 5). Plain `check` holds only the `sha`'s shape, 40 lowercase hex characters,
 because between releases the entry pins the plugin commit pushed last, which no later tree makes.
 
@@ -65,7 +65,7 @@ unapproved and fails on Trusted Publishing for want of a pending publisher, and
 step 7's sentence true.
 
 **If this is the first release published from the plugin repository, do section 3's "The plugin
-repository" first.** That is `0.3.0`, not only the first release ever: until
+repository" first.** That is the first release after the rename too, not only the first release ever: until
 `dry-bag/drybag-plugin` exists with its four rulesets, step 1's read-back of them answers
 `404` and step 7's push has nowhere to go.
 
@@ -144,8 +144,8 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    git ls-remote https://github.com/dry-bag/drybag-plugin.git refs/heads/main
    gh api repos/dry-bag/drybag-plugin/git/ref/heads/main --jq .object.sha
    grep '"sha"' .claude-plugin/marketplace.json
-   # one commit on all three lines, the plugin repository's main; before 0.3.0 the first and the
-   # last print nothing, and gh api answers "gh: Git Repository is empty. (HTTP 409)"
+   # one commit on all three lines, the plugin repository's main; for an empty plugin repository
+   # the first prints nothing, and gh api answers "gh: Git Repository is empty. (HTTP 409)"
    gh api repos/dry-bag/drybag/private-vulnerability-reporting --jq .enabled
    # true
    curl -sS -o /dev/null -w '%{http_code}\n' https://pypi.org/pypi/drybag/json
@@ -155,8 +155,8 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
 
    Any other answer stops the release here. A `404` from `dry-bag/drybag-plugin` means section
    3's "The plugin repository" has not been done: do it, then read back again. Once it is done, `gh
-   api …/git/ref/heads/main` answers `(HTTP 409)` for the empty repository before `0.3.0` (measured
-   2026-10-12, the day it was created), and the publisher reads it, or a `404`, as no `main`; any
+   api …/git/ref/heads/main` answers `(HTTP 409)` for the empty repository (measured 2026-10-12,
+   on the plugin repository before the rename, the day it was created), and the publisher reads it, or a `404`, as no `main`; any
    other failure there stops the release too. A ruleset that
    lists other patterns leaves the tag step 6 pushes movable; a `release tags` that anyone bypasses
    lets that one move it; a `release tag creation` with no `creation` rule, or with another bypass
@@ -250,7 +250,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
      so a reader can find the one that is theirs.
 
    - **No internal terms without a user-facing meaning.** A reader of the changelog has not read
-     the code. 0.2.0's entries name "the note reader", "a real `drybag.toml`" (a file that is
+     the code. 0.2.0's entries name "the note reader", a "real" configuration file (one that is
      not a symlink), "the session-start line" and "the `preset-rules` and `standing-rules`
      bundle" (the first since removed) without saying what each is to someone using the tool;
      say what the user would see, or say the thing in the words the commands print.
@@ -259,7 +259,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
      it did, call out what a script or a habit can depend on, because a `Fixed` entry hides
      it: an `upgrading` fragment holds it as a list, one bullet per thing a caller relies on,
      each pointing at its full entry, and the notes render it first, as **Upgrading**. Two of
-     0.2.0's sat under `Fixed` and are what that hides: `drybag attach --check` exiting `2`
+     0.2.0's sat under `Fixed` and are what that hides: `attach --check` exiting `2`
      instead of `0` for a repository whose `memory.mode` is not `overlay` (`docs/cli.md`
      documents the exit codes as the way a caller tells a finding from a refusal, so a CI
      script that ran it goes red), and `attach` newly writing a marked block into
@@ -286,7 +286,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    ```
 
    `pin` writes nothing unless the plugin commit's parent is `dry-bag/drybag-plugin`'s `main`
-   — both absent for `0.3.0`, and after it whatever plugin commit was pushed last, a spent
+   — both absent for the first release an empty plugin repository holds, and after it whatever plugin commit was pushed last, a spent
    release's included — because that `main` moves only by fast-forward. Its refusal names both
    commits; section 5 says what each means. It lists `main` with `git ls-remote` through your own
    git, which a `url.*.insteadOf` or a `GIT_CONFIG_*` variable can point elsewhere, so its check is
@@ -460,8 +460,8 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    key GitHub knows:
 
    ```bash
-   uv run python scripts/publish_template.py --owner drybag        # read the plan
-   uv run python scripts/publish_template.py --owner drybag --yes  # do it
+   uv run python scripts/publish_template.py --owner dry-bag       # read the plan
+   uv run python scripts/publish_template.py --owner dry-bag --yes  # do it
    ```
 
    Without `--yes` nothing outward-facing happens: it renders, asks `gh` what is there, and
@@ -491,7 +491,7 @@ than a stored secret, which requires a one-time registration on PyPI:
 
 | Field | Value |
 |---|---|
-| Owner | `drybag` |
+| Owner | `dry-bag` |
 | Repository | `drybag` |
 | Workflow | `release.yml` |
 | Environment | `pypi` |
@@ -532,8 +532,8 @@ matches neither pattern — free to move:
   where `RepositoryRole` `5` is the admin role.
 
 GitHub's REST reference does not name the built-in roles' ids, and step 1's read-back only echoes
-the id it was given; the settings page showed `5` as **Repository admin** on both repositories on
-2026-10-12. So after creating such a ruleset anew, here or in the plugin repository below, open it
+the id it was given; the settings page showed `5` as **Repository admin** on both repositories, before
+the rename, on 2026-10-12. So after creating such a ruleset anew, here or in the plugin repository below, open it
 under **Settings → Rules → Rulesets** and confirm that its bypass list reads **Repository admin**;
 any other role there is the one that can create a release tag.
 
@@ -672,11 +672,12 @@ the release that publishes the template.
 - **Which commit a release is cut on.** Always `origin/main`, as step 1 leaves it. A release
   commit's first parent decides its plugin commit's parent (section 1), and the plugin
   repository's `main` must be that parent, so:
-  - **`0.3.0`**, the first release the plugin repository holds, is cut on `main` once `dev` is
-    merged into it. `main` before that merge still holds the marketplace entry `"source": "./"`,
-    which `scripts/plugin_tree.py` refuses to read a pin from, since the entry's `source` is not
-    an object; the merge brings `dev`'s `url` entry, which pins no `sha`, so the first plugin
-    commit has no parent, as the plugin repository's absent `main` requires.
+  - **`0.3.0`**, the first release published from a plugin repository, before the rename, was cut
+    on `main` once `dev` was merged into it. `main` before that merge still held the marketplace
+    entry `"source": "./"`, which `scripts/plugin_tree.py` refuses to read a pin from, since the
+    entry's `source` is not an object; the merge brought `dev`'s `url` entry, which pinned no
+    `sha`, so the first plugin commit had no parent, as the plugin repository's absent `main`
+    required.
   - **Any later release** is cut on `main` once `dev` is merged into it, since `dev` carries the
     `sha` of the plugin commit pushed last ("How a release returns to `dev`", below).
   - **After a stopped release**, on `origin/main` too, never on the spent release commit, which

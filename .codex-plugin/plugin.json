@@ -1,13 +1,13 @@
 {
   "name": "drybag",
   "version": "0.6.1",
-  "description": "A methodology harness for coding agents: working memory whose notes count once reviewed, and fail-closed guards.",
+  "description": "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check.",
   "author": { "name": "Nezhinskiy" },
   "repository": "https://github.com/dry-bag/drybag",
   "license": "MIT",
   "interface": {
     "displayName": "drybag",
-    "shortDescription": "Reviewed working memory and fail-closed guards for coding agents",
+    "shortDescription": "Private layers, memory and note sync for coding agents",
     "developerName": "Nezhinskiy",
     "category": "Developer Tools"
   }

@@ -1,6 +1,6 @@
 {
   "name": "drybag",
-  "description": "drybag, a methodology harness for coding agents, published from its own repository.",
+  "description": "drybag, private layers for coding agents, published from its own repository.",
   "owner": {
     "name": "drybag"
   },
@@ -13,7 +13,7 @@
         "ref": "v0.6.1",
         "sha": "f6d299144481ccc0824c890913985abc16e0bc6f"
       },
-      "description": "A methodology harness for coding agents: working memory whose notes count once reviewed, and fail-closed guards."
+      "description": "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check."
     }
   ]
 }
