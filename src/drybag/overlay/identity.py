@@ -3,8 +3,7 @@
 **What an overlay is, for the purpose of recording one.** A tree whose identity record,
 `drybag-overlay.toml` at its root (`layout.IDENTITY_RECORD`), parses and names layout 1: the
 file the shipped template writes and the one thing every overlay carries, written last by a render
-and, as far as git's checkout order goes, by a clone (`layout.OVERLAY_FILES`), so a tree cut short
-is not ordinarily one. It replaced the plugin manifests an
+(`layout.OVERLAY_FILES`), so a render cut short is not one. It replaced the plugin manifests an
 overlay carried while it was a plugin of its own; an overlay made before the record shipped is
 refused with the record to add named in full, since no code migrates one.
 

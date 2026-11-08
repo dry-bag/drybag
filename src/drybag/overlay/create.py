@@ -14,9 +14,9 @@ shipped and `overlay upgrade` can refresh it. Generating is idempotent — `gh` 
 clone with the repository already created, so a second run is the ordinary case rather than the
 exception — and so is `finish`.
 
-A render writes its identity record last and a clone ordinarily does (`layout.OVERLAY_FILES` says
-when not), each into nothing or an empty directory (`fsops.vacant`), and every refusal after `gh
-repo create` ends in `UNRECORDED`.
+A render writes its identity record last and a clone in the order git takes
+(`layout.OVERLAY_FILES`), each into nothing or an empty directory (`fsops.vacant`), and every
+refusal after `gh repo create` ends in `UNRECORDED`.
 """
 
 from __future__ import annotations

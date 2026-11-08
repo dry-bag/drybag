@@ -43,11 +43,8 @@ CAPABILITY_NAMES = (f"{COMMON_CLAUDE}/permissions.json", f"{COMMON_CLAUDE}/hooks
 # are two statements of one thing: `tests/overlay/test_template.py` asserts each way round, so a
 # file deleted from the tree and a file added to it without a line here are both caught rather than
 # one of them. The identity record is last, because a tree is an overlay exactly when it parses, so
-# a render cut short before it is never one. A clone gets the same only as far as git's order
-# goes: git checks a tree out in path order, where the record's path sorts after every file this
-# list ships, but parallel checkout (`checkout.workers`) writes files in no fixed order, and a file
-# of the owner's whose path sorts after the record is written after it, so a clone cut short can
-# carry the record and not everything else.
+# a render cut short before it is never one. A clone is written in the order git takes, which this
+# list does not choose, so a clone cut short can carry the record and not everything else.
 OVERLAY_FILES = (
     f"{COMMON_MEMORY}/_README.md",
     *CAPABILITY_NAMES,

@@ -1518,11 +1518,9 @@ with `drybag setup --overlay <home>/<name>`. When `gh repo create` itself fails,
 stops there with its exit code and stderr; when it reports success and the clone leaves nothing at
 `<home>/<name>`, `gh repo view` is asked whether the repository exists, and the clone is retried
 once, after a ten-second wait when it does — a wait carried on reasoning rather than a measurement,
-since the one trial run against it did not reproduce the race. A clone checks the identity record
-out last as far as git's order goes: git writes a tree in path order, where the record's path sorts
-after every file the template ships, but parallel checkout (`checkout.workers`) keeps no order, and
-a file of yours whose path sorts after the record comes after it, so a clone cut short can carry
-the record. A generated overlay has no `.drybag/manifest.json`, so `drybag overlay upgrade`
+since the one trial run against it did not reproduce the race. A clone is written in the order git
+takes, so, unlike a render, a clone cut short can carry the identity record without every other
+file. A generated overlay has no `.drybag/manifest.json`, so `drybag overlay upgrade`
 refreshes none of its files once they differ from a release's (`overlay upgrade`, above).
 
 **Writes** `<home>` itself when it is not there yet; `--machine`'s file, with the directories above
