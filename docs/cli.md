@@ -614,10 +614,11 @@ Markdown, a nested repository or a file git calls binary is left out of the comm
 never committed, integrated, written or pushed. Nothing configures the list.
 
 **When an overlay stops tracking its generated indexes.** An overlay that still commits its
-`MEMORY.md` indexes should stop, with one commit that untracks them. Git deletes a tracked file when
-a pull removes it from the index, so each machine runs `git rm --cached -q <its indexes>` in its
-overlay clone before pulling that commit, or git deletes the working files. `<its indexes>` are the
-`projects/*/memory/MEMORY.md` files that clone tracks. Until the commit is taken on a machine, the
+`MEMORY.md` indexes should stop, with one commit that untracks and ignores them. Nothing is needed beforehand on a
+machine: the pull deletes each index the commit untracks, and the next session renders it again. A
+clone with local changes to an index refuses that pull; copy the index aside, run
+`git checkout -- <index>`, pull, and put the copy back, where it is now ignored. Until the commit is
+taken on a machine, the
 job holds it like any upstream change outside memory, and `doctor` gives the review command.
 
 **What it never does.** Force-push, stash, rebase, pull, push a tag, rebuild a commit of yours that

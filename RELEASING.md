@@ -43,7 +43,7 @@ holds it, because it is computed from the release commit alone: the plugin tree,
 committer and date, a message naming the version, and as its parent the `sha` the release
 commit's first parent pins — the plugin commit pushed last, the previous release's or a stopped
 release's (section 5), which is what the plugin repository's `main` must hold — or none for
-the first release an empty plugin repository holds. `scripts/release.py pin` writes it
+a plugin repository with no history, which this one is not (section 3 seeds it). `scripts/release.py pin` writes it
 (section 2, step 5). Plain `check` holds only the `sha`'s shape, 40 lowercase hex characters,
 because between releases the entry pins the plugin commit pushed last, which no later tree makes.
 
@@ -67,7 +67,10 @@ step 7's sentence true.
 **If this is the first release published from the plugin repository, do section 3's "The plugin
 repository" first.** That is the first release after the rename too, not only the first release ever: until
 `dry-bag/drybag-plugin` exists with its four rulesets, step 1's read-back of them answers
-`404` and step 7's push has nowhere to go.
+`404` and step 7's push has nowhere to go. The first release after the rename also finds this
+repository's own two tag rulesets as the transfer left them, guarding the former product's `--v*` tags:
+replace that pattern with `refs/tags/drybag--v*` in both before step 1, whose read-back holds exactly
+the two patterns.
 
 **The plugin is published from a repository of its own.** The marketplace entry here fetches it
 from `dry-bag/drybag-plugin`, a `url` source pinned to the release's tag by `ref` and to the
@@ -286,7 +289,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    ```
 
    `pin` writes nothing unless the plugin commit's parent is `dry-bag/drybag-plugin`'s `main`
-   — both absent for the first release an empty plugin repository holds, and after it whatever plugin commit was pushed last, a spent
+   — the commit section 3 seeds it with, for the first release after the rename, and after it whatever plugin commit was pushed last, a spent
    release's included — because that `main` moves only by fast-forward. Its refusal names both
    commits; section 5 says what each means. It lists `main` with `git ls-remote` through your own
    git, which a `url.*.insteadOf` or a `GIT_CONFIG_*` variable can point elsewhere, so its check is
@@ -569,8 +572,13 @@ release_ruleset "release tag creation" "${TMPDIR:-/tmp}/release-tag-creation.jso
 Then read the two back with section 2's step 1, one line each.
 
 **The plugin repository.** Before the first `scripts/publish_plugin.py --yes`, create
-`dry-bag/drybag-plugin`, public and empty — no README, licence or `.gitignore`, because its
-first commit is the one `publish_plugin.py` builds — and protect its tags and its `main`. A
+`dry-bag/drybag-plugin`, public and empty — no README, licence or `.gitignore` — then seed it and
+protect its tags and its `main`. The seed is the commit the first release's plugin commit follows, the
+`sha` `.claude-plugin/marketplace.json` pins, which is the last plugin commit pushed before the rename:
+from a clone of the plugin repository the earlier releases were published from, `git push
+git@github.com:dry-bag/drybag-plugin.git f6d299144481ccc0824c890913985abc16e0bc6f:refs/heads/main`.
+Without the seed `pin` refuses, since the new plugin commit has that parent and the repository has no
+`main`. A
 ruleset applies every rule it carries to every ref it matches and has one target, tags or
 branches, and its bypass applies to every rule it carries, so four rulesets: `release tags`, with
 `deletion` and `update` rules over `refs/tags/v*.*.*` and no bypass, so a published tag never

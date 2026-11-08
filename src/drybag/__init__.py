@@ -1,4 +1,4 @@
-"""drybag: a methodology harness for coding agents."""
+"""drybag: private layers for coding agents."""
 
 __version__ = "0.6.1"
 

@@ -924,7 +924,7 @@ reddens = [
 [[mutation]]
 name = "the README's not-yet sentence stops naming what has not shipped"
 file = "README.md"
-before = "**Not yet:** the memory MCP server, a hold-the-line baseline, an importer for the notes\n> you already keep, a visual map of what an overlay delivers, and adapters for Cursor or Hermes \u2014\n> each"
+before = "**Not yet:** the memory MCP server, an importer for the notes\n> you already keep, a visual map of what an overlay delivers, and adapters for Cursor or Hermes \u2014\n> each"
 after = "**Not yet:** the memory MCP server \u2014\n> each"
 reddens = [
   "tests/test_manifests.py::test_the_readme_still_declares_what_has_not_shipped",

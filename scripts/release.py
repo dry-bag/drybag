@@ -603,7 +603,8 @@ def pin(root: Path, *, remote: str, runner: Runner) -> str:
         holds = f"main at {main}" if main is not None else "no main"
         raise Refusal(
             f"the plugin commit {made} has {follows}, and {remote} has {holds}; the plugin "
-            "repository's main moves only by fast-forward. The likely cause: this release commit "
+            "repository's main moves only by fast-forward. The likely cause: the plugin "
+            "repository was never seeded (RELEASING.md, section 3); this release commit "
             f"was cut on the wrong base; a merge into main dropped the sha {MARKETPLACE} pinned "
             "at the release before; or a release that stopped after its plugin was pushed left "
             "main at a commit nothing here pins, which the restore commit puts back (RELEASING.md, "

@@ -10,7 +10,7 @@ project. One plugin for Claude Code and Codex, one Python package with **no runt
 > the plugin is enough to make the hints fire and the memory bundles arrive
 > ([what each agent enforces](#what-each-agent-enforces)). The first skills ship with them, and so
 > does one command meant for a machine rather than for you — `hook`, which dispatches one harness
-> event. **Not yet:** the memory MCP server, a hold-the-line baseline, an importer for the notes
+> event. **Not yet:** the memory MCP server, an importer for the notes
 > you already keep, a visual map of what an overlay delivers, and adapters for Cursor or Hermes —
 > each leaves this list in the change that ships it. The [Quickstart](#quickstart) shows the three
 > keys that are enough to start a project by hand.
@@ -194,12 +194,12 @@ drybag writes files. Being specific about which is the point of this section.
 | `<store>/MEMORY.md` | The rendered routing index. **Generated — do not hand-edit** | `drybag memory index` |
 | `docs/roadmap.md` (configurable) | The forward track; `docs trail` owns only the listing between its two markers | you; `drybag docs trail` rewrites the listing |
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | you |
-| `~/.config/drybag/config.toml` | Machine-level settings: `[personal]`; `[guards]`, where `bg_cleanup = false` switches the background guard off on this machine, whatever a repository's `drybag.toml` sets as its default; `[budgets]`, the four budgets that bound what a session loads; `[overlay]`; `[sync]`, whose `enabled = true` `setup --overlay` writes for an overlay it makes; and `[machine]`. `~` is `HOME`, as the harness reads it ([docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md#configuration)) | you, or `drybag setup` |
+| `~/.config/drybag/config.toml` | Machine-level settings: `[personal]`; `[guards]`, where `bg_cleanup = false` switches the background hint off on this machine, whatever a repository's `drybag.toml` sets as its default; `[budgets]`, the four budgets that bound what a session loads; `[overlay]`; `[sync]`, whose `enabled = true` `setup --overlay` writes for an overlay it makes; and `[machine]`. `~` is `HOME`, as the harness reads it ([docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md#configuration)) | you, or `drybag setup` |
 | `~/.config/drybag/trust.json` | Every approval recorded on this machine, as a versioned record of kinds and subjects, under the same home, the notes you promoted among them (kind `reviewed`) | `drybag memory promote`, which records a note |
 | `hooks/hooks.json` and `hooks/run-hook.sh` | The zero-config wiring both harnesses read, and the wrapper they execute. **Shipped in the plugin; never written into a project** | nothing — they are part of the plugin |
 | `${CLAUDE_PLUGIN_DATA}/drybag/` | Once-per-session markers and the hook diagnostics log. Deleted with the plugin | the hook dispatcher |
 | `.git/drybag/attach.json` (in the git common directory every worktree shares) | What `attach` added to this repository, so `detach` can take exactly that back. A branch cannot write it | `drybag attach` |
-| `<overlay>/common/drybag.toml` | Preferences, session budgets, personal values and guard switches for every checkout on a machine that records this overlay, above the repository's `drybag.toml` and below the machine file. Read the way a session reads `drybag.toml`: what this drybag cannot use is ignored with a note, and a gate's input or a fact about the repository is never taken from it | you |
+| `<overlay>/common/drybag.toml` | Preferences, session budgets, personal values and hint switches for every checkout on a machine that records this overlay, above the repository's `drybag.toml` and below the machine file. Read the way a session reads `drybag.toml`: what this drybag cannot use is ignored with a note, and a gate's input or a fact about the repository is never taken from it | you |
 | `<overlay>/projects/<name>/drybag.toml` | The same keys for one project, above the common file: read only for a checkout this machine binds to `<name>`, never for one whose own `drybag.toml` merely names it | you |
 | `<overlay>/projects/<name>/project.toml` | The remote this project was first attached with, and when; it binds nothing | `drybag attach`, while it records no remote |
 | `.git/drybag/binding` (in the git common directory every worktree shares) | The checkout's binding id: 32 random hexadecimal characters that never leave this machine and are printed only as their first eight. No clone carries it | `drybag attach`, once |
@@ -342,7 +342,7 @@ drybag docs trail --check
 drybag plan check                                   # lint the plans a change touches
 drybag plan check --base origin/main docs/plans/example.md
 
-# Guards
+# Commit checks
 drybag commit check --range origin/main..HEAD       # attribution lines in commit messages
 drybag commit strip .git/COMMIT_EDITMSG             # take the attribution block out of a message file
 
