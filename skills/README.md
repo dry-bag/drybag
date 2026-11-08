@@ -28,5 +28,5 @@ Skills reference the CLI by name (`drybag …`): the plugin root placeholder is 
 in skill content under Codex, so a path to the launcher would break there. Detail beyond a
 short procedure goes in `<skill>/references/`.
 
-`memory-sweep` wraps the methodology rather than a command: it names the commands it runs and
+`memory-sweep` wraps a procedure rather than a command: it names the commands it runs and
 the reference that carries its detail.

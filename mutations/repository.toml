@@ -902,8 +902,8 @@ reddens = ["tests/test_neutral.py::test_a_token_hit_names_the_offset_of_its_firs
 [[mutation]]
 name = "the PyPI description advertises the unshipped memory MCP server"
 file = "pyproject.toml"
-before = 'description = "A methodology harness for coding agents: working memory whose notes count once reviewed, and fail-closed guards, packaged as one plugin for Claude Code and Codex."'
-after = 'description = "A methodology harness for coding agents: curated working memory, guards, and a memory MCP server, packaged as one plugin for Claude Code and Codex."'
+before = 'description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check, packaged as one plugin for Claude Code and Codex."'
+after = 'description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, a memory MCP server, plan and doc linting, and a commit-attribution check, packaged as one plugin for Claude Code and Codex."'
 reddens = [
   "tests/test_manifests.py::test_no_storefront_string_advertises_what_the_readme_says_is_not_yet",
 ]
@@ -924,8 +924,8 @@ reddens = [
 [[mutation]]
 name = "the README's not-yet sentence stops naming what has not shipped"
 file = "README.md"
-before = "**Not yet:** the memory MCP server, a hold-the-line baseline,\n> and adapters for Cursor or Hermes \u2014 each"
-after = "**Not yet:** the memory MCP server \u2014 each"
+before = "**Not yet:** the memory MCP server, a hold-the-line baseline, an importer for the notes\n> you already keep, a visual map of what an overlay delivers, and adapters for Cursor or Hermes \u2014\n> each"
+after = "**Not yet:** the memory MCP server \u2014\n> each"
 reddens = [
   "tests/test_manifests.py::test_the_readme_still_declares_what_has_not_shipped",
 ]

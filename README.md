@@ -1,83 +1,91 @@
 # drybag
 
-A methodology harness for coding agents: a working memory whose index is rendered rather than written, and guards that fail closed where
-the platform lets them. One plugin for Claude Code and Codex, one Python package with
-**no runtime dependencies**.
+Private layers for coding agents, delivered into their sessions with nothing tracked in the
+project. One plugin for Claude Code and Codex, one Python package with **no runtime dependencies**.
 
-> **Pre-1.0.** What ships is a core and three delivery areas. The **core** is what drybag does
-> without its private layer: the methodology's gates, the records they check, and a machine's setup.
-> It holds the documentation and plan lints; the guards over a shell call, a commit
-> message and a test run; the scaffolding engine that writes files into a repository;
-> `drybag setup`, which configures a
-> machine from a preset; and `drybag doctor`, which reports on the result. The **delivery** areas
-> are the private layer: `memory`, the note store; `overlay`, the private overlay
-> — `overlay upgrade`, with `setup --overlay` making it; and `attach`,
-> whose `attach` binds a repository to the overlay and whose `detach` takes back what `attach`
-> wrote, keeping the overlay's record of the binding ([CONTRIBUTING.md](https://github.com/dry-bag/drybag/blob/main/CONTRIBUTING.md#areas) says
-> where the line between the two runs). The core is language-neutral, so a repository in several
-> languages needs no configuration. The hooks file that
-> wires all of it into a session ships too, so on Claude Code installing the plugin is enough to make the guards fire and
-> the memory bundles arrive ([what each agent enforces](#what-each-agent-enforces)). The first
-> skills ship with them, and so does one command meant for a machine rather than for you — `hook`,
-> which dispatches one harness event. **Not yet:** the memory MCP server, a hold-the-line baseline,
-> and adapters for Cursor or Hermes — each leaves this list in the
-> change that ships it. The [Quickstart](#quickstart) shows the three keys that are enough to start
-> a project by hand.
+> **Pre-1.0.** What ships: a private overlay of your own and the commands that deliver it, the
+> notes kept in it and synced between machines, a machine restored from it, the session hints, the
+> documentation and plan lints, the commit-attribution check, and `drybag doctor`, which reports on
+> the result. The hooks file that wires it into a session ships too, so on Claude Code installing
+> the plugin is enough to make the hints fire and the memory bundles arrive
+> ([what each agent enforces](#what-each-agent-enforces)). The first skills ship with them, and so
+> does one command meant for a machine rather than for you — `hook`, which dispatches one harness
+> event. **Not yet:** the memory MCP server, a hold-the-line baseline, an importer for the notes
+> you already keep, a visual map of what an overlay delivers, and adapters for Cursor or Hermes —
+> each leaves this list in the change that ships it. The [Quickstart](#quickstart) shows the three
+> keys that are enough to start a project by hand.
 > [docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md) is the reference; the command list below is held
 > to the parser by a test, so it is complete for what ships.
 
-## What this is, and what it is not
+A machine that ran this project under its former name starts fresh: none of its old paths, files
+or variables is read, and [CHANGELOG.md](https://github.com/dry-bag/drybag/blob/main/CHANGELOG.md) lists what was renamed. What left
+this project has new homes: the bug ledger is snagbook, and the code-free method skills are hipbelt.
 
-Two kinds of tool already exist for working with a coding agent. A process layer such as
-superpowers tells the agent *how* to work — brainstorm, plan, test first, review. A spec
-layer such as spec-kit tells it *what* to build. Neither remembers what went wrong last
-time, and neither has a way to introduce rules into a repository that does not yet follow
-them.
+## What drybag does
 
-This project looked through the community plugin marketplace on 2026-09-05 and counted about
-2,300 plugins listed that day. That is one project's dated count rather than a survey with a
-method — no row in [sources.md](https://github.com/dry-bag/drybag/blob/main/docs/methodology/sources.md) backs it, and it says what that
-look found, not what exists. What it did not find anywhere else is what drybag adds:
+**Private layers.** Your hooks, skills, agents, allow rules, rules and notes live in a private
+overlay: a versioned repository of your own, named by its identity record and with its own upgrade
+manifest, rather than a dotfiles sync. `drybag setup --overlay` renders or generates one. It is
+layered: `common/`, each tag a project lists (`groups/<tag>/`), `projects/<name>/`, then the machine
+file, the later one winning. `drybag attach` binds a checkout to it and delivers it into that
+repository's sessions, and what it places in the checkout is hidden from git, so the project tracks
+none of it ([What it writes, and where](#what-it-writes-and-where) lists every path);
+`drybag detach` takes it back. Your rules (`claude/rules/*.md`) arrive as a standing rule at every
+session's start, or, with `paths:` frontmatter, the first time a session reads or edits a file its
+globs match. The overlay also *declares* the drybag it needs, in its identity record; `drybag
+doctor` reports it when the drybag running is too old — red when this project keeps its notes in
+that overlay, a warning when it does not — and a session in a bound repository says so once at its
+start.
 
-- **A personal overlay that is a versioned repository of its own**, named by its identity record
-  and with its own upgrade manifest, rather than a dotfiles sync. `drybag setup --overlay` renders or generates one and `drybag attach`
-  binds a repository to it: the hooks, skills, agents and allow rules you keep there reach that
-  repository's sessions, and so do your rules — `claude/rules/*.md` in `common/`, in each
-  tag your project lists (`groups/<tag>/`) and in `projects/<name>/`, a standing rule at every session's start and one with
-  `paths:` frontmatter the first time a session reads or edits a file its globs match. It also *declares* the drybag it needs, in its identity record;
-  `drybag doctor` reads it and reports it when the drybag running is too old — red when
-  this project keeps its notes in that overlay, a warning when it does not — and a session in a
-  bound repository says so once at its start.
+**Memory.** Notes are Markdown files; `MEMORY.md` is a routing table rendered from them, and a note
+counts as yours only once you promote it ([Memory, in one page](#memory-in-one-page)).
 
-Two more practices ride along and are named as such: every branch that decides a verdict, a
-containment or a data-loss path ships with the mutation that reddens its test, and working memory
-is a routing table of hand-written lines, not a summary. The principles behind all of it, with dated sources and an honest note where the
-backing is thin, are in [docs/methodology/README.md](https://github.com/dry-bag/drybag/blob/main/docs/methodology/README.md).
+**Note sync.** A machine whose machine file says `[sync] enabled = true` commits the overlay's
+notes, takes in the other machines' and pushes its own from Claude Code's session hooks, through a
+detached job. Only notes move, a secret scan runs before every commit and push, and nothing is
+forced ([docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md#note-sync) names every step).
 
-**This is not a replacement for superpowers.** drybag recommends it, and
-[context7](https://github.com/upstash/context7), and `drybag setup --plugin superpowers
---plugin context7` installs them on Claude Code — both ship in Anthropic's own official
-marketplace, so `setup` needs no separate registration step for either. Neither is installed
-unless you name it: each runs in every session, and neither is pinned. **Codex has no verified non-interactive marketplace source for either plugin** (checked
-against this project's own spike record and each plugin's own published install instructions,
-2026-09-18): install `superpowers` and `context7` by hand there if you use Codex, the same way
-you would install any other Codex plugin — `setup` reports this as a note rather than guessing a
-marketplace name (nothing is vendored on a guess).
+**Machine restore.** `drybag setup --restore --overlay <path>` runs a machine's setup and then
+attaches every checkout the overlay's `machine/projects.toml` lists; `--yes` also records the
+overlay's notes as reviewed on this machine, and `--sync` switches the note sync on.
+
+**Session hints.** The background-cleanup hints, the pipe-status hint and the note after a red test
+run add context and refuse nothing ([what each agent enforces](#what-each-agent-enforces)).
+
+**Documentation and commit checks.** `drybag docs check` holds your documents to their budgets and
+link targets, `drybag docs trail` keeps a design-and-plan trail, `drybag plan check` lints the plans
+a change touches, and `drybag commit check` finds attribution lines in commit messages, which
+`drybag setup --git-hooks` strips as you commit. They are commands, so they run where you put them;
+CI is the place for one that has to hold.
+
+The principles behind the design, with dated sources and an honest note where the backing is thin,
+are in [docs/methodology/README.md](https://github.com/dry-bag/drybag/blob/main/docs/methodology/README.md).
+
+**This is not a replacement for a process layer such as superpowers.** `drybag setup --plugin
+superpowers --plugin context7` installs [superpowers](https://github.com/obra/superpowers) and
+[context7](https://github.com/upstash/context7) on Claude Code — both ship in Anthropic's own
+official marketplace, so `setup` needs no separate registration step for either. Neither is
+installed unless you name it: each runs in every session, and neither is pinned. **Codex has no
+verified non-interactive marketplace source for either plugin** (checked against this project's own
+spike record and each plugin's own published install instructions, 2026-09-18): install `superpowers`
+and `context7` by hand there if you use Codex, the same way you would install any other Codex
+plugin — `setup` reports this as a note rather than guessing a marketplace name (nothing is vendored
+on a guess).
 
 ## What each agent enforces
 
 drybag reaches an agent in three ways, and they do not hold alike on every agent. The
-**session notices** add context and refuse nothing (the background-cleanup hints, the pipe-status hint, the test-hygiene
-note, the standing rules, the volatile notes); the **repository gates** — the bug, documentation,
-plan, commit and trail checks — run in CI; and the **methodology** is
-the skills. Each column is an agent under its name in drybag's registry: `claude` is Claude
+**session notices** add context and refuse nothing (the background-cleanup hints, the pipe-status
+hint, the red-run note, the standing rules, the volatile notes); the **repository checks** — the
+documentation, plan, commit and trail commands — run where you put them, and hold in CI; and the
+**skills** are instructions. Each column is an agent under its name in drybag's registry: `claude` is Claude
 Code and `codex` is Codex.
 
 | Surface | `claude` | `codex` |
 |---|---|---|
 | session notices | context only | not verified |
-| repository gates | CI only | CI only |
-| methodology | instructions only | instructions only |
+| repository checks | CI only | CI only |
+| skills | instructions only | instructions only |
 
 The background-cleanup hints, from the `bg-cleanup` handler that `drybag hook PreToolUse` runs
 on every shell call, name a command the agent runs in the background that leaves an `&` job behind
@@ -95,8 +103,8 @@ and never refuses the command. It reads a flat list of pipelines and nothing els
 heredoc gets no hint. It reads the command alone, so it has no switch and
 runs in every repository too.
 
-Where a surface does not reach an agent in the session, the repository gates
-still hold in CI, which every agent's changes pass through. What was measured of Codex
+Where a surface does not reach an agent in the session, the repository checks
+you run in CI still hold there, since every agent's changes pass through it. What was measured of Codex
 (Codex CLI 0.162.0-alpha.17.2) is its side: it runs a plugin's hooks once they are trusted in
 `/hooks`, skips untrusted ones without a message and runs them anyway under
 `--dangerously-bypass-hook-trust`, and a blocking `PreToolUse` hook's reason reaches the model.
@@ -180,7 +188,7 @@ drybag writes files. Being specific about which is the point of this section.
 
 | Path | What it is | Written by |
 |---|---|---|
-| `drybag.toml` | Your project's configuration, committed | you |
+| `drybag.toml` | Your project's configuration: committed if you want it in the project, and not needed in a checkout bound to an overlay | you |
 | `docs/memory/` (configurable) | The note store, in `in-repo` and `overlay` mode | `drybag memory index` |
 | `.drybag/local/memory/` | The note store in `local-only` mode — git-ignored | `drybag memory index` |
 | `<store>/MEMORY.md` | The rendered routing index. **Generated — do not hand-edit** | `drybag memory index` |
@@ -204,8 +212,7 @@ drybag writes files. Being specific about which is the point of this section.
 
 Every write into a repository goes through a path walk that refuses a symlink at any component
 and refuses to leave the project root, and replaces files atomically, keeping the mode of the
-file it replaced. Nothing is written by `--check`, `plan check` or `memory
-refs`, and the scaffold engine's `plan` phase performs no writes at all.
+file it replaced. Nothing is written by `--check` or `plan check`, and the scaffold engine's `plan` phase performs no writes at all.
 
 ## What drybag sends where
 

@@ -613,6 +613,13 @@ from the scope's name down, and only as text; a link, an executable, a dot-file,
 Markdown, a nested repository or a file git calls binary is left out of the commit and named. A path outside those globs is
 never committed, integrated, written or pushed. Nothing configures the list.
 
+**When an overlay stops tracking its generated indexes.** An overlay that still commits its
+`MEMORY.md` indexes should stop, with one commit that untracks them. Git deletes a tracked file when
+a pull removes it from the index, so each machine runs `git rm --cached -q <its indexes>` in its
+overlay clone before pulling that commit, or git deletes the working files. `<its indexes>` are the
+`projects/*/memory/MEMORY.md` files that clone tracks. Until the commit is taken on a machine, the
+job holds it like any upstream change outside memory, and `doctor` gives the review command.
+
 **What it never does.** Force-push, stash, rebase, pull, push a tag, rebuild a commit of yours that
 is not memory alone, write a non-memory path of the working tree or of the real index, run a script
 from the overlay's working tree, run a git hook of the overlay's (`core.hooksPath=/dev/null`), or
@@ -1508,7 +1515,7 @@ view <owner>/drybag-overlay-template --json isTemplate` once: a template there i
 from, and a repository of that name that is not one, or `gh`'s explicit answer that there is none,
 means you have published none, and the template is `github.com/dry-bag/drybag-overlay-template`,
 the publisher's public copy, named with its host: `gh` looks an unqualified name up on `GH_HOST`,
-so on a GitHub Enterprise host `drybag/…` would be whoever owns that name there. Any other
+so on a GitHub Enterprise host `dry-bag/…` would be whoever owns that name there. Any other
 failure of that question — an expired token, a network error, a `gh` that is not installed or
 hung, an answer that is not the JSON asked for — stops the command with `gh`'s own message and
 creates nothing (`1`). Once `gh repo create` has run, the repository may exist on GitHub whatever

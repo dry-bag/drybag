@@ -1,0 +1,3 @@
+stayfixed is now drybag. The package and the command are `drybag`; the plugin is `drybag` in the marketplace `drybag` (`drybag@drybag`, from `dry-bag/drybag`); the configuration file is `drybag.toml` with the table `[drybag]`; the overlay's record is `drybag-overlay.toml`; the state directories are `~/.config/drybag/`, `~/.local/share/drybag/`, `<git common dir>/drybag/` and `.drybag/`; and the environment variables are `DRYBAG_*`. No old path, file or variable is read, so a machine that ran stayfixed starts fresh.
+
+An overlay that stops tracking its generated `MEMORY.md` indexes needs one step on every machine: run `git rm --cached -q <its indexes>` in the overlay's clone before pulling that commit, or git deletes the working files.

@@ -160,7 +160,7 @@ keeps the notes; `setup` a machine's configuration; `sync` the unattended commit
 of the overlay's memory notes (the session triggers, a detached job and its `doctor` row), switched
 on per machine; and `hints` the session hints
 (the background-cleanup hint, the red-run note and the command scanner they share). The **pack**
-(`PACK_PACKAGES`) is the methodology's records and checks: `docs`
+(`PACK_PACKAGES`) is the repository checks: `docs`
 the documentation and plan lints, and `guards` the commit-message rules.
 Every other module is the **core**,
 which both sides share, `cli.py` and the subpackages that are not areas included: its areas

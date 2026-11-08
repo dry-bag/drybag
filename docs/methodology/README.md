@@ -65,11 +65,10 @@ and narrows it to the part of the harness that encodes *how a particular person 
 which is the part none of those four covers, and the part that does not travel between
 machines unless something carries it.
 
-The code draws a line of its own. Its **core** is what drybag does without its private layer:
-the methodology's gates, the records they check, and a machine's setup. The private layer — the
-note store, the private overlay and the binding of a repository to that overlay — is the
-**delivery** layer, which the core does not import apart from the one step of machine setup that
-records the overlay ([CONTRIBUTING.md](../../CONTRIBUTING.md#areas) says how that is held). The
+The code draws a line of its own. The private layer — the note store and its sync, the private
+overlay, the binding of a repository to that overlay, a machine's setup and the session hints — is
+the **delivery** side, the documentation and commit checks are the other side, and the **core** is
+what both import ([CONTRIBUTING.md](../../CONTRIBUTING.md#areas) says how that is held). The
 code also uses the word in a narrower sense of its own: there, a harness is the agent a session
 runs in, Claude Code or Codex, one value each in a registry that the README's table of what each
 agent enforces is held equal to.

@@ -44,7 +44,7 @@ TEMPLATE_REPOSITORY = "drybag-overlay-template"
 TEMPLATE_PUBLISHER = "dry-bag"
 # The fallback named with its host, and never host-relative: `gh` resolves an unqualified
 # `OWNER/REPO` on `GH_HOST`, which the runner keeps, so on a GitHub Enterprise host the fallback
-# would be whoever owns `drybag` there, and the owner's private overlay, whose hooks run in
+# would be whoever owns `dry-bag` there, and the owner's private overlay, whose hooks run in
 # every session, would be generated from it. `gh repo create --template` and `gh repo view` look a
 # `HOST/OWNER/REPO` name up on that host whatever `GH_HOST` says (measured against gh 2.101.0).
 # The owner's own `<owner>/…` probe stays host-relative: that repository is on the owner's host.

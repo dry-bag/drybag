@@ -92,10 +92,10 @@ class Surface(StrEnum):
     # A hook that adds context and refuses nothing: the background-cleanup hints, the
     # pipe-status hint, the test-hygiene note, the standing rules, the volatile notes.
     NOTICES = "session notices"
-    # The bug, documentation, plan, commit and trail checks, run in a project's CI.
-    GATES = "repository gates"
+    # The documentation, plan, commit and trail checks, run in a project's CI.
+    GATES = "repository checks"
     # The skills.
-    METHOD = "methodology"
+    METHOD = "skills"
 
 
 class Tier(StrEnum):
