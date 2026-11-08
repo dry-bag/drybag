@@ -26,56 +26,24 @@
      `uv tool install drybag`, `/plugin marketplace add dry-bag/drybag@v0.7.0`,
      `/plugin install drybag@drybag`.
   3. In a repository with a `stayfixed.toml`, rename it to `drybag.toml`, rename its table to
-     `[drybag]`, set `version = "0.7.0"` and delete the keys listed below.
+     `[drybag]`, set `version = "0.7.0"` and delete the keys listed below. In a `local-only` project,
+     also run `mkdir -p .drybag/local && mv .stayfixed/local/memory .drybag/local/` and add
+     `.drybag/local/` to `.gitignore`.
   4. At your overlay's root, rename `stayfixed-overlay.toml` to `drybag-overlay.toml`; without it
-     `drybag setup --overlay` and `drybag overlay upgrade` refuse the tree as not an overlay. Copy
-     what you keep in `~/.config/stayfixed/config.toml` into `~/.config/drybag/config.toml`, then
-     run `drybag setup --overlay <overlay>` and `drybag attach` in each checkout. The overlay's
-     `.stayfixed/manifest.json` is not read either, so `drybag overlay upgrade` skips and names
-     every file that differs from this release's.
-  5. Read your notes, then run `drybag memory promote --changed` in a bound checkout: your approvals
-     are in `~/.config/stayfixed/trust.json`, which is not read.
+     `drybag setup --overlay` and `drybag overlay upgrade` refuse the tree as not an overlay. Rename
+     its layers, `common/stayfixed.toml` and `projects/<name>/stayfixed.toml`, to `drybag.toml`, or
+     what they set stops applying and `attach` does not say so. Copy what you keep in
+     `~/.config/stayfixed/config.toml` into `~/.config/drybag/config.toml`, then run
+     `drybag setup --overlay <overlay>` and `drybag attach` in each checkout. With no manifest of
+     its own yet, `drybag overlay upgrade` skips and names every file that differs from this
+     release's.
+  5. Read your notes, then run `drybag memory promote --changed` in each checkout that holds them.
 
-  Once that is done, `~/.config/stayfixed/`, `~/.local/share/stayfixed/`,
-  `<git common dir>/stayfixed/` and `.stayfixed/` are yours to delete.
-- **The bug ledger moved to its own tool, snagbook.** Every `stayfixed bugs` command and the
-  `file-bug` and `close-bug` skills are gone, with no alias. `drybag plan check` still holds a plan
-  that claims `Fixes BR-nnn` to a premise line, and reads that claim with the prefix `BR` only: a
-  configured `[ledger] id_prefix` is no longer honoured.
-- **Five method skills moved to the hipbelt plugin; install hipbelt to keep them:**
-  `sweep-defect-class`, `retro-to-guard`, `review-plan-three-lenses`, `run-correctness-audit` and
-  `attribute-failure`. The `code-navigator` agent no longer ships, so the plugin has no `agents/`
-  directory. The skills that ship are `attach`, `doctor`, `memory-sweep` and `setup`.
-- **`stayfixed prove` is gone, with no alias**, and so is the `Stop`-hook recipe built on it
-  (`examples/stop-hook/`): delete a hook you copied from it.
-- **The gates are gone: `stayfixed assess`, `stayfixed gate` and `stayfixed adopt promote`, with no
-  alias**, and the `adopt` skill. The checks themselves (`drybag docs check`, `docs trail --check`,
-  `plan check`, `commit check`) still report each finding, and your own CI runs the ones you choose.
-  The reusable workflow `check.yml` went with `gate`: a caller pinned to an earlier commit keeps
-  running that commit's workflow, and one pinned to a later commit no longer finds the file, so
-  delete the caller workflow, `.github/workflows/stayfixed.yml`.
-- **The stack profiles are gone, and `[stayfixed] profile` with them.** The red-run note after a
-  failed `Bash` call now speaks when one of the command's simple commands is a common test runner's
-  (`pytest`, `go test`, `cargo test`, `npm test` and the like), whatever the stack, and names only
-  the uncommitted changes in the tree: the line about stale Python bytecode is gone.
-- **`stayfixed init`, `stayfixed upgrade` and `stayfixed uninstall` are gone, with no alias**, and
-  their skills and the shipped project templates with them. A project starts from a `drybag.toml`
-  you write (the README's Quickstart), and a command that finds none says to write one.
-  `drybag docs trail` keeps working over a `docs/roadmap.md` and a `trail.toml` you write yourself,
-  and `docs/cli.md` gives their shape. A file an earlier release wrote is yours to edit or delete by
-  hand; to take a repository off, delete those files and the `stayfixed:ignore` region of
-  `.gitignore`.
-- **`stayfixed test attribute` and `stayfixed test hygiene` are gone, with no alias**, and the
-  `test` command group with them. The red-run note above still names the uncommitted changes that
-  `test hygiene` reported.
-- **`stayfixed memory refs` and `stayfixed memory fit` are gone.** `drybag doctor`'s `bundles` row
-  still says whether each bundle fits its slots.
-- **`stayfixed trust list` and `stayfixed trust revoke` are gone.** `drybag memory inventory --json`
-  gives each note's `reviewed` state and the `unreviewed` total, and `drybag doctor`'s `memory` row
-  the store's unreviewed count; both only read. A promoted note's approval holds for its bytes
-  wherever they reappear; withdrawing it is a hand edit of `trust.json` beside the machine file.
-- **Keys that left with those features are refused.** Delete these from a `drybag.toml` you carry
-  over, or every command that loads it exits 1 with the loader's refusal,
+  Once that is done, the same four directories named `stayfixed` are yours to delete. First move
+  what you keep of the files the harness wrote to `~/.local/share/stayfixed/stores/<id>/`, which
+  `detach` leaves, into the overlay's `projects/<name>/memory/project-stable/`.
+- **Keys that left with the features below are refused.** Delete these from a `drybag.toml` you
+  carry over, or every command that loads it exits 1 with the loader's refusal,
   `[drybag] has unknown key(s): enforced` for a key and `has unknown section(s): gates` for a table.
   `drybag doctor` is the exception: it warns `not-initialised`, names the settings it ignored and
   exits 0, and a session's hooks load the file the same way.
@@ -88,11 +56,44 @@
     `stayfixed`.
   - `[project] release_branch`.
   - `[commit_messages] types`; `attribution_check` stays.
+- **The bug ledger and five method skills left and are not published separately yet, so anyone
+  relying on them stays on 0.6.1 for now.** Gone, with no alias: every `stayfixed bugs` command and
+  the skills `file-bug`, `close-bug`, `sweep-defect-class`, `retro-to-guard`,
+  `review-plan-three-lenses`, `run-correctness-audit` and `attribute-failure`. `drybag plan check`
+  still holds a plan that claims `Fixes BR-nnn` to a premise line, and reads that claim with the
+  prefix `BR` only: a configured `[ledger] id_prefix` is no longer honoured. The `code-navigator`
+  agent no longer ships, so the plugin has no `agents/` directory. The skills that ship are
+  `attach`, `doctor`, `memory-sweep` and `setup`.
+- **`stayfixed prove` and these other commands are gone, with no alias:**
+
+  - `assess`, `gate` and `adopt promote`, and the `adopt` skill. The checks themselves
+    (`drybag docs check`, `docs trail --check`, `plan check`, `commit check`) still report each
+    finding, and your own CI runs the ones you choose. The reusable workflow `check.yml` went with
+    `gate`: a caller pinned to an earlier commit keeps running that commit's workflow, and one
+    pinned to a later commit no longer finds the file, so delete the caller workflow,
+    `.github/workflows/stayfixed.yml`.
+  - `init`, `upgrade` and `uninstall`, and their skills and the shipped project templates. A project
+    starts from a `drybag.toml` you write (the README's Quickstart), and a command that finds none
+    says to write one. `drybag docs trail` keeps working over a `docs/roadmap.md` and a `trail.toml`
+    you write yourself, and `docs/cli.md` gives their shape.
+  - `test attribute` and `test hygiene`, and the `test` command group.
+  - `memory refs` and `memory fit`. `drybag doctor`'s `bundles` row still says whether each bundle
+    fits its slots.
+  - `trust list` and `trust revoke`. `drybag memory inventory --json` gives each note's `reviewed`
+    state and the `unreviewed` total, and `drybag doctor`'s `memory` row the store's unreviewed
+    count; both only read. A promoted note's approval holds for its bytes wherever they reappear;
+    withdrawing it is a hand edit of `trust.json` beside the machine file.
+- **The stack profiles are gone, and `[stayfixed] profile` with them.** The red-run note after a
+  failed `Bash` call now speaks when one of the command's simple commands is a common test runner's
+  (`pytest`, `go test`, `cargo test`, `npm test` and the like), whatever the stack, and names only
+  the uncommitted changes in the tree, which `test hygiene` reported: the line about stale Python
+  bytecode is gone.
 - **Four rows left `drybag doctor`'s report, so a script reading its `--json` no longer finds
-  them:** `ci-ref`, which went with `[ci]`; `files`, where `wrapper` now reports a hook wrapper that
-  is not executable under a plugin root the environment names; `hook-entries`, which counted hook
-  entries and named none, so a hook a cloned repository commits read as accounted for; and
-  `retired-deny`.
+  them:** `ci-ref`, which went with `[ci]`; `retired-deny`; `files`, whose executable-bit check
+  moved to `wrapper` and whose comparison of `hooks.json`, the wrapper and the launcher with
+  `hooks/hashes.json` is gone; and `hook-entries`, so nothing now counts foreign hooks by provenance,
+  names by file and position an entry claiming the marker (it could go red), or lists the files
+  whose frontmatter declares hooks.
 - **`drybag setup` no longer takes `Read(.env*)` or `Read(**/.env*)` out of
   `~/.claude/settings.json`.** If either is still there, delete it by hand, since it refuses
   `.env.example` too.
@@ -115,10 +116,11 @@
   copy it aside, run `git checkout -- <index>`, pull, and put the copy back. Until a machine takes
   that commit, the sync holds it like any upstream change outside memory, and `drybag doctor` gives
   the review command.
-- **Files an earlier release wrote are left in place, and nothing here reads or writes them.** You
-  may delete each by hand: `docs/stayfixed/rules/<profile>.md` and
-  `.claude/rules/stayfixed-<profile>.md`, the profile's rules; `docs/roadmap-history.md`; and the
-  bug runbook, `bug-reports.md` in the runbooks directory under `docs/`.
+- **Files an earlier release wrote stay in place, yours to edit or delete by hand,** among them
+  `docs/stayfixed/rules/<profile>.md` and `.claude/rules/stayfixed-<profile>.md`, the profile's
+  rules; `docs/roadmap-history.md`; and the bug runbook, `bug-reports.md` in the runbooks directory
+  under `docs/`. To take a repository off, delete them and the `stayfixed:ignore` region of
+  `.gitignore`.
 
 ### Added
 
@@ -164,9 +166,7 @@
   that `set -o pipefail;` in front of the command keeps it. The hint reads only a plain list of
   pipelines, stays silent for a command with a substitution or heredoc, and never refuses the
   command.
-- **The hook wrapper now falls back to uv's Python** when there is no `python3` of 3.11 or newer on
-  `PATH`. uv is asked from `/`, so no file in the repository can choose the program every hook
-  starts.
+- **The hook wrapper now falls back to uv's Python** when `PATH` has no `python3` of 3.11 or newer.
 - **`examples/demo/demo.py` shows drybag working in a scratch directory.** It builds a small
   repository and runs a `drybag` you name against it, passing only on `drybag`'s own exit code and
   `--json` answer: an overlay attached with one project's skill and not another's. One command runs
@@ -209,9 +209,9 @@
 - **A skill or agent that both `common/` and a project of your overlay hold is now delivered whole
   from the project.** Before, `drybag attach` merged the two directories file by file, so a file
   only `common/` held, such as a helper script, stayed beside the project's `SKILL.md`.
-- **The hook wrapper now looks up `python3` from `/` and runs the binary it names,** so a `python3`
-  committed to the repository, reached through an empty or relative `PATH` element, or a version
-  manager's pin in the project no longer chooses the program every hook starts.
+- **The hook wrapper now looks up `python3`, or else uv, from `/` and runs the binary it names,**
+  so a `python3` committed to the repository, reached through an empty or relative `PATH` element,
+  or a version manager's pin in the project no longer chooses the program every hook starts.
 
 
 ## 0.6.1 (2026-10-28)

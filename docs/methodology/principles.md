@@ -11,8 +11,8 @@ closed vocabulary, and — for the severe ones — a line saying what the eviden
 establish. The index over those files is generated, refuses to overwrite content it did not
 write, and is never the place a fact is entered.
 
-**What drybag does.** Nothing any more: the bug ledger left this package for a tool of its own,
-snagbook. `plan check` still holds a plan that claims `Fixes BR-nnn` to a premise.
+**What drybag does.** Nothing any more: the bug ledger left this package. `plan
+check` still holds a plan that claims `Fixes BR-nnn` to a premise.
 
 **Why a file.** An issue tracker records a conversation; a file records a claim a later
 session can falsify. The "what this evidence does not establish" line is the part that

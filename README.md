@@ -18,8 +18,8 @@ project. One plugin for Claude Code and Codex, one Python package with **no runt
 > to the parser by a test, so it is complete for what ships.
 
 A machine that ran this project under its former name starts fresh: none of its old paths, files
-or variables is read, and [CHANGELOG.md](https://github.com/dry-bag/drybag/blob/main/CHANGELOG.md) lists what was renamed. What left
-this project has new homes: the bug ledger is snagbook, and the code-free method skills are hipbelt.
+or variables is read, and [CHANGELOG.md](https://github.com/dry-bag/drybag/blob/main/CHANGELOG.md) lists what was renamed. The bug
+ledger and the code-free method skills left and are not published separately yet: if you rely on them, stay on 0.6.1 for now.
 
 ## What drybag does
 
@@ -158,11 +158,11 @@ version = "0.7.0"
 name = "widget"          # one lowercase path segment
 
 [memory]
-groups = ["developer"]   # the preset names four; the store below has one
+mode = "local-only"
 ```
 
-The default memory mode keeps notes under `.drybag/local/memory/`, git-ignored, one
-directory per group. Write one note and render the index:
+`local-only` keeps notes under `.drybag/local/memory/`, one directory per group; `harness`,
+the default, has no store for `memory index`. Write one note and render the index:
 
 ```bash
 mkdir -p .drybag/local/memory/developer

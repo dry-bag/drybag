@@ -1144,11 +1144,7 @@ no longer grants**, where the ledger names it and the settings file still holds 
 from `common/`, from `projects/<name>/` or from a tag you took off the project leaves with the
 next run, each said as `allow rule withdrawn`, and a rule you added by hand, which the ledger does not name, stays.
 The ledger sits in the git common directory beside the binding id, where a branch cannot write it, so
-nothing a branch commits names what a re-attach or `detach` takes back. **An upgrade from 0.6.1, which
-kept the ledger inside the working tree (the changelog names the path),** neither reads nor removes that file. Delete it:
-it holds your allow rules, and `git status` shows it once `detach` takes the exclude block. Run
-`attach` again to rebuild the ledger. `detach` does not remove what an attach merged before the
-move, so take those allow rules, hook entries and directories out by hand. **A re-attach removes no `.codex/rules/` copy**: a
+nothing a branch commits names what a re-attach or `detach` takes back. **A re-attach removes no `.codex/rules/` copy**: a
 file dropped from a plate, or a tag taken off the project, may since have been committed or edited
 by the team, so the run leaves it and says `Codex rule copy no longer in the overlay: <path>`
 (`rules_left` in `--json`). The ledger records the sha256 of the bytes `attach` wrote to each copy,
