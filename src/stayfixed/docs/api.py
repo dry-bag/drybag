@@ -1,7 +1,7 @@
 """The import surface: everything a consumer may import from this area.
 
 A module and not the package's `__init__`, for the reason `stayfixed.guards.api`,
-`stayfixed.memory.api` and `stayfixed.ledger.api` all give: area discovery imports a package
+and `stayfixed.memory.api` both give: area discovery imports a package
 before it imports the submodule it wants, so a re-export list in `__init__.py` would pull this
 whole area — and with it the configuration layer — into every `discover()` call.
 `tests/docs/test_surface.py` asserts the `__init__` imports nothing at all.
@@ -34,8 +34,7 @@ area and why.
 The two checks above have no importer; they stay on an argument about shape — one call per
 check rather than the machinery behind it — and on `tests/test_surfaces.py`'s floor, which
 refuses a surface exporting no function or record at all. Whether this area publishes at all
-is a structural decision and the owner's; `ledger/api.py` records the same finding about its
-own list.
+is a structural decision and the owner's.
 
 **`trail_target`, for the `project` area**, which ships `trail.toml` beside the roadmap template
 and must put it where `docs trail` reads it, under the *preset's* `[paths]`, a place this

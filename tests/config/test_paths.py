@@ -269,8 +269,6 @@ _NOT_EXEMPT = {
     "agents_md",
     "specs",
     "plans",
-    "bugs",
-    "bug_index",
     "roadmap",
 }
 
@@ -464,7 +462,7 @@ def test_contained_refuses_gits_control_directory_at_any_depth_and_in_any_case(
 ) -> None:
     # `contained()` is the function every configured path and every area-supplied path goes
     # through above the first write, so the rule has to hold here and not only in the grammar
-    # loop: `ledger`, `memory` and `docs` all call it with strings `validate_paths` never sees.
+    # loop: `memory` and `docs` both call it with strings `validate_paths` never sees.
     # The case arm is not decoration — the default filesystem on macOS is case-insensitive, so
     # `.GIT` reaches the same directory — and the depth arm is a submodule's control directory.
     with pytest.raises(PathEscape, match="control directory"):

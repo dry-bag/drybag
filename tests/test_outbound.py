@@ -305,7 +305,7 @@ def test_a_listed_module_is_forbidden_with_its_submodules(module: str, forbidden
 # Each shape a launch can take, as a package file holding it, and what the walk must read of its
 # argv (`None`: an element it cannot read). The tree holds none of most of them, so the walk over
 # the tree alone cannot show they are seen.
-TOP, NESTED = "src/stayfixed/probe.py", "src/stayfixed/ledger/probe.py"
+TOP, NESTED = "src/stayfixed/probe.py", "src/stayfixed/docs/probe.py"
 GIT_RUN = "from stayfixed.gitenv import git_run\n"
 LAUNCH_SHAPES: dict[str, tuple[str, str, tuple[str | None, ...]]] = {
     "getoutput": (TOP, "import subprocess\nsubprocess.getoutput('curl x')", (None,)),

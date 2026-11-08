@@ -62,7 +62,6 @@ GIT_ENV_KEEP = (
 # nor grows with the repository: it guards against a `git` binary that hangs outright, and is
 # generous for that without leaving a hook blocked for long. A caller whose query is not that shape
 # passes its own wider bound instead and says why beside it —
-# `stayfixed.ledger.write.FETCH_TIMEOUT_SECONDS` for one that reaches the network,
 # `QUERY_TIMEOUT_SECONDS` below for one that is merely slow, since a `log --all` over a long history
 # is not a five-second `rev-parse`. Tune this number for the hang, not for a remote and not for a
 # long history.

@@ -88,14 +88,11 @@ TABLE_ROWS = [
     ("budgets.status_lines", KeyClass.GATE_PARAMETER),
     ("budgets.roadmap_prose_lines", KeyClass.GATE_PARAMETER),
     ("budgets.roadmap_prose_words", KeyClass.GATE_PARAMETER),
-    ("ledger.code_roots", KeyClass.GATE_PARAMETER),
-    ("ledger.evidence_boundary_required_for", KeyClass.GATE_PARAMETER),
     ("stayfixed.version", KeyClass.REPOSITORY_ONLY),
     ("stayfixed.preset", KeyClass.REPOSITORY_ONLY),
     ("project.name", KeyClass.REPOSITORY_ONLY),
     ("project.base_branch", KeyClass.REPOSITORY_ONLY),
-    ("paths.bugs", KeyClass.REPOSITORY_ONLY),
-    ("ledger.id_prefix", KeyClass.REPOSITORY_ONLY),
+    ("paths.roadmap", KeyClass.REPOSITORY_ONLY),
     ("native_caps.hook_output_chars", KeyClass.PLUGIN_OWNED),
 ]
 
@@ -118,7 +115,7 @@ def test_no_exact_key_contradicts_its_wildcard() -> None:
     # `class_of` asks the exact key first, so an exact row under a wildcard of another class
     # would make one field of a section settable where the rest are not, with nothing saying so.
     # Mutation (`mutations/`'s "an exact row contradicts its section's wildcard"): a
-    # `paths.bugs` row of the gate class under `paths.*` reddens this.
+    # `paths.roadmap` row of the gate class under `paths.*` reddens this.
     for key in exact_keys(CLASSES):
         wildcard = key.split(".")[0] + ".*"
         assert wildcard not in CLASSES or CLASSES[wildcard] is CLASSES[key]
@@ -139,8 +136,6 @@ def test_the_budget_split_is_total_and_disjoint() -> None:
 
 @pytest.mark.parametrize(("key", "expected"), TABLE_ROWS)
 def test_the_table(key: str, expected: KeyClass) -> None:
-    # Mutation (`mutations/`'s "ledger.code_roots is classed as the repository's alone"): the row
-    # moves to `REPOSITORY_ONLY` and the `ledger.code_roots` case reddens.
     assert class_of(key) is expected
 
 

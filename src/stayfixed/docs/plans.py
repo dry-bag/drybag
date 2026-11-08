@@ -92,7 +92,7 @@ from stayfixed.docs.hygiene import read_document
 from stayfixed.errors import Failure, Refusal
 from stayfixed.findings import Finding
 from stayfixed.gitenv import NO_ANSWER, ForkUnknown, fork_points, git_run
-from stayfixed.ledger.api import bug_register
+from stayfixed.identifiers import BUG_FIXES
 from stayfixed.prose import blank_fences, path_references, present_within, resolves_within
 
 if TYPE_CHECKING:
@@ -411,7 +411,7 @@ def _has_premise(prose: str) -> bool:
 
 
 def _lint_one(
-    path: Path, where: str, root: Path, *, fixes: re.Pattern[str], judged: set[int] | None = None
+    path: Path, where: str, root: Path, *, judged: set[int] | None = None
 ) -> list[Finding]:
     """Every finding one plan carries, with the line numbers of the file as it is on disk.
 
@@ -424,7 +424,7 @@ def _lint_one(
     # Per plan, not per line: these are properties of the document, not of one line in it.
     if not _SCOPE_LINE.search(prose):
         found.append(Finding("scope-missing", where, None, _SCOPE_MISSING))
-    if fixes.search(prose) and not _has_premise(prose):
+    if BUG_FIXES.search(prose) and not _has_premise(prose):
         found.append(Finding("premise-missing", where, None, _PREMISE_MISSING))
     declared: set[str] = set()
     for line in _DECLARES.findall(prose):
@@ -483,9 +483,8 @@ def lint(root: Path, config: Config, *, plans: list[Path], base: str | None = No
     else:
         selected = sorted(plans_dir.glob("*.md")) if fsops.is_dir(plans_dir) else []
     findings: list[Finding] = []
-    fixes = bug_register(config).ids.fixes
     for path in sorted(selected):
         judged = written_lines(root, base, path) if diff_scoped else None
         where = path.relative_to(root).as_posix()
-        findings.extend(_lint_one(path, where, root, fixes=fixes, judged=judged))
+        findings.extend(_lint_one(path, where, root, judged=judged))
     return Lint(findings, sorted(selected), sorted(unlinted))

@@ -227,9 +227,9 @@ def test_an_undecodable_worktree_back_pointer_is_no_registered_worktree(tmp_path
     [
         (("init", "--yes", "--dry-run"), "machine"),
         (("init", "--yes", "--dry-run"), CONFIG_FILE),
-        (("bugs", "check"), CONFIG_FILE),
+        (("docs", "check"), CONFIG_FILE),
     ],
-    ids=["init-machine", "init-stayfixed-toml", "bugs-check-stayfixed-toml"],
+    ids=["init-machine", "init-stayfixed-toml", "docs-check-stayfixed-toml"],
 )
 def test_a_command_meeting_an_undecodable_file_fails_and_does_not_crash(
     tmp_path: Path, argv: tuple[str, ...], planted: str

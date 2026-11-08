@@ -311,17 +311,6 @@ reddens = [
   "tests/project/test_init.py::test_a_second_init_creates_what_is_missing_and_touches_nothing_else",
 ]
 
-# `bug_register` refuses a `[ledger]` value the ledger cannot work with in every command that
-# builds the register and in no other, and `init` builds it only to render an index it writes.
-[[mutation]]
-name = "init builds the bug ledger's register though the index is already there"
-file = "src/stayfixed/project/templates.py"
-before = '        _once("bug-index", p.bug_index, lambda: render_index([], bug_register(config))),'
-after = '        _once("bug-index", p.bug_index, partial(render_index, [], bug_register(config))),'
-reddens = [
-  "tests/project/test_init.py::test_the_bug_index_is_rendered_only_where_init_writes_it",
-]
-
 # One refusal for every pair of artifacts at one file: `scaffold.engine.plan` has no
 # duplicate-target detection, and two `[paths]` keys aimed at one file had `apply` write both. The
 # anchor is this module's artifact list; the refusal names two ids and their keys, never the value.
@@ -731,17 +720,6 @@ reddens = [
 
 # `LISTED_LIMIT` on the rest of the class: every list of names the repository or its history
 # bounds in number by nothing, on a summary line or in a refusal, takes `findings.listed`.
-
-# `init` writes the audits README where the bug ledger's index links it, from the name its register
-# builds that link from.
-[[mutation]]
-name = "init writes the audits README under a directory the bug index does not link"
-file = "src/stayfixed/project/templates.py"
-before = "    audits = ledger_path(p.bugs, BUG_AUDITS)"
-after = '    audits = ledger_path(p.bugs, "audit")'
-reddens = [
-  "tests/project/test_init.py::test_a_fresh_init_leaves_trail_and_ledger_checks_green",
-]
 
 # A preset is parsed once per process, and every load hands its caller a copy of that parse.
 [[mutation]]

@@ -147,11 +147,11 @@ LOCAL_WHOLE = frozenset({("git", "remote")})
 # `-c`, whose value is configuration: it is held to `GIT_CONFIG_KEYS`. Any other option there is a
 # finding, because the subcommand the tables match would then follow something unread.
 # `--no-optional-locks` keeps a `status` from writing the index it refreshes.
-GIT_GLOBAL_OPTIONS = {"-c": True, "--literal-pathspecs": False, "--no-optional-locks": False}
-# The configuration a launch may set with `git -c`: each changes how git prints a name or how
-# strictly it checks what it receives (the note sync's fetch), and never what it runs or where it
-# reaches, as `core.sshCommand`, `core.fsmonitor` or `url.<base>.insteadOf` would.
-GIT_CONFIG_KEYS = frozenset({"core.quotePath", "fetch.fsckObjects"})
+GIT_GLOBAL_OPTIONS = {"-c": True, "--no-optional-locks": False}
+# The configuration a launch may set with `git -c`: each changes how strictly git checks what it
+# receives (the note sync's fetch), and never what it runs or where it reaches, as
+# `core.sshCommand`, `core.fsmonitor` or `url.<base>.insteadOf` would.
+GIT_CONFIG_KEYS = frozenset({"fetch.fsckObjects"})
 # Options with which a git command that otherwise reads the local repository asks a remote instead
 # (`git archive --remote=<url>`). Wherever one appears before the options end, the launch is not
 # local. Matched by the start of the whole name, since `git archive` takes neither of its two
@@ -191,9 +191,6 @@ NO_ROWS: frozenset[str] = frozenset()
 # in it is bound once in its function and never mutated, so the same expression handed again after
 # a rebinding is a finding too. The comment says what each runs; a reviewer reads it.
 PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
-    # A fixed bug entry's `regression`, the argv as the entry wrote it, which `bugs regressions`
-    # runs from the project root.
-    ("src/stayfixed/ledger/regressions.py", "_run", "list(argv)"): frozenset({"regression"}),
     # `claude plugin marketplace add` and `codex plugin marketplace add`, then `claude plugin
     # install` and `codex plugin add`, each built by a lambda in `_MARKETPLACE_ADD` or
     # `_PLUGIN_INSTALL`, which `test_the_plugin_installs_reach_the_rows_their_entries_name` calls.
@@ -275,7 +272,6 @@ VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
         "a merge base git printed, or the base `touched_plans` refused when it starts with `-`, "
         "which `lint` runs before it asks for any plan's lines"
     ),
-    ("src/stayfixed/ledger/check.py", "_base_ledger", "fork"): "a merge base git printed",
     ("src/stayfixed/guards/attribute.py", "_extract", "str(archive)"): (
         "the value of `git archive -o` and of `tar -f`, a path under the temporary directory "
         "this run made"

@@ -62,7 +62,7 @@ def _finish(groups: SubParsers) -> None:
     spell it twice. The `--json` epilog rides along for the same reason it is on the root.
 
     The group listing is sorted because discovery is by area and registration within one, so
-    `bugs` (from `ledger`) landed between `hook` and `memory`; `discover_registrars` says "in
+    `commit` (from `guards`) landed between `doctor` and `hook`; `discover_registrars` says "in
     name order", and that is now true of what the user sees and not only of the modules.
 
     `_choices_actions` and `_name_parser_map` are argparse's own bookkeeping, unchanged since

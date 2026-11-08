@@ -20,7 +20,7 @@ no shipped system file carries an excludes rule.
 The directory is empty but for one file: a `.gitconfig` that turns git's automatic maintenance
 off, with the two keys and for the reason `tests/gitfixture.py` gives the fixture's `git`.
 `scrubbed_env` drops the variables that carry them there, and `HOME` is how the same two reach
-the product's `git` — a ledger `fetch` starts maintenance like a `commit` does — and every
+the product's `git` — a `fetch` starts maintenance like a `commit` does — and every
 `stayfixed` and `Runner` launch a test starts, which inherit this `HOME`.
 """
 

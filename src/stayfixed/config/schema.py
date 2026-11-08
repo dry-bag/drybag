@@ -76,8 +76,6 @@ class Paths:
     agents_md: str
     specs: str
     plans: str
-    bugs: str
-    bug_index: str
     roadmap: str
     memory: str
 
@@ -141,13 +139,6 @@ class NativeCaps:
 
 
 @dataclass(frozen=True)
-class Ledger:
-    id_prefix: str
-    code_roots: tuple[str, ...]
-    evidence_boundary_required_for: tuple[str, ...]
-
-
-@dataclass(frozen=True)
 class CommitMessages:
     attribution_check: bool
 
@@ -167,6 +158,5 @@ class Config:
     memory: Memory
     budgets: Budgets
     native_caps: NativeCaps
-    ledger: Ledger
     commit_messages: CommitMessages
     personal: Personal

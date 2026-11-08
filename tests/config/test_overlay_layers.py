@@ -17,7 +17,7 @@ from stayfixed.config import overlay_layers
 from stayfixed.config.classes import REFUSED_LAYER_NOTE, LayerName
 from stayfixed.config.reading import MachineConfigError, read_machine_toml
 from stayfixed.config.session import session_config
-from stayfixed.presets import defaults_of, load_preset
+from stayfixed.presets import load_preset
 from stayfixed.printed import quoted
 from tests.gitfixture import git, needs_git
 from tests.tagged import list_tags
@@ -26,6 +26,7 @@ pytestmark = needs_git
 
 MINIMAL = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "sample"\n'
 BUDGET = "budgets.startup_rules_words"
+GATE_BUDGET = "agents_md_lines"
 
 
 def project(tmp_path: Path) -> Path:
@@ -117,19 +118,19 @@ def test_an_unbound_checkout_naming_the_project_gets_no_project_layer(tmp_path: 
 
 def test_a_gate_parameter_in_either_overlay_file_never_reaches_the_config(tmp_path: Path) -> None:
     # What a pull request is judged by is the base branch's file alone: `resolve` refuses both
-    # overlay layers for `ledger.code_roots`, and says so for each.
+    # overlay layers for a gate's budget, and says so for each.
     root = project(tmp_path)
-    gate = '[ledger]\ncode_roots = ["elsewhere"]\n'
+    gate = f"[budgets]\n{GATE_BUDGET} = 999\n"
     recorded = overlay(tmp_path, common=gate, sample=gate)
     binding.record(root, "sample", None)
     session = session_config(root, machine=machine(tmp_path, recorded))
-    preset = defaults_of(load_preset("recommended"))["ledger"]["code_roots"]
+    preset = load_preset("recommended")["budgets"][GATE_BUDGET]
     assert session.config is not None
-    assert session.config.ledger.code_roots == tuple(preset)
-    assert REFUSED_LAYER_NOTE.format(key="ledger.code_roots", layer="overlay common") in (
+    assert session.config.budgets.effective(GATE_BUDGET) == preset
+    assert REFUSED_LAYER_NOTE.format(key=f"budgets.{GATE_BUDGET}", layer="overlay common") in (
         session.resolution.notes
     )
-    assert REFUSED_LAYER_NOTE.format(key="ledger.code_roots", layer="overlay project") in (
+    assert REFUSED_LAYER_NOTE.format(key=f"budgets.{GATE_BUDGET}", layer="overlay project") in (
         session.resolution.notes
     )
 
@@ -236,12 +237,12 @@ def test_a_gate_parameter_in_a_tag_file_never_reaches_the_config(tmp_path: Path)
     # branch's alone, and the note names the tag that tried.
     root = project(tmp_path)
     recorded = overlay(tmp_path, common="", sample="")
-    tagged(recorded, ["a"], a='[ledger]\ncode_roots = ["elsewhere"]\n')
+    tagged(recorded, ["a"], a=f"[budgets]\n{GATE_BUDGET} = 999\n")
     binding.record(root, "sample", None)
     session = session_config(root, machine=machine(tmp_path, recorded))
-    preset = defaults_of(load_preset("recommended"))["ledger"]["code_roots"]
+    preset = load_preset("recommended")["budgets"][GATE_BUDGET]
     assert session.config is not None
-    assert session.config.ledger.code_roots == tuple(preset)
-    assert REFUSED_LAYER_NOTE.format(key="ledger.code_roots", layer="overlay tag a") in (
+    assert session.config.budgets.effective(GATE_BUDGET) == preset
+    assert REFUSED_LAYER_NOTE.format(key=f"budgets.{GATE_BUDGET}", layer="overlay tag a") in (
         session.resolution.notes
     )

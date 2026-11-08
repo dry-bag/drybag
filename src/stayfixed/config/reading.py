@@ -66,7 +66,7 @@ INTEGER_LIMIT = 2**31
 class ConfigError(Failure):
     """A stayfixed.toml that cannot be trusted as written.
 
-    `key` is the dotted key a refusal of one key is about — `memory.mode`, `paths.bugs`, a
+    `key` is the dotted key a refusal of one key is about — `memory.mode`, `paths.specs`, a
     section's name for a section that is not a table — and `None` for a refusal of the whole
     document. It is the key the NOTE path decides about, removing it or naming it
     (`loads_noting`); it is never printed, so it may be any text the document chose.

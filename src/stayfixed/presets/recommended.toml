@@ -32,19 +32,12 @@ base_branch = "main"
 agents_md = "AGENTS.md"
 specs = "docs/specs"
 plans = "docs/plans"
-bugs = "docs/bugs"
-bug_index = "docs/bug-reports.md"
 roadmap = "docs/roadmap.md"
 memory = "docs/memory"
 
 [defaults.memory]
 groups = ["developer", "project-stable", "project-volatile", "specs"]
 index_extra = []
-
-[defaults.ledger]
-id_prefix = "BR"
-code_roots = ["src", "tests", "scripts"]
-evidence_boundary_required_for = ["high"]
 
 [defaults.commit_messages]
 attribution_check = false

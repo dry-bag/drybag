@@ -341,7 +341,7 @@ jobs:
   # on the product's own exit code and `--json` answer. Claude Code is installed at the `plugin`
   # job's pin for the act that attaches an overlay, and `--require-claude` fails the run when that
   # act is skipped, so a missing `claude` is a red job and not a quiet skip. It makes no model
-  # call. `PATH` leads with the project's environment, so its `pytest` is the one the acts run.
+  # call.
   demo:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
@@ -363,4 +363,4 @@ jobs:
       - name: Install
         run: uv sync --locked
       - name: The demo, against the checkout's stayfixed
-        run: PATH="$PWD/.venv/bin:$PATH" python3 -I examples/demo/demo.py "$PWD/.venv/bin/stayfixed" --require-claude
+        run: python3 -I examples/demo/demo.py "$PWD/.venv/bin/stayfixed" --require-claude

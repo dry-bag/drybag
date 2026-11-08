@@ -23,11 +23,10 @@ from tests.pathfaults import ROOT_SEARCHES_EVERYTHING, unsearchable
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# The tree's `needs_git` idiom (`tests/test_git_run.py`, `tests/ledger/test_scan.py`,
-# `tests/ledger/test_write.py`), with the one change this module needs: the guard asks about
-# `/usr/bin/git` rather than `shutil.which("git")`, because the hook runs in a subprocess whose
-# PATH `hook()` pins to `/usr/bin:/bin`. A `git` the parent can find elsewhere is a `git` the
-# hygiene handler's `git status` still cannot reach, so `which` would answer for the wrong
+# The tree's `needs_git` idiom (`tests/test_git_run.py`), with the one change this module needs: the
+# guard asks about `/usr/bin/git` rather than `shutil.which("git")`, because the hook runs in a
+# subprocess whose PATH `hook()` pins to `/usr/bin:/bin`. A `git` the parent can find elsewhere is a
+# `git` the hygiene handler's `git status` still cannot reach, so `which` would answer for the wrong
 # process and turn a skip into a failure nobody could read.
 needs_git = pytest.mark.skipif(
     not Path("/usr/bin/git").exists(),

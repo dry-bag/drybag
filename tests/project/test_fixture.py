@@ -44,5 +44,5 @@ def test_the_smoke_fixture_is_a_project_init_has_nothing_left_to_create_in(tmp_p
     planned = plan(root, templates)
     # The walk is stated non-empty first: an empty artifact list would satisfy the assertion
     # below while proving nothing about the fixture at all.
-    assert len(templates) >= 5
+    assert len(templates) >= 4
     assert not [a for a in planned.actions if a.verb is Verb.CREATE]

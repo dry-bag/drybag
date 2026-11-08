@@ -72,11 +72,10 @@ _UNINTERPOLABLE = (
     "{path}: a {what} is written into the generated listing verbatim, so it must be a single "
     "line and must carry neither `{marker}` nor the end-of-trail comment"
 )
-# `{row!r}` is repository-authored text in a message, for `ledger.index.FOREIGN_CONTENT`'s
-# reason: this reaches the terminal of the person who ran the command against their own
-# repository, and naming the file is the whole of what makes "rename it" actionable. `!r` keeps
-# a name holding a newline or a carriage return on one line, and spells a byte that is not UTF-8
-# as its escape.
+# `{row!r}` is repository-authored text in a message: this reaches the terminal of the person who
+# ran the command against their own repository, and naming the file is the whole of what makes
+# "rename it" actionable. `!r` keeps a name holding a newline or a carriage return on one line, and
+# spells a byte that is not UTF-8 as its escape.
 _UNLISTABLE = (
     "{row!r} cannot be written into the {roadmap} listing: a document's name becomes both the "
     "row and the link verbatim, so it must be a single line of UTF-8 text and must carry neither "

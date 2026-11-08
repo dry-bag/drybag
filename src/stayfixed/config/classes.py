@@ -117,13 +117,10 @@ CLASSES: Mapping[str, KeyClass] = MappingProxyType(
         "memory.index_extra": KeyClass.PREFERENCE,
         **{f"budgets.{name}": KeyClass.SESSION_PARAMETER for name in sorted(SESSION_BUDGETS)},
         **{f"budgets.{name}": KeyClass.GATE_PARAMETER for name in sorted(GATE_BUDGETS)},
-        "ledger.code_roots": KeyClass.GATE_PARAMETER,
-        "ledger.evidence_boundary_required_for": KeyClass.GATE_PARAMETER,
         "stayfixed.version": KeyClass.REPOSITORY_ONLY,
         "stayfixed.preset": KeyClass.REPOSITORY_ONLY,
         "project.*": KeyClass.REPOSITORY_ONLY,
         "paths.*": KeyClass.REPOSITORY_ONLY,
-        "ledger.id_prefix": KeyClass.REPOSITORY_ONLY,
         "commit_messages.*": KeyClass.REPOSITORY_ONLY,
         "native_caps.*": KeyClass.PLUGIN_OWNED,
     }

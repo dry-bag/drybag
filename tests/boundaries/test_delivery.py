@@ -131,7 +131,7 @@ def test_the_core_imports_neither_side_but_where_pinned() -> None:
     # side, through `api.py` or not, at module level or inside a function, but for the statements
     # `CORE_TO_DELIVERY` and `CORE_TO_PACK` pin.
     #
-    # Mutation (declared): `mutations/`'s "a core module imports the bug ledger".
+    # Mutation (declared): `mutations/`'s "a core module imports the documentation area".
     assert _unpinned_or_gone((CORE, DELIVERY), (CORE, PACK)) == {}
 
 
@@ -141,10 +141,10 @@ def test_delivery_and_the_pack_import_each_other_only_where_pinned() -> None:
     # the other; an import within one side is no crossing. Held as the core's rule is, in both
     # directions.
     #
-    # Mutations (declared): `mutations/`'s "the note store imports the bug ledger", "a pinned
-    # crossing's import goes while its row stays" and "setup adds a second import statement from
-    # the guards area beside the pinned one", which a comparison of `(file, module)` sets let
-    # through.
+    # Mutations (declared): `mutations/`'s "the note store imports the documentation area",
+    # "a pinned crossing's import goes while its row stays" and "setup adds a second import
+    # statement from the guards area beside the pinned one", which a comparison of `(file, module)`
+    # sets let through.
     assert _unpinned_or_gone((PACK, DELIVERY), (DELIVERY, PACK)) == {}
 
 
@@ -244,7 +244,7 @@ def test_the_delivery_rule_judges_the_importer_and_the_imported() -> None:
     # module" -> the first arm reddens; "the delivery rule holds a delivery module to the core's
     # rule" -> the second does.
     delivery = frozenset({"attach", "memory", "overlay"})
-    pack = frozenset({"ledger", "docs"})
+    pack = frozenset({"guards", "docs"})
     assert _crossings(
         "doctor/commands.py", "def check():\n    from ..memory import api\n", delivery, pack
     ) == [((CORE, DELIVERY), ("doctor/commands.py", "stayfixed.memory"))]
@@ -253,16 +253,16 @@ def test_the_delivery_rule_judges_the_importer_and_the_imported() -> None:
     # Every direction, and the core reached from each: one text, imported from each side. Measured
     # by hand: reading an import of the core as a crossing, or reading the pack as delivery, each
     # reddens one of these.
-    text = "import stayfixed.ledger.api\nimport stayfixed.memory.store\nimport stayfixed.fsops\n"
+    text = "import stayfixed.guards.api\nimport stayfixed.memory.store\nimport stayfixed.fsops\n"
     assert _crossings("cli.py", text, delivery, pack) == [
-        ((CORE, PACK), ("cli.py", "stayfixed.ledger.api")),
+        ((CORE, PACK), ("cli.py", "stayfixed.guards.api")),
         ((CORE, DELIVERY), ("cli.py", "stayfixed.memory.store")),
     ]
-    assert _crossings("ledger/x.py", text, delivery, pack) == [
-        ((PACK, DELIVERY), ("ledger/x.py", "stayfixed.memory.store"))
+    assert _crossings("guards/x.py", text, delivery, pack) == [
+        ((PACK, DELIVERY), ("guards/x.py", "stayfixed.memory.store"))
     ]
     assert _crossings("memory/x.py", text, delivery, pack) == [
-        ((DELIVERY, PACK), ("memory/x.py", "stayfixed.ledger.api"))
+        ((DELIVERY, PACK), ("memory/x.py", "stayfixed.guards.api"))
     ]
 
     # The one spelling whose module is the package itself, so the area is in an alias: read by

@@ -52,7 +52,6 @@ from stayfixed.config.schema import (
     Budgets,
     CommitMessages,
     Config,
-    Ledger,
     Memory,
     NativeCaps,
     Paths,
@@ -79,7 +78,6 @@ SECTIONS = (
     "paths",
     "memory",
     "budgets",
-    "ledger",
     "commit_messages",
     "guards",
 )
@@ -277,7 +275,7 @@ def _deduplicated(memory: Memory) -> Memory:
     return replace(memory, groups=tuple(dict.fromkeys(memory.groups)))
 
 
-def _budgets(raw: dict[str, Any], preset: dict[str, Any], owner: Owner | None) -> Budgets:
+def _budgets(raw: dict[str, Any], preset: dict[str, Any], owner: Owner) -> Budgets:
     configured = _table(raw, "budgets")
     unknown = sorted(set(configured) - set(Budgets.NAMES))
     if unknown:
@@ -288,7 +286,7 @@ def _budgets(raw: dict[str, Any], preset: dict[str, Any], owner: Owner | None) -
         positive(f"budgets.{key}", value)
     # The owner's session budgets, which `config.owner` admitted only for the session's names,
     # are configured values that win over the document's.
-    session = {} if owner is None else owner.session_budgets
+    session = owner.session_budgets
     return Budgets(preset=dict(preset["budgets"]), configured={**configured, **session})
 
 
@@ -311,8 +309,7 @@ def load(root: Path, *, machine: Path | None = None, owner: Owner | None = None)
 
     **One reader of the file.** Through `read_document`, which goes through `contained()`: a
     `stayfixed.toml` that is a symlink is refused by every command. Read with a plain `read_text`, a
-    clone's link to `/dev/zero` would keep `bugs check` and `plan check` reading until the machine
-    ran out of memory.
+    clone's link to `/dev/zero` would keep `plan check` reading until the machine ran out of memory.
     """
     text = read_document(root)
     if text is None:
@@ -346,42 +343,31 @@ def loads(
     root: Path,
     *,
     machine: Path | None = None,
-    label: str | None = None,
-    personal: Personal | None = None,
     owner: Owner | None = None,
 ) -> Config:
     """Build a `Config` from `text` as `stayfixed.toml`'s contents, without reading a file.
 
     `load` is "read the file, then `loads`"; `init --yes` needs a `Config` for a document it
     has not written to disk yet, so the parse-and-validate half is this function on its own.
-    `label` is what a refusal calls the document when it is not the file at `root`: a commit's
-    copy `bugs check --base` reads out of git is validated against the tree's disk, and a refusal
-    naming `<root>/stayfixed.toml` would send its owner to a file with nothing wrong in it.
-    `personal` is the `[personal]` a load earlier in the same command already read, taken in
-    place of reading the machine file again: a caller that holds a `Config` and not the path
-    its machine file came from — the `bugs` gate, handed `(root, config, base)` — loads a
-    second document with it, and so reads no machine file but the one the command was given. Given
-    both, `personal` wins and `machine` is never read. `owner` is the machine owner's layer
-    (`config.owner.resolve_owner`), read once by the caller and stood on the document's preset
-    (`config.owner.rebased`): its `personal` stands in for the machine file's, as `personal` does,
-    and its session budgets are folded into `[budgets]` as configured values that win over the
-    document's; a command resolves it once, saying its notes there (`command.command_owner`), and
-    hands it to every load it makes, so a note is said once a command and never once a document.
-    Every argument after `root` is keyword-only.
+    `owner` is the machine owner's layer (`config.owner.resolve_owner`), read once by the caller
+    and stood on the document's preset (`config.owner.rebased`): its `personal` stands in for the
+    machine file's, and its session budgets are folded into `[budgets]` as configured values that
+    win over the document's; a command resolves it once, saying its notes there
+    (`command.command_owner`), and hands it to every load it makes, so a note is said once a command
+    and never once a document. Every argument after `root` is keyword-only.
     """
-    path = _document(root, label)
+    path = _document(root)
     raw = _parsed(text, path)
     unknown = sorted(set(raw) - set(SECTIONS))
     if unknown:
         raise ConfigError(f"{path} has unknown section(s): {_named(unknown, 'section')}")
-    return _built(raw, root, machine=machine, personal=personal, owner=owner)
+    return _built(raw, root, machine=machine, owner=owner)
 
 
-def _document(root: Path, label: str | None) -> str:
-    """What a refusal calls the document: `label`, or the file at `root` through
-    `printed.quoted`, since the root's name is the repository's, or the caller file's `path:`,
-    and a line break in it would start a line of its own."""
-    return label or quoted(str(root / CONFIG_FILE))
+def _document(root: Path) -> str:
+    """What a refusal calls the document: the file at `root` through `printed.quoted`, since the
+    root's name is the repository's, and a line break in it would start a line of its own."""
+    return quoted(str(root / CONFIG_FILE))
 
 
 def _parsed(text: str, path: str) -> dict[str, Any]:
@@ -414,7 +400,6 @@ def _built(
     root: Path,
     *,
     machine: Path | None,
-    personal: Personal | None,
     owner: Owner | None,
 ) -> Config:
     """The `Config` a parsed document holds, every section read and held under the preset."""
@@ -440,7 +425,6 @@ def _built(
     paths = _build(Paths, "paths", _merged(raw, defaults, "paths"))
     memory = _deduplicated(_build(Memory, "memory", _merged(raw, defaults, "memory")))
     _enum("memory", "mode", memory.mode, MEMORY_MODES)
-    ledger = _build(Ledger, "ledger", _merged(raw, defaults, "ledger"))
     commit_messages = _build(
         CommitMessages, "commit_messages", _merged(raw, defaults, "commit_messages")
     )
@@ -448,18 +432,15 @@ def _built(
     # Held to its types and dropped: a session reads the repository's `[guards]` from the document
     # the build held (`config.session`), and no command reads a guard.
     _build(Guards, "guards", _table(raw, "guards"))
-    if personal is None:
-        # The owner's layer a session folds in: one reader of the machine file for every load, so a
-        # command and a session never run on two sets of budgets. Handed in, it is stood on this
-        # document's preset; otherwise read here, `strict`, which refuses only a file that does
-        # not load, and said nowhere: saying it is the command's, once (`command.command_owner`),
-        # and said here it was said once a document, again for each base copy `bugs check` loads.
-        owner = (
-            resolve_owner(machine or machine_config_path(), preset=preset_name, strict=True)
-            if owner is None
-            else rebased(owner, preset_name)
-        )
-        personal = owner.personal
+    # The owner's layer a session folds in: one reader of the machine file for every load, so a
+    # command and a session never run on two sets of budgets. Handed in, it is stood on this
+    # document's preset; otherwise read here, `strict`, which refuses only a file that does not
+    # load, and said nowhere: saying it is the command's, once (`command.command_owner`).
+    owner = (
+        resolve_owner(machine or machine_config_path(), preset=preset_name, strict=True)
+        if owner is None
+        else rebased(owner, preset_name)
+    )
     config = Config(
         stayfixed=stayfixed,
         project=project,
@@ -467,9 +448,8 @@ def _built(
         memory=memory,
         budgets=_budgets(raw, preset, owner),
         native_caps=caps,
-        ledger=ledger,
         commit_messages=commit_messages,
-        personal=personal,
+        personal=owner.personal,
     )
     validate_paths(config, root)
     return config
@@ -493,7 +473,6 @@ def loads_noting(
     root: Path,
     *,
     owner: Owner,
-    label: str | None = None,
     parsed: dict[str, Any] | None = None,
 ) -> Noted:
     """`loads`, noting rather than refusing: read what the document holds that this stayfixed can
@@ -523,14 +502,14 @@ def loads_noting(
     document never wrote is one (`MissingKeys`). The owner's layer is folded in as `loads` folds it.
     `parsed` is `text` as a caller already parsed it, which is then not parsed again.
     """
-    path = _document(root, label)
+    path = _document(root)
     raw = _parsed(text, path) if parsed is None else parsed
     notes: list[str] = []
     keys: list[str] = []
     document = _known_only(raw, notes, keys)
     while True:
         try:
-            config = _built(document, root, machine=None, personal=None, owner=owner)
+            config = _built(document, root, machine=None, owner=owner)
         except (ConfigError, PathEscape) as exc:
             if exc.key is None:
                 raise
@@ -622,7 +601,6 @@ _SCHEMA_OF: dict[str, type[Any]] = {
     "project": Project,
     "paths": Paths,
     "memory": Memory,
-    "ledger": Ledger,
     "commit_messages": CommitMessages,
     "guards": Guards,
 }
@@ -707,7 +685,6 @@ def preset_defaults(project: str, *, preset: str = DEFAULT_PRESET) -> Config:
         memory=_build(Memory, "memory", defaults.get("memory", {})),
         budgets=Budgets(preset=dict(raw.get("budgets", {}))),
         native_caps=_build(NativeCaps, "native_caps", dict(raw.get("native_caps", {}))),
-        ledger=_build(Ledger, "ledger", defaults.get("ledger", {})),
         commit_messages=_build(
             CommitMessages, "commit_messages", defaults.get("commit_messages", {})
         ),

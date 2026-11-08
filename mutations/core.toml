@@ -67,21 +67,13 @@ before = '            os.fsync(stream.fileno())'
 after = ''
 reddens = ["tests/test_fsops.py::test_the_bytes_are_fsynced_before_the_rename"]
 
-# A repository-controlled prefix reaches a regular expression only after its shape is checked.
+# A claim on fewer than three digits is not a bug identifier.
 [[mutation]]
-name = "an unchecked ledger prefix reaches the regular expression"
+name = "a Fixes claim accepts fewer than three digits"
 file = "src/stayfixed/identifiers.py"
-before = '        if not PREFIX.match(self.prefix):'
-after = '        if False:'
-reddens = ["tests/test_identifiers.py::test_a_prefix_outside_the_contract_is_refused_before_it_meets_a_regex"]
-
-# One digit rule for the ledger and the plan lint.
-[[mutation]]
-name = "the Fixes claim stops sharing the identifier digit rule"
-file = "src/stayfixed/identifiers.py"
-before = '        return re.compile(rf"\bFixes\s+{re.escape(self.prefix)}-{DIGITS}\b")'
-after = '        return re.compile(rf"\bFixes\s+{re.escape(self.prefix)}-\d+\b")'
-reddens = ["tests/test_identifiers.py::test_the_fixes_claim_shares_the_digit_rule"]
+before = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d{3,}\b")'
+after = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d+\b")'
+reddens = ["tests/test_identifiers.py::test_a_fixes_claim_takes_three_digits_or_more"]
 
 # A non-zero exit is an answer some callers need (`check-ignore` says 1 for "nothing matched").
 [[mutation]]
@@ -294,15 +286,6 @@ after = "GIT_TIMEOUT_SECONDS = 60"
 reddens = [
   "tests/test_git_run.py::test_a_query_that_grows_with_the_repository_is_given_at_least_the_default_bound",
 ]
-
-# `number` is the identifier grammar's one lossy reader: a caller that did not ask
-# `is_identifier` first must not be handed a number guessed out of a filename that has none.
-[[mutation]]
-name = "reading the number out of a non-identifier answers zero instead of refusing"
-file = "src/stayfixed/identifiers.py"
-before = '            raise Refusal(f"{identifier!r} is not a {self.shape} identifier")'
-after = '            return 0'
-reddens = ["tests/test_identifiers.py::test_reading_the_number_out_of_a_non_identifier_is_refused"]
 
 # The extension is any word that starts with a letter, a decision rather than a default: a
 # closed list leaves every stack it does not name unchecked (`src/lib.rs`, `cmd/main.go`).
@@ -546,20 +529,6 @@ after = "    except NotImplementedError:\n        return False\n"
 reddens = [
   "tests/docs/test_plans.py::test_a_reference_below_a_directory_that_cannot_be_searched_is_not_found_rather_than_a_crash",
   "tests/docs/test_hygiene.py::test_a_link_below_a_directory_that_cannot_be_searched_is_missing_rather_than_a_crash",
-]
-
-# One digit rule, and every reader takes it from the constant. The allocator's `git log` source
-# respelled it inline, where widening the rule would have left it counting by the old one and
-# handing out a number some ref already holds — a survivor of `mutations/`'s "the Fixes claim stops
-# sharing the identifier digit rule", which is exactly what this entry now proves it is not.
-[[mutation]]
-name = "the identifier digit rule widens and the allocator keeps the old one"
-file = "src/stayfixed/identifiers.py"
-before = 'DIGITS = r"\d{3,}"'
-after = 'DIGITS = r"\d+"'
-reddens = [
-  "tests/test_identifiers.py::test_fewer_than_three_digits_is_not_an_identifier",
-  "tests/ledger/test_write.py::test_the_allocator_reads_the_git_source_with_the_shared_digit_rule",
 ]
 
 # The grammar was shared and the resolution was not. `Path(root) / "/etc/passwd.md"` discards
@@ -1346,7 +1315,7 @@ after = """    except KeyError:
         raise ConfigError(NOT_UTF8.format(path=CONFIG_FILE)) from None"""
 reddens = [
   "tests/test_undecodable.py::test_an_undecodable_file_is_its_readers_own_failure[stayfixed.toml, as every command loads it]",
-  "tests/test_undecodable.py::test_a_command_meeting_an_undecodable_file_fails_and_does_not_crash[bugs-check-stayfixed-toml]",
+  "tests/test_undecodable.py::test_a_command_meeting_an_undecodable_file_fails_and_does_not_crash[docs-check-stayfixed-toml]",
 ]
 
 [[mutation]]
@@ -1520,7 +1489,7 @@ reddens = [
 ]
 
 # Two readers of `stayfixed.toml` followed two rules: `read_document` refuses a symlink, and
-# `load` read the file with a plain `read_text`, so `adopt`, `bugs check`, `plan check` and the
+# `load` read the file with a plain `read_text`, so `adopt`, `plan check` and the
 # rest followed a clone's `stayfixed.toml -> /dev/zero` until memory ran out. `load` reads through
 # `read_document` now; the case's link points at a valid document, so a reader that follows it
 # loads and goes on, and a regression cannot hang the run.
@@ -1539,7 +1508,7 @@ after = """
 """
 reddens = [
   "tests/config/test_symlinked_document.py::test_load_refuses_a_symlinked_stayfixed_toml",
-  "tests/config/test_symlinked_document.py::test_every_command_family_refuses_a_symlinked_stayfixed_toml[bugs-check]",
+  "tests/config/test_symlinked_document.py::test_every_command_family_refuses_a_symlinked_stayfixed_toml[plan-check]",
 ]
 
 # Every integer the schema holds is a count or a bound, so the loader refuses zero, a negative and
@@ -1615,7 +1584,6 @@ before = "    return name if PATH_VALUE.match(name) else repr(name)"
 after = "    return name if PATH_VALUE.match(name) else UNPRINTABLE"
 reddens = [
   "tests/test_printed.py::test_a_name_outside_the_grammar_arrives_whole_and_inert_through_quoted",
-  "tests/ledger/test_commands.py::test_index_names_a_crafted_entry_it_cannot_read_escaped_never_raw",
 ]
 
 [[mutation]]
@@ -1625,7 +1593,6 @@ before = "        where = printable(self.path, withheld) if self.path else \"-\"
 after = "        where = self.path or \"-\""
 reddens = [
   "tests/test_findings.py::test_a_path_outside_the_grammar_never_reaches_a_label_raw",
-  "tests/ledger/test_commands.py::test_check_never_prints_a_crafted_entry_file_name_raw",
 ]
 
 [[mutation]]
@@ -1651,12 +1618,12 @@ reddens = [
 ]
 
 [[mutation]]
-name = "the scan records a read failure in words that name its absolute path"
+name = "a read failure is said in words that name its absolute path"
 file = "src/stayfixed/fsops.py"
 before = "    return error.strerror or type(error).__name__"
 after = "    return str(error)"
 reddens = [
-  "tests/ledger/test_commands.py::test_renumber_names_a_file_it_could_not_read_without_this_machine_s_paths",
+  "tests/test_fsops.py::test_an_error_is_said_in_its_words_never_with_the_path_it_was_opened_by",
 ]
 
 [[mutation]]
@@ -1777,7 +1744,6 @@ before = """    code, out = git_run(root, "merge-base", "--all", base, "HEAD")""
 after = """    code, out = git_run(root, "merge-base", base, "HEAD")"""
 reddens = [
   "tests/test_fork_points.py::test_every_merge_base_is_named_in_git_s_order",
-  "tests/ledger/test_check.py::test_a_deletion_is_named_whichever_of_several_merge_bases_git_would_pick",
   "tests/docs/test_plans.py::test_a_plan_is_linted_whichever_of_several_merge_bases_git_would_pick",
   "tests/guards/test_attribute.py::test_several_merge_bases_leave_the_attribution_undetermined",
 ]
@@ -1792,7 +1758,6 @@ after = """    if False:
         return ForkUnknown(SHALLOW, answered=True)"""
 reddens = [
   "tests/test_fork_points.py::test_a_shallow_clone_is_not_known",
-  "tests/ledger/test_check.py::test_a_shallow_clone_is_a_failure_never_an_older_fork_point",
   "tests/docs/test_plans.py::test_a_shallow_clone_is_a_base_that_will_not_resolve_never_an_older_fork_point",
   "tests/guards/test_attribute.py::test_a_shallow_clone_leaves_the_attribution_undetermined",
 ]
@@ -1811,8 +1776,6 @@ reddens = [
   "tests/test_fork_points.py::test_a_shallow_check_git_does_not_answer_is_not_known[no-answer]",
   "tests/test_fork_points.py::test_a_shallow_check_git_does_not_answer_is_not_known[signalled]",
   "tests/test_fork_points.py::test_a_shallow_check_git_does_not_answer_is_not_known[refused]",
-  "tests/ledger/test_check.py::test_a_shallow_check_git_does_not_answer_is_a_failure_never_a_full_clone[no-answer]",
-  "tests/ledger/test_check.py::test_a_shallow_check_git_does_not_answer_is_a_failure_never_a_full_clone[refused]",
   "tests/docs/test_plans.py::test_a_shallow_check_git_does_not_answer_never_reads_as_a_full_clone[no-answer]",
   "tests/docs/test_plans.py::test_a_shallow_check_git_does_not_answer_never_reads_as_a_full_clone[refused]",
   "tests/guards/test_attribute.py::test_a_shallow_check_git_does_not_answer_leaves_the_attribution_undetermined[no-answer]",
@@ -1830,7 +1793,6 @@ after = """    if code == 1 and not forks:
         return []"""
 reddens = [
   "tests/test_fork_points.py::test_a_base_that_shares_no_commit_is_not_known_and_says_so",
-  "tests/ledger/test_check.py::test_a_base_that_shares_no_history_with_the_tree_is_a_failure",
   "tests/docs/test_plans.py::test_a_base_that_shares_no_history_with_the_tree_will_not_resolve",
 ]
 
@@ -1844,7 +1806,6 @@ after = """    if code < 0:
         return ForkUnknown.of(code)"""
 reddens = [
   "tests/test_fork_points.py::test_a_merge_base_git_does_not_give_is_not_known[missing-ref]",
-  "tests/ledger/test_check.py::test_a_base_git_cannot_list_never_reads_as_a_base_with_no_ledger",
   "tests/docs/test_plans.py::test_a_base_that_will_not_resolve_is_raised_never_an_ok",
   "tests/guards/test_attribute.py::test_a_base_git_names_in_bytes_that_are_not_text_keeps_git_s_own_exit_code",
 ]
@@ -1985,13 +1946,13 @@ before = '        "memory",'
 after = ""
 reddens = ["tests/boundaries/test_delivery.py::test_every_area_is_on_exactly_one_side"]
 
-# The core imports neither side: the bug ledger imported by a core module, inside a function where
+# The core imports neither side: the documentation area imported by a core module, inside a function where
 # nothing loads it until a command asks, is a crossing no row pins.
 [[mutation]]
-name = "a core module imports the bug ledger"
+name = "a core module imports the documentation area"
 file = "src/stayfixed/fsops.py"
 before = "    return error.strerror or type(error).__name__"
-after = """    from stayfixed.ledger.api import bug_register
+after = """    from stayfixed.docs.api import check_links
 
     return error.strerror or type(error).__name__"""
 reddens = [
@@ -2479,7 +2440,6 @@ before = "_REGULAR_OPEN = os.O_RDONLY | os.O_NONBLOCK | os.O_NOCTTY | os.O_CLOEX
 after = "_REGULAR_OPEN = os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC"
 reddens = [
   "tests/test_fsops.py::test_a_regular_file_is_read_through_a_link_and_anything_else_is_refused",
-  "tests/ledger/test_entries.py::test_a_ledger_file_linked_to_a_device_is_a_ledger_error_and_one_linked_to_a_file_is_read",
 ]
 
 # Under a root, `read_bounded` reaches a file as a write does, no link followed, the file's own
@@ -2647,111 +2607,6 @@ before = "    return os.access(creation_directory(path), os.W_OK | os.X_OK)"
 after = "    return os.access(creation_directory(path), os.W_OK)"
 reddens = [
   "tests/test_fsops.py::test_a_directory_that_can_be_written_but_not_searched_cannot_take_a_new_file",
-]
-
-# A commit's copy of a document at the project's own path (`committed.py`), read for each fork
-# point's `stayfixed.toml`, which places the ledger. A copy that reads as missing is the bootstrap, where the change decides for itself, so
-# each git argument and refusal whose removal reaches it by accident is a guard: git failing read
-# as "no copy", the bytes read in the locale's codec, a root reached through a symlink or spelled
-# otherwise than git spells it, a project in a subdirectory, a directory named like pathspec magic.
-[[mutation]]
-name = "git failing to read the base is read as the base having no stayfixed.toml"
-file = "src/stayfixed/committed.py"
-before = """    if code != 0:
-        raise failed(code)
-    if not listed:
-        return None"""
-after = """    if not listed:
-        return None"""
-reddens = [
-  "tests/ledger/test_check.py::test_a_listing_of_the_base_s_configuration_git_refuses_is_a_failure_never_the_bootstrap",
-]
-
-[[mutation]]
-name = "the base copy is read in the locale's codec rather than as UTF-8"
-file = "src/stayfixed/committed.py"
-before = '    return answer_bytes(text)'
-after = '    return text.encode("utf-8")'
-reddens = [
-  "tests/ledger/test_check.py::test_a_base_copy_that_will_not_load_fails_the_check_and_never_reads_as_no_ledger[not-utf8]",
-]
-
-[[mutation]]
-name = "a project root reached through a symlink reads the base at a path it never had"
-file = "src/stayfixed/committed.py"
-before = '    if spelled != prefix.rstrip("\n"):'
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[moved-behind-a-link]",
-  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[linked-back-to-the-top]",
-]
-
-[[mutation]]
-name = "the ancestor that resolves to the top is looked for from the nearest end"
-file = "src/stayfixed/committed.py"
-before = "    chain = (*reversed(lexical.parents), lexical)"
-after = "    chain = (lexical, *lexical.parents)"
-reddens = [
-  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[linked-back-to-the-top]",
-]
-
-[[mutation]]
-name = "a root no ancestor of which resolves to the top is read as if one did"
-file = "src/stayfixed/committed.py"
-before = """    if ancestor is None:
-        raise Refusal(ROOT_THROUGH_SYMLINK)"""
-after = """    if False:
-        raise Refusal(ROOT_THROUGH_SYMLINK)"""
-reddens = [
-  "tests/ledger/test_commands.py::test_a_root_reached_through_a_link_is_refused_against_its_base[reached-from-outside]",
-]
-
-[[mutation]]
-name = "a root outside any repository is judged as if git had answered"
-file = "src/stayfixed/committed.py"
-before = """    if code != 0:
-        # Read off the disk"""
-after = """    if False:
-        # Read off the disk"""
-reddens = [
-  "tests/ledger/test_commands.py::test_a_root_git_answers_nothing_for_fails_against_its_base[no-repository]",
-  "tests/ledger/test_commands.py::test_a_root_git_answers_nothing_for_fails_against_its_base[git-directory-gone]",
-]
-
-[[mutation]]
-name = "a repository git will not answer for is called no repository"
-file = "src/stayfixed/committed.py"
-before = "        raise Failure(ROOT_UNANSWERED if in_work_tree(lexical) else NOT_A_REPOSITORY)"
-after = "        raise Failure(NOT_A_REPOSITORY)"
-reddens = [
-  "tests/ledger/test_commands.py::test_a_root_git_answers_nothing_for_fails_against_its_base[git-directory-gone]",
-]
-
-[[mutation]]
-name = "a project in a subdirectory reads the base's copy at the repository's top"
-file = "src/stayfixed/committed.py"
-before = '    path = f"{prefix}{name}"'
-after = "    path = name"
-reddens = [
-  "tests/ledger/test_commands.py::test_a_ledger_the_base_placed_below_a_directory_named_like_pathspec_magic_is_read_there",
-]
-
-[[mutation]]
-name = "a project under a directory named like pathspec magic reads no copy on the base"
-file = "src/stayfixed/committed.py"
-before = '        "--literal-pathspecs",'
-after = '        "--no-pager",'
-reddens = [
-  "tests/ledger/test_commands.py::test_a_ledger_the_base_placed_below_a_directory_named_like_pathspec_magic_is_read_there",
-]
-
-[[mutation]]
-name = "the base's copy is listed relative to the project root rather than the repository's top"
-file = "src/stayfixed/committed.py"
-before = '        "--full-tree",'
-after = '        "--name-only",'
-reddens = [
-  "tests/ledger/test_commands.py::test_a_ledger_the_base_placed_below_a_directory_named_like_pathspec_magic_is_read_there",
 ]
 
 [[mutation]]
@@ -2967,16 +2822,6 @@ reddens = [
   "tests/config/test_paths.py::test_a_root_through_a_symlink_loop_is_an_oserror_naming_it[as-3-11]",
   "tests/setup/test_setup.py::test_a_symlink_loop_at_any_path_setup_is_given_is_a_refusal_naming_it[home]",
 ]
-
-# Every configuration key has one class, and the class decides which layers may set it
-# (`src/stayfixed/config/classes.py`). A gate's input is the base branch's to set, so moving one
-# to the repository-only class would change nothing a test of the layers sees and the table must.
-[[mutation]]
-name = "ledger.code_roots is classed as the repository's alone"
-file = "src/stayfixed/config/classes.py"
-before = '        "ledger.code_roots": KeyClass.GATE_PARAMETER,'
-after = '        "ledger.code_roots": KeyClass.REPOSITORY_ONLY,'
-reddens = ["tests/config/test_classes.py::test_the_table[ledger.code_roots-gate-parameter]"]
 
 # The repository never sets a machine-only key: a clone's `[personal]` would stand in for the
 # owner's.
@@ -3946,8 +3791,8 @@ reddens = [
 [[mutation]]
 name = "a command's load reads no machine file for the owner's layer"
 file = "src/stayfixed/config/loader.py"
-before = "            resolve_owner(machine or machine_config_path(), preset=preset_name, strict=True)"
-after = "            resolve_owner(None, preset=preset_name, strict=True)"
+before = "        resolve_owner(machine or machine_config_path(), preset=preset_name, strict=True)"
+after = "        resolve_owner(None, preset=preset_name, strict=True)"
 reddens = [
   "tests/memory/test_owner_budgets.py::test_a_command_loads_the_session_budgets_the_session_runs_on",
 ]
@@ -3955,8 +3800,8 @@ reddens = [
 [[mutation]]
 name = "a command's load reads the owner's layer as a session does"
 file = "src/stayfixed/config/loader.py"
-before = "            resolve_owner(machine or machine_config_path(), preset=preset_name, strict=True)"
-after = "            resolve_owner(machine or machine_config_path(), preset=preset_name, strict=False)"
+before = "        resolve_owner(machine or machine_config_path(), preset=preset_name, strict=True)"
+after = "        resolve_owner(machine or machine_config_path(), preset=preset_name, strict=False)"
 reddens = [
   "tests/memory/test_owner_budgets.py::test_a_command_refuses_a_machine_file_that_does_not_load",
 ]
@@ -3964,8 +3809,8 @@ reddens = [
 [[mutation]]
 name = "a load keeps the owner's layer on the preset it was handed"
 file = "src/stayfixed/config/loader.py"
-before = "            else rebased(owner, preset_name)"
-after = "            else owner"
+before = "        else rebased(owner, preset_name)"
+after = "        else owner"
 reddens = [
   "tests/config/test_owner.py::test_a_load_stands_the_layer_it_is_handed_on_the_documents_preset",
 ]
@@ -4112,15 +3957,14 @@ reddens = [
   "tests/trust/test_record.py::test_approving_no_subject_writes_nothing",
 ]
 
-# --- ending a command's whole process group (`stayfixed.processes`), which `bugs regressions`
-# uses; its tests drive it ---
+# --- ending a command's whole process group (`stayfixed.processes`); its tests drive it ---
 
 [[mutation]]
-name = "a timed-out regression's children run on after it reported"
+name = "a timed-out command's children run on after it reported"
 file = "src/stayfixed/processes.py"
 before = "        os.killpg(process.pid, number)"
 after = "        process.kill()"
-reddens = ["tests/ledger/test_regressions.py::test_a_timed_out_regression_ends_its_whole_group"]
+reddens = ["tests/test_processes.py::test_a_timeout_ends_the_whole_group"]
 
 [[mutation]]
 name = "the one appending write opens without O_APPEND"
@@ -4300,49 +4144,6 @@ before = "    return segment.lower().removesuffix(\".git\")"
 after = "    return segment.removesuffix(\".git\")"
 reddens = [
   "tests/attach/test_project_choice.py::test_with_nothing_recorded_the_project_is_the_last_segment_of_origin_lower_cased",
-]
-
-# The containment check on `ledger.code_roots`. `config.paths` guards `[paths]` and leaves this
-# field to whoever consumes it, so this call is the only thing between a committed
-# `code_roots = ["../.."]` and a walk of the tree above the project root. Declared rather than
-# only covered because the fixture had to be built for it: an escaping entry that names nothing
-# on disk is dropped by the `is_dir()` filter, and the containment call could then be deleted
-# with every test still green — the test creates the escaping directory so it cannot.
-[[mutation]]
-name = "an escaping code root is followed"
-file = "src/stayfixed/roots.py"
-before = "            candidate = contained(root, folded, resolved_root=resolved_root)"
-after = "            candidate = root / entry"
-reddens = [
-  "tests/ledger/test_scan.py::test_a_code_root_outside_the_project_is_skipped_not_scanned",
-]
-
-# Where git cannot list the files, `ledger.scan` walks each code root and adds up what it finds, so
-# a root inside another doubled the count `bugs check` prints for a mention under both.
-[[mutation]]
-name = "a code root inside a kept one is walked again"
-file = "src/stayfixed/roots.py"
-before = "        if any(_covers(kept, candidate) for kept in found):"
-after = "        if False:"
-reddens = ["tests/test_roots.py::test_no_directory_is_walked_twice[inside]"]
-
-[[mutation]]
-name = "a code root around a kept one leaves it walked"
-file = "src/stayfixed/roots.py"
-before = "        found = [kept for kept in found if not _covers(candidate, kept)]"
-after = "        found = found"
-reddens = ["tests/test_roots.py::test_no_directory_is_walked_twice[around]"]
-
-# `contained()` took on the write's component rule, and `contained_roots` catches its refusal and
-# moves on — so `code_roots = ["src/"]` was silently dropped from every count the field feeds. The
-# fold is what keeps a read-only walk from inheriting a rule that exists for writes.
-[[mutation]]
-name = "a code root spelled with a slash is dropped again"
-file = "src/stayfixed/roots.py"
-before = "            candidate = contained(root, folded, resolved_root=resolved_root)"
-after = "            candidate = contained(root, entry, resolved_root=resolved_root)"
-reddens = [
-  "tests/test_roots.py::test_a_code_root_spelled_with_a_trailing_or_leading_slash_is_still_walked",
 ]
 
 # One precedence for values and item names: a later plate wins, and the tags sit in the order the

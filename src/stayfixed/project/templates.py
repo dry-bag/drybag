@@ -2,12 +2,11 @@
 
 Under the module root beside `templates/overlay/` and resolved by `stayfixed.templates.tree`, the
 one resolver both shipped trees go through. `stayfixed.toml` and the files the surviving pack
-commands need — the bug ledger's audits README, which keeps its directory in git, the generated bug
-index, the roadmap with its trail markers, and `trail.toml` beside it — are create-once artifacts,
-and the `.gitignore` region that keeps `.stayfixed/local/` out of git is rewritten in place, so a
-second `init` writes what is missing and touches nothing else. Every target but `.gitignore` is a
-`config.paths` value, which the loader has bounded to `PATH_VALUE` and contained; what this module
-adds is a file name under it.
+commands need — the roadmap with its trail markers, and `trail.toml` beside it — are create-once
+artifacts, and the `.gitignore` region that keeps `.stayfixed/local/` out of git is rewritten in
+place, so a second `init` writes what is missing and touches nothing else. Every target but
+`.gitignore` is a `config.paths` value, which the loader has bounded to `PATH_VALUE` and contained;
+what this module adds is a file name under it.
 """
 
 from __future__ import annotations
@@ -20,7 +19,6 @@ from stayfixed.config.schema import Config
 from stayfixed.docs.api import trail_target
 from stayfixed.errors import Failure, Refusal
 from stayfixed.fsops import path_key
-from stayfixed.ledger.api import BUG_AUDITS, bug_register, ledger_path, render_index
 from stayfixed.project.layout import PROJECT_FILES
 from stayfixed.scaffold import Kind, Style, Template
 from stayfixed.templates import tree
@@ -43,8 +41,6 @@ IGNORE_BODY = "# stayfixed's local state: yours, never a collaborator's.\n.stayf
 OWN_NAME = "a fixed name of stayfixed's own"
 PATH_KEYS = {
     CONFIG_ARTIFACT: OWN_NAME,
-    "ledger-audits": "paths.bugs",
-    "bug-index": "paths.bug_index",
     "roadmap": "paths.roadmap",
     "trail": "paths.roadmap",
     IGNORE_ARTIFACT: OWN_NAME,
@@ -81,8 +77,8 @@ def _once(artifact_id: str, target: str, render: Callable[[], str]) -> Template:
 def _no_file_of_another(templates: tuple[Template, ...]) -> None:
     """Refuse two artifacts at one file, before anything is planned.
 
-    `scaffold.engine.plan` has no duplicate-target detection, so with `roadmap` and `bug_index`
-    set to one path the plan reported no refusal, `apply` wrote both and the file held only the
+    `scaffold.engine.plan` has no duplicate-target detection, so with `roadmap` set to
+    `.gitignore` the plan reported no refusal, `apply` wrote both and the file held only the
     second artifact's bytes. Places are one file when `fsops.path_key` says so, as on the default
     filesystems of macOS and Windows, so `roadmap = "STAYFIXED.TOML"` is `stayfixed.toml`'s file on
     every filesystem and the refusal reddens on Linux as on macOS. It names two ids and their
@@ -107,19 +103,11 @@ def project_templates(config: Config, *, document: str) -> tuple[Template, ...]:
     """The footprint this configuration asks for.
 
     Nothing here reads the disk for a target: `trail_target` is a location, like every
-    `[paths]`-built target, and the engine contains each one when it plans it. The bug index is
-    rendered only where it is written, so a `[ledger]` value `bug_register` refuses stops a run that
-    writes the index and no other, as it stops every command that builds the register.
+    `[paths]`-built target, and the engine contains each one when it plans it.
     """
     p = config.paths
-    # The audits README is where the bug index links it, built from `[paths] bugs` and the name
-    # `bug_register` builds that link from, joined as it joins them. Without a file under the
-    # ledger's directory, `bugs index --check` and `bugs check` read the index as orphaned.
-    audits = ledger_path(p.bugs, BUG_AUDITS)
     templates = (
         _once(CONFIG_ARTIFACT, CONFIG_FILE, lambda: document),
-        _once("ledger-audits", f"{audits}/README.md", partial(read, "audits-readme.md")),
-        _once("bug-index", p.bug_index, lambda: render_index([], bug_register(config))),
         _once("roadmap", p.roadmap, partial(read, "roadmap.md")),
         _once("trail", trail_target(config), partial(read, "trail.toml")),
         Template(

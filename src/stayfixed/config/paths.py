@@ -1,17 +1,16 @@
 """Root containment for the `[paths]` fields, and for nothing else yet.
 
 `validate_paths` iterates `config.paths.as_dict()`, so the guard covers exactly the fields of
-`schema.Paths` and no others. Three path-shaped, repository-writable fields never reach
-`contained()`: `ledger.code_roots`, `memory.groups` and `memory.index_extra`. A `stayfixed.toml`
-setting `ledger.code_roots = ["../../../../etc", "/etc/passwd"]` loads without a murmur, while the
-same strings under `[paths]` are refused. Until that changes, `stayfixed.ledger` and
-`stayfixed.memory` must call `contained()` themselves on the fields they consume; widening the
-guard here would change `Config`'s shape, so it belongs with the module that first reads those
-fields.
+`schema.Paths` and no others. Two path-shaped, repository-writable fields never reach
+`contained()`: `memory.groups` and `memory.index_extra`. A `stayfixed.toml` setting
+`memory.index_extra = ["../../../../etc", "/etc/passwd"]` loads without a murmur, while the same
+strings under `[paths]` are refused. Until that changes, `stayfixed.memory` must call `contained()`
+itself on the fields it consumes; widening the guard here would change `Config`'s shape, so it
+belongs with the module that first reads those fields.
 
 Two rules, not one: `PATH_VALUE` is the grammar half — what a value must match before it may be
 printed anywhere, a report included — and `contained()` is the root half, deciding whether the
-value may be written *here*. The same three unguarded fields above are unguarded by both.
+value may be written *here*. The same two unguarded fields above are unguarded by both.
 
 **The component rule is `fsops`', and this module borrows it rather than restating it.**
 `contained()` used to split the value with `Path(relative).parts`, which normalises an empty

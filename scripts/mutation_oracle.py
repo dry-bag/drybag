@@ -89,7 +89,6 @@ GROUP_OF: tuple[tuple[str, str], ...] = (
     ("src/stayfixed/doctor/", "doctor"),
     ("src/stayfixed/memory/", "records"),
     ("src/stayfixed/docs/", "records"),
-    ("src/stayfixed/ledger/", "records"),
     ("src/stayfixed/", "core"),
     ("scripts/publish_plugin.py", "publish"),
     ("scripts/", "tooling"),

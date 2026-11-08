@@ -26,7 +26,6 @@ from stayfixed.errors import Refusal
 from stayfixed.gitenv import GitUnavailable, Unasked, _git_toplevel, hooks_dir, origin_remote
 from stayfixed.guards.commit import commits_in
 from stayfixed.hints.hygiene import dirty_count
-from stayfixed.ledger.scan import TOP_LEVEL, _committed_files
 from stayfixed.overlay.sync import overlay_sync
 from stayfixed.project.detect import NOT_DERIVABLE, detect
 from tests.attach.test_write import RULE, _attachable
@@ -228,24 +227,6 @@ def test_a_dirty_name_holding_a_line_separator_is_one_entry(tmp_path: Path) -> N
     plant_path(root, "a\u2028b.py".encode())
     assert dirty_count(root) == 1
     assert overlay_sync(root).dirty == 1
-
-
-@needs_git
-def test_the_ledger_sweep_asks_git_for_a_root_whose_name_ends_in_a_space(tmp_path: Path) -> None:
-    # `strip()` took the space off git's toplevel, so the root never equalled itself and the
-    # sweep fell back to walking the disk: an ignored build artifact was swept as if it were a
-    # file the change would commit. The line ending alone is taken off. Mutation (declared):
-    # `strip()` the toplevel again -> the listing is `None` and this reddens.
-    root = tmp_path / "project "
-    root.mkdir()
-    git(root, "init", "-q")
-    (root / ".gitignore").write_text("build.md\n", encoding="utf-8")
-    (root / "build.md").write_text("x\n", encoding="utf-8")
-    (root / "kept.md").write_text("x\n", encoding="utf-8")
-    listed = _committed_files(root, (TOP_LEVEL,))
-    assert listed is not None
-    assert root / "kept.md" in listed
-    assert root / "build.md" not in listed
 
 
 @pytest.mark.parametrize(

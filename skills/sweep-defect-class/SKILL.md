@@ -20,7 +20,7 @@ description: Turn one defect into its class and close every instance — enumera
    reads as coverage.
 4. Fix every instance or file it. A hit outside the change's scope becomes a ledger entry
    (the `file-bug` skill), with the predicate quoted so the next sweep finds it again;
-   `stayfixed bugs check` says whether the ledger still agrees with the tree.
+   `stayfixed docs check` says whether the documentation's links still resolve.
 5. Declare the mutation for each fix: the one line to change, and the test that must go red
    when it does. Run the declared set unfiltered — a filtered run cannot see an entry an
    earlier change declared and this one invalidated — and read its last line.

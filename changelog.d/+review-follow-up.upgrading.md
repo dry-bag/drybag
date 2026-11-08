@@ -10,9 +10,7 @@ ignored and exits 0, and a session's hooks load the file the same way:
 - `[project] release_branch`. `stayfixed init` no longer writes it, and `--base-branch` writes
   `[project] base_branch` alone.
 - `[paths] architecture`, `runbooks`, `adr`, `roadmap_history` and `stayfixed`, which placed
-  documents earlier releases of `init` wrote. Their one remaining effect was to make `docs` a
-  directory `bugs check` reads citations of entry files in, which `specs`, `plans` and `bugs`
-  already do, so a project on the defaults loses nothing.
+  documents earlier releases of `init` wrote.
 
 `stayfixed init` writes nothing into a `stayfixed.toml` you wrote. It no longer adds a missing
 `[stayfixed] version`: the next command that loads the file

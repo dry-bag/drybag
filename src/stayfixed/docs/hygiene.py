@@ -45,9 +45,7 @@ def read_document(path: Path, where: str | Path) -> str:
     2 — telling the operator this tool is broken rather than that their file is, with nothing in
     the message to act on. A repository's malformed input must read as their input being wrong.
 
-    The same treatment and the same shape as `ledger.entries.read_ledger_text`, which the ledger
-    area already gives its own files: followed rather than shared, because a reader belongs to
-    the area whose vocabulary its message speaks. The exception is not rendered — it names the
+    The exception is not rendered — it names the
     offending byte, and the byte came out of the file.
 
     `where` is how this area's findings already name the file, so the message names the

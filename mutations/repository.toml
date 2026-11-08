@@ -902,8 +902,8 @@ reddens = ["tests/test_neutral.py::test_a_token_hit_names_the_offset_of_its_firs
 [[mutation]]
 name = "the PyPI description advertises the unshipped memory MCP server"
 file = "pyproject.toml"
-before = 'description = "A methodology harness for coding agents: a bug ledger that lives in the repository, working memory whose notes count once reviewed, and fail-closed guards, packaged as one plugin for Claude Code and Codex."'
-after = 'description = "A methodology harness for coding agents: a bug ledger, curated working memory, guards, and a memory MCP server, packaged as one plugin for Claude Code and Codex."'
+before = 'description = "A methodology harness for coding agents: working memory whose notes count once reviewed, and fail-closed guards, packaged as one plugin for Claude Code and Codex."'
+after = 'description = "A methodology harness for coding agents: curated working memory, guards, and a memory MCP server, packaged as one plugin for Claude Code and Codex."'
 reddens = [
   "tests/test_manifests.py::test_no_storefront_string_advertises_what_the_readme_says_is_not_yet",
 ]
@@ -1798,7 +1798,7 @@ reddens = [
 [[mutation]]
 name = "the README drops the git fetch row"
 file = "README.md"
-before = "| `git fetch` | `stayfixed bugs new`; the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the project's `origin`; for the note sync, the overlay's `origin` (note 1) | `bugs new` unless `--no-fetch`; the note sync on each run |"
+before = "| `git fetch` | the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the overlay's `origin` (note 1) | the note sync on each run |"
 after = ''
 reddens = ["tests/test_outbound.py::test_the_readme_declares_every_program_that_reaches_a_network"]
 
@@ -1843,9 +1843,9 @@ reddens = [
 [[mutation]]
 name = "a vouched element names a value no launch hands"
 file = "tests/outbound/policy.py"
-before = '    ("src/stayfixed/ledger/check.py", "_base_ledger", "fork"): "a merge base git printed",'
-after = '''    ("src/stayfixed/ledger/check.py", "_base_ledger", "fork"): "a merge base git printed",
-    ("src/stayfixed/ledger/check.py", "_base_ledger", "base"): "a merge base git printed",'''
+before = '    ("src/stayfixed/docs/plans.py", "written_lines", "since"): ('
+after = '''    ("src/stayfixed/docs/plans.py", "written_lines", "fork"): "a merge base git printed",
+    ("src/stayfixed/docs/plans.py", "written_lines", "since"): ('''
 reddens = [
   "tests/test_outbound.py::test_the_declarations_name_exactly_what_the_classification_rests_on",
 ]

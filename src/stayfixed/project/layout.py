@@ -9,4 +9,4 @@ the built wheel the same question.
 
 from __future__ import annotations
 
-PROJECT_FILES: tuple[str, ...] = ("audits-readme.md", "roadmap.md", "trail.toml")
+PROJECT_FILES: tuple[str, ...] = ("roadmap.md", "trail.toml")

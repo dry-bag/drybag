@@ -1,13 +1,12 @@
 # stayfixed
 
-A methodology harness for coding agents: a bug ledger that lives in the repository, a
-working memory whose index is rendered rather than written, and guards that fail closed where
+A methodology harness for coding agents: a working memory whose index is rendered rather than written, and guards that fail closed where
 the platform lets them. One plugin for Claude Code and Codex, one Python package with
 **no runtime dependencies**.
 
 > **Pre-1.0.** What ships is a core and three delivery areas. The **core** is what stayfixed does
 > without its private layer: the methodology's gates, the records they check, and a machine's setup.
-> It holds the bug ledger; the documentation and plan lints; the guards over a shell call, a commit
+> It holds the documentation and plan lints; the guards over a shell call, a commit
 > message and a test run; the scaffolding engine that writes files into a repository;
 > `stayfixed init`, which writes a repository's scaffold from the shipped project templates;
 > `stayfixed setup`, which configures a
@@ -41,12 +40,8 @@ them.
 This project looked through the community plugin marketplace on 2026-09-05 and counted about
 2,300 plugins listed that day. That is one project's dated count rather than a survey with a
 method — no row in [sources.md](https://github.com/stayfixed/stayfixed/blob/main/docs/methodology/sources.md) backs it, and it says what that
-look found, not what exists. What it did not find anywhere else is the two things stayfixed
-adds:
+look found, not what exists. What it did not find anywhere else is what stayfixed adds:
 
-- **A bug ledger as a first-class repository artifact** — one file per bug, a generated
-  index, a "what this evidence does not establish" line the tooling insists on, and skills
-  that teach the agent how to read an entry.
 - **A personal overlay that is a versioned repository of its own**, named by its identity record
   and with its own upgrade manifest, rather than a dotfiles sync. `stayfixed setup --overlay` renders or generates one and `stayfixed attach`
   binds a repository to it: the hooks, skills, agents and allow rules you keep there reach that
@@ -161,8 +156,7 @@ name = "widget"          # one lowercase path segment
 groups = ["developer"]   # the preset names four; the store below has one
 ```
 
-`stayfixed init --yes` writes that file for you — the name from `origin` and the base branch — along with the roadmap, its `trail.toml`, and the bug
-ledger's index and audits README, which `docs trail` and `bugs check` read.
+`stayfixed init --yes` writes that file for you — the name from `origin` and the base branch — along with the roadmap and its `trail.toml`, which `docs trail` reads.
 `stayfixed init --questions` shows each value it would take and where it came from, and a flag
 on `--yes` replaces any of them. Read it before it runs; a `stayfixed.toml` you wrote yourself
 is read as your answers rather than replaced:
@@ -188,8 +182,8 @@ rules; [The threat model, in one paragraph](#the-threat-model-in-one-paragraph) 
 Add `.stayfixed/local/` to `.gitignore` if it is not there already.
 
 The other commands in [Commands](#commands) expect more of a repository than those three keys
-create: `docs trail` wants a `docs/roadmap.md`, `bugs check` a ledger, `docs check` an
-`AGENTS.md`. `stayfixed init --yes` writes the first two; `AGENTS.md` is yours to write, and `docs
+create: `docs trail` wants a `docs/roadmap.md`, `docs check` an
+`AGENTS.md`. `stayfixed init --yes` writes the first; `AGENTS.md` is yours to write, and `docs
 check` names it until you do. In a repository you would rather grow by hand, add each path as you
 start using the command that reads it — [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#configuration) lists every default.
 
@@ -203,7 +197,6 @@ stayfixed writes files. Being specific about which is the point of this section.
 | `docs/memory/` (configurable) | The note store, in `in-repo` and `overlay` mode | `stayfixed memory index` |
 | `.stayfixed/local/memory/` | The note store in `local-only` mode — git-ignored | `stayfixed memory index` |
 | `<store>/MEMORY.md` | The rendered routing index. **Generated — do not hand-edit** | `stayfixed memory index` |
-| `docs/bugs/` and `docs/bug-reports.md` (configurable) | One file per bug, and the generated index over them | `stayfixed init` writes the empty index and `docs/bugs/audits/README.md`; `stayfixed bugs new`, `bugs index` and `bugs renumber` after |
 | `docs/roadmap.md` (configurable) | The forward track; `docs trail` owns only the listing between its two markers | `stayfixed init` writes it; `stayfixed docs trail` rewrites the listing |
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | `stayfixed init`, once; you after |
 | `.gitignore`, the `stayfixed:ignore` region | The block that keeps `.stayfixed/local/` out of git. `attach` and `detach` never touch `.gitignore` | `stayfixed init` |
@@ -225,7 +218,7 @@ stayfixed writes files. Being specific about which is the point of this section.
 
 Every write into a repository goes through a path walk that refuses a symlink at any component
 and refuses to leave the project root, and replaces files atomically, keeping the mode of the
-file it replaced. Nothing is written by `--check`, `bugs check`, `plan check` or `memory
+file it replaced. Nothing is written by `--check`, `plan check` or `memory
 refs`, and the scaffold engine's `plan` phase performs no writes at all.
 
 ## What stayfixed sends where
@@ -252,7 +245,7 @@ last to find the project root, and reaches no network.
 
 | Program | Run by | Talks to | When |
 |---|---|---|---|
-| `git fetch` | `stayfixed bugs new`; the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the project's `origin`; for the note sync, the overlay's `origin` (note 1) | `bugs new` unless `--no-fetch`; the note sync on each run |
+| `git fetch` | the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the overlay's `origin` (note 1) | the note sync on each run |
 | `git push` | the note sync's job, which the session hooks start where the machine file says `[sync] enabled = true` | the overlay's `origin` (note 1) | the note sync, when the commits on `main` that `origin` lacks are all notes and pass the secret scan |
 | `gh` | `stayfixed setup --overlay create:<owner>/<name>` | GitHub's API, as the account `gh` acts for, and the clones it makes over git (note 2) | note 2 |
 | `git clone` | `stayfixed setup --overlay create:<owner>/<name>` | `git@github.com:<owner>/<name>.git`, the overlay just created | when `gh repo create --clone` reported success and left nothing at the destination |
@@ -260,7 +253,6 @@ last to find the project root, and reaches no network.
 | `codex plugin` | `stayfixed setup --plugin NAME` (`--preset NAME`; `recommended` when omitted) | the marketplace the preset names for Codex (note 3) | when `--plugin` names a plugin and the preset names a marketplace for Codex |
 | `pre-commit install` | `stayfixed setup --overlay` | nothing as it installs; GitHub and Go's servers on the first commit after it (note 4) | when it renders an overlay at a path, records an existing one, or with `create:` |
 | `sh -c` | `stayfixed test attribute --command CMD` | wherever `CMD` reaches; stayfixed does not choose | every run: `CMD` in the working tree, then in extracts of `HEAD` and of the merge base |
-| each fixed bug entry's `regression` | `stayfixed bugs regressions`, each argv run as written from the project root | wherever the argv reaches; stayfixed does not choose: `uv run` may sync the project's environment from its index, `go test` may download the modules `go.mod` names, and `npx` installs a runner no `node_modules` holds, from the registry the project's `.npmrc` names, without asking, since the argv's standard input is no terminal | every run, for each fixed entry that carries one |
 | `.github/workflows/scan.yml` | the overlay's CI on GitHub (note 5) | GitHub, through `gitleaks/gitleaks-action` (note 5) | on every push, pull request and manual run, unless the repository is marked a template |
 | `.github/dependabot.yml` | GitHub's Dependabot, from the file the same commands write into the overlay | GitHub: it looks up new releases of the scan workflow's two pinned actions and opens one grouped pull request in the overlay to move them | monthly, once the file is on GitHub |
 
@@ -370,15 +362,6 @@ stayfixed memory session-context --bundle standing-rules --part 1
 stayfixed memory promote developer/prefer-uv.md        # count a note as yours, at the bytes it holds now
 stayfixed memory promote --changed                     # every unreviewed note, after you have read them
 
-# The bug ledger
-stayfixed bugs new "A title" --severity high --area cli   # file an entry at the next free identifier
-stayfixed bugs index                                   # render the generated index
-stayfixed bugs index --check                           # fail if the committed index is stale
-stayfixed bugs check                                   # every rule the ledger holds, one pass
-stayfixed bugs check --base origin/main                # also fail a tree that deleted the ledger or an entry it forked with
-stayfixed bugs regressions                             # run each fixed entry's regression; its exit code is the verdict
-stayfixed bugs renumber BR-001 BR-002                  # move an entry; rewrite every mention
-
 # Documentation and plans
 stayfixed docs check                                   # budgets and link targets
 stayfixed docs trail                                   # regenerate the design-and-plan trail
@@ -421,7 +404,7 @@ a machine configuration file other than the default); `memory` commands and `att
 `--store` as well. The commands that take neither, and the ones that mean something else by
 either, are listed in [Shared flags](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md#shared-flags). `--json` is accepted anywhere and
 prints one machine-readable object instead of one line. The commands that report a list of
-findings — `bugs check`, `docs check`, `plan check` — all spell it `findings`,
+findings — `docs check`, `plan check` — all spell it `findings`,
 whatever their summary line calls them; every other command's keys are its own and are listed
 with it in [docs/cli.md](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md).
 
@@ -473,21 +456,10 @@ one an agent or the harness wrote, and one edited since you promoted it all arri
 inside the delimited region, labelled, and never as a standing rule. A session hears one line,
 "N notes are unreviewed", when that set has changed since the last session.
 
-## The bug ledger, in one paragraph
-
-An entry is one file, `docs/bugs/BR-001.md` by default, with flat frontmatter — `id`,
-`status` from `open | partial | fixed | rejected | void`, `severity` from `high | medium |
-low`, `area`, `related` — and a body whose `**What this evidence does not establish:**` line
-must be filled in for the severities the project names. `bugs index` renders the index as a
-pure function of the entries and refuses to overwrite one it did not generate; `bugs check`
-finds identifiers in the code with no entry behind them, entries whose evidence line is still
-the template's, and citations that do not resolve. The identifier prefix is one configuration
-key. The `close-bug` skill walks the closing of an entry through these commands.
-
 ## Skills and agents
 
-`skills/` ships two ported skills (`close-bug`, `memory-sweep`), six authored ones
-(`file-bug`, `sweep-defect-class`, `review-plan-three-lenses`, `attribute-failure`,
+`skills/` ships one ported skill (`memory-sweep`), five authored ones
+(`sweep-defect-class`, `review-plan-three-lenses`, `attribute-failure`,
 `run-correctness-audit`, `retro-to-guard`), and thin wrappers for the commands the CLI
 registers; `agents/` ships a read-only `code-navigator`. Every skill is written in action
 language — never a harness tool's name — with the per-harness mapping in

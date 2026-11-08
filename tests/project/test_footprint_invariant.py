@@ -120,13 +120,13 @@ HOSTILE = (
         plant={LOCAL_STATE: FOREIGN},
         links={"hidden": ".stayfixed/local"},
     ),
-    # `roadmap` placed at the bug index spelled in another case: one file where case folds, an
+    # `roadmap` placed at the `.gitignore` spelled in another case: one file where case folds, an
     # existing file stayfixed did not write where it does not. Either way the collision must be
     # refused, or one artifact is never written and a second plan still has work to do.
     Case(
         "a-paths-value-at-another-artifact-s-file-case-folded",
-        paths={"roadmap": "docs/Bug-Reports.md"},
-        plant={"docs/Bug-Reports.md": FOREIGN},
+        paths={"roadmap": ".GitIgnore"},
+        plant={".GitIgnore": FOREIGN},
     ),
 )
 

@@ -99,7 +99,6 @@ def test_every_package_with_a_surface_is_walked() -> None:
         "doctor",
         "guards",
         "hooks",
-        "ledger",
         "memory",
         "overlay",
         "project",

@@ -10,7 +10,6 @@ import pytest
 from stayfixed.config.loader import CONFIG_FILE, preset_defaults
 from stayfixed.config.schema import BRANCH_NAME, Config
 from stayfixed.errors import Failure, Refusal
-from stayfixed.ledger.api import bug_register, render_index
 from stayfixed.project.api import PROJECT_FILES, project_templates
 from stayfixed.project.templates import IGNORE_ARTIFACT, ONE_FILE, OWN_NAME, PATH_KEYS, read
 from stayfixed.scaffold import Kind, Style, Template, upsert
@@ -39,8 +38,6 @@ def test_every_artifact_is_create_once_but_the_ignore_region() -> None:
     prepared = _prepared(preset_defaults("widget"))
     assert {t.id: t.kind for t in prepared} == {
         "config": Kind.ONCE,
-        "ledger-audits": Kind.ONCE,
-        "bug-index": Kind.ONCE,
         "roadmap": Kind.ONCE,
         "trail": Kind.ONCE,
         "gitignore": Kind.MANAGED_REGION,
@@ -50,15 +47,10 @@ def test_every_artifact_is_create_once_but_the_ignore_region() -> None:
 
 def test_targets_follow_the_configured_paths_and_not_the_preset() -> None:
     config = preset_defaults("widget")
-    moved = replace(
-        config,
-        paths=replace(config.paths, roadmap="docs/plan/roadmap.md", bug_index="docs/bugs.md"),
-    )
+    moved = replace(config, paths=replace(config.paths, roadmap="docs/plan/roadmap.md"))
     by_id = {t.id: t for t in _prepared(moved)}
     assert by_id["roadmap"].target == "docs/plan/roadmap.md"
     assert by_id["trail"].target == "docs/plan/trail.toml"
-    assert by_id["bug-index"].target == "docs/bugs.md"
-    assert by_id["bug-index"].render() == render_index([], bug_register(moved))
 
 
 def test_no_two_artifacts_resolve_to_the_same_file() -> None:
@@ -72,34 +64,30 @@ def test_no_two_artifacts_resolve_to_the_same_file() -> None:
     ownership" -> the case-variant case does.
     """
     config = preset_defaults("widget")
-    footprint_clash = replace(
-        config, paths=replace(config.paths, roadmap="docs/x.md", bug_index="docs/x.md")
-    )
+    footprint_clash = replace(config, paths=replace(config.paths, roadmap=".gitignore"))
     with pytest.raises(Refusal) as caught:
         _prepared(footprint_clash)
     message = str(caught.value)
     assert message == ONE_FILE.format(
-        first="bug-index",
-        first_key="paths.bug_index",
-        second="roadmap",
-        second_key="paths.roadmap",
+        first="roadmap",
+        first_key="paths.roadmap",
+        second="gitignore",
+        second_key=OWN_NAME,
     )
     # The colliding value is the repository's own bytes and is named nowhere.
-    assert "docs/x.md" not in message
+    assert ".gitignore" not in message
     # One file where case folds, as on the default macOS and Windows filesystems, so one file
     # here on every filesystem.
-    variant = replace(
-        config, paths=replace(config.paths, roadmap="docs/x.md", bug_index="docs/X.md")
-    )
+    variant = replace(config, paths=replace(config.paths, roadmap=".GitIgnore"))
     with pytest.raises(Refusal) as caught:
         _prepared(variant)
     assert str(caught.value) == message
-    # The bug index on `stayfixed.toml`.
-    across = replace(config, paths=replace(config.paths, bug_index=CONFIG_FILE))
+    # The roadmap on `stayfixed.toml`.
+    across = replace(config, paths=replace(config.paths, roadmap=CONFIG_FILE))
     with pytest.raises(Refusal) as caught:
         _prepared(across)
     assert str(caught.value) == ONE_FILE.format(
-        first="config", first_key=OWN_NAME, second="bug-index", second_key="paths.bug_index"
+        first="config", first_key=OWN_NAME, second="roadmap", second_key="paths.roadmap"
     )
 
 
@@ -131,7 +119,7 @@ def test_every_artifact_init_builds_has_a_paths_key_recorded_for_it() -> None:
     ids = {t.id for t in _prepared(preset_defaults("widget"))}
     # The walk is stated non-empty first, and at its full size: a build of nothing would make the
     # comparison below vacuous in both directions.
-    assert len(ids) == 6, sorted(ids)
+    assert len(ids) == 4, sorted(ids)
     assert ids == set(PATH_KEYS), (sorted(ids ^ set(PATH_KEYS)),)
 
 

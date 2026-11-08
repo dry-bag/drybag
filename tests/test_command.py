@@ -41,7 +41,7 @@ EXCEPTIONS = {
     ("overlay", "upgrade", "--root"): OVERLAY_ROOT_HELP,
     ("setup", None, "--root"): SETUP_ROOT_HELP,
     ("setup", None, "--machine"): SETUP_MACHINE_HELP,
-    # `attach --check` reports the same way `bugs index`, `docs trail` and `memory index` do,
+    # `attach --check` reports the same way `docs trail` and `memory index` do,
     # and exits differently on purpose: its 1 is a binding mismatch and not a non-empty diff.
     # `command.ATTACH_CHECK_HELP` carries the argument.
     ("attach", None, "--check"): ATTACH_CHECK_HELP,

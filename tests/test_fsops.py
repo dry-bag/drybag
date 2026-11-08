@@ -753,7 +753,7 @@ def test_a_regular_file_is_read_through_a_link_and_anything_else_is_refused(
     tmp_path: Path,
 ) -> None:
     # The readers of `*.md` a repository commits followed a committed link to whatever it named:
-    # `/dev/zero` grew `bugs check` to 9 GB in 2 s, and `/dev/stdin` or a FIFO waited forever.
+    # `/dev/zero` grew one to 9 GB in 2 s, and `/dev/stdin` or a FIFO waited forever.
     # A link to a regular file is still read, because `attach` links each memory group and
     # `MEMORY.md` into the overlay; a link to `/dev/null` is refused, and it is the case that tells
     # the guard apart without being able to hang: unguarded, it reads as empty. Mutation

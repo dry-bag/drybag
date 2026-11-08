@@ -50,7 +50,6 @@ PACK_PACKAGES: frozenset[str] = frozenset(
     {
         "docs",
         "guards",
-        "ledger",
         "project",
     }
 )

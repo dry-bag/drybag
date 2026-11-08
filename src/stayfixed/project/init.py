@@ -45,7 +45,7 @@ from stayfixed.project.templates import project_templates
 from stayfixed.scaffold import Plan, apply, plan
 from stayfixed.tomlout import dumps
 
-USER_OWNED = ("paths", "memory", "budgets", "ledger", "commit_messages")
+USER_OWNED = ("paths", "memory", "budgets", "commit_messages")
 HEADER = "# Written by `stayfixed init`. Every key you leave out takes the preset's default.\n\n"
 # The pair is spelled literally because the intended reader is an agent relaying this sentence,
 # and `--dry-run` on its own is refused by this same refusal: "pass --yes, and --dry-run to read

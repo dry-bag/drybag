@@ -2,7 +2,7 @@ Ten commands are gone, with no alias, and so are the keys and flags only they re
 and what to use instead:
 
 - `stayfixed assess`, `stayfixed gate` and `stayfixed adopt promote`, the gate ratchet. `stayfixed
-  doctor` and the checks themselves (`docs check`, `docs trail --check`, `bugs check`, `plan check`,
+  doctor` and the checks themselves (`docs check`, `docs trail --check`, `plan check`,
   `commit check`) still report each finding, and your own CI runs the ones you choose. The reusable
   workflow `check.yml` went with `gate`: a caller pinned to an earlier commit keeps running that
   commit's workflow, and one pinned to a later commit no longer finds the file, so delete the caller
@@ -25,28 +25,17 @@ gates` for a table. `stayfixed doctor` is the exception: it warns `not-initialis
 settings it ignored and exits 0, and a session's hooks load the file the same way:
 
 - `[stayfixed] enforced`, and `[stayfixed] state` where the file still has it;
-- the whole `[gates]` table, `[gates.custom]` included: `stayfixed bugs regressions --timeout
-  SECONDS` now bounds each regression's run, with the default `custom_timeout_seconds` had, 600
-  seconds;
+- the whole `[gates]` table, `[gates.custom]` included;
 - the whole `[ci]` table;
 - the whole `[artifacts]` table;
 - `[commit_messages] types`; `attribution_check` stays.
 
-`stayfixed bugs check --base` loads the `stayfixed.toml` of the commit a change forked from, so a
-base branch whose copy still carries one of these fails it on every pull request: push the edit to
-the base branch first.
-
-`stayfixed init` now writes five files and the `.gitignore` region: `stayfixed.toml`,
-`docs/roadmap.md` with its trail markers, `docs/trail.toml`, the generated bug index
-`docs/bug-reports.md`, `docs/bugs/audits/README.md`, and the `stayfixed:ignore` region, which keeps
+`stayfixed init` now writes three files and the `.gitignore` region: `stayfixed.toml`,
+`docs/roadmap.md` with its trail markers, `docs/trail.toml`, and the `stayfixed:ignore` region, which keeps
 `.stayfixed/local/` out of git. It writes no `AGENTS.md`, `CLAUDE.md` or workflow, and
 `init --json` carries no `skipped` key. Its `--local`, `--commit-type` and `--no-ci` flags are gone,
 and `init --questions` no longer asks about CI or commit types. `stayfixed doctor` has no `ci-ref`
 row any more: it went with `[ci]`.
-
-The generated bug index no longer links a runbook, since `init` no longer writes one: run
-`stayfixed bugs index` once and commit it, or `bugs index --check` and `bugs check` report the
-committed index stale.
 
 An earlier `init` or `[artifacts] local` left files this release neither writes nor reads, and you
 may delete each by hand: `.stayfixed/local/artifacts/` and `.stayfixed/local/artifacts.json`; the

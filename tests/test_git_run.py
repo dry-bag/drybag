@@ -382,7 +382,6 @@ def test_git_call_honours_the_floor(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 GIT_RUN_BOUNDS = (
     "stayfixed.gitenv.GIT_TIMEOUT_SECONDS",
     "stayfixed.gitenv.QUERY_TIMEOUT_SECONDS",
-    "stayfixed.ledger.write.FETCH_TIMEOUT_SECONDS",
     "stayfixed.overlay.sync.SYNC_TIMEOUT_SECONDS",
     "stayfixed.guards.commit.LOG_TIMEOUT_SECONDS",
     "stayfixed.hints.hygiene.STATUS_TIMEOUT_SECONDS",

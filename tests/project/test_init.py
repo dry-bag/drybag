@@ -14,7 +14,7 @@ from stayfixed.config.reading import ConfigError
 from stayfixed.errors import Failure, Refusal
 from stayfixed.project.commands import ADOPTED_LEFT, PICKED
 from stayfixed.project.init import InitReport, init
-from stayfixed.project.templates import ONE_FILE, read
+from stayfixed.project.templates import ONE_FILE, OWN_NAME, read
 from stayfixed.scaffold import Verb
 from tests.cli import cli
 from tests.gitfixture import git, needs_git, run_git
@@ -54,23 +54,18 @@ def test_a_bare_repository_gets_the_footprint(tmp_path: Path) -> None:
 
 
 @needs_git
-def test_a_fresh_init_leaves_trail_and_ledger_checks_green(tmp_path: Path) -> None:
-    # `init --yes` writes `stayfixed.toml`, the roadmap with its trail markers, `trail.toml`, the
-    # generated bug index, the ledger's audits README and the `.gitignore` region, and nothing
-    # else; the checks that read them pass on what it wrote. Without the
-    # index, `bugs index --check` reports it stale; without a file under the ledger's directory it
-    # refuses the index as orphaned; without the roadmap or the trail, `docs trail --check` fails.
+def test_a_fresh_init_leaves_the_trail_check_green(tmp_path: Path) -> None:
+    # `init --yes` writes `stayfixed.toml`, the roadmap with its trail markers, `trail.toml` and the
+    # `.gitignore` region, and nothing else; the check that reads them passes on what it wrote.
+    # Without the roadmap or the trail, `docs trail --check` fails.
     root = _repo(tmp_path)
     code, out, err = cli(root, tmp_path, "init", "--yes")
     assert code == 0, (out, err)
-    for argv in (("docs", "trail", "--check"), ("bugs", "index", "--check"), ("bugs", "check")):
-        code, out, err = cli(root, tmp_path, *argv)
-        assert code == 0, (argv, out, err)
+    code, out, err = cli(root, tmp_path, "docs", "trail", "--check")
+    assert code == 0, (out, err)
     untracked = git(root, "ls-files", "--others").split()
     assert sorted(untracked) == [
         ".gitignore",
-        "docs/bug-reports.md",
-        "docs/bugs/audits/README.md",
         "docs/roadmap.md",
         "docs/trail.toml",
         "stayfixed.toml",
@@ -237,23 +232,6 @@ def test_a_second_init_creates_what_is_missing_and_touches_nothing_else(tmp_path
 
 
 @needs_git
-def test_the_bug_index_is_rendered_only_where_init_writes_it(tmp_path: Path) -> None:
-    # `bug_register` refuses a `[ledger]` value the ledger cannot work with in every command that
-    # builds the register, and in no other. `init` builds it to render an index it is about to
-    # write, so with the index already there a second run goes through, and without it the value is
-    # refused. Mutation (oracle): `mutations/`'s "init builds the bug ledger's register though the
-    # index is already there" -> the second run refuses.
-    root = _repo(tmp_path)
-    assert cli(root, tmp_path, "init", "--yes")[0] == 0
-    with (root / CONFIG_FILE).open("a", encoding="utf-8") as config:
-        config.write('\n[ledger]\nevidence_boundary_required_for = ["nonsense"]\n')
-    assert cli(root, tmp_path, "init", "--yes")[0] == 0
-    (root / "docs" / "bug-reports.md").unlink()
-    with pytest.raises(Refusal, match="not a severity"):
-        _init(root, tmp_path)
-
-
-@needs_git
 def test_without_yes_and_with_a_broken_configuration_nothing_happens(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     before = snapshot(root)
@@ -288,16 +266,14 @@ def test_a_configuration_that_will_not_parse_never_quotes_its_own_keys(tmp_path:
 
 
 @needs_git
-@pytest.mark.parametrize(
-    "value", ["docs/bug-reports.md", "docs/Bug-Reports.md"], ids=["exact", "case-variant"]
-)
+@pytest.mark.parametrize("value", [".gitignore", ".GitIgnore"], ids=["exact", "case-variant"])
 def test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_write(
     tmp_path: Path, value: str
 ) -> None:
-    # `[paths] roadmap = "docs/bug-reports.md"`: `roadmap` and `bug-index` would share that file.
+    # `[paths] roadmap = ".gitignore"`: `roadmap` and `gitignore` would share that file.
     # Refused with nothing written. Mutation (oracle): `mutations/`'s "an artifact may target a
     # file another artifact is built to write" -> init writes both into one file and this
-    # reddens. `docs/Bug-Reports.md` is the same file where case folds, and is refused on every
+    # reddens. `.GitIgnore` is the same file where case folds, and is refused on every
     # filesystem: `mutations/`'s "places are compared case-sensitively for ownership" -> that case
     # reddens.
     root = _repo(tmp_path)
@@ -311,10 +287,10 @@ def test_a_paths_value_naming_another_artifact_s_file_refuses_init_before_any_wr
         _init(root, tmp_path)
     assert_snapshot_unchanged(root, before)
     assert str(refused.value) == ONE_FILE.format(
-        first="bug-index",
-        first_key="paths.bug_index",
-        second="roadmap",
-        second_key="paths.roadmap",
+        first="roadmap",
+        first_key="paths.roadmap",
+        second="gitignore",
+        second_key=OWN_NAME,
     )
 
 
@@ -361,7 +337,7 @@ def test_an_adopted_document_is_left_as_it_is_and_the_next_load_names_what_it_la
     assert PICKED not in out and "--base-branch" not in out
     assert (root / CONFIG_FILE).read_text(encoding="utf-8") == document
     assert (root / "docs" / "roadmap.md").is_file()
-    code, out, err = cli(root, tmp_path, "bugs", "check")
+    code, out, err = cli(root, tmp_path, "docs", "check")
     assert code == 1 and re.search(sentence, err), (out, err)
 
 

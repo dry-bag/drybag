@@ -14,13 +14,13 @@ already removed from this very docstring, two paragraphs down, and it survived t
 of this surface's importers because that count covered `src/` and `scripts/` and `tests/` and
 never read the prose.
 
-They stay, and the reason is the one `docs/api.py` and `ledger/api.py` record for their own
-lists. Trimming to `USER_SETTINGS` alone leaves a surface with no exported callable or record on
-it, and `tests/test_surfaces.py`'s derived check refuses that outright — "the surface exports no
-function or record, so this checked nothing". So what is left is not a trim of two names; it is
-the question of whether this area publishes at all, which is the owner's and not a refactor's.
-`SetupReport` is here because `setup` is: a return type absent from this list is a value a
-caller can hold and cannot declare.
+They stay, and the reason is the one `docs/api.py` records for its own list. Trimming to
+`USER_SETTINGS` alone leaves a surface with no exported callable or record on it, and
+`tests/test_surfaces.py`'s derived check refuses that outright — "the surface exports no function or
+record, so this checked nothing". So what is left is not a trim of two names; it is the question of
+whether this area publishes at all, which is the owner's and not a refactor's. `SetupReport` is here
+because `setup` is: a return type absent from this list is a value a caller can hold and cannot
+declare.
 
 **Trimmed: `read_machine`, `write_machine` and `Written`.** This docstring used to claim
 `doctor` "needs the machine reader and `USER_SETTINGS` by name"; `doctor` imported

@@ -81,14 +81,13 @@ def split(path: Path) -> tuple[dict[str, str], str]:
 
 def test_the_walk_finds_the_ported_skills() -> None:
     # The mutation guard for the parametrised tests below: an empty `skills/` passes them all.
-    # Every skill `skills/` ships is named, not only the two ported ones — deleting the six
+    # Every skill `skills/` ships is named, not only the one ported one — deleting the five
     # wrappers would otherwise leave NOT_YET_SHIPPED describing commands no skill names, with
     # the suite still green. Subsets, not equalities: `skills-author` grows this directory.
     names = {path.parent.name for path in skills()}
-    assert {"close-bug", "memory-sweep"} <= names
+    assert {"memory-sweep"} <= names
     assert {"init", "attach", "setup", "doctor"} <= names
     assert {
-        "file-bug",
         "sweep-defect-class",
         "review-plan-three-lenses",
         "attribute-failure",

@@ -1,7 +1,7 @@
 """The import surface: everything a consumer may import from this area.
 
 A module and not the package's `__init__`, for the reason `stayfixed.docs.api`,
-`stayfixed.ledger.api` and `stayfixed.memory.api` all give: area discovery imports a package
+`stayfixed.memory.api` both give: area discovery imports a package
 before it imports the submodule it wants, so a re-export list in `__init__.py` would pull this
 whole area into every `discover()` call.
 
@@ -13,7 +13,7 @@ Two names, each with the consumer that reaches for it:
   exists to stop.
 - `project_templates`, for `tests/project/test_fixture.py`, which plans the footprint over a copy
   of the smoke fixture and asserts that the planning has nothing left to create. Not that the
-  fixture is what these templates render: the fixture's bug index, roadmap and trail are its own,
+  fixture is what these templates render: the fixture's roadmap and trail are its own,
   and come back `skip_modified` with bytes that differ from the templates. That module's docstring
   states the measurement. It returns `scaffold.Template`s, which a consumer declares through
   `stayfixed.scaffold`.

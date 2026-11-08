@@ -120,11 +120,11 @@ def test_an_invalid_value_resets_only_its_key(tmp_path: Path) -> None:
 def test_an_escaping_path_resets_only_that_path(tmp_path: Path) -> None:
     # Mutation (`mutations/`'s "the NOTE path catches ConfigError but not PathEscape"): the
     # refusal of `../x` propagates and the session would lose the whole file.
-    text = MINIMAL + '[paths]\nbugs = "../x"\nspecs = "design/specs"\n'
+    text = MINIMAL + '[paths]\nplans = "../x"\nspecs = "design/specs"\n'
     got = loads_noting(text, tmp_path, owner=OWNER)
-    assert got.config.paths.bugs == preset_defaults("paths")["bugs"]
+    assert got.config.paths.plans == preset_defaults("paths")["plans"]
     assert got.config.paths.specs == "design/specs"
-    assert got.notes == (reset("paths.bugs", text, tmp_path),)
+    assert got.notes == (reset("paths.plans", text, tmp_path),)
 
 
 def test_a_path_longer_than_its_cap_resets_only_that_path(tmp_path: Path) -> None:
@@ -132,11 +132,11 @@ def test_a_path_longer_than_its_cap_resets_only_that_path(tmp_path: Path) -> Non
     # `config.paths.PATH_VALUE_LIMIT` is put back to the preset's like any value that cannot be
     # used, and the project's other paths stand. Mutation (`mutations/`'s "a [paths] value may be
     # any length"): the value loads.
-    text = MINIMAL + f'[paths]\nbugs = "{"a/" * 20_000}x"\nspecs = "design/specs"\n'
+    text = MINIMAL + f'[paths]\nplans = "{"a/" * 20_000}x"\nspecs = "design/specs"\n'
     got = loads_noting(text, tmp_path, owner=OWNER)
-    assert got.config.paths.bugs == preset_defaults("paths")["bugs"]
+    assert got.config.paths.plans == preset_defaults("paths")["plans"]
     assert got.config.paths.specs == "design/specs"
-    assert got.notes == (reset("paths.bugs", text, tmp_path),)
+    assert got.notes == (reset("paths.plans", text, tmp_path),)
 
 
 def test_a_path_through_a_symlink_resets_only_that_path(tmp_path: Path) -> None:
@@ -148,11 +148,11 @@ def test_a_path_through_a_symlink_resets_only_that_path(tmp_path: Path) -> None:
     root = tmp_path / "root"
     root.mkdir()
     os.symlink(outside, root / "elsewhere")
-    text = MINIMAL + '[paths]\nbugs = "elsewhere/bugs"\nspecs = "design/specs"\n'
+    text = MINIMAL + '[paths]\nplans = "elsewhere/bugs"\nspecs = "design/specs"\n'
     got = loads_noting(text, root, owner=OWNER)
-    assert got.config.paths.bugs == preset_defaults("paths")["bugs"]
+    assert got.config.paths.plans == preset_defaults("paths")["plans"]
     assert got.config.paths.specs == "design/specs"
-    assert got.notes == (reset("paths.bugs", text, root),)
+    assert got.notes == (reset("paths.plans", text, root),)
 
 
 def test_an_unknown_preset_resets_to_recommended(tmp_path: Path) -> None:
@@ -229,10 +229,10 @@ REFUSED = [
     ),
     pytest.param('[memory]\nmode = "cloud"\n', r"memory\.mode must be one of", id="enum"),
     pytest.param(
-        '[paths]\nbugs = "../x"\n', r"paths\.bugs is not a plain relative path", id="path"
+        '[paths]\nspecs = "../x"\n', r"paths\.specs is not a plain relative path", id="path"
     ),
     pytest.param(
-        f'[paths]\nbugs = "{"a/" * 600}x"\n', r"paths\.bugs is longer than the", id="path-length"
+        f'[paths]\nspecs = "{"a/" * 600}x"\n', r"paths\.specs is longer than the", id="path-length"
     ),
     pytest.param(
         "[guards]\nbg_cleanup = 0\n", r"guards\.bg_cleanup must be true or false", id="guards"
@@ -400,7 +400,7 @@ def _symlinked_docs(tmp_path: Path) -> Path:
     [
         pytest.param("", "paths.specs", id="preset-value"),
         pytest.param('specs = "../x"\n', "paths.specs", id="reset-then-preset"),
-        pytest.param('bugs = "../x"\n', "paths.bugs", id="reset-before-the-first-preset"),
+        pytest.param('plans = "../x"\n', "paths.plans", id="reset-before-the-first-preset"),
     ],
 )
 def test_a_preset_value_a_committed_symlink_breaks_is_named(

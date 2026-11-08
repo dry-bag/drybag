@@ -713,8 +713,7 @@ reddens = [
   "tests/guards/test_attribute.py::test_a_listing_git_gave_no_answer_for_skips_the_comparison",
 ]
 
-# In the block led by `mutations/`'s "the bug ledger reports itself uninitialised and checks
-# nothing": a smoke-fixture gate row reports on what it examined, not on `exit 0`.
+# A smoke-fixture gate row reports on what it examined, not on `exit 0`.
 [[mutation]]
 name = "the commit gate reads an empty range and reports OK"
 file = "src/stayfixed/guards/commit.py"
