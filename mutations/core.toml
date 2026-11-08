@@ -5294,6 +5294,13 @@ reddens = [
 ]
 
 [[mutation]]
+name = "doctor puts any recorded sha into a conflict's command"
+file = "src/stayfixed/sync/doctor.py"
+before = '        if outcome.state == "conflict" and full_sha(state.fetched_sha):'
+after = '        if outcome.state == "conflict" and state.fetched_sha:'
+reddens = ["tests/sync/test_doctor.py::test_conflict_row_carries_the_whole_remedy"]
+
+[[mutation]]
 name = "doctor calls every upstream hold outside memory"
 file = "src/stayfixed/sync/doctor.py"
 before = "        what, review = held[holds.upstream_why or OUTSIDE]"

@@ -142,6 +142,13 @@ def _sync(context: Context) -> Row:
         fix = "the job acts once this is resolved; the next session event runs it"
     elif outcome.state in STANDING:
         fix = "a rerun meets this again until you act on what it says"
+        # A conflict's detail ends in its command, past the clip: the command is given here, from
+        # the job's own text and only for a recorded sha that is one, as a hold's is (`_held`).
+        from stayfixed.sync.job import REVIEW
+        from stayfixed.sync.state import full_sha
+
+        if outcome.state == "conflict" and full_sha(state.fetched_sha):
+            fix += f"; in {overlay}: {REVIEW.format(sha=state.fetched_sha)}"
     else:
         fix = "a later session event retries"
     return Row(WARN, said, fix)

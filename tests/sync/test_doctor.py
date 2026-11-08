@@ -8,6 +8,7 @@ state a file the job's own writer made in the test's `HOME`.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import time
@@ -16,7 +17,10 @@ from pathlib import Path
 
 import pytest
 
+from stayfixed.cli import build_parser, discover_registrars, run
+from stayfixed.doctor import checks
 from stayfixed.doctor.api import OK, SKIP, WARN
+from stayfixed.printed import CLIPPED_CHARS
 from stayfixed.setup.api import setup
 from stayfixed.sync import git as G
 from stayfixed.sync import job as J
@@ -33,6 +37,7 @@ from stayfixed.sync.state import (
     write_state,
 )
 from tests.doctor.test_checks import _by_name, _checks, _env, _initialised, _overlay
+from tests.floor import is_developers
 from tests.gitfixture import git
 from tests.runners import Recorder, real_git
 from tests.sync.conftest import gitleaks_on_path, path_without_gitleaks
@@ -302,6 +307,38 @@ def test_a_standing_failure_says_a_rerun_meets_it(machine: Machine, outcome: str
     status, detail, remedy = machine.scanner().state(outcome, "what it needs\nfindings").row()
     assert (status, remedy) == (WARN, STANDING_FIX)
     assert "what it needs" in detail and "findings" not in detail
+
+
+def test_conflict_row_carries_the_whole_remedy(
+    machine: Machine,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The job's detail for a conflict is longer than `clipped` prints, and its one command comes
+    # last, so the row gives that command apart from the detail, from the sha the job recorded,
+    # in the row and in `--json`, where the doctor skill reads it.
+    command = J.REVIEW.format(sha=UPSTREAM)
+    detail = "x" * CLIPPED_CHARS + command
+    assert f"then git rebase {UPSTREAM}" in command
+    machine.scanner().state("conflict", detail, fetched=UPSTREAM)
+
+    status, _, remedy = machine.row()
+    assert status == WARN and command in remedy
+
+    for name in list(os.environ):
+        if is_developers(name):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(checks, "_own_root", lambda: None)  # `wrapper` would run this checkout
+    root = _initialised(tmp_path)
+    argv = ["doctor", "--json", "--root", str(root), "--home", str(tmp_path / "home")]
+    run([*argv, "--machine", str(machine.file)], parser=build_parser(discover_registrars()))
+    rows = json.loads(capsys.readouterr().out)["checks"]
+    assert command in next(row for row in rows if row["name"] == "sync")["remedy"]
+
+    # A planted `fetched_sha` never becomes a command. Mutation (oracle): `mutations/`'s "doctor
+    # puts any recorded sha into a conflict's command".
+    assert machine.state("conflict", detail, fetched="x; touch owned").row()[2] == STANDING_FIX
 
 
 def test_a_retried_failure_says_a_later_event_retries(machine: Machine) -> None:
