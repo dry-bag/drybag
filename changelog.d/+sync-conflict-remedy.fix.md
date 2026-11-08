@@ -1,0 +1,1 @@
+When the note sync's last job ended in a `conflict`, `stayfixed doctor`'s `sync` row now gives the whole command that integrates upstream by hand (`git log -p … then git rebase <sha>`) in its remedy, in `--json` too; before, the row cut the job's message short before that command, so it said what to do without showing how.
