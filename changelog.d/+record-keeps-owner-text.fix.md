@@ -1,1 +1,0 @@
-`stayfixed attach` no longer rewrites a project's overlay record whole when it adds the remote or the first-attach date: it adds only the keys the record lacks, above the rest, and every comment, key and table you wrote there stays as it was.

@@ -117,13 +117,13 @@ through the plugin `attach` renders and are not delivered to Codex.
 
 ## Install
 
-**Released as 0.6.1.** The plugin form below takes that release's tag. `uv tool install
+**Released as 0.7.0.** The plugin form below takes that release's tag. `uv tool install
 drybag` names no version, so it installs the newest release on PyPI:
 
 As a Claude Code plugin:
 
 ```
-/plugin marketplace add dry-bag/drybag@v0.6.1
+/plugin marketplace add dry-bag/drybag@v0.7.0
 /plugin install drybag@drybag
 ```
 
@@ -152,7 +152,7 @@ of them, annotated.
 
 ```toml
 [drybag]
-version = "0.6.1"
+version = "0.7.0"
 
 [project]
 name = "widget"          # one lowercase path segment

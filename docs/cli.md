@@ -1144,8 +1144,8 @@ no longer grants**, where the ledger names it and the settings file still holds 
 from `common/`, from `projects/<name>/` or from a tag you took off the project leaves with the
 next run, each said as `allow rule withdrawn`, and a rule you added by hand, which the ledger does not name, stays.
 The ledger sits in the git common directory beside the binding id, where a branch cannot write it, so
-nothing a branch commits names what a re-attach or `detach` takes back. **An upgrade from a release that
-kept the ledger in `.drybag/local/attach.json`** neither reads nor removes that file. Delete it:
+nothing a branch commits names what a re-attach or `detach` takes back. **An upgrade from 0.6.1, which
+kept the ledger inside the working tree (the changelog names the path),** neither reads nor removes that file. Delete it:
 it holds your allow rules, and `git status` shows it once `detach` takes the exclude block. Run
 `attach` again to rebuild the ledger. `detach` does not remove what an attach merged before the
 move, so take those allow rules, hook entries and directories out by hand. **A re-attach removes no `.codex/rules/` copy**: a
@@ -2031,7 +2031,7 @@ why so few of them are trusted with anything.
 
 ```toml
 [drybag]
-version = "0.6.1"        # required; there is no default
+version = "0.7.0"        # required; there is no default
 preset = "recommended"
 
 [project]

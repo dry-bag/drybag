@@ -1,1 +1,0 @@
-In a checkout you attached to your overlay without a `stayfixed.toml`, `stayfixed doctor`'s `memory` row now counts the unreviewed notes of the store it names and its `bundles` row is checked instead of skipped, and the overlay-status line that warns of unpushed overlay changes is said at session start; before, all three read as if the checkout had no configuration.

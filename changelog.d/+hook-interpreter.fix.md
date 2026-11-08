@@ -1,1 +1,0 @@
-The hook wrapper now looks up `python3` from `/` and runs the binary it names, so a `python3` committed to the repository, reached through an empty or relative `PATH` element, or a version manager's pin in the project no longer chooses the program every hook starts.
