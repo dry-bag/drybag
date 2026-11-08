@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.findings import LISTED_LIMIT
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.findings import LISTED_LIMIT
 from tests.gitfixture import git
 
 
@@ -16,7 +16,7 @@ def invoke(argv: list[str]) -> int:
 
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -36,7 +36,7 @@ def repo(tmp_path: Path, *messages: str) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
     git(root, "init", "-q", "-b", "main")
-    (root / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG, encoding="utf-8")
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", "chore: seed")
     git(root, "tag", "base")

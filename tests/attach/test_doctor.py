@@ -1,7 +1,7 @@
-"""What the `attached` row in `stayfixed doctor` answers, now that `attach` contributes it.
+"""What the `attached` row in `drybag doctor` answers, now that `attach` contributes it.
 
 Every case runs the whole report through `run_checks`, so the row is asked the way a user's
-`stayfixed doctor` asks it: discovered in this area's `doctor.py`, with the note store resolved by
+`drybag doctor` asks it: discovered in this area's `doctor.py`, with the note store resolved by
 the lazy value its `register()` creates and the overlay root by the report's `Context`. The
 fixtures are the doctor area's own (`tests/doctor/test_checks.py`), shared rather than respelled.
 """
@@ -14,22 +14,22 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import binding
-from stayfixed.attach import doctor as attach_doctor
-from stayfixed.attach.api import LOCAL_SETTINGS
-from stayfixed.attach.check import check as attach_check
-from stayfixed.attach.render import MARKETPLACE_FILE, read_parts
-from stayfixed.attach.render import write as render_write
-from stayfixed.attach.write import attach
-from stayfixed.binding import LEDGER_NAME, delivery_directory
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.config.plates import plates
-from stayfixed.doctor import checks as doctor_checks
-from stayfixed.doctor.api import OK, RED, SKIP, WARN, Check
-from stayfixed.errors import Refusal
-from stayfixed.memory.api import PROJECTS, RECORD
-from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX
-from stayfixed.printed import quoted
+from drybag import binding
+from drybag.attach import doctor as attach_doctor
+from drybag.attach.api import LOCAL_SETTINGS
+from drybag.attach.check import check as attach_check
+from drybag.attach.render import MARKETPLACE_FILE, read_parts
+from drybag.attach.render import write as render_write
+from drybag.attach.write import attach
+from drybag.binding import LEDGER_NAME, delivery_directory
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.config.plates import plates
+from drybag.doctor import checks as doctor_checks
+from drybag.doctor.api import OK, RED, SKIP, WARN, Check
+from drybag.errors import Refusal
+from drybag.memory.api import PROJECTS, RECORD
+from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX
+from drybag.printed import quoted
 from tests.attach.test_write import (
     NOT_LEDGERS,
     _attachable,
@@ -71,7 +71,7 @@ def _past_a_name(tmp_path: Path, path: Path) -> None:
     path.symlink_to(tmp_path / ("x" * 300))
 
 
-# The row as `stayfixed doctor --json` prints it for a project that was never attached, pasted here
+# The row as `drybag doctor --json` prints it for a project that was never attached, pasted here
 # and never derived from the code under test. The overlay case is the bytes captured before the row
 # moved into this area; the `local-only` one changed when delivery stopped depending on the memory
 # mode, since `attach` delivers to such a repository too, and "there is no overlay to bind to" was
@@ -81,7 +81,7 @@ UNATTACHED = {
         "attached",
         "warn",
         f"memory.mode is overlay and {LEDGER_NAME} does not exist, so nothing records an attach",
-        "run `stayfixed attach --check`",
+        "run `drybag attach --check`",
     ),
     "local-only": Check(
         "attached", "ok", f"{LEDGER_NAME} does not exist, so nothing records an attach", ""
@@ -91,7 +91,7 @@ UNATTACHED = {
 
 @pytest.mark.parametrize("mode", sorted(UNATTACHED))
 def test_an_unattached_project_reports_attached_as_it_did(tmp_path: Path, mode: str) -> None:
-    # A checkout with a `stayfixed.toml` and a git repository and nothing `attach` wrote: the
+    # A checkout with a `drybag.toml` and a git repository and nothing `attach` wrote: the
     # state `detach` leaves, and the state of a fresh clone. The whole row is compared, status,
     # sentence and remedy, because a move that reworded any of them is a change a reader of the
     # report sees. The `local-only` case is the row's one green answer without an overlay, the arm
@@ -125,14 +125,14 @@ def test_an_overlay_recording_another_remote_leaves_a_bound_checkout_attached(
 
 def test_an_overlay_project_with_no_ledger_is_a_warning_naming_the_file(tmp_path: Path) -> None:
     # `memory.mode = "overlay"` and nothing recording an attach. Not red: a project may be
-    # configured for an overlay before anyone has run `stayfixed attach` in this checkout, which
+    # configured for an overlay before anyone has run `drybag attach` in this checkout, which
     # is the ordinary state of a fresh clone. The remedy is the command that ends it.
     root = _attached(tmp_path)
     ledger_file(root).unlink()
     check = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
     assert check.status == "warn"
     assert LEDGER_NAME in check.detail
-    assert "stayfixed attach" in check.remedy
+    assert "drybag attach" in check.remedy
 
 
 def test_an_empty_home_is_told_it_is_home_that_names_none(
@@ -142,8 +142,8 @@ def test_an_empty_home_is_told_it_is_home_that_names_none(
     # names no home. The row says so, as a warning and never "this check could not run". Asked of
     # the row directly, which is how a person runs `doctor`. Mutation (oracle): `mutations/`'s
     # "the attached row dies on a home it cannot name".
-    from stayfixed.attach.doctor import _attached as attached_row
-    from stayfixed.attach.doctor import _Ledger
+    from drybag.attach.doctor import _attached as attached_row
+    from drybag.attach.doctor import _Ledger
     from tests.doctor.test_checks import _context
 
     root = _attached(tmp_path)
@@ -176,7 +176,7 @@ def test_the_pointer_at_the_composed_store_is_green_and_red_once_the_store_is_go
     # harness then reads no memory and nothing else says so. Mutation (oracle): `mutations/`'s
     # "doctor reads the pointer at the composed store as a key set elsewhere" -> the first reads
     # red.
-    from stayfixed.memory.api import composed_directory
+    from drybag.memory.api import composed_directory
 
     root = _attached(tmp_path)
     assert (_row(tmp_path, root).status, _row(tmp_path, root).detail) == (OK, POINTED)
@@ -192,7 +192,7 @@ def test_a_composed_store_whose_link_dangles_warns(tmp_path: Path) -> None:
     # The overlay moved and the machine file records the new root, and no attach followed: every
     # link of the composed store still names the old place, so the harness reads none of those
     # notes while the row said the pointer was in place.
-    from stayfixed.memory.api import composed_directory
+    from drybag.memory.api import composed_directory
 
     root = _attached(tmp_path)
     link = composed_directory(_id(root)) / "developer"
@@ -203,7 +203,7 @@ def test_a_composed_store_whose_link_dangles_warns(tmp_path: Path) -> None:
         WARN,
         f"attached; the delivery is in place; {attach_doctor.STORE_DANGLES}; the binding is bound",
     )
-    assert "stayfixed attach" in row.remedy
+    assert "drybag attach" in row.remedy
 
 
 def _pointer_set(root: Path, value: object) -> None:
@@ -256,13 +256,13 @@ def test_a_ledger_with_no_binding_in_the_overlay_is_a_warning_and_never_an_attac
     # Mutation (declared): `if state == UNBOUND or id is None:` -> `if False:` -> the row falls
     # through to the harness-shape branch and this reddens on the sentence.
     root = _attached(tmp_path)
-    kept = root / ".git" / "stayfixed" / "binding"
+    kept = root / ".git" / "drybag" / "binding"
     assert kept.is_file(), "the fixture must have recorded a binding for this to be a probe"
     kept.unlink()
     row = _by_name(_checks(tmp_path, root, machine=_machine(tmp_path)), "attached")
     assert row.status == WARN
     assert "records no binding of this checkout to this project" in row.detail
-    assert "stayfixed attach" in row.remedy
+    assert "drybag attach" in row.remedy
 
 
 def test_a_ledger_naming_a_store_the_overlay_does_not_permit_is_a_warning(tmp_path: Path) -> None:
@@ -285,7 +285,7 @@ def test_a_ledger_naming_a_store_the_overlay_does_not_permit_is_a_warning(tmp_pa
     assert row.status == WARN
     assert "is not this project's directory inside the overlay" in row.detail
     assert "attached;" not in row.detail, "a ledger the overlay does not confirm is not an attach"
-    assert "stayfixed attach" in row.remedy
+    assert "drybag attach" in row.remedy
 
 
 def test_a_ledger_on_a_machine_that_records_no_overlay_skips_and_never_reads_as_attached(
@@ -305,7 +305,7 @@ def test_a_ledger_on_a_machine_that_records_no_overlay_skips_and_never_reads_as_
     assert row.status == SKIP
     assert "records no overlay to check it against" in row.detail
     assert "attached;" not in row.detail
-    assert "stayfixed setup --overlay" in row.remedy
+    assert "drybag setup --overlay" in row.remedy
 
 
 def test_a_ledger_on_a_machine_whose_file_does_not_load_skips_in_words_of_its_own(
@@ -313,7 +313,7 @@ def test_a_ledger_on_a_machine_whose_file_does_not_load_skips_in_words_of_its_ow
 ) -> None:
     # Whether a machine whose file nobody could read records an overlay is not known, which is
     # neither of the two arms beside it: read as no overlay, the row told the owner to run
-    # `stayfixed setup --overlay`; read as an overlay that could not be asked, it blamed `git`. The
+    # `drybag setup --overlay`; read as an overlay that could not be asked, it blamed `git`. The
     # `preferences` row is red on the file and carries the remedy, so this skip carries none.
     # Mutations (`mutations/`'s "the attached row reads a machine file nobody could read as an
     # overlay that could not be asked" and "the report reads a machine file it could not read as
@@ -363,7 +363,7 @@ UNREADABLE_LEDGER_ATTACHED = Check(
     "warn",
     f"{LEDGER_NAME} is here and cannot be read as a ledger, so nothing in it can be corroborated "
     f"and this checkout's attach state is unknown",
-    f"remove {LEDGER_NAME}, then run `stayfixed attach --check`",
+    f"remove {LEDGER_NAME}, then run `drybag attach --check`",
 )
 
 
@@ -373,11 +373,11 @@ def test_one_report_reads_the_ledger_once_and_the_configuration_not_again(
     # `attached` reads the ledger more than once, and the row needs the binding behind it. The
     # ledger had three readers that asked three ways — one of them the
     # `is_file()` that a link to an over-long name defeats — and parsed the file twice, and the
-    # binding was read through `read_binding` without the report's `Config`, so `stayfixed.toml`
+    # binding was read through `read_binding` without the report's `Config`, so `drybag.toml`
     # and the machine file were loaded a second time. Measured by hand: `_Ledger.state` asking
     # `_ledger_state` every time -> three ledger reads; `read_binding` without `config=` -> one
     # load.
-    from stayfixed.attach import binding, write
+    from drybag.attach import binding, write
 
     reads: list[Path] = []
     loads: list[Path] = []
@@ -413,7 +413,7 @@ def test_one_report_resolves_the_overlay_root_once_for_every_area(
     # nothing caches the `git` answers they ask, so this counts only the reads through the
     # `Context`. Mutation (oracle): `mutations/`'s "the report resolves the overlay root for every
     # reader" -> five reads, three of `attach`'s and two of `overlay`'s.
-    from stayfixed.config.overlay import overlay_root
+    from drybag.config.overlay import overlay_root
 
     asked: list[Path | None] = []
 
@@ -422,7 +422,7 @@ def test_one_report_resolves_the_overlay_root_once_for_every_area(
         return overlay_root(machine)
 
     # The name the report's `Context` calls the machine file's reader by, in `doctor.model`.
-    monkeypatch.setattr("stayfixed.doctor.model.recorded_overlay_root", counted)
+    monkeypatch.setattr("drybag.doctor.model.recorded_overlay_root", counted)
     root = _attached(tmp_path)
     rows = _checks(tmp_path, root, machine=_machine(tmp_path))
     # Non-vacuous: both areas read the root, and found the overlay there.
@@ -545,7 +545,7 @@ def test_a_bound_checkouts_damaged_overlay_is_named_and_never_answered_by_removi
         f"{LEDGER_NAME} records an attach, but {broken} is not a directory, so the overlay this "
         f"machine records is damaged and holds none of this checkout's notes or grants",
         f"repair the overlay so that {broken} is a directory again (or clone the overlay afresh), "
-        f"then run `stayfixed doctor` again",
+        f"then run `drybag doctor` again",
     )
     assert "remove the ledger" not in attached.remedy
     assert [row.name for row in rows if row.status == "red"] == []
@@ -587,10 +587,10 @@ def test_an_owner_whose_own_binding_record_will_not_parse_is_told_where_to_look(
 #
 # What the binding delivers, read where `attach` left it: the render under the machine's data
 # directory and the paths it placed in the checkout. Each state is asserted by its constant in
-# `stayfixed.attach.doctor`, formatted as the row formats it.
+# `drybag.attach.doctor`, formatted as the row formats it.
 
 # The remedy every delivery state but the named ones carries.
-RERUN = "run `stayfixed attach`"
+RERUN = "run `drybag attach`"
 
 
 def _id(root: Path) -> str:
@@ -654,7 +654,7 @@ def test_an_overlay_that_moved_is_red_and_names_where_it_was(tmp_path: Path) -> 
     row = _delivered_row(tmp_path, root)
     assert row.status == RED, row
     assert attach_doctor.OVERLAY_GONE.format(path=quoted(str(overlay))) in row.detail
-    assert "stayfixed setup --overlay <path>" in row.remedy
+    assert "drybag setup --overlay <path>" in row.remedy
 
 
 def test_a_placed_path_the_repository_tracks_is_red(tmp_path: Path) -> None:
@@ -683,9 +683,9 @@ def test_a_tracked_file_naming_the_delivery_is_red_and_never_prints_the_id(tmp_p
     # machine's delivery; a tracked file holding it is a leak on its way out. Asked for the whole
     # name: this repository's own sources spell the prefix.
     root = _attached(tmp_path)
-    name = f"stayfixed-delivery-{_id(root)}"
+    name = f"drybag-delivery-{_id(root)}"
     (root / "notes.md").write_text(f"enabled: overlay-x@{name}\n", encoding="utf-8")
-    (root / "prefix.md").write_text("stayfixed-delivery-<id>\n", encoding="utf-8")
+    (root / "prefix.md").write_text("drybag-delivery-<id>\n", encoding="utf-8")
     _git(root, "add", "notes.md", "prefix.md")
     row = _delivered_row(tmp_path, root)
     assert (row.status, row.detail) == (
@@ -700,7 +700,7 @@ def test_a_git_that_cannot_say_what_it_tracks_warns_and_never_reads_as_in_place(
 ) -> None:
     # "Could not ask" is never "nothing tracked": a git that cannot answer leaves the placed paths
     # unchecked, which the row says.
-    from stayfixed.attach import exclude
+    from drybag.attach import exclude
 
     def unanswered(root: Path, relatives: object) -> tuple[str, ...]:
         raise Refusal(exclude.UNANSWERED)
@@ -746,13 +746,13 @@ def test_an_overlay_whose_parts_cannot_be_read_warns_and_says_where_to_look(tmp_
         "attached",
         WARN,
         _attached_detail(attach_doctor.OVERLAY_UNREAD),
-        "run `stayfixed attach --check`, which says why",
+        "run `drybag attach --check`, which says why",
     )
 
 
 def test_a_launcher_the_path_scoped_rules_run_through_that_is_gone_warns(tmp_path: Path) -> None:
     # The path-scoped rules' entry runs `hook PostToolUse` through the launcher that ran `attach`,
-    # by its absolute path; the render keeps it, so a stayfixed moved or uninstalled since leaves
+    # by its absolute path; the render keeps it, so a drybag moved or uninstalled since leaves
     # those rules undelivered. The digest is taken with the launcher the render holds, so the
     # report reads no drift for a launcher of its own.
     root = _attached(tmp_path)
@@ -768,7 +768,7 @@ def test_a_launcher_the_path_scoped_rules_run_through_that_is_gone_warns(tmp_pat
         "attached",
         WARN,
         _attached_detail(attach_doctor.LAUNCHER_GONE.format(path=quoted(str(gone)))),
-        f"{RERUN} from the stayfixed you run now, which renders the entry through it",
+        f"{RERUN} from the drybag you run now, which renders the entry through it",
     )
 
 
@@ -827,7 +827,7 @@ def test_the_attached_row_reads_the_main_checkouts_pointer_from_every_checkout(
     # worktree, and `attach` writes it and its ledger there alone, so the row reads both there,
     # from the main checkout and from a linked worktree alike, and says nothing of a harness memory
     # path, which nothing places any more.
-    from stayfixed.attach.write import attach
+    from drybag.attach.write import attach
     from tests.attach.test_detach import _bound
 
     root, store, machine = _bound(tmp_path)
@@ -867,7 +867,7 @@ def test_two_tags_setting_one_key_is_a_warning(tmp_path: Path) -> None:
     root = _attached(tmp_path)
     overlay = with_tags(tmp_path / "overlay", "p", ["a", "b"])
     for tag in ("a", "b"):
-        _tag_file(overlay, tag, "stayfixed.toml", '[memory]\nmode = "overlay"\n')
+        _tag_file(overlay, tag, "drybag.toml", '[memory]\nmode = "overlay"\n')
     clause = "the setting memory.mode is held by the tags a, b: the later, b, wins"
     assert _delivered_row(tmp_path, root) == Check(
         "attached", WARN, _attached_detail(clause), attach_doctor.TAGS_REMEDY

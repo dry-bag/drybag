@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from stayfixed.hooks.api import EVENTS, Handler, HookEvent, HookResult
-from stayfixed.hooks.registry import UnknownHookEvent, discover
+from drybag.hooks.api import EVENTS, Handler, HookEvent, HookResult
+from drybag.hooks.registry import UnknownHookEvent, discover
 
 
 class Area:
-    """Stands in for `stayfixed.<area>.hooks`, which no shipped area provides yet."""
+    """Stands in for `drybag.<area>.hooks`, which no shipped area provides yet."""
 
     def __init__(self, name: str, handlers: list[Handler]) -> None:
         self.__name__ = name
@@ -27,8 +27,8 @@ def guard(event: str) -> Handler:
 
 
 def area_of(monkeypatch: pytest.MonkeyPatch, *handlers: Handler) -> None:
-    area = Area("stayfixed.example.hooks", list(handlers))
-    monkeypatch.setattr("stayfixed.hooks.registry.area_modules", lambda submodule: [area])
+    area = Area("drybag.example.hooks", list(handlers))
+    monkeypatch.setattr("drybag.hooks.registry.area_modules", lambda submodule: [area])
 
 
 def test_a_mistyped_event_name_is_refused_and_named(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -36,7 +36,7 @@ def test_a_mistyped_event_name_is_refused_and_named(monkeypatch: pytest.MonkeyPa
     with pytest.raises(UnknownHookEvent) as raised:
         discover()
     message = str(raised.value)
-    assert "stayfixed.example.hooks" in message
+    assert "drybag.example.hooks" in message
     assert "'background-cleanup'" in message
     assert "'PreToolUSe'" in message
 

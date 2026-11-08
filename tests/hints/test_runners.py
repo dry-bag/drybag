@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from stayfixed.hints import bashscan
-from stayfixed.hints.runners import names_a_test_run
+from drybag.hints import bashscan
+from drybag.hints.runners import names_a_test_run
 
 
 @pytest.mark.parametrize(

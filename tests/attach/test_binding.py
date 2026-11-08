@@ -15,18 +15,18 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import fsops
-from stayfixed.attach import binding
-from stayfixed.attach.api import Binding, read_binding
-from stayfixed.attach.binding import binding_for
-from stayfixed.attach.permissions import diff_permissions
-from stayfixed.config.loader import CONFIG_FILE, load, loads
-from stayfixed.config.reading import ConfigError
-from stayfixed.errors import Refusal
-from stayfixed.memory.api import BOUND, PROJECTS, RECORD, UNBOUND
-from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX, COMMON_MEMORY
-from stayfixed.presets import load_preset
-from stayfixed.scaffold import EntriesError
+from drybag import fsops
+from drybag.attach import binding
+from drybag.attach.api import Binding, read_binding
+from drybag.attach.binding import binding_for
+from drybag.attach.permissions import diff_permissions
+from drybag.config.loader import CONFIG_FILE, load, loads
+from drybag.config.reading import ConfigError
+from drybag.errors import Refusal
+from drybag.memory.api import BOUND, PROJECTS, RECORD, UNBOUND
+from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX, COMMON_MEMORY
+from drybag.presets import load_preset
+from drybag.scaffold import EntriesError
 from tests.gitfixture import git as _git
 from tests.gitfixture import run_git
 from tests.runners import git_that_cannot_run
@@ -40,7 +40,7 @@ pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not 
 DEFAULT_MEMORY = load_preset("recommended")["defaults"]["paths"]["memory"]
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -58,7 +58,7 @@ index_extra = []
 def _project_and_store(
     tmp_path: Path, *, recorded: str | None, origin: str | None, name: str = "p"
 ) -> tuple[Path, Path]:
-    """A git repository with a `stayfixed.toml`, and the overlay it would attach to.
+    """A git repository with a `drybag.toml`, and the overlay it would attach to.
 
     Idempotent, because several of the tests below build the fixture and then read it back
     through `_read`. Returns `(project root, <overlay>/projects/<name>/memory)`.
@@ -128,7 +128,7 @@ def test_read_binding_reads_the_machine_file_once(
     #
     # Mutation (oracle): `mutations/`'s "read_binding reads the machine file a second time for the
     # binding" -> two reads, and this reddens.
-    from stayfixed.config.reading import read_machine_toml as real
+    from drybag.config.reading import read_machine_toml as real
 
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@github.com:o/p.git")
     machine = _machine(tmp_path, overlay=store.parents[2])
@@ -139,7 +139,7 @@ def test_read_binding_reads_the_machine_file_once(
         reads.append(path)
         return real(path)
 
-    monkeypatch.setattr("stayfixed.config.overlay.read_machine_toml", counted)
+    monkeypatch.setattr("drybag.config.overlay.read_machine_toml", counted)
     binding = read_binding(root, store=store, machine=machine, config=config)
     assert binding.overlay == store.parents[2]
     assert reads == [machine]
@@ -198,7 +198,7 @@ def test_a_first_attach_reports_unbound_rather_than_binding_silently(tmp_path: P
 def test_a_checkout_this_machine_binds_is_bound_whatever_its_remote(tmp_path: Path) -> None:
     # The binding is this machine's record of the checkout's id, so a remote the overlay records
     # neither makes it nor unmakes it.
-    from stayfixed import binding as core
+    from drybag import binding as core
 
     url = "git@github.com:o/p.git"
     root, _ = _project_and_store(tmp_path, recorded=url, origin=url)
@@ -241,7 +241,7 @@ def test_git_being_unavailable_is_a_machine_fault_and_not_an_unbound_state(
     # caller "became a silent no-op … while every memory bundle was empty and nothing reported
     # a failure". An unreadable remote must not read as "never bound", which is the state that
     # invites a rebind.
-    from stayfixed.gitenv import GitUnavailable
+    from drybag.gitenv import GitUnavailable
 
     root, store = _project_and_store(tmp_path, recorded="u", origin="u")
     machine = _machine(tmp_path, overlay=store.parents[2])
@@ -317,7 +317,7 @@ def test_a_machine_that_records_no_overlay_is_refused_naming_what_records_one(
     blank.write_text("[personal]\n", encoding="utf-8")
     with pytest.raises(Refusal) as refused:
         read_binding(root, store=store, machine=blank)
-    assert "stayfixed setup" in str(refused.value)
+    assert "drybag setup" in str(refused.value)
 
 
 def test_a_binding_record_that_cannot_be_read_is_said_and_never_read_as_absent(
@@ -339,7 +339,7 @@ def test_a_binding_record_that_will_not_parse_reports_only_where_the_parser_stop
 
     **Which file this is, and why it is not exempt.** `projects/<name>/project.toml` lives in
     the overlay, whose bytes are the machine owner's own and may print — but the one value
-    stayfixed puts in it is the repository's `origin`, and a remote URL may not print wherever
+    drybag puts in it is the repository's `origin`, and a remote URL may not print wherever
     it came from. `tomllib` builds its message as `f"{msg} (at line N, column M)"` and `msg`
     embeds the source for several of its faults, so interpolating the exception whole would put
     the *file's own text* into the note that `skills/attach/SKILL.md` has the model relay.
@@ -429,7 +429,7 @@ def test_a_binding_record_past_the_read_cap_is_unreadable_in_words_not_a_class_n
 ) -> None:
     # The record is read to the read cap (`fsops.read_regular_text`), and one past it stops the
     # run as any record that cannot be read does. The refusal says why in the reader's words: the
-    # class name it printed before named stayfixed's internals (`TooLarge`) and no condition. The
+    # class name it printed before named drybag's internals (`TooLarge`) and no condition. The
     # cap is lowered so the record is small. Mutation (oracle): `mutations/`'s "a read refusal says
     # an unreadable file by its error's class name" -> `(TooLarge)`.
     root, store = _project_and_store(tmp_path, recorded="x", origin="x")
@@ -446,10 +446,10 @@ def test_a_binding_record_past_the_read_cap_is_unreadable_in_words_not_a_class_n
 def test_binding_for_takes_the_config_it_is_handed_rather_than_loading_a_second_time(
     tmp_path: Path,
 ) -> None:
-    # A test that built its `Config` from a `stayfixed.toml` on disk would let a `binding_for` that
+    # A test that built its `Config` from a `drybag.toml` on disk would let a `binding_for` that
     # ignored its `config` argument and called `load(root, machine=machine)` itself pass too — and
     # "must not load a second time" is the entire reason this seam exists for the session-start
-    # handler. `root` carries no `stayfixed.toml` at all, so that fallback raises `ConfigError`
+    # handler. `root` carries no `drybag.toml` at all, so that fallback raises `ConfigError`
     # instead of quietly succeeding; the `Config` in hand comes from `loads` against text that was
     # never written. Mutation (comment): have `binding_for` call `load(root, machine=machine)` and
     # ignore `config` -> this reddens with `ConfigError` instead of returning a `Binding`.
@@ -458,7 +458,7 @@ def test_binding_for_takes_the_config_it_is_handed_rather_than_loading_a_second_
     _git(root, "init", "-q", "-b", "main")
     _git(root, "remote", "add", "origin", "git@github.com:o/p.git")
     machine = _machine(tmp_path, overlay=tmp_path / "overlay")
-    text = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
+    text = '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
     config = loads(text, root, machine=machine)
     assert not (root / CONFIG_FILE).exists()
     assert binding_for(root, config, machine=machine).state == UNBOUND

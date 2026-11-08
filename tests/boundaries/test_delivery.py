@@ -1,5 +1,5 @@
-"""The sides: every module under `src/stayfixed/` is on one of three, delivery, the pack or the
-core, as `stayfixed.areas` lists them. The core imports neither side and the two sides import each
+"""The sides: every module under `src/drybag/` is on one of three, delivery, the pack or the
+core, as `drybag.areas` lists them. The core imports neither side and the two sides import each
 other only through the statements pinned here, each with what removes it; importing the core loads
 neither side; and no module imports by a string or reaches the import machinery but where pinned,
 so the import rules cannot be walked around."""
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-import stayfixed.areas
+import drybag.areas
 from tests.boundaries import astscan
 from tests.boundaries.test_discovery import area_names
 
@@ -27,7 +27,7 @@ Row = tuple[str, str]
 Direction = tuple[str, str]
 
 # Every import by which a module reaches a package on another side, one row per import statement
-# and one table per direction: the importing file relative to `src/stayfixed/`, the module the
+# and one table per direction: the importing file relative to `src/drybag/`, the module the
 # statement names cut to three dotted parts. Each table is held as a multiset and by equality in
 # both directions, so a new crossing reddens its test, and so do a row whose import has gone and a
 # second statement beside a pinned one: the pardon covers exactly the statements written here, and
@@ -37,9 +37,9 @@ CORE_TO_DELIVERY: tuple[Row, ...] = ()
 CORE_TO_PACK: tuple[Row, ...] = ()
 PACK_TO_DELIVERY: tuple[Row, ...] = ()
 DELIVERY_TO_PACK: tuple[Row, ...] = (
-    # `stayfixed setup --git-hooks` installs and removes the commit-message hook, inside the one
+    # `drybag setup --git-hooks` installs and removes the commit-message hook, inside the one
     # function that runs it. Goes when the commit-hook installer leaves `setup`.
-    ("setup/commands.py", "stayfixed.guards.api"),
+    ("setup/commands.py", "drybag.guards.api"),
 )
 PINNED: dict[Direction, tuple[Row, ...]] = {
     (CORE, DELIVERY): CORE_TO_DELIVERY,
@@ -50,7 +50,7 @@ PINNED: dict[Direction, tuple[Row, ...]] = {
 
 
 def _side(name: str, delivery: frozenset[str], pack: frozenset[str]) -> str:
-    """The side of the module or package `name` directly under `src/stayfixed/`: one neither side
+    """The side of the module or package `name` directly under `src/drybag/`: one neither side
     lists is the core's."""
     return DELIVERY if name in delivery else PACK if name in pack else CORE
 
@@ -64,9 +64,9 @@ def _crossings(
     side.
 
     One row per import statement, keyed on the module the statement names and never on its
-    aliases: `astscan.imported_modules` also yields `stayfixed.overlay.api.create` for every name a
+    aliases: `astscan.imported_modules` also yields `drybag.overlay.api.create` for every name a
     `from` imports, which would turn one import of four names into four rows. The one spelling
-    whose aliases are the modules is `from stayfixed import memory`, and it is read as such: a row
+    whose aliases are the modules is `from drybag import memory`, and it is read as such: a row
     per package, importing the package itself. A module is on the side its first
     path part is listed on, so `cli.py`, `config/` and every other module and subpackage that
     neither side lists are the core's.
@@ -80,15 +80,15 @@ def _crossings(
         elif isinstance(node, ast.ImportFrom):
             # `astscan.imported_modules` yields the statement's own module first, resolved when
             # the import is relative, and then one name per alias.
-            module = astscan.imported_modules(node, ("stayfixed", *parts[:-1]))[0][1]
+            module = astscan.imported_modules(node, ("drybag", *parts[:-1]))[0][1]
             taken = [module]
-            if module == "stayfixed":
+            if module == "drybag":
                 taken = [f"{module}.{alias.name}" for alias in node.names]
         else:
             continue
         for module in taken:
             bits = module.split(".")
-            ours = bits[0] == "stayfixed" and len(bits) > 1
+            ours = bits[0] == "drybag" and len(bits) > 1
             target = _side(bits[1], delivery, pack) if ours else CORE
             if target not in (origin, CORE):
                 rows.append(((origin, target), (where, ".".join(bits[:3]))))
@@ -99,7 +99,7 @@ def _unpinned_or_gone(*directions: Direction) -> dict[str, dict[str, Counter[Row
     """For each of `directions` whose rows the whole package's walk does not find exactly as
     `PINNED` has them: the rows found and not pinned (`unpinned`) and pinned and not found
     (`gone`). Empty when every one is held."""
-    source = ROOT / "src" / "stayfixed"
+    source = ROOT / "src" / "drybag"
     paths = sorted(source.rglob("*.py"))
     # A walk that stopped walking finds no crossing, which an empty table holds, so the walk is
     # held first: a floor well under the package's size, not kept current.
@@ -110,8 +110,8 @@ def _unpinned_or_gone(*directions: Direction) -> dict[str, dict[str, Counter[Row
             _crossings(
                 path.relative_to(source).as_posix(),
                 path.read_text(encoding="utf-8"),
-                stayfixed.areas.DELIVERY_AREAS,
-                stayfixed.areas.PACK_PACKAGES,
+                drybag.areas.DELIVERY_AREAS,
+                drybag.areas.PACK_PACKAGES,
             )
         )
     differences: dict[str, dict[str, Counter[Row]]] = {}
@@ -148,19 +148,19 @@ def test_delivery_and_the_pack_import_each_other_only_where_pinned() -> None:
     assert _unpinned_or_gone((PACK, DELIVERY), (DELIVERY, PACK)) == {}
 
 
-# Imports every module it is handed, then prints every `stayfixed` module the interpreter loaded.
+# Imports every module it is handed, then prints every `drybag` module the interpreter loaded.
 IMPORT_EACH = (
     "import importlib, sys\n"
     "for name in sys.argv[1:]:\n"
     "    importlib.import_module(name)\n"
-    "print(' '.join(sorted(m for m in sys.modules if m.startswith('stayfixed'))))\n"
+    "print(' '.join(sorted(m for m in sys.modules if m.startswith('drybag'))))\n"
 )
 
 
 def core_files(source: Path) -> list[tuple[str, Path]]:
     """Every core file under `source`, relative to it: each module on neither side, `cli.py` and
     the subpackages that are not areas included."""
-    sides = stayfixed.areas.DELIVERY_AREAS | stayfixed.areas.PACK_PACKAGES
+    sides = drybag.areas.DELIVERY_AREAS | drybag.areas.PACK_PACKAGES
     return [
         (path.relative_to(source).as_posix(), path)
         for path in sorted(source.rglob("*.py"))
@@ -181,22 +181,22 @@ def test_in_isolation_no_core_module_loads_either_side() -> None:
     #
     # No declared mutation: no core module imports either side, at module level or in a function,
     # so there is no import to lift.
-    source = ROOT / "src" / "stayfixed"
+    source = ROOT / "src" / "drybag"
     # Every core module, dotted. `__main__` is left out because importing it runs the CLI: its
     # whole body is `main()`.
     modules = [
-        ".".join(("stayfixed", *Path(where).with_suffix("").parts)).removesuffix(".__init__")
+        ".".join(("drybag", *Path(where).with_suffix("").parts)).removesuffix(".__init__")
         for where, _ in core_files(source)
         if Path(where).name != "__main__.py"
     ]
     # The walk names the modules the pinned crossings start from and the report that once loaded
     # the private layer, so a list that stopped holding them cannot keep this green.
     assert {
-        "stayfixed.cli",
-        "stayfixed.doctor.api",
-        "stayfixed.doctor.checks",
-        "stayfixed.harnesses",
-        "stayfixed.scaffold.engine",
+        "drybag.cli",
+        "drybag.doctor.api",
+        "drybag.doctor.checks",
+        "drybag.harnesses",
+        "drybag.scaffold.engine",
     } <= set(modules), modules
     completed = subprocess.run(
         [sys.executable, "-c", IMPORT_EACH, *modules],
@@ -207,8 +207,8 @@ def test_in_isolation_no_core_module_loads_either_side() -> None:
     )
     assert completed.returncode == 0, completed.stderr
     loaded = completed.stdout.split()
-    assert "stayfixed.doctor.checks" in loaded, "the probe imported nothing"
-    delivery, pack = stayfixed.areas.DELIVERY_AREAS, stayfixed.areas.PACK_PACKAGES
+    assert "drybag.doctor.checks" in loaded, "the probe imported nothing"
+    delivery, pack = drybag.areas.DELIVERY_AREAS, drybag.areas.PACK_PACKAGES
     tops = {name: name.split(".")[1] for name in loaded if "." in name}
     assert [name for name, top in tops.items() if _side(top, delivery, pack) != CORE] == []
 
@@ -222,9 +222,9 @@ def test_every_area_is_on_exactly_one_side() -> None:
     # an area joins its side in the change that writes it.
     #
     # Mutation (declared): `mutations/`'s "memory stops being a delivery area".
-    source = ROOT / "src" / "stayfixed"
-    delivery, pack = stayfixed.areas.DELIVERY_AREAS, stayfixed.areas.PACK_PACKAGES
-    core = stayfixed.areas.CORE_AREAS
+    source = ROOT / "src" / "drybag"
+    delivery, pack = drybag.areas.DELIVERY_AREAS, drybag.areas.PACK_PACKAGES
+    core = drybag.areas.CORE_AREAS
     listed = Counter([*delivery, *pack, *core])
     assert [name for name, sides in listed.items() if sides > 1] == []
     areas = set(area_names(source))
@@ -247,37 +247,37 @@ def test_the_delivery_rule_judges_the_importer_and_the_imported() -> None:
     pack = frozenset({"guards", "docs"})
     assert _crossings(
         "doctor/commands.py", "def check():\n    from ..memory import api\n", delivery, pack
-    ) == [((CORE, DELIVERY), ("doctor/commands.py", "stayfixed.memory"))]
-    assert _crossings("memory/x.py", "import stayfixed.overlay.api\n", delivery, pack) == []
+    ) == [((CORE, DELIVERY), ("doctor/commands.py", "drybag.memory"))]
+    assert _crossings("memory/x.py", "import drybag.overlay.api\n", delivery, pack) == []
 
     # Every direction, and the core reached from each: one text, imported from each side. Measured
     # by hand: reading an import of the core as a crossing, or reading the pack as delivery, each
     # reddens one of these.
-    text = "import stayfixed.guards.api\nimport stayfixed.memory.store\nimport stayfixed.fsops\n"
+    text = "import drybag.guards.api\nimport drybag.memory.store\nimport drybag.fsops\n"
     assert _crossings("cli.py", text, delivery, pack) == [
-        ((CORE, PACK), ("cli.py", "stayfixed.guards.api")),
-        ((CORE, DELIVERY), ("cli.py", "stayfixed.memory.store")),
+        ((CORE, PACK), ("cli.py", "drybag.guards.api")),
+        ((CORE, DELIVERY), ("cli.py", "drybag.memory.store")),
     ]
     assert _crossings("guards/x.py", text, delivery, pack) == [
-        ((PACK, DELIVERY), ("guards/x.py", "stayfixed.memory.store"))
+        ((PACK, DELIVERY), ("guards/x.py", "drybag.memory.store"))
     ]
     assert _crossings("memory/x.py", text, delivery, pack) == [
-        ((DELIVERY, PACK), ("memory/x.py", "stayfixed.guards.api"))
+        ((DELIVERY, PACK), ("memory/x.py", "drybag.guards.api"))
     ]
 
     # The one spelling whose module is the package itself, so the area is in an alias: read by
     # alias, and only for that spelling. Mutation (declared): `mutations/`'s "the delivery rule
-    # reads `from stayfixed import memory` as importing nothing".
-    assert _crossings("cli.py", "from stayfixed import fsops, memory\n", delivery, pack) == [
-        ((CORE, DELIVERY), ("cli.py", "stayfixed.memory"))
+    # reads `from drybag import memory` as importing nothing".
+    assert _crossings("cli.py", "from drybag import fsops, memory\n", delivery, pack) == [
+        ((CORE, DELIVERY), ("cli.py", "drybag.memory"))
     ]
 
     # Two statements naming one module are two rows, so a pardon for one statement is never a
     # pardon for a second one beside it.
-    two = "from stayfixed.overlay.api import create\nfrom stayfixed.overlay.api import create\n"
+    two = "from drybag.overlay.api import create\nfrom drybag.overlay.api import create\n"
     assert _crossings("doctor/checks.py", two, delivery, pack) == [
-        ((CORE, DELIVERY), ("doctor/checks.py", "stayfixed.overlay.api")),
-        ((CORE, DELIVERY), ("doctor/checks.py", "stayfixed.overlay.api")),
+        ((CORE, DELIVERY), ("doctor/checks.py", "drybag.overlay.api")),
+        ((CORE, DELIVERY), ("doctor/checks.py", "drybag.overlay.api")),
     ]
 
 
@@ -315,14 +315,14 @@ DYNAMIC_IMPORTS = frozenset(
 TEXT_RUNNERS = frozenset({"__builtins__", "breakpoint", "compile", "eval", "exec"})
 
 # The one module whose job is importing modules by name: discovery, which imports
-# `stayfixed.<area>.<submodule>` for the submodules `area_modules` is called with (held below), and
+# `drybag.<area>.<submodule>` for the submodules `area_modules` is called with (held below), and
 # is how every area, on either side or in the core, plugs into the core.
 DISCOVERY_MODULE = "areas.py"
 # What discovery itself reads of the names below, by function: its two imports by name.
 DISCOVERY_READS = (("area_modules", "import_module"), ("area_imports", "import_module"))
 
 # Every other place a module imports by a string, one row per reference: the file relative to
-# `src/stayfixed/`, the innermost function, and the name it reaches. Held as a multiset and by
+# `src/drybag/`, the innermost function, and the name it reaches. Held as a multiset and by
 # equality in both directions, as the crossings are. None today.
 DYNAMIC_IMPORTERS: tuple[tuple[str, str, str], ...] = ()
 
@@ -400,7 +400,7 @@ def _dynamic_imports(tree: ast.Module) -> list[tuple[str, str]]:
 
 def test_no_core_module_imports_by_a_string_but_discovery() -> None:
     # The delivery rule reads import statements, so a function-level
-    # `importlib.import_module("stayfixed.memory.store")` or `__import__(...)` in a core file
+    # `importlib.import_module("drybag.memory.store")` or `__import__(...)` in a core file
     # crossed into the private layer with every boundary test green. A string import is
     # discovery's alone.
     # So were a module's own loader (`type(__spec__.loader)(name, path).exec_module(module)`), a
@@ -417,7 +417,7 @@ def test_no_core_module_imports_by_a_string_but_discovery() -> None:
     # finder on sys.meta_path", "a core function imports the note store by running text", "a core
     # function reaches __import__ through __builtins__" and "a core function's string annotation
     # imports the note store".
-    source = ROOT / "src" / "stayfixed"
+    source = ROOT / "src" / "drybag"
     rows: list[tuple[str, str, str]] = []
     discovery: list[tuple[str, str]] = []
     for path in sorted(source.rglob("*.py")):
@@ -466,7 +466,7 @@ def test_the_string_import_rules_read_every_spelling() -> None:
     reflected = "import importlib\ndef f():\n    getattr(importlib, 'import_module')('x')\n"
     assert _dynamic_imports(ast.parse(reflected)) == [("f", "import_module")]
     texts = (
-        "def f(x: \"__import__('stayfixed.memory.store')\"):\n    type(__spec__.loader)\n"
+        "def f(x: \"__import__('drybag.memory.store')\"):\n    type(__spec__.loader)\n"
         "    sys.meta_path\n    m.__loader__\n    getattr(importlib, 'import_module')\n"
         "exec(text)\ngetattr(builtins, 'eval')\nfrom builtins import compile as c\nbreakpoint()\n"
         "__builtins__\nre.compile('x')\nfrom sys import path_hooks\nsys.path_importer_cache\n"
@@ -617,19 +617,19 @@ STANDARD_IMPORTS = frozenset(
 # `importlib.resources` reads package data, and imports a module only as the anchor `files` is
 # handed: given a module's name, it imports that module. So it is outside the rule for exactly two
 # reads, which import nothing that is not already loaded. One is `files` called on the package
-# itself, `__package__` (a module's own package) or the literal `"stayfixed"`, in a module
+# itself, `__package__` (a module's own package) or the literal `"drybag"`, in a module
 # that never binds `__package__` itself. The other is `importlib.resources.abc`, which holds types.
 # Every other read of it, the same function given any other argument, the module handed on and the
 # functions that take an anchor of their own (`read_text`, `open_binary` …), is the machinery.
 RESOURCES = "importlib.resources"
 
 # Every import of a module off `STANDARD_IMPORTS`, one row per statement: the file relative
-# to `src/stayfixed/`, the module the statement names, and what the file reaches through it -- the
+# to `src/drybag/`, the module the statement names, and what the file reaches through it -- the
 # names a `from` statement takes, or each attribute path read off the name an `import` binds
 # (`<value>` when the name itself is handed on, where anything could be read off it). Held as a
 # multiset and by equality in both directions, as `DYNAMIC_IMPORTERS` is.
 MACHINERY_IMPORTERS = (
-    # Discovery: imports `stayfixed.<area>.<submodule>` by name, and lists the areas.
+    # Discovery: imports `drybag.<area>.<submodule>` by name, and lists the areas.
     ("areas.py", "importlib", frozenset({"import_module"})),
     ("areas.py", "pkgutil", frozenset({"iter_modules"})),
 )
@@ -653,7 +653,7 @@ def _within(module: str, listed: Iterable[str]) -> bool:
 def _reads_data(dotted: str, node: ast.AST, parents: dict[int, ast.AST], rebound: bool) -> bool:
     """Whether reading `dotted` at `node` is one of the two reads of `RESOURCES` that import
     nothing: anything in its `abc`, or a call of its `files` with one positional argument, the
-    literal `"stayfixed"` or `__package__` in a module that never binds it (`rebound`)."""
+    literal `"drybag"` or `__package__` in a module that never binds it (`rebound`)."""
     if _within(dotted, {f"{RESOURCES}.abc"}):
         return True
     call = parents.get(id(node))
@@ -664,11 +664,11 @@ def _reads_data(dotted: str, node: ast.AST, parents: dict[int, ast.AST], rebound
     (anchor,) = call.args
     if isinstance(anchor, ast.Name):
         return anchor.id == "__package__" and not rebound
-    return isinstance(anchor, ast.Constant) and anchor.value == "stayfixed"
+    return isinstance(anchor, ast.Constant) and anchor.value == "drybag"
 
 
 def _machinery_imports(tree: ast.AST) -> list[tuple[str, frozenset[str]]]:
-    """Every statement in `tree` that imports a module neither `stayfixed`'s own nor on
+    """Every statement in `tree` that imports a module neither `drybag`'s own nor on
     `STANDARD_IMPORTS`, as `(module, reach)`: for `from m import a, b` the names taken that are not
     allowed modules themselves (`from urllib import parse` takes none), for `import m.n [as x]`
     every attribute path read off the name it binds, anywhere in the file. A `RESOURCES` name,
@@ -694,7 +694,7 @@ def _machinery_imports(tree: ast.AST) -> list[tuple[str, frozenset[str]]]:
         return paths
 
     def allowed(module: str) -> bool:
-        return module.split(".")[0] == "stayfixed" or _within(module, STANDARD_IMPORTS)
+        return module.split(".")[0] == "drybag" or _within(module, STANDARD_IMPORTS)
 
     found: list[tuple[str, frozenset[str]]] = []
     for node in ast.walk(tree):
@@ -725,7 +725,7 @@ def _machinery_imports(tree: ast.AST) -> list[tuple[str, frozenset[str]]]:
 
 
 def test_no_core_module_reaches_the_import_machinery_but_where_pinned() -> None:
-    # The rule above reads a list of names, and `pkgutil.resolve_name("stayfixed.memory.store")`,
+    # The rule above reads a list of names, and `pkgutil.resolve_name("drybag.memory.store")`,
     # `importlib.util.find_spec` and a loader's `exec_module`, `importlib.resources.files` handed
     # the store's name, `pydoc.locate`, `pickle.loads`, `logging.config`'s resolver, `timeit` and
     # `xml.sax.make_parser` each crossed into the private layer from a core function with every
@@ -744,7 +744,7 @@ def test_no_core_module_reaches_the_import_machinery_but_where_pinned() -> None:
     # logging.config", "a core function runs an import through timeit", "a core function reaches
     # xml.sax through a sibling submodule's import" and "a core function takes __import__ from
     # builtins by a computed name".
-    source = ROOT / "src" / "stayfixed"
+    source = ROOT / "src" / "drybag"
     rows = [
         (path.relative_to(source).as_posix(), module, reach)
         for path in sorted(source.rglob("*.py"))
@@ -794,13 +794,13 @@ def test_the_machinery_rule_reads_every_spelling() -> None:
     [
         pytest.param(
             "from importlib import resources\nresources.files(__package__).joinpath('x')\n"
-            "resources.files('stayfixed')\n",
+            "resources.files('drybag')\n",
             [],
             id="files-on-the-package",
         ),
         pytest.param(
             "import importlib.resources\nimport importlib.resources as r\n"
-            "importlib.resources.files(__package__)\nr.files('stayfixed')\n",
+            "importlib.resources.files(__package__)\nr.files('drybag')\n",
             [],
             id="files-on-the-package-through-import",
         ),
@@ -808,7 +808,7 @@ def test_the_machinery_rule_reads_every_spelling() -> None:
             "from importlib.resources.abc import Traversable\nx: Traversable\n", [], id="abc"
         ),
         pytest.param(
-            "from importlib import resources\nresources.files('stayfixed.memory.store')\n",
+            "from importlib import resources\nresources.files('drybag.memory.store')\n",
             [("importlib", frozenset({"resources"}))],
             id="files-on-a-module-name",
         ),
@@ -823,7 +823,7 @@ def test_the_machinery_rule_reads_every_spelling() -> None:
             id="files-by-keyword",
         ),
         pytest.param(
-            "from importlib.resources import files\nfiles('stayfixed.memory.store')\n",
+            "from importlib.resources import files\nfiles('drybag.memory.store')\n",
             [("importlib.resources", frozenset({"files"}))],
             id="files-imported-by-name",
         ),
@@ -838,7 +838,7 @@ def test_the_machinery_rule_reads_every_spelling() -> None:
             id="handed-on",
         ),
         pytest.param(
-            "from importlib import resources\n__package__ = 'stayfixed.memory.store'\n"
+            "from importlib import resources\n__package__ = 'drybag.memory.store'\n"
             "resources.files(__package__)\n",
             [("importlib", frozenset({"resources"}))],
             id="package-rebound",
@@ -898,7 +898,7 @@ def test_the_machinery_rule_reads_every_spelling() -> None:
         ),
         pytest.param(
             "import os.path\nfrom collections.abc import Mapping\nimport urllib.parse\n"
-            "from urllib import parse\nfrom os import path\nimport stayfixed.areas\n"
+            "from urllib import parse\nfrom os import path\nimport drybag.areas\n"
             "from . import sibling\n",
             [],
             id="on-the-list-or-our-own",
@@ -918,6 +918,6 @@ def test_the_machinery_rule_reads_resources_by_its_anchor_and_every_other_module
     # row. Every module off `STANDARD_IMPORTS` is a row, a submodule of an allowed package
     # included, and nothing on it is. Measured by hand: dropping the `rebound` check, the keyword
     # check, the `abc` arm, the `RESOURCES` check of the `import` arm, the `allowed` check of
-    # either statement, the dotted name's own check in the `from` arm, the `stayfixed` exemption,
+    # either statement, the dotted name's own check in the `from` arm, the `drybag` exemption,
     # or reading the list by top-level name each reddens a case.
     assert _machinery_imports(ast.parse(source)) == rows

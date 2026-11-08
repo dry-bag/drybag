@@ -14,7 +14,7 @@ precedent for a shared test module.
 
 **The environment is sealed rather than inherited, and that is the hardening.** An inherited
 `GIT_DIR`, `GIT_WORK_TREE` or `GIT_INDEX_FILE` points `git` at a repository other than the one
-it was given — which is the defect `stayfixed.gitenv` and `stayfixed.runner` both exist to close,
+it was given — which is the defect `drybag.gitenv` and `drybag.runner` both exist to close,
 and it is worse here than in production: these calls are `init`, `add` and `commit`, so a
 redirected fixture does not read the wrong repository, it *writes* to it. `GIT_CONFIG_GLOBAL`
 and `GIT_CONFIG_SYSTEM` go to `os.devnull` for the reason `tests/memory/test_store.py` gave in
@@ -23,7 +23,7 @@ that has nothing to do with the code under test. `GIT_CONFIG_NOSYSTEM` is set be
 because on macOS the second is not enough: Apple's git also reads a gitconfig inside Xcode that
 no path variable replaces, and that file names the default branch.
 
-**`PATH` is passed through rather than pinned**, for the reason `stayfixed.gitenv`'s module
+**`PATH` is passed through rather than pinned**, for the reason `drybag.gitenv`'s module
 docstring gives about production: the machine owner's own `git` is the one that must answer,
 and a hardcoded `/usr/bin:/bin` is what picks the Xcode shim on macOS over the `git` they
 installed. Two modules pinned it; that was a narrowing nothing needed, and this widens it.
@@ -68,20 +68,20 @@ from typing import Any
 
 import pytest
 
-from stayfixed import gitenv
+from drybag import gitenv
 
 # The one spelling of the skip, published here because five modules had written it out.
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
 # The variable a session sets to give every git it starts a configuration of its own, a `pushurl`
 # or an `insteadOf` among them. Spelled here, the one module that may name it, for the tests that
-# set it in the process to show that no git stayfixed starts reads it.
+# set it in the process to show that no git drybag starts reads it.
 SESSION_CONFIG = "GIT_CONFIG_GLOBAL"
 
 # What survives from the ambient environment. `PATH` for the reason in the module docstring;
 # the rest is what makes `git` able to run and report at all on the three platforms. Everything
 # else is dropped, `GIT_DIR` and `GIT_WORK_TREE` above all — the same rule
-# `stayfixed.gitenv.GIT_ENV_KEEP` states for production, with `TMPDIR` added because these
+# `drybag.gitenv.GIT_ENV_KEEP` states for production, with `TMPDIR` added because these
 # fixtures are built under one.
 ENV_KEEP = ("PATH", "LANG", "LC_ALL", "SYSTEMROOT", "TMPDIR")
 
@@ -104,9 +104,9 @@ def env(home: Path, **extra: str) -> dict[str, str]:
     """The sealed environment one fixture `git` runs in, with `extra` layered on top.
 
     `extra` is for a module whose difference is real: `tests/guards/test_githooks.py` puts a
-    `stayfixed` shim on `PATH` because its `git commit` has to run the commit-msg hook it just
+    `drybag` shim on `PATH` because its `git commit` has to run the commit-msg hook it just
     installed, and that shim is the branch the test exists to exercise; it adds the suite's
-    floor (`tests/floor.py`) as well, for the `stayfixed` that hook starts.
+    floor (`tests/floor.py`) as well, for the `drybag` that hook starts.
     """
     sealed = {key: os.environ[key] for key in ENV_KEEP if key in os.environ}
     sealed.update(
@@ -144,7 +144,7 @@ def run_git(
     `check=True` and only the stdout, which is what every other call site wants.
 
     `stdin` is closed rather than inherited, which is the second half of what
-    `GIT_TERMINAL_PROMPT` buys and the reason `stayfixed.runner` gives for the same line: every
+    `GIT_TERMINAL_PROMPT` buys and the reason `drybag.runner` gives for the same line: every
     call here captures its output, so a credential prompt would be invisible and would block
     until the test run was killed.
     """
@@ -264,5 +264,5 @@ def repository(tmp_path: Path) -> Path:
     root.mkdir(parents=True)
     git(root, "init", "-q", "-b", "main")
     git(root, "remote", "add", "origin", "git@github.com:owner/widget.git")
-    (root / "README.md").write_text("# ours, from before stayfixed\n", encoding="utf-8")
+    (root / "README.md").write_text("# ours, from before drybag\n", encoding="utf-8")
     return root

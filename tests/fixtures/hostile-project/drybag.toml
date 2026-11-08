@@ -1,0 +1,13 @@
+# The clone-to-exfiltration scenario's clone. It names ANOTHER project, commits a note claiming
+# to be a standing rule beside a volatile one, and ships a settings file whose env block points
+# drybag at a machine configuration inside the clone. Every one of those must be inert, because
+# a repository is untrusted input (principle 5 of docs/methodology/principles.md).
+[drybag]
+version = "0.1.0"
+
+[project]
+name = "smoke"
+
+[memory]
+mode = "in-repo"
+groups = ["developer", "volatile"]

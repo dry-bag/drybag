@@ -1,4 +1,4 @@
-"""`stayfixed detach` removes exactly what `attach` added, and nothing else.
+"""`drybag detach` removes exactly what `attach` added, and nothing else.
 
 The ledger is the authority on what was ours. Guessing it back from the content of a settings
 file is the heuristic the ledger exists to replace, and a detach built on a guess removes a rule
@@ -16,12 +16,12 @@ from typing import Any
 
 import pytest
 
-from stayfixed import fsops, jsonobject
-from stayfixed.attach.write import Attached, Detached, attach, detach
-from stayfixed.binding import LEDGER_NAME
-from stayfixed.errors import Failure, Refusal
-from stayfixed.printed import quoted
-from stayfixed.scaffold.regions import extract
+from drybag import fsops, jsonobject
+from drybag.attach.write import Attached, Detached, attach, detach
+from drybag.binding import LEDGER_NAME
+from drybag.errors import Failure, Refusal
+from drybag.printed import quoted
+from drybag.scaffold.regions import extract
 from tests.attach.test_binding import CONFIG, _machine
 from tests.attach.test_write import NOT_LEDGERS, SETTINGS, ledger_file, rewritten
 from tests.gitfixture import git
@@ -68,7 +68,7 @@ def _bound(tmp_path: Path) -> tuple[Path, Path, Path]:
     )
     (overlay / "common" / "claude").mkdir(parents=True)
     (overlay / "common" / "codex").mkdir(parents=True)
-    (root / "stayfixed.toml").write_text(CONFIG.format(name="p"), encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG.format(name="p"), encoding="utf-8")
     git(root, "init", "-q", "-b", "main")
     git(root, "remote", "add", "origin", "git@example.com:o/p.git")
     git(root, "add", "-A")
@@ -138,8 +138,8 @@ def test_detach_leaves_a_file_at_a_name_attach_stopped_recording(
 
 def _render_of(root: Path) -> tuple[str, Path]:
     """The binding id of `root`'s repository and the render directory it names."""
-    from stayfixed import binding
-    from stayfixed.binding import delivery_directory
+    from drybag import binding
+    from drybag.binding import delivery_directory
 
     id = binding.read_id(root)
     assert id is not None
@@ -150,7 +150,7 @@ def _installed(root: Path, store: Path, machine: Path) -> None:
     """An attach whose two `claude plugin` calls wrote what Claude Code writes into the main
     checkout's settings file: the `enabledPlugins` and `extraKnownMarketplaces` entries that name
     the binding id."""
-    from stayfixed.attach.write import attach
+    from drybag.attach.write import attach
 
     runner = Recorder(on_call=claude_code(root))
     attach(root, store=store, machine=machine, runner=runner)
@@ -161,7 +161,7 @@ def test_detach_withdraws_the_rendered_plugin_and_keeps_the_binding(tmp_path: Pa
     # told to forget the plugin and its marketplace, each once, from the main checkout whose
     # settings file holds the plugin's entries. The id, this machine's record of it and the
     # overlay's record stay: a later attach binds the same checkout again.
-    from stayfixed import binding
+    from drybag import binding
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,), hooks=True)
@@ -179,13 +179,13 @@ def test_detach_withdraws_the_rendered_plugin_and_keeps_the_binding(tmp_path: Pa
                 "claude",
                 "plugin",
                 "uninstall",
-                f"overlay-{id}@stayfixed-delivery-{id}",
+                f"overlay-{id}@drybag-delivery-{id}",
                 "--scope",
                 "local",
             ],
             root.resolve(),
         ),
-        (["claude", "plugin", "marketplace", "remove", f"stayfixed-delivery-{id}"], root.resolve()),
+        (["claude", "plugin", "marketplace", "remove", f"drybag-delivery-{id}"], root.resolve()),
     ]
     assert not (root / SETTINGS).exists()
     assert binding.read_id(root) == id
@@ -268,7 +268,7 @@ def test_a_ledger_naming_another_directory_deletes_nothing_outside_the_delivery_
 def _branch_ledger(root: Path, store: Path, **fields: object) -> Path:
     """The ledger a branch commits at the path the working tree once kept it, as git leaves it on
     checkout."""
-    path = root / ".stayfixed" / "local" / "attach.json"
+    path = root / ".drybag" / "local" / "attach.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     document = {
         "format": 1,
@@ -322,7 +322,7 @@ def test_a_ledger_left_in_the_working_tree_is_neither_read_nor_removed(tmp_path:
 def _exclude_block(root: Path) -> bool:
     """Whether the repository's exclude file still holds `attach`'s block."""
     exclude = root / ".git" / "info" / "exclude"
-    return exclude.is_file() and "# stayfixed:attach:begin" in exclude.read_text(encoding="utf-8")
+    return exclude.is_file() and "# drybag:attach:begin" in exclude.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -348,7 +348,7 @@ def test_a_settings_file_still_naming_the_plugin_keeps_the_delivery_hidden_and_d
     # exclude block, the ledger and the render. The failure names the entry left by its key and
     # never the id. A second detach makes only the call the file still asks for.
     # Mutation: `mutations/`'s "detach goes past a settings file that still names the plugin".
-    from stayfixed.attach.write import STILL_NAMED
+    from drybag.attach.write import STILL_NAMED
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,), hooks=True)
@@ -371,16 +371,16 @@ def test_a_detach_that_cannot_read_the_id_keeps_a_settings_file_naming_a_deliver
 ) -> None:
     # With the id file gone, `detach` cannot name the plugin, and the settings file still names the
     # old id under both keys: withdrawn, the block left that file for `git add -A` to commit. Any
-    # `stayfixed-delivery-` name there keeps the block, the ledger and the render, and fails.
+    # `drybag-delivery-` name there keeps the block, the ledger and the render, and fails.
     # Mutation: `mutations/`'s "detach asks the settings file about this binding id's delivery
     # alone".
-    from stayfixed.attach.write import STILL_NAMED
+    from drybag.attach.write import STILL_NAMED
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
     _installed(root, store, machine)
     _, delivery = _render_of(root)
-    (root / ".git" / "stayfixed" / "binding").unlink()
+    (root / ".git" / "drybag" / "binding").unlink()
     runner = Recorder(on_call=claude_code(root))
     with pytest.raises(Failure) as failed:
         _detach(root, runner)
@@ -398,8 +398,8 @@ def test_detach_after_an_attach_whose_marketplace_add_failed_runs_no_call_and_fi
     # attach exited 1. The settings file names no plugin, so `detach` asks Claude Code to forget
     # nothing and withdraws: it used to run `marketplace remove` regardless, fail on it, and promise
     # that running it again would finish, which it never did.
-    from stayfixed.attach.write import attach
-    from stayfixed.runner import Completed
+    from drybag.attach.write import attach
+    from drybag.runner import Completed
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
@@ -537,7 +537,7 @@ def test_a_second_detach_exits_one_and_writes_nothing(tmp_path: Path, run_in: st
     target = root if run_in == "main" else side
     _detach(target)
     before = tree_entries(root, side)
-    assert str(root / "stayfixed.toml") in before
+    assert str(root / "drybag.toml") in before
     with pytest.raises(Failure) as failed:
         _detach(target)
     assert LEDGER_NAME in str(failed.value)
@@ -547,9 +547,9 @@ def test_a_second_detach_exits_one_and_writes_nothing(tmp_path: Path, run_in: st
 def test_detach_withdraws_the_memory_pointer_and_the_composed_store(tmp_path: Path) -> None:
     # The key names a directory derived from the id; both go, the overlay the links point into
     # stays, and a settings file that held nothing else goes with them.
-    from stayfixed import binding
-    from stayfixed.attach.write import attach
-    from stayfixed.memory.store import composed_directory as store_directory
+    from drybag import binding
+    from drybag.attach.write import attach
+    from drybag.memory.store import composed_directory as store_directory
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
@@ -572,7 +572,7 @@ def test_detach_from_a_worktree_takes_the_pointer_out_of_the_main_checkouts_file
     # `attach` writes the pointer and its ledger into the main checkout from any worktree, since
     # Claude Code reads that settings file from every one: a detach from the worktree takes the key
     # out of the main checkout's file and leaves the rest of that file as it was.
-    from stayfixed.attach.write import attach
+    from drybag.attach.write import attach
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
@@ -879,7 +879,7 @@ def test_detach_takes_back_the_exclude_block_and_the_empty_directories(tmp_path:
 def test_the_memory_pointer_is_hidden_too(tmp_path: Path) -> None:
     # The pointer is written into the settings file every run places and hides in its one block
     # above the first write, since Claude Code writes the plugin's entry there too.
-    from stayfixed.attach.write import attach
+    from drybag.attach.write import attach
     from tests.attach.test_write import _check_ignore
 
     root, store, machine = _bound(tmp_path)
@@ -982,7 +982,7 @@ def test_an_exclude_file_that_is_not_utf8_neither_blocks_attach_nor_detach(
     _attach(root, store, machine)
     written = _exclude_file(root).read_bytes()
     assert written.startswith(held)
-    assert b"# stayfixed:attach:begin" in written
+    assert b"# drybag:attach:begin" in written
     _detach(root)
     assert _exclude_file(root).read_bytes() == held
 
@@ -995,7 +995,7 @@ def test_the_exclude_file_refusals_print_the_path_through_the_quoting_rule(
     # it, as the store's refusals already print theirs.
     #
     # Mutation: `mutations/`'s "the exclude file's symlink refusal prints its path raw".
-    from stayfixed.attach.exclude import planned_block
+    from drybag.attach.exclude import planned_block
 
     root = tmp_path / "clone\n::error::x"
     root.mkdir()
@@ -1046,7 +1046,7 @@ def test_a_doubled_exclude_block_refuses_detach_naming_the_exclude_file(tmp_path
     # Mutation: `mutations/`'s "a doubled exclude block is refused without its file".
     root = _withdrawable(tmp_path)
     path = _exclude_file(root)
-    begin = "# stayfixed:attach:begin\n"
+    begin = "# drybag:attach:begin\n"
     path.write_text(path.read_text(encoding="utf-8") + begin, encoding="utf-8")
     before = snapshot(root)
     with pytest.raises(Refusal) as refused:
@@ -1068,7 +1068,7 @@ def test_an_exclude_file_detach_cannot_write_is_refused_before_anything_is_withd
     root = _withdrawable(tmp_path)
     info = _exclude_file(root).parent
     # Non-vacuous: there is a block to take out, and a settings file and rule copies before it.
-    assert "stayfixed:attach:begin" in _exclude_file(root).read_text(encoding="utf-8")
+    assert "drybag:attach:begin" in _exclude_file(root).read_text(encoding="utf-8")
     assert (root / SETTINGS).is_file()
     assert any((root / ".codex" / "rules").iterdir())
     before = tree_entries(root)
@@ -1099,7 +1099,7 @@ def test_detach_writes_nothing_through_an_exclude_file_that_became_a_symlink(
     shutil.move(path, elsewhere)
     path.symlink_to(elsewhere)
     held = elsewhere.read_bytes()
-    assert b"stayfixed:attach:begin" in held
+    assert b"drybag:attach:begin" in held
     detached = _detach(root)
     assert path.is_symlink()
     assert elsewhere.read_bytes() == held
@@ -1207,12 +1207,12 @@ def test_a_settings_file_detach_withdraws_nothing_from_is_not_rewritten(tmp_path
     # written at all.
     #
     # Mutation: `mutations/`'s "detach rewrites a settings file it withdraws nothing from".
-    from stayfixed.attach.write import attach
+    from drybag.attach.write import attach
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
     # A repository that keeps its own notes, so the composed store's pointer is not written either.
-    config = root / "stayfixed.toml"
+    config = root / "drybag.toml"
     text = config.read_text(encoding="utf-8").replace('mode = "overlay"', 'mode = "local-only"')
     config.write_text(text, encoding="utf-8")
     (root / ".claude").mkdir()

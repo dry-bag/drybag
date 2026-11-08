@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from stayfixed.scaffold import Action, Plan, Refused, Verb, render_report
+from drybag.scaffold import Action, Plan, Refused, Verb, render_report
 
 
 def a_plan() -> Plan:

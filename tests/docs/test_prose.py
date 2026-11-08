@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.prose import (
+from drybag.prose import (
     blank_fences,
     path_references,
     resolves_within,
@@ -75,7 +75,7 @@ def test_a_long_symbol_path_is_read_in_memory_linear_in_its_length() -> None:
     # back" -> this reddens.
     probe = (
         "import resource, sys\n"
-        "from stayfixed.prose import path_references\n"
+        "from drybag.prose import path_references\n"
         "line = '`src/a.py' + '::x' * int(sys.argv[1]) + '` `docs/b.md`'\n"
         "scale = 1 if sys.platform == 'darwin' else 1024\n"
         "before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss\n"
@@ -141,7 +141,7 @@ def test_a_span_whose_first_component_is_a_host_is_prose() -> None:
 def test_a_version_number_is_not_an_extension() -> None:
     # `releases/0.1.9596` names a version, not a file: an extension starts with a letter, so a
     # numbered directory is prose. Oracle: `mutations/`'s "an extension may start with a digit".
-    assert list(path_references("`releases/0.1.9596` `docs/p0/0.0.1` `man/stayfixed.1`")) == []
+    assert list(path_references("`releases/0.1.9596` `docs/p0/0.0.1` `man/drybag.1`")) == []
 
 
 def test_a_shell_command_or_a_url_is_never_a_reference() -> None:
@@ -208,7 +208,7 @@ def test_fences_are_read_in_time_linear_in_the_text(shape: str) -> None:
     # cases; "a fence's closers are searched from the first again" -> `closed pairs`.
     probe = (
         "import json, sys\n"
-        "from stayfixed.prose import blank_fences\n"
+        "from drybag.prose import blank_fences\n"
         "runs, blanked = json.loads(sys.argv[1])\n"
         "head = ''.join(unit * count for unit, count in runs)\n"
         "kept = '\\n' * head.count('\\n') if blanked else head\n"

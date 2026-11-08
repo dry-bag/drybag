@@ -8,19 +8,19 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.harnesses import CLAUDE
-from stayfixed.hints import bgcleanup
-from stayfixed.hints.hooks import register
-from stayfixed.hooks.api import EVENTS, Handler, HookEvent
-from stayfixed.hooks.dispatch import Recorder, dispatch
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.harnesses import CLAUDE
+from drybag.hints import bgcleanup
+from drybag.hints.hooks import register
+from drybag.hooks.api import EVENTS, Handler, HookEvent
+from drybag.hooks.dispatch import Recorder, dispatch
 from tests.floor import floor_env
 from tests.gitfixture import git
 from tests.sessions import NO_CONFIG, session_of
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -31,10 +31,10 @@ base_branch = "main"
 
 LIST_IMPORTS = (
     "import sys\n"
-    "from stayfixed.hooks.registry import discover\n"
+    "from drybag.hooks.registry import discover\n"
     "names = [h.name for h in discover()]\n"
     "assert 'bg-cleanup' in names, names\n"
-    "print(' '.join(sorted(m for m in sys.modules if m.startswith('stayfixed'))))\n"
+    "print(' '.join(sorted(m for m in sys.modules if m.startswith('drybag'))))\n"
 )
 
 
@@ -75,8 +75,8 @@ def test_every_handler_declares_a_known_event() -> None:
 
 
 def test_no_config_silences_the_hygiene_note_and_never_the_guard(tmp_path: Path) -> None:
-    # With no stayfixed.toml the guard was silent too, by design, so a repository that had not
-    # write a `stayfixed.toml` was not guarded. It judges with any configuration now, none included,
+    # With no drybag.toml the guard was silent too, by design, so a repository that had not
+    # write a `drybag.toml` was not guarded. It judges with any configuration now, none included,
     # and the hygiene note, which is about the project, stays silent. Mutation (`mutations/`'s
     # "the hygiene note judges with no project configuration"): the note raises on `None`.
     verdicts = {
@@ -150,21 +150,21 @@ def test_discovery_imports_no_guards_module_but_hooks(tmp_path: Path) -> None:
     )
     assert completed.returncode == 0, completed.stderr
     imported = set(completed.stdout.split())
-    assert "stayfixed.hints.hooks" in imported
-    assert "stayfixed.hints.bgcleanup" not in imported
-    assert "stayfixed.hints.bashscan" not in imported
+    assert "drybag.hints.hooks" in imported
+    assert "drybag.hints.bgcleanup" not in imported
+    assert "drybag.hints.bashscan" not in imported
     # The test-hygiene notice's modules, named explicitly: `hygiene` imports `bashscan` and
     # `gitenv` at module scope, so a module-level import of it in `hooks.py` would be caught by
     # the line above too — but only by accident of what it happens to import.
-    assert "stayfixed.hints.hygiene" not in imported
-    assert "stayfixed.config" not in imported
+    assert "drybag.hints.hygiene" not in imported
+    assert "drybag.config" not in imported
 
 
 def hook(event: str, stdin: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     # A home of its own with no machine file, so nothing of the developer's is read.
     home = cwd.parent / "no-home"
     return subprocess.run(
-        [sys.executable, "-m", "stayfixed", "hook", event],
+        [sys.executable, "-m", "drybag", "hook", event],
         input=stdin,
         capture_output=True,
         text=True,
@@ -329,7 +329,7 @@ def test_a_hygiene_failure_is_recorded_and_never_costs_the_call(
     # The dispatcher swallows and records. The handler does not need its own try/except, and
     # must not have one — a silent swallow is how a broken notice goes unnoticed. The stderr
     # assertion is reddened by giving `_test_hygiene` its own try/except around `context_for`.
-    from stayfixed.hints import hygiene as module
+    from drybag.hints import hygiene as module
 
     def broken(command: str, root: Path) -> str | None:
         raise RuntimeError("boom")

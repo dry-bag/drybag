@@ -22,11 +22,11 @@ from typing import Any
 
 import pytest
 
-from stayfixed.config.machine import machine_config_path
-from stayfixed.sync import job as J
-from stayfixed.sync.job import JobContext, Limits
-from stayfixed.sync.rules import MEMORY_PATHSPEC
-from stayfixed.sync.state import state_directory
+from drybag.config.machine import machine_config_path
+from drybag.sync import job as J
+from drybag.sync.job import JobContext, Limits
+from drybag.sync.rules import MEMORY_PATHSPEC
+from drybag.sync.state import state_directory
 from tests import gitfixture as fx
 
 # A bound no scan should reach under the load other sessions put on the machine: the scanner is no

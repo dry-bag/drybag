@@ -19,9 +19,9 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.gitenv import FLOOR_VARIABLE
-from stayfixed.sync import job as J
-from stayfixed.sync.state import LOCK_FILE, Lock, Outcome
+from drybag.gitenv import FLOOR_VARIABLE
+from drybag.sync import job as J
+from drybag.sync.state import LOCK_FILE, Lock, Outcome
 from tests.gitfixture import run_git
 from tests.sync.conftest import (
     HOST,
@@ -288,7 +288,7 @@ _KILL_RUNNER = r"""
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from stayfixed.sync import job as J
+from drybag.sync import job as J
 ctx = J.JobContext(overlay=Path(sys.argv[1]), state_dir=Path(sys.argv[2]),
                    host="testhost", now=lambda: datetime.now(UTC),
                    limits=J.Limits(checks=float(sys.argv[3])))

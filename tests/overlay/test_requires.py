@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.overlay.api import requires_of, satisfies
-from stayfixed.overlay.layout import IDENTITY_RECORD
-from stayfixed.overlay.template import template_root
+from drybag.overlay.api import requires_of, satisfies
+from drybag.overlay.layout import IDENTITY_RECORD
+from drybag.overlay.template import template_root
 from tests.parserlimits import LONG_NUMBER
 
 
@@ -66,8 +66,8 @@ def test_a_fifo_at_the_identity_record_is_unreadable_to_its_readers_without_wait
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed.overlay.api import requires_of\n"
-        "from stayfixed.overlay.identity import identity_record, overlay_fault\n"
+        "from drybag.overlay.api import requires_of\n"
+        "from drybag.overlay.identity import identity_record, overlay_fault\n"
         "root = Path(sys.argv[1])\n"
         "print(identity_record(root), requires_of(root), overlay_fault(root) is not None)\n"
     )

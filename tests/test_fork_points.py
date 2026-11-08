@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
-from stayfixed import gitenv
-from stayfixed.gitenv import DISJOINT, NO_ANSWER, SHALLOW, ForkUnknown, fork_points
+from drybag import gitenv
+from drybag.gitenv import DISJOINT, NO_ANSWER, SHALLOW, ForkUnknown, fork_points
 from tests.gitfixture import answer_shallow_check, criss_cross, dated, git, needs_git
 
 

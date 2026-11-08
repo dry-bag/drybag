@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import fsops
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.config.schema import Config
-from stayfixed.printed import quoted
+from drybag import fsops
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.config.schema import Config
+from drybag.printed import quoted
 from tests.attach.test_binding import _machine, _project_and_store
 from tests.attach.test_write import ENTRY, RULE, SETTINGS, _overlay_grants, _wide, ledger_file
 from tests.runners import Recorder
@@ -39,7 +39,7 @@ def _never_the_developers_own_home(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     # through the CLI's own `subprocess_runner()`, which resolves `claude` on `PATH`. One recorder
     # for the case, answering every program as having succeeded.
     runner = Recorder()
-    monkeypatch.setattr("stayfixed.runner.subprocess_runner", lambda **_: runner)
+    monkeypatch.setattr("drybag.runner.subprocess_runner", lambda **_: runner)
 
 
 def invoke(argv: list[str]) -> int:
@@ -80,7 +80,7 @@ def test_the_attach_screen_and_check_name_the_project_quoted(
     # name shaped like an instruction to one inert quoted value. `--check` opens its line with the
     # same quoted name and carries it in `--json` through `printed.printable`; `attach --json`
     # has no field of its own for it.
-    from stayfixed import binding
+    from drybag import binding
 
     root, store = _project_and_store(
         tmp_path,
@@ -92,7 +92,7 @@ def test_the_attach_screen_and_check_name_the_project_quoted(
     machine = _machine(tmp_path, overlay=store.parents[2])
     assert invoke(["attach", "--check", *_flags(root, store, machine)]) == 0
     line = capsys.readouterr().out
-    assert line.startswith(f"project {quoted(PROJECT_NAME)} (its stayfixed.toml); unbound")
+    assert line.startswith(f"project {quoted(PROJECT_NAME)} (its drybag.toml); unbound")
     assert invoke(["attach", "--check", *_flags(root, store, machine), "--json"]) == 0
     report = json.loads(capsys.readouterr().out)
     assert (report["project"], report["state"]) == (PROJECT_NAME, "unbound")
@@ -126,7 +126,7 @@ def test_a_reattach_that_binds_another_project_says_both_on_one_line(
     )
     assert invoke(["attach", *_flags(root, other, machine)]) == 0
     out = capsys.readouterr().out
-    from stayfixed.attach.write import REBOUND
+    from drybag.attach.write import REBOUND
 
     assert REBOUND.format(earlier=quoted("p"), project=quoted("q")) in out
 
@@ -138,7 +138,7 @@ def test_an_attach_after_an_added_hook_entry_proceeds_and_shows_the_binding_and_
     # adds a hook entry and an allow rule proceeds with no flag and says, on one screen, which
     # binding it acted for and what will run that did not before. Each name is the overlay's,
     # printed through `printed`.
-    from stayfixed import binding
+    from drybag import binding
 
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     _overlay_grants(store)
@@ -191,7 +191,7 @@ def test_a_re_attach_names_each_codex_rule_copy_the_overlay_no_longer_holds(
 def test_the_line_about_a_dropped_copy_says_when_detach_removes_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # The line was "remove it, or run `stayfixed detach`", and that command then took an uncommitted
+    # The line was "remove it, or run `drybag detach`", and that command then took an uncommitted
     # edit with it.
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     machine = _machine(tmp_path, overlay=store.parents[2])
@@ -223,7 +223,7 @@ def test_an_origin_carrying_credentials_is_neither_printed_nor_recorded_with_the
     # Mutations: `mutations/`'s "an origin keeps its credentials", "the binding record keeps an
     # origin's credentials", "the origin note names a remote's credentials" and "the attach
     # screen names an origin's credentials".
-    from stayfixed import binding
+    from drybag import binding
 
     origin, kept = "https://user:s3cret-token@example.com/o/p.git", "https://example.com/o/p.git"
     root, store = _project_and_store(tmp_path, recorded="git@example.com:o/real.git", origin=origin)
@@ -263,7 +263,7 @@ def test_attach_with_no_origin_attaches_and_says_the_binding_records_none(
 ) -> None:
     # A missing `origin` was a refusal whose way out was to add one; the binding is the id in the
     # git common directory now, and the remote is only what the record notes beside it.
-    from stayfixed import binding
+    from drybag import binding
 
     root, store = _project_and_store(tmp_path, recorded=None, origin=None)
     _overlay_grants(store)
@@ -279,7 +279,7 @@ def test_attach_with_an_origin_the_record_does_not_name_attaches_and_names_both(
 ) -> None:
     # A different remote was a refusal past which only `--trust-remote` went. It binds nothing and
     # decides nothing now, so it is a note naming both URLs, each through `printed`.
-    from stayfixed import binding
+    from drybag import binding
 
     recorded, origin = "git@example.com:o/real.git", "https://example.com/fork/p"
     root, store = _project_and_store(tmp_path, recorded=recorded, origin=origin)
@@ -297,7 +297,7 @@ def test_no_output_of_attach_carries_the_whole_binding_id(
 ) -> None:
     # The id is the whole defence against a clone committing `enabledPlugins` for the delivery, so
     # it never leaves the machine: printed only as its first eight characters.
-    from stayfixed import binding
+    from drybag import binding
 
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     _overlay_grants(store)
@@ -333,7 +333,7 @@ def test_detach_undoes_an_attach_through_the_command_surface(tmp_path: Path) -> 
 
 def test_detach_on_a_repository_that_was_never_attached_is_a_finding(tmp_path: Path) -> None:
     # Exit 1 and not 2: nothing crossed a boundary, there is simply nothing recorded — and the
-    # answer is to say so rather than to guess which rules were stayfixed's.
+    # answer is to say so rather than to guess which rules were drybag's.
     root, _ = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     assert invoke(["detach", "--root", str(root)]) == 1
 
@@ -368,7 +368,7 @@ def test_nothing_the_ledger_holds_reaches_detachs_line_or_its_json(
     # out of the ledger or `.claude/settings.local.json`, and the settings file is a path a clone
     # can commit, because `.gitignore` does not untrack a committed file.
     # `skills/attach/SKILL.md` tells the model to relay what detach removed, so an allow rule
-    # shaped like an instruction arrived attributed to stayfixed.
+    # shaped like an instruction arrived attributed to drybag.
     #
     # `attach.check` reduces `already_present` to `len(...)` on exactly this reasoning, and
     # this branch removed a marker id **bounded by a grammar** from `doctor`'s output on it. An
@@ -421,11 +421,11 @@ def test_check_reads_each_of_its_two_documents_once(
     # loads and the whole suite still passed.
     #
     # Counted at `binding.load`, the name `read_binding` resolves, and not at
-    # `stayfixed.config.loader.load`: `permissions` binds its own reference at import time, so a
+    # `drybag.config.loader.load`: `permissions` binds its own reference at import time, so a
     # patch there would also count the load `check` is supposed to make. Zero is the assertion.
     #
     # Mutation (oracle): `read_binding(...)` without `config=config` -> this reddens.
-    from stayfixed.config.loader import load as real_load
+    from drybag.config.loader import load as real_load
 
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     _overlay_grants(store)
@@ -438,7 +438,7 @@ def test_check_reads_each_of_its_two_documents_once(
 
     # Patched by name rather than through the module object, which is the same seam and does not
     # read an attribute the module never exported.
-    monkeypatch.setattr("stayfixed.attach.binding.load", counted)
+    monkeypatch.setattr("drybag.attach.binding.load", counted)
     assert invoke(["attach", "--check", *_flags(root, store, machine)]) == 0
     assert loads == []
 
@@ -457,9 +457,9 @@ def test_a_name_whose_binding_record_is_past_the_longest_path_is_refused_by_chec
     #
     # Mutation (oracle): `mutations/`'s "attach and --check go on for a name whose share holds a
     # path past the longest one" -> `--check` exits 0 again.
-    from stayfixed.attach.binding import PATH_CANNOT_EXIST
-    from stayfixed.config.loader import CONFIG_FILE
-    from stayfixed.memory.api import RECORD
+    from drybag.attach.binding import PATH_CANNOT_EXIST
+    from drybag.config.loader import CONFIG_FILE
+    from drybag.memory.api import RECORD
     from tests.attach.test_binding import CONFIG
 
     longest = os.pathconf(tmp_path, "PC_PATH_MAX")
@@ -479,7 +479,7 @@ def test_a_name_whose_binding_record_is_past_the_longest_path_is_refused_by_chec
     assert len(str(projects / name / RECORD)) > longest
     (root / CONFIG_FILE).write_text(CONFIG.format(name=name), encoding="utf-8")
     flags = _flags(root, projects / name / "memory", machine)
-    refused = f"stayfixed: refused: {PATH_CANNOT_EXIST.format(projects=projects)}"
+    refused = f"drybag: refused: {PATH_CANNOT_EXIST.format(projects=projects)}"
     before = snapshot(deep)
 
     assert invoke(["attach", "--check", *flags]) == 2
@@ -514,9 +514,9 @@ def test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_
     #
     # Mutation (oracle): `mutations/`'s "attach and --check go on for a name whose share holds a
     # path past the longest one" -> `--check` exits 0 again, and `attach` writes.
-    from stayfixed.attach.binding import PATH_CANNOT_EXIST
-    from stayfixed.config.loader import CONFIG_FILE, load
-    from stayfixed.memory.api import RECORD, link_sources
+    from drybag.attach.binding import PATH_CANNOT_EXIST
+    from drybag.config.loader import CONFIG_FILE, load
+    from drybag.memory.api import RECORD, link_sources
     from tests.attach.test_binding import CONFIG
 
     longest = os.pathconf(tmp_path, "PC_PATH_MAX")
@@ -548,7 +548,7 @@ def test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_
     assert len(str(projects / name / RECORD)) < longest
     configure(name)
     flags = _flags(root, projects / name / "memory", machine)
-    refused = f"stayfixed: refused: {PATH_CANNOT_EXIST.format(projects=projects)}"
+    refused = f"drybag: refused: {PATH_CANNOT_EXIST.format(projects=projects)}"
     before = snapshot(deep)
 
     assert invoke(["attach", "--check", *flags]) == 2
@@ -574,7 +574,7 @@ def test_a_group_holding_a_nul_is_refused_by_check_and_attach_alike(
     #
     # Mutation (oracle): `mutations/`'s "a path component holding a NUL passes the containment
     # rule" -> both commands end in the internal error again.
-    from stayfixed.config.loader import CONFIG_FILE
+    from drybag.config.loader import CONFIG_FILE
     from tests.attach.test_binding import CONFIG
 
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
@@ -593,7 +593,7 @@ def test_a_group_holding_a_nul_is_refused_by_check_and_attach_alike(
     assert invoke(["attach", *flags]) == 2
     attached = capsys.readouterr()
     for said in (checked, attached):
-        assert said.err.startswith("stayfixed: refused: ")
+        assert said.err.startswith("drybag: refused: ")
         assert "memory.groups" in said.err
         assert "internal error" not in said.err
         assert "\x00" not in said.out + said.err
@@ -667,7 +667,7 @@ def test_check_refuses_exactly_the_settings_shapes_attach_refuses_in_its_words(
     checked = capsys.readouterr()
     assert invoke(["attach", *flags]) == 2
     attached = capsys.readouterr()
-    assert checked.err == attached.err == f"stayfixed: refused: {SETTINGS}: {clause}\n"
+    assert checked.err == attached.err == f"drybag: refused: {SETTINGS}: {clause}\n"
     assert_snapshot_unchanged(tmp_path, before)
 
 
@@ -690,7 +690,7 @@ def test_check_refuses_a_settings_file_the_run_refuses_in_its_diff(
         (root / SETTINGS).write_text(json.dumps(REFUSED_SHAPES[shape][0]), encoding="utf-8")
     checked, attached = _check_then_attach(_flags(root, store, machine), capsys)
     assert checked == attached
-    assert checked[0] == 2 and checked[1].startswith(f"stayfixed: refused: {SETTINGS}")
+    assert checked[0] == 2 and checked[1].startswith(f"drybag: refused: {SETTINGS}")
 
 
 @pytest.mark.parametrize("shape", sorted(READ_SHAPES))
@@ -750,7 +750,7 @@ def test_check_ends_on_an_overlay_rule_that_is_not_utf8_with_the_runs_code_and_l
     rule.write_bytes(b"\xff\xfe not text\n")
     before = snapshot(tmp_path)
     checked, attached = _check_then_attach(_flags(root, store, machine), capsys)
-    line = f"stayfixed: failed: {quoted(str(rule))} is not UTF-8 text, so nothing was written\n"
+    line = f"drybag: failed: {quoted(str(rule))} is not UTF-8 text, so nothing was written\n"
     assert checked == attached == (1, line)
     assert_snapshot_unchanged(tmp_path, before)
 
@@ -769,14 +769,14 @@ def _claude_linked_in(root: Path, tmp_path: Path) -> None:
 # Refusals the real run makes past its gates and before its first write, each of which `--check`
 # once answered with 0, or with another refusal's line, and the setup that reaches each one.
 PAST_THE_GATES = {
-    "group-leaves-the-share": lambda root, _: (root / "stayfixed.toml").write_text(
-        (root / "stayfixed.toml")
+    "group-leaves-the-share": lambda root, _: (root / "drybag.toml").write_text(
+        (root / "drybag.toml")
         .read_text(encoding="utf-8")
         .replace('groups = ["developer", "project-stable"]', 'groups = ["../../escape"]'),
         encoding="utf-8",
     ),
     "exclude-block-doubled": lambda root, _: _exclude_file(root).write_text(
-        "# stayfixed:attach:begin\n# stayfixed:attach:begin\n# stayfixed:attach:end\n",
+        "# drybag:attach:begin\n# drybag:attach:begin\n# drybag:attach:end\n",
         encoding="utf-8",
     ),
     "claude-linked-in": _claude_linked_in,
@@ -798,7 +798,7 @@ def test_check_ends_on_each_refusal_past_the_runs_gates_with_the_runs_code_and_l
     before = snapshot(tmp_path)
     checked, attached = _check_then_attach(_flags(root, store, machine), capsys)
     assert checked == attached
-    assert checked[0] == 2 and checked[1].startswith("stayfixed: refused: ")
+    assert checked[0] == 2 and checked[1].startswith("drybag: refused: ")
     assert_snapshot_unchanged(tmp_path, before)
 
 
@@ -809,14 +809,14 @@ def test_attach_reads_each_of_its_two_documents_once_too(
     # above: a `--check` that read two documents reports the wrong thing, while an `attach`
     # that reads two *writes* under the wrong one. `attach` called `read_binding` without a
     # `Config` and then loaded a second time for its own `memory.groups` refusals, so
-    # `stayfixed.toml` and the machine file were read twice per run with the two halves free to
+    # `drybag.toml` and the machine file were read twice per run with the two halves free to
     # disagree.
     #
     # Counted at `binding.load` and zero is the assertion, for the reason the test above gives.
     # A real attach and not a `--check`, so the count covers the whole run.
     #
     # Mutation (oracle): `read_binding(...)` without `config=config` -> this reddens.
-    from stayfixed.config.loader import load as real_load
+    from drybag.config.loader import load as real_load
 
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     _overlay_grants(store)
@@ -828,7 +828,7 @@ def test_attach_reads_each_of_its_two_documents_once_too(
         loads.append(target)
         return real_load(target, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr("stayfixed.attach.binding.load", counted)
+    monkeypatch.setattr("drybag.attach.binding.load", counted)
     assert invoke(["attach", *_flags(root, store, machine)]) == 0
     assert loads == []
 
@@ -842,8 +842,8 @@ def test_a_name_longer_than_a_file_name_under_an_overlay_with_no_projects_is_ref
     # then ended in a raw `OSError` that printed the name. Both refuse it above every write, and
     # neither prints the name, which is the repository's. Mutation (declared): the share check
     # asks no length where an ancestor of the share is absent -> `--check` exits 0 again.
-    from stayfixed.attach.binding import SHARE_CANNOT_EXIST
-    from stayfixed.config.loader import CONFIG_FILE
+    from drybag.attach.binding import SHARE_CANNOT_EXIST
+    from drybag.config.loader import CONFIG_FILE
     from tests.attach.test_binding import CONFIG
 
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
@@ -854,7 +854,7 @@ def test_a_name_longer_than_a_file_name_under_an_overlay_with_no_projects_is_ref
     name = "n" * 300
     (root / CONFIG_FILE).write_text(CONFIG.format(name=name), encoding="utf-8")
     flags = _flags(root, projects / name / "memory", machine)
-    refused = f"stayfixed: refused: {SHARE_CANNOT_EXIST.format(projects=projects)}"
+    refused = f"drybag: refused: {SHARE_CANNOT_EXIST.format(projects=projects)}"
     before = snapshot(tmp_path)
     assert before
 
@@ -879,9 +879,9 @@ def test_a_first_attach_under_an_overlay_root_too_deep_for_its_links_is_refused_
     # Both commands refuse it above every write, `projects/` there or not, without printing the
     # name. Mutation (oracle): `mutations/`'s "attach and --check go on for a name whose share
     # holds a path past the longest one".
-    from stayfixed.attach.binding import PATH_CANNOT_EXIST
-    from stayfixed.config.loader import load
-    from stayfixed.memory.api import link_sources
+    from drybag.attach.binding import PATH_CANNOT_EXIST
+    from drybag.config.loader import load
+    from drybag.memory.api import link_sources
 
     longest = os.pathconf(tmp_path, "PC_PATH_MAX")
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
@@ -911,7 +911,7 @@ def test_a_first_attach_under_an_overlay_root_too_deep_for_its_links_is_refused_
     if not projects_there:
         shutil.rmtree(projects)
     flags = _flags(root, store, machine)
-    refused = f"stayfixed: refused: {PATH_CANNOT_EXIST.format(projects=projects)}"
+    refused = f"drybag: refused: {PATH_CANNOT_EXIST.format(projects=projects)}"
     before = snapshot(tmp_path)
     assert before
 
@@ -932,8 +932,8 @@ def test_a_group_longer_than_a_file_name_under_a_share_not_there_yet_is_refused_
     # and every lookup below it says "no such file". Refused above every write, and the group is
     # never printed. Mutation (declared): the share check asks no length of a component below a
     # share that is not there -> `--check` exits 0.
-    from stayfixed.attach.binding import PATH_CANNOT_EXIST
-    from stayfixed.config.loader import CONFIG_FILE
+    from drybag.attach.binding import PATH_CANNOT_EXIST
+    from drybag.config.loader import CONFIG_FILE
     from tests.attach.test_binding import CONFIG
 
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
@@ -947,7 +947,7 @@ def test_a_group_longer_than_a_file_name_under_a_share_not_there_yet_is_refused_
     (root / CONFIG_FILE).write_text(text, encoding="utf-8")
     shutil.rmtree(store.parent)
     flags = _flags(root, store, machine)
-    refused = f"stayfixed: refused: {PATH_CANNOT_EXIST.format(projects=store.parents[1])}"
+    refused = f"drybag: refused: {PATH_CANNOT_EXIST.format(projects=store.parents[1])}"
     before = snapshot(tmp_path)
     assert before
 
@@ -990,8 +990,8 @@ def test_a_group_name_is_judged_by_what_the_filesystem_takes_and_not_by_its_byte
     # Counting bytes again reddens this on macOS; the oracle runs on Linux, where bytes are what
     # the filesystem counts, so `mutations/`'s "the share check counts a name's bytes" is proven
     # by `tests/attach/test_binding.py`'s stubbed lookup instead.
-    from stayfixed.attach.binding import PATH_CANNOT_EXIST
-    from stayfixed.config.loader import CONFIG_FILE
+    from drybag.attach.binding import PATH_CANNOT_EXIST
+    from drybag.config.loader import CONFIG_FILE
     from tests.attach.test_binding import CONFIG
 
     group = "é" * 200
@@ -1017,6 +1017,6 @@ def test_a_group_name_is_judged_by_what_the_filesystem_takes_and_not_by_its_byte
         assert invoke(["attach", *flags]) == 0, capsys.readouterr().err
         assert (store / group).is_dir()
     else:
-        refused = f"stayfixed: refused: {PATH_CANNOT_EXIST.format(projects=store.parents[1])}"
+        refused = f"drybag: refused: {PATH_CANNOT_EXIST.format(projects=store.parents[1])}"
         assert invoke(["attach", "--check", *flags]) == 2
         assert refused in capsys.readouterr().err

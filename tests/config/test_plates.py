@@ -1,4 +1,4 @@
-"""The overlay's plates for a bound project (`src/stayfixed/config/plates.py`): `common`, the tags
+"""The overlay's plates for a bound project (`src/drybag/config/plates.py`): `common`, the tags
 the overlay's record of the project lists, in list order, then the project.
 
 The tags are the owner's, read from `projects/<name>/project.toml` of the project this machine's
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from stayfixed.config.plates import (
+from drybag.config.plates import (
     GROUPS,
     PROJECTS,
     RECORD,
@@ -19,7 +19,7 @@ from stayfixed.config.plates import (
     record_fault,
     tags,
 )
-from stayfixed.printed import quoted
+from drybag.printed import quoted
 
 PROJECT = "sample"
 

@@ -1,10 +1,10 @@
-"""What `stayfixed.scaffold` publishes, which is the whole of the engine's contract for a caller."""
+"""What `drybag.scaffold` publishes, which is the whole of the engine's contract for a caller."""
 
 from __future__ import annotations
 
-from stayfixed import scaffold
-from stayfixed.errors import Refusal
-from stayfixed.scaffold import EntriesError, ManifestError, ParserLimitError, RegionError
+from drybag import scaffold
+from drybag.errors import Refusal
+from drybag.scaffold import EntriesError, ManifestError, ParserLimitError, RegionError
 
 EXPORTED = [
     "FORMAT",

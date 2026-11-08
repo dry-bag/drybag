@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import __version__
-from stayfixed.hooks.api import EVENTS
-from stayfixed.overlay.identity import NO_RECORD, NOT_A_RECORD, overlay_fault
-from stayfixed.overlay.layout import IDENTITY_RECORD, OVERLAY_FILES
-from stayfixed.overlay.template import template_root, templates
-from stayfixed.presets import load_preset
-from stayfixed.printed import quoted
-from stayfixed.scaffold import MANIFEST_PATH
+from drybag import __version__
+from drybag.hooks.api import EVENTS
+from drybag.overlay.identity import NO_RECORD, NOT_A_RECORD, overlay_fault
+from drybag.overlay.layout import IDENTITY_RECORD, OVERLAY_FILES
+from drybag.overlay.template import template_root, templates
+from drybag.presets import load_preset
+from drybag.printed import quoted
+from drybag.scaffold import MANIFEST_PATH
 
 
 def _json_files() -> list[Path]:
@@ -304,7 +304,7 @@ def test_the_identity_record_is_the_last_file_a_render_writes_and_a_clone_checks
 
 
 def test_the_templates_plan_cleanly_into_an_empty_directory(tmp_path: Path) -> None:
-    from stayfixed.scaffold import apply, plan
+    from drybag.scaffold import apply, plan
 
     # The overlay writes through the scaffold engine like every other area, which is what makes
     # `overlay upgrade` the engine's hash-and-skip rule rather than a second implementation of it.
@@ -312,14 +312,14 @@ def test_the_templates_plan_cleanly_into_an_empty_directory(tmp_path: Path) -> N
     assert planned.refusals == ()
     assert len(planned.actions) == len(OVERLAY_FILES)
     apply(tmp_path, planned)
-    assert (tmp_path / ".stayfixed" / "manifest.json").is_file()
+    assert (tmp_path / ".drybag" / "manifest.json").is_file()
 
 
 def test_the_manifest_records_a_comparable_version(tmp_path: Path) -> None:
-    from stayfixed.scaffold import apply, plan
-    from stayfixed.scaffold.manifest import Manifest
+    from drybag.scaffold import apply, plan
+    from drybag.scaffold.manifest import Manifest
 
-    # `[defaults.stayfixed]` carries no `version`, and the engine stamps one into every Record.
+    # `[defaults.drybag]` carries no `version`, and the engine stamps one into every Record.
     # A record written with "" is a record `upgrade` and `doctor` can never compare against.
     apply(tmp_path, plan(tmp_path, templates()))
     records = Manifest.read(tmp_path).records
@@ -364,7 +364,7 @@ def _rendered_paths() -> tuple[str, ...]:
     """Every file a render leaves in a fresh instance, as the README has to describe it.
 
     `OVERLAY_FILES` plus the scaffold manifest, which is the one path the template tree does not
-    hold: `scaffold.apply` writes `.stayfixed/manifest.json` as the record `overlay upgrade` keys
+    hold: `scaffold.apply` writes `.drybag/manifest.json` as the record `overlay upgrade` keys
     on, so it is in the instance without ever having been in `templates/overlay/`. That is
     exactly how it went missing from a README that counts them.
     """
@@ -373,7 +373,7 @@ def _rendered_paths() -> tuple[str, ...]:
 
 def test_the_overlay_readme_counts_the_files_a_create_actually_leaves() -> None:
     # The template README said "renders fifteen files here" and a rendered overlay has sixteen —
-    # `.stayfixed/manifest.json`, the file the project README advertises as the overlay's "own
+    # `.drybag/manifest.json`, the file the project README advertises as the overlay's "own
     # upgrade manifest", in neither of that README's two tables. The count was written by hand
     # against `OVERLAY_FILES` and nothing read the document, which is how a file the scaffold
     # engine adds slips past a sentence that counts them.
@@ -392,7 +392,7 @@ def test_the_capability_files_are_spelled_once_and_are_shipped_files() -> None:
     # while the tuple was built by filtering `OVERLAY_FILES` against a second spelling of
     # them. One spelling now: `CAPABILITY_NAMES` is unpacked into `OVERLAY_FILES` and
     # `CAPABILITY_FILES` is that same tuple.
-    from stayfixed.overlay.layout import CAPABILITY_FILES, CAPABILITY_NAMES, OVERLAY_FILES
+    from drybag.overlay.layout import CAPABILITY_FILES, CAPABILITY_NAMES, OVERLAY_FILES
 
     # Against the SHIPPED tree, not against `OVERLAY_FILES`: with one spelling the subset
     # holds by construction, so the assertion that can fail is that each name is a file the
@@ -457,7 +457,7 @@ def test_the_template_ships_a_dependabot_configuration_for_its_pinned_actions() 
 
 
 def _render_into(tmp_path: Path) -> Path:
-    from stayfixed.overlay.api import render_template
+    from drybag.overlay.api import render_template
 
     return render_template(tmp_path, "rendered")
 
@@ -471,7 +471,7 @@ def test_nothing_in_a_fresh_common_memory_fails_the_note_reader(tmp_path: Path) 
     # directory has to be a note or be skipped.
     # Mutation: rename `_README.md` back to `README.md` (and `OVERLAY_FILES` with it) → reddens
     # on `unreadable`.
-    from stayfixed.memory.notes import walk
+    from drybag.memory.notes import walk
 
     rendered = _render_into(tmp_path)
     directory = rendered / "common" / "memory"
@@ -487,7 +487,7 @@ def test_nothing_in_a_fresh_common_memory_fails_the_note_reader(tmp_path: Path) 
 def test_a_rendered_overlay_carries_its_identity_record_and_no_plugin_manifest(
     tmp_path: Path,
 ) -> None:
-    # The overlay is no plugin any more: the delivery stayfixed renders on the machine carries
+    # The overlay is no plugin any more: the delivery drybag renders on the machine carries
     # its hooks, skills and rules, so the manifests that made the tree installable, and the hooks
     # file it fired as a plugin, went. What names it an overlay is its identity record.
     rendered = _render_into(tmp_path)
@@ -518,7 +518,7 @@ def test_a_tree_without_the_identity_record_is_no_overlay_and_is_told_what_to_ad
     ids=["another-layout", "a-string", "a-boolean", "not-toml", "no-layout"],
 )
 def test_a_record_that_is_not_a_layout_1_record_is_no_overlay(tmp_path: Path, body: str) -> None:
-    # The one layout this stayfixed reads is 1; a record naming another, or one that does not
+    # The one layout this drybag reads is 1; a record naming another, or one that does not
     # parse, names nothing it can act on. `true` is no 1, though Python compares them equal.
     # Mutations: `mutations/`'s "the overlay probe takes any record for an overlay" ->
     # `another-layout`; "the overlay probe takes true for layout 1" -> `a-boolean`.

@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.harnesses import CLAUDE
-from stayfixed.hints import bgcleanup
-from stayfixed.hints.hooks import register
-from stayfixed.hints.pipes import NOTICE, notice_for
-from stayfixed.hooks.api import Handler, HookEvent
-from stayfixed.hooks.dispatch import Recorder, dispatch
+from drybag.harnesses import CLAUDE
+from drybag.hints import bgcleanup
+from drybag.hints.hooks import register
+from drybag.hints.pipes import NOTICE, notice_for
+from drybag.hooks.api import Handler, HookEvent
+from drybag.hooks.dispatch import Recorder, dispatch
 from tests.hints.test_hooks import bash_event
 from tests.sessions import NO_CONFIG
 

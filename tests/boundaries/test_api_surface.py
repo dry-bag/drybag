@@ -1,5 +1,5 @@
 """The surface rule: a package that publishes an `api.py`, and every area, is reached from outside
-it through that `api.py` alone, from `src/stayfixed/` and from `scripts/`."""
+it through that `api.py` alone, from `src/drybag/` and from `scripts/`."""
 
 from __future__ import annotations
 
@@ -31,16 +31,16 @@ def _boundary_offences(where: str, text: str, ruled: Sequence[str]) -> tuple[lis
     package that publishes an `api.py`.
 
     A function rather than a loop body, so the test below can put a spelling in front of it that
-    `src/stayfixed/` does not currently contain. A guard whose rule can only be exercised by the
+    `src/drybag/` does not currently contain. A guard whose rule can only be exercised by the
     tree it walks cannot be shown to hold for anything the tree does not happen to do.
     """
     parts = Path(where).parts
     here = parts[0] if len(parts) > 1 else None
     crossings: list[str] = []
     offences: list[str] = []
-    for line, module in astscan.imported_modules(ast.parse(text), ("stayfixed", *parts[:-1])):
+    for line, module in astscan.imported_modules(ast.parse(text), ("drybag", *parts[:-1])):
         bits = module.split(".")
-        if len(bits) < 3 or bits[0] != "stayfixed" or bits[1] not in ruled or bits[1] == here:
+        if len(bits) < 3 or bits[0] != "drybag" or bits[1] not in ruled or bits[1] == here:
             continue
         crossings.append(f"{where} -> {module}")
         if bits[2] == "api":
@@ -62,16 +62,16 @@ def test_no_module_reaches_into_another_packages_private_module() -> None:
     # nothing to report does; and "the boundary rule ignores a relative import again" -> a
     # relative import goes unresolved, which the test below holds, because this walk has none to
     # find.
-    source = ROOT / "src" / "stayfixed"
+    source = ROOT / "src" / "drybag"
     areas = area_names(source)
     ruled = _ruled_packages(source)
     files = sorted(source.rglob("*.py"))
     # `scripts/` is walked too, and the reason is the violation that merged green under a walk
-    # that was not: `scripts/check_artifacts.py` imported `stayfixed.overlay.layout` for the very
+    # that was not: `scripts/check_artifacts.py` imported `drybag.overlay.layout` for the very
     # constant `overlay/api.py`'s docstring said had been trimmed *because* nothing outside the
     # area imported it. A walk one directory narrower than the code that can break the rule is a
     # walk that will eventually report nothing. The script paths are relative to `ROOT` rather
-    # than to `source`, so `here` is `scripts` — not an area, so every stayfixed import a script
+    # than to `source`, so `here` is `scripts` — not an area, so every drybag import a script
     # makes is a crossing and has to go through an `api.py`.
     scripts = sorted((ROOT / "scripts").glob("*.py"))
     crossings: list[str] = []
@@ -110,7 +110,7 @@ def test_no_module_reaches_into_another_packages_private_module() -> None:
 
 def test_the_boundary_rule_resolves_a_relative_import_before_judging_it() -> None:
     # The hole the guard above shipped with, and the reason it needs a test of its own: there is
-    # not one relative import under `src/stayfixed/`, so the walk cannot exercise this spelling
+    # not one relative import under `src/drybag/`, so the walk cannot exercise this spelling
     # and a synthetic module has to. `from ..hooks.sink import DIRECTORY` inside
     # `doctor/checks.py` is the violation this whole guard exists to end, written the way a
     # contributor who prefers relative imports would write it.
@@ -122,12 +122,12 @@ def test_the_boundary_rule_resolves_a_relative_import_before_judging_it() -> Non
         "doctor/checks.py", "from ..hooks.sink import DIRECTORY\n", ruled
     )
     assert offences == [
-        "doctor/checks.py:1 imports stayfixed.hooks.sink",
-        "doctor/checks.py:1 imports stayfixed.hooks.sink.DIRECTORY",
+        "doctor/checks.py:1 imports drybag.hooks.sink",
+        "doctor/checks.py:1 imports drybag.hooks.sink.DIRECTORY",
     ]
     assert crossings == [
-        "doctor/checks.py -> stayfixed.hooks.sink",
-        "doctor/checks.py -> stayfixed.hooks.sink.DIRECTORY",
+        "doctor/checks.py -> drybag.hooks.sink",
+        "doctor/checks.py -> drybag.hooks.sink.DIRECTORY",
     ]
 
     # The published spelling of the same import, relatively: a crossing and not an offence. This
@@ -137,8 +137,8 @@ def test_the_boundary_rule_resolves_a_relative_import_before_judging_it() -> Non
         "doctor/checks.py", "from ..hooks.api import DIRECTORY\n", ruled
     )
     assert crossings == [
-        "doctor/checks.py -> stayfixed.hooks.api",
-        "doctor/checks.py -> stayfixed.hooks.api.DIRECTORY",
+        "doctor/checks.py -> drybag.hooks.api",
+        "doctor/checks.py -> drybag.hooks.api.DIRECTORY",
     ]
     assert not offences
 
@@ -156,32 +156,32 @@ def test_a_package_that_publishes_an_api_py_is_held_to_it_without_being_an_area(
     # while the rule was keyed on discovery alone, a reach past its surface — from a module
     # under `src/` or from a script — was not even a crossing. Read off the tree rather than
     # with a hand-picked list, so the probe is of the set the walk above actually uses.
-    source = ROOT / "src" / "stayfixed"
+    source = ROOT / "src" / "drybag"
     assert "release" not in area_names(source)
     ruled = _ruled_packages(source)
 
     crossings, offences = _boundary_offences(
-        "doctor/checks.py", "from stayfixed.release.pins import released\n", ruled
+        "doctor/checks.py", "from drybag.release.pins import released\n", ruled
     )
     assert offences == [
-        "doctor/checks.py:1 imports stayfixed.release.pins",
-        "doctor/checks.py:1 imports stayfixed.release.pins.released",
+        "doctor/checks.py:1 imports drybag.release.pins",
+        "doctor/checks.py:1 imports drybag.release.pins.released",
     ]
     crossings, offences = _boundary_offences(
-        "scripts/release.py", "from stayfixed.release.pins import tag_for\n", ruled
+        "scripts/release.py", "from drybag.release.pins import tag_for\n", ruled
     )
     assert offences == [
-        "scripts/release.py:1 imports stayfixed.release.pins",
-        "scripts/release.py:1 imports stayfixed.release.pins.tag_for",
+        "scripts/release.py:1 imports drybag.release.pins",
+        "scripts/release.py:1 imports drybag.release.pins.tag_for",
     ]
 
     # The published spelling is a crossing and not an offence: the arm that fails if the
     # package is refused outright instead of being held to its surface.
     crossings, offences = _boundary_offences(
-        "scripts/release.py", "from stayfixed.release.api import tag_for\n", ruled
+        "scripts/release.py", "from drybag.release.api import tag_for\n", ruled
     )
     assert crossings == [
-        "scripts/release.py -> stayfixed.release.api",
-        "scripts/release.py -> stayfixed.release.api.tag_for",
+        "scripts/release.py -> drybag.release.api",
+        "scripts/release.py -> drybag.release.api.tag_for",
     ]
     assert not offences

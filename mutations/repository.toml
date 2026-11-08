@@ -380,8 +380,8 @@ reddens = [
   "tests/test_neutral.py::test_the_fallback_walk_skips_bytecode_at_any_depth",
 ]
 
-# Every spawner that strips the developer's `STAYFIXED_*` variables goes through one predicate,
-# and the floor is the name it keeps; strip it too and a spawned `stayfixed` runs under the bare
+# Every spawner that strips the developer's `DRYBAG_*` variables goes through one predicate,
+# and the floor is the name it keeps; strip it too and a spawned `drybag` runs under the bare
 # bounds again.
 [[mutation]]
 name = "the suite's developer strip drops the floor"
@@ -390,7 +390,7 @@ before = "    return name.startswith(DEVELOPERS) and name != gitenv.FLOOR_VARIAB
 after = "    return name.startswith(DEVELOPERS)"
 reddens = [
   "tests/test_floor.py::test_a_spawner_strips_the_developers_variables_and_keeps_the_floor",
-  "tests/test_floor.py::test_a_stayfixed_the_suite_starts_runs_its_git_under_the_floor",
+  "tests/test_floor.py::test_a_drybag_the_suite_starts_runs_its_git_under_the_floor",
 ]
 
 # A launcher that is not there reaches Python as a missing script, and the session sees CPython's
@@ -430,7 +430,7 @@ reddens = [
 
 # A root that cannot be RESOLVED is a correct silent degradation; a root that was named and
 # cannot be entered is not. The process stayed in the harness's working directory, and if that
-# happened to be another stayfixed project every `--root`-defaulting entry read its
+# happened to be another drybag project every `--root`-defaulting entry read its
 # configuration, with nothing said.
 [[mutation]]
 name = "an unenterable project root leaves the hook in the harness's directory in silence"
@@ -442,7 +442,7 @@ reddens = [
 ]
 
 # With no usable `python3` every entry said why on stderr alone, which nobody reads on a `0`, and
-# stayfixed was off with nothing said. The entry that dispatches `SessionStart` says it to the
+# drybag was off with nothing said. The entry that dispatches `SessionStart` says it to the
 # person and the model; the six memory entries on that event, and every tool event, stay silent.
 [[mutation]]
 name = "every entry says the hooks are off, not only the dispatching SessionStart"
@@ -455,7 +455,7 @@ reddens = [
 ]
 
 [[mutation]]
-name = "no python3 on PATH leaves the session unaware that stayfixed is off"
+name = "no python3 on PATH leaves the session unaware that drybag is off"
 file = "hooks/run-hook.sh"
 before = '|| off "" "no python3 on PATH"'
 after = '|| skip "no python3 on PATH"'
@@ -464,7 +464,7 @@ reddens = [
 ]
 
 [[mutation]]
-name = "a python3 below the floor leaves the session unaware that stayfixed is off"
+name = "a python3 below the floor leaves the session unaware that drybag is off"
 file = "hooks/run-hook.sh"
 before = '  off "$bad" "$bad is not python 3.11 or newer"'
 after = '  skip "$bad is not python 3.11 or newer"'
@@ -578,11 +578,11 @@ reddens = [
 ]
 
 # No handler refuses a call, so the launcher's non-zero exit is a fault: passed through, a 2 blocks
-# every Bash call on stayfixed's own fault.
+# every Bash call on drybag's own fault.
 [[mutation]]
 name = "the wrapper passes the launcher's non-zero exit through again"
 file = "hooks/run-hook.sh"
-before = ' || skip "stayfixed exited $?"'
+before = ' || skip "drybag exited $?"'
 after = ''
 reddens = [
   "tests/hooks/test_wrapper.py::test_any_non_zero_exit_degrades_open_and_says_so[2]",
@@ -792,12 +792,12 @@ reddens = [
 ]
 
 # The cross-area import guard (`mutations/`'s "the cross-area import guard walks ten files instead
-# of the package") walks `src/stayfixed/`, and `src/stayfixed/` contains no relative import — so the
+# of the package") walks `src/drybag/`, and `src/drybag/` contains no relative import — so the
 # spelling `from ..hooks.sink import DIRECTORY` could not be exercised by the walk, and the first
 # version of the rule dropped it on the floor (`and not node.level`) with every test green. Nothing
 # bans a relative import here: ruff's `TID` rules are not selected. The rule is therefore tested
 # against a synthetic module, and this mutation stops it resolving one: the relative module name
-# then reads as `hooks.sink`, which is not `stayfixed.*`, and the violation walks past exactly as it
+# then reads as `hooks.sink`, which is not `drybag.*`, and the violation walks past exactly as it
 # used to. What reddens is the offence list, not a missing name.
 [[mutation]]
 name = "the boundary rule ignores a relative import again"
@@ -846,12 +846,12 @@ reddens = [
   "tests/boundaries/test_delivery.py::test_the_delivery_rule_judges_the_importer_and_the_imported",
 ]
 
-# `from stayfixed import memory` names the area in an alias and the package as its module, so a
+# `from drybag import memory` names the area in an alias and the package as its module, so a
 # rule keyed on the module alone would read it as importing nothing from an area.
 [[mutation]]
-name = "the delivery rule reads `from stayfixed import memory` as importing nothing"
+name = "the delivery rule reads `from drybag import memory` as importing nothing"
 file = "tests/boundaries/test_delivery.py"
-before = '            if module == "stayfixed":'
+before = '            if module == "drybag":'
 after = "            if False:"
 reddens = [
   "tests/boundaries/test_delivery.py::test_the_delivery_rule_judges_the_importer_and_the_imported",
@@ -895,7 +895,7 @@ reddens = ["tests/test_neutral.py::test_a_token_hit_names_the_offset_of_its_firs
 
 # The storefront — PyPI's page, the Claude Code plugin card, the marketplace row and the Codex
 # listing — is what a stranger reads before the README, and all four of its strings advertised
-# "an adoption state machine" while `stayfixed assess` did not exist and the README listed it
+# "an adoption state machine" while `drybag assess` did not exist and the README listed it
 # under **Not yet**. The release check reads versions, never descriptions, so nothing
 # looked. This put that claim back into the widest-reach of the four until adoption shipped and
 # left the README's list; it now puts in the memory MCP server, which has not.
@@ -1055,8 +1055,8 @@ reddens = [
 [[mutation]]
 name = "Shared flags forgets that `hook` takes neither project flag"
 file = "docs/cli.md"
-before = "Neither flag is taken by `stayfixed commit strip` and `stayfixed hook`,"
-after = "Neither flag is taken by `stayfixed commit strip`,"
+before = "Neither flag is taken by `drybag commit strip` and `drybag hook`,"
+after = "Neither flag is taken by `drybag commit strip`,"
 reddens = [
   "tests/test_documents.py::test_shared_flags_names_every_command_that_takes_neither_root_nor_machine",
 ]
@@ -1151,8 +1151,8 @@ reddens = [
 [[mutation]]
 name = "the README's Install section offers an untagged install again"
 file = "README.md"
-before = "uv tool install stayfixed\n```"
-after = "uv tool install git+https://github.com/stayfixed/stayfixed\n```"
+before = "uv tool install drybag\n```"
+after = "uv tool install git+https://github.com/dry-bag/drybag\n```"
 reddens = [
   "tests/test_documents.py::test_the_readme_installs_the_release_the_tree_carries",
 ]
@@ -1163,7 +1163,7 @@ reddens = [
 [[mutation]]
 name = "the README links the reference relatively again"
 file = "README.md"
-before = "](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference"
+before = "](https://github.com/dry-bag/drybag/blob/main/docs/cli.md) is the reference"
 after = "](docs/cli.md) is the reference"
 reddens = [
   "tests/test_documents.py::test_the_readme_links_only_inside_the_plugin_or_absolutely",
@@ -1175,8 +1175,8 @@ reddens = [
 [[mutation]]
 name = "the README links the reference through a plugin path and back out"
 file = "README.md"
-before = "](https://github.com/stayfixed/stayfixed/blob/main/docs/cli.md) is the reference"
-after = "](src/stayfixed/../../docs/cli.md) is the reference"
+before = "](https://github.com/dry-bag/drybag/blob/main/docs/cli.md) is the reference"
+after = "](src/drybag/../../docs/cli.md) is the reference"
 reddens = [
   "tests/test_documents.py::test_the_readme_links_only_inside_the_plugin_or_absolutely",
 ]
@@ -1192,7 +1192,7 @@ reddens = [
   "tests/test_documents.py::test_the_readme_links_only_inside_the_plugin_or_absolutely",
 ]
 
-# `doctor` warns whenever `[stayfixed] version` is not the running version, so an example block
+# `doctor` warns whenever `[drybag] version` is not the running version, so an example block
 # that kept the last release's number makes a copy-pasted project warn from its first run. Neither
 # document's block is one of the release check's seven sources. The `before` stops short of the number
 # on purpose: an entry that quoted `"0.2.0"` would go stale at the next release, and a mutation
@@ -1200,8 +1200,8 @@ reddens = [
 [[mutation]]
 name = "the README's example configuration keeps a release that is not the running one"
 file = "README.md"
-before = "[stayfixed]\nversion = \""
-after = "[stayfixed]\nversion = \"0.0.1-"
+before = "[drybag]\nversion = \""
+after = "[drybag]\nversion = \"0.0.1-"
 reddens = [
   "tests/test_documents.py::test_the_example_configurations_carry_the_running_version[README.md]",
 ]
@@ -1209,13 +1209,13 @@ reddens = [
 [[mutation]]
 name = "docs/cli.md's example configuration keeps a release that is not the running one"
 file = "docs/cli.md"
-before = "[stayfixed]\nversion = \""
-after = "[stayfixed]\nversion = \"0.0.1-"
+before = "[drybag]\nversion = \""
+after = "[drybag]\nversion = \"0.0.1-"
 reddens = [
   "tests/test_documents.py::test_the_example_configurations_carry_the_running_version[cli.md]",
 ]
 
-# The harness guard for the sweep. `main` deletes every `stayfixed-oracle-*` directory under
+# The harness guard for the sweep. `main` deletes every `drybag-oracle-*` directory under
 # `TEMPDIR`, so a test module that loads this script without redirecting it swept the
 # developer's own temporary directory — measured with a canary, which the suite removed — and
 # would have destroyed a concurrently running oracle's checkout.
@@ -1312,9 +1312,9 @@ reddens = [
 # its own help string again" already proves load-bearing.
 
 # The hermetic default the helper's own docstring promises. `machine=None` is not "no machine
-# file" to the code under test: it resolves to `Path.home()/.config/stayfixed/config.toml`, the
+# file" to the code under test: it resolves to `Path.home()/.config/drybag/config.toml`, the
 # process `HOME`, which the `env` dict this helper passes cannot reach. Every case that omitted
-# `machine` read the developer's real overlay on any machine that has run `stayfixed setup
+# `machine` read the developer's real overlay on any machine that has run `drybag setup
 # --overlay`, and passed only because neither this machine nor CI has one.
 [[mutation]]
 name = "the doctor test helper defaults machine back to the process home"
@@ -1329,7 +1329,7 @@ reddens = [
 [[mutation]]
 name = "a docs/cli.md section drops out of the Contents"
 file = "docs/cli.md"
-before = "- [`stayfixed memory inventory`](#stayfixed-memory-inventory)"
+before = "- [`drybag memory inventory`](#drybag-memory-inventory)"
 after = ""
 reddens = ["tests/test_documents.py::test_the_cli_reference_contents_lists_every_section_in_order"]
 
@@ -1793,7 +1793,7 @@ reddens = [
   "tests/test_payload.py::test_a_gitattributes_line_carrying_an_export_attribute_is_a_finding[export-subst]",
 ]
 
-# README.md declares every program stayfixed runs that can reach a network, which is what the
+# README.md declares every program drybag runs that can reach a network, which is what the
 # directory's security scan reads; a row gone is a destination no longer disclosed.
 [[mutation]]
 name = "the README drops the git fetch row"
@@ -1823,7 +1823,7 @@ reddens = ["tests/test_outbound.py::test_the_readme_declares_every_program_that_
 [[mutation]]
 name = "a launch the outbound walk cannot read loses its declaration"
 file = "tests/outbound/policy.py"
-before = '    ("src/stayfixed/attach/exclude.py", "unhidden_by_owner", "*asked"): NO_ROWS,'
+before = '    ("src/drybag/attach/exclude.py", "unhidden_by_owner", "*asked"): NO_ROWS,'
 after = ''
 reddens = ["tests/test_outbound.py::test_every_launch_is_classified"]
 
@@ -1843,9 +1843,9 @@ reddens = [
 [[mutation]]
 name = "a vouched element names a value no launch hands"
 file = "tests/outbound/policy.py"
-before = '    ("src/stayfixed/docs/plans.py", "written_lines", "since"): ('
-after = '''    ("src/stayfixed/docs/plans.py", "written_lines", "fork"): "a merge base git printed",
-    ("src/stayfixed/docs/plans.py", "written_lines", "since"): ('''
+before = '    ("src/drybag/docs/plans.py", "written_lines", "since"): ('
+after = '''    ("src/drybag/docs/plans.py", "written_lines", "fork"): "a merge base git printed",
+    ("src/drybag/docs/plans.py", "written_lines", "since"): ('''
 reddens = [
   "tests/test_outbound.py::test_the_declarations_name_exactly_what_the_classification_rests_on",
 ]
@@ -1961,7 +1961,7 @@ reddens = [
   "tests/test_outbound.py::test_a_launch_of_any_shape_is_found[relative-up]",
 ]
 
-# `from stayfixed.memory.store import git_run` is `gitenv`'s `git_run`, which `store` imports; not
+# `from drybag.memory.store import git_run` is `gitenv`'s `git_run`, which `store` imports; not
 # followed there, an undisclosed `git push` through the re-export passes.
 [[mutation]]
 name = "the outbound walk stops following a re-export"
@@ -2603,22 +2603,22 @@ reddens = ["tests/test_manifests.py::test_marketplace_has_a_description_and_an_u
 [[mutation]]
 name = "RELEASING lists another plugin repository's main"
 file = "RELEASING.md"
-before = "   git ls-remote https://github.com/stayfixed/stayfixed-plugin.git refs/heads/main\n"
-after = "   git ls-remote https://github.com/stayfixed/stayfixed-plugins.git refs/heads/main\n"
+before = "   git ls-remote https://github.com/dry-bag/drybag-plugin.git refs/heads/main\n"
+after = "   git ls-remote https://github.com/dry-bag/drybag-plugins.git refs/heads/main\n"
 reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]
 
 [[mutation]]
 name = "RELEASING sets the rulesets of another plugin repository"
 file = "RELEASING.md"
-before = '  id=$(gh api repos/stayfixed/stayfixed-plugin/rulesets --jq ".[]'
-after = '  id=$(gh api repos/stayfixed/stayfixed-plugins/rulesets --jq ".[]'
+before = '  id=$(gh api repos/dry-bag/drybag-plugin/rulesets --jq ".[]'
+after = '  id=$(gh api repos/dry-bag/drybag-plugins/rulesets --jq ".[]'
 reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]
 
 [[mutation]]
 name = "RELEASING creates another plugin repository"
 file = "RELEASING.md"
-before = "gh repo create stayfixed/stayfixed-plugin --public"
-after = "gh repo create stayfixed/stayfixed-plugins --public"
+before = "gh repo create dry-bag/drybag-plugin --public"
+after = "gh repo create dry-bag/drybag-plugins --public"
 reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]
 
 # The same test finds each of the document's three commands before it compares them: a set that
@@ -2626,8 +2626,8 @@ reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]
 [[mutation]]
 name = "RELEASING no longer creates the plugin repository"
 file = "RELEASING.md"
-before = '''gh repo create stayfixed/stayfixed-plugin --public \
-  --description "The stayfixed plugin, generated from stayfixed/stayfixed at each release"
+before = '''gh repo create dry-bag/drybag-plugin --public \
+  --description "The drybag plugin, generated from dry-bag/drybag at each release"
 '''
 after = ""
 reddens = ["tests/test_workflows.py::test_one_plugin_repository_everywhere"]

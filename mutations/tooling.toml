@@ -25,16 +25,16 @@ reddens = [
   "tests/scripts/test_mutation_oracle.py::test_a_tree_git_cannot_answer_about_is_refused_not_assumed_clean",
 ]
 
-# Both smoke scripts build a session on one base environment that strips every `STAYFIXED_*`
+# Both smoke scripts build a session on one base environment that strips every `DRYBAG_*`
 # variable; the suite's floor is the one it keeps, or their entries run under the bare bounds the
 # floor exists to lift.
 [[mutation]]
 name = "the hook smoke strips the suite's floor"
 file = "scripts/smoke_hooks.py"
-before = """        if k == FLOOR_VARIABLE or not k.startswith(("STAYFIXED_", "XDG_", "CLAUDE_", "PLUGIN_"))"""
-after = """        if not k.startswith(("STAYFIXED_", "XDG_", "CLAUDE_", "PLUGIN_"))"""
+before = """        if k == FLOOR_VARIABLE or not k.startswith(("DRYBAG_", "XDG_", "CLAUDE_", "PLUGIN_"))"""
+after = """        if not k.startswith(("DRYBAG_", "XDG_", "CLAUDE_", "PLUGIN_"))"""
 reddens = [
-  "tests/scripts/test_smoke_scripts.py::test_a_hook_entry_keeps_the_suite_floor_and_no_other_stayfixed_variable",
+  "tests/scripts/test_smoke_scripts.py::test_a_hook_entry_keeps_the_suite_floor_and_no_other_drybag_variable",
 ]
 
 # The oracle proves HEAD in a detached worktree. Three entries are on the run itself — this one,
@@ -413,7 +413,7 @@ before = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git'''
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git'''
 after = '''      contents: read
     steps:
       - name: The plugin repository holds this release's commit
@@ -421,7 +421,7 @@ after = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugins.git'''
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugins.git'''
 reddens = [
   "tests/test_workflows.py::test_one_plugin_repository_everywhere",
 ]
@@ -436,8 +436,8 @@ before = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
-            echo "::error::stayfixed/stayfixed-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
+            echo "::error::dry-bag/drybag-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
             exit 1
           }
           tagged=""
@@ -456,8 +456,8 @@ after = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
-            echo "::error::stayfixed/stayfixed-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
+            echo "::error::dry-bag/drybag-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
             exit 1
           }
           tagged=""
@@ -484,8 +484,8 @@ before = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
-            echo "::error::stayfixed/stayfixed-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
+            echo "::error::dry-bag/drybag-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
             exit 1
           }
           tagged=""
@@ -501,8 +501,8 @@ after = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
-            echo "::error::stayfixed/stayfixed-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
+            echo "::error::dry-bag/drybag-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
             exit 1
           }
           tagged=""
@@ -638,7 +638,7 @@ reddens = [
   "tests/test_workflows.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
 ]
 
-# The runner's interpreter has no `stayfixed` of its own, so without the checkout's `src` the
+# The runner's interpreter has no `drybag` of its own, so without the checkout's `src` the
 # script fails to import; the suite's interpreter has one, so only the step's `env:` pin holds it.
 [[mutation]]
 name = "the attest job runs the plugin script without the checkout's package"
@@ -701,16 +701,16 @@ reddens = [
 name = "the plugin gate takes an empty pin for a match"
 file = ".github/workflows/release.yml"
 before = '''          if ! [[ "$PINNED" =~ ^[0-9a-f]{40}$ ]] || [ "$found" != "$PINNED" ]; then
-            echo "::error::stayfixed/stayfixed-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
+            echo "::error::dry-bag/drybag-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
             exit 1
           fi
-          echo "stayfixed/stayfixed-plugin's $TAG is the plugin commit this release pins, $PINNED"
+          echo "dry-bag/drybag-plugin's $TAG is the plugin commit this release pins, $PINNED"
       - uses: actions/download-artifact'''
 after = '''          if [ "$found" != "$PINNED" ]; then
-            echo "::error::stayfixed/stayfixed-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
+            echo "::error::dry-bag/drybag-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
             exit 1
           fi
-          echo "stayfixed/stayfixed-plugin's $TAG is the plugin commit this release pins, $PINNED"
+          echo "dry-bag/drybag-plugin's $TAG is the plugin commit this release pins, $PINNED"
       - uses: actions/download-artifact'''
 reddens = [
   "tests/test_workflows.py::test_the_gated_step_compares_the_peeled_id[nothing-pinned-publish]",
@@ -901,7 +901,7 @@ reddens = [
 [[mutation]]
 name = "the sdist executable claim covers no file"
 file = "scripts/check_artifacts.py"
-before = 'SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/stayfixed")'
+before = 'SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/drybag")'
 after = "SDIST_EXECUTABLE = ()"
 reddens = [
   "tests/scripts/test_check_artifacts.py::test_a_wrapper_that_lost_its_executable_bit_in_the_sdist_is_named",
@@ -937,15 +937,15 @@ reddens = [
   "tests/test_fixtures.py::test_the_block_a_contributor_copies_is_the_one_ci_runs",
 ]
 
-# `scripts/check_artifacts.py` imported `stayfixed.overlay.layout` for the very constant
+# `scripts/check_artifacts.py` imported `drybag.overlay.layout` for the very constant
 # `overlay/api.py` said had been trimmed *because* nothing outside the area imported it. The
 # boundary walk stopped at `src/`, so the false docstring and the violation merged green together.
 # This is that import put back, against the widened walk.
 [[mutation]]
 name = "a script reaches past an area's api.py again"
 file = "scripts/check_artifacts.py"
-before = "from stayfixed.overlay.api import OVERLAY_FILES"
-after = "from stayfixed.overlay.layout import OVERLAY_FILES"
+before = "from drybag.overlay.api import OVERLAY_FILES"
+after = "from drybag.overlay.layout import OVERLAY_FILES"
 reddens = [
   "tests/boundaries/test_api_surface.py::test_no_module_reaches_into_another_packages_private_module",
 ]
@@ -1202,11 +1202,11 @@ reddens = ["tests/scripts/test_mutation_oracle.py::test_the_oracle_reads_every_g
 [[mutation]]
 name = "the group table loses a row and its entries route to the catch-all"
 file = "scripts/mutation_oracle.py"
-before = '    ("src/stayfixed/doctor/", "doctor"),'
+before = '    ("src/drybag/doctor/", "doctor"),'
 after = ''
 reddens = ["tests/scripts/test_mutation_oracle.py::test_every_entry_lives_in_its_group_file"]
 
-# `GROUP_OF` routes by the longest prefix, so a row appended after `src/stayfixed/` is not dead;
+# `GROUP_OF` routes by the longest prefix, so a row appended after `src/drybag/` is not dead;
 # taken first-match, that catch-all row would take the new row's files without a sound.
 [[mutation]]
 name = "the group table routes a file by its first matching row again"
@@ -1747,7 +1747,7 @@ reddens = [
 name = "the release script tells its reader to run the command the CLI no longer ships"
 file = "scripts/release.py"
 before = 'COMMAND = "uv run python scripts/release.py"'
-after = 'COMMAND = "uv run stayfixed release"'
+after = 'COMMAND = "uv run drybag release"'
 reddens = [
   "tests/scripts/test_release.py::test_a_tag_with_pending_fragments_is_refused",
   "tests/scripts/test_release.py::test_a_version_that_is_not_the_projects_is_refused_before_anything_runs",
@@ -1759,7 +1759,7 @@ reddens = [
 name = "the release workflow runs the release check the CLI no longer ships"
 file = ".github/workflows/release.yml"
 before = '        run: uv run python scripts/release.py check --tag "$GITHUB_REF_NAME"'
-after = '        run: uv run stayfixed release check --tag "$GITHUB_REF_NAME"'
+after = '        run: uv run drybag release check --tag "$GITHUB_REF_NAME"'
 reddens = [
   "tests/test_fixtures.py::test_the_release_workflow_runs_the_release_check_in_the_one_spelling",
 ]
@@ -1791,7 +1791,7 @@ reddens = [
 name = "the release workflow builds after running the release check the CLI no longer ships"
 file = ".github/workflows/release.yml"
 before = "        run: uv build"
-after = "        run: uv run stayfixed release check && uv build"
+after = "        run: uv run drybag release check && uv build"
 reddens = [
   "tests/test_fixtures.py::test_the_release_workflow_runs_the_release_check_in_the_one_spelling",
 ]
@@ -1836,10 +1836,10 @@ reddens = ["tests/scripts/test_release.py::test_a_root_the_check_cannot_read_is_
 [[mutation]]
 name = "the plugin tree drops a path the runtime reads"
 file = "scripts/plugin_tree.py"
-before = """    "src/stayfixed",
+before = """    "src/drybag",
     "skills",
     "README.md","""
-after = """    "src/stayfixed",
+after = """    "src/drybag",
     "README.md","""
 reddens = [
   "tests/scripts/test_plugin_tree.py::test_members_lists_every_plugin_path_with_its_mode_and_nothing_else",
@@ -1904,8 +1904,8 @@ reddens = [
 [[mutation]]
 name = "plugin_tree.py writes another manifest format than the publisher reads"
 file = "scripts/plugin_tree.py"
-before = 'FORMAT = "stayfixed-plugin-tree 1"'
-after = 'FORMAT = "stayfixed-plugin-tree 2"'
+before = 'FORMAT = "drybag-plugin-tree 1"'
+after = 'FORMAT = "drybag-plugin-tree 2"'
 reddens = ["tests/test_workflows.py::test_one_commit_id_shape_everywhere"]
 
 [[mutation]]
@@ -2152,8 +2152,8 @@ reddens = ["tests/scripts/test_plugin_tree.py::test_render_writes_into_an_empty_
 [[mutation]]
 name = "the plugin commit is dated a second after the epoch"
 file = "scripts/plugin_tree.py"
-before = 'IDENTITY = "stayfixed <release@stayfixed.invalid> 0 +0000"'
-after = 'IDENTITY = "stayfixed <release@stayfixed.invalid> 1 +0000"'
+before = 'IDENTITY = "drybag <release@drybag.invalid> 0 +0000"'
+after = 'IDENTITY = "drybag <release@drybag.invalid> 1 +0000"'
 reddens = [
   "tests/scripts/test_plugin_tree.py::test_commit_text_is_exactly_the_documented_bytes",
   "tests/scripts/test_plugin_tree.py::test_the_plugin_commit_is_what_git_computes",
@@ -2478,7 +2478,7 @@ reddens = [
   "tests/scripts/test_plugin_tree.py::test_a_plugin_json_version_that_is_not_x_y_z_in_ascii_digits_is_refused[a-tag]",
 ]
 
-# Run by an interpreter without this repository's `stayfixed`, `scripts/release.py` fails on its
+# Run by an interpreter without this repository's `drybag`, `scripts/release.py` fails on its
 # first import, before the CLI frame exists; a traceback would exit `1`, `check`'s findings.
 [[mutation]]
 name = "release.py exits 1 when its package cannot be imported"
@@ -2489,13 +2489,13 @@ reddens = [
   "tests/scripts/test_release.py::test_run_without_its_package_it_refuses_with_exit_2_and_says_to_use_uv",
 ]
 
-# `tomllib` came with Python 3.11, so an older `python3` fails on it as one without `stayfixed`
+# `tomllib` came with Python 3.11, so an older `python3` fails on it as one without `drybag`
 # does, and the same guard says so.
 [[mutation]]
 name = "release.py imports tomllib outside its guarded imports"
 file = "scripts/release.py"
-before = "try:\n    import tomllib\n\n    from stayfixed import fsops"
-after = "import tomllib\n\ntry:\n    from stayfixed import fsops"
+before = "try:\n    import tomllib\n\n    from drybag import fsops"
+after = "import tomllib\n\ntry:\n    from drybag import fsops"
 reddens = [
   "tests/scripts/test_release.py::test_run_on_a_python_without_tomllib_it_refuses_with_exit_2",
 ]
@@ -2509,7 +2509,7 @@ reddens = [
   "tests/scripts/test_release.py::test_run_without_its_package_it_refuses_with_exit_2_and_says_to_use_uv",
 ]
 
-# Run by an interpreter without this repository's `stayfixed`, the script fails on its first
+# Run by an interpreter without this repository's `drybag`, the script fails on its first
 # import, before the CLI frame exists; a traceback would exit `1`, `commit --require-pin`'s finding.
 [[mutation]]
 name = "plugin_tree.py exits 1 when its package cannot be imported"
@@ -2915,11 +2915,11 @@ reddens = [
 # every case in `tests/scripts/test_publish_template.py` still green.
 #
 # **Both strip lines, and this is the second time this entry was wrong.** Removing only the
-# `remove_within` left `rmdir_within` pointed at a `.stayfixed/` that still held the manifest,
+# `remove_within` left `rmdir_within` pointed at a `.drybag/` that still held the manifest,
 # which raises `OSError: Directory not empty` — so all twelve cases in the module failed and
 # the oracle said `caught` for a reason with nothing to do with the ledger. It would have gone
 # on saying `caught` with the assertion this entry exists to prove deleted. Measured with both
-# lines replaced: exactly one case fails, and it fails on `.stayfixed/manifest.json` being in
+# lines replaced: exactly one case fails, and it fails on `.drybag/manifest.json` being in
 # the render.
 [[mutation]]
 name = "publish-template publishes the scaffold ledger"

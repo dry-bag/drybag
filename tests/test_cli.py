@@ -13,8 +13,8 @@ from typing import cast
 
 import pytest
 
-from stayfixed import __version__
-from stayfixed.cli import (
+from drybag import __version__
+from drybag.cli import (
     Registrar,
     SubParsers,
     build_parser,
@@ -23,8 +23,8 @@ from stayfixed.cli import (
     run,
     split_json_flag,
 )
-from stayfixed.errors import Failure, Refusal
-from stayfixed.result import Result
+from drybag.errors import Failure, Refusal
+from drybag.result import Result
 from tests.cli import subparsers
 
 
@@ -37,7 +37,7 @@ def test_version_flag_prints_the_package_version(capsys: pytest.CaptureFixture[s
 
 def test_module_entry_point_runs_without_the_console_script() -> None:
     completed = subprocess.run(
-        [sys.executable, "-m", "stayfixed", "--version"],
+        [sys.executable, "-m", "drybag", "--version"],
         capture_output=True,
         text=True,
         check=False,
@@ -144,7 +144,7 @@ def test_failures_emit_json_when_asked(capsys: pytest.CaptureFixture[str]) -> No
 
 
 def test_every_command_describes_itself_and_names_json_in_its_own_help() -> None:
-    # `stayfixed attach --help` printed `usage:` and jumped to the options: the one sentence the
+    # `drybag attach --help` printed `usage:` and jumped to the options: the one sentence the
     # area registered with `help=` reached the parent's listing and nothing else. And `--json`
     # is stripped before argparse sees it, so no command could mention it -- while the README
     # promised it works everywhere. Mutation: `_finish` not called from `build_parser` reddens
@@ -158,17 +158,17 @@ def test_every_command_describes_itself_and_names_json_in_its_own_help() -> None
     assert listed == sorted(listed)
     for name, sub in groups.choices.items():
         text = sub.format_help()
-        assert sub.description, f"`stayfixed {name}` has no description"
-        assert "--json" in text, f"`stayfixed {name} --help` never mentions --json"
+        assert sub.description, f"`drybag {name}` has no description"
+        assert "--json" in text, f"`drybag {name} --help` never mentions --json"
         nested = subparsers(sub)
         for leaf_name, leaf in (nested.choices if nested is not None else {}).items():
-            assert leaf.description, f"`stayfixed {name} {leaf_name}` has no description"
+            assert leaf.description, f"`drybag {name} {leaf_name}` has no description"
             assert "--json" in leaf.format_help()
 
 
 def test_areas_are_discovered_from_the_package() -> None:
     names = {registrar.__module__ for registrar in discover_registrars()}
-    assert "stayfixed.doctor.commands" in names
+    assert "drybag.doctor.commands" in names
 
 
 def _exploding(args: argparse.Namespace) -> Result:
@@ -180,7 +180,7 @@ def test_an_internal_error_in_a_command_exits_two_not_one(
 ) -> None:
     # Exit 1 is reserved for findings, so a command's own bug must not read as three findings.
     assert run(["probe", "go"], parser=build_parser([_area("probe", _exploding)])) == 2
-    assert "stayfixed: internal error: KeyError: 'no such key'" in capsys.readouterr().err
+    assert "drybag: internal error: KeyError: 'no such key'" in capsys.readouterr().err
 
 
 def test_an_internal_error_still_renders_json(capsys: pytest.CaptureFixture[str]) -> None:
@@ -195,9 +195,9 @@ def _broken() -> list[Registrar]:
 def test_a_broken_area_module_maps_to_exit_two(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("stayfixed.cli.discover_registrars", _broken)
+    monkeypatch.setattr("drybag.cli.discover_registrars", _broken)
     assert main([]) == 2
-    assert "stayfixed: internal error: RuntimeError: area exploded at import time" in (
+    assert "drybag: internal error: RuntimeError: area exploded at import time" in (
         capsys.readouterr().err
     )
 
@@ -208,7 +208,7 @@ def test_a_broken_area_never_costs_a_hook_event(
 ) -> None:
     # One later area's import-time bug in its commands.py must not cost the user what they
     # typed (exit 2 on UserPromptSubmit erases the prompt) nor block a tool call.
-    monkeypatch.setattr("stayfixed.cli.discover_registrars", _broken)
+    monkeypatch.setattr("drybag.cli.discover_registrars", _broken)
     assert main(["hook", event]) == 0
     err = capsys.readouterr().err
     assert "area exploded at import time" in err
@@ -218,16 +218,16 @@ def test_a_broken_area_never_costs_a_hook_event(
 def test_the_json_flag_does_not_hide_the_hook_event_from_the_guard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("stayfixed.cli.discover_registrars", _broken)
+    monkeypatch.setattr("drybag.cli.discover_registrars", _broken)
     assert main(["--json", "hook", "UserPromptSubmit"]) == 0
 
 
 def test_a_broken_area_on_a_non_hook_command_still_exits_two(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("stayfixed.cli.discover_registrars", _broken)
+    monkeypatch.setattr("drybag.cli.discover_registrars", _broken)
     assert main(["doctor"]) == 2
-    assert "stayfixed: internal error: RuntimeError" in capsys.readouterr().err
+    assert "drybag: internal error: RuntimeError" in capsys.readouterr().err
 
 
 def _broken_by_keyboard_interrupt() -> list[Registrar]:
@@ -249,10 +249,10 @@ def test_discovery_raising_a_base_exception_gets_the_same_verdicts_as_an_excepti
     # something that raises KeyboardInterrupt or asyncio.CancelledError at import time bypassed
     # `_discovery_failed` entirely instead of degrading open on a hook and refusing on a
     # non-hook command, exactly like a RuntimeError already does.
-    monkeypatch.setattr("stayfixed.cli.discover_registrars", _broken_by_keyboard_interrupt)
+    monkeypatch.setattr("drybag.cli.discover_registrars", _broken_by_keyboard_interrupt)
     assert main(argv) == code
     err = capsys.readouterr().err
-    assert "stayfixed: internal error: KeyboardInterrupt" in err
+    assert "drybag: internal error: KeyboardInterrupt" in err
     assert ("continuing open" in err) == (code == 0)
 
 
@@ -285,10 +285,10 @@ def test_a_broken_parser_build_is_judged_like_a_broken_import(
     # An area's `register()` runs during the parser build, one line outside the try that judged its
     # import, and returned 1 where a hook must degrade open. Two areas claiming one group name
     # is the same failure, and a plausible merge accident in an architecture that adds areas.
-    monkeypatch.setattr("stayfixed.cli.discover_registrars", lambda: list(registrars))
+    monkeypatch.setattr("drybag.cli.discover_registrars", lambda: list(registrars))
     assert main(argv) == code
     err = capsys.readouterr().err
-    assert "stayfixed: internal error" in err
+    assert "drybag: internal error" in err
     assert ("continuing open" in err) == (code == 0)
 
 
@@ -320,7 +320,7 @@ def test_a_command_that_returns_neither_a_result_nor_an_exit_code_refuses(
 ) -> None:
     parser = build_parser([_area("probe", lambda args: cast(Result, returned))])
     assert run(["probe", "go"], parser=parser) == 2
-    assert "stayfixed: internal error" in capsys.readouterr().err
+    assert "drybag: internal error" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("raised", [asyncio.CancelledError(), KeyboardInterrupt()], ids=type)

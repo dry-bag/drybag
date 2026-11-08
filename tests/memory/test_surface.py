@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-import stayfixed.memory.api as memory
+import drybag.memory.api as memory
 
 
 def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:

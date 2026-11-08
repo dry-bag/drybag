@@ -77,18 +77,18 @@ DECLARATIONS = ROOT / "mutations"
 # collide with every open branch's entries, for no reader's gain. CONTRIBUTING.md, "Tests", states
 # the same ruling.
 GROUP_OF: tuple[tuple[str, str], ...] = (
-    ("src/stayfixed/attach/", "attach"),
-    ("src/stayfixed/templates/", "templates"),
-    ("src/stayfixed/presets/", "templates"),
-    ("src/stayfixed/scaffold/", "scaffold"),
-    ("src/stayfixed/guards/", "guards"),
-    ("src/stayfixed/hints/", "guards"),
-    ("src/stayfixed/setup/", "install"),
-    ("src/stayfixed/overlay/", "install"),
-    ("src/stayfixed/doctor/", "doctor"),
-    ("src/stayfixed/memory/", "records"),
-    ("src/stayfixed/docs/", "records"),
-    ("src/stayfixed/", "core"),
+    ("src/drybag/attach/", "attach"),
+    ("src/drybag/templates/", "templates"),
+    ("src/drybag/presets/", "templates"),
+    ("src/drybag/scaffold/", "scaffold"),
+    ("src/drybag/guards/", "guards"),
+    ("src/drybag/hints/", "guards"),
+    ("src/drybag/setup/", "install"),
+    ("src/drybag/overlay/", "install"),
+    ("src/drybag/doctor/", "doctor"),
+    ("src/drybag/memory/", "records"),
+    ("src/drybag/docs/", "records"),
+    ("src/drybag/", "core"),
     ("scripts/publish_plugin.py", "publish"),
     ("scripts/", "tooling"),
     (".github/", "tooling"),
@@ -235,7 +235,7 @@ def single_run(tempdir: Path | None = None) -> Iterator[Path]:
         return
 
 
-SCRATCH_PREFIX = "stayfixed-oracle-"
+SCRATCH_PREFIX = "drybag-oracle-"
 # The one-run-at-a-time lock, beside the scratch checkouts it exists to protect. A **file** and
 # not a directory, which is what keeps it out of `sweep_stale_scratch`'s own housekeeping: that
 # walk globs this prefix and removes directories, and the `is_dir()` arm is what spares this.

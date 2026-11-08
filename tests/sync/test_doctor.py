@@ -1,6 +1,6 @@
-"""What the `sync` row in `stayfixed doctor` answers, one case per arm.
+"""What the `sync` row in `drybag doctor` answers, one case per arm.
 
-Every case runs the whole report through `run_checks`, as a user's `stayfixed doctor` does, with the
+Every case runs the whole report through `run_checks`, as a user's `drybag doctor` does, with the
 fixtures of the doctor area's own tests. The overlay is a plain repository, the scanner the
 stand-in of this directory's `conftest.py` on a `PATH` that holds no other `gitleaks`, and the
 state a file the job's own writer made in the test's `HOME`.
@@ -17,14 +17,14 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.doctor import checks
-from stayfixed.doctor.api import OK, SKIP, WARN
-from stayfixed.printed import CLIPPED_CHARS
-from stayfixed.setup.api import setup
-from stayfixed.sync import git as G
-from stayfixed.sync import job as J
-from stayfixed.sync.state import (
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.doctor import checks
+from drybag.doctor.api import OK, SKIP, WARN
+from drybag.printed import CLIPPED_CHARS
+from drybag.setup.api import setup
+from drybag.sync import git as G
+from drybag.sync import job as J
+from drybag.sync.state import (
     EMPTY_HOLDS,
     LOCAL_REWRITE,
     OUTSIDE,
@@ -114,7 +114,7 @@ def test_on_with_no_overlay_recorded_is_a_warning(
     status, detail, remedy = Machine(tmp_path, monkeypatch).write(overlay=False).row()
     assert status == WARN
     assert "no overlay" in detail
-    assert "stayfixed setup --overlay" in remedy
+    assert "drybag setup --overlay" in remedy
 
 
 def test_on_with_a_recorded_overlay_that_is_gone_is_a_warning(machine: Machine) -> None:

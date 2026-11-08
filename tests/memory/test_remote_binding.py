@@ -15,8 +15,8 @@ import itertools
 
 import pytest
 
-from stayfixed.gitenv import without_userinfo
-from stayfixed.memory.store import NO_REMOTE_SAID, origin_note
+from drybag.gitenv import without_userinfo
+from drybag.memory.store import NO_REMOTE_SAID, origin_note
 
 # One repository on a host that is not github.com, in every spelling the rule makes one binding.
 SPELLINGS = (
@@ -67,7 +67,7 @@ def test_case_folds_where_the_server_ignores_it(recorded: str, origin: str) -> N
         ("git@example.com:acme/widget.git", "https://example.org/acme/widget"),
         ("git@example.com:acme/widget.git", "git@example.com:acme/widget-tools.git"),
         ("git@example.com:acme/tools/widget", "https://example.com/acme/widget"),
-        # Outside github.com a path's case is the server's to judge, and stayfixed does not guess.
+        # Outside github.com a path's case is the server's to judge, and drybag does not guess.
         pytest.param(
             "git@example.com:acme/widget.git",
             "https://example.com/Acme/Widget",

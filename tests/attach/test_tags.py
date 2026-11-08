@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from stayfixed.attach.tags import collisions
-from stayfixed.config.classes import Layer, LayerName
-from stayfixed.config.plates import plates
+from drybag.attach.tags import collisions
+from drybag.config.classes import Layer, LayerName
+from drybag.config.plates import plates
 from tests.tagged import with_tags
 
 

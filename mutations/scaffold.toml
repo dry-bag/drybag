@@ -7,7 +7,7 @@
 # only, and one past the cap is that artifact's refusal.
 [[mutation]]
 name = "the scaffold engine reads an artifact's file with no bound"
-file = "src/stayfixed/scaffold/engine.py"
+file = "src/drybag/scaffold/engine.py"
 before = '        return read_regular_text(path, newline=""), None'
 after = """        with path.open(encoding="utf-8", newline="") as stream:
             return stream.read(), None"""
@@ -17,33 +17,33 @@ reddens = [
 ]
 
 # A footprint manifest's `format` that is no integer is damage, refused as the manifest's other bad
-# shapes are; read as a newer stayfixed's, it sent the owner to upgrade the plugin.
+# shapes are; read as a newer drybag's, it sent the owner to upgrade the plugin.
 [[mutation]]
 name = "a footprint manifest's format that is not an integer reads as a newer one"
-file = "src/stayfixed/scaffold/manifest.py"
+file = "src/drybag/scaffold/manifest.py"
 before = """        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
             raise ManifestError(f"{MANIFEST_PATH}: 'format' is not a positive integer")
         if version > FORMAT:"""
 after = """        if not isinstance(version, int) or version > FORMAT:"""
 reddens = [
-  "tests/scaffold/test_manifest.py::test_a_format_that_is_not_a_positive_integer_is_damage_and_not_a_newer_stayfixed",
+  "tests/scaffold/test_manifest.py::test_a_format_that_is_not_a_positive_integer_is_damage_and_not_a_newer_drybag",
 ]
 
 [[mutation]]
 name = "a footprint manifest's format below 1 is read"
-file = "src/stayfixed/scaffold/manifest.py"
+file = "src/drybag/scaffold/manifest.py"
 before = "        if not isinstance(version, int) or isinstance(version, bool) or version < 1:"
 after = "        if not isinstance(version, int) or isinstance(version, bool):"
 reddens = [
-  "tests/scaffold/test_manifest.py::test_a_format_that_is_not_a_positive_integer_is_damage_and_not_a_newer_stayfixed[0]",
-  "tests/scaffold/test_manifest.py::test_a_format_that_is_not_a_positive_integer_is_damage_and_not_a_newer_stayfixed[-1]",
+  "tests/scaffold/test_manifest.py::test_a_format_that_is_not_a_positive_integer_is_damage_and_not_a_newer_drybag[0]",
+  "tests/scaffold/test_manifest.py::test_a_format_that_is_not_a_positive_integer_is_damage_and_not_a_newer_drybag[-1]",
 ]
 
 # A clone chooses the manifest's size too: it is read to the read cap, and a fault is said without
 # the path it was opened by.
 [[mutation]]
 name = "the footprint manifest is read with no bound"
-file = "src/stayfixed/scaffold/manifest.py"
+file = "src/drybag/scaffold/manifest.py"
 before = "            text = read_regular_text(path)"
 after = '            text = path.read_text(encoding="utf-8")'
 reddens = [
@@ -52,7 +52,7 @@ reddens = [
 
 [[mutation]]
 name = "the footprint manifest's read refusal prints the path it opened"
-file = "src/stayfixed/scaffold/manifest.py"
+file = "src/drybag/scaffold/manifest.py"
 before = "        with fsops.reading(MANIFEST_PATH, ManifestError):"
 after = "        with fsops.reading(path, ManifestError):"
 reddens = ["tests/scaffold/test_manifest.py::test_a_manifest_past_the_read_cap_is_unreadable_and_never_read_whole"]
@@ -62,7 +62,7 @@ reddens = ["tests/scaffold/test_manifest.py::test_a_manifest_past_the_read_cap_i
 # words; quoted, the refusal told the owner to raise an interpreter limit.
 [[mutation]]
 name = "the manifest reader quotes the parser's exception for a document past its reach"
-file = "src/stayfixed/scaffold/manifest.py"
+file = "src/drybag/scaffold/manifest.py"
 before = "        raw = json_object(text, str(MANIFEST_PATH), error=ManifestError)"
 after = """        try:
             raw = json.loads(text)
@@ -77,7 +77,7 @@ reddens = [
 
 [[mutation]]
 name = 'the engine refuses every recorded artifact'
-file = "src/stayfixed/scaffold/engine.py"
+file = "src/drybag/scaffold/engine.py"
 before = '        if reason is not None:'
 after = '        if reason is not None or record is not None:'
 reddens = [
@@ -89,7 +89,7 @@ reddens = [
 # `/zz\r` got `\r\n` appended, git read `/zz\r`, and `zz` showed while attached.
 [[mutation]]
 name = "a hash region ends a line after a lone carriage return with the file's own ending"
-file = "src/stayfixed/scaffold/regions.py"
+file = "src/drybag/scaffold/regions.py"
 before = '            lone_cr = head[-1].endswith("\r")'
 after = "            lone_cr = False"
 reddens = [
@@ -100,7 +100,7 @@ reddens = [
 # tell it from a malformed one by name and every caller catching `EntriesError` still catches it.
 [[mutation]]
 name = "a document past a limit of the parser is refused outside the entries refusal"
-file = "src/stayfixed/scaffold/entries.py"
+file = "src/drybag/scaffold/entries.py"
 before = "class ParserLimitError(EntriesError):"
 after = "class ParserLimitError(Refusal):"
 reddens = [
@@ -111,7 +111,7 @@ reddens = [
 # error's own text carries the absolute path, this machine's layout, twice.
 [[mutation]]
 name = "the scaffold engine names an unreadable artifact by its absolute path"
-file = "src/stayfixed/scaffold/engine.py"
+file = "src/drybag/scaffold/engine.py"
 before = "        return None, unreadable(quoted(relative), exc)"
 after = "        return None, unreadable(path, exc)"
 reddens = [
@@ -124,7 +124,7 @@ reddens = [
 # release plans nothing: planned again, every artifact reads as an update or as hand-edited.
 [[mutation]]
 name = "an artifact whose bytes are already the template's is planned again"
-file = "src/stayfixed/scaffold/engine.py"
+file = "src/drybag/scaffold/engine.py"
 before = "        if digest(current) == digest(body):"
 after = "        if False:"
 reddens = [
@@ -132,10 +132,10 @@ reddens = [
 ]
 
 # The digest is of the bytes on disk. A read that translated line endings hashed a CRLF copy as the
-# template's own text, and a file that differs from what stayfixed wrote reported as unchanged.
+# template's own text, and a file that differs from what drybag wrote reported as unchanged.
 [[mutation]]
 name = "the scaffold engine reads a CRLF copy of an artifact as the template's own text"
-file = "src/stayfixed/scaffold/engine.py"
+file = "src/drybag/scaffold/engine.py"
 before = '        return read_regular_text(path, newline=""), None'
 after = "        return read_regular_text(path), None"
 reddens = [

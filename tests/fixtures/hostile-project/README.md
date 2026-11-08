@@ -4,7 +4,7 @@ The clone half of the clone-to-exfiltration scenario. Nothing here is a real pro
 file is an input that a repository is allowed to author and that must reach nothing it is not
 allowed to choose.
 
-- `stayfixed.toml` names `smoke` — **another project's name** — so that a machine which has an
+- `drybag.toml` names `smoke` — **another project's name** — so that a machine which has an
   overlay for `smoke` is asked to hand this clone that project's notes.
 - `docs/memory/developer/canary.md` is committed in-repo memory flagged `startup: -1`, which
   is the highest standing-rule rank there is. A note the repository committed is never a

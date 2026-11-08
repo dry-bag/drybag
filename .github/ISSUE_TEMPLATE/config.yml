@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/stayfixed/stayfixed/security/advisories/new
+    url: https://github.com/dry-bag/drybag/security/advisories/new
     about: >
       Containment bypasses, trust-gate bypasses and marker forgery go here, privately — never
       into a public issue. See SECURITY.md for what counts.

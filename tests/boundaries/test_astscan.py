@@ -18,22 +18,22 @@ def test_an_import_names_its_module_in_every_spelling_and_a_relative_one_resolve
     # ignores a relative import again" -> the relative modules read as written.
     text = (
         "import os.path, json as j\n"
-        "from stayfixed.memory import worktree\n"
+        "from drybag.memory import worktree\n"
         "from ..hooks.sink import DIRECTORY\n"
         "from . import commands\n"
         "from .checks import OK\n"
     )
-    assert astscan.imported_modules(ast.parse(text), ("stayfixed", "doctor")) == [
+    assert astscan.imported_modules(ast.parse(text), ("drybag", "doctor")) == [
         (1, "os.path"),
         (1, "json"),
-        (2, "stayfixed.memory"),
-        (2, "stayfixed.memory.worktree"),
-        (3, "stayfixed.hooks.sink"),
-        (3, "stayfixed.hooks.sink.DIRECTORY"),
-        (4, "stayfixed.doctor"),
-        (4, "stayfixed.doctor.commands"),
-        (5, "stayfixed.doctor.checks"),
-        (5, "stayfixed.doctor.checks.OK"),
+        (2, "drybag.memory"),
+        (2, "drybag.memory.worktree"),
+        (3, "drybag.hooks.sink"),
+        (3, "drybag.hooks.sink.DIRECTORY"),
+        (4, "drybag.doctor"),
+        (4, "drybag.doctor.commands"),
+        (5, "drybag.doctor.checks"),
+        (5, "drybag.doctor.checks.OK"),
     ]
 
 

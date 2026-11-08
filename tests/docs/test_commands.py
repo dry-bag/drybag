@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.docs.trail import END_MARKER, MARKER
-from stayfixed.findings import LISTED_LIMIT, Finding
-from stayfixed.printed import CLIPPED_CHARS, UNPRINTABLE
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.docs.trail import END_MARKER, MARKER
+from drybag.findings import LISTED_LIMIT, Finding
+from drybag.printed import CLIPPED_CHARS, UNPRINTABLE
 from tests.crafted import CRAFTED, CRAFTED_TOML, assert_never_raw
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -33,7 +33,7 @@ def project(tmp_path: Path) -> tuple[Path, list[str]]:
     root = tmp_path / "widget"
     for name in ("docs/specs", "docs/plans"):
         (root / name).mkdir(parents=True)
-    (root / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG, encoding="utf-8")
     (root / "AGENTS.md").write_text(AGENTS, encoding="utf-8")
     (root / "docs" / "guide.md").write_text("g\n", encoding="utf-8")
     (root / "docs" / "roadmap.md").write_text(f"# R\n\n{MARKER}\n{END_MARKER}\n", encoding="utf-8")
@@ -322,8 +322,8 @@ def test_a_non_utf8_roadmap_or_plan_exits_1_through_the_frame_and_never_2(
 @pytest.mark.parametrize(
     ("command", "module", "gate"),
     [
-        (["docs", "check"], "stayfixed.docs.hygiene", "docs_gate"),
-        (["docs", "trail", "--check"], "stayfixed.docs.trail", "trail_gate"),
+        (["docs", "check"], "drybag.docs.hygiene", "docs_gate"),
+        (["docs", "trail", "--check"], "drybag.docs.trail", "trail_gate"),
     ],
     ids=["docs check", "docs trail --check"],
 )

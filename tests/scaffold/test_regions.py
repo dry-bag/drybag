@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from stayfixed.scaffold.regions import RegionError, drop, extract, markers, upsert
+from drybag.scaffold.regions import RegionError, drop, extract, markers, upsert
 
 BEFORE = "# Title\n\nHand-written prose the tool must never touch.\n"
 
 
 def test_markers_are_the_shapes_the_design_fixes() -> None:
-    assert markers("harness") == ("# stayfixed:harness:begin", "# stayfixed:harness:end")
+    assert markers("harness") == ("# drybag:harness:begin", "# drybag:harness:end")
 
 
 def test_a_new_region_is_appended_and_the_rest_is_untouched() -> None:
@@ -64,13 +64,13 @@ def test_an_absent_region_extracts_as_none() -> None:
 
 
 def test_an_indented_marker_is_still_found() -> None:
-    text = BEFORE + "  # stayfixed:harness:begin\nbody\n  # stayfixed:harness:end\n"
+    text = BEFORE + "  # drybag:harness:begin\nbody\n  # drybag:harness:end\n"
     assert extract(text, "harness") == "body"
 
 
 def test_drop_removes_the_region_and_its_markers() -> None:
     out = drop(upsert(BEFORE, "harness", "one"), "harness")
-    assert "stayfixed" not in out
+    assert "drybag" not in out
     assert out == BEFORE
 
 
@@ -79,36 +79,36 @@ def test_dropping_an_absent_region_changes_nothing() -> None:
 
 
 def test_an_unterminated_region_refuses() -> None:
-    broken = BEFORE + "# stayfixed:harness:begin\nbody\n"
+    broken = BEFORE + "# drybag:harness:begin\nbody\n"
     with pytest.raises(RegionError, match="end"):
         extract(broken, "harness")
 
 
 def test_two_regions_of_one_name_refuse() -> None:
     doubled = upsert(BEFORE, "harness", "one")
-    doubled += "# stayfixed:harness:begin\nsecond\n# stayfixed:harness:end\n"
+    doubled += "# drybag:harness:begin\nsecond\n# drybag:harness:end\n"
     with pytest.raises(RegionError, match="twice"):
         extract(doubled, "harness")
 
 
 def test_a_doubled_begin_marker_with_one_end_refuses() -> None:
     text = (
-        BEFORE + "# stayfixed:harness:begin\nfirst\n"
-        "# stayfixed:harness:begin\nsecond\n# stayfixed:harness:end\n"
+        BEFORE + "# drybag:harness:begin\nfirst\n"
+        "# drybag:harness:begin\nsecond\n# drybag:harness:end\n"
     )
     with pytest.raises(RegionError, match="twice"):
         extract(text, "harness")
 
 
 def test_a_marker_for_another_name_is_not_a_terminator() -> None:
-    text = BEFORE + "# stayfixed:a:begin\nA\n# stayfixed:b:end\n# stayfixed:a:end\n"
-    assert extract(text, "a") == "A\n# stayfixed:b:end"
+    text = BEFORE + "# drybag:a:begin\nA\n# drybag:b:end\n# drybag:a:end\n"
+    assert extract(text, "a") == "A\n# drybag:b:end"
 
 
 def test_an_end_marker_with_no_beginning_refuses() -> None:
     # The mirror of the unterminated case above, and the one that used to read as "region
     # absent": a begin line somebody deleted, or a merge that kept one side's end marker.
-    orphaned = BEFORE + "# stayfixed:harness:end\n"
+    orphaned = BEFORE + "# drybag:harness:end\n"
     with pytest.raises(RegionError, match="no beginning"):
         extract(orphaned, "harness")
 
@@ -117,7 +117,7 @@ def test_an_end_marker_with_no_beginning_refuses_instead_of_doubling_itself() ->
     # Why it has to refuse rather than return None. Treated as absent, `upsert` appended a fresh
     # block and left one begin against two ends — a file only `_bounds` could have written and
     # only a person can now repair, with `drop` refusing it too so `uninstall` could not finish.
-    orphaned = BEFORE + "# stayfixed:harness:end\n"
+    orphaned = BEFORE + "# drybag:harness:end\n"
     with pytest.raises(RegionError, match="no beginning"):
         upsert(orphaned, "harness", "one")
     with pytest.raises(RegionError, match="no beginning"):
@@ -127,7 +127,7 @@ def test_an_end_marker_with_no_beginning_refuses_instead_of_doubling_itself() ->
 def test_an_end_marker_for_another_name_is_not_an_orphan() -> None:
     # The anti-overreach guard: the refusal is keyed on this region's own marker, so a file
     # carrying somebody else's closed region still reads as "absent" for this name.
-    text = BEFORE + "# stayfixed:other:end\n"
+    text = BEFORE + "# drybag:other:end\n"
     assert extract(text, "harness") is None
 
 
@@ -143,4 +143,4 @@ def test_a_hash_region_reads_lines_where_git_does() -> None:
     # And a marker is a marker only on a line of its own, as git splits it: glued onto the line
     # before it by a lone `\r`, it is not one, and the end marker then has no beginning.
     with pytest.raises(RegionError, match="no beginning"):
-        extract(f"/a\r{begin}\n/c\n# stayfixed:x:end\n", "x")
+        extract(f"/a\r{begin}\n/c\n# drybag:x:end\n", "x")

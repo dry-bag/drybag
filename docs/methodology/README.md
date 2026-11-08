@@ -1,13 +1,13 @@
 # Methodology
 
-stayfixed is the tooling half of a way of working with coding agents. This directory is the
+drybag is the tooling half of a way of working with coding agents. This directory is the
 other half: the principles the tooling exists to hold, each stated once, each with the
 sources that back it and a plain statement of how well they do.
 
 Two files:
 
 - [principles.md](principles.md) — ten numbered principles. Each one has a statement, what
-  stayfixed does about it today, its sources, and a **Backing** line.
+  drybag does about it today, its sources, and a **Backing** line.
 - [sources.md](sources.md) — the citation pack. Every `[S<n>]` in the principles resolves to
   a row here; every row is cited at least once. A test holds both directions.
 
@@ -60,12 +60,12 @@ Anthropic wrote about harnesses for long-running agents in November 2025 [S27], 
 described "harness engineering" as a discipline in February 2026 [S28] and open-sourced its
 own agent harness in August 2026 [S30], and Lilian Weng generalised the term to
 self-improvement loops in July 2026 [S29]. In all four the harness is what surrounds the
-model: the tools, the context, the guards, the memory. stayfixed uses the word the same way,
+model: the tools, the context, the guards, the memory. drybag uses the word the same way,
 and narrows it to the part of the harness that encodes *how a particular person works* —
 which is the part none of those four covers, and the part that does not travel between
 machines unless something carries it.
 
-The code draws a line of its own. Its **core** is what stayfixed does without its private layer:
+The code draws a line of its own. Its **core** is what drybag does without its private layer:
 the methodology's gates, the records they check, and a machine's setup. The private layer — the
 note store, the private overlay and the binding of a repository to that overlay — is the
 **delivery** layer, which the core does not import apart from the one step of machine setup that

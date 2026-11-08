@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-import stayfixed
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.doctor import checks
-from stayfixed.doctor.api import OK, RED, SKIP, WARN, Check
-from stayfixed.doctor.commands import summarise
-from stayfixed.findings import LISTED_LIMIT
+import drybag
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.doctor import checks
+from drybag.doctor.api import OK, RED, SKIP, WARN, Check
+from drybag.doctor.commands import summarise
+from drybag.findings import LISTED_LIMIT
 from tests.boundaries.test_discovery import UNIMPORTABLE, plant_area
 from tests.doctor.test_checks import _initialised
 from tests.floor import is_developers
@@ -34,7 +34,7 @@ def _nothing_of_the_developers_own(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     real environment, which no test in this suite may read: `ignored-env` reports whichever of
     two real variables is set, `diagnostics` finds the harness data root in it and this suite is
     plausibly run inside a session where that points at a real log, and
-    `load(root, machine=None)` resolves the developer's own `~/.config/stayfixed/config.toml`.
+    `load(root, machine=None)` resolves the developer's own `~/.config/drybag/config.toml`.
     The flag cases below cannot pass an environment through argparse, so the environment is made
     hermetic instead of passed.
 
@@ -104,15 +104,15 @@ def test_a_skip_is_not_a_finding(tmp_path: Path, capsys: pytest.CaptureFixture[s
 
 def test_any_red_check_exits_one(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # Exit 1 is "findings". A doctor that always exits 0 is a doctor nothing can gate on: a script
-    # or a CI step that runs it reads the exit code. A `stayfixed.toml` that is not TOML is the
+    # or a CI step that runs it reads the exit code. A `drybag.toml` that is not TOML is the
     # cheapest red there is, and the report's own first row; a directory with none at all is a
     # warning, which exits 0. Mutation (`mutations/`'s "not-initialised is red with no
-    # stayfixed.toml"): the second run exits 1.
-    (tmp_path / "stayfixed.toml").write_text("[[[", encoding="utf-8")
+    # drybag.toml"): the second run exits 1.
+    (tmp_path / "drybag.toml").write_text("[[[", encoding="utf-8")
     code = invoke(["doctor", "--root", str(tmp_path), "--home", str(tmp_path / "home")])
     assert code == 1
     assert "not-initialised" in capsys.readouterr().out
-    (tmp_path / "stayfixed.toml").unlink()
+    (tmp_path / "drybag.toml").unlink()
     assert invoke(["doctor", "--root", str(tmp_path), "--home", str(tmp_path / "home")]) == 0
 
 
@@ -157,7 +157,7 @@ def test_an_area_whose_doctor_module_fails_to_import_costs_one_red_row_and_not_t
         {
             "name": "zzplanted",
             "status": "red",
-            "detail": "stayfixed.zzplanted.doctor could not be imported: RuntimeError",
+            "detail": "drybag.zzplanted.doctor could not be imported: RuntimeError",
             "remedy": "report this, with the command you ran",
         },
     ]
@@ -171,7 +171,7 @@ def test_the_json_form_carries_every_check_and_its_remedy(
     # user never sees — and the summary line has room for none of them. The count is the
     # report's fourteen rows, held beside `README.md`, `docs/cli.md`, the doctor skill and the
     # smoke workflow by `tests/test_documents.py`.
-    (tmp_path / "stayfixed.toml").write_text("[[[", encoding="utf-8")
+    (tmp_path / "drybag.toml").write_text("[[[", encoding="utf-8")
     code = invoke(["doctor", "--root", str(tmp_path), "--home", str(tmp_path / "home"), "--json"])
     assert code == 1
     report = json.loads(capsys.readouterr().out)
@@ -188,8 +188,8 @@ def test_doctor_json_carries_no_codex_hooks_row(
     # Codex reach table: `doctor --json` carries no `codex-hooks`.
     root = tmp_path / "project"
     root.mkdir()
-    (root / "stayfixed.toml").write_text(
-        f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "p"\n',
+    (root / "drybag.toml").write_text(
+        f'[drybag]\nversion = "{drybag.__version__}"\n\n[project]\nname = "p"\n',
         encoding="utf-8",
     )
     invoke(["doctor", "--root", str(root), "--home", str(tmp_path / "home"), "--json"])

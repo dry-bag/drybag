@@ -1,10 +1,10 @@
 """A session's preferences from one resolution over the overlay's layers
-(`src/stayfixed/config/overlay_layers.py`, `src/stayfixed/config/session.py`).
+(`src/drybag/config/overlay_layers.py`, `src/drybag/config/session.py`).
 
-`<overlay>/common/stayfixed.toml` is a layer for every checkout, and
-`<overlay>/projects/<project>/stayfixed.toml` one for a checkout this machine binds to that project:
+`<overlay>/common/drybag.toml` is a layer for every checkout, and
+`<overlay>/projects/<project>/drybag.toml` one for a checkout this machine binds to that project:
 the project comes from the machine's binding record, never from the name the repository's
-`stayfixed.toml` gives. A missing file, an unrecorded overlay or a machine file the overlay root
+`drybag.toml` gives. A missing file, an unrecorded overlay or a machine file the overlay root
 cannot be read from is no layer and one note, never an exception.
 """
 
@@ -12,29 +12,29 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from stayfixed import binding
-from stayfixed.config import overlay_layers
-from stayfixed.config.classes import REFUSED_LAYER_NOTE, LayerName
-from stayfixed.config.reading import MachineConfigError, read_machine_toml
-from stayfixed.config.session import session_config
-from stayfixed.presets import load_preset
-from stayfixed.printed import quoted
+from drybag import binding
+from drybag.config import overlay_layers
+from drybag.config.classes import REFUSED_LAYER_NOTE, LayerName
+from drybag.config.reading import MachineConfigError, read_machine_toml
+from drybag.config.session import session_config
+from drybag.presets import load_preset
+from drybag.printed import quoted
 from tests.gitfixture import git, needs_git
 from tests.tagged import list_tags
 
 pytestmark = needs_git
 
-MINIMAL = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "sample"\n'
+MINIMAL = '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "sample"\n'
 BUDGET = "budgets.startup_rules_words"
 GATE_BUDGET = "agents_md_lines"
 
 
 def project(tmp_path: Path) -> Path:
-    """A git checkout whose `stayfixed.toml` names the project `sample`, bound to nothing."""
+    """A git checkout whose `drybag.toml` names the project `sample`, bound to nothing."""
     root = tmp_path / "project"
     root.mkdir()
     git(root, "init", "-q", "-b", "main")
-    (root / "stayfixed.toml").write_text(MINIMAL, encoding="utf-8")
+    (root / "drybag.toml").write_text(MINIMAL, encoding="utf-8")
     return root
 
 
@@ -42,20 +42,20 @@ def overlay(tmp_path: Path, *, common: str = "", sample: str | None = None) -> P
     """An overlay whose common file holds `common` and, given, `projects/sample`'s `sample`."""
     root = tmp_path / "overlay"
     (root / "common").mkdir(parents=True)
-    (root / "common" / "stayfixed.toml").write_text(common, encoding="utf-8")
+    (root / "common" / "drybag.toml").write_text(common, encoding="utf-8")
     if sample is not None:
         (root / "projects" / "sample").mkdir(parents=True)
-        (root / "projects" / "sample" / "stayfixed.toml").write_text(sample, encoding="utf-8")
+        (root / "projects" / "sample" / "drybag.toml").write_text(sample, encoding="utf-8")
     return root
 
 
 def tagged(root: Path, listed: list[str], **files: str) -> None:
-    """The project `sample`'s record listing `listed`, and `groups/<tag>/stayfixed.toml` for each
+    """The project `sample`'s record listing `listed`, and `groups/<tag>/drybag.toml` for each
     tag in `files`, holding what it is given."""
     list_tags(root, "sample", listed)
     for tag, text in files.items():
         (root / "groups" / tag).mkdir(parents=True)
-        (root / "groups" / tag / "stayfixed.toml").write_text(text, encoding="utf-8")
+        (root / "groups" / tag / "drybag.toml").write_text(text, encoding="utf-8")
 
 
 def mode(value: str) -> str:
@@ -164,8 +164,8 @@ def test_a_missing_file_is_no_layer_and_one_note(tmp_path: Path) -> None:
     binding.record(root, "sample", None)
     layers, notes, _ = overlay_layers.read(root, machine=machine(tmp_path, recorded))
     assert layers == ()
-    common = quoted(str(recorded / "common" / "stayfixed.toml"))
-    own = quoted(str(recorded / "projects" / "sample" / "stayfixed.toml"))
+    common = quoted(str(recorded / "common" / "drybag.toml"))
+    own = quoted(str(recorded / "projects" / "sample" / "drybag.toml"))
     assert notes == (
         overlay_layers.NOT_THERE.format(path=common, layer="overlay common"),
         overlay_layers.NOT_THERE.format(path=own, layer="overlay project"),
@@ -183,7 +183,7 @@ def test_a_later_tag_wins_a_value_and_the_project_wins_over_every_tag(tmp_path: 
     assert session.resolution.values["memory.mode"] == "local-only"
     assert session.resolution.provenance["memory.mode"] is LayerName.OVERLAY_TAG
     assert session.resolution.said("memory.mode") == "overlay tag b"
-    (recorded / "projects" / "sample" / "stayfixed.toml").write_text(mode("overlay"), "utf-8")
+    (recorded / "projects" / "sample" / "drybag.toml").write_text(mode("overlay"), "utf-8")
     session = session_config(root, machine=machine(tmp_path, recorded))
     assert session.resolution.values["memory.mode"] == "overlay"
     assert session.resolution.said("memory.mode") == "overlay project"
@@ -216,7 +216,7 @@ def test_a_tag_file_that_is_not_toml_is_a_note_and_no_layer(tmp_path: Path) -> N
     binding.record(root, "sample", None)
     layers, notes, _ = overlay_layers.read(root, machine=machine(tmp_path, recorded))
     assert LayerName.OVERLAY_TAG not in [layer.name for layer in layers]
-    path = quoted(str(recorded / "groups" / "a" / "stayfixed.toml"))
+    path = quoted(str(recorded / "groups" / "a" / "drybag.toml"))
     assert any(
         path in note and "is not valid TOML" in note and "overlay tag a" in note for note in notes
     )

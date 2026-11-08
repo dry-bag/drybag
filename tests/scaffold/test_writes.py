@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
-from stayfixed.scaffold import Template, apply, plan
-from stayfixed.scaffold.manifest import MANIFEST_PATH
+from drybag.scaffold import Template, apply, plan
+from drybag.scaffold.manifest import MANIFEST_PATH
 
 WRITING_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
 
@@ -153,7 +153,7 @@ def test_the_trace_sees_a_write_the_tree_diff_cannot(tmp_path: Path, trace: Trac
     # The anti-vacuity guard for the test above, and the demonstration that this instrument is
     # strictly stronger than the diff: a write to $HOME is invisible to a walk of tmp_path.
     root = a_project(tmp_path)
-    outside = tmp_path.parent / "stayfixed-trace-probe.log"
+    outside = tmp_path.parent / "drybag-trace-probe.log"
     outside.write_text("x\n", encoding="utf-8")
     outside.unlink()
     assert trace.outside(root) == [str(outside)]

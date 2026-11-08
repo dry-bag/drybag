@@ -16,12 +16,12 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.attach.binding import Binding
-from stayfixed.attach.permissions import codex_rules
-from stayfixed.attach.render import RenderRecord, read_parts, write
-from stayfixed.attach.rules import read as rules_read
-from stayfixed.attach.tags import collisions
-from stayfixed.config.plates import plates
+from drybag.attach.binding import Binding
+from drybag.attach.permissions import codex_rules
+from drybag.attach.render import RenderRecord, read_parts, write
+from drybag.attach.rules import read as rules_read
+from drybag.attach.tags import collisions
+from drybag.config.plates import plates
 from tests.tagged import with_tags
 
 
@@ -38,7 +38,7 @@ GUARD = {"type": "command", "command": "guard.sh"}
 def _delivery(id: str = ID) -> Path:
     # Spelled out rather than asked of the module: the directory is the contract, and the test
     # suite gives every test a `HOME` of its own (`tests/conftest.py`).
-    return Path(os.environ["HOME"]) / ".local" / "share" / "stayfixed" / "delivery" / id
+    return Path(os.environ["HOME"]) / ".local" / "share" / "drybag" / "delivery" / id
 
 
 def _overlay(tmp_path: Path) -> Path:
@@ -99,7 +99,7 @@ def test_render_writes_the_marketplace_and_the_plugin_under_names_carrying_the_w
     delivery = _delivery()
     marketplace = _json(delivery / ".claude-plugin" / "marketplace.json")
     assert isinstance(marketplace, dict)
-    assert marketplace["name"] == f"stayfixed-delivery-{ID}"
+    assert marketplace["name"] == f"drybag-delivery-{ID}"
     assert [(p["name"], p["source"]) for p in marketplace["plugins"]] == [
         (f"overlay-{ID}", "./plugin")
     ]
@@ -185,14 +185,14 @@ def test_run_from_the_plugin_the_entry_runs_the_plugins_own_hook_wrapper(tmp_pat
 def test_run_from_an_installed_package_the_entry_runs_its_interpreter_isolated(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # No plugin root beside the module: the entry runs the interpreter this stayfixed runs under,
-    # by its absolute path, with `-I -m stayfixed`. A path a shell would read into is quoted so
+    # No plugin root beside the module: the entry runs the interpreter this drybag runs under,
+    # by its absolute path, with `-I -m drybag`. A path a shell would read into is quoted so
     # that `sh` hands it back as it is.
-    import stayfixed
+    import drybag
 
-    module = tmp_path / "site-packages" / "stayfixed" / "__init__.py"
+    module = tmp_path / "site-packages" / "drybag" / "__init__.py"
     interpreter = str(tmp_path / 'py "$HOME" `x` \\ 3' / "python3")
-    monkeypatch.setattr(stayfixed, "__file__", str(module))
+    monkeypatch.setattr(drybag, "__file__", str(module))
     monkeypatch.setattr(sys, "executable", interpreter)
     overlay = _overlay(tmp_path)
     _scoped_rule(overlay)
@@ -200,9 +200,9 @@ def test_run_from_an_installed_package_the_entry_runs_its_interpreter_isolated(
     entry = _scoped_entry()
     assert isinstance(entry, list)
     command = entry[0]["hooks"][0]["command"]
-    assert command.endswith(" -I -m stayfixed hook PostToolUse")
+    assert command.endswith(" -I -m drybag hook PostToolUse")
     assert entry == _entry(command)
-    quoted = command.removesuffix(" -I -m stayfixed hook PostToolUse")
+    quoted = command.removesuffix(" -I -m drybag hook PostToolUse")
     said = subprocess.run(
         ["/bin/sh", "-c", f"printf '%s' {quoted}"], capture_output=True, text=True, check=True
     )
@@ -222,7 +222,7 @@ def test_an_overlay_with_no_path_scoped_rule_renders_no_post_tool_use_entry(
 
 def test_a_fault_under_the_rendered_entry_is_exit_0(tmp_path: Path) -> None:
     # The entry's command, run as the harness runs it, under a `python3` that passes the wrapper's
-    # version probe (printing its own path, as the probe asks) and then fails as stayfixed: the
+    # version probe (printing its own path, as the probe asks) and then fails as drybag: the
     # wrapper answers exit 0 with one line, where a launcher run bare would hand its non-zero exit,
     # and on `PostToolUse` an exit 2's stderr, to the session.
     overlay = _overlay(tmp_path)
@@ -247,7 +247,7 @@ def test_a_fault_under_the_rendered_entry_is_exit_0(tmp_path: Path) -> None:
         env={"PATH": str(bin), "CLAUDE_PROJECT_DIR": str(tmp_path)},
     )
     assert (done.returncode, done.stdout) == (0, "")
-    assert done.stderr == "stayfixed: stayfixed exited 3; continuing open\n"
+    assert done.stderr == "drybag: drybag exited 3; continuing open\n"
 
 
 def test_a_tag_hook_group_is_rendered_between_common_and_the_project(tmp_path: Path) -> None:

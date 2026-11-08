@@ -3,8 +3,8 @@
 `tomllib` reads nested arrays by recursion, so `a = [[[…]]]` a few thousand levels deep raises
 `RecursionError`, not `TOMLDecodeError`; and an integer literal longer than the interpreter
 converts raises a plain `ValueError`, which is not a `TOMLDecodeError` either. Uncaught, each is an
-internal error, the class stayfixed keeps for its own defects; in a gate run it ended every gate,
-and in `stayfixed.toml` it replaced "does not load" with a traceback's name. So each reader answers
+internal error, the class drybag keeps for its own defects; in a gate run it ended every gate,
+and in `drybag.toml` it replaced "does not load" with a traceback's name. So each reader answers
 both as it answers a document that does not parse, and each case below holds one reader to its own
 answer.
 """
@@ -16,14 +16,14 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.attach import binding, write
-from stayfixed.config.loader import loads
-from stayfixed.config.overlay import overlay_root
-from stayfixed.config.plates import PROJECTS, RECORD
-from stayfixed.config.reading import TOO_DEEP, TOO_LONG, ConfigError, MachineConfigError
-from stayfixed.docs.trail import read_trail
-from stayfixed.errors import Failure
-from stayfixed.setup.machine import read_machine
+from drybag.attach import binding, write
+from drybag.config.loader import loads
+from drybag.config.overlay import overlay_root
+from drybag.config.plates import PROJECTS, RECORD
+from drybag.config.reading import TOO_DEEP, TOO_LONG, ConfigError, MachineConfigError
+from drybag.docs.trail import read_trail
+from drybag.errors import Failure
+from drybag.setup.machine import read_machine
 from tests.parserlimits import LONG_NUMBER
 from tests.scriptload import release
 
@@ -35,7 +35,7 @@ DEPTH = 2000
 DEEP = "a = " + "[" * DEPTH + "]" * DEPTH + "\n"
 # Valid TOML whose one integer is longer than the interpreter converts.
 LONG = "a = " + LONG_NUMBER + "\n"
-FINE = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
+FINE = '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
 
 
 def _file(tmp_path: Path, relative: str, text: str) -> Path:
@@ -150,17 +150,17 @@ def test_the_refusal_names_the_file_and_says_why_without_a_position() -> None:
     # nested past the parser has none, and the message says what it has instead.
     with pytest.raises(ConfigError) as refused:
         loads(DEEP, Path("/nowhere"), machine=Path("/nowhere/absent.toml"))
-    assert str(refused.value).endswith(f"stayfixed.toml' is not valid TOML {TOO_DEEP}")
+    assert str(refused.value).endswith(f"drybag.toml' is not valid TOML {TOO_DEEP}")
 
 
-def test_a_number_past_the_parser_is_refused_in_stayfixeds_words_not_the_interpreters() -> None:
+def test_a_number_past_the_parser_is_refused_in_drybags_words_not_the_interpreters() -> None:
     # The interpreter's message tells the reader to raise a process-wide limit
     # (`sys.set_int_max_str_digits`), which is no remedy for a file somebody else wrote, and it
     # carries no position. Mutation (declared): `toml_position` answering a plain `ValueError`
     # as it answers a `TOMLDecodeError` -> the suffix is `NO_POSITION`.
     with pytest.raises(ConfigError) as refused:
         loads(LONG, Path("/nowhere"), machine=Path("/nowhere/absent.toml"))
-    assert str(refused.value).endswith(f"stayfixed.toml' is not valid TOML {TOO_LONG}")
+    assert str(refused.value).endswith(f"drybag.toml' is not valid TOML {TOO_LONG}")
 
 
 def test_an_integer_of_exactly_the_conversion_limit_still_parses() -> None:

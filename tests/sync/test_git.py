@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.gitenv import FLOOR_VARIABLE, Called
-from stayfixed.sync import git as G
+from drybag.gitenv import FLOOR_VARIABLE, Called
+from drybag.sync import git as G
 from tests import gitfixture as fx
 from tests.sync.conftest import (
     World,

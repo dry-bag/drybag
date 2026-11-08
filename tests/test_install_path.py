@@ -8,7 +8,7 @@ package and read by another, and a stub on both sides of a seam agrees with itse
 **Every step runs the real launcher.** Each one used to call a library function, so the
 argv wiring of eight commands — the flag names, the `--yes` gate reached through argparse, the
 `--machine` refusal from a pipe, the JSON `doctor` prints — was exercised by nothing that ran
-them in order. `_cli` below runs `scripts/stayfixed` in a subprocess, which is how a person and
+them in order. `_cli` below runs `scripts/drybag` in a subprocess, which is how a person and
 how a skill reach these commands.
 
 Nothing here touches the network, the real `~`, or any harness binary. `HOME` is a scratch
@@ -32,11 +32,11 @@ from pathlib import Path
 
 import pytest
 
-import stayfixed
-from stayfixed.attach.hooks import NOT_ATTACHED
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.doctor.api import OK, RED, SKIP, run_checks
-from stayfixed.memory.api import DELIMITER, PROJECTS, markers
+import drybag
+from drybag.attach.hooks import NOT_ATTACHED
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.doctor.api import OK, RED, SKIP, run_checks
+from drybag.memory.api import DELIMITER, PROJECTS, markers
 from tests.floor import developer_free_environ
 from tests.gitfixture import git
 from tests.snapshot import (
@@ -65,7 +65,7 @@ NOTE = (
     f"metadata:\n  type: rule\n  startup: 1\n---\n\n{RULE_BODY}\n"
 )
 
-CONFIG = """[stayfixed]
+CONFIG = """[drybag]
 version = "{version}"
 
 [project]
@@ -80,12 +80,12 @@ groups = ["developer", "project-stable"]
 def _project(tmp_path: Path, *, mode: str, initialised: bool = False) -> Path:
     """The repository the walkthrough starts from; `initialised`, the shape the owner's has:
     notes already in `paths.memory` as real directories, a hand-written roadmap, and one commit,
-    so the history predates stayfixed and the notes moved later are notes that were tracked before
+    so the history predates drybag and the notes moved later are notes that were tracked before
     it arrived.
     """
     root = tmp_path / "project"
     root.mkdir(parents=True, exist_ok=True)
-    document = CONFIG.format(version=stayfixed.__version__, project=PROJECT, mode=mode)
+    document = CONFIG.format(version=drybag.__version__, project=PROJECT, mode=mode)
     (root / CONFIG_FILE).write_text(document, encoding="utf-8")
     git(root, "init", "-q", "-b", "main")
     git(root, "remote", "add", "origin", ORIGIN)
@@ -103,7 +103,7 @@ def _project(tmp_path: Path, *, mode: str, initialised: bool = False) -> Path:
             "user.name=a",
             "commit",
             "-qm",
-            "chore: before stayfixed",
+            "chore: before drybag",
         )
     return root
 
@@ -169,7 +169,7 @@ def _cli(walk: Walkthrough, *argv: str) -> subprocess.CompletedProcess[str]:
     env["PATH"] = f"{walk.bin}{os.pathsep}{env.get('PATH', '')}"
     env["CLAUDE_PLUGIN_ROOT"] = str(ROOT)
     env["CLAUDE_PLUGIN_DATA"] = str(walk.data)
-    command = [sys.executable, str(ROOT / "scripts" / "stayfixed"), *argv]
+    command = [sys.executable, str(ROOT / "scripts" / "drybag"), *argv]
     return subprocess.run(
         command,
         cwd=walk.root,
@@ -225,7 +225,7 @@ def _install_path(
     """
     home = tmp_path / "home"
     data = tmp_path / "plugin-data"
-    machine = tmp_path / "config" / "stayfixed" / "config.toml"
+    machine = tmp_path / "config" / "drybag" / "config.toml"
     machine.parent.mkdir(parents=True)
     bin_dir = tmp_path / "bin"
     _fake_binaries(bin_dir)
@@ -234,7 +234,7 @@ def _install_path(
     overlays = tmp_path / "overlays"
     overlays.mkdir()
     # Where `setup --overlay <path>` renders it: a path that names nothing yet.
-    overlay = overlays / "stayfixed-private"
+    overlay = overlays / "drybag-private"
     store = overlay / PROJECTS / PROJECT / "memory"
     walk = Walkthrough(root, overlay, machine, home, data, store, bin_dir)
 
@@ -316,10 +316,10 @@ def _session(
     """One `hooks.json` entry, run the way a harness runs it: through the wrapper, raw.
 
     `HOME` and `--machine` both point into the scratch tree, so nothing here can read the
-    developer's own `~/.claude` or `~/.config/stayfixed`.
+    developer's own `~/.claude` or `~/.config/drybag`.
 
-    `machine=False` for `stayfixed hook <event>`, which takes no such flag: the dispatcher hands
-    every handler `machine=None` on purpose, so a handler reads `<HOME>/.config/stayfixed/` and
+    `machine=False` for `drybag hook <event>`, which takes no such flag: the dispatcher hands
+    every handler `machine=None` on purpose, so a handler reads `<HOME>/.config/drybag/` and
     nothing a session can name. `HOME` above is what keeps that inside the scratch tree, and a
     caller that wants the hook path to see a machine file puts one there.
     """
@@ -346,7 +346,7 @@ def _bundle(walk: Walkthrough, bundle: str, part: int = 1) -> subprocess.Complet
 def _doctor_env(walk: Walkthrough) -> dict[str, str]:
     """The environment a harness session has: a data root, and neither ignored variable."""
     # `HOME` is here because `doctor`'s `wrapper` check hands this environment to a real
-    # subprocess: without it the wrapper's `stayfixed --version` builds the default machine path
+    # subprocess: without it the wrapper's `drybag --version` builds the default machine path
     # out of the developer's own home directory, which is a read this suite does not make.
     return {
         "PATH": os.environ.get("PATH", ""),
@@ -431,12 +431,12 @@ def test_a_wrapped_bundle_arrives_with_both_of_its_region_markers(tmp_path: Path
     # is what wraps it: its volatile notes reach the session with no approval, as data. Same
     # wrapper, same command, same scratch machine file.
     root = _project(tmp_path, mode="in-repo")
-    config_file = root / "stayfixed.toml"
+    config_file = root / "drybag.toml"
     config_file.write_text(
         config_file.read_text(encoding="utf-8").replace('"project-stable"', '"project-volatile"'),
         encoding="utf-8",
     )
-    machine = tmp_path / "config" / "stayfixed" / "config.toml"
+    machine = tmp_path / "config" / "drybag" / "config.toml"
     machine.parent.mkdir(parents=True)
     notes = root / "docs" / "memory" / "project-volatile"
     notes.mkdir(parents=True)
@@ -465,14 +465,14 @@ def test_detach_returns_the_project_to_where_it_started(tmp_path: Path) -> None:
     # The walkthrough's own steps are repeated here rather than reused, because the snapshot has
     # to be taken between `setup` and `attach` and `_install_path` runs both.
     home = tmp_path / "home"
-    machine = tmp_path / "config" / "stayfixed" / "config.toml"
+    machine = tmp_path / "config" / "drybag" / "config.toml"
     machine.parent.mkdir(parents=True)
     bin_dir = tmp_path / "bin"
     _fake_binaries(bin_dir)
     root = _project(tmp_path, mode="overlay")
     overlays = tmp_path / "overlays"
     overlays.mkdir()
-    overlay = overlays / "stayfixed-private"
+    overlay = overlays / "drybag-private"
     store = overlay / PROJECTS / PROJECT / "memory"
     walk = Walkthrough(root, overlay, machine, home, tmp_path / "plugin-data", store, bin_dir)
 
@@ -507,13 +507,13 @@ def test_restore_attaches_every_listed_checkout_and_detach_undoes_it(tmp_path: P
     # attached (`doctor`'s `attached` row reads it so), the absent one is reported and skipped,
     # and `detach` there returns the checkout to the bytes it had before the restore.
     home = tmp_path / "home"
-    machine = tmp_path / "config" / "stayfixed" / "config.toml"
+    machine = tmp_path / "config" / "drybag" / "config.toml"
     machine.parent.mkdir(parents=True)
     bin_dir = tmp_path / "bin"
     _fake_binaries(bin_dir)
     root = _project(tmp_path, mode="overlay")
     (tmp_path / "overlays").mkdir()
-    overlay = tmp_path / "overlays" / "stayfixed-private"
+    overlay = tmp_path / "overlays" / "drybag-private"
     walk = Walkthrough(
         root,
         overlay,
@@ -554,7 +554,7 @@ def test_doctor_is_green_on_the_attached_fixture(tmp_path: Path) -> None:
     assert [row["name"] for row in rows if row["status"] == SKIP] == []
 
 
-# What `docs/cli.md` says `stayfixed doctor` launches on a green attached installation. Written
+# What `docs/cli.md` says `drybag doctor` launches on a green attached installation. Written
 # as a number rather than as a set of argv lists so the failure reads as "the count moved", which
 # is the claim.
 #
@@ -643,7 +643,7 @@ def test_the_walkthrough_ends_with_the_rule_in_a_session(tmp_path: Path) -> None
 def test_a_session_before_the_attach_is_told_what_is_missing(tmp_path: Path) -> None:
     # The handler through the wrapper, on the one state it exists for: initialised, not yet
     # attached. It reads the machine file the hook path reads —
-    # `<home>/.config/stayfixed/config.toml` — and not the walkthrough's own, so the walkthrough's
+    # `<home>/.config/drybag/config.toml` — and not the walkthrough's own, so the walkthrough's
     # file is copied there for the hook alone.
     #
     # The envelope is raw JSON with `additionalContext` inside; both constants are single lines
@@ -653,7 +653,7 @@ def test_a_session_before_the_attach_is_told_what_is_missing(tmp_path: Path) -> 
     # What would break it: drop the line from the handler, or let the binding read as bound, and
     # the `in` fails.
     walk = _install_path(tmp_path, initialised=True, attach=False)
-    hook_machine = walk.home / ".config" / "stayfixed" / "config.toml"
+    hook_machine = walk.home / ".config" / "drybag" / "config.toml"
     hook_machine.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(walk.machine, hook_machine)
     done = _session(walk, "hook", "SessionStart", machine=False)

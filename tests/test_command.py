@@ -3,9 +3,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import stayfixed
-from stayfixed.cli import build_parser, discover_registrars
-from stayfixed.command import (
+import drybag
+from drybag.cli import build_parser, discover_registrars
+from drybag.command import (
     ATTACH_CHECK_HELP,
     CHECK_HELP,
     DRY_RUN_HELP,
@@ -19,7 +19,7 @@ from stayfixed.command import (
     common_flags,
     root_and_config,
 )
-from stayfixed.config.owner import IGNORED_NOTE, MACHINE_FILE_NOTE, UNKNOWN_KEY
+from drybag.config.owner import IGNORED_NOTE, MACHINE_FILE_NOTE, UNKNOWN_KEY
 from tests.cli import cli, subparsers
 from tests.gitfixture import needs_git, repository
 
@@ -47,7 +47,7 @@ EXCEPTIONS = {
 }
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -73,7 +73,7 @@ def test_root_and_config_resolves_the_root_and_loads_under_the_named_machine_fil
 ) -> None:
     root = tmp_path / "widget"
     root.mkdir()
-    (root / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG, encoding="utf-8")
     args = common_flags(argparse.ArgumentParser()).parse_args(
         ["--root", str(root), "--machine", str(tmp_path / "m.toml")]
     )
@@ -125,9 +125,9 @@ def test_every_shared_flag_carries_the_one_help_string_or_a_named_exception() ->
     assert wrong == [], wrong
 
 
-# A machine file that loads, with one key this stayfixed does not read: one note, said on stderr.
+# A machine file that loads, with one key this drybag does not read: one note, said on stderr.
 UNREAD_KEY = "[guards]\nfuture = 1\n"
-DOCUMENT = f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n'
+DOCUMENT = f'[drybag]\nversion = "{drybag.__version__}"\n\n[project]\nname = "widget"\n'
 
 
 @needs_git
@@ -140,7 +140,7 @@ def test_a_command_says_a_machine_file_note_once_however_many_documents_it_loads
     # one-line edit puts the side effect back into the load, and with it there each case is said
     # again.
     root = repository(tmp_path)
-    (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
+    (root / "drybag.toml").write_text(DOCUMENT, encoding="utf-8")
     (root / "AGENTS.md").write_text("# Agents\n\n## Current status\n", encoding="utf-8")
     argv = ("docs", "check", "--json")
     machine = tmp_path / "machine.toml"
@@ -148,7 +148,7 @@ def test_a_command_says_a_machine_file_note_once_however_many_documents_it_loads
     code, out, err = cli(root, tmp_path, *argv, machine=machine)
     assert code == 0, (out, err)
     problem = UNKNOWN_KEY.format(table="guards", key="future")
-    assert err == f"stayfixed: {IGNORED_NOTE.format(path=machine, problem=problem)}\n", err
+    assert err == f"drybag: {IGNORED_NOTE.format(path=machine, problem=problem)}\n", err
 
 
 @needs_git
@@ -158,7 +158,7 @@ def test_a_command_refuses_a_machine_file_that_does_not_load(tmp_path: Path) -> 
     # says the session's note, which quotes the same refusal, and exits 0. Mutation
     # (`mutations/`'s "a command reads the owner's layer as a session does"): exit 0.
     root = repository(tmp_path)
-    (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
+    (root / "drybag.toml").write_text(DOCUMENT, encoding="utf-8")
     machine = tmp_path / "machine.toml"
     machine.write_text("[personal\nx = 1\n", encoding="utf-8")
     code, _, err = cli(root, tmp_path, "docs", "check", machine=machine)

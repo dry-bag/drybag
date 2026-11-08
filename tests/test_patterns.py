@@ -27,7 +27,7 @@ from typing import Any
 
 import pytest
 
-import stayfixed
+import drybag
 
 # `re`'s own parser, private and the same from 3.11 to 3.14. It gives the shape the engine runs:
 # a prefix every alternative shares is taken out ahead of the choice (`cd|cxb` is `c(?:d|xb)`),
@@ -172,7 +172,7 @@ def _compiled() -> dict[str, re.Pattern[str]]:
 def _modules() -> list[ModuleType]:
     return [
         importlib.import_module(module.name)
-        for module in pkgutil.walk_packages(stayfixed.__path__, "stayfixed.")
+        for module in pkgutil.walk_packages(drybag.__path__, "drybag.")
         if not module.name.endswith(".__main__")
     ]
 
@@ -486,7 +486,7 @@ def _offences_in(spelled: Mapping[str, list[tuple[str, int]]]) -> dict[str, list
 # place named once, and on a row whose call is gone.
 _HANDED = (
     (
-        "stayfixed.attach.rules._glob",
+        "drybag.attach.rules._glob",
         "a rule's `paths:` glob, from the owner's overlay, translated into `[^/]*`, `[^/]`, `.*` "
         "and choices, with every other character through `re.escape`: no possessive repeat",
     ),

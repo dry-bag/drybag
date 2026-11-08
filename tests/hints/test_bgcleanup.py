@@ -15,8 +15,8 @@ import time
 
 import pytest
 
-from stayfixed.hints import bgcleanup
-from stayfixed.hints.bgcleanup import (
+from drybag.hints import bgcleanup
+from drybag.hints.bgcleanup import (
     EXIT_ECHO_HINT,
     LEAK_HINT,
     MAX_COMMAND_CHARS,

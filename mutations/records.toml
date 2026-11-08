@@ -9,7 +9,7 @@
 # from full injection to descriptions only.
 [[mutation]]
 name = "group_order outranks the startup rank in the index order"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = '''        UNRANKED if rank is None else rank,
         UNRANKED if note.group_order is None else note.group_order,'''
 after = '''        UNRANKED if note.group_order is None else note.group_order,
@@ -20,7 +20,7 @@ reddens = [
 
 [[mutation]]
 name = "the volatile budget excludes the set that is exactly the budget"
-file = "src/stayfixed/memory/bundles.py"
+file = "src/drybag/memory/bundles.py"
 before = '    if sum(len(block.split()) for block in full) <= config.budgets.effective('
 after = '    if sum(len(block.split()) for block in full) < config.budgets.effective('
 reddens = [
@@ -33,7 +33,7 @@ reddens = [
 # state `trust.wrap`'s nonce region exists to make unreachable.
 [[mutation]]
 name = "an oversized part is handed out to be truncated again"
-file = "src/stayfixed/memory/bundles.py"
+file = "src/drybag/memory/bundles.py"
 before = '    if len(text) > cap:'
 after = '    if False:'
 reddens = [
@@ -43,7 +43,7 @@ reddens = [
 # A note in a nested group is keyed on the group the configuration names, not on its folder.
 [[mutation]]
 name = "a nested group is keyed on its folder rather than its configured name"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = '        return self.store_group or self.path.parent.name'
 after = '        return self.path.parent.name'
 reddens = [
@@ -53,7 +53,7 @@ reddens = [
 # A note whose body did not change is written back byte for byte, never renormalised.
 [[mutation]]
 name = "an unchanged note's body is renormalised on the way out"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = '    if note.verbatim is not None:'
 after = '    if False:'
 reddens = ["tests/memory/test_notes.py::test_an_unchanged_note_round_trips_byte_for_byte"]
@@ -71,7 +71,7 @@ reddens = ["tests/memory/test_notes.py::test_an_unchanged_note_round_trips_byte_
 # because the refactor that moved the test could not see an entry naming its old home.
 [[mutation]]
 name = "a type the surface names in a signature drops off the surface"
-file = "src/stayfixed/memory/api.py"
+file = "src/drybag/memory/api.py"
 before = '    "Store",'
 after = ''
 reddens = [
@@ -81,7 +81,7 @@ reddens = [
 # A substring search for the trail marker also matches a deeper heading that contains it.
 [[mutation]]
 name = "the roadmap prose is cut at a heading that merely contains the marker"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = '    return TRAIL_MARKER_LINE.split(text, 1)[0]'
 after = '    return text.split(TRAIL_MARKER, 1)[0]'
 reddens = ["tests/docs/test_hygiene.py::test_a_deeper_heading_containing_the_marker_does_not_split_the_prose"]
@@ -89,7 +89,7 @@ reddens = ["tests/docs/test_hygiene.py::test_a_deeper_heading_containing_the_mar
 # A renamed design would otherwise reappear as `delivered` and `--check` would stay green.
 [[mutation]]
 name = "a state naming a vanished document defaults instead of aborting"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '    stale = sorted(set(trail.states) - named)'
 after = '    stale: list[str] = []'
 reddens = ["tests/docs/test_trail.py::test_a_state_naming_a_vanished_document_aborts_instead_of_defaulting"]
@@ -97,7 +97,7 @@ reddens = ["tests/docs/test_trail.py::test_a_state_naming_a_vanished_document_ab
 # `check-ignore` without `--no-index` answers "not ignored" for anything tracked.
 [[mutation]]
 name = "an untracked document is listed as if CI could see it"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '    skip = _ignored(root, paths) | _untracked(root, paths)'
 after = '    skip = _ignored(root, paths)'
 reddens = ["tests/docs/test_trail.py::test_an_untracked_or_ignored_document_is_not_listed"]
@@ -106,7 +106,7 @@ reddens = ["tests/docs/test_trail.py::test_an_untracked_or_ignored_document_is_n
 # output; let the exception through and it ends as a bare `failed:` with no findings listed.
 [[mutation]]
 name = "plan check stops printing an unresolvable base as its finding"
-file = "src/stayfixed/docs/commands.py"
+file = "src/drybag/docs/commands.py"
 before = "    except BaseUnresolvable as exc:"
 after = "    except ():"
 reddens = ["tests/docs/test_plans.py::test_a_base_that_will_not_resolve_is_raised_never_an_ok"]
@@ -114,7 +114,7 @@ reddens = ["tests/docs/test_plans.py::test_a_base_that_will_not_resolve_is_raise
 # Every `--check` carries the one help string, so a reader of `--help` gets one meaning for it.
 [[mutation]]
 name = "one --check spells its own help string again"
-file = "src/stayfixed/docs/commands.py"
+file = "src/drybag/docs/commands.py"
 before = '    trail.add_argument("--check", action="store_true", help=CHECK_HELP)'
 after = '    trail.add_argument("--check", action="store_true", help="fail if the trail is stale")'
 reddens = [
@@ -126,7 +126,7 @@ reddens = [
 # it and no word that the option had done nothing.
 [[mutation]]
 name = "docs check accepts a store it never reads"
-file = "src/stayfixed/docs/commands.py"
+file = "src/drybag/docs/commands.py"
 before = '    check = common_flags(docs_sub.add_parser("check", help="budgets and link targets"))'
 after = '    check = common_flags(docs_sub.add_parser("check", help="budgets and link targets"), store=True)'
 reddens = ["tests/docs/test_commands.py::test_docs_check_takes_no_store"]
@@ -134,7 +134,7 @@ reddens = ["tests/docs/test_commands.py::test_docs_check_takes_no_store"]
 # `\s*` crosses newlines under MULTILINE, so an empty marker would be satisfied by any later text.
 [[mutation]]
 name = "an empty Premise marker is satisfied by text anywhere later in the plan"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = '_PREMISE_LINE = re.compile(r"^\*\*Premise[^:]*+(:\*\*[^\S\n]*\S)?", re.MULTILINE)'
 after = '_PREMISE_LINE = re.compile(r"^\*\*Premise[^:]*+(:\*\*\s*\S)?", re.MULTILINE)'
 reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_needs_a_premise_line_with_content"]
@@ -144,7 +144,7 @@ reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_needs_a_premise_line_wi
 # times as long at each doubling.
 [[mutation]]
 name = "a premise marker is read on from every marker"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    return any(marker.group(1) for marker in _PREMISE_LINE.finditer(prose))"
 after = '    return re.search(r"^\*\*Premise[^:]*:\*\*[^\S\n]*\S", prose, re.MULTILINE) is not None'
 reddens = ["tests/docs/test_plans.py::test_a_long_plan_is_linted_in_time_linear_in_its_length[premise markers]"]
@@ -154,7 +154,7 @@ reddens = ["tests/docs/test_plans.py::test_a_long_plan_is_linted_in_time_linear_
 # times as long at each doubling.
 [[mutation]]
 name = "a claim's sentence is looked for from its paragraph's start"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = """            while end is not None and end.end() <= match.start():
                 opening, end = end.end(), next(ends, None)"""
 after = "            opening = max((e.end() for e in _SENTENCE_END.finditer(text, 0, match.start())), default=0)"
@@ -165,7 +165,7 @@ reddens = [
 
 [[mutation]]
 name = "an expectation marker is looked for over the claim's whole sentence again"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "            if marker is not None and marker.end() <= match.end():"
 after = "            if _MARKED_AS_EXPECTATION.search(text[opening : match.end()]):"
 reddens = ["tests/docs/test_plans.py::test_a_paragraph_of_claims_is_read_in_time_linear_in_its_length[one sentence]"]
@@ -173,7 +173,7 @@ reddens = ["tests/docs/test_plans.py::test_a_paragraph_of_claims_is_read_in_time
 # A plan names what its tasks remove, so once they land a finished plan must not read as dead.
 [[mutation]]
 name = "a path a plan declares on a Delete line reads as a dead reference once it is gone"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = '_DECLARES = re.compile(r"^[^\S\n]*-\s*(?:Create|Test|Delete):\s*(.+)$", re.MULTILINE)'
 after = '_DECLARES = re.compile(r"^[^\S\n]*-\s*(?:Create|Test):\s*(.+)$", re.MULTILINE)'
 reddens = [
@@ -185,14 +185,14 @@ reddens = [
 # each doubling.
 [[mutation]]
 name = "a declaring line is read for from every blank line above it"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = '_DECLARES = re.compile(r"^[^\S\n]*-\s*(?:Create|Test|Delete):\s*(.+)$", re.MULTILINE)'
 after = '_DECLARES = re.compile(r"^\s*-\s*(?:Create|Test|Delete):\s*(.+)$", re.MULTILINE)'
 reddens = ["tests/docs/test_plans.py::test_a_long_plan_is_linted_in_time_linear_in_its_length[blank lines]"]
 
 [[mutation]]
 name = "a line a plan marks (delete) reads as a dead reference once its path is gone"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = '_LINE_MARK = re.compile(r"\((?:create|delete)\)", re.IGNORECASE)'
 after = '_LINE_MARK = re.compile(r"\((?:create)\)", re.IGNORECASE)'
 reddens = [
@@ -203,7 +203,7 @@ reddens = [
 # way through was to rewrite history.
 [[mutation]]
 name = "plan check judges an edited plan's untouched lines"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "        if not _LINE_MARK.search(line) and (judged is None or number in judged):"
 after = "        if not _LINE_MARK.search(line):"
 reddens = [
@@ -213,7 +213,7 @@ reddens = [
 # Against the base alone, a line the base rewrote since the fork reads as the change's own.
 [[mutation]]
 name = "plan check reads the lines a change wrote against the base alone"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    for since in (*_forks(root, base), base):"
 after = "    for since in (base,):"
 reddens = [
@@ -226,7 +226,7 @@ reddens = [
 # reported OK having linted nothing, which is what raising `BaseUnresolvable` exists to prevent.
 [[mutation]]
 name = "an option-shaped base reaches a git argv slot ahead of `--`"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = '''    if base.startswith("-"):
         raise Refusal(f"{base!r} looks like an option, not a base ref")'''
 after = '''    if False:
@@ -239,7 +239,7 @@ reddens = ["tests/docs/test_plans.py::test_an_option_shaped_base_never_reaches_a
 # prose lands in a document agents load with no delimited region behind it.
 [[mutation]]
 name = "a theme label can carry the end marker into the generated roadmap"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '''        if not _interpolable(entry["label"]):
             raise Failure(
                 _UNINTERPOLABLE.format(path=shown, what="[[theme]] `label`", marker=MARKER)
@@ -252,7 +252,7 @@ reddens = [
 
 [[mutation]]
 name = "a declared state can carry the end marker into the generated roadmap"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '''    if not all(_interpolable(state) for state in states.values()):
         raise Failure(_UNINTERPOLABLE.format(path=shown, what="[states] value", marker=MARKER))'''
 after = "    pass"
@@ -265,7 +265,7 @@ reddens = [
 # printed it named nothing a reader can find in the repository.
 [[mutation]]
 name = "docs trail names a trail file that is not TOML by its absolute path"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = """        raise Failure(f"{shown} is not valid TOML {toml_position(exc)}") from None"""
 after = """        raise Failure(f"{path} is not valid TOML {toml_position(exc)}") from None"""
 reddens = [
@@ -274,7 +274,7 @@ reddens = [
 
 [[mutation]]
 name = "docs trail names a trail file that is not UTF-8 by its absolute path"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "        raw: dict[str, Any] = tomllib.loads(read_document(path, where))"
 after = "        raw: dict[str, Any] = tomllib.loads(read_document(path, path))"
 reddens = [
@@ -283,7 +283,7 @@ reddens = [
 
 [[mutation]]
 name = "docs trail names its trail file by the path it opened"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "    shown = quoted(where)"
 after = "    shown = path"
 reddens = [
@@ -294,7 +294,7 @@ reddens = [
 # committed symlink out of the tree and answers about the machine.
 [[mutation]]
 name = "the plan lint follows a symlink out of the tree"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "                if present_within(root, landed) is not False:"
 after = "                if landed.exists():"
 reddens = [
@@ -303,7 +303,7 @@ reddens = [
 
 [[mutation]]
 name = "the AGENTS.md link check follows a symlink out of the tree"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "        if present_within(root, landed) is False"
 after = "        if not landed.exists()"
 reddens = [
@@ -316,7 +316,7 @@ reddens = [
 # being broken, with nothing in the message the operator can act on.
 [[mutation]]
 name = "a non-UTF-8 document reads as an internal error again"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = '''    except UnicodeDecodeError as error:
         raise Failure(f"{shown}: is not valid UTF-8 ({error.reason})") from None'''
 after = '''    except RecursionError as error:
@@ -332,7 +332,7 @@ reddens = [
 # a latin-1 byte in a note escaped the walk instead of being quarantined onto `unreadable`.
 [[mutation]]
 name = "a non-UTF-8 note escapes the walk instead of being quarantined"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = '''    except UnicodeDecodeError as exc:
         raise NoteError(f"{path} is not valid UTF-8 ({exc.reason})") from None'''
 after = '''    except RecursionError as exc:
@@ -347,7 +347,7 @@ reddens = [
 # its author cannot satisfy, because creating an ignored file changes nothing.
 [[mutation]]
 name = "the roadmap's ignore check cannot match a non-ASCII path"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '''    stdin = "\0".join(p.relative_to(root).as_posix() for p in paths)
     code, out = git_run(root, "check-ignore", "--no-index", "--stdin", "-z", stdin=stdin)'''
 after = '''    stdin = "\n".join(p.relative_to(root).as_posix() for p in paths)
@@ -358,7 +358,7 @@ reddens = ["tests/docs/test_trail.py::test_an_ignored_document_whose_name_is_not
 # Containing against the document's directory instead refuses a link from `docs/` into `src/`.
 [[mutation]]
 name = "a link is contained against its own document's directory instead of the root"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = '        landed = resolves_within(root, target, base=agents_path.parent)'
 after = '        landed = resolves_within(agents_path.parent, target)'
 reddens = [
@@ -372,7 +372,7 @@ reddens = [
 # stale forever with nothing to do about it short of renaming the file.
 [[mutation]]
 name = "a document filename carries the end marker into the generated roadmap"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '''        if not (_interpolable(row) and _interpolable(link) and utf_8_name(path.name)):
             raise Failure(_UNLISTABLE.format(row=row, roadmap=config.paths.roadmap, marker=MARKER))'''
 after = "        pass"
@@ -387,7 +387,7 @@ reddens = [
 # `docs trail --check` stayed stale after every successful `docs trail`.
 [[mutation]]
 name = "a carriage return in a listed value reaches the generated roadmap"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '    return not ({"\n", "\r"} & set(value)) and MARKER not in value and END_MARKER not in value'
 after = '    return "\n" not in value and MARKER not in value and END_MARKER not in value'
 reddens = [
@@ -398,7 +398,7 @@ reddens = [
 # hold": a name the disk holds in bytes that are not UTF-8 is never written into a UTF-8 file.
 [[mutation]]
 name = "the memory walk hands the index a note whose name it cannot write"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = """            if not utf_8_name(path.name):
                 unreadable.append((path, f"{path}: {NAME_NOT_UTF_8}"))
                 continue
@@ -409,12 +409,12 @@ reddens = [
   "tests/memory/test_notes.py::test_a_note_named_in_bytes_that_are_not_utf_8_is_quarantined",
 ]
 
-# A checkout this machine binds to one project is not bound to another its `stayfixed.toml` names
+# A checkout this machine binds to one project is not bound to another its `drybag.toml` names
 # later: the name is the repository's, and a share it picks that the binding never named would
 # read another project's notes.
 [[mutation]]
 name = "a checkout's binding reads a project it was not bound to"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "    return BOUND if found is not None and found.project == project else UNBOUND"
 after = "    return BOUND if found is not None else UNBOUND"
 reddens = [
@@ -426,7 +426,7 @@ reddens = [
 # frontmatter, and `memory index --check` fails in every project attached to a fresh overlay.
 [[mutation]]
 name = "the note walk stops skipping underscore-prefixed files"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = '''            if path.name.startswith((".", "_")):'''
 after = '''            if path.name.startswith("."):'''
 reddens = [
@@ -438,7 +438,7 @@ reddens = [
 # violation per walk, so each walk has a mutation of its own.
 [[mutation]]
 name = "the documentation budget walk stops reporting a document over its budget"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "    if measured > limit:"
 after = "    if False:"
 reddens = [
@@ -447,7 +447,7 @@ reddens = [
 
 [[mutation]]
 name = "the documentation link walk stops asking whether a target is there"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "    for target in local_markdown_targets(blank_fences(agents)):"
 after = "    for target in ():"
 reddens = [
@@ -457,7 +457,7 @@ reddens = [
 # Each gate function finds what its area's command finds.
 [[mutation]]
 name = "the docs gate drops the budget checks"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "    return check_budgets(root, config) + check_links(root, config)"
 after = "    return check_links(root, config)"
 reddens = [
@@ -466,7 +466,7 @@ reddens = [
 
 [[mutation]]
 name = "the trail gate reports a stale listing as current"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '    return [Finding(TRAIL_STALE, config.paths.roadmap, None, "")]'
 after = "    return []"
 reddens = [
@@ -477,7 +477,7 @@ reddens = [
 # judge does, and is read as could not run, which fails an enforced gate.
 [[mutation]]
 name = "a missing roadmap is a trail gate that passes"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '        raise Failure(f"{config.paths.roadmap} does not exist")'
 after = "        return []"
 reddens = [
@@ -490,7 +490,7 @@ reddens = [
 # filter, because each names its own line.
 [[mutation]]
 name = "the trail reads an ignore question git gave no answer to as nothing ignored"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '        _unasked(root, "check-ignore", code, "ignores", "a local-only one")'
 after = "        pass"
 reddens = [
@@ -500,7 +500,7 @@ reddens = [
 
 [[mutation]]
 name = "the trail reads an untracked question git gave no answer to as nothing untracked"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '        _unasked(root, "ls-files", code, "tracks", "an untracked one")'
 after = "        pass"
 reddens = [
@@ -512,7 +512,7 @@ reddens = [
 # change's head made `plan check`'s range empty, and it printed OK having linted nothing.
 [[mutation]]
 name = "plan check's default base is a short name a tag can shadow"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    base = base or local_base(config)"
 after = '    base = base or f"origin/{config.project.base_branch}"'
 reddens = ["tests/docs/test_plans.py::test_a_tag_named_like_the_tracking_branch_does_not_choose_the_default_base"]
@@ -522,7 +522,7 @@ reddens = ["tests/docs/test_plans.py::test_a_tag_named_like_the_tracking_branch_
 # parser as one that does not parse.
 [[mutation]]
 name = "a trail.toml nested past the parser escapes its reader"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "    except UNPARSEABLE as exc:"
 after = "    except tomllib.TOMLDecodeError as exc:"
 reddens = [
@@ -536,7 +536,7 @@ reddens = [
 # else is refused.
 [[mutation]]
 name = "a theme pattern is compiled with re again, whose backtracking a repository can choose"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '            themes.append((entry["label"], compile_theme(entry["pattern"])))'
 after = '            themes.append((entry["label"], re.compile(entry["pattern"])))'
 reddens = ["tests/docs/test_themes.py::test_a_pattern_re_would_backtrack_on_for_hours_answers_at_once"]
@@ -546,33 +546,33 @@ reddens = ["tests/docs/test_themes.py::test_a_pattern_re_would_backtrack_on_for_
 # name.
 [[mutation]]
 name = "a theme pattern of any length is compiled"
-file = "src/stayfixed/docs/themes.py"
+file = "src/drybag/docs/themes.py"
 before = "    if len(pattern) > PATTERN_MAX_CHARS:"
 after = "    if False:"
 reddens = [
-  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_stayfixed_s_words",
+  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_drybag_s_words",
   "tests/docs/test_themes.py::test_a_pattern_is_compiled_up_to_its_bound_and_refused_past_it",
 ]
 
 [[mutation]]
 name = "a trail.toml of any number of themes is read"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "    if len(declared) > THEMES_MAX:"
 after = "    if False:"
 reddens = [
-  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_stayfixed_s_words",
+  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_drybag_s_words",
 ]
 
 [[mutation]]
 name = "a theme piece is looked for from the start of the name, not after the piece before it"
-file = "src/stayfixed/docs/themes.py"
+file = "src/drybag/docs/themes.py"
 before = "            at = _find(name, piece, position)"
 after = "            at = _find(name, piece, 0)"
 reddens = ["tests/docs/test_themes.py::test_every_pattern_in_the_language_matches_as_re_search_does"]
 
 [[mutation]]
 name = "regular-expression syntax outside the theme language is read as literal text"
-file = "src/stayfixed/docs/themes.py"
+file = "src/drybag/docs/themes.py"
 before = "        elif char in _REFUSED:"
 after = "        elif False:"
 reddens = ["tests/docs/test_themes.py::test_syntax_outside_the_language_is_refused_by_the_rule_alone"]
@@ -581,7 +581,7 @@ reddens = ["tests/docs/test_themes.py::test_syntax_outside_the_language_is_refus
 # quadratic, over a document the change under review commits.
 [[mutation]]
 name = "the markdown link reader backtracks quadratically again"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = '_MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\[\]]+\]\(([^()]+)\)")'
 after = '_MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")'
 reddens = ["tests/docs/test_hygiene.py::test_a_text_of_unclosed_links_is_read_in_linear_time"]
@@ -590,7 +590,7 @@ reddens = ["tests/docs/test_hygiene.py::test_a_text_of_unclosed_links_is_read_in
 # the repository chose is printed through `printed.printable` or `printed.quoted`.
 [[mutation]]
 name = "the undeclared-document report prints a crafted name raw"
-file = "src/stayfixed/docs/commands.py"
+file = "src/drybag/docs/commands.py"
 before = "listed([printable(row) for row in undeclared])"
 after = "listed(undeclared)"
 reddens = [
@@ -599,7 +599,7 @@ reddens = [
 
 [[mutation]]
 name = "a stale trail.toml key reaches the refusal unescaped"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "listed([clipped(key) for key in stale])"
 after = "listed(stale)"
 reddens = [
@@ -608,7 +608,7 @@ reddens = [
 
 [[mutation]]
 name = "a document the docs area cannot read is named unescaped"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "    shown = quoted(Path(where).as_posix())"
 after = "    shown = str(where)"
 reddens = [
@@ -617,7 +617,7 @@ reddens = [
 
 [[mutation]]
 name = "memory joins the names it held back raw"
-file = "src/stayfixed/memory/commands.py"
+file = "src/drybag/memory/commands.py"
 before = "    return listed([printable(name) for name in names])"
 after = "    return listed(names)"
 reddens = [
@@ -627,7 +627,7 @@ reddens = [
 
 [[mutation]]
 name = "memory index names the refused pointers raw"
-file = "src/stayfixed/memory/commands.py"
+file = "src/drybag/memory/commands.py"
 before = "_EXTRA_NOT_PUBLISHED.format(names=_printed(reconciled.refused_extra), index=index)"
 after = "_EXTRA_NOT_PUBLISHED.format(names=\", \".join(reconciled.refused_extra), index=index)"
 reddens = [
@@ -636,7 +636,7 @@ reddens = [
 
 [[mutation]]
 name = "memory index names an unreadable note by its absolute path"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "unreadable=[path.relative_to(store.path).as_posix() for path, _ in reconciled.unreadable],"
 after = "unreadable=[str(path) for path, _ in reconciled.unreadable],"
 reddens = [
@@ -650,7 +650,7 @@ reddens = [
 
 [[mutation]]
 name = "the undeclared-document report names every document on the line"
-file = "src/stayfixed/docs/commands.py"
+file = "src/drybag/docs/commands.py"
 before = "listed([printable(row) for row in undeclared])"
 after = "', '.join(printable(row) for row in undeclared)"
 reddens = [
@@ -659,7 +659,7 @@ reddens = [
 
 [[mutation]]
 name = "the stale trail.toml key refusal names every key"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "listed([clipped(key) for key in stale])"
 after = "\", \".join(clipped(key) for key in stale)"
 reddens = [
@@ -668,7 +668,7 @@ reddens = [
 
 [[mutation]]
 name = "memory names every note or pointer it held back on the line"
-file = "src/stayfixed/memory/commands.py"
+file = "src/drybag/memory/commands.py"
 before = "    return listed([printable(name) for name in names])"
 after = "    return \", \".join(printable(name) for name in names)"
 reddens = [
@@ -682,7 +682,7 @@ reddens = [
 
 [[mutation]]
 name = "the stale-key refusal says a re-run names the rest at exactly the limit"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "if len(stale) > LISTED_LIMIT else \"\""
 after = "if len(stale) >= LISTED_LIMIT else \"\""
 reddens = [
@@ -691,7 +691,7 @@ reddens = [
 
 [[mutation]]
 name = "a stale trail.toml key prints unclipped"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "listed([clipped(key) for key in stale])"
 after = "listed([repr(key) for key in stale])"
 reddens = [
@@ -700,11 +700,11 @@ reddens = [
 
 [[mutation]]
 name = "a theme label prints unclipped in its refusal"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "{clipped(entry['label'])}"
 after = "{clipped(entry['label'][:120]) + entry['label'][120:]}"
 reddens = [
-  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_stayfixed_s_words",
+  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_drybag_s_words",
 ]
 
 # A gate that cannot answer must say so in its exit code; this one ran green for its whole
@@ -712,7 +712,7 @@ reddens = [
 # `commit` could not, and `plan check` prints the cause as its own finding.
 [[mutation]]
 name = "an unresolvable base reads as a clean run"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = """    if isinstance(forks, ForkUnknown):
         raise _unresolved(forks, base, root)"""
 after = """    if isinstance(forks, ForkUnknown):
@@ -727,7 +727,7 @@ reddens = [
 # checkout, sent to a clone that may hold every ref.
 [[mutation]]
 name = "plan reads a git that gave no answer as a base that will not resolve"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    if not unknown.answered:"
 after = "    if False:"
 reddens = [
@@ -740,7 +740,7 @@ reddens = [
 # too, and merging it puts the plan back on the base unlinted.
 [[mutation]]
 name = "plan diffs against the one merge base git would pick"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    for fork in _forks(root, base):"
 after = "    for fork in _forks(root, base)[:1]:"
 reddens = [
@@ -752,7 +752,7 @@ reddens = [
 # before the stack merged the base in, and fails on a file it never touched.
 [[mutation]]
 name = "plan lints a plan the base already holds as the change does"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    found &= changed(base)"
 after = "    found |= set()"
 reddens = [
@@ -762,7 +762,7 @@ reddens = [
 # A diff git did not answer lists no plan, and no plan listed is an OK over nothing.
 [[mutation]]
 name = "plan reads a diff git did not answer as no plan changed"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = """    if code != 0:
         raise _unresolved(ForkUnknown.of(code), base, root)"""
 after = """    if False:
@@ -775,7 +775,7 @@ reddens = [
 # directory the repository chose never stands in for the store that reaches the overlay's notes.
 [[mutation]]
 name = "overlay mode reads a named store"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "    if composed is not None:\n        # Overlay mode reads"
 after = "    if composed is not None and override is None:\n        # Overlay mode reads"
 reddens = [
@@ -787,7 +787,7 @@ reddens = [
 # reason at all.
 [[mutation]]
 name = "a missing store directory is reported with no reason of its own"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "        return None, Unresolved(said, shown(base))"
 after = '        return None, Unresolved("", shown(base))'
 reddens = [
@@ -795,11 +795,11 @@ reddens = [
 ]
 
 # The resolver's detail carries the store's path, `paths.memory` or a group's name, all of them the
-# repository's, so a refusal prints stayfixed's sentence first and the detail only inside the
+# repository's, so a refusal prints drybag's sentence first and the detail only inside the
 # region `trust.wrap` marks as data. Joined into the lead, the detail prints ahead of the marker.
 [[mutation]]
 name = "a store refusal prints its repository-authored detail before the data region"
-file = "src/stayfixed/memory/commands.py"
+file = "src/drybag/memory/commands.py"
 before = "    lead = _SAID.format(said=reason.said)"
 after = "    lead = _SAID.format(said=str(reason))"
 reddens = [
@@ -807,11 +807,11 @@ reddens = [
 ]
 
 # A machine record naming an overlay root that is no longer there read as "no record of this
-# project; run `stayfixed attach`", and `attach --store <new place>` refuses a store outside the
+# project; run `drybag attach`", and `attach --store <new place>` refuses a store outside the
 # recorded root -- a refusal whose way out was a command that refuses.
 [[mutation]]
 name = "a recorded overlay root that is gone reads as an unrecorded project"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "        if not fsops.is_dir(overlay):"
 after = "        if False:"
 reddens = [
@@ -822,20 +822,20 @@ reddens = [
 # region that marks repository text.
 [[mutation]]
 name = "the recorded overlay root is printed as repository text"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "            return None, Unresolved(OVERLAY_GONE.format(root=quoted(str(overlay))))"
 after = '            return None, Unresolved(OVERLAY_GONE.format(root="it"), quoted(str(overlay)))'
 reddens = [
   "tests/memory/test_commands.py::test_a_binding_refusal_names_its_own_cause_and_the_way_out_that_fits_it[overlay-gone]",
 ]
 
-# An area's `doctor.py` is imported by discovery and imports nothing of stayfixed at module level,
+# An area's `doctor.py` is imported by discovery and imports nothing of drybag at module level,
 # as CONTRIBUTING's "Areas" says. The mutation adds one module-level import to one of them.
 [[mutation]]
-name = "an area's doctor.py imports stayfixed at module level"
-file = "src/stayfixed/memory/doctor.py"
+name = "an area's doctor.py imports drybag at module level"
+file = "src/drybag/memory/doctor.py"
 before = "from typing import TYPE_CHECKING\n"
-after = "from typing import TYPE_CHECKING\n\nfrom stayfixed.errors import Failure\n"
+after = "from typing import TYPE_CHECKING\n\nfrom drybag.errors import Failure\n"
 reddens = [
   "tests/boundaries/test_discovery.py::test_an_areas_doctor_module_imports_only_inside_its_functions",
 ]
@@ -843,10 +843,10 @@ reddens = [
 # The same import nested in a `try`, which runs on import all the same: a walk of the module's
 # top-level statements saw only the `try`.
 [[mutation]]
-name = "an area's doctor.py imports stayfixed at module level inside a try"
-file = "src/stayfixed/memory/doctor.py"
+name = "an area's doctor.py imports drybag at module level inside a try"
+file = "src/drybag/memory/doctor.py"
 before = "from typing import TYPE_CHECKING\n"
-after = "from typing import TYPE_CHECKING\n\ntry:\n    from stayfixed.memory.bundles import SLOTS\nexcept ImportError:\n    pass\n"
+after = "from typing import TYPE_CHECKING\n\ntry:\n    from drybag.memory.bundles import SLOTS\nexcept ImportError:\n    pass\n"
 reddens = [
   "tests/boundaries/test_discovery.py::test_an_areas_doctor_module_imports_only_inside_its_functions",
 ]
@@ -855,7 +855,7 @@ reddens = [
 # store is a tree a clone commits.
 [[mutation]]
 name = "the note store's walk lists every entry"
-file = "src/stayfixed/memory/doctor.py"
+file = "src/drybag/memory/doctor.py"
 before = "            if listed > fsops.WALK_ENTRIES:"
 after = "            if False:"
 reddens = [
@@ -867,7 +867,7 @@ reddens = [
 # FIFO is one more file it cannot read, in that reader's own words.
 [[mutation]]
 name = "the note reader follows a link to a device"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = '        text = read_regular_text(path, newline="")'
 after = '        text = path.read_bytes().decode("utf-8")'
 reddens = [
@@ -878,7 +878,7 @@ reddens = [
 # past it is drift, never read to its end.
 [[mutation]]
 name = "the harvest reads the index with no bound"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "        lines = read_regular_text(path).splitlines()"
 after = "        lines = path.read_text(encoding=\"utf-8\").splitlines()"
 reddens = [
@@ -887,7 +887,7 @@ reddens = [
 
 [[mutation]]
 name = "the index check reads the index with no bound"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "        current = read_regular_text(path) if fsops.is_file(path) else None"
 after = '        current = path.read_text(encoding="utf-8") if fsops.is_file(path) else None'
 reddens = [
@@ -896,7 +896,7 @@ reddens = [
 
 [[mutation]]
 name = "the document reader follows a link to a device"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "        return read_regular_text(path)"
 after = '        return path.read_text(encoding="utf-8")'
 reddens = [
@@ -905,16 +905,16 @@ reddens = [
 
 # CONTRIBUTING makes `api.py` the only cross-area import surface, and before this guard nothing
 # asserted it: `memory/commands.py` reached into `hooks.dispatch` and `doctor/checks.py` into
-# `hooks.sink`, and both merged green. The guard now walks every module under `src/stayfixed/`.
+# `hooks.sink`, and both merged green. The guard now walks every module under `src/drybag/`.
 # This mutation puts a violation back — the reviewed-note reader taking a name from the trust
 # package's private `record` module that its `api.py` publishes — and the guard must name it. The name still
 # exists at the private spelling, so the mutated tree imports and runs: what goes red is the
 # boundary assertion and nothing else.
 [[mutation]]
 name = "an area reaches past another area's api.py again"
-file = "src/stayfixed/memory/reviewed.py"
-before = 'from stayfixed.trust.api import UnreadableTrust, approve_all, recorded'
-after = 'from stayfixed.trust.record import UnreadableTrust, approve_all, recorded'
+file = "src/drybag/memory/reviewed.py"
+before = 'from drybag.trust.api import UnreadableTrust, approve_all, recorded'
+after = 'from drybag.trust.record import UnreadableTrust, approve_all, recorded'
 reddens = [
   "tests/boundaries/test_api_surface.py::test_no_module_reaches_into_another_packages_private_module",
 ]
@@ -923,7 +923,7 @@ reddens = [
 # error's own fields again is a private copy of it, and the four there were each said less.
 [[mutation]]
 name = "a reader spells the error's words again rather than saying them"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = '        raise Failure(f"{shown}: could not be read ({said(error)})") from None'
 after = '        raise Failure(f"{shown}: could not be read ({error.strerror or error})") from None'
 reddens = ["tests/test_fsops.py::test_no_module_but_fsops_says_an_error_by_its_strerror"]
@@ -932,7 +932,7 @@ reddens = ["tests/test_fsops.py::test_no_module_but_fsops_says_an_error_by_its_s
 # words that name that, and not as a link or an escape it is not.
 [[mutation]]
 name = "the store words a local-only store it cannot ask about as a link"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = """
             return None, Unresolved(
                 "a directory on the way to the local-only store cannot be checked for a symlink","""
@@ -945,7 +945,7 @@ reddens = [
 
 [[mutation]]
 name = "the store words a paths.memory it cannot ask about as an escape"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = '            "a directory on the way to paths.memory cannot be checked for a symlink",'
 after = '            "paths.memory does not stay inside the project",'
 reddens = [
@@ -956,7 +956,7 @@ reddens = [
 # the description, or the description the native writer appended to `MEMORY.md`, as its `index:`.
 [[mutation]]
 name = "memory index passes over a note's metadata index line"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "        own = _metadata_index(note)\n"
 after = "        own = None\n"
 reddens = [
@@ -968,7 +968,7 @@ reddens = [
 # rather than taking an index line of blanks.
 [[mutation]]
 name = "a metadata index of only spaces becomes the note's index line"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = '    line = note.metadata.get("index", "").strip()'
 after = '    line = note.metadata.get("index", "")'
 reddens = [
@@ -977,7 +977,7 @@ reddens = [
 
 [[mutation]]
 name = "the index link rule lets a symlink loop out"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = """    try:
         resolved = fsops.resolved(target)
     except OSError:
@@ -989,10 +989,10 @@ reddens = [
   "tests/memory/test_index.py::test_an_index_link_that_is_a_symlink_loop_is_refused_and_sources_nothing",
 ]
 
-# `memory session-context` reads `stayfixed.toml` the way the session it feeds does.
+# `memory session-context` reads `drybag.toml` the way the session it feeds does.
 [[mutation]]
 name = "memory session-context refuses what a session reads"
-file = "src/stayfixed/memory/commands.py"
+file = "src/drybag/memory/commands.py"
 before = "    config = session.acting\n"
 after = "    config = load(root, machine=machine)\n"
 reddens = ["tests/hooks/test_floor.py::test_memory_session_context_reads_a_newer_key_with_a_note"]
@@ -1001,7 +1001,7 @@ reddens = ["tests/hooks/test_floor.py::test_memory_session_context_reads_a_newer
 # bundles are the project's file's to say.
 [[mutation]]
 name = "the bundles row reads a configuration that is not there"
-file = "src/stayfixed/memory/doctor.py"
+file = "src/drybag/memory/doctor.py"
 before = "                configured(lambda context, config: _bundles(context, config, answers), attach=True),"
 after = "                lambda context: _bundles(context, context.config, answers),"
 reddens = [
@@ -1012,7 +1012,7 @@ reddens = [
 # `[overlay] root` takes such a file for no overlay recorded rather than ending the session's notes.
 [[mutation]]
 name = "the store's overlay read lets a machine file it cannot read end a session's notes"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "    except MachineConfigError:\n        return None"
 after = "    except FileNotFoundError:\n        return None"
 reddens = [
@@ -1022,7 +1022,7 @@ reddens = [
 # The origin note names both remotes; a token in either one's userinfo is taken out before it does.
 [[mutation]]
 name = "the origin note names a remote's credentials"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "        origin=NO_REMOTE_SAID if origin is None else quoted(without_userinfo(origin)),"
 after = "        origin=NO_REMOTE_SAID if origin is None else quoted(origin),"
 reddens = ["tests/attach/test_commands.py::test_an_origin_carrying_credentials_is_neither_printed_nor_recorded_with_them"]
@@ -1031,7 +1031,7 @@ reddens = ["tests/attach/test_commands.py::test_an_origin_carrying_credentials_i
 # is repeated until the nonce is one the note does not contain.
 [[mutation]]
 name = "wrap keeps a nonce the note already holds"
-file = "src/stayfixed/memory/trust.py"
+file = "src/drybag/memory/trust.py"
 before = "    while nonce in text:\n        nonce = new_nonce()"
 after = "    while False:\n        nonce = new_nonce()"
 reddens = [
@@ -1042,7 +1042,7 @@ reddens = [
 # record holds, so an edit after promoting is a note to review again.
 [[mutation]]
 name = "a stale digest still reads as reviewed"
-file = "src/stayfixed/memory/reviewed.py"
+file = "src/drybag/memory/reviewed.py"
 before = "    return REVIEWED if current in held else UNREVIEWED"
 after = "    return REVIEWED if held else UNREVIEWED"
 reddens = [
@@ -1053,7 +1053,7 @@ reddens = [
 # path through `store.shown`, which cuts the id to its short form.
 [[mutation]]
 name = "a store path is printed with the whole binding id"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = '    return "/".join([str(base), f"{short(id)}…", *rest])'
 after = "    return str(path)"
 reddens = [
@@ -1064,7 +1064,7 @@ reddens = [
 # region, the last render's line for an edited note was written into it as the native writer's.
 [[mutation]]
 name = "the harvest reads the rendered region"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "        return lines[:start] + lines[end + 1 :]"
 after = "        return lines"
 reddens = [
@@ -1075,7 +1075,7 @@ reddens = [
 # store's own index, never one a repository commits or the overlay shares.
 [[mutation]]
 name = "the index labels an unreviewed note outside a composed store"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "    if stores_holding(_destination(store, config)) is not None:"
 after = "    if True:"
 reddens = [
@@ -1086,7 +1086,7 @@ reddens = [
 # through it, a file outside it or a note promoted elsewhere.
 [[mutation]]
 name = "a symlinked note is walked"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = "            if fsops.is_symlink(path):\n                skipped.append(path)"
 after = "            if False:\n                skipped.append(path)"
 reddens = [
@@ -1096,7 +1096,7 @@ reddens = [
 # Only a reviewed note is a standing rule, whatever `startup` rank a note claims about itself.
 [[mutation]]
 name = "the standing rules admit an unreviewed note"
-file = "src/stayfixed/memory/bundles.py"
+file = "src/drybag/memory/bundles.py"
 before = "        return _standing([note for note in notes if note.path in reviewed], config)"
 after = "        return _standing(notes, config)"
 reddens = [
@@ -1108,9 +1108,9 @@ reddens = [
 # pins.
 [[mutation]]
 name = "the note store imports the documentation area"
-file = "src/stayfixed/memory/store.py"
-before = "from stayfixed.config.reading import MachineConfigError\n"
-after = "from stayfixed.config.reading import MachineConfigError\nfrom stayfixed.docs.api import check_links\n"
+file = "src/drybag/memory/store.py"
+before = "from drybag.config.reading import MachineConfigError\n"
+after = "from drybag.config.reading import MachineConfigError\nfrom drybag.docs.api import check_links\n"
 reddens = [
   "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
 ]
@@ -1119,7 +1119,7 @@ reddens = [
 # memory directory named in the tag namespace never takes the name a tag's own link needs.
 [[mutation]]
 name = "the composed store links a project directory in the tag namespace"
-file = "src/stayfixed/memory/composed.py"
+file = "src/drybag/memory/composed.py"
 before = "        if not reserved(entry):"
 after = "        if True:"
 reddens = [
@@ -1130,7 +1130,7 @@ reddens = [
 # notes are among them: without them the resolver refuses the link `attach` made for the tag.
 [[mutation]]
 name = "permitted roots leave out the tags' notes"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "        allowed = _notes(held)"
 after = "        allowed = _notes((held[0], held[-1]))"
 reddens = [
@@ -1141,7 +1141,7 @@ reddens = [
 # the common ones, so the index lists and the bundles deliver a tag's notes.
 [[mutation]]
 name = "walked groups leave out the tags"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "    return [*walked[:at], *tagged, *walked[at:]]"
 after = "    return walked"
 reddens = [
@@ -1149,12 +1149,12 @@ reddens = [
   "tests/memory/test_index.py::test_the_index_has_a_section_per_tag_after_the_common_notes",
 ]
 
-# A bound checkout with no `stayfixed.toml` has the configuration `attach` acted on
+# A bound checkout with no `drybag.toml` has the configuration `attach` acted on
 # (`Context.attach_config`): the note store resolves through it, so the walk that counts its notes
 # and the `bundles` row must read it too, or they report a store they never walked.
 [[mutation]]
 name = "the note store's unreviewed count ignores a bound checkout's configuration"
-file = "src/stayfixed/memory/doctor.py"
+file = "src/drybag/memory/doctor.py"
 before = "        config = context.attach_config\n"
 after = "        config = context.config\n"
 reddens = [
@@ -1162,8 +1162,8 @@ reddens = [
 ]
 
 [[mutation]]
-name = "the bundles row skips a bound checkout with no stayfixed.toml"
-file = "src/stayfixed/memory/doctor.py"
+name = "the bundles row skips a bound checkout with no drybag.toml"
+file = "src/drybag/memory/doctor.py"
 before = "_bundles(context, config, answers), attach=True),"
 after = "_bundles(context, config, answers)),"
 reddens = [
@@ -1174,7 +1174,7 @@ reddens = [
 # their notes before it renders.
 [[mutation]]
 name = "the in-process render harvests no appended line"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "        reconciled = reconcile(store, config, write=True)"
 after = "        reconciled = reconcile(store, config, write=False)"
 reddens = [
@@ -1185,7 +1185,7 @@ reddens = [
 # sync's handler starts the job, so the notes the harvest wrote travel in it.
 [[mutation]]
 name = "the session end renders no index"
-file = "src/stayfixed/memory/hooks.py"
+file = "src/drybag/memory/hooks.py"
 before = """        Handler(name="index-render", event="SessionEnd", run=_render),
 """
 after = ""
@@ -1193,11 +1193,11 @@ reddens = [
   "tests/memory/test_index.py::test_session_end_harvests_an_appended_line_before_the_sync_runs",
 ]
 
-# A bound checkout with no `stayfixed.toml` has no file to load; its index is rendered from the
+# A bound checkout with no `drybag.toml` has no file to load; its index is rendered from the
 # session's bound configuration (`SessionConfig.acting`), as the unreviewed count reads it.
 [[mutation]]
-name = "the index render skips a bound checkout with no stayfixed.toml"
-file = "src/stayfixed/memory/hooks.py"
+name = "the index render skips a bound checkout with no drybag.toml"
+file = "src/drybag/memory/hooks.py"
 before = "    config = session.acting\n    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
 after = "    config = session.config\n    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
 reddens = [
@@ -1207,7 +1207,7 @@ reddens = [
 # Outside overlay mode the index is the repository's file, which nobody's session rewrites.
 [[mutation]]
 name = "a repository-mode checkout's index is rendered by a hook"
-file = "src/stayfixed/memory/hooks.py"
+file = "src/drybag/memory/hooks.py"
 before = "    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
 after = "    if event.project_root is None or config is None:"
 reddens = [
@@ -1217,7 +1217,7 @@ reddens = [
 # A claim on fewer than three digits is not a bug identifier.
 [[mutation]]
 name = "a Fixes claim accepts fewer than three digits"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d{3,}\b")'
 after = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d+\b")'
 reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_takes_three_digits_or_more"]

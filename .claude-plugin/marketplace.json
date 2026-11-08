@@ -1,15 +1,15 @@
 {
-  "name": "stayfixed-marketplace",
-  "description": "stayfixed, a methodology harness for coding agents, published from its own repository.",
+  "name": "drybag",
+  "description": "drybag, a methodology harness for coding agents, published from its own repository.",
   "owner": {
-    "name": "stayfixed"
+    "name": "drybag"
   },
   "plugins": [
     {
-      "name": "stayfixed",
+      "name": "drybag",
       "source": {
         "source": "url",
-        "url": "https://github.com/stayfixed/stayfixed-plugin.git",
+        "url": "https://github.com/dry-bag/drybag-plugin.git",
         "ref": "v0.6.1",
         "sha": "f6d299144481ccc0824c890913985abc16e0bc6f"
       },

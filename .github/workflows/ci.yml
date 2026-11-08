@@ -124,7 +124,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: An interpreter below the floor, for the launcher's version guard
         if: env.FULL == 'true'
-        # `scripts/stayfixed` is the only thing between a Python 3.9 user and a SyntaxError, and
+        # `scripts/drybag` is the only thing between a Python 3.9 user and a SyntaxError, and
         # `test_an_old_interpreter_is_refused_with_a_reason` skipped for want of one on every
         # machine that has ever run it — so the guard was asserted nowhere, ever. The test is
         # handed this one by path rather than by searching, and fails rather than skips when it
@@ -176,7 +176,7 @@ jobs:
         # loop was covered, just never with an escaping path. No statement count is written here:
         # every change falsifies one, and the report prints it.
         env:
-          STAYFIXED_OLD_PYTHON: ${{ steps.old-python.outputs.python-path }}
+          DRYBAG_OLD_PYTHON: ${{ steps.old-python.outputs.python-path }}
         run: uv run pytest -n auto --cov --cov-report=term-missing --cov-fail-under=92
       - name: Version discipline
         if: env.FULL == 'true'
@@ -184,7 +184,7 @@ jobs:
       - name: Build
         if: env.FULL == 'true'
         run: uv build
-      - name: The artifacts carry what an installed stayfixed needs
+      - name: The artifacts carry what an installed drybag needs
         if: env.FULL == 'true'
         # Every earlier test resolves the template tree to the checkout; only an artifact
         # can say whether the build backend shipped it.
@@ -201,7 +201,7 @@ jobs:
           uv venv "$RUNNER_TEMP/wheel"
           uv pip install --python "$RUNNER_TEMP/wheel/bin/python" dist/*.whl
           mkdir "$RUNNER_TEMP/home"
-          HOME="$RUNNER_TEMP/home" PATH=/usr/bin:/bin "$RUNNER_TEMP/wheel/bin/stayfixed" setup \
+          HOME="$RUNNER_TEMP/home" PATH=/usr/bin:/bin "$RUNNER_TEMP/wheel/bin/drybag" setup \
             --overlay "$RUNNER_TEMP/rendered"
           uv run python scripts/check_artifacts.py rendered "$RUNNER_TEMP/rendered"
 
@@ -337,7 +337,7 @@ jobs:
         # run on every change beside a `url` entry. A dry run creates nothing.
         run: claude plugin tag --dry-run .
 
-  # The demo script, `examples/demo/demo.py`, against this checkout's `stayfixed`: each act passes
+  # The demo script, `examples/demo/demo.py`, against this checkout's `drybag`: each act passes
   # on the product's own exit code and `--json` answer. Claude Code is installed at the `plugin`
   # job's pin for the act that attaches an overlay, and `--require-claude` fails the run when that
   # act is skipped, so a missing `claude` is a red job and not a quiet skip. It makes no model
@@ -362,5 +362,5 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code@2.1.261
       - name: Install
         run: uv sync --locked
-      - name: The demo, against the checkout's stayfixed
-        run: python3 -I examples/demo/demo.py "$PWD/.venv/bin/stayfixed" --require-claude
+      - name: The demo, against the checkout's drybag
+        run: python3 -I examples/demo/demo.py "$PWD/.venv/bin/drybag" --require-claude

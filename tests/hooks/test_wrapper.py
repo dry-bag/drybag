@@ -12,7 +12,7 @@ from typing import NamedTuple
 
 import pytest
 
-from stayfixed import __version__
+from drybag import __version__
 from tests.gitfixture import git
 from tests.test_launcher import _old_python
 
@@ -26,9 +26,9 @@ def _plugin_root(
     """A plugin root: a copy of the shipped wrapper, and a fake launcher beside it.
 
     The wrapper finds its launcher relative to its own path, so a plugin root is a real directory
-    pair — `hooks/run-hook.sh` and `scripts/stayfixed` — which is what an installed plugin is. A
+    pair — `hooks/run-hook.sh` and `scripts/drybag` — which is what an installed plugin is. A
     fake launcher, because these cases are about the wrapper's exit mapping and its argv, and a
-    real `stayfixed` run would couple them to every command in the package. With `echo_cwd` it
+    real `drybag` run would couple them to every command in the package. With `echo_cwd` it
     prints the physical directory it runs in, which is what `Path.resolve()` names.
     """
     root = base / "plugin"
@@ -38,7 +38,7 @@ def _plugin_root(
     (root / "hooks" / WRAPPER.name).chmod(0o755)
     if not with_launcher:
         return root
-    launcher = root / "scripts" / "stayfixed"
+    launcher = root / "scripts" / "drybag"
     body = "import os\n\nprint(os.getcwd())\n" if echo_cwd else ""
     launcher.write_text(
         f"#!/usr/bin/env python3\n{body}raise SystemExit({exit_code})\n", encoding="utf-8"
@@ -176,10 +176,10 @@ def test_an_interpreter_below_the_floor_degrades_open(tmp_path: Path) -> None:
     # A real sub-floor interpreter rather than a fake that exits non-zero for every argument,
     # which could not exercise `sys.version_info` at all. Without the probe the launcher's own
     # floor check answers in its own words. `_old_python` is the tree's own seam,
-    # and CI pins it through STAYFIXED_OLD_PYTHON so this runs there rather than skipping.
+    # and CI pins it through DRYBAG_OLD_PYTHON so this runs there rather than skipping.
     old = _old_python()
     if old is None:
-        pytest.skip("no interpreter below 3.11 on this machine; set STAYFIXED_OLD_PYTHON")
+        pytest.skip("no interpreter below 3.11 on this machine; set DRYBAG_OLD_PYTHON")
     result = _run(
         "hook",
         "PreToolUse",
@@ -190,7 +190,7 @@ def test_an_interpreter_below_the_floor_degrades_open(tmp_path: Path) -> None:
     assert "is not python 3.11 or newer" in result.stderr
 
 
-OFF = "stayfixed's hooks are off in this session: "
+OFF = "drybag's hooks are off in this session: "
 TO_DO = ". Install Python 3.11 or newer on PATH."
 
 
@@ -221,7 +221,7 @@ def test_the_dispatching_session_start_says_the_hooks_are_off(
     tmp_path: Path, state: Callable[[Path], tuple[str, str]]
 ) -> None:
     # Measured on a machine whose `PATH` held only a 3.9 `/usr/bin/python3`: every entry said why
-    # on stderr, which nobody reads on a `0`, and stayfixed was off with nothing said. So the one
+    # on stderr, which nobody reads on a `0`, and drybag was off with nothing said. So the one
     # entry that dispatches `SessionStart` says it where Claude Code shows the person
     # (`systemMessage`) and where the model reads (`additionalContext`), and still exits 0.
     path, why = state(tmp_path)
@@ -257,8 +257,8 @@ def test_every_other_entry_stays_silent_without_a_usable_python(
     assert "no python3 on PATH" in result.stderr
 
 
-def test_a_usable_interpreter_leaves_session_start_to_stayfixed(tmp_path: Path) -> None:
-    # The positive row: with a usable `python3` the wrapper adds nothing to what stayfixed prints.
+def test_a_usable_interpreter_leaves_session_start_to_drybag(tmp_path: Path) -> None:
+    # The positive row: with a usable `python3` the wrapper adds nothing to what drybag prints.
     result = _run(
         "hook", "SessionStart", plugin_root=_plugin_root(tmp_path, 0, echo_cwd=True), cwd=tmp_path
     )
@@ -285,11 +285,11 @@ def test_a_launcher_that_cannot_be_read_degrades_open(tmp_path: Path) -> None:
     # `test -f` tests existence, not readability: a launcher at mode 000 reached CPython, which
     # printed its own "Permission denied" and exited 2.
     root = _plugin_root(tmp_path, 0)
-    (root / "scripts" / "stayfixed").chmod(0o000)
+    (root / "scripts" / "drybag").chmod(0o000)
     try:
         result = _run("hook", "PreToolUse", plugin_root=root)
     finally:
-        (root / "scripts" / "stayfixed").chmod(0o755)
+        (root / "scripts" / "drybag").chmod(0o755)
     assert result.returncode == 0
     assert "no readable launcher" in result.stderr
 
@@ -300,7 +300,7 @@ def test_any_non_zero_exit_degrades_open_and_says_so(tmp_path: Path, rc: int) ->
     # would block every Bash call on one.
     result = _run("hook", "PreToolUse", plugin_root=_plugin_root(tmp_path, rc))
     assert result.returncode == 0
-    assert f"stayfixed exited {rc}" in result.stderr
+    assert f"drybag exited {rc}" in result.stderr
 
 
 def test_a_zero_exit_passes_through_untouched(tmp_path: Path) -> None:
@@ -353,7 +353,7 @@ def test_a_repository_never_chooses_the_interpreter(
     assert result.stdout.splitlines() == [str(project.resolve())]
 
 
-def test_stayfixed_runs_from_the_project_root(tmp_path: Path) -> None:
+def test_drybag_runs_from_the_project_root(tmp_path: Path) -> None:
     # Every hooks.json entry but the dispatcher's relies on `--root` defaulting to `.`, and the
     # harness does not promise to launch a hook in the project. The wrapper changes into
     # CLAUDE_PROJECT_DIR, else git's toplevel, so one rule serves every entry.
@@ -375,7 +375,7 @@ def test_stayfixed_runs_from_the_project_root(tmp_path: Path) -> None:
 
 def test_the_project_root_is_never_taken_from_an_inherited_git_environment(tmp_path: Path) -> None:
     # `cd repoA` with GIT_DIR/GIT_WORK_TREE naming repoB put the launcher in repoB, so the whole
-    # hook read another repository's stayfixed.toml, budgets and note store. The Codex path,
+    # hook read another repository's drybag.toml, budgets and note store. The Codex path,
     # where CLAUDE_PROJECT_DIR is unset.
     here, there = tmp_path / "here", tmp_path / "there"
     for repository in (here, there):
@@ -393,7 +393,7 @@ def test_the_project_root_is_never_taken_from_an_inherited_git_environment(tmp_p
 
 def test_a_project_root_that_cannot_be_entered_says_so(tmp_path: Path) -> None:
     # A root that was named and cannot be entered left the process in the harness's directory,
-    # and if that was another stayfixed project every `--root`-defaulting entry read its
+    # and if that was another drybag project every `--root`-defaulting entry read its
     # configuration, with nothing said.
     result = _run(
         "hook",
@@ -535,4 +535,4 @@ def test_a_module_the_environment_plants_never_runs(
     )
     assert not planting.record.exists(), planting.record.read_text(encoding="utf-8")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == f"stayfixed {__version__}"
+    assert result.stdout.strip() == f"drybag {__version__}"

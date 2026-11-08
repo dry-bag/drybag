@@ -17,12 +17,12 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import gitenv
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.errors import Refusal
-from stayfixed.guards.commands import GIVES_WAY
-from stayfixed.guards.commit import (
+from drybag import gitenv
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.errors import Refusal
+from drybag.guards.commands import GIVES_WAY
+from drybag.guards.commit import (
     ATTRIBUTION_LABELS,
     LOG_TIMEOUT_SECONDS,
     Offence,
@@ -548,7 +548,7 @@ LONG_LINES = {
 _TRAILER_LABEL = ATTRIBUTION_LABELS[0]
 _LONG_LINE_PROBE = (
     "import sys\n"
-    "from stayfixed.guards.commit import offending_lines\n"
+    "from drybag.guards.commit import offending_lines\n"
     "head, unit, count, tail = sys.argv[1:]\n"
     "line = head + unit * int(count) + tail\n"
     "last = 'Co-Authored-By: Claude <noreply@anthropic.com>'\n"
@@ -601,7 +601,7 @@ def test_a_long_trailer_is_judged_in_memory_linear_in_its_length(shape: str) -> 
     # are given back" -> `model words`.
     probe = (
         "import resource, sys\n"
-        "from stayfixed.guards.commit import offending_lines\n"
+        "from drybag.guards.commit import offending_lines\n"
         "head, unit, count, tail = sys.argv[1:]\n"
         "line = head + unit * int(count) + tail\n"
         "last = 'Co-Authored-By: Claude <noreply@anthropic.com>'\n"
@@ -628,7 +628,7 @@ def test_a_long_trailer_is_judged_in_memory_linear_in_its_length(shape: str) -> 
 
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -923,7 +923,7 @@ def test_commit_strip_never_waits_on_a_fifo_where_the_settings_file_belongs(
     environment = {**developer_free_environ(), "HOME": str(home)}
     try:
         done = subprocess.run(
-            [sys.executable, "-m", "stayfixed", "commit", "strip", str(message)],
+            [sys.executable, "-m", "drybag", "commit", "strip", str(message)],
             capture_output=True,
             text=True,
             timeout=_STRIP_SECONDS,

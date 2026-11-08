@@ -1,12 +1,12 @@
 {
-  "name": "stayfixed",
+  "name": "drybag",
   "version": "0.6.1",
   "description": "A methodology harness for coding agents: working memory whose notes count once reviewed, and fail-closed guards.",
   "author": { "name": "Nezhinskiy" },
-  "repository": "https://github.com/stayfixed/stayfixed",
+  "repository": "https://github.com/dry-bag/drybag",
   "license": "MIT",
   "interface": {
-    "displayName": "stayfixed",
+    "displayName": "drybag",
     "shortDescription": "Reviewed working memory and fail-closed guards for coding agents",
     "developerName": "Nezhinskiy",
     "category": "Developer Tools"

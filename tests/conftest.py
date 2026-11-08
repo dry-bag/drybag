@@ -3,7 +3,7 @@ configuration.
 
 `tests/gitfixture.py` seals the `git` a fixture runs (`GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM`
 at `os.devnull`, `GIT_CONFIG_NOSYSTEM` set, `HOME` under `tmp_path`). The `git` the product
-runs is another matter: `stayfixed.gitenv.scrubbed_env` keeps `HOME` on purpose, because a real
+runs is another matter: `drybag.gitenv.scrubbed_env` keeps `HOME` on purpose, because a real
 user's global excludes and configuration are theirs to have honoured, and it drops every
 `GIT_CONFIG_*` variable. So
 under test that `git` read the developer's `~/.gitconfig` and `~/.config/git/ignore`: with
@@ -21,7 +21,7 @@ The directory is empty but for one file: a `.gitconfig` that turns git's automat
 off, with the two keys and for the reason `tests/gitfixture.py` gives the fixture's `git`.
 `scrubbed_env` drops the variables that carry them there, and `HOME` is how the same two reach
 the product's `git` — a `fetch` starts maintenance like a `commit` does — and every
-`stayfixed` and `Runner` launch a test starts, which inherit this `HOME`.
+`drybag` and `Runner` launch a test starts, which inherit this `HOME`.
 """
 
 from __future__ import annotations
@@ -33,14 +33,14 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import gitenv
+from drybag import gitenv
 from tests.floor import SUITE_GIT_FLOOR_SECONDS
 from tests.gitfixture import MAINTENANCE_OFF, gitconfig
 
 
 @pytest.fixture(autouse=True)
 def _git_outlasts_the_machines_load(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The floor under every `git` the product runs, in this process and in every `stayfixed` a
+    # The floor under every `git` the product runs, in this process and in every `drybag` a
     # test starts (`tests/floor.py` says why it is an environment variable). A test about a bound
     # running out removes it and passes a small bound of its own.
     monkeypatch.setenv(gitenv.FLOOR_VARIABLE, str(SUITE_GIT_FLOOR_SECONDS))
@@ -55,7 +55,7 @@ def _a_home_of_its_own(
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     # The password database agrees with `HOME`, as on most machines (`doctor`'s `ignored-env`).
-    monkeypatch.setattr("stayfixed.doctor.checks.passwd_home", lambda: home)
+    monkeypatch.setattr("drybag.doctor.checks.passwd_home", lambda: home)
     return home
 
 

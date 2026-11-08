@@ -21,17 +21,17 @@ from typing import Any
 
 import pytest
 
-from stayfixed import gitenv
-from stayfixed.config.machine import machine_config_path
-from stayfixed.config.session import SessionConfig, session_config
-from stayfixed.gitenv import Called
-from stayfixed.hooks.api import HookEvent, HookResult
-from stayfixed.hooks.commands import run_hook
-from stayfixed.sync import git as G
-from stayfixed.sync import job as J
-from stayfixed.sync import trigger as T
-from stayfixed.sync.hooks import register
-from stayfixed.sync.state import (
+from drybag import gitenv
+from drybag.config.machine import machine_config_path
+from drybag.config.session import SessionConfig, session_config
+from drybag.gitenv import Called
+from drybag.hooks.api import HookEvent, HookResult
+from drybag.hooks.commands import run_hook
+from drybag.sync import git as G
+from drybag.sync import job as J
+from drybag.sync import trigger as T
+from drybag.sync.hooks import register
+from drybag.sync.state import (
     BACK_OFF_MINUTES,
     LOCK_FILE,
     PENDING_FILE,
@@ -507,7 +507,7 @@ def test_stop_and_session_end_print_nothing_that_blocks(
 def test_the_command_prints_nothing_that_blocks_in_a_process_of_its_own(
     overlays: Overlays,
 ) -> None:
-    # The same through `python -m stayfixed`, sync off and on; with nothing waiting, the sync on
+    # The same through `python -m drybag`, sync off and on; with nothing waiting, the sync on
     # decides `none`, so no job is started by a process this test cannot reach.
     a = overlays.a
     _state(overlays, ago=600, head_sha=head(a), fetched=head(a))
@@ -516,7 +516,7 @@ def test_the_command_prints_nothing_that_blocks_in_a_process_of_its_own(
         overlays.use(a)
         for name in ("Stop", "SessionEnd"):
             done = subprocess.run(
-                [sys.executable, "-m", "stayfixed", "hook", name],
+                [sys.executable, "-m", "drybag", "hook", name],
                 input=json.dumps({"session_id": "s", "cwd": str(overlays.home)}),
                 capture_output=True,
                 text=True,

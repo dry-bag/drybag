@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from stayfixed.tomlout import dumps
+from drybag.tomlout import dumps
 
 
 def list_tags(overlay: Path, project: str, tags: list[str]) -> None:

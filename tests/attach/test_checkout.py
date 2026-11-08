@@ -16,17 +16,17 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import binding
-from stayfixed.attach.checkout import PLACED, READ_AGENTS, WITHHELD, place, said
-from stayfixed.attach.hooks import register
-from stayfixed.errors import Refusal
-from stayfixed.hooks.api import HookEvent
+from drybag import binding
+from drybag.attach.checkout import PLACED, READ_AGENTS, WITHHELD, place, said
+from drybag.attach.hooks import register
+from drybag.errors import Refusal
+from drybag.hooks.api import HookEvent
 from tests.gitfixture import git, needs_git
 from tests.sessions import NO_CONFIG
 
 pytestmark = needs_git
 
-REGULAR = {"AGENTS.md": 0o755, "CLAUDE.md": 0o600, "stayfixed.toml": 0o644}
+REGULAR = {"AGENTS.md": 0o755, "CLAUDE.md": 0o600, "drybag.toml": 0o644}
 NOT_PLACED = (".env", ".env.local", ".ENV", "settings.local.json", ".DS_Store")
 
 
@@ -44,7 +44,7 @@ def _overlay(tmp_path: Path) -> Path:
     (source / "link.md").symlink_to(source / "AGENTS.md")
     (source / "notes").mkdir()
     (source / "notes" / "inner.md").write_text("inside a directory\n", encoding="utf-8")
-    machine = Path(os.environ["HOME"]) / ".config" / "stayfixed" / "config.toml"
+    machine = Path(os.environ["HOME"]) / ".config" / "drybag" / "config.toml"
     machine.parent.mkdir(parents=True, exist_ok=True)
     machine.write_text(f'[overlay]\nroot = "{overlay}"\n', encoding="utf-8")
     return overlay
@@ -113,7 +113,7 @@ def test_a_present_name_is_never_overwritten(tmp_path: Path, kind: str) -> None:
     else:
         target.symlink_to(outside)
     placed, _ = place(linked, machine=None)
-    assert placed == ["CLAUDE.md", "stayfixed.toml"]
+    assert placed == ["CLAUDE.md", "drybag.toml"]
     if kind == "file":
         assert target.read_text(encoding="utf-8") == "the worktree's own\n"
     elif kind == "directory":
@@ -200,9 +200,9 @@ def test_the_context_names_what_it_withheld_and_reads_agents_md_only_when_it_pla
     # -> `CLAUDE.md` placed alone points the session at the branch's own `AGENTS.md`.
     _, linked = _world(tmp_path, hide=("CLAUDE.md",))
     placed, withheld = place(linked, machine=None)
-    assert (placed, withheld) == (["CLAUDE.md"], ["AGENTS.md", "stayfixed.toml"])
+    assert (placed, withheld) == (["CLAUDE.md"], ["AGENTS.md", "drybag.toml"])
     assert said(placed, withheld) == (
-        f"{PLACED.format(names='CLAUDE.md')} {WITHHELD.format(names='AGENTS.md, stayfixed.toml')}"
+        f"{PLACED.format(names='CLAUDE.md')} {WITHHELD.format(names='AGENTS.md, drybag.toml')}"
     )
     assert said(["AGENTS.md", "CLAUDE.md"], []) == (
         f"{PLACED.format(names='AGENTS.md, CLAUDE.md')} {READ_AGENTS}"
@@ -220,8 +220,8 @@ def test_a_name_a_branch_gitignore_un_ignores_is_withheld_not_placed(tmp_path: P
     # they are ignored".
     _, linked = _world(tmp_path, gitignore="!/AGENTS.md\n!/CLAUDE.md\n")
     placed, withheld = place(linked, machine=None)
-    assert (placed, withheld) == (["stayfixed.toml"], ["AGENTS.md", "CLAUDE.md"])
-    assert _names(linked) == {"README.md", ".gitignore", "stayfixed.toml"}
+    assert (placed, withheld) == (["drybag.toml"], ["AGENTS.md", "CLAUDE.md"])
+    assert _names(linked) == {"README.md", ".gitignore", "drybag.toml"}
     assert git(linked, "status", "--porcelain") == ""
 
 
@@ -244,7 +244,7 @@ def test_where_git_cannot_say_what_it_ignores_nothing_is_placed_or_said(
     def unanswered(root: Path, relatives: object) -> tuple[str, ...]:
         raise Refusal("git did not answer")
 
-    monkeypatch.setattr("stayfixed.attach.checkout.unignored", unanswered)
+    monkeypatch.setattr("drybag.attach.checkout.unignored", unanswered)
     assert place(linked, machine=None) == ([], [])
     assert _names(linked) == {"README.md"}
 
@@ -252,10 +252,10 @@ def test_where_git_cannot_say_what_it_ignores_nothing_is_placed_or_said(
 def test_the_handler_needs_no_configuration_and_a_machine_without_an_overlay_places_nothing(
     tmp_path: Path,
 ) -> None:
-    # The worktree has no `stayfixed.toml` until this places one, so the handler is asked with no
+    # The worktree has no `drybag.toml` until this places one, so the handler is asked with no
     # configuration at all; and a machine file recording no overlay leaves the worktree as it is.
     _, linked = _world(tmp_path)
-    machine = Path(os.environ["HOME"]) / ".config" / "stayfixed" / "config.toml"
+    machine = Path(os.environ["HOME"]) / ".config" / "drybag" / "config.toml"
     machine.write_text("[overlay]\n", encoding="utf-8")
     (handler,) = (h for h in register() if h.name == "owner-files")
     assert handler.run(_event(linked), NO_CONFIG).context is None

@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.errors import Refusal
-from stayfixed.overlay.api import render
-from stayfixed.overlay.layout import IDENTITY_RECORD
-from stayfixed.overlay.template import template_root
-from stayfixed.overlay.upgrade import upgrade
-from stayfixed.scaffold import MANIFEST_PATH, Verb, digest
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.errors import Refusal
+from drybag.overlay.api import render
+from drybag.overlay.layout import IDENTITY_RECORD
+from drybag.overlay.template import template_root
+from drybag.overlay.upgrade import upgrade
+from drybag.scaffold import MANIFEST_PATH, Verb, digest
 from tests.runners import Recorder
 
 
@@ -61,7 +61,7 @@ def _a_release_that_raises_the_floor(
     text = record.read_text(encoding="utf-8")
     assert 'requires = ">=0.1.0"' in text, "the stand-in has no floor to raise"
     record.write_text(text.replace('">=0.1.0"', f'"{floor}"'), encoding="utf-8")
-    monkeypatch.setattr("stayfixed.overlay.template.template_root", lambda: shipped)
+    monkeypatch.setattr("drybag.overlay.template.template_root", lambda: shipped)
 
 
 def test_an_overlay_set_up_at_a_path_takes_a_raised_floor_with_nothing_for_its_owner_to_edit(
@@ -75,8 +75,8 @@ def test_an_overlay_set_up_at_a_path_takes_a_raised_floor_with_nothing_for_its_o
     #
     # Mutation: `mutations/`'s "setup writes into the identity record it rendered" -> the record
     # is skipped as hand-edited and this reddens.
-    from stayfixed.overlay.requires import requires_of
-    from stayfixed.setup.api import setup
+    from drybag.overlay.requires import requires_of
+    from drybag.setup.api import setup
 
     destination = tmp_path / "ov"
     report = setup(
@@ -100,11 +100,11 @@ def test_a_record_written_by_hand_as_the_upgrading_note_says_is_the_one_the_temp
     tmp_path: Path,
 ) -> None:
     # An overlay made before the record shipped is migrated by hand: the release note says to add
-    # `stayfixed-overlay.toml` holding `requires = ">=0.1.0"` and `layout = 1`. Written so, it is
+    # `drybag-overlay.toml` holding `requires = ">=0.1.0"` and `layout = 1`. Written so, it is
     # the shipped record byte for byte, so `overlay upgrade` reads it as up to date. While the
     # record also held an owner and a name, a record written as the note said never matched the
-    # template, and was skipped as a file stayfixed did not write. A ledger records only what
-    # stayfixed wrote, so such a record is still not refreshed once a later release changes it
+    # template, and was skipped as a file drybag did not write. A ledger records only what
+    # drybag wrote, so such a record is still not refreshed once a later release changes it
     # (`docs/cli.md`, `overlay upgrade`).
     root = _an_overlay(tmp_path)
     manifest = root / MANIFEST_PATH
@@ -152,7 +152,7 @@ def test_a_directory_that_is_not_an_overlay_is_refused_before_anything_is_writte
     tmp_path: Path,
 ) -> None:
     # `--root` defaults to `.` and was checked nowhere: in a directory
-    # holding a `README.md` and a `src/main.py`, `stayfixed overlay upgrade --root .` created
+    # holding a `README.md` and a `src/main.py`, `drybag overlay upgrade --root .` created
     # the whole overlay — both plugin manifests, `hooks/hooks.json`, `common/**`, `.gitignore`
     # and `.github/workflows/scan.yml` — reported them as work done and exited 0. (Fourteen
     # files when the defect was found; the count has moved since, which is why it is not
@@ -187,7 +187,7 @@ def test_the_cli_exits_two_rather_than_zero_on_a_directory_that_is_not_an_overla
 
 # --- a file an earlier release shipped and this one does not --------------------------------
 
-# The bytes 0.1.0 and 0.1.1 shipped at `common/memory/README.md`, whole: the bytes stayfixed wrote
+# The bytes 0.1.0 and 0.1.1 shipped at `common/memory/README.md`, whole: the bytes drybag wrote
 # there, which `overlay upgrade` once removed the file by.
 SHIPPED_MEMORY_README = (
     "# Cross-project notes\n"
@@ -209,7 +209,7 @@ MEMORY_README = "common/memory/README.md"
 
 def test_upgrade_plans_nothing_for_a_formerly_retired_file(tmp_path: Path) -> None:
     # `overlay upgrade` plans the shipped template files only: a file an earlier release shipped
-    # and this one does not is the owner's to delete, even holding the bytes stayfixed wrote.
+    # and this one does not is the owner's to delete, even holding the bytes drybag wrote.
     root = _an_overlay(tmp_path)
     (root / MANIFEST_PATH).unlink()
     path = root / MEMORY_README

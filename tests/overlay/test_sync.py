@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from stayfixed.overlay.api import Sync, overlay_sync
+from drybag.overlay.api import Sync, overlay_sync
 from tests.gitfixture import git, needs_git
 
 

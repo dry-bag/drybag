@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.processes import Ran, run_bounded
+from drybag.processes import Ran, run_bounded
 
 ENV = {"PATH": os.environ["PATH"]}
 

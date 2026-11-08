@@ -1,4 +1,4 @@
-"""The machine's one trust record (`src/stayfixed/trust/record.py`): a versioned document of kinds
+"""The machine's one trust record (`src/drybag/trust/record.py`): a versioned document of kinds
 and subjects beside the machine file."""
 
 from __future__ import annotations
@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import fsops
-from stayfixed.config.machine import machine_config_path
-from stayfixed.errors import Failure
-from stayfixed.jsonobject import LONG_NUMBER, NESTED
-from stayfixed.trust.record import (
+from drybag import fsops
+from drybag.config.machine import machine_config_path
+from drybag.errors import Failure
+from drybag.jsonobject import LONG_NUMBER, NESTED
+from drybag.trust.record import (
     LATER_VERSION,
     NO_HOME,
     NOT_A_RECORD,
@@ -102,9 +102,9 @@ def test_an_unreadable_record_refuses_and_is_never_overwritten(
 ) -> None:
     # Each arm of the version-1 reader has a case of its own: every other version-1 record in the
     # suite is one `approve_all` wrote, and it can write none of these. Only a version above this
-    # one sends its reader to a later stayfixed. Mutations (`mutations/`'s "a trust record of a
+    # one sends its reader to a later drybag. Mutations (`mutations/`'s "a trust record of a
     # later version is read as empty" -> version 2 reads as no approval and the write replaces it;
-    # "a trust record of any other version is sent to a later stayfixed" -> `bool`, `version-0`,
+    # "a trust record of any other version is sent to a later drybag" -> `bool`, `version-0`,
     # `negative` and `text` say `LATER_VERSION`; "an approval over an unreadable trust record
     # writes the record anyway" -> the write replaces every case; "a trust
     # record's approvals that are not a list read as none" -> `approvals-not-a-list` reads as no
@@ -184,8 +184,8 @@ def test_the_record_ignores_xdg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     # The record beside the machine file is under `HOME`, whatever `XDG_CONFIG_HOME` says.
     monkeypatch.setenv("HOME", str(tmp_path / "owner"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-    assert machine_config_path() == tmp_path / "owner" / ".config" / "stayfixed" / "config.toml"
-    assert record_path(None) == tmp_path / "owner" / ".config" / "stayfixed" / RECORD
+    assert machine_config_path() == tmp_path / "owner" / ".config" / "drybag" / "config.toml"
+    assert record_path(None) == tmp_path / "owner" / ".config" / "drybag" / RECORD
     assert record_path(machine(tmp_path)) == tmp_path / RECORD
     # No home: no record, and nothing to fall back on.
     monkeypatch.setenv("HOME", "")
@@ -270,7 +270,7 @@ def test_a_home_that_cannot_be_written_fails_naming_the_directory(
     finally:
         locked.chmod(0o755)
     assert not isinstance(failed.value, SandboxedWrite)
-    assert str(failed.value).startswith(f"{locked / '.config' / 'stayfixed'} cannot be written")
+    assert str(failed.value).startswith(f"{locked / '.config' / 'drybag'} cannot be written")
 
 
 @pytest.mark.parametrize(
@@ -316,8 +316,8 @@ def test_the_sandbox_sentence_says_what_a_person_in_their_own_terminal_meets() -
     # immutable flag answers a person already in their own terminal, whom the sentence would
     # otherwise send there again. Mutation (`mutations/`'s "the sandbox sentence sends a person in
     # their own terminal there again"): the sentence ends at the sandbox.
-    from stayfixed.trust.boundary import OWN_TERMINAL_TOO
-    from stayfixed.trust.record import SANDBOXED
+    from drybag.trust.boundary import OWN_TERMINAL_TOO
+    from drybag.trust.record import SANDBOXED
 
     assert SANDBOXED.endswith(OWN_TERMINAL_TOO)
 
@@ -392,10 +392,10 @@ def test_a_record_linked_into_a_directory_that_cannot_be_written_names_that_dire
     assert str(failed.value).startswith(f"{leads_to.parent} cannot be written (")
 
 
-def test_a_later_records_refusal_sends_its_reader_to_a_later_stayfixed() -> None:
-    # A record a later stayfixed wrote is met after a downgrade, where deleting it would destroy
-    # that release's approvals: the remedy is updating stayfixed, never deleting the file. No
+def test_a_later_records_refusal_sends_its_reader_to_a_later_drybag() -> None:
+    # A record a later drybag wrote is met after a downgrade, where deleting it would destroy
+    # that release's approvals: the remedy is updating drybag, never deleting the file. No
     # mutation of its own: the refusal is a constant, asserted whole by the unreadable-record cases
     # above.
-    assert LATER_VERSION.endswith("update stayfixed to read it")
+    assert LATER_VERSION.endswith("update drybag to read it")
     assert "delete" not in LATER_VERSION

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the built artifacts carry what an installed stayfixed needs.
+"""Check the built artifacts carry what an installed drybag needs.
 
     uv run python scripts/check_artifacts.py dist            # the one wheel and one sdist
     uv run python scripts/check_artifacts.py rendered DIR    # what `setup --overlay DIR` left
@@ -32,8 +32,8 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-from stayfixed.overlay.api import OVERLAY_FILES
-from stayfixed.scaffold import MANIFEST_PATH
+from drybag.overlay.api import OVERLAY_FILES
+from drybag.scaffold import MANIFEST_PATH
 
 # The mutation declarations, one file per group. The sdist must carry the files this checkout
 # carries, globbed rather than spelled: `GROUP_OF` in `scripts/mutation_oracle.py` is the one
@@ -41,8 +41,8 @@ from stayfixed.scaffold import MANIFEST_PATH
 DECLARATIONS = Path(__file__).resolve().parents[1] / "mutations"
 
 WHEEL_MUST = (
-    "stayfixed/presets/recommended.toml",
-    *(f"stayfixed/templates/overlay/{relative}" for relative in OVERLAY_FILES),
+    "drybag/presets/recommended.toml",
+    *(f"drybag/templates/overlay/{relative}" for relative in OVERLAY_FILES),
 )
 # What a downstream packager needs to verify the sdist, plus the three files the harness runs
 # without an interpreter of ours.
@@ -54,10 +54,10 @@ SDIST_MUST = (
     # the build and not a new packaging rule.
     "hooks/run-hook.sh",
     "hooks/hooks.json",
-    "scripts/stayfixed",
+    "scripts/drybag",
     *(f"mutations/{path.name}" for path in sorted(DECLARATIONS.glob("*.toml"))),
 )
-SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/stayfixed")
+SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/drybag")
 
 
 def check_wheel(path: Path) -> list[str]:

@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from stayfixed.printed import CLIPPED_CHARS, UNPRINTABLE, clipped, printable, quoted
+from drybag.printed import CLIPPED_CHARS, UNPRINTABLE, clipped, printable, quoted
 from tests.crafted import CRAFTED
 
 # Names the path grammar admits: each prints as itself under both bounds, so ordinary output is
@@ -89,7 +89,7 @@ def test_a_name_past_the_clip_prints_its_first_characters_and_its_length(name: s
 
 # A name of a million segments, which the grammar read with 124 MiB more of match state when `re`
 # kept a record for each segment it might give back, and with none when it keeps none: a
-# `stayfixed.toml` value is bounded in length by nothing. The most the child may grow its peak
+# `drybag.toml` value is bounded in length by nothing. The most the child may grow its peak
 # resident size by, a few copies of the two-mebibyte name.
 _LONG_NAME_SEGMENTS = 1 << 20
 _LONG_NAME_BYTES = 32 << 20
@@ -103,7 +103,7 @@ def test_a_long_name_is_judged_in_memory_linear_in_its_length() -> None:
     # path's segments are given back" -> this reddens.
     probe = (
         "import resource, sys\n"
-        "from stayfixed.printed import quoted\n"
+        "from drybag.printed import quoted\n"
         "name = 'a/' * int(sys.argv[1]) + 'a'\n"
         "scale = 1 if sys.platform == 'darwin' else 1024\n"
         "before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss\n"

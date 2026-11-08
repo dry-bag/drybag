@@ -1,4 +1,4 @@
-"""`stayfixed setup --restore`: the overlay's projects file, the tools, and the attach loop.
+"""`drybag setup --restore`: the overlay's projects file, the tools, and the attach loop.
 
 Every case builds an overlay and its checkouts under `tmp_path`, hands `restore` (or the command)
 a `Recorder` for `claude`, and a `home` and a `machine` file of its own: nothing here reads the
@@ -16,13 +16,13 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import binding, fsops
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.errors import Refusal
-from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX
-from stayfixed.overlay.layout import IDENTITY_RECORD
-from stayfixed.runner import Completed
-from stayfixed.setup.restore import (
+from drybag import binding, fsops
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.errors import Refusal
+from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX
+from drybag.overlay.layout import IDENTITY_RECORD
+from drybag.runner import Completed
+from drybag.setup.restore import (
     PLUGINS_FILE,
     PROJECTS_FILE,
     Listed,
@@ -33,7 +33,7 @@ from stayfixed.setup.restore import (
     missing_tools,
     restore,
 )
-from stayfixed.setup.run import _MARKETPLACE_ADD, _PLUGIN_INSTALL
+from drybag.setup.run import _MARKETPLACE_ADD, _PLUGIN_INSTALL
 from tests.attach.test_binding import CONFIG
 from tests.attach.test_write import ledger_file
 from tests.gitfixture import git
@@ -59,11 +59,11 @@ def _overlay(tmp_path: Path) -> Path:
 
 
 def _checkout(tmp_path: Path, directory: str, *, claims: str | None = None) -> Path:
-    """A git checkout under `tmp_path/checkouts/<directory>` whose tracked `stayfixed.toml` names
+    """A git checkout under `tmp_path/checkouts/<directory>` whose tracked `drybag.toml` names
     the project `claims` (the directory's own name by default)."""
     root = tmp_path / "checkouts" / directory
     root.mkdir(parents=True)
-    (root / "stayfixed.toml").write_text(CONFIG.format(name=claims or directory), encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG.format(name=claims or directory), encoding="utf-8")
     git(root, "init", "-q", "-b", "main")
     git(root, "remote", "add", "origin", f"git@example.com:o/{directory}.git")
     return root
@@ -156,7 +156,7 @@ def test_a_listed_dir_that_is_not_there_is_reported_and_skipped(tmp_path: Path) 
 def test_a_checkout_whose_project_is_not_its_table_key_is_refused_and_the_rest_attach(
     tmp_path: Path,
 ) -> None:
-    # A clone's tracked `stayfixed.toml` can claim another of the owner's projects. The store comes
+    # A clone's tracked `drybag.toml` can claim another of the owner's projects. The store comes
     # from the key in the owner's file, so attach refuses the clone rather than giving it beta's
     # notes. Mutation: `mutations/`'s "restore attaches without the store its table key names".
     overlay = _overlay(tmp_path)
@@ -202,7 +202,7 @@ def test_a_listed_dir_that_is_no_checkout_is_reported_and_the_rest_attach(tmp_pa
     assert states["gamma"] == "attached"
     assert states["alpha"] == states["beta"] == "failed"
     assert all(o.detail for o in report.projects if o.name != "gamma")
-    assert not fsops.exists(plain / ".stayfixed")
+    assert not fsops.exists(plain / ".drybag")
 
 
 def test_a_relative_dir_is_refused_before_any_attach(tmp_path: Path) -> None:
@@ -253,7 +253,7 @@ def test_no_projects_file_lists_nothing(tmp_path: Path) -> None:
 
 
 def test_keys_the_product_does_not_read_are_ignored(tmp_path: Path) -> None:
-    # An overlay's own scripts read `branch`, `sync`, `exclude` and `links`; stayfixed reads `dir`.
+    # An overlay's own scripts read `branch`, `sync`, `exclude` and `links`; drybag reads `dir`.
     overlay = _overlay(tmp_path)
     alpha = _checkout(tmp_path, "alpha")
     body = f'dir = "{alpha}"\nbranch = "next"\nsync = true\nexclude = ["x"]\nlinks = {{ a = 1 }}'
@@ -309,7 +309,7 @@ def test_a_failed_project_makes_the_command_exit_1(
     overlay = _overlay(tmp_path)
     claiming = _checkout(tmp_path, "alpha", claims="beta")
     _list(overlay, {"alpha": f'dir = "{claiming}"'})
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: Recorder())
     code, out, _ = invoke(_restoring(tmp_path, overlay, "--json"))
     assert code == 1
     rows = json.loads(out)["projects"]
@@ -331,7 +331,7 @@ def test_a_checkout_with_no_config_is_attached_under_its_table_key(tmp_path: Pat
     # Its `origin` names `zzz`, which is not the key: the key names the project.
     overlay = _overlay(tmp_path)
     zzz = _checkout(tmp_path, "zzz")
-    (zzz / "stayfixed.toml").unlink()
+    (zzz / "drybag.toml").unlink()
     report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha2=zzz))
     assert _states(report) == {"alpha2": "attached"}
     assert not fsops.exists(overlay / "projects" / "zzz")
@@ -355,7 +355,7 @@ def test_a_restore_from_the_recorded_overlay_names_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     overlay = _overlay(tmp_path)
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: Recorder())
     code, out, _ = _recording(tmp_path, overlay)
     assert code == 0
     assert str(overlay) in out and "no overlay recorded" not in out
@@ -365,10 +365,10 @@ def test_a_restore_from_the_recorded_overlay_names_it(
 def test_sync_switches_note_sync_on(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sync: bool
 ) -> None:
-    from stayfixed.setup.machine import read_machine
+    from drybag.setup.machine import read_machine
 
     overlay = _overlay(tmp_path)
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: Recorder())
     code, out, _ = invoke(_restoring(tmp_path, overlay, "--json", *(["--sync"] if sync else [])))
     assert code == 0
     assert json.loads(out)["sync"] is sync
@@ -410,8 +410,8 @@ def test_restore_prints_the_missing_tools_first_and_still_attaches(
     overlay = _overlay(tmp_path)
     alpha = _checkout(tmp_path, "alpha")
     _list(overlay, {"alpha": f'dir = "{alpha}"'})
-    monkeypatch.setattr("stayfixed.setup.restore.missing_tools", lambda: ("codex",))
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
+    monkeypatch.setattr("drybag.setup.restore.missing_tools", lambda: ("codex",))
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: Recorder())
     code, out, _ = invoke(_restoring(tmp_path, overlay))
     assert code == 0
     assert out.splitlines()[0].startswith("missing tools: codex")
@@ -539,7 +539,7 @@ def test_a_failed_install_is_printed_by_the_command(
     _machine_settings(overlay, _enabling("need@hub"))
     install = "claude plugin install need@hub"
     runner = Recorder(answers={install: Completed(1, "", "no such plugin\n")})
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: runner)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: runner)
     code, out, _ = invoke(_restoring(tmp_path, overlay, *json_flag))
     assert code == 0
     said = json.loads(out)["notes"] if json_flag else [out]
@@ -589,7 +589,7 @@ def _note(name: str) -> str:
 
 def _notes(overlay: Path, project: str, *names: str) -> None:
     """Notes in the project's own `project-stable` group, which the attach fixture's
-    `stayfixed.toml` lists among `memory.groups`."""
+    `drybag.toml` lists among `memory.groups`."""
     group = overlay / "projects" / project / "memory" / "project-stable"
     group.mkdir(parents=True, exist_ok=True)
     for name in names:
@@ -598,7 +598,7 @@ def _notes(overlay: Path, project: str, *names: str) -> None:
 
 def _reviewed(machine: Path) -> list[str]:
     """The notes the machine's trust record holds as reviewed."""
-    from stayfixed.trust.api import recorded
+    from drybag.trust.api import recorded
 
     return sorted(subject for kind, subject in recorded(machine) if kind == "reviewed")
 
@@ -637,9 +637,9 @@ def test_yes_records_the_overlays_notes_for_the_key_and_never_the_checkouts(
     # for the table key and reads nothing the checkout holds.
     overlay = _overlay(tmp_path)
     alpha = _checkout(tmp_path, "alpha")
-    config = (alpha / "stayfixed.toml").read_text(encoding="utf-8")
+    config = (alpha / "drybag.toml").read_text(encoding="utf-8")
     in_repo = config.replace('mode = "overlay"', 'mode = "in-repo"') + '[paths]\nmemory = "n"\n'
-    (alpha / "stayfixed.toml").write_text(in_repo, encoding="utf-8")
+    (alpha / "drybag.toml").write_text(in_repo, encoding="utf-8")
     committed = alpha / "n" / "project-stable" / "planted.md"
     committed.parent.mkdir(parents=True)
     committed.write_text(_note("planted"), encoding="utf-8")
@@ -652,7 +652,7 @@ def test_yes_records_the_overlays_notes_for_the_key_and_never_the_checkouts(
 def test_yes_records_the_overlays_notes_for_a_checkout_with_no_config(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path)
     alpha = _checkout(tmp_path, "alpha")
-    (alpha / "stayfixed.toml").unlink()
+    (alpha / "drybag.toml").unlink()
     _notes(overlay, "alpha", "one")
     report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha), yes=True)
     assert [(o.state, o.promoted) for o in report.projects] == [("attached", 1)]
@@ -682,7 +682,7 @@ def test_yes_through_the_command_records_the_notes_and_the_json_counts_them(
     alpha = _checkout(tmp_path, "alpha")
     _notes(overlay, "alpha", "one", "two")
     _list(overlay, {"alpha": f'dir = "{alpha}"'})
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: Recorder())
     code, out, _ = invoke(_restoring(tmp_path, overlay, "--yes", "--json"))
     assert code == 0
     assert [row["promoted"] for row in json.loads(out)["projects"]] == [2]

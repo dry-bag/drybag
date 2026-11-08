@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import gitenv
-from stayfixed.gitenv import NO_ANSWER, git_run
+from drybag import gitenv
+from drybag.gitenv import NO_ANSWER, git_run
 from tests.gitfixture import SESSION_CONFIG, plant_path, stand_in_git
 
 SRC = Path(__file__).resolve().parents[1] / "src"
@@ -270,7 +270,7 @@ def test_the_product_ships_with_no_floor_under_its_bounds() -> None:
     # product ships a floor under every git bound" -> this reddens.
     env = {key: value for key, value in os.environ.items() if key != gitenv.FLOOR_VARIABLE}
     shipped = subprocess.run(
-        [sys.executable, "-P", "-c", "from stayfixed import gitenv; print(gitenv.bound_floor())"],
+        [sys.executable, "-P", "-c", "from drybag import gitenv; print(gitenv.bound_floor())"],
         capture_output=True,
         text=True,
         check=False,
@@ -332,7 +332,7 @@ def test_git_call_hands_git_only_the_kept_variables(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Whatever the session that fired carries, a per-project `GIT_CONFIG_GLOBAL` with a `pushurl`
-    # above all, reaches no git stayfixed starts; the agent and the proxy a push needs still do.
+    # above all, reaches no git drybag starts; the agent and the proxy a push needs still do.
     # Mutation (oracle): `mutations/`'s "a session's global git configuration reaches git" -> this
     # reddens.
     for name in (SESSION_CONFIG, "GIT_DIR", "PRE_COMMIT_HOME", "GIT_SSH_COMMAND"):
@@ -380,11 +380,11 @@ def test_git_call_honours_the_floor(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 # latency, so a bound shrunk below it — `QUERY_TIMEOUT_SECONDS = 0.001` — passed every test
 # that runs through it, and only an owner's machine would have met a `git` never given the time.
 GIT_RUN_BOUNDS = (
-    "stayfixed.gitenv.GIT_TIMEOUT_SECONDS",
-    "stayfixed.gitenv.QUERY_TIMEOUT_SECONDS",
-    "stayfixed.overlay.sync.SYNC_TIMEOUT_SECONDS",
-    "stayfixed.guards.commit.LOG_TIMEOUT_SECONDS",
-    "stayfixed.hints.hygiene.STATUS_TIMEOUT_SECONDS",
+    "drybag.gitenv.GIT_TIMEOUT_SECONDS",
+    "drybag.gitenv.QUERY_TIMEOUT_SECONDS",
+    "drybag.overlay.sync.SYNC_TIMEOUT_SECONDS",
+    "drybag.guards.commit.LOG_TIMEOUT_SECONDS",
+    "drybag.hints.hygiene.STATUS_TIMEOUT_SECONDS",
 )
 
 
@@ -442,7 +442,7 @@ def test_every_bound_a_git_run_call_passes_is_one_the_table_pins() -> None:
     pinned = {bound.rsplit(".", 1)[1] for bound in GIT_RUN_BOUNDS}
     reached = {"GIT_TIMEOUT_SECONDS"}  # `git_run`'s own default, for a call that passes none
     unpinned = []
-    for path in sorted((SRC / "stayfixed").rglob("*.py")):
+    for path in sorted((SRC / "drybag").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         enclosing = {
             id(node): function
