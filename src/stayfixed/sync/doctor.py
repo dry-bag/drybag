@@ -88,14 +88,7 @@ def _sync(context: Context) -> Row:
     from stayfixed.printed import clipped
     from stayfixed.sync import scan
     from stayfixed.sync.git import MIN_GIT, git, version_ok
-    from stayfixed.sync.job import REVIEW
-    from stayfixed.sync.state import (
-        STANDING,
-        StateUnreadable,
-        full_sha,
-        read_state,
-        state_directory,
-    )
+    from stayfixed.sync.state import STANDING, StateUnreadable, read_state, state_directory
 
     if not context.session.owner.sync.enabled:
         where = context.machine or machine_config_path() or "the machine file"
@@ -151,6 +144,9 @@ def _sync(context: Context) -> Row:
         fix = "a rerun meets this again until you act on what it says"
         # A conflict's detail ends in its command, past the clip: the command is given here, from
         # the job's own text and only for a recorded sha that is one, as a hold's is (`_held`).
+        from stayfixed.sync.job import REVIEW
+        from stayfixed.sync.state import full_sha
+
         if outcome.state == "conflict" and full_sha(state.fetched_sha):
             fix += f"; in {overlay}: {REVIEW.format(sha=state.fetched_sha)}"
     else:

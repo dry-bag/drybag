@@ -454,12 +454,6 @@ LOCAL_REVIEW = (
 )
 # How the owner reads an upstream {sha} git will not check out, which only upstream can repair.
 UNREADABLE_REVIEW = "git diff --stat HEAD {sha}, then repair upstream"
-# What a replay that conflicts records: the {paths} it conflicts on, and how the owner integrates
-# the fetched {sha} by hand.
-CONFLICT = (
-    "a local commit conflicts with upstream on {paths}; main was not moved. To integrate {sha} by "
-    "hand: " + REVIEW
-)
 
 
 def _original(ctx: JobContext, commit: str) -> tuple[dict[str, str], bytes]:
@@ -601,7 +595,10 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
         return None
     tip, conflicted = replay(ctx, upstream, local)
     if tip is None:
-        detail = CONFLICT.format(paths=", ".join(conflicted), sha=upstream)
+        detail = (
+            f"a local commit conflicts with upstream on {', '.join(conflicted)}; main was not "
+            f"moved. To {by_hand}"
+        )
         return _outcome(ctx, "conflict", detail)
     incoming = _nul(
         _ok(ctx, "diff", "--no-renames", "--name-only", "-z", "--end-of-options", head, tip)

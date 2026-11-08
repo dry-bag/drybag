@@ -318,9 +318,9 @@ def test_conflict_row_carries_the_whole_remedy(
     # The job's detail for a conflict is longer than `clipped` prints, and its one command comes
     # last, so the row gives that command apart from the detail, from the sha the job recorded,
     # in the row and in `--json`, where the doctor skill reads it.
-    detail = J.CONFLICT.format(paths="common/memory/first.md", sha=UPSTREAM)
     command = J.REVIEW.format(sha=UPSTREAM)
-    assert len(detail) > CLIPPED_CHARS and f"then git rebase {UPSTREAM}" in command
+    detail = "x" * CLIPPED_CHARS + command
+    assert f"then git rebase {UPSTREAM}" in command
     machine.scanner().state("conflict", detail, fetched=UPSTREAM)
 
     status, _, remedy = machine.row()
