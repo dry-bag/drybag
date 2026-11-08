@@ -1,12 +1,12 @@
 name: Bug report
-description: Something stayfixed did that it should not have, or did not do that it should
+description: Something drybag did that it should not have, or did not do that it should
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
         **If this is a containment or trust-gate bypass, stop.** Report it privately:
-        https://github.com/stayfixed/stayfixed/security/advisories/new — a public issue
+        https://github.com/dry-bag/drybag/security/advisories/new — a public issue
         discloses it to every user at the moment you file it. See SECURITY.md.
   - type: textarea
     id: what
@@ -27,14 +27,14 @@ body:
       label: How to reproduce it
       description: >
         A repository — or a script that builds one — is worth far more than a description.
-        Most of stayfixed's behaviour turns on what a repository contains.
+        Most of drybag's behaviour turns on what a repository contains.
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: stayfixed version
-      description: "`stayfixed --version`"
+      label: drybag version
+      description: "`drybag --version`"
     validations:
       required: true
   - type: input

@@ -3,7 +3,7 @@
 `smoke-project` is a project every gate passes on; `hostile-project` is the clone the
 clone-to-exfiltration scenario runs. Both are read by CI from this tree, so a fixture that drifted
 from what a gate accepts would fail the smoke workflow with a message about the fixture rather than
-about stayfixed.
+about drybag.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from stayfixed.cli import build_parser, discover_registrars, run
+from drybag.cli import build_parser, discover_registrars, run
 from tests.declarations import declared
 from tests.gitfixture import git, needs_git
 from tests.workflow_yaml import load, runs
@@ -122,7 +122,7 @@ def test_docs_check_on_the_fixture_reads_the_documents_it_is_about(tmp_path: Pat
     # The fifth row's companion, and it has to be a planted violation rather than a count:
     # `docs check` reports `findings: []` and the same `OK:` line whether it examined the
     # documents or returned early, so no field of its success answer can tell the two apart.
-    # Measured: `check_budgets` and `check_links` in `src/stayfixed/docs/hygiene.py` each given
+    # Measured: `check_budgets` and `check_links` in `src/drybag/docs/hygiene.py` each given
     # `return []` as their first statement left `tests/test_fixtures.py` 30 green.
     #
     # Two plants and not one, because they are two walks: an always-loaded document blown past
@@ -165,7 +165,7 @@ def test_the_hostile_fixture_carries_the_three_properties_the_scenario_depends_o
     import json
     import tomllib
 
-    raw = (HOSTILE / "stayfixed.toml").read_text(encoding="utf-8")
+    raw = (HOSTILE / "drybag.toml").read_text(encoding="utf-8")
     config = tomllib.loads(raw)
     # The clone names ANOTHER project, which is the whole of the `mismatch` row.
     assert config["project"]["name"] == "smoke"
@@ -176,7 +176,7 @@ def test_the_hostile_fixture_carries_the_three_properties_the_scenario_depends_o
     assert "CANARY-IN-REPO-RULE" in note
 
     settings = json.loads((HOSTILE / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    assert "STAYFIXED_CONFIG" in settings["env"]
+    assert "DRYBAG_CONFIG" in settings["env"]
 
 
 # --- workflow steps, read out of the shipped files -------------------------------------
@@ -629,7 +629,7 @@ def test_the_release_workflow_runs_the_release_check_in_the_one_spelling() -> No
     # the old one passed it. Mutation (declared): `mutations/`'s "the release workflow builds
     # after running the release check the CLI no longer ships".
     for body in bodies:
-        assert "stayfixed release" not in body, body
+        assert "drybag release" not in body, body
 
 
 @needs_release_workflow

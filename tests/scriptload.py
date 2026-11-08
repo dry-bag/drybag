@@ -71,10 +71,10 @@ def publish_template() -> ModuleType:
     return load(SCRIPTS / "publish_template.py", "publish_template_script_under_test")
 
 
-def without_stayfixed(
+def without_drybag(
     name: str, where: Path, *args: str, missing: tuple[str, ...] = ()
 ) -> subprocess.CompletedProcess[str]:
-    """The script `name` run as an owner runs it without `uv run`, where no `stayfixed` can be
+    """The script `name` run as an owner runs it without `uv run`, where no `drybag` can be
     imported: a copy in `where`, outside this repository, under `-I -S`. `-I` alone would still
     find this checkout's package through the environment's `site-packages`, where `uv sync`
     installs it; `-S` leaves only the standard library. `missing` names standard modules this

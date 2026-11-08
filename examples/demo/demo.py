@@ -1,15 +1,15 @@
-"""A demonstration of stayfixed, run against a small repository it builds in a scratch directory.
+"""A demonstration of drybag, run against a small repository it builds in a scratch directory.
 
-    python3 -I examples/demo/demo.py STAYFIXED [--require-claude] [--keep]
+    python3 -I examples/demo/demo.py DRYBAG [--require-claude] [--keep]
 
-`STAYFIXED` is the `stayfixed` program under test. Each act runs it as a user would and passes
+`DRYBAG` is the `drybag` program under test. Each act runs it as a user would and passes
 only on the product's own answer: its exit code and the fields of the one JSON object its
 `--json` prints on standard output. Nothing this script prints is ever read back, so an act
 cannot pass on the script's word.
 
 Every command runs with `HOME` inside the scratch directory, `GIT_CONFIG_NOSYSTEM=1`, fixed
 author and committer names, emails and dates, and a `bin/` directory first on `PATH` that holds a
-link named `stayfixed` to `STAYFIXED`, so a configured `["stayfixed", ...]` runs the program under
+link named `drybag` to `DRYBAG`, so a configured `["drybag", ...]` runs the program under
 test. Nothing reaches the network: `git` and `python3` come from the caller's `PATH`.
 
 Exit 0 when no act failed, 1 when one did, 2 on a usage error.
@@ -130,17 +130,17 @@ class Demo:
     """The scratch directory, the fixture repository in it and the environment every command
     runs under."""
 
-    def __init__(self, scratch: Path, stayfixed: Path, caller_path: str) -> None:
+    def __init__(self, scratch: Path, drybag: Path, caller_path: str) -> None:
         self.scratch = scratch
         self.repo = scratch / "repo"
         self.home = scratch / "home"
         self.bin = scratch / "bin"
         self.tmp = scratch / "tmp"
-        # The version `stayfixed --version` names, which the fixture's configuration records.
+        # The version `drybag --version` names, which the fixture's configuration records.
         self.version = ""
         for directory in (self.repo, self.home, self.bin, self.tmp):
             directory.mkdir()
-        (self.bin / "stayfixed").symlink_to(stayfixed)
+        (self.bin / "drybag").symlink_to(drybag)
         self.env = {
             "PATH": os.pathsep.join([str(self.bin), caller_path]),
             "HOME": str(self.home),
@@ -199,15 +199,15 @@ class Demo:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
 
-    def stayfixed(
+    def drybag(
         self, args: Sequence[str], *, code: int, fields: Sequence[Field]
     ) -> dict[str, object]:
-        """Run `stayfixed ARGS` and assert its exit code and every field of its `--json` object.
+        """Run `drybag ARGS` and assert its exit code and every field of its `--json` object.
 
         Prints the command as typed, the exit code and each field asserted. Returns the object, so
         an act may take a value the product named (a path it wrote) for its next step.
         """
-        argv = ["stayfixed", *args]
+        argv = ["drybag", *args]
         print(f"  $ {shlex.join(argv)}")
         ran = self.run(argv)
         problems: list[str] = []
@@ -244,7 +244,7 @@ class Demo:
 
 # The project's configuration.
 CONFIGURATION = """\
-[stayfixed]
+[drybag]
 version = "{version}"
 
 [project]
@@ -264,7 +264,7 @@ SKILLS = {
 }
 # Where `attach` renders the overlay's plugin, under the home directory: one directory per binding,
 # named by the binding id, which `--json` names by its first characters.
-DELIVERY = ".local/share/stayfixed/delivery"
+DELIVERY = ".local/share/drybag/delivery"
 MARKETPLACE = ".claude-plugin/marketplace.json"
 
 
@@ -314,7 +314,7 @@ def act_attach(demo: Demo) -> None:
         raise Skipped("claude is not on PATH")
     machine = _overlay(demo)
     _clean(demo)
-    attached = demo.stayfixed(
+    attached = demo.drybag(
         ["attach", "--machine", os.path.relpath(machine, demo.repo), "--json"],
         code=0,
         fields=[
@@ -342,7 +342,7 @@ def build_fixture(demo: Demo) -> None:
     demo.git("init", "-q", "-b", "main")
     for relative, text in FIXTURE.items():
         demo.write(relative, text)
-    demo.write("stayfixed.toml", CONFIGURATION.format(version=demo.version))
+    demo.write("drybag.toml", CONFIGURATION.format(version=demo.version))
     demo.git("add", "-A")
     demo.git("commit", "-q", "-m", "a total and the project's configuration")
 
@@ -360,8 +360,8 @@ def _on_signal(signum: int, _frame: FrameType | None) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the stayfixed demo against STAYFIXED.")
-    parser.add_argument("stayfixed", metavar="STAYFIXED", help="the stayfixed program to run")
+    parser = argparse.ArgumentParser(description="Run the drybag demo against DRYBAG.")
+    parser.add_argument("drybag", metavar="DRYBAG", help="the drybag program to run")
     parser.add_argument(
         "--require-claude",
         action="store_true",
@@ -370,7 +370,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--keep", action="store_true", help="keep the scratch directory")
     options = parser.parse_args(argv)
 
-    program = Path(options.stayfixed)
+    program = Path(options.drybag)
     if not program.is_file() or not os.access(program, os.X_OK):
         print(f"usage error: {program} is not an executable file", file=sys.stderr)
         return 2
@@ -383,7 +383,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for signum in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(signum, _on_signal)
     started = time.monotonic()
-    scratch = Path(tempfile.mkdtemp(prefix="stayfixed-demo-"))
+    scratch = Path(tempfile.mkdtemp(prefix="drybag-demo-"))
     try:
         return _run(Demo(scratch, Path(os.path.abspath(program)), caller_path), options, started)
     except KeyboardInterrupt:
@@ -395,9 +395,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _run(demo: Demo, options: argparse.Namespace, started: float) -> int:
-    # By its absolute path and never through `PATH`: a STAYFIXED that cannot start would let the
-    # acts' bare `stayfixed` fall through to the next one on `PATH`, and pass on its answers.
-    program = os.path.abspath(options.stayfixed)
+    # By its absolute path and never through `PATH`: a DRYBAG that cannot start would let the
+    # acts' bare `drybag` fall through to the next one on `PATH`, and pass on its answers.
+    program = os.path.abspath(options.drybag)
     try:
         version = demo.run([program, "--version"])
     except ActFailed as failed:
@@ -407,8 +407,8 @@ def _run(demo: Demo, options: argparse.Namespace, started: float) -> int:
         print(f"usage error: {program} --version exited {version.code}", file=sys.stderr)
         return 2
     demo.version = _first_line(version).split()[-1]
-    print(f"stayfixed: {os.path.realpath(options.stayfixed)}")
-    print(f"stayfixed --version: {_first_line(version)}")
+    print(f"drybag: {os.path.realpath(options.drybag)}")
+    print(f"drybag --version: {_first_line(version)}")
     if options.keep:
         print(f"scratch directory, kept: {demo.scratch}")
 

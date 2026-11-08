@@ -22,8 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.sync import job as J
-from stayfixed.sync import state as S
+from drybag.sync import job as J
+from drybag.sync import state as S
 from tests.sync.conftest import Overlays, context
 
 NOW = datetime(2026, 11, 2, 12, 0, 0, tzinfo=UTC)
@@ -257,7 +257,7 @@ def test_a_state_past_the_cap_is_unreadable(
 _HOLDER = """
 import sys, time
 from pathlib import Path
-from stayfixed.sync.state import Lock
+from drybag.sync.state import Lock
 lock = Lock.try_acquire(Path(sys.argv[1]))
 print("held" if lock else "busy", flush=True)
 time.sleep(float(sys.argv[2]))
@@ -336,7 +336,7 @@ def test_a_lock_dies_with_its_holder(tmp_path: Path) -> None:
 _LEAVES_A_CHILD = """
 import subprocess, sys, time
 from pathlib import Path
-from stayfixed.sync.state import Lock
+from drybag.sync.state import Lock
 lock = Lock.try_acquire(Path(sys.argv[1]))
 child = subprocess.Popen(["sleep", "30"], close_fds=False)
 print("held", child.pid, flush=True)

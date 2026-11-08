@@ -12,7 +12,7 @@ normal and personal attacks are not.
 
 ## A note specific to this project
 
-stayfixed's reviews are direct. A finding will be stated as a finding, a disagreement about an
+drybag's reviews are direct. A finding will be stated as a finding, a disagreement about an
 approach will be argued on its merits, and "this is wrong because X" is not rudeness. The line
 is the usual one: criticise the code, the design or the argument — never the person who wrote
 it, and never their competence, background or identity.
@@ -21,7 +21,7 @@ it, and never their competence, background or identity.
 
 To report behaviour that breaks this code, open a private report through GitHub:
 
-<https://github.com/stayfixed/stayfixed/security/advisories/new>
+<https://github.com/dry-bag/drybag/security/advisories/new>
 
 That channel is private to the maintainers. It is meant for security reports, and using it for
 a conduct report is a deliberate reuse until a dedicated contact address is published here —

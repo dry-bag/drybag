@@ -7,19 +7,19 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config import paths
-from stayfixed.config.loader import CONFIG_FILE, load, loads
-from stayfixed.config.paths import (
+from drybag.config import paths
+from drybag.config.loader import CONFIG_FILE, load, loads
+from drybag.config.paths import (
+    DRYBAG_DIRECTORY,
     PATH_RULE,
     PATH_VALUE_LIMIT,
-    STAYFIXED_DIRECTORY,
     PathEscape,
     contained,
     validate_paths,
 )
-from stayfixed.config.schema import Config, Paths
-from stayfixed.fsops import UnsafePath, checked_components, write_within
-from stayfixed.grammar import PATH_VALUE
+from drybag.config.schema import Config, Paths
+from drybag.fsops import UnsafePath, checked_components, write_within
+from drybag.grammar import PATH_VALUE
 from tests.crafted import CRAFTED, assert_never_raw
 from tests.pathfaults import (
     LSTAT_FAULT,
@@ -42,7 +42,7 @@ def test_a_plain_relative_path_resolves_under_the_root(tmp_path: Path) -> None:
     [
         "../sibling",
         "docs/../../x",
-        "/etc/stayfixed",
+        "/etc/drybag",
         "",
         ".",
         "./",
@@ -236,7 +236,7 @@ def test_a_supplied_resolved_root_is_the_one_compared(tmp_path: Path) -> None:
 
 def test_validate_paths_allows_a_final_symlink_only_for_the_memory_path(tmp_path: Path) -> None:
     (tmp_path / CONFIG_FILE).write_text(
-        '[stayfixed]\nversion = "0.1.0"\npreset = "recommended"\n\n[project]\nname = "sample"\n',
+        '[drybag]\nversion = "0.1.0"\npreset = "recommended"\n\n[project]\nname = "sample"\n',
         encoding="utf-8",
     )
     config = load(tmp_path, machine=tmp_path / "no-machine.toml")
@@ -259,7 +259,7 @@ def test_validate_paths_allows_a_final_symlink_only_for_the_memory_path(tmp_path
 
 def _sample_config(tmp_path: Path) -> Config:
     (tmp_path / CONFIG_FILE).write_text(
-        '[stayfixed]\nversion = "0.1.0"\npreset = "recommended"\n\n[project]\nname = "sample"\n',
+        '[drybag]\nversion = "0.1.0"\npreset = "recommended"\n\n[project]\nname = "sample"\n',
         encoding="utf-8",
     )
     return load(tmp_path, machine=tmp_path / "no-machine.toml")
@@ -306,13 +306,13 @@ def test_a_paths_value_outside_the_grammar_is_refused_and_never_quoted(tmp_path:
     # `render_report` would print it raw. Mutation (oracle): drop the `PATH_VALUE` check from
     # `validate_paths` -> this reddens.
     text = (
-        '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
+        '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
         '[paths]\nspecs = """docs/\n\n=== NOTICE ===\nspecs"""\n'
     )
     with pytest.raises(PathEscape) as caught:
         loads(text, tmp_path, machine=tmp_path / "absent.toml")
     assert "paths.specs" in str(caught.value) and "NOTICE" not in str(caught.value)
-    for value in ("docs/specs", "design/specs.v2", ".stayfixed/local/x", "AGENTS.md"):
+    for value in ("docs/specs", "design/specs.v2", ".drybag/local/x", "AGENTS.md"):
         assert PATH_VALUE.match(value), value
     for value in ("docs/ specs", "docs/spécs", "-docs", "docs/`x`", "docs/x\n"):
         assert PATH_VALUE.match(value) is None, value
@@ -324,7 +324,7 @@ def test_a_paths_value_longer_than_its_cap_is_refused_naming_the_key(tmp_path: P
     # and never by the value; one of exactly the cap, sound otherwise, loads. Mutations
     # (`mutations/`'s "a [paths] value may be any length" -> the longer value loads; "the [paths]
     # length cap refuses a value of its own length" -> the one at the cap is refused).
-    head = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n[paths]\n'
+    head = '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n[paths]\n'
     segments = "/".join(["a" * 99] * 10)
     at_cap = f"{segments}/{'b' * (PATH_VALUE_LIMIT - len(segments) - 1)}"
     assert len(at_cap) == PATH_VALUE_LIMIT
@@ -370,7 +370,7 @@ def test_contained_asks_no_ancestor_below_the_first_that_is_not_there(
 
 # Every spelling the two readers of a path could have disagreed about, and the plain ones they
 # never did. Shared by the three assertions below so one list of spellings answers all of them.
-ADMITTED = ("docs/specs", "design/specs.v2", ".stayfixed/local/x", "AGENTS.md", "docs/.hidden")
+ADMITTED = ("docs/specs", "design/specs.v2", ".drybag/local/x", "AGENTS.md", "docs/.hidden")
 REFUSED = (
     "docs//roadmap-history.md",  # an empty component
     "design/handbooks/",  # a trailing slash
@@ -380,7 +380,7 @@ REFUSED = (
     "docs/..",  # a '..' component that ends the value
     ".",
     "..",
-    "/etc/stayfixed",
+    "/etc/drybag",
     "",
 )
 
@@ -436,15 +436,15 @@ def test_a_paths_value_naming_gits_control_directory_is_refused_and_never_quoted
 ) -> None:
     # `.git` was reserved by nothing: the grammar admits a leading dot, and `contained()`
     # refused an absolute path, `..` and a symlink but not a control directory. The `agents-md`
-    # artifact is a `MANAGED_REGION`, so it is exempt from the engine's "exists and stayfixed did
+    # artifact is a `MANAGED_REGION`, so it is exempt from the engine's "exists and drybag did
     # not write it" guard and takes the `region_update` path — and `fsops._mode_of` carries the
     # existing 0755 onto the replacement, so a clone got the developer's own pre-commit hook
-    # rewritten in place by choosing one string in its own `stayfixed.toml`.
+    # rewritten in place by choosing one string in its own `drybag.toml`.
     #
     # The refusal names the key and never the value, which is the rule `validate_paths` already
     # follows for the charset. Mutation (oracle): drop the check from `validate_paths`.
     text = (
-        '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
+        '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
         '[paths]\nagents_md = ".git/hooks/pre-commit"\n'
     )
     with pytest.raises(PathEscape) as caught:
@@ -472,64 +472,62 @@ def test_contained_refuses_gits_control_directory_at_any_depth_and_in_any_case(
 @pytest.mark.parametrize(
     "value",
     [
-        ".stayfixed/local/state.json",
-        ".stayfixed/manifest.json",
-        ".stayfixed/local/memory/developer/x.md",
-        "packages/api/.stayfixed/local/state.json",
-        ".stayfixed",
+        ".drybag/local/state.json",
+        ".drybag/manifest.json",
+        ".drybag/local/memory/developer/x.md",
+        "packages/api/.drybag/local/state.json",
+        ".drybag",
     ],
 )
-def test_a_paths_value_inside_stayfixeds_own_directory_is_refused_and_never_quoted(
+def test_a_paths_value_inside_drybags_own_directory_is_refused_and_never_quoted(
     tmp_path: Path, value: str
 ) -> None:
-    # `.stayfixed/local/` holds the local-only notes, state git never sees. `agents-md` is a
+    # `.drybag/local/` holds the local-only notes, state git never sees. `agents-md` is a
     # `MANAGED_REGION` inserted into whatever file `agents_md` names, so a committed `agents_md`
     # naming a file there had `upgrade` rewrite it.
     # Case and depth for the reasons `.git` has them: a case-folding filesystem, and a nested
     # package initialised on its own. The refusal names the key, never the value.
-    # Mutation (oracle): `mutations/`'s "a [paths] value may name stayfixed's own directory".
+    # Mutation (oracle): `mutations/`'s "a [paths] value may name drybag's own directory".
     text = (
-        '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
+        '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
         f'[paths]\nagents_md = "{value}"\n'
     )
     with pytest.raises(PathEscape) as caught:
         loads(text, tmp_path, machine=tmp_path / "absent.toml")
-    assert "paths.agents_md" in str(caught.value) and "stayfixed's own directory" in str(
-        caught.value
-    )
+    assert "paths.agents_md" in str(caught.value) and "drybag's own directory" in str(caught.value)
     assert "attach" not in str(caught.value) and "packages" not in str(caught.value)
 
 
-def test_a_name_that_merely_resembles_stayfixeds_directory_is_admitted(tmp_path: Path) -> None:
-    # A directory named like stayfixed's own, and any other near-miss, loads.
-    for value in ("docs/stayfixed", ".stayfixed-notes/x.md", "docs/.stayfixedrc"):
+def test_a_name_that_merely_resembles_drybags_directory_is_admitted(tmp_path: Path) -> None:
+    # A directory named like drybag's own, and any other near-miss, loads.
+    for value in ("docs/drybag", ".drybag-notes/x.md", "docs/.drybagrc"):
         text = (
-            '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
+            '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
             f'[paths]\nroadmap = "{value}"\n'
         )
         assert loads(text, tmp_path, machine=tmp_path / "absent.toml").paths.roadmap == value
 
 
-def test_every_file_stayfixed_keeps_in_its_own_directory_is_under_the_reserved_name() -> None:
-    # `config` spells `.stayfixed` because it imports no area; the areas that keep files there
+def test_every_file_drybag_keeps_in_its_own_directory_is_under_the_reserved_name() -> None:
+    # `config` spells `.drybag` because it imports no area; the areas that keep files there
     # spell their own paths. This holds each of them under the reserved name, so a rename on
     # either side reddens here instead of leaving an area's state unprotected.
-    from stayfixed.memory.store import LOCAL_STORE
-    from stayfixed.scaffold import MANIFEST_PATH
+    from drybag.memory.store import LOCAL_STORE
+    from drybag.scaffold import MANIFEST_PATH
 
     for path in (
         MANIFEST_PATH.as_posix(),
         LOCAL_STORE.as_posix(),
     ):
-        assert path.split("/")[0] == STAYFIXED_DIRECTORY, path
+        assert path.split("/")[0] == DRYBAG_DIRECTORY, path
 
 
-def test_stayfixeds_own_dotted_footprint_is_not_refused(tmp_path: Path) -> None:
-    # The ruling this rule is narrow for: `.github/workflows/stayfixed.yml` is an artifact this
-    # branch ships and `.stayfixed/` holds the manifest, so "refuse a leading dot" would refuse
-    # stayfixed's own footprint. Pinned so a later widening of the rule fails here rather than in
+def test_drybags_own_dotted_footprint_is_not_refused(tmp_path: Path) -> None:
+    # The ruling this rule is narrow for: `.github/workflows/drybag.yml` is an artifact this
+    # branch ships and `.drybag/` holds the manifest, so "refuse a leading dot" would refuse
+    # drybag's own footprint. Pinned so a later widening of the rule fails here rather than in
     # a user's repository.
-    for value in (".github/workflows/stayfixed.yml", ".stayfixed/manifest.json", ".gitignore"):
+    for value in (".github/workflows/drybag.yml", ".drybag/manifest.json", ".gitignore"):
         assert contained(tmp_path, value) == tmp_path.joinpath(*value.split("/"))
 
 
@@ -538,7 +536,7 @@ def test_a_paths_value_outside_the_grammar_is_refused_in_words(tmp_path: Path) -
     # that is correct and that no person reading a refusal can act on. The value itself is still
     # never quoted.
     (tmp_path / CONFIG_FILE).write_text(
-        '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
+        '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
         '[paths]\nroadmap = "docs//roadmap.md"\n',
         encoding="utf-8",
     )

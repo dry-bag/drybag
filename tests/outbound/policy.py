@@ -1,4 +1,4 @@
-"""What stayfixed's launches may reach, declared: the policy `tests/test_outbound.py` holds the
+"""What drybag's launches may reach, declared: the policy `tests/test_outbound.py` holds the
 package to, over what `tests/outbound/walk.py` finds.
 
 The classification tables and the declarations are held both ways: a launch no entry accounts
@@ -68,8 +68,8 @@ NATIVE_MODULES = frozenset({"_ctypes", "_posixsubprocess", "_winapi", "ctypes"})
 # `<receiver>.launch(argv, cwd)`, by the attribute alone, and its own launch is the argv each of
 # those hands it.
 ROOT_LAUNCHERS: dict[tuple[str, str], Launcher] = {
-    ("src/stayfixed/gitenv.py", "_ask"): Launcher(("git",), at=1, spread=True),
-    ("src/stayfixed/runner.py", f"_SubprocessRunner.{RUNNER_METHOD}"): RUNNER,
+    ("src/drybag/gitenv.py", "_ask"): Launcher(("git",), at=1, spread=True),
+    ("src/drybag/runner.py", f"_SubprocessRunner.{RUNNER_METHOD}"): RUNNER,
 }
 
 # Where each program a launch runs can reach, by the argv prefix that decides it, git's global
@@ -174,60 +174,60 @@ PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
     # `claude plugin marketplace add` and `codex plugin marketplace add`, then `claude plugin
     # install` and `codex plugin add`, each built by a lambda in `_MARKETPLACE_ADD` or
     # `_PLUGIN_INSTALL`, which `test_the_plugin_installs_reach_the_rows_their_entries_name` calls.
-    ("src/stayfixed/setup/run.py", "_install_plugins", "add_argv_of(source)"): frozenset(
+    ("src/drybag/setup/run.py", "_install_plugins", "add_argv_of(source)"): frozenset(
         {"claude plugin", "codex plugin"}
     ),
-    ("src/stayfixed/setup/run.py", "_install_plugins", "argv"): frozenset(
+    ("src/drybag/setup/run.py", "_install_plugins", "argv"): frozenset(
         {"claude plugin", "codex plugin"}
     ),
     # `setup --restore`'s `claude plugin marketplace add` and `claude plugin install`, the same
     # lambdas' `claude` entries, which the same test calls.
-    ("src/stayfixed/setup/restore.py", "install_listed", "add(argument)"): frozenset(
+    ("src/drybag/setup/restore.py", "install_listed", "add(argument)"): frozenset(
         {"claude plugin"}
     ),
-    ("src/stayfixed/setup/restore.py", "install_listed", "argv"): frozenset({"claude plugin"}),
+    ("src/drybag/setup/restore.py", "install_listed", "argv"): frozenset({"claude plugin"}),
     # `claude plugin marketplace add <render directory> --scope local`, then `claude plugin install
-    # overlay-<id>@stayfixed-delivery-<id> --scope local`, each `attach.render`'s table with its
+    # overlay-<id>@drybag-delivery-<id> --scope local`, each `attach.render`'s table with its
     # slot filled, which `test_the_rendered_plugins_install_reaches_the_rows_its_entries_name`
     # fills.
     (
-        "src/stayfixed/attach/write.py",
+        "src/drybag/attach/write.py",
         "_install",
         "filled(PLUGIN_MARKETPLACE_ADD_LOCAL, str(delivery_directory(id)))",
     ): frozenset({"claude plugin"}),
     (
-        "src/stayfixed/attach/write.py",
+        "src/drybag/attach/write.py",
         "_install",
         "filled(PLUGIN_INSTALL_LOCAL, f'{plugin_name(id)}@{marketplace_name(id)}')",
     ): frozenset({"claude plugin"}),
-    # `claude plugin uninstall overlay-<id>@stayfixed-delivery-<id> --scope local`, then `claude
-    # plugin marketplace remove stayfixed-delivery-<id>`, `detach`'s withdrawal of the same plugin,
+    # `claude plugin uninstall overlay-<id>@drybag-delivery-<id> --scope local`, then `claude
+    # plugin marketplace remove drybag-delivery-<id>`, `detach`'s withdrawal of the same plugin,
     # each where the main checkout's settings file names it, filled the same way.
     (
-        "src/stayfixed/attach/write.py",
+        "src/drybag/attach/write.py",
         "_withdraw_plugin",
         "filled(PLUGIN_UNINSTALL_LOCAL, plugin)",
     ): frozenset({"claude plugin"}),
     (
-        "src/stayfixed/attach/write.py",
+        "src/drybag/attach/write.py",
         "_withdraw_plugin",
         "filled(PLUGIN_MARKETPLACE_REMOVE, marketplace_name(id))",
     ): frozenset({"claude plugin"}),
     # `git [-c core.excludesFile=…] --git-dir=… --work-tree=<empty> check-ignore --no-index
     # --stdin -z`, assembled in `asked`: the owner's own exclude files, asked about.
-    ("src/stayfixed/attach/exclude.py", "unhidden_by_owner", "*asked"): NO_ROWS,
+    ("src/drybag/attach/exclude.py", "unhidden_by_owner", "*asked"): NO_ROWS,
     # The `gitleaks` on `PATH`, run as `gitleaks git .` over a repository the scan wrote in the
     # job's scratch: it reads that and its rules, and reaches no network.
-    ("src/stayfixed/sync/scan.py", "scan", "str(binary)"): NO_ROWS,
+    ("src/drybag/sync/scan.py", "scan", "str(binary)"): NO_ROWS,
     # `init`, `add` and `commit` of `scan._COMMIT_ITEMS`, in that repository, which has no remote.
-    ("src/stayfixed/sync/scan.py", "scan", "*step"): NO_ROWS,
+    ("src/drybag/sync/scan.py", "scan", "*step"): NO_ROWS,
     # The note sync's detached job: this interpreter, isolated (`-I -c BOOT`), running this
     # package's `sync.job.main`, whose own launches (its `git fetch` and `git push` among them)
     # are walked where they are, in `sync/job.py`.
-    ("src/stayfixed/sync/job.py", "spawn", "job_argv(wake=wake)"): NO_ROWS,
-    # `hooks/run-hook.sh --version` under the plugin root this process derived: stayfixed's
+    ("src/drybag/sync/job.py", "spawn", "job_argv(wake=wake)"): NO_ROWS,
+    # `hooks/run-hook.sh --version` under the plugin root this process derived: drybag's
     # own hook wrapper, asked for its version.
-    ("src/stayfixed/doctor/checks.py", "_wrapper", "str(root / WRAPPER)"): NO_ROWS,
+    ("src/drybag/doctor/checks.py", "_wrapper", "str(root / WRAPPER)"): NO_ROWS,
 }
 # What the sync's revisions are: built by its own callers, never from repository text.
 _REVISIONS = (
@@ -239,53 +239,53 @@ _REVISIONS = (
 # an option's value, an option the code builds, or an operand its callers have refused when it
 # starts with `-`. The launch is then classified by the rest of its argv.
 VOUCHED_ELEMENTS: dict[tuple[str, str, str], str] = {
-    ("src/stayfixed/attach/doctor.py", "_delivery", "delivered"): (
-        "the value of `-e`: `stayfixed-delivery-` and the 32 hex characters of the binding id"
+    ("src/drybag/attach/doctor.py", "_delivery", "delivered"): (
+        "the value of `-e`: `drybag-delivery-` and the 32 hex characters of the binding id"
     ),
-    ("src/stayfixed/gitenv.py", "fork_points", "base"): (
+    ("src/drybag/gitenv.py", "fork_points", "base"): (
         "every caller refuses a base that starts with `-` before it asks"
     ),
-    ("src/stayfixed/docs/plans.py", "touched_plans.changed", "since"): (
+    ("src/drybag/docs/plans.py", "touched_plans.changed", "since"): (
         "a merge base git printed, or the base `touched_plans` refused when it starts with `-`"
     ),
-    ("src/stayfixed/docs/plans.py", "written_lines", "since"): (
+    ("src/drybag/docs/plans.py", "written_lines", "since"): (
         "a merge base git printed, or the base `touched_plans` refused when it starts with `-`, "
         "which `lint` runs before it asks for any plan's lines"
     ),
-    ("src/stayfixed/guards/commit.py", "commits_in", "rev_range"): (
+    ("src/drybag/guards/commit.py", "commits_in", "rev_range"): (
         "refused when it starts with `-`, and closed by the `--` after it"
     ),
-    ("src/stayfixed/gitenv.py", "git_path", "name"): (
+    ("src/drybag/gitenv.py", "git_path", "name"): (
         "the value of `--git-path`, always one of its callers' constants"
     ),
-    ("src/stayfixed/sync/git.py", "guard", "*_MARKER_PATHS"): (
+    ("src/drybag/sync/git.py", "guard", "*_MARKER_PATHS"): (
         "the module's own constant: `--git-path` and the name of each in-progress marker"
     ),
-    ("src/stayfixed/sync/job.py", "_commit", "str(message)"): (
+    ("src/drybag/sync/job.py", "_commit", "str(message)"): (
         "the value of `-F`, a file in the job's own scratch directory"
     ),
-    ("src/stayfixed/sync/job.py", "replay", "parent"): "the value of `-p`, a sha git printed",
-    ("src/stayfixed/sync/job.py", "replay", "*signed"): "`-S`, or nothing",
+    ("src/drybag/sync/job.py", "replay", "parent"): "the value of `-p`, a sha git printed",
+    ("src/drybag/sync/job.py", "replay", "*signed"): "`-S`, or nothing",
     (
-        "src/stayfixed/sync/job.py",
+        "src/drybag/sync/job.py",
         "_original",
         "*(f'--encoding={each}' for each in encodings[:1])",
     ): (
         "`--encoding=` with the value attached, one token, which only names how git prints the "
         "author it was asked for"
     ),
-    ("src/stayfixed/sync/job.py", "replay", "f'--merge-base={commit}^'"): (
+    ("src/drybag/sync/job.py", "replay", "f'--merge-base={commit}^'"): (
         "`--merge-base=` and the parent of a sha git printed"
     ),
-    ("src/stayfixed/sync/rules.py", "commit_entries", "rev_range"): _REVISIONS,
-    ("src/stayfixed/sync/rules.py", "diff_entries", "*revisions"): _REVISIONS,
-    ("src/stayfixed/sync/rules.py", "range_is_memory_only", "base"): _REVISIONS,
-    ("src/stayfixed/sync/rules.py", "range_is_memory_only", "tip"): _REVISIONS,
+    ("src/drybag/sync/rules.py", "commit_entries", "rev_range"): _REVISIONS,
+    ("src/drybag/sync/rules.py", "diff_entries", "*revisions"): _REVISIONS,
+    ("src/drybag/sync/rules.py", "range_is_memory_only", "base"): _REVISIONS,
+    ("src/drybag/sync/rules.py", "range_is_memory_only", "tip"): _REVISIONS,
 }
 
 # The package function whose environment every git launch is given, `git` with only the variables
 # it keeps: an `env=` that calls it overrides nothing worth declaring.
-SCRUBBED_ENVIRONMENT = ("src/stayfixed/gitenv.py", "scrubbed_env")
+SCRUBBED_ENVIRONMENT = ("src/drybag/gitenv.py", "scrubbed_env")
 # The sync job's git environment: `scrubbed_env()`, which `gitenv.git_call` lays everything over,
 # plus the job's own settings (`sync.git.JOB_SETTINGS`).
 _JOB_ENVIRONMENT = (
@@ -297,52 +297,52 @@ _JOB_ENVIRONMENT = (
 # program the argv names, and an `env=` can carry `GIT_CONFIG_COUNT` and its keys and values,
 # configuration as strong as `git -c`; either is a finding until it is declared here.
 OVERRIDES: dict[tuple[str, str, str], str] = {
-    ("src/stayfixed/runner.py", f"_SubprocessRunner.{RUNNER_METHOD}", "env=env"): (
+    ("src/drybag/runner.py", f"_SubprocessRunner.{RUNNER_METHOD}", "env=env"): (
         "`scrubbed_env()` for a `git`; for every other program the owner's own environment, less "
         "the variables that point git at another repository: the `gh`, `pre-commit` and plugin "
         "launches it runs are the owner's own, signed in as the owner"
     ),
     # The bounded launch hands on exactly the environment its caller built, read at each caller.
-    ("src/stayfixed/processes.py", "run_bounded", "env=env"): (
+    ("src/drybag/processes.py", "run_bounded", "env=env"): (
         "exactly what its caller hands it: `git_call`'s and the scanner's, each declared or "
         "scrubbed where it is built"
     ),
-    ("src/stayfixed/gitenv.py", "git_call", "env=scrubbed_env() | dict(env or {})"): (
+    ("src/drybag/gitenv.py", "git_call", "env=scrubbed_env() | dict(env or {})"): (
         "`scrubbed_env()`, with its caller's own settings laid over it: the note sync's, each "
         "declared where it is built"
     ),
-    ("src/stayfixed/doctor/checks.py", "_wrapper", "env=env"): (
-        "the environment doctor was handed, less every `CLAUDE_`, `PLUGIN_` and `STAYFIXED_` "
+    ("src/drybag/doctor/checks.py", "_wrapper", "env=env"): (
+        "the environment doctor was handed, less every `CLAUDE_`, `PLUGIN_` and `DRYBAG_` "
         "variable, plus the plugin root and project directory the wrapper needs"
     ),
-    ("src/stayfixed/sync/scan.py", "_step", "env=env"): (
+    ("src/drybag/sync/scan.py", "_step", "env=env"): (
         "`scan.SEALED`: no system file, an identity for the scan's own commit, and `HOME` the "
         "scan's directory, so nothing configures its repository"
     ),
-    ("src/stayfixed/sync/scan.py", "scan", "env=scrubbed_env() | env"): (
+    ("src/drybag/sync/scan.py", "scan", "env=scrubbed_env() | env"): (
         "`scrubbed_env()` with `scan.SEALED` over it, for the gitleaks that runs git in the same "
         "repository"
     ),
-    ("src/stayfixed/sync/git.py", "git", "env={**JOB_SETTINGS, **(env or {})}"): (
+    ("src/drybag/sync/git.py", "git", "env={**JOB_SETTINGS, **(env or {})}"): (
         _JOB_ENVIRONMENT + ", and what a call lays over it, each declared where it is built"
     ),
-    ("src/stayfixed/sync/job.py", "_git", "env=env"): (
+    ("src/drybag/sync/job.py", "_git", "env=env"): (
         "a call's own: the literal pathspecs a list asks for, a replayed commit's author, or the "
         "temporary index a readability check names"
     ),
-    ("src/stayfixed/sync/job.py", "replay", "env=author"): (
+    ("src/drybag/sync/job.py", "replay", "env=author"): (
         "a replayed commit's own author, and its encoding as one `git -c`-style entry"
     ),
-    ("src/stayfixed/sync/job.py", "integrate", "env=probe"): (
+    ("src/drybag/sync/job.py", "integrate", "env=probe"): (
         "`GIT_INDEX_FILE`, a file in the job's own scratch directory"
     ),
-    ("src/stayfixed/sync/rules.py", "diff_entries", "env=literal"): (
+    ("src/drybag/sync/rules.py", "diff_entries", "env=literal"): (
         _JOB_ENVIRONMENT + ", and `GIT_LITERAL_PATHSPECS=1` when it names the paths"
     ),
-    ("src/stayfixed/sync/job.py", "commit_memory", "env=_LITERAL"): (
+    ("src/drybag/sync/job.py", "commit_memory", "env=_LITERAL"): (
         "`GIT_LITERAL_PATHSPECS=1` alone, over the job's own: each note's path matched as written"
     ),
-    ("src/stayfixed/sync/job.py", "_commit", "env=_LITERAL"): (
+    ("src/drybag/sync/job.py", "_commit", "env=_LITERAL"): (
         "`GIT_LITERAL_PATHSPECS=1` alone, over the job's own: each note's path matched as written"
     ),
 }

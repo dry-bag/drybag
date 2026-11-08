@@ -12,20 +12,20 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.memory.commands import NOT_A_NOTE, NOTHING_NAMED
-from stayfixed.memory.hooks import UNREVIEWED_COUNT, register
-from stayfixed.memory.notes import walk
-from stayfixed.memory.reviewed import REVIEWED, UNREVIEWED, status
-from stayfixed.memory.store import Store, resolve
-from stayfixed.memory.trust import DELIMITER
-from stayfixed.trust.record import RECORD, SANDBOXED, recorded
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.memory.commands import NOT_A_NOTE, NOTHING_NAMED
+from drybag.memory.hooks import UNREVIEWED_COUNT, register
+from drybag.memory.notes import walk
+from drybag.memory.reviewed import REVIEWED, UNREVIEWED, status
+from drybag.memory.store import Store, resolve
+from drybag.memory.trust import DELIMITER
+from drybag.trust.record import RECORD, SANDBOXED, recorded
 from tests.cli import cli
 from tests.sandboxed import refuse_writes_under
 from tests.sessions import session_of
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 
 [project]
@@ -44,7 +44,7 @@ def _note(name: str, *, startup: str = "", body: str = "Body.") -> str:
 
 def _project(tmp_path: Path) -> Path:
     root = tmp_path / "project"
-    base = root / ".stayfixed" / "local" / "memory"
+    base = root / ".drybag" / "local" / "memory"
     for group in ("developer", "project-volatile"):
         (base / group).mkdir(parents=True)
     (base / "developer" / "rule.md").write_text(
@@ -119,7 +119,7 @@ def test_an_edit_after_promotion_makes_that_note_unreviewed_and_moves_no_other(
     assert cli(root, tmp_path, "memory", "promote", "--changed")[0] == 0
     assert _status_of(root, tmp_path, "rule") == REVIEWED
     assert _status_of(root, tmp_path, "other") == REVIEWED
-    path = root / ".stayfixed" / "local" / "memory" / "developer" / "rule.md"
+    path = root / ".drybag" / "local" / "memory" / "developer" / "rule.md"
     path.write_text(_note("rule", startup="1", body="RULE-BODY, edited"), "utf-8")
     assert _status_of(root, tmp_path, "rule") == UNREVIEWED
     assert _status_of(root, tmp_path, "other") == REVIEWED
@@ -182,7 +182,7 @@ def test_promote_changed_records_only_the_unreviewed_notes(tmp_path: Path) -> No
     "argv,refusal",
     [
         (("developer/absent.md",), NOT_A_NOTE),
-        (("../stayfixed.toml",), NOT_A_NOTE),
+        (("../drybag.toml",), NOT_A_NOTE),
         ((), NOTHING_NAMED),
         (("developer/rule.md", "--changed"), NOTHING_NAMED),
     ],
@@ -211,7 +211,7 @@ def test_a_record_write_a_sandbox_refused_says_a_person_must_run_it(
     code, out, err = cli(root, tmp_path, "memory", "promote", "developer/rule.md")
     assert (code, out) == (2, "")
     assert refused == [tmp_path / RECORD]
-    assert err == f"stayfixed: refused: {SANDBOXED}\n"
+    assert err == f"drybag: refused: {SANDBOXED}\n"
     assert recorded(tmp_path / "absent.toml") == {}
     capsys.readouterr()
 
@@ -231,7 +231,7 @@ def test_the_count_line_is_said_once_for_a_new_set_and_not_again_for_the_same_se
 ) -> None:
     # Said at `SessionStart` only when the set of unreviewed notes differs from the last
     # session's, so a session over an unchanged store hears nothing, and a new note is news.
-    from stayfixed.hooks.api import HookEvent
+    from drybag.hooks.api import HookEvent
 
     root = _project(tmp_path)
     config = load(root, machine=tmp_path / "absent.toml")
@@ -243,7 +243,7 @@ def test_the_count_line_is_said_once_for_a_new_set_and_not_again_for_the_same_se
 
     assert said() == UNREVIEWED_COUNT.format(count=2)
     assert said() is None
-    (root / ".stayfixed" / "local" / "memory" / "developer" / "third.md").write_text(
+    (root / ".drybag" / "local" / "memory" / "developer" / "third.md").write_text(
         _note("third"), "utf-8"
     )
     assert said() == UNREVIEWED_COUNT.format(count=3)

@@ -1,5 +1,5 @@
 """The machine owner's layer: the preset's personal values and guards, overridden by the machine
-file's `[personal]`, `[guards]` and session `[budgets]` (`src/stayfixed/config/owner.py`)."""
+file's `[personal]`, `[guards]` and session `[budgets]` (`src/drybag/config/owner.py`)."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
-from stayfixed.config import owner
-from stayfixed.config.classes import LayerName
-from stayfixed.config.owner import (
+from drybag.config import owner
+from drybag.config.classes import LayerName
+from drybag.config.owner import (
     GATE_BUDGET,
     IGNORED_NOTE,
     MACHINE_FILE_NOTE,
@@ -23,11 +23,11 @@ from stayfixed.config.owner import (
     rebased,
     resolve_owner,
 )
-from stayfixed.config.reading import MachineConfigError, read_machine_toml
-from stayfixed.config.schema import Personal
-from stayfixed.presets import load_preset
-from stayfixed.printed import clipped
-from stayfixed.setup.machine import read_machine, write_machine
+from drybag.config.reading import MachineConfigError, read_machine_toml
+from drybag.config.schema import Personal
+from drybag.presets import load_preset
+from drybag.printed import clipped
+from drybag.setup.machine import read_machine, write_machine
 from tests.crafted import assert_never_raw
 
 
@@ -238,7 +238,7 @@ def test_strict_raises_for_a_broken_machine_file(tmp_path: Path) -> None:
 )
 def test_strict_notes_what_a_session_notes_in_a_file_that_loads(tmp_path: Path, text: str) -> None:
     # `strict` refuses only a file that does not load: in one that does, what the owner wrote and
-    # this stayfixed cannot use costs its key, with the note a session gets. Mutation
+    # this drybag cannot use costs its key, with the note a session gets. Mutation
     # (`mutations/`'s "the owner's layer refuses a key it cannot use in a file that loads"): each
     # case raises.
     path = machine_file(tmp_path, text)
@@ -251,12 +251,12 @@ def _second_preset(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every preset name but `recommended` loads as `recommended` with another personal
     `preset`, in both readers of a preset a load asks: the project loader's and the
     owner's layer's."""
-    from stayfixed import presets
-    from stayfixed.config import loader
+    from drybag import presets
+    from drybag.config import loader
 
     real = presets.load_preset
 
-    def load(name: str, *, key: str = "[stayfixed] preset") -> dict[str, Any]:
+    def load(name: str, *, key: str = "[drybag] preset") -> dict[str, Any]:
         preset = copy.deepcopy(real("recommended", key=key))
         if name != "recommended":
             preset["defaults"]["personal"]["preset"] = "de"
@@ -290,11 +290,11 @@ def test_a_load_stands_the_layer_it_is_handed_on_the_documents_preset(
     # `loads(owner=...)` is how a command hands every load the one layer it resolved, over the
     # default preset. Mutation (`mutations/`'s "a load keeps the owner's layer on the preset it was
     # handed"): the document's preset is not the layer's, and the default's value stands.
-    from stayfixed.config.loader import loads
+    from drybag.config.loader import loads
 
     _second_preset(monkeypatch)
     path = machine_file(tmp_path, "[guards]\nbg_cleanup = false\n")
-    document = '[stayfixed]\nversion = "0.1.0"\npreset = "other"\n\n[project]\nname = "sample"\n'
+    document = '[drybag]\nversion = "0.1.0"\npreset = "other"\n\n[project]\nname = "sample"\n'
     config = loads(document, tmp_path, owner=resolve_owner(path))
     assert config.personal.preset == "de"
 

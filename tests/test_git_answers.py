@@ -21,11 +21,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.attach.write import attach, main_checkout_of
-from stayfixed.gitenv import GitUnavailable, Unasked, _git_toplevel, hooks_dir, origin_remote
-from stayfixed.guards.commit import commits_in
-from stayfixed.hints.hygiene import dirty_count
-from stayfixed.overlay.sync import overlay_sync
+from drybag.attach.write import attach, main_checkout_of
+from drybag.gitenv import GitUnavailable, Unasked, _git_toplevel, hooks_dir, origin_remote
+from drybag.guards.commit import commits_in
+from drybag.hints.hygiene import dirty_count
+from drybag.overlay.sync import overlay_sync
 from tests.attach.test_write import RULE, _attachable
 from tests.gitfixture import git, needs_git, plant_path, stand_in_git
 from tests.hints.test_hygiene import repo
@@ -85,7 +85,7 @@ def test_a_git_that_fails_everything_is_not_a_repository_without_an_origin(
     # Both answers off one checkout with no `origin`: git that runs says "no such remote" with a
     # non-zero exit, which is `None`, and a git that exits non-zero for everything — the Xcode
     # shim with an unaccepted licence — must not read the same way, or the user is sent to
-    # `stayfixed attach` about their own `git`. And its remedy is to check that `git` runs, never
+    # `drybag attach` about their own `git`. And its remedy is to check that `git` runs, never
     # to run the command again, which would repeat for ever. Mutations (declared): `mutations/`'s
     # "a broken git reads as a repository that answered" and "a broken git is told to run the
     # command again".
@@ -97,7 +97,7 @@ def test_a_git_that_fails_everything_is_not_a_repository_without_an_origin(
     def broken(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         return subprocess.CompletedProcess(args, 69, b"", b"You have not agreed to the licence\n")
 
-    monkeypatch.setattr("stayfixed.gitenv.subprocess.run", broken)
+    monkeypatch.setattr("drybag.gitenv.subprocess.run", broken)
     with pytest.raises(GitUnavailable, match=re.escape(Unasked.BROKEN.value)):
         origin_remote(root)
 
@@ -174,7 +174,7 @@ def test_attach_binds_an_origin_it_cannot_record_and_records_none(tmp_path: Path
     # read losslessly, it raised `UnicodeEncodeError` at the overlay record's write, after the
     # ignore region, the Codex rules, the settings merge and the ledger, and was then refused
     # above every write. The remote binds nothing now, so the binding is made and records none.
-    from stayfixed import binding
+    from drybag import binding
 
     hooks = {"SessionStart": [{"hooks": [{"type": "command", "command": "echo hello"}]}]}
     root, store, machine = _attachable(
@@ -222,6 +222,6 @@ def test_an_origin_loses_its_credentials_and_keeps_an_ssh_user(url: str, kept: s
     # prints the origin and records it on this machine. Everything before the authority's last
     # `@` goes on every scheme but ssh, whose user (`git@`) is no secret and is part of how the
     # same remote is recognised; there only a password goes. The scp form carries no password.
-    from stayfixed.gitenv import without_userinfo
+    from drybag.gitenv import without_userinfo
 
     assert without_userinfo(url) == kept

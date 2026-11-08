@@ -14,10 +14,10 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.gitenv import FLOOR_VARIABLE, QUERY_TIMEOUT_SECONDS
-from stayfixed.sync import git as G
-from stayfixed.sync import rules as R
-from stayfixed.sync import trigger
+from drybag.gitenv import FLOOR_VARIABLE, QUERY_TIMEOUT_SECONDS
+from drybag.sync import git as G
+from drybag.sync import rules as R
+from drybag.sync import trigger
 from tests import gitfixture as fx
 from tests.sync.conftest import (
     World,

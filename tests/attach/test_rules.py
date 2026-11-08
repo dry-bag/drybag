@@ -10,9 +10,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from stayfixed import binding
-from stayfixed.attach.rules import SCOPED_LEAD, STANDING_LEAD, scoped_exist, scoped_for, standing
-from stayfixed.config.plates import plates
+from drybag import binding
+from drybag.attach.rules import SCOPED_LEAD, STANDING_LEAD, scoped_exist, scoped_for, standing
+from drybag.config.plates import plates
 from tests.gitfixture import git, needs_git
 from tests.tagged import with_tags
 
@@ -32,7 +32,7 @@ def _overlay(tmp_path: Path) -> Path:
     (project / "generated.md").write_text(
         f'---\npaths: ["scoped/**"]\n---\n\n{SCOPED}\n', encoding="utf-8"
     )
-    machine = Path(os.environ["HOME"]) / ".config" / "stayfixed" / "config.toml"
+    machine = Path(os.environ["HOME"]) / ".config" / "drybag" / "config.toml"
     machine.parent.mkdir(parents=True)
     machine.write_text(f'[overlay]\nroot = "{overlay}"\n', encoding="utf-8")
     return overlay
@@ -43,7 +43,7 @@ def _checkout(tmp_path: Path, *, bound: bool = True) -> Path:
     root.mkdir()
     git(root, "init", "-q", "-b", "main")
     # A clone naming one of the owner's projects binds nothing by that name (`binding`).
-    (root / "stayfixed.toml").write_text('[project]\nname = "p"\n', encoding="utf-8")
+    (root / "drybag.toml").write_text('[project]\nname = "p"\n', encoding="utf-8")
     if bound:
         binding.record(root, "p", None)
     return root
@@ -82,7 +82,7 @@ def test_a_scoped_rule_is_said_once_per_file_per_session(tmp_path: Path) -> None
 
 @needs_git
 def test_an_unbound_checkout_gets_no_rule(tmp_path: Path) -> None:
-    # Its `stayfixed.toml` names the overlay's project, and no binding record names the checkout.
+    # Its `drybag.toml` names the overlay's project, and no binding record names the checkout.
     _overlay(tmp_path)
     root = _checkout(tmp_path, bound=False)
     assert standing(root) == ""

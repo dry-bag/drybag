@@ -223,12 +223,12 @@ def _preset_paths() -> tuple[tuple[int, str], ...]:
     """The digests of the default `[paths]` values the preset ships.
 
     One of them is in `FORBIDDEN`, because it was the source repository's path before it was
-    stayfixed's default. A public document that could not say where the note store
+    drybag's default. A public document that could not say where the note store
     lives by default would be useless, so the public-document walk exempts exactly the values
     the plugin itself ships — read off the preset at import time, never written here. Source
     code keeps the full table: a module has no reason to spell a default path.
     """
-    from stayfixed.presets import load_preset
+    from drybag.presets import load_preset
 
     values = load_preset("recommended")["defaults"]["paths"].values()
     return tuple((len(value), digest_of(value)) for value in values)
@@ -236,7 +236,7 @@ def _preset_paths() -> tuple[tuple[int, str], ...]:
 
 PUBLIC_FORBIDDEN = tuple(entry for entry in FORBIDDEN if entry not in _preset_paths())
 # One of the preset's default `[paths]` values is also a digest-table entry — the one that was the
-# source repository's path before it was stayfixed's default. Pinned so the exemption cannot
+# source repository's path before it was drybag's default. Pinned so the exemption cannot
 # quietly grow: a second would mean a token was added to the table for a
 # path the plugin itself ships, which is a contradiction to resolve, not to exempt.
 PRESET_PATHS_IN_TABLE = 1
@@ -375,10 +375,10 @@ def test_the_gate_reads_the_whole_tree() -> None:
     # inside it, so it is named like the rest.
     for wanted in (
         "README.md",
-        "src/stayfixed/cli.py",
+        "src/drybag/cli.py",
         "docs/cli.md",
         "hooks/run-hook.sh",
-        "scripts/stayfixed",
+        "scripts/drybag",
         "tests/test_fsops.py",
         "skills/README.md",
     ):
@@ -429,15 +429,13 @@ def test_the_two_tables_are_told_apart_by_the_file_they_are_for() -> None:
     # `table_for` is what decides whether a file may name a default path, so it is worth an
     # assertion of its own rather than only being exercised through the walk. A module and a
     # test module take the full table; the preset that ships those defaults, every document,
-    # and a data file under a full-table tree take the public one. `scripts/stayfixed` has no
+    # and a data file under a full-table tree take the public one. `scripts/drybag` has no
     # suffix at all and is source, which is why the tree name is a second arm.
-    assert table_for(ROOT / "src" / "stayfixed" / "cli.py") == FORBIDDEN
+    assert table_for(ROOT / "src" / "drybag" / "cli.py") == FORBIDDEN
     assert table_for(ROOT / "tests" / "test_fsops.py") == FORBIDDEN
-    assert table_for(ROOT / "scripts" / "stayfixed") == FORBIDDEN
-    assert (
-        table_for(ROOT / "src" / "stayfixed" / "presets" / "recommended.toml") == PUBLIC_FORBIDDEN
-    )
-    fixture = ROOT / "tests" / "fixtures" / "smoke-project" / "stayfixed.toml"
+    assert table_for(ROOT / "scripts" / "drybag") == FORBIDDEN
+    assert table_for(ROOT / "src" / "drybag" / "presets" / "recommended.toml") == PUBLIC_FORBIDDEN
+    fixture = ROOT / "tests" / "fixtures" / "smoke-project" / "drybag.toml"
     assert table_for(fixture) == PUBLIC_FORBIDDEN
     assert table_for(ROOT / "docs" / "cli.md") == PUBLIC_FORBIDDEN
     assert table_for(ROOT / "README.md") == PUBLIC_FORBIDDEN
@@ -572,7 +570,7 @@ def test_the_exemption_is_exactly_the_presets_default_paths() -> None:
 def test_the_public_table_still_discriminates() -> None:
     # A preset path is allowed by the public table and refused by the full one; a planted
     # token is refused by both; the dotted harness directory is not a vendor branch.
-    from stayfixed.presets import load_preset
+    from drybag.presets import load_preset
 
     defaults = load_preset("recommended")["defaults"]["paths"].values()
     exempt_value = next(

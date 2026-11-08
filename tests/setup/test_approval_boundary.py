@@ -1,7 +1,7 @@
 """`setup --approval-boundary`: the advice that keeps an agent's shell out of the trust record.
 
 The record holds against repository bytes, and against an agent only while the harness's sandbox
-keeps that agent's shell out of its directory, which is the person's to set and stayfixed's never
+keeps that agent's shell out of its directory, which is the person's to set and drybag's never
 to check (`trust.boundary` says why). So the command prints the deny rule measured on Claude Code
 2.1.296 (macOS) on 2026-10-16 -- `Edit(//<absolute path>/**)` in `permissions.deny` stopped both the
 sandboxed shell and the file tools, where one leading slash and a `Write(...)` rule stopped neither
@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.setup.commands import BOUNDARY_ADVICE
-from stayfixed.setup.machine import USER_SETTINGS
-from stayfixed.trust.api import ENFORCING_SETTINGS, SANDBOX_ON, managed_named
-from stayfixed.trust.boundary import NO_MANAGED_PATH, deny_rule
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.setup.commands import BOUNDARY_ADVICE
+from drybag.setup.machine import USER_SETTINGS
+from drybag.trust.api import ENFORCING_SETTINGS, SANDBOX_ON, managed_named
+from drybag.trust.boundary import NO_MANAGED_PATH, deny_rule
 
 
 def invoke(argv: list[str]) -> int:
@@ -45,7 +45,7 @@ def test_the_advice_names_the_rule_and_the_sandbox_and_writes_nothing(
     # The flag is advice only: the deny rule over the directory the trust record lies in, the
     # user settings file it belongs in, the setting that turns the sandbox on and the managed ones
     # that keep a repository from turning it off -- and no machine file, no settings file, not
-    # even the home's `.claude`, since a rule stayfixed wrote would read as a boundary stayfixed
+    # even the home's `.claude`, since a rule drybag wrote would read as a boundary drybag
     # keeps. Mutation (`mutations/`'s "setup --approval-boundary runs the machine setup"): the
     # machine file and the settings are written, and the advice is never printed.
     machine = tmp_path / "machine" / "config.toml"
@@ -143,7 +143,7 @@ def test_the_deny_rule_is_the_measured_spelling() -> None:
     # Two leading slashes: one anchors the path at the working directory, which was measured to
     # stop nothing outside it. Mutation (`mutations/`'s "the approval boundary is spelled with one
     # leading slash"): `Edit(/Users/...)`.
-    assert deny_rule(Path("/Users/me/.config/stayfixed")) == "Edit(//Users/me/.config/stayfixed/**)"
+    assert deny_rule(Path("/Users/me/.config/drybag")) == "Edit(//Users/me/.config/drybag/**)"
 
 
 @pytest.mark.parametrize(

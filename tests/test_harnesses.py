@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import harnesses
-from stayfixed.harnesses import (
+from drybag import harnesses
+from drybag.harnesses import (
     CANONICAL,
     CLAUDE,
     CODEX,
@@ -158,7 +158,7 @@ def test_every_harness_renders_through_the_canonical_render() -> None:
         assert harness.render is CANONICAL.render, (
             f"`{harness.name}` has a render of its own. A harness may get one only together with "
             "a detection signal a repository cannot steer: not the environment and not stdin, "
-            "but one the wrapper controls, such as its argv (`stayfixed.harnesses.detect`)."
+            "but one the wrapper controls, such as its argv (`drybag.harnesses.detect`)."
         )
 
 
@@ -201,7 +201,7 @@ def test_every_harness_states_every_surface() -> None:
         for surface, reach in harness.reach.items():
             assert reach.evidence, (harness.name, surface)
             # "Not claimed on this agent" is a statement a reader acts on, so it rests on evidence
-            # (a measured absence, or a measurement that stopped short of stayfixed's own
+            # (a measured absence, or a measurement that stopped short of drybag's own
             # surfaces); a surface nothing was measured of keeps the tier it was built for.
             if reach.tier is None:
                 assert reach.evidence != "unmeasured", (harness.name, surface)
@@ -235,52 +235,52 @@ _HARNESS_MENTION = re.compile(
 # a new item in that list. Counted, so a new constant beside a pardoned one reddens too. A site
 # whose constants make more than one fact gives a phrase for each.
 LISTED = {
-    ("src/stayfixed/setup/run.py", "claude"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
-    ("src/stayfixed/setup/run.py", "codex"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
-    ("src/stayfixed/setup/restore.py", "claude"): (5, "`install_listed` in `setup/restore.py`"),
-    ("src/stayfixed/attach/render.py", "claude"): (
+    ("src/drybag/setup/run.py", "claude"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
+    ("src/drybag/setup/run.py", "codex"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
+    ("src/drybag/setup/restore.py", "claude"): (5, "`install_listed` in `setup/restore.py`"),
+    ("src/drybag/attach/render.py", "claude"): (
         6,
         "`PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL`",
     ),
-    ("src/stayfixed/overlay/layout.py", "claude"): (1, "(`overlay.layout`"),
-    ("src/stayfixed/overlay/layout.py", "codex"): (1, "(`overlay.layout`"),
-    ("src/stayfixed/overlay/api.py", "claude"): (1, "re-exported by `overlay.api`"),
-    ("src/stayfixed/overlay/api.py", "codex"): (1, "re-exported by `overlay.api`"),
+    ("src/drybag/overlay/layout.py", "claude"): (1, "(`overlay.layout`"),
+    ("src/drybag/overlay/layout.py", "codex"): (1, "(`overlay.layout`"),
+    ("src/drybag/overlay/api.py", "claude"): (1, "re-exported by `overlay.api`"),
+    ("src/drybag/overlay/api.py", "codex"): (1, "re-exported by `overlay.api`"),
     # The overlay's per-harness directories, and the kind of item a Codex rule file is.
-    ("src/stayfixed/attach/items.py", "claude"): (
+    ("src/drybag/attach/items.py", "claude"): (
         1,
         "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
-    ("src/stayfixed/attach/items.py", "codex"): (
+    ("src/drybag/attach/items.py", "codex"): (
         2,
         "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
-    ("src/stayfixed/attach/permissions.py", "codex"): (
+    ("src/drybag/attach/permissions.py", "codex"): (
         1,
         "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
-    ("src/stayfixed/attach/write.py", "claude"): (
+    ("src/drybag/attach/write.py", "claude"): (
         4,
         "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
-    ("src/stayfixed/attach/write.py", "codex"): (
+    ("src/drybag/attach/write.py", "codex"): (
         4,
         "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
-    ("src/stayfixed/hooks/api.py", "claude"): (1, "`hooks.api.DATA_ROOT_VARIABLES`"),
-    ("src/stayfixed/hooks/api.py", "plugin_data"): (2, "`hooks.api.DATA_ROOT_VARIABLES`"),
-    ("src/stayfixed/doctor/checks.py", "claude"): (
+    ("src/drybag/hooks/api.py", "claude"): (1, "`hooks.api.DATA_ROOT_VARIABLES`"),
+    ("src/drybag/hooks/api.py", "plugin_data"): (2, "`hooks.api.DATA_ROOT_VARIABLES`"),
+    ("src/drybag/doctor/checks.py", "claude"): (
         3,
         "every variable under Claude Code's and Codex's",
     ),
-    ("src/stayfixed/doctor/checks.py", "codex"): (1, "names Codex in the `cli-path`"),
-    ("src/stayfixed/doctor/checks.py", "plugin_root"): (
+    ("src/drybag/doctor/checks.py", "codex"): (1, "names Codex in the `cli-path`"),
+    ("src/drybag/doctor/checks.py", "plugin_root"): (
         1,
         "names `CLAUDE_PLUGIN_ROOT` in the remedy",
     ),
-    ("src/stayfixed/doctor/checks.py", "plugin_data"): (1, "`${CLAUDE_PLUGIN_DATA}` in the"),
-    ("src/stayfixed/trust/boundary.py", "claude"): (2, "`trust.boundary` spells"),
-    ("src/stayfixed/guards/commands.py", "claude"): (
+    ("src/drybag/doctor/checks.py", "plugin_data"): (1, "`${CLAUDE_PLUGIN_DATA}` in the"),
+    ("src/drybag/trust/boundary.py", "claude"): (2, "`trust.boundary` spells"),
+    ("src/drybag/guards/commands.py", "claude"): (
         1,
         "`commit strip` gives way to Claude Code's `attribution.commit`",
     ),
@@ -288,23 +288,23 @@ LISTED = {
 # The mentions that are no fact the code acts on, each with how many constants make it and why.
 PROSE = {
     # Messages naming the Codex rule files `attach` places, and `--check` would place.
-    ("src/stayfixed/attach/check.py", "codex"): 1,
-    ("src/stayfixed/attach/commands.py", "codex"): 4,
+    ("src/drybag/attach/check.py", "codex"): 1,
+    ("src/drybag/attach/commands.py", "codex"): 4,
     # The advice `setup --approval-boundary` prints, which names the harness whose settings it is.
-    ("src/stayfixed/setup/commands.py", "claude"): 1,
+    ("src/drybag/setup/commands.py", "claude"): 1,
     # The commit-trailer guard's names of tools that sign commits as authors: the agent as an
-    # author of a commit, not as a harness stayfixed runs under.
-    ("src/stayfixed/guards/commit.py", "claude"): 2,
-    ("src/stayfixed/guards/commit.py", "codex"): 2,
+    # author of a commit, not as a harness drybag runs under.
+    ("src/drybag/guards/commit.py", "claude"): 2,
+    ("src/drybag/guards/commit.py", "codex"): 2,
 }
 
 
 def _harness_mentions() -> Counter[tuple[str, str]]:
     """How many string constants of each module outside the registry name each harness word."""
     found: Counter[tuple[str, str]] = Counter()
-    for path in sorted((ROOT / "src" / "stayfixed").rglob("*.py")):
+    for path in sorted((ROOT / "src" / "drybag").rglob("*.py")):
         relative = path.relative_to(ROOT).as_posix()
-        if relative == "src/stayfixed/harnesses.py":
+        if relative == "src/drybag/harnesses.py":
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         prose = _docstrings(tree)

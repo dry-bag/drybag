@@ -15,23 +15,23 @@ from typing import Any
 
 import pytest
 
-from stayfixed.config.loader import load
-from stayfixed.config.schema import Config
-from stayfixed.docs.plans import (
+from drybag.config.loader import load
+from drybag.config.schema import Config
+from drybag.docs.plans import (
     BUG_FIXES,
     BaseUnresolvable,
     asserted_outcomes,
     lint,
     touched_plans,
 )
-from stayfixed.errors import Failure, Refusal
-from stayfixed.gitenv import DISJOINT, NO_ANSWER, git_run
+from drybag.errors import Failure, Refusal
+from drybag.gitenv import DISJOINT, NO_ANSWER, git_run
 from tests.cli import cli
 from tests.crafted import CRAFTED, assert_never_raw
 from tests.gitfixture import answer_shallow_check, criss_cross, dated, git, plant_path
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -47,7 +47,7 @@ needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not i
 def project(tmp_path: Path) -> tuple[Path, Config]:
     root = tmp_path / "widget"
     (root / "docs" / "plans").mkdir(parents=True)
-    (root / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG, encoding="utf-8")
     return root, load(root, machine=tmp_path / "m.toml")
 
 
@@ -271,8 +271,8 @@ def test_a_long_plan_is_linted_in_time_linear_in_its_length(tmp_path: Path, shap
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed.config.loader import load\n"
-        "from stayfixed.docs.plans import lint\n"
+        "from drybag.config.loader import load\n"
+        "from drybag.docs.plans import lint\n"
         "root, machine, path = map(Path, sys.argv[1:])\n"
         "found = lint(root, load(root, machine=machine), plans=[path]).findings\n"
         "print([finding.rule for finding in found])\n"
@@ -309,7 +309,7 @@ def test_a_paragraph_of_claims_is_read_in_time_linear_in_its_length(shape: str) 
     # looked for over the claim's whole sentence again" -> `one sentence`.
     probe = (
         "import sys\n"
-        "from stayfixed.docs.plans import asserted_outcomes\n"
+        "from drybag.docs.plans import asserted_outcomes\n"
         "found = asserted_outcomes(sys.argv[1] * int(sys.argv[2]))\n"
         "print([len(found), found[-1]])\n"
     )
@@ -567,7 +567,7 @@ def test_a_diff_git_gave_no_answer_for_is_not_a_shallow_checkout(
     # every ref, and reads as a finding rather than as a gate that never looked. Still exit 1,
     # with the cause in words. Mutation (advisory): drop the `code == -1` arm in
     # `_unresolved` — `BaseUnresolvable` is raised instead of this `Failure` and this reddens.
-    from stayfixed.docs import plans as module
+    from drybag.docs import plans as module
 
     root, config = project(tmp_path)
     git(root, "init", "-q", "-b", "main")
@@ -778,7 +778,7 @@ def test_an_uncommitted_plan_is_reported_as_unlinted_and_linted_when_named(tmp_p
 
 
 def test_a_named_plan_that_does_not_exist_is_a_failure(tmp_path: Path) -> None:
-    from stayfixed.errors import Failure
+    from drybag.errors import Failure
 
     root, config = project(tmp_path)
     with pytest.raises(Failure):
@@ -792,7 +792,7 @@ def test_a_named_plan_outside_the_project_is_a_failure_not_an_internal_error(
     # and raise `ValueError`, which the frame reports as an internal error (2) rather than as
     # the failure the missing-file case beside it already produces. Mutation: drop the
     # `is_relative_to` guard — this reddens with `ValueError`.
-    from stayfixed.errors import Failure
+    from drybag.errors import Failure
 
     root, config = project(tmp_path)
     elsewhere = tmp_path / "other" / "2026-01-01-x.md"

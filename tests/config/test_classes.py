@@ -13,7 +13,7 @@ from typing import Any, get_type_hints
 
 import pytest
 
-from stayfixed.config.classes import (
+from drybag.config.classes import (
     ALLOWED,
     CLASSES,
     GATE_BUDGETS,
@@ -26,7 +26,7 @@ from stayfixed.config.classes import (
     class_of,
     resolve,
 )
-from stayfixed.config.schema import Budgets, Config
+from drybag.config.schema import Budgets, Config
 from tests.crafted import assert_never_raw
 
 # Pinned: the ClassVar tuples of `Budgets` and `NativeCaps` are not fields, and the one name a
@@ -88,8 +88,8 @@ TABLE_ROWS = [
     ("budgets.status_lines", KeyClass.GATE_PARAMETER),
     ("budgets.roadmap_prose_lines", KeyClass.GATE_PARAMETER),
     ("budgets.roadmap_prose_words", KeyClass.GATE_PARAMETER),
-    ("stayfixed.version", KeyClass.REPOSITORY_ONLY),
-    ("stayfixed.preset", KeyClass.REPOSITORY_ONLY),
+    ("drybag.version", KeyClass.REPOSITORY_ONLY),
+    ("drybag.preset", KeyClass.REPOSITORY_ONLY),
     ("project.name", KeyClass.REPOSITORY_ONLY),
     ("project.base_branch", KeyClass.REPOSITORY_ONLY),
     ("paths.roadmap", KeyClass.REPOSITORY_ONLY),

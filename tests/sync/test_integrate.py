@@ -21,11 +21,11 @@ from typing import Any
 
 import pytest
 
-from stayfixed.gitenv import FLOOR_VARIABLE, Called
-from stayfixed.sync import git as G
-from stayfixed.sync import job as J
-from stayfixed.sync.git import GitTimeout
-from stayfixed.sync.state import LOCAL_REWRITE, OUTSIDE, Holds, SyncState, read_state
+from drybag.gitenv import FLOOR_VARIABLE, Called
+from drybag.sync import git as G
+from drybag.sync import job as J
+from drybag.sync.git import GitTimeout
+from drybag.sync.state import LOCAL_REWRITE, OUTSIDE, Holds, SyncState, read_state
 from tests import gitfixture as fx
 from tests.gitfixture import git_bytes
 from tests.sync.conftest import (

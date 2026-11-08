@@ -28,20 +28,20 @@ def imported_modules(tree: ast.AST, package: tuple[str, ...]) -> list[tuple[int,
     """Every module name this file imports, as an absolute dotted name, with its line.
 
     Three spellings, and the third is the one the surface rule shipped without seeing.
-    `from stayfixed.memory.api import X` and `import stayfixed.memory.api` are the obvious one;
-    `from stayfixed.memory import worktree` is the one a rule that looked only at `node.module`
+    `from drybag.memory.api import X` and `import drybag.memory.api` are the obvious one;
+    `from drybag.memory import worktree` is the one a rule that looked only at `node.module`
     would miss, and it reaches a private module just as squarely.
 
     **The third is the relative import**, and it used to be dropped on the floor: the condition
     read `and not node.level`, so `from ..hooks.sink import DIRECTORY` inside `doctor/checks.py`
-    walked straight past. There are no relative imports under `src/stayfixed/` today, but only by
+    walked straight past. There are no relative imports under `src/drybag/` today, but only by
     house style: ruff's `TID` rules are not selected, so nothing bans one, and the first
     contributor to write an idiomatic one would have reopened the boundary with the rule still
     green.
 
     Resolved rather than refused, so a rule answers the question it is named for in whatever
     spelling, instead of imposing a second rule the project has not made. `package` is the
-    importing module's package, `("stayfixed", "doctor")` for `doctor/checks.py`; `level` counts
+    importing module's package, `("drybag", "doctor")` for `doctor/checks.py`; `level` counts
     the leading dots: one means that package, and each further dot strips one component off it.
     A `from` statement yields its own module first and then one name per alias.
     """
@@ -52,7 +52,7 @@ def imported_modules(tree: ast.AST, package: tuple[str, ...]) -> list[tuple[int,
         elif isinstance(node, ast.ImportFrom):
             if node.level:
                 base = package[: len(package) - (node.level - 1)]
-                # A relative import that climbs above `stayfixed` is a module Python could not
+                # A relative import that climbs above `drybag` is a module Python could not
                 # import at all; it must fail here rather than resolve to something shorter.
                 assert base, f"line {node.lineno}: a relative import above the package root"
                 prefix = ".".join((*base, *(node.module.split(".") if node.module else ())))

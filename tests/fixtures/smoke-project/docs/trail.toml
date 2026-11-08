@@ -1,5 +1,5 @@
 # The forward track in machine-readable form: one theme, and a declared state per document so
-# that `stayfixed docs trail` writes the listing without having to default anything to
+# that `drybag docs trail` writes the listing without having to default anything to
 # `delivered`. A document that enters the listing with no declared state is written as
 # delivered and reported, which is a finding for the person who added it — here there is
 # nobody to report to, so every row is declared.

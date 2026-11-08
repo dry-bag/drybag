@@ -11,24 +11,24 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.errors import Refusal
-from stayfixed.gitenv import hooks_dir
-from stayfixed.guards.commands import GIVES_WAY
-from stayfixed.guards.commit import offending_lines
-from stayfixed.guards.githooks import (
+from drybag.errors import Refusal
+from drybag.gitenv import hooks_dir
+from drybag.guards.commands import GIVES_WAY
+from drybag.guards.commit import offending_lines
+from drybag.guards.githooks import (
     HOOK_MARKER,
     HOOK_NAME,
     Found,
     install,
     uninstall,
 )
-from stayfixed.printed import quoted
+from drybag.printed import quoted
 from tests import gitfixture
 from tests.cli import cli
 from tests.floor import floor_env
 
 ROOT = Path(__file__).resolve().parents[2]
-# The hook exactly as stayfixed 0.2.0 wrote it into a repository, generated once from the tag.
+# The hook exactly as drybag 0.2.0 wrote it into a repository, generated once from the tag.
 RELEASED_0_2_0 = ROOT / "tests" / "fixtures" / "prepare-commit-msg-0.2.0"
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -54,19 +54,19 @@ def _scrubbed_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 def launching(tmp_path: Path) -> dict[str, str]:
     """What this module layers on `tests/gitfixture.py`'s sealed environment.
 
-    A `stayfixed` shim leading `PATH`, so the hook's first branch is the one exercised — the same
+    A `drybag` shim leading `PATH`, so the hook's first branch is the one exercised — the same
     branch a `uv tool install` user takes. The shim runs this checkout's package, and it has to
     be first because the `git commit` below runs the commit-msg hook this test just installed,
-    and that hook is what invokes `stayfixed`. The suite's floor under the product's own `git`
+    and that hook is what invokes `drybag`. The suite's floor under the product's own `git`
     (`tests/floor.py`) is layered on too: git hands it on to the hook, and the hook to that
-    `stayfixed`.
+    `drybag`.
     """
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
-    shim = bin_dir / "stayfixed"
+    shim = bin_dir / "drybag"
     if not shim.exists():
         shim.write_text(
-            f'#!/bin/sh\nPYTHONPATH="{ROOT / "src"}" exec "{sys.executable}" -m stayfixed "$@"\n',
+            f'#!/bin/sh\nPYTHONPATH="{ROOT / "src"}" exec "{sys.executable}" -m drybag "$@"\n',
             encoding="utf-8",
         )
         shim.chmod(0o755)
@@ -116,7 +116,7 @@ CANONICAL_BLOCK = (
     "Co-Authored-By: Claude <noreply@anthropic.com>"
 )
 CLEAN = "fix: thing"
-FAILED_LINE = "stayfixed: commit strip failed"
+FAILED_LINE = "drybag: commit strip failed"
 
 
 def test_install_writes_an_executable_hook_carrying_the_marker(tmp_path: Path) -> None:
@@ -183,7 +183,7 @@ def test_a_hook_the_developer_switched_off_stays_off(tmp_path: Path) -> None:
 
 def test_a_stray_local_hook_is_refused_even_with_no_hook_at_the_name(tmp_path: Path) -> None:
     # The chain `exec`s `$0.local`; a file this installer never preserved must not be run
-    # under stayfixed's name, so the refusal cannot live inside the preserve branch alone.
+    # under drybag's name, so the refusal cannot live inside the preserve branch alone.
     root = repo(tmp_path)
     directory = hooks_dir(root)
     directory.mkdir(parents=True, exist_ok=True)
@@ -241,11 +241,11 @@ def test_the_hook_reports_a_failed_strip_and_still_lets_the_commit_through(
     # Behaviours 3 and 4: the failure line belongs to `commit strip` exiting non-zero and to
     # nothing else, and no outcome of it may cost the developer their commit. The shim `env`
     # would write is pre-empted here by one that fails, which is the only way to reach that
-    # branch without a genuinely broken `stayfixed`.
+    # branch without a genuinely broken `drybag`.
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
-    shim = bin_dir / "stayfixed"
-    shim.write_text("#!/bin/sh\necho 'stayfixed: refused' >&2\nexit 2\n", encoding="utf-8")
+    shim = bin_dir / "drybag"
+    shim.write_text("#!/bin/sh\necho 'drybag: refused' >&2\nexit 2\n", encoding="utf-8")
     shim.chmod(0o755)
     root = repo(tmp_path)
     install(root)
@@ -272,7 +272,7 @@ def test_install_is_idempotent_over_its_own_hook(tmp_path: Path) -> None:
 
 def test_a_hook_an_earlier_release_wrote_is_still_ours(tmp_path: Path) -> None:
     # The hook's text changes between releases, and every repository keeps the bytes the release
-    # that installed it wrote. The marker line, not the text, is what makes a hook stayfixed's:
+    # that installed it wrote. The marker line, not the text, is what makes a hook drybag's:
     # an install over an earlier text rewrites it in place rather than preserving it as a
     # stranger's `.local` and chaining to it, and an uninstall removes it rather than leaving it
     # orphaned. The earlier text is frozen in a file, `HOOK_TEXT` as the v0.2.0 tag evaluates it,
@@ -280,7 +280,7 @@ def test_a_hook_an_earlier_release_wrote_is_still_ours(tmp_path: Path) -> None:
     # so a changed marker, which would orphan every hook 0.2.0 installed, would pass unseen.
     # Mutation (declared): a hook is ours only when its bytes equal today's text -> this reddens.
     # Mutation (declared): the marker line changes -> this reddens.
-    from stayfixed.guards.githooks import HOOK_TEXT
+    from drybag.guards.githooks import HOOK_TEXT
 
     old_text = RELEASED_0_2_0.read_text(encoding="utf-8")
     assert old_text != HOOK_TEXT
@@ -372,7 +372,7 @@ def test_reinstalling_over_a_chained_setup_keeps_the_preserved_hook(tmp_path: Pa
 
 # Each spelling a predecessor chains to `prepare-commit-msg.local` with once it is renamed there:
 # from the common directory, as husky-style chains do, and from its own directory off `$0`. Each
-# names the file the predecessor becomes, so stayfixed's hook execs it and it execs itself.
+# names the file the predecessor becomes, so drybag's hook execs it and it execs itself.
 SELF_CHAINS = {
     "common-dir": 'exec "$(git rev-parse --git-common-dir)/hooks/prepare-commit-msg.local" "$@"',
     "dirname-expansion": 'exec "${0%/*}/prepare-commit-msg.local" "$@"',
@@ -414,7 +414,7 @@ def test_a_predecessor_that_names_its_own_local_is_refused_and_left_in_place(
     tmp_path: Path, chain: str
 ) -> None:
     # `install` renamed such a hook to `prepare-commit-msg.local` without reading it, and
-    # stayfixed's hook execs that name last: the renamed predecessor then execs itself, and
+    # drybag's hook execs that name last: the renamed predecessor then execs itself, and
     # `git commit` ran until it was killed. It is refused before the rename, naming the file and
     # the name it chains to, and nothing is written. Mutation: `mutations/`'s "a predecessor that
     # names its own .local is installed over".
@@ -428,7 +428,7 @@ def test_a_predecessor_that_names_its_own_local_is_refused_and_left_in_place(
     exit_code, _, out = cli(root, tmp_path, "setup", "--git-hooks")
     assert exit_code == 2 and "prepare-commit-msg.local" in out
     assert out.startswith(
-        f"stayfixed: refused: {quoted(str(target))} names prepare-commit-msg.local"
+        f"drybag: refused: {quoted(str(target))} names prepare-commit-msg.local"
     ), out
     assert target.read_bytes() == before and not local.exists()
 
@@ -449,7 +449,7 @@ def test_a_predecessor_that_is_not_utf_8_and_names_its_own_local_is_refused(
     exit_code, _, out = cli(root, tmp_path, "setup", "--git-hooks")
     assert exit_code == 2, out
     assert out.startswith(
-        f"stayfixed: refused: {quoted(str(target))} names prepare-commit-msg.local"
+        f"drybag: refused: {quoted(str(target))} names prepare-commit-msg.local"
     ), out
     assert target.read_bytes() == before and not local.exists()
 
@@ -476,7 +476,7 @@ def test_a_predecessor_that_names_its_own_local_is_refused_from_a_linked_worktre
     assert exit_code == 2, out
     shown_target, shown_local = quoted(str(target)), quoted(str(local))
     assert out.startswith(
-        f"stayfixed: refused: {shown_target} names prepare-commit-msg.local: kept as {shown_local}"
+        f"drybag: refused: {shown_target} names prepare-commit-msg.local: kept as {shown_local}"
     ), out
     assert target.read_bytes() == before and not local.exists()
 
@@ -502,7 +502,7 @@ def test_a_reinstall_over_a_local_that_names_itself_is_refused(tmp_path: Path) -
     assert exit_code == 2
     shown_target, shown_local = quoted(str(target)), quoted(str(local))
     assert out.startswith(
-        f"stayfixed: refused: {shown_local} names prepare-commit-msg.local: stayfixed's hook at "
+        f"drybag: refused: {shown_local} names prepare-commit-msg.local: drybag's hook at "
         f"{shown_target} runs it last, so it runs itself and every commit runs until it is killed"
     ), out
     assert "the installed hook was left as it was" in out and "nothing was installed" not in out
@@ -561,9 +561,9 @@ def test_a_commit_after_installing_over_a_plain_predecessor_ends(tmp_path: Path)
 
 
 def test_uninstall_leaves_a_hook_it_did_not_write(tmp_path: Path) -> None:
-    # And says so, `Found.FOREIGN`, where the answer was the one an uninstall of stayfixed's own
+    # And says so, `Found.FOREIGN`, where the answer was the one an uninstall of drybag's own
     # hook with nothing chained gave; with no hook at all, `Found.ABSENT`. Mutations:
-    # `mutations/`'s "uninstall says it removed a hook when the hook there is not stayfixed's" and
+    # `mutations/`'s "uninstall says it removed a hook when the hook there is not drybag's" and
     # "uninstall says it removed a hook when there was none".
     root = repo(tmp_path)
     foreign = hooks_dir(root) / HOOK_NAME
@@ -593,7 +593,7 @@ def _in_a_child(probe: str, root: Path, verb: str) -> str:
 
 
 def test_a_fifo_at_the_hook_path_is_refused_by_install_and_never_waited_on(tmp_path: Path) -> None:
-    # Whether a hook is stayfixed's is read off its bytes, and the read waited on a FIFO for a
+    # Whether a hook is drybag's is read off its bytes, and the read waited on a FIFO for a
     # writer that never came: `setup --git-hooks` and `--uninstall` both hung. It is read as a
     # regular file only, to the read cap, so a FIFO is a hook `install` cannot read, and it can
     # neither chain one nor write over it: refused. (`uninstall` leaves it as foreign, below.)
@@ -605,8 +605,8 @@ def test_a_fifo_at_the_hook_path_is_refused_by_install_and_never_waited_on(tmp_p
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed.errors import Refusal\n"
-        "from stayfixed.guards.githooks import install\n"
+        "from drybag.errors import Refusal\n"
+        "from drybag.guards.githooks import install\n"
         "try:\n"
         "    install(Path(sys.argv[1]))\n"
         "except Refusal as refused:\n"
@@ -621,9 +621,9 @@ def test_a_fifo_at_the_hook_path_is_refused_by_install_and_never_waited_on(tmp_p
 def test_uninstall_leaves_a_fifo_or_a_directory_at_the_hook_path_as_a_foreign_hook(
     tmp_path: Path, shape: str
 ) -> None:
-    # stayfixed writes only a regular file at the hook path, so anything else there is as surely
+    # drybag writes only a regular file at the hook path, so anything else there is as surely
     # not its own as a regular file past the read cap: `--uninstall` leaves it in place and says
-    # it is not stayfixed's, where it refused it as a hook it could not read. A FIFO is never
+    # it is not drybag's, where it refused it as a hook it could not read. A FIFO is never
     # opened, and so never waited on; a regression to a plain open would wait for a writer, so
     # this runs in a child under a timeout as its `install` sibling does. Mutation:
     # `mutations/`'s "uninstall reads a hook that is not a regular file".
@@ -637,7 +637,7 @@ def test_uninstall_leaves_a_fifo_or_a_directory_at_the_hook_path_as_a_foreign_ho
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed.guards.githooks import uninstall\n"
+        "from drybag.guards.githooks import uninstall\n"
         "path, restored, found = uninstall(Path(sys.argv[1]))\n"
         "print(path, restored, found.name, sep='\\n')\n"
     )
@@ -648,8 +648,8 @@ def test_uninstall_leaves_a_fifo_or_a_directory_at_the_hook_path_as_a_foreign_ho
 
 @pytest.mark.parametrize("verb", ["install", "uninstall"])
 def test_a_hook_that_cannot_be_read_is_neither_ours_nor_foreign(tmp_path: Path, verb: str) -> None:
-    # Whether it is stayfixed's cannot be told, so it is neither: read as foreign, `--uninstall`
-    # said "it is not stayfixed's hook" of stayfixed's own hook at mode 000, and `install`
+    # Whether it is drybag's cannot be told, so it is neither: read as foreign, `--uninstall`
+    # said "it is not drybag's hook" of drybag's own hook at mode 000, and `install`
     # renamed that hook to `.local` and chained it. Each refuses, naming the reason, and leaves it
     # where it is. Mutation: `mutations/`'s "a hook that cannot be read is read as a foreign one".
     if os.geteuid() == 0:
@@ -724,13 +724,13 @@ def test_a_hooks_directory_git_names_reaches_every_install_refusal_quoted(
 def test_a_hook_past_the_read_cap_is_a_foreign_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # stayfixed's own hook is a couple of kilobytes, so a regular file longer than the read cap
+    # drybag's own hook is a couple of kilobytes, so a regular file longer than the read cap
     # is certainly not it: it is foreign, chained by `install` and left alone by `--uninstall`,
     # as 0.2.0 did, rather than refused as a hook that cannot be read. The cap is lowered to
-    # just past stayfixed's own hook, which is still read whole. Mutation: `mutations/`'s "a hook
+    # just past drybag's own hook, which is still read whole. Mutation: `mutations/`'s "a hook
     # past the read cap is refused as one that cannot be read".
-    from stayfixed import fsops
-    from stayfixed.guards.githooks import HOOK_TEXT
+    from drybag import fsops
+    from drybag.guards.githooks import HOOK_TEXT
 
     limit = len(HOOK_TEXT.encode("utf-8")) + 16
     monkeypatch.setattr(fsops, "REGULAR_READ_LIMIT", limit)
@@ -825,6 +825,6 @@ def test_the_hook_text_carries_the_marker_the_installer_looks_for() -> None:
     # survives any edit to the marker by construction. It is here as the mutation guard for
     # `install`'s `_ours` check — the marker the installer greps for and the one the hook
     # carries are the same string, and this is what says so.
-    from stayfixed.guards.githooks import HOOK_TEXT
+    from drybag.guards.githooks import HOOK_TEXT
 
     assert HOOK_TEXT.splitlines()[1] == HOOK_MARKER

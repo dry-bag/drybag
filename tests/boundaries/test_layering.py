@@ -1,6 +1,6 @@
 """Layering: what each layer of the runtime may import. The runtime imports nothing but the
-standard library and itself, a leaf nothing of stayfixed, and the packages and the modules under
-`src/stayfixed/` import one another without a cycle."""
+standard library and itself, a leaf nothing of drybag, and the packages and the modules under
+`src/drybag/` import one another without a cycle."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 from tests.boundaries import astscan
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "src" / "stayfixed"
+SRC = ROOT / "src" / "drybag"
 
 
 def test_runtime_modules_import_only_the_standard_library() -> None:
@@ -21,15 +21,15 @@ def test_runtime_modules_import_only_the_standard_library() -> None:
     # every supported version. A module named in a string is the delivery rule's
     # (`tests/boundaries/test_delivery.py`), which also holds every module to `STANDARD_IMPORTS`, a
     # part of what this allows. Mutation: none of the code's; watched red by planting a function
-    # that imports `yaml` in `src/stayfixed/tomlout.py`.
-    allowed = set(sys.stdlib_module_names) | {"stayfixed"}
+    # that imports `yaml` in `src/drybag/tomlout.py`.
+    allowed = set(sys.stdlib_module_names) | {"drybag"}
     offenders: dict[str, list[str]] = {}
     walked: list[str] = []
     for path in sorted(SRC.rglob("*.py")):
         relative = path.relative_to(SRC)
         walked.append(relative.as_posix())
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        package = ("stayfixed", *relative.parts[:-1])
+        package = ("drybag", *relative.parts[:-1])
         roots = {module.split(".")[0] for _, module in astscan.imported_modules(tree, package)}
         if offending := sorted(roots - allowed):
             offenders[relative.as_posix()] = offending
@@ -40,10 +40,10 @@ def test_runtime_modules_import_only_the_standard_library() -> None:
 
 def test_the_runner_is_a_leaf_and_not_an_area() -> None:
     # `runner.py` is a leaf: it sits beside `fsops.py`, `gitenv.py` and `tomlout.py` and imports
-    # nothing from `stayfixed` but `gitenv`, another leaf, whose environment its `git` is given.
+    # nothing from `drybag` but `gitenv`, another leaf, whose environment its `git` is given.
     # Pinned as an import check rather than by walking the tree, because
     # the surface rule's walk treats a leaf as invisible on purpose. No mutation: adding a
-    # stayfixed import to a leaf is a review finding the standard-library walk above does not
+    # drybag import to a leaf is a review finding the standard-library walk above does not
     # catch, and this is the one line that does.
     source = SRC / "runner.py"
     tree = ast.parse(source.read_text(encoding="utf-8"))
@@ -59,21 +59,21 @@ def test_the_runner_is_a_leaf_and_not_an_area() -> None:
     # found no imports at all, or a filter that stopped matching — satisfies the filter below
     # without reading a single name. `runner.py` imports five stdlib modules.
     assert imported
-    assert not [n for n in imported if n.startswith("stayfixed") and n != "stayfixed.gitenv"]
+    assert not [n for n in imported if n.startswith("drybag") and n != "drybag.gitenv"]
 
 
 def _package_imports(where: str, text: str, packages: frozenset[str]) -> set[tuple[str, str]]:
     """The package graph's edges one file gives: `(its package, a package it imports)` for every
     import statement that runs when the file is imported (`astscan.imports`), to a package out of
     `packages` other than its own. A package is a subpackage or a module directly under
-    `src/stayfixed/`, named by its first path component."""
+    `src/drybag/`, named by its first path component."""
     parts = Path(where).parts
     importer = parts[0].removesuffix(".py")
     edges: set[tuple[str, str]] = set()
     for node in astscan.imports([ast.parse(text)], inside_functions=False):
-        for _, module in astscan.imported_modules(node, ("stayfixed", *parts[:-1])):
+        for _, module in astscan.imported_modules(node, ("drybag", *parts[:-1])):
             bits = module.split(".")
-            if bits[0] == "stayfixed" and bits[1:2] and bits[1] in packages - {importer}:
+            if bits[0] == "drybag" and bits[1:2] and bits[1] in packages - {importer}:
                 edges.add((importer, bits[1]))
     return edges
 
@@ -119,7 +119,7 @@ def test_the_packages_import_one_another_without_a_cycle_at_module_level() -> No
     # half-initialised, and is held where it crosses from one side to another by
     # `tests/boundaries/test_delivery.py`; and an `if TYPE_CHECKING:` body, which never runs and is
     # the idiom for naming a type from a package that depends on this one. The nodes are the
-    # packages under `src/stayfixed/`, delivery areas included, and imports within one package are
+    # packages under `src/drybag/`, delivery areas included, and imports within one package are
     # not edges.
     #
     # Mutation (declared): `mutations/`'s "the path grammar reads the configuration's schema
@@ -146,12 +146,12 @@ def test_the_package_graph_reads_imports_that_run_and_finds_every_cycle() -> Non
     # of one package, or read reachability one way only, reddens the second.
     packages = frozenset({"config", "findings", "guards", "printed", "docs"})
     text = (
-        "from stayfixed.findings import listed\n"
-        "if TYPE_CHECKING:\n    from stayfixed.config.schema import Config\n"
-        "else:\n    import stayfixed.printed\n"
-        "def f():\n    from stayfixed.guards.api import contained_roots\n"
-        "from . import sibling\nfrom stayfixed.docs import plans\n"
-        "from stayfixed import nothing_here\n"
+        "from drybag.findings import listed\n"
+        "if TYPE_CHECKING:\n    from drybag.config.schema import Config\n"
+        "else:\n    import drybag.printed\n"
+        "def f():\n    from drybag.guards.api import contained_roots\n"
+        "from . import sibling\nfrom drybag.docs import plans\n"
+        "from drybag import nothing_here\n"
     )
     assert _package_imports("docs/check.py", text, packages) == {
         ("docs", "findings"),
@@ -174,13 +174,13 @@ def _module_imports(where: str, text: str, modules: frozenset[str]) -> set[tuple
     one, and to the package's `__init__` either way, since Python runs it to look the name up.
 
     **And every import is an edge to each package above the module it names**, relative imports
-    resolved first: `from stayfixed.scaffold.model import Template` runs `scaffold/__init__.py`
+    resolved first: `from drybag.scaffold.model import Template` runs `scaffold/__init__.py`
     before `scaffold/model.py`, so whatever that `__init__` imports is reached through it. Not the
     packages above the importer itself, which Python started before the importer ran and does not
     run again."""
     parts = Path(where).with_suffix("").parts
-    importer = ".".join(("stayfixed", *(parts[:-1] if parts[-1] == "__init__" else parts)))
-    package = ("stayfixed", *Path(where).parts[:-1])
+    importer = ".".join(("drybag", *(parts[:-1] if parts[-1] == "__init__" else parts)))
+    package = ("drybag", *Path(where).parts[:-1])
     started = _packages_above(importer) | {importer}
     edges: set[tuple[str, str]] = set()
     for node in astscan.imports([ast.parse(text)], inside_functions=True):
@@ -198,7 +198,7 @@ def test_the_modules_import_one_another_without_a_cycle_even_inside_functions() 
     # inside the function, while `write` imports `permissions` at module level. Nothing failed,
     # and the first change to hoist that import, the house style everywhere a load is not being
     # deferred, would have stopped every `attach` and `detach` at import. So the modules under
-    # `src/stayfixed/` are a graph of their own here, every import that can run is an edge,
+    # `src/drybag/` are a graph of their own here, every import that can run is an edge,
     # module level or inside a function alike, and only an `if TYPE_CHECKING:` body, which never
     # runs, is left out. No cycle is pinned: a new one is a layering to fix, not a row to add.
     #
@@ -206,7 +206,7 @@ def test_the_modules_import_one_another_without_a_cycle_even_inside_functions() 
     # and "printed reads the scaffold inside a function".
     files = {path.relative_to(SRC).as_posix(): path for path in sorted(SRC.rglob("*.py"))}
     modules = frozenset(
-        ".".join(("stayfixed", *Path(where).with_suffix("").parts)).removesuffix(".__init__")
+        ".".join(("drybag", *Path(where).with_suffix("").parts)).removesuffix(".__init__")
         for where in files
     )
     edges: set[tuple[str, str]] = set()
@@ -215,8 +215,8 @@ def test_the_modules_import_one_another_without_a_cycle_even_inside_functions() 
     # The walk reads an edge that runs only inside a function, and the edge that import makes to the
     # package above the module it names, so a reader that stopped finding either cannot pass by
     # finding no cycle.
-    assert ("stayfixed.config.overlay_layers", "stayfixed.binding") in edges
-    assert ("stayfixed.memory.doctor", "stayfixed.doctor") in edges
+    assert ("drybag.config.overlay_layers", "drybag.binding") in edges
+    assert ("drybag.memory.doctor", "drybag.doctor") in edges
     assert _cycles(edges) == []
 
 
@@ -226,29 +226,29 @@ def test_the_module_graph_reads_imports_inside_functions_and_names_the_module_im
     # package's `__init__` or reading a relative import from the wrong package each reddens this.
     modules = frozenset(
         {
-            "stayfixed.attach",
-            "stayfixed.attach.permissions",
-            "stayfixed.attach.write",
-            "stayfixed.config.schema",
-            "stayfixed.printed",
+            "drybag.attach",
+            "drybag.attach.permissions",
+            "drybag.attach.write",
+            "drybag.config.schema",
+            "drybag.printed",
         }
     )
     text = (
-        "from stayfixed.attach.write import ledger\n"
-        "if TYPE_CHECKING:\n    from stayfixed.config.schema import Config\n"
-        "def f():\n    from stayfixed.printed import quoted\n"
+        "from drybag.attach.write import ledger\n"
+        "if TYPE_CHECKING:\n    from drybag.config.schema import Config\n"
+        "def f():\n    from drybag.printed import quoted\n"
         "from . import permissions\n"
-        "from stayfixed.attach import nothing_here\n"
+        "from drybag.attach import nothing_here\n"
     )
     assert _module_imports("attach/check.py", text, modules) == {
-        ("stayfixed.attach.check", "stayfixed.attach"),
-        ("stayfixed.attach.check", "stayfixed.attach.permissions"),
-        ("stayfixed.attach.check", "stayfixed.attach.write"),
-        ("stayfixed.attach.check", "stayfixed.printed"),
+        ("drybag.attach.check", "drybag.attach"),
+        ("drybag.attach.check", "drybag.attach.permissions"),
+        ("drybag.attach.check", "drybag.attach.write"),
+        ("drybag.attach.check", "drybag.printed"),
     }
     # A package's own `__init__` is named after the package, and imports nothing of itself.
     assert _module_imports("attach/__init__.py", "from . import write\n", modules) == {
-        ("stayfixed.attach", "stayfixed.attach.write"),
+        ("drybag.attach", "drybag.attach.write"),
     }
 
 
@@ -262,41 +262,39 @@ def test_the_module_graph_runs_every_package_above_the_module_imported() -> None
     # scaffold inside a function", the same shape in today's tree.
     modules = frozenset(
         {
-            "stayfixed",
-            "stayfixed.attach",
-            "stayfixed.attach.write",
-            "stayfixed.printed",
-            "stayfixed.scaffold",
-            "stayfixed.scaffold.engine",
-            "stayfixed.scaffold.model",
+            "drybag",
+            "drybag.attach",
+            "drybag.attach.write",
+            "drybag.printed",
+            "drybag.scaffold",
+            "drybag.scaffold.engine",
+            "drybag.scaffold.model",
         }
     )
-    planted = (
-        "def _probe():\n    from stayfixed.scaffold.model import Template\n    return Template\n"
-    )
+    planted = "def _probe():\n    from drybag.scaffold.model import Template\n    return Template\n"
     assert _module_imports("printed.py", planted, modules) == {
-        ("stayfixed.printed", "stayfixed.scaffold"),
-        ("stayfixed.printed", "stayfixed.scaffold.model"),
+        ("drybag.printed", "drybag.scaffold"),
+        ("drybag.printed", "drybag.scaffold.model"),
     }
     edges = (
         _module_imports("printed.py", planted, modules)
         | _module_imports("scaffold/__init__.py", "from .engine import plan\n", modules)
-        | _module_imports("scaffold/engine.py", "from stayfixed.printed import quoted\n", modules)
+        | _module_imports("scaffold/engine.py", "from drybag.printed import quoted\n", modules)
     )
     assert _cycles(edges) == [
-        ["stayfixed.printed", "stayfixed.scaffold", "stayfixed.scaffold.engine"],
+        ["drybag.printed", "drybag.scaffold", "drybag.scaffold.engine"],
     ]
     # `import a.b.c` runs the same packages, and so does a relative import once resolved. The
     # packages above the importer itself are not edges: Python started them before it, and an
     # edge to each would put every package that imports its own submodules in a cycle.
     text = (
-        "import stayfixed.scaffold.model\n"
+        "import drybag.scaffold.model\n"
         "from .write import ledger\n"
         "def f():\n    from ..scaffold.engine import plan\n"
     )
     assert _module_imports("attach/check.py", text, modules) == {
-        ("stayfixed.attach.check", "stayfixed.attach.write"),
-        ("stayfixed.attach.check", "stayfixed.scaffold"),
-        ("stayfixed.attach.check", "stayfixed.scaffold.engine"),
-        ("stayfixed.attach.check", "stayfixed.scaffold.model"),
+        ("drybag.attach.check", "drybag.attach.write"),
+        ("drybag.attach.check", "drybag.scaffold"),
+        ("drybag.attach.check", "drybag.scaffold.engine"),
+        ("drybag.attach.check", "drybag.scaffold.model"),
     }

@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.gitenv import FLOOR_VARIABLE
-from stayfixed.sync import job as J
-from stayfixed.sync.state import LOCK_FILE, STATE_FILE, Lock, Outcome, SyncState, read_state
+from drybag.gitenv import FLOOR_VARIABLE
+from drybag.sync import job as J
+from drybag.sync.state import LOCK_FILE, STATE_FILE, Lock, Outcome, SyncState, read_state
 from tests import gitfixture as fx
 from tests.gitfixture import SESSION_CONFIG, git_bytes
 from tests.sync.conftest import (

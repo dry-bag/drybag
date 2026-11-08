@@ -1,4 +1,4 @@
-# stayfixed:ignore:begin
-# stayfixed's local state: yours, never a collaborator's.
-.stayfixed/local/
-# stayfixed:ignore:end
+# drybag:ignore:begin
+# drybag's local state: yours, never a collaborator's.
+.drybag/local/
+# drybag:ignore:end

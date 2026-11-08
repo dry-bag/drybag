@@ -21,9 +21,9 @@ from typing import Any
 
 import pytest
 
-from stayfixed.sync import job as J
-from stayfixed.sync import scan as S
-from stayfixed.sync.state import SCRATCH
+from drybag.sync import job as J
+from drybag.sync import scan as S
+from drybag.sync.state import SCRATCH
 from tests.sync.conftest import (
     LEAK,
     SLOW,

@@ -5,7 +5,7 @@
 # CONTRIBUTING.md, "Tests".
 
 # `scripts/publish_plugin.py` pushes to the plugin repository only the commit the release's tag
-# pins, built with the tag's own `scripts/plugin_tree.py` and `src/stayfixed`, attested, read back
+# pins, built with the tag's own `scripts/plugin_tree.py` and `src/drybag`, attested, read back
 # whole, compared by id with what GitHub holds, and only as one atomic fast-forward of `main` with
 # the tag. It rejects (exit 1) a fact of the release no re-run changes and refuses (exit 2)
 # anything else. Each of these drops one of those conditions.
@@ -57,7 +57,7 @@ reddens = [
   "tests/scripts/test_publish_plugin.py::test_a_replace_ref_on_the_tag_object_does_not_move_the_tags_commit",
 ]
 
-# The tag's code runs only when GitHub's `stayfixed/stayfixed` holds the same commit under the tag,
+# The tag's code runs only when GitHub's `dry-bag/drybag` holds the same commit under the tag,
 # and only the tag's code: its `plugin_tree.py`, its `src` first on `sys.path`, regular files only.
 [[mutation]]
 name = "the publisher runs a tag GitHub does not hold"
@@ -121,7 +121,7 @@ name = "the publisher puts the tag's src after the checkout's"
 file = "scripts/publish_plugin.py"
 before = '"sys.path.insert(0, src); runpy'
 after = '"sys.path.append(src); runpy'
-reddens = ["tests/scripts/test_publish_plugin.py::test_the_tag_s_tool_imports_the_tag_s_stayfixed"]
+reddens = ["tests/scripts/test_publish_plugin.py::test_the_tag_s_tool_imports_the_tag_s_drybag"]
 
 [[mutation]]
 name = "the publisher quotes the first lines of a tool that printed no JSON object"
@@ -367,7 +367,7 @@ before = """        "--cert-identity",
         CERT_IDENTITY.format(tag=tag),
 """
 after = """        "--signer-workflow",
-        "stayfixed/stayfixed/.github/workflows/release.yml",
+        "dry-bag/drybag/.github/workflows/release.yml",
 """
 reddens = [
   "tests/scripts/test_publish_plugin.py::test_the_attestation_is_asked_with_an_exact_identity",
@@ -747,8 +747,8 @@ reddens = [
 [[mutation]]
 name = "the publisher pushes to another repository than the marketplace fetches from"
 file = "scripts/publish_plugin.py"
-before = 'PLUGIN_REMOTE = "git@github.com:stayfixed/stayfixed-plugin.git"'
-after = 'PLUGIN_REMOTE = "git@github.com:stayfixed/plugin.git"'
+before = 'PLUGIN_REMOTE = "git@github.com:dry-bag/drybag-plugin.git"'
+after = 'PLUGIN_REMOTE = "git@github.com:drybag/plugin.git"'
 reddens = [
   "tests/scripts/test_publish_plugin.py::test_the_publisher_pushes_to_the_repository_the_marketplace_fetches_from",
 ]
@@ -756,8 +756,8 @@ reddens = [
 [[mutation]]
 name = "the publisher confirms through another repository than the marketplace fetches from"
 file = "scripts/publish_plugin.py"
-before = 'PLUGIN_URL = "https://github.com/stayfixed/stayfixed-plugin.git"'
-after = 'PLUGIN_URL = "https://github.com/stayfixed/plugin.git"'
+before = 'PLUGIN_URL = "https://github.com/dry-bag/drybag-plugin.git"'
+after = 'PLUGIN_URL = "https://github.com/drybag/plugin.git"'
 reddens = [
   "tests/scripts/test_publish_plugin.py::test_the_publisher_pushes_to_the_repository_the_marketplace_fetches_from",
 ]
@@ -765,8 +765,8 @@ reddens = [
 [[mutation]]
 name = "the publisher asks GitHub about another plugin repository"
 file = "scripts/publish_plugin.py"
-before = 'PLUGIN_REPOSITORY = "stayfixed/stayfixed-plugin"'
-after = 'PLUGIN_REPOSITORY = "stayfixed/plugin"'
+before = 'PLUGIN_REPOSITORY = "dry-bag/drybag-plugin"'
+after = 'PLUGIN_REPOSITORY = "drybag/plugin"'
 reddens = [
   "tests/scripts/test_publish_plugin.py::test_the_publisher_pushes_to_the_repository_the_marketplace_fetches_from",
 ]
@@ -1178,7 +1178,7 @@ before = "    if not done.confirmed:"
 after = "    if False:"
 reddens = ["tests/scripts/test_publish_plugin.py::test_the_cli_says_what_a_dry_run_would_push"]
 
-# Run by an interpreter without this repository's `stayfixed`, the publisher fails on its first
+# Run by an interpreter without this repository's `drybag`, the publisher fails on its first
 # import, before the CLI frame exists, and a traceback's exit `1` asks the owner to reject the
 # release; it refuses with `2` itself.
 [[mutation]]
@@ -1213,8 +1213,8 @@ reddens = ["tests/scripts/test_publish_plugin.py::test_two_equal_manifests_have_
 [[mutation]]
 name = "the publisher reads another manifest format than plugin_tree.py writes"
 file = "scripts/publish_plugin.py"
-before = 'FORMAT = "stayfixed-plugin-tree 1"'
-after = 'FORMAT = "stayfixed-plugin-tree 2"'
+before = 'FORMAT = "drybag-plugin-tree 1"'
+after = 'FORMAT = "drybag-plugin-tree 2"'
 reddens = ["tests/test_workflows.py::test_one_commit_id_shape_everywhere"]
 
 [[mutation]]

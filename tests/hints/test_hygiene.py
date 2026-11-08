@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.loader import CONFIG_FILE
-from stayfixed.hints.hygiene import dirty_count, notice, red_exit, simple_commands
+from drybag.config.loader import CONFIG_FILE
+from drybag.hints.hygiene import dirty_count, notice, red_exit, simple_commands
 from tests.gitfixture import git
 
 # Per test: `red_exit`, `notice` and `simple_commands` are pure, and a module-level skip would
@@ -19,7 +19,7 @@ from tests.gitfixture import git
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 

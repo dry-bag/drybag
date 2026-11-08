@@ -291,7 +291,7 @@ def test_the_smoke_runs_doctor_from_the_installed_tree() -> None:
     doctor = [
         step
         for step in _steps_of(SMOKE_WORKFLOW, "installed-plugin")
-        if "-m stayfixed doctor" in _run(step)
+        if "-m drybag doctor" in _run(step)
     ]
     assert len(doctor) == 1, doctor
     env = doctor[0].get("env")
@@ -465,7 +465,7 @@ def test_the_release_attests_the_plugin_tree_it_rendered_from_the_commit() -> No
 GATED = ("publish", "github-release")
 PLUGIN_GATE = "The plugin repository holds this release's commit"
 # The plugin repository, as every reader of it must name it.
-PLUGIN_REPOSITORY = "stayfixed/stayfixed-plugin"
+PLUGIN_REPOSITORY = "dry-bag/drybag-plugin"
 TAG = "v1.2.3"
 
 
@@ -612,7 +612,7 @@ def _attest(tmp_path: Path, source: Path) -> tuple[subprocess.CompletedProcess[s
     index, _ = _tree_command(RELEASE_WORKFLOW, "attest", "commit")
     step = _steps_of(RELEASE_WORKFLOW, "attest")[index]
     env = step.get("env")
-    # The runner's interpreter has no `stayfixed` but the checkout's `src`; this one has its own
+    # The runner's interpreter has no `drybag` but the checkout's `src`; this one has its own
     # through its environment, so the run below cannot tell, and only this pin holds it.
     # Mutation (oracle): `mutations/`'s "the attest job runs the plugin script without the
     # checkout's package".
@@ -860,7 +860,7 @@ def test_one_commit_id_shape_everywhere() -> None:
     # and "the plugin tree takes no 64-character object name for one".
     tree, publisher = scriptload.plugin_tree(), scriptload.publish_plugin()
     formats = {"plugin_tree.py FORMAT": tree.FORMAT, "publish_plugin.py FORMAT": publisher.FORMAT}
-    assert set(formats.values()) == {"stayfixed-plugin-tree 1"}, formats
+    assert set(formats.values()) == {"drybag-plugin-tree 1"}, formats
     names = {
         "plugin_tree.py OBJECT_NAME": _pattern(tree.OBJECT_NAME),
         "publish_plugin.py OBJECT_NAME": _pattern(publisher.OBJECT_NAME),
@@ -909,7 +909,7 @@ def test_one_plugin_repository_everywhere() -> None:
     asked = {
         name
         for name in re.findall(r"\brepos/([a-z0-9._-]+/[a-z0-9._-]+)/", releasing)
-        if name != "stayfixed/stayfixed"
+        if name != "dry-bag/drybag"
     }
     created = re.findall(r"\bgh repo create (\S+)", releasing)
     assert listed and asked and len(created) == 1, (listed, asked, created)
@@ -951,7 +951,7 @@ def _smoke_programs(tmp_path: Path, source: Path) -> tuple[Path, Path]:
     (stub / "claude").write_text(
         "#!/bin/sh\n"
         'if [ "$1 $2" = "plugin install" ]; then\n'
-        '  mkdir -p "$CLAUDE_CONFIG_DIR/plugins/cache/stayfixed-marketplace/stayfixed/1.2.3"\n'
+        '  mkdir -p "$CLAUDE_CONFIG_DIR/plugins/cache/drybag/drybag/1.2.3"\n'
         "fi\n"
     )
     for name in ("uv", "claude"):
@@ -1064,7 +1064,7 @@ def test_the_smoke_says_why_it_built_no_plugin_commit(tmp_path: Path) -> None:
     # file when the script fails; without it the job stops with an exit code and no reason. A
     # `plugin.json` naming no `X.Y.Z` version renders, and is refused by `commit` alone. Mutation
     # (oracle): `mutations/`'s "the smoke hides why it built no plugin commit".
-    manifest = (b'{"name": "stayfixed", "version": "1.2"}\n', "100644")
+    manifest = (b'{"name": "drybag", "version": "1.2"}\n', "100644")
     source = plugintree.plugin_source(
         tmp_path, {**plugintree.PLUGIN_FILES, ".claude-plugin/plugin.json": manifest}
     )

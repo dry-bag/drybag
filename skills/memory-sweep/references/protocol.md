@@ -7,7 +7,7 @@ group for durable preferences and working lessons, a project-stable group for du
 project facts absent from the repository's documents, and a project-volatile group for
 temporary state, where every note carries `metadata.as_of`.
 
-`MEMORY.md` is a **routing table**, rendered by `stayfixed memory index` from each note's
+`MEMORY.md` is a **routing table**, rendered by `drybag memory index` from each note's
 `index:` line — never edited by hand, and budgeted (`memory_index_words`). Every entry is a
 pointer, phrased *trigger → what the note settles*. It must not read as a finished claim: an
 entry that can be quoted gets quoted instead of opened, and the note always carries the part
@@ -15,9 +15,9 @@ that decides the work. No status tail either — a factual tail is the same fail
 position.
 
 Notes with `metadata.startup: <rank>` are standing rules once the owner promotes them
-(`stayfixed memory promote`), injected whole at session start in rank order; an edit makes a note
+(`drybag memory promote`), injected whole at session start in rank order; an edit makes a note
 unreviewed again until it is promoted anew; volatile notes are injected whole too, and
-`stayfixed memory session-context --bundle volatile-notes` reports one past its `as_of` or its
+`drybag memory session-context --bundle volatile-notes` reports one past its `as_of` or its
 budget. Before ranking a note, decide where it belongs at all: a rule that fires on an
 *action* belongs on that action's hook; a rule already mechanized by a repository setting or a
 CI gate belongs in neither, and the note is deleted.
@@ -48,6 +48,6 @@ CI gate belongs in neither, and the note is deleted.
 
 The store is linked, not copied, so a note written from either side is the same note and
 nothing is lost when the worktree goes. Linking is automatic, and it is not the job of
-`stayfixed memory index`: a `SessionStart` handler makes one link per group at the start of a
+`drybag memory index`: a `SessionStart` handler makes one link per group at the start of a
 session and says how many it made. When a group is missing from the worktree, read that line
 first — the handler reports a path it refused rather than failing the session.

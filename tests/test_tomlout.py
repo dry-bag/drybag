@@ -7,8 +7,8 @@ import tomllib
 
 import pytest
 
-from stayfixed.errors import Refusal
-from stayfixed.tomlout import dumps
+from drybag.errors import Refusal
+from drybag.tomlout import dumps
 
 
 def test_a_value_with_a_quote_and_a_newline_round_trips() -> None:
@@ -49,7 +49,7 @@ def test_every_value_a_toml_document_can_hold_round_trips() -> None:
     # The contract widened when a third input arrived: `setup` rewrites the machine
     # configuration, a file `README.md` documents the owner as writing by hand, so what reaches
     # this serialiser is no longer only a caller's own dict. Refusing a float or a sub-table
-    # merely because no caller of ours produces one wedged `stayfixed setup` permanently — the
+    # merely because no caller of ours produces one wedged `drybag setup` permanently — the
     # file is read back at the top of every run. A nested dict becomes a sub-table header; a
     # dict inside a list becomes an inline table, the one spelling that survives being nested.
     #
@@ -155,7 +155,7 @@ def test_a_time_with_an_offset_and_a_sub_minute_offset_are_refused_rather_than_w
 def test_an_integer_past_the_conversion_limit_round_trips_in_hexadecimal() -> None:
     # `tomllib` converts a hex, octal or binary literal of any length, and `str()` of the result
     # past 4,300 digits raises `ValueError`: `setup`'s rewrite of the owner's machine file and
-    # `init`'s re-render of an adopted `stayfixed.toml` ended in an internal error on one such
+    # `init`'s re-render of an adopted `drybag.toml` ended in an internal error on one such
     # line. Written as the hexadecimal TOML reads back, which no digit limit bounds. Mutation
     # (declared): the integer spelled with `str` alone again -> `ValueError`.
     large = int("f" * 5_000, 16)

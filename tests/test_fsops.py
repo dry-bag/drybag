@@ -11,8 +11,8 @@ from typing import NoReturn
 
 import pytest
 
-from stayfixed import fsops
-from stayfixed.fsops import (
+from drybag import fsops
+from drybag.fsops import (
     NEW_FILE_MODE,
     NotASymlink,
     NotRegularFile,
@@ -266,12 +266,12 @@ def test_gits_control_directory_is_reserved_at_every_depth_and_in_any_case() -> 
 
 def test_the_reserved_name_is_the_component_and_not_a_leading_dot() -> None:
     # The rule this branch cannot have: `.github/workflows/` is an artifact it ships and
-    # `.stayfixed/` holds the manifest, so refusing a leading dot would refuse stayfixed's own
+    # `.drybag/` holds the manifest, so refusing a leading dot would refuse drybag's own
     # footprint. And `.gitignore`, `.gitattributes` and `.gitkeep` are ordinary files that
     # merely start the same way, which an equality test on the whole component leaves alone.
     for target in (
-        ".github/workflows/stayfixed.yml",
-        ".stayfixed/manifest.json",
+        ".github/workflows/drybag.yml",
+        ".drybag/manifest.json",
         ".gitignore",
         ".gitattributes",
         "docs/.gitkeep",
@@ -284,7 +284,7 @@ def test_the_reserved_name_is_the_component_and_not_a_leading_dot() -> None:
 def test_an_existing_git_hook_is_never_rewritten_in_place(tmp_path: Path) -> None:
     # The impact, end to end and at the primitive. The developer's own `pre-commit` is a real
     # executable file, and `_mode_of` carries an existing file's mode onto the replacement — so
-    # before this rule, a write through here left a 0755 file with stayfixed's bytes appended to
+    # before this rule, a write through here left a 0755 file with drybag's bytes appended to
     # somebody else's hook. Mode and body are both asserted, and both after the refusal.
     hooks = tmp_path / ".git" / "hooks"
     hooks.mkdir(parents=True)
@@ -293,14 +293,14 @@ def test_an_existing_git_hook_is_never_rewritten_in_place(tmp_path: Path) -> Non
     hook.chmod(0o755)
 
     with pytest.raises(UnsafePath, match="control directory"):
-        write_within(tmp_path, ".git/hooks/pre-commit", "#!/bin/sh\n<!-- stayfixed -->\n")
+        write_within(tmp_path, ".git/hooks/pre-commit", "#!/bin/sh\n<!-- drybag -->\n")
     assert hook.read_text(encoding="utf-8") == "#!/bin/sh\necho real hook\n"
     assert stat.S_IMODE(hook.stat().st_mode) == 0o755
 
     # And nothing new is created inside it either, which is the other half of what a clone got
     # to choose: an arbitrary file at an arbitrary name in git's own directory.
     with pytest.raises(UnsafePath, match="control directory"):
-        write_within(tmp_path, ".git/stayfixed-roadmap.md", "# roadmap\n")
+        write_within(tmp_path, ".git/drybag-roadmap.md", "# roadmap\n")
     assert sorted(p.name for p in (tmp_path / ".git").iterdir()) == ["hooks"]
 
 
@@ -491,7 +491,7 @@ def test_a_name_is_utf_8_by_its_bytes_on_disk_not_by_its_str() -> None:
 
 def test_an_error_is_said_in_its_words_never_with_the_path_it_was_opened_by() -> None:
     # `str(OSError)` carries the file the call opened, by the path it was given — the absolute
-    # one under this machine's layout — so an error is said by its `strerror` alone. stayfixed's
+    # one under this machine's layout — so an error is said by its `strerror` alone. drybag's
     # own path refusal, `UnsafePath`, carries no errno and names the path relative to the root,
     # so it is said whole rather than as its class's name. Mutation: drop the fall-back to
     # `str(error)` in `said` — the second assertion reddens.
@@ -803,7 +803,7 @@ def test_a_fifo_is_refused_without_waiting_for_a_writer(tmp_path: Path) -> None:
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed import fsops\n"
+        "from drybag import fsops\n"
         "try:\n"
         "    fsops.open_regular(Path(sys.argv[1]))\n"
         "except fsops.NotRegularFile:\n"
@@ -832,7 +832,7 @@ def test_a_fifo_swapped_in_after_the_check_is_refused_without_waiting(tmp_path: 
     probe = (
         "import os, sys\n"
         "from pathlib import Path\n"
-        "from stayfixed import fsops\n"
+        "from drybag import fsops\n"
         "real = os.open\n"
         "os.open = lambda path, flags, *rest: real(sys.argv[2], flags, *rest)\n"
         "try:\n"
@@ -928,7 +928,7 @@ def test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer(tmp_path: P
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed import fsops\n"
+        "from drybag import fsops\n"
         "try:\n"
         "    print(fsops.read_bounded_within(Path(sys.argv[1]), 'pipe.md', 4))\n"
         "except fsops.NotRegularFile:\n"
@@ -1025,7 +1025,7 @@ def test_an_append_to_a_fifo_with_no_reader_is_refused_and_never_waits(tmp_path:
     probe = (
         "import errno, sys\n"
         "from pathlib import Path\n"
-        "from stayfixed import fsops\n"
+        "from drybag import fsops\n"
         "try:\n"
         "    with fsops.open_within(Path(sys.argv[1]), 'log.jsonl') as (dir_fd, name):\n"
         "        fsops.append_at(dir_fd, name, b'line\\n')\n"

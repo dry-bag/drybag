@@ -4,17 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import presets
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.config.paths import PathEscape
-from stayfixed.config.reading import ConfigError
-from stayfixed.config.schema import Config
-from stayfixed.errors import Failure, Refusal
-from stayfixed.presets import load_preset
-from stayfixed.scaffold import Template, apply, plan
+from drybag import presets
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.config.paths import PathEscape
+from drybag.config.reading import ConfigError
+from drybag.config.schema import Config
+from drybag.errors import Failure, Refusal
+from drybag.presets import load_preset
+from drybag.scaffold import Template, apply, plan
 
 VALID_HEAD = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -48,7 +48,7 @@ index_extra = ["../../elsewhere/index.md"]
 HOSTILE_NAME = VALID_HEAD.replace('name = "widget"', 'name = "../common"')
 HOSTILE_PRESET = VALID_HEAD.replace('preset = "recommended"', 'preset = "../../etc/passwd"')
 
-ESCAPES = ["../../AGENTS.md", "/etc/stayfixed", "../runbooks/x.md", "docs/../../x.md", "", "."]
+ESCAPES = ["../../AGENTS.md", "/etc/drybag", "../runbooks/x.md", "docs/../../x.md", "", "."]
 
 
 def write_config(root: Path, text: str) -> None:
@@ -91,7 +91,7 @@ def test_an_absolute_paths_value_is_refused_by_the_grammar_before_contained_is_r
     # `contained()`'s own `..`-shaped message never fires for it, and folding it into
     # `HOSTILE_PATHS` let one guard silently cover for the other. Asserted directly against the
     # grammar instead.
-    from stayfixed.grammar import PATH_VALUE
+    from drybag.grammar import PATH_VALUE
 
     assert PATH_VALUE.match("/etc") is None
 
@@ -128,7 +128,7 @@ def test_a_preset_name_outside_the_identifier_rule_is_refused_and_never_quoted(
     with pytest.raises(Failure) as caught:
         load_at(tmp_path)
     message = str(caught.value)
-    assert message.startswith("[stayfixed] preset is not a plain identifier"), message
+    assert message.startswith("[drybag] preset is not a plain identifier"), message
     assert "\x1b" not in message and "\n" not in message and "IGNORE" not in message
     assert "available: recommended" in message
 
@@ -143,7 +143,7 @@ def test_a_preset_this_build_does_not_ship_is_refused_and_never_quoted(tmp_path:
     with pytest.raises(Failure) as caught:
         load_at(tmp_path)
     message = str(caught.value)
-    assert message.startswith("[stayfixed] preset names a preset this version"), message
+    assert message.startswith("[drybag] preset names a preset this version"), message
     assert "IGNOREPRIORRULES" not in message
 
 
@@ -152,7 +152,7 @@ def test_a_preset_name_in_another_case_is_refused_on_every_filesystem(
     tmp_path: Path, name: str
 ) -> None:
     # The membership question was put to the filesystem, and macOS's default one folds case: the
-    # same `stayfixed.toml` loaded on a Mac and was refused on a Linux CI runner. It is asked of
+    # same `drybag.toml` loaded on a Mac and was refused on a Linux CI runner. It is asked of
     # the listing now, which answers the same everywhere. On a case-sensitive filesystem this
     # case cannot tell the two apart, so it is the regression and not the oracle's proof; the
     # case below is, and holds on every platform.
@@ -216,7 +216,7 @@ def test_nothing_outside_the_root_is_written_even_when_apply_is_called(tmp_path:
 ROUND_TRIP = (
     "docs/x.md",
     "AGENTS.md",
-    ".stayfixed/local/x.md",
+    ".drybag/local/x.md",
     "a.b-c/d_e.md",
     "docs//roadmap-history.md",
     "design/handbooks/",
@@ -249,7 +249,7 @@ def test_a_target_that_survives_plan_is_one_apply_can_write(tmp_path: Path) -> N
         if planned.refusals:
             # A refused plan is allowed, and must have planned nothing and written nothing.
             assert planned.actions == ()
-            assert not (root / ".stayfixed").exists(), target
+            assert not (root / ".drybag").exists(), target
             continue
         apply(root, planned)  # must not raise: this is the whole of the round trip
         assert (root / target).read_text(encoding="utf-8") == "x", target

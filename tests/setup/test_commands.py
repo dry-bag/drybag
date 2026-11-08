@@ -12,13 +12,13 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import fsops
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.overlay.identity import NOT_A_RECORD
-from stayfixed.overlay.layout import IDENTITY_RECORD
-from stayfixed.printed import quoted
-from stayfixed.setup.api import SetupReport
-from stayfixed.setup.machine import SETUP_SANDBOXED
+from drybag import fsops
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.overlay.identity import NOT_A_RECORD
+from drybag.overlay.layout import IDENTITY_RECORD
+from drybag.printed import quoted
+from drybag.setup.api import SetupReport
+from drybag.setup.machine import SETUP_SANDBOXED
 from tests.parserlimits import LONG_NUMBER
 from tests.runners import Recorder
 from tests.sandboxed import refuse_writes_under
@@ -46,10 +46,10 @@ def test_the_parser_refuses_a_plugin_name_outside_its_grammar_and_writes_nothing
     # option, names a marketplace of its own or reaches past the name. Refused by the parser, naming
     # the rule and never the value, before anything is written or run. Mutation: `mutations/`'s
     # "setup --plugin takes any name".
-    from stayfixed.setup.commands import PLUGIN_RULE
+    from drybag.setup.commands import PLUGIN_RULE
 
     stub = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: stub)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: stub)
     machine = tmp_path / "config.toml"
     argv = ["setup", "--home", str(tmp_path / "home"), "--machine", str(machine)]
     with pytest.raises(SystemExit):
@@ -63,13 +63,13 @@ def test_the_parser_refuses_a_plugin_name_outside_its_grammar_and_writes_nothing
 def test_the_preset_flow_runs_through_the_cli_with_a_stubbed_runner(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Patched at `stayfixed.setup.commands` itself, not at `overlay.api`: that module-level import
+    # Patched at `drybag.setup.commands` itself, not at `overlay.api`: that module-level import
     # is what `run_setup` calls directly, so a test that wants to keep this command away from a real
     # `claude`/`codex` monkeypatches a name this module owns rather than reaching two hops into a
     # dependency's own attribute. The recorder answers every call with success, because the run
     # names a plugin to install and a test here must never reach a real `claude` or `codex`.
     stub = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: stub)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: stub)
     home = tmp_path / "home"
     machine = tmp_path / "config.toml"
     code = invoke(
@@ -103,7 +103,7 @@ def test_uninstall_without_git_hooks_refuses_and_runs_no_machine_setup(
     # Mutation (`mutations/`'s "setup drops a lone --uninstall and runs the machine setup"): the
     # run exits 0, writes the machine file and reaches the runner, and this reddens.
     stub = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: stub)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: stub)
     home = tmp_path / "home"
     machine = tmp_path / "config.toml"
     argv = ["setup", "--uninstall", "--home", str(home), "--machine", str(machine)]
@@ -121,14 +121,14 @@ def test_machine_setup_refuses_root_and_writes_nothing(
     # person who named a repository. Refused before anything is written, as `--uninstall` is.
     #
     # Mutation: `mutations/`'s "setup drops --root and runs the machine setup".
-    from stayfixed.setup.commands import _ROOT_ALONE
+    from drybag.setup.commands import _ROOT_ALONE
 
     stub = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: stub)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: stub)
     machine = tmp_path / "config.toml"
     argv = ["setup", "--root", str(tmp_path), "--home", str(tmp_path / "home")]
     assert invoke([*argv, "--machine", str(machine)]) == 2
-    assert capsys.readouterr().err == f"stayfixed: refused: {_ROOT_ALONE}\n"
+    assert capsys.readouterr().err == f"drybag: refused: {_ROOT_ALONE}\n"
     assert not machine.exists()
     assert not stub.calls
 
@@ -137,9 +137,9 @@ def test_the_machine_default_is_the_file_every_reader_reads(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # `--machine`'s default once took the `isatty` sniff that no *reader* took. With
-    # `XDG_CONFIG_HOME` set, an owner running `stayfixed setup` in their own shell wrote
-    # `/xdg/stayfixed/config.toml`, got exit 0, and every reader then said "no overlay root is
-    # recorded in the machine configuration; run `stayfixed setup`" — the defect
+    # `XDG_CONFIG_HOME` set, an owner running `drybag setup` in their own shell wrote
+    # `/xdg/drybag/config.toml`, got exit 0, and every reader then said "no overlay root is
+    # recorded in the machine configuration; run `drybag setup`" — the defect
     # `config.loader.load`'s docstring describes, on the write side.
     #
     # Mutation (`mutations/`'s "the machine path honours XDG_CONFIG_HOME again"): the file lands
@@ -154,11 +154,11 @@ def test_the_machine_default_is_the_file_every_reader_reads(
     # depend on it.
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     stub = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: stub)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: stub)
     argv = ["setup", "--preset", "recommended", "--home", str(home), "--plugin", "superpowers"]
     assert invoke(argv) == 0
-    assert (home / ".config" / "stayfixed" / "config.toml").is_file()
-    assert not (xdg / "stayfixed" / "config.toml").exists()
+    assert (home / ".config" / "drybag" / "config.toml").is_file()
+    assert not (xdg / "drybag" / "config.toml").exists()
     assert stub.calls, "the stubbed runner was never called; the patch may have stopped applying"
 
 
@@ -176,12 +176,12 @@ def test_an_empty_home_is_no_default_for_home(
         seen.append(home)
         return SetupReport(False, (), False, False, None, ())
 
-    monkeypatch.setattr("stayfixed.setup.run.setup", recorded)
+    monkeypatch.setattr("drybag.setup.run.setup", recorded)
     monkeypatch.setenv("HOME", "")
     machine = tmp_path / "config.toml"
     assert invoke(["setup", "--preset", "recommended", "--machine", str(machine)]) == 1
     assert capsys.readouterr().err == (
-        "stayfixed: failed: HOME names no home directory, so there is no default for --home or "
+        "drybag: failed: HOME names no home directory, so there is no default for --home or "
         "--machine; set HOME to your home directory, or pass --home PATH and --machine PATH\n"
     )
     assert seen == []
@@ -196,14 +196,14 @@ def test_a_relative_home_is_no_default_for_home_from_any_directory(
     # `setup` refuses from either directory before anything is written. Mutation (oracle):
     # `mutations/`'s "a relative HOME is read against the working directory".
     stub = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: stub)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: stub)
     monkeypatch.setenv("HOME", "h")
     for name in ("a", "b"):
         (tmp_path / name).mkdir()
         monkeypatch.chdir(tmp_path / name)
         assert invoke(["setup", "--preset", "recommended"]) == 1
         assert capsys.readouterr().err == (
-            "stayfixed: failed: HOME names no home directory, so there is no default for --home "
+            "drybag: failed: HOME names no home directory, so there is no default for --home "
             "or --machine; set HOME to your home directory, or pass --home PATH and --machine "
             "PATH\n"
         )
@@ -215,14 +215,14 @@ def test_setup_help_names_no_path_from_the_machine_the_parser_was_built_on(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # The second half of the same finding: both defaults used to be computed when the parser is
-    # built, so `stayfixed setup --help` printed the developer's own home directory — and it was
+    # built, so `drybag setup --help` printed the developer's own home directory — and it was
     # computed on every run of every command, since the parser is built for all of them.
     with pytest.raises(SystemExit):
         invoke(["setup", "--help"])
     printed = capsys.readouterr().out
     assert "--machine" in printed
     assert str(Path.home()) not in printed
-    assert "~/.config/stayfixed/config.toml" in printed
+    assert "~/.config/drybag/config.toml" in printed
 
 
 # An identity record `tomllib` meets with neither a `TOMLDecodeError` nor an answer: nested past
@@ -242,7 +242,7 @@ def test_an_overlay_record_past_the_parser_is_refused_as_unreadable_through_the_
 ) -> None:
     # `tomllib` meets neither document with a `TOMLDecodeError`: nesting past what it follows
     # raises `RecursionError`, and the long integer a plain `ValueError`. A reader catching only
-    # the first would end `stayfixed setup --overlay` in an internal error instead of refusing a
+    # the first would end `drybag setup --overlay` in an internal error instead of refusing a
     # tree whose record it cannot read. Nothing is recorded, and the runner is never reached: the
     # probe runs above every write.
     #
@@ -252,14 +252,14 @@ def test_an_overlay_record_past_the_parser_is_refused_as_unreadable_through_the_
     overlay.mkdir()
     (overlay / IDENTITY_RECORD).write_text(PAST_THE_PARSER[case], encoding="utf-8")
     stub = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: stub)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: stub)
     machine = tmp_path / "config.toml"
     argv = ["setup", "--overlay", str(overlay), "--home", str(tmp_path / "home")]
     code = invoke([*argv, "--machine", str(machine)])
     err = capsys.readouterr().err
     assert "internal error" not in err
     refused = NOT_A_RECORD.format(root=quoted(str(overlay)))
-    assert f"stayfixed: refused: {refused}" in err
+    assert f"drybag: refused: {refused}" in err
     assert code == 2
     assert not machine.exists()
     assert stub.calls == []
@@ -272,7 +272,7 @@ def test_setup_with_no_home_names_machine_and_writes_nothing(
     # to name one, and runs nothing.
     monkeypatch.setenv("HOME", "")
     stub = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: stub)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: stub)
     home = tmp_path / "home"
     home.mkdir()
     assert invoke(["setup", "--preset", "recommended", "--home", str(home)]) == 1
@@ -288,14 +288,14 @@ def test_setup_where_the_home_cannot_be_written_fails_naming_the_directory(
     locked.mkdir()
     home.mkdir()
     locked.chmod(0o555)
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: Recorder())
     try:
         monkeypatch.setenv("HOME", str(locked))
         assert invoke(["setup", "--preset", "recommended", "--home", str(home)]) == 1
     finally:
         locked.chmod(0o755)
     err = capsys.readouterr().err
-    assert f"{locked / '.config' / 'stayfixed'} cannot be written" in err
+    assert f"{locked / '.config' / 'drybag'} cannot be written" in err
     assert "without --machine it is under HOME" in err
     assert "internal error" not in err
 
@@ -311,8 +311,8 @@ def test_setup_whose_named_machine_file_cannot_be_written_says_nothing_of_runnin
     locked.mkdir()
     home.mkdir()
     locked.chmod(0o555)
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
-    named = locked / "stayfixed" / "config.toml"
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: Recorder())
+    named = locked / "drybag" / "config.toml"
     try:
         argv = ["setup", "--preset", "recommended", "--home", str(home)]
         assert invoke([*argv, "--machine", str(named)]) == 1
@@ -342,7 +342,7 @@ def test_setup_from_a_sandboxed_shell_says_a_person_must_run_it(
     # writable).
     home, machine = tmp_path / "home", tmp_path / "machine" / "config.toml"
     (home / ".claude").mkdir(parents=True)
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: Recorder())
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: Recorder())
     met: list[Path] = []
     if refused == "machine-file":
         met = refuse_writes_under(monkeypatch, machine.parent)
@@ -355,7 +355,7 @@ def test_setup_from_a_sandboxed_shell_says_a_person_must_run_it(
         )
     argv = ["setup", "--preset", "recommended", "--home", str(home)]
     assert invoke([*argv, "--machine", str(machine)]) == 2
-    assert capsys.readouterr().err == f"stayfixed: refused: {SETUP_SANDBOXED}\n"
+    assert capsys.readouterr().err == f"drybag: refused: {SETUP_SANDBOXED}\n"
     assert (
         met
         == {
@@ -371,6 +371,6 @@ def test_setup_s_sandbox_sentence_says_what_a_person_in_their_own_terminal_meets
     # As the trust record's: the sandbox's answer is also a read-only mount's or an immutable
     # flag's, met by a person already in their own terminal. Mutation (`mutations/`'s "the sandbox
     # sentence sends a person in their own terminal there again"): it ends at the sandbox.
-    from stayfixed.trust.boundary import OWN_TERMINAL_TOO
+    from drybag.trust.boundary import OWN_TERMINAL_TOO
 
     assert SETUP_SANDBOXED.endswith(OWN_TERMINAL_TOO)

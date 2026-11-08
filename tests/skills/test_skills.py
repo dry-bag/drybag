@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.areas import area_modules
-from stayfixed.cli import build_parser, discover_registrars, split_json_flag
-from stayfixed.overlay.template import template_root
+from drybag.areas import area_modules
+from drybag.cli import build_parser, discover_registrars, split_json_flag
+from drybag.overlay.template import template_root
 
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS = ROOT / "skills"
@@ -47,7 +47,7 @@ _TOOL = re.compile(r"\b(?:" + "|".join(TOOL_NAMES) + r")\b")
 # `test_every_invocation_parses_or_is_allowlisted`. Empty since `uninstall` shipped; kept, with its
 # check against the areas that register commands, for the next wrapper written ahead of its command.
 NOT_YET_SHIPPED: dict[str, str] = {}
-_INVOCATION = re.compile(r"`stayfixed ([^`\n]+)`")
+_INVOCATION = re.compile(r"`drybag ([^`\n]+)`")
 _FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.DOTALL)
 
 
@@ -150,13 +150,13 @@ def test_every_invocation_parses_or_is_allowlisted(path: Path) -> None:
                 parsed = False
         if argv[0] in NOT_YET_SHIPPED:
             assert not parsed, (
-                f"`stayfixed {invocation}` parses now; delete its NOT_YET_SHIPPED entry "
+                f"`drybag {invocation}` parses now; delete its NOT_YET_SHIPPED entry "
                 f"({NOT_YET_SHIPPED[argv[0]]} shipped it) and re-read this skill against the "
                 f"flags that actually shipped — this test proves the command parses, never "
                 f"that the skill describes it correctly"
             )
         else:
-            assert parsed, f"`stayfixed {invocation}` does not parse against the real parser"
+            assert parsed, f"`drybag {invocation}` does not parse against the real parser"
 
 
 def test_the_allowlist_names_only_areas_that_register_commands() -> None:

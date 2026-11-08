@@ -14,11 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.attach.check import check
-from stayfixed.attach.write import attach
-from stayfixed.config.loader import load
-from stayfixed.doctor.api import run_checks
-from stayfixed.memory.store import resolved
+from drybag.attach.check import check
+from drybag.attach.write import attach
+from drybag.config.loader import load
+from drybag.doctor.api import run_checks
+from drybag.memory.store import resolved
 from tests.attach.test_write import RULE, _attachable
 from tests.gitfixture import git
 from tests.runners import Recorder

@@ -5,7 +5,7 @@ updates:
   # rewrites the SHA *and* the comment. `directory: /` is the whole of that tree and not one
   # file, so a workflow added tomorrow is covered without editing this — which is why this
   # comment names the directory rather than counting the actions, the way it used to.
-  # What it does NOT cover is `src/stayfixed/templates/overlay/.github/workflows/`: the
+  # What it does NOT cover is `src/drybag/templates/overlay/.github/workflows/`: the
   # overlay template's own pins are not in a workflow directory the platform reads, and
   # `RELEASING.md` section 4 is where they are checked by hand.
   - package-ecosystem: github-actions
@@ -22,7 +22,7 @@ updates:
       actions:
         patterns: ["*"]
 
-  # Development dependencies only — stayfixed has no runtime dependencies, and
+  # Development dependencies only — drybag has no runtime dependencies, and
   # `tests/boundaries/test_layering.py` is what keeps it that way.
   - package-ecosystem: uv
     directory: /

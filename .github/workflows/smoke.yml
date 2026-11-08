@@ -55,7 +55,7 @@ jobs:
   installed-plugin:
     needs: changes
     # A fork inherits the schedule; only this repository runs it weekly.
-    if: ${{ !cancelled() && (github.event_name != 'schedule' || github.repository == 'stayfixed/stayfixed') }}
+    if: ${{ !cancelled() && (github.event_name != 'schedule' || github.repository == 'dry-bag/drybag') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -74,7 +74,7 @@ jobs:
           node-version: "22"
       - name: The interpreter every step below runs on
         if: env.FULL == 'true'
-        # stayfixed's floor is 3.11: the two smoke scripts and `python3 -m stayfixed doctor` all
+        # drybag's floor is 3.11: the two smoke scripts and `python3 -m drybag doctor` all
         # run the runner's bare `python3`, and which interpreter that is on `macos-latest` is the
         # image's business rather than a contract. One step removes the question from every step after it.
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -152,16 +152,16 @@ jobs:
           import json, sys
           catalog = json.load(open(sys.argv[1], encoding="utf-8"))
           [entry] = catalog["plugins"]
-          assert catalog["name"] == "stayfixed-marketplace", catalog["name"]
-          assert entry["name"] == "stayfixed" and entry["source"]["source"] == "url", entry
+          assert catalog["name"] == "drybag", catalog["name"]
+          assert entry["name"] == "drybag" and entry["source"]["source"] == "url", entry
           entry["source"] = {"source": "url", "url": sys.argv[3], "ref": sys.argv[4], "sha": sys.argv[5]}
           with open(sys.argv[2], "w", encoding="utf-8") as out:
               json.dump(catalog, out, indent=2)
           PY
           export CLAUDE_CONFIG_DIR="$RUNNER_TEMP/claude"
           claude plugin marketplace add "$RUNNER_TEMP/market"
-          claude plugin install stayfixed@stayfixed-marketplace
-          cache="$CLAUDE_CONFIG_DIR/plugins/cache/stayfixed-marketplace/stayfixed"
+          claude plugin install drybag@drybag
+          cache="$CLAUDE_CONFIG_DIR/plugins/cache/drybag/drybag"
           root="$(find "$cache" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           test -n "$root"
           echo "root=$root" >> "$GITHUB_OUTPUT"
@@ -171,7 +171,7 @@ jobs:
           INSTALLED: ${{ steps.install.outputs.root }}
         run: |
           diff -r hooks "$INSTALLED/hooks"
-          diff scripts/stayfixed "$INSTALLED/scripts/stayfixed"
+          diff scripts/drybag "$INSTALLED/scripts/drybag"
           test -x "$INSTALLED/hooks/run-hook.sh"
       - name: The installed tree is the rendered one, file for file
         if: env.FULL == 'true'
@@ -210,7 +210,7 @@ jobs:
           # omitted would have passed.
           PYTHONPATH: ${{ steps.install.outputs.root }}/src
         run: |
-          python3 -m stayfixed doctor --json --root "$RUNNER_TEMP/smoke/project" \
+          python3 -m drybag doctor --json --root "$RUNNER_TEMP/smoke/project" \
             --home "$RUNNER_TEMP/smoke/home" --machine "$RUNNER_TEMP/machine.toml" \
             > "$RUNNER_TEMP/doctor.json" || true
           python3 - "$RUNNER_TEMP/doctor.json" <<'PY'

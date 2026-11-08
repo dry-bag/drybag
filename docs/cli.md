@@ -1,6 +1,6 @@
 # Command reference
 
-Every command, what it reads, what it writes, and what each exit code means. `stayfixed --help`
+Every command, what it reads, what it writes, and what each exit code means. `drybag --help`
 gives you the one-line version; this is the rest.
 
 Three things hold everywhere:
@@ -16,13 +16,13 @@ Three things hold everywhere:
   surrogate escape per byte (`\udcXX`), which a strict JSON reader may refuse.
 - **Exit codes**: `0` success, `1` findings, `2` a refusal or an internal error. A caller that
   treats `1` as "proceed anyway" must still never treat `2` that way — a refusal is a boundary,
-  not a low-confidence result. Every command that reads `stayfixed.toml` refuses one that is a
+  not a low-confidence result. Every command that reads `drybag.toml` refuses one that is a
   symbolic link, whatever it points at, before reading anything through it: a link to
   `/dev/zero` would otherwise be read until memory ran out. The refusal exits `2`, except in three
-  commands that read the file the way a session does: `stayfixed hook` runs on with no project
-  configuration and warns once when the session starts (see [its section](#stayfixed-hook-event)),
-  `stayfixed memory session-context` prints nothing, and `stayfixed doctor` reports it as a
-  `stayfixed.toml` that does not load, a red row, exit `1`.
+  commands that read the file the way a session does: `drybag hook` runs on with no project
+  configuration and warns once when the session starts (see [its section](#drybag-hook-event)),
+  `drybag memory session-context` prints nothing, and `drybag doctor` reports it as a
+  `drybag.toml` that does not load, a red row, exit `1`.
 - **Every `memory` command takes the same three options**, described once here rather than seven
   times below. `--root` and `--machine` are not memory's alone: [Shared flags](#shared-flags) says
   which commands take them, and in which sense.
@@ -31,42 +31,42 @@ Three things hold everywhere:
 |---|---|
 | `--root PATH` | The project root. Default: the current directory. |
 | `--store PATH` | Resolve the note store at this path instead of where the configuration says. An override of *where the notes are*, not of the rules about them: the same containment checks apply. In overlay mode it is not read: the store is the composed store the binding names, so no directory a repository chose stands in for it. |
-| `--machine PATH` | Read this machine configuration file instead of `~/.config/stayfixed/config.toml`. Mostly for tests and for running against a second machine profile; it also decides which `trust.json` is consulted. |
+| `--machine PATH` | Read this machine configuration file instead of `~/.config/drybag/config.toml`. Mostly for tests and for running against a second machine profile; it also decides which `trust.json` is consulted. |
 ## Contents
 
-- [`stayfixed memory index`](#stayfixed-memory-index)
-- [`stayfixed memory session-context --bundle <name> [--part N]`](#stayfixed-memory-session-context---bundle-name---part-n)
-- [`stayfixed memory inventory`](#stayfixed-memory-inventory)
-- [`stayfixed memory promote NOTE… | --changed`](#stayfixed-memory-promote-note----changed)
-- [`stayfixed hook <event>`](#stayfixed-hook-event)
+- [`drybag memory index`](#drybag-memory-index)
+- [`drybag memory session-context --bundle <name> [--part N]`](#drybag-memory-session-context---bundle-name---part-n)
+- [`drybag memory inventory`](#drybag-memory-inventory)
+- [`drybag memory promote NOTE… | --changed`](#drybag-memory-promote-note----changed)
+- [`drybag hook <event>`](#drybag-hook-event)
 - [Hooks](#hooks)
 - [Note sync](#note-sync)
-- [`stayfixed commit check --range RANGE`](#stayfixed-commit-check---range-range)
-- [`stayfixed commit strip FILE`](#stayfixed-commit-strip-file)
-- [`stayfixed docs check [--budgets] [--links]`](#stayfixed-docs-check---budgets---links)
-- [`stayfixed docs trail [--check]`](#stayfixed-docs-trail---check)
-- [`stayfixed plan check [--base REF] [PATH …]`](#stayfixed-plan-check---base-ref-path-)
-- [`stayfixed overlay upgrade [--root PATH] [--dry-run]`](#stayfixed-overlay-upgrade---root-path---dry-run)
-- [`stayfixed attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
-- [`stayfixed detach [--root PATH] [--machine PATH]`](#stayfixed-detach---root-path---machine-path)
-- [`stayfixed setup [--preset NAME] [--plugin NAME …] [--home PATH] [--machine PATH] [--overlay VALUE]`](#stayfixed-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
-- [`stayfixed setup --git-hooks [--uninstall] [--root PATH]`](#stayfixed-setup---git-hooks---uninstall---root-path)
-- [`stayfixed setup --approval-boundary [--home PATH] [--machine PATH]`](#stayfixed-setup---approval-boundary---home-path---machine-path)
-- [`stayfixed doctor [--json] [--root PATH] [--home PATH] [--machine PATH]`](#stayfixed-doctor---json---root-path---home-path---machine-path)
+- [`drybag commit check --range RANGE`](#drybag-commit-check---range-range)
+- [`drybag commit strip FILE`](#drybag-commit-strip-file)
+- [`drybag docs check [--budgets] [--links]`](#drybag-docs-check---budgets---links)
+- [`drybag docs trail [--check]`](#drybag-docs-trail---check)
+- [`drybag plan check [--base REF] [PATH …]`](#drybag-plan-check---base-ref-path-)
+- [`drybag overlay upgrade [--root PATH] [--dry-run]`](#drybag-overlay-upgrade---root-path---dry-run)
+- [`drybag attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#drybag-attach---store-path---project-name---check---root-path---machine-path)
+- [`drybag detach [--root PATH] [--machine PATH]`](#drybag-detach---root-path---machine-path)
+- [`drybag setup [--preset NAME] [--plugin NAME …] [--home PATH] [--machine PATH] [--overlay VALUE]`](#drybag-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
+- [`drybag setup --git-hooks [--uninstall] [--root PATH]`](#drybag-setup---git-hooks---uninstall---root-path)
+- [`drybag setup --approval-boundary [--home PATH] [--machine PATH]`](#drybag-setup---approval-boundary---home-path---machine-path)
+- [`drybag doctor [--json] [--root PATH] [--home PATH] [--machine PATH]`](#drybag-doctor---json---root-path---home-path---machine-path)
 - [Shared flags](#shared-flags)
 - [Terms](#terms)
 - [Configuration](#configuration)
 
 ---
 
-## `stayfixed memory index`
+## `drybag memory index`
 
 Render `MEMORY.md` from the notes. The index is a rendering: no note is written but one whose line
 the native writer appended to `MEMORY.md`, which is harvested into it.
 
 ```bash
-stayfixed memory index            # write
-stayfixed memory index --check    # report drift, write nothing
+drybag memory index            # write
+drybag memory index --check    # report drift, write nothing
 ```
 
 **Reads** every `*.md` under each configured group, and the current `MEMORY.md`.
@@ -84,7 +84,7 @@ What it does, in order:
    are read back into its `index:` frontmatter, marked `index_provenance: native`, so nothing a
    session wrote is lost by regenerating. Only lines outside the region the render writes are
    read (step 4), so the render's own lines are never read back into a note. A note written so is unreviewed until promoted again
-   ([`memory promote`](#stayfixed-memory-promote-note----changed)).
+   ([`memory promote`](#drybag-memory-promote-note----changed)).
 3. **Renders what is missing.** A note with none of these is rendered with its `description`, and
    is not written. A line an earlier release wrote into a note as `index_provenance: provisional`
    is read as no line, so the note's line follows its description again.
@@ -94,12 +94,12 @@ What it does, in order:
    The harness's own memory writer keeps its notes as topic files at the top of the store,
    outside every group, each named by one `- [title](file.md)` line in `MEMORY.md`: every such
    line whose file the store still holds is kept, verbatim and once, and the topic files are never
-   written. The render sits between two marker lines, `<!-- stayfixed:index -->` and
-   `<!-- stayfixed:index:end -->`; the native writer's pointer lines stand after it, where that
+   written. The render sits between two marker lines, `<!-- drybag:index -->` and
+   `<!-- drybag:index:end -->`; the native writer's pointer lines stand after it, where that
    writer appends, and a `MEMORY.md` with no markers is read whole as lines outside the region. In
-   a composed store's own `MEMORY.md` under `~/.local/share/stayfixed/stores/`, a note you have not
+   a composed store's own `MEMORY.md` under `~/.local/share/drybag/stores/`, a note you have not
    promoted at the bytes it holds now
-   ([`memory promote`](#stayfixed-memory-promote-note----changed)) has its line end in
+   ([`memory promote`](#drybag-memory-promote-note----changed)) has its line end in
    `[unreviewed]`, as the bundles label it; the label follows this machine's record, so it is never
    written into an index a repository commits or the overlay shares.
 
@@ -119,7 +119,7 @@ Exits `2` if `MEMORY.md` is a symlink this store may not follow (the target rule
 overlay mode a symlinked index is refused outright; in overlay mode only a link into *this*
 project's own share of the recorded overlay is honoured).
 
-**A session renders it in overlay mode.** In a checkout with a `stayfixed.toml` whose memory is in
+**A session renders it in overlay mode.** In a checkout with a `drybag.toml` whose memory is in
 overlay mode and that this machine binds, the `index-render` hook handler runs this command's write
 on `SessionStart` and on `SessionEnd`, and renders once more when a line arrived while it rendered:
 the note sync moves no `MEMORY.md`, so each machine renders its own from the notes it holds. The `SessionEnd` render is the one that
@@ -128,16 +128,16 @@ the [note sync](#note-sync)'s own `SessionEnd` handler starts its job, so the no
 in that job; the `SessionStart` render lists what the jobs brought in since. It says nothing; a
 failure is one line on stderr and costs no other handler.
 
-**A checkout with no `stayfixed.toml` that this machine binds** reads the memory a repository with
+**A checkout with no `drybag.toml` that this machine binds** reads the memory a repository with
 the file reads: every `memory` command, the bundles and `doctor`'s note-store rows use the preset's
 configuration under the overlay's layers (`common/`, the project's tags, `projects/<name>/`), for
 the project this machine's binding record names, which is how a public clone you cannot commit to
 gets its notes. A checkout nothing on this machine binds is still refused (`1`), naming the
-`stayfixed.toml` it lacks, and the bundles print nothing for it. A `stayfixed.toml` is read first when
+`drybag.toml` it lacks, and the bundles print nothing for it. A `drybag.toml` is read first when
 there is one.
 
-**One store in overlay mode.** There the store is the composed store `stayfixed attach` builds,
-`~/.local/share/stayfixed/stores/<id>/`, named by the checkout's binding id and holding one link per
+**One store in overlay mode.** There the store is the composed store `drybag attach` builds,
+`~/.local/share/drybag/stores/<id>/`, named by the checkout's binding id and holding one link per
 group into the overlay, and `--store` is not read. In every other mode `--store` is resolved at the
 path it names, under the same rules as the configured store. The groups include the notes of each tag
 the project lists, as `tag-<tag>` (`groups/<tag>/memory/` in the overlay), which every `memory`
@@ -148,29 +148,29 @@ unreviewed once.
 
 **When there is no store, the refusal says why** (exit `1`). An overlay root the machine
 configuration records that is not a directory on this machine — the overlay moved, or was never
-cloned here — is said first, with the root named in stayfixed's own sentence (it is your
-machine configuration's, not the repository's) and `stayfixed setup --preset NAME
+cloned here — is said first, with the root named in drybag's own sentence (it is your
+machine configuration's, not the repository's) and `drybag setup --preset NAME
 --overlay PATH` as the way out, since `attach` refuses a store outside the recorded root. A
 checkout this machine does not bind to the project — no binding id in its git common directory, or
-none this machine records for that project — is said in stayfixed's own words before the region
-that carries the repository's, with `stayfixed attach` as the way out. The checkout's `origin`
+none this machine records for that project — is said in drybag's own words before the region
+that carries the repository's, with `drybag attach` as the way out. The checkout's `origin`
 plays no part in it.
 
-## `stayfixed memory session-context --bundle <name> [--part N]`
+## `drybag memory session-context --bundle <name> [--part N]`
 
 Render one injection bundle. This is what a `SessionStart` hook entry invokes; you will rarely
 run it by hand except to see what a session actually receives.
 
 | Bundle | What it is |
 |---|---|
-| `standing-rules` | Every note flagged `startup` that you promoted at the bytes it holds now ([`memory promote`](#stayfixed-memory-promote-note----changed)), in full, ranked; an unreviewed note is never a standing rule, whatever it says about itself. Never truncated — only flagged when the set outgrows its budget, because a standing rule that does not arrive is a standing rule that gets broken. |
+| `standing-rules` | Every note flagged `startup` that you promoted at the bytes it holds now ([`memory promote`](#drybag-memory-promote-note----changed)), in full, ranked; an unreviewed note is never a standing rule, whatever it says about itself. Never truncated — only flagged when the set outgrows its budget, because a standing rule that does not arrive is a standing rule that gets broken. |
 | `volatile-notes` | Dated, perishable notes, and every unreviewed note flagged `startup`, in full; over budget, descriptions only. An unreviewed note arrives labelled `[unreviewed]` inside a delimited region that says it is data, opened and closed with a nonce the note does not hold. |
 
 Each bundle is emitted across numbered parts, because the harness caps each hook entry's output
 independently. `--part N` selects one; a part past the end prints nothing and exits `0`. A part
 that is a single block too large for one slot is withheld — the command prints a short notice
 saying so instead, because the harness would otherwise truncate it and a truncated region loses
-the marker that says where repository content ends. `stayfixed doctor`'s `bundles` row reports it.
+the marker that says where repository content ends. `drybag doctor`'s `bundles` row reports it.
 
 Output is deliberately **raw**, not JSON: the margin that keeps a bundle inside the platform cap
 is additive only because there is no envelope and no escaping. Do not pass `--json` from a hook
@@ -181,7 +181,7 @@ store, and this command prints nothing. So it does before the store's directory 
 `local-only` repository before its first note — and in an overlay checkout this machine has not
 bound, whose binding `doctor` reports. In an overlay checkout this machine binds whose composed
 store is gone, `--bundle standing-rules` (part 1) prints one line saying so, the store named by its
-short binding id, with `stayfixed attach` as the way back, and every other entry prints nothing. A configured
+short binding id, with `drybag attach` as the way back, and every other entry prints nothing. A configured
 group whose directory the store does not hold is an empty group, here and in every `memory`
 command: it contributes no notes, and the store is still read, the native writer's files at its
 top included. An unreviewed note — one a repository commits, one
@@ -195,7 +195,7 @@ file.
 
 **Writes** nothing: the bundle goes to standard output and nowhere else.
 
-## `stayfixed memory inventory`
+## `drybag memory inventory`
 
 What a memory sweep reads: every note with its word count, type, `startup` rank, date, whether
 it is stale, whether its index line is curated, harvested or provisional, and whether it is
@@ -210,7 +210,7 @@ followed.
 
 **Writes** nothing.
 
-## `stayfixed memory promote NOTE… | --changed`
+## `drybag memory promote NOTE… | --changed`
 
 Count notes as yours, at the bytes they hold now. Each `NOTE` is a note's path in the store,
 `<group>/<file>.md` as `memory index` links it, or a path to the note's file; `--changed` takes
@@ -218,8 +218,8 @@ every note that is not reviewed. One or the other: both, or neither, exits `2` a
 as does a name that is no note of the store.
 
 ```bash
-stayfixed memory promote developer/prefer-uv.md
-stayfixed memory promote --changed    # after reading what changed
+drybag memory promote developer/prefer-uv.md
+drybag memory promote --changed    # after reading what changed
 ```
 
 A note is reviewed while the sha256 of its current bytes is a `reviewed` approval in `trust.json`.
@@ -227,13 +227,13 @@ The digest alone decides, and the approval keeps the note's resolved path only a
 under another name, and an edit — yours, an agent's, the harness's writer's — makes the note
 unreviewed again and moves no other note. The record is this machine's, so another machine
 promotes for itself. Only a reviewed note is a standing rule
-([`session-context`](#stayfixed-memory-session-context---bundle-name---part-n)). The record lies
+([`session-context`](#drybag-memory-session-context---bundle-name---part-n)). The record lies
 outside every tree, so repository bytes cannot write it; an agent whose shell can run this command
 can, and against it the record is a label, not a gate (what the record holds against is below). An
 approval holds for its bytes wherever they reappear: an edit takes the note out of review, but the
 same bytes written again anywhere, a revert or a copy, are reviewed again. No command withdraws
 an approval; withdrawing one is a hand edit of `trust.json` that removes its entry.
-[`stayfixed setup --restore --yes`](#stayfixed-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
+[`drybag setup --restore --yes`](#drybag-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
 records the notes of the overlay's share for each project it attaches.
 
 Prints each note's path in the store and the digest recorded, one per line. `--json` keys:
@@ -244,13 +244,13 @@ object holding `version` (`1`) and `approvals`, each with its `kind`, `subject`,
 `approved_at`. Every write replaces the whole file in one atomic step, and no lock is taken: two
 commands writing at once each replace it whole, the last one wins, and neither leaves it torn.
 
-**What an approval holds against.** Repository bytes: stayfixed never writes `trust.json` from
+**What an approval holds against.** Repository bytes: drybag never writes `trust.json` from
 what a repository holds, and a clone, a pull or a pull request does not reach it, since it lies
 under `HOME` and outside every repository. A repository whose hooks your harness runs — a committed
 `.claude/settings.json` hook in a folder you trusted — is code running as you, and can write any
 file you can, this one included. Not the session's own agent: an agent whose shell can write any
-file you can may write the record as well, and stayfixed neither stops nor checks that. That
-boundary is the harness's sandbox, which is yours to set; `stayfixed setup --approval-boundary`
+file you can may write the record as well, and drybag neither stops nor checks that. That
+boundary is the harness's sandbox, which is yours to set; `drybag setup --approval-boundary`
 prints what to set under Claude Code. Even a sandbox that keeps the record out of reach leaves an
 agent a way to instruct the next session: Claude Code's documentation does not list a project's
 `CLAUDE.md` or `AGENTS.md` among the paths its sandbox keeps from the agent's own writes, and Claude
@@ -258,20 +258,20 @@ Code loads the first as instructions and can load the second, through an import 
 instructions setting (read in the documentation, not measured). [SECURITY.md](../SECURITY.md)
 lists an agent with an unsandboxed shell as out of scope.
 
-Exits `2` if `trust.json` exists and is not a record this stayfixed reads — not JSON, not UTF-8, a
+Exits `2` if `trust.json` exists and is not a record this drybag reads — not JSON, not UTF-8, a
 later version, no `version`, a `version` that is neither `1` nor later (`0`, `"1"`, `true`), or a
 version-1 record that is not whole: a key besides `version` and `approvals`, an approval that is not
 an object of four text fields, or one approval named twice. Nothing will overwrite a file it
 could not read: one that does not parse may hold every project's approval, so repair or delete it;
 repair any other that holds approvals you want to keep, or delete it to start a new record; for a record of a later version, which a later
-stayfixed wrote and is met after a downgrade, update stayfixed instead, since deleting it would
+drybag wrote and is met after a downgrade, update drybag instead, since deleting it would
 destroy that release's approvals.
 
 Exits `2` for a write refused as an agent's sandbox refuses one, as **Writes** below says.
 
 **Reads** the store's notes and the machine's trust record.
 
-**Writes** `~/.config/stayfixed/trust.json` (or the file beside `--machine`), only when a note was
+**Writes** `~/.config/drybag/trust.json` (or the file beside `--machine`), only when a note was
 promoted, through a link a dotfiles manager put there: the file the link leads to gets the record,
 and the link stays. A write refused as an agent's sandbox refuses one (`EPERM` on macOS and
 `EROFS` on Linux and WSL2, as Claude Code's sandboxing reference gives them) exits `2`, records
@@ -280,23 +280,23 @@ sandbox, and that met in their own terminal it is the directory itself refusing 
 read-only mount or an immutable flag does. A directory you may not write for its mode exits `1`,
 naming it.
 
-## `stayfixed hook <event>`
+## `drybag hook <event>`
 
 Internal. Reads a hook payload on stdin, dispatches it to every handler registered for that
 event, and writes the harness's expected output.
 
 Not something to run by hand. Its exit-code policy differs from every other command: an internal
-error degrades open (`0`) on every event, with the error on stderr — a bug in stayfixed must not
+error degrades open (`0`) on every event, with the error on stderr — a bug in drybag must not
 cost you a tool call, and on `UserPromptSubmit` an exit `2` would erase what you typed.
 
 On `PreToolUse` for a `Bash` call two handlers hint and neither refuses: `bg-cleanup` names a
 backgrounded command that leaves a job behind, and `pipe-status` names a test run piped into `tail`,
 `head` or `grep` whose text names no `pipefail` or `PIPESTATUS` and is a flat list of pipelines, where
-the run's exit status is lost. Each reads the command alone, so each speaks in a repository with no `stayfixed.toml`; `pipe-status` has no
+the run's exit status is lost. Each reads the command alone, so each speaks in a repository with no `drybag.toml`; `pipe-status` has no
 switch and speaks once per context.
 
 **A session never dies of its configuration.** The guards run in every repository, whatever
-`stayfixed.toml` holds: none at all, one that does not load, and a broken machine file included;
+`drybag.toml` holds: none at all, one that does not load, and a broken machine file included;
 only their switches are read, the repository's `[guards]` as a default the overlay's files and the
 machine file override. A configuration is never the reason a call is refused.
 The project's file is read the way [Configuration](#configuration) says a
@@ -305,7 +305,7 @@ to the preset's, so the rest of the file still applies. The handlers about the p
 unreviewed-notes count, the overlay status, the red-run note — say nothing when there is no project
 configuration to use, which is so when there is no file, and when the file is a symbolic link
 (never read, whatever it points at), is not UTF-8, cannot be read or is not TOML, or holds a key
-nothing can stand in for: a required key with no default (`[stayfixed] version`, `[project]
+nothing can stand in for: a required key with no default (`[drybag] version`, `[project]
 name`) that is missing or cannot be used, or whose section is not a table, or a key whose preset
 value does not hold in this repository either, such as a `[paths]` default under a committed
 symlink. Nor is a file longer than 256 KiB read at all, nor one read key by key past more settings
@@ -317,20 +317,20 @@ preset and the owner's layer.
 
 What the session could not use is said once, on `SessionStart`, in one warning about each file, to
 the person (`systemMessage`) and at the head of the model's context (`additionalContext`), both
-counted inside the hook's output cap: that `stayfixed.toml` does not load, that one of its keys
+counted inside the hook's output cap: that `drybag.toml` does not load, that one of its keys
 cannot be used and nothing can stand in for it (naming the key), that it is longer than a session
-reads, that it holds more settings this stayfixed cannot use than a file its length is read past,
+reads, that it holds more settings this drybag cannot use than a file its length is read past,
 that it loaded with some
-settings ignored or put back to the preset's (counting them, and saying when a newer stayfixed
+settings ignored or put back to the preset's (counting them, and saying when a newer drybag
 wrote it), or that the machine file, named by the path that was read, could not be used whole.
-Each points at `stayfixed doctor`, and none carries the loader's own message, which carries the
-repository's text; a command such as `stayfixed docs check` still refuses the file and prints that
+Each points at `drybag doctor`, and none carries the loader's own message, which carries the
+repository's text; a command such as `drybag docs check` still refuses the file and prints that
 message in full. Every other event
 prints no warning, and records once per session, in the diagnostics log below, that the session
 runs without some of its configuration (`config-fallback`).
 
 **The overlay's rules.** In a checkout this machine binds to an overlay project
-([`attach`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)), `SessionStart`
+([`attach`](#drybag-attach---store-path---project-name---check---root-path---machine-path)), `SessionStart`
 carries the overlay's standing rules — every `*.md` file in `claude/rules/` of `common/`, of each
 tag the project lists (`groups/<tag>/`) and of `projects/<name>/` whose frontmatter has no `paths:`
 key, in that order and each in name order, a later plate's file replacing the earlier plate's file of
@@ -338,13 +338,13 @@ its name —
 under one fixed lead line, on every event the matcher covers, since a compacted or cleared context
 has lost them. A rule with `paths:` is path-scoped: the plugin `attach` renders carries a
 `PostToolUse` entry for it, matching `Read|Edit|Write`, that runs `hook PostToolUse` through
-whatever launched the stayfixed that ran `attach`, by absolute paths in double quotes: from the
+whatever launched the drybag that ran `attach`, by absolute paths in double quotes: from the
 core plugin, its own `hooks/run-hook.sh` (below), so `-I` and exit `0` on any fault hold as for the
 plugin's own entries; from an installed package, which has no plugin root, the interpreter it ran
-under, as `<python> -I -m stayfixed`. That answer carries every such rule whose globs match the file the tool named, relative to the checkout's root (`*` and `?` within
+under, as `<python> -I -m drybag`. That answer carries every such rule whose globs match the file the tool named, relative to the checkout's root (`*` and `?` within
 one path segment, `**` across segments, `{a,b}` for alternatives), the first time a session touches
 that file, and nothing after. The project is the one the machine's binding record names, never the
-repository's `stayfixed.toml`, so an unbound checkout hears no rule, whatever its `memory.mode`; a
+repository's `drybag.toml`, so an unbound checkout hears no rule, whatever its `memory.mode`; a
 rule that cannot be read silences the rules of that hook, and `attach` refuses it. A rule's body
 reaches the model as the overlay holds it; the one path printed is the touched file's, withheld
 outside the path grammar.
@@ -352,12 +352,12 @@ outside the path grammar.
 **The owner-held files.** In a new linked worktree of a checkout this machine binds to an overlay
 project, `SessionStart` places the regular files directly inside the overlay's
 `projects/<name>/checkout/` (`owner-files`, the first handler there) that the worktree does not
-have: an `AGENTS.md`, a `CLAUDE.md`, a `stayfixed.toml` the repository does not track. Never a
+have: an `AGENTS.md`, a `CLAUDE.md`, a `drybag.toml` the repository does not track. Never a
 `.env*` file (in any letter case), `settings.local.json` or `.DS_Store`, and never a subdirectory or
 a link in `checkout/`. A file keeps its source's permission bits and is created only where nothing
 is at the name: a file the branch tracks is already there, and a file, directory or link at the name
 is left alone and never written through. It answers from the machine's binding record, never from
-the repository's `stayfixed.toml`, which the worktree may not have until this places it, and it
+the repository's `drybag.toml`, which the worktree may not have until this places it, and it
 places nothing in the main checkout, in a submodule, in an unbound checkout or on a machine that
 records no overlay. It runs on every `SessionStart` there, so a placed file you delete by hand comes
 back with the next session. **A file is placed only where your own excludes hide its name**, the
@@ -373,7 +373,7 @@ itself is among them, and names the files withheld. It asks git only `rev-parse`
 finds the linked worktree and the common directory the binding id is read from, so a checkout it
 does not serve costs that one launch, and the rest are asked only when a name is free.
 
-**Writes** inside `stayfixed/` under the data root the harness names — `CLAUDE_PLUGIN_DATA`, or
+**Writes** inside `drybag/` under the data root the harness names — `CLAUDE_PLUGIN_DATA`, or
 Codex's `PLUGIN_DATA` — and nowhere else of its own: `.probe`, written each time it dispatches to
 learn whether the root can be written at all; under `markers/`, one empty file per `once_key`
 handler that delivered, and one for a `config-fallback` record, filed under a directory per
@@ -382,28 +382,28 @@ with all but the newest fifty session directories removed; and `diagnostics.json
 per diagnostic record, rotated to `diagnostics.1.jsonl` once it would pass 256 KiB. With no data
 root, or a relative one, nothing is written there and a `once_key` handler is asked on every
 invocation. These handlers write outside it. `index-render`, on `SessionStart` and `SessionEnd`
-in a checkout bound in overlay mode, writes what `stayfixed memory index` writes there: the
+in a checkout bound in overlay mode, writes what `drybag memory index` writes there: the
 overlay's `MEMORY.md` for the project and each note it harvests a line into. `owner-files`, the files above, creates one file in the
 root of the new linked worktree for each name it places, and nothing else there; nothing removes
 them. `overlay-path-rules`, the path-scoped rules above,
 writes one empty file per session and file it said a rule for, under
-`$HOME/.local/share/stayfixed/sessions/`, both names hashed to a fixed width; none for a payload
+`$HOME/.local/share/drybag/sessions/`, both names hashed to a fixed width; none for a payload
 with no session id, and nothing removes them. And `unreviewed-notes`, which on `SessionStart` says
 "N notes are unreviewed" when the set of the store's unreviewed notes differs from the one last
-said, writes one file per store under `$HOME/.local/share/stayfixed/unreviewed/`, named by a hash
+said, writes one file per store under `$HOME/.local/share/drybag/unreviewed/`, named by a hash
 of the store's path and holding a digest of that set; nothing removes them. And the note sync's three handlers, on a machine whose machine file switches
-the sync on and nowhere else, write `pending` under `$HOME/.local/share/stayfixed/sync/` and start the
+the sync on and nowhere else, write `pending` under `$HOME/.local/share/drybag/sync/` and start the
 job that writes the rest ([Note sync](#note-sync) names every path). No handler links a memory store into a worktree:
 the harness reads the composed store from every worktree through the main checkout's
-`autoMemoryDirectory` (`stayfixed attach`).
+`autoMemoryDirectory` (`drybag attach`).
 
 ## Hooks
 
-The two harnesses do not run `stayfixed` directly. Every entry in `hooks/hooks.json` invokes
-`hooks/run-hook.sh`, which hands its argv to `stayfixed` untouched:
+The two harnesses do not run `drybag` directly. Every entry in `hooks/hooks.json` invokes
+`hooks/run-hook.sh`, which hands its argv to `drybag` untouched:
 
 ```
-run-hook.sh <stayfixed args…>
+run-hook.sh <drybag args…>
 ```
 
 `hooks/hooks.json` files its entries under six events: `SessionStart`, `PreToolUse`,
@@ -412,11 +412,11 @@ run-hook.sh <stayfixed args…>
 carries the red-run note (below); Codex reads the same file and ignores that key (measured on
 Codex CLI 0.162.0-alpha.17.2). `SessionStart` and `SessionEnd` carry `index-render`, which
 renders a bound overlay checkout's `MEMORY.md`
-([`memory index`](#stayfixed-memory-index)). `Stop` and `SessionEnd` carry the note sync's handlers
+([`memory index`](#drybag-memory-index)). `Stop` and `SessionEnd` carry the note sync's handlers
 ([Note sync](#note-sync)) and print nothing that blocks: each answers
 `{"hookSpecificOutput": {"hookEventName": …}}` with no `decision`, which on `Stop` would keep the
 turn from ending. An event Codex delivers from that file runs the same handlers behind the same
-per-machine switch, and that has not been measured on Codex. `stayfixed hook` dispatches eight
+per-machine switch, and that has not been measured on Codex. `drybag hook` dispatches eight
 events, those six and `UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses.
 
 **The red-run note.** The environment fault that makes a red test run unattributable:
@@ -440,14 +440,14 @@ the note, and one named through an alias or another launcher (`poetry run pytest
 command the table does not name gets no note.
 
 The wrapper exists because a Python process cannot speak for its own absence: a missing script
-exits `2` by CPython accident, and so does a launcher run under an interpreter below stayfixed's
+exits `2` by CPython accident, and so does a launcher run under an interpreter below drybag's
 floor, and on `PreToolUse` Claude Code reads a `2` as a refusal of the call. So the wrapper does
-three things before stayfixed runs: it unsets an inherited `GIT_DIR` and `GIT_WORK_TREE`, which
+three things before drybag runs: it unsets an inherited `GIT_DIR` and `GIT_WORK_TREE`, which
 would make every `git` answer about another repository, and changes into the project root
 (`CLAUDE_PROJECT_DIR`, else `git`'s toplevel) so every command's `--root` default is correct; it
 takes its interpreter from `PATH` resolved in `/`, which a repository cannot move because it writes
 no file there; and it maps exit codes. The `python3` found from `/` is asked, by running code, to be
-3.11 or newer and to print the binary it really is, which then runs stayfixed from the project
+3.11 or newer and to print the binary it really is, which then runs drybag from the project
 root. Where that `python3` is missing or older, it takes the interpreter `uv python find '>=3.11'`
 names, also asked from `/`. Asked from the project root, an empty or relative `PATH` element would
 run a `python3` the repository commits, a pyenv, asdf or mise shim would run what the project's own
@@ -455,17 +455,17 @@ pin names, and uv reads `.python-version`, `pyproject.toml` and `uv.toml` from i
 directory and its parents and runs the `.venv/bin/python` it finds there to ask its version
 (measured with uv 0.12.19).
 
-No handler refuses a call, so stayfixed's non-zero exit is always a fault. `0` passes through
-untouched. Every non-zero exit, and every fault the wrapper finds before `stayfixed` runs — no
-`python3` of 3.11 or newer on `PATH` and no uv that names one, no readable `scripts/stayfixed`
+No handler refuses a call, so drybag's non-zero exit is always a fault. `0` passes through
+untouched. Every non-zero exit, and every fault the wrapper finds before `drybag` runs — no
+`python3` of 3.11 or newer on `PATH` and no uv that names one, no readable `scripts/drybag`
 beside the wrapper, a project root it cannot enter — ends in exit `0` with one line on stderr that names the fault and ends
-`continuing open`: **a session never dies of stayfixed's own fault.** `stayfixed hook` exits `0` on
+`continuing open`: **a session never dies of drybag's own fault.** `drybag hook` exits `0` on
 an internal error of its own for the same reason, so no shipped entry ever blocks a call. Claude
-Code discards stderr on a `0`, so `stayfixed doctor`'s `wrapper` row runs the wrapper and goes red
+Code discards stderr on a `0`, so `drybag doctor`'s `wrapper` row runs the wrapper and goes red
 on such a line. Without a usable interpreter neither `doctor` nor any hook can run, so the one entry
 that dispatches `SessionStart` (`hook SessionStart`) also prints, on stdout, the hook answer Claude
 Code shows the person (`systemMessage`) and adds to the model's context (`additionalContext`):
-that stayfixed's hooks are off in this session, because there is no `python3` on `PATH` or the one
+that drybag's hooks are off in this session, because there is no `python3` on `PATH` or the one
 there (its path, each byte but an ASCII letter, a digit, a space and `/._+~-` printed as `?`) is not
 Python 3.11 or newer, and to install Python 3.11 or newer on `PATH`. Every other entry, the six
 memory entries on the same event included, stays silent on stdout.
@@ -477,11 +477,11 @@ MacPorts or mise `git`, and a `python3` in a virtual environment, both answer. A
 committed `env` block can set `PATH`, and it runs code in your shells by design; that boundary is
 the harness's ([SECURITY.md](../SECURITY.md)).
 
-**The interpreter starts isolated.** `-I` keeps what the interpreter imports before stayfixed's
+**The interpreter starts isolated.** `-I` keeps what the interpreter imports before drybag's
 first line to the standard library: the wrapper runs both the version probe and the launcher with
 it, so no `PYTHON*` variable is read (`PYTHONPATH`, `PYTHONHOME`, `PYTHONUSERBASE`), there is no
 user site, and neither the working directory nor the script's own directory is on `sys.path`. The
-launcher puts the plugin's own `src` there itself, and stayfixed still sees the whole environment:
+launcher puts the plugin's own `src` there itself, and drybag still sees the whole environment:
 `-I` changes how the interpreter starts, not what `os.environ` holds. What the dynamic loader
 injects is out of any wrapper's reach — `LD_PRELOAD` on Linux acts on the wrapper's own shell before
 its first line. On macOS the wrapper's `/bin/sh` is SIP-protected and drops `DYLD_*` before
@@ -489,7 +489,7 @@ anything below it starts, which is why its shebang must stay a protected shell.
 
 **The one row this does not cover.** A `run-hook.sh` whose executable bit has been cleared is
 never executed by the harness at all, so no code of ours runs and the hooks are silent. The
-wrapper cannot defend its own mode, so `stayfixed doctor` is what catches it: the `wrapper` row
+wrapper cannot defend its own mode, so `drybag doctor` is what catches it: the `wrapper` row
 goes **red** on a cleared bit, and under a root the environment named hands you the `chmod +x`. Run it after anything that rewrites the
 plugin directory.
 
@@ -500,16 +500,16 @@ per session: the marker is banked only when the handler had something to say, so
 hears a line hears it once, and a repository with nothing to report is asked again on every
 `startup`, `resume`, `clear`, `compact` and `fork` the matcher above covers — and it says
 nothing at all unless `[memory] mode` is `overlay`, which for a checkout this machine binds and that has
-no `stayfixed.toml` is the mode the overlay's layers set. Eight lines, each fixed and carrying at most a
+no `drybag.toml` is the mode the overlay's layers set. Eight lines, each fixed and carrying at most a
 count but the one that names two remotes, joined by newlines in this order: **no overlay recorded** on this machine, or one that
 **could not be asked** about, which is a machine configuration file that will not parse; this
 repository **not attached** to that overlay, or, for a bound one, its **`origin` moved** from
 the remote its binding was recorded with — the one line that names repository bytes, both remotes,
 each escaped where it is not a plain path; the `requires` of the overlay's identity record
-(`stayfixed-overlay.toml`) in **a form this stayfixed cannot read**, or naming **a floor this stayfixed
+(`drybag-overlay.toml`) in **a form this drybag cannot read**, or naming **a floor this drybag
 does not meet**, a pre-release of the floor's version included; and — only when none of those fired — the overlay's branch having **no
 upstream**, and the counts of its **unpushed commits and uncommitted changes**. A bound,
-up-to-date repository on a satisfied stayfixed hears nothing. But for the moved-`origin` line, not
+up-to-date repository on a satisfied drybag hears nothing. But for the moved-`origin` line, not
 one byte a repository wrote reaches any of those lines: `project.name`, `memory.groups` and
 `paths.memory` are read and none is quoted back, because the field these lines land in is
 `additionalContext` — model input with no delimiter.
@@ -527,10 +527,10 @@ Which is why those last two `git` calls are gated on the event's own `source`: o
 the running conversation continuing, under the session id the marker is filed under — they are
 skipped, so a healthy repository costs five seconds there and not nine. `startup`, `resume`,
 `fork`, `clear` and a payload carrying no `source` all pay: a resume is a new launch, often days
-later, over an overlay the conversation may have left dirty, and an invocation stayfixed cannot
+later, over an overlay the conversation may have left dirty, and an invocation drybag cannot
 place in a context is treated as a new one rather than as one already answered. The cost is that
 an overlay which becomes unpushed *during* a session that started clean is not reported at that
-session's compactions, only at its next resume or startup; `stayfixed doctor` answers on demand. And the overlay is never a plugin stayfixed
+session's compactions, only at its next resume or startup; `drybag doctor` answers on demand. And the overlay is never a plugin drybag
 executes anything from: it carries no plugin manifest and no
 `hooks/hooks.json`, and hook entries the owner keeps in the `claude/hooks.json` of *common/*, of a tag and of
 `projects/<name>/` reach a session only through the plugin `attach` renders from
@@ -540,12 +540,12 @@ them, named by this machine's binding id.
 
 A machine whose machine file says `[sync] enabled = true` commits the overlay's notes, takes in the
 other machines' and pushes its own, unattended, from Claude Code's session hooks; a machine whose
-file does not say so runs nothing. The sync has no command and no `stayfixed.toml` key.
+file does not say so runs nothing. The sync has no command and no `drybag.toml` key.
 
 **The switch.** `[sync] enabled = true` in [the machine file](#configuration), the bool `true` and
 nothing else: a string, a number, a table that is not one or a file that does not load reads as
-off. `[sync]` is machine-only, so a repository's `stayfixed.toml` that holds it is refused and
-switches nothing. `stayfixed setup --overlay` writes it for an overlay it renders or creates and
+off. `[sync]` is machine-only, so a repository's `drybag.toml` that holds it is refused and
+switches nothing. `drybag setup --overlay` writes it for an overlay it renders or creates and
 leaves it alone for one it records; turn it off by changing it to `false` or removing it. A value
 that is not a bool is said as the machine file's other unusable values are, and reads as off. The
 handlers read it from the configuration the session resolved when it started, so a change reaches
@@ -574,7 +574,7 @@ harness's to set, whatever `timeout` its entry asks for.
 
 The job is a detached process in its own session, its standard streams on `/dev/null`, started
 as `python -I -c BOOT <package directory> [--sleep-until ISO]` from the overlay. `-I` keeps the
-overlay's root, `PYTHONPATH` and the user site off `sys.path`, so a `json.py` or a `stayfixed/` the
+overlay's root, `PYTHONPATH` and the user site off `sys.path`, so a `json.py` or a `drybag/` the
 overlay holds is never imported. It reads the switch and the overlay root from the machine file itself, and a sleeper reads
 the switch again when it wakes. It exits `0` whatever happens and records the outcome.
 
@@ -592,7 +592,7 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    moves `main` and updates the real index for those notes alone, so your staged work stays staged
    and your next `git commit` carries no old note back. A signature is made when `commit.gpgsign` is
    set, and never switched off.
-3. **Fetch.** `git fetch origin main` into `refs/stayfixed/fetched`, with `fetch.fsckObjects`.
+3. **Fetch.** `git fetch origin main` into `refs/drybag/fetched`, with `fetch.fsckObjects`.
 4. **Integrate.** When everything `HEAD..` the fetched sha brings is memory, and every local commit
    is a plain commit of memory alone, the local commits are replayed onto it one by one; a commit
    that conflicts is `conflict`, `main` unmoved. Then git writes the incoming notes and the real
@@ -607,11 +607,19 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
 **What moves.** Three globs only: `common/memory/**`, `groups/*/memory/**` and
 `projects/*/memory/**`, less each project's own `MEMORY.md` (`projects/*/memory/MEMORY.md`), which
 never moves: it is a rendering of the notes beside it and of what this machine's sessions appended,
-so each machine renders its own ([`memory index`](#stayfixed-memory-index), on `SessionStart` and
+so each machine renders its own ([`memory index`](#drybag-memory-index), on `SessionStart` and
 `SessionEnd`) and the notes travel instead. A path moves as a regular, non-executable `.md` file with no dot component
 from the scope's name down, and only as text; a link, an executable, a dot-file, a file that is not
 Markdown, a nested repository or a file git calls binary is left out of the commit and named. A path outside those globs is
 never committed, integrated, written or pushed. Nothing configures the list.
+
+**When an overlay stops tracking its generated indexes.** An overlay that still commits its
+`MEMORY.md` indexes should stop, with one commit that untracks and ignores them. Nothing is needed beforehand on a
+machine: the pull deletes each index the commit untracks, and the next session renders it again. A
+clone with local changes to an index refuses that pull; copy the index aside, run
+`git checkout -- <index>`, pull, and put the copy back, where it is now ignored. Until the commit is
+taken on a machine, the
+job holds it like any upstream change outside memory, and `doctor` gives the review command.
 
 **What it never does.** Force-push, stash, rebase, pull, push a tag, rebuild a commit of yours that
 is not memory alone, write a non-memory path of the working tree or of the real index, run a script
@@ -620,7 +628,7 @@ ask for a password (`GIT_TERMINAL_PROMPT=0`, no askpass variable kept, `core.ask
 standard input, and its whole process group ended at the step's bound). What your own git
 configuration names still runs, as it does for your own git: a credential helper,
 `core.sshCommand`, `gpg.program` and `core.fsmonitor`. Its `git` gets the one environment every git
-stayfixed starts is given: `PATH` without its relative entries, `HOME`, `LANG`, `LC_ALL`,
+drybag starts is given: `PATH` without its relative entries, `HOME`, `LANG`, `LC_ALL`,
 `SYSTEMROOT`, `SSH_AUTH_SOCK` and the proxy variables (`http_proxy`, `https_proxy`, `HTTPS_PROXY`,
 `all_proxy`, `ALL_PROXY`, `no_proxy`, `NO_PROXY`), and nothing else of the session's, so a
 `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND` or `GIT_DIR` it sets reaches no git of the job. Over that go
@@ -652,7 +660,7 @@ commits it`), and the notes beside it commit. A finding stops the push
 (`secret_found`): its detail opens with the rewrite from the oldest commit found, then names each
 finding's rule, commit and path.
 
-**Writes.** In the data directory, `$HOME/.local/share/stayfixed/sync/`: `state.json` (the last
+**Writes.** In the data directory, `$HOME/.local/share/drybag/sync/`: `state.json` (the last
 outcome, the holds, the fetched sha, the sha `main` and upstream last agreed on and a digest of the dirty notes, written in one step), `job.lock` and `sleeper.lock` (held
 while a job runs and while a sleeper waits), `pending` (a trigger that arrived while a job ran),
 and `scratch/`, which the job removes whole at its start and its end. In the overlay: the objects
@@ -661,7 +669,7 @@ of the notes it commits; an intent-to-add entry for each new note (`git add -N`,
 `git update-index --force-remove` for one left out); the replayed commits of step 4; the real index's
 stat data (`git update-index --refresh`), then the notes it brings in, written, removed (with the
 directories a removal empties) and entered in the real index by `git read-tree -m -u`; `refs/heads/main`, moved by `update-ref` against the sha it read; and
-`refs/stayfixed/fetched`. On the remote, `main`, by step 5. Besides `scratch/` and what git removes
+`refs/drybag/fetched`. On the remote, `main`, by step 5. Besides `scratch/` and what git removes
 for step 4, it removes `pending` when it takes it, and nothing else. When the plugin is removed, the
 triggers go and this directory stays.
 
@@ -728,11 +736,11 @@ named wherever git keeps it, a linked worktree's included.
 
 **Claude Code and Codex.** The triggers are the entries of `hooks/hooks.json` ([Hooks](#hooks)),
 which Codex reads too. A hook process whose environment carries Codex's `PLUGIN_ROOT` starts
-nothing: Codex sets it and Claude Code does not, measured as `src/stayfixed/harnesses.py` cites. A
+nothing: Codex sets it and Claude Code does not, measured as `src/drybag/harnesses.py` cites. A
 repository that sets it in a Claude Code session turns that session's triggers off, never on.
 There is no cloud mode.
 
-## `stayfixed commit check --range RANGE`
+## `drybag commit check --range RANGE`
 
 Every message in `RANGE` (a `git log` revision range, e.g. `main..HEAD`), for lines in its
 trailing attribution block that are an AI/tool attribution trailer or footer: a `-by:` trailer
@@ -752,12 +760,12 @@ when git cannot read the range or the range looks like an option.
 **Writes** nothing.
 
 Exit `1` has two meanings here and a gate should know both: messages were read and some carry a
-trailer (`FAIL: …`), and *no `stayfixed.toml` was found under `--root`*, which the configuration
-loader reports as a failure — `stayfixed: failed: …/stayfixed.toml does not exist` — and not as a
+trailer (`FAIL: …`), and *no `drybag.toml` was found under `--root`*, which the configuration
+loader reports as a failure — `drybag: failed: …/drybag.toml does not exist` — and not as a
 refusal. A workflow that must tell them apart reads the first word of the output, or checks the
 file is there before it runs the gate.
 
-## `stayfixed commit strip FILE`
+## `drybag commit strip FILE`
 
 Rewrite a commit-message file in place with the attribution lines of its trailing attribution
 block removed — never a line of the body. Exits `0` whether or not anything was stripped, and
@@ -781,15 +789,15 @@ Git's own trailing comment block is kept, and so is everything below the scissor
 
 This is what the chained `prepare-commit-msg` hook runs, so the trailer is gone before the
 commit exists; `git commit --no-verify` skips `commit-msg` but not that hook. Installing the
-hook is `stayfixed setup --git-hooks`, and removing it — restoring whatever it chained to — is
-`stayfixed setup --git-hooks --uninstall`; both are documented below.
-`stayfixed.guards.api.install` is the same call for a caller embedding stayfixed.
+hook is `drybag setup --git-hooks`, and removing it — restoring whatever it chained to — is
+`drybag setup --git-hooks --uninstall`; both are documented below.
+`drybag.guards.api.install` is the same call for a caller embedding drybag.
 
 **Reads** `FILE` and `~/.claude/settings.json` under your home, and nothing a repository holds.
 
 **Writes** `FILE`.
 
-## `stayfixed docs check [--budgets] [--links]`
+## `drybag docs check [--budgets] [--links]`
 
 Two checks, both enforced, and no flag runs both (exit `1`, `FAIL:`):
 the always-loaded document at `[paths] agents_md` exists, is within `agents_md_lines` and
@@ -804,7 +812,7 @@ effective ones — the preset's, or the value `[budgets]` sets in its place.
 
 **Writes** nothing.
 
-## `stayfixed docs trail [--check]`
+## `drybag docs trail [--check]`
 
 Rewrite the listing between `## Design and plan trail` and `<!-- end design and plan trail -->`
 in the roadmap: every `*.md` under `[paths] specs` and `[paths] plans` that git tracks and does
@@ -859,7 +867,7 @@ pattern = ".*"
 
 **Writes** `[paths] roadmap`.
 
-## `stayfixed plan check [--base REF] [PATH …]`
+## `drybag plan check [--base REF] [PATH …]`
 
 With `PATH` arguments, lint exactly those plans; without, the plans under `[paths] plans` that
 merging the change could alter on `REF`, `REF` defaulting to
@@ -898,26 +906,26 @@ lints it.
 
 ---
 
-## `stayfixed overlay upgrade [--root PATH] [--dry-run]`
+## `drybag overlay upgrade [--root PATH] [--dry-run]`
 
 **`--root` must name an overlay, and that is checked before anything is planned.** It defaults
 to `.`, and pointed at a directory that is not one this command used to create the overlay's
 files there — `.gitignore` and `.github/workflows/scan.yml` among them — report them as work done
-and exit `0`. An overlay is a tree whose identity record, `stayfixed-overlay.toml` at its root,
-parses as TOML and holds `layout = 1`; the record also holds `requires`, the floor `stayfixed
+and exit `0`. An overlay is a tree whose identity record, `drybag-overlay.toml` at its root,
+parses as TOML and holds `layout = 1`; the record also holds `requires`, the floor `drybag
 doctor` and a session's first lines read, and nothing else. Anything else is refused (`2`) with
 nothing written, and the refusal names the file and its two keys: an overlay made before the
 record shipped carries plugin manifests instead, and no code migrates it, so its owner adds the
 record by hand.
 
-Brings an overlay up to date with the template a newer stayfixed ships. It is the project rule
+Brings an overlay up to date with the template a newer drybag ships. It is the project rule
 and not a second copy of it: a skeleton file you have not touched is refreshed, one you have
-edited is skipped and named, and the oracle is the digest `.stayfixed/manifest.json` recorded when
+edited is skipped and named, and the oracle is the digest `.drybag/manifest.json` recorded when
 the file was written. An overlay is where your own rules live, so a silent overwrite here would
 destroy the only copy of something. An overlay `setup --overlay create:` generated has no
-`.stayfixed/manifest.json` (the template repository carries none), and an identity record you
-added by hand has no entry in one, so neither is recorded as stayfixed's: a file there that differs
-from this release's is skipped as `exists and stayfixed did not write it`.
+`.drybag/manifest.json` (the template repository carries none), and an identity record you
+added by hand has no entry in one, so neither is recorded as drybag's: a file there that differs
+from this release's is skipped as `exists and drybag did not write it`.
 
 **Two files are always listed, however their hashes compare.**
 `common/claude/permissions.json` and `common/claude/hooks.json` are the two an overlay carries
@@ -932,7 +940,7 @@ file is empty, both held by a test. `--dry-run` first is how you read them befor
 code path that then runs, which is what makes the dry run worth reading.
 
 **Writes**, without `--dry-run`, every artifact the report lists as `create` or `update`, plus
-`.stayfixed/manifest.json`. A file an earlier release shipped and this one does not, such as
+`.drybag/manifest.json`. A file an earlier release shipped and this one does not, such as
 `common/memory/README.md` or `hooks/hooks.json`, is not planned at all: delete it by hand. Exits
 `0`; `1` when the report carries a REFUSED section, because nothing would be written while one of
 those stands; `2` when `--root` is not an overlay, when the manifest itself cannot be trusted, or
@@ -940,7 +948,7 @@ when a write is refused by the containment walk.
 
 ---
 
-## `stayfixed attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`
+## `drybag attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`
 
 Binds this repository to your private overlay, renders the hooks, skills and agents you keep there
 into a local plugin and installs it, and, in overlay mode, points the harness at the composed store
@@ -951,9 +959,9 @@ project's own notes, and the allow rules you keep in the overlay are merged into
 
 **`--store` is optional, and names one directory and nothing else:**
 `<overlay>/projects/<project name>/memory`, where `<project name>` is the `[project] name` in this
-repository's `stayfixed.toml`, or the project chosen below where it has none; without it that directory is derived from the overlay the machine
+repository's `drybag.toml`, or the project chosen below where it has none; without it that directory is derived from the overlay the machine
 records, and passing it changes nothing. The overlay root itself is **not** taken from that path —
-it comes from the `[overlay] root` your machine configuration records, which `stayfixed setup`
+it comes from the `[overlay] root` your machine configuration records, which `drybag setup`
 writes. A `--store` anywhere else is refused (`2`), including a directory elsewhere under the same
 overlay. A `[project] name` no directory can carry there — the name of a file the overlay keeps
 under `projects/`, which on a filesystem that ignores case includes `readme.md`, or a name longer
@@ -966,10 +974,10 @@ to that path; a long `memory.groups` entry reaches it as a long name does, and t
 neither. Both hold where the overlay has no directory for the project yet, `projects/` included. An
 overlay whose root, or whose `projects/`, is there and is not a directory is refused (`2`) as
 damaged, by `--check` as well, with that path named and the overlay's repair as the way out; no name
-is blamed for it, and `stayfixed doctor`'s `attached` row warns about the same path rather than
+is blamed for it, and `drybag doctor`'s `attached` row warns about the same path rather than
 offering to remove the ledger.
 
-**A repository with no `stayfixed.toml` attaches too**, so a public clone you cannot commit to can
+**A repository with no `drybag.toml` attaches too**, so a public clone you cannot commit to can
 be bound to your overlay. Its project — the directory under the overlay's `projects/` it is bound
 to — is chosen, by `attach` and `--check` alike, in this order:
 
@@ -988,15 +996,15 @@ With no `origin` and neither of the first two, it is refused (`2`). Every refusa
 as the way out. The attach screen's binding line names the project and the origin, which is what
 you read: matching by remote is a convenience, and a clone whose `origin` claims one of your
 repositories is bound to that project. The configuration it acts on is the preset's, under your
-overlay's `common/stayfixed.toml`, its `projects/<name>/stayfixed.toml` once the binding is recorded
+overlay's `common/drybag.toml`, its `projects/<name>/drybag.toml` once the binding is recorded
 (a first attach reads it after recording, as for a repository with the file), and the machine
 file, as a session resolves its preferences; so `memory.mode` is the preset's,
-`harness`, unless an overlay file sets `overlay`. Where the repository has a `stayfixed.toml`, its
+`harness`, unless an overlay file sets `overlay`. Where the repository has a `drybag.toml`, its
 `[project] name` names the project and nothing above applies; `--project` beside it is refused
 (`2`).
 
 **The notes are composed only in overlay mode; the rest is delivered whatever the mode.** A
-`stayfixed.toml` whose `memory.mode` is not `overlay` keeps its notes elsewhere, so for it `attach`
+`drybag.toml` whose `memory.mode` is not `overlay` keeps its notes elsewhere, so for it `attach`
 builds no composed store, writes no `autoMemoryDirectory` and makes no note directories in the
 overlay, and does not ask the `memory.groups` containment below; where an earlier attach composed
 them, it takes the recorded key and the composed store back, as `detach` does. It binds, merges the
@@ -1006,14 +1014,14 @@ overlay's project file sets applies from the first attach.
 
 **One place per repository: the main checkout.** Claude Code reads the main checkout's
 `.claude/settings.local.json` from every worktree, and writes a worktree's own answers into it, so
-`attach` run from any worktree acts on the main checkout: it reads that checkout's `stayfixed.toml`
+`attach` run from any worktree acts on the main checkout: it reads that checkout's `drybag.toml`
 and writes its settings file and its `.codex/rules/` copies; its ledger is in the git common
 directory. Nothing is placed in a
 linked worktree, and a worktree created later needs no step of its own.
 
 **`--check` writes nothing.** It opens with the project it would bind and where the name came from —
 `project NAME (named by --project)`, `(this machine's binding record)`, `(the overlay's record of the
-remote)`, `(the remote's name)` or, for a checkout that has one, `(its stayfixed.toml)` — the name
+remote)`, `(the remote's name)` or, for a checkout that has one, `(its drybag.toml)` — the name
 escaped as every name the repository chose is; `--json` carries them as `project` and
 `project_source`. It then reports the binding state — `unbound` or `bound` — with the
 `origin` note the run would print (below), the permission diff
@@ -1034,7 +1042,7 @@ binding — the first eight characters of the binding id, the project it is reco
 checkout's `origin`, the project and the remote escaped as every name the repository chose is —
 then each hook entry (by its event and command), skill (by its directory) and
 agent (by its file) the render adds or removes against the render the last run left in
-`$HOME/.local/share/stayfixed/delivery/<id>/`, which is what a session runs, and then each allow
+`$HOME/.local/share/drybag/delivery/<id>/`, which is what a session runs, and then each allow
 rule this run merges or takes back. A hook's command and an allow rule that do not fit a plain name are printed
 escaped, and cut to their first 120 characters and their length. `--json` carries the same lists
 as `hooks_added`, `hooks_removed`, `skills_added`, `skills_removed`, `agents_added`,
@@ -1044,8 +1052,8 @@ renamed in a pulled commit moves every worktree's binding — says so on one lin
 `--check`'s line names no project.
 
 **The overlay's hooks, skills and agents are delivered as a plugin.** Every run renders them into
-`$HOME/.local/share/stayfixed/delivery/<id>/`, named by the binding id below: a marketplace
-`stayfixed-delivery-<id>` holding one plugin, `overlay-<id>`, whose `hooks/hooks.json` is the union
+`$HOME/.local/share/drybag/delivery/<id>/`, named by the binding id below: a marketplace
+`drybag-delivery-<id>` holding one plugin, `overlay-<id>`, whose `hooks/hooks.json` is the union
 of the `claude/hooks.json` of `common/`, of each tag the project lists in list order, and of
 `projects/<name>/` — each event's entry groups in that order, as the overlay wrote them — and whose
 skills and agents, each an entry directly in `skills/` or `agents/` of the same directories, are
@@ -1055,7 +1063,7 @@ directory in place, so a later `attach` re-renders it there and an edit reaches 
 with no reinstall. Each render is written whole into a new directory beside it and swapped into
 place, so a file the overlay no longer holds is gone, whatever an earlier run recorded; the ledger
 keeps the render's digest alone, never the id. Every run installs it with `claude plugin marketplace
-add <that directory> --scope local` and `claude plugin install overlay-<id>@stayfixed-delivery-<id>
+add <that directory> --scope local` and `claude plugin install overlay-<id>@drybag-delivery-<id>
 --scope local`, run from the main checkout, whose `.claude/settings.local.json` Claude Code reads
 from every worktree and writes the plugin's entries into; both calls succeed for a marketplace and a
 plugin Claude Code already has, so what Claude Code holds is asked of Claude Code each time rather
@@ -1072,9 +1080,9 @@ it records and never one by its marker alone, and the new ledger records none.
 
 **The binding is an id this machine keeps, not a remote.** `attach` draws a random binding id
 (32 hexadecimal characters) the first time, writes it into the repository's git common directory,
-`stayfixed/binding` there (the directory `git rev-parse --git-common-dir` names, which every
+`drybag/binding` there (the directory `git rev-parse --git-common-dir` names, which every
 worktree of the repository shares), and records on this machine what it is bound to — the project
-name, the `origin` at the time and the checkout — in `$HOME/.local/share/stayfixed/bindings/<id>.toml`.
+name, the `origin` at the time and the checkout — in `$HOME/.local/share/drybag/bindings/<id>.toml`.
 A checkout is bound where both are there and the record names its `[project] name`; nothing a
 repository commits can write either, and a clone never carries the id, so a clone that names itself
 after one of your projects is not bound to it. The id never leaves the machine: it is printed only
@@ -1099,22 +1107,22 @@ in list order), this project's `projects/<name>/claude/` equivalents, the `codex
 `common/`, of each tag and of `projects/<name>/`, a later plate winning a name over an earlier one
 (the order is `common`, the tags, the project), and this repository's existing
 `.claude/settings.local.json`; for a
-repository with no `stayfixed.toml` whose project neither `--project` nor this machine's binding
+repository with no `drybag.toml` whose project neither `--project` nor this machine's binding
 names, every `projects/<name>/project.toml` in the overlay.
 `.claude/settings.json` — the committed one — is read for **nothing**: it is repository-controlled,
 and the repository never grants a capability.
 
-**Writes** a block between `# stayfixed:attach:begin` and `# stayfixed:attach:end` in the
+**Writes** a block between `# drybag:attach:begin` and `# drybag:attach:end` in the
 repository's own exclude file (the one `git rev-parse --git-path info/exclude` names, which every
 worktree shares), written first,
-`.claude/settings.local.json`, `.codex/rules/`, the ledger `stayfixed/attach.json` and the
-binding id `stayfixed/binding` (when there is none yet) in the git common directory, this machine's
-binding record `$HOME/.local/share/stayfixed/bindings/<id>.toml`, the render
-`$HOME/.local/share/stayfixed/delivery/<id>/` (written whole into a directory beside it, then
+`.claude/settings.local.json`, `.codex/rules/`, the ledger `drybag/attach.json` and the
+binding id `drybag/binding` (when there is none yet) in the git common directory, this machine's
+binding record `$HOME/.local/share/drybag/bindings/<id>.toml`, the render
+`$HOME/.local/share/drybag/delivery/<id>/` (written whole into a directory beside it, then
 swapped into place, the render before removed whole) and, through the two `claude plugin` calls,
 Claude Code's own records of the marketplace and the plugin and the main checkout's
 `.claude/settings.local.json`; where the notes are composed, the composed store
-`$HOME/.local/share/stayfixed/stores/<id>/` (a link per group of the overlay's for this project,
+`$HOME/.local/share/drybag/stores/<id>/` (a link per group of the overlay's for this project,
 `tag-<tag>` to `groups/<tag>/memory/` for each tag the project lists where that is a directory, and
 one to its `MEMORY.md`; a directory of the project's `memory/` whose name starts with `tag-` is not
 linked, the prefix being the tags'; each run makes its links exactly the overlay's current set, so
@@ -1123,21 +1131,21 @@ link, such as a note the harness wrote), the key `autoMemoryDirectory`
 naming that directory, absolute, in the main checkout's `.claude/settings.local.json`, which Claude
 Code reads from every worktree, and — in the overlay — `projects/<name>/project.toml` while it
 records no remote, this project's note directories,
-`projects/<name>/memory/MEMORY.md` when the store has none yet (rendered as `stayfixed memory
+`projects/<name>/memory/MEMORY.md` when the store has none yet (rendered as `drybag memory
 index` renders it, so the store's index link never dangles and `memory index --check` passes right after
 a first attach in an overlay this release rendered, and in an older one once its owner has deleted
 by hand the `common/memory/README.md` 0.1.x shipped, which the note reader reads as a note).
 It runs no program in the overlay: its commit-time secret scan is `setup --overlay`'s, which makes
 or records the overlay, and where that scan is missing `doctor`'s `pre-commit` row says it is not
 installed. The ledger is the only record
-of which allow rules are stayfixed's, because an allow rule cannot carry a marker the way a hook
+of which allow rules are drybag's, because an allow rule cannot carry a marker the way a hook
 entry can; `detach` reads it and nothing else. **A re-attach takes back an allow rule the overlay
 no longer grants**, where the ledger names it and the settings file still holds it: a rule dropped
 from `common/`, from `projects/<name>/` or from a tag you took off the project leaves with the
 next run, each said as `allow rule withdrawn`, and a rule you added by hand, which the ledger does not name, stays.
 The ledger sits in the git common directory beside the binding id, where a branch cannot write it, so
 nothing a branch commits names what a re-attach or `detach` takes back. **An upgrade from a release that
-kept the ledger in `.stayfixed/local/attach.json`** neither reads nor removes that file. Delete it:
+kept the ledger in `.drybag/local/attach.json`** neither reads nor removes that file. Delete it:
 it holds your allow rules, and `git status` shows it once `detach` takes the exclude block. Run
 `attach` again to rebuild the ledger. `detach` does not remove what an attach merged before the
 move, so take those allow rules, hook entries and directories out by hand. **A re-attach removes no `.codex/rules/` copy**: a
@@ -1147,7 +1155,7 @@ by the team, so the run leaves it and says `Codex rule copy no longer in the ove
 and goes on recording a dropped one only while its file is untracked and holds those bytes, so
 `detach` can still take a file Codex reads as a standing instruction; any other is forgotten, and
 the file is yours. **`.gitignore` is never written**: it is tracked, so
-any line there would be a change every collaborator gets. A `stayfixed:ignore` region an earlier
+any line there would be a change every collaborator gets. A `drybag:ignore` region an earlier
 release wrote there stays until you remove it.
 
 **`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
@@ -1185,11 +1193,11 @@ one `attach` or `detach` at a time. Running `attach` again in the checkout whose
 them back.
 
 **The harness reads its memory from the composed store.** Where the notes are composed, the
-`autoMemoryDirectory` key points the harness at `$HOME/.local/share/stayfixed/stores/<id>/`, outside
+`autoMemoryDirectory` key points the harness at `$HOME/.local/share/drybag/stores/<id>/`, outside
 every checkout, whose links reach the overlay's notes and nothing of the repository's, so it waits
 for no approval. The key is recorded in the ledger before it is written, so `detach` takes it back;
 the path names the whole binding id and is printed only with the id cut to its short form. A repository that keeps its own notes gets
-no key. `stayfixed memory` reads the same store in overlay mode, so the bundles a session starts
+no key. `drybag memory` reads the same store in overlay mode, so the bundles a session starts
 with and the harness read one directory. Nothing is placed under `paths.memory` or under
 `~/.claude/projects/`: the link tree and the harness memory link an earlier release made there are
 yours to remove by hand.
@@ -1200,7 +1208,7 @@ Exits `0` on success. A failure or refusal below that the run meets before its f
 A real run exits `1` on a failure, something it reads that cannot be read or a `git` that cannot
 answer, in the order the run meets them:
 
-- `stayfixed.toml` is missing, cannot be read, is not UTF-8 or valid TOML, or holds a key or value
+- `drybag.toml` is missing, cannot be read, is not UTF-8 or valid TOML, or holds a key or value
   the loader refuses; or the machine configuration cannot be read, is not UTF-8 or is not valid
   TOML.
 - `git` cannot read the `origin` remote, or `git` cannot name the repository's common directory.
@@ -1210,13 +1218,13 @@ answer, in the order the run meets them:
   read or is not UTF-8; or a file under the overlay's `skills/` or `agents/` cannot be read, is
   not a regular file, is not UTF-8 or is longer than 64 MiB, or a directory there cannot be
   listed.
-- An existing ledger (`stayfixed/attach.json` in the git common directory) cannot be read. One that
+- An existing ledger (`drybag/attach.json` in the git common directory) cannot be read. One that
   is not valid JSON or not a JSON object records nothing: `attach` carries on and writes a new one.
 - A Codex rule file in the overlay cannot be read or is not UTF-8, or the overlay's `common/codex/`
   or `projects/<name>/codex/` directory holding it cannot be listed.
 - `git worktree list`, which names the main checkout, fails.
 
-For `stayfixed.toml`, the overlay's record of this project, its `permissions.json` and
+For `drybag.toml`, the overlay's record of this project, its `permissions.json` and
 `hooks.json`, `.claude/settings.local.json` and the ledger, a file that "cannot be read" includes
 one that is not a regular file once a link to it is followed, such as a link to `/dev/zero` or to
 a FIFO, which is never waited on, and one longer than 64 MiB, which is as far as each of these is
@@ -1239,7 +1247,7 @@ It exits `2` on a refusal, in the order the run meets them:
   `hooks` of `.claude/settings.local.json` is read only where an earlier attach's ledger records
   entries to take back out of it. `--check` reads each with the run's own readers, so it refuses
   exactly these documents.
-- A `.claude/settings.local.json` that stayfixed's indented write-back would make longer than the
+- A `.claude/settings.local.json` that drybag's indented write-back would make longer than the
   64 MiB it reads, whether or not this run would rewrite it: a short document many levels deep
   grows by its depth on every line, and `would be longer than this reader reads once written
   back` keeps a run from leaving a file its next read refuses. `--check` refuses it too.
@@ -1259,7 +1267,7 @@ It exits `2` on a refusal, in the order the run meets them:
   The refusal names each such path. `--check` refuses it too.
 - A `.claude` that is a symlink, or a `.codex` that is one on a run that writes into it; a
   `git rev-parse --git-path info/exclude` that names no exclude file; an exclude file that cannot
-  be read or holds a `stayfixed:attach` block opened or closed twice (the refusal names the file),
+  be read or holds a `drybag:attach` block opened or closed twice (the refusal names the file),
   or, when the block needs a line, that is a symlink or sits in a directory you cannot write.
 
 Every refusal in that list happens before anything is written, so a refused attach leaves both the
@@ -1279,15 +1287,15 @@ repository and the overlay as they were. What is left can only happen once writi
 
 ---
 
-## `stayfixed detach [--root PATH] [--machine PATH]`
+## `drybag detach [--root PATH] [--machine PATH]`
 
 Removes exactly what `attach` added, and leaves the binding alone: the binding id, this machine's
 record of it and the overlay's `projects/<name>/project.toml` stay, so a later `attach` binds the
 same checkout again.
 
-It reads the ledger, `stayfixed/attach.json` in the git common directory, and acts on that and on
+It reads the ledger, `drybag/attach.json` in the git common directory, and acts on that and on
 nothing else. A repository with no ledger fails (`1`) naming the missing file rather than guessing
-which allow rules were stayfixed's from their content — that guess is the reason the ledger
+which allow rules were drybag's from their content — that guess is the reason the ledger
 exists, and getting it wrong removes a rule you wrote by hand. A branch cannot write the git
 common directory, and a ledger left in the working tree by an earlier release is not read. A
 ledger that is not valid JSON records nothing: `detach` fails (`1`), says so and removes nothing.
@@ -1305,21 +1313,21 @@ the one git common directory, so `detach` acts on the main checkout too.
 main checkout's `.claude/settings.local.json`, and leaves the file unwritten when neither is in it,
 removes each `.codex/rules/` copy whose bytes are
 still the ones the ledger's sha256 records (any other copy is left and named, `Codex rule copy left:
-<path>`, `rules_left` in `--json`), withdraws the overlay's rendered plugin — `claude plugin uninstall overlay-<id>@stayfixed-delivery-<id> --scope
+<path>`, `rules_left` in `--json`), withdraws the overlay's rendered plugin — `claude plugin uninstall overlay-<id>@drybag-delivery-<id> --scope
 local` where the main checkout's `.claude/settings.local.json` names that plugin under
-`enabledPlugins`, and `claude plugin marketplace remove stayfixed-delivery-<id>` where it names that
+`enabledPlugins`, and `claude plugin marketplace remove drybag-delivery-<id>` where it names that
 marketplace under `extraKnownMarketplaces`, each run from the main checkout, then the render
-directory `$HOME/.local/share/stayfixed/delivery/<id>/` removed whole where it is there, a link
-there unlinked, then every link in the composed store `$HOME/.local/share/stayfixed/stores/<id>/`
+directory `$HOME/.local/share/drybag/delivery/<id>/` removed whole where it is there, a link
+there unlinked, then every link in the composed store `$HOME/.local/share/drybag/stores/<id>/`
 and the directory where nothing else is left (a file there that is not a link is a note the harness
 wrote: it stays, and so does the directory, which the line says and `--json` reports as
-`store_kept: true`) — removes the `stayfixed:attach` block in the repository's exclude file, and deletes
-the ledger, `stayfixed/attach.json` in the git common directory. The render directory and the composed store are derived
+`store_kept: true`) — removes the `drybag:attach` block in the repository's exclude file, and deletes
+the ledger, `drybag/attach.json` in the git common directory. The render directory and the composed store are derived
 from the binding id and never read from the ledger, so a ledger naming another directory removes nothing
 outside it. The plugin goes before the exclude block, so Claude Code takes the plugin's entries,
 which name the id, out of `.claude/settings.local.json` while that file is still hidden. Each call
 is decided by what that file names, never by the ledger or the render directory, and the file is
-read again once they ran: while a name under either key names a `stayfixed-delivery-` marketplace,
+read again once they ran: while a name under either key names a `drybag-delivery-` marketplace,
 whatever the calls exited with and whether or not the binding id can be read, `detach` fails (`1`)
 naming the key and never the id; the exclude block, the ledger and
 the render directory are kept, so the file stays hidden, and running `detach` again finishes the
@@ -1347,9 +1355,9 @@ empty, and left standing otherwise. A link tree under `paths.memory` or a harnes
 is not on the ledger, and `detach` leaves it, as it leaves any file in a worktree you may have edited.
 
 **`.gitignore` is never touched.** `attach` writes nothing there, so `detach` takes nothing out:
-a `stayfixed:ignore` region an earlier release wrote stays until you remove it.
+a `drybag:ignore` region an earlier release wrote stays until you remove it.
 
-**Directories come back too.** `attach` records which of `.stayfixed/local/`, `.stayfixed/`,
+**Directories come back too.** `attach` records which of `.drybag/local/`, `.drybag/`,
 `.codex/rules/`, `.codex/` and `.claude/` this repository did not have before it ran, and `detach`
 removes exactly those once everything inside them is gone. The removal is `rmdir`: a directory
 still holding anything — your own `.codex/rules/` file, your `.claude/settings.json` — survives,
@@ -1362,7 +1370,7 @@ the overlay's, not this checkout's, so a detach leaves it as it is.
 Exits `0` on success. It exits `1` on a failure, in the order the run meets them:
 
 - `git` cannot list this repository's worktrees, which names the main checkout.
-- The ledger, `stayfixed/attach.json` in the git common directory, is not there, cannot be read,
+- The ledger, `drybag/attach.json` in the git common directory, is not there, cannot be read,
   is not UTF-8, is not valid JSON or is not a JSON object.
 - `.claude/settings.local.json` cannot be read or is not UTF-8.
 
@@ -1376,7 +1384,7 @@ It exits `2` on a refusal, in the order the run meets them:
 - A `.claude/settings.local.json` that is not JSON or not a JSON object, or whose `hooks` has a
   shape the withdrawal cannot read, or whose indented write-back would pass 64 MiB.
 - A `git rev-parse --git-path info/exclude` that names no exclude file, an exclude file that cannot
-  be read, a `stayfixed:attach` block in it opened or closed twice, or one to take out of a file in
+  be read, a `drybag:attach` block in it opened or closed twice, or one to take out of a file in
   a directory you cannot write (the refusal names the file).
 - A path the withdrawal writes or removes reached through a directory that became a symlink after
   the attach: `.claude` when the settings file is to be rewritten, `.codex` or `.codex/rules` for
@@ -1397,7 +1405,7 @@ with part of the attach already undone:
 
 ---
 
-## `stayfixed setup [--preset NAME] [--plugin NAME …] [--home PATH] [--machine PATH] [--overlay VALUE]`
+## `drybag setup [--preset NAME] [--plugin NAME …] [--home PATH] [--machine PATH] [--overlay VALUE]`
 
 Configures this machine from a preset, `recommended` unless `--preset` names another: the
 machine configuration file's `[personal]` and `[machine]` tables, the deny rules and personal
@@ -1408,8 +1416,8 @@ which a rewrite keeps. The deny rules are merged in beside the owner's own, and 
 `.env.development`, `.env.prod`, `.env.production`, `.env.stage`, `.env.staging` and `.env.test`,
 each as `Read(**/<name>)`, so the templates a project commits (`.env.example`, `.env.dist` and the
 rest) stay readable. An env file under another name stays readable too. `--home` and `--machine` default to the home directory and to
-`~/.config/stayfixed/config.toml` — the file every reader reads, and not whatever
-`XDG_CONFIG_HOME` or `STAYFIXED_CONFIG` names, because a machine file half the installation
+`~/.config/drybag/config.toml` — the file every reader reads, and not whatever
+`XDG_CONFIG_HOME` or `DRYBAG_CONFIG` names, because a machine file half the installation
 cannot find is not a machine file. Both flags exist so this command can be pointed at a
 scratch destination instead of your real one, the same way every other command here takes
 `--root`. A scratch destination is **not a dry run**: the same files are written, at the paths
@@ -1420,9 +1428,9 @@ another tree gets the file the link leads to, and the link stays. The machine co
 is written through a link at it the same way.
 
 `setup` is not the only command that writes outside a repository, and two others say so in their
-own sections: `stayfixed memory promote` records an approval in `~/.config/stayfixed/trust.json`,
-and `stayfixed attach` keeps its binding record, render and composed store under
-`~/.local/share/stayfixed/`. It is the only
+own sections: `drybag memory promote` records an approval in `~/.config/drybag/trust.json`,
+and `drybag attach` keeps its binding record, render and composed store under
+`~/.local/share/drybag/`. It is the only
 one that writes the machine configuration file and `<home>/.claude/settings.json`. `--root` names
 the repository `--git-hooks` installs into (below); machine setup reads no repository, so it refuses
 `--root` (`2`) with nothing written, where it used to take the flag and read nothing of it.
@@ -1451,7 +1459,7 @@ person outside the agent's sandbox as the one to run it, and never ends in a tra
 **Plugins are installed only when named**, with `--plugin NAME` once per plugin: a plugin name is
 lowercase ASCII letters, digits and `-`, led by a letter or a digit, and the parser refuses any
 other, naming that rule. A third-party plugin runs in every session of its harness, hooks
-included, and none is pinned, so none is installed unasked. A named plugin is installed per harness stayfixed serves (`claude` and `codex`),
+included, and none is pinned, so none is installed unasked. A named plugin is installed per harness drybag serves (`claude` and `codex`),
 from the preset's own per-harness marketplace table (`[plugins.<harness>]`). For each harness the preset declares a
 marketplace for, `setup` registers it (`claude plugin marketplace add <source>`; idempotent — an already-registered
 source is a no-op reported as such) and then installs each plugin bare (`claude plugin install
@@ -1467,12 +1475,12 @@ overlay, in three forms, below; naming one is the request, and no flag stands in
 is validated **before the first write** — before the machine file, the settings merge and the
 plugin installs, and for `create:` before `gh repo create` runs on anybody's account — and the
 place it names is judged by one rule. Nothing there, or an empty directory that is no link, is a
-place to render or clone into. A tree that carries the identity record `stayfixed-overlay.toml`,
+place to render or clone into. A tree that carries the identity record `drybag-overlay.toml`,
 parsing as TOML and holding `layout = 1`, is an overlay; the refusal of a tree without it names the
 file and its keys. Anything else is refused (`2`): a file, a link at a `create:` destination, a
 directory holding something that is not an overlay, and, in one sentence for both forms, a
 directory you cannot search, or one holding no overlay that you cannot both list and write. Where
-the overlay lives is yours to choose and `setup` refuses no place for it; `stayfixed doctor`'s
+the overlay lives is yours to choose and `setup` refuses no place for it; `drybag doctor`'s
 `overlay-requires` row warns when another repository's work tree holds it, since that repository
 can put files into it. Each path is judged and recorded resolved, so the record does not follow a
 link someone retargets later, and a run that records a root other than the one the machine file
@@ -1504,25 +1512,23 @@ judged first, before the first write and before `gh` is asked anything: nothing,
 directory, which this run clones into; the overlay an earlier run made, which is left alone and
 nothing is generated; or anything else, refused (`2`) by the rule above, since the clone would meet
 it only after `gh repo create` had made a repository nothing then records. It then asks `gh repo
-view <owner>/stayfixed-overlay-template --json isTemplate` once: a template there is generated
+view <owner>/drybag-overlay-template --json isTemplate` once: a template there is generated
 from, and a repository of that name that is not one, or `gh`'s explicit answer that there is none,
-means you have published none, and the template is `github.com/stayfixed/stayfixed-overlay-template`,
+means you have published none, and the template is `github.com/dry-bag/drybag-overlay-template`,
 the publisher's public copy, named with its host: `gh` looks an unqualified name up on `GH_HOST`,
-so on a GitHub Enterprise host `stayfixed/…` would be whoever owns that name there. Any other
+so on a GitHub Enterprise host `dry-bag/…` would be whoever owns that name there. Any other
 failure of that question — an expired token, a network error, a `gh` that is not installed or
 hung, an answer that is not the JSON asked for — stops the command with `gh`'s own message and
 creates nothing (`1`). Once `gh repo create` has run, the repository may exist on GitHub whatever
 `gh` answered, and a second `create:` would fail on the name it holds, so every refusal from then
 on says so and gives the remedy that works: once `<home>/<name>` holds a clone of it, record it
-with `stayfixed setup --overlay <home>/<name>`. When `gh repo create` itself fails, the command
+with `drybag setup --overlay <home>/<name>`. When `gh repo create` itself fails, the command
 stops there with its exit code and stderr; when it reports success and the clone leaves nothing at
 `<home>/<name>`, `gh repo view` is asked whether the repository exists, and the clone is retried
 once, after a ten-second wait when it does — a wait carried on reasoning rather than a measurement,
-since the one trial run against it did not reproduce the race. A clone checks the identity record
-out last as far as git's order goes: git writes a tree in path order, where the record's path sorts
-after every file the template ships, but parallel checkout (`checkout.workers`) keeps no order, and
-a file of yours whose path sorts after the record comes after it, so a clone cut short can carry
-the record. A generated overlay has no `.stayfixed/manifest.json`, so `stayfixed overlay upgrade`
+since the one trial run against it did not reproduce the race. A clone is written in the order git
+takes, so, unlike a render, a clone cut short can carry the identity record without every other
+file. A generated overlay has no `.drybag/manifest.json`, so `drybag overlay upgrade`
 refreshes none of its files once they differ from a release's (`overlay upgrade`, above).
 
 **Writes** `<home>` itself when it is not there yet; `--machine`'s file, with the directories above
@@ -1539,14 +1545,14 @@ file, and, with `--yes`, the trust record's `reviewed` approvals (`trust.json`, 
 file) for the notes of the overlay's share for each attached project.
 `--overlay <path>` naming an overlay writes nothing in its tree: it is recorded, and its
 `pre-commit` git hook is installed through `pre-commit install`. Naming nothing or an
-empty directory, it writes the directory with every file of the template plus `.stayfixed/manifest.json`, the
+empty directory, it writes the directory with every file of the template plus `.drybag/manifest.json`, the
 repository `git init` makes there, and, through `pre-commit install`, its `pre-commit` git hook.
 `--overlay create:<owner>/<name>` writes, through `gh repo create <owner>/<name> --private
 --template <template> --clone`, a new private repository on GitHub under `<owner>` and its clone
 at `<home>/<name>` — or, when that clone leaves nothing there, a clone from the retried `git clone`
 — then its `pre-commit` git hook. Run again over the overlay it made, it generates nothing.
 `--restore` writes, beyond the above, for each checkout it attaches what
-[`stayfixed attach`](#stayfixed-attach---store-path---project-name---check---root-path---machine-path)
+[`drybag attach`](#drybag-attach---store-path---project-name---check---root-path---machine-path)
 writes, listed in its **Writes**, and nothing else; into a checkout it reports `absent` or
 `refused` it writes nothing, and a `failed` one keeps what the failed attach had written, which a
 re-run finishes.
@@ -1625,13 +1631,13 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
    machine setup's `plugin(s) installed` and `--json`'s `plugins_installed`, and each note is
    printed among its notes, in its summary line and in `--json`'s `notes`;
 3. attach, for every project `<overlay>/machine/projects.toml` lists whose `dir` is there. A `dir`
-   that is not there is reported `absent` and skipped; a checkout with no `stayfixed.toml` is
+   that is not there is reported `absent` and skipped; a checkout with no `drybag.toml` is
    attached under the project its table key names, as `attach --project` would; a checkout `attach`
-   refuses (one whose `stayfixed.toml` names another project than its table key) is `refused`, and one whose attach
+   refuses (one whose `drybag.toml` names another project than its table key) is `refused`, and one whose attach
    fails (a plain directory, or a failure part-way) is `failed`, each with attach's own message, and the rest go
    on. The exit code is `1` when a project was refused or failed, and `0` otherwise, `absent`
    included. A run twice attaches nothing new, and a project removed from the file stays attached
-   until `stayfixed detach` there.
+   until `drybag detach` there.
 
 4. with `--yes` only, the overlay's notes recorded as reviewed on this machine: after each project
    it attached, every note of the overlay's share for its table key (`common/memory`, each listed
@@ -1654,13 +1660,13 @@ for the hooks. A missing `git` makes each attach fail in attach's own words.
 **The input, `<overlay>/machine/projects.toml`**, is the owner's, one `[projects.<name>]` table per
 project: `<name>` is the overlay project the checkout belongs to (the directory under the overlay's
 `projects/`), and `dir` is where its main checkout lives, absolute or led by `~/`, which is read
-under `--home`. Every other key is ignored by stayfixed; an overlay's own scripts may read them.
+under `--home`. Every other key is ignored by drybag; an overlay's own scripts may read them.
 `dir` missing, not a string or relative, a file that cannot be read or is not TOML, and a
 `projects` that is not a table, are refused (`2`) naming the table, after machine setup ran and
 before any attach. No
 file lists nothing. The store `attach` is handed is the one the table key names, and `attach`
 refuses a store that is not the checkout's own project's, so a clone that claims another of your
-projects in its tracked `stayfixed.toml` is refused rather than given that project's notes, rules
+projects in its tracked `drybag.toml` is refused rather than given that project's notes, rules
 and delivery.
 
 With `--restore`, the overlay restored from is the one `--overlay` recorded, rendered or created,
@@ -1678,7 +1684,7 @@ excludes, links, commit hooks and the merge of the overlay's settings.
 
 ---
 
-## `stayfixed setup --git-hooks [--uninstall] [--root PATH]`
+## `drybag setup --git-hooks [--uninstall] [--root PATH]`
 
 Installs the commit-message hook into this repository's own hooks directory — `git rev-parse
 --git-path hooks`, never `core.hooksPath`, which is global state this command has no business owning
@@ -1695,8 +1701,8 @@ it is the file the installed hook `exec`s last, so a chain line naming it — `e
 --git-common-dir)/hooks/prepare-commit-msg.local" "$@"`, or the same name off `"${0%/*}"` or
 `"$(dirname "$0")"` — would `exec` itself, and `git commit` would run until it was killed. The
 refusal names the hook and where it would be kept, and nothing is written: remove its chain line, or
-move the hook aside. A re-install reads the `.local` beside stayfixed's hook for the same name and
-refuses too, saying what is already on disk: stayfixed's hook runs that `.local` last, so every
+move the hook aside. A re-install reads the `.local` beside drybag's hook for the same name and
+refuses too, saying what is already on disk: drybag's hook runs that `.local` last, so every
 commit runs until it is killed. It names the same remedy and leaves both files as they are. The
 check is for the name, not for how a chain is spelled: `exec "$0.local" "$@"` names
 `prepare-commit-msg.local.local` once the hook is kept, runs nothing twice, and is installed; a
@@ -1716,35 +1722,35 @@ do something, which this form does not do, so it names `--git-hooks` and writes 
 only where machine setup would write, and are ignored.
 
 **Refuses (`2`) `--uninstall` without `--git-hooks`.** It removes the hook this form installs and
-means nothing to machine setup, so `stayfixed setup --uninstall` names `--git-hooks` and writes
+means nothing to machine setup, so `drybag setup --uninstall` names `--git-hooks` and writes
 nothing, where it used to drop the flag and run the machine setup.
 
 **Writes** the hook file in `--root`'s hooks directory, and the `.local` file beside it only when a
 foreign hook was there to preserve, by renaming that hook. Under `--uninstall` it removes the hook
-file only when it is stayfixed's, and renames the `.local` file beside it, when there is one, back
+file only when it is drybag's, and renames the `.local` file beside it, when there is one, back
 to `prepare-commit-msg`. Its line says which it met: `removed <hook>` with whether a foreign hook
-was restored, `there is no stayfixed hook at <hook>; nothing was removed`, or `left <hook> as it
-was: it is not stayfixed's hook; nothing was removed`; `--json` carries it as `found` (`removed`,
+was restored, `there is no drybag hook at <hook>; nothing was removed`, or `left <hook> as it
+was: it is not drybag's hook; nothing was removed`; `--json` carries it as `found` (`removed`,
 `absent` or `foreign`) beside `path` and `restored`. A FIFO or a directory at the path is foreign to
 `--uninstall`, which leaves it, and the install refuses it (`2`). A hook whose mode forbids reading
-is neither stayfixed's nor foreign: either form refuses (`2`) naming it and the reason, and leaves
-it. A regular file past the 64 MiB read cap is foreign, since stayfixed's own hook is a couple of
+is neither drybag's nor foreign: either form refuses (`2`) naming it and the reason, and leaves
+it. A regular file past the 64 MiB read cap is foreign, since drybag's own hook is a couple of
 kilobytes: it is kept and chained, and `--uninstall` leaves it. Exits `0`; `2` when `--preset`,
 `--overlay`, `--plugin` or `--restore` is also given, `--uninstall` is given without `--git-hooks`, the hook
 cannot be read, or a hook names `prepare-commit-msg.local`.
 
 ---
 
-## `stayfixed setup --approval-boundary [--home PATH] [--machine PATH]`
+## `drybag setup --approval-boundary [--home PATH] [--machine PATH]`
 
 Prints what keeps an agent's shell out of the trust record's directory under Claude Code, for you
 to set, and sets none of it: an approval holds against an agent only while the harness's sandbox
-holds ([`stayfixed memory promote`](#stayfixed-memory-promote-note----changed) says why), and
-stayfixed neither enforces nor checks that boundary. The line names:
+holds ([`drybag memory promote`](#drybag-memory-promote-note----changed) says why), and
+drybag neither enforces nor checks that boundary. The line names:
 
 - the deny rule `Edit(//<the trust record's directory>/**)` for `permissions.deny` in
   `<home>/.claude/settings.json`. The directory is that of
-  `~/.config/stayfixed/trust.json`, or of the file beside `--machine`, which is the machine
+  `~/.config/drybag/trust.json`, or of the file beside `--machine`, which is the machine
   configuration file's own, so the rule covers that file too; where a symbolic link makes the
   directory as named and the directory it leads to differ, a rule is named for each, since the
   harness compares a write against the resolved path and a tool call may carry the path as named.
@@ -1775,7 +1781,7 @@ and `managed`.
 
 ---
 
-## `stayfixed doctor [--json] [--root PATH] [--home PATH] [--machine PATH]`
+## `drybag doctor [--json] [--root PATH] [--home PATH] [--machine PATH]`
 
 Fourteen checks over one installation. It **reports and never repairs**: every finding
 carries the command that would fix it, and not one of them is run for you. Nothing is written.
@@ -1785,7 +1791,7 @@ private layer — the binding's (`attached`), memory's (`bundles`, `memory`), th
 private overlay's (`pre-commit`, `overlay-requires`) and its note sync's (`sync`). Match a row by its `name`, never by its
 position.
 
-**Several subprocesses are run and every one of them only asks.** stayfixed's own
+**Several subprocesses are run and every one of them only asks.** drybag's own
 `hooks/run-hook.sh` with `--version`, and the `git` queries the other rows need — where the overlay keeps its hooks, what this checkout's `origin` is, which the
 binding's row asks, the repository's common directory, where the binding id and the ledger are
 kept, which the binding's row (twice: for the ledger and for the id), the note store's rows and
@@ -1811,24 +1817,24 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 
 | Check | What it answers | What it reads |
 |---|---|---|
-| `not-initialised` | whether there is a `stayfixed.toml` here, and how much of it a session can use: with none, a warning that the session guards and `doctor` work without one and memory stays the coding agent's own, and that a `stayfixed.toml` adds the rest, except in a checkout this machine binds, where it is ok and says the configuration comes from the overlay's layers; with one that loaded with settings ignored or put back to the preset's, a warning naming at most three of their keys and counting the rest, never their values; red only for one a session drops whole, in the words of the session's warning | `stayfixed.toml` |
-| `versions` | whether the project's `[stayfixed] version` is the stayfixed running; with no project configuration, which stayfixed runs | `stayfixed.toml`, the package |
-| `wrapper` | whether the wrapper can actually reach stayfixed on this machine: red when it writes a fault to stderr or cannot be run; under a root the environment named, which it never runs, red when the wrapper is not executable and a skip otherwise; a stale `hooks/hooks.json`, an edited wrapper that still runs or a changed `scripts/stayfixed` is not reported | one `run-hook.sh --version`, and only under the plugin root this stayfixed is part of; under a named root, `hooks/run-hook.sh`'s mode |
-| `budgets` | every budget set above the preset, named raised, and every one set below it, named lowered | `stayfixed.toml`, the machine file, the preset |
-| `preferences` | each personal value, guard switch, preference and session budget a session resolves, with the layer its value came from — the preset, the repository, the overlay's common file (`overlay common`), its file for the project this checkout is bound to (`overlay project`) or the machine file — and the value only where it is a boolean, a number or one of stayfixed's own words; then, as information that never changes the row's status, every note reading the overlay's layers gave — no overlay recorded, a file not there or not loading, a key it cannot use or may not set; red when the machine file does not load, in the words every command refuses it in, which name the file and where the parser stopped; a warning naming the file when a key in it could not be used | `stayfixed.toml`, the preset, the overlay's two `stayfixed.toml` files, the machine file |
-| `cli-path` | whether `stayfixed` resolves on `PATH` | `PATH` |
-| `diagnostics` | how many reasons the hook sink recorded — a count, never a line of the file | `${CLAUDE_PLUGIN_DATA}/stayfixed/diagnostics.jsonl` |
-| `ignored-env` | as information, never a status: `STAYFIXED_CONFIG` set, or `XDG_CONFIG_HOME` set to anything but the `.config` of the home every command reads under (`HOME`, or the password database's where `HOME` is unset), and not honoured by any command; and a `HOME` that is not the home the password database records for this user, since stayfixed follows `HOME` | the environment, the password database |
-| `attached` | the overlay binding, what it delivers, and, where `memory.mode` is `overlay`, the `autoMemoryDirectory` pointer at the composed store, read alike from every checkout (the states are below the table) | the ledger `stayfixed/attach.json` in the git common directory, the main checkout's `.claude/settings.local.json`, `~/.local/share/stayfixed/delivery/<id>/`, `~/.local/share/stayfixed/stores/<id>/`, the overlay's executable parts, `git` on the paths `attach` placed |
+| `not-initialised` | whether there is a `drybag.toml` here, and how much of it a session can use: with none, a warning that the session guards and `doctor` work without one and memory stays the coding agent's own, and that a `drybag.toml` adds the rest, except in a checkout this machine binds, where it is ok and says the configuration comes from the overlay's layers; with one that loaded with settings ignored or put back to the preset's, a warning naming at most three of their keys and counting the rest, never their values; red only for one a session drops whole, in the words of the session's warning | `drybag.toml` |
+| `versions` | whether the project's `[drybag] version` is the drybag running; with no project configuration, which drybag runs | `drybag.toml`, the package |
+| `wrapper` | whether the wrapper can actually reach drybag on this machine: red when it writes a fault to stderr or cannot be run; under a root the environment named, which it never runs, red when the wrapper is not executable and a skip otherwise; a stale `hooks/hooks.json`, an edited wrapper that still runs or a changed `scripts/drybag` is not reported | one `run-hook.sh --version`, and only under the plugin root this drybag is part of; under a named root, `hooks/run-hook.sh`'s mode |
+| `budgets` | every budget set above the preset, named raised, and every one set below it, named lowered | `drybag.toml`, the machine file, the preset |
+| `preferences` | each personal value, guard switch, preference and session budget a session resolves, with the layer its value came from — the preset, the repository, the overlay's common file (`overlay common`), its file for the project this checkout is bound to (`overlay project`) or the machine file — and the value only where it is a boolean, a number or one of drybag's own words; then, as information that never changes the row's status, every note reading the overlay's layers gave — no overlay recorded, a file not there or not loading, a key it cannot use or may not set; red when the machine file does not load, in the words every command refuses it in, which name the file and where the parser stopped; a warning naming the file when a key in it could not be used | `drybag.toml`, the preset, the overlay's two `drybag.toml` files, the machine file |
+| `cli-path` | whether `drybag` resolves on `PATH` | `PATH` |
+| `diagnostics` | how many reasons the hook sink recorded — a count, never a line of the file | `${CLAUDE_PLUGIN_DATA}/drybag/diagnostics.jsonl` |
+| `ignored-env` | as information, never a status: `DRYBAG_CONFIG` set, or `XDG_CONFIG_HOME` set to anything but the `.config` of the home every command reads under (`HOME`, or the password database's where `HOME` is unset), and not honoured by any command; and a `HOME` that is not the home the password database records for this user, since drybag follows `HOME` | the environment, the password database |
+| `attached` | the overlay binding, what it delivers, and, where `memory.mode` is `overlay`, the `autoMemoryDirectory` pointer at the composed store, read alike from every checkout (the states are below the table) | the ledger `drybag/attach.json` in the git common directory, the main checkout's `.claude/settings.local.json`, `~/.local/share/drybag/delivery/<id>/`, `~/.local/share/drybag/stores/<id>/`, the overlay's executable parts, `git` on the paths `attach` placed |
 | `bundles` | a bundle that does not fit its slots, and one whose part reaches the cap | the note store |
 | `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning only for files in the note store that are not notes, counted (at most 500,000 entries) | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
 | `pre-commit` | whether the overlay's commit-time secret scan is installed on this machine | the overlay |
-| `overlay-requires` | whether the overlay this machine records requires a stayfixed the running one satisfies — red when this project keeps its notes in that overlay, a warning when it does not — and, where that finds nothing, a warning when another repository's work tree holds the overlay root (a `.git` in a directory above it), naming that directory, since that repository can put files into the overlay | the overlay's `stayfixed-overlay.toml`, `stayfixed.toml`, the directories above the overlay root |
-| `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when no `gitleaks` is on `PATH` (nothing is then committed or pushed; `setup --overlay` switches the sync on without installing one, and the job fails closed), when a hold stands (the paths or commits, and the review command, which names the recorded sha only when it is a whole one), when the record of the job cannot be read, or when the last outcome is anything but `ok`, with the outcome and the first line of its detail: for `skipped` the guard's reason and its remedy (the job acts once it is resolved, and the next session event runs it), for a failure a rerun meets again (`conflict`, `auth_failed`, `hook_failed`, `scan_unavailable`, `signing_failed`, `secret_found`, `waiting_clean_tree`) that it does until you act on what the line says, for any other that a later session event retries, and for `raced` beside an `index.lock` older than a whole job runs (the path `git rev-parse --git-path index.lock` gives, so a linked worktree's too), that lock and to remove it if no git is running; green for `ok`, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, `PATH`, `~/.local/share/stayfixed/sync/state.json` |
+| `overlay-requires` | whether the overlay this machine records requires a drybag the running one satisfies — red when this project keeps its notes in that overlay, a warning when it does not — and, where that finds nothing, a warning when another repository's work tree holds the overlay root (a `.git` in a directory above it), naming that directory, since that repository can put files into the overlay | the overlay's `drybag-overlay.toml`, `drybag.toml`, the directories above the overlay root |
+| `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when no `gitleaks` is on `PATH` (nothing is then committed or pushed; `setup --overlay` switches the sync on without installing one, and the job fails closed), when a hold stands (the paths or commits, and the review command, which names the recorded sha only when it is a whole one), when the record of the job cannot be read, or when the last outcome is anything but `ok`, with the outcome and the first line of its detail: for `skipped` the guard's reason and its remedy (the job acts once it is resolved, and the next session event runs it), for a failure a rerun meets again (`conflict`, `auth_failed`, `hook_failed`, `scan_unavailable`, `signing_failed`, `secret_found`, `waiting_clean_tree`) that it does until you act on what the line says, for any other that a later session event retries, and for `raced` beside an `index.lock` older than a whole job runs (the path `git rev-parse --git-path index.lock` gives, so a linked worktree's too), that lock and to remove it if no git is running; green for `ok`, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, `PATH`, `~/.local/share/drybag/sync/state.json` |
 
 **How `attached` reads the delivery.** With no ledger, a repository whose `memory.mode` is not
 `overlay` is simply not attached, and the row is green. Once this machine's binding confirms the
-ledger, the row reads what `attach` left: the render under `~/.local/share/stayfixed/delivery/<id>/`,
+ledger, the row reads what `attach` left: the render under `~/.local/share/drybag/delivery/<id>/`,
 named only by the binding id's first eight characters, and the paths `attach` placed in the main
 checkout, beside the ledger every checkout reads. Every state is read, and the first red one answers,
 else the first warning; the row's detail says the delivery's state beside the pointer's, its status
@@ -1842,12 +1848,12 @@ nothing.
 | overlay gone | the overlay root this machine records is not there, so the delivered hooks that run its scripts have nothing to run | `red` | move the overlay back, or record where it is now, then `attach` |
 | placed path tracked | the index tracks a path `attach` placed for this machine alone | `red` | `git rm --cached`, then `attach` |
 | placed path shown | git would not ignore a path `attach` placed: a tracked `.gitignore` re-includes it with `!` | `red` | take that line out, then `attach` |
-| delivery named in a tracked file | a tracked file holds `stayfixed-delivery-<id>`, the delivery's name and with it the binding id, which never leaves this machine; asked for the whole name, never the prefix | `red` | take the name out before it is pushed |
+| delivery named in a tracked file | a tracked file holds `drybag-delivery-<id>`, the delivery's name and with it the binding id, which never leaves this machine; asked for the whole name, never the prefix | `red` | take the name out before it is pushed |
 | render gone | the render directory is gone, so nothing of the overlay loads and nothing else says so | `red` | `attach`, which renders it again |
 | marketplace gone | the render has no `.claude-plugin/marketplace.json`, so its plugin does not load | `red` | `attach`, which renders it again |
 | placed paths unasked | git could not say whether the placed paths are tracked or ignored, or whether a tracked file names the delivery | `warn` | `doctor` again where `git ls-files`, `git check-ignore` and `git grep` work |
 | not installed | the ledger records no install of the plugin | `warn` | `attach`, which installs it |
-| launcher gone | the launcher the path-scoped rules' entry runs through is not there | `warn` | `attach` from the stayfixed you run now |
+| launcher gone | the launcher the path-scoped rules' entry runs through is not there | `warn` | `attach` from the drybag you run now |
 | drift | the overlay's hooks, skills or agents changed since the last render | `warn` | `attach`, which renders the overlay as it is now |
 | overlay unreadable | the overlay's executable parts could not be read | `warn` | `attach --check`, which says why |
 | `origin` moved | this checkout's `origin` is not the one the binding was recorded with | `warn` | `attach`, which records the new one |
@@ -1855,7 +1861,7 @@ nothing.
 
 **How `attached` reads the memory pointer.** Where `memory.mode` is `overlay`, the row reads
 `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json`, which Claude Code reads
-from every worktree, and compares it with the composed store `~/.local/share/stayfixed/stores/<id>/`
+from every worktree, and compares it with the composed store `~/.local/share/drybag/stores/<id>/`
 of this checkout's binding id, the one value `attach` writes there. The value is never printed.
 Which `autoMemoryDirectory` is in effect where a committed `.claude/settings.json` sets one too is
 the harness's to decide, and this row does not read that file.
@@ -1883,13 +1889,13 @@ no overlay root is recorded on this machine **or** when the root it records is n
 and then moved it is not a machine that recorded none; `attached`, `pre-commit` and
 `overlay-requires` again, each in a sentence of its own, when the machine file does not load, so
 whether it records an overlay is not known, which is neither of those; `overlay-requires` again
-when the overlay declares no stayfixed requirement and no other repository's work tree holds it;
+when the overlay declares no drybag requirement and no other repository's work tree holds it;
 `bundles`, when the note store does not resolve; `diagnostics`, when no harness data root is set in the environment, which is every
-`stayfixed doctor` run from a terminal rather than from a hook; and `sync`, when the machine file
+`drybag doctor` run from a terminal rather than from a hook; and `sync`, when the machine file
 does not switch the note sync on.
 And three rows read the project configuration and skip, in one sentence, when there is none to
-read — no `stayfixed.toml`, or one a session drops whole: `budgets`, `attached` and `bundles`. `memory` reads the resolution a session reads and answers without one. A checkout this
-machine binds whose main checkout has no `stayfixed.toml` is the one exception for `attached` and
+read — no `drybag.toml`, or one a session drops whole: `budgets`, `attached` and `bundles`. `memory` reads the resolution a session reads and answers without one. A checkout this
+machine binds whose main checkout has no `drybag.toml` is the one exception for `attached` and
 for the note store `memory` reads: both are judged on the configuration `attach` acted on there,
 the preset's under the overlay's layers for the project the binding record names.
 
@@ -1903,7 +1909,7 @@ three with no project configuration, whose remedy is
 `not-initialised`'s, and the three on a machine file that does not load, whose remedy is
 `preferences`', red on the same file. Nor
 is it whether another row names a command that changes the state: `pre-commit`'s arm carries
-nothing though `attached` names `stayfixed setup --overlay` there. It is whether the skip is
+nothing though `attached` names `drybag setup --overlay` there. It is whether the skip is
 itself worth acting on. Those six report something wrong that no other
 row will tell you: a plugin root nothing can find, a root that will be read and never executed,
 a recorded attach the overlay could not confirm, an overlay root recorded and not there. Of the
@@ -1914,36 +1920,36 @@ file another row is red about, with the command that clears it.
 
 **The one to read first is the plugin root**, because it is the quietest and the worst. When
 this process can find no plugin root at all, `wrapper` skips — no red, and every hook entry on
-this machine silent. It carries a remedy: run `stayfixed doctor` from the plugin's own launcher,
+this machine silent. It carries a remedy: run `drybag doctor` from the plugin's own launcher,
 so its root answers for itself, or set `CLAUDE_PLUGIN_ROOT` to where the plugin is installed,
 which lets `wrapper` read the wrapper's executable bit even though it still will not run it.
 
 **Nothing configured is not broken.** `doctor` reads the configuration the way a session does
-([`stayfixed hook <event>`](#stayfixed-hook-event)), so every row is asked whatever `--root`
-holds. With no `stayfixed.toml`, `not-initialised` **warns**, the three rows above that read the
+([`drybag hook <event>`](#drybag-hook-event)), so every row is asked whatever `--root`
+holds. With no `drybag.toml`, `not-initialised` **warns**, the three rows above that read the
 project configuration skip, and no row is red for it: a default install, where the guards and
 this report already work, exits `0`. In a checkout this machine binds, `not-initialised` is **ok**
 instead and says the configuration comes from the overlay's layers, with no remedy, since no file is
-what that checkout lacks. A `stayfixed.toml` that loads with settings ignored or put
+what that checkout lacks. A `drybag.toml` that loads with settings ignored or put
 back to the preset's warns, naming at most three of their keys and counting the rest. Only one a session drops whole is **red**: a
 symbolic link, whatever it points at, a file that is not UTF-8, cannot be read or is not TOML, or
 one holding a key nothing can stand in for; the row says which in the session's own words and
-names `stayfixed docs check`, which prints the loader's own message.
+names `drybag docs check`, which prints the loader's own message.
 
 **What is printed, and what is not. There is one exception, and it is bounded.** Counts,
-statuses, file paths this project chose and stayfixed's own vocabulary print freely; a
-repository-authored string does not. `[stayfixed] version`, a note's filename, every
+statuses, file paths this project chose and drybag's own vocabulary print freely; a
+repository-authored string does not. `[drybag] version`, a note's filename, every
 field of the hook sink's diagnostics log and the reason the store would not resolve are all read
-and none is quoted back — `stayfixed doctor
+and none is quoted back — `drybag doctor
 --json` is relayed to a model verbatim by the `doctor` skill, so a byte a repository wrote reaching
 this report is a byte reaching the model outside `trust.wrap`. The exception is the name of a
-`stayfixed.toml` key that `not-initialised` says was ignored or put back to the preset's, which is
+`drybag.toml` key that `not-initialised` says was ignored or put back to the preset's, which is
 what the owner needs to find it: at most three names, one outside the path grammar withheld and
 one inside it clipped at 120 characters, then a count of the rest, so the row stays short however
 many keys the file holds and however long their names are.
 
 `diagnostics` follows the same ruling, and is why that row counts rather than quotes. Its three
-fields are stayfixed's own vocabulary *for a log stayfixed wrote*, and the log is found through
+fields are drybag's own vocabulary *for a log drybag wrote*, and the log is found through
 `${CLAUDE_PLUGIN_DATA}` — the same environment class a committed `env` block reaches — so this
 command never establishes that. The row reports how many records are logged and how many sessions were
 seen, and the remedy names the file by its variable; you open it yourself. A record is a hook
@@ -1952,7 +1958,7 @@ failure, an answer the output cap cut, or a session that ran without some of its
 `error` field, the very field this row does not trust.
 
 **A plugin root the environment named is read and never run.** `wrapper` launches
-`hooks/run-hook.sh` only under the root this stayfixed derived from its own module path. With a
+`hooks/run-hook.sh` only under the root this drybag derived from its own module path. With a
 wheel installation there is no such root — which is what `uv tool install` gives, and what
 `cli-path`'s own remedy suggests — and `CLAUDE_PLUGIN_ROOT` or `PLUGIN_ROOT` may then name one:
 that root's wrapper is still read by `wrapper`, for its executable bit, red without it and
@@ -1966,7 +1972,7 @@ called the result green, would be worse than one that says it could not vouch fo
 ## Shared flags
 
 Six flags mean the same thing wherever they appear, and each has exactly one sentence. Both
-tables below are held to `stayfixed.command`'s own constants, row by row, by
+tables below are held to `drybag.command`'s own constants, row by row, by
 `tests/test_documents.py` — so a sentence cannot be spelled by hand here any more than it can be
 in a parser, which is the whole point of the rule.
 
@@ -1980,7 +1986,7 @@ in a parser, which is the whole point of the rule.
 | `--check` | report drift instead of writing, and fail if there is any |
 
 `--check` is the CI half of `--dry-run`: both read and write nothing, and `--check` fails when
-anything differs. `stayfixed docs trail` and `stayfixed memory index` both
+anything differs. `drybag docs trail` and `drybag memory index` both
 take it with that meaning.
 
 Three commands mean something else by a shared name, `setup` by two. Each of the four is a
@@ -1989,10 +1995,10 @@ and each has its own constant beside the six above:
 
 | Command and flag | What it means there |
 |---|---|
-| `stayfixed overlay upgrade --root` | the overlay root (default: current directory) |
-| `stayfixed setup --root` | the repository --git-hooks installs into (default: .) |
-| `stayfixed setup --machine` | the machine configuration file to write (default: ~/.config/stayfixed/config.toml, the file every reader reads) |
-| `stayfixed attach --check` | report the binding and the diff, and write nothing |
+| `drybag overlay upgrade --root` | the overlay root (default: current directory) |
+| `drybag setup --root` | the repository --git-hooks installs into (default: .) |
+| `drybag setup --machine` | the machine configuration file to write (default: ~/.config/drybag/config.toml, the file every reader reads) |
+| `drybag attach --check` | report the binding and the diff, and write nothing |
 
 `attach --check` reports the way the three `--check`s above do and exits differently on purpose: never on a
 non-empty diff. A diff carrying allow rules is the ordinary state of a first attach, which
@@ -2001,12 +2007,12 @@ failure.
 
 Every command that reads a project's configuration takes `--root` and `--machine`, with the
 meanings in the first table, whether or not its heading spells them.
-Neither flag is taken by `stayfixed commit strip` and `stayfixed hook`,
+Neither flag is taken by `drybag commit strip` and `drybag hook`,
 because none of them reads a project's configuration: the first reads the message file it is
 handed and your own `~/.claude/settings.json`, and `hook` finds the project from the harness's own
 event.
 `overlay upgrade` takes `--root` alone, in the sense the second table gives it, and reads no
-`stayfixed.toml`; `setup` takes both, in its own senses. `tests/test_documents.py` holds both
+`drybag.toml`; `setup` takes both, in its own senses. `tests/test_documents.py` holds both
 lists to the real parser.
 
 ---
@@ -2014,17 +2020,17 @@ lists to the real parser.
 ## Terms
 
 **Scaffold** means the scaffold engine, which plans and writes the overlay's files and reports
-every action in the same verbs, `stayfixed overlay upgrade`'s included.
+every action in the same verbs, `drybag overlay upgrade`'s included.
 
 ---
 
 ## Configuration
 
-`stayfixed.toml` in the project root, committed. Every value is repository-controlled, which is
+`drybag.toml` in the project root, committed. Every value is repository-controlled, which is
 why so few of them are trusted with anything.
 
 ```toml
-[stayfixed]
+[drybag]
 version = "0.6.1"        # required; there is no default
 preset = "recommended"
 
@@ -2032,7 +2038,7 @@ preset = "recommended"
 name = "widget"          # one lowercase path segment
 base_branch = "main"
 
-[paths]                  # each inside the root, out of .git and .stayfixed, 1024 characters at most
+[paths]                  # each inside the root, out of .git and .drybag, 1024 characters at most
 agents_md = "AGENTS.md"
 specs = "docs/specs"
 plans = "docs/plans"
@@ -2069,24 +2075,24 @@ the file loads (`unknown section(s)`), so the grammar above is the whole of it.
 for a session in this repository, which the overlay's files and the machine file override (below);
 no command reads it.
 
-**Commands refuse; a session reads what it can.** Every command that loads `stayfixed.toml`, but
+**Commands refuse; a session reads what it can.** Every command that loads `drybag.toml`, but
 `doctor` and `memory session-context`, refuses it whole over an unknown section or key, a value it
 cannot use or a `[paths]` value that leaves the root, naming the key and never the value. Those
 two read it the way a session does: an unknown section or key is ignored, a value that cannot be
-used is put back to the preset's, one key at a time, and each says so in a note naming the key, so a file a newer stayfixed wrote keeps every setting
+used is put back to the preset's, one key at a time, and each says so in a note naming the key, so a file a newer drybag wrote keeps every setting
 this one understands. A repository's `[personal]` is the machine owner's to set and is ignored
 the same way, with a note. A session drops the project configuration whole
 only for a file it cannot read as TOML — a symbolic link, one that is not UTF-8, one it cannot
 read, or one that is not TOML — and for a key nothing can stand in for: a key that has no default
-(`[stayfixed] version`, `[project] name`) and is missing or cannot be used, or whose section is not
+(`[drybag] version`, `[project] name`) and is missing or cannot be used, or whose section is not
 a table, or a key whose preset value does not hold in this repository either, such as a `[paths]`
 default under a committed symbolic link. It then names that key rather than calling a key the file holds missing, and runs
-the guards on the preset and the machine owner's layer ([`stayfixed hook
-<event>`](#stayfixed-hook-event)).
+the guards on the preset and the machine owner's layer ([`drybag hook
+<event>`](#drybag-hook-event)).
 
 Every value above is what a key you leave out takes, from the `recommended` preset — with two
-exceptions. `[stayfixed] version` and `[project] name` have no default at all and are yours to
-write: a file without `version` does not load at all (`[stayfixed] is missing required key(s):
+exceptions. `[drybag] version` and `[project] name` have no default at all and are yours to
+write: a file without `version` does not load at all (`[drybag] is missing required key(s):
 version`). Everything else from `[project] base_branch` down is the preset's default exactly as written. `[project]
 base_branch` is a branch name git accepts, from letters, digits, `.`, `_`, `-` and `/` (the
 grammar `--base-branch` follows); anything else does not load, and the refusal names the key and
@@ -2101,21 +2107,21 @@ trees `docs trail` lists, and `plans` is where `plan check` looks for the plans 
 `agents_md_lines`, `agents_md_words` and `status_lines` over the always-loaded document and its
 `## Current status` section, `roadmap_prose_lines` and `roadmap_prose_words` over the roadmap
 above its trail marker. The last four bound the memory store. The base branch and the machine
-owner raise or lower a budget — the base branch's `stayfixed.toml` any of the nine, the machine
+owner raise or lower a budget — the base branch's `drybag.toml` any of the nine, the machine
 file a session's four — and the value set is the value in force.
 
-`~/.config/stayfixed/config.toml` is yours, not the project's:
+`~/.config/drybag/config.toml` is yours, not the project's:
 
 ```toml
 [personal]
 preset = "recommended"   # the preset `setup` applies
 
 [overlay]
-root = "~/stayfixed-overlay"   # only read in overlay mode
+root = "~/drybag-overlay"   # only read in overlay mode
 
 [guards]
 bg_cleanup = true        # false switches the bg-cleanup session guard off on this machine,
-                         # whatever a repository's stayfixed.toml sets
+                         # whatever a repository's drybag.toml sets
 
 [budgets]                # the session's budgets only, which win over a project's
 memory_index_words = 1200
@@ -2125,15 +2131,15 @@ volatile_ttl_days = 30
 ```
 
 `[guards]` here is the last word on a session guard, and it is yours: a repository's
-`stayfixed.toml` sets the default, the overlay's files move it, and this file wins over both.
+`drybag.toml` sets the default, the overlay's files move it, and this file wins over both.
 `[budgets]` here holds only the four budgets that bound
 what a session loads; the five a gate judges a pull request by (`agents_md_lines`,
 `agents_md_words`, `status_lines`, `roadmap_prose_lines`, `roadmap_prose_words`) are the
 repository's alone: one written here is ignored, with a note. Every key you leave out is the
-preset's. A command that loads `stayfixed.toml` reads this file's `[personal]`, `[guards]` and
+preset's. A command that loads `drybag.toml` reads this file's `[personal]`, `[guards]` and
 `[budgets]` too, as a session reads them, so `memory index` and `memory inventory`
 measure the session budgets a session runs on. What you write here is honoured, and what this
-stayfixed cannot use is said and never refused: a key in those three tables it does not know, a
+drybag cannot use is said and never refused: a key in those three tables it does not know, a
 value it cannot use or a table that is not one costs that key or table alone — an unknown key is
 ignored, an unusable value is put back to the preset's — and a command says so on stderr, once
 however many documents it loads, naming the file and the key, while a session says so once, when
@@ -2141,19 +2147,19 @@ it starts. So a key a later release's
 `setup` writes stops no older command on the machine. Only a file that does not load at all is
 refused by a command, as `[overlay] root`'s reader refuses it, before the command reads anything
 else, and leaves a session on the preset's personal values and guards, with one warning naming
-this file when the session starts and `stayfixed doctor`'s `preferences` row red.
-With no `stayfixed.toml` in the repository a session still reads this file: `bg_cleanup = false`
+this file when the session starts and `drybag doctor`'s `preferences` row red.
+With no `drybag.toml` in the repository a session still reads this file: `bg_cleanup = false`
 turns the guard off there too.
 
 Between the repository's file and this one, a session reads the overlay's two, under the overlay
-`[overlay] root` names: `<overlay>/common/stayfixed.toml` for every checkout, and
-`<overlay>/projects/<name>/stayfixed.toml` for a checkout this machine binds to `<name>` — by the
-binding id `stayfixed attach` records, never by the repository's own `[project] name`, so a clone
+`[overlay] root` names: `<overlay>/common/drybag.toml` for every checkout, and
+`<overlay>/projects/<name>/drybag.toml` for a checkout this machine binds to `<name>` — by the
+binding id `drybag attach` records, never by the repository's own `[project] name`, so a clone
 that names one of your projects gets the common file alone. Each may set a `[personal]` value, a
 `[guards]` switch, a preference (`[memory] mode`, `groups` and `index_extra`) and a session
 budget; the project file wins over the common one, and this file over
-both. They are read the way a session reads `stayfixed.toml`: an unknown name is ignored, and a
-value this stayfixed cannot use is left out so the layer beneath applies; a gate's input or a fact
+both. They are read the way a session reads `drybag.toml`: an unknown name is ignored, and a
+value this drybag cannot use is left out so the layer beneath applies; a gate's input or a fact
 about the repository written there is never taken from it. A missing file, an overlay this file
 does not record, or this file not loading sets nothing. A session, `doctor`, `memory
 session-context`, `attach`, `attach --check`, `detach` and the other `memory` commands read them
@@ -2164,21 +2170,21 @@ row names the layer each value came from.
 To state a language preference, write a personal standing rule, a note with `metadata.startup`
 in your overlay's `common/memory/`.
 
-`stayfixed setup` writes one more table, `[machine]`, into the same file — `version`, the
-stayfixed that ran, and `installed`, the date it ran. It is `setup`'s record of what it did, not
+`drybag setup` writes one more table, `[machine]`, into the same file — `version`, the
+drybag that ran, and `installed`, the date it ran. It is `setup`'s record of what it did, not
 a setting: it is written, never hand-edited, and a file that has never had one loads fine.
 `--overlay` writes `[sync] enabled = true` beside `[overlay] root` when it renders or creates an
 overlay, and nothing under `[sync]` when it records an existing one; the key is yours to change
-by hand, and a repository's `stayfixed.toml` cannot set it ([Note sync](#note-sync)).
+by hand, and a repository's `drybag.toml` cannot set it ([Note sync](#note-sync)).
 
 **This file's location is not selectable by a repository.** The path is
-`~/.config/stayfixed/config.toml`, and neither `STAYFIXED_CONFIG` nor `XDG_CONFIG_HOME` changes
+`~/.config/drybag/config.toml`, and neither `DRYBAG_CONFIG` nor `XDG_CONFIG_HOME` changes
 it: a committed `.claude/settings.json` `env` block would otherwise choose your overlay root
 and your trust record. Pass `--machine <path>` to read a different file — a path you typed
 rather than one an environment chose, and honoured by every reader of it.
 
 **`~` here is `HOME`**, as the harness and every other program read it, so a devcontainer, a
-home-manager setup or a scratch `HOME` keeps stayfixed and the harness under one home; a `~` in
+home-manager setup or a scratch `HOME` keeps drybag and the harness under one home; a `~` in
 `[overlay] root` means that home too. An environment that sets `HOME` already runs code as you.
 An empty or relative `HOME` names no home, so `setup`, `attach` and `detach` stop there and
 `doctor` says so; `doctor`'s `ignored-env` row says, as information, when `HOME` is not the home

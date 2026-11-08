@@ -11,13 +11,13 @@ The two P0 documents here were copied from that repository, which keeps its own 
 history.
 
 Plans dated before 2026-09-28 predate the rename and keep the former name as the record, and
-so does the plan that performs it; read `stayfixed` for it in every path, command and variable.
+so does the plan that performs it; read `drybag` for it in every path, command and variable.
 
 Two plans continue in a `-part-2.md` beside them. They were split while the plugin was this
 repository's root, when every file here counted against the plugin directory's 256 KiB file
 limit; the plugin is now a tree generated from nine paths, `docs/` is not among them, and no
 plan is split for size any more. A split plan is still one plan: it is cut at a heading, each
 part ends by linking the next, each later part opens by naming part 1, and part 1's `Scope:` line
-governs them all. `stayfixed plan check` lints each file on its own, so a path one part cites and
+governs them all. `drybag plan check` lints each file on its own, so a path one part cites and
 another declares under `- Create:` or `- Test:` is reported as a dead reference; across parts that
 finding is the split's, not the plan's.

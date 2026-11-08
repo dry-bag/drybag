@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-import stayfixed.docs.api as docs
+import drybag.docs.api as docs
 
 
 def test_the_surface_carries_what_every_consumer_reaches_for() -> None:

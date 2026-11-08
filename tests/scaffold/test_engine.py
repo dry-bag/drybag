@@ -9,19 +9,19 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import fsops
-from stayfixed.config.paths import PathEscape
-from stayfixed.errors import Refusal
-from stayfixed.scaffold import engine
-from stayfixed.scaffold.engine import apply, plan
-from stayfixed.scaffold.manifest import (
+from drybag import fsops
+from drybag.config.paths import PathEscape
+from drybag.errors import Refusal
+from drybag.scaffold import engine
+from drybag.scaffold.engine import apply, plan
+from drybag.scaffold.manifest import (
     MANIFEST_PATH,
     Location,
     Manifest,
     Record,
     digest,
 )
-from stayfixed.scaffold.model import Action, Plan, Template, Verb
+from drybag.scaffold.model import Action, Plan, Template, Verb
 
 
 def a_template(**overrides: object) -> Template:
@@ -88,7 +88,7 @@ def test_a_hand_edited_file_is_skipped_and_named(tmp_path: Path) -> None:
 
 def test_a_crlf_copy_of_a_recorded_file_is_hand_edited_and_never_unchanged(tmp_path: Path) -> None:
     # The digest is of the bytes on disk. A read that translated line endings would hash this copy
-    # as the template's own `BODY\n`, and a file that differs from what stayfixed wrote would be
+    # as the template's own `BODY\n`, and a file that differs from what drybag wrote would be
     # reported as unchanged.
     (tmp_path / "AGENTS.md").write_bytes(b"BODY\r\n")
     Manifest({}).with_record(a_record()).write(tmp_path)
@@ -103,7 +103,7 @@ def test_a_crlf_copy_of_a_recorded_file_is_hand_edited_and_never_unchanged(tmp_p
 # --- refusals ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("target", ["../outside.md", "/etc/stayfixed.md", "docs/../../x.md", ""])
+@pytest.mark.parametrize("target", ["../outside.md", "/etc/drybag.md", "docs/../../x.md", ""])
 def test_an_escaping_target_is_refused_not_planned(tmp_path: Path, target: str) -> None:
     result = plan(tmp_path, [a_template(target=target)])
     assert result.actions == ()
@@ -185,8 +185,8 @@ def test_a_fifo_at_an_artifacts_place_is_its_refusal_and_never_waited_on(tmp_pat
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed.scaffold.engine import plan\n"
-        "from stayfixed.scaffold.model import Template\n"
+        "from drybag.scaffold.engine import plan\n"
+        "from drybag.scaffold.model import Template\n"
         "root = Path(sys.argv[1])\n"
         "template = Template(id='agents-md', target='AGENTS.md',\n"
         "    source='project/AGENTS.md', render=lambda: 'BODY\\n')\n"
@@ -270,7 +270,7 @@ def test_a_skipped_artifact_is_reported_and_not_written(tmp_path: Path) -> None:
 
 def test_no_temporary_file_survives_a_write(tmp_path: Path) -> None:
     apply(tmp_path, plan(tmp_path, [a_template()]))
-    assert sorted(p.name for p in tmp_path.iterdir()) == [".stayfixed", "AGENTS.md"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == [".drybag", "AGENTS.md"]
 
 
 def test_an_updated_file_keeps_the_mode_it_had(tmp_path: Path) -> None:
@@ -285,7 +285,7 @@ def test_a_created_file_is_readable_by_more_than_its_owner(tmp_path: Path) -> No
     assert stat.S_IMODE((tmp_path / "AGENTS.md").stat().st_mode) == 0o644
 
 
-def test_a_committed_symlink_at_dot_stayfixed_refuses_before_anything_is_written(
+def test_a_committed_symlink_at_dot_drybag_refuses_before_anything_is_written(
     tmp_path: Path,
 ) -> None:
     # git stores symlinks, so a clone materialises this one, and no race is needed: without a
@@ -294,14 +294,14 @@ def test_a_committed_symlink_at_dot_stayfixed_refuses_before_anything_is_written
     root.mkdir()
     victim = tmp_path / "victim"
     victim.mkdir()
-    (root / ".stayfixed").symlink_to(victim, target_is_directory=True)
+    (root / ".drybag").symlink_to(victim, target_is_directory=True)
     with pytest.raises(PathEscape, match="symlink"):
         plan(root, [a_template()])
     assert list(victim.iterdir()) == []
     assert not (root / "AGENTS.md").exists()
 
 
-def test_dot_stayfixed_symlinked_after_the_plan_makes_apply_refuse(tmp_path: Path) -> None:
+def test_dot_drybag_symlinked_after_the_plan_makes_apply_refuse(tmp_path: Path) -> None:
     # The same escape in the race shape the dry run cannot see: the plan was clean when the
     # user read it. `apply` must refuse with nothing written, inside the root or outside it.
     root = tmp_path / "project"
@@ -309,7 +309,7 @@ def test_dot_stayfixed_symlinked_after_the_plan_makes_apply_refuse(tmp_path: Pat
     victim = tmp_path / "victim"
     victim.mkdir()
     planned = plan(root, [a_template()])
-    (root / ".stayfixed").symlink_to(victim, target_is_directory=True)
+    (root / ".drybag").symlink_to(victim, target_is_directory=True)
     with pytest.raises(PathEscape, match="symlink"):
         apply(root, planned)
     assert list(victim.iterdir()) == []
@@ -333,7 +333,7 @@ def test_a_file_where_a_directory_belongs_refuses_rather_than_raising_oserror(
 def test_a_directory_that_cannot_be_created_refuses_rather_than_raising_oserror(
     tmp_path: Path,
 ) -> None:
-    # The other half of "no bare OSError": a parent directory stayfixed may read but not write
+    # The other half of "no bare OSError": a parent directory drybag may read but not write
     # to. `open_within` opens it happily — r-x is enough — so this arrives as EACCES from
     # `os.mkdir` rather than as an `UnsafePath`, and only the broad clause turns it into exit 2.
     (tmp_path / "docs").mkdir()
@@ -348,7 +348,7 @@ def test_a_directory_that_cannot_be_created_refuses_rather_than_raising_oserror(
 
 def test_apply_records_the_files_it_wrote_before_a_later_action_refused(tmp_path: Path) -> None:
     # The ledger describes the disk, so it cannot be discarded for actions that already ran. A
-    # file stayfixed wrote and did not record reads as somebody else's on every later run:
+    # file drybag wrote and did not record reads as somebody else's on every later run:
     # `skip_modified` under a reason that is false, moved only by a `--force` that names it, and
     # invisible to `uninstall`.
     outside = tmp_path.parent / f"{tmp_path.name}-outside"

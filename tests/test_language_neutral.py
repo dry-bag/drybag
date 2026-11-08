@@ -1,7 +1,7 @@
-"""stayfixed names no language stack, so a repository in several languages works with no
+"""drybag names no language stack, so a repository in several languages works with no
 configuration.
 
-The walk reads every module under `src/stayfixed/` with `ast`, so comments and docstrings are prose
+The walk reads every module under `src/drybag/` with `ast`, so comments and docstrings are prose
 and are never read; string and bytes constants (an f-string's literal parts included) and
 identifiers are code and are. A word counts where it stands alone, letters and
 digits on neither side, so `PYTEST`, `is_pytest_run` and `"*.pyc"` are mentions and
@@ -20,7 +20,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "src" / "stayfixed"
+PACKAGE = ROOT / "src" / "drybag"
 
 # One stack's test runner, build artifacts or package manager, for the common stacks. `uv` stands
 # for itself rather than for `uv run`: the walk reads one constant at a time, and the command
@@ -60,34 +60,34 @@ STACK_NAMED = {
     # `uv run <cmd>` to `<cmd>` up to the first word the table reads as a test run, which
     # `hints/bashscan.py` calls, so the scanner names no stack itself: `uv run` is a Python
     # launcher every stack's runner may stand behind.
-    ("src/stayfixed/hints/runners.py", "uv"),
-    ("src/stayfixed/hints/runners.py", "cargo"),
-    ("src/stayfixed/hints/runners.py", "gradle"),
-    ("src/stayfixed/hints/runners.py", "jest"),
-    ("src/stayfixed/hints/runners.py", "mvn"),
-    ("src/stayfixed/hints/runners.py", "npm"),
-    ("src/stayfixed/hints/runners.py", "npx"),
-    ("src/stayfixed/hints/runners.py", "pnpm"),
-    ("src/stayfixed/hints/runners.py", "pytest"),
-    ("src/stayfixed/hints/runners.py", "python"),
-    ("src/stayfixed/hints/runners.py", "python3"),
-    ("src/stayfixed/hints/runners.py", "tox"),
-    ("src/stayfixed/hints/runners.py", "vitest"),
-    ("src/stayfixed/hints/runners.py", "yarn"),
-    # stayfixed's own installer, `uv tool install`, named in two of `doctor`'s remedies
+    ("src/drybag/hints/runners.py", "uv"),
+    ("src/drybag/hints/runners.py", "cargo"),
+    ("src/drybag/hints/runners.py", "gradle"),
+    ("src/drybag/hints/runners.py", "jest"),
+    ("src/drybag/hints/runners.py", "mvn"),
+    ("src/drybag/hints/runners.py", "npm"),
+    ("src/drybag/hints/runners.py", "npx"),
+    ("src/drybag/hints/runners.py", "pnpm"),
+    ("src/drybag/hints/runners.py", "pytest"),
+    ("src/drybag/hints/runners.py", "python"),
+    ("src/drybag/hints/runners.py", "python3"),
+    ("src/drybag/hints/runners.py", "tox"),
+    ("src/drybag/hints/runners.py", "vitest"),
+    ("src/drybag/hints/runners.py", "yarn"),
+    # drybag's own installer, `uv tool install`, named in two of `doctor`'s remedies
     # (`cli-path` in the core's checks, `overlay-requires` in the overlay area's) and in `setup`'s
-    # pinned install command: the tool stayfixed itself is installed with, not a stack a project
+    # pinned install command: the tool drybag itself is installed with, not a stack a project
     # is written in.
-    ("src/stayfixed/doctor/checks.py", "uv"),
-    ("src/stayfixed/overlay/doctor.py", "uv"),
-    ("src/stayfixed/setup/run.py", "uv"),
-    # The git hook stayfixed installs runs stayfixed itself, under the `python3` that can import it:
-    # stayfixed's own interpreter in its own hook, not the interpreter of a project's stack.
-    ("src/stayfixed/guards/githooks.py", "python3"),
+    ("src/drybag/doctor/checks.py", "uv"),
+    ("src/drybag/overlay/doctor.py", "uv"),
+    ("src/drybag/setup/run.py", "uv"),
+    # The git hook drybag installs runs drybag itself, under the `python3` that can import it:
+    # drybag's own interpreter in its own hook, not the interpreter of a project's stack.
+    ("src/drybag/guards/githooks.py", "python3"),
     # `setup --restore` says when the machine has neither `python3` nor `uv`: the two programs the
-    # hook wrapper looks for to run stayfixed itself, not the stack of any project.
-    ("src/stayfixed/setup/restore.py", "python3"),
-    ("src/stayfixed/setup/restore.py", "uv"),
+    # hook wrapper looks for to run drybag itself, not the stack of any project.
+    ("src/drybag/setup/restore.py", "python3"),
+    ("src/drybag/setup/restore.py", "uv"),
 }
 
 

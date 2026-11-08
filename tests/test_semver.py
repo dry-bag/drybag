@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from stayfixed.semver import later
+from drybag.semver import later
 
 
 def test_a_component_past_nine_digits_is_no_version_and_never_an_exception() -> None:

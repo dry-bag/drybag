@@ -1,4 +1,4 @@
-"""stayfixed's real command line, run in this process as a person types it.
+"""drybag's real command line, run in this process as a person types it.
 
 One runner for every test that drives a command through the parser, where each module carried a
 copy of its own: the argv as typed, then `--root` and a `--machine` file that is not there
@@ -12,13 +12,13 @@ import io
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
-from stayfixed.cli import SubParsers, build_parser, discover_registrars, run
+from drybag.cli import SubParsers, build_parser, discover_registrars, run
 
 
 def cli(
     root: Path, tmp_path: Path, *argv: str, machine: Path | None = None
 ) -> tuple[int, str, str]:
-    """The exit code, standard output and standard error of `stayfixed <argv>` against `root`."""
+    """The exit code, standard output and standard error of `drybag <argv>` against `root`."""
     parser = build_parser(discover_registrars())
     flags = ["--root", str(root), "--machine", str(machine or tmp_path / "absent.toml")]
     with redirect_stdout(io.StringIO()) as out, redirect_stderr(io.StringIO()) as err:

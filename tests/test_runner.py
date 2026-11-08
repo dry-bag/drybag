@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.runner import (
+from drybag.runner import (
     _ENV_DROP,
     _ENV_FORCE,
     NOT_FOUND,
@@ -45,7 +45,7 @@ def test_a_launched_command_gets_no_stdin_and_no_credential_prompt(tmp_path: Pat
     # on an inherited stdin is invisible and blocks for the whole of NETWORK_TIMEOUT_SECONDS.
     # What makes that a finding rather than an annoyance is which callers reach the network
     # through this seam: `setup --overlay create:` launches `gh` with the machine owner's own
-    # authentication, a write meant to be non-interactive. See `stayfixed.runner._ENV_FORCE`.
+    # authentication, a write meant to be non-interactive. See `drybag.runner._ENV_FORCE`.
     #
     # The pty is the point of the case: without it this process's own stdin is already not a
     # terminal under pytest, and the assertion would pass with the guard deleted.
@@ -98,7 +98,7 @@ def test_a_command_that_hangs_is_not_reported_as_one_that_is_missing(tmp_path: P
     # `TimeoutExpired` is a `SubprocessError`, so a `gh` that hung for the full five minutes
     # arrived as NOT_FOUND — which every caller reads as "gh is not installed". A wrong finding
     # is worse than a slow one, and the two have different remedies.
-    import stayfixed.runner as runner
+    import drybag.runner as runner
 
     before = runner.NETWORK_TIMEOUT_SECONDS
     runner.NETWORK_TIMEOUT_SECONDS = 1
@@ -109,7 +109,7 @@ def test_a_command_that_hangs_is_not_reported_as_one_that_is_missing(tmp_path: P
     assert hung.code == TIMED_OUT
     # Non-vacuous: a binary that really is missing still answers NOT_FOUND, which is the mapping
     # an optional binary needs — a missing one is a finding, never a traceback.
-    assert _SubprocessRunner().launch(["stayfixed-no-such-binary"], tmp_path).code == NOT_FOUND
+    assert _SubprocessRunner().launch(["drybag-no-such-binary"], tmp_path).code == NOT_FOUND
 
 
 def test_output_that_is_not_text_is_read_with_replacement_characters_not_raised(
@@ -119,7 +119,7 @@ def test_output_that_is_not_text_is_read_with_replacement_characters_not_raised(
     # a message or matches it against a grammar — a tag listing, JSON, an exit code —
     # and never as a path. Decoded strictly, one byte that was not text ended the command as
     # `internal error: UnicodeDecodeError`. A byte the codec cannot read is U+FFFD instead, which
-    # every stream and every UTF-8 file stayfixed writes can hold. Mutation (declared): decode
+    # every stream and every UTF-8 file drybag writes can hold. Mutation (declared): decode
     # strictly again -> this reddens.
     done = subprocess_runner().launch(
         ["sh", "-c", "printf 'caf\\351'; printf 'x\\351' >&2"], tmp_path

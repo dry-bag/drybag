@@ -1,4 +1,4 @@
-"""What a session runs on (`src/stayfixed/config/session.py`): the project's configuration read the
+"""What a session runs on (`src/drybag/config/session.py`): the project's configuration read the
 way a session must, the owner's layer, and one warning about each file it could not use whole.
 
 `session_config` never raises for anything a repository or a machine file holds, so every case
@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import __version__, binding
-from stayfixed.config.classes import LayerName
-from stayfixed.config.owner import resolve_owner
-from stayfixed.config.paths import data_directory
-from stayfixed.config.session import (
+from drybag import __version__, binding
+from drybag.config.classes import LayerName
+from drybag.config.owner import resolve_owner
+from drybag.config.paths import data_directory
+from drybag.config.session import (
     FALLBACK_WARNING,
     MACHINE_FILE_WARNING,
     NEWER_RELEASE_WARNING,
@@ -28,7 +28,7 @@ from stayfixed.config.session import (
     bound_config,
     session_config,
 )
-from stayfixed.doctor.checks import VERSION_AHEAD
+from drybag.doctor.checks import VERSION_AHEAD
 from tests.config import test_overlay_layers as overlays
 from tests.config.test_loader import HEAD, MINIMAL
 from tests.gitfixture import needs_git
@@ -39,7 +39,7 @@ HEAD_LATER = HEAD.replace('version = "0.1.0"', f'version = "{_MAJOR}.{_MINOR + 1
 
 
 def write(root: Path, text: str) -> None:
-    (root / "stayfixed.toml").write_text(text, encoding="utf-8")
+    (root / "drybag.toml").write_text(text, encoding="utf-8")
 
 
 def none(root: Path) -> Path:
@@ -58,16 +58,16 @@ def unparseable(root: Path) -> None:
 
 
 def not_utf8(root: Path) -> None:
-    (root / "stayfixed.toml").write_bytes(MINIMAL.encode("utf-8") + b"\xff\n")
+    (root / "drybag.toml").write_bytes(MINIMAL.encode("utf-8") + b"\xff\n")
 
 
 def symlink_to_loadable(root: Path) -> None:
     (root / "real.toml").write_text(MINIMAL, encoding="utf-8")
-    os.symlink(root / "real.toml", root / "stayfixed.toml")
+    os.symlink(root / "real.toml", root / "drybag.toml")
 
 
 def symlink_to_dev_zero(root: Path) -> None:
-    os.symlink("/dev/zero", root / "stayfixed.toml")
+    os.symlink("/dev/zero", root / "drybag.toml")
 
 
 def test_a_session_parses_its_preset_once(tmp_path: Path) -> None:
@@ -75,7 +75,7 @@ def test_a_session_parses_its_preset_once(tmp_path: Path) -> None:
     # each asked the package to parse the same TOML again, on every hook: the preset is asked for
     # at least twice and parsed once. Mutation (`mutations/`'s "the preset is parsed on every
     # load"): every load parses past the cache, which then records no parse at all.
-    from stayfixed import presets
+    from drybag import presets
 
     write(tmp_path, MINIMAL)
     presets._parsed.cache_clear()
@@ -113,7 +113,7 @@ def test_a_file_that_cannot_be_read_as_toml_falls_back_whole(
 ) -> None:
     # A link meets the rule before anything follows it, so one to a loadable file and one to
     # `/dev/zero` get the same answer. Mutations (`mutations/`'s "a session lets a symlinked
-    # stayfixed.toml raise" -> both links raise; "a session lets a file that is not TOML raise"
+    # drybag.toml raise" -> both links raise; "a session lets a file that is not TOML raise"
     # -> `unparseable` raises).
     make(tmp_path)
     got = session_config(tmp_path, machine=none(tmp_path))
@@ -121,7 +121,7 @@ def test_a_file_that_cannot_be_read_as_toml_falls_back_whole(
 
 
 def test_a_newer_release_keeps_every_other_setting(tmp_path: Path) -> None:
-    # A `stayfixed.toml` a newer release wrote: an unknown section and an unknown enum value
+    # A `drybag.toml` a newer release wrote: an unknown section and an unknown enum value
     # together, and the raised budget beside them stands. Mutation (`mutations/`'s "session_config
     # answers no configuration for a file that loads with notes"): the budget goes with the file.
     write(
@@ -167,7 +167,7 @@ def test_a_broken_machine_file_keeps_the_project(tmp_path: Path) -> None:
 def test_a_broken_machine_file_is_named_with_no_project_configuration(
     tmp_path: Path, root: str
 ) -> None:
-    # A machine file that is not TOML, with nothing of the project's to read: no `stayfixed.toml`,
+    # A machine file that is not TOML, with nothing of the project's to read: no `drybag.toml`,
     # or a hook with no project root. The guards still run on the preset's owner values, and the
     # warning still names the machine file. Mutation (`mutations/`'s "a session with no project
     # configuration says nothing of a machine file it could not use"): the warning goes.
@@ -218,7 +218,7 @@ UNUSABLE = [
     ),
     pytest.param(
         lambda root: MINIMAL.replace('version = "0.1.0"', "version = 1"),
-        "stayfixed.version",
+        "drybag.version",
         id="version",
     ),
     pytest.param(_docs_symlink, "paths.specs", id="docs-symlink"),
@@ -235,15 +235,15 @@ def test_a_file_longer_than_a_session_reads_is_read_no_further(tmp_path: Path) -
     # The parse and every build of the NOTE load cost in proportion to the file, and a hook that
     # runs past its timeout loses the call, so a session reads `SESSION_READ_LIMIT` bytes
     # at most and drops a longer file whole, in words of its own. Mutation (`mutations/`'s "a
-    # session reads stayfixed.toml as far as a command does"): the longer file loads. By hand, the
+    # session reads drybag.toml as far as a command does"): the longer file loads. By hand, the
     # `TooLargeDocument` arm taken out: the warning is `FALLBACK_WARNING`, which sends the owner
-    # to `stayfixed docs check`, where the file loads.
+    # to `drybag docs check`, where the file loads.
     write(tmp_path, _padded(SESSION_READ_LIMIT + 1))
     got = session_config(tmp_path, machine=none(tmp_path))
     assert got.config is None and got.warnings == (TOO_LARGE_WARNING,)
     # The control: a file of exactly the cap is read and loads.
     write(tmp_path, _padded(SESSION_READ_LIMIT))
-    assert (tmp_path / "stayfixed.toml").stat().st_size == SESSION_READ_LIMIT
+    assert (tmp_path / "drybag.toml").stat().st_size == SESSION_READ_LIMIT
     got = session_config(tmp_path, machine=none(tmp_path))
     assert got.config is not None and got.warnings == ()
 
@@ -287,7 +287,7 @@ def test_a_preset_this_build_cannot_use_is_one_note(tmp_path: Path, value: str) 
     # owner's layer is asked to load a preset this build cannot, and the session raises.
     write(tmp_path, MINIMAL.replace('preset = "recommended"', f"preset = {value}"))
     got = session_config(tmp_path, machine=none(tmp_path))
-    assert got.config is not None and got.config.stayfixed.preset == "recommended"
+    assert got.config is not None and got.config.drybag.preset == "recommended"
     assert got.owner.notes == ()
     assert got.warnings == (NOTED_WARNING.format(count=1),)
 
@@ -361,12 +361,12 @@ def test_each_layer_sets_changes_and_unsets_the_guards_with_the_machine_file_las
 
 
 def a_bound_checkout_with_no_file(tmp_path: Path) -> tuple[Path, Path]:
-    """A checkout this machine binds to the overlay's project `sample`, with no `stayfixed.toml`;
+    """A checkout this machine binds to the overlay's project `sample`, with no `drybag.toml`;
     the project's layer sets a startup budget. Returns the checkout and the machine file."""
     root = overlays.project(tmp_path)
     recorded = overlays.overlay(tmp_path, sample=overlays.budgets(900))
     binding.record(root, "sample", None)
-    (root / "stayfixed.toml").unlink()
+    (root / "drybag.toml").unlink()
     return root, overlays.machine(tmp_path, recorded)
 
 
@@ -421,6 +421,6 @@ def test_methodology_hooks_still_answer_nothing_without_a_file(tmp_path: Path) -
 @needs_git
 def test_a_checkout_whose_file_does_not_load_has_no_bound_configuration(tmp_path: Path) -> None:
     root, machine = a_bound_checkout_with_no_file(tmp_path)
-    (root / "stayfixed.toml").write_text("x = [", encoding="utf-8")
+    (root / "drybag.toml").write_text("x = [", encoding="utf-8")
     got = session_config(root, machine=machine)
     assert got.project_warnings and got.acting is None

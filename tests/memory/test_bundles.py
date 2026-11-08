@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import binding
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.config.schema import Config
-from stayfixed.memory.bundles import (
+from drybag import binding
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.config.schema import Config
+from drybag.memory.bundles import (
     CAP_MARGIN,
     SLOTS,
     STANDING_LEAD,
@@ -21,15 +21,15 @@ from stayfixed.memory.bundles import (
     render,
     split,
 )
-from stayfixed.memory.notes import walk
-from stayfixed.memory.reviewed import promote
-from stayfixed.memory.store import Store, composed_directory, resolve
-from stayfixed.memory.trust import DELIMITER
+from drybag.memory.notes import walk
+from drybag.memory.reviewed import promote
+from drybag.memory.store import Store, composed_directory, resolve
+from drybag.memory.trust import DELIMITER
 from tests.cli import cli
 from tests.gitfixture import git
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -174,7 +174,7 @@ def test_an_in_repo_store_reaches_volatile_notes_as_data_and_never_the_standing_
     # A store committed to the repository, with nothing promoted: its volatile notes reach the
     # session as the harness delivers `CLAUDE.md`, still marked as data, and a note claiming
     # `startup: 1` is not a standing rule, whatever it says about itself; it arrives with the
-    # volatile notes, labelled and as data. Only the lead, stayfixed's own words, is outside a
+    # volatile notes, labelled and as data. Only the lead, drybag's own words, is outside a
     # region.
     store, config = a_store(tmp_path, mode="in-repo", reviewed=False)
     volatile = blocks(Bundle.VOLATILE_NOTES, store, config)
@@ -357,7 +357,7 @@ def test_the_declared_slot_counts_are_the_ones_hooks_json_has_to_ship() -> None:
     # mapping is the contract, so the mapping is pinned — a bundle added or dropped fails this
     # too.
     #
-    # The other side of that contract, `hooks/hooks.json` itself, belongs to `stayfixed.hooks`:
+    # The other side of that contract, `hooks/hooks.json` itself, belongs to `drybag.hooks`:
     # `tests/hooks/test_hooks_json.py` cross-checks these counts against the entries that file
     # declares, which is not a check this file can fake.
     assert SLOTS == {
@@ -408,7 +408,7 @@ def test_the_margin_is_additive_because_the_text_is_emitted_raw(tmp_path: Path) 
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
 OVERLAY_CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -465,7 +465,7 @@ def test_the_overlay_groups_themselves_are_neither_gated_nor_wrapped(tmp_path: P
 
 
 LOCAL_CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
 preset = "recommended"
 
@@ -479,8 +479,8 @@ def test_with_no_mode_chosen_session_context_prints_no_bundle(tmp_path: Path) ->
     # The same local-only store twice: chosen explicitly it is delivered as today, and with no
     # layer choosing a mode memory is the harness's own, so not one bundle is printed.
     root = tmp_path / "project"
-    (root / ".stayfixed" / "local" / "memory" / "project-volatile").mkdir(parents=True)
-    (root / ".stayfixed" / "local" / "memory" / "project-volatile" / "now.md").write_text(
+    (root / ".drybag" / "local" / "memory" / "project-volatile").mkdir(parents=True)
+    (root / ".drybag" / "local" / "memory" / "project-volatile" / "now.md").write_text(
         note("now", as_of=date.today().isoformat(), body="Volatile body."), encoding="utf-8"
     )
     machine = a_machine(tmp_path)
@@ -500,11 +500,11 @@ def test_the_standing_rules_bundle_carries_a_reviewed_note_with_no_file(
     tmp_path: Path, with_file: bool
 ) -> None:
     # A checkout this machine binds, whose overlay's project layer chooses the overlay as the
-    # memory: with no `stayfixed.toml` the bundle printed nothing, though the same checkout with
+    # memory: with no `drybag.toml` the bundle printed nothing, though the same checkout with
     # a file naming the same project printed the note. Both read the one store.
     _store, _config, machine, overlay = a_resolved_overlay_store(tmp_path)
     root = tmp_path / "project"
-    (overlay / "projects" / "widget" / "stayfixed.toml").write_text(
+    (overlay / "projects" / "widget" / "drybag.toml").write_text(
         '[memory]\nmode = "overlay"\n', encoding="utf-8"
     )
     if not with_file:

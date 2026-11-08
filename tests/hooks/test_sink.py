@@ -8,8 +8,8 @@ import pytest
 
 # The layout the sink writes is `hooks.api`'s, because `doctor` reads the same tree and the two
 # must name it with one set of strings; the sink's own bookkeeping stays in `hooks.sink`.
-from stayfixed.hooks.api import DIAGNOSTICS, DIAGNOSTICS_MAX_BYTES, MARKERS, NullSink
-from stayfixed.hooks.sink import (
+from drybag.hooks.api import DIAGNOSTICS, DIAGNOSTICS_MAX_BYTES, MARKERS, NullSink
+from drybag.hooks.sink import (
     DIAGNOSTIC_FIELD_CHARS,
     ROTATED,
     UNKEYED_SESSION,
@@ -21,7 +21,7 @@ HEX32 = re.compile(r"\A[0-9a-f]{32}\Z")
 
 
 def test_no_plugin_data_means_a_sink_that_forgets() -> None:
-    # The ordinary state outside a harness: `stayfixed hook` run by hand, or by a test. It must
+    # The ordinary state outside a harness: `drybag hook` run by hand, or by a test. It must
     # degrade, not raise — a sink failure would take the whole dispatch with it.
     assert isinstance(sink_for("s1", {}), NullSink)
 
@@ -41,15 +41,15 @@ def test_a_relative_data_root_is_no_sink_at_all(
 ) -> None:
     # `CLAUDE_PLUGIN_DATA` arrives through a committed `env` block, and `Path(".")` anchors the
     # contained walk on the process cwd — for a hook, the checkout. Measured: `CLAUDE_PLUGIN_DATA=.`
-    # landed `stayfixed/.probe` and `stayfixed/diagnostics.jsonl` inside the repository. Traversal
+    # landed `drybag/.probe` and `drybag/diagnostics.jsonl` inside the repository. Traversal
     # and symlinks were still refused; *where the walk was anchored* was the repository's to
     # choose, and this is the half taken back. The cwd is `tmp_path` here so the assertion can
     # say what was not written and where.
     #
     # Mutation (`mutations/`'s "the sink accepts a relative data root"): the `is_absolute`
-    # guard removed → a `DataSink` comes back and `stayfixed/` appears under the cwd.
+    # guard removed → a `DataSink` comes back and `drybag/` appears under the cwd.
     monkeypatch.chdir(tmp_path)
-    for spelling in (".", "stayfixed-data", "./sub"):
+    for spelling in (".", "drybag-data", "./sub"):
         assert isinstance(sink_for("s1", {"CLAUDE_PLUGIN_DATA": spelling}), NullSink)
         assert isinstance(sink_for("s1", {"PLUGIN_DATA": spelling}), NullSink)
     assert not any(tmp_path.iterdir())
@@ -75,7 +75,7 @@ def test_a_marker_is_a_regular_file_and_not_merely_a_name_that_exists(tmp_path: 
     # able to write the data root could silence a `once_key` handler with one `mkdir`: no
     # content, no permissions, no race. A marker is the regular file `mark()` writes.
     sink = sink_for("s1", {"CLAUDE_PLUGIN_DATA": str(tmp_path)})
-    planted = tmp_path / "stayfixed" / MARKERS / _segment("s1") / _segment("ledger-notes")
+    planted = tmp_path / "drybag" / MARKERS / _segment("s1") / _segment("ledger-notes")
     planted.parent.mkdir(parents=True, exist_ok=True)
     planted.mkdir()
     assert sink.seen("ledger-notes") is False
@@ -97,7 +97,7 @@ def test_a_payload_with_no_session_id_gets_a_segment_nothing_can_precompute(
     # session id — `NullSink`'s own documented degradation, on the abnormal path, losing a
     # notice rather than a guard.
     data = {"CLAUDE_PLUGIN_DATA": str(tmp_path)}
-    predictable = tmp_path / "stayfixed" / MARKERS / _segment("") / _segment("test-hygiene")
+    predictable = tmp_path / "drybag" / MARKERS / _segment("") / _segment("test-hygiene")
     predictable.parent.mkdir(parents=True, exist_ok=True)
     predictable.write_text("", encoding="utf-8")
     assert sink_for(None, data).seen("test-hygiene") is False
@@ -117,11 +117,11 @@ def test_a_different_session_does_not_inherit_markers(tmp_path: Path) -> None:
 def test_a_marker_lands_at_two_hashed_segments_and_nowhere_else(tmp_path: Path) -> None:
     # The POSITIVE shape, asserted rather than "nothing escaped". An earlier draft asserted
     # only that every written path stayed under tmp_path, which holds with the hash deleted:
-    # `../../escape` from `<data>/stayfixed/markers/<session>/` lands back inside `<data>`, just
+    # `../../escape` from `<data>/drybag/markers/<session>/` lands back inside `<data>`, just
     # not under `markers/`. All three of its assertions passed with the guard broken.
     data = {"CLAUDE_PLUGIN_DATA": str(tmp_path)}
     sink_for("../../session", data).mark("../../escape")
-    markers = tmp_path / "stayfixed" / MARKERS
+    markers = tmp_path / "drybag" / MARKERS
     written = [p for p in markers.rglob("*") if p.is_file()]
     assert len(written) == 1
     marker = written[0]
@@ -136,7 +136,7 @@ def test_a_hostile_segment_never_reaches_the_filesystem_walk(tmp_path: Path) -> 
     data = {"CLAUDE_PLUGIN_DATA": str(tmp_path)}
     sink_for("s1", data).mark("../../escape")
     assert not (tmp_path.parent / "escape").exists()
-    assert not (tmp_path / "stayfixed" / "escape").exists()
+    assert not (tmp_path / "drybag" / "escape").exists()
 
 
 def test_a_diagnostic_never_carries_a_payload_verbatim(tmp_path: Path) -> None:
@@ -146,7 +146,7 @@ def test_a_diagnostic_never_carries_a_payload_verbatim(tmp_path: Path) -> None:
     # is supposed to read.
     sink = sink_for("s1", {"CLAUDE_PLUGIN_DATA": str(tmp_path)})
     sink.diagnostic({"event": "PreToolUse", "handler": "bg-cleanup", "error": "X" * 50_000})
-    line = (tmp_path / "stayfixed" / DIAGNOSTICS).read_text(encoding="utf-8").splitlines()[0]
+    line = (tmp_path / "drybag" / DIAGNOSTICS).read_text(encoding="utf-8").splitlines()[0]
     record = json.loads(line)
     assert record["handler"] == "bg-cleanup"
     assert len(record["error"]) < 50_000
@@ -161,7 +161,7 @@ def test_the_session_a_record_is_filed_under_is_capped_like_any_other_field(
     # write to this log at any length it liked.
     sink = sink_for("S" * 50_000, {"CLAUDE_PLUGIN_DATA": str(tmp_path)})
     sink.diagnostic({"event": "PreToolUse", "handler": "bg-cleanup", "error": "boom"})
-    line = (tmp_path / "stayfixed" / DIAGNOSTICS).read_text(encoding="utf-8").splitlines()[0]
+    line = (tmp_path / "drybag" / DIAGNOSTICS).read_text(encoding="utf-8").splitlines()[0]
     assert len(json.loads(line)["session"]) == DIAGNOSTIC_FIELD_CHARS
 
 
@@ -169,9 +169,9 @@ def test_the_log_is_rotated_rather_than_grown(tmp_path: Path) -> None:
     sink = sink_for("s1", {"CLAUDE_PLUGIN_DATA": str(tmp_path)})
     for _ in range(4_000):
         sink.diagnostic({"event": "PreToolUse", "handler": "bg-cleanup", "error": "Y" * 200})
-    live = tmp_path / "stayfixed" / DIAGNOSTICS
+    live = tmp_path / "drybag" / DIAGNOSTICS
     assert live.stat().st_size <= DIAGNOSTICS_MAX_BYTES
-    assert (tmp_path / "stayfixed" / ROTATED).exists()
+    assert (tmp_path / "drybag" / ROTATED).exists()
 
 
 def test_old_sessions_are_pruned_and_the_newest_survives(tmp_path: Path) -> None:
@@ -181,7 +181,7 @@ def test_old_sessions_are_pruned_and_the_newest_survives(tmp_path: Path) -> None
     data = {"CLAUDE_PLUGIN_DATA": str(tmp_path)}
     for index in range(60):
         sink_for(f"s{index}", data).mark("k")
-    kept = list((tmp_path / "stayfixed" / MARKERS).iterdir())
+    kept = list((tmp_path / "drybag" / MARKERS).iterdir())
     assert len(kept) <= 50
     assert sink_for("s59", data).seen("k") is True
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from stayfixed.scaffold.model import Action, Plan, Refused, Template, Verb
+from drybag.scaffold.model import Action, Plan, Refused, Template, Verb
 
 
 def test_the_four_verbs_are_exactly_the_frozen_set() -> None:

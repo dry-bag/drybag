@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from stayfixed.hints import bashscan
+from drybag.hints import bashscan
 
 
 def test_quoted_heredoc_bodies_are_stripped_but_the_command_remains() -> None:

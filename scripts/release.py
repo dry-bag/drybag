@@ -5,8 +5,8 @@
     uv run python scripts/release.py notes --version X.Y.Z [--draft]  # assemble CHANGELOG.md
     uv run python scripts/release.py pin [--remote URL]            # the plugin commit, pinned
 
-These commands only ever checked or wrote the stayfixed repository itself, so they live beside it
-rather than in the installed CLI. What shipped code does read stays in `stayfixed.release`: the
+These commands only ever checked or wrote the drybag repository itself, so they live beside it
+rather than in the installed CLI. What shipped code does read stays in `drybag.release`: the
 tag a version is released under. `RELEASING.md` is the process these commands
 serve.
 
@@ -28,7 +28,7 @@ read `versions` on success had nothing to read on the run it actually cared abou
 still raised for what it is for: a source this gate cannot parse at all (`MalformedSource`) and
 a towncrier that cannot be run.
 
-**`notes --draft` prints more than one line**, and it is deliberate: every stayfixed command
+**`notes --draft` prints more than one line**, and it is deliberate: every drybag command
 gets one summary line because a line is what a caller reads, and a draft's whole purpose is that
 a person reads the section towncrier *would* write before it is written. Under `--json` it keeps
 the one-line contract.
@@ -44,26 +44,26 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-# Before the CLI frame exists, so said here: an interpreter without this repository's `stayfixed`,
+# Before the CLI frame exists, so said here: an interpreter without this repository's `drybag`,
 # or older than the 3.11 that brought `tomllib`, would otherwise end in a traceback and exit `1`,
 # which `check` gives its findings.
 try:
     import tomllib
 
-    from stayfixed import fsops
-    from stayfixed.cli import JSON_EPILOG, run
-    from stayfixed.command import ROOT_HELP
-    from stayfixed.config.reading import UNPARSEABLE
-    from stayfixed.errors import Failure, Refusal
-    from stayfixed.jsonobject import json_object
-    from stayfixed.printed import clipped
-    from stayfixed.release.api import PACKAGE, tag_for
-    from stayfixed.result import Result
-    from stayfixed.runner import NOT_FOUND, Completed, Runner, subprocess_runner
+    from drybag import fsops
+    from drybag.cli import JSON_EPILOG, run
+    from drybag.command import ROOT_HELP
+    from drybag.config.reading import UNPARSEABLE
+    from drybag.errors import Failure, Refusal
+    from drybag.jsonobject import json_object
+    from drybag.printed import clipped
+    from drybag.release.api import PACKAGE, tag_for
+    from drybag.result import Result
+    from drybag.runner import NOT_FOUND, Completed, Runner, subprocess_runner
 except ImportError as exc:
     sys.stderr.write(
         f"scripts/release.py: refused: {exc}; run it with `uv run python scripts/release.py`, "
-        "which runs it on the project's Python with this repository's stayfixed on the path\n"
+        "which runs it on the project's Python with this repository's drybag on the path\n"
     )
     sys.exit(2)
 
@@ -76,7 +76,7 @@ MARKETPLACE = ".claude-plugin/marketplace.json"
 SOURCES = (
     PYPROJECT,
     LOCKFILE,
-    "src/stayfixed/__init__.py",
+    "src/drybag/__init__.py",
     ".claude-plugin/plugin.json",
     ".codex-plugin/plugin.json",
     "CHANGELOG.md",
@@ -86,10 +86,10 @@ SOURCES = (
 # `scripts/plugin_tree.py` generates from this one. The marketplace entry is a `url` source pinned
 # to the release's tag by `ref` and to the plugin commit by `sha`. The `ref` is a version source
 # (`_released_ref`): the release commit names the tag it releases, which is the only marketplace a
-# user reads, since `README.md` installs `stayfixed/stayfixed@vX.Y.Z` and `main` moves only at a
+# user reads, since `README.md` installs `dry-bag/drybag@vX.Y.Z` and `main` moves only at a
 # release. The `sha` is the commit `scripts/plugin_tree.py commit` computes from the release commit
 # alone, so the release commit can name it before the plugin repository holds it (`pin`).
-PLUGIN_URL = "https://github.com/stayfixed/stayfixed-plugin.git"
+PLUGIN_URL = "https://github.com/dry-bag/drybag-plugin.git"
 # The same repository as `owner/name`, as a refusal names it.
 PLUGIN_REPOSITORY = PLUGIN_URL.removeprefix("https://github.com/").removesuffix(".git")
 # A release's tag, as the marketplace entry's `ref` names it: ASCII digits, as the publisher's
@@ -408,7 +408,7 @@ def checked_by_kind(
             # reported `names -v1.2.3`. The membership test above is exact and was always
             # right; only the sentence was invented. Both slips are the ones `RELEASING.md`
             # invites, because a human types this flag by hand right after a tool prints
-            # `stayfixed--vX.Y.Z`. The existing cases passed by accident: every tag they
+            # `drybag--vX.Y.Z`. The existing cases passed by accident: every tag they
             # exercised began with `v` and carried no earlier one.
             workflow_tag, platform_tag = tag_for(canonical)
             problems.append(
@@ -603,7 +603,8 @@ def pin(root: Path, *, remote: str, runner: Runner) -> str:
         holds = f"main at {main}" if main is not None else "no main"
         raise Refusal(
             f"the plugin commit {made} has {follows}, and {remote} has {holds}; the plugin "
-            "repository's main moves only by fast-forward. The likely cause: this release commit "
+            "repository's main moves only by fast-forward. The likely cause: the plugin "
+            "repository was never seeded (RELEASING.md, section 3); this release commit "
             f"was cut on the wrong base; a merge into main dropped the sha {MARKETPLACE} pinned "
             "at the release before; or a release that stopped after its plugin was pushed left "
             "main at a commit nothing here pins, which the restore commit puts back (RELEASING.md, "
@@ -683,7 +684,7 @@ def parser() -> argparse.ArgumentParser:
     hand."""
     top = argparse.ArgumentParser(
         prog="scripts/release.py",
-        description="Release discipline for the stayfixed repository itself.",
+        description="Release discipline for the drybag repository itself.",
         epilog=JSON_EPILOG,
     )
     sub = top.add_subparsers(dest="command", metavar="<command>")

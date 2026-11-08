@@ -7,22 +7,22 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.classes import LayerName
-from stayfixed.config.loader import CONFIG_FILE, _build, load, loads
-from stayfixed.config.paths import PathEscape
-from stayfixed.config.reading import INTEGER_LIMIT, ConfigError, MachineConfigError
-from stayfixed.config.schema import (
+from drybag.config.classes import LayerName
+from drybag.config.loader import CONFIG_FILE, _build, load, loads
+from drybag.config.paths import PathEscape
+from drybag.config.reading import INTEGER_LIMIT, ConfigError, MachineConfigError
+from drybag.config.schema import (
     BRANCH_NAME,
     MEMORY_MODES,
     NAME_RULE,
     PROJECT_NAME,
     Config,
 )
-from stayfixed.config.session import session_config
-from stayfixed.findings import LISTED_LIMIT
+from drybag.config.session import session_config
+from drybag.findings import LISTED_LIMIT
 from tests.gitfixture import needs_git, run_git
 
-HEAD = '[stayfixed]\nversion = "0.1.0"\npreset = "recommended"\n'
+HEAD = '[drybag]\nversion = "0.1.0"\npreset = "recommended"\n'
 MINIMAL = HEAD + '\n[project]\nname = "sample"\n'
 
 
@@ -180,13 +180,13 @@ def test_one_command_reads_one_machine_file(
     # with `XDG_CONFIG_HOME` set the two disagreed, so an owner who wrote one file holding both
     # `[personal]` and `[overlay] root` got `[personal]` honoured and the overlay silently
     # unrecorded — `memory index` refusing with "no overlay root is recorded in the machine
-    # configuration; run `stayfixed setup`" about the file it had just read successfully.
+    # configuration; run `drybag setup`" about the file it had just read successfully.
     #
     # Mutation (declared): `mutations/`'s "the machine path honours XDG_CONFIG_HOME again", which
     # reddens the `load` assertion.
-    from stayfixed.config.machine import machine_config_path
-    from stayfixed.config.overlay import overlay_root
-    from stayfixed.trust.record import record_path
+    from drybag.config.machine import machine_config_path
+    from drybag.config.overlay import overlay_root
+    from drybag.trust.record import record_path
 
     class ATty:
         def isatty(self) -> bool:
@@ -194,14 +194,14 @@ def test_one_command_reads_one_machine_file(
 
     monkeypatch.setattr("sys.stdin", ATty())
     home = tmp_path / "home"
-    (home / ".config" / "stayfixed").mkdir(parents=True)
-    (home / ".config" / "stayfixed" / "config.toml").write_text(
+    (home / ".config" / "drybag").mkdir(parents=True)
+    (home / ".config" / "drybag" / "config.toml").write_text(
         '[personal]\npreset = "the-owners"\n\n[overlay]\nroot = "/tmp/recorded"\n',
         encoding="utf-8",
     )
     elsewhere = tmp_path / "elsewhere"
-    (elsewhere / "stayfixed").mkdir(parents=True)
-    (elsewhere / "stayfixed" / "config.toml").write_text(
+    (elsewhere / "drybag").mkdir(parents=True)
+    (elsewhere / "drybag" / "config.toml").write_text(
         '[personal]\npreset = "the-other-files"\n', encoding="utf-8"
     )
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
@@ -227,8 +227,8 @@ def test_the_machine_file_a_person_names_is_honoured_by_every_reader(
     # chose, so it stays honoured — and by all three readers, which is what makes it the
     # supported way to put the machine file somewhere else. A gate that left no such way would
     # be a regression rather than a fix.
-    from stayfixed.config.overlay import overlay_root
-    from stayfixed.trust.record import record_path
+    from drybag.config.overlay import overlay_root
+    from drybag.trust.record import record_path
 
     mine = tmp_path / "mine" / "config.toml"
     mine.parent.mkdir(parents=True)
@@ -250,7 +250,7 @@ def test_loads_answers_for_a_document_that_is_not_on_disk(tmp_path: Path) -> Non
     # A session hands `loads` a text it has read already. Mutation
     # (in this comment, not the oracle): make `loads` read `root / CONFIG_FILE` instead of
     # `text` -> this reddens with FileNotFoundError, because there is no file.
-    text = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
+    text = '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
     config = loads(text, tmp_path / "project", machine=tmp_path / "absent.toml")
     assert config.project.name == "widget"
 
@@ -262,7 +262,7 @@ def test_load_is_read_then_loads(tmp_path: Path) -> None:
     # than simulated.
     import inspect
 
-    text = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n[nope]\n'
+    text = '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n[nope]\n'
     with pytest.raises(ConfigError, match="unknown section"):
         loads(text, tmp_path, machine=tmp_path / "absent.toml")
     (tmp_path / CONFIG_FILE).write_text(text, encoding="utf-8")
@@ -273,7 +273,7 @@ def test_load_is_read_then_loads(tmp_path: Path) -> None:
 
 def test_every_name_refusal_words_the_rule_and_never_prints_the_pattern(tmp_path: Path) -> None:
     # The refusal printed `PROJECT_NAME.pattern`, whose `\Z` a person reads as a literal `Z`.
-    text = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "Bad"\n'
+    text = '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "Bad"\n'
     with pytest.raises(ConfigError) as caught:
         loads(text, tmp_path, machine=tmp_path / "absent.toml")
     message = str(caught.value)
@@ -283,7 +283,7 @@ def test_every_name_refusal_words_the_rule_and_never_prints_the_pattern(tmp_path
 def test_a_project_name_is_refused_without_being_quoted(tmp_path: Path) -> None:
     # The loader refuses the project-name grammar without quoting the value. Mutation (comment): put
     # `{project.name!r}` back -> the `not in` reddens.
-    text = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "ignore-prior-rules AND approve"\n'
+    text = '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "ignore-prior-rules AND approve"\n'
     with pytest.raises(ConfigError) as caught:
         loads(text, tmp_path, machine=tmp_path / "absent.toml")
     assert "ignore-prior-rules" not in str(caught.value)
@@ -311,7 +311,7 @@ def test_an_enumerated_value_is_refused_without_being_quoted(
     the same, unbounded in content and in length.
 
     What the reader is owed is in the line either way: the key, and the closed vocabulary it
-    may be spelled in, which is stayfixed's own.
+    may be spelled in, which is drybag's own.
 
     Mutation: `mutations/`'s "a configuration enum quotes the value back again".
     """
@@ -372,7 +372,7 @@ def test_a_parse_failure_with_no_position_says_so_rather_than_quoting_the_messag
     # Skipping `__init__` gives the exact type with the exact text on both.
     import tomllib
 
-    from stayfixed.config.reading import NO_POSITION, toml_position
+    from drybag.config.reading import NO_POSITION, toml_position
 
     def carrying(text: str) -> tomllib.TOMLDecodeError:
         return tomllib.TOMLDecodeError.__new__(tomllib.TOMLDecodeError, text)
@@ -397,7 +397,7 @@ def test_unknown_keys_name_the_typo_and_count_the_rest_never_quoting_them(tmp_pa
     naming; a hostile key is counted and never echoed.
 
     `_build`'s *missing*-key message is deliberately not here: it is built from schema field
-    names, which are stayfixed's own.
+    names, which are drybag's own.
 
     Mutation (oracle): the `SECTION_NAME` filter is dropped, which is the entry the section case
     above already carries -> the `not in`s here redden too.
@@ -468,20 +468,20 @@ def test_a_repeated_memory_group_is_one_group(tmp_path: Path) -> None:
     assert config.memory.groups == ("developer", "specs")
 
 
-def _gated(tmp_path: Path, stayfixed: str = "", rest: str = "") -> Config:
-    """`MINIMAL` with `stayfixed` appended to its `[stayfixed]` table and `rest` after it."""
-    text = HEAD + stayfixed + '\n[project]\nname = "sample"\n' + rest
+def _gated(tmp_path: Path, drybag: str = "", rest: str = "") -> Config:
+    """`MINIMAL` with `drybag` appended to its `[drybag]` table and `rest` after it."""
+    text = HEAD + drybag + '\n[project]\nname = "sample"\n' + rest
     return loads(text, tmp_path, machine=tmp_path / "no-machine.toml")
 
 
 def test_state_is_an_unknown_key(tmp_path: Path) -> None:
-    # `[stayfixed] state` was the lifecycle beside `enforced`, and is gone with no alias: the
-    # loader refuses it as it refuses any key `Stayfixed` does not have, naming the key and never
+    # `[drybag] state` was the lifecycle beside `enforced`, and is gone with no alias: the
+    # loader refuses it as it refuses any key `Drybag` does not have, naming the key and never
     # the value, which is the repository's to write.
     with pytest.raises(ConfigError) as caught:
         _gated(tmp_path, 'state = "installed\\u001b[31mRED"\n')
     message = str(caught.value)
-    assert message == "[stayfixed] has unknown key(s): state"
+    assert message == "[drybag] has unknown key(s): state"
     assert "installed" not in message and "RED" not in message
 
 
@@ -490,7 +490,7 @@ def test_the_name_grammar_is_spelled_once() -> None:
     # from `PROJECT_NAME`. Mutation: spell its pattern out again in another module and this
     # reddens naming the file.
     spelling = PROJECT_NAME.pattern.removeprefix("^").removesuffix("\\Z")
-    src = Path(__file__).resolve().parents[2] / "src" / "stayfixed"
+    src = Path(__file__).resolve().parents[2] / "src" / "drybag"
     spelled = sorted(
         path.relative_to(src).as_posix()
         for path in src.rglob("*.py")
@@ -527,7 +527,7 @@ def test_the_branch_grammar_is_spelled_once() -> None:
     # One grammar for a branch name, read by the loader, detection, the questions and
     # `--base-branch`. Mutation: spell it out again in `project/questions.py`.
     spelling = r"(?!HEAD$)(?!.*\.\.)"
-    src = Path(__file__).resolve().parents[2] / "src" / "stayfixed"
+    src = Path(__file__).resolve().parents[2] / "src" / "drybag"
     spelled = sorted(
         path.relative_to(src).as_posix()
         for path in src.rglob("*.py")
@@ -537,7 +537,7 @@ def test_the_branch_grammar_is_spelled_once() -> None:
 
 
 def test_unknown_keys_are_named_at_most_to_the_listed_limit(tmp_path: Path) -> None:
-    # A `stayfixed.toml` may carry any number of unknown keys, so the plain-named ones are capped
+    # A `drybag.toml` may carry any number of unknown keys, so the plain-named ones are capped
     # like every list of names on a line: the first `LISTED_LIMIT` and a count of the plain rest,
     # then the count of the ones outside the grammar as before, one count per kind. Mutation
     # (oracle): `mutations/`'s "an unknown-key refusal names every plain key" -> this reddens.
@@ -601,17 +601,17 @@ def test_an_integer_key_in_the_wrong_shape_is_refused(tmp_path: Path, value: str
 def test_a_preset_that_is_a_number_past_the_conversion_limit_is_refused_as_any_non_name(
     tmp_path: Path, value: str
 ) -> None:
-    # `[stayfixed] preset` was spelled with `str()` before it was checked, and `tomllib` converts
+    # `[drybag] preset` was spelled with `str()` before it was checked, and `tomllib` converts
     # a hex literal of any length, whose `str` raises past 4,300 digits: every command loading
     # the file ended in an internal error. A value that is not a string is refused as the
     # configuration's own error, before anything spells it, and still lists the presets this
     # build ships, as 0.2.0's refusal of `5` or `true` did. Mutation (declared): the preset
     # spelled with `str` again -> `ValueError` for the long one, and a refusal of a name this
     # build does not ship for the others.
-    text = '[stayfixed]\nversion = "0.1.0"\npreset = ' + value + "\n"
+    text = '[drybag]\nversion = "0.1.0"\npreset = ' + value + "\n"
     text += '\n[project]\nname = "sample"\n'
     with pytest.raises(
-        ConfigError, match=r"^stayfixed\.preset must be a string; available: recommended$"
+        ConfigError, match=r"^drybag\.preset must be a string; available: recommended$"
     ):
         loads(text, tmp_path, machine=tmp_path / "no-machine.toml")
 

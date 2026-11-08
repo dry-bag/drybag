@@ -1,8 +1,8 @@
 """The NOTE loader: an unknown name is ignored, an invalid value resets only its key.
 
-A session cannot refuse the way a command does: a `stayfixed.toml` from a newer release, or one
+A session cannot refuse the way a command does: a `drybag.toml` from a newer release, or one
 with one bad value in it, would otherwise cost every setting the project made. `loads_noting`
-reads what it can and says what it could not (`src/stayfixed/config/loader.py`); `loads` and
+reads what it can and says what it could not (`src/drybag/config/loader.py`); `loads` and
 `load` still refuse, and every case below is held on both sides.
 """
 
@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config import loader
-from stayfixed.config.classes import REFUSED_LAYER_NOTE
-from stayfixed.config.loader import (
+from drybag.config import loader
+from drybag.config.classes import REFUSED_LAYER_NOTE
+from drybag.config.loader import (
     CONFIG_FILE,
     RESET_NOTE,
     UNKNOWN_NOTE,
@@ -26,16 +26,16 @@ from stayfixed.config.loader import (
     loads,
     loads_noting,
 )
-from stayfixed.config.owner import resolve_owner
-from stayfixed.config.paths import PathEscape, contained
-from stayfixed.config.reading import ConfigError, toml_position
-from stayfixed.config.schema import HARNESS_MODE
-from stayfixed.errors import Failure, Refusal
-from stayfixed.presets import load_preset
-from stayfixed.printed import clipped, quoted
+from drybag.config.owner import resolve_owner
+from drybag.config.paths import PathEscape, contained
+from drybag.config.reading import ConfigError, toml_position
+from drybag.config.schema import HARNESS_MODE
+from drybag.errors import Failure, Refusal
+from drybag.presets import load_preset
+from drybag.printed import clipped, quoted
 from tests.crafted import assert_never_raw
 
-HEAD = '[stayfixed]\nversion = "0.1.0"\npreset = "recommended"\n'
+HEAD = '[drybag]\nversion = "0.1.0"\npreset = "recommended"\n'
 MINIMAL = HEAD + '\n[project]\nname = "sample"\n'
 OWNER = resolve_owner(None)
 
@@ -85,7 +85,7 @@ def test_an_unknown_name_is_never_printed_raw(tmp_path: Path) -> None:
 
 
 def test_the_rest_of_a_newer_file_survives(tmp_path: Path) -> None:
-    # A file a newer stayfixed wrote: an unknown section, an unknown key and an unknown enum
+    # A file a newer drybag wrote: an unknown section, an unknown key and an unknown enum
     # value together, and the project's other settings — a raised budget beside the unknown key,
     # a `[paths]` value — still stand. Mutation (`mutations/`'s "an unknown key costs the NOTE
     # path its whole section"): the budget goes with the unknown key beside it.
@@ -160,8 +160,8 @@ def test_an_unknown_preset_resets_to_recommended(tmp_path: Path) -> None:
     # loader's own refusal, which carries no key, propagates.
     text = MINIMAL.replace('preset = "recommended"', 'preset = "future"')
     got = loads_noting(text, tmp_path, owner=OWNER)
-    assert got.config.stayfixed.preset == "recommended"
-    assert got.notes == (reset("stayfixed.preset", text, tmp_path),)
+    assert got.config.drybag.preset == "recommended"
+    assert got.notes == (reset("drybag.preset", text, tmp_path),)
 
 
 def test_a_document_parsed_once_is_read_as_its_text_is(tmp_path: Path) -> None:
@@ -251,7 +251,7 @@ def test_refuse_still_refuses_an_unknown_preset(tmp_path: Path) -> None:
     # Mutation (`mutations/`'s "an unknown preset name is quietly read as recommended"): the
     # command loads on `recommended` instead of refusing.
     text = MINIMAL.replace('preset = "recommended"', 'preset = "future"')
-    with pytest.raises(ConfigError, match=r"^\[stayfixed\] preset names a preset this version"):
+    with pytest.raises(ConfigError, match=r"^\[drybag\] preset names a preset this version"):
         loads(text, tmp_path, machine=tmp_path / "none.toml")
 
 
@@ -267,7 +267,7 @@ def _decoder_position(text: str) -> str:
         pytest.param("[[[", "{path} is not valid TOML {position}", id="not-toml"),
         pytest.param(
             '[project]\nname = "x"\n',
-            "[stayfixed] is missing required key(s): version",
+            "[drybag] is missing required key(s): version",
             id="no-version",
         ),
     ],
@@ -275,8 +275,8 @@ def _decoder_position(text: str) -> str:
 def test_a_document_level_refusal_propagates(tmp_path: Path, text: str, refused: str) -> None:
     # A refusal with no key is about the whole document: there is nothing to reset. Mutations
     # (`mutations/`'s "a missing required key is keyed as one value" -> the `no-version` refusal
-    # carries `stayfixed.version`; "a document that is not TOML is keyed to a section" -> the
-    # `not-toml` one carries `stayfixed`).
+    # carries `drybag.version`; "a document that is not TOML is keyed to a section" -> the
+    # `not-toml` one carries `drybag`).
     with pytest.raises(ConfigError) as raised:
         loads_noting(text, tmp_path, owner=OWNER)
     position = _decoder_position(text) if "{position}" in refused else ""
@@ -314,7 +314,7 @@ def test_a_validator_that_keeps_refusing_spends_the_document_and_stops(
     # it is a value the preset gave, so the attempts are the keys removed plus one, never a loop.
     # Mutation (`mutations/`'s "the NOTE retry takes a key the document does not hold for
     # removed"): the third refusal looks for a key that is not there.
-    handed = ["stayfixed.preset", "paths.specs", "paths.specs"]
+    handed = ["drybag.preset", "paths.specs", "paths.specs"]
     calls: list[str] = []
 
     def refuses(config: object, root: object) -> object:
@@ -355,14 +355,12 @@ REQUIRED_UNUSABLE = [
         MINIMAL.replace('name = "sample"', 'name = "has space"'), "project.name", id="project-name"
     ),
     pytest.param(
-        MINIMAL.replace('version = "0.1.0"', "version = 1"), "stayfixed.version", id="version"
+        MINIMAL.replace('version = "0.1.0"', "version = 1"), "drybag.version", id="version"
     ),
     # A section that is not a table, holding a key with no default: before any header, so a
     # top-level key.
     pytest.param("project = 1\n" + HEAD, "project", id="project-not-a-table"),
-    pytest.param(
-        'stayfixed = 1\n[project]\nname = "sample"\n', "stayfixed", id="stayfixed-not-a-table"
-    ),
+    pytest.param('drybag = 1\n[project]\nname = "sample"\n', "drybag", id="drybag-not-a-table"),
 ]
 
 
@@ -442,7 +440,7 @@ def test_a_key_with_a_value_to_fall_back_to_resets_with_its_note(
     tmp_path: Path, extra: str, key: str
 ) -> None:
     # Each kind of value a key falls back to besides a preset value (`memory.mode` and
-    # `stayfixed.preset` above): the key is removed with its note and the load goes on.
+    # `drybag.preset` above): the key is removed with its note and the load goes on.
     # Mutation (`mutations/`'s "a budget is called unusable" -> `absent-entry` raises).
     text = MINIMAL + extra
     got = loads_noting(text, tmp_path, owner=OWNER)

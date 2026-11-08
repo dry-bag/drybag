@@ -8,16 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import __version__
+from drybag import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = ROOT / "scripts" / "stayfixed"
+LAUNCHER = ROOT / "scripts" / "drybag"
 
 
 def test_the_launcher_runs_from_the_plugin_root() -> None:
-    # -S suppresses site, so the venv's stayfixed.pth (an ambient editable install of the
+    # -S suppresses site, so the venv's drybag.pth (an ambient editable install of the
     # package under test) never runs. Without -S, the interpreter would already have
-    # `stayfixed` importable before the launcher does anything, and this test would pass
+    # `drybag` importable before the launcher does anything, and this test would pass
     # even if the launcher's own sys.path insertion were deleted. With -S there is no
     # site-packages at all, so the only way the import can succeed is the launcher's own
     # insertion — which is also the stdlib-only constraint in action.
@@ -31,18 +31,18 @@ def test_the_launcher_runs_from_the_plugin_root() -> None:
     assert __version__ in completed.stdout
 
 
-def test_the_floor_check_precedes_every_stayfixed_import() -> None:
+def test_the_floor_check_precedes_every_drybag_import() -> None:
     text = LAUNCHER.read_text(encoding="utf-8")
-    assert text.index("sys.version_info < (3, 11)") < text.index("from stayfixed")
+    assert text.index("sys.version_info < (3, 11)") < text.index("from drybag")
 
 
 # The environment variable CI sets from `actions/setup-python`'s own `python-path` output.
 #
 # Without it this test skipped on every machine that has ever run it — "no interpreter below
-# 3.11 on this machine" — and CI installed none, so `scripts/stayfixed`'s version guard, the only
+# 3.11 on this machine" — and CI installed none, so `scripts/drybag`'s version guard, the only
 # thing between a Python 3.9 user and a `SyntaxError`, was asserted nowhere, ever. A skip is
 # also invisible under `-q`, so nothing said so.
-OLD_PYTHON_ENV = "STAYFIXED_OLD_PYTHON"
+OLD_PYTHON_ENV = "DRYBAG_OLD_PYTHON"
 
 
 def _is_below_the_floor(path: str) -> bool:

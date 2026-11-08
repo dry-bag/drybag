@@ -21,9 +21,9 @@ from typing import Any
 
 import pytest
 
-from stayfixed.config.machine import machine_config_path
-from stayfixed.sync import job as J
-from stayfixed.sync.state import (
+from drybag.config.machine import machine_config_path
+from drybag.sync import job as J
+from drybag.sync.state import (
     EMPTY_HOLDS,
     PENDING_FILE,
     SCRATCH,
@@ -199,7 +199,7 @@ def test_a_state_for_another_overlay_is_not_used(overlays: Overlays) -> None:
     assert state is not None and state.outcome.state == "ok", state
     assert state.overlay == str(overlays.a)
     assert state.holds == EMPTY_HOLDS
-    assert state.fetched_sha == head(overlays.a, "refs/stayfixed/fetched")
+    assert state.fetched_sha == head(overlays.a, "refs/drybag/fetched")
     assert state.outcome.detail is not None and str(elsewhere) in state.outcome.detail
     assert read_state(overlays.state_dir) == state
 
@@ -308,7 +308,7 @@ def test_the_job_argv_is_isolated_and_carries_only_the_wake_time() -> None:
 
     assert plain[:4] == [sys.executable, "-I", "-c", J.BOOT]
     assert Path(plain[4]) == Path(J.__file__).resolve().parents[2]
-    assert (Path(plain[4]) / "stayfixed" / "sync" / "job.py").is_file()
+    assert (Path(plain[4]) / "drybag" / "sync" / "job.py").is_file()
     assert plain[5:] == []
     assert sleeper[5:] == ["--sleep-until", iso(wake)]
 
@@ -340,15 +340,15 @@ def test_the_job_imports_nothing_from_the_overlay(
 ) -> None:
     # The job runs in the overlay, a directory its notes' authors write. Without `-I` the
     # interpreter puts that directory first on `sys.path`, and a `json.py` there runs inside the
-    # job; with `BOOT` putting the package's own directory first, a `stayfixed/` there is not
+    # job; with `BOOT` putting the package's own directory first, a `drybag/` there is not
     # the one imported either.
     a = on.a
     marker = a.parent / "planted-module-ran"
     planted = f"open({str(marker)!r}, 'a').write(__name__ + '\\n')\n"
     write(a, "json.py", planted)
-    write(a, "stayfixed/__init__.py", planted)
-    write(a, "stayfixed/sync/__init__.py", planted)
-    write(a, "stayfixed/sync/job.py", planted)
+    write(a, "drybag/__init__.py", planted)
+    write(a, "drybag/sync/__init__.py", planted)
+    write(a, "drybag/sync/job.py", planted)
     write(a, NOTE, note_text("new"))
     started = _started(monkeypatch)
     try:

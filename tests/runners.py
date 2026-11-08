@@ -1,4 +1,4 @@
-"""The recording `stayfixed.runner.Runner` doubles the suite hands the code under test.
+"""The recording `drybag.runner.Runner` doubles the suite hands the code under test.
 
 `Recorder` answers any program from a script. A module states what its runner answers at the
 call site, as keyword arguments, and keeps no private runner class of its own unless the question
@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.runner import Completed
+from drybag.runner import Completed
 
 
 @dataclass(kw_only=True)
@@ -74,7 +74,7 @@ def git_that_cannot_run(monkeypatch: pytest.MonkeyPatch) -> None:
     whole process. A repository with no `origin` remote is a different state — `git` ran and
     answered nothing — and it is the ordinary "not bound" one rather than a machine fault.
     """
-    monkeypatch.setattr("stayfixed.gitenv.scrubbed_env", lambda: {"PATH": os.devnull})
+    monkeypatch.setattr("drybag.gitenv.scrubbed_env", lambda: {"PATH": os.devnull})
 
 
 def claude_code(main: Path, *, ignoring: tuple[str, ...] = ()) -> Callable[[list[str], Path], None]:
@@ -100,7 +100,7 @@ def claude_code(main: Path, *, ignoring: tuple[str, ...] = ()) -> Callable[[list
         name = argv[4] if argv[2] == "marketplace" else argv[3]
         if verb == "marketplace add":
             source = {"source": "directory", "path": name}
-            known[f"stayfixed-delivery-{Path(name).name}"] = {"source": source}
+            known[f"drybag-delivery-{Path(name).name}"] = {"source": source}
         elif verb == "install":
             plugins[name] = True
         elif verb == "uninstall":

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.memory import notes
-from stayfixed.memory.notes import (
+from drybag.memory import notes
+from drybag.memory.notes import (
     NAME_NOT_UTF_8,
     UNRANKED,
     NoteError,

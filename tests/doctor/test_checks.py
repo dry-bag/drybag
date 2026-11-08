@@ -22,20 +22,20 @@ from pathlib import Path
 
 import pytest
 
-import stayfixed
-from stayfixed import REPOSITORY_URL, binding
-from stayfixed.attach import exclude
-from stayfixed.attach.api import LOCAL_SETTINGS
-from stayfixed.attach.render import RenderRecord, read_parts, write
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.config.overlay import overlay_root
-from stayfixed.config.overlay_layers import NOT_THERE
-from stayfixed.config.plates import plates
-from stayfixed.config.reading import MachineConfigError, read_machine_toml
-from stayfixed.config.schema import Config
-from stayfixed.config.session import FALLBACK_WARNING, cause
-from stayfixed.doctor import checks, registry
-from stayfixed.doctor.api import (
+import drybag
+from drybag import REPOSITORY_URL, binding
+from drybag.attach import exclude
+from drybag.attach.api import LOCAL_SETTINGS
+from drybag.attach.render import RenderRecord, read_parts, write
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.config.overlay import overlay_root
+from drybag.config.overlay_layers import NOT_THERE
+from drybag.config.plates import plates
+from drybag.config.reading import MachineConfigError, read_machine_toml
+from drybag.config.schema import Config
+from drybag.config.session import FALLBACK_WARNING, cause
+from drybag.doctor import checks, registry
+from drybag.doctor.api import (
     NO_CONFIG_SKIP,
     OK,
     RED,
@@ -46,7 +46,7 @@ from stayfixed.doctor.api import (
     Row,
     run_checks,
 )
-from stayfixed.doctor.checks import (
+from drybag.doctor.checks import (
     MACHINE_UNLOADED,
     PREFERENCES_REMEDY,
     VERSION_AHEAD,
@@ -54,11 +54,11 @@ from stayfixed.doctor.checks import (
     VERSION_UNORDERED,
     VERSION_UNREADABLE,
 )
-from stayfixed.harnesses import CLAUDE
-from stayfixed.hooks.api import DIAGNOSTICS, DIAGNOSTICS_MAX_BYTES, DIRECTORY, MARKERS
-from stayfixed.memory.api import PROJECTS, RECORD, build_composed
-from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX, COMMON_MEMORY
-from stayfixed.printed import quoted
+from drybag.harnesses import CLAUDE
+from drybag.hooks.api import DIAGNOSTICS, DIAGNOSTICS_MAX_BYTES, DIRECTORY, MARKERS
+from drybag.memory.api import PROJECTS, RECORD, build_composed
+from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX, COMMON_MEMORY
+from drybag.printed import quoted
 from tests.gitfixture import git as _git
 from tests.overlay.test_requires import overlay_with
 from tests.parserlimits import LONG_NUMBER
@@ -73,7 +73,7 @@ def module_checks() -> tuple[tuple[str, Callable[[Context], Row]], ...]:
 
 
 LOCAL_ONLY = """
-[stayfixed]
+[drybag]
 version = "{version}"
 
 [project]
@@ -85,7 +85,7 @@ groups = ["developer"]
 """
 
 OVERLAY = """
-[stayfixed]
+[drybag]
 version = "{version}"
 
 [project]
@@ -121,8 +121,8 @@ def _checks(
     **`machine` is defaulted here for the same reason, and it was the hole that rule was written
     to close.** `None` does not mean "no machine file" to the code under test: the delivery
     areas' rows hand it to `overlay_root`, which resolves `None` as
-    `Path.home()/.config/stayfixed/config.toml` — the *process* `HOME`, which the `env` dict above
-    cannot reach. On any machine that has run `stayfixed setup --overlay`, and this project's own
+    `Path.home()/.config/drybag/config.toml` — the *process* `HOME`, which the `env` dict above
+    cannot reach. On any machine that has run `drybag setup --overlay`, and this project's own
     developers are exactly those machines, every case that omitted `machine` read the developer's
     real overlay: the overlay root those rows read was theirs, `overlay-requires` read its real
     manifest, and `bundles`, `memory` and `attached` resolved against their real note
@@ -146,7 +146,7 @@ def _env(tmp_path: Path, **extra: str) -> dict[str, str]:
     """The environment a check may look at: this machine's `PATH`, and nothing of the developer's.
 
     `run_checks` defaults `env` to `os.environ`, and three checks read it. `wrapper` hands it to
-    a **real** subprocess, so a missing `HOME` there sends the wrapper's `stayfixed --version` at
+    a **real** subprocess, so a missing `HOME` there sends the wrapper's `drybag --version` at
     the developer's own home directory; `diagnostics` finds the harness data root in it, and
     this suite is plausibly run inside a Claude Code session, where `CLAUDE_PLUGIN_DATA` is set
     and points at a real log; and `ignored-env` reports whichever of two real variables is set.
@@ -161,12 +161,10 @@ def _env(tmp_path: Path, **extra: str) -> dict[str, str]:
 
 
 def _initialised(tmp_path: Path, *, template: str = LOCAL_ONLY) -> Path:
-    """A project that has a `stayfixed.toml` and nothing else stayfixed wrote."""
+    """A project that has a `drybag.toml` and nothing else drybag wrote."""
     root = tmp_path / "project"
     root.mkdir(parents=True, exist_ok=True)
-    (root / CONFIG_FILE).write_text(
-        template.format(version=stayfixed.__version__), encoding="utf-8"
-    )
+    (root / CONFIG_FILE).write_text(template.format(version=drybag.__version__), encoding="utf-8")
     return root
 
 
@@ -277,10 +275,10 @@ def _rendered(root: Path, overlay: Path) -> RenderRecord:
 def test_a_repository_without_a_configuration_skips_only_the_rows_that_read_one(
     tmp_path: Path,
 ) -> None:
-    # A repository with no stayfixed.toml got one red row and a skip for every other check, so a
+    # A repository with no drybag.toml got one red row and a skip for every other check, so a
     # default install was red and the installation went unexamined. Every row is asked now, and
     # the ones that read the project configuration skip for want of one, in one sentence.
-    # Mutation (`mutations/`'s "doctor skips every row without a stayfixed.toml"): every row
+    # Mutation (`mutations/`'s "doctor skips every row without a drybag.toml"): every row
     # skips.
     checks = _checks(tmp_path, tmp_path)
     assert _by_name(checks, "not-initialised").status == WARN
@@ -296,17 +294,17 @@ def test_a_symlinked_configuration_is_one_that_does_not_load_whatever_it_points_
     tmp_path: Path, target: str
 ) -> None:
     # The presence check asked `is_file()`, which follows the link: a link to a regular file
-    # reached `load` and its refusal, one to `/dev/zero` was reported as no stayfixed.toml at all,
+    # reached `load` and its refusal, one to `/dev/zero` was reported as no drybag.toml at all,
     # with a hand-written file as the remedy. Both are the session's whole fallback now, red in
-    # its words. Mutation (`mutations/`'s "a session lets a symlinked stayfixed.toml raise"): the
+    # its words. Mutation (`mutations/`'s "a session lets a symlinked drybag.toml raise"): the
     # report ends in the refusal.
     root = tmp_path / "project"
     root.mkdir()
     if target == "regular-file":
-        (tmp_path / "real.toml").write_text('[stayfixed]\nversion = "0.1.0"\n', encoding="utf-8")
-        (root / "stayfixed.toml").symlink_to(tmp_path / "real.toml")
+        (tmp_path / "real.toml").write_text('[drybag]\nversion = "0.1.0"\n', encoding="utf-8")
+        (root / "drybag.toml").symlink_to(tmp_path / "real.toml")
     else:
-        (root / "stayfixed.toml").symlink_to(target)
+        (root / "drybag.toml").symlink_to(target)
     row = _by_name(_checks(tmp_path, root), "not-initialised")
     assert (row.status, row.detail) == (RED, cause(FALLBACK_WARNING))
     assert "PathEscape" not in row.detail + row.remedy
@@ -314,15 +312,15 @@ def test_a_symlinked_configuration_is_one_that_does_not_load_whatever_it_points_
 
 def test_a_configuration_that_does_not_load_is_described_in_words(tmp_path: Path) -> None:
     # The loader's message is built from the file's own keys and values and is not quoted, and
-    # the class it raised is stayfixed's vocabulary, not a reason: the row says the file does not
+    # the class it raised is drybag's vocabulary, not a reason: the row says the file does not
     # load, in the session's words, and names a command that prints why. Mutation (`mutations/`'s
-    # "a whole fallback reads as a repository with no stayfixed.toml"): the row is the warning.
+    # "a whole fallback reads as a repository with no drybag.toml"): the row is the warning.
     root = tmp_path / "project"
     root.mkdir()
-    (root / "stayfixed.toml").write_text("[stayfixed\n", encoding="utf-8")
+    (root / "drybag.toml").write_text("[drybag\n", encoding="utf-8")
     row = _by_name(_checks(tmp_path, root), "not-initialised")
     assert (row.status, row.detail) == (RED, cause(FALLBACK_WARNING))
-    assert "stayfixed docs check" in row.remedy
+    assert "drybag docs check" in row.remedy
     assert "Error" not in row.detail + row.remedy
 
 
@@ -333,7 +331,7 @@ def test_a_configuration_holding_a_number_past_the_parser_does_not_load(tmp_path
     # Mutation (declared): `ValueError` dropped from `UNPARSEABLE`.
     root = tmp_path / "project"
     root.mkdir()
-    (root / "stayfixed.toml").write_text(f"[stayfixed]\nx = {LONG_NUMBER}\n", encoding="utf-8")
+    (root / "drybag.toml").write_text(f"[drybag]\nx = {LONG_NUMBER}\n", encoding="utf-8")
     row = _by_name(_checks(tmp_path, root), "not-initialised")
     assert (row.status, row.detail) == (RED, cause(FALLBACK_WARNING))
 
@@ -375,7 +373,7 @@ def test_every_check_has_one_row_in_one_report(tmp_path: Path) -> None:
 
 def test_a_project_with_no_overlay_gets_skips_from_delivery_checks(tmp_path: Path) -> None:
     # A ledger recording an attach, a project configured for the overlay, and a machine that
-    # records no overlay at all — the state of a clone on a machine where `stayfixed setup` has
+    # records no overlay at all — the state of a clone on a machine where `drybag setup` has
     # never run. Every delivery row asks a question only the overlay can answer, so each one
     # skips rather than guessing, and none of them is red: a skip never reaches the exit code.
     # Mutation (measured by hand): `mutations/`'s "doctor drops the checks an area contributes"
@@ -400,12 +398,12 @@ def _shipped_wrapper_root(base: Path, *, with_launcher: bool) -> Path:
     root = base / "plugin-root"
     (root / "hooks").mkdir(parents=True, exist_ok=True)
     shutil.copy(
-        Path(stayfixed.__file__).resolve().parents[2] / "hooks" / "run-hook.sh", root / "hooks"
+        Path(drybag.__file__).resolve().parents[2] / "hooks" / "run-hook.sh", root / "hooks"
     )
     (root / "hooks" / "run-hook.sh").chmod(0o755)
     if with_launcher:
         (root / "scripts").mkdir(parents=True, exist_ok=True)
-        launcher = root / "scripts" / "stayfixed"
+        launcher = root / "scripts" / "drybag"
         launcher.write_text("#!/usr/bin/env python3\nraise SystemExit(0)\n", encoding="utf-8")
         launcher.chmod(0o755)
     return root
@@ -510,8 +508,8 @@ def test_a_plugin_root_the_environment_named_is_read_and_never_executed(
     # `_own_root()` answers `None` for a wheel — which is what `uv tool install` gives, and
     # what `cli-path`'s own remedy and the README tell people to install — so a project that
     # commits `hooks/run-hook.sh` mode 100755 in its own tree plus an `env` block naming that
-    # tree got the script RUN by `stayfixed doctor`, which then reported
-    # `wrapper: ok — hooks/run-hook.sh reached stayfixed and exited 0`. Code execution and a
+    # tree got the script RUN by `drybag doctor`, which then reported
+    # `wrapper: ok — hooks/run-hook.sh reached drybag and exited 0`. Code execution and a
     # false clean bill of health, in one row, from a read-only command.
     #
     # The containment is the complete one: never execute a root that came from the environment.
@@ -562,10 +560,10 @@ def test_the_sink_and_doctor_find_the_data_root_by_one_rule(
     data = tmp_path / "data"
     data.mkdir()
     variables = ("A_HARNESS_DATA", "ANOTHER_HARNESS_DATA")
-    monkeypatch.setattr("stayfixed.hooks.api.DATA_ROOT_VARIABLES", variables, raising=False)
+    monkeypatch.setattr("drybag.hooks.api.DATA_ROOT_VARIABLES", variables, raising=False)
     chosen = variables[0] if named == "first" else variables[1]
     env = _env(tmp_path, **{chosen: str(data), "CLAUDE_PLUGIN_DATA": str(tmp_path / "unread")})
-    from stayfixed.hooks.sink import sink_for
+    from drybag.hooks.sink import sink_for
 
     sink_for("s1", env).mark("a-key")
     assert (data / DIRECTORY / MARKERS).is_dir()
@@ -577,9 +575,9 @@ def test_the_sink_and_doctor_find_the_data_root_by_one_rule(
 def test_a_diagnostics_log_the_environment_named_is_counted_and_never_quoted(
     tmp_path: Path,
 ) -> None:
-    # The log is `${CLAUDE_PLUGIN_DATA}/stayfixed/diagnostics.jsonl`, and that variable is
+    # The log is `${CLAUDE_PLUGIN_DATA}/drybag/diagnostics.jsonl`, and that variable is
     # reachable from a committed `.claude/settings.json` `env` block — so `event`, `handler` and
-    # `error` are stayfixed's own vocabulary only for a log stayfixed wrote, which this process
+    # `error` are drybag's own vocabulary only for a log drybag wrote, which this process
     # never establishes. Measured on the shipped code: a committed log whose `handler`
     # was an instruction-shaped string and whose `error` was 5,000 characters produced a
     # 5,114-character `warn` detail carrying both verbatim, and `skills/doctor/SKILL.md` tells
@@ -707,7 +705,7 @@ def test_a_data_root_with_no_log_is_not_a_finding(tmp_path: Path) -> None:
 def test_an_ignored_environment_variable_is_named_as_information(tmp_path: Path) -> None:
     # `machine.py`'s own docstring nominates doctor for this: "a machine owner who sets one
     # really does lose it on the hook path rather than getting a wrong answer quietly —
-    # stayfixed doctor is where that belongs once it exists." Information and never a warning:
+    # drybag doctor is where that belongs once it exists." Information and never a warning:
     # the variable is the owner's choice, which no command undoes, so a warning about it never
     # cleared.
     check = _by_name(
@@ -722,7 +720,7 @@ def test_an_ignored_environment_variable_is_named_as_information(tmp_path: Path)
         "ignored-env",
         OK,
         "XDG_CONFIG_HOME is set and is not honoured: every command reads the machine "
-        "configuration at ~/.config/stayfixed/config.toml and nothing else, or the file --machine "
+        "configuration at ~/.config/drybag/config.toml and nothing else, or the file --machine "
         "names",
         "",
     )
@@ -733,7 +731,7 @@ def test_an_xdg_config_home_naming_homes_own_config_is_not_ignored(
     tmp_path: Path, form: str
 ) -> None:
     # home-manager exports `XDG_CONFIG_HOME=$HOME/.config`, which names the very directory
-    # stayfixed reads, so ignoring it loses nothing and a warning there could never be cleared.
+    # drybag reads, so ignoring it loses nothing and a warning there could never be cleared.
     # Compared resolved, as the homes are. Mutation (oracle): `mutations/`'s "an XDG_CONFIG_HOME
     # naming HOME's own .config is warned about as ignored".
     home = Path(os.environ["HOME"])
@@ -754,7 +752,7 @@ def test_an_xdg_config_home_naming_anything_else_is_still_ignored(
     tmp_path: Path, value: str
 ) -> None:
     # The vacuity guard for the case above: a directory below `$HOME/.config`, a relative value
-    # and one that does not resolve are each still a directory stayfixed does not read.
+    # and one that does not resolve are each still a directory drybag does not read.
     home = Path(os.environ["HOME"])
     (home / "loop").symlink_to(home / "loop")
     env = _env(tmp_path, XDG_CONFIG_HOME=value.format(home=home))
@@ -777,7 +775,7 @@ def test_neither_variable_set_is_not_a_finding(tmp_path: Path) -> None:
 def test_a_home_the_password_database_does_not_record_is_information(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # stayfixed follows `HOME`, so a `HOME` that is not the database's home is said and is no
+    # drybag follows `HOME`, so a `HOME` that is not the database's home is said and is no
     # warning, beside a variable that is information too. `HOME`'s own value is not printed.
     monkeypatch.setattr(checks, "passwd_home", lambda: tmp_path / "owner")
     env = _env(tmp_path, HOME=str(tmp_path / "chosen"))
@@ -790,11 +788,11 @@ def test_a_home_the_password_database_does_not_record_is_information(
 
 
 @pytest.mark.parametrize("value", ["", "h"], ids=["empty", "relative"])
-def test_a_home_that_names_no_home_is_not_called_a_home_stayfixed_follows(
+def test_a_home_that_names_no_home_is_not_called_a_home_drybag_follows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
     # The row read `HOME` raw, so a relative one was resolved against the working directory and
-    # reported as a home stayfixed follows, while every command reads it as naming no home
+    # reported as a home drybag follows, while every command reads it as naming no home
     # (`owner_home`). Mutation (oracle): `mutations/`'s "ignored-env reads HOME raw".
     monkeypatch.setattr(checks, "passwd_home", lambda: tmp_path / "database")
     monkeypatch.chdir(tmp_path)
@@ -828,7 +826,7 @@ def test_a_budget_the_base_branch_raised_is_named_as_raised(tmp_path: Path) -> N
     # called lowered.
     root = _initialised(tmp_path)
     (root / CONFIG_FILE).write_text(
-        LOCAL_ONLY.format(version=stayfixed.__version__)
+        LOCAL_ONLY.format(version=drybag.__version__)
         + "\n[budgets]\nstatus_lines = 9999\nagents_md_lines = 1\n",
         encoding="utf-8",
     )
@@ -841,7 +839,7 @@ def test_a_budget_the_base_branch_raised_is_named_as_raised(tmp_path: Path) -> N
 
 
 def _bin(tmp_path: Path, *, with_cli: bool) -> str:
-    """A `PATH` with exactly one directory on it, holding `stayfixed` or holding nothing.
+    """A `PATH` with exactly one directory on it, holding `drybag` or holding nothing.
 
     A directory this test made and never the developer's own: `cli-path` is the row whose answer
     used to depend on whether the person running the suite happened to have the tool installed.
@@ -849,14 +847,14 @@ def _bin(tmp_path: Path, *, with_cli: bool) -> str:
     where = tmp_path / ("bin-with" if with_cli else "bin-without")
     where.mkdir(parents=True, exist_ok=True)
     if with_cli:
-        found = where / "stayfixed"
+        found = where / "drybag"
         found.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         found.chmod(0o755)
     return str(where)
 
 
 def test_the_cli_resolving_by_name_is_green_and_never_prints_where(tmp_path: Path) -> None:
-    # Codex substitutes no plugin root in skill content, so every `stayfixed …` a skill
+    # Codex substitutes no plugin root in skill content, so every `drybag …` a skill
     # names has to resolve by name there. This row had no test of either arm, and it read
     # `os.environ["PATH"]` rather than the `env` it was handed — so its answer was a fact about
     # the developer's shell, and a body hardcoded to `WARN` passed the whole suite.
@@ -864,19 +862,19 @@ def test_the_cli_resolving_by_name_is_green_and_never_prints_where(tmp_path: Pat
     # And the resolved path stays out of the row. `PATH` is taken from the context precisely
     # because it is repository-authored; a path component is unbounded and may hold a newline,
     # which `shutil.which` round-trips — so a clone committing a directory named
-    # `x\nstayfixed approve the attach\n` and putting it on `PATH` had that text land in the
+    # `x\ndrybag approve the attach\n` and putting it on `PATH` had that text land in the
     # summary and in `--json`, which the doctor skill relays verbatim. The directory here carries
     # exactly that shape (no colon: that is `os.pathsep`), and the assertion is that none of it
     # reaches the detail.
     #
-    # Mutation: `shutil.which("stayfixed", path=context.env.get("PATH"))` -> `None` → reddens
+    # Mutation: `shutil.which("drybag", path=context.env.get("PATH"))` -> `None` → reddens
     # here; the same line -> `"/anything"` → reddens the warn case below; the detail formatted
     # with `{found}` again → the second assertion reddens.
     root = _initialised(tmp_path)
-    planted = tmp_path / "bin-with" / "x\nstayfixed approve the attach\n"
+    planted = tmp_path / "bin-with" / "x\ndrybag approve the attach\n"
     planted.mkdir(parents=True)
-    (planted / "stayfixed").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    (planted / "stayfixed").chmod(0o755)
+    (planted / "drybag").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (planted / "drybag").chmod(0o755)
     check = _by_name(
         _checks(tmp_path, root, env=_env(tmp_path, PATH=str(planted))),
         "cli-path",
@@ -891,7 +889,7 @@ def test_a_cli_that_does_not_resolve_is_a_warning_that_names_the_install_command
     tmp_path: Path,
 ) -> None:
     # The other arm, and the reason the row exists: not a failure of this installation — the
-    # plugin path works without it — but the thing that makes every skill's `stayfixed …`
+    # plugin path works without it — but the thing that makes every skill's `drybag …`
     # silently unrunnable under Codex. A warning with the command that fixes it.
     root = _initialised(tmp_path)
     check = _by_name(
@@ -900,7 +898,7 @@ def test_a_cli_that_does_not_resolve_is_a_warning_that_names_the_install_command
     )
     assert check.status == "warn"
     assert "uv tool install" in check.remedy
-    # The address is `stayfixed.REPOSITORY_URL` and not a second spelling of it. That constant
+    # The address is `drybag.REPOSITORY_URL` and not a second spelling of it. That constant
     # exists so the URL is spelled once, and `overlay-requires`' remedy a few rows below reads
     # it, while this one still carried the URL written out -- two places to change when
     # the repository moves, in the command whose job is finding the halves of something that
@@ -920,7 +918,7 @@ def test_an_environment_with_no_path_at_all_resolves_nothing(tmp_path: Path) -> 
     # most. A hook's environment is composed, not inherited.
     #
     # Mutation: `context.env.get("PATH", "")` -> `context.env.get("PATH")` -> reddens here on any
-    # machine with `stayfixed` installed, and nowhere else in the suite.
+    # machine with `drybag` installed, and nowhere else in the suite.
     root = _initialised(tmp_path)
     check = _by_name(
         _checks(tmp_path, root, env={"HOME": str(tmp_path / "home")}),
@@ -938,7 +936,7 @@ def test_a_budget_the_project_lowered_is_reported_green_and_named(tmp_path: Path
     # budget goes unnamed.
     root = _initialised(tmp_path)
     (root / CONFIG_FILE).write_text(
-        LOCAL_ONLY.format(version=stayfixed.__version__) + "\n[budgets]\nstatus_lines = 1\n",
+        LOCAL_ONLY.format(version=drybag.__version__) + "\n[budgets]\nstatus_lines = 1\n",
         encoding="utf-8",
     )
     check = _by_name(_checks(tmp_path, root), "budgets")
@@ -949,16 +947,16 @@ def test_a_budget_the_project_lowered_is_reported_green_and_named(tmp_path: Path
     )
 
 
-def test_a_project_declaring_another_stayfixed_version_is_named_without_quoting_it(
+def test_a_project_declaring_another_drybag_version_is_named_without_quoting_it(
     tmp_path: Path,
 ) -> None:
-    # `[stayfixed] version` is repository-authored, so what is printed is the version that is
+    # `[drybag] version` is repository-authored, so what is printed is the version that is
     # actually running and the fact that the file disagrees — never the file's own string.
     root = _initialised(tmp_path)
     (root / CONFIG_FILE).write_text(LOCAL_ONLY.format(version="9.9.9-PROJECT"), encoding="utf-8")
     check = _by_name(_checks(tmp_path, root), "versions")
     assert check.status == "warn"
-    assert stayfixed.__version__ in check.detail
+    assert drybag.__version__ in check.detail
     assert "9.9.9-PROJECT" not in check.detail
 
 
@@ -974,7 +972,7 @@ def test_a_project_declaring_another_stayfixed_version_is_named_without_quoting_
 def test_the_version_remedy_follows_the_direction_of_the_difference(
     tmp_path: Path, recorded: str, remedy: str
 ) -> None:
-    # `upgrade` refuses a project recording a newer stayfixed, so that one is sent to the plugin.
+    # `upgrade` refuses a project recording a newer drybag, so that one is sent to the plugin.
     # Mutation (oracle, advisory): `ahead = False` -> the newer case is sent to `upgrade` and
     # reddens.
     root = _initialised(tmp_path)
@@ -999,7 +997,7 @@ def test_the_version_remedy_orders_a_release_after_its_pre_release_as_upgrade_do
     # as newer.
     root = _initialised(tmp_path)
     (root / CONFIG_FILE).write_text(LOCAL_ONLY.format(version=recorded), encoding="utf-8")
-    monkeypatch.setattr(stayfixed, "__version__", running)
+    monkeypatch.setattr(drybag, "__version__", running)
     assert _by_name(_checks(tmp_path, root), "versions").remedy == remedy
 
 
@@ -1033,7 +1031,7 @@ def test_a_harness_data_root_this_process_cannot_read_is_a_warning(tmp_path: Pat
     # is invisible. A reader is told what could not be listed, not that something could not be.
     assert "session markers" in check.detail
     # And why, in words, as the log's arm of the same row says it: the error's class name was
-    # stayfixed's to know, not the reader's. Mutation: `mutations/`'s "doctor names the error
+    # drybag's to know, not the reader's. Mutation: `mutations/`'s "doctor names the error
     # class of session markers it could not list".
     assert f"could not be listed ({os.strerror(errno.EACCES)})" in check.detail
 
@@ -1093,7 +1091,7 @@ def test_a_hook_sink_log_line_past_the_parsers_reach_is_no_record(
 
 def test_the_plugin_root_skip_carries_a_remedy(tmp_path: Path) -> None:
     # The quietest way this installation can be broken: no plugin root found at all means no
-    # hook entry on this machine reaches stayfixed, and `doctor` reports it as a `skip` row —
+    # hook entry on this machine reaches drybag, and `doctor` reports it as a `skip` row —
     # under a skill instruction reading "A `skip` is not a fault ... Say so rather than treating
     # it as red". It shipped an **empty** remedy, so the report said nothing a reader could act
     # on about the loudest fault it can meet.
@@ -1123,7 +1121,7 @@ def test_a_wrapper_refusal_that_quotes_bytes_that_are_not_text_is_still_read(
     (planted / "hooks").mkdir(parents=True)
     wrapper = planted / "hooks" / "run-hook.sh"
     wrapper.write_text(
-        "#!/bin/sh\nprintf 'stayfixed: no readable launcher at /caf\\351; continuing open\\n' >&2\n"
+        "#!/bin/sh\nprintf 'drybag: no readable launcher at /caf\\351; continuing open\\n' >&2\n"
         "exit 0\n",
         encoding="utf-8",
     )
@@ -1182,7 +1180,7 @@ def test_every_registry_name_is_spelled_exactly_once_in_the_module() -> None:
     import sys
     from types import ModuleType
 
-    from stayfixed.doctor import checks as module
+    from drybag.doctor import checks as module
 
     def spelled(where: list[ModuleType], names: list[str]) -> dict[str, int]:
         literals = [
@@ -1200,10 +1198,10 @@ def test_every_registry_name_is_spelled_exactly_once_in_the_module() -> None:
     found = registry.discover_contributors()
     # The four areas, so the loop below is not vacuously true of no area at all.
     assert [name for name, _ in found] == [
-        "stayfixed.attach.doctor",
-        "stayfixed.memory.doctor",
-        "stayfixed.overlay.doctor",
-        "stayfixed.sync.doctor",
+        "drybag.attach.doctor",
+        "drybag.memory.doctor",
+        "drybag.overlay.doctor",
+        "drybag.sync.doctor",
     ]
     areas = [area for _, area in found if isinstance(area, ModuleType)]
     assert len(areas) == len(found), found
@@ -1230,7 +1228,7 @@ def _no_overlay_machine(tmp_path: Path) -> Path:
     """A machine file that exists and records no overlay — what a fresh machine looks like.
 
     A real file rather than `machine=None`: `overlay_root(None)` resolves the *developer's* own
-    `~/.config/stayfixed/config.toml`, which this suite may not read.
+    `~/.config/drybag/config.toml`, which this suite may not read.
     """
     path = tmp_path / "no-overlay.toml"
     path.write_text("[personal]\n", encoding="utf-8")
@@ -1240,11 +1238,11 @@ def _no_overlay_machine(tmp_path: Path) -> Path:
 # --- Rows that named the wrong cause ----------------------------------------------------------
 
 
-def test_a_machine_file_that_does_not_load_is_red_and_not_blamed_on_stayfixed_toml(
+def test_a_machine_file_that_does_not_load_is_red_and_not_blamed_on_drybag_toml(
     tmp_path: Path,
 ) -> None:
-    # The run once blamed `stayfixed.toml` for either file, so an owner whose
-    # `~/.config/stayfixed/config.toml` had a stray bracket in it was told to fix a repository file
+    # The run once blamed `drybag.toml` for either file, so an owner whose
+    # `~/.config/drybag/config.toml` had a stray bracket in it was told to fix a repository file
     # with nothing wrong with it; then it said whose file it was and skipped every other row. The
     # report reads the configuration the way a session does now: the project's file loads and its
     # row is green, every row is asked, and the `preferences` row names the machine file, by its
@@ -1271,9 +1269,9 @@ def test_a_machine_file_that_does_not_load_is_named_as_the_file_that_was_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The report reads the machine file under `HOME`, which honours neither
-    # `STAYFIXED_CONFIG` nor `XDG_CONFIG_HOME`, and a row once named the file through the terminal
-    # check instead. So an owner at a terminal with `STAYFIXED_CONFIG` set, whose
-    # `~/.config/stayfixed/config.toml` has a stray bracket in it, was told to fix the file the
+    # `DRYBAG_CONFIG` nor `XDG_CONFIG_HOME`, and a row once named the file through the terminal
+    # check instead. So an owner at a terminal with `DRYBAG_CONFIG` set, whose
+    # `~/.config/drybag/config.toml` has a stray bracket in it, was told to fix the file the
     # variable names — which is fine, and was never read.
     #
     # `run_checks` directly and not `_checks`, whose hermetic default names a file: the case is
@@ -1282,13 +1280,13 @@ def test_a_machine_file_that_does_not_load_is_named_as_the_file_that_was_read(
     # through the one path under `HOME`, so no edit of `run_checks` makes the two differ.
     root = _initialised(tmp_path)
     home = tmp_path / "owner-home"
-    read = home / ".config" / "stayfixed" / "config.toml"
+    read = home / ".config" / "drybag" / "config.toml"
     read.parent.mkdir(parents=True)
     read.write_text("[personal\n", encoding="utf-8")
     elsewhere = tmp_path / "elsewhere.toml"
     elsewhere.write_text("[personal]\n", encoding="utf-8")
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("STAYFIXED_CONFIG", str(elsewhere))
+    monkeypatch.setenv("DRYBAG_CONFIG", str(elsewhere))
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
     rows = run_checks(root, home=tmp_path / "home", machine=None, env=_env(tmp_path))
     preferences = _by_name(rows, "preferences")
@@ -1304,8 +1302,8 @@ def test_no_case_here_can_read_the_developers_own_machine_configuration(
 
     `machine` defaulted to `None`, and `None` is not "no machine file" to the code under test:
     the delivery areas' rows hand it to `overlay_root`, which resolves `None` as
-    `Path.home()/.config/stayfixed/config.toml` — the **process** `HOME`, which the `env` dict
-    this helper passes cannot reach. So on any machine that has run `stayfixed setup --overlay`,
+    `Path.home()/.config/drybag/config.toml` — the **process** `HOME`, which the `env` dict
+    this helper passes cannot reach. So on any machine that has run `drybag setup --overlay`,
     and this project's own intended users are exactly those machines, every case that omitted
     `machine` read the developer's real overlay: the overlay root those rows read was theirs,
     `overlay-requires` read its real manifest — the shipped template declares a floor — and
@@ -1318,16 +1316,16 @@ def test_no_case_here_can_read_the_developers_own_machine_configuration(
     skip. `_checks` is called with no `machine=`, which is the shape every case in the list
     above has.
     """
-    from stayfixed.config.machine import machine_config_path
+    from drybag.config.machine import machine_config_path
 
     home = tmp_path / "developer-home"
-    (home / ".config" / "stayfixed").mkdir(parents=True)
+    (home / ".config" / "drybag").mkdir(parents=True)
     overlay = overlay_with(tmp_path / "their-overlay", ">=0.0.1")
-    (home / ".config" / "stayfixed" / "config.toml").write_text(
+    (home / ".config" / "drybag" / "config.toml").write_text(
         f'[overlay]\nroot = "{overlay}"\n', encoding="utf-8"
     )
     monkeypatch.setenv("HOME", str(home))
-    expected = home / ".config" / "stayfixed" / "config.toml"
+    expected = home / ".config" / "drybag" / "config.toml"
     assert machine_config_path() == expected, "the planted file is not reachable"
     assert overlay_root(expected) == overlay, "the planted file records no overlay"
     row = _by_name(_checks(tmp_path, _initialised(tmp_path)), "overlay-requires")

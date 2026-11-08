@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from stayfixed import jsonobject
-from stayfixed.scaffold.entries import (
+from drybag import jsonobject
+from drybag.scaffold.entries import (
     EntriesError,
     ParserLimitError,
     mark,
@@ -29,12 +29,12 @@ def document(*commands: tuple[str, str]) -> str:
 
 
 def test_marker_id_reads_the_id_a_command_claims() -> None:
-    assert marker_id("run.sh hook PreToolUse  # stayfixed:bg-cleanup") == "bg-cleanup"
+    assert marker_id("run.sh hook PreToolUse  # drybag:bg-cleanup") == "bg-cleanup"
     assert marker_id("run.sh hook PreToolUse") is None
 
 
 def test_a_marker_that_is_not_at_the_end_is_not_an_id() -> None:
-    assert marker_id("run.sh  # stayfixed:bg-cleanup then more text") is None
+    assert marker_id("run.sh  # drybag:bg-cleanup then more text") is None
 
 
 def test_mark_is_idempotent() -> None:
