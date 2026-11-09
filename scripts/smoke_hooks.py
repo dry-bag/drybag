@@ -43,7 +43,7 @@ EXPECTED_ENTRIES = 12
 EXPECTED_ROWS = 13
 # What the red-run note opens with, `drybag.hints.hygiene.LEAD`, spelled out for the reason
 # `FLOOR_VARIABLE` is. The note is all a `PostToolUseFailure` entry is for, so its row asks for it
-# by its words and not only for an envelope naming the event.
+# by its words and not only for an answer naming the event.
 RED_RUN_NOTE = "Before calling this red a flake, pre-existing, or caused by the branch:"
 # The note speaks only of something in the tree that could have falsified the run, and the
 # fixture's tree is clean as committed, so the rows run over one uncommitted file: the dirty-tree
@@ -68,7 +68,7 @@ SAMPLES: dict[str, tuple[Sample, ...]] = {
             {"source": "startup"},
             0,
             "a session starts",
-            context_says=("notes are unreviewed",),
+            context_says=("unreviewed note(s)",),
         ),
     ),
     "PreToolUse": (

@@ -21,6 +21,12 @@ from tests.scriptload import SCRIPTS, load
 ROOT = Path(__file__).resolve().parents[2]
 
 
+# The one line the session-start hook says for the hostile store's unreviewed notes.
+COUNT_LINE = (
+    "drybag: 1 unreviewed note(s); promoting them is the owner's call (`drybag memory promote`)"
+)
+
+
 def _load(name: str) -> ModuleType:
     return load(SCRIPTS / f"{name}.py", name)
 
@@ -146,27 +152,31 @@ def test_a_quiet_entry_that_answers_anything_but_an_empty_object_is_reported(
 
 
 @needs_git
+@pytest.mark.parametrize(
+    ("answer", "says"),
+    [
+        ("{}", "stdout names None"),
+        ('{"hookSpecificOutput": {"hookEventName": "Stop"}}', "stdout names 'Stop'"),
+        (
+            '{"hookSpecificOutput": {"hookEventName": "PostToolUseFailure"}}',
+            "the context does not say 'Before calling this red a flake",
+        ),
+    ],
+    ids=["silent", "another-event", "no-note"],
+)
 def test_a_red_run_entry_that_says_nothing_is_reported(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], answer: str, says: str
 ) -> None:
-    # The red-run note is all the `PostToolUseFailure` entry is for, and an envelope naming the
-    # event, exit 0, is what that entry prints whether or not its handler spoke: the row asks for
-    # the note by its words. Every other row is the real launcher's, so the one failure is this
-    # row's. Mutation (declared, `mutations/`'s "the hook smoke stops reading the context an
-    # entry printed"): the `context_says` check never fails -> this reddens.
+    # The red-run note is all the `PostToolUseFailure` entry is for, and that entry exits 0 whether
+    # or not its handler spoke: the row asks for its event and for the note by its words. Every
+    # other row is the real launcher's, so the one failure is this row's. Mutation (declared,
+    # `mutations/`'s "the hook smoke stops reading the context an entry printed"): the
+    # `context_says` check never fails -> the no-note case reddens.
     smoke = _load("smoke_hooks")
     code = smoke.main(
         [
             "--plugin-root",
-            str(
-                _plugin(
-                    tmp_path,
-                    launcher=_answering(
-                        "PostToolUseFailure",
-                        '{"hookSpecificOutput": {"hookEventName": "PostToolUseFailure"}}',
-                    ),
-                )
-            ),
+            str(_plugin(tmp_path, launcher=_answering("PostToolUseFailure", answer))),
             "--fixture",
             str(ROOT / "tests" / "fixtures" / "smoke-project"),
             "--scratch",
@@ -175,7 +185,7 @@ def test_a_red_run_entry_that_says_nothing_is_reported(
     )
     out = capsys.readouterr().out
     assert code == 1, out
-    assert "the context does not say 'Before calling this red a flake" in out, out
+    assert says in out, out
     assert "12 entries, 13 row(s), 1 failure(s)" in out, out
 
 
@@ -349,6 +359,41 @@ def test_the_exfiltration_scenario_holds_against_the_checkout(
     out = capsys.readouterr().out
     assert code == 0, out
     assert "5 row(s), 0 failure(s)" in out, out
+
+
+@needs_git
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "{}",
+        json.dumps(
+            {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": COUNT_LINE}}
+        ),
+        json.dumps(
+            {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "other"}}
+        ),
+    ],
+    ids=["silent", "another-event", "other-words"],
+)
+def test_the_exfiltration_row_takes_only_the_count_line_from_the_session_start_hook(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], answer: str
+) -> None:
+    # The hostile store's unreviewed notes are the one thing this entry has to say, so an answer
+    # that says nothing, or names another event, or says anything else is the row's failure.
+    exfil = _load("smoke_exfiltration")
+    code = exfil.main(
+        [
+            "--plugin-root",
+            str(_plugin(tmp_path, launcher=_answering("SessionStart", answer))),
+            "--fixture",
+            str(ROOT / "tests" / "fixtures" / "hostile-project"),
+            "--scratch",
+            str(tmp_path / "s"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "FAIL  the session-start hook names its event and injects nothing" in out, out
 
 
 @needs_git

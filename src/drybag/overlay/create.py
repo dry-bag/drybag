@@ -162,8 +162,8 @@ def _initialise_repository(target: Path, runner: Runner) -> tuple[str, str]:
     # older `git` refuses the option, so the one command that makes the repository failed there.
     # `symbolic-ref` names the unborn branch on every version.
     remote = (
-        "`git remote add origin <the private repository>` and `git push -u origin main` once you "
-        "have created one on GitHub"
+        "`git remote add origin <the private repository>`, a first commit and "
+        "`git push -u origin main` once you have created one on GitHub"
     )
     step = "git init"
     done = runner.launch(["git", "init"], target)

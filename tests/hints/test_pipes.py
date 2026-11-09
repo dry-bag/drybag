@@ -12,9 +12,10 @@ from drybag.hints import bgcleanup
 from drybag.hints.hooks import register
 from drybag.hints.pipes import NOTICE, notice_for
 from drybag.hooks.api import Handler, HookEvent
-from drybag.hooks.dispatch import Recorder, dispatch
+from drybag.hooks.dispatch import dispatch
 from tests.hints.test_hooks import bash_event
 from tests.sessions import NO_CONFIG
+from tests.sinks import Recorder
 
 
 @pytest.mark.parametrize(
@@ -109,6 +110,6 @@ def test_the_hint_is_given_once_per_context(tmp_path: Path) -> None:
             sink=recorder,
         )
         assert outcome.exit_code == 0, outcome.stderr
-        output = json.loads(outcome.stdout).get("hookSpecificOutput", {})
-        notes.append(output.get("additionalContext"))
-    assert notes == [NOTICE, None]
+        notes.append(json.loads(outcome.stdout))
+    assert notes[0]["hookSpecificOutput"]["additionalContext"] == NOTICE
+    assert notes[1] == {}

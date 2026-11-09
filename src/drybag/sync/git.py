@@ -163,7 +163,7 @@ def guard(repo: Path, *, timeout: float = QUERY_TIMEOUT_SECONDS) -> str | None:
     merge = ask(repo, deadline, "config", "--get", "branch.main.merge").out.strip()
     if (remote, merge) != ("origin", "refs/heads/main"):
         if not remote:  # short enough for `doctor`'s line (`printed.CLIPPED_CHARS`)
-            fix = "`git remote add origin <url>`, then `git push -u origin main`"
+            fix = "`git remote add origin <url>`, a commit, then `git push -u origin main`"
             return f"main tracks nothing; give the overlay a remote: {fix}"
         tracking = f"{remote}/{merge.removeprefix('refs/heads/')}"
         return f"main tracks {tracking}, not origin/main"

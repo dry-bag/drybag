@@ -146,7 +146,7 @@ def _own_root() -> Path | None:
 
 # Every registered harness's name for the plugin root, `CANONICAL`'s first, read off the registry.
 # Both names, because both reach this process: Codex exports `PLUGIN_ROOT` and also
-# `CLAUDE_PLUGIN_ROOT`, as the spike record (`docs/plans/2026-09-05-agent-harness-p0-spikes.md`)
+# `CLAUDE_PLUGIN_ROOT`, as the spike record
 # measured in its *Codex plugin hooks* trial, so a rule written against one of them is
 # `config/machine.py`'s own finding again — "gating one of a pair of equivalent inputs is not a
 # partial defence, it is a redirect with a longer name". Neither is ever executed; see

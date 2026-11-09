@@ -63,7 +63,7 @@ preset = "recommended"
 # registration, and it is idempotent (`claude plugin marketplace add` on an already-added source
 # answers "already on disk" and exits 0). `claude plugin install <name>@<marketplace>` is the
 # measured bare form — the install output the spike record
-# (`docs/plans/2026-09-05-agent-harness-p0-spikes.md`) transcribes reports `(scope: user)` as the
+# transcribes reports `(scope: user)` as the
 # *default*, not a flag, and the record passes `-y` only to `uninstall`, never to `install`.
 marketplace = "claude-plugins-official"
 source = "anthropics/claude-plugins-official"

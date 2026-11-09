@@ -52,6 +52,8 @@ SDIST_MUST = (
     "scripts/drybag",
 )
 SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/drybag")
+# Kept out by `pyproject.toml`, because PyPI keeps its copy of an sdist for good.
+SDIST_MUST_NOT = ("docs/plans/", "mutations/")
 
 
 def check_wheel(path: Path) -> list[str]:
@@ -64,6 +66,11 @@ def check_sdist(path: Path) -> list[str]:
     with tarfile.open(path) as archive:
         members = {"/".join(m.name.split("/")[1:]): m for m in archive.getmembers()}
     findings = [f"sdist: missing {name}" for name in SDIST_MUST if name not in members]
+    findings += [
+        f"sdist: carries {tree}"
+        for tree in SDIST_MUST_NOT
+        if any(n.startswith(tree) for n in members)
+    ]
     for name in SDIST_EXECUTABLE:
         member = members.get(name)
         if member is not None and member.mode & 0o111 == 0:

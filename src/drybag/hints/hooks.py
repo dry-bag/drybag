@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from drybag.config.session import SessionConfig
 
 # The matcher both handlers share. Codex reports every shell-routed action as `Bash` too, as the
-# spike record (`docs/plans/2026-09-05-agent-harness-p0-spikes.md`) measured in its *Codex plugin
+# spike record measured in its *Codex plugin
 # hooks* trial, so this one name serves both harnesses.
 BASH = "Bash"
 

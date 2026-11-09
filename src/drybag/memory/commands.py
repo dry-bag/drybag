@@ -210,7 +210,7 @@ def run_index(args: argparse.Namespace) -> Result:
     # Exit 0: the write succeeded, and `--check` is the mode that fails a build. The findings
     # are still said, because a person running this by hand is who can act on them.
     wrote = "; ".join(
-        [f"wrote {shown(path)} ({report.words} words, {len(reconciled.notes)} notes)", *findings]
+        [f"wrote {shown(path)} ({report.words} words, {len(reconciled.notes)} note(s))", *findings]
     )
     wrote = _with(wrote, _publish(reconciled, store))
     return Result(
@@ -280,7 +280,7 @@ def run_inventory(args: argparse.Namespace) -> Result:
     # reads what the store holds.
     skipped = len(reconciled.skipped)
     return Result(
-        f"{counts['notes']} notes, {counts['words']} words, "
+        f"{counts['notes']} note(s), {counts['words']} words, "
         f"{counts['provisional']} provisional, {counts['stale']} stale"
         + (f", {skipped} linked note(s) skipped" if skipped else ""),
         {"entries": [entry.as_dict() for entry in entries], **counts, "skipped": skipped},

@@ -846,15 +846,15 @@ reddens = [
   "tests/scripts/test_smoke_scripts.py::test_a_launcher_fault_is_not_mistaken_for_an_injection",
 ]
 
-# The red-run entry prints the event's envelope, exit 0, whether or not its handler spoke, so a row
-# that reads only the exit code and the envelope is green over an entry that never says the note.
+# The red-run entry exits 0 whether or not its handler spoke, so a row that reads only the exit
+# code and the event's name is green over an entry that never says the note.
 [[mutation]]
 name = "the hook smoke stops reading the context an entry printed"
 file = "scripts/smoke_hooks.py"
 before = "        if phrase not in context:"
 after = "        if False:"
 reddens = [
-  "tests/scripts/test_smoke_scripts.py::test_a_red_run_entry_that_says_nothing_is_reported",
+  "tests/scripts/test_smoke_scripts.py::test_a_red_run_entry_that_says_nothing_is_reported[no-note]",
 ]
 
 # A quiet entry's answer is exactly `{}`, so a `decision` or a refused envelope cannot pass as quiet.

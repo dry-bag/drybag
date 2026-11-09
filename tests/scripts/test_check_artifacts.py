@@ -39,10 +39,15 @@ def _wheel(path: Path, *, without: str | None = None) -> Path:
 
 
 def _sdist(
-    path: Path, module: ModuleType, *, wrapper_mode: int = 0o755, without: str | None = None
+    path: Path,
+    module: ModuleType,
+    *,
+    wrapper_mode: int = 0o755,
+    without: str | None = None,
+    extra: str = "CHANGELOG.md",
 ) -> Path:
     with tarfile.open(path, "w:gz") as archive:
-        for name in module.SDIST_MUST:
+        for name in {*module.SDIST_MUST, extra}:
             if name == without:
                 continue
             info = tarfile.TarInfo(f"drybag-0.0.0/{name}")
@@ -56,6 +61,22 @@ def test_complete_artifacts_have_no_findings(tmp_path: Path) -> None:
     module = checker()
     assert module.check_wheel(_wheel(tmp_path / "k.whl")) == []
     assert module.check_sdist(_sdist(tmp_path / "k.tar.gz", module)) == []
+
+
+@pytest.mark.parametrize(
+    ("member", "findings"),
+    [
+        ("docs/plans/a.md", ["sdist: carries docs/plans/"]),
+        ("mutations/core.toml", ["sdist: carries mutations/"]),
+        ("tests/fixtures/smoke-project/docs/plans/a.md", []),
+    ],
+    ids=["plans", "mutations", "a-fixture-of-the-same-name"],
+)
+def test_a_tree_the_sdist_must_not_carry_is_named(
+    tmp_path: Path, member: str, findings: list[str]
+) -> None:
+    module = checker()
+    assert module.check_sdist(_sdist(tmp_path / "k.tar.gz", module, extra=member)) == findings
 
 
 def test_a_template_file_missing_from_the_wheel_is_named(tmp_path: Path) -> None:

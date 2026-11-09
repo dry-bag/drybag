@@ -24,7 +24,7 @@ installs one and the README recommends them.
 never guessed.** The first draft attempted `claude plugin install superpowers@obra` on a fresh
 machine and always failed there — `obra` and `upstash` are GitHub accounts, not marketplace names,
 and every measured successful install in this tree's own spike record
-(`docs/plans/2026-09-05-agent-harness-p0-spikes.md`) is preceded by a `marketplace add`. Checked
+is preceded by a `marketplace add`. Checked
 before writing this fix (`gh api repos/...`, `claude plugin marketplace list` on the machine this
 was written on): `superpowers` and `context7` both ship in Anthropic's own official marketplace,
 `anthropics/claude-plugins-official`, which a Claude Code install already carries — the

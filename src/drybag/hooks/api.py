@@ -127,7 +127,7 @@ DIAGNOSTICS_MAX_BYTES = 256 * 1024
 
 # The variables a harness names its data root for this plugin in, asked in this order.
 # `PLUGIN_DATA` is Codex's name for the same directory: the spike record
-# (`docs/plans/2026-09-05-agent-harness-p0-spikes.md`) measured Codex's hook launch setting it
+# measured Codex's hook launch setting it
 # beside `CLAUDE_PLUGIN_DATA` in its *Codex plugin hooks* trial.
 DATA_ROOT_VARIABLES = ("CLAUDE_PLUGIN_DATA", "PLUGIN_DATA")
 
