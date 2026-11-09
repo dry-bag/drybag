@@ -43,8 +43,7 @@ EXPECTED_ENTRIES = 12
 EXPECTED_ROWS = 13
 # What the red-run note opens with, `drybag.hints.hygiene.LEAD`, spelled out for the reason
 # `FLOOR_VARIABLE` is. The note is all a `PostToolUseFailure` entry is for, so its row asks for it
-# by its words and not only for an envelope naming the event, which an entry whose handler said
-# nothing also prints.
+# by its words and not only for an envelope naming the event.
 RED_RUN_NOTE = "Before calling this red a flake, pre-existing, or caused by the branch:"
 # The note speaks only of something in the tree that could have falsified the run, and the
 # fixture's tree is clean as committed, so the rows run over one uncommitted file: the dirty-tree
@@ -59,12 +58,19 @@ class Sample:
     label: str
     # What the stderr must never say: a fault the wrapper or the dispatcher degraded to exit 0.
     stderr_never: tuple[str, ...] = ()
-    # What the `additionalContext` a dispatched entry prints must say. Empty asks nothing of it.
+    # What the `additionalContext` a dispatched entry prints must say. Empty means it says nothing.
     context_says: tuple[str, ...] = ()
 
 
 SAMPLES: dict[str, tuple[Sample, ...]] = {
-    "SessionStart": (Sample({"source": "startup"}, 0, "a session starts"),),
+    "SessionStart": (
+        Sample(
+            {"source": "startup"},
+            0,
+            "a session starts",
+            context_says=("notes are unreviewed",),
+        ),
+    ),
     "PreToolUse": (
         Sample(
             {
@@ -93,6 +99,7 @@ SAMPLES: dict[str, tuple[Sample, ...]] = {
             0,
             "a failed test run is annotated, never blocked",
             stderr_never=(FAULT,),
+            context_says=(RED_RUN_NOTE,),
         ),
     ),
     # The shape Claude Code delivers a Bash command that exited non-zero in, measured on Claude
@@ -114,7 +121,7 @@ SAMPLES: dict[str, tuple[Sample, ...]] = {
         ),
     ),
     # The note sync's triggers. The scratch `HOME` has no machine file, so the sync is off: the
-    # handler reads that and says nothing, and the envelope carries no `decision` that would keep
+    # handler reads that and says nothing, so the answer is `{}`, with no `decision` that would keep
     # a turn from ending.
     "Stop": (Sample({"stop_hook_active": False}, 0, "a turn ends", stderr_never=(FAULT,)),),
     "SessionEnd": (Sample({"reason": "other"}, 0, "a session ends", stderr_never=(FAULT,)),),
@@ -246,19 +253,21 @@ def check_entry(
             return f"this part renders nothing on the fixture, yet emitted {len(done.stdout)}"
     # Only the dispatcher's own entries (`… hook <event>`) speak JSON; the six
     # `memory session-context` entries print a bundle as prose, which is how they inject it.
-    context = ""
-    if "hook" in argv and done.stdout.strip():
-        try:
-            emitted = json.loads(done.stdout)
-        except json.JSONDecodeError:
-            return "stdout is not JSON"
-        specific = emitted.get("hookSpecificOutput", {})
-        # The one event Claude Code refuses the field on (`hook_specific_output`).
-        if event == "SessionEnd" and "hookSpecificOutput" in emitted:
-            return "stdout carries a hookSpecificOutput, which Claude Code refuses on SessionEnd"
-        if event != "SessionEnd" and specific.get("hookEventName") != event:
-            return f"stdout names {specific.get('hookEventName')!r}, not {event!r}"
-        context = str(specific.get("additionalContext", ""))
+    if "hook" not in argv:
+        return None
+    if not sample.context_says:
+        # A hook with nothing to say answers `{}`: a `decision`, an envelope a harness refuses, or
+        # the empty stdout of a wrapper that never reached the dispatcher are all something else.
+        if done.stdout.strip() != "{}":
+            return f"expected an empty object, got {done.stdout.strip()[:200]!r}"
+        return None
+    try:
+        specific = json.loads(done.stdout).get("hookSpecificOutput", {})
+    except (json.JSONDecodeError, AttributeError):
+        return "stdout is not a JSON object"
+    if specific.get("hookEventName") != event:
+        return f"stdout names {specific.get('hookEventName')!r}, not {event!r}"
+    context = str(specific.get("additionalContext", ""))
     for phrase in sample.context_says:
         if phrase not in context:
             return f"the context does not say {phrase!r} ({len(context)} characters)"

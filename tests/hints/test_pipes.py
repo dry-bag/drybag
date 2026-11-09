@@ -109,5 +109,6 @@ def test_the_hint_is_given_once_per_context(tmp_path: Path) -> None:
             sink=recorder,
         )
         assert outcome.exit_code == 0, outcome.stderr
-        notes.append(json.loads(outcome.stdout)["hookSpecificOutput"].get("additionalContext"))
+        output = json.loads(outcome.stdout).get("hookSpecificOutput", {})
+        notes.append(output.get("additionalContext"))
     assert notes == [NOTICE, None]

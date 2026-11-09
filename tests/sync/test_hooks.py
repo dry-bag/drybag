@@ -500,12 +500,8 @@ def test_stop_and_session_end_print_nothing_that_blocks(
         assert run_hook(argparse.Namespace(event=name)) == 0
         out, err = capsys.readouterr()
         assert err == ""
-        assert json.loads(out) == _quiet_answer(name)
+        assert json.loads(out) == {}
     assert len(spied["spawn"]) == (2 if sync else 0)
-
-
-def _quiet_answer(event: str) -> dict[str, object]:
-    return {} if event == "SessionEnd" else {"hookSpecificOutput": {"hookEventName": event}}
 
 
 def test_the_command_prints_nothing_that_blocks_in_a_process_of_its_own(
@@ -530,5 +526,5 @@ def test_the_command_prints_nothing_that_blocks_in_a_process_of_its_own(
             )
             assert done.returncode == 0 and done.stderr == "", done
             assert "decision" not in done.stdout
-            assert json.loads(done.stdout) == _quiet_answer(name)
+            assert json.loads(done.stdout) == {}
     assert not (overlays.state_dir / PENDING_FILE).exists()

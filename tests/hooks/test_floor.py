@@ -200,9 +200,7 @@ def test_pre_tool_use_prints_no_warning_and_logs_it_once(tmp_path: Path) -> None
     for _ in range(2):
         completed = hook("PreToolUse", json.dumps(call), root, data=data, home=home)
         assert (completed.returncode, completed.stderr) == (0, "")
-        assert json.loads(completed.stdout) == {
-            "hookSpecificOutput": {"hookEventName": "PreToolUse"}
-        }
+        assert json.loads(completed.stdout) == {}
     log = (data / DIRECTORY / DIAGNOSTICS).read_text(encoding="utf-8").splitlines()
     records = [json.loads(line) for line in log]
     assert [record.get("error") for record in records] == [CONFIG_FALLBACK]

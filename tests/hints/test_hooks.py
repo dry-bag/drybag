@@ -196,7 +196,7 @@ def test_a_leaking_background_call_is_hinted_through_the_real_dispatcher(tmp_pat
     allowed = dict(payload, tool_input={"command": "make && make test", "run_in_background": True})
     completed = hook("PreToolUse", json.dumps(allowed), root)
     assert completed.returncode == 0, completed.stderr
-    assert "additionalContext" not in json.loads(completed.stdout)["hookSpecificOutput"]
+    assert json.loads(completed.stdout) == {}
 
 
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
@@ -403,8 +403,8 @@ def test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_
             sink=recorder,
         )
         assert outcome.exit_code == 0, outcome.stderr
-        output = json.loads(outcome.stdout)["hookSpecificOutput"]
-        assert output["hookEventName"] == event
+        output = json.loads(outcome.stdout).get("hookSpecificOutput", {})
+        assert output.get("hookEventName", event) == event
         notes.append(output.get("additionalContext"))
     assert notes[0] is not None and "uncommitted" in notes[0]
     assert notes[1] is None
@@ -464,11 +464,9 @@ def test_a_failure_whose_error_does_not_begin_with_an_exit_code_is_not_annotated
     # the exit code: the hint says nothing rather than guess at what failed. The shape is an
     # assumption, not one observed on Claude Code 2.1.296, which put the exit code first in every
     # failure measured. Beside its positive twins this is what shows the handler, not the absence
-    # of one, is what stays silent. Silent as the dispatcher says it: the event's envelope with
-    # no context in it, which it writes for every event it dispatches.
+    # of one, is what stays silent. Silent as the dispatcher says it: `{}`.
     root = dirty_project(tmp_path)
     error = "Command timed out after 2m 0s\nExit code 143"
     completed = hook("PostToolUseFailure", failure_payload(root, error), root)
     assert completed.returncode == 0, completed.stderr
-    out = json.loads(completed.stdout)
-    assert out == {"hookSpecificOutput": {"hookEventName": "PostToolUseFailure"}}
+    assert json.loads(completed.stdout) == {}

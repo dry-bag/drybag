@@ -21,6 +21,7 @@ from drybag.harnesses import (
     Surface,
     detect,
 )
+from drybag.hooks.api import EVENTS
 from tests.test_language_neutral import _docstrings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -145,21 +146,18 @@ def test_no_harness_renders_a_decision(harness: Harness, event: str, context: st
     # A rendering is context in an envelope, and a context or a notice shaped like a decision is
     # still a string inside it, never a key of the envelope. Mutation (declared, on `harnesses`):
     # the canonical render adds `"permissionDecision": "allow"` beside `hookEventName` -> every
-    # Claude Code and Codex case reddens, since both render through the same function.
+    # Claude Code and Codex case with a context reddens, since both render through the same function.
     assert not _decisions(harness.render(event, context, context), context)
 
 
-@pytest.mark.parametrize("context", ["", "a note"])
-def test_session_end_answers_without_the_field_claude_code_refuses_there(context: str) -> None:
-    # Measured on Claude Code 2.1.319 with a bare hook for each event the dispatcher carries: the
-    # field fails validation on `SessionEnd`, with or without a context, and prints the expected
-    # schema at every exit, while `{}` passes. Every other event accepts the shape.
-    # Mutation (declared, `mutations/`'s "SessionEnd answers with the field Claude Code refuses"):
-    # the event's early answer goes -> the envelope comes back and this reddens.
-    assert CLAUDE.render("SessionEnd", context, "") == "{}"
-    assert json.loads(CLAUDE.render("Stop", "", "")) == {
-        "hookSpecificOutput": {"hookEventName": "Stop"}
-    }
+@pytest.mark.parametrize("harness", HARNESSES, ids=lambda h: h.name)
+@pytest.mark.parametrize("event", EVENTS)
+def test_a_hook_with_nothing_to_say_answers_an_empty_object(harness: Harness, event: str) -> None:
+    # Claude Code 2.1.319 fails validation on the envelope on `SessionEnd` and Codex 0.166.0 reports
+    # `hook: Stop Failed`, while `{}` passes on every event of both.
+    # Mutation (declared, `mutations/`'s "a hook with nothing to say answers the envelope"): the
+    # payload starts as the envelope -> every case reddens.
+    assert harness.render(event, "", "") == "{}"
 
 
 def test_every_harness_renders_through_the_canonical_render() -> None:

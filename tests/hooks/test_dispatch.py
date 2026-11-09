@@ -72,7 +72,7 @@ def test_a_handler_stays_silent_on_every_event_but_its_own(registered: str, othe
     heard = dispatch(event(registered), [guard], NO_CONFIG, harness=CLAUDE, sink=Recorder())
     assert json.loads(heard.stdout)["hookSpecificOutput"]["additionalContext"] == "G"
     silent = dispatch(event(other), [guard], NO_CONFIG, harness=CLAUDE, sink=Recorder())
-    assert "additionalContext" not in json.loads(silent.stdout)["hookSpecificOutput"]
+    assert json.loads(silent.stdout) == {}
     assert silent.stderr == ""
 
 
@@ -158,11 +158,11 @@ def test_a_once_key_handler_runs_every_time_under_the_null_sink() -> None:
 
 
 def test_a_cap_below_the_envelope_is_recorded_and_emits_nothing() -> None:
-    # No JSON envelope fits in 20 characters, so the honest output is none at all: anything
-    # longer than the cap is replaced by the platform with a preview and a file path.
+    # Not even `{}` fits in 1 character, so the honest output is none at all: anything longer
+    # than the cap is replaced by the platform with a preview and a file path.
     recorder = Recorder()
     handlers = [handler("a", HookResult(context="x" * 50))]
-    outcome = dispatch(event(), handlers, NO_CONFIG, harness=CLAUDE, sink=recorder, cap=20)
+    outcome = dispatch(event(), handlers, NO_CONFIG, harness=CLAUDE, sink=recorder, cap=1)
     assert outcome.stdout == ""
     assert recorder.records[0]["error"] == "context-truncated"
 
@@ -228,7 +228,7 @@ def test_a_once_per_context_handler_runs_once_and_is_skipped_afterwards() -> Non
     first = json.loads(dispatch(event(), [once], NO_CONFIG, harness=CLAUDE, sink=recorder).stdout)
     second = json.loads(dispatch(event(), [once], NO_CONFIG, harness=CLAUDE, sink=recorder).stdout)
     assert first["hookSpecificOutput"]["additionalContext"] == "A"
-    assert "additionalContext" not in second["hookSpecificOutput"]
+    assert second == {}
     assert recorder.marks == {"ledger-notes"}
 
 
@@ -249,7 +249,7 @@ def test_a_once_per_context_handler_that_says_nothing_keeps_its_one_delivery() -
     silent = handler("a", HookResult(), once_key="overlay-status")
     for _ in range(3):
         outcome = dispatch(event(), [silent], NO_CONFIG, harness=CLAUDE, sink=recorder)
-        assert "additionalContext" not in json.loads(outcome.stdout)["hookSpecificOutput"]
+        assert json.loads(outcome.stdout) == {}
     assert recorder.marks == set()
     # Non-vacuous: the same handler with something to say does bank it, so this is about the
     # emptiness of the result and not about the key being ignored.

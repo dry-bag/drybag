@@ -857,14 +857,14 @@ reddens = [
   "tests/scripts/test_smoke_scripts.py::test_a_red_run_entry_that_says_nothing_is_reported",
 ]
 
-# The field is what Claude Code refuses on `SessionEnd`, so the row holds its absence.
+# A quiet entry's answer is exactly `{}`, so a `decision` or a refused envelope cannot pass as quiet.
 [[mutation]]
-name = "the hook smoke accepts the field on SessionEnd"
+name = "the hook smoke accepts any answer from a quiet entry"
 file = "scripts/smoke_hooks.py"
-before = """        if event == "SessionEnd" and "hookSpecificOutput" in emitted:"""
+before = """        if done.stdout.strip() != "{}":"""
 after = """        if False:"""
 reddens = [
-  "tests/scripts/test_smoke_scripts.py::test_a_session_end_entry_that_answers_with_the_refused_field_is_reported",
+  "tests/scripts/test_smoke_scripts.py::test_a_quiet_entry_that_answers_anything_but_an_empty_object_is_reported[a decision]",
 ]
 
 # The registry's converse, which is the direction that fails silently: `SAMPLES` is keyed by
