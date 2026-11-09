@@ -1,6 +1,6 @@
 [project]
 name = "drybag"
-version = "0.7.0"
+version = "0.7.1"
 description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check, packaged as one plugin for Claude Code and Codex."
 readme = "README.md"
 requires-python = ">=3.11"
