@@ -242,8 +242,10 @@ def main(argv: list[str]) -> int:
         started.returncode == 0
         and (
             envelope == {}
-            or (specific.get("hookEventName") == "SessionStart"
-            and UNREVIEWED_COUNT.fullmatch(str(context)) is not None)
+            or (
+                specific.get("hookEventName") == "SessionStart"
+                and UNREVIEWED_COUNT.fullmatch(str(context)) is not None
+            )
         )
         and CANARY not in started.stdout
         and DELIMITER not in started.stdout,

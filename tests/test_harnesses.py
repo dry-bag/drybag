@@ -146,7 +146,7 @@ def test_no_harness_renders_a_decision(harness: Harness, event: str, context: st
     # A rendering is context in an envelope, and a context or a notice shaped like a decision is
     # still a string inside it, never a key of the envelope. Mutation (declared, on `harnesses`):
     # the canonical render adds `"permissionDecision": "allow"` beside `hookEventName` -> every
-    # Claude Code and Codex case with a context reddens, since both render through the same function.
+    # case with a context reddens, on both harnesses, since they render through the same function.
     assert not _decisions(harness.render(event, context, context), context)
 
 

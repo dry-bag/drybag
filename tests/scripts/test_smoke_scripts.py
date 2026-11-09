@@ -105,7 +105,7 @@ def test_a_launcher_fault_is_not_mistaken_for_an_injection(
 
 
 def _answering(event: str, stdout: str) -> str:
-    """A launcher that is the real one for everything but `event`, which it answers with `stdout`."""
+    """A launcher that is the real one but for `event`, which it answers with `stdout`."""
     return f"""
 import runpy, sys
 
