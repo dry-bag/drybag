@@ -42,7 +42,7 @@ DELIMITER = "<<<drybag:repository-data"
 # `drybag.memory.hooks.UNREVIEWED_COUNT`, spelled out because this script runs without
 # `drybag` importable: fixed words and a count, nothing the clone wrote.
 UNREVIEWED_COUNT = re.compile(
-    r"drybag: [0-9]+ notes are unreviewed; promoting them is the owner's call "
+    r"drybag: [0-9]+ unreviewed note\(s\); promoting them is the owner's call "
     r"\(`drybag memory promote`\)"
 )
 # The remote the overlay records for `smoke`, and the one the clone has instead. The clone chooses
@@ -225,31 +225,25 @@ def main(argv: list[str]) -> int:
     )
 
     # The dispatcher's own SessionStart entry. The overlay's status line and rules speak only in
-    # `overlay` mode, so for an `in-repo` store the one thing the envelope may carry is the count
+    # `overlay` mode, so for an `in-repo` store the one thing the answer may carry is the count
     # of its unreviewed notes, fixed words and a number. That is what is asserted: a well-formed
-    # envelope naming the event, whose `additionalContext` is absent or that line alone, and
+    # envelope naming the event, whose `additionalContext` is that line alone, and
     # neither the canary nor the repository-data marker anywhere in it. The row's positive control
     # is the first row above — the same store does reach a session through the bundle entries —
     # so "nothing came out" cannot be a crash.
     started = through_wrapper(wrapper, ["hook", "SessionStart"], env, planted.clone)
     try:
-        envelope = json.loads(started.stdout)
-    except json.JSONDecodeError:
-        envelope = {"unparsed": True}
-    specific = envelope.get("hookSpecificOutput", {})
+        specific = json.loads(started.stdout)["hookSpecificOutput"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        specific = {}
     context = specific.get("additionalContext")
     report.row(
         started.returncode == 0
-        and (
-            envelope == {}
-            or (
-                specific.get("hookEventName") == "SessionStart"
-                and UNREVIEWED_COUNT.fullmatch(str(context)) is not None
-            )
-        )
+        and specific.get("hookEventName") == "SessionStart"
+        and UNREVIEWED_COUNT.fullmatch(str(context)) is not None
         and CANARY not in started.stdout
         and DELIMITER not in started.stdout,
-        "the session-start hook answers its envelope and injects nothing from the clone",
+        "the session-start hook names its event and injects nothing from the clone",
         f"rc={started.returncode}, event={specific.get('hookEventName')!r}, "
         f"context={context!r}, canary={CANARY in started.stdout}",
     )

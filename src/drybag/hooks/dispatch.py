@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -30,23 +30,6 @@ class Outcome:
     stderr: str
 
 
-@dataclass
-class Recorder:
-    """A sink that keeps its records and markers in memory; the tests use it."""
-
-    records: list[dict[str, object]] = field(default_factory=list)
-    marks: set[str] = field(default_factory=set)
-
-    def diagnostic(self, record: dict[str, object]) -> None:
-        self.records.append(record)
-
-    def seen(self, key: str) -> bool:
-        return key in self.marks
-
-    def mark(self, key: str) -> None:
-        self.marks.add(key)
-
-
 def read_event(payload: dict[str, Any], env: Mapping[str, str]) -> HookEvent:
     """The one reading of a hook's stdin, whichever harness sent it, and never told which
     (`harnesses.detect` says why).
@@ -55,7 +38,7 @@ def read_event(payload: dict[str, Any], env: Mapping[str, str]) -> HookEvent:
     first non-empty variable among every registered harness's, asked in
     `harnesses.project_root_variables`' order, and without one the checkout `cwd` sits in
     (`gitenv.checkout_root`). Codex names none (measured in the spike record,
-    `docs/plans/2026-09-05-agent-harness-p0-spikes.md`, in its *Codex plugin hooks* trial), so
+    in its *Codex plugin hooks* trial), so
     under Codex an inherited `CLAUDE_PROJECT_DIR` still names the root, as it names the directory
     `hooks/run-hook.sh` enters.
     """

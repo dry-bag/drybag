@@ -150,8 +150,11 @@ class Harness:
 def hook_specific_output(event_name: str, context: str, notice: str) -> str:
     """The hook answer: the whole string a hook writes to stdout, which the harness caps.
 
-    A hook with nothing to say answers `{}`, on every event: which events take the envelope is each
-    harness's own list, and no copy of one is kept here. `notice` goes out as `systemMessage`, which
+    A hook with nothing to say answers `{}`, on every event. The rule covers that quiet answer only:
+    a context goes out in the envelope whatever the event, and one on `Stop` or `SessionEnd` is
+    refused (Claude Code 2.1.319 fails validation on `SessionEnd` and does not let `Stop` end the
+    turn; Codex 0.166.0 reports `Stop Failed`). No shipped handler gives one there, and no list of
+    the events each harness takes is kept here. `notice` goes out as `systemMessage`, which
     Claude Code shows a person in a terminal on `SessionStart` and never hands the model
     (`hooks.dispatch.NOTICE_EVENT`); the model's copy is the caller's to put into `context`."""
     payload: dict[str, Any] = {}
@@ -163,8 +166,8 @@ def hook_specific_output(event_name: str, context: str, notice: str) -> str:
 
 
 def _codex_detects(env: Mapping[str, str], payload: Mapping[str, Any] | None) -> bool:
-    """Measured on both harnesses in the *Codex plugin hooks* trial of the spike record
-    (`docs/plans/2026-09-05-agent-harness-p0-spikes.md`): Codex sets `PLUGIN_ROOT` and
+    """Measured on both harnesses in the *Codex plugin hooks* trial of the spike record:
+    Codex sets `PLUGIN_ROOT` and
     `PLUGIN_DATA` and ALSO `CLAUDE_PLUGIN_ROOT`, so Claude Code's names alone identify nothing;
     Codex's `SessionStart` stdin also carries `model` and `permission_mode`, which Claude Code's
     does not. How far either signal can be trusted is `detect`'s to say."""
@@ -178,10 +181,8 @@ CLAUDE_DIR = ".claude"
 _IN_CI = Reach(
     Tier.CI, "unmeasured: the checks run in a project's own CI, where no agent takes part"
 )
-# The records the measurements below are kept in. The delivery spike's plan is not named by its
-# path, which carries words this repository keeps out of its code.
-_P0_SPIKES = "`docs/plans/2026-09-05-agent-harness-p0-spikes.md`"
-_DELIVERY_SPIKE = "the delivery spike of 2026-10-02 in `docs/plans/`"
+# The records the measurements below are kept in, named and not linked: the plugin ships no plan.
+_DELIVERY_SPIKE = "the delivery spike of 2026-10-02"
 # What is claimed of Codex's plugin hooks, which both hook surfaces rest on: no tier yet. Codex
 # runs a plugin's hooks once they are trusted in `/hooks` (an untrusted one is skipped without a
 # message, and `--dangerously-bypass-hook-trust` runs it anyway), and a blocking `PreToolUse`
@@ -209,7 +210,7 @@ CLAUDE = Harness(
             Surface.NOTICES: Reach(
                 Tier.CONTEXT,
                 "a SessionStart hook's output arrived as context "
-                f"({_P0_SPIKES}, the hook output cap trial)",
+                "(the spike record of 2026-09-05, the hook output cap trial)",
                 measured_on="Claude Code 2.1.261",
             ),
             Surface.GATES: _IN_CI,
@@ -232,9 +233,10 @@ CODEX = Harness(
     # Codex names the project root in no variable of its own (`read_event` still asks every
     # registered value's, so an inherited `CLAUDE_PROJECT_DIR` names it as it does the wrapper's).
     project_dir_env=None,
-    # Claude Code's shape, and unverified under Codex: Codex CLI 0.162.0-alpha.17.2 ran the
-    # plugin's hooks once they were trusted (`_CODEX_HOOKS_UNVERIFIED`), but no output this
-    # `render` shaped has been checked there end to end. A harness whose output differs is a
+    # Claude Code's shape. Under Codex, 0.162.0-alpha.17.2 ran the plugin's hooks once they were
+    # trusted (`_CODEX_HOOKS_UNVERIFIED`) and 0.166.0 took `{}` on the events it reports, from a
+    # hand-written hooks file; nothing else this `render` shapes has been checked there end to
+    # end. A harness whose output differs is a
     # different value, never a branch inside a shared one, and a `render` of its own needs more
     # than a measured shape: `detect` says what.
     render=hook_specific_output,

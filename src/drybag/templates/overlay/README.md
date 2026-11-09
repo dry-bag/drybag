@@ -23,7 +23,7 @@ below accounts for. These are the ones that are yours to fill in:
 
 | Path | What it holds |
 |---|---|
-| `common/memory/` | notes that belong to you rather than to one project, and your personal standing rules: a note carrying `metadata.startup` is injected in full at the start of every session |
+| `common/memory/` | notes that belong to you rather than to one project, and your personal standing rules: a note carrying `metadata.startup` is injected in full at the start of every session, once `common/drybag.toml` sets `[memory] mode = "overlay"` and `drybag memory promote` has recorded the note |
 | `common/claude/permissions.json` | **your own** `permissions.allow` rules. `drybag attach` merges this list into a bound repository's `.claude/settings.local.json`, and nothing else in the file is read — a `deny` list here reaches nothing. It ships empty, because a plugin author may never grant a permission; only you may, on your own instance. |
 | `common/claude/hooks.json` | **your own** hook entries, which `drybag attach` renders into the plugin it installs for a bound repository on this machine. Ships empty for the same reason. |
 | `common/claude/rules/*.md` | **your own** rules, for every bound repository; `projects/<name>/claude/rules/*.md` holds one project's, and a file there replaces the common file of its name. A rule whose frontmatter has `paths:` (`paths: ["src/**/*.py"]`, globs relative to the checkout's root) reaches a session the first time it reads, edits or writes a file one of them matches, once per file in a session; any other is a standing rule, given to every session at its start. No directory ships: create it when you write your first rule. |

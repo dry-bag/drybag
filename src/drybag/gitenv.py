@@ -18,8 +18,7 @@ owner's `git`, `safe.directory` and excludes answer, and the ssh agent and proxy
 or a clone needs (`scrubbed_env`): the one environment every git drybag starts is given, the
 `Runner`'s included. Every other variable is dropped, every `GIT_CONFIG_*`, `GIT_SSH_COMMAND` and
 `XDG_CONFIG_HOME` among them, so no inherited variable names another repository, a configuration
-git would otherwise not read, or a program to run. Inside a `named` block it is also handed
-`GIT_DIR` and `GIT_WORK_TREE`, naming the one checkout the block's caller chose.
+git would otherwise not read, or a program to run.
 
 `git_run` is the one runner for every question this project asks git about a repository it works on
 — the hook path's toplevel, the three-valued answer (`git_answer`) the memory store and
@@ -38,8 +37,7 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -129,35 +127,14 @@ def in_work_tree(root: Path) -> bool:
     refused the one before it: a `rev-parse` that times out, or that exits 128 on a checkout it
     judges of dubious ownership (`safe.directory`) or on a worktree whose gitdir is gone, reads as
     "no repository" — and a guard that took that answer let its caller through. No inherited
-    `GIT_DIR` reaches a `git` this project runs, so the `.git` entry is the one git would use;
-    inside a `named` block git uses the named checkout's, at a top every root asked there is below.
+    `GIT_DIR` reaches a `git` this project runs, so the `.git` entry is the one git would use.
     """
     return any(os.path.lexists(directory / ".git") for directory in (root, *root.parents))
 
 
-# The checkout the `named` block names; `None` outside it.
-_named: Path | None = None
-
-
-@contextmanager
-def named(checkout: Path | None) -> Iterator[None]:
-    """Inside the block every `git_run` answers for `checkout`'s own repository, its `.git` with
-    `checkout` the work tree, whatever directory it is asked in: git looks for no repository.
-    The directory asked still places the question inside the work tree, so `--show-prefix` is
-    its path below `checkout`. `None` names nothing, and git finds the repository as it does
-    outside a block."""
-    global _named
-    saved, _named = _named, checkout
-    try:
-        yield
-    finally:
-        _named = saved
-
-
 def scrubbed_env() -> dict[str, str]:
     """The variables `GIT_ENV_KEEP` names, as this process has them, `PATH` with its absolute
-    entries alone, no terminal prompt, and inside a `named` block the repository it names: what
-    every git drybag starts is handed.
+    entries alone, and no terminal prompt: what every git drybag starts is handed.
 
     Every git runs in a repository whose contents a clone chose, so an empty or `.` entry of
     `PATH` (a dotfile slip) would find a `git`, or git an `ssh`, planted at its root."""
@@ -167,8 +144,6 @@ def scrubbed_env() -> dict[str, str]:
             entry for entry in env["PATH"].split(os.pathsep) if os.path.isabs(entry)
         )
     env["GIT_TERMINAL_PROMPT"] = "0"
-    if _named is not None:
-        env |= {"GIT_DIR": str(_named / ".git"), "GIT_WORK_TREE": str(_named)}
     return env
 
 

@@ -1035,6 +1035,7 @@ def test_an_entry_anchored_on_a_rewritten_action_pin_is_a_finding(tmp_path: Path
     ]
 
 
+@needs_declarations
 def test_every_declared_entry_is_sound_before_any_run() -> None:
     """`static_findings` over the real `mutations/` finds nothing.
 

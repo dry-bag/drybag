@@ -19,9 +19,9 @@
   the skills `file-bug`, `close-bug`, `sweep-defect-class`, `retro-to-guard`,
   `review-plan-three-lenses`, `run-correctness-audit` and `attribute-failure`. `drybag plan check`
   still holds a plan that claims `Fixes BR-nnn` to a premise line, and reads that claim with the
-  prefix `BR` only: a configured `[ledger] id_prefix` is no longer honoured. The `code-navigator`
-  agent no longer ships, so the plugin has no `agents/` directory. The skills that ship are
-  `attach`, `doctor`, `memory-sweep` and `setup`.
+  prefix `BR` only: a configured `[ledger] id_prefix` is no longer honoured.
+- **The `code-navigator` agent no longer ships,** so the plugin has no `agents/` directory. The
+  skills that ship are `attach`, `doctor`, `memory-sweep` and `setup`.
 - **A machine that ran stayfixed starts fresh.** No old path, file or variable is read, and no code
   migrates or removes one: a checkout stayfixed attached reads as not attached, and a note you
   approved reads as unreviewed. To move a machine, in this order:
@@ -29,8 +29,10 @@
   1. With stayfixed 0.6.1 still installed, run `stayfixed detach` in each checkout it attached, and
      `stayfixed setup --git-hooks --uninstall` in each repository where you installed that hook,
      because drybag cannot take back what stayfixed added. For a checkout you miss, take the allow
-     rules, the hook entries and the `autoMemoryDirectory` key out of `.claude/settings.local.json`
-     by hand, and delete `.stayfixed/local/attach.json`, which holds your allow rules.
+     rules, the hook entries, the `autoMemoryDirectory` key and the delivery plugin's
+     `enabledPlugins` and `extraKnownMarketplaces` entries out of `.claude/settings.local.json` by
+     hand, take the `# stayfixed:attach` block out of `.git/info/exclude`, delete the copies in
+     `.codex/rules/`, and delete `.stayfixed/local/attach.json`, which holds your allow rules.
   2. Remove the old plugin and command: `/plugin marketplace remove stayfixed-marketplace`, which
      uninstalls the plugin, and `uv tool uninstall stayfixed`. Install drybag:
      `uv tool install drybag`, `/plugin marketplace add dry-bag/drybag@v0.7.1`,
@@ -44,9 +46,9 @@
      its layers, `common/stayfixed.toml` and `projects/<name>/stayfixed.toml`, to `drybag.toml`, or
      what they set stops applying and `attach` does not say so. Copy what you keep in
      `~/.config/stayfixed/config.toml` into `~/.config/drybag/config.toml`, then run
-     `drybag setup --overlay <overlay>` and `drybag attach` in each checkout. With no manifest of
-     its own yet, `drybag overlay upgrade` skips and names every file that differs from this
-     release's.
+     `drybag setup --overlay <overlay>` and `drybag attach` in each checkout. An overlay 0.6.1
+     rendered has no manifest of drybag's yet, so `drybag overlay upgrade` skips and names every
+     file that differs from this release's.
   5. In each checkout that holds notes, run `drybag memory index`, read the notes, then run
      `drybag memory promote --changed`. The index comes first because the lines 0.6.1 rendered stand
      outside the new markers, so they are harvested once, which edits those notes and would undo an
@@ -55,7 +57,8 @@
   Once that is done, `~/.config/stayfixed/`, `~/.local/share/stayfixed/`,
   `<git common dir>/stayfixed/` and `.stayfixed/` are yours to delete. First move what you keep of
   the files the harness wrote to `~/.local/share/stayfixed/stores/<id>/`, which `detach` leaves,
-  into the overlay's `projects/<name>/memory/project-stable/`.
+  into the overlay's `projects/<name>/memory/project-stable/`. A file with no frontmatter needs one
+  before it reads as a note, and a moved note reads as unreviewed until you run step 5 again.
 - **Keys that left with removed features are refused.** Delete these from a `drybag.toml` you
   carry over, or every command that loads it exits 1 with the loader's refusal,
   `[drybag] has unknown key(s): enforced` for a key and `has unknown section(s): gates` for a table.

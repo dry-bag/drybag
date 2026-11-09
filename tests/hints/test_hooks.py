@@ -13,10 +13,11 @@ from drybag.harnesses import CLAUDE
 from drybag.hints import bgcleanup
 from drybag.hints.hooks import register
 from drybag.hooks.api import EVENTS, Handler, HookEvent
-from drybag.hooks.dispatch import Recorder, dispatch
+from drybag.hooks.dispatch import dispatch
 from tests.floor import floor_env
 from tests.gitfixture import git
 from tests.sessions import NO_CONFIG, session_of
+from tests.sinks import Recorder
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = """
@@ -403,11 +404,10 @@ def test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_
             sink=recorder,
         )
         assert outcome.exit_code == 0, outcome.stderr
-        output = json.loads(outcome.stdout).get("hookSpecificOutput", {})
-        assert output.get("hookEventName", event) == event
-        notes.append(output.get("additionalContext"))
-    assert notes[0] is not None and "uncommitted" in notes[0]
-    assert notes[1] is None
+        notes.append(json.loads(outcome.stdout))
+    assert notes[0]["hookSpecificOutput"]["hookEventName"] == order[0]
+    assert "uncommitted" in notes[0]["hookSpecificOutput"]["additionalContext"]
+    assert notes[1] == {}
 
 
 # One red run, as Claude Code reports a Bash command that exited non-zero: on `PostToolUseFailure`,

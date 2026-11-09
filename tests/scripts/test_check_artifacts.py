@@ -58,6 +58,23 @@ def test_complete_artifacts_have_no_findings(tmp_path: Path) -> None:
     assert module.check_sdist(_sdist(tmp_path / "k.tar.gz", module)) == []
 
 
+@pytest.mark.parametrize(
+    ("member", "findings"),
+    [
+        ("docs/plans/a.md", ["sdist: carries docs/plans/"]),
+        ("mutations/core.toml", ["sdist: carries mutations/"]),
+        ("tests/fixtures/smoke-project/docs/plans/a.md", []),
+    ],
+    ids=["plans", "mutations", "a-fixture-of-the-same-name"],
+)
+def test_a_tree_the_sdist_must_not_carry_is_named(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, member: str, findings: list[str]
+) -> None:
+    module = checker()
+    monkeypatch.setattr(module, "SDIST_MUST", (*module.SDIST_MUST, member))
+    assert module.check_sdist(_sdist(tmp_path / "k.tar.gz", module)) == findings
+
+
 def test_a_template_file_missing_from_the_wheel_is_named(tmp_path: Path) -> None:
     # Mutation: none of its own — the wheel check is a set difference; the sdist mode check
     # below carries the declared mutation.

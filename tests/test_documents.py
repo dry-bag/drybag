@@ -671,8 +671,8 @@ def test_the_readme_links_only_inside_the_plugin_or_absolutely() -> None:
     """The README is published three times — here, on PyPI as the long description, and at the
     root of the plugin repository, which holds only the plugin's paths. A relative link to
     `docs/cli.md` resolves here and in nothing else, so a link to a file outside the plugin is
-    absolute, to this repository's `main`. One inside it stays relative: it resolves here and in
-    the plugin repository, though not on PyPI.
+    absolute, to this repository's `main`. One inside the plugin may stay relative, and then it
+    does not resolve on PyPI, so none does today.
 
     `test_every_relative_link_resolves` holds that a relative link names a file here; this holds
     that the file is one the plugin repository has too, and that every absolute link to `main`
@@ -684,9 +684,6 @@ def test_the_readme_links_only_inside_the_plugin_or_absolutely() -> None:
     walk's link naming a file that is not there -> `missing` reddens.
     """
     relative = links_in(README)
-    # Floors: a README whose links all vanished, or a regex that stopped matching, would make
-    # both walks vacuously true. `skills/README.md` and `LICENSE` stay relative today.
-    assert len(relative) >= 2, relative
     # Normalised first: `src/drybag/../../docs/cli.md` starts with a plugin path and names a
     # file outside every one of them.
     normal = [posixpath.normpath(target) for target in relative]
@@ -701,6 +698,7 @@ def test_the_readme_links_only_inside_the_plugin_or_absolutely() -> None:
         for target in _LINK.findall(prose(README))
         if (match := _THIS_REPOSITORY_MAIN.match(target))
     ]
+    # The floor of both walks: a README whose links all vanished, or a regex that stopped matching.
     assert absolute, "README.md links nothing of this repository's main"
     tracked = set(tracked_files())
     missing = [path for path in absolute if ROOT / path not in tracked]

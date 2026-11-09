@@ -13,7 +13,7 @@ prints both for the person to set, and writes nothing. This module holds the spe
 and nothing here reads or writes a file.
 
 Every literal below was measured on Claude Code 2.1.296 (macOS) on 2026-10-16; the record is the
-findings at the end of the 2026-10-15 floor, layers and trust plan in `docs/plans/`.
+findings at the end of the 2026-10-15 floor, layers and trust plan.
 
 - **The sandbox.** A project's `.claude/settings.json` or `.claude/settings.local.json` setting
   `sandbox.enabled = false` turns a user's `sandbox.enabled = true` off for that project. The

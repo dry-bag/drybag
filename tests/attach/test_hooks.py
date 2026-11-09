@@ -531,7 +531,8 @@ def test_the_registration_is_what_the_dispatcher_acts_on(
     """
     from drybag.attach import hooks as attach_hooks
     from drybag.harnesses import CLAUDE
-    from drybag.hooks.dispatch import Recorder, dispatch
+    from drybag.hooks.dispatch import dispatch
+    from tests.sinks import Recorder
 
     seen: list[str] = []
 

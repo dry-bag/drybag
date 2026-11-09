@@ -14,6 +14,7 @@ from types import ModuleType
 import pytest
 
 from drybag import gitenv
+from drybag.memory.hooks import UNREVIEWED_COUNT
 from tests.floor import SUITE_GIT_FLOOR_SECONDS
 from tests.gitfixture import needs_git
 from tests.scriptload import SCRIPTS, load
@@ -23,6 +24,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _load(name: str) -> ModuleType:
     return load(SCRIPTS / f"{name}.py", name)
+
+
+SMOKE = ROOT / "tests" / "fixtures" / "smoke-project"
+HOSTILE = ROOT / "tests" / "fixtures" / "hostile-project"
+
+
+def _main(script: ModuleType, plugin: Path, scratch: Path, fixture: Path = SMOKE) -> int:
+    """`script`'s `main` over `plugin` and a fixture, with the three flags both scripts take."""
+    code: int = script.main(
+        ["--plugin-root", str(plugin), "--fixture", str(fixture), "--scratch", str(scratch)]
+    )
+    return code
 
 
 def _plugin(tmp_path: Path, *, launcher: str | None = None, hooks: Path | None = None) -> Path:
@@ -64,16 +77,7 @@ def test_every_hook_entry_answers_its_sample_event_through_the_checkout(
     # state their own count for that reason (`test_check_artifacts.py`, `test_mutation_oracle`).
     # Mutation (declared): blind the entries-and-rows floor.
     smoke = _load("smoke_hooks")
-    code = smoke.main(
-        [
-            "--plugin-root",
-            str(ROOT),
-            "--fixture",
-            str(ROOT / "tests" / "fixtures" / "smoke-project"),
-            "--scratch",
-            str(tmp_path),
-        ]
-    )
+    code = _main(smoke, ROOT, tmp_path)
     out = capsys.readouterr().out
     assert code == 0, out
     assert "12 entries, 13 row(s), 0 failure(s)" in out, out
@@ -84,16 +88,7 @@ def test_a_launcher_fault_is_not_mistaken_for_an_injection(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     smoke = _load("smoke_hooks")
-    code = smoke.main(
-        [
-            "--plugin-root",
-            str(_plugin(tmp_path, launcher=FAULTY)),
-            "--fixture",
-            str(ROOT / "tests" / "fixtures" / "smoke-project"),
-            "--scratch",
-            str(tmp_path / "s"),
-        ]
-    )
+    code = _main(smoke, _plugin(tmp_path, launcher=FAULTY), tmp_path / "s")
     out = capsys.readouterr().out
     assert code == 1, out
     # The entries that carry repository bytes emitted nothing, which is what every one of them
@@ -129,15 +124,8 @@ def test_a_quiet_entry_that_answers_anything_but_an_empty_object_is_reported(
     # Mutation (declared, `mutations/`'s "the hook smoke accepts any answer from a quiet entry"):
     # the check never fires -> the row passes and this reddens.
     smoke = _load("smoke_hooks")
-    code = smoke.main(
-        [
-            "--plugin-root",
-            str(_plugin(tmp_path, launcher=_answering("SessionEnd", stdout))),
-            "--fixture",
-            str(ROOT / "tests" / "fixtures" / "smoke-project"),
-            "--scratch",
-            str(tmp_path / "s"),
-        ]
+    code = _main(
+        smoke, _plugin(tmp_path, launcher=_answering("SessionEnd", stdout)), tmp_path / "s"
     )
     out = capsys.readouterr().out
     assert code == 1, out
@@ -146,36 +134,33 @@ def test_a_quiet_entry_that_answers_anything_but_an_empty_object_is_reported(
 
 
 @needs_git
+@pytest.mark.parametrize(
+    ("answer", "says"),
+    [
+        ("{}", "stdout names None"),
+        ('{"hookSpecificOutput": {"hookEventName": "Stop"}}', "stdout names 'Stop'"),
+        (
+            '{"hookSpecificOutput": {"hookEventName": "PostToolUseFailure"}}',
+            "the context does not say 'Before calling this red a flake",
+        ),
+    ],
+    ids=["silent", "another-event", "no-note"],
+)
 def test_a_red_run_entry_that_says_nothing_is_reported(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], answer: str, says: str
 ) -> None:
-    # The red-run note is all the `PostToolUseFailure` entry is for, and an envelope naming the
-    # event, exit 0, is what that entry prints whether or not its handler spoke: the row asks for
-    # the note by its words. Every other row is the real launcher's, so the one failure is this
-    # row's. Mutation (declared, `mutations/`'s "the hook smoke stops reading the context an
-    # entry printed"): the `context_says` check never fails -> this reddens.
+    # The red-run note is all the `PostToolUseFailure` entry is for, and that entry exits 0 whether
+    # or not its handler spoke: the row asks for its event and for the note by its words. Every
+    # other row is the real launcher's, so the one failure is this row's. Mutation (declared,
+    # `mutations/`'s "the hook smoke stops reading the context an entry printed"): the
+    # `context_says` check never fails -> the no-note case reddens.
     smoke = _load("smoke_hooks")
-    code = smoke.main(
-        [
-            "--plugin-root",
-            str(
-                _plugin(
-                    tmp_path,
-                    launcher=_answering(
-                        "PostToolUseFailure",
-                        '{"hookSpecificOutput": {"hookEventName": "PostToolUseFailure"}}',
-                    ),
-                )
-            ),
-            "--fixture",
-            str(ROOT / "tests" / "fixtures" / "smoke-project"),
-            "--scratch",
-            str(tmp_path / "s"),
-        ]
+    code = _main(
+        smoke, _plugin(tmp_path, launcher=_answering("PostToolUseFailure", answer)), tmp_path / "s"
     )
     out = capsys.readouterr().out
     assert code == 1, out
-    assert "the context does not say 'Before calling this red a flake" in out, out
+    assert says in out, out
     assert "12 entries, 13 row(s), 1 failure(s)" in out, out
 
 
@@ -192,16 +177,7 @@ def test_a_wrapper_that_answers_wrongly_is_reported(
     (planted / "hooks" / "run-hook.sh").write_text("#!/bin/sh\nexit 2\n", encoding="utf-8")
     (planted / "scripts").mkdir()
     (planted / "scripts" / "drybag").write_text("raise SystemExit(0)\n", encoding="utf-8")
-    code = smoke.main(
-        [
-            "--plugin-root",
-            str(planted),
-            "--fixture",
-            str(ROOT / "tests" / "fixtures" / "smoke-project"),
-            "--scratch",
-            str(tmp_path),
-        ]
-    )
+    code = _main(smoke, planted, tmp_path)
     assert code == 1
     out = capsys.readouterr().out
     assert "exited 2, expected 0" in out
@@ -232,16 +208,7 @@ def test_hooks_json_losing_an_event_fails_instead_of_running_fewer_rows(
     assert "PostToolUse" in document["hooks"], "the fixture removes an event that is there"
     del document["hooks"]["PostToolUse"]
     entries.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    code = smoke.main(
-        [
-            "--plugin-root",
-            str(planted),
-            "--fixture",
-            str(ROOT / "tests" / "fixtures" / "smoke-project"),
-            "--scratch",
-            str(tmp_path),
-        ]
-    )
+    code = _main(smoke, planted, tmp_path)
     assert code == 1
     assert "no hook entry for ['PostToolUse']" in capsys.readouterr().out
 
@@ -268,16 +235,7 @@ def test_hooks_json_losing_a_bundle_fails_instead_of_injecting_one_fewer(
     assert len(kept) == len(groups) - 1, "the fixture removes an entry that is there"
     document["hooks"]["SessionStart"][0]["hooks"] = kept
     entries.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    code = smoke.main(
-        [
-            "--plugin-root",
-            str(planted),
-            "--fixture",
-            str(ROOT / "tests" / "fixtures" / "smoke-project"),
-            "--scratch",
-            str(tmp_path / "s"),
-        ]
-    )
+    code = _main(smoke, planted, tmp_path / "s")
     out = capsys.readouterr().out
     assert code == 1, out
     assert "hooks.json lost a bundle" in out, out
@@ -301,16 +259,7 @@ def test_hooks_json_gaining_an_entry_is_reported_rather_than_quietly_run(
     groups = document["hooks"]["SessionStart"][0]["hooks"]
     groups.append(dict(groups[0]))
     entries.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    code = smoke.main(
-        [
-            "--plugin-root",
-            str(planted),
-            "--fixture",
-            str(ROOT / "tests" / "fixtures" / "smoke-project"),
-            "--scratch",
-            str(tmp_path / "s"),
-        ]
-    )
+    code = _main(smoke, planted, tmp_path / "s")
     out = capsys.readouterr().out
     assert code == 1, out
     assert "13 entries and 14 rows, expected 12 and 13" in out, out
@@ -336,19 +285,46 @@ def test_the_exfiltration_scenario_holds_against_the_checkout(
     # passed"): `Report.row` banks only the failures, the report empties, and the floor is what
     # notices.
     exfil = _load("smoke_exfiltration")
-    code = exfil.main(
-        [
-            "--plugin-root",
-            str(ROOT),
-            "--fixture",
-            str(ROOT / "tests" / "fixtures" / "hostile-project"),
-            "--scratch",
-            str(tmp_path),
-        ]
-    )
+    code = _main(exfil, ROOT, tmp_path, HOSTILE)
     out = capsys.readouterr().out
     assert code == 0, out
     assert "5 row(s), 0 failure(s)" in out, out
+
+
+@needs_git
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "{}",
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "Stop",
+                    "additionalContext": UNREVIEWED_COUNT.format(count=2),
+                }
+            }
+        ),
+        json.dumps(
+            {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "other"}}
+        ),
+    ],
+    ids=["silent", "another-event", "other-words"],
+)
+def test_the_exfiltration_row_takes_only_the_count_line_from_the_session_start_hook(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], answer: str
+) -> None:
+    # The hostile store's unreviewed notes are the one thing this entry has to say, so an answer
+    # that says nothing, or names another event, or says anything else is the row's failure.
+    exfil = _load("smoke_exfiltration")
+    code = _main(
+        exfil,
+        _plugin(tmp_path, launcher=_answering("SessionStart", answer)),
+        tmp_path / "s",
+        HOSTILE,
+    )
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "FAIL  the session-start hook names its event and injects nothing" in out, out
 
 
 @needs_git
@@ -365,9 +341,7 @@ def test_the_exfiltration_scenario_reports_a_row_that_went_the_wrong_way(
     shutil.copytree(ROOT / "tests" / "fixtures" / "hostile-project", fixture)
     note = fixture / "docs" / "memory" / "volatile" / "carried.md"
     note.write_text(note.read_text(encoding="utf-8").replace("CANARY-AS-DATA", "nothing"), "utf-8")
-    code = exfil.main(
-        ["--plugin-root", str(ROOT), "--fixture", str(fixture), "--scratch", str(tmp_path / "s")]
-    )
+    code = _main(exfil, ROOT, tmp_path / "s", fixture)
     assert code == 1
     out = capsys.readouterr().out
     assert "FAIL  the clone's notes reach a session as data and never as a standing rule" in out, (

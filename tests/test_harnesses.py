@@ -139,8 +139,8 @@ TEXT = Harness(
 @pytest.mark.parametrize("event", ["SessionStart", "PreToolUse", "PostToolUse"])
 @pytest.mark.parametrize(
     "context",
-    ["", "a note", '{"permissionDecision": "deny", "decision": "block", "continue": false}'],
-    ids=["empty", "plain", "deny-shaped"],
+    ["a note", '{"permissionDecision": "deny", "decision": "block", "continue": false}'],
+    ids=["plain", "deny-shaped"],
 )
 def test_no_harness_renders_a_decision(harness: Harness, event: str, context: str) -> None:
     # A rendering is context in an envelope, and a context or a notice shaped like a decision is
@@ -154,10 +154,24 @@ def test_no_harness_renders_a_decision(harness: Harness, event: str, context: st
 @pytest.mark.parametrize("event", EVENTS)
 def test_a_hook_with_nothing_to_say_answers_an_empty_object(harness: Harness, event: str) -> None:
     # Claude Code 2.1.319 fails validation on the envelope on `SessionEnd` and Codex 0.166.0 reports
-    # `hook: Stop Failed`, while `{}` passes on every event of both.
+    # `hook: Stop Failed`, while `{}` passes on the six events and the five they were measured on;
+    # `UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses, were not.
     # Mutation (declared, `mutations/`'s "a hook with nothing to say answers the envelope"): the
     # payload starts as the envelope -> every case reddens.
     assert harness.render(event, "", "") == "{}"
+
+
+@pytest.mark.parametrize("harness", HARNESSES, ids=lambda h: h.name)
+@pytest.mark.parametrize("event", ["Stop", "SessionEnd"])
+def test_a_context_on_stop_or_session_end_goes_out_in_the_envelope(
+    harness: Harness, event: str
+) -> None:
+    # The empty object is the quiet answer's rule and no more. This is the shape the harnesses
+    # refuse on these two events, and no shipped handler gives it: pinned so that a handler that
+    # starts speaking there, or a render that drops its words, is a decision and not an accident.
+    assert json.loads(harness.render(event, "a note", "")) == {
+        "hookSpecificOutput": {"hookEventName": event, "additionalContext": "a note"}
+    }
 
 
 def test_every_harness_renders_through_the_canonical_render() -> None:

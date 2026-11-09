@@ -2673,7 +2673,7 @@ reddens = [
 name = "the release pulls main again"
 file = "RELEASING.md"
 before = """   git fetch origin
-   git log --oneline --decorate origin/main..main   # nothing, or a spent release commit
+   git log --oneline --decorate --no-merges main --not origin/main origin/dev   # nothing, or a spent release commit
    git switch -C main origin/main
 """
 after = """   git switch main && git pull
