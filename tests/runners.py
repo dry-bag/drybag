@@ -1,11 +1,10 @@
-"""The recording `stayfixed.runner.Runner` doubles the suite hands the code under test.
+"""The recording `drybag.runner.Runner` doubles the suite hands the code under test.
 
-`Recorder` answers any program from a script, and `LsRemote` is `git ls-remote --exit-code`.
-A module states what its runner answers at the call site, as keyword arguments, and keeps no
-private runner class of its own unless the question it asks is not "record the argv and answer
-from a script": `tests/guards/test_attribute.py`'s `_Coded` (answers by the tree it is run in) and
-`tests/scripts/test_publish_template.py`'s `_GitHub` (models a repository's state) are the two
-that are not, and each says why.
+`Recorder` answers any program from a script. A module states what its runner answers at the
+call site, as keyword arguments, and keeps no private runner class of its own unless the question
+it asks is not "record the argv and answer from a script":
+`tests/scripts/test_publish_template.py`'s `_GitHub` (models a repository's state) is the one
+that is not, and says why.
 
 `git_that_cannot_run` is here too, though it is no `Runner`: the product runs `git` through
 `gitenv.git_run` rather than a `Runner`, and a `git` that cannot be launched is a double every
@@ -23,8 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.release.pins import NO_MATCH
-from stayfixed.runner import Completed
+from drybag.runner import Completed
 
 
 @dataclass(kw_only=True)
@@ -67,28 +65,6 @@ class Recorder:
         return Completed(self.code, self.stdout, self.stderr)
 
 
-# `LsRemote.code`'s default, which no process exits with: "derive the code from the listing".
-_FROM_LISTING = -1
-
-
-@dataclass(kw_only=True)
-class LsRemote(Recorder):
-    """`git ls-remote --exit-code` answering from a listing, with no network.
-
-    The exit code follows git's contract unless the case names one: `NO_MATCH` for an empty
-    listing and `0` for any other. So `LsRemote()` is "no tags", `LsRemote(stdout=listing)` is a
-    listing, and `LsRemote(code=128)` or `LsRemote(code=NOT_FOUND)` is a git that failed. A case
-    *about* the no-match branch spells `code=NO_MATCH`, so the value that selects the branch is
-    visible in it.
-    """
-
-    code: int = _FROM_LISTING
-
-    def __post_init__(self) -> None:
-        if self.code == _FROM_LISTING:
-            self.code = 0 if self.stdout else NO_MATCH
-
-
 def git_that_cannot_run(monkeypatch: pytest.MonkeyPatch) -> None:
     """A `git` that cannot be launched at all, the state `gitenv.GitUnavailable` is about: a `PATH`
     with no `git` on it for `gitenv._ask`, which `git_run`, `git_answer` and `origin_remote` all
@@ -98,7 +74,7 @@ def git_that_cannot_run(monkeypatch: pytest.MonkeyPatch) -> None:
     whole process. A repository with no `origin` remote is a different state — `git` ran and
     answered nothing — and it is the ordinary "not bound" one rather than a machine fault.
     """
-    monkeypatch.setattr("stayfixed.gitenv.scrubbed_env", lambda: {"PATH": os.devnull})
+    monkeypatch.setattr("drybag.gitenv.scrubbed_env", lambda: {"PATH": os.devnull})
 
 
 def claude_code(main: Path, *, ignoring: tuple[str, ...] = ()) -> Callable[[list[str], Path], None]:
@@ -124,7 +100,7 @@ def claude_code(main: Path, *, ignoring: tuple[str, ...] = ()) -> Callable[[list
         name = argv[4] if argv[2] == "marketplace" else argv[3]
         if verb == "marketplace add":
             source = {"source": "directory", "path": name}
-            known[f"stayfixed-delivery-{Path(name).name}"] = {"source": source}
+            known[f"drybag-delivery-{Path(name).name}"] = {"source": source}
         elif verb == "install":
             plugins[name] = True
         elif verb == "uninstall":

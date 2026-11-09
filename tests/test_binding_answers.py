@@ -14,11 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.attach.check import check
-from stayfixed.attach.write import attach
-from stayfixed.config.loader import load
-from stayfixed.doctor.api import run_checks
-from stayfixed.memory.store import resolved
+from drybag.attach.check import check
+from drybag.attach.write import attach
+from drybag.config.loader import load
+from drybag.doctor.api import run_checks
+from drybag.memory.store import resolved
 from tests.attach.test_write import RULE, _attachable
 from tests.gitfixture import git
 from tests.runners import Recorder
@@ -51,13 +51,11 @@ def test_a_checkout_whose_origin_was_removed_stays_bound_on_every_surface(
     assert not attached.binding_recorded
 
     checked = check(root, store=store, machine=machine)
-    assert checked.exit_code == 0 and checked.summary.startswith("bound;")
+    assert checked.exit_code == 0 and "; bound; " in checked.summary
 
     doctor = next(
         row
-        for row in run_checks(
-            root, home=home, machine=machine, runner=Recorder(), env={"HOME": str(home)}
-        )
+        for row in run_checks(root, home=home, machine=machine, env={"HOME": str(home)})
         if row.name == "attached"
     )
     assert "the binding is bound" in doctor.detail

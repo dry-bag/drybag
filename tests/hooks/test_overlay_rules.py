@@ -1,4 +1,4 @@
-"""The overlay's rules through `stayfixed hook`, end to end: a standing rule on `SessionStart` from
+"""The overlay's rules through `drybag hook`, end to end: a standing rule on `SessionStart` from
 the core plugin, and a path-scoped one on the `PostToolUse` entry the rendered plugin carries.
 
 Each case spawns the hook with a home of its own, which is where the machine file records the
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.attach.rules import SCOPED_LEAD, STANDING_LEAD
+from drybag.attach.rules import SCOPED_LEAD, STANDING_LEAD
 from tests.gitfixture import git
 from tests.hooks.test_hook_command import hook, needs_git
 
@@ -23,10 +23,10 @@ SCOPED = "Files under scoped/ are generated; edit the generator instead."
 def _attached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, bound: bool) -> tuple[Path, Path]:
     """A checkout, an overlay with one standing and one scoped rule, and the home the hook runs
     under; the checkout bound to the overlay's project when `bound`."""
-    from stayfixed import binding
+    from drybag import binding
 
     home = tmp_path / "home"
-    machine = home / ".config" / "stayfixed" / "config.toml"
+    machine = home / ".config" / "drybag" / "config.toml"
     machine.parent.mkdir(parents=True)
     overlay = tmp_path / "overlay"
     common = overlay / "common" / "claude" / "rules"

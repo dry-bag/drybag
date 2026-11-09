@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The plugin's tree: the nine paths the runtime reads, read from a commit of this repository.
+"""The plugin's tree: the nine paths it is published with, read from a commit of this repository.
 
     uv run python scripts/plugin_tree.py manifest --root DIR --rev REV [--exact]
                                          [--manifest-file FILE]
@@ -50,46 +50,47 @@ from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-# Before the CLI frame exists, so said here: an interpreter without this repository's `stayfixed`
+# Before the CLI frame exists, so said here: an interpreter without this repository's `drybag`
 # would otherwise end in a traceback and exit `1`, which is `commit --require-pin`'s finding.
 try:
-    from stayfixed import fsops
-    from stayfixed.cli import JSON_EPILOG, run
-    from stayfixed.errors import Failure, Refusal
-    from stayfixed.gitenv import (
+    from drybag import fsops
+    from drybag.cli import JSON_EPILOG, run
+    from drybag.errors import Failure, Refusal
+    from drybag.gitenv import (
         NO_ANSWER,
         QUERY_TIMEOUT_SECONDS,
         answer_bytes,
         git_run,
         pipe_encoding,
     )
-    from stayfixed.jsonobject import json_object
-    from stayfixed.printed import clipped, quoted
-    from stayfixed.release.api import PACKAGE
-    from stayfixed.result import Result
+    from drybag.jsonobject import json_object
+    from drybag.printed import clipped, quoted
+    from drybag.release.api import PACKAGE
+    from drybag.result import Result
 except ImportError as exc:
     sys.stderr.write(
         f"scripts/plugin_tree.py: refused: {exc}; run it with `uv run python "
-        "scripts/plugin_tree.py`, which puts this repository's stayfixed on the path\n"
+        "scripts/plugin_tree.py`, which puts this repository's drybag on the path\n"
     )
     sys.exit(2)
 
 # What the plugin's runtime reads, and nothing else: the two manifests, the hooks and their
-# wrapper, the launcher and the package it puts on `sys.path`, the skills and agents the harness
-# loads, and the two files every published repository carries.
+# wrapper, the launcher and the package it puts on `sys.path`, the skills the harness
+# loads, and the two files every published repository carries. One more path the runtime never
+# reads: the icon the plugin directory takes for the listing, once, at the first submission.
 PLUGIN_PATHS: tuple[str, ...] = (
     ".claude-plugin/plugin.json",
+    ".claude-plugin/icon.png",
     ".codex-plugin/plugin.json",
     "hooks",
-    "scripts/stayfixed",
-    "src/stayfixed",
+    "scripts/drybag",
+    "src/drybag",
     "skills",
-    "agents",
     "README.md",
     "LICENSE",
 )
 # The manifest's first line: a reader that meets another refuses to compare.
-FORMAT = "stayfixed-plugin-tree 1"
+FORMAT = "drybag-plugin-tree 1"
 # The only modes a member may have. A symlink (`120000`) and a submodule (`160000`) are what the
 # plugin directory blocks where the plugin loads them, and every path here is one it loads.
 REGULAR_MODES = frozenset({"100644", "100755"})
@@ -292,7 +293,7 @@ def render(entries: Iterable[Member], out: Path) -> None:
 # --- The plugin repository's commit -------------------------------------------------------------
 
 # The repository the plugin's tree is read from, as the commit message names it.
-SOURCE_REPOSITORY = "stayfixed/stayfixed"
+SOURCE_REPOSITORY = "dry-bag/drybag"
 # Where, at a source commit, the marketplace names the plugin commit it pins; the entry is the one
 # named `PACKAGE`, as `scripts/release.py` reads it.
 MARKETPLACE = ".claude-plugin/marketplace.json"
@@ -303,7 +304,7 @@ VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
 # The author and the committer of every plugin commit, with its date: fixed, so the commit is the
 # same whoever computes it and whenever. Its message names the version and not the source commit,
 # so the release commit can carry the result.
-IDENTITY = "stayfixed <release@stayfixed.invalid> 0 +0000"
+IDENTITY = "drybag <release@drybag.invalid> 0 +0000"
 # A commit id of the plugin repository, which is SHA-1 whatever the owner's configuration says.
 SHA1 = re.compile(r"[0-9a-f]{40}")
 # On every git that runs in the git dir, `init` included: none of the owner's hooks runs there.
@@ -329,7 +330,7 @@ def commit_text(tree: str, parent: str | None, version: str) -> str:
     lineage = f"parent {parent}\n" if parent is not None else ""
     return (
         f"tree {tree}\n{lineage}author {IDENTITY}\ncommitter {IDENTITY}\n\n"
-        f"stayfixed {version}\n\nThe plugin tree of {SOURCE_REPOSITORY} at v{version}.\n"
+        f"drybag {version}\n\nThe plugin tree of {SOURCE_REPOSITORY} at v{version}.\n"
     )
 
 
@@ -347,7 +348,7 @@ def pinned_sha(root: Path, rev: str) -> str | None:
     the commit holds no marketplace or its entry pins no `sha`.
 
     Read as `scripts/release.py` reads the entry: `plugins` a list of objects, exactly one of them
-    named `stayfixed`, and its `source` an object. Refused, each in its own words naming the commit
+    named `drybag`, and its `source` an object. Refused, each in its own words naming the commit
     and the marketplace: a marketplace that is not JSON, a `plugins` that is not a list of
     objects, not that one entry, a `source` that is no object, or a `sha` that is not 40 lowercase
     hex characters.

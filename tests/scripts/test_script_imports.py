@@ -1,7 +1,7 @@
 """No script under `scripts/` imports another, but the one exemption named here; CONTRIBUTING.md,
 under "Areas", says why.
 
-The walk reads every import statement in every `scripts/*.py` and the launcher `scripts/stayfixed`
+The walk reads every import statement in every `scripts/*.py` and the launcher `scripts/drybag`
 through `tests/boundaries/astscan.py`, as the area rules do, and an offence is a module reached by a
 sibling's stem or by the directory's own name, which a package-qualified or relative import goes
 through. What it cannot see is reviewed by hand: a script run through `runpy` or loaded through
@@ -26,7 +26,7 @@ EXEMPT: frozenset[tuple[str, str]] = frozenset({("smoke_exfiltration.py", "smoke
 
 def _script_files() -> list[Path]:
     """Every script the walk reads: the `*.py` files and the launcher."""
-    return [*sorted(SCRIPTS.glob("*.py")), SCRIPTS / "stayfixed"]
+    return [*sorted(SCRIPTS.glob("*.py")), SCRIPTS / "drybag"]
 
 
 def _script_modules() -> frozenset[str]:

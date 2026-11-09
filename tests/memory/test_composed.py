@@ -6,9 +6,10 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from stayfixed.config.paths import data_directory
-from stayfixed.memory.composed import build, withdraw
-from stayfixed.memory.store import composed_directory as store_directory
+from drybag.config.paths import data_directory
+from drybag.memory.composed import build, withdraw
+from drybag.memory.store import composed_directory as store_directory
+from tests.tagged import with_tags
 
 # A binding id as `secrets.token_hex(16)` draws one; the store is named by it and nothing else.
 ID = "0123456789abcdef0123456789abcdef"
@@ -64,9 +65,65 @@ def test_a_rebuild_follows_the_overlay_and_keeps_a_note_the_harness_wrote(tmp_pa
     assert (store / "topic.md").read_text(encoding="utf-8") == "the harness's note"
 
 
+def a_tagged_overlay(tmp_path: Path, *tags: str, memory: bool = True) -> tuple[Path, Path]:
+    """`an_overlay` whose record of `p` lists `tags`, each with a `groups/<tag>/` directory and,
+    where `memory`, its `memory/` too."""
+    overlay, share = an_overlay(tmp_path)
+    return with_tags(overlay, "p", list(tags), *(("memory",) if memory else ())), share
+
+
+def test_a_tags_memory_is_linked_under_its_tag_name(tmp_path: Path) -> None:
+    overlay, _share = a_tagged_overlay(tmp_path, "a")
+    store = build(overlay, "p", ID)
+    assert (store / "tag-a").is_symlink()
+    assert (store / "tag-a").resolve() == (overlay / "groups" / "a" / "memory").resolve()
+
+
+def test_a_tag_without_memory_gets_no_link(tmp_path: Path) -> None:
+    # A link at no directory would take a note the harness writes through it into nowhere; the
+    # next attach picks the directory up once it exists.
+    overlay, _share = a_tagged_overlay(tmp_path, "a", memory=False)
+    store = build(overlay, "p", ID)
+    assert "tag-a" not in sorted(entry.name for entry in store.iterdir())
+    (overlay / "groups" / "a" / "memory").mkdir()
+    build(overlay, "p", ID)
+    assert (store / "tag-a").is_symlink()
+
+
+def test_untagging_takes_the_link_and_keeps_a_note_the_harness_wrote(tmp_path: Path) -> None:
+    overlay, _share = a_tagged_overlay(tmp_path, "a")
+    store = build(overlay, "p", ID)
+    (store / "topic.md").write_text("the harness's note", encoding="utf-8")
+    (overlay / "projects" / "p" / "project.toml").write_text("tags = []\n", encoding="utf-8")
+    build(overlay, "p", ID)
+    assert not (store / "tag-a").is_symlink() and not (store / "tag-a").exists()
+    assert (store / "topic.md").read_text(encoding="utf-8") == "the harness's note"
+    assert (overlay / "groups" / "a" / "memory").is_dir()
+
+
+def test_a_project_memory_directory_in_the_tag_namespace_is_not_linked(tmp_path: Path) -> None:
+    # The project side gives up the `tag-` prefix: the directory would otherwise take the name
+    # the tag's own link needs. Mutation (oracle): `mutations/`'s "the composed store links a
+    # project directory in the tag namespace".
+    overlay, share = a_tagged_overlay(tmp_path, "a")
+    (share / "tag-a").mkdir()
+    (share / "tag-b").mkdir()
+    store = build(overlay, "p", ID)
+    assert (store / "tag-a").resolve() == (overlay / "groups" / "a" / "memory").resolve()
+    assert not (store / "tag-b").exists() and not (store / "tag-b").is_symlink()
+
+
+def test_a_tag_and_a_project_group_of_one_name_both_link(tmp_path: Path) -> None:
+    overlay, share = a_tagged_overlay(tmp_path, "specs")
+    (share / "specs").mkdir()
+    store = build(overlay, "p", ID)
+    assert (store / "specs").resolve() == (share / "specs").resolve()
+    assert (store / "tag-specs").resolve() == (overlay / "groups" / "specs" / "memory").resolve()
+
+
 def test_withdraw_removes_the_links_and_the_store_and_never_a_note(tmp_path: Path) -> None:
     # The links go and the overlay they point into stays; a note the harness wrote keeps the
-    # directory, since nothing stayfixed placed it there.
+    # directory, since nothing drybag placed it there.
     overlay, share = an_overlay(tmp_path)
     store = build(overlay, "p", ID)
     assert withdraw(ID) is True
@@ -80,7 +137,7 @@ def test_withdraw_removes_the_links_and_the_store_and_never_a_note(tmp_path: Pat
 
 
 def _never_the_whole_id(root: Path, tmp_path: Path, machine: Path, id: str, *argv: str) -> str:
-    """What `stayfixed <argv>` printed, asserted to name the binding id by its short form alone."""
+    """What `drybag <argv>` printed, asserted to name the binding id by its short form alone."""
     from tests.cli import cli
 
     code, out, err = cli(root, tmp_path, *argv, machine=machine)
@@ -97,21 +154,21 @@ def test_no_memory_command_prints_the_whole_binding_id_through_a_store_path(
     # `memory.index_extra`, which the sweep skill relays; and with the store deleted under the
     # pointer. Each prints the store under its short id now. Mutation (oracle): `mutations/`'s
     # "a store path is printed with the whole binding id".
-    from stayfixed import binding
-    from stayfixed.attach.write import attach, detach
-    from stayfixed.binding import short
+    from drybag import binding
+    from drybag.attach.write import attach, detach
+    from drybag.binding import short
     from tests.attach.test_detach import _bound, _grant
     from tests.runners import Recorder
 
     root, own, machine = _bound(tmp_path)
     _grant(own.parents[1])
-    toml = root / "stayfixed.toml"
+    toml = root / "drybag.toml"
     overlay_mode = toml.read_text(encoding="utf-8")
     attach(root, store=None, machine=machine, runner=Recorder())
     id = binding.read_id(root)
     assert id is not None
     # A pull request lists a pointer the overlay's shared index may not carry.
-    toml.write_text(overlay_mode.replace("index_extra = []", 'index_extra = ["stayfixed.toml"]'))
+    toml.write_text(overlay_mode.replace("index_extra = []", 'index_extra = ["drybag.toml"]'))
     said = _never_the_whole_id(root, tmp_path, machine, id, "memory", "index")
     assert f"stores/{short(id)}…/MEMORY.md" in said
     toml.write_text(overlay_mode)
@@ -130,10 +187,10 @@ def test_no_memory_command_prints_the_whole_binding_id_through_a_store_path(
 def test_a_bound_checkout_whose_composed_store_is_gone_hears_it_once(tmp_path: Path) -> None:
     # The pointer names a store that is gone, so the harness reads no memory and the session heard
     # nothing: the standing-rules entry says so on one line, naming the store by its short id and
-    # `stayfixed attach` as the way back; every other entry stays quiet.
-    from stayfixed import binding
-    from stayfixed.attach.write import attach
-    from stayfixed.binding import short
+    # `drybag attach` as the way back; every other entry stays quiet.
+    from drybag import binding
+    from drybag.attach.write import attach
+    from drybag.binding import short
     from tests.attach.test_detach import _bound, _grant
     from tests.cli import cli
     from tests.runners import Recorder
@@ -147,7 +204,7 @@ def test_a_bound_checkout_whose_composed_store_is_gone_hears_it_once(tmp_path: P
     entry = ("memory", "session-context", "--bundle")
     code, out, err = cli(root, tmp_path, *entry, "standing-rules", machine=machine)
     assert (code, err) == (0, "")
-    assert len(out.splitlines()) == 1 and "stayfixed attach" in out
+    assert len(out.splitlines()) == 1 and "drybag attach" in out
     assert f"{short(id)}…" in out and id not in out
     for bundle, part in (("standing-rules", "2"), ("volatile-notes", "1")):
         assert cli(root, tmp_path, *entry, bundle, "--part", part, machine=machine) == (0, "\n", "")

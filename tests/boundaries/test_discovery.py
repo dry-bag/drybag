@@ -13,17 +13,17 @@ from types import ModuleType
 
 import pytest
 
-import stayfixed
-from stayfixed.areas import area_imports, area_modules
-from stayfixed.cli import discover_registrars
+import drybag
+from drybag.areas import area_imports, area_modules
+from drybag.cli import discover_registrars
 from tests.boundaries import astscan
 
 ROOT = Path(__file__).resolve().parents[2]
 LIST_IMPORTS = (
     "import sys\n"
-    "from stayfixed.hooks.registry import discover\n"
+    "from drybag.hooks.registry import discover\n"
     "discover()\n"
-    "print(' '.join(sorted(m for m in sys.modules if m.startswith('stayfixed'))))\n"
+    "print(' '.join(sorted(m for m in sys.modules if m.startswith('drybag'))))\n"
 )
 
 # The submodules discovery imports by name, one per reader: the CLI frame, the hook registry and
@@ -45,8 +45,8 @@ def area_names(source: Path) -> list[str]:
 def test_commands_modules_are_found_in_area_name_order() -> None:
     names = [module.__name__ for module in area_modules("commands")]
     assert names == sorted(names)
-    assert "stayfixed.hooks.commands" in names
-    assert "stayfixed.doctor.commands" in names
+    assert "drybag.hooks.commands" in names
+    assert "drybag.doctor.commands" in names
 
 
 def plant_area(
@@ -56,8 +56,8 @@ def plant_area(
     name: str,
     files: dict[str, str],
 ) -> None:
-    """A real area `stayfixed.<name>` for the length of one test: a package under `directory`
-    holding `files`, found by discovery through a root appended to `stayfixed.__path__`.
+    """A real area `drybag.<name>` for the length of one test: a package under `directory`
+    holding `files`, found by discovery through a root appended to `drybag.__path__`.
 
     Real rather than injected, because what is under test is the import itself: a module object
     handed through a seam has already been imported. The root goes when the test ends, and so does
@@ -68,13 +68,13 @@ def plant_area(
     (package / "__init__.py").write_text("", encoding="utf-8")
     for filename, source in files.items():
         (package / filename).write_text(source, encoding="utf-8")
-    monkeypatch.setattr(stayfixed, "__path__", [*stayfixed.__path__, str(directory)])
+    monkeypatch.setattr(drybag, "__path__", [*drybag.__path__, str(directory)])
 
     def forget() -> None:
-        qualified = f"stayfixed.{name}"
+        qualified = f"drybag.{name}"
         for module in [m for m in sys.modules if m == qualified or m.startswith(f"{qualified}.")]:
             del sys.modules[module]
-        vars(stayfixed).pop(name, None)
+        vars(drybag).pop(name, None)
 
     request.addfinalizer(forget)
 
@@ -95,10 +95,11 @@ def test_an_area_submodule_that_fails_to_import_is_handed_over_as_its_exception(
     plant_area(request, monkeypatch, tmp_path, "zzplanted", {"doctor.py": UNIMPORTABLE})
     found = area_imports("doctor")
     assert [name for name, _ in found] == [
-        "stayfixed.attach.doctor",
-        "stayfixed.memory.doctor",
-        "stayfixed.overlay.doctor",
-        "stayfixed.zzplanted.doctor",
+        "drybag.attach.doctor",
+        "drybag.memory.doctor",
+        "drybag.overlay.doctor",
+        "drybag.sync.doctor",
+        "drybag.zzplanted.doctor",
     ]
     assert all(isinstance(module, ModuleType) for _, module in found[:-1])
     assert isinstance(found[-1][1], RuntimeError)
@@ -129,12 +130,14 @@ def test_in_isolation_an_area_with_no_such_submodule_is_never_imported() -> None
     )
     assert completed.returncode == 0, completed.stderr
     imported = completed.stdout.split()
-    assert "stayfixed.hooks.registry" in imported
-    assert "stayfixed.release" not in imported
-    assert "stayfixed.config" not in imported
-    assert "stayfixed.presets" not in imported
-    assert "stayfixed.profiles" not in imported
-    assert "stayfixed.harnesses" not in imported
+    assert "drybag.hooks.registry" in imported
+    assert "drybag.release" not in imported
+    assert "drybag.config" not in imported
+    assert "drybag.presets" not in imported
+    assert "drybag.harnesses" not in imported
+    # The index render's own modules too: `memory.hooks` imports them inside its handler.
+    assert "drybag.memory.index" not in imported
+    assert "drybag.memory.store" not in imported
 
 
 # The modules an area's `doctor.py` may import at module level: neither costs the report anything,
@@ -162,12 +165,12 @@ def test_an_areas_doctor_module_imports_only_inside_its_functions() -> None:
     # what `TYPE_CHECKING` guards stand at module level. The walk is the whole tree, because a
     # walk of the top-level statements let an import nested in a `try` through, which runs on
     # import all the same. Mutations (oracle): `mutations/`'s "an area's doctor.py imports
-    # stayfixed at module level" and "an area's doctor.py imports stayfixed at module level
+    # drybag at module level" and "an area's doctor.py imports drybag at module level
     # inside a try".
-    source = ROOT / "src" / "stayfixed"
+    source = ROOT / "src" / "drybag"
     found = sorted(source.glob("*/doctor.py"))
-    # The three delivery areas carry one each, and the walk says so before it judges them.
-    assert [path.parent.name for path in found] == ["attach", "memory", "overlay"]
+    # Four areas carry one each, and the walk says so before it judges them.
+    assert [path.parent.name for path in found] == ["attach", "memory", "overlay", "sync"]
     offences: list[str] = []
     for path in found:
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -182,8 +185,8 @@ def test_the_doctor_import_rule_reads_both_spellings_of_type_checking() -> None:
     # dropping the `ast.Import` arm of `_doctor_offences` reddens the first assertion, and
     # dropping the `typing.TYPE_CHECKING` arm of `astscan.type_checking` reddens it too.
     guarded = (
-        "import typing\nif typing.TYPE_CHECKING:\n    from stayfixed.memory.store import Store\n"
-        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    import stayfixed.errors\n"
+        "import typing\nif typing.TYPE_CHECKING:\n    from drybag.memory.store import Store\n"
+        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    import drybag.errors\n"
     )
     assert _doctor_offences("x.py", ast.parse(guarded)) == []
     carried = (
@@ -193,13 +196,13 @@ def test_the_doctor_import_rule_reads_both_spellings_of_type_checking() -> None:
     assert _doctor_offences("x.py", ast.parse(carried)) == ["x.py:1", "x.py:2", "x.py:6"]
 
 
-# The two functions through which discovery imports `stayfixed.<area>.<submodule>`: the one the CLI
+# The two functions through which discovery imports `drybag.<area>.<submodule>`: the one the CLI
 # frame and the hook registry ask, which lets an import failure raise, and the one `doctor` asks,
 # which hands it back so it costs one row.
 DISCOVERY_FUNCTIONS = frozenset({"area_modules", "area_imports"})
 
 
-# Who asks discovery for what, one row per call: the file relative to `src/stayfixed/` and the
+# Who asks discovery for what, one row per call: the file relative to `src/drybag/` and the
 # submodule its call names. Held as a multiset and by equality in both directions, as
 # `tests/boundaries/test_delivery.py`'s `DYNAMIC_IMPORTERS` is. Each submodule has its one reader,
 # the CLI frame, the hook registry and the doctor report, and no other module asks: any module that
@@ -224,7 +227,7 @@ def _discovery_references(
     tree: ast.AST, functions: frozenset[str] = DISCOVERY_FUNCTIONS
 ) -> list[ast.Name | ast.Attribute]:
     """Every reference to one of `functions` in `tree`: by any name a `from … import` binds it
-    to, and as an attribute of anything (`stayfixed.areas.area_modules`)."""
+    to, and as an attribute of anything (`drybag.areas.area_modules`)."""
     bound = set(functions) | {
         alias.asname
         for node in ast.walk(tree)
@@ -266,17 +269,17 @@ def _area_module_offences(where: str, tree: ast.AST, allowed: frozenset[str]) ->
 
 
 def test_discovery_is_asked_only_for_the_submodules_it_names() -> None:
-    # `area_modules` and `area_imports` import `stayfixed.<area>.<submodule>` for every area that
+    # `area_modules` and `area_imports` import `drybag.<area>.<submodule>` for every area that
     # has one, so a core caller asking for `"api"` loads every area's surface, the private layer's
     # included, through the one door the delivery rule leaves open. Every call under
-    # `src/stayfixed/` names one of the four submodules discovery is for, as a literal, and is
+    # `src/drybag/` names one of the four submodules discovery is for, as a literal, and is
     # made by that submodule's reader alone (`DISCOVERY_CALLERS`). No module but its own refers to a
     # reader's seam that hands discovery's answer on (`DISCOVERY_SEAMS`).
     #
     # Mutations (declared): `mutations/`'s "a core module asks discovery for every area's api.py",
     # "a core module picks one area's commands out of discovery" and "a core module picks one
     # area's commands out of the CLI frame's registrars".
-    source = ROOT / "src" / "stayfixed"
+    source = ROOT / "src" / "drybag"
     allowed = frozenset(name.removesuffix(".py") for name in DISCOVERED_SUBMODULES)
     offences: list[str] = []
     asked: list[tuple[str, str]] = []
@@ -304,10 +307,10 @@ def test_the_discovery_rule_reads_every_spelling() -> None:
     # `_discovery_references`, or reading a call of any function as an ask, reddens it.
     allowed = frozenset({"commands", "hooks", "doctor"})
     spellings = (
-        "import stayfixed.areas\nstayfixed.areas.area_modules('api')\n"
-        "from stayfixed.areas import area_modules as found\nfound(name)\nkept = found\n"
+        "import drybag.areas\ndrybag.areas.area_modules('api')\n"
+        "from drybag.areas import area_modules as found\nfound(name)\nkept = found\n"
         "found('hooks')\n"
-        "from stayfixed.areas import area_imports\narea_imports('api')\narea_imports('doctor')\n"
+        "from drybag.areas import area_imports\narea_imports('api')\narea_imports('doctor')\n"
     )
     assert _area_module_offences("x.py", ast.parse(spellings), allowed) == [
         "x.py:2",
@@ -316,13 +319,13 @@ def test_the_discovery_rule_reads_every_spelling() -> None:
         "x.py:8",
     ]
     asking = (
-        "import stayfixed.areas\nstayfixed.areas.area_modules('commands')\n"
-        "from stayfixed.areas import area_imports as ask\nask('doctor')\nprint('hooks')\n"
+        "import drybag.areas\ndrybag.areas.area_modules('commands')\n"
+        "from drybag.areas import area_imports as ask\nask('doctor')\nprint('hooks')\n"
     )
     assert sorted(_discovery_asks(ast.parse(asking), allowed).values()) == ["commands", "doctor"]
     seams = (
-        "from stayfixed.cli import discover_registrars as found\nfound()\n"
-        "import stayfixed.cli\nstayfixed.cli.discover_registrars()\n"
+        "from drybag.cli import discover_registrars as found\nfound()\n"
+        "import drybag.cli\ndrybag.cli.discover_registrars()\n"
     )
     seam = frozenset(DISCOVERY_SEAMS)
     assert [node.lineno for node in _discovery_references(ast.parse(seams), seam)] == [2, 4]

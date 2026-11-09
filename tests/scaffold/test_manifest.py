@@ -8,24 +8,25 @@ from typing import Any
 
 import pytest
 
-from stayfixed import fsops
-from stayfixed.config.paths import PathEscape
-from stayfixed.scaffold.manifest import (
+from drybag import fsops
+from drybag.config.paths import PathEscape
+from drybag.jsonobject import LONG_NUMBER, NESTED
+from drybag.scaffold.manifest import (
     FORMAT,
     MANIFEST_PATH,
-    Kind,
     Location,
     Manifest,
     ManifestError,
     Record,
     digest,
 )
+from tests import parserlimits
 
 
 def a_record(**overrides: object) -> Record:
     values: dict[str, object] = {
         "id": "agents-md",
-        "kind": Kind.TEMPLATE,
+        "kind": "template",
         "location": Location.REPO,
         "target": "AGENTS.md",
         "template": "project/AGENTS.md",
@@ -64,7 +65,7 @@ def test_the_format_is_recorded_so_a_migration_can_key_on_it(tmp_path: Path) -> 
     assert Manifest.read(tmp_path).format == FORMAT
 
 
-def test_a_manifest_from_a_newer_stayfixed_refuses(tmp_path: Path) -> None:
+def test_a_manifest_from_a_newer_drybag_refuses(tmp_path: Path) -> None:
     Manifest({}).with_record(a_record()).write(tmp_path)
     raw = raw_of(tmp_path)
     raw["format"] = FORMAT + 1
@@ -74,11 +75,11 @@ def test_a_manifest_from_a_newer_stayfixed_refuses(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("value", [None, "1", 1.0, True, [1], 0, -1], ids=repr)
-def test_a_format_that_is_not_a_positive_integer_is_damage_and_not_a_newer_stayfixed(
+def test_a_format_that_is_not_a_positive_integer_is_damage_and_not_a_newer_drybag(
     tmp_path: Path, value: object
 ) -> None:
-    # A `format` of `null` or `"1"` is no number a stayfixed writes, newer or older, and was read
-    # as one written by a newer stayfixed, which sent the owner to upgrade the plugin; `true`, `0`
+    # A `format` of `null` or `"1"` is no number a drybag writes, newer or older, and was read
+    # as one written by a newer drybag, which sent the owner to upgrade the plugin; `true`, `0`
     # and `-1` were read as formats. Each is a manifest that is not this module's shape, refused as
     # the others are. Mutations (oracle): `mutations/`'s "a footprint manifest's format that is
     # not an integer reads as a newer one" -> the refusal says to upgrade; "a footprint manifest's
@@ -99,10 +100,36 @@ def test_records_are_written_in_id_order(tmp_path: Path) -> None:
 
 
 def test_a_malformed_manifest_refuses_rather_than_reading_as_empty(tmp_path: Path) -> None:
-    (tmp_path / ".stayfixed").mkdir()
+    (tmp_path / ".drybag").mkdir()
     (tmp_path / MANIFEST_PATH).write_text("{not json", encoding="utf-8")
     with pytest.raises(ManifestError):
         Manifest.read(tmp_path)
+
+
+# Two manifests that are valid JSON past this interpreter's parser, and what the refusal says of
+# each: nested deeper than it follows, and an integer longer than it converts (4,300 digits by
+# default).
+PAST_THE_PARSER = {
+    "nested": (parserlimits.NESTED, NESTED),
+    "long-number": ('{"format": ' + parserlimits.LONG_NUMBER + "}", LONG_NUMBER),
+}
+
+
+@pytest.mark.parametrize("case", sorted(PAST_THE_PARSER))
+def test_a_manifest_past_the_parser_is_refused_in_its_own_words(tmp_path: Path, case: str) -> None:
+    # The reader caught both documents and quoted the exception: "is unreadable: Exceeds the limit
+    # (4300 digits) for integer string conversion ... use sys.set_int_max_str_digits() to increase
+    # the limit", which tells the owner of a committed ledger to change their interpreter, and
+    # for the nested one the parser's report of its own stack. The refusal now says what the file
+    # holds, in the sentence shape the reader's other refusals have, and quotes no interpreter.
+    # Mutation (oracle): `mutations/`'s "the manifest reader quotes the parser's exception for a
+    # document past its reach" -> every case reddens.
+    document, clause = PAST_THE_PARSER[case]
+    (tmp_path / ".drybag").mkdir()
+    (tmp_path / MANIFEST_PATH).write_text(document, encoding="utf-8")
+    with pytest.raises(ManifestError) as refused:
+        Manifest.read(tmp_path)
+    assert str(refused.value) == f"{MANIFEST_PATH} {clause}"
 
 
 def test_a_manifest_past_the_read_cap_is_unreadable_and_never_read_whole(
@@ -123,7 +150,7 @@ def test_a_manifest_past_the_read_cap_is_unreadable_and_never_read_whole(
 
 
 def test_an_unknown_kind_refuses(tmp_path: Path) -> None:
-    (tmp_path / ".stayfixed").mkdir()
+    (tmp_path / ".drybag").mkdir()
     (tmp_path / MANIFEST_PATH).write_text(
         json.dumps(
             {
@@ -149,7 +176,7 @@ def test_an_unknown_kind_refuses(tmp_path: Path) -> None:
 
 
 def test_a_record_missing_a_field_refuses(tmp_path: Path) -> None:
-    (tmp_path / ".stayfixed").mkdir()
+    (tmp_path / ".drybag").mkdir()
     (tmp_path / MANIFEST_PATH).write_text(
         json.dumps({"artifacts": {"a": {"id": "a", "kind": "template", "location": "repo"}}}),
         encoding="utf-8",
@@ -160,24 +187,24 @@ def test_a_record_missing_a_field_refuses(tmp_path: Path) -> None:
 
 def test_the_manifest_is_written_atomically_and_readably(tmp_path: Path) -> None:
     Manifest({}).with_record(a_record()).write(tmp_path)
-    directory = tmp_path / ".stayfixed"
+    directory = tmp_path / ".drybag"
     assert sorted(p.name for p in directory.iterdir()) == ["manifest.json"]
     assert stat.S_IMODE((tmp_path / MANIFEST_PATH).stat().st_mode) == 0o644
 
 
-def test_a_symlinked_stayfixed_directory_refuses_the_write(tmp_path: Path) -> None:
+def test_a_symlinked_drybag_directory_refuses_the_write(tmp_path: Path) -> None:
     # `write_atomically` takes a path, so it makes the parent with `Path.mkdir` and replaces
-    # through `os.replace`: both follow a symlink at `.stayfixed` and neither is a containment
+    # through `os.replace`: both follow a symlink at `.drybag` and neither is a containment
     # check. The ledger is the one file this module knows the location of, so the check is here.
     victim = tmp_path / "victim"
     victim.mkdir()
-    (tmp_path / ".stayfixed").symlink_to(victim, target_is_directory=True)
+    (tmp_path / ".drybag").symlink_to(victim, target_is_directory=True)
     with pytest.raises(PathEscape, match="symlink"):
         Manifest({}).with_record(a_record()).write(tmp_path)
     assert list(victim.iterdir()) == []
 
 
-def test_a_symlinked_stayfixed_directory_refuses_the_read_rather_than_trusting_it(
+def test_a_symlinked_drybag_directory_refuses_the_read_rather_than_trusting_it(
     tmp_path: Path,
 ) -> None:
     # Reading through the link is not merely a read outside the root: the records decide which
@@ -186,7 +213,7 @@ def test_a_symlinked_stayfixed_directory_refuses_the_read_rather_than_trusting_i
     victim = tmp_path / "victim"
     victim.mkdir()
     Manifest({}).with_record(a_record(target="somebody-elses.md")).write(victim)
-    (tmp_path / ".stayfixed").symlink_to(victim, target_is_directory=True)
+    (tmp_path / ".drybag").symlink_to(victim, target_is_directory=True)
     with pytest.raises(PathEscape, match="symlink"):
         Manifest.read(tmp_path)
 

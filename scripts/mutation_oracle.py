@@ -69,7 +69,7 @@ DECLARATIONS = ROOT / "mutations"
 #
 # **A hand-kept table, and the one deliberate exception to CONTRIBUTING's "areas are discovered
 # by name — there is no shared registry to edit".** One file per area would need no table, and it
-# would be about twenty files, not twelve. The groups were sized for the plugin directory's limit
+# would be about twenty files, not eleven. The groups were sized for the plugin directory's limit
 # of 512 files, while the repository root was the plugin folder and every tracked file counted
 # against it. The plugin's tree (`scripts/plugin_tree.py`) no longer holds `mutations/`, so that
 # limit no longer reaches these files, and no size cap holds a group file. The table stays because
@@ -77,21 +77,18 @@ DECLARATIONS = ROOT / "mutations"
 # collide with every open branch's entries, for no reader's gain. CONTRIBUTING.md, "Tests", states
 # the same ruling.
 GROUP_OF: tuple[tuple[str, str], ...] = (
-    ("src/stayfixed/assess/", "assess"),
-    ("src/stayfixed/attach/", "attach"),
-    ("src/stayfixed/project/", "project"),
-    ("src/stayfixed/templates/", "project"),
-    ("src/stayfixed/profiles/", "project"),
-    ("src/stayfixed/presets/", "project"),
-    ("src/stayfixed/scaffold/", "scaffold"),
-    ("src/stayfixed/guards/", "guards"),
-    ("src/stayfixed/setup/", "install"),
-    ("src/stayfixed/overlay/", "install"),
-    ("src/stayfixed/doctor/", "doctor"),
-    ("src/stayfixed/memory/", "records"),
-    ("src/stayfixed/docs/", "records"),
-    ("src/stayfixed/ledger/", "records"),
-    ("src/stayfixed/", "core"),
+    ("src/drybag/attach/", "attach"),
+    ("src/drybag/templates/", "templates"),
+    ("src/drybag/presets/", "templates"),
+    ("src/drybag/scaffold/", "scaffold"),
+    ("src/drybag/guards/", "guards"),
+    ("src/drybag/hints/", "guards"),
+    ("src/drybag/setup/", "install"),
+    ("src/drybag/overlay/", "install"),
+    ("src/drybag/doctor/", "doctor"),
+    ("src/drybag/memory/", "records"),
+    ("src/drybag/docs/", "records"),
+    ("src/drybag/", "core"),
     ("scripts/publish_plugin.py", "publish"),
     ("scripts/", "tooling"),
     (".github/", "tooling"),
@@ -238,7 +235,7 @@ def single_run(tempdir: Path | None = None) -> Iterator[Path]:
         return
 
 
-SCRATCH_PREFIX = "stayfixed-oracle-"
+SCRATCH_PREFIX = "drybag-oracle-"
 # The one-run-at-a-time lock, beside the scratch checkouts it exists to protect. A **file** and
 # not a directory, which is what keeps it out of `sweep_stale_scratch`'s own housekeeping: that
 # walk globs this prefix and removes directories, and the `is_dir()` arm is what spares this.

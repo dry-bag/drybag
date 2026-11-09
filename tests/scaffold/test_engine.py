@@ -1,65 +1,32 @@
 from __future__ import annotations
 
-import json
 import os
 import stat
 import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
 
 import pytest
 
-from stayfixed import fsops, profiles
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.config.paths import PathEscape
-from stayfixed.config.schema import Config
-from stayfixed.errors import Refusal
-from stayfixed.scaffold import engine
-from stayfixed.scaffold.engine import apply, plan
-from stayfixed.scaffold.entries import mark
-from stayfixed.scaffold.manifest import (
+from drybag import fsops
+from drybag.config.paths import PathEscape
+from drybag.errors import Refusal
+from drybag.scaffold import engine
+from drybag.scaffold.engine import apply, plan
+from drybag.scaffold.manifest import (
     MANIFEST_PATH,
-    Kind,
     Location,
     Manifest,
     Record,
     digest,
 )
-from stayfixed.scaffold.model import Action, Plan, Template, Verb
-from stayfixed.scaffold.regions import Style, upsert
-
-CONFIG = """
-[stayfixed]
-version = "0.1.0"
-state = "initialised"
-preset = "recommended"
-profile = ""
-agents = ["claude"]
-
-[project]
-name = "widget"
-base_branch = "main"
-release_branch = "main"
-
-[artifacts]
-local = []
-"""
-
-
-def a_config(tmp_path: Path, *, local: tuple[str, ...] = ()) -> Config:
-    text = CONFIG
-    if local:
-        text = text.replace("local = []", "local = [" + ", ".join(f'"{i}"' for i in local) + "]")
-    (tmp_path / CONFIG_FILE).write_text(text, encoding="utf-8")
-    return load(tmp_path, machine=tmp_path / "absent.toml")
+from drybag.scaffold.model import Action, Plan, Template, Verb
 
 
 def a_template(**overrides: object) -> Template:
     base = Template(
         id="agents-md",
-        kind=Kind.TEMPLATE,
         target="AGENTS.md",
         source="project/AGENTS.md",
         render=lambda: "BODY\n",
@@ -70,7 +37,7 @@ def a_template(**overrides: object) -> Template:
 def a_record(**overrides: object) -> Record:
     values: dict[str, object] = {
         "id": "agents-md",
-        "kind": Kind.TEMPLATE,
+        "kind": "template",
         "location": Location.REPO,
         "target": "AGENTS.md",
         "template": "project/AGENTS.md",
@@ -81,28 +48,11 @@ def a_record(**overrides: object) -> Record:
     return Record(**values)  # type: ignore[arg-type]
 
 
-def a_settings_template(entries: dict[str, list[dict[str, Any]]]) -> Template:
-    return a_template(
-        id="claude-hooks",
-        kind=Kind.KEYED_ENTRIES,
-        target=".claude/settings.json",
-        render=lambda: "",
-        entries=entries,
-    )
-
-
-OURS: dict[str, list[dict[str, Any]]] = {
-    "PreToolUse": [
-        {"matcher": "Bash", "hooks": [{"type": "command", "command": mark("ours", "bg-cleanup")}]}
-    ]
-}
-
-
 # --- whole files -------------------------------------------------------------------------
 
 
 def test_an_unrecorded_absent_file_is_created(tmp_path: Path) -> None:
-    result = plan(tmp_path, a_config(tmp_path), [a_template()])
+    result = plan(tmp_path, [a_template()])
     assert [(a.verb, a.target, a.payload) for a in result.actions] == [
         (Verb.CREATE, "AGENTS.md", "BODY\n")
     ]
@@ -110,14 +60,14 @@ def test_an_unrecorded_absent_file_is_created(tmp_path: Path) -> None:
 
 def test_an_unrecorded_present_file_is_never_clobbered(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("someone wrote this\n", encoding="utf-8")
-    result = plan(tmp_path, a_config(tmp_path), [a_template()])
+    result = plan(tmp_path, [a_template()])
     assert [a.verb for a in result.actions] == [Verb.SKIP_MODIFIED]
 
 
 def test_a_recorded_unchanged_file_yields_no_action(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
     Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template()])
+    result = plan(tmp_path, [a_template()])
     assert result.actions == ()
     assert result.unchanged == ("agents-md",)
 
@@ -125,390 +75,37 @@ def test_a_recorded_unchanged_file_yields_no_action(tmp_path: Path) -> None:
 def test_a_recorded_file_the_tool_wrote_is_updated(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
     Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(render=lambda: "NEWER\n")])
+    result = plan(tmp_path, [a_template(render=lambda: "NEWER\n")])
     assert [(a.verb, a.payload) for a in result.actions] == [(Verb.UPDATE, "NEWER\n")]
 
 
 def test_a_hand_edited_file_is_skipped_and_named(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("edited by hand\n", encoding="utf-8")
     Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(render=lambda: "NEWER\n")])
+    result = plan(tmp_path, [a_template(render=lambda: "NEWER\n")])
     assert [(a.verb, a.target) for a in result.actions] == [(Verb.SKIP_MODIFIED, "AGENTS.md")]
 
 
-def test_force_takes_a_whole_file_stayfixed_did_not_write_and_records_it(tmp_path: Path) -> None:
-    # The whole-file rule: a file that differs is skipped and named, and `--force <path>` is how
-    # its owner says it may be overwritten. The branch for a file with no record ignored
-    # `force`, so a caller workflow a person wrote held `upgrade`'s version and pin back for
-    # ever. Forced, it is written and recorded like any file stayfixed writes. Mutation (oracle):
-    # `mutations/`'s "--force stops reaching a whole file stayfixed did not write".
-    (tmp_path / "AGENTS.md").write_text("someone wrote this\n", encoding="utf-8")
-    config = a_config(tmp_path)
-    unforced = plan(tmp_path, config, [a_template()], force=("CLAUDE.md",))
-    assert [(a.verb, a.reason) for a in unforced.actions] == [
-        (Verb.SKIP_MODIFIED, "exists and stayfixed did not write it")
-    ]
-    forced = plan(tmp_path, config, [a_template()], force=("AGENTS.md",))
-    assert [(a.verb, a.payload) for a in forced.actions] == [(Verb.UPDATE, "BODY\n")]
-    apply(tmp_path, forced)
-    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "BODY\n"
-    assert Manifest.read(tmp_path).get("agents-md") == a_record()
-
-
-def test_force_overrides_a_hand_edit(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("edited by hand\n", encoding="utf-8")
+def test_a_crlf_copy_of_a_recorded_file_is_hand_edited_and_never_unchanged(tmp_path: Path) -> None:
+    # The digest is of the bytes on disk. A read that translated line endings would hash this copy
+    # as the template's own `BODY\n`, and a file that differs from what drybag wrote would be
+    # reported as unchanged.
+    (tmp_path / "AGENTS.md").write_bytes(b"BODY\r\n")
     Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(
-        tmp_path, a_config(tmp_path), [a_template(render=lambda: "NEWER\n")], force=("AGENTS.md",)
-    )
-    assert [a.verb for a in result.actions] == [Verb.UPDATE]
-
-
-def test_a_once_artifact_is_never_updated(tmp_path: Path) -> None:
-    # `skip_modified` and not `unchanged`: a file that is present with no record is `skip_modified`
-    # for a `template` or a `once` kind, and `unchanged` renders as "up to date" for a file
-    # stayfixed deliberately never looks inside again. The user needs "left alone because it is
-    # yours", which is the statement that is true.
-    (tmp_path / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
-    template = a_template(id="claude-md", kind=Kind.ONCE, target="CLAUDE.md")
-    result = plan(tmp_path, a_config(tmp_path), [template])
-    assert [(a.verb, a.target) for a in result.actions] == [(Verb.SKIP_MODIFIED, "CLAUDE.md")]
+    result = plan(tmp_path, [a_template()])
     assert result.unchanged == ()
-    before = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
-    assert apply(tmp_path, result).skipped == ("CLAUDE.md",)
-    assert (tmp_path / "CLAUDE.md").read_text(encoding="utf-8") == before
+    assert [(a.verb, a.reason) for a in result.actions] == [(Verb.SKIP_MODIFIED, "hand-edited")]
 
 
-def test_a_retired_template_is_removed_while_its_hash_matches(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(retired=True)])
-    assert [(a.verb, a.target, a.payload) for a in result.actions] == [
-        (Verb.REMOVE, "AGENTS.md", None)
-    ]
-
-
-@pytest.mark.parametrize("directory", [True, False], ids=["directory-there", "directory-gone"])
-def test_a_retired_record_whose_file_is_already_gone_is_dropped(
-    tmp_path: Path, directory: bool
-) -> None:
-    # A retired artifact whose file was already gone read as unchanged while its record stayed,
-    # so the record outlived the file for good: every later `upgrade` passed over it again, and
-    # in an overlay the memory README's successor was never written in its place. The removal is
-    # planned with nothing to unlink, and `apply` drops the record, with or without the
-    # directory the file was in.
-    # Mutation: `mutations/`'s "a retired record whose file is gone is kept for good".
-    target = "docs/AGENTS.md"
-    if directory:
-        (tmp_path / "docs").mkdir()
-    Manifest({}).with_record(a_record(target=target)).write(tmp_path)
-    planned = plan(tmp_path, a_config(tmp_path), [a_template(target=target, retired=True)])
-    assert [(a.verb, a.target, a.payload, a.reason) for a in planned.actions] == [
-        (Verb.REMOVE, target, None, "retired, already gone")
-    ]
-    assert planned.unchanged == ()
-    applied = apply(tmp_path, planned)
-    assert applied.removed == ()
-    assert Manifest.read(tmp_path).get("agents-md") is None
-    assert (tmp_path / "docs").is_dir() is directory
-
-
-def test_a_retired_template_edited_by_hand_is_reported_not_removed(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("mine now\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(retired=True)])
-    assert [a.verb for a in result.actions] == [Verb.SKIP_MODIFIED]
-
-
-def test_a_local_artifact_moves_under_dot_stayfixed(tmp_path: Path) -> None:
-    config = a_config(tmp_path, local=("agents-md",))
-    result = plan(tmp_path, config, [a_template()])
-    assert [a.target for a in result.actions] == [".stayfixed/local/artifacts/AGENTS.md"]
-
-
-def test_a_relocated_artifact_is_removed_from_its_old_home(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    config = a_config(tmp_path, local=("agents-md",))
-    result = plan(tmp_path, config, [a_template()])
-    assert [(a.verb, a.target) for a in result.actions] == [
-        (Verb.REMOVE, "AGENTS.md"),
-        (Verb.CREATE, ".stayfixed/local/artifacts/AGENTS.md"),
-    ]
-
-
-def test_a_relocated_artifact_whose_old_file_was_hand_edited_is_reported(tmp_path: Path) -> None:
-    # The plan was `[(create, .stayfixed/local/artifacts/AGENTS.md)]`, the report said "0
-    # skipped, 0 refused", the old file stayed on disk holding the user's edit, and the manifest
-    # ended empty — which `apply`'s own comment calls a defect: "a file stayfixed wrote carrying no
-    # record, which every later run reads as somebody else's … invisible to `uninstall`". The
-    # symmetric `_plan_retired` path has always emitted `skip_modified` for this.
-    old = tmp_path / "AGENTS.md"
-    old.write_text("BODY\nand a line the user added\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)  # recorded sha256 is of "BODY\n"
-    config = a_config(tmp_path, local=("agents-md",))
-    result = plan(tmp_path, config, [a_template()])
-    assert [(a.verb, a.target) for a in result.actions] == [
-        (Verb.SKIP_MODIFIED, "AGENTS.md"),
-        (Verb.CREATE, ".stayfixed/local/artifacts/AGENTS.md"),
-    ]
-    assert result.actions[0].reason == "relocated and hand-edited"
-    applied = apply(tmp_path, result)
-    assert applied.skipped == ("AGENTS.md",)
-    assert old.read_text(encoding="utf-8") == "BODY\nand a line the user added\n"
-
-
-def test_a_relocation_whose_old_file_is_already_gone_reports_no_skip(tmp_path: Path) -> None:
-    # The one branch that must stay silent: nothing at the old path means the move has already
-    # happened, and a `skip_modified` there would report a file that is not on disk.
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    config = a_config(tmp_path, local=("agents-md",))
-    result = plan(tmp_path, config, [a_template()])
-    assert [(a.verb, a.target) for a in result.actions] == [
-        (Verb.REMOVE, "AGENTS.md"),
-        (Verb.CREATE, ".stayfixed/local/artifacts/AGENTS.md"),
-    ]
-    assert apply(tmp_path, result).skipped == ()
-
-
-def test_a_manifest_naming_a_target_outside_the_root_plans_nothing_for_it(tmp_path: Path) -> None:
-    # The manifest is committed, so `record.target` is repository-controlled input.
-    root = tmp_path / "project"
-    root.mkdir()
-    (tmp_path / "outside.md").write_text("BODY\n", encoding="utf-8")
-    Manifest({}).with_record(a_record(target="../outside.md")).write(root)
-    config = a_config(root, local=("agents-md",))
-    result = plan(root, config, [a_template()])
-    # Said out loud, not silent. The file is still not touched — that is the property — but a
-    # record naming a file stayfixed will not remove is something the report has to carry, or
-    # the artifact is created at its new target with the old one left on disk and nothing said.
-    assert [a.verb for a in result.actions] == [Verb.SKIP_MODIFIED, Verb.CREATE]
-    assert result.actions[0].target == "../outside.md"
-    assert (tmp_path / "outside.md").exists()
-
-
-def test_a_recorded_target_this_template_could_never_produce_is_not_a_relocation(
-    tmp_path: Path,
-) -> None:
-    # Both halves of "is this file ours" come out of the committed manifest: the recorded target
-    # and the recorded hash. So without a guard, naming any file in the root and stamping it with
-    # the bytes it is committed with is enough to make `plan` emit a REMOVE for it — and a
-    # mismatch between the recorded target and the effective one is all it takes, with no
-    # `[artifacts] local` entry and so no relocation anywhere in sight.
-    victim = tmp_path / ".claude"
-    victim.mkdir()
-    settings = victim / "settings.json"
-    before = '{"permissions": {"deny": ["Read(./.env)"]}}\n'
-    settings.write_text(before, encoding="utf-8")
-    record = a_record(target=".claude/settings.json", sha256=digest(before))
-    Manifest({}).with_record(record).write(tmp_path)
-    planned = plan(tmp_path, a_config(tmp_path), [a_template()])
-    assert [(a.verb, a.target) for a in planned.actions] == [
-        (Verb.SKIP_MODIFIED, ".claude/settings.json"),
-        (Verb.CREATE, "AGENTS.md"),
-    ]
-    applied = apply(tmp_path, planned)
-    assert settings.read_text(encoding="utf-8") == before
-    assert applied.skipped == (".claude/settings.json",)
-
-
-def test_relocating_a_managed_region_removes_only_its_own_lines(tmp_path: Path) -> None:
-    # A relocation's REMOVE goes through the same writer as a retirement's, so it needs the same
-    # payload. For a region the file at the old path is the user's own; unlinking it takes their
-    # prose with it, while `_plan_retired` in the same module strips just the marked block.
-    host = tmp_path / "AGENTS.md"
-    body = upsert("User prose.\n", "harness", "R1\n", Style.MARKDOWN)
-    host.write_text(body, encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
-    config = a_config(tmp_path, local=("agents-md",))
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1\n")
-    planned = plan(tmp_path, config, [template])
-    assert [(a.verb, a.target) for a in planned.actions] == [
-        (Verb.REMOVE, "AGENTS.md"),
-        (Verb.CREATE, ".stayfixed/local/artifacts/AGENTS.md"),
-    ]
-    apply(tmp_path, planned)
-    assert host.read_text(encoding="utf-8") == "User prose.\n"
-
-
-def test_a_local_artifact_that_is_not_this_build_s_bytes_is_left_and_force_takes_it(
-    tmp_path: Path,
-) -> None:
-    # A local artifact is never recorded, so the one oracle it has is what this build renders.
-    # `.stayfixed/local/` is git-ignored: an owner's edit overwritten there is gone for good, so a
-    # file that differs is left and named, and `--force` is how the owner says it may go.
-    config = a_config(tmp_path, local=("agents-md",))
-    local = tmp_path / ".stayfixed" / "local" / "artifacts" / "AGENTS.md"
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    local.write_text("BODY\nand the owner's own line\n", encoding="utf-8")
-    planned = plan(tmp_path, config, [a_template()])
-    assert [(a.verb, a.reason) for a in planned.actions] == [
-        (Verb.SKIP_MODIFIED, engine.CHANGED_LOCALLY)
-    ]
-    forced = plan(tmp_path, config, [a_template()], force=(".stayfixed/local/artifacts/AGENTS.md",))
-    assert [(a.verb, a.reason) for a in forced.actions] == [(Verb.UPDATE, "refreshed")]
-    apply(tmp_path, forced)
-    assert local.read_text(encoding="utf-8") == "BODY\n"
-    assert Manifest.read(tmp_path).records == {}
-
-
-def test_a_local_artifact_whose_content_already_matches_is_unchanged(tmp_path: Path) -> None:
-    # The other half: refreshing unconditionally would rewrite a file nothing changed in on
-    # every run, which is the report saying work happened when none did.
-    config = a_config(tmp_path, local=("agents-md",))
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    again = plan(tmp_path, config, [a_template()])
-    assert again.actions == ()
-    assert again.unchanged == ("agents-md",)
-
-
-def test_a_retired_local_artifact_is_removed(tmp_path: Path) -> None:
-    # `uninstall` has to be able to finish. A local artifact has no record by design, so its
-    # retirement is judged against this build's render: exactly those bytes, and it goes.
-    config = a_config(tmp_path, local=("agents-md",))
-    local = tmp_path / ".stayfixed" / "local" / "artifacts" / "AGENTS.md"
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    planned = plan(tmp_path, config, [a_template(retired=True)])
-    assert [(a.verb, a.target) for a in planned.actions] == [
-        (Verb.REMOVE, ".stayfixed/local/artifacts/AGENTS.md")
-    ]
-    apply(tmp_path, planned)
-    assert not local.exists()
-
-
-def test_a_retired_local_artifact_edited_by_hand_stays_unless_forced(tmp_path: Path) -> None:
-    config = a_config(tmp_path, local=("agents-md",))
-    local = tmp_path / ".stayfixed" / "local" / "artifacts" / "AGENTS.md"
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    local.write_text("the owner's notes\n", encoding="utf-8")
-    planned = plan(tmp_path, config, [a_template(retired=True)])
-    assert [a.verb for a in planned.actions] == [Verb.SKIP_MODIFIED]
-    apply(tmp_path, planned)
-    assert local.read_text(encoding="utf-8") == "the owner's notes\n"
-    forced = plan(
-        tmp_path,
-        config,
-        [a_template(retired=True)],
-        force=(".stayfixed/local/artifacts/AGENTS.md",),
-    )
-    assert [(a.verb, a.reason) for a in forced.actions] == [(Verb.REMOVE, "retired, forced")]
-
-
-# --- regions and keyed entries, which live inside somebody else's file ---------------------
-
-
-def test_a_managed_region_is_installed_into_a_file_no_record_covers(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("PROSE\n", encoding="utf-8")
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    first = plan(tmp_path, a_config(tmp_path), [template])
-    assert first.actions[0].verb is Verb.REGION_UPDATE
-    assert first.actions[0].payload is not None
-    assert first.actions[0].payload.startswith("PROSE\n")
-    assert "R1" in first.actions[0].payload
-
-
-def test_a_region_already_current_yields_no_action(tmp_path: Path) -> None:
-    text = upsert("PROSE\n", "harness", "R1", Style.MARKDOWN)
-    (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    assert plan(tmp_path, a_config(tmp_path), [template]).actions == ()
-
-
-def test_prose_around_a_region_may_change_without_reading_as_a_hand_edit(tmp_path: Path) -> None:
-    text = upsert("PROSE\n", "harness", "R1", Style.MARKDOWN) + "a paragraph the user added\n"
-    (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R2")
-    assert [a.verb for a in plan(tmp_path, a_config(tmp_path), [template]).actions] == [
-        Verb.REGION_UPDATE
-    ]
-
-
-def test_a_hand_edited_region_body_is_skipped(tmp_path: Path) -> None:
-    text = upsert("PROSE\n", "harness", "EDITED BY HAND", Style.MARKDOWN)
-    (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R2")
-    assert [a.verb for a in plan(tmp_path, a_config(tmp_path), [template]).actions] == [
-        Verb.SKIP_MODIFIED
-    ]
-
-
-def test_a_retired_region_leaves_the_file_and_removes_only_its_own_lines(tmp_path: Path) -> None:
-    text = upsert("PROSE\n", "harness", "R1", Style.MARKDOWN)
-    (tmp_path / "AGENTS.md").write_text(text, encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
-    template = a_template(
-        kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1", retired=True
-    )
-    planned = plan(tmp_path, a_config(tmp_path), [template])
-    assert [a.verb for a in planned.actions] == [Verb.REMOVE]
-    apply(tmp_path, planned)
-    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "PROSE\n"
-
-
-def test_keyed_entries_are_installed_into_a_file_no_record_covers(tmp_path: Path) -> None:
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(
-        json.dumps(
-            {
-                "hooks": {
-                    "PreToolUse": [
-                        {"matcher": "Bash", "hooks": [{"type": "command", "command": "theirs"}]}
-                    ]
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    result = plan(tmp_path, a_config(tmp_path), [a_settings_template(OURS)])
-    assert result.actions[0].verb is Verb.ENTRIES_UPDATE
-    assert result.actions[0].payload is not None
-    assert "theirs" in result.actions[0].payload
-
-
-def test_an_unrelated_edit_beside_the_entries_is_not_a_hand_edit(tmp_path: Path) -> None:
-    template = a_settings_template(OURS)
-    first = plan(tmp_path, a_config(tmp_path), [template])
-    apply(tmp_path, first)
-    settings = tmp_path / ".claude" / "settings.json"
-    raw = json.loads(settings.read_text(encoding="utf-8"))
-    raw["permissions"] = {"deny": ["Read(./.env)"]}
-    settings.write_text(json.dumps(raw, indent=2), encoding="utf-8")
-    again = plan(tmp_path, a_config(tmp_path), [template])
-    assert again.actions == ()
-    assert again.unchanged == ("claude-hooks",)
-
-
-def test_a_retired_keyed_entry_leaves_the_rest_of_the_document(tmp_path: Path) -> None:
-    template = a_settings_template(OURS)
-    apply(tmp_path, plan(tmp_path, a_config(tmp_path), [template]))
-    planned = plan(tmp_path, a_config(tmp_path), [replace(template, retired=True)])
-    assert [a.verb for a in planned.actions] == [Verb.REMOVE]
-    apply(tmp_path, planned)
-    text = (tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8")
-    assert "stayfixed:bg-cleanup" not in text
-    assert (tmp_path / ".claude" / "settings.json").exists()
+# --- regions, which live inside somebody else's file -------------------------------------
 
 
 # --- refusals ------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("target", ["../outside.md", "/etc/stayfixed.md", "docs/../../x.md", ""])
+@pytest.mark.parametrize("target", ["../outside.md", "/etc/drybag.md", "docs/../../x.md", ""])
 def test_an_escaping_target_is_refused_not_planned(tmp_path: Path, target: str) -> None:
-    result = plan(tmp_path, a_config(tmp_path), [a_template(target=target)])
+    result = plan(tmp_path, [a_template(target=target)])
     assert result.actions == ()
     assert [r.artifact_id for r in result.refusals] == ["agents-md"]
 
@@ -516,7 +113,6 @@ def test_an_escaping_target_is_refused_not_planned(tmp_path: Path, target: str) 
 def test_one_refused_template_does_not_hide_the_others(tmp_path: Path) -> None:
     result = plan(
         tmp_path,
-        a_config(tmp_path),
         [a_template(id="bad", target="../x"), a_template(id="good", target="GOOD.md")],
     )
     assert [a.artifact_id for a in result.actions] == ["good"]
@@ -527,7 +123,6 @@ def test_an_unreadable_file_refuses_only_its_own_artifact(tmp_path: Path) -> Non
     (tmp_path / "AGENTS.md").write_bytes(b"\xff\xfe not utf-8 \xff")
     result = plan(
         tmp_path,
-        a_config(tmp_path),
         [a_template(), a_template(id="good", target="GOOD.md")],
     )
     assert [a.artifact_id for a in result.actions] == ["good"]
@@ -543,9 +138,8 @@ def test_a_file_past_the_read_cap_refuses_only_its_own_artifact(
     # `mutations/`'s "the scaffold engine reads an artifact's file with no bound" -> it is read.
     limit = 4 * 1024
     (tmp_path / "AGENTS.md").write_text("BODY\n" + "#" * limit, encoding="utf-8")
-    config = a_config(tmp_path)
     monkeypatch.setattr(fsops, "REGULAR_READ_LIMIT", limit)
-    result = plan(tmp_path, config, [a_template(), a_template(id="good", target="GOOD.md")])
+    result = plan(tmp_path, [a_template(), a_template(id="good", target="GOOD.md")])
     assert [a.artifact_id for a in result.actions] == ["good"]
     assert [r.artifact_id for r in result.refusals] == ["agents-md"]
     assert "larger than this reader reads" in result.refusals[0].reason
@@ -576,22 +170,8 @@ def test_an_unreadable_artifact_is_named_relative_to_the_project_with_the_reason
         agents.write_text("#" * 8 * 1024, encoding="utf-8")
     else:
         agents.write_bytes(b"\xff\xfe not utf-8 \xff")
-    result = plan(tmp_path, a_config(tmp_path), [a_template()])
+    result = plan(tmp_path, [a_template()])
     assert [r.reason for r in result.refusals] == [reason]
-
-
-def test_an_unreadable_old_home_of_a_relocated_artifact_is_named_where_it_is(
-    tmp_path: Path,
-) -> None:
-    # The reason names the file it is about: the recorded old place, which is not the artifact's
-    # configured target when the artifact moves back out of `[artifacts] local`. Mutation:
-    # `mutations/`'s "a relocation names an unreadable old home by the artifact's target".
-    local = ".stayfixed/local/artifacts/AGENTS.md"
-    (tmp_path / local).mkdir(parents=True)
-    Manifest({}).with_record(a_record(target=local, location=Location.LOCAL)).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template()])
-    skipped = [(a.target, a.reason) for a in result.actions if a.verb is Verb.SKIP_MODIFIED]
-    assert skipped == [(local, f"{local} cannot be read (not a regular file)")]
 
 
 def test_a_fifo_at_an_artifacts_place_is_its_refusal_and_never_waited_on(tmp_path: Path) -> None:
@@ -601,20 +181,16 @@ def test_a_fifo_at_an_artifacts_place_is_its_refusal_and_never_waited_on(tmp_pat
     # a child under a timeout, so a regression fails this case rather than hanging. Mutation
     # (oracle): `mutations/`'s "the scaffold engine reads an artifact's file with no bound" -> the
     # child waits and this times out.
-    a_config(tmp_path)
     os.mkfifo(tmp_path / "AGENTS.md")
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed.config.loader import load\n"
-        "from stayfixed.scaffold.engine import plan\n"
-        "from stayfixed.scaffold.manifest import Kind\n"
-        "from stayfixed.scaffold.model import Template\n"
+        "from drybag.scaffold.engine import plan\n"
+        "from drybag.scaffold.model import Template\n"
         "root = Path(sys.argv[1])\n"
-        "template = Template(id='agents-md', kind=Kind.TEMPLATE, target='AGENTS.md',\n"
+        "template = Template(id='agents-md', target='AGENTS.md',\n"
         "    source='project/AGENTS.md', render=lambda: 'BODY\\n')\n"
-        "config = load(root, machine=root / 'absent.toml')\n"
-        "print([r.artifact_id for r in plan(root, config, [template]).refusals])\n"
+        "print([r.artifact_id for r in plan(root, [template]).refusals])\n"
     )
     try:
         done = subprocess.run(
@@ -629,257 +205,18 @@ def test_a_fifo_at_an_artifacts_place_is_its_refusal_and_never_waited_on(tmp_pat
     assert done.stdout == "['agents-md']\n", done.stderr
 
 
-def test_a_doubled_region_marker_refuses_only_its_own_artifact(tmp_path: Path) -> None:
-    # A bad merge, not an internal bug. The engine answers it with a refusal for this one artifact,
-    # and `render_report`'s REFUSED section exists to name exactly these — which it can only do if a
-    # plan is returned at all.
-    (tmp_path / "AGENTS.md").write_text(
-        "PROSE\n"
-        "<!-- stayfixed:harness:begin -->\nfirst\n<!-- stayfixed:harness:end -->\n"
-        "<!-- stayfixed:harness:begin -->\nsecond\n<!-- stayfixed:harness:end -->\n",
-        encoding="utf-8",
-    )
-    result = plan(
-        tmp_path,
-        a_config(tmp_path),
-        [
-            a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1"),
-            a_template(id="good", target="GOOD.md"),
-        ],
-    )
-    assert [(r.artifact_id, "twice" in r.reason) for r in result.refusals] == [("agents-md", True)]
-    assert [(a.artifact_id, a.verb) for a in result.actions] == [("good", Verb.CREATE)]
-
-
-@pytest.mark.parametrize(
-    ("document", "expected"),
-    [
-        ("{not json", "not valid JSON"),
-        ('{"hooks": "not an object"}', "'hooks' is not an object"),
-    ],
-)
-def test_a_settings_document_the_engine_cannot_parse_refuses_only_its_own_artifact(
-    tmp_path: Path, document: str, expected: str
-) -> None:
-    (tmp_path / ".claude").mkdir()
-    (tmp_path / ".claude" / "settings.json").write_text(document, encoding="utf-8")
-    result = plan(
-        tmp_path,
-        a_config(tmp_path),
-        [a_settings_template(OURS), a_template(id="good", target="GOOD.md")],
-    )
-    assert [(r.artifact_id, expected in r.reason) for r in result.refusals] == [
-        ("claude-hooks", True)
-    ]
-    assert [(a.artifact_id, a.verb) for a in result.actions] == [("good", Verb.CREATE)]
-
-
-def test_a_keyed_entries_template_naming_no_entries_raises(tmp_path: Path) -> None:
-    # The symmetric case, and the one that was missing. `Template.entries` defaults to `None`
-    # and `apply_entries(current, {})` means "remove every stayfixed entry", so a caller that
-    # forgot one keyword argument uninstalled the user's hook wiring — reported as
-    # `entries_update` / "refreshed", with the manifest rewritten as an ordinary upgrade.
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(json.dumps({"hooks": OURS}), encoding="utf-8")
-    template = a_settings_template(OURS)
-    with pytest.raises(Refusal, match="names no entries"):
-        plan(tmp_path, a_config(tmp_path), [replace(template, entries=None)])
-
-
-def test_a_keyed_entries_template_whose_entries_carry_no_marker_raises(tmp_path: Path) -> None:
-    # The third face of the same defect, and the one that was silent in the *install*
-    # direction. `_payload_and_stamp` stamps `owned(document)` — the marked entries alone — so
-    # with none of them marked `owned()` answers `{}` for the payload and `{}` for what is
-    # already on disk, the digests match, and `plan` reports the artifact `unchanged`. Measured
-    # before the fix, against a template whose command is `stayfixed hook PreToolUse` and no
-    # `mark()`: actions `[]`, unchanged `('hooks',)`, `apply` wrote nothing, and the user's
-    # `.claude/settings.json` still had no hook wiring in it while the report said up to date.
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(json.dumps({"hooks": OURS}), encoding="utf-8")
-    unmarked_entries: dict[str, list[dict[str, Any]]] = {
-        "PreToolUse": [
-            {
-                "matcher": "Bash",
-                "hooks": [{"type": "command", "command": "stayfixed hook PreToolUse"}],
-            }
-        ]
-    }
-    with pytest.raises(Refusal, match="no `# stayfixed:<id>` marker"):
-        plan(tmp_path, a_config(tmp_path), [a_settings_template(unmarked_entries)])
-
-
-def test_one_unmarked_entry_beside_a_marked_one_is_still_a_refusal(tmp_path: Path) -> None:
-    # Not "no entry is marked" — *any* unmarked entry is one this module's own two rules say
-    # belongs to somebody else, so it would be installed once and then left alone for ever,
-    # while `owned()` stamps only its marked neighbour. A check on the whole mapping rather
-    # than on it being empty is what tells those apart.
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(json.dumps({"hooks": OURS}), encoding="utf-8")
-    mixed: dict[str, list[dict[str, Any]]] = {
-        "PreToolUse": [
-            {
-                "matcher": "Bash",
-                "hooks": [
-                    {"type": "command", "command": mark("ours", "bg-cleanup")},
-                    {"type": "command", "command": "stayfixed hook PreToolUse"},
-                ],
-            }
-        ]
-    }
-    with pytest.raises(Refusal, match="'stayfixed hook PreToolUse'"):
-        plan(tmp_path, a_config(tmp_path), [a_settings_template(mixed)])
-
-
-@pytest.mark.parametrize(
-    "entry",
-    [
-        pytest.param({"type": "command", "command": ["ls"]}, id="command-is-not-a-string"),
-        pytest.param({"type": "command"}, id="no-command-at-all"),
-        pytest.param("stayfixed hook PreToolUse", id="entry-is-not-an-object"),
-    ],
-)
-def test_an_entry_that_cannot_be_keyed_is_refused_rather_than_written(
-    tmp_path: Path, entry: object
-) -> None:
-    # `apply_entries` writes `wanted` into the user's file verbatim, and nothing between a caller
-    # and that write validates its shape — `_entries_of` checks the *document*, not the mapping
-    # coming in. An entry that cannot be keyed is the same bug whatever makes it unkeyable, and
-    # the last case is why the shape guard is a guard rather than decoration: without it
-    # `entry.get` raises `AttributeError` out of `plan` instead of naming the caller's bug.
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(json.dumps({"hooks": OURS}), encoding="utf-8")
-    malformed: dict[str, list[dict[str, Any]]] = {
-        "PreToolUse": [{"matcher": "Bash", "hooks": [entry]}]
-    }
-    with pytest.raises(Refusal, match="no `# stayfixed:<id>` marker"):
-        plan(tmp_path, a_config(tmp_path), [a_settings_template(malformed)])
-
-
-def test_an_empty_entries_mapping_still_means_remove_everything(tmp_path: Path) -> None:
-    # `{}` is left meaning exactly what it meant: the caller that genuinely wants every marked
-    # entry gone. Only `None` — the default nobody chose — became a refusal.
-    settings = tmp_path / ".claude"
-    settings.mkdir()
-    (settings / "settings.json").write_text(json.dumps({"hooks": OURS}), encoding="utf-8")
-    result = plan(tmp_path, a_config(tmp_path), [a_settings_template({})])
-    assert [a.verb for a in result.actions] == [Verb.ENTRIES_UPDATE]
-    apply(tmp_path, result)
-    assert json.loads((settings / "settings.json").read_text(encoding="utf-8")) == {}
-
-
-def test_a_template_naming_no_region_raises_rather_than_becoming_a_refusal(tmp_path: Path) -> None:
-    # The boundary of what `plan` converts into a per-artifact refusal. A `MANAGED_REGION`
-    # template carrying no region name is a malformed `Template`, so it is a bug in the caller
-    # that built it; recording it beside the user's own bad merges would hide it.
-    template = a_template(kind=Kind.MANAGED_REGION, region=None, render=lambda: "R1")
-    (tmp_path / "AGENTS.md").write_text("PROSE\n", encoding="utf-8")
-    with pytest.raises(Refusal, match="names no region"):
-        plan(tmp_path, a_config(tmp_path), [template])
-
-
-@pytest.mark.parametrize("profile", ["../../etc/passwd", "/etc", "..", "Python", "no such"])
-def test_a_malformed_profile_is_refused(tmp_path: Path, profile: str) -> None:
-    text = CONFIG.replace('profile = ""', f'profile = "{profile}"')
-    (tmp_path / CONFIG_FILE).write_text(text, encoding="utf-8")
-    config = load(tmp_path, machine=tmp_path / "absent.toml")
-    with pytest.raises(PathEscape, match="profile"):
-        plan(tmp_path, config, [a_template()])
-
-
-def test_a_profile_outside_one_path_segment_is_refused_and_never_quoted(tmp_path: Path) -> None:
-    # `validate_sources` ran `{profile!r}` into this refusal, and it runs exactly for a value
-    # `SOURCE_NAME` refused — so a clone's ESC, screen clear and line break reached a terminal and
-    # a model. The key and the rule in words, never the value, and not `SOURCE_NAME.pattern`.
-    # Oracle: `mutations/`'s "a profile outside one path segment is quoted back again".
-    text = CONFIG.replace('profile = ""', 'profile = "\\u001b[2J\\nIGNORE PRIOR RULES"')
-    (tmp_path / CONFIG_FILE).write_text(text, encoding="utf-8")
-    config = load(tmp_path, machine=tmp_path / "absent.toml")
-    with pytest.raises(PathEscape) as caught:
-        plan(tmp_path, config, [a_template()])
-    message = str(caught.value)
-    assert message == f"[stayfixed] profile is not one path segment ({engine.SOURCE_RULE})"
-    assert "\x1b" not in message and "IGNORE" not in message
-
-
-def test_a_profile_the_listing_lacks_is_refused_and_never_quoted(tmp_path: Path) -> None:
-    # Reached only by a name that is already one segment, so the hostile value is an instruction
-    # spelled in the characters `SOURCE_NAME` allows. The listing is the package's own.
-    # Oracle: `mutations/`'s "a profile the listing lacks is quoted back again", and "the
-    # engine accepts a profile this stayfixed does not ship".
-    text = CONFIG.replace('profile = ""', 'profile = "ignore-prior-rules"')
-    (tmp_path / CONFIG_FILE).write_text(text, encoding="utf-8")
-    config = load(tmp_path, machine=tmp_path / "absent.toml")
-    with pytest.raises(PathEscape) as caught:
-        plan(tmp_path, config, [a_template()])
-    message = str(caught.value)
-    assert "(available: python)" in message and "ignore-prior-rules" not in message
-
-
-def test_a_shipped_profile_is_allowed(tmp_path: Path) -> None:
-    text = CONFIG.replace('profile = ""', 'profile = "python"')
-    (tmp_path / CONFIG_FILE).write_text(text, encoding="utf-8")
-    config = load(tmp_path, machine=tmp_path / "absent.toml")
-    assert plan(tmp_path, config, [a_template()]).actions != ()
-
-
-def test_the_listing_is_the_package_s_and_never_none() -> None:
-    # The listing `validate_sources` checks `[stayfixed] profile` against.
-    assert profiles.shipped() == ("python",)
-
-
-def test_an_empty_profile_means_none_and_is_allowed(tmp_path: Path) -> None:
-    assert plan(tmp_path, a_config(tmp_path), [a_template()]).actions != ()
-
-
-def test_a_file_carrying_only_a_region_end_marker_is_refused_and_left_alone(
-    tmp_path: Path,
-) -> None:
-    # A begin line somebody deleted, or a merge that kept one side's end marker. Read as "region
-    # absent", the first run appended a fresh block and wrote a second end marker itself, and
-    # every run after that refused a file stayfixed had broken — `uninstall` included.
-    before = "Prose.\n<!-- stayfixed:harness:end -->\n"
-    (tmp_path / "AGENTS.md").write_text(before, encoding="utf-8")
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    first = plan(tmp_path, a_config(tmp_path), [template])
-    assert first.actions == ()
-    assert [(r.artifact_id, "no beginning" in r.reason) for r in first.refusals] == [
-        ("agents-md", True)
-    ]
-    with pytest.raises(Refusal):
-        apply(tmp_path, first)
-    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == before
-
-
-def test_a_profile_name_with_a_trailing_newline_is_refused(tmp_path: Path) -> None:
-    # `$` matches before a final newline as well as at the end of the string, so the one-segment
-    # check accepted a name carrying a line break. The listing would refuse it too, but the
-    # grammar runs first and is the refusal that names the rule.
-    text = CONFIG.replace('profile = ""', 'profile = "python\\n"')
-    (tmp_path / CONFIG_FILE).write_text(text, encoding="utf-8")
-    config = load(tmp_path, machine=tmp_path / "absent.toml")
-    assert config.stayfixed.profile == "python\n"
-    with pytest.raises(PathEscape, match="profile"):
-        plan(tmp_path, config, [a_template()])
-
-
 # --- apply ----------------------------------------------------------------------------------
 
 
 def test_apply_writes_the_payload_and_records_it(tmp_path: Path) -> None:
-    config = a_config(tmp_path)
-    result = apply(tmp_path, plan(tmp_path, config, [a_template()]))
+    result = apply(tmp_path, plan(tmp_path, [a_template()]))
     assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "BODY\n"
     assert result.written == ("AGENTS.md",)
     assert Manifest.read(tmp_path).get("agents-md") is not None
 
 
 def test_apply_refuses_a_plan_carrying_a_refusal(tmp_path: Path) -> None:
-    config = a_config(tmp_path)
-    planned = plan(tmp_path, config, [a_template(target="../outside.md")])
+    planned = plan(tmp_path, [a_template(target="../outside.md")])
     with pytest.raises(Refusal, match="refused"):
         apply(tmp_path, planned)
 
@@ -887,9 +224,8 @@ def test_apply_refuses_a_plan_carrying_a_refusal(tmp_path: Path) -> None:
 def test_a_symlink_planted_between_plan_and_apply_is_refused(tmp_path: Path) -> None:
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.mkdir()
-    config = a_config(tmp_path)
     (tmp_path / "docs").mkdir()
-    planned = plan(tmp_path, config, [a_template(target="docs/AGENTS.md")])
+    planned = plan(tmp_path, [a_template(target="docs/AGENTS.md")])
     (tmp_path / "docs").rmdir()
     (tmp_path / "docs").symlink_to(outside, target_is_directory=True)
     with pytest.raises(Refusal):
@@ -925,54 +261,31 @@ def test_the_write_refuses_a_symlinked_parent_containment_never_saw(tmp_path: Pa
     assert list(outside.iterdir()) == []
 
 
-def test_a_removal_deletes_the_file_and_the_record(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    config = a_config(tmp_path)
-    result = apply(tmp_path, plan(tmp_path, config, [a_template(retired=True)]))
-    assert not (tmp_path / "AGENTS.md").exists()
-    assert result.removed == ("AGENTS.md",)
-    assert Manifest.read(tmp_path).get("agents-md") is None
-
-
-def test_a_local_artifact_is_written_but_never_recorded(tmp_path: Path) -> None:
-    config = a_config(tmp_path, local=("agents-md",))
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    assert (tmp_path / ".stayfixed/local/artifacts/AGENTS.md").read_text(
-        encoding="utf-8"
-    ) == "BODY\n"
-    assert Manifest.read(tmp_path).records == {}
-
-
 def test_a_skipped_artifact_is_reported_and_not_written(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("mine\n", encoding="utf-8")
-    config = a_config(tmp_path)
-    result = apply(tmp_path, plan(tmp_path, config, [a_template()]))
+    result = apply(tmp_path, plan(tmp_path, [a_template()]))
     assert result.skipped == ("AGENTS.md",)
     assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == "mine\n"
 
 
 def test_no_temporary_file_survives_a_write(tmp_path: Path) -> None:
-    config = a_config(tmp_path)
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
-    assert sorted(p.name for p in tmp_path.iterdir()) == [".stayfixed", "AGENTS.md", CONFIG_FILE]
+    apply(tmp_path, plan(tmp_path, [a_template()]))
+    assert sorted(p.name for p in tmp_path.iterdir()) == [".drybag", "AGENTS.md"]
 
 
 def test_an_updated_file_keeps_the_mode_it_had(tmp_path: Path) -> None:
-    config = a_config(tmp_path)
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
+    apply(tmp_path, plan(tmp_path, [a_template()]))
     os.chmod(tmp_path / "AGENTS.md", 0o664)
-    apply(tmp_path, plan(tmp_path, config, [a_template(render=lambda: "NEWER\n")]))
+    apply(tmp_path, plan(tmp_path, [a_template(render=lambda: "NEWER\n")]))
     assert stat.S_IMODE((tmp_path / "AGENTS.md").stat().st_mode) == 0o664
 
 
 def test_a_created_file_is_readable_by_more_than_its_owner(tmp_path: Path) -> None:
-    config = a_config(tmp_path)
-    apply(tmp_path, plan(tmp_path, config, [a_template()]))
+    apply(tmp_path, plan(tmp_path, [a_template()]))
     assert stat.S_IMODE((tmp_path / "AGENTS.md").stat().st_mode) == 0o644
 
 
-def test_a_committed_symlink_at_dot_stayfixed_refuses_before_anything_is_written(
+def test_a_committed_symlink_at_dot_drybag_refuses_before_anything_is_written(
     tmp_path: Path,
 ) -> None:
     # git stores symlinks, so a clone materialises this one, and no race is needed: without a
@@ -981,24 +294,22 @@ def test_a_committed_symlink_at_dot_stayfixed_refuses_before_anything_is_written
     root.mkdir()
     victim = tmp_path / "victim"
     victim.mkdir()
-    (root / ".stayfixed").symlink_to(victim, target_is_directory=True)
-    config = a_config(root)
+    (root / ".drybag").symlink_to(victim, target_is_directory=True)
     with pytest.raises(PathEscape, match="symlink"):
-        plan(root, config, [a_template()])
+        plan(root, [a_template()])
     assert list(victim.iterdir()) == []
     assert not (root / "AGENTS.md").exists()
 
 
-def test_dot_stayfixed_symlinked_after_the_plan_makes_apply_refuse(tmp_path: Path) -> None:
+def test_dot_drybag_symlinked_after_the_plan_makes_apply_refuse(tmp_path: Path) -> None:
     # The same escape in the race shape the dry run cannot see: the plan was clean when the
     # user read it. `apply` must refuse with nothing written, inside the root or outside it.
     root = tmp_path / "project"
     root.mkdir()
     victim = tmp_path / "victim"
     victim.mkdir()
-    config = a_config(root)
-    planned = plan(root, config, [a_template()])
-    (root / ".stayfixed").symlink_to(victim, target_is_directory=True)
+    planned = plan(root, [a_template()])
+    (root / ".drybag").symlink_to(victim, target_is_directory=True)
     with pytest.raises(PathEscape, match="symlink"):
         apply(root, planned)
     assert list(victim.iterdir()) == []
@@ -1011,8 +322,7 @@ def test_a_file_where_a_directory_belongs_refuses_rather_than_raising_oserror(
     # No race and no symlink: the user saves a file at `docs` while reading the dry-run report,
     # then confirms. A bare `OSError` here reaches the CLI as a traceback instead of the exit 2
     # a refusal is for.
-    config = a_config(tmp_path)
-    planned = plan(tmp_path, config, [a_template(id="doc", target="docs/README.md")])
+    planned = plan(tmp_path, [a_template(id="doc", target="docs/README.md")])
     (tmp_path / "docs").write_text("a file the user just saved\n", encoding="utf-8")
     with pytest.raises(Refusal):
         apply(tmp_path, planned)
@@ -1023,7 +333,7 @@ def test_a_file_where_a_directory_belongs_refuses_rather_than_raising_oserror(
 def test_a_directory_that_cannot_be_created_refuses_rather_than_raising_oserror(
     tmp_path: Path,
 ) -> None:
-    # The other half of "no bare OSError": a parent directory stayfixed may read but not write
+    # The other half of "no bare OSError": a parent directory drybag may read but not write
     # to. `open_within` opens it happily — r-x is enough — so this arrives as EACCES from
     # `os.mkdir` rather than as an `UnsafePath`, and only the broad clause turns it into exit 2.
     (tmp_path / "docs").mkdir()
@@ -1036,50 +346,16 @@ def test_a_directory_that_cannot_be_created_refuses_rather_than_raising_oserror(
     assert not (tmp_path / "docs" / "specs").exists()
 
 
-def test_crlf_endings_outside_a_managed_region_survive_plan_and_apply(tmp_path: Path) -> None:
-    # `regions.py` promises to return every byte outside its own markers unchanged, and
-    # `test_regions.py` proves it by calling `upsert` directly. This measures the same property
-    # where a user meets it: a universal-newline read rewrites every ending in the file before
-    # `upsert` is ever reached, so the promise is kept or broken here, not there.
-    before = b"# Title\r\n\r\nProse the tool must never touch.\r\n"
-    (tmp_path / "AGENTS.md").write_bytes(before)
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1")
-    apply(tmp_path, plan(tmp_path, a_config(tmp_path), [template]))
-    assert (tmp_path / "AGENTS.md").read_bytes() == before + (
-        b"<!-- stayfixed:harness:begin -->\r\nR1\r\n<!-- stayfixed:harness:end -->\r\n"
-    )
-
-
-def test_reordering_the_keys_inside_a_marked_entry_is_not_a_hand_edit(tmp_path: Path) -> None:
-    # `owned()`'s canonical rendering is the only thing making this true. Without it, a user who
-    # writes "command" before "type" inside stayfixed's own hook entry has changed no value and
-    # still flips the artifact to `skip_modified` for good.
-    template = a_settings_template(OURS)
-    apply(tmp_path, plan(tmp_path, a_config(tmp_path), [template]))
-    settings = tmp_path / ".claude" / "settings.json"
-    raw = json.loads(settings.read_text(encoding="utf-8"))
-    entry = raw["hooks"]["PreToolUse"][0]["hooks"][0]
-    reordered = dict(reversed(list(entry.items())))
-    assert list(reordered) != list(entry)
-    raw["hooks"]["PreToolUse"][0]["hooks"][0] = reordered
-    settings.write_text(json.dumps(raw, indent=2), encoding="utf-8")
-    again = plan(tmp_path, a_config(tmp_path), [template])
-    assert [(a.verb, a.reason) for a in again.actions] == []
-    assert again.unchanged == ("claude-hooks",)
-
-
 def test_apply_records_the_files_it_wrote_before_a_later_action_refused(tmp_path: Path) -> None:
     # The ledger describes the disk, so it cannot be discarded for actions that already ran. A
-    # file stayfixed wrote and did not record reads as somebody else's on every later run:
+    # file drybag wrote and did not record reads as somebody else's on every later run:
     # `skip_modified` under a reason that is false, moved only by a `--force` that names it, and
     # invisible to `uninstall`.
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.mkdir()
-    config = a_config(tmp_path)
     (tmp_path / "docs").mkdir()
     planned = plan(
         tmp_path,
-        config,
         [
             a_template(id="first", target="A.md", render=lambda: "A\n"),
             a_template(id="second", target="docs/B.md", render=lambda: "B\n"),
@@ -1098,43 +374,13 @@ def test_apply_records_the_files_it_wrote_before_a_later_action_refused(tmp_path
 def test_a_plan_carrying_a_refusal_creates_no_manifest_at_all(tmp_path: Path) -> None:
     # The boundary of persisting progress. `apply` refuses a plan carrying a refusal before it
     # reaches the first action, so there is nothing on disk to record and no ledger to create.
-    config = a_config(tmp_path)
-    planned = plan(tmp_path, config, [a_template(target="../outside.md")])
+    planned = plan(tmp_path, [a_template(target="../outside.md")])
     with pytest.raises(Refusal, match="refused"):
         apply(tmp_path, planned)
     assert not (tmp_path / MANIFEST_PATH).exists()
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores the directory mode under test")
-def test_a_file_that_cannot_be_unlinked_refuses_rather_than_raising_oserror(
-    tmp_path: Path,
-) -> None:
-    # The removal half of "no bare OSError". `open_within` opens an r-x directory happily, so
-    # EACCES arrives from `os.unlink` rather than as an `UnsafePath`, and the `suppress` around
-    # the unlink is entered after the walk has yielded, so it covers neither.
-    docs = tmp_path / "docs"
-    docs.mkdir()
-    (docs / "OLD.md").write_text("BODY\n", encoding="utf-8")
-    os.chmod(docs, stat.S_IRUSR | stat.S_IXUSR)
-    try:
-        with pytest.raises(Refusal, match="cannot be removed"):
-            engine._remove(tmp_path, "docs/OLD.md", None)
-    finally:
-        os.chmod(docs, 0o755)
-    assert (docs / "OLD.md").exists()
-
-
 # --- the two rules the module docstring is read for ------------------------------------------
-
-
-def test_the_module_docstring_names_every_input_plan_raises_for() -> None:
-    # A consumer reads this docstring to decide what to catch. It named two inputs while the
-    # module raises for three: a `MANAGED_REGION` template carrying no region name is a malformed
-    # `Template`, and the test above pins that `plan` deliberately does not soften it into a
-    # per-artifact refusal.
-    prose = " ".join((engine.__doc__ or "").split())
-    assert "and a malformed `Template`" in prose
-    assert "the configured profile, and the manifest itself" not in prose
 
 
 def test_the_containment_docstring_claims_the_property_the_walk_actually_holds() -> None:
@@ -1145,109 +391,3 @@ def test_the_containment_docstring_claims_the_property_the_walk_actually_holds()
     prose = " ".join((engine.__doc__ or "").split())
     assert "it cannot redirect the write" in prose
     assert "there is no window in which a component can become a symlink" not in prose
-
-
-def test_a_region_the_engine_recorded_itself_relocates_and_leaves_the_prose(tmp_path: Path) -> None:
-    # The record the engine writes for a region holds the digest of the region's body, never of
-    # the file around it. `_relocation` compared the whole file with it, so every real relocation
-    # read as a hand edit, the local `CREATE` dropped the record, and the region stayed in
-    # `AGENTS.md` where no later run could find it. The relocation test that fabricates its
-    # record passed only because it stamped a whole-file digest, which the engine never records.
-    host = tmp_path / "AGENTS.md"
-    host.write_text("User prose.\n", encoding="utf-8")
-    template = a_template(kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1\n")
-    apply(tmp_path, plan(tmp_path, a_config(tmp_path), [template]))
-    planned = plan(tmp_path, a_config(tmp_path, local=("agents-md",)), [template])
-    assert [(a.verb, a.target, a.reason) for a in planned.actions] == [
-        (Verb.REMOVE, "AGENTS.md", "relocated"),
-        (Verb.CREATE, ".stayfixed/local/artifacts/AGENTS.md", "new"),
-    ]
-    apply(tmp_path, planned)
-    assert host.read_text(encoding="utf-8") == "User prose.\n"
-
-
-def test_force_reaches_a_retired_artifact_edited_by_hand(tmp_path: Path) -> None:
-    # `uninstall --force PATH` exists for exactly this file: one the user edited and has now
-    # decided to remove anyway. Without the fix the verdict is "retired and hand-edited"
-    # whatever is forced, and the command's documented flag does nothing.
-    (tmp_path / "AGENTS.md").write_text("mine now\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(retired=True)], force=("AGENTS.md",))
-    assert [(a.verb, a.target, a.reason) for a in result.actions] == [
-        (Verb.REMOVE, "AGENTS.md", "retired, forced")
-    ]
-    apply(tmp_path, result)
-    assert not (tmp_path / "AGENTS.md").exists()
-
-
-def test_force_on_another_path_leaves_a_retired_hand_edit_alone(tmp_path: Path) -> None:
-    # The negative, so the positive cannot pass because `force` became a blanket switch.
-    (tmp_path / "AGENTS.md").write_text("mine now\n", encoding="utf-8")
-    Manifest({}).with_record(a_record()).write(tmp_path)
-    result = plan(tmp_path, a_config(tmp_path), [a_template(retired=True)], force=("CLAUDE.md",))
-    assert [a.verb for a in result.actions] == [Verb.SKIP_MODIFIED]
-
-
-def test_force_on_a_retired_region_removes_the_region_and_keeps_the_prose(tmp_path: Path) -> None:
-    # Forcing is the only way to remove a region whose body was edited by hand, and the file
-    # around the region is the user's. Mutation: give the forced branch the payload `None`
-    # (delete the host file) and this reddens; every other scaffold test stays green.
-    host = tmp_path / "AGENTS.md"
-    host.write_text(upsert("User prose.\n", "harness", "EDITED", Style.MARKDOWN), encoding="utf-8")
-    Manifest({}).with_record(a_record(kind=Kind.MANAGED_REGION, sha256=digest("R1"))).write(
-        tmp_path
-    )
-    template = a_template(
-        kind=Kind.MANAGED_REGION, region="harness", render=lambda: "R1", retired=True
-    )
-    planned = plan(tmp_path, a_config(tmp_path), [template], force=("AGENTS.md",))
-    assert [(a.verb, a.reason) for a in planned.actions] == [(Verb.REMOVE, "retired, forced")]
-    apply(tmp_path, planned)
-    assert host.exists(), "forcing a retired region deleted the file around it"
-    assert host.read_text(encoding="utf-8") == "User prose.\n"
-
-
-def test_a_retired_region_that_was_the_whole_file_removes_the_file(tmp_path: Path) -> None:
-    # `init` creates `.gitignore` when there is none, and then it holds nothing but the region.
-    # Taking the region out used to leave a zero-byte `.gitignore` behind. `detach` has always
-    # removed the file it emptied, and the two withdrawals now agree.
-    text = upsert("", "ignore", ".stayfixed/local/", Style.HASH)
-    (tmp_path / ".gitignore").write_text(text, encoding="utf-8")
-    Manifest({}).with_record(
-        a_record(
-            id="gitignore",
-            kind=Kind.MANAGED_REGION,
-            target=".gitignore",
-            sha256=digest(".stayfixed/local/"),
-        )
-    ).write(tmp_path)
-    template = a_template(
-        id="gitignore",
-        kind=Kind.MANAGED_REGION,
-        target=".gitignore",
-        region="ignore",
-        style=Style.HASH,
-        render=lambda: ".stayfixed/local/",
-        retired=True,
-    )
-    planned = plan(tmp_path, a_config(tmp_path), [template])
-    assert [(a.verb, a.payload) for a in planned.actions] == [(Verb.REMOVE, None)]
-    apply(tmp_path, planned)
-    assert not (tmp_path / ".gitignore").exists()
-
-
-def test_a_record_at_a_case_variant_of_the_target_is_that_file_and_never_a_relocation(
-    tmp_path: Path,
-) -> None:
-    # A record at `agents.md` for an artifact at `AGENTS.md`, as a case-only `[paths]` edit leaves
-    # it. Where case folds they are one file, and a relocation "from" `agents.md` removed the
-    # artifact's own file (`relocated`) beside an `unchanged` verdict for it, then dropped its
-    # record. Asserted on the plan, which is the same string rule on every filesystem.
-    # Mutation (oracle): `mutations/`'s "a record at a case variant of the target triggers a
-    # relocation" -> the plan holds that `REMOVE` and this reddens.
-    config = a_config(tmp_path)
-    (tmp_path / "AGENTS.md").write_text("BODY\n", encoding="utf-8")
-    Manifest({}).with_record(a_record(target="agents.md")).write(tmp_path)
-    planned = plan(tmp_path, config, [a_template()])
-    assert planned.actions == ()
-    assert planned.unchanged == ("agents-md",)

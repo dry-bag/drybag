@@ -33,10 +33,11 @@ from tests.gitfixture import needs_git, run_git
 ROOT = Path(__file__).resolve().parents[1]
 THIS = Path(__file__).resolve()
 FULL_TABLE_TREES = ("src", "tests", "scripts")
-# How many tracked files the walk is allowed to skip for being undecodable. Zero, measured: this
-# repository ships no binary. A file that changes it is a deliberate edit here and not a case
-# that quietly stopped being checked.
-UNDECODABLE = 0
+# How many tracked files the walk is allowed to skip for being undecodable. One, measured: the
+# plugin directory's listing icon, `.claude-plugin/icon.png`, is this repository's only binary.
+# A file that changes it is a deliberate edit here and not a case that quietly stopped being
+# checked.
+UNDECODABLE = 1
 # Only for the fallback walk in an unpacked sdist, where `git ls-files` cannot answer.
 FALLBACK_EXCLUDED = {
     ".git",
@@ -221,24 +222,24 @@ def offending(text: str, forbidden: tuple[tuple[int, str], ...] = FORBIDDEN) -> 
 def _preset_paths() -> tuple[tuple[int, str], ...]:
     """The digests of the default `[paths]` values the preset ships.
 
-    Three of them are in `FORBIDDEN`, because they were the source repository's paths before
-    they were stayfixed's defaults. A public document that could not say where the note store
+    One of them is in `FORBIDDEN`, because it was the source repository's path before it was
+    drybag's default. A public document that could not say where the note store
     lives by default would be useless, so the public-document walk exempts exactly the values
     the plugin itself ships — read off the preset at import time, never written here. Source
     code keeps the full table: a module has no reason to spell a default path.
     """
-    from stayfixed.presets import load_preset
+    from drybag.presets import load_preset
 
     values = load_preset("recommended")["defaults"]["paths"].values()
     return tuple((len(value), digest_of(value)) for value in values)
 
 
 PUBLIC_FORBIDDEN = tuple(entry for entry in FORBIDDEN if entry not in _preset_paths())
-# Three of the preset's default `[paths]` values are also digest-table entries — the ones that
-# were the source repository's paths before they were stayfixed's defaults. Pinned so
-# the exemption cannot quietly grow: a fourth would mean a token was added to the table for a
+# One of the preset's default `[paths]` values is also a digest-table entry — the one that was the
+# source repository's path before it was drybag's default. Pinned so the exemption cannot
+# quietly grow: a second would mean a token was added to the table for a
 # path the plugin itself ships, which is a contradiction to resolve, not to exempt.
-PRESET_PATHS_IN_TABLE = 3
+PRESET_PATHS_IN_TABLE = 1
 
 
 # Every top-level directory this repository tracks, measured 2026-09-19 against
@@ -249,7 +250,6 @@ TRACKED_TREES = (
     ".claude-plugin",
     ".codex-plugin",
     ".github",
-    "agents",
     "changelog.d",
     "docs",
     "hooks",
@@ -344,7 +344,7 @@ def test_a_coverage_worker_file_is_not_a_file_the_gate_walks(tmp_path: Path) -> 
 # `[paths]` value where they could not before. That is the design and not a slip: a skill is a
 # document a person reads, and the argument that a README which could not say where the note store
 # lives by default would be useless is the same argument one directory over. The denylist proper is
-# unchanged for them — only the three exempted preset defaults move — and the shape arms are not
+# unchanged for them — only the exempted preset default moves — and the shape arms are not
 # table-scoped at all, so a personal address, a bare commit id and a vendor branch are still refused
 # in a skill. Changing it back means changing that rule, not only this function.
 def table_for(path: Path) -> tuple[tuple[int, str], ...]:
@@ -371,17 +371,16 @@ def test_the_gate_reads_the_whole_tree() -> None:
     files = tracked_files()
     names = {str(p.relative_to(ROOT)) for p in files}
     # No `.github/` name here: that tree is outside `source-include`, and this floor has to
-    # hold in the unpacked sdist the fallback walk exists for. `skills/` and `agents/` are
-    # inside it, so they are named like the rest.
+    # hold in the unpacked sdist the fallback walk exists for. `skills/` is
+    # inside it, so it is named like the rest.
     for wanted in (
         "README.md",
-        "src/stayfixed/cli.py",
+        "src/drybag/cli.py",
         "docs/cli.md",
         "hooks/run-hook.sh",
-        "scripts/stayfixed",
+        "scripts/drybag",
         "tests/test_fsops.py",
         "skills/README.md",
-        "agents/code-navigator.md",
     ):
         assert wanted in names, wanted
     # The mutation declarations by their directory and not by a group file's name, which is
@@ -430,15 +429,13 @@ def test_the_two_tables_are_told_apart_by_the_file_they_are_for() -> None:
     # `table_for` is what decides whether a file may name a default path, so it is worth an
     # assertion of its own rather than only being exercised through the walk. A module and a
     # test module take the full table; the preset that ships those defaults, every document,
-    # and a data file under a full-table tree take the public one. `scripts/stayfixed` has no
+    # and a data file under a full-table tree take the public one. `scripts/drybag` has no
     # suffix at all and is source, which is why the tree name is a second arm.
-    assert table_for(ROOT / "src" / "stayfixed" / "cli.py") == FORBIDDEN
+    assert table_for(ROOT / "src" / "drybag" / "cli.py") == FORBIDDEN
     assert table_for(ROOT / "tests" / "test_fsops.py") == FORBIDDEN
-    assert table_for(ROOT / "scripts" / "stayfixed") == FORBIDDEN
-    assert (
-        table_for(ROOT / "src" / "stayfixed" / "presets" / "recommended.toml") == PUBLIC_FORBIDDEN
-    )
-    fixture = ROOT / "tests" / "fixtures" / "smoke-project" / "stayfixed.toml"
+    assert table_for(ROOT / "scripts" / "drybag") == FORBIDDEN
+    assert table_for(ROOT / "src" / "drybag" / "presets" / "recommended.toml") == PUBLIC_FORBIDDEN
+    fixture = ROOT / "tests" / "fixtures" / "smoke-project" / "drybag.toml"
     assert table_for(fixture) == PUBLIC_FORBIDDEN
     assert table_for(ROOT / "docs" / "cli.md") == PUBLIC_FORBIDDEN
     assert table_for(ROOT / "README.md") == PUBLIC_FORBIDDEN
@@ -567,13 +564,13 @@ def test_the_exemption_is_exactly_the_presets_default_paths() -> None:
     # is *defined* as that difference, so the subset held for any derivation and reddened for
     # none. The size is the claim with teeth — it is the one a hand-written table breaks.
     # The full table's size is pinned by `test_the_denylist_is_stored_as_digests`; the source
-    # walk still refuses those three, which `test_the_public_table_still_discriminates` shows.
+    # walk still refuses it, which `test_the_public_table_still_discriminates` shows.
 
 
 def test_the_public_table_still_discriminates() -> None:
     # A preset path is allowed by the public table and refused by the full one; a planted
     # token is refused by both; the dotted harness directory is not a vendor branch.
-    from stayfixed.presets import load_preset
+    from drybag.presets import load_preset
 
     defaults = load_preset("recommended")["defaults"]["paths"].values()
     exempt_value = next(

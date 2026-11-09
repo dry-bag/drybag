@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.loader import load
-from stayfixed.config.schema import Config
-from stayfixed.docs.hygiene import (
+from drybag.config.loader import load
+from drybag.config.schema import Config
+from drybag.docs.hygiene import (
     TRAIL_MARKER,
     check_budgets,
     check_links,
@@ -18,21 +18,17 @@ from stayfixed.docs.hygiene import (
     read_document,
     roadmap_prose,
 )
-from stayfixed.errors import Failure
-from stayfixed.findings import Finding
+from drybag.errors import Failure
+from drybag.findings import Finding
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
-state = "installed"
 preset = "recommended"
-profile = ""
-agents = ["claude"]
 
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 
 AGENTS = """# AGENTS.md
@@ -50,7 +46,7 @@ AGENTS = """# AGENTS.md
 def project(tmp_path: Path, extra: str = "", agents: str = AGENTS) -> tuple[Path, Config]:
     root = tmp_path / "widget"
     (root / "docs").mkdir(parents=True)
-    (root / "stayfixed.toml").write_text(CONFIG + extra, encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG + extra, encoding="utf-8")
     (root / "AGENTS.md").write_text(agents, encoding="utf-8")
     (root / "docs" / "guide.md").write_text("# Guide\n", encoding="utf-8")
     return root, load(root, machine=tmp_path / "m.toml")
@@ -162,7 +158,7 @@ def test_a_missing_local_link_target_is_a_finding_and_external_links_are_not(
 
 
 def test_a_link_inside_a_fence_is_an_example_not_a_claim(tmp_path: Path) -> None:
-    # The other prose readers (`docs.plans`, `memory.graph`) blank fences; this one must too.
+    # The other prose reader (`docs.plans`) blanks fences; this one must too.
     # Mutation: scan the raw text instead of the blanked one — this reddens.
     root, config = project(tmp_path, agents=AGENTS + "```\n[x](docs/example.md)\n```\n")
     assert check_links(root, config) == []
@@ -239,7 +235,7 @@ def test_a_link_out_of_the_documents_own_directory_but_inside_the_root_still_res
     (root / "docs" / "AGENTS.md").write_text(
         AGENTS + "\n- [b](../src/boot.py)\n- [g](../src/gone.py)\n", encoding="utf-8"
     )
-    (root / "stayfixed.toml").write_text(
+    (root / "drybag.toml").write_text(
         CONFIG + '\n[paths]\nagents_md = "docs/AGENTS.md"\n', encoding="utf-8"
     )
     config = load(root, machine=tmp_path / "m.toml")

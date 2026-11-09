@@ -12,7 +12,7 @@ from typing import NamedTuple
 
 import pytest
 
-from stayfixed import __version__
+from drybag import __version__
 from tests.gitfixture import git
 from tests.test_launcher import _old_python
 
@@ -26,9 +26,9 @@ def _plugin_root(
     """A plugin root: a copy of the shipped wrapper, and a fake launcher beside it.
 
     The wrapper finds its launcher relative to its own path, so a plugin root is a real directory
-    pair — `hooks/run-hook.sh` and `scripts/stayfixed` — which is what an installed plugin is. A
+    pair — `hooks/run-hook.sh` and `scripts/drybag` — which is what an installed plugin is. A
     fake launcher, because these cases are about the wrapper's exit mapping and its argv, and a
-    real `stayfixed` run would couple them to every command in the package. With `echo_cwd` it
+    real `drybag` run would couple them to every command in the package. With `echo_cwd` it
     prints the physical directory it runs in, which is what `Path.resolve()` names.
     """
     root = base / "plugin"
@@ -38,7 +38,7 @@ def _plugin_root(
     (root / "hooks" / WRAPPER.name).chmod(0o755)
     if not with_launcher:
         return root
-    launcher = root / "scripts" / "stayfixed"
+    launcher = root / "scripts" / "drybag"
     body = "import os\n\nprint(os.getcwd())\n" if echo_cwd else ""
     launcher.write_text(
         f"#!/usr/bin/env python3\n{body}raise SystemExit({exit_code})\n", encoding="utf-8"
@@ -47,14 +47,29 @@ def _plugin_root(
     return root
 
 
+def _path_without_uv() -> str:
+    """This process's `PATH` less every directory that holds a `uv`.
+
+    The suite runs under `uv run`, so its own `PATH` holds uv, and a wrapper that falls back to
+    uv's interpreter would pass every case below that expects `off()` from a missing or sub-floor
+    `python3`. Those cases are about the wrapper's own interpreter lookup, so they get this.
+    """
+    kept = [
+        directory
+        for directory in os.environ.get("PATH", "").split(os.pathsep)
+        if directory and not os.access(os.path.join(directory, "uv"), os.X_OK)
+    ]
+    return os.pathsep.join(kept)
+
+
 def _python_on_path(base: Path, interpreter: str = sys.executable) -> str:
-    """A `PATH` whose first `python3` runs `interpreter`, then this process's own `PATH`."""
+    """A `PATH` whose first `python3` runs `interpreter`, then this process's own, without uv."""
     directory = base / "python-on-path"
     directory.mkdir(parents=True, exist_ok=True)
     shim = directory / "python3"
     shim.write_text(f'#!/bin/sh\nexec "{interpreter}" "$@"\n', encoding="utf-8")
     shim.chmod(0o755)
-    return f"{directory}{os.pathsep}{os.environ.get('PATH', '')}"
+    return f"{directory}{os.pathsep}{_path_without_uv()}"
 
 
 def _run(
@@ -100,14 +115,71 @@ def test_no_python3_on_path_degrades_open(tmp_path: Path) -> None:
     assert "no python3 on PATH" in result.stderr
 
 
+def test_no_python3_and_no_uv_degrades_open(tmp_path: Path) -> None:
+    # The wrapper's uv fallback is taken only where a uv is named: with an empty `PATH` there is
+    # neither a `python3` nor a uv, and the answer is today's line.
+    result = _run("hook", "PreToolUse", plugin_root=_plugin_root(tmp_path, 0), path="")
+    assert result.returncode == 0
+    assert "no python3 on PATH" in result.stderr
+
+
+def test_uv_is_asked_from_a_neutral_directory_and_a_repository_script_never_runs(
+    tmp_path: Path,
+) -> None:
+    # Measured with uv 0.12.19: asked from a project, `uv python find` runs the executable at
+    # `.venv/bin/python` in its working directory or a parent to ask its version, an explicit
+    # `>=3.11` request included, so a repository that commits one chooses the program every hook
+    # starts. A `.python-version` naming a script is ignored, and is planted beside it as the file
+    # the requirement names. Asked from `/`, uv looks at no repository. No `python3` on `PATH`:
+    # one directory holds a link to the real uv and another a link named `python3.<minor>` to the
+    # interpreter the suite's venv came from, which uv finds and the wrapper's own `python3` lookup
+    # does not. Skips only where no uv is on `PATH`; CI runs the suite under `uv run`, so it runs
+    # there.
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("no uv on PATH; CI runs the suite under `uv run`")
+    uv_dir, python_dir = tmp_path / "uv-only", tmp_path / "interpreter-only"
+    uv_dir.mkdir()
+    python_dir.mkdir()
+    (uv_dir / "uv").symlink_to(uv)
+    (python_dir / f"python3.{sys.version_info.minor}").symlink_to(_base_interpreter())
+    marker = tmp_path / "script-ran"
+    # `echo` is a builtin: the wrapper's `PATH` here holds no `touch`.
+    script = f"#!/bin/sh\necho ran > '{marker}'\nexit 1\n"
+    project = tmp_path / "project"
+    planted = project / ".venv" / "bin" / "python"
+    planted.parent.mkdir(parents=True)
+    planted.write_text(script, encoding="utf-8")
+    planted.chmod(0o755)
+    (project / ".venv" / "pyvenv.cfg").write_text("home = /usr/bin\n", encoding="utf-8")
+    pinned = tmp_path / "repository-python"
+    pinned.write_text(script, encoding="utf-8")
+    pinned.chmod(0o755)
+    (project / ".python-version").write_text(f"{pinned}\n", encoding="utf-8")
+    result = _run(
+        "hook",
+        "PreToolUse",
+        plugin_root=_plugin_root(tmp_path, 0, echo_cwd=True),
+        project=project,
+        path=f"{uv_dir}{os.pathsep}{python_dir}",
+        # Under `uv run` the suite's own venv is the active one, which uv answers before it looks
+        # at any `.venv` in the directory it runs in.
+        extra={"VIRTUAL_ENV": "", "CONDA_PREFIX": ""},
+    )
+    assert not marker.exists()
+    assert result.returncode == 0 and "continuing open" not in result.stderr
+    # The launcher ran, in the project: only `uv`'s `cd /` stayed in the substitution's subshell.
+    assert Path(result.stdout.strip()) == project.resolve()
+
+
 def test_an_interpreter_below_the_floor_degrades_open(tmp_path: Path) -> None:
     # A real sub-floor interpreter rather than a fake that exits non-zero for every argument,
     # which could not exercise `sys.version_info` at all. Without the probe the launcher's own
     # floor check answers in its own words. `_old_python` is the tree's own seam,
-    # and CI pins it through STAYFIXED_OLD_PYTHON so this runs there rather than skipping.
+    # and CI pins it through DRYBAG_OLD_PYTHON so this runs there rather than skipping.
     old = _old_python()
     if old is None:
-        pytest.skip("no interpreter below 3.11 on this machine; set STAYFIXED_OLD_PYTHON")
+        pytest.skip("no interpreter below 3.11 on this machine; set DRYBAG_OLD_PYTHON")
     result = _run(
         "hook",
         "PreToolUse",
@@ -118,7 +190,7 @@ def test_an_interpreter_below_the_floor_degrades_open(tmp_path: Path) -> None:
     assert "is not python 3.11 or newer" in result.stderr
 
 
-OFF = "stayfixed's hooks are off in this session: "
+OFF = "drybag's hooks are off in this session: "
 TO_DO = ". Install Python 3.11 or newer on PATH."
 
 
@@ -149,7 +221,7 @@ def test_the_dispatching_session_start_says_the_hooks_are_off(
     tmp_path: Path, state: Callable[[Path], tuple[str, str]]
 ) -> None:
     # Measured on a machine whose `PATH` held only a 3.9 `/usr/bin/python3`: every entry said why
-    # on stderr, which nobody reads on a `0`, and stayfixed was off with nothing said. So the one
+    # on stderr, which nobody reads on a `0`, and drybag was off with nothing said. So the one
     # entry that dispatches `SessionStart` says it where Claude Code shows the person
     # (`systemMessage`) and where the model reads (`additionalContext`), and still exits 0.
     path, why = state(tmp_path)
@@ -185,8 +257,8 @@ def test_every_other_entry_stays_silent_without_a_usable_python(
     assert "no python3 on PATH" in result.stderr
 
 
-def test_a_usable_interpreter_leaves_session_start_to_stayfixed(tmp_path: Path) -> None:
-    # The positive row: with a usable `python3` the wrapper adds nothing to what stayfixed prints.
+def test_a_usable_interpreter_leaves_session_start_to_drybag(tmp_path: Path) -> None:
+    # The positive row: with a usable `python3` the wrapper adds nothing to what drybag prints.
     result = _run(
         "hook", "SessionStart", plugin_root=_plugin_root(tmp_path, 0, echo_cwd=True), cwd=tmp_path
     )
@@ -213,11 +285,11 @@ def test_a_launcher_that_cannot_be_read_degrades_open(tmp_path: Path) -> None:
     # `test -f` tests existence, not readability: a launcher at mode 000 reached CPython, which
     # printed its own "Permission denied" and exited 2.
     root = _plugin_root(tmp_path, 0)
-    (root / "scripts" / "stayfixed").chmod(0o000)
+    (root / "scripts" / "drybag").chmod(0o000)
     try:
         result = _run("hook", "PreToolUse", plugin_root=root)
     finally:
-        (root / "scripts" / "stayfixed").chmod(0o755)
+        (root / "scripts" / "drybag").chmod(0o755)
     assert result.returncode == 0
     assert "no readable launcher" in result.stderr
 
@@ -228,7 +300,7 @@ def test_any_non_zero_exit_degrades_open_and_says_so(tmp_path: Path, rc: int) ->
     # would block every Bash call on one.
     result = _run("hook", "PreToolUse", plugin_root=_plugin_root(tmp_path, rc))
     assert result.returncode == 0
-    assert f"stayfixed exited {rc}" in result.stderr
+    assert f"drybag exited {rc}" in result.stderr
 
 
 def test_a_zero_exit_passes_through_untouched(tmp_path: Path) -> None:
@@ -236,34 +308,52 @@ def test_a_zero_exit_passes_through_untouched(tmp_path: Path) -> None:
     assert (result.returncode, result.stderr) == (0, "")
 
 
-def test_the_interpreter_is_the_one_the_project_root_chooses(tmp_path: Path) -> None:
-    # A pyenv, asdf or mise shim answers for the directory it runs in. Probed outside the project
-    # and launched inside it, a shim passed the probe and then ran a sub-floor interpreter. No
-    # mutation entry, since the order now decides only whether the hook runs; measured by hand by
-    # moving the `cd` below the probe, after which the launch exits 2 and this reddens.
+def _executable(path: Path, body: str) -> None:
+    path.write_text(f"#!/bin/sh\n{body}", encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _empty_path_element(project: Path, script: str) -> str:
+    # An empty `PATH` element is the working directory, so a `python3` committed to the project.
+    _executable(project / "python3", script)
+    return f"{os.pathsep}{_path_without_uv()}"
+
+
+def _version_manager_shim(project: Path, script: str) -> str:
+    # A pyenv, asdf or mise shim runs what the `.python-version` where it runs names.
+    _executable(project / "pinned", script)
+    (project / ".python-version").write_text(f"{project / 'pinned'}\n", encoding="utf-8")
+    shims = project.parent / "shims"
+    shims.mkdir()
+    read = 'test -e .python-version && read -r v < .python-version && exec "$v" "$@"'
+    _executable(shims / "python3", f'{read}\nexec "{sys.executable}" "$@"\n')
+    return f"{shims}{os.pathsep}{_path_without_uv()}"
+
+
+@pytest.mark.parametrize(
+    "plant", [_empty_path_element, _version_manager_shim], ids=["empty-element", "shim"]
+)
+def test_a_repository_never_chooses_the_interpreter(
+    tmp_path: Path, plant: Callable[[Path, str], str]
+) -> None:
     project = tmp_path / "project"
     project.mkdir()
-    (project / ".python-version").write_text("3.9\n", encoding="utf-8")
-    shims = tmp_path / "shims"
-    shims.mkdir()
-    shim = shims / "python3"
-    shim.write_text(
-        f'#!/bin/sh\ntest -e .python-version && exit 2\nexec "{sys.executable}" "$@"\n',
-        encoding="utf-8",
-    )
-    shim.chmod(0o755)
+    marker = tmp_path / "planted-ran"
+    path = plant(project, f"echo ran > '{marker}'\nexit 1\n")
     result = _run(
         "hook",
         "PreToolUse",
-        plugin_root=_plugin_root(tmp_path, 0),
+        plugin_root=_plugin_root(tmp_path, 0, echo_cwd=True),
         project=project,
-        path=f"{shims}{os.pathsep}{os.environ.get('PATH', '')}",
+        path=path,
     )
-    assert result.returncode == 0
-    assert "is not python 3.11 or newer" in result.stderr
+    assert not marker.exists()
+    # The hook still ran, on the real interpreter, in the project root.
+    assert (result.returncode, result.stderr) == (0, "")
+    assert result.stdout.splitlines() == [str(project.resolve())]
 
 
-def test_stayfixed_runs_from_the_project_root(tmp_path: Path) -> None:
+def test_drybag_runs_from_the_project_root(tmp_path: Path) -> None:
     # Every hooks.json entry but the dispatcher's relies on `--root` defaulting to `.`, and the
     # harness does not promise to launch a hook in the project. The wrapper changes into
     # CLAUDE_PROJECT_DIR, else git's toplevel, so one rule serves every entry.
@@ -285,7 +375,7 @@ def test_stayfixed_runs_from_the_project_root(tmp_path: Path) -> None:
 
 def test_the_project_root_is_never_taken_from_an_inherited_git_environment(tmp_path: Path) -> None:
     # `cd repoA` with GIT_DIR/GIT_WORK_TREE naming repoB put the launcher in repoB, so the whole
-    # hook read another repository's stayfixed.toml, budgets and note store. The Codex path,
+    # hook read another repository's drybag.toml, budgets and note store. The Codex path,
     # where CLAUDE_PROJECT_DIR is unset.
     here, there = tmp_path / "here", tmp_path / "there"
     for repository in (here, there):
@@ -303,7 +393,7 @@ def test_the_project_root_is_never_taken_from_an_inherited_git_environment(tmp_p
 
 def test_a_project_root_that_cannot_be_entered_says_so(tmp_path: Path) -> None:
     # A root that was named and cannot be entered left the process in the harness's directory,
-    # and if that was another stayfixed project every `--root`-defaulting entry read its
+    # and if that was another drybag project every `--root`-defaulting entry read its
     # configuration, with nothing said.
     result = _run(
         "hook",
@@ -445,4 +535,4 @@ def test_a_module_the_environment_plants_never_runs(
     )
     assert not planting.record.exists(), planting.record.read_text(encoding="utf-8")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == f"stayfixed {__version__}"
+    assert result.stdout.strip() == f"drybag {__version__}"

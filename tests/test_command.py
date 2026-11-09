@@ -3,11 +3,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import pytest
-
-import stayfixed
-from stayfixed.cli import build_parser, discover_registrars
-from stayfixed.command import (
+import drybag
+from drybag.cli import build_parser, discover_registrars
+from drybag.command import (
     ATTACH_CHECK_HELP,
     CHECK_HELP,
     DRY_RUN_HELP,
@@ -21,11 +19,9 @@ from stayfixed.command import (
     common_flags,
     root_and_config,
 )
-from stayfixed.config.owner import IGNORED_NOTE, MACHINE_FILE_NOTE, UNKNOWN_KEY
-from tests.assess.baserepo import clone
+from drybag.config.owner import IGNORED_NOTE, MACHINE_FILE_NOTE, UNKNOWN_KEY
 from tests.cli import cli, subparsers
-from tests.gitfixture import needs_git
-from tests.project.repos import initialised, repository
+from tests.gitfixture import needs_git, repository
 
 SHARED = {
     "--root": ROOT_HELP,
@@ -44,24 +40,20 @@ EXCEPTIONS = {
     ("overlay", "upgrade", "--root"): OVERLAY_ROOT_HELP,
     ("setup", None, "--root"): SETUP_ROOT_HELP,
     ("setup", None, "--machine"): SETUP_MACHINE_HELP,
-    # `attach --check` reports the same way `bugs index`, `docs trail` and `memory index` do,
+    # `attach --check` reports the same way `docs trail` and `memory index` do,
     # and exits differently on purpose: its 1 is a binding mismatch and not a non-empty diff.
     # `command.ATTACH_CHECK_HELP` carries the argument.
     ("attach", None, "--check"): ATTACH_CHECK_HELP,
 }
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
-state = "installed"
 preset = "recommended"
-profile = ""
-agents = ["claude"]
 
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 
 
@@ -81,7 +73,7 @@ def test_root_and_config_resolves_the_root_and_loads_under_the_named_machine_fil
 ) -> None:
     root = tmp_path / "widget"
     root.mkdir()
-    (root / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG, encoding="utf-8")
     args = common_flags(argparse.ArgumentParser()).parse_args(
         ["--root", str(root), "--machine", str(tmp_path / "m.toml")]
     )
@@ -133,41 +125,30 @@ def test_every_shared_flag_carries_the_one_help_string_or_a_named_exception() ->
     assert wrong == [], wrong
 
 
-# A machine file that loads, with one key this stayfixed does not read: one note, said on stderr.
+# A machine file that loads, with one key this drybag does not read: one note, said on stderr.
 UNREAD_KEY = "[guards]\nfuture = 1\n"
-DOCUMENT = f'[stayfixed]\nversion = "{stayfixed.__version__}"\n\n[project]\nname = "widget"\n'
-
-
-def _two_documents(tmp_path: Path, command: str) -> tuple[Path, tuple[str, ...]]:
-    """A repository where `command` loads more than one `stayfixed.toml`, and its argv: `init`
-    adopting a file it loads as merged and as on disk, `upgrade` the document before and after,
-    and `gate` the tree's copy once for its base and twice for the verdict, with the base's."""
-    if command == "init":
-        root = repository(tmp_path)
-        (root / "stayfixed.toml").write_text(DOCUMENT, encoding="utf-8")
-        return root, ("init", "--yes", "--no-ci", "--json")
-    if command == "upgrade":
-        return initialised(tmp_path), ("upgrade", "--dry-run", "--json")
-    return clone(tmp_path, DOCUMENT), ("gate", "--only", "config", "--json")
+DOCUMENT = f'[drybag]\nversion = "{drybag.__version__}"\n\n[project]\nname = "widget"\n'
 
 
 @needs_git
-@pytest.mark.parametrize("command", ["init", "upgrade", "gate"])
 def test_a_command_says_a_machine_file_note_once_however_many_documents_it_loads(
-    tmp_path: Path, command: str
+    tmp_path: Path,
 ) -> None:
-    # The note was said by every load, so once a document: twice in `init --yes` and `upgrade
-    # --dry-run`, and three times in `gate --json`, one per copy it read. The command resolves the
-    # owner's layer once (`command.command_owner`) and every load takes it. Mutation (`mutations/`'s
-    # "a command keeps quiet about what it read past in the machine file"): none; no one-line edit
-    # puts the side effect back into the load, and with it there each case is said again.
-    root, argv = _two_documents(tmp_path, command)
+    # The note was said by every load, so once a document, one per copy read. The command resolves
+    # the owner's layer once (`command.command_owner`) and every load takes it. Mutation
+    # (`mutations/`'s "a command keeps quiet about what it read past in the machine file"): none; no
+    # one-line edit puts the side effect back into the load, and with it there each case is said
+    # again.
+    root = repository(tmp_path)
+    (root / "drybag.toml").write_text(DOCUMENT, encoding="utf-8")
+    (root / "AGENTS.md").write_text("# Agents\n\n## Current status\n", encoding="utf-8")
+    argv = ("docs", "check", "--json")
     machine = tmp_path / "machine.toml"
     machine.write_text(UNREAD_KEY, encoding="utf-8")
     code, out, err = cli(root, tmp_path, *argv, machine=machine)
     assert code == 0, (out, err)
     problem = UNKNOWN_KEY.format(table="guards", key="future")
-    assert err == f"stayfixed: {IGNORED_NOTE.format(path=machine, problem=problem)}\n", err
+    assert err == f"drybag: {IGNORED_NOTE.format(path=machine, problem=problem)}\n", err
 
 
 @needs_git
@@ -176,7 +157,8 @@ def test_a_command_refuses_a_machine_file_that_does_not_load(tmp_path: Path) -> 
     # else: nothing of it can be read past key by key. Read as a session reads it, the command
     # says the session's note, which quotes the same refusal, and exits 0. Mutation
     # (`mutations/`'s "a command reads the owner's layer as a session does"): exit 0.
-    root = initialised(tmp_path)
+    root = repository(tmp_path)
+    (root / "drybag.toml").write_text(DOCUMENT, encoding="utf-8")
     machine = tmp_path / "machine.toml"
     machine.write_text("[personal\nx = 1\n", encoding="utf-8")
     code, _, err = cli(root, tmp_path, "docs", "check", machine=machine)

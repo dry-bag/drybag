@@ -4,15 +4,15 @@ import json
 from pathlib import Path
 from typing import Any
 
-from stayfixed.cli import build_parser, discover_registrars
-from stayfixed.guards.hooks import BASH
-from stayfixed.harnesses import CLAUDE
-from stayfixed.hooks.api import EVENTS
-from stayfixed.hooks.registry import discover
+from drybag.cli import build_parser, discover_registrars
+from drybag.harnesses import CLAUDE
+from drybag.hints.hooks import BASH
+from drybag.hooks.api import EVENTS
+from drybag.hooks.registry import discover
 
-# `stayfixed.memory.api` and not `stayfixed.memory.bundles`: an area is imported through its
+# `drybag.memory.api` and not `drybag.memory.bundles`: an area is imported through its
 # published surface, never through a private module, and `SLOTS` is on that surface.
-from stayfixed.memory.api import SLOTS
+from drybag.memory.api import SLOTS
 
 ROOT = Path(__file__).resolve().parents[2]
 HOOKS = json.loads((ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
@@ -47,7 +47,7 @@ SESSION_SOURCES = {"startup", "resume", "clear", "compact", "fork"}
 def test_there_are_entries_at_all() -> None:
     # The non-vacuity guard every walk-driven assertion below depends on: an empty `hooks`
     # object satisfies all six of them.
-    assert len(_entries()) == 10
+    assert len(_entries()) == 12
 
 
 def test_every_command_parses_against_the_real_parser() -> None:
@@ -61,7 +61,7 @@ def test_every_command_parses_against_the_real_parser() -> None:
 
 
 def test_no_entry_passes_json() -> None:
-    # `bundles.py`'s CAP_MARGIN comment, addressing `stayfixed.hooks` by name: "the `hooks.json`
+    # `bundles.py`'s CAP_MARGIN comment, addressing `drybag.hooks` by name: "the `hooks.json`
     # entries must not pass `--json`. The margin is additive only because `memory
     # session-context` prints the text raw." `memory/commands.py` records that this invariant
     # is owned outside `memory` and asserted by no test there. This is that test.
@@ -154,7 +154,7 @@ def test_every_entry_is_a_command_entry() -> None:
 
 
 def test_every_tool_matched_entry_matches_the_name_both_handlers_filter_on() -> None:
-    # `guards.hooks.BASH` is the name `bash_command` compares `event.tool_name` against, so the
+    # `hints.hooks.BASH` is the name `bash_command` compares `event.tool_name` against, so the
     # matcher in this file and that constant are two spellings of one thing. The matcher is a
     # case-sensitive regular expression: `"bash"` matches no tool Claude Code or Codex reports,
     # which retires `bg-cleanup` and the `test-hygiene` notice with it, permanently and silently.

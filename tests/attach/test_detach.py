@@ -1,4 +1,4 @@
-"""`stayfixed detach` removes exactly what `attach` added, and nothing else.
+"""`drybag detach` removes exactly what `attach` added, and nothing else.
 
 The ledger is the authority on what was ours. Guessing it back from the content of a settings
 file is the heuristic the ledger exists to replace, and a detach built on a guess removes a rule
@@ -7,6 +7,7 @@ the owner wrote by hand — which is worse than removing none.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -15,20 +16,17 @@ from typing import Any
 
 import pytest
 
-from stayfixed import fsops, jsonobject
-from stayfixed.attach.write import Attached, Detached, attach, detach
-from stayfixed.config.layout import ATTACH_LEDGER as LEDGER
-from stayfixed.errors import Failure, Refusal
-from stayfixed.printed import quoted
-from stayfixed.project.init import init
-from stayfixed.project.uninstall import uninstall
-from stayfixed.scaffold import MANIFEST_PATH
-from stayfixed.scaffold.regions import Style, extract
+from drybag import fsops, jsonobject
+from drybag.attach.write import Attached, Detached, attach, detach
+from drybag.binding import LEDGER_NAME
+from drybag.errors import Failure, Refusal
+from drybag.printed import quoted
+from drybag.scaffold.regions import extract
 from tests.attach.test_binding import CONFIG, _machine
-from tests.attach.test_write import SETTINGS
+from tests.attach.test_write import NOT_LEDGERS, SETTINGS, ledger_file, rewritten
 from tests.gitfixture import git
 from tests.parserlimits import LONG_NUMBER, NESTED, PAST_ENCODING, overflowing_indent
-from tests.runners import LsRemote, Recorder, claude_code, git_that_cannot_run
+from tests.runners import Recorder, claude_code, git_that_cannot_run
 from tests.snapshot import (
     assert_snapshot_changed,
     assert_snapshot_unchanged,
@@ -70,7 +68,7 @@ def _bound(tmp_path: Path) -> tuple[Path, Path, Path]:
     )
     (overlay / "common" / "claude").mkdir(parents=True)
     (overlay / "common" / "codex").mkdir(parents=True)
-    (root / "stayfixed.toml").write_text(CONFIG.format(name="p"), encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG.format(name="p"), encoding="utf-8")
     git(root, "init", "-q", "-b", "main")
     git(root, "remote", "add", "origin", "git@example.com:o/p.git")
     git(root, "add", "-A")
@@ -99,10 +97,49 @@ def test_detach_removes_exactly_what_attach_added(tmp_path: Path) -> None:
     assert_snapshot_unchanged(root, before)
 
 
+COPY = ".codex/rules/common.rules"
+
+
+def test_detach_leaves_and_names_a_copy_that_does_not_hold_what_attach_wrote(
+    tmp_path: Path,
+) -> None:
+    # The anchor is the digest in the git common directory, which a branch cannot write: what is at
+    # the name is the branch's or the owner's, and an uncommitted edit cannot be got back. Mutation
+    # (oracle): `mutations/`'s "detach removes a copy whatever its bytes".
+    root, store, machine = _bound(tmp_path)
+    _grant(store.parents[2])
+    _attach(root, store, machine)
+    (root / COPY).write_text("# edited\n", encoding="utf-8")
+    detached = _detach(root)
+    assert (root / COPY).read_text(encoding="utf-8") == "# edited\n"
+    assert (detached.rules_removed, detached.rules_left) == ((), (COPY,))
+
+
+@pytest.mark.parametrize("committed", [True, False], ids=["committed", "hand-written"])
+def test_detach_leaves_a_file_at_a_name_attach_stopped_recording(
+    tmp_path: Path, committed: bool
+) -> None:
+    # The overlay drops the file and the owner deletes the copy as attach's line says, so a later
+    # file of that name was never attach's.
+    root, store, machine = _bound(tmp_path)
+    overlay = store.parents[2]
+    _grant(overlay)
+    _attach(root, store, machine)
+    (overlay / "common" / "codex" / "common.rules").unlink()
+    (root / COPY).unlink()
+    _attach(root, store, machine)
+    (root / COPY).write_text("# rule\n", encoding="utf-8")
+    if committed:
+        git(root, "add", "-f", COPY)
+        git(root, "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-qm", "the team's")
+    assert _detach(root).rules_removed == ()
+    assert (root / COPY).is_file()
+
+
 def _render_of(root: Path) -> tuple[str, Path]:
     """The binding id of `root`'s repository and the render directory it names."""
-    from stayfixed import binding
-    from stayfixed.binding import delivery_directory
+    from drybag import binding
+    from drybag.binding import delivery_directory
 
     id = binding.read_id(root)
     assert id is not None
@@ -113,7 +150,7 @@ def _installed(root: Path, store: Path, machine: Path) -> None:
     """An attach whose two `claude plugin` calls wrote what Claude Code writes into the main
     checkout's settings file: the `enabledPlugins` and `extraKnownMarketplaces` entries that name
     the binding id."""
-    from stayfixed.attach.write import attach
+    from drybag.attach.write import attach
 
     runner = Recorder(on_call=claude_code(root))
     attach(root, store=store, machine=machine, runner=runner)
@@ -124,7 +161,7 @@ def test_detach_withdraws_the_rendered_plugin_and_keeps_the_binding(tmp_path: Pa
     # told to forget the plugin and its marketplace, each once, from the main checkout whose
     # settings file holds the plugin's entries. The id, this machine's record of it and the
     # overlay's record stay: a later attach binds the same checkout again.
-    from stayfixed import binding
+    from drybag import binding
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,), hooks=True)
@@ -142,13 +179,13 @@ def test_detach_withdraws_the_rendered_plugin_and_keeps_the_binding(tmp_path: Pa
                 "claude",
                 "plugin",
                 "uninstall",
-                f"overlay-{id}@stayfixed-delivery-{id}",
+                f"overlay-{id}@drybag-delivery-{id}",
                 "--scope",
                 "local",
             ],
             root.resolve(),
         ),
-        (["claude", "plugin", "marketplace", "remove", f"stayfixed-delivery-{id}"], root.resolve()),
+        (["claude", "plugin", "marketplace", "remove", f"drybag-delivery-{id}"], root.resolve()),
     ]
     assert not (root / SETTINGS).exists()
     assert binding.read_id(root) == id
@@ -219,19 +256,73 @@ def test_a_ledger_naming_another_directory_deletes_nothing_outside_the_delivery_
     outside = tmp_path / "elsewhere"
     outside.mkdir()
     (outside / "keep.txt").write_text("mine\n", encoding="utf-8")
-    raw = json.loads((root / LEDGER).read_text(encoding="utf-8"))
+    raw = json.loads(ledger_file(root).read_text(encoding="utf-8"))
     raw["store"] = str(outside)
     raw["render"] = {"digest": "0" * 64, "parts": ["keep.txt"]}
-    (root / LEDGER).write_text(json.dumps(raw), encoding="utf-8")
+    ledger_file(root).write_text(json.dumps(raw), encoding="utf-8")
     _detach(root)
     assert (outside / "keep.txt").read_text(encoding="utf-8") == "mine\n"
     assert not delivery.exists()
 
 
+def _branch_ledger(root: Path, store: Path, **fields: object) -> Path:
+    """The ledger a branch commits at the path the working tree once kept it, as git leaves it on
+    checkout."""
+    path = root / ".drybag" / "local" / "attach.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    document = {
+        "format": 1,
+        "store": str(store),
+        "rules": {},
+        "settings_keys": [],
+        "directories": [],
+    }
+    path.write_text(json.dumps({**document, **fields}), encoding="utf-8")
+    return path
+
+
+def test_a_ledger_a_branch_commits_names_nothing_a_re_attach_or_detach_removes(
+    tmp_path: Path,
+) -> None:
+    # The ledger lives in the git common directory, which a branch cannot write. One committed
+    # into the working tree, naming a hand-written Codex rule and an allow rule the owner typed,
+    # is read by nothing: a re-attach and a detach leave both.
+    # Mutation: `mutations/`'s "the ledger is read from the working tree".
+    root, store, machine = _bound(tmp_path)
+    _grant(store.parents[2], allow=(RULE,))
+    _attach(root, store, machine)
+    mine, typed = root / ".codex" / "rules" / "mine.rules", "Bash(make:*)"
+    mine.write_text("# mine\n", encoding="utf-8")
+    document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+    document["permissions"]["allow"].append(typed)
+    (root / SETTINGS).write_text(json.dumps(document), encoding="utf-8")
+    digest = hashlib.sha256(mine.read_bytes()).hexdigest()
+    _branch_ledger(root, store, allow=[typed], rules={".codex/rules/mine.rules": digest})
+    _attach(root, store, machine)
+    _detach(root)
+    assert mine.is_file()
+    assert (
+        typed in json.loads((root / SETTINGS).read_text(encoding="utf-8"))["permissions"]["allow"]
+    )
+
+
+def test_a_ledger_left_in_the_working_tree_is_neither_read_nor_removed(tmp_path: Path) -> None:
+    # No migration: the old path is not imported, so `detach` finds no ledger in the git common
+    # directory and fails, and a later attach and detach pass the old file by.
+    root, store, machine = _bound(tmp_path)
+    _grant(store.parents[2], allow=(RULE,))
+    old = _branch_ledger(root, store, allow=[RULE])
+    with pytest.raises(Failure):
+        _detach(root)
+    _attach(root, store, machine)
+    _detach(root)
+    assert old.is_file()
+
+
 def _exclude_block(root: Path) -> bool:
     """Whether the repository's exclude file still holds `attach`'s block."""
     exclude = root / ".git" / "info" / "exclude"
-    return exclude.is_file() and "# stayfixed:attach:begin" in exclude.read_text(encoding="utf-8")
+    return exclude.is_file() and "# drybag:attach:begin" in exclude.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -257,7 +348,7 @@ def test_a_settings_file_still_naming_the_plugin_keeps_the_delivery_hidden_and_d
     # exclude block, the ledger and the render. The failure names the entry left by its key and
     # never the id. A second detach makes only the call the file still asks for.
     # Mutation: `mutations/`'s "detach goes past a settings file that still names the plugin".
-    from stayfixed.attach.write import STILL_NAMED
+    from drybag.attach.write import STILL_NAMED
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,), hooks=True)
@@ -268,11 +359,11 @@ def test_a_settings_file_still_naming_the_plugin_keeps_the_delivery_hidden_and_d
         _detach(root, Recorder(on_call=claude_code(root, ignoring=ignoring)))
     assert str(failed.value) == STILL_NAMED.format(keys=", ".join(f"`{key}`" for key in left))
     assert id not in str(failed.value)
-    assert _exclude_block(root) and (root / LEDGER).is_file() and delivery.is_dir()
+    assert _exclude_block(root) and ledger_file(root).is_file() and delivery.is_dir()
     second = Recorder(on_call=claude_code(root))
     _detach(root, second)
     assert [argv[2] for argv in second.calls] == again
-    assert not _exclude_block(root) and not (root / LEDGER).exists() and not delivery.exists()
+    assert not _exclude_block(root) and not ledger_file(root).exists() and not delivery.exists()
 
 
 def test_a_detach_that_cannot_read_the_id_keeps_a_settings_file_naming_a_delivery_hidden(
@@ -280,16 +371,16 @@ def test_a_detach_that_cannot_read_the_id_keeps_a_settings_file_naming_a_deliver
 ) -> None:
     # With the id file gone, `detach` cannot name the plugin, and the settings file still names the
     # old id under both keys: withdrawn, the block left that file for `git add -A` to commit. Any
-    # `stayfixed-delivery-` name there keeps the block, the ledger and the render, and fails.
+    # `drybag-delivery-` name there keeps the block, the ledger and the render, and fails.
     # Mutation: `mutations/`'s "detach asks the settings file about this binding id's delivery
     # alone".
-    from stayfixed.attach.write import STILL_NAMED
+    from drybag.attach.write import STILL_NAMED
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
     _installed(root, store, machine)
     _, delivery = _render_of(root)
-    (root / ".git" / "stayfixed" / "binding").unlink()
+    (root / ".git" / "drybag" / "binding").unlink()
     runner = Recorder(on_call=claude_code(root))
     with pytest.raises(Failure) as failed:
         _detach(root, runner)
@@ -297,7 +388,7 @@ def test_a_detach_that_cannot_read_the_id_keeps_a_settings_file_naming_a_deliver
         keys="`enabledPlugins`, `extraKnownMarketplaces`"
     )
     assert runner.calls == []
-    assert _exclude_block(root) and (root / LEDGER).is_file() and delivery.is_dir()
+    assert _exclude_block(root) and ledger_file(root).is_file() and delivery.is_dir()
 
 
 def test_detach_after_an_attach_whose_marketplace_add_failed_runs_no_call_and_finishes(
@@ -307,8 +398,8 @@ def test_detach_after_an_attach_whose_marketplace_add_failed_runs_no_call_and_fi
     # attach exited 1. The settings file names no plugin, so `detach` asks Claude Code to forget
     # nothing and withdraws: it used to run `marketplace remove` regardless, fail on it, and promise
     # that running it again would finish, which it never did.
-    from stayfixed.attach.write import attach
-    from stayfixed.runner import Completed
+    from drybag.attach.write import attach
+    from drybag.runner import Completed
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
@@ -319,7 +410,7 @@ def test_detach_after_an_attach_whose_marketplace_add_failed_runs_no_call_and_fi
     runner = Recorder(answers={"claude": Completed(127, "", "")})
     _detach(root, runner)
     assert runner.calls == []
-    assert not _exclude_block(root) and not (root / LEDGER).exists() and not delivery.exists()
+    assert not _exclude_block(root) and not ledger_file(root).exists() and not delivery.exists()
 
 
 def test_detach_in_a_bare_repositorys_worktree_withdraws_this_checkouts_own_parts(
@@ -336,16 +427,16 @@ def test_detach_in_a_bare_repositorys_worktree_withdraws_this_checkouts_own_part
     git(tmp_path, "clone", "-q", "--bare", str(root), str(bare))
     side = tmp_path / "side"
     git(bare, "worktree", "add", "-q", str(side), "main")
-    (side / ".stayfixed" / "local").mkdir(parents=True)
-    ledgered = {"format": 1, "store": str(store), "allow": [RULE], "entries": {}, "rules": []}
-    ledgered |= {"settings_keys": [], "directories": [".stayfixed/local", ".stayfixed"]}
-    (side / LEDGER).write_text(json.dumps(ledgered), encoding="utf-8")
+    ledger_file(side).parent.mkdir(parents=True)
+    ledgered = {"format": 1, "store": str(store), "allow": [RULE], "rules": {}}
+    ledgered |= {"settings_keys": [], "directories": []}
+    ledger_file(side).write_text(json.dumps(ledgered), encoding="utf-8")
     (side / ".claude").mkdir()
     (side / SETTINGS).write_text(json.dumps({"permissions": {"allow": [RULE]}}), encoding="utf-8")
     runner = Recorder()
     removed = _detach(side, runner)
     assert removed.allow_removed == (RULE,)
-    assert runner.calls == [] and not (side / LEDGER).exists() and not (side / SETTINGS).exists()
+    assert runner.calls == [] and not ledger_file(side).exists() and not (side / SETTINGS).exists()
 
 
 def test_detach_keeps_the_allow_rule_claude_code_added_to_a_rewritten_settings_file(
@@ -368,27 +459,18 @@ def test_detach_keeps_the_allow_rule_claude_code_added_to_a_rewritten_settings_f
     assert document["permissions"]["allow"] == ["Bash(git tag *)"]
 
 
-def test_uninstall_after_a_real_detach_takes_the_footprint_back(tmp_path: Path) -> None:
-    # The lifecycle's "uninstalled after a detach": what a detach leaves behind decides whether
-    # `stayfixed uninstall` reads the repository as attached, and so whether it detaches again
-    # before it takes the scaffold back. An `init`
-    # footprint, a real attach that merged a rule and a hook entry, a detach, and the tree is the
-    # one `init` left; `uninstall` then runs and takes the footprint back, and a second one finds
-    # nothing to take. Mutation: `mutations/`'s "detach leaves its ledger behind".
+def test_a_real_detach_leaves_the_tree_the_attach_found(tmp_path: Path) -> None:
+    # A real attach that merged a rule and a hook entry, a detach, and the tree is the one the
+    # attach found, with no ledger behind. Mutation: `mutations/`'s "detach leaves
+    # its ledger behind".
     root, store, machine = _bound(tmp_path)
-    init(root, machine=machine, runner=LsRemote(), yes=True, dry_run=False, ci=False)
-    git(root, "add", "-A")
-    git(root, "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-qm", "footprint")
     initialised = snapshot(root)
     _grant(store.parents[2], allow=(RULE,), hooks=True)
     _attach(root, store, machine)
     assert_snapshot_changed(root, initialised)
     _detach(root)
     assert_snapshot_unchanged(root, initialised)
-    uninstall(root, machine=machine, dry_run=False, force=(), runner=Recorder())
-    assert not (root / MANIFEST_PATH).exists() and not (root / LEDGER).exists()
-    with pytest.raises(Refusal):
-        uninstall(root, machine=machine, dry_run=False, force=(), runner=Recorder())
+    assert not ledger_file(root).exists()
 
 
 def test_detach_leaves_a_rule_the_ledger_does_not_claim(tmp_path: Path) -> None:
@@ -408,9 +490,8 @@ def test_detach_leaves_a_rule_the_ledger_does_not_claim(tmp_path: Path) -> None:
 
 
 def test_detach_leaves_a_hook_entry_that_was_never_marked(tmp_path: Path) -> None:
-    # The same rule for the other half of the file. `scaffold.apply_entries` splits a group
-    # rather than replacing it, so a developer's own entry beside stayfixed's survives — and
-    # this is the command whose mistake would delete it.
+    # The same rule for the other half of the file: a developer's own entry survives, and this is
+    # the command whose mistake would delete it.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], hooks=True)
     (root / ".claude").mkdir(exist_ok=True)
@@ -432,14 +513,14 @@ def test_detach_without_a_ledger_says_so_and_changes_nothing(tmp_path: Path) -> 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
     _attach(root, store, machine)
-    (root / LEDGER).unlink()
+    ledger_file(root).unlink()
     before = snapshot(root)
     # As in `test_a_mismatched_remote_refuses_and_writes_nothing`: `snapshot` is a walk and an
     # empty one satisfies the comparison below on its own.
     assert before
     with pytest.raises(Failure) as failed:
         _detach(root)
-    assert LEDGER in str(failed.value)
+    assert LEDGER_NAME in str(failed.value)
     assert_snapshot_unchanged(root, before)
 
 
@@ -456,19 +537,19 @@ def test_a_second_detach_exits_one_and_writes_nothing(tmp_path: Path, run_in: st
     target = root if run_in == "main" else side
     _detach(target)
     before = tree_entries(root, side)
-    assert str(root / "stayfixed.toml") in before
+    assert str(root / "drybag.toml") in before
     with pytest.raises(Failure) as failed:
         _detach(target)
-    assert LEDGER in str(failed.value)
+    assert LEDGER_NAME in str(failed.value)
     assert tree_entries(root, side) == before
 
 
 def test_detach_withdraws_the_memory_pointer_and_the_composed_store(tmp_path: Path) -> None:
     # The key names a directory derived from the id; both go, the overlay the links point into
     # stays, and a settings file that held nothing else goes with them.
-    from stayfixed import binding
-    from stayfixed.attach.write import attach
-    from stayfixed.memory.store import composed_directory as store_directory
+    from drybag import binding
+    from drybag.attach.write import attach
+    from drybag.memory.store import composed_directory as store_directory
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
@@ -491,7 +572,7 @@ def test_detach_from_a_worktree_takes_the_pointer_out_of_the_main_checkouts_file
     # `attach` writes the pointer and its ledger into the main checkout from any worktree, since
     # Claude Code reads that settings file from every one: a detach from the worktree takes the key
     # out of the main checkout's file and leaves the rest of that file as it was.
-    from stayfixed.attach.write import attach
+    from drybag.attach.write import attach
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
@@ -518,11 +599,11 @@ def test_detach_leaves_the_binding_record_in_place(tmp_path: Path) -> None:
 
 
 def test_detach_removes_a_rule_file_the_overlay_has_since_deleted(tmp_path: Path) -> None:
-    # `attach` stays idempotent and reversible by `detach`, and the ledger is the only record
-    # of what was placed. A rule file deleted from the overlay between two attaches is not
-    # written by the second one and so drops out of a ledger built from that run alone — while
-    # the copy the first attach made is still in `.codex/rules/`, where Codex reads it as a
-    # standing instruction. Without the union, `detach` leaves it there for good.
+    # `attach` stays reversible by `detach`, and the ledger is the only record of what was placed.
+    # A re-attach removes no Codex copy, so one the overlay dropped between two attaches is still in
+    # `.codex/rules/`, where Codex reads it as a standing instruction, and it stays on the ledger
+    # while it is as attach wrote it.
+    # Mutation: `mutations/`'s "the ledger forgets a Codex copy the overlay dropped".
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
     _attach(root, store, machine)
@@ -530,78 +611,72 @@ def test_detach_removes_a_rule_file_the_overlay_has_since_deleted(tmp_path: Path
     assert landed.is_file()
     (store.parents[2] / "common" / "codex" / "common.rules").unlink()
     _attach(root, store, machine)
-    assert landed.is_file(), "the copy the first attach made is still here"
+    assert landed.is_file()
     _detach(root)
     assert not landed.exists()
 
 
-def _rewrite_ledger(root: Path, **fields: object) -> None:
-    """The ledger a clone committed: `attach`'s own, with fields replaced.
-
-    Built from a real one rather than by hand so that the case differs from a working detach in
-    exactly the field under test. `.gitignore` does not untrack a file a clone committed, which
-    is what makes this a state a fresh checkout can be in rather than a contrivance.
-    """
-    document = json.loads((root / LEDGER).read_text(encoding="utf-8"))
-    document.update(fields)
-    (root / LEDGER).write_text(json.dumps(document), encoding="utf-8")
-
-
-def test_a_ledger_naming_a_file_attach_could_not_have_written_removes_nothing(
+def test_a_ledger_naming_a_path_outside_the_rule_copies_removes_none_of_them(
     tmp_path: Path,
 ) -> None:
-    # The ledger is a record, not an authority. `fsops.remove_within` contains the removal to
-    # the root — and `.github/workflows/`, `.pre-commit-config.yaml` and every source file are
-    # inside it, so containment is not the guard that matters. The guard is that `attach` only
-    # ever writes `.codex/rules/<file>`, so anything else in `rules` is a repository asking for
-    # a deletion no attach could have earned.
-    #
-    # Mutation: `mutations/`'s "detach deletes whatever file the ledger names" — make
-    # `_rule_is_writable` answer True unconditionally and the workflow file goes.
+    # The ledger is a record, not an authority: `detach` removes a rule copy only from one segment
+    # under `.codex/rules/`, and skips any other path the ledger names, whatever digest it gives.
+    # Mutation: `mutations/`'s "detach deletes whatever file the ledger names" -> the others go.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
     _attach(root, store, machine)
-    workflow = root / ".github" / "workflows" / "ci.yml"
-    workflow.parent.mkdir(parents=True)
-    workflow.write_text("on: push\n", encoding="utf-8")
-    _rewrite_ledger(root, rules=[".github/workflows/ci.yml", ".codex/rules/common.rules"])
+    kept = [root / ".github" / "workflows" / "ci.yml", root / ".codex" / "x", tmp_path / "outside"]
+    for path in kept:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("mine\n", encoding="utf-8")
+    named = [".github/workflows/ci.yml", ".codex/rules/../x", "../../outside"]
+    recorded = json.loads(ledger_file(root).read_text(encoding="utf-8"))["rules"]
+    mine = hashlib.sha256(b"mine\n").hexdigest()
+    rewritten(root, {"rules": {**recorded, **dict.fromkeys(named, mine)}})
+    _detach(root)
+    assert [path.is_file() for path in kept] == [True] * 3
+    assert not (root / ".codex" / "rules" / "common.rules").exists()
+
+
+@pytest.mark.parametrize(
+    ("text", "said"),
+    [
+        ("{", "valid JSON"),
+        ('{"entries": ' + NESTED + "}", "nested deeper"),
+        ('{"entries": {"x": ' + LONG_NUMBER + "}}", "number longer"),
+    ],
+)
+def test_a_ledger_that_does_not_parse_removes_nothing_and_says_so(
+    tmp_path: Path, text: str, said: str
+) -> None:
+    # A committed ledger nested deeper than `json.loads` follows, or holding an integer literal
+    # longer than the interpreter converts, once ended `detach` in an internal error. It records
+    # nothing, so the run fails before it withdraws anything. Mutation (oracle): `mutations/`'s
+    # "the JSON object reader lets a document nested past the parser raise" -> `RecursionError`.
+    root, store, machine = _bound(tmp_path)
+    _grant(store.parents[2])
+    _attach(root, store, machine)
+    ledger_file(root).write_text(text, encoding="utf-8")
     before = snapshot(root)
-    # `snapshot` is a walk, and an empty one satisfies the comparison below on its own.
     assert before
-    with pytest.raises(Refusal):
+    with pytest.raises(Failure, match=f"{said}.*nothing was removed"):
         _detach(root)
     assert_snapshot_unchanged(root, before)
-    assert workflow.is_file()
 
 
-def test_a_ledger_nested_past_the_parsers_reach_removes_nothing(tmp_path: Path) -> None:
-    # A committed ledger nested deeper than `json.loads` follows ended `detach` in an internal
-    # error. It is a ledger that cannot be read, so the run fails before it withdraws anything.
-    # Mutation (oracle): `mutations/`'s "the JSON object reader lets a document nested past the
-    # parser raise" -> `RecursionError`.
+@pytest.mark.parametrize("fields", NOT_LEDGERS, ids=str)
+def test_a_ledger_of_the_wrong_shape_removes_nothing_and_says_so(
+    tmp_path: Path, fields: dict[str, object]
+) -> None:
+    # `{"rules": [1]}` ended in `internal error: TypeError` and `{"rules": "abc"}` ran a whole
+    # detach. The reader says "not a ledger" and `detach` takes that one answer.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
     _attach(root, store, machine)
-    (root / LEDGER).write_text('{"entries": ' + NESTED + "}", encoding="utf-8")
+    rewritten(root, fields)
     before = snapshot(root)
     assert before
-    with pytest.raises(Failure, match="nested deeper"):
-        _detach(root)
-    assert_snapshot_unchanged(root, before)
-
-
-def test_a_ledger_holding_a_number_past_the_parsers_reach_removes_nothing(tmp_path: Path) -> None:
-    # A committed ledger holding an integer literal longer than the interpreter converts ended
-    # `detach` in an internal error, `ValueError`. It is a ledger that cannot be read, so the run
-    # fails before it withdraws anything. Mutation (oracle): `mutations/`'s "the JSON object
-    # reader lets a number past the parser's reach raise" -> `ValueError`.
-    root, store, machine = _bound(tmp_path)
-    _grant(store.parents[2])
-    _attach(root, store, machine)
-    (root / LEDGER).write_text('{"entries": {"x": ' + LONG_NUMBER + "}}", encoding="utf-8")
-    before = snapshot(root)
-    assert before
-    with pytest.raises(Failure, match="number longer"):
+    with pytest.raises(Failure, match=r"not a ledger.*nothing was removed"):
         _detach(root)
     assert_snapshot_unchanged(root, before)
 
@@ -644,7 +719,7 @@ def test_a_ledger_claiming_the_permissions_key_never_drops_the_owners_deny_rules
     # permissions block out — deny rules included. A repository cannot be allowed to remove a
     # deny rule by committing a JSON file, whatever it calls that file.
     #
-    # Mutation: the same entry as above, on the `settings_keys` half — let `_checked` accept a
+    # Mutation: the same entry as above, on the `settings_keys` half — let `_removable` accept a
     # key other than `autoMemoryDirectory` and the deny rule below is gone.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
@@ -654,29 +729,11 @@ def test_a_ledger_claiming_the_permissions_key_never_drops_the_owners_deny_rules
         json.dumps({"permissions": {"allow": ["Bash(ls:*)"], "deny": ["Bash(curl:*)"]}}),
         encoding="utf-8",
     )
-    _rewrite_ledger(root, settings_keys=["permissions"])
-    with pytest.raises(Refusal):
-        _detach(root)
+    rewritten(root, {"settings_keys": ["permissions"]})
+    _detach(root)
     document = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
     assert document["permissions"]["deny"] == ["Bash(curl:*)"]
     assert document["permissions"]["allow"] == ["Bash(ls:*)"]
-
-
-def test_the_two_values_attach_really_writes_are_still_acted_on(tmp_path: Path) -> None:
-    # The vacuity guard for both refusals above: a validator that refused everything would pass
-    # them and break the command. A ledger holding exactly what `attach` wrote — one
-    # `.codex/rules/` file and the one pointer key — detaches, and both are withdrawn.
-    root, store, machine = _bound(tmp_path)
-    _grant(store.parents[2])
-    _attach(root, store, machine)
-    from stayfixed.attach.api import ledger as read_ledger
-
-    recorded = read_ledger(root)
-    assert recorded.rules == (".codex/rules/common.rules",)
-    assert recorded.settings_keys == ("autoMemoryDirectory",)
-    _detach(root)
-    assert not (root / ".codex" / "rules" / "common.rules").exists()
-    assert not (root / SETTINGS).exists()
 
 
 def test_a_git_that_cannot_run_is_answered_before_anything_is_withdrawn(
@@ -710,7 +767,7 @@ def test_the_git_failure_is_reached_on_a_run_that_would_have_withdrawn(tmp_path:
     removed = _detach(root)
     after = snapshot(root)
     gone = set(before) - set(after)
-    assert {SETTINGS, ".codex/rules/common.rules", LEDGER} <= gone
+    assert {SETTINGS, ".codex/rules/common.rules"} <= gone and not ledger_file(root).exists()
     assert removed.allow_removed == (RULE,)
 
 
@@ -728,12 +785,12 @@ def _directories(root: Path) -> set[str]:
 
 def test_detach_removes_the_directories_the_attach_created(tmp_path: Path) -> None:
     # `docs/cli.md` promised "an attach and a detach leave the tree byte-for-byte as it was" and
-    # it was false for directories: `.stayfixed/local/`, `.stayfixed/`, `.codex/rules/` and
-    # `.codex/` survived every round trip. `snapshot` filters on `is_file()`, so the round-trip
-    # test above passed while four directories accumulated.
+    # it was false for directories: `.codex/rules/` and `.codex/` survived every round trip.
+    # `snapshot` filters on `is_file()`, so the round-trip test above passed while directories
+    # accumulated.
     #
     # The set is asserted by value and not by `not any(...)`: a `_withdraw_directories` that
-    # removed only the leaves, or only `.stayfixed/`, satisfies "something was removed" and
+    # removed only the leaves, or only `.codex/`, satisfies "something was removed" and
     # leaves the tree changed. `.claude/` is on the list too — the overlay here grants a rule,
     # so the attach creates it.
     #
@@ -746,13 +803,7 @@ def test_detach_removes_the_directories_the_attach_created(tmp_path: Path) -> No
     # `rglob` that finds nothing would satisfy every equality in this case on its own.
     assert _directories(root) > before
     removed = _detach(root)
-    assert set(removed.directories_removed) == {
-        ".stayfixed/local",
-        ".stayfixed",
-        ".codex/rules",
-        ".codex",
-        ".claude",
-    }
+    assert set(removed.directories_removed) == {".codex/rules", ".codex", ".claude"}
     assert _directories(root) == before
 
 
@@ -775,8 +826,8 @@ def test_detach_keeps_a_directory_that_still_holds_something(tmp_path: Path) -> 
     assert mine.is_file(), "a detach deleted a rule file the owner wrote by hand"
     assert ".codex/rules" not in removed.directories_removed
     assert ".codex" not in removed.directories_removed
-    # And the ones that had nothing of the owner's in them still went.
-    assert ".stayfixed" in removed.directories_removed
+    # And the one that had nothing of the owner's in it still went.
+    assert ".claude" in removed.directories_removed
 
 
 def test_detach_leaves_a_directory_that_was_there_before_the_attach(tmp_path: Path) -> None:
@@ -795,25 +846,18 @@ def test_detach_leaves_a_directory_that_was_there_before_the_attach(tmp_path: Pa
     assert not (root / ".codex" / "rules").exists()
 
 
-def test_a_ledger_naming_a_directory_no_attach_creates_is_refused(tmp_path: Path) -> None:
-    # `.stayfixed/local/attach.json` is a path a clone can commit, and `directories` drives
-    # `rmdir`. It is held to the same closed list `rules` and `settings_keys` are held to, so a
-    # ledger naming `src` is refused with nothing removed rather than obeyed — even though
-    # `rmdir` would have spared a non-empty `src/` anyway. A partial defence reported as a
-    # success is the shape this refusal exists to avoid.
+def test_a_ledger_naming_a_directory_no_attach_creates_is_skipped(tmp_path: Path) -> None:
+    # `directories` drives `rmdir` and is held to the closed list `CREATED_DIRS`, so a ledger
+    # naming `src` leaves it, even though `rmdir` would have spared a non-empty `src/` anyway.
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
     _attach(root, store, machine)
-    recorded = json.loads((root / LEDGER).read_text(encoding="utf-8"))
+    recorded = json.loads(ledger_file(root).read_text(encoding="utf-8"))
     recorded["directories"] = ["src"]
-    (root / LEDGER).write_text(json.dumps(recorded), encoding="utf-8")
+    ledger_file(root).write_text(json.dumps(recorded), encoding="utf-8")
     (root / "src").mkdir()
-    before = snapshot(root)
-    assert before
-    with pytest.raises(Refusal):
-        _detach(root)
+    assert "src" not in _detach(root).directories_removed
     assert (root / "src").is_dir()
-    assert_snapshot_unchanged(root, before)
 
 
 def test_detach_takes_back_the_exclude_block_and_the_empty_directories(tmp_path: Path) -> None:
@@ -826,16 +870,16 @@ def test_detach_takes_back_the_exclude_block_and_the_empty_directories(tmp_path:
     _attach(root, store, machine)
     exclude = root / ".git" / "info" / "exclude"
     # Non-vacuous: the block exists before the detach.
-    assert extract(exclude.read_text(encoding="utf-8"), "attach", Style.HASH) is not None
+    assert extract(exclude.read_text(encoding="utf-8"), "attach") is not None
     _detach(root)
-    assert extract(exclude.read_text(encoding="utf-8"), "attach", Style.HASH) is None
+    assert extract(exclude.read_text(encoding="utf-8"), "attach") is None
     assert _directories(root) == before
 
 
 def test_the_memory_pointer_is_hidden_too(tmp_path: Path) -> None:
     # The pointer is written into the settings file every run places and hides in its one block
     # above the first write, since Claude Code writes the plugin's entry there too.
-    from stayfixed.attach.write import attach
+    from drybag.attach.write import attach
     from tests.attach.test_write import _check_ignore
 
     root, store, machine = _bound(tmp_path)
@@ -867,7 +911,7 @@ def test_an_exclude_file_attach_created_is_removed_by_detach(tmp_path: Path) -> 
     _exclude_file(root).unlink(missing_ok=True)
     _attach(root, store, machine)
     # Non-vacuous: the attach did create the file for its block.
-    assert extract(_exclude_file(root).read_text(encoding="utf-8"), "attach", Style.HASH)
+    assert extract(_exclude_file(root).read_text(encoding="utf-8"), "attach")
     _detach(root)
     assert not _exclude_file(root).exists()
 
@@ -878,7 +922,7 @@ def test_an_exclude_file_that_was_there_and_empty_stays_there_and_empty(tmp_path
     _grant(store.parents[2], allow=(RULE,))
     _exclude_file(root).write_bytes(b"")
     _attach(root, store, machine)
-    assert extract(_exclude_file(root).read_text(encoding="utf-8"), "attach", Style.HASH)
+    assert extract(_exclude_file(root).read_text(encoding="utf-8"), "attach")
     _detach(root)
     assert _exclude_file(root).read_bytes() == b""
 
@@ -938,7 +982,7 @@ def test_an_exclude_file_that_is_not_utf8_neither_blocks_attach_nor_detach(
     _attach(root, store, machine)
     written = _exclude_file(root).read_bytes()
     assert written.startswith(held)
-    assert b"# stayfixed:attach:begin" in written
+    assert b"# drybag:attach:begin" in written
     _detach(root)
     assert _exclude_file(root).read_bytes() == held
 
@@ -951,7 +995,7 @@ def test_the_exclude_file_refusals_print_the_path_through_the_quoting_rule(
     # it, as the store's refusals already print theirs.
     #
     # Mutation: `mutations/`'s "the exclude file's symlink refusal prints its path raw".
-    from stayfixed.attach.exclude import planned_block
+    from drybag.attach.exclude import planned_block
 
     root = tmp_path / "clone\n::error::x"
     root.mkdir()
@@ -1002,7 +1046,7 @@ def test_a_doubled_exclude_block_refuses_detach_naming_the_exclude_file(tmp_path
     # Mutation: `mutations/`'s "a doubled exclude block is refused without its file".
     root = _withdrawable(tmp_path)
     path = _exclude_file(root)
-    begin = "# stayfixed:attach:begin\n"
+    begin = "# drybag:attach:begin\n"
     path.write_text(path.read_text(encoding="utf-8") + begin, encoding="utf-8")
     before = snapshot(root)
     with pytest.raises(Refusal) as refused:
@@ -1024,7 +1068,7 @@ def test_an_exclude_file_detach_cannot_write_is_refused_before_anything_is_withd
     root = _withdrawable(tmp_path)
     info = _exclude_file(root).parent
     # Non-vacuous: there is a block to take out, and a settings file and rule copies before it.
-    assert "stayfixed:attach:begin" in _exclude_file(root).read_text(encoding="utf-8")
+    assert "drybag:attach:begin" in _exclude_file(root).read_text(encoding="utf-8")
     assert (root / SETTINGS).is_file()
     assert any((root / ".codex" / "rules").iterdir())
     before = tree_entries(root)
@@ -1055,7 +1099,7 @@ def test_detach_writes_nothing_through_an_exclude_file_that_became_a_symlink(
     shutil.move(path, elsewhere)
     path.symlink_to(elsewhere)
     held = elsewhere.read_bytes()
-    assert b"stayfixed:attach:begin" in held
+    assert b"drybag:attach:begin" in held
     detached = _detach(root)
     assert path.is_symlink()
     assert elsewhere.read_bytes() == held
@@ -1070,9 +1114,8 @@ def test_an_exclude_file_ending_in_a_lone_carriage_return_keeps_its_last_pattern
     # marker was glued onto that line and `zz` showed in `git status` while the repository was
     # attached. The file comes back byte for byte on detach.
     #
-    # Mutations: `mutations/`'s "a hash region reads a lone carriage return as a line end",
-    # "the exclude block reads a lone carriage return as a line end" and "detach leaves the
-    # newline it added after a lone carriage return".
+    # Mutations: `mutations/`'s "the exclude block reads a lone carriage return as a line end"
+    # and "detach leaves the newline it added after a lone carriage return".
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
     held = b"/qq\n/zz\r"
@@ -1116,26 +1159,20 @@ def test_an_info_directory_the_owner_had_survives_detach(tmp_path: Path) -> None
     assert info.is_dir()
 
 
-@pytest.mark.parametrize(
-    "linked",
-    [".stayfixed", ".stayfixed/local", ".claude"],
-    ids=["stayfixed", "stayfixed-local", "claude"],
-)
 def test_a_directory_linked_in_after_attach_refuses_before_anything_is_withdrawn(
-    tmp_path: Path, linked: str
+    tmp_path: Path,
 ) -> None:
     # Each removal `detach` makes is a walk that refuses a symlinked component, and the check made
-    # before the first withdrawal was not that walk: it asked nothing of the ledger's or the
-    # settings file's path. So `.stayfixed` or `.stayfixed/local` moved away and linked back ended
-    # as `internal error: UnsafePath` with the settings file already withdrawn. Every removal
-    # target is walked first now, and the refusal says which one.
+    # before the first withdrawal was not that walk: it asked nothing of the settings file's path.
+    # So `.claude` moved away and linked back ended as `internal error: UnsafePath` with the
+    # allow rules already withdrawn. Every removal target is walked first now, and the refusal
+    # says which one.
     #
-    # Mutations: `mutations/`'s "detach walks to the ledger only when it removes it" and "detach
-    # walks to the settings file only when it rewrites it".
+    # Mutation: `mutations/`'s "detach walks to the settings file only when it rewrites it".
     root = _withdrawable(tmp_path)
-    elsewhere = tmp_path / ("moved-" + linked.replace("/", "-"))
-    shutil.move(root / linked, elsewhere)
-    (root / linked).symlink_to(elsewhere, target_is_directory=True)
+    elsewhere = tmp_path / "moved-.claude"
+    shutil.move(root / ".claude", elsewhere)
+    (root / ".claude").symlink_to(elsewhere, target_is_directory=True)
     before = snapshot(root)
     with pytest.raises(Refusal) as refused:
         _detach(root)
@@ -1170,12 +1207,12 @@ def test_a_settings_file_detach_withdraws_nothing_from_is_not_rewritten(tmp_path
     # written at all.
     #
     # Mutation: `mutations/`'s "detach rewrites a settings file it withdraws nothing from".
-    from stayfixed.attach.write import attach
+    from drybag.attach.write import attach
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
     # A repository that keeps its own notes, so the composed store's pointer is not written either.
-    config = root / "stayfixed.toml"
+    config = root / "drybag.toml"
     text = config.read_text(encoding="utf-8").replace('mode = "overlay"', 'mode = "local-only"')
     config.write_text(text, encoding="utf-8")
     (root / ".claude").mkdir()
@@ -1183,7 +1220,7 @@ def test_a_settings_file_detach_withdraws_nothing_from_is_not_rewritten(tmp_path
     attach(root, store=store, machine=machine, runner=Recorder())
     _detach(root)
     assert (root / SETTINGS).read_text(encoding="utf-8") == '{"theme": "dark"}'
-    assert not (root / LEDGER).exists()
+    assert not ledger_file(root).exists()
 
 
 def test_a_local_settings_file_read_but_too_deep_to_write_back_is_refused_or_withdrawn(
@@ -1263,12 +1300,15 @@ def test_a_ledger_linked_to_a_device_stops_detach_and_is_never_read(tmp_path: Pa
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
     _attach(root, store, machine)
-    (root / LEDGER).unlink()
-    (root / LEDGER).symlink_to("/dev/null")
+    ledger_file(root).unlink()
+    ledger_file(root).symlink_to("/dev/null")
     before = snapshot(root)
     with pytest.raises(Failure) as refused:
         _detach(root)
-    assert str(refused.value) == f"{LEDGER} cannot be read (not a regular file)"
+    assert str(refused.value) == (
+        f"{LEDGER_NAME} cannot be read (not a regular file); it records nothing, so nothing was "
+        "removed"
+    )
     assert_snapshot_unchanged(root, before)
 
 
@@ -1279,11 +1319,13 @@ def test_a_ledger_that_is_not_utf8_is_named_as_the_project_names_it(tmp_path: Pa
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2])
     _attach(root, store, machine)
-    (root / LEDGER).write_bytes(b'{"entries": {"\xff": "PreToolUse"}}')
+    ledger_file(root).write_bytes(b'{"entries": {"\xff": "PreToolUse"}}')
     before = snapshot(root)
     with pytest.raises(Failure) as refused:
         _detach(root)
-    assert str(refused.value) == f"{LEDGER} is not UTF-8 text"
+    assert str(refused.value) == (
+        f"{LEDGER_NAME} is not UTF-8 text; it records nothing, so nothing was removed"
+    )
     assert_snapshot_unchanged(root, before)
 
 

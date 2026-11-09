@@ -3,7 +3,7 @@
 
     uv run python scripts/publish_plugin.py --tag vX.Y.Z [--remote URL] [--yes]
 
-The plugin is published from `stayfixed/stayfixed-plugin`, a repository whose root is the plugin's
+The plugin is published from `dry-bag/drybag-plugin`, a repository whose root is the plugin's
 tree at a commit of this one. Its commit is a function of the release commit: the tree, a fixed
 author, committer and date, a message naming the version, and as its parent the commit the
 marketplace pinned at the release commit's first parent. So the release commit pins it
@@ -12,12 +12,12 @@ tags, builds that commit again and pushes it as `main` and as the tag, atomicall
 it does everything but the push and says which commit it would push; the commit is the same from
 run to run, so a dry run names the commit a later run pushes.
 
-**The tag's own code builds the commit.** `scripts/plugin_tree.py` and `src/stayfixed` are read out
+**The tag's own code builds the commit.** `scripts/plugin_tree.py` and `src/drybag` are read out
 of the tag's objects — `ls-tree` and `cat-file`, regular files only, never `git archive`, which
 applies the owner's attributes and line endings — written into the scratch directory, and run as
 `python -I`, the tag's `src` first on `sys.path`: the checkout's copy of either may be another
 release's. Before any of it runs, the local tag's commit is compared with the one GitHub's
-`stayfixed/stayfixed` holds under that tag, so the code run is the release's own, and the
+`dry-bag/drybag` holds under that tag, so the code run is the release's own, and the
 attestation binds the same commit afterwards.
 
 **What it trusts, and why.** Every answer it trusts is GitHub's, asked of `github.com` by name, so
@@ -56,7 +56,7 @@ outcome is which is said once, to the owner who acts on it: `RELEASING.md`, sect
 
 The command goes through the CLI frame's `run`, as `scripts/release.py`'s do: `--json` anywhere on
 the line before a bare `--`, and `Rejected` is the frame's `Failure`, exit `1`. Run without this
-repository's `stayfixed`, it refuses with exit `2` before the frame exists, since a traceback would
+repository's `drybag`, it refuses with exit `2` before the frame exists, since a traceback would
 exit `1`.
 """
 
@@ -73,40 +73,40 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-# Before the CLI frame exists, so said here: an interpreter without this repository's `stayfixed`
+# Before the CLI frame exists, so said here: an interpreter without this repository's `drybag`
 # would otherwise end in a traceback and exit `1`, which asks the owner to reject the release.
 try:
-    from stayfixed import fsops
-    from stayfixed.cli import JSON_EPILOG, run
-    from stayfixed.errors import Failure, Refusal
-    from stayfixed.gitenv import (
+    from drybag import fsops
+    from drybag.cli import JSON_EPILOG, run
+    from drybag.errors import Failure, Refusal
+    from drybag.gitenv import (
         GIT_TIMEOUT_SECONDS,
         NO_ANSWER,
         QUERY_TIMEOUT_SECONDS,
         answer_bytes,
         git_run,
     )
-    from stayfixed.printed import clipped, quoted
-    from stayfixed.release.api import tag_for
-    from stayfixed.result import Result
-    from stayfixed.runner import Completed, Runner, subprocess_runner
+    from drybag.printed import clipped, quoted
+    from drybag.release.api import tag_for
+    from drybag.result import Result
+    from drybag.runner import Completed, Runner, subprocess_runner
 except ImportError as exc:
     sys.stderr.write(
         f"scripts/publish_plugin.py: refused: {exc}; run it with `uv run python "
-        "scripts/publish_plugin.py`, which puts this repository's stayfixed on the path; nothing "
+        "scripts/publish_plugin.py`, which puts this repository's drybag on the path; nothing "
         "was run\n"
     )
     sys.exit(2)
 
 # The plugin's own repository: as the owner's git reaches it to push, as the marketplace fetches
 # it, and as GitHub's API names it.
-PLUGIN_REMOTE = "git@github.com:stayfixed/stayfixed-plugin.git"
-PLUGIN_URL = "https://github.com/stayfixed/stayfixed-plugin.git"
-PLUGIN_REPOSITORY = "stayfixed/stayfixed-plugin"
+PLUGIN_REMOTE = "git@github.com:dry-bag/drybag-plugin.git"
+PLUGIN_URL = "https://github.com/dry-bag/drybag-plugin.git"
+PLUGIN_REPOSITORY = "dry-bag/drybag-plugin"
 # The repository whose tag is published, and the certificate identity of the run that attests its
 # manifest: `release.yml` run for the tag, as the certificate's SubjectAlternativeName spells it
 # (measured for `v0.2.0`), which `gh attestation verify --cert-identity` matches exactly.
-SOURCE_REPOSITORY = "stayfixed/stayfixed"
+SOURCE_REPOSITORY = "dry-bag/drybag"
 CERT_IDENTITY = (
     f"https://github.com/{SOURCE_REPOSITORY}/.github/workflows/release.yml@refs/tags/{{tag}}"
 )
@@ -122,17 +122,17 @@ ROOT = Path(__file__).resolve().parents[1]
 TAG_PATTERN = r"v[0-9]+\.[0-9]+\.[0-9]+"
 MAIN = "refs/heads/main"
 # Where the fetched `main` is kept in the scratch repository, beside nothing else.
-FETCHED = "refs/stayfixed/main"
+FETCHED = "refs/drybag/main"
 # A commit id of either repository: 40 lowercase hex characters.
 SHA1 = r"[0-9a-f]{40}"
 # A full object name, SHA-1's or SHA-256's, as `ls-remote` prints one.
 OBJECT_NAME = r"[0-9a-f]{40}|[0-9a-f]{64}"
 # The first line of the manifest `plugin_tree.py` writes, and the `format` its `commit` answers.
-FORMAT = "stayfixed-plugin-tree 1"
+FORMAT = "drybag-plugin-tree 1"
 # What the tag carries beside the plugin and this script runs: its own reader of the plugin's tree
 # and the package that reader imports.
 TOOL = "scripts/plugin_tree.py"
-TOOL_PACKAGE = "src/stayfixed"
+TOOL_PACKAGE = "src/drybag"
 # The only modes a file of the tag's code may have: a symlink or a submodule is refused, not
 # skipped, since the code would run without it.
 TOOL_MODES = frozenset({"100644", "100755"})
@@ -395,7 +395,7 @@ def _blobs(root: Path, objects: list[str]) -> dict[str, bytes]:
 
 
 def _tool(root: Path, tag: str, sha: str, scratch: Path) -> Path:
-    """The tag's `scripts/plugin_tree.py` and `src/stayfixed`, read out of its objects and
+    """The tag's `scripts/plugin_tree.py` and `src/drybag`, read out of its objects and
     written under `scratch / "tool"`: the directory to run them from."""
     code, answer = _git(
         root,
@@ -853,7 +853,7 @@ def remote_argument(remote: str) -> str:
 
 def run_publish(args: argparse.Namespace) -> Result:
     remote = remote_argument(args.remote)
-    with tempfile.TemporaryDirectory(prefix="stayfixed-publish-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="drybag-publish-") as scratch:
         done = publish(
             ROOT,
             args.tag,

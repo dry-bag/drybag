@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.setup.machine import SETUP_SANDBOXED
-from stayfixed.trust.boundary import RUN_OUTSIDE, SANDBOX_REFUSED
-from stayfixed.trust.record import SANDBOXED
+from drybag.setup.machine import SETUP_SANDBOXED
+from drybag.trust.boundary import RUN_OUTSIDE, SANDBOX_REFUSED
+from drybag.trust.record import SANDBOXED
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -24,9 +24,9 @@ def test_no_module_writes_the_sandbox_sentence_by_hand() -> None:
     # the docstrings said every writer gave one; a writer's own string carrying the words again is
     # what this scan finds.
     found = []
-    for path in sorted((ROOT / "src" / "stayfixed").rglob("*.py")):
+    for path in sorted((ROOT / "src" / "drybag").rglob("*.py")):
         relative = path.relative_to(ROOT).as_posix()
-        if relative == "src/stayfixed/trust/boundary.py":
+        if relative == "src/drybag/trust/boundary.py":
             continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if (
@@ -42,7 +42,7 @@ def test_no_module_writes_the_sandbox_sentence_by_hand() -> None:
     ("sentence", "remedy"),
     [
         (SANDBOXED, RUN_OUTSIDE.format(command="this command")),
-        (SETUP_SANDBOXED, RUN_OUTSIDE.format(command="`stayfixed setup`")),
+        (SETUP_SANDBOXED, RUN_OUTSIDE.format(command="`drybag setup`")),
     ],
     ids=["trust-record", "setup"],
 )

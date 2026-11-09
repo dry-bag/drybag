@@ -19,7 +19,7 @@ from tests.gitfixture import ENV_KEEP, env, git, needs_git, run_git
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / "tests"
 
-# What points `git` at a repository other than the one it was handed. `stayfixed.runner` names
+# What points `git` at a repository other than the one it was handed. `drybag.runner` names
 # the same seven as the set it drops, and its docstring says why each is there; this list is
 # that one, and a variable added there belongs here too.
 REDIRECTING = (
@@ -49,7 +49,7 @@ def test_a_fixture_repository_is_built_where_it_was_asked_although_git_dir_names
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The defect the sealed environment exists to close, and the reason it matters more here
-    # than in `stayfixed.gitenv`: these calls are `init`, `add` and `commit`, so an inherited
+    # than in `drybag.gitenv`: these calls are `init`, `add` and `commit`, so an inherited
     # `GIT_DIR` does not make a fixture read the wrong repository, it makes it *write* to one.
     # Under `pytest -p xdist` or a shell that exports `GIT_DIR`, that repository is whichever
     # one the developer is sitting in.

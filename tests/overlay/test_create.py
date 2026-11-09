@@ -6,13 +6,13 @@ from typing import NoReturn
 
 import pytest
 
-from stayfixed import jsonobject
-from stayfixed.errors import Failure, Refusal
-from stayfixed.overlay.api import finish, generate, render
-from stayfixed.overlay.create import RETRY_WAIT_SECONDS, UNRECORDED, _is_template
-from stayfixed.overlay.layout import IDENTITY_RECORD
-from stayfixed.printed import quoted
-from stayfixed.runner import TIMED_OUT, Completed
+from drybag import jsonobject
+from drybag.errors import Failure, Refusal
+from drybag.overlay.api import finish, generate, render
+from drybag.overlay.create import RETRY_WAIT_SECONDS, UNRECORDED, _is_template
+from drybag.overlay.layout import IDENTITY_RECORD
+from drybag.printed import quoted
+from drybag.runner import TIMED_OUT, Completed
 from tests.parserlimits import LONG_NUMBER, NESTED
 from tests.runners import Recorder
 
@@ -27,11 +27,11 @@ NOT_A_TEMPLATE = Completed(0, '{"isTemplate":false}\n', "")
 NO_SUCH_REPOSITORY = Completed(
     1,
     "",
-    "GraphQL: Could not resolve to a Repository with the name 'octo/stayfixed-overlay-template'."
+    "GraphQL: Could not resolve to a Repository with the name 'octo/drybag-overlay-template'."
     " (repository)\n",
 )
 # A repository of the owner's own, published or not: the probe `create` asks before it chooses.
-THE_OWNERS_PROBE = "gh repo view octo/stayfixed-overlay-template"
+THE_OWNERS_PROBE = "gh repo view octo/drybag-overlay-template"
 
 
 def _populate(argv: list[str], cwd: Path) -> None:
@@ -59,7 +59,7 @@ def test_creating_from_the_template_asks_github_for_a_private_repository(tmp_pat
     # A template rather than a fork, because a fork's visibility is bound to the
     # upstream network and cannot be made private. The `--private` flag is that decision.
     runner = Recorder(answers={THE_OWNERS_PROBE: A_TEMPLATE}, on_call=_populate)
-    generate("octo", "stayfixed-private", root=tmp_path, runner=runner)
+    generate("octo", "drybag-private", root=tmp_path, runner=runner)
     creating = _the_create_call(runner)
     assert "--private" in creating
     assert "--template" in creating
@@ -72,22 +72,22 @@ def test_a_clone_that_raced_generation_is_retried_once_before_failing(tmp_path: 
     # — so it is asserted here rather than left to be discovered by whoever hits it.
     empty = Recorder(answers={THE_OWNERS_PROBE: A_TEMPLATE})
     with pytest.raises(Failure):
-        generate("octo", "stayfixed-private", root=tmp_path, runner=empty)
+        generate("octo", "drybag-private", root=tmp_path, runner=empty)
     # The repository's own name, not the template's: the probe is also a `gh repo view`.
     verbs = [argv[:4] for argv in empty.calls]
-    assert ["gh", "repo", "view", "octo/stayfixed-private"] in verbs, (
+    assert ["gh", "repo", "view", "octo/drybag-private"] in verbs, (
         "must distinguish 'not created' from 'raced'"
     )
-    assert ["git", "clone", "--", "git@github.com:octo/stayfixed-private.git"] in verbs
+    assert ["git", "clone", "--", "git@github.com:octo/drybag-private.git"] in verbs
 
 
 def test_an_existing_overlay_at_the_destination_is_left_alone(tmp_path: Path) -> None:
     # Generating is idempotent: a second run finds the overlay the first one cloned and must not
     # create it again.
-    (tmp_path / "stayfixed-private").mkdir()
-    (tmp_path / "stayfixed-private" / IDENTITY_RECORD).write_text("layout = 1\n", encoding="utf-8")
+    (tmp_path / "drybag-private").mkdir()
+    (tmp_path / "drybag-private" / IDENTITY_RECORD).write_text("layout = 1\n", encoding="utf-8")
     runner = Recorder()
-    created = generate("octo", "stayfixed-private", root=tmp_path, runner=runner)
+    created = generate("octo", "drybag-private", root=tmp_path, runner=runner)
     assert runner.calls == []
     assert "exists" in " ".join(created.notes)
 
@@ -96,7 +96,7 @@ def test_the_local_render_touches_no_network(tmp_path: Path) -> None:
     # The documented fallback when the template repository is unreachable, and the only mode a
     # test may exercise end to end.
     runner = Recorder()
-    created = render(tmp_path / "stayfixed-private", runner=runner)
+    created = render(tmp_path / "drybag-private", runner=runner)
     # "Touches no network" is a claim about `gh`: the one local call is `git init`, asserted on
     # its own below. It used to read `runner.calls == []`, which was that claim while the render
     # ran nothing at all.
@@ -118,7 +118,7 @@ def test_a_name_that_is_not_one_path_segment_is_refused(tmp_path: Path, name: st
 def test_finish_installs_pre_commit_and_says_so_when_it_cannot(tmp_path: Path) -> None:
     # gitleaks runs twice over the overlay, and one of the two is this hook. A missing
     # `pre-commit` is a reported finding, never a traceback — the binary is optional.
-    created = render(tmp_path / "stayfixed-private", runner=Recorder())
+    created = render(tmp_path / "drybag-private", runner=Recorder())
     missing = Recorder(answers={"pre-commit": Completed(127, "", "not found")})
     note = finish(created.root, runner=missing)
     # "did not run" and not merely "pre-commit": the success note names the tool too, so the
@@ -147,14 +147,14 @@ def test_the_wait_before_the_retry_is_spent_only_on_the_race(tmp_path: Path) -> 
     named: list[float] = []
     answering = Recorder(
         answers={
-            "gh": Completed(0, "stayfixed-private\n", ""),
+            "gh": Completed(0, "drybag-private\n", ""),
             THE_OWNERS_PROBE: A_TEMPLATE,
         }
     )
     with pytest.raises(Failure):
         generate(
             "octo",
-            "stayfixed-private",
+            "drybag-private",
             root=tmp_path,
             runner=answering,
             wait=named.append,
@@ -165,7 +165,7 @@ def test_the_wait_before_the_retry_is_spent_only_on_the_race(tmp_path: Path) -> 
     with pytest.raises(Failure):
         generate(
             "octo",
-            "stayfixed-private",
+            "drybag-private",
             root=tmp_path,
             runner=Recorder(answers={THE_OWNERS_PROBE: A_TEMPLATE}),
             wait=silent.append,
@@ -182,12 +182,12 @@ def test_a_render_that_cannot_start_leaves_no_probe_behind(
     # Everything that can refuse therefore runs first. Mutation: move the `plan(...)` call back
     # below `mkdirs_within` and this reddens on the second assertion, with a directory on disk.
     def _unavailable() -> NoReturn:
-        raise Failure("this stayfixed was installed without the template tree")
+        raise Failure("this drybag was installed without the template tree")
 
-    monkeypatch.setattr("stayfixed.overlay.create.templates", _unavailable)
+    monkeypatch.setattr("drybag.overlay.create.templates", _unavailable)
     with pytest.raises(Failure):
-        render(tmp_path / "stayfixed-private", runner=Recorder())
-    assert not (tmp_path / "stayfixed-private").exists()
+        render(tmp_path / "drybag-private", runner=Recorder())
+    assert not (tmp_path / "drybag-private").exists()
 
 
 def test_a_mixed_case_owner_is_folded_before_it_is_judged(tmp_path: Path) -> None:
@@ -198,12 +198,12 @@ def test_a_mixed_case_owner_is_folded_before_it_is_judged(tmp_path: Path) -> Non
     remote = tmp_path / "remote"
     remote.mkdir()
     runner = Recorder(
-        answers={"gh repo view octocat/stayfixed-overlay-template": A_TEMPLATE}, on_call=_populate
+        answers={"gh repo view octocat/drybag-overlay-template": A_TEMPLATE}, on_call=_populate
     )
-    generate("OctoCat", "stayfixed-private", root=remote, runner=runner)
+    generate("OctoCat", "drybag-private", root=remote, runner=runner)
     # And the fold reaches the argv, not just the validator.
-    assert "octocat/stayfixed-private" in _the_create_call(runner)
-    assert runner.calls[0][3] == "octocat/stayfixed-overlay-template", "the probe folds too"
+    assert "octocat/drybag-private" in _the_create_call(runner)
+    assert runner.calls[0][3] == "octocat/drybag-overlay-template", "the probe folds too"
 
 
 def test_a_gh_that_cannot_be_run_at_creation_is_named_as_the_cause_and_costs_no_more_calls(
@@ -232,7 +232,7 @@ def test_a_gh_that_cannot_be_run_at_creation_is_named_as_the_cause_and_costs_no_
     with pytest.raises(Failure) as failed:
         generate(
             "octo",
-            "stayfixed-private",
+            "drybag-private",
             root=tmp_path,
             runner=absent,
             wait=waited.append,
@@ -264,10 +264,10 @@ def test_a_gh_that_ran_and_declined_quotes_its_own_answer(tmp_path: Path) -> Non
         }
     )
     with pytest.raises(Failure) as failed:
-        generate("octo", "stayfixed-private", root=tmp_path, runner=declined)
+        generate("octo", "drybag-private", root=tmp_path, runner=declined)
     message = str(failed.value)
     assert "Could not resolve to a Repository" in message
-    assert "<owner>/stayfixed-overlay-template when the owner has published one" in message
+    assert "<owner>/drybag-overlay-template when the owner has published one" in message
     assert "exited 1" in message, "a binary that ran has an exit code, not a launch failure"
     assert [argv[:3] for argv in declined.calls] == [
         ["gh", "repo", "view"],
@@ -301,10 +301,10 @@ def test_every_refusal_after_gh_repo_create_says_the_repository_may_exist_and_ho
         answers={THE_OWNERS_PROBE: A_TEMPLATE, "gh repo create": created}, on_call=on_call
     )
     with pytest.raises((Failure, Refusal)) as stopped:
-        generate("octo", "stayfixed-private", root=tmp_path, runner=runner, wait=lambda _: None)
+        generate("octo", "drybag-private", root=tmp_path, runner=runner, wait=lambda _: None)
     message = str(stopped.value)
     remedy = UNRECORDED.format(
-        slug="octo/stayfixed-private", path=quoted(str(tmp_path / "stayfixed-private"))
+        slug="octo/drybag-private", path=quoted(str(tmp_path / "drybag-private"))
     )
     assert message.endswith(remedy), message
     assert "nothing was created" not in message, message
@@ -314,10 +314,10 @@ def test_an_empty_destination_nothing_arrived_in_is_not_taken_for_a_clone(tmp_pa
     # An empty directory at the destination is cloned into, so its being there says nothing about
     # whether a clone arrived: only something in it does. Read as "a tree arrived", it skipped the
     # retried clone and was refused as a tree that is not an overlay.
-    (tmp_path / "stayfixed-private").mkdir()
+    (tmp_path / "drybag-private").mkdir()
     runner = Recorder(answers={THE_OWNERS_PROBE: A_TEMPLATE})
     with pytest.raises(Failure) as failed:
-        generate("octo", "stayfixed-private", root=tmp_path, runner=runner)
+        generate("octo", "drybag-private", root=tmp_path, runner=runner)
     assert ["git", "clone"] in [argv[:2] for argv in runner.calls]
     assert "produced no tree" in str(failed.value)
 
@@ -331,47 +331,47 @@ def test_the_owners_own_template_is_used_when_they_have_published_one(tmp_path: 
     # "create: never asks whose template to use"): the probe is dropped and the publisher's
     # template is always named → this reddens on the argv.
     runner = Recorder(answers={THE_OWNERS_PROBE: A_TEMPLATE}, on_call=_populate)
-    created = generate("octo", "stayfixed-private", root=tmp_path, runner=runner)
+    created = generate("octo", "drybag-private", root=tmp_path, runner=runner)
     assert runner.calls[0] == [
         "gh",
         "repo",
         "view",
-        "octo/stayfixed-overlay-template",
+        "octo/drybag-overlay-template",
         "--json",
         "isTemplate",
     ]
-    assert _template_named(runner) == "octo/stayfixed-overlay-template"
-    assert "octo/stayfixed-overlay-template" in " ".join(created.notes)
+    assert _template_named(runner) == "octo/drybag-overlay-template"
+    assert "octo/drybag-overlay-template" in " ".join(created.notes)
     assert len([argv for argv in runner.calls if argv[:3] == ["gh", "repo", "view"]]) == 1
 
 
 def test_the_publishers_template_is_used_when_the_owner_has_none(tmp_path: Path) -> None:
     # A personal account with no copy of the template could not create an overlay at all: the
     # documented contract asked for a repository nobody had told them to publish. The answer to
-    # "does <owner>/stayfixed-overlay-template exist" is `gh`'s real not-found shape (see
+    # "does <owner>/drybag-overlay-template exist" is `gh`'s real not-found shape (see
     # `NO_SUCH_REPOSITORY`), and it falls back to the publisher's own public template.
     # Mutation (`mutations/`'s "create: has no template to fall back on"): the
     # fallback is dropped and the owner's template is always named → this reddens.
     #
     # Named with its host. `gh` resolves an unqualified `OWNER/REPO` on `GH_HOST`, which the runner
-    # keeps, so on a GitHub Enterprise host the fallback named whoever owns `stayfixed` there, and
+    # keeps, so on a GitHub Enterprise host the fallback named whoever owns `drybag` there, and
     # the owner's private overlay -- whose hooks run in every session -- was generated from it.
     # `github.com/OWNER/REPO` is looked up on github.com whatever `GH_HOST` says (measured against
     # gh 2.101.0 with `GH_HOST` set to another host). The owner's own probe above stays
     # host-relative: that repository is on the owner's own host. Mutation (`mutations/`'s "the
     # publisher's template is named on whatever host gh defaults to") → this reddens on the argv.
     runner = Recorder(answers={THE_OWNERS_PROBE: NO_SUCH_REPOSITORY}, on_call=_populate)
-    created = generate("octo", "stayfixed-private", root=tmp_path, runner=runner)
-    assert _template_named(runner) == "github.com/stayfixed/stayfixed-overlay-template"
-    assert "github.com/stayfixed/stayfixed-overlay-template" in " ".join(created.notes)
+    created = generate("octo", "drybag-private", root=tmp_path, runner=runner)
+    assert _template_named(runner) == "github.com/dry-bag/drybag-overlay-template"
+    assert "github.com/dry-bag/drybag-overlay-template" in " ".join(created.notes)
 
 
 def test_a_repository_that_is_not_a_template_is_not_generated_from(tmp_path: Path) -> None:
     # `gh repo create --template` on an ordinary repository fails; an owner whose repository of
     # that name is not marked as a template has not published one, and gets the publisher's.
     runner = Recorder(answers={THE_OWNERS_PROBE: NOT_A_TEMPLATE}, on_call=_populate)
-    generate("octo", "stayfixed-private", root=tmp_path, runner=runner)
-    assert _template_named(runner) == "github.com/stayfixed/stayfixed-overlay-template"
+    generate("octo", "drybag-private", root=tmp_path, runner=runner)
+    assert _template_named(runner) == "github.com/dry-bag/drybag-overlay-template"
 
 
 @pytest.mark.parametrize(
@@ -415,10 +415,10 @@ def test_a_probe_that_failed_for_another_reason_never_switches_the_template(
     # Mutation: treat every non-zero exit of the probe as not-found → the first two cases redden.
     runner = Recorder(answers={THE_OWNERS_PROBE: answer}, on_call=_populate)
     with pytest.raises(Failure) as failed:
-        generate("octo", "stayfixed-private", root=tmp_path, runner=runner)
+        generate("octo", "drybag-private", root=tmp_path, runner=runner)
     assert said in str(failed.value)
     assert not [argv for argv in runner.calls if argv[:3] == ["gh", "repo", "create"]]
-    assert not (tmp_path / "stayfixed-private").exists()
+    assert not (tmp_path / "drybag-private").exists()
 
 
 def test_a_probe_failure_is_printed_without_letting_it_drive_a_terminal(tmp_path: Path) -> None:
@@ -427,7 +427,7 @@ def test_a_probe_failure_is_printed_without_letting_it_drive_a_terminal(tmp_path
     hostile = Completed(1, "", "HTTP 401\n::error::forged\x1b[2J")
     runner = Recorder(answers={THE_OWNERS_PROBE: hostile})
     with pytest.raises(Failure) as failed:
-        generate("octo", "stayfixed-private", root=tmp_path, runner=runner)
+        generate("octo", "drybag-private", root=tmp_path, runner=runner)
     message = str(failed.value)
     assert "\n::error::" not in message
     assert "\x1b" not in message
@@ -441,7 +441,7 @@ HOSTILE = Completed(1, "", "HTTP 500\n::error::forged\x1b[2J")
     [
         pytest.param({THE_OWNERS_PROBE: A_TEMPLATE, "gh repo create": HOSTILE}, id="repo-create"),
         pytest.param(
-            {THE_OWNERS_PROBE: A_TEMPLATE, "gh repo view octo/stayfixed-private": HOSTILE},
+            {THE_OWNERS_PROBE: A_TEMPLATE, "gh repo view octo/drybag-private": HOSTILE},
             id="clone-and-view",
         ),
     ],
@@ -457,7 +457,7 @@ def test_what_gh_and_git_print_cannot_drive_a_terminal(
     # Mutation: `mutations/`'s "a subprocess's answer is quoted raw".
     runner = Recorder(answers={**answers, "git clone": HOSTILE})
     with pytest.raises(Failure) as failed:
-        generate("octo", "stayfixed-private", root=tmp_path, runner=runner)
+        generate("octo", "drybag-private", root=tmp_path, runner=runner)
     message = str(failed.value)
     assert "forged" in message
     assert "\n::error::" not in message
@@ -475,15 +475,15 @@ def test_every_message_naming_the_destination_prints_it_quoted(tmp_path: Path, e
     root.mkdir()
     answers = {THE_OWNERS_PROBE: A_TEMPLATE}
     if ending == "left-alone":
-        (root / "stayfixed-private").mkdir()
-        (root / "stayfixed-private" / IDENTITY_RECORD).write_text("layout = 1\n", encoding="utf-8")
+        (root / "drybag-private").mkdir()
+        (root / "drybag-private" / IDENTITY_RECORD).write_text("layout = 1\n", encoding="utf-8")
     elif ending == "declined":
         answers["gh repo create"] = Completed(1, "", "Name already exists on this account")
     try:
         said = " ".join(
             generate(
                 "octo",
-                "stayfixed-private",
+                "drybag-private",
                 root=root,
                 runner=Recorder(answers=answers),
                 wait=lambda _: None,
@@ -492,13 +492,13 @@ def test_every_message_naming_the_destination_prints_it_quoted(tmp_path: Path, e
     except (Failure, Refusal) as stopped:
         said = str(stopped)
     assert "\x1b" not in said and "\x07" not in said, said
-    assert quoted(str(root / "stayfixed-private")) in said, said
+    assert quoted(str(root / "drybag-private")) in said, said
 
 
 def test_what_git_init_prints_cannot_drive_a_terminal(tmp_path: Path) -> None:
     # The same for the local render's `git init`, whose failure is a note.
     runner = Recorder(answers={"git init": HOSTILE})
-    created = render(tmp_path / "stayfixed-private", runner=runner)
+    created = render(tmp_path / "drybag-private", runner=runner)
     message = " ".join(created.notes)
     assert "forged" in message
     assert "\n::error::" not in message
@@ -513,7 +513,7 @@ def test_a_gh_that_is_not_installed_costs_one_subprocess_at_the_probe(tmp_path: 
     with pytest.raises(Failure) as failed:
         generate(
             "octo",
-            "stayfixed-private",
+            "drybag-private",
             root=tmp_path,
             runner=absent,
             wait=waited.append,
@@ -536,7 +536,7 @@ def test_a_local_overlay_is_a_git_repository_on_main_with_no_remote(tmp_path: Pa
     # scratch render. Mutation (`mutations/`'s "a local render leaves no git repository"): the
     # `git init` call is deleted → this reddens.
     runner = Recorder()
-    created = render(tmp_path / "stayfixed-private", runner=runner)
+    created = render(tmp_path / "drybag-private", runner=runner)
     assert runner.calls == [["git", "init"], ["git", "symbolic-ref", "HEAD", "refs/heads/main"]]
     assert runner.cwds == [created.root, created.root]
     assert not any(argv[0] == "gh" for argv in runner.calls), "a render touches no GitHub"
@@ -552,9 +552,9 @@ def test_a_local_overlay_carries_a_real_repository_on_main(tmp_path: Path) -> No
 
     if shutil.which("git") is None:
         pytest.skip("git is not installed")
-    from stayfixed.runner import subprocess_runner
+    from drybag.runner import subprocess_runner
 
-    created = render(tmp_path / "stayfixed-private", runner=subprocess_runner())
+    created = render(tmp_path / "drybag-private", runner=subprocess_runner())
     head = (created.root / ".git" / "HEAD").read_text(encoding="utf-8").strip()
     assert head == "ref: refs/heads/main"
     config = (created.root / ".git" / "config").read_text(encoding="utf-8")
@@ -565,7 +565,7 @@ def test_a_git_that_cannot_init_is_a_note_and_the_tree_is_kept(tmp_path: Path) -
     # The tree is already rendered when `git init` runs, so a missing `git` cannot un-render it;
     # refusing would only hide a directory that exists. The note says what to run.
     runner = Recorder(answers={"git": Completed(127, "", "git could not be run: [Errno 2] git")})
-    created = render(tmp_path / "stayfixed-private", runner=runner)
+    created = render(tmp_path / "drybag-private", runner=runner)
     assert (created.root / IDENTITY_RECORD).is_file()
     message = " ".join(created.notes)
     assert "git could not be run" in message
@@ -581,7 +581,7 @@ def test_a_git_older_than_2_28_still_leaves_a_repository_on_main(tmp_path: Path)
     #
     # Mutation: `mutations/`'s "a local render asks git init for its branch".
     runner = Recorder(answers={"git init -b": Completed(129, "", "error: unknown switch `b'")})
-    created = render(tmp_path / "stayfixed-private", runner=runner)
+    created = render(tmp_path / "drybag-private", runner=runner)
     assert ["git", "init", "-b", "main"] not in runner.calls
     assert "made it a git repository on main" in " ".join(created.notes)
 
@@ -592,7 +592,7 @@ def test_a_git_init_that_ran_and_failed_is_said_to_have_failed(tmp_path: Path) -
     #
     # Mutation: `mutations/`'s "a git init that failed is said not to have run".
     runner = Recorder(answers={"git init": Completed(128, "", "fatal: cannot mkdir")})
-    created = render(tmp_path / "stayfixed-private", runner=runner)
+    created = render(tmp_path / "drybag-private", runner=runner)
     message = " ".join(created.notes)
     assert "`git init` exited 128" in message
     assert "did not run" not in message and "could not be run" not in message
@@ -602,7 +602,7 @@ def test_the_scratch_render_the_publisher_uses_is_not_a_repository(tmp_path: Pat
     # `render_template` is shared with `scripts/publish_template.py`, whose scratch tree is cloned
     # over and then replaced: a `.git` of its own there would be pushed as a nested repository.
     # The init belongs to `render` alone.
-    from stayfixed.overlay.api import render_template
+    from drybag.overlay.api import render_template
 
     rendered = render_template(tmp_path, "scratch")
     assert not (rendered / ".git").exists()
@@ -643,7 +643,7 @@ def test_the_overlay_group_no_longer_creates_initialises_or_publishes(
     # One entry for an overlay: `setup --overlay <path>` renders one and `setup --overlay
     # create:<owner>/<name>` generates one, and publishing the template is the maintainer's
     # script. A second spelling of either is a second thing to keep true.
-    from stayfixed.cli import build_parser, discover_registrars
+    from drybag.cli import build_parser, discover_registrars
 
     with pytest.raises(SystemExit) as exited:
         build_parser(discover_registrars()).parse_args(argv)

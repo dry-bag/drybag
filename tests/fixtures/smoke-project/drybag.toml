@@ -1,0 +1,18 @@
+# A project every gate passes on, which the smoke workflow's `doctor` step runs against.
+# Its version is written by hand; `doctor` warns when it drifts from the drybag running, and
+# nothing fails.
+[drybag]
+version = "0.1.0"
+
+[project]
+name = "smoke"
+base_branch = "main"
+
+# A real store, so the six `memory session-context` entries in `hooks/hooks.json` carry
+# repository bytes toward the model instead of exiting 0 on a project that has none.
+# `scripts/smoke_hooks.py` asserts what each bundle emitted: the volatile note as data, and
+# no standing rule; before this block every one of those rows was green against a store that
+# did not exist.
+[memory]
+mode = "in-repo"
+groups = ["developer", "volatile"]

@@ -14,11 +14,11 @@ from typing import Any, cast
 
 import pytest
 
-from stayfixed.gitenv import _git_toplevel
-from stayfixed.harnesses import CLAUDE, HARNESSES, Harness
-from stayfixed.hooks.api import Handler, HookEvent, HookResult, NullSink
-from stayfixed.hooks.commands import run_hook
-from stayfixed.hooks.dispatch import TRUNCATION_MARK, Recorder, dispatch, read_event
+from drybag.gitenv import _git_toplevel
+from drybag.harnesses import CLAUDE, HARNESSES, Harness
+from drybag.hooks.api import Handler, HookEvent, HookResult, NullSink
+from drybag.hooks.commands import run_hook
+from drybag.hooks.dispatch import TRUNCATION_MARK, Recorder, dispatch, read_event
 from tests.gitfixture import git
 from tests.sessions import NO_CONFIG
 
@@ -376,16 +376,16 @@ def _forbidden(cwd: Path) -> Path | None:
 def test_a_harness_registered_first_never_takes_the_root_from_claude_code(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The registry's order is the order `init` writes `[stayfixed] agents` in, and adding a
-    # harness ahead of Claude Code must not change which directory a Claude Code session's
-    # configuration loads from. So the canonical harness's variable is asked first, whatever the
-    # registry order, and the others' after it. Mutation (declared, on `harnesses`): the
-    # variables are asked in registry order -> the fake's root wins and this reddens.
+    # The registry's order is a choice about presentation, and adding a harness ahead of Claude Code
+    # must not change which directory a Claude Code session's configuration loads from. So the
+    # canonical harness's variable is asked first, whatever the registry order, and the others'
+    # after it. Mutation (declared, on `harnesses`): the variables are asked in registry order ->
+    # the fake's root wins and this reddens.
     project = tmp_path / "project"
     project.mkdir()
     fake = _harness(lambda name, context, notice: context, project_dir_env="FAKE_PROJECT_DIR")
-    monkeypatch.setattr("stayfixed.harnesses.HARNESSES", (fake, *HARNESSES))
-    monkeypatch.setattr("stayfixed.gitenv._git_toplevel", _forbidden)
+    monkeypatch.setattr("drybag.harnesses.HARNESSES", (fake, *HARNESSES))
+    monkeypatch.setattr("drybag.gitenv._git_toplevel", _forbidden)
     env = {"CLAUDE_PROJECT_DIR": str(project), "FAKE_PROJECT_DIR": str(tmp_path / "elsewhere")}
     ev = read_event({"hook_event_name": "PreToolUse", "cwd": str(tmp_path)}, env)
     assert ev.project_root == project
@@ -396,7 +396,7 @@ def test_the_walk_finds_the_root_through_a_git_directory(
 ) -> None:
     (tmp_path / ".git").mkdir()
     (tmp_path / "a" / "b").mkdir(parents=True)
-    monkeypatch.setattr("stayfixed.gitenv._git_toplevel", _forbidden)
+    monkeypatch.setattr("drybag.gitenv._git_toplevel", _forbidden)
     ev = read_event({"hook_event_name": "PreToolUse", "cwd": str(tmp_path / "a" / "b")}, {})
     assert ev.project_root == tmp_path
 
@@ -407,7 +407,7 @@ def test_the_walk_finds_the_root_through_a_git_file(
     # A worktree and a submodule carry `.git` as a file, so `is_dir()` would miss both.
     (tmp_path / ".git").write_text("gitdir: /elsewhere/.git/worktrees/w\n", encoding="utf-8")
     (tmp_path / "a").mkdir()
-    monkeypatch.setattr("stayfixed.gitenv._git_toplevel", _forbidden)
+    monkeypatch.setattr("drybag.gitenv._git_toplevel", _forbidden)
     ev = read_event({"hook_event_name": "PreToolUse", "cwd": str(tmp_path / "a")}, {})
     assert ev.project_root == tmp_path
 
@@ -435,7 +435,7 @@ def test_the_walk_finds_the_root_above_a_directory_too_deep_to_name_its_dot_git(
     with pytest.raises(OSError) as past:
         os.stat(deep / ".git")
     assert past.value.errno == errno.ENAMETOOLONG
-    monkeypatch.setattr("stayfixed.gitenv._git_toplevel", _forbidden)
+    monkeypatch.setattr("drybag.gitenv._git_toplevel", _forbidden)
     ev = read_event({"hook_event_name": "PreToolUse", "cwd": str(deep)}, {})
     assert ev.project_root == tmp_path
 
@@ -451,7 +451,7 @@ def test_the_walk_resolves_a_symlinked_root_the_way_git_does(
     (real_repo / "sub").mkdir()
     link = tmp_path / "link"
     link.symlink_to(real_repo)
-    monkeypatch.setattr("stayfixed.gitenv._git_toplevel", _forbidden)
+    monkeypatch.setattr("drybag.gitenv._git_toplevel", _forbidden)
     ev = read_event({"hook_event_name": "PreToolUse", "cwd": str(link / "sub")}, {})
     assert ev.project_root == real_repo.resolve()
 
@@ -465,7 +465,7 @@ def test_git_is_still_asked_when_the_walk_finds_no_dot_git(
         asked.append(cwd)
         return Path("/from-git")
 
-    monkeypatch.setattr("stayfixed.gitenv._git_toplevel", fake)
+    monkeypatch.setattr("drybag.gitenv._git_toplevel", fake)
     ev = read_event({"hook_event_name": "PreToolUse", "cwd": str(tmp_path)}, {})
     assert ev.project_root == Path("/from-git")
     assert asked == [tmp_path]
@@ -523,7 +523,6 @@ def _harness(
 ) -> Harness:
     return Harness(
         name="fake",
-        marker_dir=".fake",
         settings=(),
         local_settings=(),
         project_dir_env=project_dir_env,
@@ -548,7 +547,7 @@ def _hook(
         monkeypatch.delenv(variable, raising=False)
     for variable, value in (env or {}).items():
         monkeypatch.setenv(variable, value)
-    monkeypatch.setattr("stayfixed.hooks.commands.discover", lambda: [probe])
+    monkeypatch.setattr("drybag.hooks.commands.discover", lambda: [probe])
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
     return run_hook(argparse.Namespace(event=event_name))
 
@@ -567,7 +566,7 @@ def test_a_detected_harness_renders_its_own_answer(
         detects=lambda env, payload: payload is not None and "fake_session" in payload,
         project_dir_env="FAKE_PROJECT_DIR",
     )
-    monkeypatch.setattr("stayfixed.harnesses.HARNESSES", (fake, *HARNESSES))
+    monkeypatch.setattr("drybag.harnesses.HARNESSES", (fake, *HARNESSES))
     monkeypatch.setenv("FAKE_PROJECT_DIR", str(tmp_path))
     seen: list[Path | None] = []
 
@@ -602,8 +601,8 @@ def test_a_handler_sees_one_event_whichever_harness_is_detected(
     fake = _harness(
         lambda name, context, notice: context, detects=lambda env, payload: "FAKE_HARNESS" in env
     )
-    monkeypatch.setattr("stayfixed.harnesses.HARNESSES", (fake, *HARNESSES))
-    monkeypatch.setattr("stayfixed.gitenv._git_toplevel", _forbidden)
+    monkeypatch.setattr("drybag.harnesses.HARNESSES", (fake, *HARNESSES))
+    monkeypatch.setattr("drybag.gitenv._git_toplevel", _forbidden)
     seen: list[HookEvent] = []
     detected: list[str] = []
 
@@ -611,7 +610,7 @@ def test_a_handler_sees_one_event_whichever_harness_is_detected(
         detected.append(harness.name)
         return dispatch(*args, harness=harness, **kwargs)
 
-    monkeypatch.setattr("stayfixed.hooks.commands.dispatch", answered)
+    monkeypatch.setattr("drybag.hooks.commands.dispatch", answered)
 
     def note(ev: HookEvent, config: object) -> HookResult:
         seen.append(ev)

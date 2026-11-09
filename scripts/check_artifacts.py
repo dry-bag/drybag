@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the built artifacts carry what an installed stayfixed needs.
+"""Check the built artifacts carry what an installed drybag needs.
 
     uv run python scripts/check_artifacts.py dist            # the one wheel and one sdist
     uv run python scripts/check_artifacts.py rendered DIR    # what `setup --overlay DIR` left
@@ -15,8 +15,8 @@ Three things this looks at, each of which was an inline CI step or nothing at al
   which is why no test in `tests/` can see this.
 * **The sdist.** A packager for Homebrew, Debian or nixpkgs cannot run a single test against
   an sdist that ships only `src/`, which is the artefact they most need to verify for a
-  security-sensitive tool. `skills/` and `agents/` are here because
-  `tests/skills/test_skills.py` reads those trees directly. And `tar` preserves the mode: a
+  security-sensitive tool. `skills/` is here because
+  `tests/skills/test_skills.py` reads that tree directly. And `tar` preserves the mode: a
   wrapper unpacked at 0644 exits 126 for every hook entry, which Claude Code reads as a
   permission error rather than as a broken install.
 * **A rendered overlay.** `setup --overlay <path>` at a path that names nothing is the one working
@@ -32,10 +32,8 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-from stayfixed.overlay.api import OVERLAY_FILES
-from stayfixed.project.api import PROJECT_FILES
-from stayfixed.release.api import HASHED_FILES, RECORD
-from stayfixed.scaffold import MANIFEST_PATH
+from drybag.overlay.api import OVERLAY_FILES
+from drybag.scaffold import MANIFEST_PATH
 
 # The mutation declarations, one file per group. The sdist must carry the files this checkout
 # carries, globbed rather than spelled: `GROUP_OF` in `scripts/mutation_oracle.py` is the one
@@ -43,56 +41,23 @@ from stayfixed.scaffold import MANIFEST_PATH
 DECLARATIONS = Path(__file__).resolve().parents[1] / "mutations"
 
 WHEEL_MUST = (
-    "stayfixed/presets/recommended.toml",
-    *(f"stayfixed/templates/overlay/{relative}" for relative in OVERLAY_FILES),
-    # The project footprint's own tree. `init` reads it at runtime through
-    # `stayfixed.templates.tree`, exactly as `setup --overlay <path>` reads the tree above, so a
-    # build that dropped it would leave every installed stayfixed unable to initialise anything
-    # while the checkout's own suite stayed green.
-    *(f"stayfixed/templates/project/{name}" for name in PROJECT_FILES),
-    # The one shipped profile. `stayfixed.profiles` reads it at runtime through
-    # `importlib.resources`, like the presets, so a build that dropped it would refuse
-    # `[stayfixed] profile = "python"` as unshipped on every installed stayfixed.
-    "stayfixed/profiles/python/profile.toml",
-    "stayfixed/profiles/python/rules.md",
-    # Its code. `stayfixed.profiles.hints` finds `hygiene.py` through `importlib.resources` and
-    # imports it, so a build that dropped it would leave every installed stayfixed without the
-    # Python note after a failed pytest run, silently. `__init__.py` with it, so the installed
-    # profile is the regular package the checkout imports.
-    "stayfixed/profiles/python/__init__.py",
-    "stayfixed/profiles/python/hygiene.py",
-    # Its runner adapter. `stayfixed.prove.adapters` finds `adapters.py` through the same walk and
-    # imports it, so a build that dropped it would answer every `stayfixed prove -- pytest` with
-    # `not proven`, no adapter recognising the command.
-    "stayfixed/profiles/python/adapters.py",
-    # The JavaScript stack's runner adapters, jest's, vitest's and `node --test`'s, which ship no
-    # profile: found by the same walk, so a build that dropped them would answer every
-    # `stayfixed prove -- npx jest` with `not proven`. `__init__.py` with them, as above.
-    "stayfixed/profiles/javascript/__init__.py",
-    "stayfixed/profiles/javascript/adapters.py",
-    # The Go stack's runner adapter, `go test`'s, likewise with no profile.
-    "stayfixed/profiles/go/__init__.py",
-    "stayfixed/profiles/go/adapters.py",
+    "drybag/presets/recommended.toml",
+    *(f"drybag/templates/overlay/{relative}" for relative in OVERLAY_FILES),
 )
 # What a downstream packager needs to verify the sdist, plus the three files the harness runs
-# without an interpreter of ours and the record they are checked against.
+# without an interpreter of ours.
 SDIST_MUST = (
     "tests/test_fsops.py",
     "CHANGELOG.md",
     "skills/README.md",
-    "agents/code-navigator.md",
-    # The three files the harness runs with no interpreter of ours in front of them, and the
-    # record they are checked against — `HASHED_FILES` and `RECORD`, not four string literals
-    # spelled here a second time. The record is in this list for the same reason the three are:
-    # a build that dropped it would pass this checker while `doctor files` quietly degraded
-    # from a comparison to a `skip`, which is the one answer that looks like a healthy install
-    # and is not one. `pyproject.toml` carries all four under `hooks/**` and `scripts/**`, so
-    # this is a claim about the build and not a new packaging rule.
-    *HASHED_FILES,
-    RECORD,
+    # `pyproject.toml` carries these under `hooks/**` and `scripts/**`, so this is a claim about
+    # the build and not a new packaging rule.
+    "hooks/run-hook.sh",
+    "hooks/hooks.json",
+    "scripts/drybag",
     *(f"mutations/{path.name}" for path in sorted(DECLARATIONS.glob("*.toml"))),
 )
-SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/stayfixed")
+SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/drybag")
 
 
 def check_wheel(path: Path) -> list[str]:

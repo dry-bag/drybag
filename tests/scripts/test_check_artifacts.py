@@ -12,27 +12,13 @@ from types import ModuleType
 
 import pytest
 
-from stayfixed.overlay.api import OVERLAY_FILES
-from stayfixed.project.api import PROJECT_FILES
-from stayfixed.scaffold import MANIFEST_PATH
+from drybag.overlay.api import OVERLAY_FILES
+from drybag.scaffold import MANIFEST_PATH
 from tests.gitfixture import needs_git
 from tests.runners import Recorder, real_git
 from tests.scriptload import SCRIPTS, load
 
-WHEEL_LAST = f"stayfixed/templates/overlay/{OVERLAY_FILES[-1]}"
-# The Python profile's code, which the red-run hint imports at runtime.
-PROFILE_CODE = (
-    "stayfixed/profiles/python/__init__.py",
-    "stayfixed/profiles/python/hygiene.py",
-    "stayfixed/profiles/python/adapters.py",
-)
-# The stacks that ship runner adapters and no profile, each its package marker and its adapters.
-ADAPTER_CODE = (
-    "stayfixed/profiles/javascript/__init__.py",
-    "stayfixed/profiles/javascript/adapters.py",
-    "stayfixed/profiles/go/__init__.py",
-    "stayfixed/profiles/go/adapters.py",
-)
+WHEEL_LAST = f"drybag/templates/overlay/{OVERLAY_FILES[-1]}"
 
 
 def checker() -> ModuleType:
@@ -42,13 +28,8 @@ def checker() -> ModuleType:
 def _wheel(path: Path, *, without: str | None = None) -> Path:
     """A synthetic wheel holding what `WHEEL_MUST` names; keep this list in step with it."""
     names = [
-        "stayfixed/presets/recommended.toml",
-        *(f"stayfixed/templates/overlay/{r}" for r in OVERLAY_FILES),
-        *(f"stayfixed/templates/project/{n}" for n in PROJECT_FILES),
-        "stayfixed/profiles/python/profile.toml",
-        "stayfixed/profiles/python/rules.md",
-        *PROFILE_CODE,
-        *ADAPTER_CODE,
+        "drybag/presets/recommended.toml",
+        *(f"drybag/templates/overlay/{r}" for r in OVERLAY_FILES),
     ]
     with zipfile.ZipFile(path, "w") as archive:
         for name in names:
@@ -64,7 +45,7 @@ def _sdist(
         for name in module.SDIST_MUST:
             if name == without:
                 continue
-            info = tarfile.TarInfo(f"stayfixed-0.0.0/{name}")
+            info = tarfile.TarInfo(f"drybag-0.0.0/{name}")
             info.size = 1
             info.mode = wrapper_mode if name in module.SDIST_EXECUTABLE else 0o644
             archive.addfile(info, io.BytesIO(b"x"))
@@ -81,40 +62,7 @@ def test_a_template_file_missing_from_the_wheel_is_named(tmp_path: Path) -> None
     # Mutation: none of its own — the wheel check is a set difference; the sdist mode check
     # below carries the declared mutation.
     module = checker()
-    missing = f"stayfixed/templates/overlay/{OVERLAY_FILES[-1]}"
-    findings = module.check_wheel(_wheel(tmp_path / "k.whl", without=missing))
-    assert findings == [f"wheel: missing {missing}"]
-    # Both trees, because both are read at runtime by `resources.files` and `WHEEL_MUST` is
-    # what says so: the overlay's tree answers `setup --overlay <path>` and the project's
-    # answers `stayfixed init`, and a build that dropped either is invisible to every other test.
-    absent = f"stayfixed/templates/project/{PROJECT_FILES[-1]}"
-    assert module.check_wheel(_wheel(tmp_path / "p.whl", without=absent)) == [
-        f"wheel: missing {absent}"
-    ]
-
-
-@pytest.mark.parametrize("missing", PROFILE_CODE)
-def test_a_wheel_without_the_python_profiles_code_is_named(tmp_path: Path, missing: str) -> None:
-    # `hint_modules` finds a profile's `hygiene.py` through `importlib.resources`, so a build that
-    # dropped it would leave every installed stayfixed with no Python note after a failed pytest
-    # run, silently, while the checkout's own suite stayed green; `shipped_adapters` finds its
-    # `adapters.py` the same way, and without it every `prove -- pytest` is `not proven`. Oracle:
-    # `mutations/`'s "the wheel need not carry the Python profile's hint", "the wheel need not
-    # carry the Python profile's runner adapter" and "the wheel need not carry the Python
-    # profile's package marker".
-    module = checker()
-    findings = module.check_wheel(_wheel(tmp_path / "k.whl", without=missing))
-    assert findings == [f"wheel: missing {missing}"]
-
-
-@pytest.mark.parametrize("missing", ADAPTER_CODE)
-def test_a_wheel_without_a_stack_s_runner_adapters_is_named(tmp_path: Path, missing: str) -> None:
-    # `shipped_adapters` finds a stack's `adapters.py` through `importlib.resources`, profile or
-    # none, so a build that dropped one would answer every command of that stack's runners with
-    # `not proven`, silently. Oracle: `mutations/`'s "the wheel need not carry the JavaScript
-    # runner adapters", "the wheel need not carry the Go runner adapter" and the two stacks'
-    # "package marker" entries.
-    module = checker()
+    missing = f"drybag/templates/overlay/{OVERLAY_FILES[-1]}"
     findings = module.check_wheel(_wheel(tmp_path / "k.whl", without=missing))
     assert findings == [f"wheel: missing {missing}"]
 
@@ -133,27 +81,27 @@ def test_a_wrapper_that_lost_its_executable_bit_in_the_sdist_is_named(tmp_path: 
     module = checker()
     findings = module.check_sdist(_sdist(tmp_path / "k.tar.gz", module, wrapper_mode=0o644))
     assert "sdist: hooks/run-hook.sh is not executable" in findings, findings
-    assert "sdist: scripts/stayfixed is not executable" in findings, findings
+    assert "sdist: scripts/drybag is not executable" in findings, findings
     assert len(findings) == 2, findings
 
 
 def test_a_member_missing_from_the_sdist_is_named(tmp_path: Path) -> None:
     # `_sdist`'s `without=` parameter existed and was passed by nothing, so the packager-facing
-    # half of the gate — that `tests/`, `CHANGELOG.md`, `skills/`, `hooks/hashes.json` and
-    # `mutations/` actually ship — was checked by no test. Measured: the whole
-    # missing-member comprehension replaced by `findings: list[str] = []`, mode check kept,
-    # 5 passed.
-    #
-    # `hooks/hashes.json` is the member named, because it is the one whose absence is silent in
-    # the worst way: `doctor files` degrades from a comparison to a `skip`, which reads like a
-    # healthy install.
+    # half of the gate — that `tests/`, `CHANGELOG.md`, `skills/` and `mutations/` actually
+    # ship — was checked by no test.
     #
     # Mutation (declared): the missing-member finding is deleted.
     module = checker()
-    findings = module.check_sdist(
-        _sdist(tmp_path / "k.tar.gz", module, without="hooks/hashes.json")
-    )
-    assert findings == ["sdist: missing hooks/hashes.json"], findings
+    findings = module.check_sdist(_sdist(tmp_path / "k.tar.gz", module, without="CHANGELOG.md"))
+    assert findings == ["sdist: missing CHANGELOG.md"], findings
+
+
+def test_the_sdist_must_carry_the_hook_wrapper_hooks_file_and_launcher() -> None:
+    # The three files the harness runs with no interpreter of ours in front of them, spelled out
+    # so a checker that drops one from its list reddens here.
+    module = checker()
+    assert {"hooks/run-hook.sh", "hooks/hooks.json", "scripts/drybag"} <= set(module.SDIST_MUST)
+    assert "hooks/hashes.json" not in module.SDIST_MUST
 
 
 def test_the_sdist_must_carry_every_mutation_group_file() -> None:
@@ -204,7 +152,7 @@ def test_what_setup_renders_at_an_absent_overlay_path_is_what_the_check_expects(
     # this check over it, so the two have to agree: rendered through `setup` here, with `git` run
     # for real and every other program recorded, the tree is exactly the shipped files, the
     # scaffold manifest and a repository on `main`.
-    from stayfixed.setup.api import setup
+    from drybag.setup.api import setup
 
     destination = tmp_path / "rendered"
     setup(
@@ -305,13 +253,13 @@ def test_the_dist_arm_reports_a_finding_and_is_clean_when_there_is_none(
     module = checker()
     dist = tmp_path / "dist"
     dist.mkdir()
-    _wheel(dist / "stayfixed-0.0.0-py3-none-any.whl")
-    _sdist(dist / "stayfixed-0.0.0.tar.gz", module)
+    _wheel(dist / "drybag-0.0.0-py3-none-any.whl")
+    _sdist(dist / "drybag-0.0.0.tar.gz", module)
     assert module.main([str(dist)]) == 0, capsys.readouterr()
 
     short = tmp_path / "short"
     short.mkdir()
-    _wheel(short / "stayfixed-0.0.0-py3-none-any.whl", without=WHEEL_LAST)
-    _sdist(short / "stayfixed-0.0.0.tar.gz", module)
+    _wheel(short / "drybag-0.0.0-py3-none-any.whl", without=WHEEL_LAST)
+    _sdist(short / "drybag-0.0.0.tar.gz", module)
     assert module.main([str(short)]) == 1
     assert f"wheel: missing {WHEEL_LAST}" in capsys.readouterr().err

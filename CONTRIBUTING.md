@@ -1,6 +1,6 @@
-# Contributing to stayfixed
+# Contributing to drybag
 
-stayfixed's real conventions used to live only inside `docs/plans/`, which meant a first-time
+drybag's real conventions used to live only inside `docs/plans/`, which meant a first-time
 contributor's pull request could be rejected on rules they had no way to read. This file is
 those rules.
 
@@ -21,21 +21,13 @@ floor, ruff, mypy and `scripts/release.py check`), run on Linux for Python 3.11,
 and a red pull request. The mutation oracle, which is this project's headline obligation and not
 an optional extra, runs in a job of its own on Linux under 3.13 (see [Tests](#tests)). CI runs
 three more steps you can reproduce only from a build (`uv build`, then
-`scripts/check_artifacts.py dist` and an installed-wheel render), one job you cannot reproduce
-without a global install of the harness CLI, the plugin-manifest validator, and one that installs
-the real test runners `stayfixed prove`'s adapters run and runs `-m runners` under
-`STAYFIXED_REQUIRE_RUNNERS=1` (Node, jest, vitest and Go at the versions `ci.yml` pins); a failure
-in the first two is ours to diagnose, not yours. The third you can reproduce with that Node and Go
-on your `PATH`: install jest and vitest with `npm ci --ignore-scripts` of
-`tests/fixtures/prove/node/package.json` and its lockfile in a directory outside the checkout, then
-run `STAYFIXED_RUNNERS_ON_PATH=1 STAYFIXED_NODE_MODULES=<that directory>/node_modules uv run pytest
--n auto -m runners` (`tests/fixtures/prove/README.md` and `tests/prove/real_runners.py` say what
-each variable does). Without `STAYFIXED_RUNNERS_ON_PATH=1` the tests that need `node` or `go` skip,
-whatever is on your `PATH`.
+`scripts/check_artifacts.py dist` and an installed-wheel render), and one job you cannot reproduce
+without a global install of the harness CLI, the plugin-manifest validator; a failure in either is
+ours to diagnose, not yours.
 
 ## What this project is, and what that costs a change
 
-stayfixed treats **a repository as untrusted input**. A clone can commit a `stayfixed.toml`, a
+drybag treats **a repository as untrusted input**. A clone can commit a `drybag.toml`, a
 `MEMORY.md`, a manifest, an `env` block and a tree of symlinks, and all of it reaches the code
 before a human has read any of it. Three rules follow, and a change that breaks one will be
 sent back however good it looks otherwise.
@@ -74,7 +66,7 @@ wrap it.
 The wrap is for the model and escapes no byte, and the same string also reaches a terminal and a
 CI runner, where a line break followed by `::error::` is a workflow command and an escape
 sequence drives the screen. So a name the repository chose — a file name, a note's name, a
-`memory.groups` entry, a TOML key — is printed through `stayfixed.printed`: `printable` where the
+`memory.groups` entry, a TOML key — is printed through `drybag.printed`: `printable` where the
 command's `--json` carries the name, and `quoted` in a refusal, where the message is the only
 place the name appears.
 
@@ -96,20 +88,16 @@ count, a note's time to live — is a key under `[budgets]`, which the base bran
 owner may raise above its preset or lower below it, and a pull request may only lower when a
 gate reads it. A limit the harness sets — how much of an index it loads, how many
 characters of a hook's output it keeps — is a key under `[native_caps]`. Code reads both
-through `Config` (`src/stayfixed/config/schema.py`). Every other bound — a subprocess's
+through `Config` (`src/drybag/config/schema.py`). Every other bound — a subprocess's
 wall-clock timeout, how many bytes of a repository-authored file are read, how deep a parser
 descends — is a *named cap*: a constant in the code, almost always a module-level one with a
 name, and never a configuration key. None of them is a project's to move, because each one
 protects the run itself from a hung program, an oversized file or a pathological input, and a
-`stayfixed.toml` is repository-authored (principle 5). The one timeout a project does set,
-`[gates] custom_timeout_seconds`, bounds the project's own gate command rather than anything
-stayfixed runs for itself.
+`drybag.toml` is repository-authored (principle 5).
 
 The comment beside a named cap says what it bounds and why the number is what it is. When the number
 has to agree with a shipped file, the comment names that file, so a change to either is visibly a
-change to both: `doctor`'s `WORKFLOW_MAX_BYTES` names `src/stayfixed/templates/project/stayfixed.yml`,
-which it must stay well above, and `NEARLY_FULL` names `hooks/hooks.json`, where a bundle's slot
-count is raised. When no such file exists — a timeout on a hung `git`, the longest command
+change to both: `NEARLY_FULL` names `hooks/hooks.json`, where a bundle's slot count is raised. When no such file exists — a timeout on a hung `git`, the longest command
 `bg-cleanup` will read — the comment says so rather than inventing one.
 
 ### Enumerated writes
@@ -117,124 +105,120 @@ count is raised. When no such file exists — a timeout on a hung `git`, the lon
 A command's section in [docs/cli.md](docs/cli.md) names every path the command writes, in a
 paragraph that opens with **Writes** (a read-only command's says "**Writes** nothing"), and the
 command writes those paths and no others: a change that makes a command write somewhere new
-names the path there in the same commit. `stayfixed hook`, which is internal, is held to the same
-rule: its paragraph names what it keeps inside the one directory stayfixed owns under the data
-root the harness hands it (`${CLAUDE_PLUGIN_DATA}/stayfixed/`, which `src/stayfixed/hooks/sink.py`
+names the path there in the same commit. `drybag hook`, which is internal, is held to the same
+rule: its paragraph names what it keeps inside the one directory drybag owns under the data
+root the harness hands it (`${CLAUDE_PLUGIN_DATA}/drybag/`, which `src/drybag/hooks/sink.py`
 writes), and the handlers that write outside it.
 
-Removal is held tighter. Every file or directory stayfixed removes is one it names before it looks —
+Removal is held tighter. Every file or directory drybag removes is one it names before it looks —
 a fixed name in the code, a path its ledger or manifest recorded, one its configuration computes, or
 a directory above a file the same run removed — and none is found by listing a directory and
-removing what the listing returned, with four exceptions, each inside a directory only stayfixed
+removing what the listing returned, with three exceptions, each inside a directory only drybag
 writes, or, for the last, writes links into. The hook sink's sessions are unbounded in number, so it lists its `markers/` directory and
-prunes all but the newest `MARKER_SESSIONS_KEPT` sessions. `stayfixed uninstall` walks
-`.stayfixed/local/artifacts/` and removes the directories it finds there that are empty, because
-that tree holds nothing but the local artifacts the same run just removed. And `stayfixed detach`
-removes the render directory `$HOME/.local/share/stayfixed/delivery/<id>/` whole, as `attach` does
+prunes all but the newest `MARKER_SESSIONS_KEPT` sessions. And `drybag detach`
+removes the render directory `$HOME/.local/share/drybag/delivery/<id>/` whole, as `attach` does
 the one its new render replaces, a directory named by the binding id and never by the ledger, which
 only `attach` writes into; and `attach` and `detach` take the links they list in the composed store
-`$HOME/.local/share/stayfixed/stores/<id>/`, named the same way, where only `attach` puts a link and
+`$HOME/.local/share/drybag/stores/<id>/`, named the same way, where only `attach` puts a link and
 a file that is not one is a note the harness wrote, which neither removes. All go through `fsops`,
 as every removal in a project root does. A temporary directory a command creates for itself and removes whole when
 it finishes is outside the rule: nothing but that command ever wrote into it.
 
 ## Configuration
 
-Every key a configuration layer can hold — the preset, a repository's `stayfixed.toml`, the
-overlay's files, the machine file — has one class in `src/stayfixed/config/classes.py`, and the
+Every key a configuration layer can hold — the preset, a repository's `drybag.toml`, the
+overlay's files, the machine file — has one class in `src/drybag/config/classes.py`, and the
 class names the layers that may set it: the machine owner's alone (`personal.*`, `guards.*`), a
 preference, a session's parameter, a gate's parameter, the repository's alone, or
 the plugin's. `classes.resolve` applies the classes over a stack of layers — a layer a key's class
 does not admit contributes nothing to it — and so decides who may set a key and gives `doctor` the
 layer each value came from; it builds the owner's layer from the preset and the machine file, but
-the project's `Config` is still built by `config.loader`, which merges `stayfixed.toml` over the
+the project's `Config` is still built by `config.loader`, which merges `drybag.toml` over the
 preset and folds the owner's layer in. So a field added to a section of
-`src/stayfixed/config/schema.py` needs its row in `CLASSES` in the same change:
+`src/drybag/config/schema.py` needs its row in `CLASSES` in the same change:
 `tests/config/test_classes.py` derives every key from the schema's dataclasses and reddens on one
 with no class. Choose the narrowest class that is true of the key: a gate's input is never a
 preference, or a pull request would choose what it is judged by.
 
 ## Areas
 
-An area is a subpackage of `src/stayfixed/` that the CLI frame, the hook registry and `doctor`'s
-report discover by name — there is no shared registry to edit. One table does name areas, `GROUP_OF` in
-`scripts/mutation_oracle.py`, and it is a deliberate exception kept for a reason outside the code
-("Tests" gives it): it groups their mutation entries into files, and a new area needs no row there:
-its entries go in the group its path falls into.
+An area is a subpackage of `src/drybag/` that the CLI frame, the hook registry and `doctor`'s
+report discover by name — there is no shared registry to edit for an area to be found. A new area
+joins its side in `src/drybag/areas.py` (below), which the boundary rules read and discovery
+does not, and, if it publishes an `api.py`, the list of surfaces `tests/test_surfaces.py` pins.
+One more table names areas, `GROUP_OF` in `scripts/mutation_oracle.py`, and it is a deliberate
+exception kept for a reason outside the code ("Tests" gives it): it groups their mutation entries
+into files, and a new area needs no row there: its entries go in the group its path falls into.
 
-Today the discovered ones are `assess`, `attach`, `docs`, `doctor`, `guards`, `hooks`, `ledger`,
-`memory`, `overlay`, `project`, `prove`, `setup` and `trust`, and they fall on two sides of one line. Three of them
-are **delivery**: `overlay`, `attach` and `memory`, the private layer's code — the overlay, binding
-a repository to it, and the note store — named in `DELIVERY_AREAS` in `src/stayfixed/areas.py`.
+Today the discovered ones are `attach`, `docs`, `doctor`, `guards`, `hints`, `hooks`,
+`memory`, `overlay`, `setup` and `sync`, and every module under
+`src/drybag/` sits on one of three sides, which `src/drybag/areas.py` names. **Delivery**
+(`DELIVERY_AREAS`) is the private layer, a machine's setup and the session hints:
 `overlay` renders and upgrades the private overlay; `attach` binds a repository to one, and its
-`detach` takes back what `attach` wrote while the overlay keeps its record of the binding; and
-`memory` keeps the notes. Every other module under `src/stayfixed/`, `cli.py`
-and the subpackages that are not areas included, is the **core**: what stayfixed does without its
-private layer — the gates, the records they check and a machine's setup. `ledger` keeps the bug
-ledger, `docs` the documentation and plan lints, `guards` the session guard, the commit-message
-rules and the test-run checks, `hooks` the dispatcher every hook event goes through, `prove` the
-run of a test command and the verdict its runner's own report supports, and `setup` a
-machine's configuration, and `trust` every approval a person gave on the machine, in one record,
-with the `stayfixed trust` commands over it. `project` holds the shipped project templates and `init`, the command that
-writes a repository's scaffold from them; `assess` runs the gates and the inventory over a
-repository as it is, judges a change's `stayfixed.toml` against what its base branch enforces
-(`stayfixed gate`), and moves `[stayfixed] state` and `enforced` as a project promotes its gates
-(`stayfixed adopt promote`); and `doctor` reports on what every other area left behind and repairs
-none of it. `assess` publishes no `api.py`: nothing under `src/` or `scripts/` outside it imports
-it, and tests reach its modules directly, as they do every area's. (`config`, `presets`, `profiles`,
-`release`, `scaffold` and `templates` are subpackages and not areas, and `harnesses` is a module —
-area discovery does not find them, because they carry none of `commands.py`, `hooks.py` and
-`doctor.py`. `release` still publishes an `api.py`, which holds what an installed stayfixed reads
-about its own releases: the tags it pins and the record of the files a release ships.)
+`detach` takes back what `attach` wrote while the overlay keeps its record of the binding; `memory`
+keeps the notes; `setup` a machine's configuration; `sync` the unattended commit, fetch and push
+of the overlay's memory notes (the session triggers, a detached job and its `doctor` row), switched
+on per machine; and `hints` the session hints
+(the background-cleanup hint, the red-run note and the command scanner they share). The **pack**
+(`PACK_PACKAGES`) is the repository checks: `docs`
+the documentation and plan lints, and `guards` the commit-message rules.
+Every other module is the **core**,
+which both sides share, `cli.py` and the subpackages that are not areas included: its areas
+(`CORE_AREAS`) are `hooks`, the dispatcher every hook event goes through, and `doctor`, which
+reports on what every other area left behind and repairs none of it. (`config`, `presets`, `release`, `scaffold`, `templates` and
+`trust` are subpackages and not areas, and `harnesses` is a module — area discovery does not find
+them, because they carry none of `commands.py`, `hooks.py` and `doctor.py`. `release` still
+publishes an `api.py`, which holds what an installed drybag reads about its own releases: the
+tags it pins; `trust` publishes one too, over every approval a person gave on the machine, kept in
+one record that `memory promote` writes.)
 
-The rule between the two runs one way: delivery may import the core, and the core may not import
-delivery, through an `api.py` or not, at module level or inside a function, so the private layer can
-be reworked without touching the core. The core may name delivery's paths and configuration keys —
-the `.stayfixed/` namespace and the machine file's keys are the core's — and may not import
-delivery's code or call its behaviour except through discovery, which is how any area plugs into the
-core: the CLI frame, the hook registry and `doctor`'s report import an area's `commands.py`,
-`hooks.py` and `doctor.py` by name and call the `register()` each publishes, without knowing which
-area it is, and the bullets below are that contract. Two crossings still exist, and they are pinned
-in `CORE_TO_DELIVERY` in `tests/boundaries/test_delivery.py` because they are meant to stay rather
-than be cut: `stayfixed setup --overlay` creates or records the overlay as the last step of machine
-setup, so `setup/run.py` imports the overlay area's `api.py`, inside the two functions that use it,
-and those rows stay until the step leaves `setup`; and `stayfixed uninstall` detaches an attached
-repository before it takes the scaffold back, so `project/uninstall.py` imports the attach area's
-`detach`, inside the one function that runs it. A row is one import statement and the names it takes,
-held as a multiset in both directions, so `test_core_never_imports_delivery` refuses a new crossing,
-a second statement beside a pinned one, a pinned statement that takes one more name and a pinned row
-whose import has gone alike. `scripts/` is repository tooling and stays under the `api.py` rule
-alone. The rules this section names live under `tests/boundaries/`, a file for each (discovery, the
-`api.py` surface, delivery and the import layers), and share one reading of the syntax tree,
-`astscan.py`, which has cases of its own. `scripts/` has one rule of its own beside them: no script
-imports another. `scripts/publish_plugin.py` runs `scripts/plugin_tree.py` and `src/stayfixed` read
-out of the tag's objects, so nothing it runs may reach for a sibling script that extraction does not
-carry, and a constant two scripts share is copied into each and held equal by a test rather than
-imported. `tests/scripts/test_script_imports.py` holds the rule over every script and the launcher,
-with one exemption it names: `smoke_exfiltration.py` imports `smoke_hooks`, both CI smoke drivers
-run from the checkout. It reads import statements and judges each by its name, so a script run
-through `runpy` or loaded through `importlib` is not seen, and `sys.path` is not followed.
+The rules between them: either side may import the core, and otherwise no import crosses a side —
+the core imports neither side, and neither side the other — through an `api.py` or not, at module
+level or inside a function, but for the statements pinned in `tests/boundaries/test_delivery.py`, so
+a side can be reworked without touching the core or the other side. The core may name either side's
+paths and configuration keys — the `.drybag/` namespace and the machine file's keys are the
+core's — and may not import either side's code or call its behaviour except through discovery, which
+is how any area plugs into the core: the CLI frame, the hook registry and `doctor`'s report import
+an area's `commands.py`, `hooks.py` and `doctor.py` by name and call the `register()` each
+publishes, without knowing which area it is, and the bullets below are that contract. The crossings
+that still exist are pinned one table per direction, each row with what removes it. A row is one
+import statement and the names it takes, held as a multiset in both directions, so
+`test_the_core_imports_neither_side_but_where_pinned` and
+`test_delivery_and_the_pack_import_each_other_only_where_pinned` refuse a new crossing, a second
+statement beside a pinned one, a pinned statement that takes one more name and a pinned row whose
+import has gone alike. `test_every_area_is_on_exactly_one_side` puts every discovered area on
+exactly one side and refuses a listed name that names nothing.
+`scripts/` is repository tooling and stays under the `api.py` rule alone. The rules this section
+names live under `tests/boundaries/`, a file for each (discovery, the `api.py` surface, delivery and
+the import layers), and share one reading of the syntax tree, `astscan.py`, which has cases of its
+own. `scripts/` has one rule of its own beside them: no script imports another.
+`scripts/publish_plugin.py` runs `scripts/plugin_tree.py` and `src/drybag` read out of the tag's
+objects, so nothing it runs may reach for a sibling script that extraction does not carry, and a
+constant two scripts share is copied into each and held equal by a test rather than imported.
+`tests/scripts/test_script_imports.py` holds the rule over every script and the launcher, with one
+exemption it names: `smoke_exfiltration.py` imports `smoke_hooks`, both CI smoke drivers run from
+the checkout. It reads import statements and judges each by its name, so a script run through
+`runpy` or loaded through `importlib` is not seen, and `sys.path` is not followed.
 
-That rule reads import statements, so a module named to `importlib.import_module` is invisible to
-it, and two rules of their own in `tests/boundaries/test_delivery.py` hold that door. The first
-reads names: no core module names `import_module` or `__import__`, a module's own `__spec__` or
-`__loader__`, the finders on `sys` (`meta_path`, `path_hooks`, `path_importer_cache`),
-`sys.breakpointhook`, or a builtin that runs text (`exec`, `eval`, `compile`, `breakpoint`,
-`__builtins__`) wherever it is the builtin in that scope, under any alias, except `areas.py`'s two
-imports by name and the profile discovery `DYNAMIC_IMPORTERS` pins with its reason. `__builtins__`,
-which every module carries, is also read off any module (`json.__builtins__`) and in a `from` of any
-module. Only a function's own binding, a comprehension's variable or an import from a module other
-than `builtins` hides such a builtin, in its scope and the scopes it encloses. Python looks a
-module's or a class body's names up at run time, where a binding may not have run, may have been
-deleted, or may be the builtin itself (`exec = exec`), so a binding of one of these names there
-hides nothing and is a row of its own, to pin or rename; a walrus in a comprehension binds in the
-scope around it. A docstring is prose and is not read. The second reads imports: the core imports
-the standard library from the modules `STANDARD_IMPORTS` lists, none of which imports a module named
-by a string but through a name the first rule reads, and any other import (`importlib` and `pkgutil`
-among them) is a row of `MACHINERY_IMPORTERS`, with what each file reaches in it.
-`importlib.resources` is held too: `files` imports the anchor it is handed when that names a module,
-so the core calls it only on its own package, `__package__` or `"stayfixed"`, and every other read
-of it is a row.
+Those rules read import statements, so a module named to `importlib.import_module` is invisible to
+them, and two rules of their own in `tests/boundaries/test_delivery.py` hold that door for every
+module, on either side or in the core. The first reads names: no module names `import_module` or
+`__import__`, a module's own `__spec__` or `__loader__`, the finders on `sys` (`meta_path`,
+`path_hooks`, `path_importer_cache`), `sys.breakpointhook`, or a builtin that runs text (`exec`,
+`eval`, `compile`, `breakpoint`, `__builtins__`) wherever it is the builtin in that scope, under any
+alias, except `areas.py`'s two imports by name. `__builtins__`, which every module carries, is also read off any module
+(`json.__builtins__`) and in a `from` of any module. Only a function's own binding, a
+comprehension's variable or an import from a module other than `builtins` hides such a builtin, in
+its scope and the scopes it encloses. Python looks a module's or a class body's names up at run
+time, where a binding may not have run, may have been deleted, or may be the builtin itself
+(`exec = exec`), so a binding of one of these names there hides nothing and is a row of its own, to
+pin or rename; a walrus in a comprehension binds in the scope around it. A docstring is prose and is
+not read. The second reads imports: a module imports the standard library from the modules
+`STANDARD_IMPORTS` lists, none of which imports a module named by a string but through a name the
+first rule reads, and any other import (`importlib` and `pkgutil` among them) is a row of
+`MACHINERY_IMPORTERS`, with what each file reaches in it. `importlib.resources` is held too: `files`
+imports the anchor it is handed when that names a module, so a module calls it only on its own
+package, `__package__` or `"drybag"`, and every other read of it is a row.
 
 Every call of `area_modules` or `area_imports` names `commands`, `hooks` or `doctor` as a literal,
 and is made by that submodule's one reader: `cli.py` asks for `commands`, `hooks/registry.py` for
@@ -251,11 +235,11 @@ module evaluates (an annotation built at run time and handed to `typing.get_type
 what holds those.
 
 What source cannot show is when a pardoned statement runs, so
-`test_in_isolation_no_core_module_loads_a_delivery_area` imports every core module in a clean
-interpreter and refuses any delivery module among what it loaded: the core loads the private layer
-only when a command asks for it.
+`test_in_isolation_no_core_module_loads_either_side` imports every core module in a clean
+interpreter and refuses any module of either side among what it loaded: the core loads a side only
+when a command asks for it.
 
-The packages under `src/stayfixed/` import one another without a cycle
+The packages under `src/drybag/` import one another without a cycle
 (`test_the_packages_import_one_another_without_a_cycle_at_module_level`), counting each import that
 runs when its module is imported. An import inside a function, which defers a load until a command
 asks for it, and one under `if TYPE_CHECKING:`, which never runs, are not counted. A leaf that two
@@ -270,7 +254,7 @@ too, since Python runs each package's `__init__.py` first.
 - `hooks.py` with a `register() -> list[Handler]` gives it hook handlers. Every import inside a
   handler body, never at module level: `tests/boundaries/test_discovery.py` asserts that discovery
   in a clean interpreter imports neither the configuration layer nor the presets.
-- `doctor.py` with a `register() -> Contribution` gives it rows in `stayfixed doctor`'s report: its
+- `doctor.py` with a `register() -> Contribution` gives it rows in `drybag doctor`'s report: its
   `(name, check)` pairs are asked after the core's own checks, in area-name order, each with the
   report's `Context` and through the same guard, so a check that raises costs its own row and not
   the report. An area that cannot contribute is held to one policy, whatever the cause: a
@@ -285,17 +269,16 @@ too, since Python runs each package's `__init__.py` first.
   the machine file's `[overlay] root`, is read at most once per report for every area that asks
   the `Context` for it. That is the one answer it caches: code an area reaches through its own
   modules, such as the binding and the note store, resolves the root again.
-  `Contribution`, `Context` and `Row` come from `stayfixed.doctor.api`, and, as in a `hooks.py`,
+  `Contribution`, `Context` and `Row` come from `drybag.doctor.api`, and, as in a `hooks.py`,
   every import sits inside a function body; `tests/boundaries/test_discovery.py` holds that one.
 - `api.py` is the area's import surface. Other areas import from it and from nothing else, and its
   `__all__` must equal exactly what it imports — a test parses the file and checks, and
-  `tests/boundaries/test_api_surface.py` walks every module under `src/stayfixed/` and `scripts/`
+  `tests/boundaries/test_api_surface.py` walks every module under `src/drybag/` and `scripts/`
   and fails on an import that reaches past one. The rule holds every package that publishes an
-  `api.py`, an area or not (`release` is held to its surface like any area), and every area without
-  one (`assess`), none of whose modules anything outside it may import. The list is what consumers
+  `api.py`, an area or not (`release` is held to its surface like any area). The list is what consumers
   actually reach for, not what the area finds tidy: a consumer that needs something absent from it
   grows it deliberately, in a commit that says which consumer and why.
-- **`stayfixed.hooks.api` is the one exception, and it is structural rather than drift.** That
+- **`drybag.hooks.api` is the one exception, and it is structural rather than drift.** That
   module *defines* the vocabulary two areas share — `EVENTS`, `HookEvent`,
   `HookResult`, `Handler`, `HandlerFn`, `Sink`, `NullSink` and the sink's on-disk layout —
   instead of re-exporting it, because `hooks.dispatch`, `hooks.sink`, `hooks.registry` and every
@@ -303,46 +286,31 @@ too, since Python runs each package's `__init__.py` first.
   `api.py` would be an import cycle, not a tidying. So in the one area that ships the common
   vocabulary the rule runs the other way — **a name two areas share is defined in `api.py`** —
   and its `__all__` lists what it defines. No other area may read this as licence: a consumer
-  still imports `stayfixed.hooks.api` and never `stayfixed.hooks.dispatch` or `.sink`.
+  still imports `drybag.hooks.api` and never `drybag.hooks.dispatch` or `.sink`.
 - Every area is a regular package with an `__init__.py`. `pkgutil.iter_modules` does not yield a
   namespace package, so one without it is invisible to all three discovery paths.
 
-The core is language-neutral. A profile under `src/stayfixed/profiles/<name>/` is a directory of
-data — `profile.toml` and `rules.md` — and, optionally, a `hygiene.py` whose `HINT` is that
-stack's advice after its test runner failed (`stayfixed.profiles.hints` says what a hint
-answers, and the command that failed decides which hints speak), and an `adapters.py` whose
-`ADAPTERS` are its test runners' adapters for `stayfixed prove` (`stayfixed.profiles.runners`
-says what an adapter answers). A stack's directory may hold code and no profile: a stack whose
-runner `prove` counts and for which stayfixed ships no rules yet. That is where one stack's
-runner, build artifacts and package manager belong: no module outside a profile's own directory
-names a stack — the machinery directly under `profiles/` included — except the pardons
-`tests/test_language_neutral.py` lists, each with its reason, and a new mention either moves into
-its profile or joins that list with one. None imports a profile's code either: the core finds a
-hint or an adapter by discovery, and that test refuses an import of it without pardon. That
-discovery is the `profiles` package's own convention, in the style of an area's:
-`stayfixed.profiles.stack_directories` lists each stack directory that ships a given file, a
-`profile.toml`, a `hygiene.py` or an `adapters.py`, and `stack_module` imports one, so adding a
-stack's advice or its runner is adding its directory's file, and no core module learns the
-stack's name.
+drybag is language-neutral: no module names one stack's runner, build artifacts or package
+manager except the pardons `tests/test_language_neutral.py` lists, each with its reason, and a new
+mention joins that list with one.
 
 The agents are core knowledge too, held in one place. A harness — Claude Code, Codex — is a value in
-`harnesses.HARNESSES`, and the `hooks` area answers through it: `stayfixed hook` asks
+`harnesses.HARNESSES`, and the `hooks` area answers through it: `drybag hook` asks
 `harnesses.detect` which value it runs under and shapes its stdout with that value's `render`, and
 the event a handler reads does not say which value that was. That is all detection decides, and
 `detect`'s docstring says why. Adding a harness is adding a value — a positive `detects`, its
-project-root and plugin-root variables, its `render`, its settings files, the places it reads hooks
-out of a Markdown frontmatter, its memory directory if it keeps one, and its `reach`, the tier each
-enforcement surface holds at under it — and nothing that reads those needs an edit: `doctor` walks
-the settings files and the places every value names, and the README's table of what each agent
-enforces is held equal to every value's `reach` by a test. It is not only a value: what a new
+project-root and plugin-root variables, its `render`, its settings files, its memory directory if it
+keeps one, and its `reach`, the tier each enforcement surface holds at under it — and nothing that
+reads those needs an edit: the README's table of what each agent enforces is held equal to every
+value's `reach` by a test. It is not only a value: what a new
 harness still touches outside the registry is listed in the module docstring of
-`src/stayfixed/harnesses.py`, and `tests/test_harnesses.py` holds that list to every string in the
+`src/drybag/harnesses.py`, and `tests/test_harnesses.py` holds that list to every string in the
 package that names a harness.
 
-Two top-level trees are documents rather than areas. `skills/` holds the Agent Skills this
-plugin ships and `agents/` the agent files; [skills/README.md](skills/README.md) is their
+One top-level tree is documents rather than an area. `skills/` holds the Agent Skills this
+plugin ships; [skills/README.md](skills/README.md) is their
 contract — a skill body is **action language** and never names a harness tool, a `SKILL.md` is
-capped at 80 lines with the detail in `<skill>/references/`, and every `stayfixed …` invocation
+capped at 80 lines with the detail in `<skill>/references/`, and every `drybag …` invocation
 in a skill must parse against the real parser or be listed in `NOT_YET_SHIPPED` against the
 area that will ship it. `tests/skills/test_skills.py` holds all three, and the change that
 ships a command deletes its `NOT_YET_SHIPPED` entry.
@@ -390,7 +358,7 @@ that load could break. A test that fails under contention fails on the mutated r
 that is not the mutation, and that reads as *caught*. The product's own bounds on `git` are one
 such clock, so `tests/conftest.py` lifts every `git_run` bound to a floor of its own, through
 the environment variable `gitenv.FLOOR_VARIABLE`, which the product honours only as a raise
-(`src/stayfixed/gitenv.py` says why that is safe). A `stayfixed` the suite starts as a separate
+(`src/drybag/gitenv.py` says why that is safe). A `drybag` the suite starts as a separate
 process gets the same floor: a spawner that strips the developer's own variables takes
 `tests.floor.developer_free_environ()`, which keeps the floor, and one that builds its child's
 environment from nothing adds `tests.floor.floor_env()`. A test about a bound running out
@@ -402,7 +370,7 @@ a row in its table.
 ```toml
 [[mutation]]
 name = "the containment walk stops refusing '..'"
-file = "src/stayfixed/fsops.py"
+file = "src/drybag/fsops.py"
 before = "        if part in (_PARENT, _HERE):"
 after = "        if part in (_HERE,):"
 reddens = ["tests/test_fsops.py::test_a_parent_component_never_leaves_the_root"]
@@ -413,7 +381,7 @@ The set is one file per group of the tree, and an entry goes in the group file i
 winning and the empty prefix's group taking anything no other prefix matches. The groups are coarse
 because they were sized for the 512 files past which the plugin directory holds the version for a
 reviewer, while this repository's root was the plugin and every tracked file counted against them:
-one file per area would need no table, and would have spent about twenty of those 512 where twelve
+one file per area would need no table, and would have spent about twenty of those 512 where eleven
 do. The plugin is now published from a repository of its own, whose root is the tree
 `scripts/plugin_tree.py` generates from the paths its `PLUGIN_PATHS` names, and `mutations/` is not
 among them, so that limit no longer reaches these files, and there is no size cap on a group file.
@@ -444,7 +412,7 @@ citation.
 The oracle sweeps before it runs. A killed run — `kill -9`, a CI timeout, a cancelled agent —
 cannot run its own cleanup, and `git worktree prune` does not collect what it leaves: prune only
 drops entries whose directory is gone, and a killed run leaves its directory standing. So the
-first thing a run does is drop every `stayfixed-oracle-*` checkout but its own, naming on stderr
+first thing a run does is drop every `drybag-oracle-*` checkout but its own, naming on stderr
 what it dropped.
 
 CI runs the whole set in a job of its own, called `oracle`, on one configuration —
@@ -463,7 +431,7 @@ pull request.
 A pull request that changes only documents, or Python comments, narrows further: the suite runs on
 that one configuration alone, and the oracle, the plugin validator and the install smoke skip. A
 document is a path under `docs/` or `changelog.d/`, or a Markdown file at the root; Markdown under
-`skills/` or `agents/` is code, since the plugin validator reads it, and so is a docstring. Tests
+`skills/` is code, since the plugin validator reads it, and so is a docstring. Tests
 read documents and comments, and ruff, mypy and coverage read the comments that steer them, so the
 suite still runs once. `scripts/ci_scope.py`, run by the `changes` job in `ci.yml` and `smoke.yml`,
 decides it, and decides it closed: a renamed file counts under the name it left, a Python file
@@ -529,10 +497,10 @@ two differed by four. Two entries are four characters long, which is why the off
 at all — a four-character window is not something a contributor can guess. Rewrite the line;
 do not add an entry to the exemption.
 
-A test must never read or write the developer's real `~/.config/stayfixed/`, `~/.claude/` or
+A test must never read or write the developer's real `~/.config/drybag/`, `~/.claude/` or
 `~/.codex/`. Pass `--machine` to a command, `machine=` to `resolve`, `home=` where a function
 takes one, and use `tmp_path` for everything else. A test must not shell out to `gh`, `claude`,
-`codex` or `pre-commit` either: `stayfixed.runner.Runner` is the seam those calls go through, and a
+`codex` or `pre-commit` either: `drybag.runner.Runner` is the seam those calls go through, and a
 stub records the argv, which is the part of them that can be wrong in a way somebody notices.
 
 ## Commits and changelog
@@ -552,7 +520,7 @@ release note someone outside the project can read — not as a note to yourself 
 `uv run python scripts/release.py check` cross-checks the version across `pyproject.toml`,
 `uv.lock`, the package, both plugin manifests, `CHANGELOG.md` and the marketplace entry's `ref`.
 It runs in CI; run it before you push. It is this repository's own tooling and not a command
-stayfixed ships, as are its `notes`, `hashes` and `pin` beside it ([RELEASING.md](RELEASING.md)
+drybag ships, as are its `notes` and `pin` beside it ([RELEASING.md](RELEASING.md)
 says when each runs).
 
 ## Plans

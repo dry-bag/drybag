@@ -1,8 +1,8 @@
-"""What the `pre-commit` and `overlay-requires` rows in `stayfixed doctor` answer, now that
+"""What the `pre-commit` and `overlay-requires` rows in `drybag doctor` answer, now that
 `overlay` contributes them.
 
 Every case runs the whole report through `run_checks`, so the rows are asked the way a user's
-`stayfixed doctor` asks them: discovered in this area's `doctor.py`, with the overlay root resolved
+`drybag doctor` asks them: discovered in this area's `doctor.py`, with the overlay root resolved
 by the lazy value its `register()` creates. The fixtures are the doctor area's own
 (`tests/doctor/test_checks.py`), shared rather than respelled.
 """
@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-import stayfixed
-from stayfixed.config.overlay import overlay_root
-from stayfixed.doctor.api import OK, RED, SKIP, WARN
-from stayfixed.overlay.layout import IDENTITY_RECORD
+import drybag
+from drybag.config.overlay import overlay_root
+from drybag.doctor.api import OK, RED, SKIP, WARN
+from drybag.overlay.layout import IDENTITY_RECORD
 from tests.doctor.test_checks import (
     OVERLAY,
     _attached,
@@ -96,10 +96,10 @@ def _recorded_overlay(tmp_path: Path, requires: object) -> Path:
     return machine
 
 
-UNMET = "the overlay requires stayfixed >=99.0.0 and {running} does not satisfy it"
+UNMET = "the overlay requires drybag >=99.0.0 and {running} does not satisfy it"
 
 
-def test_overlay_requires_is_red_when_a_bound_project_needs_a_newer_stayfixed(
+def test_overlay_requires_is_red_when_a_bound_project_needs_a_newer_drybag(
     tmp_path: Path,
 ) -> None:
     # Red because this project keeps its notes in the overlay, so the floor it declares is this
@@ -110,7 +110,7 @@ def test_overlay_requires_is_red_when_a_bound_project_needs_a_newer_stayfixed(
     root = _initialised(tmp_path, template=OVERLAY)
     row = _by_name(_checks(tmp_path, root, machine=machine), "overlay-requires")
     assert row.status == RED
-    assert row.detail == UNMET.format(running=stayfixed.__version__)
+    assert row.detail == UNMET.format(running=drybag.__version__)
     assert "uv tool install" in row.remedy
 
 
@@ -128,7 +128,7 @@ def test_a_local_only_project_is_warned_and_never_reddened_by_an_unrelated_floor
     machine = _recorded_overlay(tmp_path, ">=99.0.0")
     row = _by_name(_checks(tmp_path, _initialised(tmp_path), machine=machine), "overlay-requires")
     assert row.status == WARN
-    assert row.detail == UNMET.format(running=stayfixed.__version__)
+    assert row.detail == UNMET.format(running=drybag.__version__)
     assert "uv tool install" in row.remedy
 
 
@@ -166,16 +166,15 @@ def test_an_overlay_that_moved_is_not_reported_as_one_never_recorded(tmp_path: P
     """Two states, two sentences, and the same two in both rows that ask.
 
     `overlay_root` answers `None` for a machine that records no overlay -- the ordinary state
-    before `stayfixed setup` has run -- and a `Path` for a recorded root whether or not anything
+    before `drybag setup` has run -- and a `Path` for a recorded root whether or not anything
     is there. `pre-commit` and `overlay-requires` collapsed the two into
     `overlay is None or not overlay.is_dir()` and told both "no overlay root is recorded on this
     machine", which is false of the second and leaves the owner nothing to act on: the overlay
     is where the notes live, and a recorded root that is gone breaks the store too.
 
     The sentences come from `_overlay_absent` so the two rows cannot drift -- `overlay-requires`'
-    arm was a byte-for-byte copy of `pre-commit`'s, which is how it inherited the defect -- and
-    `PLUGIN_ROOT_REMEDY`'s rule, "one constant because both rows must say the same thing", is the
-    one being read onto this pair.
+    arm was a byte-for-byte copy of `pre-commit`'s, which is how it inherited the defect: two
+    rows that must say the same thing say it from one constant.
 
     Mutation: `mutations/`'s "the two overlay rows call a moved overlay an unrecorded one".
     """
@@ -187,7 +186,7 @@ def test_an_overlay_that_moved_is_not_reported_as_one_never_recorded(tmp_path: P
         "can be checked from here"
     )
     gone_remedy = (
-        "put the overlay back where the machine configuration records it, or run `stayfixed setup "
+        "put the overlay back where the machine configuration records it, or run `drybag setup "
         "--preset recommended --overlay <path>` to record where it is now"
     )
     machine = tmp_path / "machine.toml"
@@ -200,7 +199,7 @@ def test_an_overlay_that_moved_is_not_reported_as_one_never_recorded(tmp_path: P
         assert row.detail == gone, row
         assert row.remedy == gone_remedy, row
     # The other arm keeps the sentence it always had, and keeps carrying no remedy: a machine
-    # that has not run `stayfixed setup` is not a machine with something wrong on it.
+    # that has not run `drybag setup` is not a machine with something wrong on it.
     for name in ("pre-commit", "overlay-requires"):
         row = _by_name(_checks(tmp_path, root), name)
         assert row.status == SKIP, row
@@ -242,8 +241,8 @@ def test_an_overlay_root_inside_another_repositorys_work_tree_is_a_warning(tmp_p
     # into, so the row says so, as a warning and never red, and names that work tree.
     #
     # Mutation: `mutations/`'s "doctor says nothing of the work tree that holds the overlay".
-    from stayfixed.overlay.doctor import NESTED
-    from stayfixed.printed import quoted
+    from drybag.overlay.doctor import NESTED
+    from drybag.printed import quoted
 
     outer = tmp_path / "dotfiles"
     (outer / ".git").mkdir(parents=True)

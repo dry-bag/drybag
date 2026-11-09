@@ -326,28 +326,28 @@ read-backs and dry runs, and never calls the pending-deployments API.
 once, before `0.6.0`; Steps 2 and 3 read `0.6.0` for `0.4.0`, and its upgrading section says
 `0.4.0` and `0.5.0` were never published.
 
-- [ ] **Step 1:** when RC1, CP1 and HS1 have merged into `dev` and `gh pr checks` read every job
+- [x] **Step 1:** when RC1, CP1 and HS1 have merged into `dev` and `gh pr checks` read every job
   green on each, run `uv run python scripts/release.py check` on `dev` — `RELEASING.md`'s first
   step, run once over the release — and paste its output into Findings.
-- [ ] **Step 2:** the owner follows `RELEASING.md` for `0.4.0`; the changelog's upgrading section
+- [x] **Step 2:** the owner follows `RELEASING.md` for `0.4.0`; the changelog's upgrading section
   names `memory trust` → `trust approve memory` (the old spelling stays until HS3 removes it), the guards that run without `stayfixed.toml`, `stayfixed prove`, and
   a session that warns where it refused.
-- [ ] **Step 3:** with `0.4.0` installed on the owner's machine, `stayfixed doctor --json` reads
+- [x] **Step 3:** with `0.4.0` installed on the owner's machine, `stayfixed doctor --json` reads
   `0.4.0` for both the CLI and the plugin; paste the two values into Findings.
 
 ### Task 2: The delivery set and `0.5.0` (controller, with the owner)
 
-- [ ] **Step 1:** when HS2, HS3 and HS4 have merged into `dev`, the controller runs `attach` once
+- [x] **Step 1:** when HS2, HS3 and HS4 have merged into `dev`, the controller runs `attach` once
   on a copy of the owner's overlay and two copies of attached checkouts, under an isolated `HOME`,
   `CLAUDE_CONFIG_DIR`, `XDG_CONFIG_HOME` and `GIT_CONFIG_GLOBAL`, never the owner's real
   installation, and pastes what it printed into Findings.
-- [ ] **Step 2:** folded into Task 3 with `0.5.0` skipped (owner, 2026-10-27). The owner cuts `0.5.0` by `RELEASING.md`; the upgrading section lists the owner's
+- [x] **Step 2:** folded into Task 3 with `0.5.0` skipped (owner, 2026-10-27). The owner cuts `0.5.0` by `RELEASING.md`; the upgrading section lists the owner's
   manual steps for an attached checkout and the existing notes (no migration code ships), and the
   spellings that are gone (`memory trust`, `overlay create`, `overlay init`).
 
 ### Task 3: Cut `0.6.0` (controller, with the owner)
 
-- [ ] **Step 1:** when CP2 and CP3 have merged (PF1 and PF2 are deferred), the owner cuts `0.6.0` by
+- [x] **Step 1:** when CP2 and CP3 have merged (PF1 and PF2 are deferred), the owner cuts `0.6.0` by
   `RELEASING.md`; the upgrading section opens with `0.4.0` and `0.5.0` never published and the
   owner's manual steps for an attached checkout, in order, carries Task 2 Step 2's items, and names
   the `regressions` gate. The installed versions are Task 4's first
@@ -378,21 +378,21 @@ Findings: a `claude` session in a clone runs its committed hooks, `env`, `status
 servers. Where the step needs only a `SessionStart`, it drives one with
 `stayfixed hook SessionStart` and a crafted payload instead.
 
-- [ ] **Step 1: The isolated machine.** Set `HOME`, `CLAUDE_CONFIG_DIR`, `XDG_CONFIG_HOME` and
+- [x] **Step 1: The isolated machine.** Set `HOME`, `CLAUDE_CONFIG_DIR`, `XDG_CONFIG_HOME` and
   `GIT_CONFIG_GLOBAL` to directories under the scratchpad and `GIT_CONFIG_NOSYSTEM=1`; install
   `0.6.0` there; create a scratch overlay with `stayfixed setup --overlay <path>`, holding a canary
   rule in `common/` and one in `projects/<name>/`, a canary skill and one hook; record the owner's
   word on the clone and the fixture split above.
-- [ ] **Step 2: Each repository.** Run `git status --porcelain=v1 -z -uall` and
+- [x] **Step 2: Each repository.** Run `git status --porcelain=v1 -z -uall` and
   `sha256sum .git/info/exclude` before `attach`; after `attach` and one `SessionStart`; after
   `detach`. Expected: every status empty; the exclude digest after `attach` differs from the
   empty-file digest, and `git check-ignore -v` names `.git/info/exclude` for each placed path; the
   digest after `detach` equals the one before `attach`; `stayfixed doctor`'s `attached` row is
   `ok` after `attach`; the isolated `installed_plugins.json` holds the rendered plugin's row; the
   `SessionStart` output holds both canaries.
-- [ ] **Step 3: The control.** Apply a scratch patch, never committed, that makes `attach` write one
+- [x] **Step 3: The control.** Apply a scratch patch, never committed, that makes `attach` write one
   extra untracked file, and run Step 2 again. Expected: the status after `attach` names that file.
-- [ ] **Step 4: The observables (d44)**, each with its expected literal, in Findings:
+- [x] **Step 4: The observables (d44)**, each with its expected literal, in Findings:
 
   | Clause | Observable | Expected |
   |---|---|---|
@@ -406,7 +406,7 @@ servers. Where the step needs only a `SessionStart`, it drives one with
 
 ### Task 5: core-proof's acceptance and the record (controller)
 
-- [ ] **Step 1:** the acceptance below is held by CI's `runners` job on the release commit; cite
+- [x] **Step 1:** the acceptance below is held by CI's `runners` job on the release commit; cite
   that run's id and conclusion. Then two smokes of the installed binary: `stayfixed prove -- pytest
   -q` in a scratch project (Expected: exit 0, `proved`) and `stayfixed prove -- sh -c 'echo 3
   passed'` (Expected: exit 1, `not proven`). Paste the output.
@@ -419,7 +419,7 @@ servers. Where the step needs only a `SessionStart`, it drives one with
   | each honest-mistake refusal (snapshot update or rerun of failures, `--setup-plan`/`--setup-only`, an optimised interpreter) is `refused`, exit 2 | the same |
   | a closed entry whose countable regression passes keeps the gate green, and a passing sibling is not named; a failing regression fails the gate and names its entry | named in the CP2 plan |
 
-- [ ] **Step 2:** record in Findings the counts before (at `22a9cad`) and after (at `0.6.0`):
+- [x] **Step 2:** record in Findings the counts before (at `22a9cad`) and after (at `0.6.0`):
   commands registered, hook entries by event, source lines under `src/stayfixed`, mutation entries,
   skills; and what wave 10 inherits (Codex parity, the metrics
   report, the visual roadmap, the owner's harness map).
@@ -569,3 +569,101 @@ The tracked Claude Code files read before any `claude` run, by sha256: the clone
 What closes the exit: `detach` takes back a settings file `attach` created once nothing of its own is
 left in it, and `attach` binds a checkout with no `stayfixed.toml` (the design's "bound by remote");
 a release carrying both, then this task again with no `stayfixed.toml` and an empty `info/exclude`.
+
+### Release `0.6.1`, 2026-10-28
+
+Cut by `RELEASING.md` at `54b5d5c`, the plugin commit `f6d2991` pinned, to carry what Task 4 found:
+`detach` removes the settings file once only its two emptied keys are left (#132), `attach` binds a
+checkout with no `stayfixed.toml` and takes the project from the binding, the overlay's record of
+the remote, or the remote's name, in that order (#137), and the plugin's hooks say in the session
+that they are off when no Python 3.11 or newer is on `PATH` (#135). Before the tags: the suite
+(7144 passed, coverage 97.46%), ruff, mypy and the mutation oracle (2689 of 2689 caught) on `main`
+at `17e5c26`. Release run `40649629151`: `build`, `attest`, `publish`, `github-release` all
+`success`; PyPI serves `stayfixed-0.6.1` as wheel and sdist; the release smoke `40693044683` passed
+at the tag and at `dev`. The overlay template had not changed since `v0.6.0`, so it was not pushed
+again.
+
+### Task 4 again — P6's exit on the installed `0.6.1`, 2026-10-28
+
+**Met.** A fresh isolated machine (a new scratch root; the same `HOME`, `CLAUDE_CONFIG_DIR`,
+`XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_NOSYSTEM=1` as before, Python 3.13 on
+`PATH`): `stayfixed==0.6.1` by `uv tool install`, the plugin from `stayfixed/stayfixed@v0.6.1`, a
+new scratch overlay by `setup --overlay` with the four canaries, and a project layer for the clone
+holding only `[memory] mode = "overlay"`. Both repositories were made anew: neither holds a
+`stayfixed.toml`, each `info/exclude` is the one `git init` writes, and nothing binds either
+checkout or records it in the overlay. The tracked Claude Code files read the same digests as in
+the first run.
+
+| Reading | Public clone | Negation fixture |
+|---|---|---|
+| `attach` | exit 0; "project claude-code", from the remote's name | exit 0; "project p6-fixture", from the remote's name |
+| status before `attach` | empty | empty |
+| status after `attach` and one `SessionStart` | empty | empty |
+| status after `detach` | empty | empty |
+| `info/exclude` after `attach` vs before | differs | differs |
+| `info/exclude` after `detach` vs before | byte-equal | byte-equal |
+| `check-ignore -v` on the placed paths | `.git/info/exclude` for all three | `.git/info/exclude`, but the fixture's `.gitignore` line `.claude/*` for `settings.local.json` |
+| both rule canaries in `SessionStart` | present | present |
+| `doctor`'s `attached` row | ok | ok |
+| `doctor`'s `memory` row | ok, mode overlay, set by the overlay's project layer | ok, mode harness |
+| the rendered plugin's row in `installed_plugins.json` | present | present |
+| `settings.local.json` after `detach` | absent | absent |
+
+**The control (Step 3)** reddens the oracle in both repositories: with a scratch patch in the
+installed package making `attach` write `p6-control-extra.txt`, each status after `attach` read
+`?? p6-control-extra.txt`. The patch was taken out and the installed module of `attach` that writes
+compared equal to `v0.6.1`'s source.
+
+**The observables (Step 4),** on the bound clone:
+
+| Clause | Observed |
+|---|---|
+| On the installed `0.6.1` | `command -v stayfixed` resolves to `<home>/.local/bin/stayfixed` → `<home>/.local/share/uv/tools/stayfixed/bin/stayfixed`; the plugin row's `gitCommitSha` is `f6d299144481`…, version `0.6.1`, the commit `v0.6.1`'s marketplace entry pins |
+| The harness arrives | `claude -p --debug-file`, offline as before: the log holds the common and project rule canaries (3 lines each), the rendered plugin's `SessionStart` hook canary (2 lines) and "Loaded 1 skills from plugin overlay-<id>"; every API call failed (`ECONNREFUSED`, a bootstrap fetch `401`), none succeeded; `claude` exit 1 |
+| It runs through the overlay | `doctor`: 0 red, `attached` ok; no `docs/memory` link tree; `settings.local.json` holds only `autoMemoryDirectory`, `enabledPlugins` and `extraKnownMarketplaces`; status empty after the session and after `detach` |
+
+`doctor`'s one warning there is `not-initialised`, which says memory "stays the coding agent's own"
+in a checkout whose `memory` row reads mode overlay: true of a checkout nothing binds, wrong for one
+bound with no `stayfixed.toml`. It is not drift from the render, and it is filed in the overlay's
+ledger with the other texts that still assume the file.
+
+With no Python 3.11 or newer on `PATH`, the installed plugin's `SessionStart` wrapper printed
+`{"systemMessage": "stayfixed's hooks are off in this session: /usr/bin/python3 is not Python 3.11
+or newer. Install Python 3.11 or newer on PATH.", …}` with the same text as `additionalContext`,
+and exited 0.
+
+### Task 5 — core-proof's acceptance and the record, 2026-10-28
+
+**Step 1.** The acceptance is held by CI's `runners` job on the release commit: run
+`40692992388` (`ci`, push to `main` at `54b5d5c`), job `runners` `122832379960`, conclusion
+`success`; at `0.6.0`'s commit `003af80` the same job (run `40611387829`, job `122563525407`) was
+`success` too. The two smokes of the installed binary, `stayfixed 0.6.1` by `uv tool install` on
+Task 4's second isolated machine, in a scratch project with three passing pytest tests in its own
+venv:
+
+```
+$ stayfixed prove -- pytest -q
+3 passed in 0.01s
+proved: the runner reported every test it ran as passed; 3 passed, 0 failed, 0 skipped; runner pytest at '<scratch>/.venv/…'
+exit=0
+$ stayfixed prove -- sh -c 'echo 3 passed'
+not proven: no runner adapter recognises this command, so nothing can count its report
+exit=1
+```
+
+**Step 2.** Counts before (`22a9cad`, after `v0.3.0`) and at `0.6.0` (`003af80`):
+
+| Count | Before | At `0.6.0` |
+|---|---|---|
+| Commands registered (leaf commands of the parser, `build_parser(discover_registrars())`, run under the released `0.3.0` and `0.6.0`) | 33 | 33: `bugs regressions`, `memory promote`, `prove`, `trust list`, `trust revoke` added; `guard bg-cleanup`, `memory trust`, `overlay create`, `overlay init`, `overlay publish-template` gone |
+| Hook entries by event (`hooks/hooks.json`) | `SessionStart` 7, `PreToolUse` 1, `PostToolUse` 1, `PostToolUseFailure` 1 | the same |
+| Python lines under `src/stayfixed` | 40,253 | 41,525 |
+| Mutation entries | 2,608 | 2,666 |
+| Skills | 14 | 15 (`adopt`) |
+
+What wave 10 inherits: Codex parity of the core, the metrics report, the visual roadmap and the
+owner's harness map (as planned); the with/without benchmark, which wave 9 never ran (P7's own
+deliverable); PF1 and PF2, deferred by the owner on 2026-10-26; the evidence records, deferred until
+a report reads them.
+
+Wave 9 is closed with this record.

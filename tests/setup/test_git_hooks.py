@@ -1,5 +1,5 @@
 # tests/setup/test_git_hooks.py
-"""`stayfixed setup --git-hooks`: the CLI wiring over `guards.githooks`'s already-tested
+"""`drybag setup --git-hooks`: the CLI wiring over `guards.githooks`'s already-tested
 installer (`tests/guards/test_githooks.py` covers the hook's own chaining behaviour end to
 end). What is untested until this file is the command that calls it and the report it prints.
 """
@@ -12,10 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.errors import Refusal
-from stayfixed.guards.api import HOOK_MARKER, HOOK_NAME, hooks_dir
-from stayfixed.printed import quoted
-from stayfixed.setup.commands import run_setup
+from drybag.errors import Refusal
+from drybag.gitenv import hooks_dir
+from drybag.guards.api import HOOK_MARKER, HOOK_NAME
+from drybag.printed import quoted
+from drybag.setup.commands import run_setup
 from tests import gitfixture
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
@@ -38,7 +39,7 @@ def _env(tmp_path: Path) -> dict[str, str]:
     """The shared fixture environment, with `tmp_path` as `HOME`.
 
     It used to pin `PATH` to `/usr/bin:/bin`; `tests/gitfixture.py` passes the real one
-    through, for the reason `stayfixed.gitenv`'s docstring gives — a hardcoded path is what
+    through, for the reason `drybag.gitenv`'s docstring gives — a hardcoded path is what
     picks the Xcode shim on macOS over the `git` the machine owner installed.
     """
     return gitfixture.env(tmp_path)
@@ -65,12 +66,15 @@ def _args(**over: object) -> argparse.Namespace:
     # `OSError` under `/nonexistent` instead of a write into the tree.
     base: dict[str, object] = {
         "preset": None,
-        "home": "/nonexistent/stayfixed-test-guard/home",
-        "machine": "/nonexistent/stayfixed-test-guard/config.toml",
+        "home": "/nonexistent/drybag-test-guard/home",
+        "machine": "/nonexistent/drybag-test-guard/config.toml",
         "overlay": None,
         "plugin": None,
         "git_hooks": True,
         "approval_boundary": False,
+        "restore": False,
+        "yes": False,
+        "sync": False,
         "uninstall": False,
         "root": ".",
     }
@@ -88,9 +92,10 @@ def test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act(
 ) -> None:
     # `--git-hooks` does nothing of machine setup's. Only `--preset` was refused beside it, and
     # `--overlay` was dropped and the hook installed, exit 0. Asked of a real repository, where an
-    # install that is not refused succeeds. Mutations (`mutations/`'s "setup --git-hooks drops
-    # --preset" -> the first case installs; "setup --git-hooks drops --overlay" -> the second
-    # does; "setup --git-hooks drops --plugin" -> the third does).
+    # install that is not refused succeeds. Mutations (`mutations/`'s "setup --git-hooks and
+    # --approval-boundary drop --preset" -> the first case installs; "setup --git-hooks and
+    # --approval-boundary drop --overlay" -> the second does; "setup --git-hooks and
+    # --approval-boundary drop --plugin" -> the third does).
     root = _repo(tmp_path)
     with pytest.raises(Refusal) as refused:
         run_setup(_args(root=str(root), **over))
@@ -101,7 +106,7 @@ def test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act(
 def test_the_hook_is_installed_into_the_repositorys_own_hooks_path(tmp_path: Path) -> None:
     # The hook is installed per repository into `git rev-parse --git-path hooks`, never into
     # `core.hooksPath`. The "never" is the assertion: `core.hooksPath` is global state this command
-    # has no business owning. Assert the file lands under `guards.hooks_dir(root)` and that
+    # has no business owning. Assert the file lands under `gitenv.hooks_dir(root)` and that
     # `git config --get core.hooksPath` is still unset afterwards.
     root = _repo(tmp_path)
     run_setup(_args(root=str(root)))
@@ -181,21 +186,21 @@ def test_uninstall_with_nothing_installed_reports_that_and_writes_nothing(tmp_pa
 
 
 # What `--uninstall` finds at the hook path — whether a foreign hook was there first, and whether
-# stayfixed's was installed over it — and the line it prints, `{hook}` being that path.
+# drybag's was installed over it — and the line it prints, `{hook}` being that path.
 UNINSTALLED = {
     "ours": (False, True, "removed {hook}; there was no foreign hook to restore"),
     "chained": (True, True, "removed {hook}; restored the foreign hook chained to it"),
-    "nothing": (False, False, "there is no stayfixed hook at {hook}; nothing was removed"),
+    "nothing": (False, False, "there is no drybag hook at {hook}; nothing was removed"),
     "foreign": (
         True,
         False,
-        "left {hook} as it was: it is not stayfixed's hook; nothing was removed",
+        "left {hook} as it was: it is not drybag's hook; nothing was removed",
     ),
 }
 
 
 @pytest.mark.parametrize(("mine", "ours", "line"), UNINSTALLED.values(), ids=UNINSTALLED)
-def test_uninstall_says_whether_it_removed_stayfixeds_hook(
+def test_uninstall_says_whether_it_removed_drybags_hook(
     tmp_path: Path, mine: bool, ours: bool, line: str
 ) -> None:
     # It said "removed …; there was no foreign hook to restore" whatever it found: with no hook
@@ -203,7 +208,7 @@ def test_uninstall_says_whether_it_removed_stayfixeds_hook(
     # being in place and untouched. The installed hook's own text names this command, so the line
     # says which of the four it met, and `--json` carries it as `found`. Mutations:
     # `mutations/`'s "uninstall says it removed a hook when there was none" and "uninstall says
-    # it removed a hook when the hook there is not stayfixed's".
+    # it removed a hook when the hook there is not drybag's".
     root = _repo(tmp_path)
     directory = hooks_dir(root)
     directory.mkdir(parents=True, exist_ok=True)
@@ -223,7 +228,7 @@ def test_uninstall_says_whether_it_removed_stayfixeds_hook(
 
 def test_uninstall_over_a_directory_at_the_hook_path_leaves_it_and_says_so(tmp_path: Path) -> None:
     # The command's half of `tests/guards/test_githooks.py`'s case: what is not a regular file at
-    # the hook path is not stayfixed's, so the line says it was left, and the run exits 0, where
+    # the hook path is not drybag's, so the line says it was left, and the run exits 0, where
     # it refused with exit 2. Mutation: `mutations/`'s "uninstall reads a hook that is not a
     # regular file".
     root = _repo(tmp_path)
@@ -232,7 +237,7 @@ def test_uninstall_over_a_directory_at_the_hook_path_leaves_it_and_says_so(tmp_p
     result = run_setup(_args(root=str(root), uninstall=True))
     assert (
         result.summary
-        == f"left {quoted(str(hook))} as it was: it is not stayfixed's hook; nothing was removed"
+        == f"left {quoted(str(hook))} as it was: it is not drybag's hook; nothing was removed"
     )
     assert (result.exit_code, result.data["found"]) == (0, "foreign")
     assert hook.is_dir()

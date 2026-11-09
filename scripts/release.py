@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""This repository's own release discipline: one version everywhere, the changelog, the record.
+"""This repository's own release discipline: one version everywhere, the changelog, the pin.
 
     uv run python scripts/release.py check [--tag TAG]            # one version everywhere
     uv run python scripts/release.py notes --version X.Y.Z [--draft]  # assemble CHANGELOG.md
-    uv run python scripts/release.py hashes [--check]              # the shipped files' record
     uv run python scripts/release.py pin [--remote URL]            # the plugin commit, pinned
 
-These commands only ever checked or wrote the stayfixed repository itself, so they live beside it
-rather than in the installed CLI. What shipped code does read stays in `stayfixed.release`: the
-record's reader (`doctor files` compares an installed plugin against it) and the tag a version
-is released under (`init` pins it). `RELEASING.md` is the process these commands serve.
+These commands only ever checked or wrote the drybag repository itself, so they live beside it
+rather than in the installed CLI. What shipped code does read stays in `drybag.release`: the
+tag a version is released under. `RELEASING.md` is the process these commands
+serve.
 
 The commands go through the CLI frame's `run`, so they keep its contract: `--json` anywhere on
 the line before a bare `--`, exit `0`, `1` for findings and `2` for a refusal or an internal error.
@@ -29,7 +28,7 @@ read `versions` on success had nothing to read on the run it actually cared abou
 still raised for what it is for: a source this gate cannot parse at all (`MalformedSource`) and
 a towncrier that cannot be run.
 
-**`notes --draft` prints more than one line**, and it is deliberate: every stayfixed command
+**`notes --draft` prints more than one line**, and it is deliberate: every drybag command
 gets one summary line because a line is what a caller reads, and a draft's whole purpose is that
 a person reads the section towncrier *would* write before it is written. Under `--json` it keeps
 the one-line contract.
@@ -45,35 +44,26 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-# Before the CLI frame exists, so said here: an interpreter without this repository's `stayfixed`,
+# Before the CLI frame exists, so said here: an interpreter without this repository's `drybag`,
 # or older than the 3.11 that brought `tomllib`, would otherwise end in a traceback and exit `1`,
 # which `check` gives its findings.
 try:
     import tomllib
 
-    from stayfixed import fsops
-    from stayfixed.cli import JSON_EPILOG, run
-    from stayfixed.command import CHECK_HELP, ROOT_HELP
-    from stayfixed.config.reading import UNPARSEABLE
-    from stayfixed.errors import Failure, Refusal
-    from stayfixed.jsonobject import json_object
-    from stayfixed.printed import clipped
-    from stayfixed.release.api import (
-        FORMAT,
-        HASHED_FILES,
-        PACKAGE,
-        RECORD,
-        UnreadableRecord,
-        digests,
-        read_record,
-        tag_for,
-    )
-    from stayfixed.result import Result
-    from stayfixed.runner import NOT_FOUND, Completed, Runner, subprocess_runner
+    from drybag import fsops
+    from drybag.cli import JSON_EPILOG, run
+    from drybag.command import ROOT_HELP
+    from drybag.config.reading import UNPARSEABLE
+    from drybag.errors import Failure, Refusal
+    from drybag.jsonobject import json_object
+    from drybag.printed import clipped
+    from drybag.release.api import PACKAGE, tag_for
+    from drybag.result import Result
+    from drybag.runner import NOT_FOUND, Completed, Runner, subprocess_runner
 except ImportError as exc:
     sys.stderr.write(
         f"scripts/release.py: refused: {exc}; run it with `uv run python scripts/release.py`, "
-        "which runs it on the project's Python with this repository's stayfixed on the path\n"
+        "which runs it on the project's Python with this repository's drybag on the path\n"
     )
     sys.exit(2)
 
@@ -86,7 +76,7 @@ MARKETPLACE = ".claude-plugin/marketplace.json"
 SOURCES = (
     PYPROJECT,
     LOCKFILE,
-    "src/stayfixed/__init__.py",
+    "src/drybag/__init__.py",
     ".claude-plugin/plugin.json",
     ".codex-plugin/plugin.json",
     "CHANGELOG.md",
@@ -96,10 +86,10 @@ SOURCES = (
 # `scripts/plugin_tree.py` generates from this one. The marketplace entry is a `url` source pinned
 # to the release's tag by `ref` and to the plugin commit by `sha`. The `ref` is a version source
 # (`_released_ref`): the release commit names the tag it releases, which is the only marketplace a
-# user reads, since `README.md` installs `stayfixed/stayfixed@vX.Y.Z` and `main` moves only at a
+# user reads, since `README.md` installs `dry-bag/drybag@vX.Y.Z` and `main` moves only at a
 # release. The `sha` is the commit `scripts/plugin_tree.py commit` computes from the release commit
 # alone, so the release commit can name it before the plugin repository holds it (`pin`).
-PLUGIN_URL = "https://github.com/stayfixed/stayfixed-plugin.git"
+PLUGIN_URL = "https://github.com/dry-bag/drybag-plugin.git"
 # The same repository as `owner/name`, as a refusal names it.
 PLUGIN_REPOSITORY = PLUGIN_URL.removeprefix("https://github.com/").removesuffix(".git")
 # A release's tag, as the marketplace entry's `ref` names it: ASCII digits, as the publisher's
@@ -355,12 +345,9 @@ def marketplace_problems(root: Path) -> list[str]:
     return problems
 
 
-# The words `check` reports each kind of problem under. A record problem is no version
-# disagreeing, and is spelled as `hashes --check` spells it, so one state reads one way whichever
-# command found it; the plugin tree's count and the marketplace's pin of the plugin commit are a
-# third and a fourth kind, found only at a tag.
+# The words `check` reports each kind of problem under. The plugin tree's count and the
+# marketplace's pin of the plugin commit are a second and a third kind, found only at a tag.
 VERSION_DRIFT = "version drift"
-RECORD_DRIFT = "release record drift"
 TREE_COUNT = "plugin tree count"
 PLUGIN_PIN = "plugin pin"
 # A `--root` that is no repository root is none of them, and is said with no word in front of it.
@@ -402,7 +389,7 @@ def checked_by_kind(
     root: Path, *, tag: str | None = None
 ) -> tuple[dict[str, list[str]], dict[str, str | None]]:
     """`checked`'s problems under the word each kind is reported under, in the order `checked`
-    lists them: the versions', the record's, the tree count's, then the pin's."""
+    lists them: the versions', the tree count's, then the pin's."""
     found = collect(root)
     unusable = _unusable_root(root)
     if unusable is not None:
@@ -421,7 +408,7 @@ def checked_by_kind(
             # reported `names -v1.2.3`. The membership test above is exact and was always
             # right; only the sentence was invented. Both slips are the ones `RELEASING.md`
             # invites, because a human types this flag by hand right after a tool prints
-            # `stayfixed--vX.Y.Z`. The existing cases passed by accident: every tag they
+            # `drybag--vX.Y.Z`. The existing cases passed by accident: every tag they
             # exercised began with `v` and carried no earlier one.
             workflow_tag, platform_tag = tag_for(canonical)
             problems.append(
@@ -444,18 +431,7 @@ def checked_by_kind(
             problems.append(f"{name} says {value!r}; {PYPROJECT} says {canonical!r}")
     entry_problems = marketplace_problems(root)
     problems += entry_problems
-    # The record of the shipped files is held current here and not only at a tag, so a
-    # wrapper edited without `hashes` fails the gate the same commit.
-    #
-    # Asked of the recorded files themselves and not of a `hooks/` directory. `--root` defaults
-    # to `.`, and a run somewhere other than this repository must not be told a record it never
-    # had is missing — and plenty of projects have a `hooks/` directory, which is what the first
-    # spelling of this actually tested. Either the record is here, or every file it would name
-    # is: the first keeps a tree whose wrapper was deleted honest, the second is how a checkout
-    # with no record yet is told to write one.
-    kinds = {VERSION_DRIFT: problems, RECORD_DRIFT: [], TREE_COUNT: [], PLUGIN_PIN: []}
-    if (root / RECORD).is_file() or all((root / name).is_file() for name in HASHED_FILES):
-        kinds[RECORD_DRIFT] = drift(root)
+    kinds = {VERSION_DRIFT: problems, TREE_COUNT: [], PLUGIN_PIN: []}
     # At a tag, on the commit the tag names: `tests/test_payload.py` holds the same count on every
     # pull request, and this holds it again where the release is cut; the pin is the release
     # commit's, and `dev` pins none before the first release that carries one, and the last
@@ -627,7 +603,8 @@ def pin(root: Path, *, remote: str, runner: Runner) -> str:
         holds = f"main at {main}" if main is not None else "no main"
         raise Refusal(
             f"the plugin commit {made} has {follows}, and {remote} has {holds}; the plugin "
-            "repository's main moves only by fast-forward. The likely cause: this release commit "
+            "repository's main moves only by fast-forward. The likely cause: the plugin "
+            "repository was never seeded (RELEASING.md, section 3); this release commit "
             f"was cut on the wrong base; a merge into main dropped the sha {MARKETPLACE} pinned "
             "at the release before; or a release that stopped after its plugin was pushed left "
             "main at a commit nothing here pins, which the restore commit puts back (RELEASING.md, "
@@ -665,58 +642,6 @@ def build(root: Path, *, version: str, draft: bool, runner: Runner) -> str:
     return done.stdout
 
 
-# --- The record of the shipped files ------------------------------------------------------------
-
-
-def write_record(root: Path) -> None:
-    """Record every shipped file, or refuse: a partial record is not a record of a release.
-
-    Not because a partial record would read as clean — both readers walk `HASHED_FILES` and
-    would flag the file it omits. It is refused because the alternative is a record that says
-    "these are the files the release shipped" while naming two of three, so every reader of it
-    afterwards is reporting drift against a claim nobody meant to make. The failure belongs at
-    the moment of writing, where the tree that is missing a file can still be fixed.
-    """
-    found = digests(root)
-    if len(found) != len(HASHED_FILES):
-        missing = [name for name in HASHED_FILES if name not in found]
-        raise Failure(
-            f"cannot record a release without {', '.join(missing)}; the record must name "
-            "every shipped file"
-        )
-    body = json.dumps({"format": FORMAT, "files": found}, indent=2, sort_keys=True) + "\n"
-    fsops.write_within(root, RECORD, body)
-
-
-def drift(root: Path) -> list[str]:
-    """Every way the tree and the record disagree, in the reader's own words.
-
-    Both directions on purpose: a file the record names and the tree lacks is drift, and so is
-    one whose bytes moved. A walk over the record alone would call a deleted file a match.
-    """
-    # A record that is there and is not one is drift too, naming the record and the command
-    # that writes it again: let out as the reader's `UnreadableRecord`, a `Failure`, it was a
-    # third spelling of a record problem, and `--json` lost the object both commands print.
-    try:
-        recorded = read_record(root)
-    except UnreadableRecord as exc:
-        return [f"{exc}; run `{COMMAND} hashes`"]
-    if recorded is None:
-        return [f"{RECORD} is missing; run `{COMMAND} hashes`"]
-    actual = digests(root)
-    problems = [
-        f"{RECORD} names {name}, which is not in the tree"
-        for name in recorded
-        if name not in actual
-    ]
-    problems += [
-        f"{RECORD} does not match {name}; run `{COMMAND} hashes`"
-        for name in actual
-        if recorded.get(name) != actual[name]
-    ]
-    return problems
-
-
 # --- The commands -------------------------------------------------------------------------------
 
 
@@ -743,18 +668,6 @@ def run_notes(args: argparse.Namespace) -> Result:
     return Result(f"CHANGELOG.md carries {args.version}")
 
 
-def run_hashes(args: argparse.Namespace) -> Result:
-    root = Path(args.root)
-    if args.check:
-        problems = drift(root)
-        data = {"problems": problems, "files": sorted(HASHED_FILES)}
-        if problems:
-            return Result(f"{RECORD_DRIFT}: " + "; ".join(problems), data, exit_code=1)
-        return Result(f"{len(HASHED_FILES)} shipped file(s) match the release record", data)
-    write_record(root)
-    return Result(f"recorded {len(HASHED_FILES)} shipped file(s)", {"files": sorted(HASHED_FILES)})
-
-
 def run_pin(args: argparse.Namespace) -> Result:
     root = Path(args.root)
     made = pin(root, remote=args.remote, runner=subprocess_runner())
@@ -771,7 +684,7 @@ def parser() -> argparse.ArgumentParser:
     hand."""
     top = argparse.ArgumentParser(
         prog="scripts/release.py",
-        description="Release discipline for the stayfixed repository itself.",
+        description="Release discipline for the drybag repository itself.",
         epilog=JSON_EPILOG,
     )
     sub = top.add_subparsers(dest="command", metavar="<command>")
@@ -788,10 +701,6 @@ def parser() -> argparse.ArgumentParser:
     notes.add_argument("--draft", action="store_true", help="render without writing")
     notes.add_argument("--root", default=".", help=ROOT_HELP)
     notes.set_defaults(func=run_notes)
-    hashes = command("hashes", "record the shipped files' hashes for this release")
-    hashes.add_argument("--check", action="store_true", help=CHECK_HELP)
-    hashes.add_argument("--root", default=".", help=ROOT_HELP)
-    hashes.set_defaults(func=run_hashes)
     pinning = command("pin", "pin the plugin commit of HEAD in the marketplace entry")
     pinning.add_argument("--remote", default=PLUGIN_URL, help=REMOTE_HELP)
     pinning.add_argument("--root", default=".", help=ROOT_HELP)

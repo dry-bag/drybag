@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-import stayfixed
-from stayfixed.attach.hooks import (
+import drybag
+from drybag.attach.hooks import (
     NO_OVERLAY,
     NO_UPSTREAM,
     NOT_ASKABLE,
@@ -24,9 +24,10 @@ from stayfixed.attach.hooks import (
     UNPUSHED,
     register,
 )
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.hooks.api import EVENTS, Handler, HookEvent, HookResult
-from stayfixed.hooks.registry import discover
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.config.session import session_config
+from drybag.hooks.api import EVENTS, Handler, HookEvent, HookResult
+from drybag.hooks.registry import discover
 from tests.boundaries.test_discovery import LIST_IMPORTS, ROOT
 from tests.gitfixture import git, needs_git
 from tests.overlay.test_requires import overlay_with
@@ -34,7 +35,7 @@ from tests.sessions import NO_CONFIG, session_of
 
 ORIGIN = "git@github.com:owner/widget.git"
 CONFIG = (
-    '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
+    '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n\n'
     '[memory]\nmode = "{mode}"\ngroups = ["developer", "project-stable"]\n'
 )
 
@@ -54,13 +55,13 @@ def _event(root: Path, source: str | None = None) -> HookEvent:
 
 
 def _machine_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """The hook path reads `<home>/.config/stayfixed/config.toml` and nothing else; HOME is
+    """The hook path reads `<home>/.config/drybag/config.toml` and nothing else; HOME is
     pinned so nothing of the developer's is read. `tests/doctor/test_command.py` pins it the same
     way, for the same reason and with the same one call."""
     home = tmp_path / "home"
-    (home / ".config" / "stayfixed").mkdir(parents=True)
+    (home / ".config" / "drybag").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
-    return home / ".config" / "stayfixed" / "config.toml"
+    return home / ".config" / "drybag" / "config.toml"
 
 
 def _project(tmp_path: Path, *, mode: str = "overlay") -> Path:
@@ -75,7 +76,7 @@ def _project(tmp_path: Path, *, mode: str = "overlay") -> Path:
 def _bind(overlay: Path, remote: str = ORIGIN) -> None:
     """What `attach` records for the checkout beside `overlay`: the overlay's project record and
     this machine's binding, both with `remote`."""
-    from stayfixed import binding
+    from drybag import binding
 
     record = overlay / "projects" / "widget" / "project.toml"
     record.parent.mkdir(parents=True, exist_ok=True)
@@ -85,11 +86,11 @@ def _bind(overlay: Path, remote: str = ORIGIN) -> None:
 
 def _moved(origin: str | None, recorded: str | None) -> str:
     """The line a bound checkout whose `origin` is not the recorded one hears."""
-    from stayfixed.memory.api import origin_note
+    from drybag.memory.api import origin_note
 
     said = origin_note(recorded, origin)
     assert said is not None
-    return f"stayfixed: {said}"
+    return f"drybag: {said}"
 
 
 def _status() -> Handler:
@@ -142,8 +143,8 @@ def test_a_bound_checkout_whose_origin_moved_hears_one_line_naming_both_urls(
     # The remote no longer decides the binding, so a moved `origin` is a hint and never the
     # mismatch it was; both URLs are named through `printed`, which escapes what a terminal or a
     # runner would act on.
-    from stayfixed import binding
-    from stayfixed.printed import quoted
+    from drybag import binding
+    from drybag.printed import quoted
 
     root, overlay, machine = _recorded(tmp_path, monkeypatch)
     _bind(overlay)
@@ -152,23 +153,23 @@ def test_a_bound_checkout_whose_origin_moved_hears_one_line_naming_both_urls(
     moved = "https://example.com/someone/fork"
     git(root, "remote", "set-url", "origin", moved)
     assert _run(root, machine, None) == (
-        f"stayfixed: this checkout's `origin` is {quoted(moved)}, and its binding was recorded "
-        f"with {quoted(ORIGIN)}; `stayfixed attach` records the new one"
+        f"drybag: this checkout's `origin` is {quoted(moved)}, and its binding was recorded "
+        f"with {quoted(ORIGIN)}; `drybag attach` records the new one"
     )
 
 
 def test_the_session_start_line_names_the_attach_command_every_remedy_names() -> None:
-    # One spelling of `stayfixed attach` serves the session-start line and every row of
-    # `attached` and `hook-entries`, so the line is pinned as bytes here: built from the shared
+    # One spelling of `drybag attach` serves the session-start line and every row of
+    # `attached`, so the line is pinned as bytes here: built from the shared
     # constant, a change to it would otherwise reach the session unread. It names no `--store`:
     # the store is derived, and the placeholder spelling an agent ran as written exited 2. No
     # mutation: a changed spelling on either side reddens one of the two lines.
-    from stayfixed.attach import ATTACH_COMMAND
+    from drybag.attach import ATTACH_COMMAND
 
-    assert ATTACH_COMMAND == "stayfixed attach"
+    assert ATTACH_COMMAND == "drybag attach"
     assert NOT_ATTACHED == (
-        "stayfixed: this repository is not attached to the overlay this machine records; "
-        "run `stayfixed attach --check`"
+        "drybag: this repository is not attached to the overlay this machine records; "
+        "run `drybag attach --check`"
     )
 
 
@@ -188,7 +189,7 @@ def test_hook_discovery_in_a_clean_interpreter_loads_no_doctor_module() -> None:
     )
     assert completed.returncode == 0, completed.stderr
     loaded = completed.stdout.split()
-    assert "stayfixed.attach.hooks" in loaded, "the probe discovered nothing"
+    assert "drybag.attach.hooks" in loaded, "the probe discovered nothing"
     assert [name for name in loaded if name.split(".")[-1] == "doctor"] == []
 
 
@@ -262,6 +263,24 @@ def test_unpushed_work_is_named_by_its_counts_and_only_when_nothing_else_is_wron
 
 
 @needs_git
+def test_a_bound_checkout_with_no_file_hears_the_overlay_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The overlay's layers set the mode, so the notes are the overlay's and the session hears about
+    # their backup as it does in a checkout with a file.
+    root, overlay, _ = _recorded(tmp_path, monkeypatch)
+    (root / CONFIG_FILE).unlink()
+    layer = overlay / "projects" / "widget" / "drybag.toml"
+    layer.parent.mkdir(parents=True)
+    layer.write_text('[memory]\nmode = "overlay"\n', encoding="utf-8")
+    git(overlay, "init", "-q", "-b", "main")
+    git(overlay, "add", "-A")
+    git(overlay, "commit", "-qm", "chore: overlay")
+    _bind(overlay)
+    assert _status().run(_event(root), session_config(root)).context == NO_UPSTREAM.format(dirty=1)
+
+
+@needs_git
 def test_an_upstream_that_is_behind_still_reports_both_counts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -283,22 +302,20 @@ def test_an_upstream_that_is_behind_still_reports_both_counts(
 
 
 @needs_git
-def test_an_overlay_that_requires_a_newer_stayfixed_says_so(
+def test_an_overlay_that_requires_a_newer_drybag_says_so(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root, overlay, machine = _recorded(tmp_path, monkeypatch, requires=">=99.0.0")
     _bind(overlay)
-    assert _run(root, machine, None) == REQUIRES.format(
-        spec=">=99.0.0", running=stayfixed.__version__
-    )
+    assert _run(root, machine, None) == REQUIRES.format(spec=">=99.0.0", running=drybag.__version__)
 
 
 @needs_git
-def test_a_requirement_this_stayfixed_cannot_read_is_its_own_line(
+def test_a_requirement_this_drybag_cannot_read_is_its_own_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Unreadable is not unsatisfied: a spec `satisfies` answers `None` for is a declaration this
-    # stayfixed has no verdict on, so it is named as unreadable and — this is the half that
+    # drybag has no verdict on, so it is named as unreadable and — this is the half that
     # matters — the declaration itself is never quoted into the context.
     # Mutation (comment): `if verdict is None` -> `if verdict is not None` -> this reddens.
     root, overlay, machine = _recorded(tmp_path, monkeypatch, requires="~=1.0")
@@ -318,7 +335,7 @@ def test_other_modes_no_config_and_a_broken_machine_file_are_silence_or_one_fixe
     assert _run(_project(tmp_path, mode="local-only"), machine, None) is None
     root = _project(tmp_path / "two")
     # No machine file at all is "no overlay recorded", which is the ordinary state before
-    # `stayfixed setup` has run and is not the same event as a file that will not parse.
+    # `drybag setup` has run and is not the same event as a file that will not parse.
     assert (
         handler.run(_event(root), session_of(load(root, machine=root / "absent.toml"))).context
         == NO_OVERLAY
@@ -367,8 +384,8 @@ def test_the_budget_this_module_documents_is_the_one_it_pays(
     `test_a_context_that_has_already_been_asked_does_not_re_pay_the_sync` holds. This case carries
     no `source` at all, which is the invocation that pays.
     """
-    from stayfixed.attach import hooks as attach_hooks
-    from stayfixed.overlay import api as overlay_api
+    from drybag.attach import hooks as attach_hooks
+    from drybag.overlay import api as overlay_api
 
     asked: list[Path] = []
     real = overlay_api.overlay_sync
@@ -424,7 +441,7 @@ def test_a_context_that_has_already_been_asked_does_not_re_pay_the_sync(
 
     Mutation: `mutations/`'s "a compacted session re-pays the overlay sync".
     """
-    from stayfixed.overlay import api as overlay_api
+    from drybag.overlay import api as overlay_api
 
     asked: list[Path] = []
     real = overlay_api.overlay_sync
@@ -452,7 +469,7 @@ def test_a_context_that_has_already_been_asked_does_not_re_pay_the_sync(
         assert _run(root, machine, None, source=source) is None, source
     assert asked == [overlay] * len(fresh)
     # The cost, asserted rather than only documented: work that arrives mid-session is not
-    # reported to that session's own compaction. `stayfixed doctor` is what answers on demand.
+    # reported to that session's own compaction. `drybag doctor` is what answers on demand.
     (overlay / "later.md").write_text("more\n", encoding="utf-8")
     assert _run(root, machine, None, source="compact") is None
     # And the case the gate used to swallow: the conversation resumed later hears it. The overlay
@@ -472,7 +489,7 @@ def test_a_failure_with_no_except_of_its_own_is_silence_not_an_exception(
     forced to fail outright.
 
     `requires_of` is that call here. Nothing is caught around it, and the handler imports it from
-    `stayfixed.overlay.api` inside its own body, so the module attribute is the seam a monkeypatch
+    `drybag.overlay.api` inside its own body, so the module attribute is the seam a monkeypatch
     reaches. The assertion is silence, and this is deliberately the case where
     the backstop *loses* a line: `NOT_ATTACHED` is already in `lines` and goes with the result,
     which is the cost an open handler accepts and the reason this is a floor and not a filter — the
@@ -481,7 +498,7 @@ def test_a_failure_with_no_except_of_its_own_is_silence_not_an_exception(
 
     Mutation: `mutations/`'s "an open session handler lets an unforeseen failure out".
     """
-    from stayfixed.overlay import api as overlay_api
+    from drybag.overlay import api as overlay_api
 
     def raising(*_args: object, **_kwargs: object) -> object:
         raise RuntimeError("something no except of its own covers")
@@ -512,9 +529,9 @@ def test_the_registration_is_what_the_dispatcher_acts_on(
     `registry.discover` already refuses a value outside `EVENTS`, and a valid-but-wrong one is
     what this assertion is for.
     """
-    from stayfixed.attach import hooks as attach_hooks
-    from stayfixed.harnesses import CLAUDE
-    from stayfixed.hooks.dispatch import Recorder, dispatch
+    from drybag.attach import hooks as attach_hooks
+    from drybag.harnesses import CLAUDE
+    from drybag.hooks.dispatch import Recorder, dispatch
 
     seen: list[str] = []
 
