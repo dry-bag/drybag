@@ -5,13 +5,5 @@
   "author": { "name": "Nezhinskiy" },
   "repository": "https://github.com/dry-bag/drybag",
   "license": "MIT",
-  "keywords": ["overlay", "memory", "sync", "hooks", "codex"],
-  "userConfig": {
-    "preset": {
-      "type": "string",
-      "title": "Preset",
-      "description": "Preset applied by setup.",
-      "default": "recommended"
-    }
-  }
+  "keywords": ["overlay", "memory", "sync", "hooks", "codex"]
 }

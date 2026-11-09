@@ -109,7 +109,7 @@ from drybag.config.owner import Owner
 from drybag.config.paths import PathEscape, PathUnasked, contained
 from drybag.config.plates import read_record, record_fault
 from drybag.config.reading import UNPARSEABLE
-from drybag.config.schema import OVERLAY_MODE, Config
+from drybag.config.schema import HARNESS_MODE, OVERLAY_MODE, Config
 from drybag.config.session import command_config
 from drybag.errors import Failure, Refusal
 from drybag.fsops import UnsafePath
@@ -117,10 +117,13 @@ from drybag.gitenv import without_userinfo
 from drybag.jsonobject import NESTED, json_object
 from drybag.memory.api import (
     BOUND,
+    NOTES_UNDELIVERED,
+    NOTES_UNDELIVERED_REMEDY,
     PROJECTS,
     RECORD,
     STORE_DIR,
     build_composed,
+    holds_notes,
     render_missing_index,
     reserved,
     withdraw_composed,
@@ -313,6 +316,14 @@ def read_ledger(path: Path) -> AttachLedger | None:
         directories=tuple(raw["directories"]),
         render=None if render is None else Rendered(render["digest"]),
     )
+
+
+def shown_placed(root: Path) -> int:
+    """How many paths the last `attach` placed git would no longer ignore in the main checkout,
+    where it places them from any worktree; `0` where no ledger records any."""
+    main = main_checkout_or_none(root) or root
+    recorded = existing_ledger(main)
+    return 0 if recorded is None else len(exclude.unignored(main, placed_paths(recorded.rules)))
 
 
 def existing_ledger(root: Path) -> AttachLedger | None:
@@ -950,6 +961,8 @@ def _carry_out(
         notes.append(NO_ORIGIN_NOTE)
     elif binding.note is not None:
         notes.append(binding.note)
+    if config.memory.mode == HARNESS_MODE and holds_notes(binding.plates):
+        notes.append(f"{NOTES_UNDELIVERED}: {NOTES_UNDELIVERED_REMEDY}")
     return Attached(
         written,
         rules,

@@ -1875,3 +1875,23 @@ after = "    if (fault := None) is not None:"
 reddens = [
   "tests/attach/test_write.py::test_an_unreadable_project_record_stops_attach_with_nothing_written",
 ]
+
+# A `.gitignore` a branch brings can re-include what `attach` placed after `attach` has checked it.
+[[mutation]]
+name = "the session start stops counting what a `.gitignore` re-included"
+file = "src/drybag/attach/hooks.py"
+before = "        count = shown_placed(event.project_root)"
+after = "        count = 0"
+reddens = [
+  "tests/attach/test_doctor.py::test_a_session_start_counts_the_placed_paths_a_gitignore_re_includes",
+]
+
+# An overlay whose notes reach no session is otherwise silent: `attach` and `doctor` both pass.
+[[mutation]]
+name = "attach stops saying the overlay's notes reach no session"
+file = "src/drybag/attach/write.py"
+before = "    if config.memory.mode == HARNESS_MODE and holds_notes(binding.plates):"
+after = "    if False:"
+reddens = [
+  "tests/attach/test_write.py::test_attach_says_when_the_overlays_notes_reach_no_session",
+]

@@ -197,7 +197,7 @@ reddens = [
 [[mutation]]
 name = "the smoke job demands a hook summary the script no longer prints"
 file = ".github/workflows/smoke.yml"
-before = '          grep -qx "12 entries, 13 row(s), 0 failure(s)" "$RUNNER_TEMP/hooks.out"'
+before = '          grep -qx "11 entries, 12 row(s), 0 failure(s)" "$RUNNER_TEMP/hooks.out"'
 after = '          grep -qx "13 entries, 14 row(s), 0 failure(s)" "$RUNNER_TEMP/hooks.out"'
 reddens = [
   "tests/test_workflows.py::test_the_smoke_job_demands_the_summary_the_hook_script_prints_over_every_entry",

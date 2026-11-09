@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,7 @@ from typing import Any
 
 import pytest
 
+import drybag
 from drybag import fsops, jsonobject
 from drybag.attach.api import ledger
 from drybag.attach.binding import OVERLAY_DAMAGED
@@ -38,6 +40,7 @@ from drybag.binding import LEDGER_FILE, common_directory
 from drybag.config.loader import CONFIG_FILE, load
 from drybag.errors import Failure, Refusal
 from drybag.memory.api import RECORD, link_sources
+from drybag.memory.store import NOTES_UNDELIVERED, NOTES_UNDELIVERED_REMEDY
 from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from drybag.printed import quoted
 from drybag.runner import Completed
@@ -2670,3 +2673,26 @@ def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:
     assert "2 allow rule(s) would be taken back" in summary
     # A preview writes nothing.
     assert (root / SETTINGS).read_bytes() == before
+
+
+def test_attach_says_when_the_overlays_notes_reach_no_session(tmp_path: Path) -> None:
+    # Attaching a checkout whose mode stays `harness` delivers rules and no note, and exits 0: the
+    # one place the owner is looking when that happens. Mutation (`mutations/`'s "attach stops
+    # saying the overlay's notes reach no session").
+    root, store, machine = _attachable(tmp_path)
+    (root / CONFIG_FILE).write_text(
+        f'[drybag]\nversion = "{drybag.__version__}"\n\n[project]\nname = "{store.parent.name}"\n',
+        encoding="utf-8",
+    )
+    said = f"{NOTES_UNDELIVERED}: {NOTES_UNDELIVERED_REMEDY}"
+    assert said not in _attach_it(root, store, machine).notes
+    (store / "a.md").write_text("---\nname: a\ndescription: d\n---\nb\n", encoding="utf-8")
+    assert said in _attach_it(root, store, machine).notes
+    # The printed step, read out of the words that print it, and run.
+    step = re.search(
+        r"`(.+?)` under `\[(.+?)\]` in the overlay\'s `(.+?)`", NOTES_UNDELIVERED_REMEDY
+    )
+    assert step is not None
+    layer = store.parents[2] / step[3].replace("<name>", store.parent.name)
+    layer.write_text(f"[{step[2]}]\n{step[1]}\n", encoding="utf-8")
+    assert said not in _attach_it(root, store, machine).notes

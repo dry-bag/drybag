@@ -568,15 +568,6 @@ reddens = [
   "tests/config/test_owner.py::test_write_machine_keeps_the_owners_guards_and_budgets",
 ]
 
-# `pluginConfigs` is where Claude Code keeps the answers a person gives in its plugin-config
-# screen, and `setup` wrote the machine file's personal values over them on every run.
-[[mutation]]
-name = "setup overwrites a plugin option the user set"
-file = "src/drybag/setup/run.py"
-before = "        options.setdefault(key, value)"
-after = "        options[key] = value"
-reddens = ["tests/setup/test_setup.py::test_a_plugin_config_value_the_user_set_survives_setup"]
-
 # --- install path: the setup and overlay guards ------------------------------------------
 #
 # The count `doctor/__init__.py` states and `docs/cli.md` repeats. It was "exactly two" and the

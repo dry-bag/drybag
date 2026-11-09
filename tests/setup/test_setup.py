@@ -252,30 +252,6 @@ def test_setup_with_no_plugin_named_runs_no_plugin_command(tmp_path: Path) -> No
     assert not [note for note in report.notes if "plugin" in note or "marketplace" in note]
 
 
-def test_a_plugin_config_value_the_user_set_survives_setup(tmp_path: Path) -> None:
-    # `pluginConfigs` is where Claude Code keeps the answers a person gives in its plugin-config
-    # screen. `setup` used to write the machine file's personal values over it on every run, so
-    # an answer given there lasted until the next `setup`. A value already there is the user's.
-    # Mutation (oracle): `mutations/`'s "setup overwrites a plugin option the user set".
-    home = tmp_path / "home"
-    settings = home / USER_SETTINGS
-    settings.parent.mkdir(parents=True)
-    plugin = "drybag@drybag"
-    settings.write_text(
-        json.dumps({"pluginConfigs": {plugin: {"options": {"preset": "mine"}}}}), encoding="utf-8"
-    )
-    for _ in range(2):
-        setup(
-            "recommended",
-            home=home,
-            machine=tmp_path / "config.toml",
-            runner=Recorder(),
-            overlay=None,
-        )
-    options = json.loads(settings.read_text(encoding="utf-8"))["pluginConfigs"][plugin]["options"]
-    assert options["preset"] == "mine"
-
-
 def test_every_plugin_install_is_one_recorded_argv(tmp_path: Path) -> None:
     # The Runner seam again. Two things could be wrong here that only an argv assertion can see: the
     # marketplace must be registered *before* anything is installed from it (a fresh machine cannot

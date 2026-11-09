@@ -384,6 +384,26 @@ def tag_link(tag: str) -> str:
     return TAG_LINK_PREFIX + tag
 
 
+# What `attach` and `doctor` say of an overlay whose notes nothing delivers.
+NOTES_UNDELIVERED = (
+    "the overlay holds notes and none reaches a session while `[memory] mode` is `harness`"
+)
+NOTES_UNDELIVERED_REMEDY = (
+    'set `mode = "overlay"` under `[memory]` in the overlay\'s `projects/<name>/drybag.toml`, '
+    "which overrides that project's own setting, then run `drybag attach`"
+)
+
+
+def holds_notes(held: Sequence[Plate]) -> bool:
+    """Whether any of these plates holds a note, at any depth: not the rendered index, nor the
+    `_`-prefixed and dotted files the note walk steps over."""
+    return any(
+        path.name != "MEMORY.md" and not path.name.startswith((".", "_"))
+        for directory in _notes(held)
+        for path in directory.rglob("*.md")
+    )
+
+
 def project_notes(overlay: Path, project: str) -> Path:
     """This project's own notes in the overlay, the last of `permitted_roots` and the one place it
     puts new notes, which asks for no tag."""

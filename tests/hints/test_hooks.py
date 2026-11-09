@@ -85,8 +85,7 @@ def test_no_config_silences_the_hygiene_note_and_never_the_guard(tmp_path: Path)
         for handler in register()
     }
     assert verdicts["bg-cleanup", "PreToolUse"].context == bgcleanup.SLEEP_HINT
-    for event in ("PostToolUse", "PostToolUseFailure"):
-        assert verdicts["test-hygiene", event].context is None
+    assert verdicts["test-hygiene", "PostToolUseFailure"].context is None
 
 
 def test_a_leaking_background_call_is_hinted(tmp_path: Path) -> None:
@@ -203,13 +202,11 @@ def test_a_leaking_background_call_is_hinted_through_the_real_dispatcher(tmp_pat
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
 
-def post_event(
-    root: Path, command: str, raw_extra: dict[str, object], *, name: str = "PostToolUse"
-) -> HookEvent:
+def post_event(root: Path, command: str, raw_extra: dict[str, object]) -> HookEvent:
     tool_input: dict[str, object] = {"command": command}
     raw: dict[str, object] = {"tool_name": "Bash", "tool_input": tool_input, **raw_extra}
     return HookEvent(
-        name=name,
+        name="PostToolUseFailure",
         session_id="s1",
         agent_id=None,
         tool_name="Bash",
@@ -233,42 +230,9 @@ def dirty_project(tmp_path: Path) -> Path:
     return root
 
 
-def hygiene(event: str = "PostToolUse") -> Handler:
-    """The `test-hygiene` handler registered on `event`: it is registered on two."""
-    return next(h for h in register() if h.name == "test-hygiene" and h.event == event)
-
-
-# The two events the red-run note is registered on: Claude Code's `PostToolUseFailure`, and
-# `PostToolUse`, where Codex delivers a failed command but no exit code to read.
-RED_RUN_EVENTS = ("PostToolUse", "PostToolUseFailure")
-
-
-@pytest.mark.parametrize("event", RED_RUN_EVENTS)
-def test_the_hygiene_notice_has_one_once_key_on_each_event(event: str) -> None:
-    # `once_key` is asserted against the literal "test-hygiene" rather than against
-    # `ONCE_TEST_HYGIENE`, so the expected value is a fixed one and not one read from the subject;
-    # it is the same literal on both events because one key is what holds a context to one note,
-    # whichever event carries it.
-    handler = hygiene(event)
-    assert handler.event == event
-    assert handler.once_key == "test-hygiene"
-
-
-@needs_git
-@pytest.mark.parametrize(
-    "extra", [{"tool_response": {"exit_code": 1}}, {"error": "Exit code 1\nFAILED"}]
-)
-def test_a_red_pytest_over_a_dirty_tree_is_noticed(
-    tmp_path: Path, extra: dict[str, object]
-) -> None:
-    # Both payload shapes through the handler, not only through `red_exit`: which field says a
-    # run was red depends on what the harness actually sends, so the parametrisation has to
-    # reach `event.raw`.
-    # Reddened by mutating `_test_hygiene`'s last line to `return HookResult()`; measured.
-    root = dirty_project(tmp_path)
-    config = load(root, machine=tmp_path / "absent.toml")
-    result = hygiene().run(post_event(root, "pytest -q", extra), session_of(config))
-    assert result.context is not None and "uncommitted" in result.context
+def hygiene() -> Handler:
+    """The `test-hygiene` handler."""
+    return next(h for h in register() if h.name == "test-hygiene")
 
 
 @needs_git
@@ -286,7 +250,7 @@ def test_a_green_run_or_a_non_pytest_command_is_silence(tmp_path: Path) -> None:
     )
     assert (
         hygiene()
-        .run(post_event(root, "ls", {"tool_response": {"exit_code": 1}}), session_of(config))
+        .run(post_event(root, "ls", {"error": "Exit code 1\nFAILED"}), session_of(config))
         .context
         is None
     )
@@ -309,23 +273,14 @@ def test_the_note_follows_the_runner_table(tmp_path: Path, command: str, noted: 
     root = dirty_project(tmp_path)
     config = load(root, machine=tmp_path / "absent.toml")
     result = hygiene().run(
-        post_event(root, command, {"tool_response": {"exit_code": 1}}), session_of(config)
+        post_event(root, command, {"error": "Exit code 1\nFAILED"}), session_of(config)
     )
     assert (result.context is not None) is noted
 
 
-# One red run in each event's own shape: an exit code in `tool_response`, which `red_exit` reads
-# on `PostToolUse`, and Claude Code's `error` on `PostToolUseFailure`.
-RED_ON: dict[str, dict[str, object]] = {
-    "PostToolUse": {"tool_response": {"exit_code": 1}},
-    "PostToolUseFailure": {"error": "Exit code 1"},
-}
-
-
 @needs_git
-@pytest.mark.parametrize("event", RED_RUN_EVENTS)
 def test_a_hygiene_failure_is_recorded_and_never_costs_the_call(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, event: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The dispatcher swallows and records. The handler does not need its own try/except, and
     # must not have one — a silent swallow is how a broken notice goes unnoticed. The stderr
@@ -340,7 +295,7 @@ def test_a_hygiene_failure_is_recorded_and_never_costs_the_call(
     config = load(root, machine=tmp_path / "absent.toml")
     recorder = Recorder()
     outcome = dispatch(
-        post_event(root, "pytest", RED_ON[event], name=event),
+        post_event(root, "pytest", {"error": "Exit code 1"}),
         register(),
         session_of(config),
         harness=CLAUDE,
@@ -367,7 +322,7 @@ def test_an_unrelated_call_does_not_consume_the_one_delivery(tmp_path: Path) -> 
         sink=recorder,
     )
     outcome = dispatch(
-        post_event(root, "pytest", {"tool_response": {"exit_code": 1}}),
+        post_event(root, "pytest", {"error": "Exit code 1\nFAILED"}),
         register(),
         session_of(config),
         harness=CLAUDE,
@@ -376,38 +331,6 @@ def test_an_unrelated_call_does_not_consume_the_one_delivery(tmp_path: Path) -> 
     assert "uncommitted" in json.loads(outcome.stdout)["hookSpecificOutput"].get(
         "additionalContext", ""
     )
-
-
-@needs_git
-@pytest.mark.parametrize(
-    "order", [RED_RUN_EVENTS, RED_RUN_EVENTS[::-1]], ids=["post-first", "failure-first"]
-)
-def test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it(
-    tmp_path: Path, order: tuple[str, str]
-) -> None:
-    # Two different red runs in one session, one on each event the note is registered on,
-    # through the dispatcher and one recording sink, which is where the dispatcher banks a
-    # `once_key`: the note is delivered for the first and not for the second, in either order,
-    # because both registrations carry the one key. No measured harness delivers one red run on
-    # both events; what the key holds is at most one note per context. Mutation:
-    # `mutations/`'s "the red-run hint on a failure forgets that the note was delivered".
-    root = dirty_project(tmp_path)
-    config = load(root, machine=tmp_path / "absent.toml")
-    recorder = Recorder()
-    notes = []
-    for event in order:
-        outcome = dispatch(
-            post_event(root, "pytest -q", RED_ON[event], name=event),
-            register(),
-            session_of(config),
-            harness=CLAUDE,
-            sink=recorder,
-        )
-        assert outcome.exit_code == 0, outcome.stderr
-        notes.append(json.loads(outcome.stdout))
-    assert notes[0]["hookSpecificOutput"]["hookEventName"] == order[0]
-    assert "uncommitted" in notes[0]["hookSpecificOutput"]["additionalContext"]
-    assert notes[1] == {}
 
 
 # One red run, as Claude Code reports a Bash command that exited non-zero: on `PostToolUseFailure`,

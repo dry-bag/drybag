@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import json
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from drybag import binding
 from drybag.attach import doctor as attach_doctor
+from drybag.attach import hooks as attach_hooks
 from drybag.attach.api import LOCAL_SETTINGS
 from drybag.attach.check import check as attach_check
 from drybag.attach.render import MARKETPLACE_FILE, read_parts
@@ -27,6 +29,7 @@ from drybag.config.plates import plates
 from drybag.doctor import checks as doctor_checks
 from drybag.doctor.api import OK, RED, SKIP, WARN, Check
 from drybag.errors import Refusal
+from drybag.hooks.api import HookEvent
 from drybag.memory.api import PROJECTS, RECORD
 from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from drybag.printed import quoted
@@ -52,6 +55,7 @@ from tests.doctor.test_checks import (
 from tests.gitfixture import git as _git
 from tests.parserlimits import LONG_NUMBER
 from tests.runners import Recorder
+from tests.sessions import NO_CONFIG
 from tests.tagged import with_tags
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
@@ -676,6 +680,20 @@ def test_a_placed_path_a_gitignore_re_includes_is_red(tmp_path: Path) -> None:
     clause = attach_doctor.PLACED_SHOWN.format(paths=LOCAL_SETTINGS)
     row = _delivered_row(tmp_path, root)
     assert (row.status, row.detail) == (RED, _attached_detail(clause))
+
+
+def test_a_session_start_counts_the_placed_paths_a_gitignore_re_includes(tmp_path: Path) -> None:
+    # The same state, said where someone is about to stage it: a hint, once per context, and a
+    # `compact` is the context asking again. Mutation (`mutations/`'s "the session start stops
+    # counting what a `.gitignore` re-included"): the count is 0 -> the second assertion reddens.
+    root = _attached(tmp_path)
+    handler = next(h for h in attach_hooks.register() if h.name == "overlay-placed-shown")
+    assert handler.once_key == "overlay-placed-shown"
+    event = HookEvent("SessionStart", "s", None, None, {}, root, root, {})
+    assert handler.run(event, NO_CONFIG).context is None
+    (root / ".gitignore").write_text(f"!{LOCAL_SETTINGS}\n", encoding="utf-8")
+    assert handler.run(event, NO_CONFIG).context == attach_hooks.PLACED_SHOWN.format(count=1)
+    assert handler.run(replace(event, raw={"source": "compact"}), NO_CONFIG).context is None
 
 
 def test_a_tracked_file_naming_the_delivery_is_red_and_never_prints_the_id(tmp_path: Path) -> None:

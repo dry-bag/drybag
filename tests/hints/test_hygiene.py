@@ -100,10 +100,6 @@ def test_each_simple_command_is_unwrapped_to_its_own_program() -> None:
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        ({"tool_response": {"exit_code": 1}}, 1),
-        ({"tool_response": {"exit_code": 0}}, None),
-        ({"tool_response": {"exit_code": True}}, None),
-        ({"tool_response": {"stdout": "1 failed"}}, None),
         ({"error": "Exit code 2\nFAILED tests/x.py"}, 2),
         ({"error": "Exit code 0"}, None),
         ({"error": "Cannot find module"}, None),
@@ -120,11 +116,8 @@ def test_each_simple_command_is_unwrapped_to_its_own_program() -> None:
         ({}, None),
     ],
 )
-def test_red_exit_reads_both_payload_shapes(raw: dict[str, object], expected: int | None) -> None:
-    # The source read `tool_response.exit_code`; the hooks reference documents the
-    # Bash `tool_response` without one and a non-zero exit arriving as `PostToolUseFailure`'s
-    # `error` field. Both are read, so the notice is not keyed on a field one harness lacks.
-    # Reddened three ways, each measured: dropping the `not isinstance(code, bool)` test (the
-    # `True` row), dropping the whole `error` branch (the `Exit code 2` row), and dropping the
-    # pattern's `\A` (the row above).
+def test_red_exit_reads_the_error_field(raw: dict[str, object], expected: int | None) -> None:
+    # The hooks reference documents a non-zero exit arriving as `PostToolUseFailure`'s `error`
+    # field. Reddened two ways, each measured: dropping the `error` branch (the `Exit code 2` row)
+    # and dropping the pattern's `\A` (the row above).
     assert red_exit(raw) == expected

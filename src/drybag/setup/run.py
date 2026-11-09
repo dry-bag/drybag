@@ -2,7 +2,7 @@
 
 Five things, each reported and each independently skippable, in this order: write the machine
 file (the personal defaults the preset names, for whichever of them nothing has recorded yet);
-merge the preset's deny rules and the personal values into the machine-scope settings file;
+merge the preset's deny rules into the machine-scope settings file;
 only for the plugins the caller named, register the marketplace the preset declares and install
 from it, per configured harness; report whether `drybag` itself resolves on `PATH`; and, only
 when the caller named an answer, create, render or record the private overlay.
@@ -13,8 +13,7 @@ rebuilt `[personal]` from the preset's own defaults on every run, which meant a 
 hand — exactly the value `setup.machine`'s own docstring promises survives a rewrite that "only
 set one of them". `_new_personal_values` computes only the keys the machine file does not already
 carry, and that is what `write_machine` receives — an empty dict on every run after the first,
-once every key has a recorded value. The settings file's `pluginConfigs` follows the same rule
-from its own side: a value it already holds is kept, whoever wrote it.
+once every key has a recorded value.
 
 **A plugin is installed only when it is named.** A third-party plugin runs in every session of its
 harness, its hooks included, and the preset pins none, so `setup --plugin NAME`
@@ -41,14 +40,6 @@ appears in that record only on `plugin uninstall`, never `install`. Codex adds o
 `codex plugin add <name>@<marketplace>` when a marketplace is declared for it — measured, not
 assumed, in that same spike record. A harness or a plugin with no declared marketplace gets a note,
 never a guessed argv.
-
-**`pluginConfigs` and not a flat top-level key.** Claude Code's own settings reference files a
-plugin's non-sensitive `userConfig` answers under `pluginConfigs[<plugin-id>].options`, keyed by
-`<plugin-name>@<marketplace-name>` and not by the plugin name alone — confirmed against
-`code.claude.com/docs/en/settings-reference` before this was written, because a flatter shape
-would round-trip through nothing Claude Code itself reads. `PLUGIN_ID` matches this repository's
-own shipped manifest and marketplace names (`tests/test_manifests.py`), which is the pair this
-plugin is actually installed under everywhere the preset's own `setup` runs.
 
 **The overlay is validated before anything is written**, in `_requested_overlay`, asked in
 `_before_the_first_write` — above the machine file, the settings merge and the plugin installs,
@@ -80,7 +71,7 @@ import datetime
 import os
 import shutil
 import stat
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -106,10 +97,6 @@ from drybag.runner import Runner
 from drybag.setup.machine import SETUP_SANDBOXED, USER_SETTINGS, read_personal, write_machine
 from drybag.trust.api import sandbox_refused
 
-# `<plugin-name>@<marketplace-name>`, matching `.claude-plugin/plugin.json`'s `name` and
-# `.claude-plugin/marketplace.json`'s `name` (`tests/test_manifests.py` holds both). Claude
-# Code keys `pluginConfigs` by this pair, not by the plugin name alone.
-PLUGIN_ID = "drybag@drybag"
 # The release tag scheme (`vX.Y.Z`); `uv tool install` has no `--from`, so the positional git URL
 # form pinned to a release tag is the install form (`git+https://…@<tag>`; principle 9: the CLI
 # installs from a git tag). An f-string with a doubled brace, because the concatenation it replaces
@@ -282,18 +269,12 @@ def _read_document(path: Path) -> tuple[dict[str, Any], str]:
     return json_object(lenient_settings(text), str(path), error=Failure), text
 
 
-def _write_user_settings(
-    home: Path,
-    deny_rules: Sequence[str],
-    personal: Mapping[str, Any],
-) -> bool:
-    """Merge the preset's deny rules and the personal values into `<home>/<USER_SETTINGS>`.
+def _write_user_settings(home: Path, deny_rules: Sequence[str]) -> bool:
+    """Merge the preset's deny rules into `<home>/<USER_SETTINGS>`.
 
     Merge, never replace: the owner's own file predates drybag on most machines, and nothing
-    this run did not add may be recorded as if it had. Deny only — this never reads or writes
-    `permissions.allow` — and `pluginConfigs` is filled key by key inside its own `options`, only
-    where it holds no value: Claude Code writes there the answers a person gives in its
-    plugin-config screen, so a value there is the user's and survives every run.
+    this run did not add may be recorded as if it had. Deny only: this never reads or writes
+    `permissions.allow`.
     """
     path = home / USER_SETTINGS
     document, text = _read_document(path)
@@ -306,18 +287,6 @@ def _write_user_settings(
     )
     permissions["deny"] = existing_deny + [r for r in deny_rules if r not in existing_deny]
     document["permissions"] = permissions
-
-    plugin_configs = document.get("pluginConfigs")
-    plugin_configs = dict(plugin_configs) if isinstance(plugin_configs, dict) else {}
-    entry = plugin_configs.get(PLUGIN_ID)
-    entry = dict(entry) if isinstance(entry, dict) else {}
-    options = entry.get("options")
-    options = dict(options) if isinstance(options, dict) else {}
-    for key, value in personal.items():
-        options.setdefault(key, value)
-    entry["options"] = options
-    plugin_configs[PLUGIN_ID] = entry
-    document["pluginConfigs"] = plugin_configs
 
     # Written back through `json_text`, which answers a document the parser read and the
     # indenting encoder cannot follow (Python 3.12) as the reader answers one nested too deep.
@@ -637,13 +606,7 @@ def setup(
     write_machine(machine, personal=personal, overlay_root=None, machine=machine_table)
 
     deny_rules = [r for r in data.get("deny", {}).get("global", []) if isinstance(r, str)]
-    # **`pluginConfigs` is filled from the machine file where it holds no value, and never
-    # overwritten.** It is where Claude Code reads a plugin's `userConfig` answers, and where its
-    # plugin-config screen writes the ones a person gives, so a value already there is the
-    # user's. The cost is stated where a reader will meet it: a personal value changed in the
-    # machine file after the first run does not reach `pluginConfigs`; changing it there, or
-    # removing it so the next `setup` fills it again, does.
-    deny_written = _write_user_settings(home, deny_rules, read_personal(machine))
+    deny_written = _write_user_settings(home, deny_rules)
 
     installed, install_notes = _install_plugins(
         data,

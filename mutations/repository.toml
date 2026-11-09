@@ -652,7 +652,7 @@ reddens = [
 [[mutation]]
 name = "a hook group is filed under an event the harness never emits"
 file = "hooks/hooks.json"
-before = '''    "PostToolUse": ['''
+before = '''    "PostToolUseFailure": ['''
 after = '''    "UserPromptSubmit": ['''
 reddens = [
   "tests/hooks/test_hooks_json.py::test_every_entry_is_filed_under_the_event_its_command_dispatches",
