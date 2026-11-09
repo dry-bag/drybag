@@ -61,8 +61,9 @@ Three things hold everywhere:
 
 ## `drybag memory index`
 
-Render `MEMORY.md` from the notes. The index is a rendering: no note is written but one whose line
-the native writer appended to `MEMORY.md`, which is harvested into it.
+Render `MEMORY.md` from the notes. The index is a rendering: the only note it writes is one that a line outside its markers in
+`MEMORY.md` names, a line the native writer appended or an earlier release rendered, which is
+harvested into it.
 
 ```bash
 drybag memory index            # write
@@ -124,10 +125,11 @@ project's own share of the recorded overlay is honoured).
 **A session renders it in overlay mode.** In a checkout with a `drybag.toml` whose memory is in
 overlay mode and that this machine binds, the `index-render` hook handler runs this command's write
 on `SessionStart` and on `SessionEnd`, and renders once more when a line arrived while it rendered:
-the note sync moves no `MEMORY.md`, so each machine renders its own from the notes it holds. The `SessionEnd` render is the one that
-harvests (step 2) the lines the session appended, on the machine that wrote them, and it runs before
-the [note sync](#note-sync)'s own `SessionEnd` handler starts its job, so the notes it wrote travel
-in that job; the `SessionStart` render lists what the jobs brought in since. It says nothing; a
+the note sync moves no `MEMORY.md`, so each machine renders its own from the notes it holds. Either render
+harvests (step 2) what stands outside the markers. The `SessionEnd` one takes the lines the session
+appended, on the machine that wrote them, and it runs before the [note sync](#note-sync)'s own
+`SessionEnd` handler starts its job, so the notes it wrote travel in that job; the `SessionStart`
+one also lists what the jobs brought in since. It says nothing; a
 failure is one line on stderr and costs no other handler.
 
 **A checkout with no `drybag.toml` that this machine binds** reads the memory a repository with
@@ -391,7 +393,7 @@ them. `overlay-path-rules`, the path-scoped rules above,
 writes one empty file per session and file it said a rule for, under
 `$HOME/.local/share/drybag/sessions/`, both names hashed to a fixed width; none for a payload
 with no session id, and nothing removes them. And `unreviewed-notes`, which on `SessionStart` says
-"N notes are unreviewed" when the set of the store's unreviewed notes differs from the one last
+"N unreviewed note(s)" when the set of the store's unreviewed notes differs from the one last
 said, writes one file per store under `$HOME/.local/share/drybag/unreviewed/`, named by a hash
 of the store's path and holding a digest of that set; nothing removes them. And the note sync's three handlers, on a machine whose machine file switches
 the sync on and nowhere else, write `pending` under `$HOME/.local/share/drybag/sync/` and start the
@@ -415,8 +417,10 @@ carries the red-run note (below); Codex reads the same file and ignores that key
 Codex CLI 0.162.0-alpha.17.2). `SessionStart` and `SessionEnd` carry `index-render`, which
 renders a bound overlay checkout's `MEMORY.md`
 ([`memory index`](#drybag-memory-index)). `Stop` and `SessionEnd` carry the note sync's handlers
-([Note sync](#note-sync)) and print nothing that blocks. A hook with nothing to say answers `{}`, on
-every event: a `decision` on `Stop` would keep the turn from ending. An event Codex delivers from that file runs the same handlers behind the same
+([Note sync](#note-sync)) and print nothing that blocks, since a `decision` on `Stop` would keep the
+turn from ending. A `drybag hook` entry with nothing to say answers `{}`, on every event; a context
+on `Stop` or `SessionEnd` is refused, and no shipped handler gives one there. An event Codex
+delivers from that file runs the same handlers behind the same
 per-machine switch, and that has not been measured on Codex. `drybag hook` dispatches eight
 events, those six and `UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses.
 
@@ -676,7 +680,7 @@ triggers go and this directory stays.
 
 **Outcomes** (`state.json`, and `doctor`): `ok`; `skipped` (the guard's reasons, each ending with
 its remedy: `git switch main`, finish or abort the operation, or give the overlay a remote with
-`git remote add origin <url>` and `git push -u origin main`, as an overlay `setup --overlay`
+`git remote add origin <url>`, a commit and `git push -u origin main`, as an overlay `setup --overlay`
 rendered needs); `conflict` (a local
 commit conflicts with upstream, and `main` was not moved); `raced` (another git holds `index.lock`, which the job never removes, or `main` moved while it integrated); `rejected`
 (`origin/main` moved before the push; the next trigger fetches and retries); `offline`,

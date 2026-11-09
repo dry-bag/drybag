@@ -99,12 +99,14 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    is cut on"): the `git log` lists what your `main` holds that `origin/main` does not, which is
    nothing, or after a stopped release that release's commit alone, decorated with the spent tags
    that keep it. Anything else it lists is work `git switch -C` would leave behind: stop, and put
-   it on a branch of its own first. `git switch -C` then makes your `main` `origin/main`.
+   it on a branch of its own first. `git switch -C` then makes your `main` `origin/main`, and
+   the merge brings `dev` into it, locally: `main` is not pushed until step 7.
 
    ```bash
    git fetch origin
    git log --oneline --decorate origin/main..main   # nothing, or a spent release commit
    git switch -C main origin/main
+   git merge --no-ff --no-edit origin/dev
    uv run pytest -n auto --cov --cov-report=term-missing --cov-fail-under=92
    uv run ruff check . && uv run ruff format --check . && uv run mypy
    uv run python scripts/mutation_oracle.py
@@ -287,6 +289,10 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    uv run python scripts/release.py pin
    git add .claude-plugin/marketplace.json && git commit --amend --no-edit
    ```
+
+   A release whose version and changelog moved in `dev`, through a pull request, leaves `-am`
+   nothing to commit: make the first command `git commit --allow-empty -m "chore(release): X.Y.Z"`
+   and run the other two as written.
 
    `pin` writes nothing unless the plugin commit's parent is `dry-bag/drybag-plugin`'s `main`
    — the commit section 3 seeds it with, for the first release after the rename, and after it whatever plugin commit was pushed last, a spent
@@ -693,7 +699,9 @@ the release that publishes the template.
     since is then in the release, and step 7's `git push origin main` is a fast-forward. The
     `changelog.d/` fragments the spent commit consumed are pending there again, so step 4's
     `notes` assembles them under the new version, and `CHANGELOG.md` never carries the spent
-    one's heading. Step 5 runs as written. If `pin` refuses because the plugin repository's
+    one's heading. A release prepared in `dev` consumed them there instead, and `dev` holds the spent
+    heading: a pull request into `dev` moves the version and that heading before step 1, and step 4
+    has nothing to assemble. Step 5 runs as written. If `pin` refuses because the plugin repository's
     `main` is the spent release's plugin commit, which no commit on `origin/main` pins, the
     spent release's plugin was pushed: make the restore commit ("How a release returns to
     `dev`", below), then run step 5 again from its first command.

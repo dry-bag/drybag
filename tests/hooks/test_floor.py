@@ -189,7 +189,7 @@ def test_session_start_carries_each_warning_once(
 
 def test_pre_tool_use_prints_no_warning_and_logs_it_once(tmp_path: Path) -> None:
     # A notice on every tool call would repeat itself, and a refused call's stderr is the
-    # model's: the tool call's answer is the bare envelope, and the sink records the fallback
+    # model's: the tool call's answer is `{}`, and the sink records the fallback
     # once for the session. Mutations (`mutations/`'s "dispatch renders the notice on every
     # event" -> stdout carries it; "the hook logs a configuration fallback on every call" -> two
     # records; "the hook never logs a configuration fallback" -> none).

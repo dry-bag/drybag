@@ -28,10 +28,11 @@ description: Diagnose a drybag installation — hooks, memory store, budgets, ov
    saying so; that is one state, not several, and it brings `budgets` to the eight. Each says which
    state it is in its own detail. Report each as the state it names, and relay the remedy where
    the row carries one.
-4. **`wrapper` skipping for no plugin root is the report's loudest finding, and it is not
-   red.** It means this process could not find the plugin — so no hook entry reaches drybag
-   on this machine, and nothing else in the report can say so. Lead with it, and relay the
-   remedy the row carries.
+4. **`wrapper` skipping for no plugin root says where this `drybag` runs from.** A `drybag`
+   installed as a package finds no plugin root while the plugin's hooks run normally, so check
+   first that the plugin is installed and enabled. Where it is not, no hook entry reaches
+   drybag on this machine and nothing else in the report can say so: lead with it, and relay
+   the remedy the row carries.
 5. When `not-initialised` warns, either there is no `drybag.toml` — the guards and this
    report work, and its remedy adds the rest — or the file loaded with some settings ignored or
    put back to the preset's, which the row names by key; relay its words and its remedy. When it

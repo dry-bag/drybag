@@ -55,7 +55,8 @@ run add context and refuse nothing ([what each agent enforces](#what-each-agent-
 **Documentation and commit checks.** `drybag docs check` holds your documents to their budgets and
 link targets, `drybag docs trail` keeps a design-and-plan trail, `drybag plan check` lints the plans
 a change touches, and `drybag commit check` finds attribution lines in commit messages, which
-`drybag setup --git-hooks` strips as you commit. They are commands, so they run where you put them;
+`drybag setup --git-hooks` strips as you commit; the check is off until
+`[commit_messages] attribution_check = true` turns it on. They are commands, so they run where you put them;
 CI is the place for one that has to hold.
 
 The principles behind the design, with dated sources and an honest note where the backing is thin,
@@ -138,6 +139,9 @@ As a command-line tool:
 uv tool install drybag
 ```
 
+Install both: the plugin carries the hooks and the skills, and the skills run `drybag` from
+`PATH`, which only the command-line tool puts there.
+
 **Requirements: Python 3.11 or newer, and a POSIX system.** The hooks take the `python3` on `PATH`,
 or else uv's, both asked from `/` so that no repository file chooses the interpreter. Linux and
 macOS are supported and tested; Windows is not. The containment this
@@ -190,7 +194,7 @@ drybag writes files. Being specific about which is the point of this section.
 |---|---|---|
 | `drybag.toml` | Your project's configuration: committed if you want it in the project, and not needed in a checkout bound to an overlay | you |
 | `docs/memory/` (configurable) | The note store, in `in-repo` and `overlay` mode | `drybag memory index` |
-| `.drybag/local/memory/` | The note store in `local-only` mode — git-ignored | `drybag memory index` |
+| `.drybag/local/memory/` | The note store in `local-only` mode; nothing ignores it for you, so add `.drybag/local/` to `.gitignore` | `drybag memory index` |
 | `<store>/MEMORY.md` | The rendered routing index. **Generated — do not hand-edit** | `drybag memory index` |
 | `docs/roadmap.md` (configurable) | The forward track; `docs trail` owns only the listing between its two markers | you; `drybag docs trail` rewrites the listing |
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | you |
@@ -405,8 +409,8 @@ Run `uv add`, not `pip install`. The lockfile is committed and CI runs `uv sync 
 
 - **`index:`** is the routing line — the trigger and the answer, not a summary. Where it is
   missing, `memory index` renders the note's `metadata.index` or its description in its place and
-  writes nothing into the note, unless the note has neither key and a line outside the index's
-  markers in `MEMORY.md` names it: that line becomes its `index:`, written once, and the note reads
+  writes nothing into the note, unless the note has neither `index:` nor `metadata.index` and a
+  line outside the index's markers in `MEMORY.md` names it: that line becomes its `index:`, written once, and the note reads
   as unreviewed until promoted again.
 - **`metadata.startup`** flags the note as a standing rule, injected in full at session start
   and ranked by that number, once you have promoted it; until then it arrives with the volatile
@@ -421,21 +425,21 @@ note's `index:` line. A second writer appending entries to `MEMORY.md` is expect
 
 `memory.mode` decides where the store is. `harness`, the default where no layer sets it, leaves
 memory to the coding agent's own and drybag resolves no store and injects no bundle.
-`local-only` (`.drybag/local/memory`, git-ignored) and `in-repo` (committed) both put the notes
+`local-only` (`.drybag/local/memory`, kept out of git by the Quickstart's `.gitignore` line) and `in-repo` (committed) both put the notes
 **inside the repository**; `overlay` (the composed store, a directory of links under
 `~/.local/share/drybag/stores/` into a machine-level overlay shared across your projects) puts
 them outside it. In every mode a note is yours only once promoted: `drybag memory promote`
 records the digest of its bytes in `trust.json`, which no tree carries, so a note a clone shipped,
 one an agent or the harness wrote, and one edited since you promoted it all arrive unreviewed —
 inside the delimited region, labelled, and never as a standing rule. A session hears one line,
-"N notes are unreviewed", when that set has changed since the last session.
+"N unreviewed note(s)", when that set has changed since the last session.
 
 ## Skills
 
 `skills/` ships one ported skill (`memory-sweep`) and thin wrappers for the commands the CLI
 registers. Every skill is written in action
 language — never a harness tool's name — with the per-harness mapping in
-[skills/README.md](skills/README.md), and every `drybag …` invocation in a skill is
+[skills/README.md](https://github.com/dry-bag/drybag/blob/main/skills/README.md), and every `drybag …` invocation in a skill is
 parsed against the real parser by a test. A wrapper written ahead of its command is listed in
 that test until the command ships; none is today.
 
@@ -447,4 +451,4 @@ which are not obvious from the code. Security reports go through
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/dry-bag/drybag/blob/main/LICENSE).
