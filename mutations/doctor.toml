@@ -7,7 +7,7 @@
 # again": a launched program's output is read with replacement characters, never strictly.
 [[mutation]]
 name = "doctor's wrapper row decodes the wrapper's stderr strictly again"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '            errors="replace",'
 after = '            errors="strict",'
 reddens = [
@@ -21,7 +21,7 @@ reddens = [
 # command.
 [[mutation]]
 name = "doctor executes the plugin root the environment named"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    root = context.own_root"
 after = "    root = context.plugin_root"
 reddens = [
@@ -32,7 +32,7 @@ reddens = [
 # mode, because that needs only a path, and a wrapper without `+x` is red there, never a skip.
 [[mutation]]
 name = "a named root's wrapper without its executable bit is a skip"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "        if not os.access(wrapper, os.X_OK):"
 after = "        if False:"
 reddens = [
@@ -45,7 +45,7 @@ reddens = [
 # it the check prints everything the record holds.
 [[mutation]]
 name = "doctor quotes a diagnostics log whose provenance it cannot establish"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '        f"{counted}; {sessions} session(s) seen. Not one line is quoted: {UNVOUCHED_LOG}",'
 after = '        f"{counted}; {sessions} session(s) seen: " + raw.decode("utf-8", "replace"),'
 reddens = [
@@ -58,7 +58,7 @@ reddens = [
 # is -- so the bound has to be applied again on the read or it is not a bound.
 [[mutation]]
 name = "doctor reads an environment-named log with no bound of its own"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "        raw, over = fsops.read_bounded(log, DIAGNOSTICS_MAX_BYTES)"
 after = "        raw = log.read_bytes()\n        over = len(raw) > DIAGNOSTICS_MAX_BYTES"
 reddens = [
@@ -69,7 +69,7 @@ reddens = [
 # machine, not about the installation.
 [[mutation]]
 name = "doctor renders an unreadable harness data root as a red row"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''    try:
         sessions = len(list((base / MARKERS).iterdir())) if fsops.is_dir(base / MARKERS) else 0
     except OSError as exc:'''
@@ -84,7 +84,7 @@ reddens = [
 # every check at once.
 [[mutation]]
 name = "doctor renders an unreadable file as a broken check"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''    except OSError as exc:  # the machine, not the installation
         return Check(
             name,
@@ -102,7 +102,7 @@ reddens = [
 # red to say so.
 [[mutation]]
 name = "doctor drops the checks an area contributes"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    return CHECKS + tuple(check for contribution in contributed for check in contribution.checks)"
 after = "    return CHECKS + tuple(check for contribution in contributed for check in ())"
 reddens = [
@@ -116,7 +116,7 @@ reddens = [
 # what escapes.
 [[mutation]]
 name = "doctor asks its checks without the guard"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    return [_guarded(name, check, context) for name, check in _report_checks(contributed)]"
 after = "    return [Check(name, **vars(check(context))) for name, check in _report_checks(contributed)]"
 reddens = [
@@ -128,7 +128,7 @@ reddens = [
 # of its own -- costs its rows as one red row named after it, as a register() that raises does.
 [[mutation]]
 name = "doctor lets an area repeat a name the report already has"
-file = "src/stayfixed/doctor/registry.py"
+file = "src/drybag/doctor/registry.py"
 before = "        if name in named:"
 after = "        if False:"
 reddens = [
@@ -138,7 +138,7 @@ reddens = [
 
 [[mutation]]
 name = "doctor lets an area name two of its checks alike"
-file = "src/stayfixed/doctor/registry.py"
+file = "src/drybag/doctor/registry.py"
 before = '        named[name] = "it"'
 after = "        pass"
 reddens = [
@@ -149,7 +149,7 @@ reddens = [
 # name is already taken it is numbered past every name taken, never printed twice.
 [[mutation]]
 name = "an area's failure row takes a name the report already has"
-file = "src/stayfixed/doctor/registry.py"
+file = "src/drybag/doctor/registry.py"
 before = "    while name in owners:"
 after = "    while False:"
 reddens = [
@@ -161,7 +161,7 @@ reddens = [
 # check had, and that area was turned away for repeating it, its row gone from the report.
 [[mutation]]
 name = "an area's failure row is named before every contribution's names are known"
-file = "src/stayfixed/doctor/registry.py"
+file = "src/drybag/doctor/registry.py"
 before = """    answers = [
         _registered(qualified, found, owners) for qualified, found in discover_contributors()
     ]"""
@@ -178,7 +178,7 @@ reddens = [
 # one is turned away too.
 [[mutation]]
 name = "asking whether an area repeats a name records its names in the report"
-file = "src/stayfixed/doctor/registry.py"
+file = "src/drybag/doctor/registry.py"
 before = "    named = dict(owners)"
 after = "    named = owners"
 reddens = [
@@ -189,7 +189,7 @@ reddens = [
 # refusal as `MachineUnread`, so every row that reads the root says the file could not be read.
 [[mutation]]
 name = "the report reads a machine file it could not read as one that records no overlay"
-file = "src/stayfixed/doctor/model.py"
+file = "src/drybag/doctor/model.py"
 before = "            return MachineUnread(str(exc))"
 after = "            return None"
 reddens = [
@@ -202,7 +202,7 @@ reddens = [
 # however many rows read it. A plain property would ask it again for every reader.
 [[mutation]]
 name = "the report resolves the overlay root for every reader"
-file = "src/stayfixed/doctor/model.py"
+file = "src/drybag/doctor/model.py"
 before = "    @cached_property\n    def overlay_root(self) -> Path | MachineUnread | None:"
 after = "    @property\n    def overlay_root(self) -> Path | MachineUnread | None:"
 reddens = [
@@ -214,7 +214,7 @@ reddens = [
 # the report, which otherwise ends in an internal error with no report at all.
 [[mutation]]
 name = "doctor calls an area's register() unguarded"
-file = "src/stayfixed/doctor/registry.py"
+file = "src/drybag/doctor/registry.py"
 before = "    except Exception as exc:  # an area's own code, guarded as its checks are"
 after = "    except OSError as exc:  # an area's own code, guarded as its checks are"
 reddens = [
@@ -223,7 +223,7 @@ reddens = [
 
 [[mutation]]
 name = "doctor takes whatever an area's register() returns"
-file = "src/stayfixed/doctor/registry.py"
+file = "src/drybag/doctor/registry.py"
 before = "    if not _well_formed(contribution):"
 after = "    if False:"
 reddens = [
@@ -239,18 +239,18 @@ reddens = [
 # whose register() then fails.
 [[mutation]]
 name = "doctor reads an import failure as a module"
-file = "src/stayfixed/doctor/registry.py"
+file = "src/drybag/doctor/registry.py"
 before = "    if isinstance(found, Exception):"
 after = "    if False:"
 reddens = [
   "tests/doctor/test_registry.py::test_an_area_whose_doctor_module_fails_to_import_costs_one_row_named_after_it",
 ]
 
-# The row for an area that could not register is about stayfixed's own code, so it is red in
-# every report, one for a repository with no `stayfixed.toml` included.
+# The row for an area that could not register is about drybag's own code, so it is red in
+# every report, one for a repository with no `drybag.toml` included.
 [[mutation]]
 name = "the row of an area that could not register is a skip"
-file = "src/stayfixed/doctor/registry.py"
+file = "src/drybag/doctor/registry.py"
 before = "        return Row(RED, self.detail, REPORT_THIS)"
 after = "        return Row(\"skip\", self.detail, REPORT_THIS)"
 reddens = [
@@ -259,13 +259,13 @@ reddens = [
   "tests/doctor/test_registry.py::test_an_area_that_could_not_contribute_is_red_even_with_nothing_else_to_check[repeat]",
 ]
 
-# Every check is asked whatever the repository holds: a repository with no `stayfixed.toml` has
+# Every check is asked whatever the repository holds: a repository with no `drybag.toml` has
 # every row the installation can answer, a contributed check's included, and only a row that reads
 # the project configuration skips for want of one. Skipping every row, as the early report did,
 # leaves the installation unexamined on every default install.
 [[mutation]]
-name = "doctor skips every row without a stayfixed.toml"
-file = "src/stayfixed/doctor/checks.py"
+name = "doctor skips every row without a drybag.toml"
+file = "src/drybag/doctor/checks.py"
 before = "    return [_guarded(name, check, context) for name, check in _report_checks(contributed)]"
 after = "    return [Check(name, \"skip\", NO_CONFIG_SKIP) if context.config is None and name != \"not-initialised\" else _guarded(name, check, context) for name, check in _report_checks(contributed)]"
 reddens = [
@@ -278,7 +278,7 @@ reddens = [
 # A closed stdin stops a wrapper that reads it holding the report open.
 [[mutation]]
 name = "doctor's wrapper probe inherits this process's stdin"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "            stdin=subprocess.DEVNULL,"
 after = "            stdin=None,"
 reddens = [
@@ -292,7 +292,7 @@ reddens = [
 # project root, which it reads before any Python runs.
 [[mutation]]
 name = "the wrapper row names the project root in no variable"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "(CLAUDE.project_dir_env, context.root)"
 after = "(None, context.root)"
 reddens = [
@@ -303,19 +303,19 @@ reddens = [
 # registry's docstring that lists it: a literal put back where the registry is read is one more.
 [[mutation]]
 name = "doctor spells the project-root variable again"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "(CLAUDE.project_dir_env, context.root)"
 after = '("CLAUDE_PROJECT_DIR", context.root)'
 reddens = [
   "tests/test_harnesses.py::test_every_harness_fact_outside_the_registry_is_listed_where_the_registry_says",
 ]
 
-# A machine where `doctor` finds no plugin root is a machine where no hook entry reaches stayfixed,
+# A machine where `doctor` finds no plugin root is a machine where no hook entry reaches drybag,
 # and the report says so as a `skip` row under a skill instruction reading "a skip is not a
 # fault". An empty remedy there is the report's loudest finding rendered as its quietest.
 [[mutation]]
 name = "the plugin-root skip goes back to an empty remedy"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''PLUGIN_ROOT_REMEDY = (
     f"{RUN_FROM_OWN_ROOT}, or set CLAUDE_PLUGIN_ROOT to where the plugin is installed, which "
     "lets `wrapper` read the wrapper's executable bit without running it"
@@ -329,11 +329,11 @@ reddens = [
 # drifted from it by a comma before the constant was extracted.
 [[mutation]]
 name = "the named-root skip carries its own copy of the remedy"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''            "guard does",
             RUN_FROM_OWN_ROOT,'''
 after = '''            "guard does",
-            "run `stayfixed doctor` from the plugin's own launcher so its root answers for itself",'''
+            "run `drybag doctor` from the plugin's own launcher so its root answers for itself",'''
 reddens = [
   "tests/doctor/test_checks.py::test_a_plugin_root_the_environment_named_is_read_and_never_executed",
 ]
@@ -343,9 +343,9 @@ reddens = [
 # which the doctor skill relays verbatim.
 [[mutation]]
 name = "doctor prints the PATH-derived location of the CLI"
-file = "src/stayfixed/doctor/checks.py"
-before = '    return Row(OK, "`stayfixed` resolves on PATH")'
-after = '    return Row(OK, f"`stayfixed` resolves on PATH at {found}")'
+file = "src/drybag/doctor/checks.py"
+before = '    return Row(OK, "`drybag` resolves on PATH")'
+after = '    return Row(OK, f"`drybag` resolves on PATH at {found}")'
 reddens = [
   "tests/doctor/test_checks.py::test_the_cli_resolving_by_name_is_green_and_never_prints_where",
 ]
@@ -355,68 +355,11 @@ reddens = [
 # mutation re-introduces one rather than deleting a guard.
 [[mutation]]
 name = "a doctor check spells its own name again"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = 'WRAPPER = "hooks/run-hook.sh"'
 after = "WRAPPER = \"hooks/run-hook.sh\"\n_STRAY = \"wrapper\""
 reddens = [
   "tests/doctor/test_checks.py::test_every_registry_name_is_spelled_exactly_once_in_the_module",
-]
-
-# `[ci] ref` is repository-authored and must be the commit of a released stayfixed. Which commits
-# those are is the `release` package's own rule (`is_released`, semver tags only), and the row's
-# verdict is what a reader acts on: a ref no released tag names is a project pinned to a gate
-# nobody shipped, reported green.
-[[mutation]]
-name = "a ci-ref that is no released commit is reported as a released commit"
-file = "src/stayfixed/doctor/checks.py"
-before = "        if not is_a_release:"
-after = "        if is_a_release:"
-reddens = [
-  "tests/doctor/test_checks.py::test_a_released_commit_is_ok_and_an_unreleased_one_is_red",
-]
-
-# A supply-chain verdict, and the one `ci-ref` row that gates the exit code from the file rather
-# than from the configuration: the pin GitHub acts on is the workflow's `uses:` line, so a
-# workflow pinning something other than `[ci] ref` means the gate that runs is not the one
-# recorded. Returning the ref's own verdict there reads as "the workflow agrees" — the same false
-# green the two `warn` arms beside it refuse by name. The anchor is `_USES`, this module's own
-# pattern in the installed package; the file it reads is repository-authored and no byte of it is
-# printed.
-[[mutation]]
-name = "doctor stops comparing the workflow's pin with [ci] ref"
-file = "src/stayfixed/doctor/checks.py"
-before = "    if pinned != {ref}:"
-after = "    if False:"
-reddens = [
-  "tests/doctor/test_checks.py::test_a_workflow_that_pins_something_else_is_red",
-]
-
-# The same row's other red, over the documented mutable opt-in. `[ci] ref = "v1"` is judged
-# against the public repository's own tag listing, and an alias the listing does not carry is a
-# project whose gate resolves to nothing; reported as the ordinary `warn` ("a mutable opt-in"), it
-# reads as an installation working. Uncovered as well as unproven until the case beside this
-# entry was written.
-[[mutation]]
-name = "an alias the public repository does not carry is reported as the mutable opt-in"
-file = "src/stayfixed/doctor/checks.py"
-before = "        if ALIAS not in tags:"
-after = "        if False:"
-reddens = [
-  "tests/doctor/test_checks.py::test_the_alias_arm_answers_a_listing_without_it_and_a_git_that_failed",
-]
-
-# A verdict a reader acts on. With `[ci] mode = "reusable"`, a released sha recorded and no
-# `.github/workflows/stayfixed.yml`, the row reported `ok` — "[ci] ref is a released stayfixed
-# commit" — for a repository with no gate in it at all. That is the false green the `not pinned`
-# arm eleven lines below already refuses by name, and it is the state `init` itself leaves
-# whenever it reports `ci-workflow` under `skipped`. The mutation puts the false green back.
-[[mutation]]
-name = "doctor reports a pinned ref as ok with no workflow file to pin it in"
-file = "src/stayfixed/doctor/checks.py"
-before = '        if config.ci.mode == "reusable":'
-after = "        if False:"
-reddens = [
-  "tests/doctor/test_checks.py::test_a_recorded_ref_with_no_workflow_file_at_all_is_never_green",
 ]
 
 # Spelled once. `overlay-requires`' remedy a few rows below reads `REPOSITORY_URL`, while
@@ -426,83 +369,11 @@ reddens = [
 # remedy's text.
 [[mutation]]
 name = "the cli-path remedy spells the repository URL again"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '            f"run `uv tool install git+{REPOSITORY_URL}`",'
-after = '            "run `uv tool install git+https://github.com/stayfixed/stayfixed`",'
+after = '            "run `uv tool install git+https://github.com/dry-bag/drybag`",'
 reddens = [
   "tests/doctor/test_checks.py::test_a_cli_that_does_not_resolve_is_a_warning_that_names_the_install_command",
-]
-
-# The `ci-ref` row's two missing guards, and both are about a path the *repository* authors:
-# `.github/workflows/stayfixed.yml`. This row read it with neither guard -- `_diagnostics` reads
-# its log to a cap -- so a committed symlink to a FIFO made
-# `read_text` block with nothing to read, and `doctor`, which is one line of output and has no
-# timeout of its own, never returned. Measured on a real FIFO before the guard: the row did not come
-# back. None of the bytes reaches the report either way, so this is containment hygiene rather than
-# a leak, which is why it is a guard and not a refusal.
-[[mutation]]
-name = "doctor reads the rendered workflow without asking what it is"
-file = "src/stayfixed/doctor/checks.py"
-before = """    if not fsops.is_file(workflow):
-        if fsops.exists(workflow) or fsops.is_symlink(workflow):"""
-after = """    if False:
-        if fsops.exists(workflow) or fsops.is_symlink(workflow):"""
-reddens = [
-  "tests/doctor/test_checks.py::test_a_workflow_that_is_not_a_file_does_not_hang_the_row",
-]
-
-# Over the bound is itself an answer, which is the sibling rule of `mutations/`'s "doctor reads an
-# environment-named log with no bound of its own" one function down: a workflow `init` rendered is
-# under 2 KiB, a file a clone committed there has no cap at all, and a `uses:` line past the bound
-# would be compared against bytes nobody read. So the arm must not fall through to the ref's own
-# verdict, which is what this entry breaks.
-#
-# **What has no entry, and why: an unbounded read itself.** A read of the whole file and the bounded
-# one answer "over the bound" identically -- the difference is how many bytes were held to answer
-# it, and no assertion at a testable file size can see that. Measured rather than assumed: this
-# entry's `after` was an unbounded read on its first run and the oracle reported it survived, which
-# is the finding that produced this paragraph. The sibling `_diagnostics` entry does redden, because
-# that row counts records *inside* what it read and an unbounded read counts more of them; this row
-# returns above its count. The bound on the read itself is `fsops.read_bounded`'s, held by
-# `mutations/`'s "the regular-file reader reads past its limit" and "the regular-file reader refuses
-# a file at its limit".
-[[mutation]]
-name = "doctor reads the rendered workflow with no bound of its own"
-file = "src/stayfixed/doctor/checks.py"
-before = "    if over:\n        # Over the cap is itself an answer"
-after = "    if False:\n        # Over the cap is itself an answer"
-reddens = [
-  "tests/doctor/test_checks.py::test_a_workflow_over_the_cap_is_not_the_refs_own_verdict",
-]
-
-# The strict decode was a red a *clone* could force. `read_text(encoding="utf-8")` raises
-# `UnicodeDecodeError`, a `ValueError`, which no arm of this row caught: it reached `_guarded` as
-# "this check could not run" and exit 1, out of the one row whose own rule is that a file it cannot
-# account for is named rather than absolved. A replaced byte cannot forge a sha -- `_USES` bounds
-# what is compared and nothing read here is printed.
-[[mutation]]
-name = "a workflow byte that is not utf-8 makes the ci-ref row a broken check"
-file = "src/stayfixed/doctor/checks.py"
-before = '    rendered = raw.decode("utf-8", errors="replace")'
-after = '    rendered = raw.decode("utf-8")'
-reddens = [
-  "tests/doctor/test_checks.py::test_a_workflow_carrying_a_byte_that_is_not_utf8_is_still_compared",
-]
-
-# The one call this area makes that leaves the machine, and the five-minute cap it inherited.
-# `NETWORK_TIMEOUT_SECONDS` is written for `gh repo create --clone` and the clone behind it; the
-# `ci-ref` row reads one tag listing, on a command that prints one line of output and `docs/cli.md`
-# calls a diagnostic. `stayfixed init` recording a `[ci] ref` is what made the block reachable at
-# all. Two entries, this one and `mutations/`'s "the runner ignores the bound its caller asked for",
-# because the choice and the honouring of it are in different modules: without the second, a
-# caller's bound is accepted and ignored.
-[[mutation]]
-name = "doctor asks the public repository with no bound of its own"
-file = "src/stayfixed/doctor/commands.py"
-before = "        runner=subprocess_runner(timeout=CI_REF_TIMEOUT_SECONDS),"
-after = "        runner=subprocess_runner(),"
-reddens = [
-  "tests/doctor/test_command.py::test_the_runner_this_command_builds_is_bounded_for_a_diagnostic",
 ]
 
 # `${CLAUDE_PLUGIN_DATA}` is a variable a committed `env` block can set, so the hook sink's log is a
@@ -511,7 +382,7 @@ reddens = [
 # catch, and `diagnostics` read red, "this check could not run".
 [[mutation]]
 name = "doctor's hook sink reader lets a line past the parser's reach raise"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    except (ValueError, RecursionError):\n        return False\n    return isinstance(record, dict)"
 after = "    except (json.JSONDecodeError, UnicodeDecodeError):\n        return False\n    return isinstance(record, dict)"
 reddens = [
@@ -524,14 +395,14 @@ reddens = [
 # answer by its name and call into the private layer.
 [[mutation]]
 name = "a core module picks one area's commands out of discovery"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""'''
 after = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""
-    from stayfixed.areas import area_modules
+    from drybag.areas import area_modules
 
-    (memory,) = [m for m in area_modules("commands") if m.__name__ == "stayfixed.memory.commands"]
+    (memory,) = [m for m in area_modules("commands") if m.__name__ == "drybag.memory.commands"]
     memory.register'''
 reddens = ["tests/boundaries/test_discovery.py::test_discovery_is_asked_only_for_the_submodules_it_names"]
 
@@ -540,19 +411,19 @@ reddens = ["tests/boundaries/test_discovery.py::test_discovery_is_asked_only_for
 # the name rule reads each by its name.
 [[mutation]]
 name = "a core function loads the note store through its own module's loader"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""'''
 after = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""
 
     def _load() -> object:
-        return type(__spec__.loader)("stayfixed.memory.store", "store.py")'''
+        return type(__spec__.loader)("drybag.memory.store", "store.py")'''
 reddens = ["tests/boundaries/test_delivery.py::test_no_core_module_imports_by_a_string_but_discovery"]
 
 [[mutation]]
 name = "a core function loads the note store through a finder on sys.meta_path"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""'''
 after = '''def _shown(key: str, value: object) -> str | None:
@@ -561,43 +432,43 @@ after = '''def _shown(key: str, value: object) -> str | None:
     def _load() -> object:
         import sys
 
-        return sys.meta_path[-1].find_spec("stayfixed.memory.store", ["memory"])'''
+        return sys.meta_path[-1].find_spec("drybag.memory.store", ["memory"])'''
 reddens = ["tests/boundaries/test_delivery.py::test_no_core_module_imports_by_a_string_but_discovery"]
 
 [[mutation]]
 name = "a core function imports the note store by running text"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""'''
 after = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""
 
     def _load() -> object:
-        return exec("import stayfixed.memory.store")'''
+        return exec("import drybag.memory.store")'''
 reddens = ["tests/boundaries/test_delivery.py::test_no_core_module_imports_by_a_string_but_discovery"]
 
 [[mutation]]
 name = "a core function reaches __import__ through __builtins__"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""'''
 after = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""
 
     def _load() -> object:
-        return getattr(__builtins__, "__imp" + "ort__")("stayfixed.memory.store")'''
+        return getattr(__builtins__, "__imp" + "ort__")("drybag.memory.store")'''
 reddens = ["tests/boundaries/test_delivery.py::test_no_core_module_imports_by_a_string_but_discovery"]
 
 [[mutation]]
 name = "a core function's string annotation imports the note store"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""'''
 after = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""
 
     def _load() -> object:
-        def hinted(x: "__import__('stayfixed.memory.store')") -> None:
+        def hinted(x: "__import__('drybag.memory.store')") -> None:
             pass
 
         return hinted'''
@@ -609,7 +480,7 @@ reddens = ["tests/boundaries/test_delivery.py::test_no_core_module_imports_by_a_
 # `__import__` over by a computed name.
 [[mutation]]
 name = "a core function runs an import through timeit"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""'''
 after = '''def _shown(key: str, value: object) -> str | None:
@@ -618,12 +489,12 @@ after = '''def _shown(key: str, value: object) -> str | None:
     def _load() -> object:
         import timeit
 
-        return timeit.timeit("import stayfixed.memory.store", number=1)'''
+        return timeit.timeit("import drybag.memory.store", number=1)'''
 reddens = ["tests/boundaries/test_delivery.py::test_no_core_module_reaches_the_import_machinery_but_where_pinned"]
 
 [[mutation]]
 name = "a core function reaches xml.sax through a sibling submodule's import"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""'''
 after = '''def _shown(key: str, value: object) -> str | None:
@@ -632,12 +503,12 @@ after = '''def _shown(key: str, value: object) -> str | None:
     def _load() -> object:
         import xml.dom.pulldom
 
-        return xml.sax.make_parser(["stayfixed.memory.store"])'''
+        return xml.sax.make_parser(["drybag.memory.store"])'''
 reddens = ["tests/boundaries/test_delivery.py::test_no_core_module_reaches_the_import_machinery_but_where_pinned"]
 
 [[mutation]]
 name = "a core function takes __import__ from builtins by a computed name"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""'''
 after = '''def _shown(key: str, value: object) -> str | None:
@@ -646,14 +517,14 @@ after = '''def _shown(key: str, value: object) -> str | None:
     def _load() -> object:
         import builtins
 
-        return getattr(builtins, "__imp" + "ort__")("stayfixed.memory.store")'''
+        return getattr(builtins, "__imp" + "ort__")("drybag.memory.store")'''
 reddens = ["tests/boundaries/test_delivery.py::test_no_core_module_reaches_the_import_machinery_but_where_pinned"]
 
 # `sys.breakpointhook` imports whatever `PYTHONBREAKPOINT` names, and `sys` is on the core's list, so
 # the name rule reads the hook by its name.
 [[mutation]]
 name = "a core function hands an import to sys.breakpointhook"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '''def _shown(key: str, value: object) -> str | None:
     """`value` as the row may print it, or `None` where it is text somebody else wrote."""'''
 after = '''def _shown(key: str, value: object) -> str | None:
@@ -669,67 +540,26 @@ reddens = ["tests/boundaries/test_delivery.py::test_no_core_module_imports_by_a_
 # does: it named the error's class, which the fragment that says the row speaks in words denied.
 [[mutation]]
 name = "doctor names the error class of session markers it could not list"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "            f\"the hook sink's session markers could not be listed ({fsops.said(exc)}), so \""
 after = "            f\"the hook sink's session markers could not be listed ({type(exc).__name__}), so \""
 reddens = ["tests/doctor/test_checks.py::test_a_harness_data_root_this_process_cannot_read_is_a_warning"]
 
-# A `uses:` word is read once: read again from every `uses:` inside it, a file of them at the cap
-# took ten seconds. Its ref is what follows the word's last call, and a word ending in `uses:`
-# hands on to the next.
-[[mutation]]
-name = "a uses: word is read again from every uses: inside it"
-file = "src/stayfixed/doctor/checks.py"
-before = "    while (match := _USES.search(text, at)) is not None:"
-after = '''    return {m.group(1) for m in re.finditer(r"uses:\s*\S+/\.github/workflows/check\.yml@(\S+)", text)}
-    while (match := _USES.search(text, at)) is not None:'''
-reddens = ["tests/doctor/test_checks.py::test_a_long_workflow_is_read_for_its_pins_in_time_linear_in_its_length"]
-
-[[mutation]]
-name = "a uses: word pins what follows its first call"
-file = "src/stayfixed/doctor/checks.py"
-before = "        call = word.rfind(_CALL)"
-after = "        call = word.find(_CALL)"
-reddens = ["tests/doctor/test_checks.py::test_a_uses_word_pins_what_the_pattern_read_it_to_pin[the last call]"]
-
-[[mutation]]
-name = "a word ending in uses: is passed over whole"
-file = "src/stayfixed/doctor/checks.py"
-before = "            at -= len(_USES_KEY)"
-after = "            pass"
-reddens = ["tests/doctor/test_checks.py::test_a_uses_word_pins_what_the_pattern_read_it_to_pin[a word ending in uses:]"]
-
-# The call that ends a word has nothing after it, so the word's ref follows the call before it;
-# and a call at the word's start has nothing before it, so it pins nothing.
-[[mutation]]
-name = "the call that ends a word no longer falls back to the one before it"
-file = "src/stayfixed/doctor/checks.py"
-before = "            call = word.rfind(_CALL, 0, call)"
-after = "            call = -1"
-reddens = ["tests/doctor/test_checks.py::test_a_uses_word_pins_what_the_pattern_read_it_to_pin[a call ending the word]"]
-
-[[mutation]]
-name = "a call with nothing before it pins"
-file = "src/stayfixed/doctor/checks.py"
-before = "        if call > 0:"
-after = "        if call >= 0:"
-reddens = ["tests/doctor/test_checks.py::test_a_uses_word_pins_what_the_pattern_read_it_to_pin[nothing before the call]"]
-
 # `doctor` on a repository with nothing configured warns and is red about nothing; it reads the
 # configuration the way a session does, so only a file the session drops whole is red.
 [[mutation]]
-name = "not-initialised is red with no stayfixed.toml"
-file = "src/stayfixed/doctor/checks.py"
+name = "not-initialised is red with no drybag.toml"
+file = "src/drybag/doctor/checks.py"
 before = "        return Row(WARN, NOT_INITIALISED, NOT_INITIALISED_REMEDY)"
 after = "        return Row(RED, NOT_INITIALISED, NOT_INITIALISED_REMEDY)"
 reddens = [
-  "tests/doctor/test_floor_report.py::test_no_stayfixed_toml_is_a_warning_and_no_row_is_red",
+  "tests/doctor/test_floor_report.py::test_no_drybag_toml_is_a_warning_and_no_row_is_red",
   "tests/doctor/test_checks.py::test_a_repository_without_a_configuration_skips_only_the_rows_that_read_one",
 ]
 
 [[mutation]]
 name = "not-initialised is green over a file that loaded with notes"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    if session.noted:\n        keys = _noted_keys("
 after = "    if False:\n        keys = _noted_keys("
 reddens = ["tests/doctor/test_floor_report.py::test_notes_are_listed_by_key"]
@@ -737,28 +567,28 @@ reddens = ["tests/doctor/test_floor_report.py::test_notes_are_listed_by_key"]
 # A noted key is repository-authored text on a line a model reads: a few names, each bounded.
 [[mutation]]
 name = "not-initialised names every noted key"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = '    return _counted(shown[:NAMES_SHOWN], len(keys) - NAMES_SHOWN, ", ")'
 after = '    return _counted(shown, 0, ", ")'
 reddens = ["tests/doctor/test_floor_report.py::test_noted_keys_are_bounded_in_number_and_in_length"]
 
 [[mutation]]
 name = "not-initialised prints a noted key whole"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    shown = [clipped(key) if PATH_VALUE.match(key) else UNPRINTABLE_KEY for key in keys]"
 after = "    shown = [key if PATH_VALUE.match(key) else UNPRINTABLE_KEY for key in keys]"
 reddens = ["tests/doctor/test_floor_report.py::test_noted_keys_are_bounded_in_number_and_in_length"]
 
 [[mutation]]
 name = "not-initialised prints a noted key outside the grammar"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    shown = [clipped(key) if PATH_VALUE.match(key) else UNPRINTABLE_KEY for key in keys]"
 after = "    shown = [clipped(key) for key in keys]"
 reddens = ["tests/doctor/test_floor_report.py::test_noted_keys_are_bounded_in_number_and_in_length"]
 
 [[mutation]]
-name = "a whole fallback reads as a repository with no stayfixed.toml"
-file = "src/stayfixed/doctor/checks.py"
+name = "a whole fallback reads as a repository with no drybag.toml"
+file = "src/drybag/doctor/checks.py"
 before = "        if dropped:\n            remedy = TOO_LARGE_REMEDY if dropped[0] == TOO_LARGE_WARNING else FALLBACK_REMEDY"
 after = "        if False:\n            remedy = TOO_LARGE_REMEDY if dropped[0] == TOO_LARGE_WARNING else FALLBACK_REMEDY"
 reddens = [
@@ -768,23 +598,16 @@ reddens = [
 
 [[mutation]]
 name = "the budgets row reads a configuration that is not there"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    (\"budgets\", configured(_budgets)),"
 after = "    (\"budgets\", lambda context: _budgets(context, context.config)),  # type: ignore[arg-type]"
 reddens = ["tests/doctor/test_floor_report.py::test_rows_that_read_the_configuration_skip_without_one[budgets]"]
-
-[[mutation]]
-name = "the ci-ref row reads a configuration that is not there"
-file = "src/stayfixed/doctor/checks.py"
-before = "    (\"ci-ref\", configured(_ci_ref)),"
-after = "    (\"ci-ref\", lambda context: _ci_ref(context, context.config)),  # type: ignore[arg-type]"
-reddens = ["tests/doctor/test_floor_report.py::test_rows_that_read_the_configuration_skip_without_one[ci-ref]"]
 
 # Every row that reads the configuration before anything else skips through `model.configured`, so
 # breaking that one wrapper reaches the core's rows and the areas' alike.
 [[mutation]]
 name = "a row that reads the configuration is asked without one"
-file = "src/stayfixed/doctor/model.py"
+file = "src/drybag/doctor/model.py"
 before = "        if config is None:\n            return Row(SKIP, NO_CONFIG_SKIP)\n        return check(context, config)"
 after = "        return check(context, config)  # type: ignore[arg-type]"
 reddens = [
@@ -793,17 +616,17 @@ reddens = [
 ]
 
 # The `preferences` row names each key the session resolved with its layer, and prints a value
-# only where it is a boolean, a number or one of stayfixed's own words.
+# only where it is a boolean, a number or one of drybag's own words.
 [[mutation]]
 name = "the preferences row prints a free text value"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    return value if isinstance(value, str) and value in vocabulary else None"
 after = "    return value if isinstance(value, str) else None"
 reddens = ["tests/doctor/test_floor_report.py::test_preferences_names_the_layer_and_hides_free_text"]
 
 [[mutation]]
 name = "the preferences row quotes every note of the machine file"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "_counted(list(notes[:NAMES_SHOWN]),"
 after = "_counted(list(notes),"
 reddens = [
@@ -812,19 +635,19 @@ reddens = [
 
 [[mutation]]
 name = "the preferences row says nothing of the machine file's notes"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    if notes:\n        return Row(\n            WARN,"
 after = "    if False:\n        return Row(\n            WARN,"
 reddens = [
   "tests/doctor/test_floor_report.py::test_preferences_warn_of_a_machine_file_that_could_not_be_used",
 ]
 
-# A `stayfixed.toml` longer than a session reads is not one a command refuses, so the remedy that
-# sends every other whole fallback to `stayfixed docs check` would send this one to a command that
+# A `drybag.toml` longer than a session reads is not one a command refuses, so the remedy that
+# sends every other whole fallback to `drybag docs check` would send this one to a command that
 # loads it and exits 0.
 [[mutation]]
-name = "a stayfixed.toml longer than a session reads is sent to docs check"
-file = "src/stayfixed/doctor/checks.py"
+name = "a drybag.toml longer than a session reads is sent to docs check"
+file = "src/drybag/doctor/checks.py"
 before = "            remedy = TOO_LARGE_REMEDY if dropped[0] == TOO_LARGE_WARNING else FALLBACK_REMEDY"
 after = "            remedy = FALLBACK_REMEDY"
 reddens = [
@@ -835,18 +658,18 @@ reddens = [
 # read as one more note of a file read past, `doctor` was the one run that exited 0 on it.
 [[mutation]]
 name = "the preferences row reads a machine file that does not load as one it read past"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    if owner.unloaded is not None:"
 after = "    if False:"
 reddens = [
-  "tests/doctor/test_checks.py::test_a_machine_file_that_does_not_load_is_red_and_not_blamed_on_stayfixed_toml",
+  "tests/doctor/test_checks.py::test_a_machine_file_that_does_not_load_is_red_and_not_blamed_on_drybag_toml",
   "tests/doctor/test_command.py::test_a_machine_file_that_does_not_load_exits_one",
 ]
 
 # The reference states the cap in words, so the cap and every sentence that states it move together.
 [[mutation]]
 name = "doctor shows four noted names"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "NAMES_SHOWN = 3"
 after = "NAMES_SHOWN = 4"
 reddens = ["tests/test_documents.py::test_every_sentence_that_counts_the_names_doctor_shows_is_the_cap"]
@@ -854,14 +677,14 @@ reddens = ["tests/test_documents.py::test_every_sentence_that_counts_the_names_d
 # A budget set above the preset is in force, so the row names it raised and never calls it lowered.
 [[mutation]]
 name = "the budgets row reads a raised budget as lowered"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "        name for name, value in budgets.configured.items() if value > budgets.preset[name]"
 after = "        name for name, value in budgets.configured.items() if value < budgets.preset[name]"
 reddens = ["tests/doctor/test_checks.py::test_a_budget_the_base_branch_raised_is_named_as_raised"]
 
 [[mutation]]
 name = "the budgets row names no lowered budget"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "        name for name, value in budgets.configured.items() if value < budgets.preset[name]"
 after = "        name for name, value in budgets.configured.items() if value > budgets.preset[name]"
 reddens = ["tests/doctor/test_checks.py::test_a_budget_the_project_lowered_is_reported_green_and_named"]
@@ -870,7 +693,7 @@ reddens = ["tests/doctor/test_checks.py::test_a_budget_the_project_lowered_is_re
 # under: ignoring it loses nothing, and a warning about it could never be cleared.
 [[mutation]]
 name = "an XDG_CONFIG_HOME naming HOME's own .config is warned about as ignored"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "            and _names_home_config(context.env[name], home)"
 after = "            and False"
 reddens = [
@@ -880,7 +703,7 @@ reddens = [
 # Compared resolved, as the homes are, so a link to `$HOME/.config` names it too.
 [[mutation]]
 name = "an XDG_CONFIG_HOME is compared with HOME's .config unresolved"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "        return fsops.resolved(Path(value)) == fsops.resolved(home / DEFAULT_CONFIG_DIR)"
 after = "        return Path(value) == home / DEFAULT_CONFIG_DIR"
 reddens = [
@@ -891,44 +714,21 @@ reddens = [
 # `HOME`, and the password database's where `HOME` is unset, not `HOME` as the environment spells it.
 [[mutation]]
 name = "ignored-env reads HOME raw"
-file = "src/stayfixed/doctor/checks.py"
+file = "src/drybag/doctor/checks.py"
 before = "    home, recorded = owner_home(), passwd_home()"
 after = "    home, recorded = Path(context.env.get(\"HOME\") or \"/\"), passwd_home()"
 reddens = [
-  "tests/doctor/test_checks.py::test_a_home_that_names_no_home_is_not_called_a_home_stayfixed_follows[relative]",
+  "tests/doctor/test_checks.py::test_a_home_that_names_no_home_is_not_called_a_home_drybag_follows[relative]",
   "tests/doctor/test_checks.py::test_an_xdg_config_home_naming_the_database_homes_config_is_not_ignored_with_home_unset",
 ]
 
-# A checkout this machine binds with no stayfixed.toml is judged by `attached` and the note store on
-# the configuration `attach` acted on (`Context.attach_config`): with none, both rows said nothing of
-# a delivery and a composed store that were in place.
-[[mutation]]
-name = "doctor judges a bound checkout with no stayfixed.toml on no configuration"
-file = "src/stayfixed/doctor/model.py"
-before = "            if bound is None:\n                return None"
-after = "            if True:\n                return None"
-reddens = [
-  "tests/attach/test_project_choice.py::test_doctor_judges_a_checkout_attached_with_no_stayfixed_toml_on_what_attach_used",
-]
-
-# A checkout nothing on this machine binds has no project to build a configuration for: without the
-# guard, both rows end red on an error instead of skipping as they did.
-[[mutation]]
-name = "doctor builds a configuration for a checkout nothing binds"
-file = "src/stayfixed/doctor/model.py"
-before = "            if bound is None:\n                return None"
-after = "            if False:\n                return None"
-reddens = [
-  "tests/attach/test_project_choice.py::test_doctor_reads_an_unbound_checkout_with_no_stayfixed_toml_as_it_did",
-]
-
-# Where the main checkout has a stayfixed.toml, the file names the project, so a worktree without it
+# Where the main checkout has a drybag.toml, the file names the project, so a worktree without it
 # and a file the session dropped are judged on no configuration, as before.
 [[mutation]]
-name = "doctor builds a configuration where the main checkout has a stayfixed.toml"
-file = "src/stayfixed/doctor/model.py"
+name = "doctor builds a configuration where the main checkout has a drybag.toml"
+file = "src/drybag/doctor/model.py"
 before = "            if main is None or read_document(main) is not None:"
 after = "            if main is None:"
 reddens = [
-  "tests/attach/test_project_choice.py::test_doctor_reads_a_worktree_whose_main_checkout_has_a_stayfixed_toml_as_it_did",
+  "tests/attach/test_project_choice.py::test_doctor_reads_a_worktree_whose_main_checkout_has_a_drybag_toml_as_it_did",
 ]

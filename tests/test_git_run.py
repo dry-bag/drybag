@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import gitenv
-from stayfixed.gitenv import NO_ANSWER, git_run
-from tests.gitfixture import plant_path, stand_in_git
+from drybag import gitenv
+from drybag.gitenv import NO_ANSWER, git_run
+from tests.gitfixture import SESSION_CONFIG, plant_path, stand_in_git
 
 SRC = Path(__file__).resolve().parents[1] / "src"
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
@@ -152,8 +152,7 @@ def test_git_s_own_diagnostics_are_never_decoded_into_a_failure(tmp_path: Path) 
 def test_a_stdin_this_process_cannot_encode_is_minus_one(tmp_path: Path) -> None:
     # A lone surrogate outside the escape range has no bytes under any codec, so git cannot be
     # asked the question at all: `(-1, "")`, the runner's own "git could not be given its
-    # input", which every stdin caller already answers conservatively — `project.ignored`
-    # refuses inside a work tree, `memory.refs` keeps the reference as unresolved. Reachable in
+    # input", which every stdin caller already answers conservatively. Reachable in
     # practice under a non-UTF-8 locale, where a note's text holds characters that locale has
     # no byte for. Mutation (declared): drop `UnicodeEncodeError` from the `except` -> this
     # reddens. `needs_git`, because where no `git` can be launched the `OSError` answers
@@ -271,7 +270,7 @@ def test_the_product_ships_with_no_floor_under_its_bounds() -> None:
     # product ships a floor under every git bound" -> this reddens.
     env = {key: value for key, value in os.environ.items() if key != gitenv.FLOOR_VARIABLE}
     shipped = subprocess.run(
-        [sys.executable, "-P", "-c", "from stayfixed import gitenv; print(gitenv.bound_floor())"],
+        [sys.executable, "-P", "-c", "from drybag import gitenv; print(gitenv.bound_floor())"],
         capture_output=True,
         text=True,
         check=False,
@@ -321,23 +320,75 @@ def test_the_floor_variable_is_capped(
     assert git_run(tmp_path, "rev-parse") == (0, "")
 
 
+def _seen_by_git(root: Path) -> dict[str, str]:
+    """The environment a `git` started by `git_call` hands a shell alias of its own."""
+    called = gitenv.git_call(root, "-c", "alias.e=!env", "e", timeout=60)
+    assert called.code == 0, called
+    return dict(line.split("=", 1) for line in called.out.splitlines() if "=" in line)
+
+
+@needs_git
+def test_git_call_hands_git_only_the_kept_variables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Whatever the session that fired carries, a per-project `GIT_CONFIG_GLOBAL` with a `pushurl`
+    # above all, reaches no git drybag starts; the agent and the proxy a push needs still do.
+    # Mutation (oracle): `mutations/`'s "a session's global git configuration reaches git" -> this
+    # reddens.
+    for name in (SESSION_CONFIG, "GIT_DIR", "PRE_COMMIT_HOME", "GIT_SSH_COMMAND"):
+        monkeypatch.setenv(name, str(tmp_path / name))
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/agent.sock")
+    monkeypatch.setenv("https_proxy", "http://proxy.invalid:3128")
+
+    seen = _seen_by_git(tmp_path)
+
+    for name in (SESSION_CONFIG, "GIT_DIR", "PRE_COMMIT_HOME", "GIT_SSH_COMMAND"):
+        assert name not in seen, name
+    assert seen["SSH_AUTH_SOCK"] == "/agent.sock"
+    assert seen["https_proxy"] == "http://proxy.invalid:3128"
+    assert seen["GIT_TERMINAL_PROMPT"] == "0"
+
+
+@needs_git
+@pytest.mark.parametrize("entry", ["", "."])
+def test_a_relative_path_entry_never_reaches_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str
+) -> None:
+    # Every git runs in a repository a clone chose the contents of, so an empty or `.` entry of
+    # `PATH` (a dotfile slip) would find a `git` planted at its root, and git an `ssh` there the
+    # same way. Mutation (oracle): `mutations/`'s "a relative PATH entry reaches git" -> this
+    # reddens.
+    _stub(tmp_path, "echo planted")
+    monkeypatch.setenv("PATH", f"{entry}{os.pathsep}{os.environ['PATH']}")
+
+    assert gitenv.git_call(tmp_path, "version", timeout=60).out.startswith("git version")
+    shown = _seen_by_git(tmp_path)["PATH"]
+    assert all(os.path.isabs(part) for part in shown.split(os.pathsep)), shown
+
+
+def test_git_call_honours_the_floor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The suite's floor lifts `git_call`'s bounds as it lifts `git_run`'s, so the note sync's tests
+    # pass no bound of their own. A `git` that answers after half a second, under a bound a fifth
+    # of that, still answers. Mutation (oracle): `mutations/`'s "git_call ignores the floor" ->
+    # this reddens.
+    _a_git_that_sleeps(tmp_path, monkeypatch, 0.5)
+    called = gitenv.git_call(tmp_path, "rev-parse", timeout=0.1)
+    assert (called.code, called.timed_out) == (0, False)
+
+
 # Every named bound a product `git` runs under. The suite's floor lifts each one past git's
 # latency, so a bound shrunk below it — `QUERY_TIMEOUT_SECONDS = 0.001` — passed every test
 # that runs through it, and only an owner's machine would have met a `git` never given the time.
 GIT_RUN_BOUNDS = (
-    "stayfixed.gitenv.GIT_TIMEOUT_SECONDS",
-    "stayfixed.gitenv.QUERY_TIMEOUT_SECONDS",
-    "stayfixed.ledger.write.FETCH_TIMEOUT_SECONDS",
-    "stayfixed.overlay.sync.SYNC_TIMEOUT_SECONDS",
-    "stayfixed.guards.commit.LOG_TIMEOUT_SECONDS",
-    "stayfixed.guards.hygiene.STATUS_TIMEOUT_SECONDS",
+    "drybag.gitenv.GIT_TIMEOUT_SECONDS",
+    "drybag.gitenv.QUERY_TIMEOUT_SECONDS",
+    "drybag.overlay.sync.SYNC_TIMEOUT_SECONDS",
+    "drybag.guards.commit.LOG_TIMEOUT_SECONDS",
+    "drybag.hints.hygiene.STATUS_TIMEOUT_SECONDS",
 )
-# The doctor's `git ls-remote` goes through the `Runner` seam rather than `git_run`, and every
-# test stubs that seam, so a bound shrunk there passes the suite the same way.
-GIT_BOUNDS = (*GIT_RUN_BOUNDS, "stayfixed.doctor.checks.CI_REF_TIMEOUT_SECONDS")
 
 
-@pytest.mark.parametrize("bound", GIT_BOUNDS)
+@pytest.mark.parametrize("bound", GIT_RUN_BOUNDS)
 def test_a_named_git_bound_leaves_git_a_second_to_answer(bound: str) -> None:
     # A second is far above what a local `rev-parse` takes and far below every bound shipped,
     # so the row fails on a bound shrunk by accident and on nothing a person would tune.
@@ -376,18 +427,22 @@ def _spelled(expression: ast.expr | None) -> str | None:
     return None
 
 
+# The two runners a bound is handed to, `git_run` and `git_call`.
+GIT_LAUNCHES = frozenset({"git_run", "git_call"})
+
+
 def test_every_bound_a_git_run_call_passes_is_one_the_table_pins() -> None:
     # The table above is only as good as its list: a call given a bound of its own that no row
     # names — a new constant, or a literal below a second — would slip past it as the two above
-    # did past the suite. So every `git_run(..., timeout=...)` under `src/` is read: a literal
-    # must be at least a second, a name must be a row, and a parameter passed through must
-    # default to one. And every row must be reached, so none outlives its constant. Mutation
-    # (oracle): `mutations/`'s "the status query's bound is a literal below git's latency" -> this
-    # reddens.
+    # did past the suite. So every `timeout=` a `git_run` or `git_call` under `src/` is given is
+    # read: a literal must be at least a second, a name must be a row, and a parameter passed
+    # through must default to one. And every row must be reached, so none outlives its constant.
+    # Mutation (oracle): `mutations/`'s "the status query's bound is a literal below git's latency"
+    # -> this reddens.
     pinned = {bound.rsplit(".", 1)[1] for bound in GIT_RUN_BOUNDS}
     reached = {"GIT_TIMEOUT_SECONDS"}  # `git_run`'s own default, for a call that passes none
     unpinned = []
-    for path in sorted((SRC / "stayfixed").rglob("*.py")):
+    for path in sorted((SRC / "drybag").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         enclosing = {
             id(node): function
@@ -396,7 +451,7 @@ def test_every_bound_a_git_run_call_passes_is_one_the_table_pins() -> None:
             for node in ast.walk(function)
         }
         for call in ast.walk(tree):
-            if not (isinstance(call, ast.Call) and _spelled(call.func) == "git_run"):
+            if not (isinstance(call, ast.Call) and _spelled(call.func) in GIT_LAUNCHES):
                 continue
             given = next((k.value for k in call.keywords if k.arg == "timeout"), None)
             where = f"{path.relative_to(SRC)}:{call.lineno}"

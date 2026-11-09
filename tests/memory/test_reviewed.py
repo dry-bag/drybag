@@ -12,20 +12,21 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.memory.commands import NOT_A_NOTE, NOTHING_NAMED
-from stayfixed.memory.hooks import UNREVIEWED_COUNT, register
-from stayfixed.memory.notes import walk
-from stayfixed.memory.reviewed import REVIEWED, UNREVIEWED, status
-from stayfixed.memory.store import Store, resolve
-from stayfixed.memory.trust import DELIMITER
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.memory.commands import NOT_A_NOTE, NOTHING_NAMED
+from drybag.memory.hooks import UNREVIEWED_COUNT, register
+from drybag.memory.notes import walk
+from drybag.memory.reviewed import REVIEWED, UNREVIEWED, status
+from drybag.memory.store import Store, resolve
+from drybag.memory.trust import DELIMITER
+from drybag.trust.record import RECORD, SANDBOXED, recorded
 from tests.cli import cli
+from tests.sandboxed import refuse_writes_under
 from tests.sessions import session_of
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 
 [project]
 name = "widget"
@@ -43,7 +44,7 @@ def _note(name: str, *, startup: str = "", body: str = "Body.") -> str:
 
 def _project(tmp_path: Path) -> Path:
     root = tmp_path / "project"
-    base = root / ".stayfixed" / "local" / "memory"
+    base = root / ".drybag" / "local" / "memory"
     for group in ("developer", "project-volatile"):
         (base / group).mkdir(parents=True)
     (base / "developer" / "rule.md").write_text(
@@ -66,7 +67,7 @@ def _store(root: Path, tmp_path: Path) -> Store:
 def _status_of(root: Path, tmp_path: Path, name: str) -> str:
     store = _store(root, tmp_path)
     notes = {n.name: n for n in walk(store.path, list(store.groups)).notes}
-    return status(store, notes[name])
+    return status(store.machine, notes[name])
 
 
 def _bundle(root: Path, tmp_path: Path, bundle: str) -> str:
@@ -118,7 +119,7 @@ def test_an_edit_after_promotion_makes_that_note_unreviewed_and_moves_no_other(
     assert cli(root, tmp_path, "memory", "promote", "--changed")[0] == 0
     assert _status_of(root, tmp_path, "rule") == REVIEWED
     assert _status_of(root, tmp_path, "other") == REVIEWED
-    path = root / ".stayfixed" / "local" / "memory" / "developer" / "rule.md"
+    path = root / ".drybag" / "local" / "memory" / "developer" / "rule.md"
     path.write_text(_note("rule", startup="1", body="RULE-BODY, edited"), "utf-8")
     assert _status_of(root, tmp_path, "rule") == UNREVIEWED
     assert _status_of(root, tmp_path, "other") == REVIEWED
@@ -155,7 +156,7 @@ def test_a_note_promoted_in_the_main_checkout_is_reviewed_in_a_linked_worktree(
 
 
 def test_a_promoted_note_is_still_reviewed_after_its_store_moves(tmp_path: Path) -> None:
-    # The path is the record's label for `trust list`, never what it matches on: the bytes the
+    # The path is only the record's label, never what it matches on: the bytes the
     # owner promoted are the bytes reviewed wherever the store now sits.
     import shutil
 
@@ -181,7 +182,7 @@ def test_promote_changed_records_only_the_unreviewed_notes(tmp_path: Path) -> No
     "argv,refusal",
     [
         (("developer/absent.md",), NOT_A_NOTE),
-        (("../stayfixed.toml",), NOT_A_NOTE),
+        (("../drybag.toml",), NOT_A_NOTE),
         ((), NOTHING_NAMED),
         (("developer/rule.md", "--changed"), NOTHING_NAMED),
     ],
@@ -197,33 +198,22 @@ def test_promote_refuses_what_is_no_note_of_the_store_and_records_nothing(
     assert not (tmp_path / "trust.json").exists()
 
 
-def test_a_revoked_record_makes_the_note_unreviewed_again(tmp_path: Path) -> None:
-    # `trust list` and `trust revoke` read the record kind `reviewed` as any other kind.
+def test_a_record_write_a_sandbox_refused_says_a_person_must_run_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # From an agent's sandboxed shell the machine directory cannot be written (`EPERM`, as macOS's
+    # sandbox answers), so a promote there ends in exit 2 and the record's constant sentence,
+    # nothing written, never a traceback. Mutation (`mutations/`'s "the trust record says nothing
+    # of the sandbox that refused its write"): exit 1 and the sentence about a directory that
+    # cannot be written.
     root = _project(tmp_path)
-    assert cli(root, tmp_path, "memory", "promote", "developer/rule.md")[0] == 0
-    code, out, _ = cli(root, tmp_path, "trust", "list", "--json")
-    rows = json.loads(out)["approvals"]
-    assert code == 0 and [row["kind"] for row in rows] == ["reviewed"]
-    subject = rows[0]["subject"]
-    assert cli(root, tmp_path, "trust", "revoke", "reviewed", "--subject", subject)[0] == 0
-    assert _status_of(root, tmp_path, "rule") == UNREVIEWED
-
-
-def test_revoking_one_entry_unreviews_every_note_holding_its_bytes(tmp_path: Path) -> None:
-    # The record matches on the digest alone, so a revocation follows the same rule: withdrawn by
-    # one subject, the bytes are no longer reviewed through another entry holding them — the
-    # same note promoted from a second worktree, or a copy of it. Mutation (oracle):
-    # `mutations/`'s "a revoke leaves another entry holding the same digest".
-    root = _project(tmp_path)
-    base = root / ".stayfixed" / "local" / "memory" / "developer"
-    (base / "copy.md").write_bytes((base / "rule.md").read_bytes())
-    assert cli(root, tmp_path, "memory", "promote", "--changed")[0] == 0
-    rows = json.loads(cli(root, tmp_path, "trust", "list", "--json")[1])["approvals"]
-    subject = next(row["subject"] for row in rows if row["subject"].endswith("rule.md"))
-    assert cli(root, tmp_path, "trust", "revoke", "reviewed", "--subject", subject)[0] == 0
-    assert _status_of(root, tmp_path, "rule") == UNREVIEWED
-    assert "RULE-BODY" not in _bundle(root, tmp_path, "standing-rules")
-    assert _status_of(root, tmp_path, "other") == REVIEWED
+    refused = refuse_writes_under(monkeypatch, tmp_path / RECORD)
+    code, out, err = cli(root, tmp_path, "memory", "promote", "developer/rule.md")
+    assert (code, out) == (2, "")
+    assert refused == [tmp_path / RECORD]
+    assert err == f"drybag: refused: {SANDBOXED}\n"
+    assert recorded(tmp_path / "absent.toml") == {}
+    capsys.readouterr()
 
 
 def test_a_trust_record_that_cannot_be_read_leaves_every_note_unreviewed(tmp_path: Path) -> None:
@@ -241,11 +231,11 @@ def test_the_count_line_is_said_once_for_a_new_set_and_not_again_for_the_same_se
 ) -> None:
     # Said at `SessionStart` only when the set of unreviewed notes differs from the last
     # session's, so a session over an unchanged store hears nothing, and a new note is news.
-    from stayfixed.hooks.api import HookEvent
+    from drybag.hooks.api import HookEvent
 
     root = _project(tmp_path)
     config = load(root, machine=tmp_path / "absent.toml")
-    (handler,) = [h for h in register() if h.event == "SessionStart"]
+    (handler,) = [h for h in register() if h.name == "unreviewed-notes"]
     event = HookEvent("SessionStart", "s1", None, None, {}, root, root, {})
 
     def said() -> str | None:
@@ -253,7 +243,7 @@ def test_the_count_line_is_said_once_for_a_new_set_and_not_again_for_the_same_se
 
     assert said() == UNREVIEWED_COUNT.format(count=2)
     assert said() is None
-    (root / ".stayfixed" / "local" / "memory" / "developer" / "third.md").write_text(
+    (root / ".drybag" / "local" / "memory" / "developer" / "third.md").write_text(
         _note("third"), "utf-8"
     )
     assert said() == UNREVIEWED_COUNT.format(count=3)

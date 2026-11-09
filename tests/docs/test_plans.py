@@ -1,6 +1,5 @@
 """Contracts for the plan lint: references resolve, steps are non-leading, mutation outcomes are
-expectations, Scope/Premise are present. stayfixed:ledger:fixtures — `BR-` strings here are
-sample data.
+expectations, Scope/Premise are present.
 """
 
 from __future__ import annotations
@@ -11,39 +10,34 @@ import re
 import shutil
 import subprocess
 import sys
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from stayfixed.config.loader import load
-from stayfixed.config.schema import Config
-from stayfixed.docs.plans import (
+from drybag.config.loader import load
+from drybag.config.schema import Config
+from drybag.docs.plans import (
+    BUG_FIXES,
     BaseUnresolvable,
     asserted_outcomes,
     lint,
-    plan_gate,
     touched_plans,
 )
-from stayfixed.errors import Failure, Refusal
-from stayfixed.gitenv import DISJOINT, NO_ANSWER, git_run
+from drybag.errors import Failure, Refusal
+from drybag.gitenv import DISJOINT, NO_ANSWER, git_run
 from tests.cli import cli
 from tests.crafted import CRAFTED, assert_never_raw
 from tests.gitfixture import answer_shallow_check, criss_cross, dated, git, plant_path
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
-profile = ""
-agents = ["claude"]
 
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 SCOPE = "**Scope:** a change belongs to this branch iff it touches the widget.\n\n"
 
@@ -53,7 +47,7 @@ needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not i
 def project(tmp_path: Path) -> tuple[Path, Config]:
     root = tmp_path / "widget"
     (root / "docs" / "plans").mkdir(parents=True)
-    (root / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG, encoding="utf-8")
     return root, load(root, machine=tmp_path / "m.toml")
 
 
@@ -215,7 +209,7 @@ def test_a_plan_without_a_scope_line_fails_and_a_bare_marker_does_not_count(
 
 
 def test_a_fixes_claim_needs_a_premise_line_with_content(tmp_path: Path) -> None:
-    # The prefix comes from `[ledger] id_prefix`. Mutation: replace `[^\S\n]*\S` with `\s*\S`
+    # Mutation: replace `[^\S\n]*\S` with `\s*\S`
     # in the premise rule — the bare-marker case reddens.
     root, config = project(tmp_path)
     assert rules(root, config, plan(root, SCOPE + "Fixes BR-042.\n")) == ["premise-missing"]
@@ -231,14 +225,25 @@ def test_a_fixes_claim_needs_a_premise_line_with_content(tmp_path: Path) -> None
     assert rules(root, config, plan(root, SCOPE + "```\nFixes BR-042\n```\n")) == []
 
 
-def test_a_fixes_claim_names_the_bug_ledgers_configured_prefix(tmp_path: Path) -> None:
-    # The identifiers are the bug ledger's, as `[ledger] id_prefix` configures them. Mutation
-    # (oracle): the rule reads the default prefix whatever the project configures -> the `DF`
-    # claim needs no premise and the `BR` one does.
+def test_a_fixes_claim_is_read_with_the_fixed_prefix(tmp_path: Path) -> None:
+    # No project configures the prefix any more, so only `BR` obliges a plan to carry a premise.
     root, config = project(tmp_path)
-    config = replace(config, ledger=replace(config.ledger, id_prefix="DF"))
-    assert rules(root, config, plan(root, SCOPE + "Fixes DF-042.\n")) == ["premise-missing"]
-    assert rules(root, config, plan(root, SCOPE + "Fixes BR-042.\n")) == []
+    assert rules(root, config, plan(root, SCOPE + "Fixes BR-042.\n")) == ["premise-missing"]
+    assert rules(root, config, plan(root, SCOPE + "Fixes DF-042.\n")) == []
+
+
+def test_a_fixes_claim_takes_three_digits_or_more() -> None:
+    # Two digits is a different shape, and a lint that accepts it asks a plan for a premise over a
+    # number that was never an identifier. Oracle: `mutations/`'s "a Fixes claim accepts fewer than
+    # three digits".
+    assert BUG_FIXES.search("Fixes BR-042.") is not None
+    assert BUG_FIXES.search("Fixes BR-2345") is not None
+    assert BUG_FIXES.search("Fixes BR-42.") is None
+
+
+def test_a_fixes_claim_is_bounded_by_word_edges() -> None:
+    assert BUG_FIXES.search("Prefixes BR-042") is None
+    assert BUG_FIXES.search("Fixes BR-0421x") is None
 
 
 # Plans the rules read in time quadratic in their length, each with the rules it must end in:
@@ -266,8 +271,8 @@ def test_a_long_plan_is_linted_in_time_linear_in_its_length(tmp_path: Path, shap
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed.config.loader import load\n"
-        "from stayfixed.docs.plans import lint\n"
+        "from drybag.config.loader import load\n"
+        "from drybag.docs.plans import lint\n"
         "root, machine, path = map(Path, sys.argv[1:])\n"
         "found = lint(root, load(root, machine=machine), plans=[path]).findings\n"
         "print([finding.rule for finding in found])\n"
@@ -304,7 +309,7 @@ def test_a_paragraph_of_claims_is_read_in_time_linear_in_its_length(shape: str) 
     # looked for over the claim's whole sentence again" -> `one sentence`.
     probe = (
         "import sys\n"
-        "from stayfixed.docs.plans import asserted_outcomes\n"
+        "from drybag.docs.plans import asserted_outcomes\n"
         "found = asserted_outcomes(sys.argv[1] * int(sys.argv[2]))\n"
         "print([len(found), found[-1]])\n"
     )
@@ -504,19 +509,16 @@ def test_a_touched_plan_whose_name_holds_a_space_is_linted_and_does_not_vanish(
 
 @needs_git
 def test_a_base_that_will_not_resolve_is_raised_never_an_ok(tmp_path: Path) -> None:
-    # This gate ran green for its whole life on a shallow checkout that had no base ref. The
-    # cause is the checkout's, not a plan's, so the lint raises it and the `plan` gate could not
-    # run, as `commit` could not; `plan check` alone prints it as its `base-unresolvable`
-    # finding, exit 1. Mutation (oracle): `mutations/`'s "an unresolvable base reads as a clean run"
-    # -> nothing is raised and this reddens.
+    # This gate ran green for its whole life on a shallow checkout that had no base ref. The cause
+    # is the checkout's, not a plan's, so the lint raises it; `plan check` alone prints it as its
+    # `base-unresolvable` finding, exit 1. Mutation (oracle): `mutations/`'s "an unresolvable base
+    # reads as a clean run" -> nothing is raised and this reddens.
     root, config = project(tmp_path)
     git(root, "init", "-q", "-b", "main")
     git(root, "add", "-A")
     git(root, "commit", "-qm", "seed")
     with pytest.raises(BaseUnresolvable, match="fetch-depth: 0"):
         lint(root, config, plans=[])
-    with pytest.raises(BaseUnresolvable):
-        plan_gate(root, config, "refs/remotes/origin/main")
     code, out, _ = cli(root, tmp_path, "plan", "check", "--json")
     assert code == 1
     printed = json.loads(out)
@@ -565,7 +567,7 @@ def test_a_diff_git_gave_no_answer_for_is_not_a_shallow_checkout(
     # every ref, and reads as a finding rather than as a gate that never looked. Still exit 1,
     # with the cause in words. Mutation (advisory): drop the `code == -1` arm in
     # `_unresolved` — `BaseUnresolvable` is raised instead of this `Failure` and this reddens.
-    from stayfixed.docs import plans as module
+    from drybag.docs import plans as module
 
     root, config = project(tmp_path)
     git(root, "init", "-q", "-b", "main")
@@ -776,7 +778,7 @@ def test_an_uncommitted_plan_is_reported_as_unlinted_and_linted_when_named(tmp_p
 
 
 def test_a_named_plan_that_does_not_exist_is_a_failure(tmp_path: Path) -> None:
-    from stayfixed.errors import Failure
+    from drybag.errors import Failure
 
     root, config = project(tmp_path)
     with pytest.raises(Failure):
@@ -790,7 +792,7 @@ def test_a_named_plan_outside_the_project_is_a_failure_not_an_internal_error(
     # and raise `ValueError`, which the frame reports as an internal error (2) rather than as
     # the failure the missing-file case beside it already produces. Mutation: drop the
     # `is_relative_to` guard — this reddens with `ValueError`.
-    from stayfixed.errors import Failure
+    from drybag.errors import Failure
 
     root, config = project(tmp_path)
     elsewhere = tmp_path / "other" / "2026-01-01-x.md"

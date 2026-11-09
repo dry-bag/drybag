@@ -1,4 +1,4 @@
-"""The builders of a source repository holding the plugin's ten paths, for the tests reading one.
+"""The builders of a source repository holding the plugin's nine paths, for the tests reading one.
 
 `scripts/plugin_tree.py`'s own tests, the payload walk (`tests/test_payload.py`) and the release
 check's tag tests (`tests/scripts/test_release.py`) each built such a repository with a copy of
@@ -6,7 +6,7 @@ these, and the copies had drifted: three spellings of the paths, two of the file
 and a payload test importing its builder from another test module. Here once, as
 `tests/gitfixture.py` is for the `git` they run.
 
-The ten paths and the files under them are spelled out here and never read from the script's
+The nine paths and the files under them are spelled out here and never read from the script's
 `PLUGIN_PATHS`: an expectation read from the subject is the subject compared with itself. Every
 `git` goes through `tests.gitfixture.git`, the sealed runner, so the developer's configuration
 never shapes a fixture; a test that means the owner's configuration writes it into the test
@@ -17,7 +17,7 @@ text spelled out (`literal`), its tree and its id computed by git (`plugin_tree_
 and never by the script's `plugin_commit`.
 
 `tool_source` is the publisher's source: a repository whose tag carries its own
-`scripts/plugin_tree.py` and `src/stayfixed`, as a release's does, so the publisher can run the
+`scripts/plugin_tree.py` and `src/drybag`, as a release's does, so the publisher can run the
 tag's code; `released` adds a later release on top of one.
 """
 
@@ -30,33 +30,31 @@ from types import EllipsisType
 
 from tests.gitfixture import git, git_bytes
 
-# The nine paths the runtime reads and the directory's listing icon, as the plugin's tree must
+# The eight paths the runtime reads and the directory's listing icon, as the plugin's tree must
 # hold them.
-TEN = (
+NINE = (
     ".claude-plugin/plugin.json",
     ".claude-plugin/icon.png",
     ".codex-plugin/plugin.json",
     "hooks",
-    "scripts/stayfixed",
-    "src/stayfixed",
+    "scripts/drybag",
+    "src/drybag",
     "skills",
-    "agents",
     "README.md",
     "LICENSE",
 )
-# One file under each of the ten, with its git mode: the wrapper and the launcher are executable,
+# One file under each of the nine, with its git mode: the wrapper and the launcher are executable,
 # and both manifests name the version a plugin commit's message carries.
 PLUGIN_FILES: dict[str, tuple[bytes, str]] = {
-    ".claude-plugin/plugin.json": (b'{"name": "stayfixed", "version": "1.2.3"}\n', "100644"),
+    ".claude-plugin/plugin.json": (b'{"name": "drybag", "version": "1.2.3"}\n', "100644"),
     ".claude-plugin/icon.png": (b"\x89PNG\r\n\x1a\n\0", "100644"),
-    ".codex-plugin/plugin.json": (b'{"name": "stayfixed", "version": "1.2.3"}\n', "100644"),
+    ".codex-plugin/plugin.json": (b'{"name": "drybag", "version": "1.2.3"}\n', "100644"),
     "hooks/hooks.json": (b"{}\n", "100644"),
     "hooks/run-hook.sh": (b"#!/bin/sh\nexit 0\n", "100755"),
-    "scripts/stayfixed": (b"#!/usr/bin/env python3\n", "100755"),
-    "src/stayfixed/__init__.py": (b'__version__ = "1.2.3"\n', "100644"),
+    "scripts/drybag": (b"#!/usr/bin/env python3\n", "100755"),
+    "src/drybag/__init__.py": (b'__version__ = "1.2.3"\n', "100644"),
     "skills/close-bug/SKILL.md": (b"# close a bug\n", "100644"),
-    "agents/navigator.md": (b"# navigator\n", "100644"),
-    "README.md": (b"# stayfixed\n", "100644"),
+    "README.md": (b"# drybag\n", "100644"),
     "LICENSE": (b"MIT\n", "100644"),
 }
 
@@ -88,8 +86,8 @@ def plugin_source(tmp_path: Path, files: dict[str, tuple[bytes, str]] | None = N
     return root
 
 
-def plugin_tree_id(root: Path, rev: str = "HEAD", paths: tuple[str, ...] = TEN) -> str:
-    """The tree git writes for `paths` (the ten) at `rev` and nothing else, through an index of
+def plugin_tree_id(root: Path, rev: str = "HEAD", paths: tuple[str, ...] = NINE) -> str:
+    """The tree git writes for `paths` (the nine) at `rev` and nothing else, through an index of
     its own: the tree a plugin commit of `rev` names, computed without the script."""
     with tempfile.TemporaryDirectory() as scratch:
         index = str(Path(scratch) / "index")
@@ -104,12 +102,12 @@ def literal(tree: str, parent: str | None, version: str = "1.2.3") -> str:
     return (
         f"tree {tree}\n"
         f"{lineage}"
-        "author stayfixed <release@stayfixed.invalid> 0 +0000\n"
-        "committer stayfixed <release@stayfixed.invalid> 0 +0000\n"
+        "author drybag <release@drybag.invalid> 0 +0000\n"
+        "committer drybag <release@drybag.invalid> 0 +0000\n"
         "\n"
-        f"stayfixed {version}\n"
+        f"drybag {version}\n"
         "\n"
-        f"The plugin tree of stayfixed/stayfixed at v{version}.\n"
+        f"The plugin tree of dry-bag/drybag at v{version}.\n"
     )
 
 
@@ -121,32 +119,32 @@ def hashed(where: Path, text: str) -> str:
 
 # --- The publisher's source: a tag carrying its own code -----------------------------------------
 
-# This repository, whose `scripts/plugin_tree.py` and `src/stayfixed` a tool source carries.
+# This repository, whose `scripts/plugin_tree.py` and `src/drybag` a tool source carries.
 REPOSITORY = Path(__file__).resolve().parents[1]
 MARKETPLACE = ".claude-plugin/marketplace.json"
 # The plugin repository's URL, spelled once for every test module that builds or expects a
 # marketplace entry, and never read from a script: the scripts' copies are held to it.
-PLUGIN_URL = "https://github.com/stayfixed/stayfixed-plugin.git"
+PLUGIN_URL = "https://github.com/dry-bag/drybag-plugin.git"
 # What a release's tag carries beside the plugin and the publisher runs: the tag's own code.
-TOOL_PATHS = ("scripts/plugin_tree.py", "src/stayfixed")
+TOOL_PATHS = ("scripts/plugin_tree.py", "src/drybag")
 
 
 def pinned_marketplace(
     sha: object, version: str = "1.2.3", *, entries: int = 1
 ) -> tuple[bytes, str]:
-    """The marketplace's file: `entries` entries `stayfixed` (one unless a case means more), each a
+    """The marketplace's file: `entries` entries `drybag` (one unless a case means more), each a
     url source at `v<version>` pinning `sha` beside its `ref`, whatever `sha` is, or no `sha` when
     it is `None`."""
     source: dict[str, object] = {"source": "url", "url": PLUGIN_URL, "ref": f"v{version}"}
     if sha is not None:
         source["sha"] = sha
-    plugins = [{"name": "stayfixed", "source": source} for _ in range(entries)]
-    text = json.dumps({"name": "stayfixed-marketplace", "plugins": plugins}, indent=2) + "\n"
+    plugins = [{"name": "drybag", "source": source} for _ in range(entries)]
+    text = json.dumps({"name": "drybag", "plugins": plugins}, indent=2) + "\n"
     return text.encode("utf-8"), "100644"
 
 
 def tool_files(where: Path) -> dict[str, tuple[bytes, str]]:
-    """This branch's `scripts/plugin_tree.py` and every file `git ls-files src/stayfixed` lists:
+    """This branch's `scripts/plugin_tree.py` and every file `git ls-files src/drybag` lists:
     each its working-tree bytes at the mode the index gives it. `where` is the `HOME` the listing
     runs under, inside the test's own directory."""
     listing = git(REPOSITORY, "ls-files", "-s", "-z", "--", *TOOL_PATHS, home=where)
@@ -173,10 +171,10 @@ def tool_source(
     *,
     plugin_tree: bytes | None = None,
     extra: dict[str, tuple[bytes, str]] | None = None,
-    paths: tuple[str, ...] = TEN,
+    paths: tuple[str, ...] = NINE,
 ) -> Path:
     """A release's source at `tmp_path / "source"`: `PLUGIN_FILES`, this branch's own
-    `scripts/plugin_tree.py` (or `plugin_tree`) and `src/stayfixed`, and `extra`, in one commit
+    `scripts/plugin_tree.py` (or `plugin_tree`) and `src/drybag`, and `extra`, in one commit
     whose marketplace pins the plugin commit its tree over `paths` makes, with no parent: the
     first release. Tagged `v1.2.3`, annotated, as `plugin.json` says."""
     root = tmp_path / "source"
@@ -213,8 +211,8 @@ def released(
         write(root, {MARKETPLACE: pinned_marketplace(before)})
         commit(root, "the release before")
     parent = pinned_at(root)
-    manifest = (f'{{"name": "stayfixed", "version": "{version}"}}\n'.encode(), "100644")
+    manifest = (f'{{"name": "drybag", "version": "{version}"}}\n'.encode(), "100644")
     write(root, {".claude-plugin/plugin.json": manifest, ".codex-plugin/plugin.json": manifest})
     write(root, {**(files or {}), MARKETPLACE: pinned_marketplace(None, version)})
     commit(root, f"release {version}")
-    return _pin_and_tag(root, version, parent, TEN)
+    return _pin_and_tag(root, version, parent, NINE)

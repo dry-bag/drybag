@@ -11,7 +11,7 @@ still do — so it is the one whose contract went unasserted longest.
 
 from __future__ import annotations
 
-import stayfixed.overlay.api as overlay
+import drybag.overlay.api as overlay
 
 
 def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
@@ -21,7 +21,7 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     # No mutation entry: the mutation is adding an export, which is two lines in `api.py` (the
     # import and the `__all__` entry) and not one substituted line. Measured by hand instead —
     # re-exporting `layout.COMMON` reddens this test and this test alone.
-    # The runner is a leaf now (`stayfixed.runner`); an area's surface does not re-export a
+    # The runner is a leaf now (`drybag.runner`); an area's surface does not re-export a
     # leaf, which is why the three names this list used to carry are absent from it.
     required = {
         # creating an overlay, rendering one and finishing either, for setup
@@ -44,7 +44,7 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
         # the shipped template file list, for `scripts/check_artifacts.py` — the one consumer
         # outside `src/`, which a walk of `src/` alone does not see
         "OVERLAY_FILES",
-        # the floor an overlay declares and whether a running stayfixed meets it, for the
+        # the floor an overlay declares and whether a running drybag meets it, for the
         # `attach` area's session-start handler
         "requires_of",
         "satisfies",

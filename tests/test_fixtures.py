@@ -1,9 +1,9 @@
 """The two fixture projects the smoke workflow runs against, held to what they claim.
 
-`smoke-project` is a project every gate passes on, with every gate listed in `enforced` so the
-gates enforce; `hostile-project` is the clone the clone-to-exfiltration scenario runs. Both are read
-by CI from this tree, so a fixture that drifted from what a gate accepts would fail the smoke
-workflow with a message about the fixture rather than about stayfixed.
+`smoke-project` is a project every gate passes on; `hostile-project` is the clone the
+clone-to-exfiltration scenario runs. Both are read by CI from this tree, so a fixture that drifted
+from what a gate accepts would fail the smoke workflow with a message about the fixture rather than
+about drybag.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from stayfixed.cli import build_parser, discover_registrars, run
+from drybag.cli import build_parser, discover_registrars, run
 from tests.declarations import declared
 from tests.gitfixture import git, needs_git
 from tests.workflow_yaml import load, runs
@@ -62,7 +62,6 @@ def _invoke(root: Path, tmp_path: Path, argv: list[str]) -> tuple[int, str]:
     "argv",
     [
         ["docs", "check"],
-        ["bugs", "check"],
         ["docs", "trail", "--check"],
         ["plan", "check", "--base", "HEAD~1"],
         ["commit", "check", "--range", "HEAD~1..HEAD"],
@@ -79,8 +78,7 @@ def test_every_gate_the_workflow_runs_passes_on_the_smoke_fixture(
     # `--base HEAD~1` and not the default: `plan check` defaults to
     # `refs/remotes/origin/<base_branch>`, and this copy is a fresh repository with no remote,
     # where an unresolvable base is a finding (`docs/cli.md`: "A base that does not resolve is a
-    # finding (1), never an OK"). CI's `stayfixed gate` passes the base as the commit it
-    # resolved; the fixture's own two commits are the equivalent here.
+    # finding (1), never an OK"). The fixture's own two commits stand in for a base here.
     root = _copy_as_repository(tmp_path)
     code, printed = _invoke(root, tmp_path, argv)
     assert code == 0, printed
@@ -90,11 +88,10 @@ def test_every_gate_the_workflow_runs_passes_on_the_smoke_fixture(
 @pytest.mark.parametrize(
     ("argv", "examined"),
     [
-        (["bugs", "check"], {"checked": True, "findings": []}),
         (["commit", "check", "--range", "HEAD~1..HEAD"], {"commits": 1, "violations": []}),
         (["docs", "trail", "--check"], {"stale": False}),
     ],
-    ids=("bugs check", "commit check", "docs trail --check"),
+    ids=("commit check", "docs trail --check"),
 )
 def test_the_gates_on_the_fixture_report_what_they_examined(
     tmp_path: Path, argv: list[str], examined: dict[str, object]
@@ -103,16 +100,13 @@ def test_the_gates_on_the_fixture_report_what_they_examined(
     # the `plan check` one was: `exit 0` is also what a gate that examined nothing produces,
     # and the author closed that for one row and not for the rest. Measured on this tree, each
     # guard torn out on its own and `tests/test_fixtures.py` run:
-    #   `ledger/check.py`'s `uninitialised()` -> `return True`, so `bugs check` takes its inert
-    #     arm and reports `{"checked": False}` having read no ledger — 30 passed;
     #   `guards/commit.py`'s `commits = commits_in(root, rev_range)` -> `commits = []`, so the
     #     range is empty and the gate says "OK: 0 commit message(s) checked" — 30 passed.
     # The quantity each row is about is what is asserted here, so those two now redden.
     # `docs trail --check` carries `stale` for the same reason; its own guard is held by the
     # hand-measured fixture mutation named above.
     #
-    # Mutations (declared): the bug ledger reports itself uninitialised; the commit gate reads
-    # an empty range.
+    # Mutation (declared): the commit gate reads an empty range.
     import json
 
     root = _copy_as_repository(tmp_path)
@@ -128,7 +122,7 @@ def test_docs_check_on_the_fixture_reads_the_documents_it_is_about(tmp_path: Pat
     # The fifth row's companion, and it has to be a planted violation rather than a count:
     # `docs check` reports `findings: []` and the same `OK:` line whether it examined the
     # documents or returned early, so no field of its success answer can tell the two apart.
-    # Measured: `check_budgets` and `check_links` in `src/stayfixed/docs/hygiene.py` each given
+    # Measured: `check_budgets` and `check_links` in `src/drybag/docs/hygiene.py` each given
     # `return []` as their first statement left `tests/test_fixtures.py` 30 green.
     #
     # Two plants and not one, because they are two walks: an always-loaded document blown past
@@ -164,16 +158,6 @@ def test_plan_check_on_the_fixture_lints_the_plan_it_touched(tmp_path: Path) -> 
     assert PLAN in printed, printed
 
 
-def test_the_smoke_fixture_lists_every_gate_so_the_gates_enforce() -> None:
-    import tomllib
-
-    from stayfixed.config.schema import BUILTIN_GATES
-
-    config = tomllib.loads((SMOKE / "stayfixed.toml").read_text(encoding="utf-8"))
-    assert config["stayfixed"]["enforced"] == list(BUILTIN_GATES)
-    assert config["project"]["name"] == "smoke"
-
-
 def test_the_hostile_fixture_carries_the_three_properties_the_scenario_depends_on() -> None:
     # `scripts/smoke_exfiltration.py` asserts that each of these reaches nothing. A fixture
     # that had quietly lost one of them would make every row in that scenario green over a
@@ -181,12 +165,8 @@ def test_the_hostile_fixture_carries_the_three_properties_the_scenario_depends_o
     import json
     import tomllib
 
-    raw = (HOSTILE / "stayfixed.toml").read_text(encoding="utf-8")
+    raw = (HOSTILE / "drybag.toml").read_text(encoding="utf-8")
     config = tomllib.loads(raw)
-    # The literal and not only the loaded value: the loader's default enforces nothing, and a
-    # fixture that relied on a default would stop being the hostile case the day it moved.
-    assert 'enforced = ["docs", "bugs", "plan", "commit", "trail"]' in raw
-    assert config["stayfixed"]["enforced"] == ["docs", "bugs", "plan", "commit", "trail"]
     # The clone names ANOTHER project, which is the whole of the `mismatch` row.
     assert config["project"]["name"] == "smoke"
     assert config["memory"]["mode"] == "in-repo"
@@ -196,7 +176,7 @@ def test_the_hostile_fixture_carries_the_three_properties_the_scenario_depends_o
     assert "CANARY-IN-REPO-RULE" in note
 
     settings = json.loads((HOSTILE / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    assert "STAYFIXED_CONFIG" in settings["env"]
+    assert "DRYBAG_CONFIG" in settings["env"]
 
 
 # --- workflow steps, read out of the shipped files -------------------------------------
@@ -206,22 +186,11 @@ def test_the_hostile_fixture_carries_the_three_properties_the_scenario_depends_o
 # from the shipped file — never retyped here, or the test would hold a copy and the file would be
 # free to drift — and a case that runs it runs it with `bash`.
 
-CHECK_WORKFLOW = ROOT / ".github" / "workflows" / "check.yml"
 needs_bash = pytest.mark.skipif(shutil.which("bash") is None, reason="bash is not installed")
 # `.github/` is outside `source-include`: it is this repository's own continuous integration
 # and not source a downstream packager needs, and `scripts/check_artifacts.py` states that the
 # sdist exists so such a packager can run the suite. So the cases below skip where the file
 # they are about is not there, rather than the tree gaining a line to ship CI configuration.
-# `tests/test_check_workflow.py` imports this marker for its cases, which run `check.yml`'s steps.
-needs_workflow = pytest.mark.skipif(
-    not CHECK_WORKFLOW.is_file(), reason="check.yml is not in the sdist"
-)
-# And its own marker for the one guard that is not about `check.yml` at all. The tree-wide
-# `${{ }}`-in-`run:` scan is the only assertion covering `ci.yml`, `release.yml` and
-# `smoke.yml`, and it carried `needs_workflow` — so renaming or deleting `check.yml` would
-# have switched off the guard over the other four, silently and green. A guard whose predicate
-# is unrelated to what it guards is a guard that will eventually be off without anyone
-# deciding it should be.
 needs_workflows_dir = pytest.mark.skipif(
     not (ROOT / ".github" / "workflows").is_dir(), reason="the workflows are not in the sdist"
 )
@@ -463,8 +432,8 @@ def test_the_mutation_oracle_has_a_job_of_its_own_with_a_budget_that_fits() -> N
 
 WORKFLOWS = ROOT / ".github" / "workflows"
 # The workflows that run a shell, so the walk below cannot pass by reading nothing: each holds a
-# script. `smoke-release.yml` is two reusable-workflow calls and legitimately runs none.
-SCRIPTED = {"ci.yml", "check.yml", "release.yml", "smoke.yml"}
+# script.
+SCRIPTED = {"ci.yml", "release.yml", "smoke.yml"}
 
 
 def scripts(text: str) -> list[str]:
@@ -488,7 +457,7 @@ def test_no_workflow_splices_an_expression_into_a_shell() -> None:
     # so a ref name, a branch name or a pull-request title that carries shell metacharacters
     # runs as the workflow's own code. Every value in these files reaches a shell through
     # `env:` instead. Mutation (oracle): `mutations/`'s "a workflow splices an expression into a
-    # shell" puts one into `check.yml`'s checkout assertion.
+    # shell" puts one into `smoke.yml`'s comparison of the installed hooks.
     #
     # `*.y*ml`: the platform reads `.yaml` too, and a workflow added with the other spelling
     # would never be read while the `>=` assertion below went on passing.
@@ -501,15 +470,14 @@ def test_no_workflow_splices_an_expression_into_a_shell() -> None:
 
 
 # An action a step uses, by a full commit sha: a tag or a branch can be moved to other code after
-# the pin was reviewed. A step's `./` action is this repository's own; a job's `uses:` is a call of
-# a reusable workflow, whose ref `smoke-release.yml` names on purpose (`@dev`, a release tag).
+# the pin was reviewed. A step's `./` action is this repository's own.
 _PINNED_ACTION = re.compile(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}")
 
 
 @needs_workflows_dir
 def test_every_action_a_step_uses_is_pinned_by_a_commit_sha() -> None:
     # Every workflow, every job, every step: one sweep, so a step added to any job is held.
-    # Mutation (declared): `mutations/`'s "the runners job takes an action by its tag" -> the
+    # Mutation (declared): `mutations/`'s "the demo job takes an action by its tag" -> the
     # step is found unpinned.
     unpinned: list[tuple[str, str, object]] = []
     seen = 0
@@ -588,7 +556,7 @@ def step_script(workflow: Path, step_name: str) -> str:
 
 
 def test_a_step_s_script_is_never_read_from_the_step_after_it(tmp_path: Path) -> None:
-    # The cases that run `check.yml`'s steps name a step and get its script. A reader that
+    # The cases that run a workflow's steps name a step and get its script. A reader that
     # searched onward for `run: |` handed back the next step's script for a step spelled with a
     # one-line `run:`, so a case about the first step ran the second. The strict reader gives
     # each step its own.
@@ -606,35 +574,6 @@ def test_a_step_s_script_is_never_read_from_the_step_after_it(tmp_path: Path) ->
     )
     assert step_script(workflow, "first") == "echo first\n"
     assert step_script(workflow, "second") == "echo second\n"
-
-
-SMOKE_RELEASE = WORKFLOWS / "smoke-release.yml"
-CALLED = "stayfixed/stayfixed/.github/workflows/check.yml"
-
-
-@pytest.mark.skipif(not SMOKE_RELEASE.is_file(), reason="smoke-release.yml is not in the sdist")
-def test_the_release_smoke_calls_the_release_this_tree_carries() -> None:
-    """RELEASING.md's last step dispatches this workflow at every release, and `uses:` takes no
-    expression, so the tag it calls is written out and moved by hand in the release commit.
-
-    Held to the version the tree carries, which the release workflow's own suite run checks at
-    the tag: a stale tag smokes the release before, and one past the tree names a tag that does
-    not exist yet, so the dispatch fails at creation for want of a ref. The alias a `1.x`
-    release moves is not called here: a `0.x` release has none, and a job naming a tag that
-    does not exist fails the whole dispatch before any job runs. Mutation (declared): the
-    release job calls `@v1` again.
-    """
-    import stayfixed
-
-    document = load(SMOKE_RELEASE.read_text(encoding="utf-8"))
-    assert isinstance(document, dict) and isinstance(document["jobs"], dict), document
-    uses = {
-        name: job.get("uses") for name, job in document["jobs"].items() if isinstance(job, dict)
-    }
-    assert uses == {
-        "at-the-development-branch": f"{CALLED}@dev",
-        "at-the-release": f"{CALLED}@v{stayfixed.__version__}",
-    }, uses
 
 
 RELEASE_WORKFLOW = WORKFLOWS / "release.yml"
@@ -690,7 +629,7 @@ def test_the_release_workflow_runs_the_release_check_in_the_one_spelling() -> No
     # the old one passed it. Mutation (declared): `mutations/`'s "the release workflow builds
     # after running the release check the CLI no longer ships".
     for body in bodies:
-        assert "stayfixed release" not in body, body
+        assert "drybag release" not in body, body
 
 
 @needs_release_workflow

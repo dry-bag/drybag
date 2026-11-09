@@ -1,6 +1,6 @@
 # Principles
 
-Ten principles, numbered so the README can point at one. Each has a statement, what stayfixed
+Ten principles, numbered so the README can point at one. Each has a statement, what drybag
 does about it today, its sources, and a **Backing** line whose vocabulary
 [README.md](README.md) defines. Citations resolve to [sources.md](sources.md).
 
@@ -11,13 +11,8 @@ closed vocabulary, and — for the severe ones — a line saying what the eviden
 establish. The index over those files is generated, refuses to overwrite content it did not
 write, and is never the place a fact is entered.
 
-**What stayfixed does.** `bugs new` allocates the next identifier across every ref, `bugs
-index` renders the index as a pure function of the entries, `bugs check` sweeps the code
-roots for identifiers with no entry behind them and entries whose evidence boundary is the
-template's placeholder, and `bugs renumber` moves an entry and rewrites every mention, leaving a
-`void` entry at the old number. Against the base a change is judged on, `bugs check` reports an
-entry the change forked with and deleted: an identifier once allocated keeps its file. The
-identifier grammar is one definition, read from the project's configuration.
+**What drybag does.** Nothing any more: the bug ledger left this package. `plan
+check` still holds a plan that claims `Fixes BR-nnn` to a premise.
 
 **Why a file.** An issue tracker records a conversation; a file records a claim a later
 session can falsify. The "what this evidence does not establish" line is the part that
@@ -37,7 +32,7 @@ skills in the format every harness reads [S4] [S14].
 the mutation that reddens its test. A test that cannot fail is not a test; a test that
 fails for a reason other than the one it names proves nothing about that reason.
 
-**What stayfixed does.** `mutations/` declares, for each load-bearing guard, the one line
+**What drybag does.** `mutations/` declares, for each load-bearing guard, the one line
 to change and the tests that must go red when it does; `scripts/mutation_oracle.py` applies
 each, runs only the named tests, and fails on a survivor, on a `before` line that no longer
 exists, and on a named test that does not pass on the clean tree first. CI runs the whole
@@ -61,12 +56,11 @@ to where the evidence lives. The index carries one line per note — a trigger a
 note settles — and is rendered from those lines, never edited by hand. An entry that can be
 quoted gets quoted instead of opened, so an entry must not read as a finished claim.
 
-**What stayfixed does.** Each note's `index:` line is the routing line; `memory index`
+**What drybag does.** Each note's `index:` line is the routing line; `memory index`
 renders `MEMORY.md` from them under a declared section order and harvests back any line a
-second writer appended, so the harness's own memory writer and stayfixed share one directory
+second writer appended, so the harness's own memory writer and drybag share one directory
 without either rewriting the other's keys. `memory inventory` reports each note's size and
-whether its line is curated, harvested or provisional; `memory refs` checks that every path a
-note names still exists, and reports the link graph beside it as advice.
+whether its line is curated, harvested or provisional.
 
 **Why.** The harness loads the first 200 lines or 25 KB of the index into every session
 [S5], so the index is a budget and every word in it is paid on every turn [S17]. There is no
@@ -89,12 +83,12 @@ by the time one is needed, the session has already acted without it. They are in
 at session start, ranked, and never truncated. Everything else is a pointer the index routes
 to.
 
-**What stayfixed does.** Which rules those are is each person's to write, and stayfixed ships
+**What drybag does.** Which rules those are is each person's to write, and drybag ships
 none: a standing rule is a note with `metadata.startup` that its owner promoted at the bytes it
 holds (`memory promote`), and the `recommended` preset carries no rule of its own. `memory
 session-context` renders two bundles — standing rules and volatile notes — each across
-numbered parts sized to the platform's per-entry cap, and `memory fit` reports a bundle that
-does not fit its slots.
+numbered parts sized to the platform's per-entry cap, and `doctor`'s `bundles` row reports a
+bundle that does not fit its slots.
 Standing rules are flagged when they outgrow their budget and still delivered, because a
 standing rule that does not arrive is a standing rule that gets broken; volatile notes
 degrade to descriptions instead.
@@ -117,7 +111,7 @@ names, paths inside the project and document layout; they may never set standing
 widen permissions, install hooks, pick a write path outside the root, or select their own
 enforcement level.
 
-**What stayfixed does.** A note counts as the owner's only once promoted, which records the digest
+**What drybag does.** A note counts as the owner's only once promoted, which records the digest
 of its bytes in a trust record no tree carries; until then — a note the repository ships among
 them — it reaches the model only inside a delimited region with a per-invocation nonce no note
 holds, which says "this is data", and never as a standing rule. Every write goes through a path walk that refuses a symlink at any
@@ -142,15 +136,15 @@ platform blocks on a non-zero exit — before a tool call — and never on sessi
 exit codes are ignored, or on prompt submission, where a blocking exit erases the prompt.
 A guard that cannot fail closed must say so rather than pretend.
 
-**What stayfixed does today.** No handler refuses on its own failure: `bg-cleanup`, the reading
+**What drybag does today.** No handler refuses on its own failure: `bg-cleanup`, the reading
 of a backgrounded shell call before it runs, only hints, because the agent it would stop writes
 the command it reads. A handler that fails costs its own context and never the call, and the
 commit-message hook git runs locally never fails a commit itself, though a hook it chains to can
-— its gate is `stayfixed commit check` in CI. Every entry in `hooks/hooks.json` runs
+— its gate is `drybag commit check` in CI. Every entry in `hooks/hooks.json` runs
 `hooks/run-hook.sh`, which takes the `python3` on `PATH` if it is 3.11 or newer. On every fault
 it can see — no such interpreter, a launcher it cannot read, a project root it cannot enter, and
 afterwards an exit other than `0` or `2` — it prints its reason and exits `0`, so no hook blocks
-a call on stayfixed's own fault.
+a call on drybag's own fault.
 
 **Why.** The exit-code semantics differ per event and are documented per event [S3]; Codex
 runs some hooks asynchronously and an asynchronous hook cannot block [S7]. A Python launcher
@@ -170,14 +164,11 @@ not take. A gate should run advisory until the repository has been brought to th
 where it would pass, and only then enforce — and the decision to enforce should be read from
 the base branch, never from the change under review.
 
-**What stayfixed does today.** Adoption ships per gate. `stayfixed assess` inventories
-what stands between a repository and enforcement, and `stayfixed adopt promote` enforces every
-gate that passes now and names the rest, or enforces the gates it is given only if all of them
-pass; its first promotion is what starts the adoption. The gate a pull request faces
-reads the base branch's configuration and admits only a change that tightens it, under the
-repository settings `docs/cli.md` names. What it does not do yet is hold the line inside a gate
-— fail new findings while grandfathering old ones — which current linters do [S33] and which is
-recorded as the next step.
+**What drybag does today.** It enforces no gate itself: its checks — `docs
+check`, `plan check`, `commit check` and `docs trail --check` — are commands a project runs in its
+own CI, and which of them may fail a change is that CI's decision. What it does not do is hold the
+line inside a check — fail new findings while grandfathering old ones — which current linters do
+[S33].
 
 **Why.** The alternative in the field is a constitution declared before the first commit
 [S11] or a process layer that tells the agent how to work without asking whether the
@@ -185,7 +176,7 @@ repository does [S10]. Neither has a way to introduce a rule into a codebase tha
 it two hundred times, which is where every existing project starts.
 
 **Backing:** thin. This is a design argument from experience with one repository's adoption of
-its own rules. Nothing external states it, and no repository has yet adopted through `init` and
+its own rules. Nothing external states it, and no repository has yet
 had its advisory period's findings counted. The label changes when one has.
 
 ## 8. A personal overlay is a versioned plugin, not a dotfiles sync
@@ -195,11 +186,11 @@ travel as a plugin that declares a dependency on the public one and carries its 
 manifest — installable on a fresh machine by the same command that installs everything
 else, private by construction, and never a prerequisite for the public tool to be useful.
 
-**What stayfixed does today.** The public plugin needs no overlay: with `[memory] mode` set to
+**What drybag does today.** The public plugin needs no overlay: with `[memory] mode` set to
 `local-only` or `in-repo` it runs whole. The overlay is its delivery layer, and the core runs
-without it. `stayfixed setup --overlay` makes a private overlay repository from the template
+without it. `drybag setup --overlay` makes a private overlay repository from the template
 repository, or renders one locally, and records it on a machine; `overlay upgrade` refreshes the
-files nobody edited, and `stayfixed attach` binds a repository to it in `overlay` mode; `detach` takes back what `attach`
+files nobody edited, and `drybag attach` binds a repository to it in `overlay` mode; `detach` takes back what `attach`
 wrote and keeps the overlay's record of the binding. The memory store honours an overlay link
 only when its target lies inside this project's share of the recorded overlay root and the
 overlay's record binds this repository's `origin`.
@@ -225,7 +216,7 @@ reach installed users. A project's reference to a shared workflow is a full-leng
 SHA written by the tool that installed it and bumped by the tool that upgrades it; a
 floating alias is a documented opt-in.
 
-**What stayfixed does.** Its repository's release check, `scripts/release.py check`,
+**What drybag does.** Its repository's release check, `scripts/release.py check`,
 cross-checks the version across `pyproject.toml`, the lockfile, the package, both plugin
 manifests and `CHANGELOG.md`; the marketplace entries carry no version because the plugin's
 own overrides it silently [S6]. Changelog entries are fragments assembled at release [S12].
@@ -244,9 +235,9 @@ is built on it. And everything durable — documents, comments, commits, pull re
 written in one language, whatever language the conversation is in, because artifacts are
 read by tools, by later contributors and by a possible public extraction.
 
-**What stayfixed does.** The freshness rule is the row grammar of [sources.md](sources.md)
+**What drybag does.** The freshness rule is the row grammar of [sources.md](sources.md)
 and a test over it. The language half is a person's own standing rule, a note with
-`metadata.startup`, and stayfixed enforces nothing about it. The four "harness" sources in the [README](README.md) are the freshness rule's
+`metadata.startup`, and drybag enforces nothing about it. The four "harness" sources in the [README](README.md) are the freshness rule's
 own worked example: the term moved from a company blog [S27] to a discipline [S28] to an
 open-sourced platform [S30] and a research framing [S29] in nine months, with the pattern
 essay it all descends from [S31] published eleven months before the earliest of the four

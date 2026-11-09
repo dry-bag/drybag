@@ -1,6 +1,6 @@
-"""`README.md`'s "What stayfixed sends where", held to the code.
+"""`README.md`'s "What drybag sends where", held to the code.
 
-The section declares every program stayfixed starts that can reach a network, and every file its
+The section declares every program drybag starts that can reach a network, and every file its
 templates write under `.github/`, which GitHub runs. This module holds the section's Program
 column to both, in both directions: a *network* launch with no row is an undisclosed
 destination, which the plugin directory's security scan rejects, and a row with no launch is a
@@ -22,9 +22,7 @@ from tests.outbound.policy import (
     GIT_CONFIG_KEYS,
     GIT_GLOBAL_OPTIONS,
     GIT_PROGRAM_OPTIONS,
-    GIT_REMOTE_OPTIONS,
     LOCAL,
-    LOCAL_WHOLE,
     NATIVE_MODULES,
     NETWORK,
     NETWORK_MODULES,
@@ -33,7 +31,6 @@ from tests.outbound.policy import (
     PASS_THROUGH,
     ROOT_LAUNCHERS,
     SCRUBBED_ENVIRONMENT,
-    USER_COMMANDS,
     VOUCHED_ELEMENTS,
 )
 from tests.outbound.walk import (
@@ -55,14 +52,12 @@ TEMPLATES = SRC / "templates"
 WALK = Walk(ROOT_LAUNCHERS)
 # Vacuity floors, not coverage: well under what the walk finds today, so that churn never trips
 # one and a walk that stopped seeing the package does.
-LAUNCHES_FLOOR = 70
+LAUNCHES_FLOOR = 50
 MODULES_FLOOR = 120
 # What ends the options in an argv, after which every element is an operand, read or not.
 END_OF_OPTIONS = ("--", "--end-of-options")
 # The section, everything between its heading and the next `## ` heading, and a code span.
-_SENDS_SECTION = re.compile(
-    r"^## What stayfixed sends where\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL
-)
+_SENDS_SECTION = re.compile(r"^## What drybag sends where\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL)
 _CODE_SPAN = re.compile(r"`([^`]+)`")
 
 Key = tuple[str, str, str]
@@ -114,13 +109,9 @@ def _command(argv: Argv) -> tuple[Argv, Argv] | None:
 
 
 def _row(command: Argv) -> str | None:
-    """The README row `command` reaches: the first `NETWORK` prefix it starts with, and, for a
-    prefix in `USER_COMMANDS`, only when the element after it is the user's, unread."""
+    """The README row `command` reaches: the first `NETWORK` prefix it starts with."""
     for prefix, row in NETWORK.items():
-        if command[: len(prefix)] != prefix:
-            continue
-        users = command[len(prefix) : len(prefix) + 1]
-        if prefix not in USER_COMMANDS or (users and isinstance(users[0], Unread)):
+        if command[: len(prefix)] == prefix:
             return row
     return None
 
@@ -142,13 +133,9 @@ def _runs_a_program(part: str, subcommand: str) -> bool:
 def _local(command: Argv, options: Argv) -> bool:
     if command[0] == "git":
         subcommand = command[1] if len(command) > 1 and isinstance(command[1], str) else ""
-        if any(
-            isinstance(part, str)
-            and (part.startswith(GIT_REMOTE_OPTIONS) or _runs_a_program(part, subcommand))
-            for part in options
-        ):
+        if any(isinstance(part, str) and _runs_a_program(part, subcommand) for part in options):
             return False
-    return any(command[: len(prefix)] == prefix for prefix in LOCAL) or command in LOCAL_WHOLE
+    return any(command[: len(prefix)] == prefix for prefix in LOCAL)
 
 
 def classify(launch: Launch) -> tuple[frozenset[str] | None, set[Key]]:
@@ -199,22 +186,19 @@ def undeclared_overrides(overrides: list[Override]) -> list[Override]:
 
 
 def github_files() -> set[str]:
-    """Every file stayfixed's templates write under a `.github/` directory, by the path it is
+    """Every file drybag's templates write under a `.github/` directory, by the path it is
     written at: a file there is one GitHub acts on.
 
     A template under a `.github/` folder is found by its path. One written into `.github/` from a
     template outside one is found only when its destination is named here, because the path it is
-    written at is computed at run time, which this does not follow: the project's workflow,
-    `init`'s `CI_WORKFLOW`, is the one today, and a second is a row this misses until it is added.
+    written at is computed at run time, which this does not follow: none is today, and one is a row
+    this misses until it is added.
     """
-    from stayfixed.project.templates import CI_WORKFLOW
-
-    shipped = {
+    return {
         "/".join(parts[parts.index(".github") :])
         for path in TEMPLATES.rglob("*")
         if path.is_file() and ".github" in (parts := path.relative_to(TEMPLATES).parts)
     }
-    return shipped | {CI_WORKFLOW}
 
 
 def outbound_programs(launches: list[Launch]) -> set[str]:
@@ -227,7 +211,7 @@ def outbound_programs(launches: list[Launch]) -> set[str]:
 def readme_outbound_rows() -> set[str]:
     """The first code span of each row's Program cell in README's network section."""
     match = _SENDS_SECTION.search(README.read_text(encoding="utf-8"))
-    assert match, "README.md has no ## What stayfixed sends where section"
+    assert match, "README.md has no ## What drybag sends where section"
     keys = []
     for line in match.group(1).splitlines():
         if not line.startswith("| ") or line.startswith("| Program |"):
@@ -243,7 +227,7 @@ def readme_outbound_rows() -> set[str]:
 
 def _plugin_installs() -> list[tuple[str, ...]]:
     """Every argv `_install_plugins` builds, from the lambdas it builds them with."""
-    from stayfixed.setup.run import _MARKETPLACE_ADD, _PLUGIN_INSTALL
+    from drybag.setup.run import _MARKETPLACE_ADD, _PLUGIN_INSTALL
 
     builders: list[tuple[Callable[[str], list[str]], str]] = [
         *((build, "owner/marketplace") for build in _MARKETPLACE_ADD.values()),
@@ -259,8 +243,8 @@ def _shown(argv: Argv) -> tuple[str | None, ...]:
 def test_no_module_imports_a_network_or_native_module() -> None:
     # `urllib.parse` and `http.HTTPStatus` reach nothing, so the match is on modules, not roots.
     # The entries in `mutations/` that name this test are its declared mutations. By hand:
-    # src/stayfixed/runner.py imports `ctypes` -> this reddens; the match moves to the root ->
-    # the `urllib.parse` that src/stayfixed/docs/hygiene.py imports reads as `urllib.request`. A
+    # src/drybag/runner.py imports `ctypes` -> this reddens; the match moves to the root ->
+    # the `urllib.parse` that src/drybag/docs/hygiene.py imports reads as `urllib.request`. A
     # walk-based assertion states its walk is non-empty: `package_files` globs only the top of
     # the package -> the floor reddens.
     assert len(package_files(SRC)) >= MODULES_FLOOR
@@ -269,14 +253,14 @@ def test_no_module_imports_a_network_or_native_module() -> None:
 
 def test_a_module_is_the_file_the_tree_lists_under_its_exact_name() -> None:
     # On a disk that folds case, as macOS's does by default, asking the disk found
-    # `scaffold/manifest.py` for `stayfixed.scaffold.Manifest`, so the class `Manifest` that
-    # `overlay/create.py` imports from `stayfixed.scaffold` was read as a module there and as a name
+    # `scaffold/manifest.py` for `drybag.scaffold.Manifest`, so the class `Manifest` that
+    # `overlay/create.py` imports from `drybag.scaffold` was read as a module there and as a name
     # on Linux: the walk read one tree two ways. No declared entry: the oracle's CI job runs on a
     # case-sensitive disk, where asking the disk again answers the same and the mutation survives.
     # By hand on macOS: `_module_file` asks `(ROOT / candidate).is_file()` again -> the first
     # assertion reddens.
-    assert _module_file("stayfixed.scaffold.Manifest") is None
-    assert _module_file("stayfixed.scaffold.manifest") == "src/stayfixed/scaffold/manifest.py"
+    assert _module_file("drybag.scaffold.Manifest") is None
+    assert _module_file("drybag.scaffold.manifest") == "src/drybag/scaffold/manifest.py"
 
 
 def test_both_import_forms_name_the_module_they_reach() -> None:
@@ -308,8 +292,8 @@ def test_a_listed_module_is_forbidden_with_its_submodules(module: str, forbidden
 # Each shape a launch can take, as a package file holding it, and what the walk must read of its
 # argv (`None`: an element it cannot read). The tree holds none of most of them, so the walk over
 # the tree alone cannot show they are seen.
-TOP, NESTED = "src/stayfixed/probe.py", "src/stayfixed/ledger/probe.py"
-GIT_RUN = "from stayfixed.gitenv import git_run\n"
+TOP, NESTED = "src/drybag/probe.py", "src/drybag/docs/probe.py"
+GIT_RUN = "from drybag.gitenv import git_run\n"
 LAUNCH_SHAPES: dict[str, tuple[str, str, tuple[str | None, ...]]] = {
     "getoutput": (TOP, "import subprocess\nsubprocess.getoutput('curl x')", (None,)),
     "getstatusoutput": (TOP, "import subprocess as sp\nsp.getstatusoutput('curl x')", (None,)),
@@ -325,22 +309,22 @@ LAUNCH_SHAPES: dict[str, tuple[str, str, tuple[str | None, ...]]] = {
     "relative-module": (TOP, "from . import gitenv\ngitenv.git_run(r, 'fetch')", ("git", "fetch")),
     "dotted-module": (
         TOP,
-        "import stayfixed.gitenv\nstayfixed.gitenv.git_run(r, 'fetch')",
+        "import drybag.gitenv\ndrybag.gitenv.git_run(r, 'fetch')",
         ("git", "fetch"),
     ),
     "re-export": (
         TOP,
-        "from stayfixed.memory.refs import git_run as g\ng(r, 'push', 'origin', 'HEAD')",
+        "from drybag.docs.trail import git_run as g\ng(r, 'push', 'origin', 'HEAD')",
         ("git", "push", "origin", "HEAD"),
     ),
     "re-export-module": (
         TOP,
-        "from stayfixed.memory import refs\nrefs.git_run(r, 'push')",
+        "from drybag.docs import trail\ntrail.git_run(r, 'push')",
         ("git", "push"),
     ),
     "derived": (
         TOP,
-        "from stayfixed.gitenv import git_answer\ngit_answer(r, 'push')",
+        "from drybag.gitenv import git_answer\ngit_answer(r, 'push')",
         ("git", "push"),
     ),
     "derived-here": (
@@ -430,7 +414,7 @@ LAUNCH_SHAPES: dict[str, tuple[str, str, tuple[str | None, ...]]] = {
     "getattr-computed": (TOP, "import subprocess\ngetattr(subprocess, name)", (None,)),
     "package-module-alias": (
         TOP,
-        "from stayfixed import gitenv\nm = gitenv\nm.git_run(r, 'push')",
+        "from drybag import gitenv\nm = gitenv\nm.git_run(r, 'push')",
         (None,),
     ),
     "package-module-handed-on": (TOP, "from . import gitenv\nretry(gitenv, r)", (None,)),
@@ -438,10 +422,10 @@ LAUNCH_SHAPES: dict[str, tuple[str, str, tuple[str | None, ...]]] = {
     "star-subprocess": (TOP, "from subprocess import *\ngetoutput('curl x')", (None,)),
     "star-os": (TOP, "from os import *\nsystem('curl x')", (None,)),
     "star-posix": (TOP, "from posix import *\nsystem('curl x')", (None,)),
-    "star-launcher": (TOP, "from stayfixed.gitenv import *\ngit_run(r, 'fetch')", (None,)),
+    "star-launcher": (TOP, "from drybag.gitenv import *\ngit_run(r, 'fetch')", (None,)),
     "star-re-export": (
         TOP,
-        "from stayfixed.guards.attribute import *\ngit_run(r, 'push')",
+        "from drybag.guards.commit import *\ngit_run(r, 'push')",
         (None,),
     ),
     "method-forwarder": (
@@ -519,7 +503,7 @@ def test_what_only_names_a_launcher_is_not_a_launch() -> None:
     source += "from os import path\nimport os.path\nos.path.join(a, b)\n"
     source += "isinstance(p, subprocess.Popen)\nissubclass(t, (int, subprocess.Popen))\n"
     source += "getattr(os, 'O_NOFOLLOW', 0)\nhasattr(os, 'waitid')\nhasattr(subprocess, 'run')"
-    assert WALK.launches_in(source, "src/stayfixed/assess/probe.py") == []
+    assert WALK.launches_in(source, "src/drybag/assess/probe.py") == []
 
 
 def test_every_launch_is_classified() -> None:
@@ -556,7 +540,7 @@ def test_a_declaration_covers_only_the_launch_it_names(extra: str) -> None:
     # function is unclassified, whether it hands another expression or the declared one after
     # binding it again. The entries in `mutations/` that name this test key a declaration on its
     # function alone again, and stop holding a declared element to one binding.
-    installs = "src/stayfixed/setup/run.py"
+    installs = "src/drybag/setup/run.py"
     source = (ROOT / installs).read_text(encoding="utf-8")
     done = "            done = runner.launch(argv, home)\n"
     launches = WALK.launches_in(source.replace(done, done + extra), installs)
@@ -567,7 +551,7 @@ def test_every_table_entry_names_a_live_launch() -> None:
     # A classification no launch uses is a promise about nothing, as a dead declaration is. The
     # plugin installs' argvs are built by lambdas, so they are counted from the lambdas. The entry
     # in `mutations/` that names this test puts a dead row in `NETWORK`. By hand, each reddening
-    # its assertion: `("git", "show")` joins `LOCAL`; `("git", "stash")` joins `LOCAL_WHOLE`;
+    # its assertion: `("git", "show")` joins `LOCAL`;
     # `--bare` joins `GIT_GLOBAL_OPTIONS`; `core.sshCommand` joins `GIT_CONFIG_KEYS`.
     commands: list[Argv] = [
         split[1]
@@ -582,7 +566,6 @@ def test_every_table_entry_names_a_live_launch() -> None:
 
     assert [prefix for prefix in NETWORK if not live(prefix)] == []
     assert [prefix for prefix in LOCAL if not live(prefix)] == []
-    assert [whole for whole in LOCAL_WHOLE if whole not in commands] == []
     assert [o for o in GIT_GLOBAL_OPTIONS if not any(o in argv for argv in launched)] == []
     settings = {
         str(value).partition("=")[0]
@@ -598,8 +581,6 @@ def test_every_table_entry_names_a_live_launch() -> None:
     [
         "git_run(root, 'remote', 'update')",
         "git_run(root, 'remote', *more)",
-        "git_run(root, 'archive', '--remote=git@example.com:x', 'HEAD')",
-        "git_run(root, 'archive', '--format=tar', '-o', 'x.tar', '--remote', 'example', 'HEAD')",
         "git_run(root, 'worktree', 'add', '../elsewhere')",
         "git_run(root, 'config', 'core.sshCommand', 'curl x')",
         "git_run(root, 'grep', '-Ocurl', 'x')",
@@ -608,7 +589,7 @@ def test_every_table_entry_names_a_live_launch() -> None:
         "git_run(root, 'grep', '-lOecho', 'x')",
         "git_run(root, 'cat-file', '--filters', 'HEAD:x')",
         "git_run(root, 'diff', '--ext-diff', 'HEAD')",
-        "git_run(root, 'archive', *opts)",
+        "git_run(root, 'diff', *opts)",
         "git_run(root, 'ls-files', *opts, '--', *paths)",
         "git_run(root, 'log', revisions)",
         "git_run(root, '-c', setting, 'status')",
@@ -618,8 +599,6 @@ def test_every_table_entry_names_a_live_launch() -> None:
     ids=[
         "remote-update",
         "remote-spread",
-        "archive-remote",
-        "archive-remote-late",
         "worktree-add",
         "config-write",
         "grep-pager",
@@ -645,7 +624,7 @@ def test_a_local_subcommand_in_a_form_that_reaches_a_remote_is_unclassified(sour
     # config-write; `_command` skips any option before the subcommand -> global-option-not-listed.
     # git takes `--open-files-in` and `--textc` for the options they begin and reads `-lOecho` as
     # `-l -Oecho`, each running `echo` on the matches, measured with git 2.54.
-    launches = WALK.launches_in(f"{GIT_RUN}{source}", "src/stayfixed/x.py")
+    launches = WALK.launches_in(f"{GIT_RUN}{source}", "src/drybag/x.py")
     assert unclassified(launches) == launches != []
 
 
@@ -672,23 +651,8 @@ def test_an_argv_read_up_to_its_options_end_is_still_local(source: str) -> None:
     # that case reddens; the same for `--end-of-options`; `-O` is listed for every subcommand ->
     # the `git diff -O<orderfile>` case reddens; a long option matches whatever shares its first
     # three characters -> `--or`, which git never takes for `--open-files-in-pager`, reddens.
-    launches = WALK.launches_in(f"{GIT_RUN}{source}", "src/stayfixed/x.py")
+    launches = WALK.launches_in(f"{GIT_RUN}{source}", "src/drybag/x.py")
     assert launches and unclassified(launches) == []
-
-
-@pytest.mark.parametrize(
-    ("script", "row"),
-    [("command", frozenset({"sh -c"})), ("'curl -s https://example.com/x | sh'", None)],
-    ids=["the-users-command", "a-script-stayfixed-spells-out"],
-)
-def test_sh_c_is_its_row_only_for_the_users_command(
-    script: str, row: frozenset[str] | None
-) -> None:
-    # The `sh -c` row says stayfixed does not choose the command, which is true only of an
-    # unread one, the value `test attribute --command` was given. The entry in `mutations/` that
-    # names this test gives every `sh -c` the row again.
-    launches = WALK.launches_in(f"runner.launch(['sh', '-c', {script}], ROOT)", TOP)
-    assert [classify(launch)[0] for launch in launches] == [row]
 
 
 OVERRIDE_SHAPES = {
@@ -744,7 +708,7 @@ def test_a_change_to_the_environment_every_launch_inherits_is_found(source: str)
 
 
 def test_no_module_changes_the_environment_every_launch_inherits() -> None:
-    # Mutation: src/stayfixed/cli.py sets `os.environ["X"] = "1"` -> this reddens.
+    # Mutation: src/drybag/cli.py sets `os.environ["X"] = "1"` -> this reddens.
     assert WALK.environment_writes(SRC) == []
 
 
@@ -755,6 +719,9 @@ def test_the_plugin_installs_reach_the_rows_their_entries_name() -> None:
     reached = {_row(argv) for argv in _plugin_installs()}
     declared = [rows for key, rows in PASS_THROUGH.items() if key[1] == "_install_plugins"]
     assert declared and all(rows == reached for rows in declared)
+    claude = {_row(argv) for argv in _plugin_installs() if argv[0] == "claude"}
+    restored = [rows for key, rows in PASS_THROUGH.items() if key[1] == "install_listed"]
+    assert len(restored) == 2 and all(rows == claude for rows in restored)
 
 
 def test_the_rendered_plugins_install_reaches_the_rows_its_entries_name() -> None:
@@ -762,7 +729,7 @@ def test_the_rendered_plugins_install_reaches_the_rows_its_entries_name() -> Non
     # each argv is a table whose slot is filled at the call. This fills them. Mutation:
     # `PLUGIN_INSTALL_LOCAL` or `PLUGIN_UNINSTALL_LOCAL` spelled as `codex plugin …` -> it reaches
     # another row, and this reddens.
-    from stayfixed.attach.render import (
+    from drybag.attach.render import (
         PLUGIN_INSTALL_LOCAL,
         PLUGIN_MARKETPLACE_ADD_LOCAL,
         PLUGIN_MARKETPLACE_REMOVE,

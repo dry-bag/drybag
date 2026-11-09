@@ -1,7 +1,7 @@
 """`scripts/plugin_tree.py`: the plugin's paths read from a commit, as members, manifest and tree.
 
 Every case builds a scratch repository and commits into it, because the subject is what a commit
-holds and not what a disk does. The ten paths are spelled out in `tests/plugintree.py`, which
+holds and not what a disk does. The nine paths are spelled out in `tests/plugintree.py`, which
 builds every source here, and never read from the script's `PLUGIN_PATHS`; the manifest's first
 line and every commit text are spelled here and never read from the script: an expectation read
 from the subject is the subject compared with itself.
@@ -22,15 +22,15 @@ from typing import Any
 
 import pytest
 
-from stayfixed import gitenv
-from stayfixed.errors import Refusal
+from drybag import gitenv
+from drybag.errors import Refusal
 from tests.gitfixture import git, git_bytes, needs_git, plant_path
 from tests.plugintree import (
     MARKETPLACE,
+    NINE,
     PLUGIN_FILES,
     PLUGIN_URL,
     REPOSITORY,
-    TEN,
     commit,
     hashed,
     literal,
@@ -39,7 +39,7 @@ from tests.plugintree import (
     write,
 )
 from tests.scriptload import plugin_tree as _script
-from tests.scriptload import without_stayfixed
+from tests.scriptload import without_drybag
 
 plugin_tree = _script()
 Member = plugin_tree.Member
@@ -50,7 +50,7 @@ pytestmark = needs_git
 # paths of the repository that are no part of the plugin.
 NEIGHBOURS = (
     ".claude-plugin/marketplace.json",
-    "src/stayfixed_extra/__init__.py",
+    "src/drybag_extra/__init__.py",
     "scripts/release.py",
     "README.md.bak",
     "hooksx/hooks.json",
@@ -64,7 +64,7 @@ def listed(root: Path, rev: str = "HEAD", **kwargs: bool) -> dict[str, tuple[byt
 
 
 def test_members_lists_every_plugin_path_with_its_mode_and_nothing_else(tmp_path: Path) -> None:
-    # Mutation (declared): `"agents"` dropped from `PLUGIN_PATHS` -> its file is missing here. The
+    # Mutation (declared): `"skills"` dropped from `PLUGIN_PATHS` -> its file is missing here. The
     # neighbours are kept out by git's pathspec in this listing; the prefix rule's own mutation
     # reddens `test_exact_refuses_a_path_outside_the_plugin`, which reads the whole tree.
     root = plugin_source(
@@ -77,17 +77,16 @@ def test_members_lists_every_plugin_path_with_its_mode_and_nothing_else(tmp_path
         (".codex-plugin/plugin.json", "100644"),
         ("LICENSE", "100644"),
         ("README.md", "100644"),
-        ("agents/navigator.md", "100644"),
         ("hooks/hooks.json", "100644"),
         ("hooks/run-hook.sh", "100755"),
-        ("scripts/stayfixed", "100755"),
+        ("scripts/drybag", "100755"),
         ("skills/close-bug/SKILL.md", "100644"),
-        ("src/stayfixed/__init__.py", "100644"),
+        ("src/drybag/__init__.py", "100644"),
     ]
     assert {m.path: m.content for m in members} == {p: c for p, (c, _) in PLUGIN_FILES.items()}
-    # Every path named is one of the ten or under one, and the ten are the script's.
-    assert all(any(m.path == p or m.path.startswith(p + "/") for p in TEN) for m in members)
-    assert plugin_tree.PLUGIN_PATHS == TEN
+    # Every path named is one of the nine or under one, and the nine are the script's.
+    assert all(any(m.path == p or m.path.startswith(p + "/") for p in NINE) for m in members)
+    assert plugin_tree.PLUGIN_PATHS == NINE
 
 
 def test_members_read_the_commit_and_not_the_disk(tmp_path: Path) -> None:
@@ -145,14 +144,14 @@ def _symlink(root: Path) -> None:
 
 def _gitlink(root: Path) -> None:
     head = git(root, "rev-parse", "HEAD").strip()
-    git(root, "update-index", "--add", "--cacheinfo", f"160000,{head},src/stayfixed/vendored")
+    git(root, "update-index", "--add", "--cacheinfo", f"160000,{head},src/drybag/vendored")
 
 
 @pytest.mark.parametrize(
     ("plant", "path", "mode"),
     [
         pytest.param(_symlink, "skills/link", "120000", id="symlink"),
-        pytest.param(_gitlink, "src/stayfixed/vendored", "160000", id="submodule"),
+        pytest.param(_gitlink, "src/drybag/vendored", "160000", id="submodule"),
     ],
 )
 def test_a_symlink_or_submodule_among_the_members_is_refused(
@@ -227,7 +226,7 @@ def test_a_path_that_is_not_utf_8_is_refused(tmp_path: Path) -> None:
         pytest.param(".mcp.json", id="mcp-json"),
         pytest.param("README.md.bak", id="a-file-beside"),
         pytest.param("hooksx/hooks.json", id="a-directory-beside"),
-        pytest.param("src/stayfixed_extra/__init__.py", id="a-package-beside"),
+        pytest.param("src/drybag_extra/__init__.py", id="a-package-beside"),
         pytest.param("scripts/release.py", id="a-script-beside"),
     ],
 )
@@ -345,7 +344,7 @@ def test_the_manifest_is_one_line_per_member_in_order() -> None:
         Member("skills/b.md", "100644", b"two"),
     ]
     assert plugin_tree.manifest(entries) == (
-        "stayfixed-plugin-tree 1\n"
+        "drybag-plugin-tree 1\n"
         f"100644 {_sha256(b'')} LICENSE\n"
         f"100755 {_sha256(b'one')} hooks/run-hook.sh\n"
         f"100644 {_sha256(b'two')} skills/b.md\n"
@@ -496,7 +495,7 @@ def test_the_cli_writes_the_manifest_file_and_renders(
     assert plugin_tree.main([*argv, "--manifest-file", str(written)]) == 0
     expected = plugin_tree.manifest(plugin_tree.read(root, "HEAD").members).encode("utf-8")
     assert written.read_bytes() == expected
-    assert written.read_bytes().startswith(b"stayfixed-plugin-tree 1\n")
+    assert written.read_bytes().startswith(b"drybag-plugin-tree 1\n")
     assert set(tree_on_disk(out)) == set(PLUGIN_FILES)
     capsys.readouterr()
 
@@ -637,21 +636,21 @@ def test_commit_text_is_exactly_the_documented_bytes() -> None:
     assert plugin_tree.commit_text("a" * 40, "b" * 40, "0.3.0") == (
         "tree aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
         "parent bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
-        "author stayfixed <release@stayfixed.invalid> 0 +0000\n"
-        "committer stayfixed <release@stayfixed.invalid> 0 +0000\n"
+        "author drybag <release@drybag.invalid> 0 +0000\n"
+        "committer drybag <release@drybag.invalid> 0 +0000\n"
         "\n"
-        "stayfixed 0.3.0\n"
+        "drybag 0.3.0\n"
         "\n"
-        "The plugin tree of stayfixed/stayfixed at v0.3.0.\n"
+        "The plugin tree of dry-bag/drybag at v0.3.0.\n"
     )
     assert plugin_tree.commit_text("a" * 40, None, "0.3.0") == (
         "tree aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-        "author stayfixed <release@stayfixed.invalid> 0 +0000\n"
-        "committer stayfixed <release@stayfixed.invalid> 0 +0000\n"
+        "author drybag <release@drybag.invalid> 0 +0000\n"
+        "committer drybag <release@drybag.invalid> 0 +0000\n"
         "\n"
-        "stayfixed 0.3.0\n"
+        "drybag 0.3.0\n"
         "\n"
-        "The plugin tree of stayfixed/stayfixed at v0.3.0.\n"
+        "The plugin tree of dry-bag/drybag at v0.3.0.\n"
     )
 
 
@@ -674,7 +673,7 @@ def test_the_plugin_commit_is_what_git_computes(tmp_path: Path) -> None:
     assert git(git_dir, "cat-file", "commit", made.commit) == literal(tree, None)
     assert made.commit == hashed(git_dir, literal(tree, None))
     assert written(git_dir, made.commit) == PLUGIN_FILES
-    assert (made.rev, made.version, made.files, made.tree) == (head, "1.2.3", 11, tree)
+    assert (made.rev, made.version, made.files, made.tree) == (head, "1.2.3", 10, tree)
     assert (made.parent, made.pinned) == (None, None)
 
 
@@ -747,14 +746,14 @@ def test_a_source_whose_first_parent_is_not_in_the_clone_is_refused(tmp_path: Pa
 
 def document(plugins: object) -> tuple[bytes, str]:
     """A marketplace file whose `plugins` is `plugins`, as it is given."""
-    text = json.dumps({"name": "stayfixed-marketplace", "plugins": plugins}) + "\n"
+    text = json.dumps({"name": "drybag", "plugins": plugins}) + "\n"
     return text.encode("utf-8"), "100644"
 
 
 # A plugin entry whose source is a url pinning `c`*40, which a reader that skips what stands before
 # it in `plugins` would read as the pin.
 PINNED_ENTRY = {
-    "name": "stayfixed",
+    "name": "drybag",
     "source": {"source": "url", "url": PLUGIN_URL, "ref": "v1.2.3", "sha": "c" * 40},
 }
 NO_COMMIT_ID = ", which is no commit id of 40 lowercase hex digits"
@@ -784,19 +783,19 @@ NO_COMMIT_ID = ", which is no commit id of 40 lowercase hex digits"
         pytest.param(pinned_marketplace(1), f" pins sha a int{NO_COMMIT_ID}", True, id="a-number"),
         pytest.param(
             pinned_marketplace("c" * 40, entries=2),
-            " has 2 entries named 'stayfixed'; the pin is read from exactly one",
+            " has 2 entries named 'drybag'; the pin is read from exactly one",
             True,
             id="two-entries",
         ),
         pytest.param(
             document([]),
-            " has 0 entries named 'stayfixed'; the pin is read from exactly one",
+            " has 0 entries named 'drybag'; the pin is read from exactly one",
             True,
             id="no-entry",
         ),
         pytest.param(
-            document([{"name": "stayfixed", "source": "./"}]),
-            " gives the entry 'stayfixed' a source that is no object; the pin is read from the "
+            document([{"name": "drybag", "source": "./"}]),
+            " gives the entry 'drybag' a source that is no object; the pin is read from the "
             "source object's sha",
             True,
             id="a-string-source",
@@ -808,7 +807,7 @@ NO_COMMIT_ID = ", which is no commit id of 40 lowercase hex digits"
             id="an-entry-that-is-no-object",
         ),
         pytest.param(
-            document("stayfixed"),
+            document("drybag"),
             " is valid JSON but its plugins is not a list of objects",
             True,
             id="plugins-a-string",
@@ -1098,7 +1097,7 @@ def _a_directory(files: dict[str, tuple[bytes, str]]) -> dict[str, tuple[bytes, 
     [
         pytest.param(_a_directory(PLUGIN_FILES), " is no file", id="no-file"),
         pytest.param(
-            {**PLUGIN_FILES, ".claude-plugin/plugin.json": (b'{"name": "stayfixed"}\n', "100644")},
+            {**PLUGIN_FILES, ".claude-plugin/plugin.json": (b'{"name": "drybag"}\n', "100644")},
             " names no version string",
             id="no-version",
         ),
@@ -1138,7 +1137,7 @@ def test_a_plugin_json_version_that_is_not_x_y_z_in_ascii_digits_is_refused(
     # -> `digits-that-are-not-ascii` builds a commit; "the plugin commit names a version followed
     # by a line break" -> `a-line-break` does; "the plugin commit names any version string" ->
     # all four do.
-    manifest = json.dumps({"name": "stayfixed", "version": version}).encode() + b"\n"
+    manifest = json.dumps({"name": "drybag", "version": version}).encode() + b"\n"
     root = plugin_source(
         tmp_path, {**PLUGIN_FILES, ".claude-plugin/plugin.json": (manifest, "100644")}
     )
@@ -1234,11 +1233,11 @@ def test_require_pin_exits_1_when_the_pin_is_another_commit(
         "pinned",
     }
     assert (report["format"], report["commit"], report["pinned"]) == (
-        "stayfixed-plugin-tree 1",
+        "drybag-plugin-tree 1",
         pinned,
         pinned,
     )
-    assert (report["tree"], report["files"], report["parent"]) == (tree, 11, None)
+    assert (report["tree"], report["files"], report["parent"]) == (tree, 10, None)
 
     # The release after it, its pin left as it was: the parent and the pin are the same commit.
     git(root, "commit", "-q", "--allow-empty", "-m", "a release that did not pin")
@@ -1259,15 +1258,15 @@ def test_require_pin_exits_1_when_the_pin_is_another_commit(
 
 
 def test_run_without_its_package_it_refuses_with_exit_2_and_says_to_use_uv(tmp_path: Path) -> None:
-    # An interpreter without this repository's `stayfixed` fails on the script's first import,
+    # An interpreter without this repository's `drybag` fails on the script's first import,
     # before the CLI frame exists, and a traceback exits `1`, which `commit --require-pin` gives
     # its finding. Mutations (declared): `mutations/`'s "plugin_tree.py exits 1 when its package
     # cannot be imported" and "plugin_tree.py refuses a missing package without saying to run it
     # through uv".
-    done = without_stayfixed("plugin_tree.py", tmp_path, "manifest", "--root", ".", "--rev", "HEAD")
+    done = without_drybag("plugin_tree.py", tmp_path, "manifest", "--root", ".", "--rev", "HEAD")
     assert done.returncode == 2, done.stdout + done.stderr
     assert done.stdout == "", done.stdout
-    assert "refused: No module named 'stayfixed'" in done.stderr, done.stderr
+    assert "refused: No module named 'drybag'" in done.stderr, done.stderr
     assert "uv run python scripts/plugin_tree.py" in done.stderr, done.stderr
     assert "Traceback" not in done.stderr, done.stderr
 

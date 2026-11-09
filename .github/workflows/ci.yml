@@ -4,7 +4,7 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, next]
 
 permissions:
   contents: read
@@ -25,20 +25,20 @@ jobs:
   # the rest (`scripts/ci_scope.py` says which paths count): no behaviour changes, yet tests read
   # them — `docs/cli.md` is held to the parser, every tracked file to the neutrality and anchor
   # guards, and ruff, mypy and coverage read the comments that steer them — so one leg of the suite
-  # still runs, and the other legs, the oracle, the real runners, the plugin validator and the demo
-  # have nothing of theirs to judge. A mutation entry whose text such a change edits fails on the
-  # next pull request that runs the oracle, not on this one.
+  # still runs, and the other legs, the oracle, the plugin validator and the demo have nothing of
+  # theirs to judge. A mutation entry whose text such a change edits fails on the next pull request
+  # that runs the oracle, not on this one.
   #
   # Skipped by step and not by job wherever a check is a matrix leg: branch protection requires
   # each leg by its full name, and every leg here still starts and reports under it. A job skipped
-  # by its `if:` reports success, so `oracle`, `runners`, `plugin` and `demo` skip whole. Every job
-  # that reads this one runs unless the run was cancelled and treats any answer but `false` as a
-  # change to code, so this job failing, or answering nothing, runs everything: it can only narrow a
+  # by its `if:` reports success, so `oracle`, `plugin` and `demo` skip whole. Every job that reads
+  # this one runs unless the run was cancelled and treats any answer but `false` as a change to
+  # code, so this job failing, or answering nothing, runs everything: it can only narrow a
   # run when it says, in so many words, that no code changed.
   #
-  # A push (to `main`) runs everything. A pull request's checkout is the merge commit the platform
-  # makes, so its first parent is the base the change is judged against. `smoke.yml` carries the
-  # same job, byte for byte.
+  # A push (to `main` or `next`) runs everything. A pull request's checkout is the merge commit the
+  # platform makes, so its first parent is the base the change is judged against. `smoke.yml`
+  # carries the same job, byte for byte.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -69,9 +69,9 @@ jobs:
     # processes, and `checks (macos-latest, 3.13)` was cancelled at fifteen right after its pytest
     # reported `7744 passed, 56 skipped in 876.84s` (738 s on the same leg before the branch;
     # macOS runners vary). The `oracle` job's comment below already prices a hung pytest at
-    # twenty minutes, so this bound costs no more than that one does. That run still took the
-    # hosted image's `go` and `node` into the real-runner tests, which only `runners` runs now;
-    # the leg may fit fifteen again, but no run has measured it, so twenty stays until one does.
+    # twenty minutes, so this bound costs no more than that one does. The leg may fit fifteen
+    # again now that the `prove` tests are gone, but no run has measured it, so twenty stays until
+    # one does.
     timeout-minutes: 20
     # Every step carries `if: env.FULL == 'true'`: on a change to docs alone one leg runs whole and
     # the others start, skip every step and report (`changes` above says why).
@@ -124,7 +124,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: An interpreter below the floor, for the launcher's version guard
         if: env.FULL == 'true'
-        # `scripts/stayfixed` is the only thing between a Python 3.9 user and a SyntaxError, and
+        # `scripts/drybag` is the only thing between a Python 3.9 user and a SyntaxError, and
         # `test_an_old_interpreter_is_refused_with_a_reason` skipped for want of one on every
         # machine that has ever run it — so the guard was asserted nowhere, ever. The test is
         # handed this one by path rather than by searching, and fails rather than skips when it
@@ -152,6 +152,23 @@ jobs:
       - name: Types
         if: env.FULL == 'true'
         run: uv run mypy
+      - name: The real gitleaks, for the note sync's scan
+        if: env.FULL == 'true'
+        # `tests/sync` runs it over notes its file sources skip, which a stand-in cannot show, and
+        # skips where it is absent. Pinned by the checksums of the release the scan was measured on.
+        run: |
+          case "$RUNNER_OS" in
+            Linux) asset=linux_x64 sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
+            macOS) asset=darwin_arm64 sum=b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5 ;;
+          esac
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_$asset.tar.gz"
+          echo "$sum  gitleaks.tar.gz" | shasum -a 256 -c -
+          mkdir gitleaks-bin
+          tar -xzf gitleaks.tar.gz -C gitleaks-bin gitleaks
+          gitleaks-bin/gitleaks version
+          echo "$RUNNER_TEMP/gitleaks-bin" >> "$GITHUB_PATH"
       - name: Tests
         if: env.FULL == 'true'
         # Coverage, because security-sensitive code with nobody able to say which containment
@@ -159,7 +176,7 @@ jobs:
         # loop was covered, just never with an escaping path. No statement count is written here:
         # every change falsifies one, and the report prints it.
         env:
-          STAYFIXED_OLD_PYTHON: ${{ steps.old-python.outputs.python-path }}
+          DRYBAG_OLD_PYTHON: ${{ steps.old-python.outputs.python-path }}
         run: uv run pytest -n auto --cov --cov-report=term-missing --cov-fail-under=92
       - name: Version discipline
         if: env.FULL == 'true'
@@ -167,7 +184,7 @@ jobs:
       - name: Build
         if: env.FULL == 'true'
         run: uv build
-      - name: The artifacts carry what an installed stayfixed needs
+      - name: The artifacts carry what an installed drybag needs
         if: env.FULL == 'true'
         # Every earlier test resolves the template tree to the checkout; only an artifact
         # can say whether the build backend shipped it.
@@ -184,7 +201,7 @@ jobs:
           uv venv "$RUNNER_TEMP/wheel"
           uv pip install --python "$RUNNER_TEMP/wheel/bin/python" dist/*.whl
           mkdir "$RUNNER_TEMP/home"
-          HOME="$RUNNER_TEMP/home" PATH=/usr/bin:/bin "$RUNNER_TEMP/wheel/bin/stayfixed" setup \
+          HOME="$RUNNER_TEMP/home" PATH=/usr/bin:/bin "$RUNNER_TEMP/wheel/bin/drybag" setup \
             --overlay "$RUNNER_TEMP/rendered"
           uv run python scripts/check_artifacts.py rendered "$RUNNER_TEMP/rendered"
 
@@ -320,67 +337,11 @@ jobs:
         # run on every change beside a `url` entry. A dry run creates nothing.
         run: claude plugin tag --dry-run .
 
-  # The real test runners `prove`'s adapters run, at the versions the adapters were measured
-  # against: Node 26.12.0, jest 30.5.2 and vitest 5.0.5 (`tests/fixtures/prove/node/`'s lockfile)
-  # and Go 1.27.2. Only this job opts the tests into them: `STAYFIXED_RUNNERS_ON_PATH=1` takes
-  # `node` and `go` from `PATH` and `STAYFIXED_NODE_MODULES` names the installed packages. Every
-  # other job sets neither, so the hosted image's own `node` and `go` are never used and the tests
-  # that need one skip (`tests/prove/real_runners.py`); the real pytest runs there, from the
-  # suite's own environment. The mutation oracle never depends on a runner: every mutation is
-  # reddened by a test that runs none. Here `STAYFIXED_REQUIRE_RUNNERS=1` turns a missing runner
-  # into a failure, so this job cannot pass by skipping what it exists to run.
-  #
-  # Go comes from the Go module proxy as the toolchain module the `go` command itself switches to,
-  # checked against the SHA-256 of the zip recorded when the version was pinned, rather than from
-  # an action: the zip carries its files' modes, and the digest is the pin. jest and vitest come
-  # from the fixture's lockfile with `npm ci`, no package's install script run, into the runner's
-  # scratch directory and never into the checkout, which the tree's own walks read.
-  runners:
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with:
-          enable-cache: true
-          python-version: "3.13"
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "26.12.0"
-      - name: Go 1.27.2, the toolchain module, checked against its digest
-        env:
-          GO_TOOLCHAIN: golang.org/toolchain@v0.0.1-go1.27.2.linux-amd64
-          GO_ZIP_SHA256: 3a467ed067f27cd55bf3a702f8e2bf12479f53c9d8ae0de548f48ebcb3c67796
-        run: |
-          curl -fsSL --retry 3 --retry-delay 2 -o "$RUNNER_TEMP/go.zip" "https://proxy.golang.org/golang.org/toolchain/@v/v0.0.1-go1.27.2.linux-amd64.zip"
-          echo "$GO_ZIP_SHA256  $RUNNER_TEMP/go.zip" | sha256sum -c -
-          unzip -q "$RUNNER_TEMP/go.zip" -d "$RUNNER_TEMP/go"
-          echo "$RUNNER_TEMP/go/$GO_TOOLCHAIN/bin" >> "$GITHUB_PATH"
-      - name: Install
-        run: uv sync --locked
-      - name: jest and vitest, from the fixture's lockfile
-        run: |
-          mkdir -p "$RUNNER_TEMP/node"
-          cp tests/fixtures/prove/node/package.json tests/fixtures/prove/node/package-lock.json "$RUNNER_TEMP/node/"
-          npm ci --prefix "$RUNNER_TEMP/node" --ignore-scripts --no-audit --no-fund
-      - name: The tests that run a real runner
-        env:
-          STAYFIXED_REQUIRE_RUNNERS: "1"
-          STAYFIXED_RUNNERS_ON_PATH: "1"
-          STAYFIXED_NODE_MODULES: ${{ runner.temp }}/node/node_modules
-        run: |
-          node --version
-          go version
-          uv run pytest -n auto -m runners
-
-  # The demo script, `examples/demo/demo.py`, against this checkout's `stayfixed`: each act passes
-  # on the product's own exit code and `--json` answer, and the last drives the `Stop`-hook recipe
-  # in `examples/stop-hook/`. Claude Code is installed at the `plugin` job's pin for the act that
-  # attaches an overlay, and `--require-claude` fails the run when that act is skipped, so a
-  # missing `claude` is a red job and not a quiet skip. It makes no model call. `PATH` leads with
-  # the project's environment, so its `pytest` and `python3` are the ones the acts run.
+  # The demo script, `examples/demo/demo.py`, against this checkout's `drybag`: each act passes
+  # on the product's own exit code and `--json` answer. Claude Code is installed at the `plugin`
+  # job's pin for the act that attaches an overlay, and `--require-claude` fails the run when that
+  # act is skipped, so a missing `claude` is a red job and not a quiet skip. It makes no model
+  # call.
   demo:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
@@ -401,5 +362,5 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code@2.1.261
       - name: Install
         run: uv sync --locked
-      - name: The demo, against the checkout's stayfixed
-        run: PATH="$PWD/.venv/bin:$PATH" python3 -I examples/demo/demo.py "$PWD/.venv/bin/stayfixed" --require-claude
+      - name: The demo, against the checkout's drybag
+        run: python3 -I examples/demo/demo.py "$PWD/.venv/bin/drybag" --require-claude

@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import jsonobject
-from stayfixed.errors import Failure, Refusal
-from stayfixed.overlay.api import OVERLAY_FILES, TEMPLATE_REPOSITORY
-from stayfixed.runner import NOT_FOUND, Completed
-from stayfixed.scaffold import MANIFEST_PATH
+from drybag import jsonobject
+from drybag.errors import Failure, Refusal
+from drybag.overlay.api import OVERLAY_FILES, TEMPLATE_REPOSITORY
+from drybag.runner import NOT_FOUND, Completed
+from drybag.scaffold import MANIFEST_PATH
 from tests.parserlimits import DEEPER_THAN_FOUR, LONG_NUMBER, NESTED
 from tests.scriptload import publish_template as script
 
@@ -153,7 +153,7 @@ def test_with_yes_the_rendered_tree_is_committed_and_pushed_without_the_ledger(
     push = next(a for a in _argv(stub) if "push" in a)
     assert push[-1] == "HEAD:refs/heads/main"
     commit = next(a for a in _argv(stub) if "commit" in a)
-    assert any(m.startswith("stayfixed overlay template ") for m in commit)
+    assert any(m.startswith("drybag overlay template ") for m in commit)
 
 
 def test_a_missing_repository_is_created_public_and_marked_as_a_template(tmp_path: Path) -> None:
@@ -169,7 +169,7 @@ def test_a_missing_repository_is_created_public_and_marked_as_a_template(tmp_pat
         f"owner/{TEMPLATE_REPOSITORY}",
         "--public",
         "--description",
-        "The template a stayfixed private overlay is generated from",
+        "The template a drybag private overlay is generated from",
     ] in argv
     assert ["gh", "repo", "edit", f"owner/{TEMPLATE_REPOSITORY}", "--template"] in argv
 
@@ -199,8 +199,8 @@ def test_a_gh_that_cannot_answer_is_never_read_as_a_repository_that_is_absent() 
     # `gh repo view` exits 1 for a repository that is not there, and equally for an
     # unauthenticated `gh`, a rate limit, a network failure and a repository the token cannot
     # see. All four read as `exists=False`, so the dry run against an account that already owns
-    # a PRIVATE `stayfixed-overlay-template` printed
-    # `would create owner/stayfixed-overlay-template, public, and mark it as a template` —
+    # a PRIVATE `drybag-overlay-template` printed
+    # `would create owner/drybag-overlay-template, public, and mark it as a template` —
     # the opposite of the truth, and exactly the case `_not_public` exists to refuse.
     # Mutation (declared): the not-found test is dropped and every non-zero answer is absence
     # again -> the "would create" note comes back.
@@ -233,7 +233,7 @@ def test_a_git_that_cannot_run_is_a_failure_and_not_a_report_that_nothing_change
     #
     #   pushed : False
     #   changed: ()
-    #   note   : someowner/stayfixed-overlay-template already carries this stayfixed's
+    #   note   : someowner/drybag-overlay-template already carries this drybag's
     #            template; nothing to push
     #
     # exit 0, and the operator told the published template is current when nothing was
@@ -291,7 +291,7 @@ def test_a_dry_run_against_a_public_repository_that_is_not_a_template_says_it_wo
 
 def test_a_template_that_is_already_current_is_not_committed_or_pushed(tmp_path: Path) -> None:
     # Idempotence, which is what makes "run it at every release" safe: `git status` reporting
-    # nothing means the published tree is already this stayfixed's, and an empty commit pushed
+    # nothing means the published tree is already this drybag's, and an empty commit pushed
     # over it would be a release note for a release that changed nothing.
     class _Unchanged(_GitHub):
         def launch(self, argv: list[str], cwd: Path) -> Completed:
@@ -329,7 +329,7 @@ def test_a_push_that_is_declined_is_a_failure_naming_the_repository(tmp_path: Pa
 
 
 def test_the_render_the_publisher_clones_beside_carries_no_scaffold_ledger(tmp_path: Path) -> None:
-    # `scaffold.apply` writes `.stayfixed/manifest.json` into every local
+    # `scaffold.apply` writes `.drybag/manifest.json` into every local
     # render, and a repository generated from a template carries none — publishing one would
     # make every generated overlay read as hand-edited to `overlay upgrade` and never be
     # refreshed again. The first assertion written for this was over the PUSHED tree, which

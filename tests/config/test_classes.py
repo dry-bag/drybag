@@ -13,7 +13,7 @@ from typing import Any, get_type_hints
 
 import pytest
 
-from stayfixed.config.classes import (
+from drybag.config.classes import (
     ALLOWED,
     CLASSES,
     GATE_BUDGETS,
@@ -26,7 +26,7 @@ from stayfixed.config.classes import (
     class_of,
     resolve,
 )
-from stayfixed.config.schema import Budgets, Config
+from drybag.config.schema import Budgets, Config
 from tests.crafted import assert_never_raw
 
 # Pinned: the ClassVar tuples of `Budgets` and `NativeCaps` are not fields, and the one name a
@@ -37,12 +37,14 @@ NOT_KEYS = ("NAMES",)
 # every entry of `Budgets.NAMES`, and neither is a key of its own. Any other field of `Budgets`
 # is a key, so a scalar added there fails the first test until it has a class.
 PER_NAME = frozenset({("budgets", "preset"), ("budgets", "configured")})
-# The keys the machine file holds that no `Config` section carries; `personal.*` is a section.
-MACHINE_FILE_KEYS = frozenset({"guards.bg_cleanup"})
+# The keys the machine file holds that no `Config` section carries: `[guards]`'s default is the
+# schema's own, and `[sync]` is read by the sync area alone (`personal.*` is a section).
+MACHINE_FILE_KEYS = frozenset({"guards.bg_cleanup", "sync.enabled"})
 
 PRESET = LayerName.PRESET
 REPOSITORY = LayerName.REPOSITORY
 OVERLAY_COMMON = LayerName.OVERLAY_COMMON
+OVERLAY_TAG = LayerName.OVERLAY_TAG
 OVERLAY_PROJECT = LayerName.OVERLAY_PROJECT
 MACHINE_FILE = LayerName.MACHINE_FILE
 
@@ -51,7 +53,7 @@ def schema_keys() -> list[str]:
     """Every key `Config`'s sections hold, dotted, derived from `dataclasses.fields`.
 
     A section with a `NAMES` tuple contributes each name as well, which is how `budgets.*` and
-    `native_caps.*` are spelled; `gates.custom` is one key, the table of the project's own gates.
+    `native_caps.*` are spelled.
     """
     hints = get_type_hints(Config)
     keys: list[str] = []
@@ -72,11 +74,11 @@ def exact_keys(table: Mapping[str, KeyClass]) -> set[str]:
 # One row per key the class table names; a wildcard row is asked through a key it covers.
 TABLE_ROWS = [
     ("personal.preset", KeyClass.MACHINE_ONLY),
+    ("sync.enabled", KeyClass.MACHINE_ONLY),
     ("guards.bg_cleanup", KeyClass.PREFERENCE),
     ("memory.mode", KeyClass.PREFERENCE),
     ("memory.groups", KeyClass.PREFERENCE),
     ("memory.index_extra", KeyClass.PREFERENCE),
-    ("stayfixed.profile", KeyClass.PREFERENCE),
     ("budgets.memory_index_words", KeyClass.SESSION_PARAMETER),
     ("budgets.startup_rules_words", KeyClass.SESSION_PARAMETER),
     ("budgets.volatile_notes_words", KeyClass.SESSION_PARAMETER),
@@ -86,22 +88,11 @@ TABLE_ROWS = [
     ("budgets.status_lines", KeyClass.GATE_PARAMETER),
     ("budgets.roadmap_prose_lines", KeyClass.GATE_PARAMETER),
     ("budgets.roadmap_prose_words", KeyClass.GATE_PARAMETER),
-    ("stayfixed.enforced", KeyClass.GATE_PARAMETER),
-    ("gates.builtin", KeyClass.GATE_PARAMETER),
-    ("gates.custom", KeyClass.GATE_PARAMETER),
-    ("ledger.code_roots", KeyClass.GATE_PARAMETER),
-    ("ledger.evidence_boundary_required_for", KeyClass.GATE_PARAMETER),
-    ("stayfixed.version", KeyClass.REPOSITORY_ONLY),
-    ("stayfixed.preset", KeyClass.REPOSITORY_ONLY),
-    ("stayfixed.agents", KeyClass.REPOSITORY_ONLY),
+    ("drybag.version", KeyClass.REPOSITORY_ONLY),
+    ("drybag.preset", KeyClass.REPOSITORY_ONLY),
     ("project.name", KeyClass.REPOSITORY_ONLY),
     ("project.base_branch", KeyClass.REPOSITORY_ONLY),
-    ("paths.bugs", KeyClass.REPOSITORY_ONLY),
-    ("ledger.id_prefix", KeyClass.REPOSITORY_ONLY),
-    ("artifacts.local", KeyClass.REPOSITORY_ONLY),
-    ("ci.mode", KeyClass.REPOSITORY_ONLY),
-    ("gates.custom_timeout_seconds", KeyClass.REPOSITORY_ONLY),
-    ("commit_messages.types", KeyClass.REPOSITORY_ONLY),
+    ("paths.roadmap", KeyClass.REPOSITORY_ONLY),
     ("native_caps.hook_output_chars", KeyClass.PLUGIN_OWNED),
 ]
 
@@ -124,7 +115,7 @@ def test_no_exact_key_contradicts_its_wildcard() -> None:
     # `class_of` asks the exact key first, so an exact row under a wildcard of another class
     # would make one field of a section settable where the rest are not, with nothing saying so.
     # Mutation (`mutations/`'s "an exact row contradicts its section's wildcard"): a
-    # `paths.bugs` row of the gate class under `paths.*` reddens this.
+    # `paths.roadmap` row of the gate class under `paths.*` reddens this.
     for key in exact_keys(CLASSES):
         wildcard = key.split(".")[0] + ".*"
         assert wildcard not in CLASSES or CLASSES[wildcard] is CLASSES[key]
@@ -145,8 +136,6 @@ def test_the_budget_split_is_total_and_disjoint() -> None:
 
 @pytest.mark.parametrize(("key", "expected"), TABLE_ROWS)
 def test_the_table(key: str, expected: KeyClass) -> None:
-    # Mutation (`mutations/`'s "ledger.code_roots is classed as the repository's alone"): the row
-    # moves to `REPOSITORY_ONLY` and the `ledger.code_roots` case reddens.
     assert class_of(key) is expected
 
 
@@ -167,6 +156,7 @@ def test_the_layers_run_lowest_first() -> None:
         PRESET,
         REPOSITORY,
         OVERLAY_COMMON,
+        OVERLAY_TAG,
         OVERLAY_PROJECT,
         MACHINE_FILE,
     )
@@ -185,6 +175,35 @@ def test_which_layers_may_set_each_class() -> None:
         KeyClass.REPOSITORY_ONLY: frozenset({PRESET, REPOSITORY}),
         KeyClass.PLUGIN_OWNED: frozenset({PRESET}),
     }
+
+
+def test_a_tag_layer_is_admitted_where_the_common_layer_is() -> None:
+    # A tag is the owner's like the common file, so it sets what the common file may and nothing
+    # more: for every class the two stand together.
+    for key_class, layers in ALLOWED.items():
+        assert (OVERLAY_TAG in layers) == (OVERLAY_COMMON in layers), key_class
+
+
+def test_a_tag_layer_names_itself_by_its_label() -> None:
+    # The label is what the owner wrote and `plates` held to `TAG`; a layer without one reads as
+    # its name alone. The winner's label rides with its provenance, and a later layer without one
+    # takes it back.
+    got = resolve(
+        [
+            Layer(OVERLAY_TAG, {"memory.mode": "overlay"}, "ops"),
+            Layer(OVERLAY_COMMON, {"memory.mode": "harness"}),
+        ]
+    )
+    assert got.said("memory.mode") == "overlay tag ops"
+    again = resolve(
+        [
+            Layer(OVERLAY_TAG, {"memory.mode": "overlay"}, "ops"),
+            Layer(OVERLAY_PROJECT, {"memory.mode": "harness"}),
+        ]
+    )
+    assert again.said("memory.mode") == "overlay project"
+    with pytest.raises(KeyError):
+        again.said("memory.groups")
 
 
 def test_a_higher_layer_wins_and_says_which() -> None:
@@ -286,6 +305,7 @@ def test_a_layer_reads_as_its_name() -> None:
         "preset",
         "repository",
         "overlay common",
+        "overlay tag",
         "overlay project",
         "machine file",
     ]

@@ -1,7 +1,7 @@
 """`scripts/release.py`: this repository's own release discipline, driven through `main(argv)`.
 
 The commands used to be the installed CLI's `release` group, and they only ever checked the
-stayfixed repository itself; the exit codes and the `--json` shapes are the ones that group had,
+drybag repository itself; the exit codes and the `--json` shapes are the ones that group had,
 and these tests are what holds them. towncrier is a development dependency and is *invoked*,
 never imported; the argv is the contract, and a stub records it.
 
@@ -20,15 +20,15 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.errors import Failure, Refusal
-from stayfixed.jsonobject import DEPTH_CAP, NESTED
-from stayfixed.runner import NOT_FOUND, Completed, subprocess_runner
+from drybag.errors import Failure, Refusal
+from drybag.jsonobject import DEPTH_CAP, NESTED
+from drybag.runner import NOT_FOUND, Completed, subprocess_runner
 from tests.cli import subparsers
 from tests.gitfixture import git, git_bytes, needs_git
 from tests.plugintree import (
+    NINE,
     PLUGIN_FILES,
     PLUGIN_URL,
-    TEN,
     commit,
     hashed,
     literal,
@@ -37,7 +37,7 @@ from tests.plugintree import (
 )
 from tests.runners import Recorder
 from tests.scriptload import release as _script
-from tests.scriptload import without_stayfixed
+from tests.scriptload import without_drybag
 
 release = _script()
 ROOT = Path(__file__).resolve().parents[2]
@@ -45,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # The fragment predicate reads the types towncrier itself is configured with, so a fixture
 # repository has to declare them exactly as the real one does.
 PYPROJECT = """[project]
-name = "stayfixed"
+name = "drybag"
 version = "{v}"
 
 [[tool.towncrier.type]]
@@ -58,7 +58,7 @@ directory = "fix"
 directory = "change"
 """
 INIT = '__version__ = "{v}"\n'
-LOCK = '[[package]]\nname = "stayfixed"\nversion = "{v}"\nsource = {{ editable = "." }}\n'
+LOCK = '[[package]]\nname = "drybag"\nversion = "{v}"\nsource = {{ editable = "." }}\n'
 # The plugin directory's count, written out rather than read from the script: the number is the
 # page's ("Keep the plugin to 512 files or fewer"), and `tests/test_payload.py` reads the script's.
 FILES_LIMIT = 512
@@ -67,7 +67,7 @@ FILES_LIMIT = 512
 def marketplace_at(version: str) -> dict[str, object]:
     """The marketplace a release commit carries: one `url` entry pinned to `v<version>`."""
     source = {"source": "url", "url": PLUGIN_URL, "ref": f"v{version}"}
-    return {"name": "stayfixed-marketplace", "plugins": [{"name": "stayfixed", "source": source}]}
+    return {"name": "drybag", "plugins": [{"name": "drybag", "source": source}]}
 
 
 def repo(
@@ -82,21 +82,21 @@ def repo(
     fragments: int = 0,
     marketplace: str | None = None,
 ) -> Path:
-    (tmp_path / "src" / "stayfixed").mkdir(parents=True)
+    (tmp_path / "src" / "drybag").mkdir(parents=True)
     (tmp_path / ".claude-plugin").mkdir()
     (tmp_path / ".codex-plugin").mkdir()
     (tmp_path / "changelog.d").mkdir()
     (tmp_path / "pyproject.toml").write_text(PYPROJECT.format(v=pyproject))
     (tmp_path / "uv.lock").write_text(LOCK.format(v=pyproject if lock is None else lock))
-    (tmp_path / "src" / "stayfixed" / "__init__.py").write_text(INIT.format(v=init))
+    (tmp_path / "src" / "drybag" / "__init__.py").write_text(INIT.format(v=init))
     (tmp_path / ".claude-plugin" / "plugin.json").write_text(
-        json.dumps({"name": "stayfixed", "version": claude})
+        json.dumps({"name": "drybag", "version": claude})
     )
     (tmp_path / ".claude-plugin" / "marketplace.json").write_text(
         json.dumps(marketplace_at(pyproject if marketplace is None else marketplace))
     )
     (tmp_path / ".codex-plugin" / "plugin.json").write_text(
-        json.dumps({"name": "stayfixed", "version": codex})
+        json.dumps({"name": "drybag", "version": codex})
     )
     (tmp_path / "CHANGELOG.md").write_text(
         "# Changelog\n\n## Unreleased\n\n<!-- towncrier release notes start -->\n\n"
@@ -158,7 +158,7 @@ def test_collect_reads_every_source_value(tmp_path: Path) -> None:
     assert release.collect(root) == {
         "pyproject.toml": "1.0.0",
         "uv.lock": "1.0.5",
-        "src/stayfixed/__init__.py": "1.0.1",
+        "src/drybag/__init__.py": "1.0.1",
         ".claude-plugin/plugin.json": "1.0.2",
         ".codex-plugin/plugin.json": "1.0.3",
         "CHANGELOG.md": "1.0.4",
@@ -170,7 +170,7 @@ def test_a_missing_version_key_reads_as_none(tmp_path: Path) -> None:
     root = repo(
         tmp_path, pyproject="1.0.0", init="1.0.0", claude="1.0.0", codex="1.0.0", changelog="1.0.0"
     )
-    (root / ".codex-plugin" / "plugin.json").write_text(json.dumps({"name": "stayfixed"}))
+    (root / ".codex-plugin" / "plugin.json").write_text(json.dumps({"name": "drybag"}))
     assert release.collect(root)[".codex-plugin/plugin.json"] is None
 
 
@@ -184,8 +184,8 @@ def test_the_cli_command_exits_one_on_version_drift(
     )
     assert release.main(["check", "--root", str(root)]) == 1
     # stdout, and that is the change rather than an accident: these commands used to report a
-    # finding by raising `Failure`, which the frame prints to stderr under a `stayfixed: failed:`
-    # prefix and which drops `Result.data`. Every stayfixed command returns its findings.
+    # finding by raising `Failure`, which the frame prints to stderr under a `drybag: failed:`
+    # prefix and which drops `Result.data`. Every drybag command returns its findings.
     assert "version drift" in capsys.readouterr().out
 
 
@@ -225,9 +225,9 @@ def test_the_json_object_has_the_same_shape_whether_or_not_there_is_drift(
     assert set(on_success) == set(on_drift) == {"summary", "problems", "versions"}
     assert on_success["problems"] == []
     assert on_drift["problems"] == [
-        "src/stayfixed/__init__.py says '0.2.0'; pyproject.toml says '0.1.0'"
+        "src/drybag/__init__.py says '0.2.0'; pyproject.toml says '0.1.0'"
     ]
-    assert on_drift["versions"]["src/stayfixed/__init__.py"] == "0.2.0"
+    assert on_drift["versions"]["src/drybag/__init__.py"] == "0.2.0"
 
 
 def test_the_cli_command_reports_the_agreed_version_on_success(
@@ -280,15 +280,15 @@ def test_the_marketplace_ref_is_a_version_source(tmp_path: Path) -> None:
 
 def _with_entry(tmp_path: Path, *entries: dict[str, object]) -> Path:
     root = _repo(tmp_path)
-    document = {"name": "stayfixed-marketplace", "plugins": list(entries)}
+    document = {"name": "drybag", "plugins": list(entries)}
     (root / ".claude-plugin" / "marketplace.json").write_text(json.dumps(document))
     return root
 
 
 # The entry's own refusal, written out, for every source that is not the plugin repository's.
 NOT_FETCHED = (
-    ".claude-plugin/marketplace.json entry 'stayfixed' does not fetch the plugin from "
-    f"{PLUGIN_URL}; the plugin is published from stayfixed/stayfixed-plugin, as a url source "
+    ".claude-plugin/marketplace.json entry 'drybag' does not fetch the plugin from "
+    f"{PLUGIN_URL}; the plugin is published from dry-bag/drybag-plugin, as a url source "
     "pinned to the release's tag by ref and to the plugin commit by sha"
 )
 
@@ -297,7 +297,7 @@ def test_a_path_source_is_refused_as_the_plugin_folder_it_used_to_be(tmp_path: P
     # `./` was the repository root, which is more than the plugin. Said once, by the entry's rule,
     # and not again as a version the marketplace lacks. Mutation (declared): the drift loop stops
     # passing over a marketplace that pins no tag -> a second problem and this reddens.
-    root = _with_entry(tmp_path, {"name": "stayfixed", "source": "./"})
+    root = _with_entry(tmp_path, {"name": "drybag", "source": "./"})
     assert release.check(root) == [NOT_FETCHED]
 
 
@@ -310,47 +310,47 @@ def _url(**extra: object) -> dict[str, object]:
     [
         pytest.param(
             {
-                "name": "stayfixed",
-                "source": _url(url="https://github.com/stayfixed/stayfixed.git"),
+                "name": "drybag",
+                "source": _url(url="https://github.com/dry-bag/drybag.git"),
             },
             NOT_FETCHED,
             id="another-url",
         ),
         pytest.param(
             {
-                "name": "stayfixed",
-                "source": {"source": "github", "repo": "stayfixed/stayfixed-plugin"},
+                "name": "drybag",
+                "source": {"source": "github", "repo": "dry-bag/drybag-plugin"},
             },
             NOT_FETCHED,
             id="a-github-source",
         ),
         pytest.param(
-            {"name": "stayfixed", "source": {"source": "url", "url": PLUGIN_URL}},
-            ".claude-plugin/marketplace.json entry 'stayfixed' pins ref None, which is no "
+            {"name": "drybag", "source": {"source": "url", "url": PLUGIN_URL}},
+            ".claude-plugin/marketplace.json entry 'drybag' pins ref None, which is no "
             "release tag vX.Y.Z",
             id="no-ref",
         ),
         pytest.param(
-            {"name": "stayfixed", "source": _url(ref="main")},
-            ".claude-plugin/marketplace.json entry 'stayfixed' pins ref main, which is no "
+            {"name": "drybag", "source": _url(ref="main")},
+            ".claude-plugin/marketplace.json entry 'drybag' pins ref main, which is no "
             "release tag vX.Y.Z",
             id="a-branch-ref",
         ),
         pytest.param(
-            {"name": "stayfixed", "source": _url(ref="v0.1.0-rc1")},
-            ".claude-plugin/marketplace.json entry 'stayfixed' pins ref v0.1.0-rc1, which is "
+            {"name": "drybag", "source": _url(ref="v0.1.0-rc1")},
+            ".claude-plugin/marketplace.json entry 'drybag' pins ref v0.1.0-rc1, which is "
             "no release tag vX.Y.Z",
             id="a-suffixed-ref",
         ),
         pytest.param(
-            {"name": "stayfixed", "source": _url(ref="v0.1.\u0660")},
-            ".claude-plugin/marketplace.json entry 'stayfixed' pins ref 'v0.1.\u0660', which is "
+            {"name": "drybag", "source": _url(ref="v0.1.\u0660")},
+            ".claude-plugin/marketplace.json entry 'drybag' pins ref 'v0.1.\u0660', which is "
             "no release tag vX.Y.Z",
             id="a-non-ascii-digit",
         ),
         pytest.param(
-            {"name": "stayfixed", "source": _url(), "version": "0.1.0"},
-            ".claude-plugin/marketplace.json entry 'stayfixed' carries a version; plugin.json "
+            {"name": "drybag", "source": _url(), "version": "0.1.0"},
+            ".claude-plugin/marketplace.json entry 'drybag' carries a version; plugin.json "
             "is the only source",
             id="a-version-on-the-entry",
         ),
@@ -373,9 +373,9 @@ def test_a_sha_beside_the_ref_is_accepted(tmp_path: Path) -> None:
     # The release commit pins the plugin commit by `sha` beside the tag's `ref`, and `dev` pins
     # none until the first release with one. Mutation (declared): `mutations/`'s "release check
     # refuses every sha beside the ref" -> this reddens.
-    assert release.check(_with_entry(tmp_path, {"name": "stayfixed", "source": _url()})) == []
+    assert release.check(_with_entry(tmp_path, {"name": "drybag", "source": _url()})) == []
     pinned: dict[str, object] = {
-        "name": "stayfixed",
+        "name": "drybag",
         "source": _url(sha="0123456789abcdef" * 2 + "01234567"),
     }
     assert release.check(_with_entry(tmp_path / "pinned", pinned)) == []
@@ -395,9 +395,9 @@ def test_a_sha_that_is_not_a_commit_id_is_refused(tmp_path: Path, sha: object, s
     # prints its ids in lower case. Mutations (declared): `mutations/`'s "release check accepts a
     # sha in upper case" -> `upper-case` reddens; "release check accepts any sha" -> every case
     # reddens.
-    root = _with_entry(tmp_path, {"name": "stayfixed", "source": _url(sha=sha)})
+    root = _with_entry(tmp_path, {"name": "drybag", "source": _url(sha=sha)})
     assert release.check(root) == [
-        f".claude-plugin/marketplace.json entry 'stayfixed' pins sha {shown}, which is no commit id"
+        f".claude-plugin/marketplace.json entry 'drybag' pins sha {shown}, which is no commit id"
     ]
 
 
@@ -416,8 +416,8 @@ def test_a_marketplace_value_is_printed_escaped_and_clipped(tmp_path: Path) -> N
     # Mutations (declared): `mutations/`'s "release check prints the marketplace's ref as it is"
     # and "release check prints the marketplace's sha as it is" -> the line break and all 211
     # characters reach the finding.
-    root = _with_entry(tmp_path, {"name": "stayfixed", "source": _url(ref=HOSTILE, sha=HOSTILE)})
-    said = ".claude-plugin/marketplace.json entry 'stayfixed' pins"
+    root = _with_entry(tmp_path, {"name": "drybag", "source": _url(ref=HOSTILE, sha=HOSTILE)})
+    said = ".claude-plugin/marketplace.json entry 'drybag' pins"
     assert release.check(root) == [
         f"{said} ref {CLIPPED}, which is no release tag vX.Y.Z",
         f"{said} sha {CLIPPED}, which is no commit id",
@@ -428,10 +428,10 @@ def test_a_marketplace_value_is_printed_escaped_and_clipped(tmp_path: Path) -> N
 def test_a_marketplace_without_the_plugin_entry_is_named(tmp_path: Path, named: int) -> None:
     # Mutation (declared): the first of several entries taken for the one -> `two` reddens.
     # Mutation (declared): a marketplace with no one entry passes -> both cases redden.
-    entries: list[dict[str, object]] = [{"name": "stayfixed", "source": _url()}] * named
+    entries: list[dict[str, object]] = [{"name": "drybag", "source": _url()}] * named
     root = _with_entry(tmp_path, {"name": "another", "source": _url()}, *entries)
     assert release.check(root) == [
-        f".claude-plugin/marketplace.json has {named} entries named 'stayfixed'; it must have "
+        f".claude-plugin/marketplace.json has {named} entries named 'drybag'; it must have "
         f"exactly one, fetching the plugin from {PLUGIN_URL}"
     ]
 
@@ -497,7 +497,7 @@ def test_a_missing_lockfile_reads_as_none_and_is_reported_as_drift(tmp_path: Pat
     assert any("uv.lock says None" in problem for problem in release.check(root))
 
 
-def test_a_lockfile_that_names_no_stayfixed_package_reads_as_none(tmp_path: Path) -> None:
+def test_a_lockfile_that_names_no_drybag_package_reads_as_none(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     (root / "uv.lock").write_text('[[package]]\nname = "pytest"\nversion = "8.0.0"\n')
     assert release.collect(root)["uv.lock"] is None
@@ -511,12 +511,12 @@ def test_the_four_root_conditions_get_four_different_messages(tmp_path: Path) ->
     # about the user's tree, which is the very thing these messages exist to stop.
     missing = tmp_path / "nope"
     not_a_directory = tmp_path / "pyproject.toml"
-    not_a_directory.write_text('[project]\nname = "stayfixed"\nversion = "0.1.0"\n')
+    not_a_directory.write_text('[project]\nname = "drybag"\nversion = "0.1.0"\n')
     empty = tmp_path / "empty"
     empty.mkdir()
     no_version = tmp_path / "no-version"
     no_version.mkdir()
-    (no_version / "pyproject.toml").write_text('[project]\nname = "stayfixed"\n')
+    (no_version / "pyproject.toml").write_text('[project]\nname = "drybag"\n')
 
     absent = release.check(missing)
     a_file = release.check(not_a_directory)
@@ -668,27 +668,26 @@ def _at(tmp_path: Path, version: str) -> Path:
     )
 
 
-# A file under each of the plugin's ten paths (`tests/plugintree.py`'s `TEN`) that `repo` does
-# not already write: the two manifests and `src/stayfixed/__init__.py` are version sources it
+# A file under each of the plugin's nine paths (`tests/plugintree.py`'s `NINE`) that `repo` does
+# not already write: the two manifests and `src/drybag/__init__.py` are version sources it
 # writes.
 BESIDE_THE_SOURCES = {
     path: PLUGIN_FILES[path]
     for path in (
         ".claude-plugin/icon.png",
         "hooks/hooks.json",
-        "scripts/stayfixed",
-        "agents/navigator.md",
+        "scripts/drybag",
         "README.md",
         "LICENSE",
     )
 }
 # How many of the plugin tree's files `_with_plugin_paths` writes outside `skills/`: the three
-# sources under the plugin's paths and the six files above.
+# sources under the plugin's paths and the five files above.
 OUTSIDE_SKILLS = 3 + len(BESIDE_THE_SOURCES)
 
 
 def _with_plugin_paths(root: Path, *, skills: int = 1, pin: bool = True) -> Path:
-    """`root` as a git checkout whose `HEAD` holds a file under each of the plugin's ten paths,
+    """`root` as a git checkout whose `HEAD` holds a file under each of the plugin's nine paths,
     `skills` of them under `skills/`, and everything else `root` holds; under `pin`, a commit on
     top whose marketplace pins the plugin commit its tree makes.
 
@@ -698,7 +697,7 @@ def _with_plugin_paths(root: Path, *, skills: int = 1, pin: bool = True) -> Path
     """
     write(root, BESIDE_THE_SOURCES)
     write(root, {f"skills/s{index}/SKILL.md": (b"x\n", "100644") for index in range(skills)})
-    assert all((root / path).exists() for path in TEN)
+    assert all((root / path).exists() for path in NINE)
     if not (root / ".git").exists():
         git(root, "init", "-q", "-b", "main")
     commit(root, "tree")
@@ -709,7 +708,7 @@ def _with_plugin_paths(root: Path, *, skills: int = 1, pin: bool = True) -> Path
 
 def _plugin_commit_of(root: Path, parent: str | None = None) -> str:
     """The plugin commit of `root`'s `HEAD` whose parent is `parent`: computed by git, over the
-    tree of the ten paths and the commit's text spelled out, never by the script."""
+    tree of the nine paths and the commit's text spelled out, never by the script."""
     version = json.loads((root / ".claude-plugin" / "plugin.json").read_text())["version"]
     return hashed(root, literal(plugin_tree_id(root), parent, version))
 
@@ -748,14 +747,14 @@ def test_a_tag_that_names_another_version_is_drift(tmp_path: Path) -> None:
     # The release workflow used to compare the tag to the package in shell; the gate that
     # exists to say "one version everywhere" now holds the tag against its seven sources. Both
     # tag shapes are accepted — `vX.Y.Z` (the workflow's trigger) and the platform's
-    # `stayfixed--vX.Y.Z` — because either may be the one the run was created from.
+    # `drybag--vX.Y.Z` — because either may be the one the run was created from.
     # Mutation (declared): accept any tag -> the first assertion reddens.
     root = _with_plugin_paths(_at(tmp_path, "1.2.3"))
     assert release.check(root, tag="v1.2.4") == [
-        "tag v1.2.4 is neither v1.2.3 nor stayfixed--v1.2.3; pyproject.toml says '1.2.3'"
+        "tag v1.2.4 is neither v1.2.3 nor drybag--v1.2.3; pyproject.toml says '1.2.3'"
     ]
     assert release.check(root, tag="v1.2.3") == []
-    assert release.check(root, tag="stayfixed--v1.2.3") == []
+    assert release.check(root, tag="drybag--v1.2.3") == []
 
 
 @needs_git
@@ -767,12 +766,12 @@ def test_the_drift_message_says_what_was_checked_rather_than_inventing_a_version
     # Measured on this repository before the fix:
     #
     #   --tag 0.1.0          -> tag 0.1.0 names 0.1.0; pyproject.toml says '0.1.0'
-    #   --tag stayfixed-v0.1.0 -> tag stayfixed-v0.1.0 names 0.1.0; …says '0.1.0'
+    #   --tag drybag-v0.1.0 -> tag drybag-v0.1.0 names 0.1.0; …says '0.1.0'
     #   --tag dev-v0.1.0     -> tag dev-v0.1.0 names -v0.1.0; …says '0.1.0'
     #
     # The first asserts that two identical strings disagree, which is the failure the comment
     # above `check` was written to end. Both of the first two are the slips `RELEASING.md`
-    # invites: a human types this flag by hand right after a tool prints `stayfixed--vX.Y.Z`.
+    # invites: a human types this flag by hand right after a tool prints `drybag--vX.Y.Z`.
     # The tags the older case exercised (`v1.2.4`, `v9.9.9`) all begin with `v` and carry no
     # earlier one, so the split happened to be right and the tests passed for that reason.
     #
@@ -781,16 +780,16 @@ def test_the_drift_message_says_what_was_checked_rather_than_inventing_a_version
     # A bare version, which is the tag `git tag 1.2.3` makes and the one that read as agreeing
     # with itself.
     assert release.check(root, tag="1.2.3") == [
-        "tag 1.2.3 is neither v1.2.3 nor stayfixed--v1.2.3; pyproject.toml says '1.2.3'"
+        "tag 1.2.3 is neither v1.2.3 nor drybag--v1.2.3; pyproject.toml says '1.2.3'"
     ]
     # One hyphen short of the platform's own tag.
-    assert release.check(root, tag="stayfixed-v1.2.3") == [
-        "tag stayfixed-v1.2.3 is neither v1.2.3 nor stayfixed--v1.2.3; pyproject.toml says '1.2.3'"
+    assert release.check(root, tag="drybag-v1.2.3") == [
+        "tag drybag-v1.2.3 is neither v1.2.3 nor drybag--v1.2.3; pyproject.toml says '1.2.3'"
     ]
     # And a prefix carrying an earlier `v`, where the split produced `-v1.2.3` — a string that
     # is not a version at all.
     assert release.check(root, tag="dev-v1.2.3") == [
-        "tag dev-v1.2.3 is neither v1.2.3 nor stayfixed--v1.2.3; pyproject.toml says '1.2.3'"
+        "tag dev-v1.2.3 is neither v1.2.3 nor drybag--v1.2.3; pyproject.toml says '1.2.3'"
     ]
 
 
@@ -882,8 +881,7 @@ def test_a_tag_whose_entry_is_malformed_reports_it_once(tmp_path: Path) -> None:
     root = _with_plugin_paths(_at(tmp_path, "1.2.3"), pin=False)
     _pinning(root, "C" * 40)
     assert release.check(root, tag="v1.2.3") == [
-        f".claude-plugin/marketplace.json entry 'stayfixed' pins sha {'C' * 40}, which is no "
-        "commit id"
+        f".claude-plugin/marketplace.json entry 'drybag' pins sha {'C' * 40}, which is no commit id"
     ]
 
 
@@ -893,7 +891,7 @@ def test_a_tag_whose_entry_is_malformed_reports_it_once(tmp_path: Path) -> None:
 def _said_pin(pinned: str, made: str) -> str:
     """The pin's finding when the marketplace pins another commit, written out."""
     return (
-        f".claude-plugin/marketplace.json entry 'stayfixed' pins sha {pinned}; the plugin commit "
+        f".claude-plugin/marketplace.json entry 'drybag' pins sha {pinned}; the plugin commit "
         f"of this tree is {made}"
     )
 
@@ -939,7 +937,7 @@ def test_a_tag_without_a_pin_is_a_finding_naming_the_commit(
     root = _with_plugin_paths(_at(tmp_path, "1.2.3"), pin=False)
     made = _plugin_commit_of(root)
     problem = (
-        ".claude-plugin/marketplace.json entry 'stayfixed' pins no sha; the plugin commit of this "
+        ".claude-plugin/marketplace.json entry 'drybag' pins no sha; the plugin commit of this "
         f"tree is {made}: run `uv run python scripts/release.py pin`"
     )
     assert release.check(root, tag="v1.2.3") == [problem]
@@ -1087,8 +1085,9 @@ def test_pin_refuses_when_the_plugin_main_is_not_the_parent(
     holds = f"main at {_tip(remote)}" if main is not None else "no main"
     assert str(refused.value) == (
         f"the plugin commit {made} has {follows}, and {remote} has {holds}; the plugin "
-        "repository's main moves only by fast-forward. The likely cause: this release commit was "
-        "cut on the wrong base; a merge into main dropped the sha .claude-plugin/marketplace.json "
+        "repository's main moves only by fast-forward. The likely cause: the plugin repository "
+        "was never seeded (RELEASING.md, section 3); this release commit was cut on the wrong "
+        "base; a merge into main dropped the sha .claude-plugin/marketplace.json "
         "pinned at the release before; or a release that stopped after its plugin was pushed left "
         "main at a commit nothing here pins, which the restore commit puts back (RELEASING.md, "
         "section 5)"
@@ -1150,19 +1149,19 @@ def test_pin_refuses_a_tree_it_cannot_make_the_commit_of(tmp_path: Path) -> None
             id="plugins-a-string",
         ),
         pytest.param(
-            '{"plugins": [{"name": "stayfixed", "source": "./"}]}',
-            "cannot be pinned: its entry 'stayfixed' has a source that is no object",
+            '{"plugins": [{"name": "drybag", "source": "./"}]}',
+            "cannot be pinned: its entry 'drybag' has a source that is no object",
             id="a-string-source",
         ),
         pytest.param(
             '{"plugins": []}',
-            "cannot be pinned: it has 0 entries named 'stayfixed'; the sha is written into "
+            "cannot be pinned: it has 0 entries named 'drybag'; the sha is written into "
             "exactly one",
             id="no-entry",
         ),
         pytest.param(
-            json.dumps({"plugins": [{"name": "stayfixed", "source": {}}] * 2}),
-            "cannot be pinned: it has 2 entries named 'stayfixed'; the sha is written into "
+            json.dumps({"plugins": [{"name": "drybag", "source": {}}] * 2}),
+            "cannot be pinned: it has 2 entries named 'drybag'; the sha is written into "
             "exactly one",
             id="two-entries",
         ),
@@ -1294,12 +1293,12 @@ def test_the_cli_refuses_notes_under_a_version_that_is_not_the_projects(
 
 
 def test_collect_still_reads_the_package_version_beside_the_repository_constants() -> None:
-    # `stayfixed.REPOSITORY_SLUG` and `stayfixed.REPOSITORY_URL` sit in
-    # `src/stayfixed/__init__.py` beside `__version__`; `_INIT`'s regex is anchored on
+    # `drybag.REPOSITORY_SLUG` and `drybag.REPOSITORY_URL` sit in
+    # `src/drybag/__init__.py` beside `__version__`; `_INIT`'s regex is anchored on
     # `__version__` alone, so the two new lines must not change what this reads.
-    from stayfixed import __version__
+    from drybag import __version__
 
-    assert release.collect(ROOT)["src/stayfixed/__init__.py"] == __version__
+    assert release.collect(ROOT)["src/drybag/__init__.py"] == __version__
 
 
 # --- `notes`: the towncrier wrapper, driven through the runner seam ------------------------------
@@ -1310,7 +1309,7 @@ NOTES = "## 1.2.3\n\n- a note\n"
 
 def _root(tmp_path: Path, version: str = "1.2.3") -> Path:
     (tmp_path / "pyproject.toml").write_text(
-        f'[project]\nname = "stayfixed"\nversion = "{version}"\n', encoding="utf-8"
+        f'[project]\nname = "drybag"\nversion = "{version}"\n', encoding="utf-8"
     )
     return tmp_path
 
@@ -1352,24 +1351,24 @@ def test_a_missing_towncrier_names_the_dependency_group(tmp_path: Path) -> None:
 
 
 def test_run_without_its_package_it_refuses_with_exit_2_and_says_to_use_uv(tmp_path: Path) -> None:
-    # An interpreter without this repository's `stayfixed` fails on the script's first import,
+    # An interpreter without this repository's `drybag` fails on the script's first import,
     # before the CLI frame exists, and a traceback exits `1`, which `check` gives its findings.
     # Mutations (declared): `mutations/`'s "release.py exits 1 when its package cannot be imported"
     # and "release.py refuses a missing package without saying to run it through uv".
-    done = without_stayfixed("release.py", tmp_path, "check")
+    done = without_drybag("release.py", tmp_path, "check")
     assert done.returncode == 2, done.stdout + done.stderr
     assert done.stdout == "", done.stdout
-    assert "refused: No module named 'stayfixed'" in done.stderr, done.stderr
+    assert "refused: No module named 'drybag'" in done.stderr, done.stderr
     assert "uv run python scripts/release.py" in done.stderr, done.stderr
     assert "Traceback" not in done.stderr, done.stderr
 
 
 def test_run_on_a_python_without_tomllib_it_refuses_with_exit_2(tmp_path: Path) -> None:
     # `tomllib` is new in Python 3.11, and a `python3` older than that fails on it before the CLI
-    # frame exists, as one without `stayfixed` does: exit `1`, `check`'s findings, unless the
+    # frame exists, as one without `drybag` does: exit `1`, `check`'s findings, unless the
     # import is guarded with the package's. Mutation (declared): `mutations/`'s "release.py imports
     # tomllib outside its guarded imports".
-    done = without_stayfixed("release.py", tmp_path, "check", missing=("tomllib",))
+    done = without_drybag("release.py", tmp_path, "check", missing=("tomllib",))
     assert done.returncode == 2, done.stdout + done.stderr
     assert "refused: import of tomllib halted" in done.stderr, done.stderr
     assert "uv run python scripts/release.py" in done.stderr, done.stderr

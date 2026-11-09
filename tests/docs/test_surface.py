@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-import stayfixed.docs.api as docs
+import drybag.docs.api as docs
 
 
 def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
@@ -13,23 +13,10 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     # substituted line. Measured by hand instead — re-exporting `trail.TRAIL_FILE` reddens this
     # test and this test alone.
     #
-    # Outside this area, `project` imports `trail_target`, and `stayfixed.assess.gates` imports
-    # the three gate functions and what the docs and trail gates read by path; the other names
-    # below have no importer and stay on the argument written beside them in `api.py`.
+    # The names below have no importer and stay on the argument written beside them in `api.py`.
     required = {
         # two checks this area is, one call each
         "check_budgets",
         "check_links",
-        # the install path: `project` ships `trail.toml`
-        # beside the roadmap and must put it where `docs trail` reads it, a location only
-        "trail_target",
-        # the three gates stayfixed.assess.gates runs, each this area's own command's function
-        "docs_gate",
-        "plan_gate",
-        "trail_gate",
-        # `assess` and `adopt promote` ask git whether each file the docs and trail gates read
-        # by path is tracked, the link targets among them, as this area's link reader finds them
-        "docs_reads",
-        "trail_reads",
     }
     assert required == set(docs.__all__)

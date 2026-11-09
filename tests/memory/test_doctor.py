@@ -1,8 +1,8 @@
-"""What the `bundles` and `memory` rows in `stayfixed doctor` answer, now that `memory`
+"""What the `bundles` and `memory` rows in `drybag doctor` answer, now that `memory`
 contributes them.
 
 Every case runs the whole report through `run_checks`, so the rows are asked the way a user's
-`stayfixed doctor` asks them: discovered in this area's `doctor.py`, with the note store resolved
+`drybag doctor` asks them: discovered in this area's `doctor.py`, with the note store resolved
 by the lazy value its `register()` creates. The fixtures are the doctor area's own
 (`tests/doctor/test_checks.py`), shared rather than respelled.
 """
@@ -14,13 +14,13 @@ from pathlib import Path
 
 import pytest
 
-import stayfixed.memory.answers as answers_module
-from stayfixed import fsops
-from stayfixed.config.loader import load
-from stayfixed.doctor.api import OK, RED, SKIP, WARN, Check
-from stayfixed.errors import Refusal
-from stayfixed.memory.doctor import NEARLY_FULL
-from stayfixed.overlay.api import COMMON_MEMORY
+import drybag.memory.answers as answers_module
+from drybag import fsops
+from drybag.config.loader import load
+from drybag.doctor.api import OK, RED, SKIP, WARN, Check
+from drybag.errors import Refusal
+from drybag.memory.doctor import NEARLY_FULL
+from drybag.overlay.api import COMMON_MEMORY
 from tests.cli import cli
 from tests.doctor.test_checks import (
     _attached,
@@ -29,15 +29,15 @@ from tests.doctor.test_checks import (
     _initialised,
     _machine,
 )
+from tests.tagged import with_tags
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
 # A local-only project whose one group leaves the store, with the store's directory in place so
 # the resolver reaches the group rather than stopping at a missing directory.
 OUTSIDE = """
-[stayfixed]
+[drybag]
 version = "{version}"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 
 [project]
 name = "p"
@@ -52,22 +52,21 @@ groups = ["../outside"]
 def test_a_store_that_refuses_skips_the_store_checks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, how: str
 ) -> None:
-    # A `stayfixed.toml` is repository-authored, so a `memory.groups` that makes the store refuse
+    # A `drybag.toml` is repository-authored, so a `memory.groups` that makes the store refuse
     # is the repository's to write. The two rows that read the store skip on it, as they did
     # when the core resolved the store for them; neither may turn red, because red gates the exit
     # code and a check that "could not run" is not something the repository did wrong.
     #
     # Two cases. Asked about a group that leaves the store, the resolver hands the store over
-    # without that group, whose reason it keeps (`Store.unavailable`), so the rows read what is
-    # left and stay green. The second case is the resolver
-    # raising `Refusal` instead, which is what the lazy value's `except` exists for and what no
-    # `memory.groups` reaches today, so it is stood in for by replacing the resolver where the lazy
-    # value calls it, in `memory.answers`.
+    # without that group, so the rows read what is left and stay green. The second case is the
+    # resolver raising `Refusal` instead, which is what the lazy value's `except` exists for and
+    # what no `memory.groups` reaches today, so it is stood in for by replacing the resolver where
+    # the lazy value calls it, in `memory.answers`.
     #
     # Mutation (oracle): `mutations/`'s "the delivery rows let a refusing store escape" -> the
     # `Refusal` reaches the guard and both rows are red with `this check could not run: Refusal`.
     root = _initialised(tmp_path, template=OUTSIDE)
-    (root / ".stayfixed" / "local" / "memory").mkdir(parents=True)
+    (root / ".drybag" / "local" / "memory").mkdir(parents=True)
     if how == "resolver-raises":
 
         def refuses(*args: object, **kwargs: object) -> None:
@@ -154,11 +153,10 @@ def test_a_bundle_whose_largest_part_is_at_the_platform_cap_is_a_warning(tmp_pat
     assert "at the platform cap" in check.detail
 
 
-# A project whose `stayfixed.toml` sets no `[memory] mode`: memory is the harness's own.
+# A project whose `drybag.toml` sets no `[memory] mode`: memory is the harness's own.
 HARNESS = """
-[stayfixed]
+[drybag]
 version = "{version}"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 
 [project]
 name = "p"
@@ -185,7 +183,7 @@ def test_a_committed_settings_file_setting_the_pointer_is_named_as_information(
     tmp_path: Path,
 ) -> None:
     # A repository can point the harness's memory elsewhere through its committed settings file;
-    # stayfixed cannot stop that and does not try, so the row names the file, as information, and
+    # drybag cannot stop that and does not try, so the row names the file, as information, and
     # never the value, which the repository wrote.
     root = _initialised(tmp_path, template=HARNESS)
     (root / ".claude").mkdir()
@@ -200,17 +198,17 @@ def test_a_committed_settings_file_setting_the_pointer_is_named_as_information(
 
 def test_store_debris_is_no_row_of_its_own(tmp_path: Path) -> None:
     root = _initialised(tmp_path)
-    (root / ".stayfixed" / "local" / "memory" / "developer").mkdir(parents=True)
+    (root / ".drybag" / "local" / "memory" / "developer").mkdir(parents=True)
     names = [row.name for row in _checks(tmp_path, root)]
     assert "memory" in names and "store-debris" not in names
 
 
 def test_a_note_store_holding_something_that_is_not_a_note_is_reported(tmp_path: Path) -> None:
-    # Counted in the `memory` row. The count is stayfixed's own; the file names are not, so they
+    # Counted in the `memory` row. The count is drybag's own; the file names are not, so they
     # are counted rather than printed and the remedy names the command that lists them. The
     # store's unreviewed notes are counted beside it, as information.
     root = _initialised(tmp_path)
-    store = root / ".stayfixed" / "local" / "memory" / "developer"
+    store = root / ".drybag" / "local" / "memory" / "developer"
     store.mkdir(parents=True)
     (store / "kept.md").write_text("---\nname: kept\ndescription: d\n---\n\nbody\n")
     (store / "scratch.txt").write_text("not a note\n", encoding="utf-8")
@@ -232,7 +230,7 @@ def test_a_note_store_past_the_walk_cap_is_one_the_row_cannot_tell_about(
     # whole. Mutation (oracle): `mutations/`'s "the note store's walk lists every entry" -> `4`.
     monkeypatch.setattr(fsops, "WALK_ENTRIES", 3)
     root = _initialised(tmp_path)
-    store = root / ".stayfixed" / "local" / "memory" / "developer"
+    store = root / ".drybag" / "local" / "memory" / "developer"
     store.mkdir(parents=True)
     for index in range(entries):
         (store / f"n{index}.md").write_text("---\nname: n\ndescription: d\n---\n\nbody\n")
@@ -246,4 +244,19 @@ def test_a_note_store_past_the_walk_cap_is_one_the_row_cannot_tell_about(
             "the walk of the note store stopped after 3 entries, so it cannot say whether the "
             "store holds files that are not notes"
         ) in check.detail
-        assert check.remedy == "run `stayfixed memory inventory` to see what the store holds"
+        assert check.remedy == "run `drybag memory inventory` to see what the store holds"
+
+
+def test_the_note_store_rows_read_a_bound_checkouts_configuration(tmp_path: Path) -> None:
+    # With no `drybag.toml` the store resolves through `Context.attach_config`; the walk that
+    # counts its unreviewed notes and the `bundles` row read that configuration too.
+    from tests.memory.test_commands import BARE_NOTE, _bound_without_file, _composed
+
+    root = _bound_without_file(tmp_path)
+    overlay = tmp_path / "overlay"
+    with_tags(overlay, "widget", ["a"], "memory")
+    (overlay / "groups" / "a" / "memory" / "t.md").write_text(BARE_NOTE, encoding="utf-8")
+    (_composed(root) / "tag-a").symlink_to(overlay / "groups" / "a" / "memory")
+    rows = {row.name: row for row in _checks(tmp_path, root, machine=tmp_path / "machine.toml")}
+    assert "2 unreviewed note(s)" in rows["memory"].detail
+    assert rows["bundles"].status != SKIP

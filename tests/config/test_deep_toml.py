@@ -3,8 +3,8 @@
 `tomllib` reads nested arrays by recursion, so `a = [[[…]]]` a few thousand levels deep raises
 `RecursionError`, not `TOMLDecodeError`; and an integer literal longer than the interpreter
 converts raises a plain `ValueError`, which is not a `TOMLDecodeError` either. Uncaught, each is an
-internal error, the class stayfixed keeps for its own defects; in a gate run it ended every gate,
-and in `stayfixed.toml` it replaced "does not load" with a traceback's name. So each reader answers
+internal error, the class drybag keeps for its own defects; in a gate run it ended every gate,
+and in `drybag.toml` it replaced "does not load" with a traceback's name. So each reader answers
 both as it answers a document that does not parse, and each case below holds one reader to its own
 answer.
 """
@@ -16,17 +16,14 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.attach import binding, write
-from stayfixed.config.loader import loads
-from stayfixed.config.overlay import overlay_root
-from stayfixed.config.owned import UnparsedDocument, rewrite
-from stayfixed.config.reading import TOO_DEEP, TOO_LONG, ConfigError, MachineConfigError
-from stayfixed.docs.trail import read_trail
-from stayfixed.errors import Failure
-from stayfixed.memory import store
-from stayfixed.profiles.evaluate import _toml_document
-from stayfixed.project import init
-from stayfixed.setup.machine import read_machine
+from drybag.attach import binding, write
+from drybag.config.loader import loads
+from drybag.config.overlay import overlay_root
+from drybag.config.plates import PROJECTS, RECORD
+from drybag.config.reading import TOO_DEEP, TOO_LONG, ConfigError, MachineConfigError
+from drybag.docs.trail import read_trail
+from drybag.errors import Failure
+from drybag.setup.machine import read_machine
 from tests.parserlimits import LONG_NUMBER
 from tests.scriptload import release
 
@@ -38,7 +35,7 @@ DEPTH = 2000
 DEEP = "a = " + "[" * DEPTH + "]" * DEPTH + "\n"
 # Valid TOML whose one integer is longer than the interpreter converts.
 LONG = "a = " + LONG_NUMBER + "\n"
-FINE = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
+FINE = '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
 
 
 def _file(tmp_path: Path, relative: str, text: str) -> Path:
@@ -50,7 +47,7 @@ def _file(tmp_path: Path, relative: str, text: str) -> Path:
 
 def _record(tmp_path: Path, text: str) -> Path:
     """The overlay's record of the project `widget`, holding `text`."""
-    return _file(tmp_path, f"overlay/{store.PROJECTS}/widget/{store.PROJECT_RECORD}", text)
+    return _file(tmp_path, f"overlay/{PROJECTS}/widget/{RECORD}", text)
 
 
 def test_the_parser_still_recurses_at_this_depth_and_refuses_this_number() -> None:
@@ -73,11 +70,6 @@ READERS = [
         lambda t, d: loads(FINE, t, machine=_file(t, "machine.toml", d)),
         MachineConfigError,
         id="personal",
-    ),
-    pytest.param(
-        lambda t, d: rewrite(d, {("stayfixed", "enforced"): ("docs",)}),
-        UnparsedDocument,
-        id="owned-rewrite",
     ),
     pytest.param(
         lambda t, d: read_trail(_file(t, "docs/trail.toml", d), "docs/trail.toml"),
@@ -103,15 +95,12 @@ READERS = [
         id="versions-pyproject",
     ),
     pytest.param(
-        lambda t, d: init._existing(_file(t, "stayfixed.toml", d).parent), Failure, id="init"
-    ),
-    pytest.param(
         lambda t, d: read_machine(_file(t, "machine.toml", d)), MachineConfigError, id="machine"
     ),
 ]
 
 DEGRADERS = [
-    pytest.param(lambda t, d: write._first_attach(_record(t, d)), None, id="first-attach"),
+    pytest.param(lambda t, d: write._record_table(_record(t, d)), None, id="record-table"),
 ]
 
 
@@ -156,32 +145,28 @@ def test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_long_number(
     assert read(tmp_path, LONG) == answer
 
 
-def test_a_profile_document_holding_a_number_past_the_parser_resolves_to_nothing() -> None:
-    # A repository's `pyproject.toml`, read by a profile's locator: before, `stayfixed assess`
-    # ended in an internal error. Mutation (declared): `ValueError` dropped from `UNPARSEABLE`.
-    assert _toml_document(LONG) is None
-
-
 def test_the_refusal_names_the_file_and_says_why_without_a_position() -> None:
     # The position `tomllib` reports is the actionable half of a parse failure; a document
     # nested past the parser has none, and the message says what it has instead.
     with pytest.raises(ConfigError) as refused:
         loads(DEEP, Path("/nowhere"), machine=Path("/nowhere/absent.toml"))
-    assert str(refused.value).endswith(f"stayfixed.toml' is not valid TOML {TOO_DEEP}")
+    assert str(refused.value).endswith(f"drybag.toml' is not valid TOML {TOO_DEEP}")
 
 
-def test_a_number_past_the_parser_is_refused_in_stayfixeds_words_not_the_interpreters() -> None:
+def test_a_number_past_the_parser_is_refused_in_drybags_words_not_the_interpreters() -> None:
     # The interpreter's message tells the reader to raise a process-wide limit
     # (`sys.set_int_max_str_digits`), which is no remedy for a file somebody else wrote, and it
     # carries no position. Mutation (declared): `toml_position` answering a plain `ValueError`
     # as it answers a `TOMLDecodeError` -> the suffix is `NO_POSITION`.
     with pytest.raises(ConfigError) as refused:
         loads(LONG, Path("/nowhere"), machine=Path("/nowhere/absent.toml"))
-    assert str(refused.value).endswith(f"stayfixed.toml' is not valid TOML {TOO_LONG}")
+    assert str(refused.value).endswith(f"drybag.toml' is not valid TOML {TOO_LONG}")
 
 
 def test_an_integer_of_exactly_the_conversion_limit_still_parses() -> None:
     # The legitimate edge of the readers' widened catch: 4,300 digits is what the interpreter still
     # converts, so such a document parses, and only one past it is a document that does not. No
     # mutation: it pins the interpreter's limit the widened catch relies on, not a line here.
-    assert _toml_document("a = " + "9" * 4_300 + "\n") == {"a": int("9" * 4_300)}
+    import tomllib
+
+    assert tomllib.loads("a = " + "9" * 4_300 + "\n") == {"a": int("9" * 4_300)}

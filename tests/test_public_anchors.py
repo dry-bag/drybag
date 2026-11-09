@@ -67,7 +67,7 @@ CITATIONS = (
     ),
     # The plans' word for a unit of work. A module, a test and a document all name the area, the
     # module or the command they mean instead: "the foundation lane" told a reader nothing that
-    # `stayfixed.hooks.dispatch` does not tell them better. A letter and not a word character is the
+    # `drybag.hooks.dispatch` does not tell them better. A letter and not a word character is the
     # boundary, because `\b` counts `_` as a word character and a snake_case test name walked past
     # it. The pattern spells the word `l[a]nes` so that the two entries that quote this line,
     # `mutations/`'s "the public-anchor gate stops seeing the plans' unit of work" and "the
@@ -205,7 +205,7 @@ def test_the_citation_gate_discriminates() -> None:
     for clean in (
         "sourced [S3] [S7], and that is the",
         "principle 5 says a repository is untrusted input",
-        "see docs/cli.md#stayfixed-init",
+        "see docs/cli.md#drybag-init",
         "Every other C0 control and DEL",
         "the C1 control range",
         "Python 3.11, 3.12 and 3.13",
@@ -227,7 +227,7 @@ def test_a_citation_reports_its_whole_text_once_on_its_own_line() -> None:
     assert citations("(D7)") == [(1, "bracketed id", "(D7)")]
     assert citations("(DC4, D15)") == [(1, "bracketed id", "(DC4, D15)")]
     assert citations("x\ny §9.12 z") == [(2, "design section", "§9.12")]
-    arms = arms_for("src/stayfixed/x.py")
+    arms = arms_for("src/drybag/x.py")
     assert citations("a\nTask 12, and Finding 14", arms) == [
         (2, "plan vocabulary", "Task 12"),
         (2, "plan vocabulary", "Finding 14"),
@@ -242,7 +242,7 @@ def test_the_plan_vocabulary_gate_discriminates() -> None:
     # the whole difference `arms_for` makes. One spelling per line, so no spelling covers for
     # another. The negatives are the words these modules use in their own sense — a background
     # task, a round trip, what a check finds, a public source by its bracketed id.
-    code = arms_for("src/stayfixed/x.py")
+    code = arms_for("src/drybag/x.py")
     for planted in (
         "the wave-3 memory engine",
         "landed in wave 4",
@@ -277,7 +277,7 @@ def test_the_arms_follow_where_a_file_lives() -> None:
     # Code is held to the bookkeeping arms and a document is not: a `.md` file anywhere, and a
     # fixture whatever its suffix, because a fixture is a document a test reads.
     for code in (
-        "src/stayfixed/runner.py",
+        "src/drybag/runner.py",
         "tests/test_cli.py",
         "scripts/x.py",
         "mutations/x.toml",
@@ -290,9 +290,8 @@ def test_the_arms_follow_where_a_file_lives() -> None:
         "README.md",
         "RELEASING.md",
         "skills/README.md",
-        "src/stayfixed/templates/project/AGENTS.md",
         "tests/fixtures/smoke-project/docs/plans/README.md",
-        "tests/fixtures/hostile-project/stayfixed.toml",
+        "tests/fixtures/hostile-project/drybag.toml",
     ):
         assert citations("the wave-4 engine", arms_for(document)) == [], document
 
@@ -326,15 +325,14 @@ def test_the_citation_walk_reads_every_tracked_file_but_the_exemptions() -> None
         ".claude-plugin/plugin.json",
         ".codex-plugin/plugin.json",
         ".github/workflows/ci.yml",
-        "src/stayfixed/cli.py",
-        "src/stayfixed/presets/recommended.toml",
+        "src/drybag/cli.py",
+        "src/drybag/presets/recommended.toml",
         "docs/cli.md",
         "docs/methodology/principles.md",
         "skills/README.md",
         "hooks/run-hook.sh",
-        "agents/code-navigator.md",
         "tests/test_cli.py",
-        "tests/fixtures/hostile-project/stayfixed.toml",
+        "tests/fixtures/hostile-project/drybag.toml",
         "scripts/mutation_oracle.py",
     ):
         assert wanted in names, wanted

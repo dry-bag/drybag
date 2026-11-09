@@ -2,6 +2,222 @@
 
 <!-- towncrier release notes start -->
 
+## 0.7.0 (2026-11-09)
+
+### Upgrading
+
+- **stayfixed is now drybag.** The package and the command are `drybag`; the plugin is `drybag` in
+  the marketplace `drybag` (`drybag@drybag`, from `dry-bag/drybag`, where it was
+  `stayfixed@stayfixed-marketplace`); the configuration file is `drybag.toml` with the table
+  `[drybag]`; the overlay's record is `drybag-overlay.toml`; the state directories are
+  `~/.config/drybag/`, `~/.local/share/drybag/`, `<git common dir>/drybag/` and `.drybag/`; and the
+  environment variables are `DRYBAG_*`.
+- **The bug ledger and five method skills left and are not published separately yet, so anyone
+  relying on them stays on 0.6.1 for now.** Gone, with no alias: every `stayfixed bugs` command and
+  the skills `file-bug`, `close-bug`, `sweep-defect-class`, `retro-to-guard`,
+  `review-plan-three-lenses`, `run-correctness-audit` and `attribute-failure`. `drybag plan check`
+  still holds a plan that claims `Fixes BR-nnn` to a premise line, and reads that claim with the
+  prefix `BR` only: a configured `[ledger] id_prefix` is no longer honoured. The `code-navigator`
+  agent no longer ships, so the plugin has no `agents/` directory. The skills that ship are
+  `attach`, `doctor`, `memory-sweep` and `setup`.
+- **A machine that ran stayfixed starts fresh.** No old path, file or variable is read, and no code
+  migrates or removes one: a checkout stayfixed attached reads as not attached, and a note you
+  approved reads as unreviewed. To move a machine, in this order:
+
+  1. With stayfixed 0.6.1 still installed, run `stayfixed detach` in each checkout it attached, and
+     `stayfixed setup --git-hooks --uninstall` in each repository where you installed that hook,
+     because drybag cannot take back what stayfixed added. For a checkout you miss, take the allow
+     rules, the hook entries and the `autoMemoryDirectory` key out of `.claude/settings.local.json`
+     by hand, and delete `.stayfixed/local/attach.json`, which holds your allow rules.
+  2. Remove the old plugin and command: `/plugin marketplace remove stayfixed-marketplace`, which
+     uninstalls the plugin, and `uv tool uninstall stayfixed`. Install drybag:
+     `uv tool install drybag`, `/plugin marketplace add dry-bag/drybag@v0.7.0`,
+     `/plugin install drybag@drybag`.
+  3. In a repository with a `stayfixed.toml`, rename it to `drybag.toml`, rename its table to
+     `[drybag]`, set `version = "0.7.0"` and delete the keys listed below. In a `local-only` project,
+     also run `mkdir -p .drybag/local && mv .stayfixed/local/memory .drybag/local/` and add
+     `.drybag/local/` to `.gitignore`.
+  4. At your overlay's root, rename `stayfixed-overlay.toml` to `drybag-overlay.toml`; without it
+     `drybag setup --overlay` and `drybag overlay upgrade` refuse the tree as not an overlay. Rename
+     its layers, `common/stayfixed.toml` and `projects/<name>/stayfixed.toml`, to `drybag.toml`, or
+     what they set stops applying and `attach` does not say so. Copy what you keep in
+     `~/.config/stayfixed/config.toml` into `~/.config/drybag/config.toml`, then run
+     `drybag setup --overlay <overlay>` and `drybag attach` in each checkout. With no manifest of
+     its own yet, `drybag overlay upgrade` skips and names every file that differs from this
+     release's.
+  5. In each checkout that holds notes, run `drybag memory index`, read the notes, then run
+     `drybag memory promote --changed`. The index comes first because the lines 0.6.1 rendered stand
+     outside the new markers, so they are harvested once, which edits those notes and would undo an
+     earlier promote.
+
+  Once that is done, `~/.config/stayfixed/`, `~/.local/share/stayfixed/`,
+  `<git common dir>/stayfixed/` and `.stayfixed/` are yours to delete. First move what you keep of
+  the files the harness wrote to `~/.local/share/stayfixed/stores/<id>/`, which `detach` leaves,
+  into the overlay's `projects/<name>/memory/project-stable/`.
+- **Keys that left with removed features are refused.** Delete these from a `drybag.toml` you
+  carry over, or every command that loads it exits 1 with the loader's refusal,
+  `[drybag] has unknown key(s): enforced` for a key and `has unknown section(s): gates` for a table.
+  `drybag doctor` is the exception: it warns `not-initialised`, names the settings it ignored and
+  exits 0, and a session's hooks load the file the same way.
+
+  - In the `[stayfixed]` table, now `[drybag]`: `enforced`, `state`, `profile` and `agents`. Which
+    harness a session runs under is read from the session, and `drybag setup --plugin` installs for
+    every harness the preset names a marketplace for.
+  - The whole tables `[gates]` (`[gates.custom]` included), `[ci]`, `[artifacts]` and `[ledger]`.
+  - In `[paths]`: `bugs`, `bug_index`, `architecture`, `runbooks`, `adr`, `roadmap_history` and
+    `stayfixed`.
+  - `[project] release_branch`.
+  - `[commit_messages] types`; `attribution_check` stays.
+- **`stayfixed prove` and these other commands are gone, with no alias:**
+
+  - `assess`, `gate` and `adopt promote`, and the `adopt` skill. The checks themselves
+    (`drybag docs check`, `docs trail --check`, `plan check`, `commit check`) still report each
+    finding, and your own CI runs the ones you choose. The reusable workflow `check.yml` went with
+    `gate`: a caller pinned to an earlier commit keeps running that commit's workflow, and one
+    pinned to a later commit no longer finds the file, so delete the caller workflow,
+    `.github/workflows/stayfixed.yml`.
+  - `init`, `upgrade` and `uninstall`, and their skills and the shipped project templates. A project
+    starts from a `drybag.toml` you write (the README's Quickstart), and a command that finds none
+    says to write one. `drybag docs trail` keeps working over a `docs/roadmap.md` and a `trail.toml`
+    you write yourself, and `docs/cli.md` gives their shape.
+  - `test attribute` and `test hygiene`, and the `test` command group.
+  - `memory refs` and `memory fit`. `drybag doctor`'s `bundles` row still says whether each bundle
+    fits its slots.
+  - `trust list` and `trust revoke`. `drybag memory inventory --json` gives each note's `reviewed`
+    state and the `unreviewed` total, and `drybag doctor`'s `memory` row the store's unreviewed
+    count; both only read. A promoted note's approval holds for its bytes wherever they reappear;
+    withdrawing it is a hand edit of `trust.json` beside the machine file.
+- **The stack profiles are gone, and `[stayfixed] profile` with them.** The red-run note after a
+  failed `Bash` call now speaks when one of the command's simple commands is a common test runner's
+  (`pytest`, `go test`, `cargo test`, `npm test` and the like), whatever the stack, and names only
+  the uncommitted changes in the tree, which `test hygiene` reported: the line about stale Python
+  bytecode is gone.
+- **Four rows left `drybag doctor`'s report, so a script reading its `--json` no longer finds
+  them:** `ci-ref`, which went with `[ci]`; `retired-deny`; `files`, whose executable-bit check
+  moved to `wrapper` and whose comparison of `hooks.json`, the wrapper and the launcher with
+  `hooks/hashes.json` is gone; and `hook-entries`, so nothing now counts foreign hooks by provenance,
+  names by file and position an entry claiming the marker (it could go red), or lists the files
+  whose frontmatter declares hooks.
+- **`drybag setup` no longer takes `Read(.env*)` or `Read(**/.env*)` out of
+  `~/.claude/settings.json`.** If either is still there, delete it by hand, since it refuses
+  `.env.example` too.
+- **`drybag overlay upgrade` no longer removes the four files earlier releases shipped in an overlay
+  and this one does not:** `common/memory/README.md`, `skills/attach/SKILL.md`,
+  `common/rules/README.md` and `hooks/hooks.json`. If any is still in your overlay, delete it by
+  hand, the memory README first, since it is read as a note.
+- **A directory of a project's `memory/` in the overlay whose name starts with `tag-` is no longer
+  linked into the composed store,** because `tag-<tag>` now names a tag's notes, and `drybag doctor`
+  names each such directory. Rename it and run `drybag attach` again.
+- **`drybag attach` stops, with nothing written, when the overlay's `projects/<name>/project.toml`
+  is there and cannot be read** (a merge conflict left in it, for example) or holds a `tags` that is
+  not a list. Mend it and run `attach` again; sessions go on reading the rest of the overlay
+  meanwhile.
+- **An overlay that still commits its `MEMORY.md` indexes should stop.** Each machine now renders
+  its own, at the start and the end of every session in a checkout bound in overlay mode, and the
+  note sync never moves one. One commit does it: `git rm --cached projects/*/memory/MEMORY.md`, with
+  the indexes ignored, pushed once. Nothing is needed beforehand on a machine: the pull deletes each
+  index and the next session renders it. A clone with local changes to an index refuses the pull;
+  copy it aside, run `git checkout -- <index>`, pull, and put the copy back. Until a machine takes
+  that commit, the sync holds it like any upstream change outside memory, and `drybag doctor` gives
+  the review command.
+- **Files an earlier release wrote stay in place, yours to edit or delete by hand,** among them
+  `docs/stayfixed/rules/<profile>.md` and `.claude/rules/stayfixed-<profile>.md`, the profile's
+  rules; `docs/roadmap-history.md`; and the bug runbook, `bug-reports.md` in the runbooks directory
+  under `docs/`. To take a repository off, delete them and the `stayfixed:ignore` region of
+  `.gitignore`.
+
+### Added
+
+- **Notes sync between machines on their own.** A machine whose machine file says
+  `[sync] enabled = true` commits the overlay's memory notes, takes in the other machines' and
+  pushes its own from Claude Code's `SessionStart`, `Stop` and `SessionEnd` hooks, through a detached
+  job. `drybag setup --overlay` writes the switch for an overlay it renders or creates and leaves it
+  alone for one it only records, and `drybag setup --restore --sync` sets it; a machine whose file
+  does not say so runs nothing new, and a Codex session starts nothing. It needs git 2.43 or newer.
+  Only memory notes move, and a secret scan runs before every commit and push: the `gitleaks` on your
+  sessions' `PATH`, less its relative entries. A machine without one syncs nothing and records
+  `scan_unavailable`. A rewrite of notes already pushed is held, not undone: the job names the
+  commits and `drybag doctor` gives the force-push and the rebase. `drybag doctor` gains a `sync`
+  row. See "Note sync" in `docs/cli.md`.
+- **An overlay can now hold tags:** a `groups/<tag>/` directory shaped like `common/` (values,
+  rules, Claude Code files, Codex rules, notes under `groups/<tag>/memory/`), shared by every project
+  that lists it as `tags = ["<tag>", ...]` in its `projects/<name>/project.toml`. One precedence
+  holds everywhere, the later one winning: `common/`, the tags in list order, `projects/<name>/`,
+  then the machine file. A tag's notes reach the session as the composed store's group `tag-<tag>`;
+  values and rules follow the next session, and the delivered files, allow rules and store links the
+  next `drybag attach`. `drybag doctor` warns when two tags hold one name, or when a listed tag has
+  no directory. A repository cannot name a tag: tags are read only from the record of the project
+  this machine binds the checkout to.
+- **`drybag setup --restore` restores a machine from the private overlay** its machine file records
+  (or `--overlay` names). It prints which of `git`, `claude` or `codex`, and `python3` or `uv` are
+  missing, runs machine setup, installs the plugins and marketplaces the overlay's
+  `machine/claude/settings.json` enables, and attaches every checkout listed in the overlay's
+  `machine/projects.toml` that exists. A checkout whose project is not the one its table names is
+  refused instead of being given another project's notes, one with no `drybag.toml` is attached under
+  the project its table names, one that is not there is skipped, and a second run changes nothing. A
+  recorded overlay that is gone is refused, naming it. With `--yes` it also records as reviewed every
+  unreviewed note of the overlay's share for each attached project, its tags' notes included, and
+  never a note a checkout holds; with `--sync` it switches note sync on.
+- **A new linked worktree of a checkout bound to an overlay project now gets the owner-held files**
+  from the overlay's `projects/<name>/checkout/` (an `AGENTS.md`, a `CLAUDE.md`, a `drybag.toml`)
+  when its first session starts, so you no longer copy them by hand. A file is placed only where
+  your own excludes hide its name and no `!` line re-includes it; a branch's `.gitignore` never makes
+  a file be placed, and any other name is named to the session and left out. Only regular files are
+  placed, never a `.env*` file or `settings.local.json`, and nothing over a name the worktree already
+  has.
+- **A shell call that pipes a test run into `tail`, `head` or `grep` without `pipefail` now gets a
+  one-time hint** that the pipeline's exit status is the reader's, so a failing run looks green, and
+  that `set -o pipefail;` in front of the command keeps it. The hint reads only a plain list of
+  pipelines, stays silent for a command with a substitution or heredoc, and never refuses the
+  command.
+- **The hook wrapper now falls back to uv's Python** when `PATH` has no `python3` of 3.11 or newer.
+- **`examples/demo/demo.py` shows drybag working in a scratch directory.** It builds a small
+  repository and runs a `drybag` you name against it, passing only on `drybag`'s own exit code and
+  `--json` answer: an overlay attached with one project's skill and not another's. One command runs
+  it, `python3 -I examples/demo/demo.py "$(command -v drybag)"`, and it makes no model call and
+  reaches no network.
+- **The plugin carries an icon,** `.claude-plugin/icon.png`, for its listing in the Claude plugin
+  directory.
+
+### Fixed
+
+- **A branch can no longer decide what `drybag detach` removes.** The record of what `attach` added
+  is now `<git common dir>/drybag/attach.json`, beside the binding id, where a branch cannot write
+  it. In 0.6.1 it sat in the working tree, where a branch could commit one that made `detach` remove
+  files and allow rules you wrote.
+- **`drybag attach` now takes back an allow rule it merged earlier when your overlay no longer
+  grants it,** for example after you remove it from the overlay or take a tag off the project, and
+  says each one as `allow rule withdrawn` (`allow_withdrawn` in `--json`); before, such a rule stayed
+  in `.claude/settings.local.json` until `detach`. A rule you added by hand, which the record of what
+  `attach` added does not name, stays.
+- **`drybag attach` now names each `.codex/rules/` file it placed earlier that your overlay no
+  longer holds,** as `Codex rule copy no longer in the overlay: <path>`, and leaves it where it is;
+  before, the copy stayed unmentioned, and Codex went on reading it as a standing instruction.
+  `drybag detach` removes such a copy only while it is untracked and holds the bytes `attach` wrote,
+  and leaves and names any recorded copy whose bytes changed.
+- **`drybag attach --check` now opens with the project it would bind the checkout to** and where
+  that name came from (`--project`, this machine's binding record, the overlay's record of the
+  remote, the remote's name, or the repository's `drybag.toml`), and `--json` gains `project` and
+  `project_source`; before, a public clone's preview did not say which of your projects it was about
+  to join.
+- **`drybag attach` no longer rewrites a project's overlay record whole** when it adds the remote or
+  the first-attach date: it adds only the keys the record lacks, above the rest, and every comment,
+  key and table you wrote there stays as it was.
+- **A checkout you attached to your overlay without a `drybag.toml`, such as a public clone, now
+  gets its memory.** `drybag memory index` and its siblings, the session's memory bundles and the
+  unreviewed-notes line read the preset's configuration under your overlay's layers, for the project
+  the binding names, instead of refusing or printing nothing. In such a checkout, `drybag doctor`'s
+  `memory` row now counts the store's unreviewed notes, its `bundles` row is checked, and the
+  overlay-status line that warns of unpushed overlay changes is said at session start. A checkout
+  nothing on your machine binds is still refused, naming the file it lacks.
+- **A skill or agent that both `common/` and a project of your overlay hold is now delivered whole
+  from the project.** Before, `drybag attach` merged the two directories file by file, so a file
+  only `common/` held, such as a helper script, stayed beside the project's `SKILL.md`.
+- **The hook wrapper now looks up `python3`, or else uv, from `/` and runs the binary it names,**
+  so a `python3` committed to the repository, reached through an empty or relative `PATH` element,
+  or a version manager's pin in the project no longer chooses the program every hook starts.
+
+
 ## 0.6.1 (2026-10-28)
 
 ### Added

@@ -5,23 +5,21 @@ import errno
 import json
 import os
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from stayfixed.attach.api import read_binding
-from stayfixed.config.overlay import overlay_root
-from stayfixed.errors import Failure, Refusal
-from stayfixed.jsonobject import LONG_NUMBER, NESTED
-from stayfixed.overlay.layout import IDENTITY_RECORD
-from stayfixed.presets import load_preset
-from stayfixed.printed import quoted
-from stayfixed.runner import Completed
-from stayfixed.setup.api import USER_SETTINGS, setup
-from stayfixed.setup.machine import read_machine, write_machine
+from drybag.attach.api import read_binding
+from drybag.config.overlay import overlay_root
+from drybag.errors import Failure, Refusal
+from drybag.jsonobject import LONG_NUMBER, NESTED
+from drybag.overlay.layout import IDENTITY_RECORD
+from drybag.presets import load_preset
+from drybag.printed import quoted
+from drybag.runner import Completed
+from drybag.setup.api import USER_SETTINGS, setup
+from drybag.setup.machine import read_machine, write_machine
 from tests import parserlimits
 from tests.gitfixture import needs_git
 from tests.parserlimits import overflowing
@@ -34,27 +32,23 @@ from tests.pathfaults import (
 )
 from tests.runners import Recorder, real_git
 
-# The minimal `stayfixed.toml` `attach.read_binding` needs (a project name and nothing else),
+# The minimal `drybag.toml` `attach.read_binding` needs (a project name and nothing else),
 # the same shape `tests/setup/test_machine.py::_initialised_project` uses for `load()`.
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
-profile = ""
-agents = ["claude"]
 
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 
 
 def _initialised_project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
     project.mkdir()
-    (project / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
+    (project / "drybag.toml").write_text(CONFIG, encoding="utf-8")
     return project
 
 
@@ -62,12 +56,13 @@ def _initialised_project(tmp_path: Path) -> Path:
 # exits 0 with `{"isTemplate":true}`, and a repository that does not exist exits 1 with GraphQL's
 # "Could not resolve to a Repository". `create:` asks it once to choose whose template to
 # generate from, so a `create:` run has to have the probe answered.
-_OCTOS_PROBE = "gh repo view octo/stayfixed-overlay-template"
+PLUGINS = ("superpowers", "context7")
+_OCTOS_PROBE = "gh repo view octo/drybag-overlay-template"
 _A_TEMPLATE = Completed(0, '{"isTemplate":true}\n', "")
 _NO_SUCH_REPOSITORY = Completed(
     1,
     "",
-    "GraphQL: Could not resolve to a Repository with the name 'octo/stayfixed-overlay-template'."
+    "GraphQL: Could not resolve to a Repository with the name 'octo/drybag-overlay-template'."
     " (repository)\n",
 )
 
@@ -115,8 +110,8 @@ def test_setup_writes_the_machine_file_and_the_deny_rules(tmp_path: Path) -> Non
 
 
 def test_a_mistyped_preset_names_the_flag_and_never_quotes_it(tmp_path: Path) -> None:
-    # `setup` is told which flag to fix rather than pointed at a `[stayfixed] preset` in a
-    # `stayfixed.toml` it never read, and the value the person typed — ESC and a line break
+    # `setup` is told which flag to fix rather than pointed at a `[drybag] preset` in a
+    # `drybag.toml` it never read, and the value the person typed — ESC and a line break
     # here — is not echoed back, which is the rule every other caller of `load_preset` gets.
     # Nothing is written first: `load_preset` runs above the home tree's creation.
     # Oracle: `mutations/`'s "setup's preset refusal names the configuration key again".
@@ -136,7 +131,7 @@ def test_a_mistyped_preset_names_the_flag_and_never_quotes_it(tmp_path: Path) ->
 
 
 def test_an_existing_user_settings_file_keeps_the_owners_own_rules(tmp_path: Path) -> None:
-    # The owner's `~/.claude/settings.json` is theirs and predates stayfixed on most machines.
+    # The owner's `~/.claude/settings.json` is theirs and predates drybag on most machines.
     # Merge, never replace, and record nothing about entries this run did not add. Mutation:
     # `_write_user_settings`'s `existing_deny = (...)` line changed to always start from `[]`
     # → reddens on the dropped `Read(/etc/shadow)` rule.
@@ -198,7 +193,7 @@ def test_a_user_settings_file_past_the_parsers_reach_is_a_failure_naming_it(
     # Both documents are valid JSON, and `json.loads` meets neither with the `JSONDecodeError` the
     # reader caught: nesting past what it follows raises `RecursionError`, and an integer longer
     # than the interpreter converts (4,300 digits by default) a plain `ValueError`. Either ended
-    # `stayfixed setup` in an internal error. The file is the owner's, and setup rewrites it, so it
+    # `drybag setup` in an internal error. The file is the owner's, and setup rewrites it, so it
     # is refused rather than read. Mutation (advisory): `_read_document` parses with `json.loads`
     # again -> the `Failure` is never raised and this reddens.
     home = tmp_path / "home"
@@ -265,7 +260,7 @@ def test_a_plugin_config_value_the_user_set_survives_setup(tmp_path: Path) -> No
     home = tmp_path / "home"
     settings = home / USER_SETTINGS
     settings.parent.mkdir(parents=True)
-    plugin = "stayfixed@stayfixed-marketplace"
+    plugin = "drybag@drybag"
     settings.write_text(
         json.dumps({"pluginConfigs": {plugin: {"options": {"preset": "mine"}}}}), encoding="utf-8"
     )
@@ -294,13 +289,13 @@ def test_every_plugin_install_is_one_recorded_argv(tmp_path: Path) -> None:
         machine=tmp_path / "config.toml",
         runner=runner,
         overlay=None,
-        plugins=preset["plugins"]["recommended"],
+        plugins=PLUGINS,
     )
     claude = preset["plugins"]["claude"]
     add = ["claude", "plugin", "marketplace", "add", claude["source"]]
     installs = [
         ["claude", "plugin", "install", f"{selector}@{claude['marketplace']}"]
-        for selector in preset["plugins"]["recommended"]
+        for selector in PLUGINS
     ]
     # **Order, not membership.** `… in runner.calls` is a set question, and the thing this test is
     # named for is a sequence: the reviewer swapped the two loops in `_install_plugins` so every
@@ -350,7 +345,7 @@ def test_a_selector_the_marketplace_does_not_carry_is_a_note_naming_the_argv(
     # questions rather than one asked twice.
     preset = load_preset("recommended")
     claude = preset["plugins"]["claude"]
-    selector = preset["plugins"]["recommended"][0]
+    selector = PLUGINS[0]
     full = f"{selector}@{claude['marketplace']}"
     runner = Recorder(
         answers={
@@ -363,13 +358,13 @@ def test_a_selector_the_marketplace_does_not_carry_is_a_note_naming_the_argv(
         machine=tmp_path / "config.toml",
         runner=runner,
         overlay=None,
-        plugins=preset["plugins"]["recommended"],
+        plugins=PLUGINS,
     )
     assert ["claude", "plugin", "marketplace", "add", claude["source"]] in runner.calls
     assert ["claude", "plugin", "install", full] in runner.calls
     assert selector not in report.plugins_installed
     # The other selector still installs: one failure is one note, never an abandoned run.
-    assert preset["plugins"]["recommended"][1] in report.plugins_installed
+    assert PLUGINS[1] in report.plugins_installed
     assert any(f"claude plugin install {full}" in note for note in report.notes), report.notes
     assert any("no plugin named" in note for note in report.notes), report.notes
 
@@ -400,19 +395,19 @@ def test_codex_gets_a_note_naming_the_unverified_plugins_rather_than_silence(
     tmp_path: Path,
 ) -> None:
     # A harness this preset cannot install for on a verified path is a reported note, never silence
-    # and never a failure. `agents = ["claude", "codex"]` is the preset's own default, so an
-    # ordinary run reaches this for every machine that has Codex configured.
-    preset = load_preset("recommended")
+    # and never a failure. `setup` installs for every registered harness, so an ordinary run
+    # reaches this for every machine that has Codex configured.
+    load_preset("recommended")
     report = setup(
         "recommended",
         home=tmp_path / "home",
         machine=tmp_path / "config.toml",
         runner=Recorder(),
         overlay=None,
-        plugins=preset["plugins"]["recommended"],
+        plugins=PLUGINS,
     )
     expected = (
-        f"codex: no verified marketplace for {', '.join(preset['plugins']['recommended'])}; "
+        f"codex: no verified marketplace for {', '.join(PLUGINS)}; "
         f"install manually if this harness supports it (see README)"
     )
     assert expected in report.notes
@@ -424,7 +419,7 @@ def test_a_harness_that_is_not_installed_is_a_note_not_a_failure(tmp_path: Path)
     # binary would surface (`Runner` turns it into `Completed(127, ...)`).
     #
     # No mutation: this is `Runner`'s own fail-soft convention (a non-zero result is a note,
-    # per `stayfixed.runner.Runner`'s own docstring), exercised here through the `Recorder`'s
+    # per `drybag.runner.Runner`'s own docstring), exercised here through the `Recorder`'s
     # script rather than guarding one line of this module's own whose removal would look like
     # a plausible bug — the "non-zero becomes a note" shape is `_install_plugins`' whole
     # structure, not a single guardable line.
@@ -460,37 +455,6 @@ def test_the_overlay_offer_is_never_taken_without_being_asked(tmp_path: Path) ->
     assert not any(argv[:2] == ["gh", "repo"] for argv in runner.calls)
 
 
-# Asks `_requested_overlay` the question a `setup` with no `--overlay` asks, in a clean interpreter,
-# and prints every module of the overlay area that loaded.
-_ASK_WITH_NO_OVERLAY = (
-    "import sys\n"
-    "from pathlib import Path\n"
-    "from stayfixed.setup.run import _requested_overlay\n"
-    "here = Path(sys.argv[1])\n"
-    "assert _requested_overlay(None, home=here) is None\n"
-    "print(' '.join(m for m in sorted(sys.modules) if m.startswith('stayfixed.overlay')))\n"
-)
-
-
-def test_setup_with_no_overlay_never_loads_the_overlay_area(tmp_path: Path) -> None:
-    # `setup --overlay` is the one crossing from the core into delivery, and the core loads the
-    # private layer only when that flag asks for it (CONTRIBUTING.md, "Areas"). The import stood
-    # above the early return for a run with no `--overlay`, so every such `setup` loaded the
-    # overlay area anyway. A clean interpreter, because this suite has long since imported it.
-    # Mutation (oracle): `mutations/`'s "setup loads the overlay area with no --overlay again" ->
-    # `stayfixed.overlay.api` is printed.
-    source = Path(__file__).resolve().parents[2] / "src"
-    completed = subprocess.run(
-        [sys.executable, "-c", _ASK_WITH_NO_OVERLAY, str(tmp_path)],
-        capture_output=True,
-        text=True,
-        check=False,
-        env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(source)},
-    )
-    assert completed.returncode == 0, completed.stderr
-    assert completed.stdout.split() == []
-
-
 def test_pointing_at_an_existing_overlay_records_its_root_and_creates_nothing(
     tmp_path: Path,
 ) -> None:
@@ -521,8 +485,8 @@ def test_an_overlay_missing_the_layout_is_refused(tmp_path: Path) -> None:
     #
     # Mutation (`mutations/`'s "the overlay probe stops asking for the identity record"): the
     # record's absence is read as an unreadable record, and the refusal names the wrong fault.
-    from stayfixed.overlay.identity import NO_RECORD
-    from stayfixed.setup.run import _RECORDING
+    from drybag.overlay.identity import NO_RECORD
+    from drybag.setup.run import _RECORDING
 
     existing = tmp_path / "not-an-overlay"
     existing.mkdir()
@@ -542,10 +506,10 @@ def test_an_overlay_missing_the_layout_is_refused(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("probe", "template"),
     [
-        pytest.param(_A_TEMPLATE, "octo/stayfixed-overlay-template", id="the-owners-own"),
+        pytest.param(_A_TEMPLATE, "octo/drybag-overlay-template", id="the-owners-own"),
         pytest.param(
             _NO_SUCH_REPOSITORY,
-            "github.com/stayfixed/stayfixed-overlay-template",
+            "github.com/dry-bag/drybag-overlay-template",
             id="the-publishers",
         ),
     ],
@@ -564,7 +528,7 @@ def test_create_generates_from_the_owners_template_or_else_the_publishers(
         home=home,
         machine=tmp_path / "config.toml",
         runner=runner,
-        overlay="create:octo/stayfixed-private",
+        overlay="create:octo/drybag-private",
     )
     creating = next(argv for argv in runner.calls if argv[:3] == ["gh", "repo", "create"])
     assert creating[creating.index("--template") + 1] == template
@@ -586,7 +550,7 @@ def test_overlay_create_that_cannot_ask_gh_whose_template_creates_nothing(
             home=home,
             machine=tmp_path / "config.toml",
             runner=runner,
-            overlay="create:octo/stayfixed-private",
+            overlay="create:octo/drybag-private",
         )
     assert not any(argv[:3] == ["gh", "repo", "create"] for argv in runner.calls)
 
@@ -600,7 +564,7 @@ def test_rerunning_overlay_create_over_an_existing_overlay_creates_nothing_and_n
     # `_apply_overlay` and the report reads "created the overlay ... generated from None".
     home = tmp_path / "home"
     machine = tmp_path / "config.toml"
-    destination = home / "stayfixed-private"
+    destination = home / "drybag-private"
     _seed_overlay(destination)
     runner = Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=_populate_overlay)
     report = setup(
@@ -608,7 +572,7 @@ def test_rerunning_overlay_create_over_an_existing_overlay_creates_nothing_and_n
         home=home,
         machine=machine,
         runner=runner,
-        overlay="create:octo/stayfixed-private",
+        overlay="create:octo/drybag-private",
     )
     assert not any(argv[:3] == ["gh", "repo", "create"] for argv in runner.calls)
     assert not any(argv[:3] == ["gh", "repo", "view"] for argv in runner.calls)
@@ -732,7 +696,7 @@ def test_a_malformed_overlay_spec_is_refused(tmp_path: Path) -> None:
         )
 
 
-def test_a_missing_stayfixed_on_path_is_a_note(
+def test_a_missing_drybag_on_path_is_a_note(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # `uv tool install` has no `--from`, so the positional git URL form pinned to a release tag
@@ -748,9 +712,7 @@ def test_a_missing_stayfixed_on_path_is_a_note(
         overlay=None,
     )
     assert report.cli_on_path is False
-    assert any(
-        "uv tool install git+https://github.com/stayfixed/stayfixed@v" in n for n in report.notes
-    )
+    assert any("uv tool install git+https://github.com/dry-bag/drybag@v" in n for n in report.notes)
 
 
 # --- everything structural, above the first write ---
@@ -779,7 +741,7 @@ def test_a_refused_overlay_path_is_refused_before_the_first_write(tmp_path: Path
     # the path, leaving only `_apply_overlay`'s floor → the refusal still arrives, in the floor's
     # words, and this reddens on the refusal, the two files and the argv. A plugin is named, as in
     # the companion below, so a run that went on to install it is in the argv.
-    from stayfixed.setup.run import NO_PLACE_TO_RENDER
+    from drybag.setup.run import NO_PLACE_TO_RENDER
 
     home = tmp_path / "home"
     machine = tmp_path / "config.toml"
@@ -807,7 +769,7 @@ def test_a_refused_overlay_path_is_refused_before_the_first_write(tmp_path: Path
     "overlay",
     [
         pytest.param(os.fsdecode(b"/overlays/caf\xe9"), id="path"),
-        pytest.param("create:octo/stayfixed-private", id="create"),
+        pytest.param("create:octo/drybag-private", id="create"),
     ],
 )
 def test_an_overlay_root_a_utf_8_file_cannot_record_is_refused_before_the_first_write(
@@ -868,7 +830,7 @@ def test_a_created_overlays_destination_that_is_a_link_is_recorded_where_it_lead
     _seed_overlay(outside)
     repository = tmp_path / "A"
     repository.mkdir()
-    link = repository / "stayfixed-private"
+    link = repository / "drybag-private"
     link.symlink_to(outside)
     machine = tmp_path / "config.toml"
     runner = Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=_populate_overlay)
@@ -877,7 +839,7 @@ def test_a_created_overlays_destination_that_is_a_link_is_recorded_where_it_lead
         home=repository,
         machine=machine,
         runner=runner,
-        overlay="create:octo/stayfixed-private",
+        overlay="create:octo/drybag-private",
     )
     assert overlay_root(machine) == outside.resolve()
     # The repository points the link into its own tree; the record does not move with it.
@@ -893,11 +855,11 @@ def test_a_created_overlays_destination_that_is_a_dangling_link_is_refused_befor
     # A link at `<home>/<name>` whose target is not there: read as absent, `gh repo create` made a
     # repository and then cloned through the link to wherever it pointed, or failed on it. It is
     # there and is not a directory, and refused before anything is written or run.
-    from stayfixed.setup.run import DESTINATION_NOT_A_DIRECTORY
+    from drybag.setup.run import DESTINATION_NOT_A_DIRECTORY
 
     home = tmp_path / "home"
     home.mkdir()
-    destination = home / "stayfixed-private"
+    destination = home / "drybag-private"
     destination.symlink_to(tmp_path / "later" / "ov")
     machine = tmp_path / "config.toml"
     runner = Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=_populate_overlay)
@@ -907,7 +869,7 @@ def test_a_created_overlays_destination_that_is_a_dangling_link_is_refused_befor
             home=home,
             machine=machine,
             runner=runner,
-            overlay="create:octo/stayfixed-private",
+            overlay="create:octo/drybag-private",
         )
     assert str(refused.value) == DESTINATION_NOT_A_DIRECTORY.format(
         destination=quoted(str(destination))
@@ -932,7 +894,7 @@ def test_an_overlay_path_a_repository_spells_is_printed_quoted(
     # it judged raw" -> `not-an-overlay`; "the floor prints the path it could not ask about raw" ->
     # `the-floor`; "setup notes a recorded overlay's path raw" -> `the-note`; "setup reports the
     # recorded overlay's path raw" -> `the-summary`).
-    from stayfixed.cli import build_parser, discover_registrars, run
+    from drybag.cli import build_parser, discover_registrars, run
 
     overlay = tmp_path / _DRIVES_A_TERMINAL
     refused = printed in ("not-an-overlay", "the-floor")
@@ -946,7 +908,7 @@ def test_an_overlay_path_a_repository_spells_is_printed_quoted(
         # Holding something: an empty directory is rendered into, not refused.
         (overlay / "notes.md").write_text("mine\n", encoding="utf-8")
     runner = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: runner)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: runner)
     argv = ["setup", "--preset", "recommended", "--home", str(tmp_path / "home")]
     argv += ["--machine", str(tmp_path / "config.toml"), "--overlay", str(overlay)]
     if printed == "the-note":
@@ -962,14 +924,14 @@ def test_an_overlay_path_a_repository_spells_is_printed_quoted(
 
 
 def test_a_directory_whose_record_names_another_layout_is_not_an_overlay(tmp_path: Path) -> None:
-    # The probe was once two manifest *files* existing, which the stayfixed checkout itself
+    # The probe was once two manifest *files* existing, which the drybag checkout itself
     # satisfied, and any Claude Code plugin repository with them. The identity record is read now,
     # and has to name layout 1.
     #
     # Mutation (`mutations/`'s "the overlay probe takes any record for an overlay"): the layout is
     # not compared → this directory is accepted and the refusal never fires.
-    from stayfixed.overlay.identity import NOT_A_RECORD
-    from stayfixed.setup.run import _RECORDING
+    from drybag.overlay.identity import NOT_A_RECORD
+    from drybag.setup.run import _RECORDING
 
     impostor = tmp_path / "some-plugin"
     impostor.mkdir()
@@ -1018,13 +980,13 @@ _ROOT_WRITES_EVERYWHERE = pytest.mark.skipif(
 def _setup_through_the_cli(
     monkeypatch: pytest.MonkeyPatch, home: Path, machine: Path
 ) -> tuple[int, Recorder]:
-    """`stayfixed setup --preset recommended --home H --machine M`, through `cli.run`, with
+    """`drybag setup --preset recommended --home H --machine M`, through `cli.run`, with
     the runner a recorder: the frame is what turns an `OSError` into `internal error`, so a test
     about what the owner reads has to go through it."""
-    from stayfixed.cli import build_parser, discover_registrars, run
+    from drybag.cli import build_parser, discover_registrars, run
 
     runner = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: runner)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: runner)
     argv = ["setup", "--preset", "recommended", "--home", str(home)]
     code = run([*argv, "--machine", str(machine)], parser=build_parser(discover_registrars()))
     return code, runner
@@ -1058,7 +1020,7 @@ def test_a_home_that_cannot_take_the_write_is_refused_before_any_write(
     with read_only(directory):
         code, runner = _setup_through_the_cli(monkeypatch, home, machine)
     out = capsys.readouterr().err
-    assert code == 2 and out.startswith("stayfixed: refused:"), out
+    assert code == 2 and out.startswith("drybag: refused:"), out
     assert f"--home {home} cannot be used: {directory} is not writable" in out
     assert "symlink" not in out
     assert not machine.exists()
@@ -1151,7 +1113,7 @@ def test_a_created_overlay_already_in_a_read_only_home_is_set_up(tmp_path: Path)
     # refused, and this reddens.
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)
-    _seed_overlay(home / "stayfixed-private")
+    _seed_overlay(home / "drybag-private")
     machine = tmp_path / "config.toml"
     runner = Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=_populate_overlay)
     with read_only(home):
@@ -1160,7 +1122,7 @@ def test_a_created_overlay_already_in_a_read_only_home_is_set_up(tmp_path: Path)
             home=home,
             machine=machine,
             runner=runner,
-            overlay="create:octo/stayfixed-private",
+            overlay="create:octo/drybag-private",
         )
     assert not any(argv[:3] == ["gh", "repo", "create"] for argv in runner.calls)
     assert machine.is_file()
@@ -1207,7 +1169,7 @@ def test_a_created_overlay_in_a_read_only_home_is_refused_before_gh_runs(tmp_pat
             home=home,
             machine=machine,
             runner=runner,
-            overlay="create:octo/stayfixed-private",
+            overlay="create:octo/drybag-private",
         )
     assert str(refused.value) == f"--home {home} cannot be used: {home} is not writable"
     assert runner.calls == []
@@ -1219,7 +1181,7 @@ def test_a_created_overlay_under_a_home_nobody_may_search_is_refused_before_anyt
     tmp_path: Path,
 ) -> None:
     # `--overlay create:` with `--home` below a directory nobody may search: asking what is at the
-    # destination raised `PermissionError`, which reached the frame as `stayfixed: internal
+    # destination raised `PermissionError`, which reached the frame as `drybag: internal
     # error`. The phase's floor names the destination it could not ask about. Mutation
     # (`mutations/`'s "setup lets a path it cannot ask about before its first write reach the
     # frame") -> `PermissionError` leaves `setup`, and this reddens.
@@ -1234,10 +1196,10 @@ def test_a_created_overlay_under_a_home_nobody_may_search_is_refused_before_anyt
             home=home,
             machine=machine,
             runner=runner,
-            overlay="create:octo/stayfixed-private",
+            overlay="create:octo/drybag-private",
         )
     assert str(refused.value) == (
-        f"{quoted(str(home / 'stayfixed-private'))} cannot be checked (Permission denied), so "
+        f"{quoted(str(home / 'drybag-private'))} cannot be checked (Permission denied), so "
         "nothing was written"
     )
     assert runner.calls == []
@@ -1258,7 +1220,7 @@ def _below_a_locked_directory(tmp_path: Path) -> tuple[dict[str, Any], Path]:
 def test_a_path_setup_cannot_ask_about_before_its_first_write_is_a_refusal_naming_it(
     tmp_path: Path,
 ) -> None:
-    # This ended in `stayfixed: internal error: PermissionError`, with the path in a traceback's
+    # This ended in `drybag: internal error: PermissionError`, with the path in a traceback's
     # words, from the overlay probe's `is_dir`. The step does not word that fault itself, so the
     # phase's floor does, naming the path the predicate was handed. Mutation (`mutations/`'s
     # "setup lets a path it cannot ask about before its first write reach the frame"): the floor's
@@ -1290,13 +1252,13 @@ def test_a_directory_this_user_cannot_search_is_refused_naming_that_before_anyth
     # be read and not searched is refused too. Mutations (`mutations/`'s "setup stops asking
     # whether the place --overlay names can be searched" -> a file inside it cannot be checked;
     # "setup asks whether the place --overlay names can be read, not searched" -> `readable-only`).
-    from stayfixed.setup.run import UNUSABLE_DIRECTORY
+    from drybag.setup.run import UNUSABLE_DIRECTORY
 
     home = tmp_path / "home"
-    destination = home / "stayfixed-private"
+    destination = home / "drybag-private"
     destination.mkdir(parents=True)
     machine = tmp_path / "config.toml"
-    overlay = "create:octo/stayfixed-private" if form == "create" else str(destination)
+    overlay = "create:octo/drybag-private" if form == "create" else str(destination)
     runner = Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=_populate_overlay)
     with at_mode(destination, mode, after=0o755), pytest.raises(Refusal) as refused:
         setup("recommended", home=home, machine=machine, runner=runner, overlay=overlay)
@@ -1319,7 +1281,7 @@ def test_every_question_before_the_first_write_is_asked_in_the_documented_order(
     # The order is what makes "refused before anything was written" true of every step: a step
     # that ran after a write or a program would have that write behind its refusal. Each step,
     # each write and each program run is logged as it happens.
-    from stayfixed.setup import run
+    from drybag.setup import run
 
     events: list[str] = []
 
@@ -1351,7 +1313,7 @@ def test_every_question_before_the_first_write_is_asked_in_the_documented_order(
         home=tmp_path / "home",
         machine=tmp_path / "config.toml",
         runner=Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=ran),
-        overlay="create:octo/stayfixed-private",
+        overlay="create:octo/drybag-private",
     )
     phase = len(_THE_PHASE)
     assert tuple(events[:phase]) == _THE_PHASE, events
@@ -1368,13 +1330,13 @@ def test_a_symlink_loop_at_any_path_setup_is_given_is_a_refusal_naming_it(
 ) -> None:
     # Python 3.11 and 3.12 raise `RuntimeError` resolving a path through a symlink loop, which the
     # floor under `setup`'s questions before its first write, an `except OSError`, did not catch:
-    # a loop at `~/.claude`, `--home` or `--overlay` was `stayfixed: internal error: RuntimeError`
+    # a loop at `~/.claude`, `--home` or `--overlay` was `drybag: internal error: RuntimeError`
     # there, while 3.13 refused some in other words. Every resolve in `setup` goes through
     # `fsops.resolved`, so each is the floor's refusal, naming the path, on every interpreter, with
     # nothing written and nothing run. Mutations (`mutations/`'s "setup resolves --overlay past
     # fsops" -> `overlay`; "fsops.resolved answers a loop with a path where the interpreter does"
     # -> `home`).
-    from stayfixed.cli import build_parser, discover_registrars, run
+    from drybag.cli import build_parser, discover_registrars, run
 
     home, machine = tmp_path / "home", tmp_path / "config.toml"
     overlay = tmp_path / "overlay"
@@ -1388,11 +1350,11 @@ def test_a_symlink_loop_at_any_path_setup_is_given_is_a_refusal_naming_it(
     argv = ["setup", "--preset", "recommended", "--home", str(home)]
     argv += ["--machine", str(machine), "--overlay", str(overlay)]
     runner = Recorder()
-    monkeypatch.setattr("stayfixed.setup.commands.subprocess_runner", lambda: runner)
+    monkeypatch.setattr("drybag.setup.commands.subprocess_runner", lambda: runner)
     code = run(argv, parser=build_parser(discover_registrars()))
     said = capsys.readouterr().err
     assert code == 2, said
-    assert said.startswith("stayfixed: refused: "), said
+    assert said.startswith("drybag: refused: "), said
     # A loop at `~/.claude` or `--home` is met resolving the settings file below it, named.
     asked = home / USER_SETTINGS if place in ("claude", "home") else looped
     assert f"{quoted(str(asked))} cannot be checked (" in said, said
@@ -1407,8 +1369,8 @@ def test_a_created_tree_that_is_not_an_overlay_says_the_repository_now_exists(
     # so what arrives is whatever is on that account — and if it is not an overlay, the run has
     # to say so *and* say that a private repository may now exist, with the remedy that works,
     # because the `SetupReport` is discarded on a refusal and nothing else would ever tell them.
-    from stayfixed.overlay.create import UNRECORDED
-    from stayfixed.overlay.identity import NOT_A_RECORD
+    from drybag.overlay.create import UNRECORDED
+    from drybag.overlay.identity import NOT_A_RECORD
 
     def _wrong_tree(argv: list[str], cwd: Path) -> None:
         if argv[:3] != ["gh", "repo", "create"]:
@@ -1425,12 +1387,12 @@ def test_a_created_tree_that_is_not_an_overlay_says_the_repository_now_exists(
             home=home,
             machine=tmp_path / "config.toml",
             runner=Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=_wrong_tree),
-            overlay="create:octo/stayfixed-private",
+            overlay="create:octo/drybag-private",
         )
-    shown = quoted(str(home / "stayfixed-private"))
+    shown = quoted(str(home / "drybag-private"))
     assert str(refused.value) == (
         f"{NOT_A_RECORD.format(root=shown)}. "
-        f"{UNRECORDED.format(slug='octo/stayfixed-private', path=shown)}"
+        f"{UNRECORDED.format(slug='octo/drybag-private', path=shown)}"
     )
     assert overlay_root(tmp_path / "config.toml") is None
 
@@ -1473,7 +1435,7 @@ def test_a_machine_file_linked_into_a_directory_that_cannot_be_written_names_tha
     leads_to = tmp_path / "dotfiles" / "config.toml"
     leads_to.parent.mkdir()
     leads_to.write_text('[personal]\nscale = "x"\n', encoding="utf-8")
-    machine = tmp_path / "stayfixed" / "config.toml"
+    machine = tmp_path / "drybag" / "config.toml"
     machine.parent.mkdir()
     machine.symlink_to(leads_to)
     home = tmp_path / "home"
@@ -1500,7 +1462,7 @@ def test_a_symlinked_machine_file_is_written_through_and_stays_a_link(tmp_path: 
     leads_to = tmp_path / "dotfiles" / "config.toml"
     leads_to.parent.mkdir()
     leads_to.write_text('[personal]\nscale = "x"\n', encoding="utf-8")
-    machine = tmp_path / "stayfixed" / "config.toml"
+    machine = tmp_path / "drybag" / "config.toml"
     machine.parent.mkdir()
     machine.symlink_to(leads_to)
     home = tmp_path / "home"
@@ -1522,11 +1484,11 @@ def test_a_user_settings_file_the_encoder_cannot_write_back_is_a_failure_naming_
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Python 3.12's indenting encoder stops near 994 levels, under what its parser reads, so a
-    # deep `~/.claude/settings.json` was read and then ended `stayfixed setup` in
+    # deep `~/.claude/settings.json` was read and then ended `drybag setup` in
     # `RecursionError` while the merge was encoded. Forced on every interpreter: it is the
     # failure a file nested past the parser gets, and the file is left as it was. Mutation
     # (declared): setup encodes the merged settings with a bare `json.dumps` again.
-    from stayfixed import jsonobject
+    from drybag import jsonobject
 
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)
@@ -1556,7 +1518,7 @@ def test_setup_renders_an_overlay_at_an_absent_or_empty_path_and_records_it(
     # there, makes it a git repository on `main`, installs the commit-time secret scan and records
     # it, as two commands of an earlier release did between them. An empty directory holds
     # nothing to keep, so it is a place to render too, where it was refused as not an overlay.
-    from stayfixed.overlay.api import overlay_fault
+    from drybag.overlay.api import overlay_fault
 
     destination = tmp_path / "overlays" / "mine"
     destination.mkdir(parents=True) if empty else destination.parent.mkdir()
@@ -1576,6 +1538,88 @@ def test_setup_renders_an_overlay_at_an_absent_or_empty_path_and_records_it(
     assert not [argv for argv in runner.calls if argv[0] == "gh"], runner.calls
     assert overlay_root(machine) == destination
     assert report.overlay == destination
+
+
+# --- the sync switch an overlay made here is born with ------------------------------------------
+
+_FOREIGN = '[foreign]\nkeep = 1\n\n[personal]\npreset = "mine"\n'
+
+
+def _sync_table(machine: Path) -> object:
+    return read_machine(machine).get("sync")
+
+
+def _kept(machine: Path) -> None:
+    """What a switch written beside the rest must leave alone."""
+    raw = read_machine(machine)
+    assert raw["foreign"] == {"keep": 1}
+    assert raw["personal"]["preset"] == "mine"
+    assert "version" in raw["machine"]
+    assert "root" in raw["overlay"]
+
+
+@needs_git
+def test_setup_rendering_an_overlay_switches_sync_on(tmp_path: Path) -> None:
+    # A new overlay is one this machine's sync should keep; the switch is the machine file's
+    # `[sync] enabled`, written in the write that records `[overlay] root`. Mutation (`mutations/`'s
+    # "recording an existing overlay switches sync on") is the other direction; here dropping the
+    # `sync` argument from that write reddens.
+    machine = tmp_path / "config.toml"
+    machine.write_text(_FOREIGN, encoding="utf-8")
+    setup(
+        "recommended",
+        home=tmp_path / "home",
+        machine=machine,
+        runner=Recorder(on_call=real_git),
+        overlay=str(tmp_path / "mine"),
+    )
+    assert _sync_table(machine) == {"enabled": True}
+    _kept(machine)
+
+
+def test_setup_creating_an_overlay_switches_sync_on(tmp_path: Path) -> None:
+    machine = tmp_path / "config.toml"
+    machine.write_text(_FOREIGN, encoding="utf-8")
+    runner = Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=_populate_overlay)
+    setup(
+        "recommended",
+        home=tmp_path / "home",
+        machine=machine,
+        runner=runner,
+        overlay="create:octo/drybag-private",
+    )
+    assert any(argv[:3] == ["gh", "repo", "create"] for argv in runner.calls)
+    assert _sync_table(machine) == {"enabled": True}
+    _kept(machine)
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        pytest.param("", None, id="absent-stays-absent"),
+        pytest.param("[sync]\nenabled = false\n", {"enabled": False}, id="false-stays-false"),
+    ],
+)
+def test_setup_recording_an_overlay_leaves_sync_alone(
+    tmp_path: Path, before: str, after: object
+) -> None:
+    # A second machine records the overlay the first one made. Whether it syncs is that machine's
+    # owner's to say by hand, so recording writes the root and touches no `[sync]`.
+    # Mutation: `mutations/`'s "recording an existing overlay switches sync on".
+    existing = tmp_path / "overlay"
+    _seed_overlay(existing)
+    machine = tmp_path / "config.toml"
+    machine.write_text(_FOREIGN + before, encoding="utf-8")
+    setup(
+        "recommended",
+        home=tmp_path / "home",
+        machine=machine,
+        runner=Recorder(),
+        overlay=str(existing),
+    )
+    assert overlay_root(machine) == existing
+    assert _sync_table(machine) == after
+    _kept(machine)
 
 
 def test_recording_an_existing_overlay_arms_its_commit_time_secret_scan(tmp_path: Path) -> None:
@@ -1618,11 +1662,11 @@ def test_create_refuses_a_destination_it_cannot_clone_into_before_github_is_call
     # create: destination after GitHub" -> the `gh` calls come first; "setup takes a link to an
     # empty directory at a created overlay's destination for no destination" ->
     # `a-link-to-an-empty-directory`.
-    from stayfixed.setup.run import DESTINATION_NOT_A_DIRECTORY, DESTINATION_NOT_AN_OVERLAY
+    from drybag.setup.run import DESTINATION_NOT_A_DIRECTORY, DESTINATION_NOT_AN_OVERLAY
 
     home = tmp_path / "home"
     home.mkdir()
-    destination = home / "stayfixed-private"
+    destination = home / "drybag-private"
     if shape == "a-file":
         destination.write_text("mine\n", encoding="utf-8")
     elif shape == "a-link-to-an-empty-directory":
@@ -1641,7 +1685,7 @@ def test_create_refuses_a_destination_it_cannot_clone_into_before_github_is_call
             home=home,
             machine=machine,
             runner=runner,
-            overlay="create:octo/stayfixed-private",
+            overlay="create:octo/drybag-private",
         )
     sentence = DESTINATION_NOT_A_DIRECTORY if shape == "a-file" else DESTINATION_NOT_AN_OVERLAY
     assert str(refused.value) == sentence.format(destination=quoted(str(destination)))
@@ -1661,13 +1705,13 @@ def test_an_empty_directory_this_user_cannot_list_and_write_is_refused_naming_th
     # it, and each said what it holds. Refused before any `gh` argv, naming the cause. Mutation
     # (`mutations/`'s "an empty directory this user cannot write reads as vacant") ->
     # `cannot-be-written` under `create:` reaches `gh repo create`.
-    from stayfixed.setup.run import UNUSABLE_DIRECTORY
+    from drybag.setup.run import UNUSABLE_DIRECTORY
 
     home = tmp_path / "home"
-    destination = home / "stayfixed-private"
+    destination = home / "drybag-private"
     destination.mkdir(parents=True)
     machine = tmp_path / "config.toml"
-    overlay = "create:octo/stayfixed-private" if form == "create" else str(destination)
+    overlay = "create:octo/drybag-private" if form == "create" else str(destination)
     runner = Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=_populate_overlay)
     with at_mode(destination, mode, after=0o755), pytest.raises(Refusal) as refused:
         setup("recommended", home=home, machine=machine, runner=runner, overlay=overlay)
@@ -1686,14 +1730,14 @@ def test_create_needs_no_yes_and_makes_an_absent_or_empty_destination(
     # something the clone would meet.
     #
     # The overlay is made under `home` and never `Path.cwd()`: a machine command runs from
-    # wherever the owner sits, and `root=Path.cwd()` once made a real `stayfixed-private/` inside
+    # wherever the owner sits, and `root=Path.cwd()` once made a real `drybag-private/` inside
     # this checkout the first time a test ran the branch. Mutation: `mutations/`'s "setup creates a
     # new overlay under the caller's cwd instead of --home". The `chdir` keeps that mutation's own
     # run from making it there again: its clone lands in `tmp_path` instead.
     monkeypatch.chdir(tmp_path)
     home = tmp_path / "home"
     if empty:
-        (home / "stayfixed-private").mkdir(parents=True)
+        (home / "drybag-private").mkdir(parents=True)
     machine = tmp_path / "config.toml"
     runner = Recorder(answers={_OCTOS_PROBE: _A_TEMPLATE}, on_call=_populate_overlay)
     report = setup(
@@ -1701,9 +1745,9 @@ def test_create_needs_no_yes_and_makes_an_absent_or_empty_destination(
         home=home,
         machine=machine,
         runner=runner,
-        overlay="create:octo/stayfixed-private",
+        overlay="create:octo/drybag-private",
     )
-    assert report.overlay == overlay_root(machine) == home / "stayfixed-private"
+    assert report.overlay == overlay_root(machine) == home / "drybag-private"
     assert [argv[:3] for argv in runner.calls if argv[0] == "gh"][-1] == ["gh", "repo", "create"]
 
 
@@ -1718,9 +1762,9 @@ def test_a_render_cut_short_is_not_an_overlay_the_next_run_records(
     # `setup --overlay` at the same path recorded half a tree, with no `.gitignore` and no secret
     # scan, as "the existing overlay". Mutation (`mutations/`'s "a render writes the identity
     # record first") -> the second run records it and this reddens.
-    from stayfixed import fsops
-    from stayfixed.overlay.identity import NO_RECORD
-    from stayfixed.setup.run import _RECORDING
+    from drybag import fsops
+    from drybag.overlay.identity import NO_RECORD
+    from drybag.setup.run import _RECORDING
 
     real = fsops.write_within
     written: list[str] = []
@@ -1731,14 +1775,14 @@ def test_a_render_cut_short_is_not_an_overlay_the_next_run_records(
             raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC), relative)
         real(root, relative, *args, **kwargs)
 
-    monkeypatch.setattr("stayfixed.scaffold.engine.write_within", full_disk)
+    monkeypatch.setattr("drybag.scaffold.engine.write_within", full_disk)
     destination = tmp_path.resolve() / "overlay"
     home, machine = tmp_path / "home", tmp_path / "config.toml"
     with pytest.raises(Refusal):
         setup(
             "recommended", home=home, machine=machine, runner=Recorder(), overlay=str(destination)
         )
-    monkeypatch.setattr("stayfixed.scaffold.engine.write_within", real)
+    monkeypatch.setattr("drybag.scaffold.engine.write_within", real)
     with pytest.raises(Refusal) as refused:
         setup(
             "recommended", home=home, machine=machine, runner=Recorder(), overlay=str(destination)
@@ -1755,7 +1799,7 @@ def test_setup_says_when_it_records_an_overlay_root_other_than_the_recorded_one(
     # overlay and not a refusal, and the machine's root moved to it without a word: every later
     # `attach` then read an empty overlay. The run that moves it says so, naming the root it
     # replaced; the run that records the same root again says nothing of it.
-    from stayfixed.setup.run import REPLACED_ROOT
+    from drybag.setup.run import REPLACED_ROOT
 
     first, second = tmp_path.resolve() / "overlay", tmp_path.resolve() / "overlai"
     _seed_overlay(first)
@@ -1778,7 +1822,7 @@ def test_an_overlay_under_a_home_that_names_none_is_refused_and_never_read_again
     # `setup` rendered an overlay under the working directory and recorded it as the machine's
     # trust anchor. A leading `~` is read as `config.machine.owner_home` reads it, as the machine
     # file's own `[overlay] root` is, and a home that names none is refused.
-    from stayfixed.setup.run import NO_HOME_FOR_OVERLAY
+    from drybag.setup.run import NO_HOME_FOR_OVERLAY
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", value)

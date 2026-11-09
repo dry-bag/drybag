@@ -27,8 +27,7 @@ from typing import Any
 
 import pytest
 
-import stayfixed
-from stayfixed import profiles
+import drybag
 
 # `re`'s own parser, private and the same from 3.11 to 3.14. It gives the shape the engine runs:
 # a prefix every alternative shares is taken out ahead of the choice (`cd|cxb` is `c(?:d|xb)`),
@@ -173,21 +172,9 @@ def _compiled() -> dict[str, re.Pattern[str]]:
 def _modules() -> list[ModuleType]:
     return [
         importlib.import_module(module.name)
-        for module in pkgutil.walk_packages(stayfixed.__path__, "stayfixed.")
+        for module in pkgutil.walk_packages(drybag.__path__, "drybag.")
         if not module.name.endswith(".__main__")
     ]
-
-
-def _held(source: Path | None = None) -> dict[str, re.Pattern[str]]:
-    """Every pattern object the package holds: each module's top-level ones, and the `match` of
-    every locator of every profile it ships (`source` stands in for the shipped directory)."""
-    patterns = _compiled()
-    for name in profiles.shipped(source=source):
-        for check in profiles.load_profile(name, source=source).checks:
-            for index, locator in enumerate(check.locators):
-                if locator.match is not None:
-                    patterns[f"the {name} profile's {check.id} locator {index}"] = locator.match
-    return patterns
 
 
 # The functions of `re` that take a pattern first, each with the place its flags stand in when
@@ -498,9 +485,8 @@ def _offences_in(spelled: Mapping[str, list[tuple[str, int]]]) -> dict[str, list
 # that text comes from. The test below fails on any place not named here, on a second call in a
 # place named once, and on a row whose call is gone.
 _HANDED = (
-    ("stayfixed.profiles.model._locator", "a profile's `match`, read from every shipped profile"),
     (
-        "stayfixed.attach.rules._glob",
+        "drybag.attach.rules._glob",
         "a rule's `paths:` glob, from the owner's overlay, translated into `[^/]*`, `[^/]`, `.*` "
         "and choices, with every other character through `re.escape`: no possessive repeat",
     ),
@@ -508,21 +494,20 @@ _HANDED = (
 
 
 def test_no_pattern_repeats_a_group_in_a_shape_python_3_11_4_misreads() -> None:
-    # Every pattern object a module holds at its top level, every shipped profile's locator, and
-    # every pattern a call of `re` is given anywhere in the package's source -- inside a function,
-    # from module constants, f-strings and `str.format`, with `re.escape`'s literals judged as
-    # none, one and two characters outside a choice a possessive group repeats. Outside it: text
-    # a function is handed at run time, and `re.escape` inside such a choice, which are
-    # `_HANDED`'s calls only, and the patterns the standard library builds itself (a glob's).
+    # Every pattern object a module holds at its top level, and every pattern a call of `re` is
+    # given anywhere in the package's source -- inside a function, from module constants,
+    # f-strings and `str.format`, with `re.escape`'s literals judged as none, one and two
+    # characters outside a choice a possessive group repeats. Outside it: text a function is
+    # handed at run time, and `re.escape` inside such a choice, which are `_HANDED`'s calls only,
+    # and the patterns the standard library builds itself (a glob's).
     # Mutations (oracle):
     # `mutations/`'s "the path grammar repeats its segments possessively", "a symbol path's parts
     # are a possessive repeat", "a footer's words are a possessive repeat", "a model's words open
     # on their possessive run" -> each reddens this.
-    patterns = _held()
+    patterns = _compiled()
     assert len(patterns) > 50  # a walk-based assertion states its walk is non-empty
     spelled, unspelled = _built_by_package()
     assert len(spelled) > 50
-    assert len([where for where in spelled if ".<module>:" not in where]) > 5
     found = {name: said for name, pattern in patterns.items() if (said := _offences_of(pattern))}
     assert found | _offences_in(spelled) == {}
     assert Counter(unspelled) == Counter(place for place, _ in _HANDED)
@@ -624,34 +609,3 @@ def test_the_scan_reads_a_pattern_wherever_the_source_spells_it(case: str) -> No
     else:
         read = "refused" if _offences_in(spelled) else "admitted" if spelled else "unseen"
     assert read == expected
-
-
-_PLANTED_PROFILE = """
-detect = ["manifest.cfg"]
-scope = ["**/*.src"]
-
-[[check]]
-id = "setting-capped"
-kind = "absent"
-level = "warning"
-remedy = "remove the cap"
-locators = [{at = "manifest.cfg", ini = ["project", "version"], match = "(?:ab+)*+"}]
-"""
-_PLANTED_RULES = """# Planted
-
-## Before the first command
-
-- run through the tool
-"""
-
-
-def test_the_walk_reads_the_match_of_every_shipped_profiles_locators(tmp_path: Path) -> None:
-    # Mutation (oracle): `mutations/`'s "the pattern walk leaves the shipped profiles' locators
-    # out" -> reddens this.
-    directory = tmp_path / "planted"
-    directory.mkdir()
-    (directory / "profile.toml").write_text(_PLANTED_PROFILE, encoding="utf-8")
-    (directory / "rules.md").write_text(_PLANTED_RULES, encoding="utf-8")
-    held = _held(source=tmp_path)
-    found = {name for name, pattern in held.items() if _offences_of(pattern)}
-    assert found == {"the planted profile's setting-capped locator 0"}

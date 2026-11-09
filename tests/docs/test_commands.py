@@ -7,24 +7,20 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.docs.trail import END_MARKER, MARKER
-from stayfixed.findings import LISTED_LIMIT, Finding
-from stayfixed.printed import CLIPPED_CHARS, UNPRINTABLE
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.docs.trail import END_MARKER, MARKER
+from drybag.findings import LISTED_LIMIT, Finding
+from drybag.printed import CLIPPED_CHARS, UNPRINTABLE
 from tests.crafted import CRAFTED, CRAFTED_TOML, assert_never_raw
 
 CONFIG = """
-[stayfixed]
+[drybag]
 version = "0.1.0"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 preset = "recommended"
-profile = ""
-agents = ["claude"]
 
 [project]
 name = "widget"
 base_branch = "main"
-release_branch = "main"
 """
 AGENTS = "# A\n\n## Current status\n\n- x\n\n- [guide](docs/guide.md)\n"
 
@@ -37,7 +33,7 @@ def project(tmp_path: Path) -> tuple[Path, list[str]]:
     root = tmp_path / "widget"
     for name in ("docs/specs", "docs/plans"):
         (root / name).mkdir(parents=True)
-    (root / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG, encoding="utf-8")
     (root / "AGENTS.md").write_text(AGENTS, encoding="utf-8")
     (root / "docs" / "guide.md").write_text("g\n", encoding="utf-8")
     (root / "docs" / "roadmap.md").write_text(f"# R\n\n{MARKER}\n{END_MARKER}\n", encoding="utf-8")
@@ -54,7 +50,7 @@ def test_docs_check_passes_a_compliant_project_and_names_the_enforced_set_only(
 
 def test_docs_check_takes_no_store(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # `--store` named the note store whose link graph `docs check` used to report, and that graph
-    # is `memory refs`'s now. Accepted and never read, the option would answer a person who passes
+    # is gone. Accepted and never read, the option would answer a person who passes
     # it exactly as if it had done something, so it is a usage error instead. Mutation (declared):
     # `mutations/`'s "docs check accepts a store it never reads".
     root, common = project(tmp_path)
@@ -326,16 +322,16 @@ def test_a_non_utf8_roadmap_or_plan_exits_1_through_the_frame_and_never_2(
 @pytest.mark.parametrize(
     ("command", "module", "gate"),
     [
-        (["docs", "check"], "stayfixed.docs.hygiene", "docs_gate"),
-        (["docs", "trail", "--check"], "stayfixed.docs.trail", "trail_gate"),
+        (["docs", "check"], "drybag.docs.hygiene", "docs_gate"),
+        (["docs", "trail", "--check"], "drybag.docs.trail", "trail_gate"),
     ],
     ids=["docs check", "docs trail --check"],
 )
 def test_the_command_answers_with_its_gate_s_own_function(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: list[str], module: str, gate: str
 ) -> None:
-    # The gate `stayfixed assess` runs and the command a person runs are one function, so the
-    # two cannot drift apart. Mutations (advisory): `problems = docs_gate(root, config)` becomes
+    # The gate function and the command a person runs are one function, so the two cannot drift
+    # apart. Mutations (advisory): `problems = docs_gate(root, config)` becomes
     # `problems = check_budgets(root, config) + check_links(root, config)` in `run_docs_check`
     # (first case); `trail_gate(root, config)` replaced by an inline comparison in
     # `run_docs_trail` (second case) — each makes the patch unseen and reddens.

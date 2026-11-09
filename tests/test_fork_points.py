@@ -1,7 +1,7 @@
 """`gitenv.fork_points`: every commit HEAD forked from a base at, or why they are not known.
 
-The one question `plan`, `bugs` and `test attribute` each ask of git about a base, asked one way.
-Each caller has its own test for what an answer means to it; these pin the answer itself.
+The question `plan` asks of git about a base. Its own tests say what an answer means to it;
+these pin the answer itself.
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
-from stayfixed import gitenv
-from stayfixed.gitenv import DISJOINT, NO_ANSWER, SHALLOW, ForkUnknown, fork_points
+from drybag import gitenv
+from drybag.gitenv import DISJOINT, NO_ANSWER, SHALLOW, ForkUnknown, fork_points
 from tests.gitfixture import answer_shallow_check, criss_cross, dated, git, needs_git
 
 

@@ -4,8 +4,8 @@ import secrets
 
 import pytest
 
-from stayfixed.memory import trust
-from stayfixed.memory.trust import DELIMITER, markers, new_nonce, wrap
+from drybag.memory import trust
+from drybag.memory.trust import DELIMITER, markers, new_nonce, wrap
 
 
 def test_a_note_cannot_close_the_region_it_is_wrapped_in(monkeypatch: pytest.MonkeyPatch) -> None:

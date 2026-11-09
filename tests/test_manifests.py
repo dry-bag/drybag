@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import __version__
+from drybag import __version__
 from tests.plugintree import PLUGIN_URL
 from tests.scriptload import release
 
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_claude_manifest_names_the_plugin_its_version_and_titled_user_config() -> None:
     manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
-    assert manifest["name"] == "stayfixed"
+    assert manifest["name"] == "drybag"
     assert manifest["version"] == __version__
     # The keys, before anything is asserted about their entries. `"x"` satisfies both
     # assertions in the loop and `{}` satisfies the loop itself: measured, the three entries
@@ -43,10 +43,10 @@ def test_marketplace_has_a_description_and_an_unversioned_entry() -> None:
     # this reddens; `mutations/`'s "the marketplace pins a sha that is no commit id" and "the
     # marketplace entry pins no sha" -> this reddens.
     marketplace = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text())
-    assert marketplace["name"] == "stayfixed-marketplace"
+    assert marketplace["name"] == "drybag"
     assert marketplace["description"]
     (entry,) = marketplace["plugins"]
-    assert entry["name"] == "stayfixed"
+    assert entry["name"] == "drybag"
     source = dict(entry["source"])
     assert "sha" in source, source
     assert re.fullmatch(r"[0-9a-f]{40}", source.pop("sha")), entry["source"]
@@ -60,7 +60,7 @@ def test_marketplace_has_a_description_and_an_unversioned_entry() -> None:
 
 def test_codex_manifest_carries_no_hooks_or_skills_key() -> None:
     manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text())
-    assert manifest["name"] == "stayfixed"
+    assert manifest["name"] == "drybag"
     assert "hooks" not in manifest
     # `claude plugin validate` refuses "../skills/" as a path traversal attempt and reports
     # "./skills/" as not found, because the value resolves relative to .codex-plugin/ itself: no
@@ -125,9 +125,8 @@ def test_the_readme_still_declares_what_has_not_shipped() -> None:
     # this parser stopped finding items in, would otherwise turn that test into an assertion
     # over an empty list and leave the storefront free to advertise anything.
     items = _not_yet()
-    assert len(items) >= 4, items
+    assert len(items) >= 3, items
     assert "memory MCP server" in items
-    assert "hold-the-line baseline" in items
 
 
 def test_no_storefront_string_advertises_what_the_readme_says_is_not_yet() -> None:
@@ -135,7 +134,7 @@ def test_no_storefront_string_advertises_what_the_readme_says_is_not_yet() -> No
 
     `pyproject.toml`'s description is the PyPI page; the two Claude manifests are the plugin
     card and the marketplace row; the Codex listing is the third storefront. All four
-    advertised "an adoption state machine" while `stayfixed assess` did not exist and the
+    advertised "an adoption state machine" while the `assess` command did not exist and the
     README listed it under **Not yet**, and nothing in `scripts/release.py check` or
     `RELEASING.md` looked. Mutation (declared): put the memory MCP server into
     `pyproject.toml`'s description -> reddens naming the file.

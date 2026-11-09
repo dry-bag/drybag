@@ -1,9 +1,7 @@
 """What `doctor` answers about an installation, and what it refuses to guess.
 
 `codex-hooks`, the one check this build could not answer, left the report: what holds on Codex is
-the README's reach table now, since a row no build can answer is a row that never clears. `ci-ref`
-skips on a state of the repository, since `init` writes `[ci] ref`, and not on a limit of this
-build.
+the README's reach table now, since a row no build can answer is a row that never clears.
 
 `git` is required by the fixtures below rather than by the code under test: an attached
 repository is one whose `origin` the overlay recorded, and `read_binding` compares the two.
@@ -18,28 +16,26 @@ import json
 import os
 import pty
 import shutil
-import subprocess
 import sys
-import threading
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-import stayfixed
-from stayfixed import REPOSITORY_URL, binding
-from stayfixed.attach import exclude
-from stayfixed.attach.api import LOCAL_SETTINGS
-from stayfixed.attach.render import RenderRecord, render
-from stayfixed.config.layout import ATTACH_LEDGER as LEDGER
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.config.overlay import overlay_root
-from stayfixed.config.overlay_layers import NOT_THERE
-from stayfixed.config.reading import MachineConfigError, read_machine_toml
-from stayfixed.config.schema import Config
-from stayfixed.config.session import FALLBACK_WARNING, cause
-from stayfixed.doctor import checks, registry
-from stayfixed.doctor.api import (
+import drybag
+from drybag import REPOSITORY_URL, binding
+from drybag.attach import exclude
+from drybag.attach.api import LOCAL_SETTINGS
+from drybag.attach.render import RenderRecord, read_parts, write
+from drybag.config.loader import CONFIG_FILE, load
+from drybag.config.overlay import overlay_root
+from drybag.config.overlay_layers import NOT_THERE
+from drybag.config.plates import plates
+from drybag.config.reading import MachineConfigError, read_machine_toml
+from drybag.config.schema import Config
+from drybag.config.session import FALLBACK_WARNING, cause
+from drybag.doctor import checks, registry
+from drybag.doctor.api import (
     NO_CONFIG_SKIP,
     OK,
     RED,
@@ -50,26 +46,22 @@ from stayfixed.doctor.api import (
     Row,
     run_checks,
 )
-from stayfixed.doctor.checks import (
+from drybag.doctor.checks import (
     MACHINE_UNLOADED,
     PREFERENCES_REMEDY,
     VERSION_AHEAD,
     VERSION_BEHIND,
     VERSION_UNORDERED,
     VERSION_UNREADABLE,
-    WORKFLOW,
-    WORKFLOW_MAX_BYTES,
-    WORKFLOW_NOT_A_FILE,
 )
-from stayfixed.harnesses import CLAUDE
-from stayfixed.hooks.api import DIAGNOSTICS, DIAGNOSTICS_MAX_BYTES, DIRECTORY, MARKERS
-from stayfixed.memory.api import PROJECT_RECORD, PROJECTS, build_composed
-from stayfixed.overlay.api import COMMON_CLAUDE, COMMON_CODEX, COMMON_MEMORY
-from stayfixed.printed import quoted
+from drybag.harnesses import CLAUDE
+from drybag.hooks.api import DIAGNOSTICS, DIAGNOSTICS_MAX_BYTES, DIRECTORY, MARKERS
+from drybag.memory.api import PROJECTS, RECORD, build_composed
+from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX, COMMON_MEMORY
+from drybag.printed import quoted
 from tests.gitfixture import git as _git
 from tests.overlay.test_requires import overlay_with
 from tests.parserlimits import LONG_NUMBER
-from tests.runners import LsRemote, Recorder
 from tests.sessions import session_of
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
@@ -81,9 +73,8 @@ def module_checks() -> tuple[tuple[str, Callable[[Context], Row]], ...]:
 
 
 LOCAL_ONLY = """
-[stayfixed]
+[drybag]
 version = "{version}"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 
 [project]
 name = "p"
@@ -94,9 +85,8 @@ groups = ["developer"]
 """
 
 OVERLAY = """
-[stayfixed]
+[drybag]
 version = "{version}"
-enforced = ["docs", "bugs", "plan", "commit", "trail"]
 
 [project]
 name = "p"
@@ -109,8 +99,8 @@ groups = ["developer"]
 
 def _context(root: Path, config: Config) -> Context:
     """A `Context` for a case that calls one check directly rather than `run_checks`: no home,
-    no machine file, an empty environment, and a runner that answers success to anything."""
-    return Context(root, None, None, Recorder(), {}, config, session=session_of(config))
+    no machine file and an empty environment."""
+    return Context(root, None, None, {}, config, session=session_of(config))
 
 
 def _checks(
@@ -119,7 +109,6 @@ def _checks(
     *,
     home: Path | None = None,
     machine: Path | None = None,
-    runner: Recorder | None = None,
     env: dict[str, str] | None = None,
 ) -> list[Check]:
     """`run_checks` with this file's hermetic defaults, so no case can be added without them.
@@ -132,8 +121,8 @@ def _checks(
     **`machine` is defaulted here for the same reason, and it was the hole that rule was written
     to close.** `None` does not mean "no machine file" to the code under test: the delivery
     areas' rows hand it to `overlay_root`, which resolves `None` as
-    `Path.home()/.config/stayfixed/config.toml` — the *process* `HOME`, which the `env` dict above
-    cannot reach. On any machine that has run `stayfixed setup --overlay`, and this project's own
+    `Path.home()/.config/drybag/config.toml` — the *process* `HOME`, which the `env` dict above
+    cannot reach. On any machine that has run `drybag setup --overlay`, and this project's own
     developers are exactly those machines, every case that omitted `machine` read the developer's
     real overlay: the overlay root those rows read was theirs, `overlay-requires` read its real
     manifest, and `bundles`, `memory` and `attached` resolved against their real note
@@ -145,7 +134,6 @@ def _checks(
         root,
         home=tmp_path / "home" if home is None else home,
         machine=tmp_path / "no-machine.toml" if machine is None else machine,
-        runner=Recorder() if runner is None else runner,
         env=_env(tmp_path) if env is None else env,
     )
 
@@ -158,7 +146,7 @@ def _env(tmp_path: Path, **extra: str) -> dict[str, str]:
     """The environment a check may look at: this machine's `PATH`, and nothing of the developer's.
 
     `run_checks` defaults `env` to `os.environ`, and three checks read it. `wrapper` hands it to
-    a **real** subprocess, so a missing `HOME` there sends the wrapper's `stayfixed --version` at
+    a **real** subprocess, so a missing `HOME` there sends the wrapper's `drybag --version` at
     the developer's own home directory; `diagnostics` finds the harness data root in it, and
     this suite is plausibly run inside a Claude Code session, where `CLAUDE_PLUGIN_DATA` is set
     and points at a real log; and `ignored-env` reports whichever of two real variables is set.
@@ -173,12 +161,10 @@ def _env(tmp_path: Path, **extra: str) -> dict[str, str]:
 
 
 def _initialised(tmp_path: Path, *, template: str = LOCAL_ONLY) -> Path:
-    """A project that has a `stayfixed.toml` and nothing else stayfixed wrote."""
+    """A project that has a `drybag.toml` and nothing else drybag wrote."""
     root = tmp_path / "project"
     root.mkdir(parents=True, exist_ok=True)
-    (root / CONFIG_FILE).write_text(
-        template.format(version=stayfixed.__version__), encoding="utf-8"
-    )
+    (root / CONFIG_FILE).write_text(template.format(version=drybag.__version__), encoding="utf-8")
     return root
 
 
@@ -189,7 +175,7 @@ def _overlay(tmp_path: Path) -> Path:
     overlay = tmp_path / "overlay"
     for relative in (COMMON_CLAUDE, COMMON_CODEX, COMMON_MEMORY):
         (overlay / relative).mkdir(parents=True, exist_ok=True)
-    # An overlay is a git repository, and the `pre-commit` row asks `guards.hooks_dir` where
+    # An overlay is a git repository, and the `pre-commit` row asks `gitenv.hooks_dir` where
     # its hooks live rather than assuming `.git/hooks`. A fixture that is not a repository has
     # no answer to that question, so the layout says here what it is.
     if not (overlay / ".git").exists():
@@ -200,7 +186,7 @@ def _overlay(tmp_path: Path) -> Path:
         # directory. Local config outranks global; production still honours the owner's.
         _git(overlay, "config", "core.hooksPath", str(overlay / ".git" / "hooks"))
     (overlay / PROJECTS / "p" / "memory" / "developer").mkdir(parents=True, exist_ok=True)
-    (overlay / PROJECTS / "p" / PROJECT_RECORD).write_text(
+    (overlay / PROJECTS / "p" / RECORD).write_text(
         f'remote = "{ORIGIN}"\nfirst_attach = "2026-09-18"\n', encoding="utf-8"
     )
     # One hook entry, which `_attached`'s render carries into the plugin, so the `attached` row's
@@ -227,8 +213,8 @@ def _machine(tmp_path: Path) -> Path:
 
 
 # Every path `attach` places in the fixture's checkout, as `attach.write.placed_paths` names them
-# for a project the overlay grants no standing rule: the ledger and the settings file.
-PLACED = (LEDGER, LOCAL_SETTINGS)
+# for a project the overlay grants no standing rule: the settings file.
+PLACED = (LOCAL_SETTINGS,)
 
 
 def _attached(tmp_path: Path) -> Path:
@@ -258,17 +244,16 @@ def _attached(tmp_path: Path) -> Path:
     settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps({"autoMemoryDirectory": str(composed)}) + "\n", encoding="utf-8")
     rendered = _rendered(root, overlay)
-    recorded = root / LEDGER
-    recorded.parent.mkdir(parents=True, exist_ok=True)
+    recorded = binding.common_directory(root) / binding.LEDGER_FILE
     recorded.write_text(
         json.dumps(
             {
                 "format": 1,
                 "store": str(overlay / PROJECTS / "p" / "memory"),
                 "allow": [],
-                "entries": {},
-                "rules": [],
+                "rules": {},
                 "settings_keys": ["autoMemoryDirectory"],
+                "directories": [],
                 "render": {"digest": rendered.digest},
             }
         ),
@@ -284,22 +269,21 @@ def _rendered(root: Path, overlay: Path) -> RenderRecord:
     """The overlay's parts rendered for `root`'s binding, under the `HOME` this process has now."""
     id = binding.read_id(root)
     assert id is not None
-    return render(overlay, "p", id)
+    return write(id, read_parts(plates(overlay, "p")[0]))
 
 
 def test_a_repository_without_a_configuration_skips_only_the_rows_that_read_one(
     tmp_path: Path,
 ) -> None:
-    # A repository with no stayfixed.toml got one red row and a skip for every other check, so a
+    # A repository with no drybag.toml got one red row and a skip for every other check, so a
     # default install was red and the installation went unexamined. Every row is asked now, and
     # the ones that read the project configuration skip for want of one, in one sentence.
-    # Mutation (`mutations/`'s "doctor skips every row without a stayfixed.toml"): every row
+    # Mutation (`mutations/`'s "doctor skips every row without a drybag.toml"): every row
     # skips.
     checks = _checks(tmp_path, tmp_path)
     assert _by_name(checks, "not-initialised").status == WARN
     assert [check.name for check in checks if check.detail == NO_CONFIG_SKIP] == [
         "budgets",
-        "ci-ref",
         "attached",
         "bundles",
     ]
@@ -310,17 +294,17 @@ def test_a_symlinked_configuration_is_one_that_does_not_load_whatever_it_points_
     tmp_path: Path, target: str
 ) -> None:
     # The presence check asked `is_file()`, which follows the link: a link to a regular file
-    # reached `load` and its refusal, one to `/dev/zero` was reported as no stayfixed.toml at all,
-    # with `stayfixed init --yes` as the remedy. Both are the session's whole fallback now, red in
-    # its words. Mutation (`mutations/`'s "a session lets a symlinked stayfixed.toml raise"): the
+    # reached `load` and its refusal, one to `/dev/zero` was reported as no drybag.toml at all,
+    # with a hand-written file as the remedy. Both are the session's whole fallback now, red in
+    # its words. Mutation (`mutations/`'s "a session lets a symlinked drybag.toml raise"): the
     # report ends in the refusal.
     root = tmp_path / "project"
     root.mkdir()
     if target == "regular-file":
-        (tmp_path / "real.toml").write_text('[stayfixed]\nversion = "0.1.0"\n', encoding="utf-8")
-        (root / "stayfixed.toml").symlink_to(tmp_path / "real.toml")
+        (tmp_path / "real.toml").write_text('[drybag]\nversion = "0.1.0"\n', encoding="utf-8")
+        (root / "drybag.toml").symlink_to(tmp_path / "real.toml")
     else:
-        (root / "stayfixed.toml").symlink_to(target)
+        (root / "drybag.toml").symlink_to(target)
     row = _by_name(_checks(tmp_path, root), "not-initialised")
     assert (row.status, row.detail) == (RED, cause(FALLBACK_WARNING))
     assert "PathEscape" not in row.detail + row.remedy
@@ -328,15 +312,15 @@ def test_a_symlinked_configuration_is_one_that_does_not_load_whatever_it_points_
 
 def test_a_configuration_that_does_not_load_is_described_in_words(tmp_path: Path) -> None:
     # The loader's message is built from the file's own keys and values and is not quoted, and
-    # the class it raised is stayfixed's vocabulary, not a reason: the row says the file does not
+    # the class it raised is drybag's vocabulary, not a reason: the row says the file does not
     # load, in the session's words, and names a command that prints why. Mutation (`mutations/`'s
-    # "a whole fallback reads as a repository with no stayfixed.toml"): the row is the warning.
+    # "a whole fallback reads as a repository with no drybag.toml"): the row is the warning.
     root = tmp_path / "project"
     root.mkdir()
-    (root / "stayfixed.toml").write_text("[stayfixed\n", encoding="utf-8")
+    (root / "drybag.toml").write_text("[drybag\n", encoding="utf-8")
     row = _by_name(_checks(tmp_path, root), "not-initialised")
     assert (row.status, row.detail) == (RED, cause(FALLBACK_WARNING))
-    assert "stayfixed docs check" in row.remedy
+    assert "drybag docs check" in row.remedy
     assert "Error" not in row.detail + row.remedy
 
 
@@ -347,14 +331,14 @@ def test_a_configuration_holding_a_number_past_the_parser_does_not_load(tmp_path
     # Mutation (declared): `ValueError` dropped from `UNPARSEABLE`.
     root = tmp_path / "project"
     root.mkdir()
-    (root / "stayfixed.toml").write_text(f"[stayfixed]\nx = {LONG_NUMBER}\n", encoding="utf-8")
+    (root / "drybag.toml").write_text(f"[drybag]\nx = {LONG_NUMBER}\n", encoding="utf-8")
     row = _by_name(_checks(tmp_path, root), "not-initialised")
     assert (row.status, row.detail) == (RED, cause(FALLBACK_WARNING))
 
 
 # The report's fourteen names in the report's order, written out rather than read back from the
 # registry: the core's own checks, then each delivery area's in area-name order — `attach`,
-# `memory`, `overlay`. `docs/cli.md`'s table is held to the same order.
+# `memory`, `overlay`, `sync`. `docs/cli.md`'s table is held to the same order.
 REPORT = (
     "not-initialised",
     "versions",
@@ -362,7 +346,6 @@ REPORT = (
     "budgets",
     "preferences",
     "cli-path",
-    "ci-ref",
     "diagnostics",
     "ignored-env",
     "attached",
@@ -370,6 +353,7 @@ REPORT = (
     "memory",
     "pre-commit",
     "overlay-requires",
+    "sync",
 )
 
 
@@ -389,7 +373,7 @@ def test_every_check_has_one_row_in_one_report(tmp_path: Path) -> None:
 
 def test_a_project_with_no_overlay_gets_skips_from_delivery_checks(tmp_path: Path) -> None:
     # A ledger recording an attach, a project configured for the overlay, and a machine that
-    # records no overlay at all — the state of a clone on a machine where `stayfixed setup` has
+    # records no overlay at all — the state of a clone on a machine where `drybag setup` has
     # never run. Every delivery row asks a question only the overlay can answer, so each one
     # skips rather than guessing, and none of them is red: a skip never reaches the exit code.
     # Mutation (measured by hand): `mutations/`'s "doctor drops the checks an area contributes"
@@ -414,12 +398,12 @@ def _shipped_wrapper_root(base: Path, *, with_launcher: bool) -> Path:
     root = base / "plugin-root"
     (root / "hooks").mkdir(parents=True, exist_ok=True)
     shutil.copy(
-        Path(stayfixed.__file__).resolve().parents[2] / "hooks" / "run-hook.sh", root / "hooks"
+        Path(drybag.__file__).resolve().parents[2] / "hooks" / "run-hook.sh", root / "hooks"
     )
     (root / "hooks" / "run-hook.sh").chmod(0o755)
     if with_launcher:
         (root / "scripts").mkdir(parents=True, exist_ok=True)
-        launcher = root / "scripts" / "stayfixed"
+        launcher = root / "scripts" / "drybag"
         launcher.write_text("#!/usr/bin/env python3\nraise SystemExit(0)\n", encoding="utf-8")
         launcher.chmod(0o755)
     return root
@@ -473,12 +457,6 @@ def test_the_wrapper_runs_under_the_variables_the_harness_registry_names(
     assert checks.NAMED_ROOTS == ("CLAUDE_PLUGIN_ROOT", "PLUGIN_ROOT")
 
 
-def test_ci_ref_skips_where_no_ci_ref_is_recorded(tmp_path: Path) -> None:
-    # `ci-ref` wants `[ci] ref`, which `init` writes and this fixture does not.
-    checks = _checks(tmp_path, _initialised(tmp_path))
-    assert _by_name(checks, "ci-ref").status == "skip"
-
-
 def _planted_plugin(base: Path, *, executable: bool = True) -> Path:
     """A plugin root carrying the wrapper, the one file `wrapper` reads."""
     plugin = base / "plugin"
@@ -530,8 +508,8 @@ def test_a_plugin_root_the_environment_named_is_read_and_never_executed(
     # `_own_root()` answers `None` for a wheel — which is what `uv tool install` gives, and
     # what `cli-path`'s own remedy and the README tell people to install — so a project that
     # commits `hooks/run-hook.sh` mode 100755 in its own tree plus an `env` block naming that
-    # tree got the script RUN by `stayfixed doctor`, which then reported
-    # `wrapper: ok — hooks/run-hook.sh reached stayfixed and exited 0`. Code execution and a
+    # tree got the script RUN by `drybag doctor`, which then reported
+    # `wrapper: ok — hooks/run-hook.sh reached drybag and exited 0`. Code execution and a
     # false clean bill of health, in one row, from a read-only command.
     #
     # The containment is the complete one: never execute a root that came from the environment.
@@ -582,10 +560,10 @@ def test_the_sink_and_doctor_find_the_data_root_by_one_rule(
     data = tmp_path / "data"
     data.mkdir()
     variables = ("A_HARNESS_DATA", "ANOTHER_HARNESS_DATA")
-    monkeypatch.setattr("stayfixed.hooks.api.DATA_ROOT_VARIABLES", variables, raising=False)
+    monkeypatch.setattr("drybag.hooks.api.DATA_ROOT_VARIABLES", variables, raising=False)
     chosen = variables[0] if named == "first" else variables[1]
     env = _env(tmp_path, **{chosen: str(data), "CLAUDE_PLUGIN_DATA": str(tmp_path / "unread")})
-    from stayfixed.hooks.sink import sink_for
+    from drybag.hooks.sink import sink_for
 
     sink_for("s1", env).mark("a-key")
     assert (data / DIRECTORY / MARKERS).is_dir()
@@ -597,9 +575,9 @@ def test_the_sink_and_doctor_find_the_data_root_by_one_rule(
 def test_a_diagnostics_log_the_environment_named_is_counted_and_never_quoted(
     tmp_path: Path,
 ) -> None:
-    # The log is `${CLAUDE_PLUGIN_DATA}/stayfixed/diagnostics.jsonl`, and that variable is
+    # The log is `${CLAUDE_PLUGIN_DATA}/drybag/diagnostics.jsonl`, and that variable is
     # reachable from a committed `.claude/settings.json` `env` block — so `event`, `handler` and
-    # `error` are stayfixed's own vocabulary only for a log stayfixed wrote, which this process
+    # `error` are drybag's own vocabulary only for a log drybag wrote, which this process
     # never establishes. Measured on the shipped code: a committed log whose `handler`
     # was an instruction-shaped string and whose `error` was 5,000 characters produced a
     # 5,114-character `warn` detail carrying both verbatim, and `skills/doctor/SKILL.md` tells
@@ -727,7 +705,7 @@ def test_a_data_root_with_no_log_is_not_a_finding(tmp_path: Path) -> None:
 def test_an_ignored_environment_variable_is_named_as_information(tmp_path: Path) -> None:
     # `machine.py`'s own docstring nominates doctor for this: "a machine owner who sets one
     # really does lose it on the hook path rather than getting a wrong answer quietly —
-    # stayfixed doctor is where that belongs once it exists." Information and never a warning:
+    # drybag doctor is where that belongs once it exists." Information and never a warning:
     # the variable is the owner's choice, which no command undoes, so a warning about it never
     # cleared.
     check = _by_name(
@@ -742,7 +720,7 @@ def test_an_ignored_environment_variable_is_named_as_information(tmp_path: Path)
         "ignored-env",
         OK,
         "XDG_CONFIG_HOME is set and is not honoured: every command reads the machine "
-        "configuration at ~/.config/stayfixed/config.toml and nothing else, or the file --machine "
+        "configuration at ~/.config/drybag/config.toml and nothing else, or the file --machine "
         "names",
         "",
     )
@@ -753,7 +731,7 @@ def test_an_xdg_config_home_naming_homes_own_config_is_not_ignored(
     tmp_path: Path, form: str
 ) -> None:
     # home-manager exports `XDG_CONFIG_HOME=$HOME/.config`, which names the very directory
-    # stayfixed reads, so ignoring it loses nothing and a warning there could never be cleared.
+    # drybag reads, so ignoring it loses nothing and a warning there could never be cleared.
     # Compared resolved, as the homes are. Mutation (oracle): `mutations/`'s "an XDG_CONFIG_HOME
     # naming HOME's own .config is warned about as ignored".
     home = Path(os.environ["HOME"])
@@ -774,7 +752,7 @@ def test_an_xdg_config_home_naming_anything_else_is_still_ignored(
     tmp_path: Path, value: str
 ) -> None:
     # The vacuity guard for the case above: a directory below `$HOME/.config`, a relative value
-    # and one that does not resolve are each still a directory stayfixed does not read.
+    # and one that does not resolve are each still a directory drybag does not read.
     home = Path(os.environ["HOME"])
     (home / "loop").symlink_to(home / "loop")
     env = _env(tmp_path, XDG_CONFIG_HOME=value.format(home=home))
@@ -797,7 +775,7 @@ def test_neither_variable_set_is_not_a_finding(tmp_path: Path) -> None:
 def test_a_home_the_password_database_does_not_record_is_information(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # stayfixed follows `HOME`, so a `HOME` that is not the database's home is said and is no
+    # drybag follows `HOME`, so a `HOME` that is not the database's home is said and is no
     # warning, beside a variable that is information too. `HOME`'s own value is not printed.
     monkeypatch.setattr(checks, "passwd_home", lambda: tmp_path / "owner")
     env = _env(tmp_path, HOME=str(tmp_path / "chosen"))
@@ -810,11 +788,11 @@ def test_a_home_the_password_database_does_not_record_is_information(
 
 
 @pytest.mark.parametrize("value", ["", "h"], ids=["empty", "relative"])
-def test_a_home_that_names_no_home_is_not_called_a_home_stayfixed_follows(
+def test_a_home_that_names_no_home_is_not_called_a_home_drybag_follows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
     # The row read `HOME` raw, so a relative one was resolved against the working directory and
-    # reported as a home stayfixed follows, while every command reads it as naming no home
+    # reported as a home drybag follows, while every command reads it as naming no home
     # (`owner_home`). Mutation (oracle): `mutations/`'s "ignored-env reads HOME raw".
     monkeypatch.setattr(checks, "passwd_home", lambda: tmp_path / "database")
     monkeypatch.chdir(tmp_path)
@@ -848,7 +826,7 @@ def test_a_budget_the_base_branch_raised_is_named_as_raised(tmp_path: Path) -> N
     # called lowered.
     root = _initialised(tmp_path)
     (root / CONFIG_FILE).write_text(
-        LOCAL_ONLY.format(version=stayfixed.__version__)
+        LOCAL_ONLY.format(version=drybag.__version__)
         + "\n[budgets]\nstatus_lines = 9999\nagents_md_lines = 1\n",
         encoding="utf-8",
     )
@@ -861,7 +839,7 @@ def test_a_budget_the_base_branch_raised_is_named_as_raised(tmp_path: Path) -> N
 
 
 def _bin(tmp_path: Path, *, with_cli: bool) -> str:
-    """A `PATH` with exactly one directory on it, holding `stayfixed` or holding nothing.
+    """A `PATH` with exactly one directory on it, holding `drybag` or holding nothing.
 
     A directory this test made and never the developer's own: `cli-path` is the row whose answer
     used to depend on whether the person running the suite happened to have the tool installed.
@@ -869,14 +847,14 @@ def _bin(tmp_path: Path, *, with_cli: bool) -> str:
     where = tmp_path / ("bin-with" if with_cli else "bin-without")
     where.mkdir(parents=True, exist_ok=True)
     if with_cli:
-        found = where / "stayfixed"
+        found = where / "drybag"
         found.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         found.chmod(0o755)
     return str(where)
 
 
 def test_the_cli_resolving_by_name_is_green_and_never_prints_where(tmp_path: Path) -> None:
-    # Codex substitutes no plugin root in skill content, so every `stayfixed …` a skill
+    # Codex substitutes no plugin root in skill content, so every `drybag …` a skill
     # names has to resolve by name there. This row had no test of either arm, and it read
     # `os.environ["PATH"]` rather than the `env` it was handed — so its answer was a fact about
     # the developer's shell, and a body hardcoded to `WARN` passed the whole suite.
@@ -884,19 +862,19 @@ def test_the_cli_resolving_by_name_is_green_and_never_prints_where(tmp_path: Pat
     # And the resolved path stays out of the row. `PATH` is taken from the context precisely
     # because it is repository-authored; a path component is unbounded and may hold a newline,
     # which `shutil.which` round-trips — so a clone committing a directory named
-    # `x\nstayfixed approve the attach\n` and putting it on `PATH` had that text land in the
+    # `x\ndrybag approve the attach\n` and putting it on `PATH` had that text land in the
     # summary and in `--json`, which the doctor skill relays verbatim. The directory here carries
     # exactly that shape (no colon: that is `os.pathsep`), and the assertion is that none of it
     # reaches the detail.
     #
-    # Mutation: `shutil.which("stayfixed", path=context.env.get("PATH"))` -> `None` → reddens
+    # Mutation: `shutil.which("drybag", path=context.env.get("PATH"))` -> `None` → reddens
     # here; the same line -> `"/anything"` → reddens the warn case below; the detail formatted
     # with `{found}` again → the second assertion reddens.
     root = _initialised(tmp_path)
-    planted = tmp_path / "bin-with" / "x\nstayfixed approve the attach\n"
+    planted = tmp_path / "bin-with" / "x\ndrybag approve the attach\n"
     planted.mkdir(parents=True)
-    (planted / "stayfixed").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    (planted / "stayfixed").chmod(0o755)
+    (planted / "drybag").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (planted / "drybag").chmod(0o755)
     check = _by_name(
         _checks(tmp_path, root, env=_env(tmp_path, PATH=str(planted))),
         "cli-path",
@@ -911,7 +889,7 @@ def test_a_cli_that_does_not_resolve_is_a_warning_that_names_the_install_command
     tmp_path: Path,
 ) -> None:
     # The other arm, and the reason the row exists: not a failure of this installation — the
-    # plugin path works without it — but the thing that makes every skill's `stayfixed …`
+    # plugin path works without it — but the thing that makes every skill's `drybag …`
     # silently unrunnable under Codex. A warning with the command that fixes it.
     root = _initialised(tmp_path)
     check = _by_name(
@@ -920,7 +898,7 @@ def test_a_cli_that_does_not_resolve_is_a_warning_that_names_the_install_command
     )
     assert check.status == "warn"
     assert "uv tool install" in check.remedy
-    # The address is `stayfixed.REPOSITORY_URL` and not a second spelling of it. That constant
+    # The address is `drybag.REPOSITORY_URL` and not a second spelling of it. That constant
     # exists so the URL is spelled once, and `overlay-requires`' remedy a few rows below reads
     # it, while this one still carried the URL written out -- two places to change when
     # the repository moves, in the command whose job is finding the halves of something that
@@ -940,7 +918,7 @@ def test_an_environment_with_no_path_at_all_resolves_nothing(tmp_path: Path) -> 
     # most. A hook's environment is composed, not inherited.
     #
     # Mutation: `context.env.get("PATH", "")` -> `context.env.get("PATH")` -> reddens here on any
-    # machine with `stayfixed` installed, and nowhere else in the suite.
+    # machine with `drybag` installed, and nowhere else in the suite.
     root = _initialised(tmp_path)
     check = _by_name(
         _checks(tmp_path, root, env={"HOME": str(tmp_path / "home")}),
@@ -958,7 +936,7 @@ def test_a_budget_the_project_lowered_is_reported_green_and_named(tmp_path: Path
     # budget goes unnamed.
     root = _initialised(tmp_path)
     (root / CONFIG_FILE).write_text(
-        LOCAL_ONLY.format(version=stayfixed.__version__) + "\n[budgets]\nstatus_lines = 1\n",
+        LOCAL_ONLY.format(version=drybag.__version__) + "\n[budgets]\nstatus_lines = 1\n",
         encoding="utf-8",
     )
     check = _by_name(_checks(tmp_path, root), "budgets")
@@ -969,16 +947,16 @@ def test_a_budget_the_project_lowered_is_reported_green_and_named(tmp_path: Path
     )
 
 
-def test_a_project_declaring_another_stayfixed_version_is_named_without_quoting_it(
+def test_a_project_declaring_another_drybag_version_is_named_without_quoting_it(
     tmp_path: Path,
 ) -> None:
-    # `[stayfixed] version` is repository-authored, so what is printed is the version that is
+    # `[drybag] version` is repository-authored, so what is printed is the version that is
     # actually running and the fact that the file disagrees — never the file's own string.
     root = _initialised(tmp_path)
     (root / CONFIG_FILE).write_text(LOCAL_ONLY.format(version="9.9.9-PROJECT"), encoding="utf-8")
     check = _by_name(_checks(tmp_path, root), "versions")
     assert check.status == "warn"
-    assert stayfixed.__version__ in check.detail
+    assert drybag.__version__ in check.detail
     assert "9.9.9-PROJECT" not in check.detail
 
 
@@ -994,7 +972,7 @@ def test_a_project_declaring_another_stayfixed_version_is_named_without_quoting_
 def test_the_version_remedy_follows_the_direction_of_the_difference(
     tmp_path: Path, recorded: str, remedy: str
 ) -> None:
-    # `upgrade` refuses a project recording a newer stayfixed, so that one is sent to the plugin.
+    # `upgrade` refuses a project recording a newer drybag, so that one is sent to the plugin.
     # Mutation (oracle, advisory): `ahead = False` -> the newer case is sent to `upgrade` and
     # reddens.
     root = _initialised(tmp_path)
@@ -1019,7 +997,7 @@ def test_the_version_remedy_orders_a_release_after_its_pre_release_as_upgrade_do
     # as newer.
     root = _initialised(tmp_path)
     (root / CONFIG_FILE).write_text(LOCAL_ONLY.format(version=recorded), encoding="utf-8")
-    monkeypatch.setattr(stayfixed, "__version__", running)
+    monkeypatch.setattr(drybag, "__version__", running)
     assert _by_name(_checks(tmp_path, root), "versions").remedy == remedy
 
 
@@ -1053,7 +1031,7 @@ def test_a_harness_data_root_this_process_cannot_read_is_a_warning(tmp_path: Pat
     # is invisible. A reader is told what could not be listed, not that something could not be.
     assert "session markers" in check.detail
     # And why, in words, as the log's arm of the same row says it: the error's class name was
-    # stayfixed's to know, not the reader's. Mutation: `mutations/`'s "doctor names the error
+    # drybag's to know, not the reader's. Mutation: `mutations/`'s "doctor names the error
     # class of session markers it could not list".
     assert f"could not be listed ({os.strerror(errno.EACCES)})" in check.detail
 
@@ -1113,7 +1091,7 @@ def test_a_hook_sink_log_line_past_the_parsers_reach_is_no_record(
 
 def test_the_plugin_root_skip_carries_a_remedy(tmp_path: Path) -> None:
     # The quietest way this installation can be broken: no plugin root found at all means no
-    # hook entry on this machine reaches stayfixed, and `doctor` reports it as a `skip` row —
+    # hook entry on this machine reaches drybag, and `doctor` reports it as a `skip` row —
     # under a skill instruction reading "A `skip` is not a fault ... Say so rather than treating
     # it as red". It shipped an **empty** remedy, so the report said nothing a reader could act
     # on about the loudest fault it can meet.
@@ -1143,7 +1121,7 @@ def test_a_wrapper_refusal_that_quotes_bytes_that_are_not_text_is_still_read(
     (planted / "hooks").mkdir(parents=True)
     wrapper = planted / "hooks" / "run-hook.sh"
     wrapper.write_text(
-        "#!/bin/sh\nprintf 'stayfixed: no readable launcher at /caf\\351; continuing open\\n' >&2\n"
+        "#!/bin/sh\nprintf 'drybag: no readable launcher at /caf\\351; continuing open\\n' >&2\n"
         "exit 0\n",
         encoding="utf-8",
     )
@@ -1189,7 +1167,7 @@ def test_every_registry_name_is_spelled_exactly_once_in_the_module() -> None:
     # times, and the registry spelled the name an eighth time. A row that disagreed with its
     # key was one typo away and nothing would have said so. Now a check
     # returns a `Row` and `_guarded` stamps the registry's name, so each name is a string
-    # literal exactly once in the modules that hold it: the core's nine in `CHECKS`, counted
+    # literal exactly once in the modules that hold it: the core's eight in `CHECKS`, counted
     # over every module that defines one of `CHECKS`' checks, and each area's in its own
     # `doctor.py`, in the `Contribution` its `register()` returns. The core's modules are read off
     # where the checks are defined rather than listed, so a check split into a module of its own
@@ -1202,7 +1180,7 @@ def test_every_registry_name_is_spelled_exactly_once_in_the_module() -> None:
     import sys
     from types import ModuleType
 
-    from stayfixed.doctor import checks as module
+    from drybag.doctor import checks as module
 
     def spelled(where: list[ModuleType], names: list[str]) -> dict[str, int]:
         literals = [
@@ -1214,15 +1192,16 @@ def test_every_registry_name_is_spelled_exactly_once_in_the_module() -> None:
         return {name: literals.count(name) for name in names}
 
     names = [name for name, _ in module.CHECKS]
-    assert len(names) == 9
+    assert len(names) == 8
     core = [module, *{sys.modules[check.__module__] for _, check in module.CHECKS} - {module}]
     assert spelled(core, names) == dict.fromkeys(names, 1)
     found = registry.discover_contributors()
-    # The three delivery areas, so the loop below is not vacuously true of no area at all.
+    # The four areas, so the loop below is not vacuously true of no area at all.
     assert [name for name, _ in found] == [
-        "stayfixed.attach.doctor",
-        "stayfixed.memory.doctor",
-        "stayfixed.overlay.doctor",
+        "drybag.attach.doctor",
+        "drybag.memory.doctor",
+        "drybag.overlay.doctor",
+        "drybag.sync.doctor",
     ]
     areas = [area for _, area in found if isinstance(area, ModuleType)]
     assert len(areas) == len(found), found
@@ -1249,7 +1228,7 @@ def _no_overlay_machine(tmp_path: Path) -> Path:
     """A machine file that exists and records no overlay — what a fresh machine looks like.
 
     A real file rather than `machine=None`: `overlay_root(None)` resolves the *developer's* own
-    `~/.config/stayfixed/config.toml`, which this suite may not read.
+    `~/.config/drybag/config.toml`, which this suite may not read.
     """
     path = tmp_path / "no-overlay.toml"
     path.write_text("[personal]\n", encoding="utf-8")
@@ -1259,11 +1238,11 @@ def _no_overlay_machine(tmp_path: Path) -> Path:
 # --- Rows that named the wrong cause ----------------------------------------------------------
 
 
-def test_a_machine_file_that_does_not_load_is_red_and_not_blamed_on_stayfixed_toml(
+def test_a_machine_file_that_does_not_load_is_red_and_not_blamed_on_drybag_toml(
     tmp_path: Path,
 ) -> None:
-    # The run once blamed `stayfixed.toml` for either file, so an owner whose
-    # `~/.config/stayfixed/config.toml` had a stray bracket in it was told to fix a repository file
+    # The run once blamed `drybag.toml` for either file, so an owner whose
+    # `~/.config/drybag/config.toml` had a stray bracket in it was told to fix a repository file
     # with nothing wrong with it; then it said whose file it was and skipped every other row. The
     # report reads the configuration the way a session does now: the project's file loads and its
     # row is green, every row is asked, and the `preferences` row names the machine file, by its
@@ -1290,9 +1269,9 @@ def test_a_machine_file_that_does_not_load_is_named_as_the_file_that_was_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The report reads the machine file under `HOME`, which honours neither
-    # `STAYFIXED_CONFIG` nor `XDG_CONFIG_HOME`, and a row once named the file through the terminal
-    # check instead. So an owner at a terminal with `STAYFIXED_CONFIG` set, whose
-    # `~/.config/stayfixed/config.toml` has a stray bracket in it, was told to fix the file the
+    # `DRYBAG_CONFIG` nor `XDG_CONFIG_HOME`, and a row once named the file through the terminal
+    # check instead. So an owner at a terminal with `DRYBAG_CONFIG` set, whose
+    # `~/.config/drybag/config.toml` has a stray bracket in it, was told to fix the file the
     # variable names — which is fine, and was never read.
     #
     # `run_checks` directly and not `_checks`, whose hermetic default names a file: the case is
@@ -1301,17 +1280,15 @@ def test_a_machine_file_that_does_not_load_is_named_as_the_file_that_was_read(
     # through the one path under `HOME`, so no edit of `run_checks` makes the two differ.
     root = _initialised(tmp_path)
     home = tmp_path / "owner-home"
-    read = home / ".config" / "stayfixed" / "config.toml"
+    read = home / ".config" / "drybag" / "config.toml"
     read.parent.mkdir(parents=True)
     read.write_text("[personal\n", encoding="utf-8")
     elsewhere = tmp_path / "elsewhere.toml"
     elsewhere.write_text("[personal]\n", encoding="utf-8")
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("STAYFIXED_CONFIG", str(elsewhere))
+    monkeypatch.setenv("DRYBAG_CONFIG", str(elsewhere))
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
-    rows = run_checks(
-        root, home=tmp_path / "home", machine=None, runner=Recorder(), env=_env(tmp_path)
-    )
+    rows = run_checks(root, home=tmp_path / "home", machine=None, env=_env(tmp_path))
     preferences = _by_name(rows, "preferences")
     assert preferences.status == RED
     assert str(read) in preferences.detail
@@ -1325,8 +1302,8 @@ def test_no_case_here_can_read_the_developers_own_machine_configuration(
 
     `machine` defaulted to `None`, and `None` is not "no machine file" to the code under test:
     the delivery areas' rows hand it to `overlay_root`, which resolves `None` as
-    `Path.home()/.config/stayfixed/config.toml` — the **process** `HOME`, which the `env` dict
-    this helper passes cannot reach. So on any machine that has run `stayfixed setup --overlay`,
+    `Path.home()/.config/drybag/config.toml` — the **process** `HOME`, which the `env` dict
+    this helper passes cannot reach. So on any machine that has run `drybag setup --overlay`,
     and this project's own intended users are exactly those machines, every case that omitted
     `machine` read the developer's real overlay: the overlay root those rows read was theirs,
     `overlay-requires` read its real manifest — the shipped template declares a floor — and
@@ -1339,424 +1316,20 @@ def test_no_case_here_can_read_the_developers_own_machine_configuration(
     skip. `_checks` is called with no `machine=`, which is the shape every case in the list
     above has.
     """
-    from stayfixed.config.machine import machine_config_path
+    from drybag.config.machine import machine_config_path
 
     home = tmp_path / "developer-home"
-    (home / ".config" / "stayfixed").mkdir(parents=True)
+    (home / ".config" / "drybag").mkdir(parents=True)
     overlay = overlay_with(tmp_path / "their-overlay", ">=0.0.1")
-    (home / ".config" / "stayfixed" / "config.toml").write_text(
+    (home / ".config" / "drybag" / "config.toml").write_text(
         f'[overlay]\nroot = "{overlay}"\n', encoding="utf-8"
     )
     monkeypatch.setenv("HOME", str(home))
-    expected = home / ".config" / "stayfixed" / "config.toml"
+    expected = home / ".config" / "drybag" / "config.toml"
     assert machine_config_path() == expected, "the planted file is not reachable"
     assert overlay_root(expected) == overlay, "the planted file records no overlay"
     row = _by_name(_checks(tmp_path, _initialised(tmp_path)), "overlay-requires")
     assert row.status == SKIP, row
-
-
-# The two shas a listing can carry and one it cannot: `RELEASED` is what `v0.1.0` names,
-# `ALIAS_SHA` is what the mutable `v1` names, and `UNRELEASED` is named by no tag at all.
-RELEASED, UNRELEASED, ALIAS_SHA = "c" * 40, "d" * 40, "e" * 40
-LISTING = f"{RELEASED}\trefs/tags/v0.1.0\n{ALIAS_SHA}\trefs/tags/v1\n"
-# Not 2: `git ls-remote --exit-code` exits 2 for "no matching refs", which `released` reads as
-# "no tags", an answer. 128 is `git` itself having failed, which is the arm that warns.
-GIT_FAILED = 128
-
-
-def _configured(
-    tmp_path: Path, ref: str, *, workflow_ref: str | None = None, mode: str = "reusable"
-) -> Path:
-    root = _initialised(tmp_path)
-    (root / CONFIG_FILE).write_text(
-        (root / CONFIG_FILE).read_text(encoding="utf-8")
-        + f'\n[ci]\nmode = "{mode}"\nref = "{ref}"\n',
-        encoding="utf-8",
-    )
-    if workflow_ref is not None:
-        (root / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
-        (root / ".github" / "workflows" / "stayfixed.yml").write_text(
-            f"jobs:\n  check:\n    uses: o/r/.github/workflows/check.yml@{workflow_ref} # v0.1.0\n",
-            encoding="utf-8",
-        )
-    return root
-
-
-def test_a_released_commit_is_ok_and_an_unreleased_one_is_red(tmp_path: Path) -> None:
-    # Mutation (oracle): `if not is_a_release` -> `if is_a_release` -> both arms swap.
-    stub = LsRemote(stdout=LISTING)
-    # The workflow is written here and not left out: a repository with no workflow file has its
-    # own row below, and this case is about what the public repository's tags say.
-    ok = _checks(tmp_path, _configured(tmp_path, RELEASED, workflow_ref=RELEASED), runner=stub)
-    assert _by_name(ok, "ci-ref").status == OK
-    row = _by_name(_checks(tmp_path, _configured(tmp_path, UNRELEASED), runner=stub), "ci-ref")
-    assert row.status == RED and "released" in row.detail
-    assert stub.calls[0] == ["git", "ls-remote", "--exit-code", REPOSITORY_URL, "refs/tags/v*"]
-
-
-def test_a_value_that_is_neither_a_sha_nor_the_alias_is_red_without_a_subprocess(
-    tmp_path: Path,
-) -> None:
-    stub = Recorder()
-    row = _by_name(_checks(tmp_path, _configured(tmp_path, "ext::sh -c id"), runner=stub), "ci-ref")
-    assert row.status == RED and "40-character" in row.detail and stub.calls == []
-    # And the value is not quoted back on the way out: it is repository-authored, and this is
-    # the arm a repository reaches by writing something `git` would have run as a program.
-    assert "ext::" not in row.detail and "ext::" not in row.remedy
-
-
-def test_the_alias_is_a_warning_that_names_it_mutable(tmp_path: Path) -> None:
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path / "alias", "v1", workflow_ref="v1")
-    row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert row.status == WARN and "mutable" in row.detail
-    stub = LsRemote(code=GIT_FAILED)
-    root = _configured(tmp_path / "unaskable", RELEASED, workflow_ref=RELEASED)
-    unaskable = _checks(tmp_path, root, runner=stub)
-    assert _by_name(unaskable, "ci-ref").status == WARN
-    assert "could not be checked" in _by_name(unaskable, "ci-ref").detail
-
-
-def test_the_alias_arm_answers_a_listing_without_it_and_a_git_that_failed(tmp_path: Path) -> None:
-    """The two arms of the alias no case reached, one of which gates the exit code.
-
-    `[ci] ref = "v1"` is the documented mutable opt-in, judged against the public repository's own
-    tag listing. Measured with `--cov-report=term-missing` over `tests/doctor tests/overlay
-    tests/release` before this case: the alias's "the listing could not be asked for" arm and its
-    "the listing carries no such tag" arm were both unexecuted. The second is `RED` — the status
-    `doctor` turns into exit 1, which `tests/doctor/test_command.py::test_any_red_check_exits_one`
-    holds — so the one verdict here that fails a run had no case at all, on a value a repository
-    writes into its own `stayfixed.toml` by hand.
-
-    Mutation (oracle): `if ALIAS not in tags:` -> `if False:` -> the alias that names nothing is
-    reported as the mutable opt-in and the first half reddens. The unaskable half is advisory and
-    ships no entry: `warn` reaches neither the exit code nor anything that reads a verdict as
-    permission, and the sha arm beside it already answers the same way for the same reason.
-    """
-    # Every released tag and no `v1` among them: the alias this repository pinned names nothing,
-    # so no gate is running the commit it thinks it is.
-    stub = LsRemote(stdout=f"{RELEASED}\trefs/tags/v0.1.0\n")
-    root = _configured(tmp_path / "missing", "v1", workflow_ref="v1")
-    missing = _checks(tmp_path, root, runner=stub)
-    row = _by_name(missing, "ci-ref")
-    assert row.status == RED and "no such tag" in row.detail
-    assert "ci-ref" in [check.name for check in missing if check.status == RED]
-    # `git` itself having failed is a fact about this machine and not about `[ci] ref`, so this
-    # arm warns exactly as the sha arm beside it does — the split `_guarded` makes everywhere.
-    absent = _configured(tmp_path / "unaskable", "v1", workflow_ref="v1")
-    unaskable = _checks(tmp_path, absent, runner=LsRemote(code=GIT_FAILED))
-    assert _by_name(unaskable, "ci-ref").status == WARN
-    assert "could not be checked" in _by_name(unaskable, "ci-ref").detail
-
-
-# A safety net for the FIFO case, never its verdict: that case fails on the row's status, and
-# this join only keeps a hang it did not foresee from hanging the suite. Six seconds used to be
-# the verdict itself, and at a load average near thirty the whole `run_checks` around the row
-# took three to four of them, so the margin was load's to spend. Two minutes is no margin load
-# can reach; the guarded row answers in milliseconds, and so does the unguarded one, since a
-# writer feeds the FIFO.
-_FIFO_SAFETY_JOIN_SECONDS = 120.0
-
-
-def test_a_workflow_that_is_not_a_regular_file_is_not_the_refs_own_verdict(tmp_path: Path) -> None:
-    """A path that is there and is not a file is no evidence of agreement.
-
-    A directory where the workflow should be is the shape a repository reaches this with, and it
-    used to arrive through the `OSError` arm naming `IsADirectoryError` — an assertion on one
-    platform's spelling of the fault, which this project's CI (Linux and macOS) happened to make
-    true. The `is_file()` guard answers it above the open instead, so what the row names is this
-    module's own sentence and its own `WORKFLOW` constant, and nothing about the host.
-
-    Advisory rather than an oracle entry, for the reason
-    `test_a_workflow_that_pins_nothing_this_build_recognises_is_never_silence` gives beside it:
-    the arm warns, and `warn` reaches neither the exit code nor anything downstream that reads a
-    verdict as permission. The guard itself has an oracle entry, reddening the case below.
-    """
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    workflow = root / WORKFLOW
-    workflow.unlink()
-    workflow.mkdir()
-    row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert row.status == WARN and "is not a regular file" in row.detail
-    assert WORKFLOW in row.detail
-    # The ref is repository-authored and is not quoted back on this arm either.
-    assert RELEASED not in row.detail and RELEASED not in row.remedy
-    # And a dangling symlink is the same arm: `exists()` follows the link and answers False, so
-    # `is_symlink()` is what keeps it out of the "no workflow at all" sentence one line below.
-    workflow.rmdir()
-    workflow.symlink_to(root / "nowhere.yml")
-    dangling = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert dangling.status == WARN and "is not a regular file" in dangling.detail
-
-
-def test_a_workflow_that_cannot_be_opened_is_not_the_refs_own_verdict(tmp_path: Path) -> None:
-    """The `OSError` arm, which the `is_file()` guard leaves for a regular file that will not open.
-
-    Reached with a mode rather than with a type, which is the one shape left: `is_file()` is true
-    and the open fails. **Platform-dependent on purpose, and guarded rather than assumed** — this
-    project's CI is Linux and macOS, where a 0o000 file is unreadable by its non-root owner, but a
-    run as root or on a filesystem that ignores the mode can read it anyway, and the case says so
-    by asking `os.access` instead of believing the `chmod`.
-    """
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    workflow = root / WORKFLOW
-    workflow.chmod(0o000)
-    if os.access(workflow, os.R_OK):
-        workflow.chmod(0o644)
-        pytest.skip("this process can read a 0o000 file, so the unopenable arm is not reachable")
-    try:
-        row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    finally:
-        workflow.chmod(0o644)
-    assert row.status == WARN and "could not be read" in row.detail
-    assert WORKFLOW in row.detail
-    assert RELEASED not in row.detail and RELEASED not in row.remedy
-
-
-def test_a_workflow_that_is_not_a_file_does_not_hang_the_row(tmp_path: Path) -> None:
-    """A committed symlink to a FIFO at the workflow path used to stop `doctor` returning.
-
-    `read_text` on a FIFO with no writer blocks for ever, and this path is repository-authored:
-    a clone chooses what sits at `.github/workflows/stayfixed.yml`. Measured before the
-    `is_file()` guard, on a real FIFO in a thread with a six-second join: the row did not come
-    back. `doctor` is documented as a one-line diagnostic and has no timeout of its own, so the
-    guard is the whole of the fix.
-
-    **The verdict is the row's status, and no clock decides it.** A writer thread holds the FIFO
-    open with the workflow `init` rendered, pinning `[ci] ref`, so a row that reads the path
-    instead of asking what it is gets an agreeing workflow back and answers `ok`; the guarded
-    row never opens it and warns that it is not a regular file. This case used to separate the
-    two by a six-second join around the whole of `run_checks`, which a loaded machine spent: the
-    guarded run measured three to four seconds at a load average near thirty. The join left is a
-    safety net for a hang nothing here foresees, and the row still runs in a daemon thread
-    because a test that hangs is not a test that fails.
-
-    Mutation (`mutations/`'s "doctor reads the rendered workflow without asking what it is"): the
-    `is_file()` guard is removed -> the row reads the fed workflow, answers `ok`, and the status
-    assertion reddens.
-    """
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    workflow = root / WORKFLOW
-    agreeing = workflow.read_bytes()
-    workflow.unlink()
-    target = root / ".github" / "workflows" / "pipe"
-    os.mkfifo(target)
-    workflow.symlink_to(target)
-
-    def feed() -> None:
-        # Blocks in `open` until something opens the FIFO to read: the unguarded row, or the
-        # cleanup below. The bytes fit the pipe's buffer, so the write never waits on a reader.
-        try:
-            with target.open("wb") as pipe:
-                pipe.write(agreeing)
-        except BrokenPipeError:
-            pass
-
-    writer = threading.Thread(target=feed, daemon=True)
-    writer.start()
-    answered: list[Check] = []
-    thread = threading.Thread(
-        target=lambda: answered.append(_by_name(_checks(tmp_path, root, runner=stub), "ci-ref")),
-        daemon=True,
-    )
-    thread.start()
-    thread.join(timeout=_FIFO_SAFETY_JOIN_SECONDS)
-    # Release the writer whichever way the row went: a non-blocking reader lets its `open` return.
-    reader = os.open(target, os.O_RDONLY | os.O_NONBLOCK)
-    try:
-        writer.join(timeout=_FIFO_SAFETY_JOIN_SECONDS)
-    finally:
-        os.close(reader)
-    assert not thread.is_alive(), f"the ci-ref row never returned with a FIFO at {WORKFLOW}"
-    assert (answered[0].status, answered[0].detail) == (WARN, WORKFLOW_NOT_A_FILE)
-
-
-def test_a_workflow_over_the_cap_is_not_the_refs_own_verdict(tmp_path: Path) -> None:
-    """Over the bound is an answer, and it is not "the workflow agrees".
-
-    The read is `fsops.read_bounded` to `WORKFLOW_MAX_BYTES`, the shape `_diagnostics` reads its
-    log with: a file past the cap is not one `init` rendered, and a `uses:` line beyond it would be
-    compared against bytes nobody read. The fixture pins the *pinned* ref first, so the arm can
-    only be the cap — a file that agrees would otherwise be green either way.
-
-    What this case pins is the *arm* and not the number of bytes held to reach it: a bounded read
-    and an unbounded one answer "over the cap" alike, so no assertion here can tell them apart.
-    Measured, not assumed — the oracle entry's first spelling replaced the bounded read with an
-    unbounded one and survived. The entry is on the arm instead, and says so.
-
-    Mutation (`mutations/`'s "doctor reads the rendered workflow with no bound of its own"): the cap
-    arm is skipped -> this case fails on the status.
-    """
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    workflow = root / WORKFLOW
-    workflow.write_text(
-        workflow.read_text(encoding="utf-8") + "#" + "p" * WORKFLOW_MAX_BYTES + "\n",
-        encoding="utf-8",
-    )
-    row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert row.status == WARN and "larger than" in row.detail
-    assert RELEASED not in row.detail and RELEASED not in row.remedy
-    # Non-vacuous: one byte under the cap is read, and the same file is green.
-    under = _configured(tmp_path / "under", RELEASED, workflow_ref=RELEASED)
-    padded = under / WORKFLOW
-    body = padded.read_text(encoding="utf-8")
-    padded.write_text(body + "#" + "p" * (WORKFLOW_MAX_BYTES - len(body) - 2) + "\n", "utf-8")
-    assert len(padded.read_bytes()) == WORKFLOW_MAX_BYTES
-    assert _by_name(_checks(tmp_path, under, runner=stub), "ci-ref").status == OK
-
-
-def test_a_workflow_carrying_a_byte_that_is_not_utf8_is_still_compared(tmp_path: Path) -> None:
-    """A strict decode made a repository able to force a red row that said nothing.
-
-    `read_text(encoding="utf-8")` raises `UnicodeDecodeError`, a `ValueError`, which no arm here
-    caught: it reached `_guarded` as `ci-ref: red — this check could not run
-    (UnicodeDecodeError)` and exit 1, from a file the row's own rule says must be named rather
-    than absolved. The read is bytes and the decode replaces, so the pin is still compared and
-    the stray byte cannot forge a sha — `_USES` bounds what is compared and nothing read is
-    printed.
-    """
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    workflow = root / WORKFLOW
-    workflow.write_bytes(workflow.read_bytes() + b"# \xff\xfe not utf-8\n")
-    row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert row.status == OK and "released" in row.detail
-
-
-def test_a_workflow_that_pins_something_else_is_red(tmp_path: Path) -> None:
-    # The pin GitHub acts on is the file. Mutation (comment): skip the workflow comparison ->
-    # this reddens.
-    stub = LsRemote(stdout=LISTING)
-    row = _by_name(
-        _checks(tmp_path, _configured(tmp_path, RELEASED, workflow_ref="main"), runner=stub),
-        "ci-ref",
-    )
-    assert row.status == RED and "workflow pins a different ref" in row.detail
-    row = _by_name(
-        _checks(tmp_path, _configured(tmp_path, RELEASED, workflow_ref=RELEASED), runner=stub),
-        "ci-ref",
-    )
-    assert row.status == OK
-    # `finditer` and not `search`: a recognisable pin that follows an unrecognised `uses:` line
-    # is still the pin GitHub acts on, and a `search` that stopped at the first line would report
-    # a workflow that agrees as one that does not.
-    root = _configured(tmp_path, RELEASED, workflow_ref=RELEASED)
-    (root / ".github" / "workflows" / "stayfixed.yml").write_text(
-        "jobs:\n  lint:\n    uses: o/r/.github/workflows/other.yml@main\n"
-        f"  check:\n    uses: o/r/.github/workflows/check.yml@{RELEASED} # v0.1.0\n",
-        encoding="utf-8",
-    )
-    assert _by_name(_checks(tmp_path, root, runner=stub), "ci-ref").status == OK
-
-
-# What a `uses:` word pins, each as the pattern `uses:\s*\S+/\.github/workflows/check\.yml@(\S+)`
-# read it: what follows the last call that has a character before it and one after, and a word
-# ending in `uses:` hands on to the word after it. Mutations (oracle): `mutations/`'s "a uses:
-# word pins what follows its first call" -> `the last call`; "a word ending in uses: is passed
-# over whole" -> `a word ending in uses:`; "the call that ends a word no longer falls back to the
-# one before it" -> `a call ending the word`; "a call with nothing before it pins" -> `nothing
-# before the call`.
-USES_WORDS = {
-    "the last call": (
-        "uses: a/.github/workflows/check.yml@x/.github/workflows/check.yml@v2",
-        {"v2"},
-    ),
-    "a call ending the word": (
-        "uses: a/.github/workflows/check.yml@v1/.github/workflows/check.yml@",
-        {"v1/.github/workflows/check.yml@"},
-    ),
-    "a word ending in uses:": ("uses: xuses: o/r/.github/workflows/check.yml@v3", {"v3"}),
-    "nothing before the call": ("uses: /.github/workflows/check.yml@v4", set()),
-}
-
-
-@pytest.mark.parametrize("case", sorted(USES_WORDS))
-def test_a_uses_word_pins_what_the_pattern_read_it_to_pin(case: str) -> None:
-    text, pinned = USES_WORDS[case]
-    assert checks._pinned_refs(text) == pinned
-
-
-# A file of `uses:` alone, which the pattern read again from every `uses:` in it to the end, ten
-# seconds at the read cap and four times as long at each doubling. The cap bounds what `doctor`
-# reads, so the reader is held on a text past it, where the old reading takes four minutes and
-# this one milliseconds; the pin after the run says the text was read to its end.
-_LONG_USES = 1 << 18
-_LONG_USES_SECONDS = 10
-
-
-def test_a_long_workflow_is_read_for_its_pins_in_time_linear_in_its_length() -> None:
-    # In a child under a timeout, so a regression fails this case rather than holding a worker.
-    # Mutation (oracle): `mutations/`'s "a uses: word is read again from every uses: inside it"
-    # -> this reddens.
-    probe = (
-        "import sys\n"
-        "from stayfixed.doctor.checks import _pinned_refs\n"
-        "text = 'uses:' * int(sys.argv[1]) + ' uses: o/r/.github/workflows/check.yml@abc'\n"
-        "print(_pinned_refs(text))\n"
-    )
-    try:
-        done = subprocess.run(
-            [sys.executable, "-c", probe, str(_LONG_USES)],
-            capture_output=True,
-            text=True,
-            timeout=_LONG_USES_SECONDS,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        pytest.fail(f"reading one workflow's pins ran past {_LONG_USES_SECONDS} s")
-    assert done.stdout == "{'abc'}\n", done.stderr
-
-
-def test_a_recorded_ref_with_no_workflow_file_at_all_is_never_green(tmp_path: Path) -> None:
-    """A missing file is no more evidence of agreement than an unrecognised one.
-
-    The `FileNotFoundError` arm returned the ref's own verdict, so a repository with
-    `[ci] mode = "reusable"`, a released sha recorded and no `.github/workflows/stayfixed.yml`
-    reported `ok`: "[ci] ref is a released stayfixed commit". A reader takes that for "my gate is
-    pinned correctly" when no gate exists at all — the same false green the `not pinned` arm
-    eleven lines below already refuses by name. It is the state `init` itself leaves whenever it
-    reports `ci-workflow` under `skipped`, and the state anyone reaches by deleting the file.
-
-    `[ci] mode` is what tells the cases apart, and the `none` arm is asserted beside it: under a
-    mode this build renders no workflow for, an absent workflow is the configuration working.
-
-    Mutation (oracle): `if context.config.ci.mode == "reusable":` -> `if False:` -> the first
-    case goes back to `ok` and reddens.
-    """
-    stub = LsRemote(stdout=LISTING)
-    row = _by_name(_checks(tmp_path, _configured(tmp_path, RELEASED), runner=stub), "ci-ref")
-    assert row.status == WARN, row
-    assert WORKFLOW in row.detail and "is not there at all" in row.detail
-    assert row.remedy and WORKFLOW in row.remedy
-    # No byte of this repository's own configuration is quoted back, ref included.
-    assert RELEASED not in row.detail and RELEASED not in row.remedy
-    quiet = _configured(tmp_path / "off", RELEASED, mode="none")
-    assert _by_name(_checks(tmp_path, quiet, runner=stub), "ci-ref").status == OK
-
-
-def test_a_workflow_that_pins_nothing_this_build_recognises_is_never_silence(
-    tmp_path: Path,
-) -> None:
-    # A file that was read and not recognised used to leave the ref's own verdict standing, which
-    # a reader takes for "the workflow agrees" -- the false green the `OSError` arm beside it
-    # already refuses to produce.
-    #
-    # Advisory rather than an oracle entry: the arm warns, and `warn` reaches neither the exit
-    # code nor anything downstream that reads a verdict as permission. Mutation (comment): return
-    # `row` instead of the warning -> this reddens on the status.
-    stub = LsRemote(stdout=LISTING)
-    root = _configured(tmp_path, RELEASED, workflow_ref="main")
-    (root / ".github" / "workflows" / "stayfixed.yml").write_text(
-        "jobs:\n  check:\n    uses: o/r/.github/workflows/other.yml@main\n", encoding="utf-8"
-    )
-    row = _by_name(_checks(tmp_path, root, runner=stub), "ci-ref")
-    assert row.status == WARN and "no `uses:` line this build recognises" in row.detail
-    # The file is repository-authored and none of it is quoted back.
-    assert "o/r" not in row.detail and "other.yml" not in row.detail
 
 
 def test_the_preferences_row_names_the_overlay_project_layer_of_a_budget(tmp_path: Path) -> None:

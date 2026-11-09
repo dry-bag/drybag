@@ -7,7 +7,7 @@ imports — a test parses the file and checks."
 
 from __future__ import annotations
 
-import stayfixed.setup.api as setup
+import drybag.setup.api as setup
 
 
 def test_the_surface_carries_what_every_consumer_reaches_for() -> None:

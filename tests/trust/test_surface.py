@@ -5,7 +5,14 @@ what the area finds tidy"."""
 
 from __future__ import annotations
 
-import stayfixed.trust.api as trust
+import subprocess
+import sys
+from pathlib import Path
+
+import drybag.trust.api as trust
+from tests.boundaries.test_delivery import IMPORT_EACH
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
@@ -36,3 +43,24 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
         "approve_all",
     }
     assert required == set(trust.__all__)
+
+
+def test_the_records_surface_loads_no_cli_frame() -> None:
+    # The surface the record is reached through loads no CLI frame. Imported from this checkout's
+    # own `src/`, and not under `-I`, which would ignore `PYTHONPATH` and import whichever
+    # drybag the environment installed. No mutation of its own: the surface imports `boundary`
+    # and `record`, neither of which imports the command frame.
+    source = ROOT / "src"
+    probe = IMPORT_EACH + "print(sys.modules['drybag'].__file__)\n"
+    completed = subprocess.run(
+        [sys.executable, "-c", probe, "drybag.trust.api"],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(source)},
+    )
+    *lines, origin = completed.stdout.splitlines()
+    loaded = " ".join(lines).split()
+    assert Path(origin).is_relative_to(source), origin
+    assert "drybag.trust.api" in loaded
+    assert "drybag.command" not in loaded

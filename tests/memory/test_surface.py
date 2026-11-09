@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-import stayfixed.memory.api as memory
+import drybag.memory.api as memory
 
 
 def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
@@ -23,12 +23,16 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         # the resolver and the store it yields, for attach
         "resolve",
         "Store",
-        "permitted_roots",
+        "project_notes",
         # the overlay's per-project layout: attach writes it, overlay renders it
         "PROJECTS",
-        "PROJECT_RECORD",
+        "RECORD",
         "STORE_DIR",
-        "COMMON_GROUP",
+        "reserved",
+        # the three roots of the overlay's notes, which `sync` builds its pathspecs from
+        "COMMON",
+        # the index's name, which `sync`'s pathspecs leave out under each project
+        "INDEX_NAME",
         # the one reader of the overlay's project record, which attach reads with a policy of its
         # own
         "read_binding_record",
@@ -60,5 +64,11 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         "UNBOUND",
         # the note a moved `origin` earns, which attach and the session-start line say
         "origin_note",
+        # the unreviewed notes of the overlay's share for a project recorded as reviewed, which
+        # `setup --restore --yes` runs for each project it attaches
+        "promote_share",
+        # the project's memory directories the composed store leaves unlinked for being in the
+        # tag namespace, which the `attached` row names
+        "reserved_project_groups",
     }
     assert required == set(memory.__all__)

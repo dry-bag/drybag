@@ -1,4 +1,4 @@
-# Releasing stayfixed
+# Releasing drybag
 
 Version discipline itself is enforced — `scripts/release.py check` cross-checks seven sources and
 a tag, and runs in CI. What was undocumented is everything around it: how to cut a release at all.
@@ -10,13 +10,13 @@ entry `scripts/release.py pin` writes the plugin commit it releases → `claude 
 `vX.Y.Z` tag, pushed without `main` → the release workflow's `build` job checks the tag, the pin
 included, tests and builds, and the same workflow's `attest` job computes the plugin commit again
 and attests the packages and the plugin tree's manifest → `scripts/publish_plugin.py` pushes that
-pinned commit to `stayfixed/stayfixed-plugin`, the repository the plugin is installed from, from
+pinned commit to `dry-bag/drybag-plugin`, the repository the plugin is installed from, from
 your own authenticated checkout → the `pypi` approval, whose two jobs first check that the plugin
 repository's tag names the pinned commit and then release the PyPI upload and the GitHub Release,
 attached to `vX.Y.Z` only and never to the floating `v1`, which immutable releases would freeze →
 `main` moves to the release commit → `scripts/publish_template.py`, which renders
-`templates/overlay/` and pushes it to the template repository from your own authenticated
-checkout → from `1.0.0` on, the `v1` alias moves → the cross-repository smoke runs at the new tag →
+`templates/overlay/` and pushes it to `dry-bag/drybag-overlay-template`, the template repository,
+from your own authenticated checkout → from `1.0.0` on, the `v1` alias moves →
 the release returns to `dev` (section 5). Both pushes to a second repository are yours, so the
 public repository's CI holds no credential that can write one.
 
@@ -27,15 +27,15 @@ public repository's CI holds no credential that can write one.
 | Source | Where the version lives |
 |---|---|
 | `pyproject.toml` | `project.version` |
-| `uv.lock` | the `stayfixed` package entry — stale unless `uv sync` has run |
-| `src/stayfixed/__init__.py` | `__version__` |
+| `uv.lock` | the `drybag` package entry — stale unless `uv sync` has run |
+| `src/drybag/__init__.py` | `__version__` |
 | `.claude-plugin/plugin.json` | `version` |
 | `.codex-plugin/plugin.json` | `version` |
 | `CHANGELOG.md` | the first `## <version>` heading after the towncrier marker |
-| `.claude-plugin/marketplace.json` | the plugin entry's `ref`, `vX.Y.Z`: the tag of `stayfixed/stayfixed-plugin` the marketplace fetches the plugin at; its `sha` beside it is the commit that tag names, and no version |
+| `.claude-plugin/marketplace.json` | the plugin entry's `ref`, `vX.Y.Z`: the tag of `dry-bag/drybag-plugin` the marketplace fetches the plugin at; its `sha` beside it is the commit that tag names, and no version |
 
 The marketplace entry is held to one shape besides its `ref`: exactly one entry named
-`stayfixed`, a `url` source naming `https://github.com/stayfixed/stayfixed-plugin.git`, pinned by
+`drybag`, a `url` source naming `https://github.com/dry-bag/drybag-plugin.git`, pinned by
 `ref` and by `sha`, and no `version` of its own. The `ref` names the plugin repository's tag; the
 `sha` names the commit that tag holds, so a tag moved there does not change what installs. That
 commit is the plugin commit, and the release commit can name it before the plugin repository
@@ -43,7 +43,7 @@ holds it, because it is computed from the release commit alone: the plugin tree,
 committer and date, a message naming the version, and as its parent the `sha` the release
 commit's first parent pins — the plugin commit pushed last, the previous release's or a stopped
 release's (section 5), which is what the plugin repository's `main` must hold — or none for
-`0.3.0`, the first release the plugin repository holds. `scripts/release.py pin` writes it
+a plugin repository with no history, which this one is not (section 3 seeds it). `scripts/release.py pin` writes it
 (section 2, step 5). Plain `check` holds only the `sha`'s shape, 40 lowercase hex characters,
 because between releases the entry pins the plugin commit pushed last, which no later tree makes.
 
@@ -65,18 +65,21 @@ unapproved and fails on Trusted Publishing for want of a pending publisher, and
 step 7's sentence true.
 
 **If this is the first release published from the plugin repository, do section 3's "The plugin
-repository" first.** That is `0.3.0`, not only the first release ever: until
-`stayfixed/stayfixed-plugin` exists with its four rulesets, step 1's read-back of them answers
-`404` and step 7's push has nowhere to go.
+repository" first.** That is the first release after the rename too, not only the first release ever: until
+`dry-bag/drybag-plugin` exists with its four rulesets, step 1's read-back of them answers
+`404` and step 7's push has nowhere to go. The first release after the rename also finds this
+repository's own two tag rulesets as the transfer left them, guarding the former product's `--v*` tags:
+replace that pattern with `refs/tags/drybag--v*` in both before step 1, whose read-back holds exactly
+the two patterns.
 
 **The plugin is published from a repository of its own.** The marketplace entry here fetches it
-from `stayfixed/stayfixed-plugin`, a `url` source pinned to the release's tag by `ref` and to the
+from `dry-bag/drybag-plugin`, a `url` source pinned to the release's tag by `ref` and to the
 plugin commit by `sha` (section 1), and that repository's root is the tree `scripts/plugin_tree.py`
-generates from a commit of this one: the nine paths the plugin's runtime reads — the two plugin
-manifests, `hooks/`, `scripts/stayfixed`, `src/stayfixed/`, `skills/`, `agents/`, `README.md` and
+generates from a commit of this one: the eight paths the plugin's runtime reads — the two plugin
+manifests, `hooks/`, `scripts/drybag`, `src/drybag/`, `skills/`, `README.md` and
 `LICENSE` — and the listing icon, `.claude-plugin/icon.png`, which the directory takes once, at
 the first submission, and nothing else. Its only tags are the `vX.Y.Z` step 7 pushes there; it
-carries no `stayfixed--vX.Y.Z`, which nothing there reads. Its `main` is the plugin commit
+carries no `drybag--vX.Y.Z`, which nothing there reads. Its `main` is the plugin commit
 pushed last, a
 spent release's when that release stopped after its push, and moves only by fast-forward, each
 release's commit the child of the one before, so a release commit cut on the wrong base is
@@ -87,7 +90,7 @@ count is the generated tree's: `tests/test_payload.py` holds it on every pull re
 `scripts/release.py check --tag` again on the commit a release is cut from, before `release.yml`
 builds. Not a subfolder of this repository: the same page holds every version of a plugin in a
 subfolder whose hook runs a non-shell file or a shell script that calls other files, and
-`hooks/run-hook.sh` runs the Python launcher. A file the runtime needs outside those ten paths
+`hooks/run-hook.sh` runs the Python launcher. A file the runtime needs outside those nine paths
 is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository never holds it.
 
 1. **Be on `main`, current, and green.** The release workflow builds from the tag, so anything
@@ -124,16 +127,16 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    as it was rather than as section 3 says it should be:
 
    ```bash
-   gh api repos/stayfixed/stayfixed/rulesets --jq '[.[] | select(.name == "release tags" or
+   gh api repos/dry-bag/drybag/rulesets --jq '[.[] | select(.name == "release tags" or
        .name == "release tag creation")] | sort_by(.name) | .[].id' |
-     xargs -I{} gh api repos/stayfixed/stayfixed/rulesets/{} \
+     xargs -I{} gh api repos/dry-bag/drybag/rulesets/{} \
      --jq '[.name, .target, .enforcement, (.conditions.ref_name.include | sort),
             ([.rules[].type] | sort),
             [(.bypass_actors // [])[] | "\(.actor_type) \(.actor_id) \(.bypass_mode)"]]'
-   # ["release tag creation","tag","active",["refs/tags/stayfixed--v*","refs/tags/v*.*.*"],["creation"],["RepositoryRole 5 always"]]
-   # ["release tags","tag","active",["refs/tags/stayfixed--v*","refs/tags/v*.*.*"],["deletion","update"],[]]
-   gh api repos/stayfixed/stayfixed-plugin/rulesets --jq 'sort_by(.name) | .[].id' |
-     xargs -I{} gh api repos/stayfixed/stayfixed-plugin/rulesets/{} \
+   # ["release tag creation","tag","active",["refs/tags/drybag--v*","refs/tags/v*.*.*"],["creation"],["RepositoryRole 5 always"]]
+   # ["release tags","tag","active",["refs/tags/drybag--v*","refs/tags/v*.*.*"],["deletion","update"],[]]
+   gh api repos/dry-bag/drybag-plugin/rulesets --jq 'sort_by(.name) | .[].id' |
+     xargs -I{} gh api repos/dry-bag/drybag-plugin/rulesets/{} \
      --jq '[.name, .target, .enforcement, (.conditions.ref_name.include | sort),
             ([.rules[].type] | sort),
             [(.bypass_actors // [])[] | "\(.actor_type) \(.actor_id) \(.bypass_mode)"]]'
@@ -141,22 +144,22 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    # ["no tag-shaped branches","branch","active",["refs/heads/v*"],["creation"],[]]
    # ["release tag creation","tag","active",["refs/tags/v*.*.*"],["creation"],["RepositoryRole 5 always"]]
    # ["release tags","tag","active",["refs/tags/v*.*.*"],["deletion","update"],[]]
-   git ls-remote https://github.com/stayfixed/stayfixed-plugin.git refs/heads/main
-   gh api repos/stayfixed/stayfixed-plugin/git/ref/heads/main --jq .object.sha
+   git ls-remote https://github.com/dry-bag/drybag-plugin.git refs/heads/main
+   gh api repos/dry-bag/drybag-plugin/git/ref/heads/main --jq .object.sha
    grep '"sha"' .claude-plugin/marketplace.json
-   # one commit on all three lines, the plugin repository's main; before 0.3.0 the first and the
-   # last print nothing, and gh api answers "gh: Git Repository is empty. (HTTP 409)"
-   gh api repos/stayfixed/stayfixed/private-vulnerability-reporting --jq .enabled
+   # one commit on all three lines, the plugin repository's main; for an empty plugin repository
+   # the first prints nothing, and gh api answers "gh: Git Repository is empty. (HTTP 409)"
+   gh api repos/dry-bag/drybag/private-vulnerability-reporting --jq .enabled
    # true
-   curl -sS -o /dev/null -w '%{http_code}\n' https://pypi.org/pypi/stayfixed/json
+   curl -sS -o /dev/null -w '%{http_code}\n' https://pypi.org/pypi/drybag/json
    # 404 before the first release; from then on 200, with you listed as owner at
-   # https://pypi.org/project/stayfixed/
+   # https://pypi.org/project/drybag/
    ```
 
-   Any other answer stops the release here. A `404` from `stayfixed/stayfixed-plugin` means section
+   Any other answer stops the release here. A `404` from `dry-bag/drybag-plugin` means section
    3's "The plugin repository" has not been done: do it, then read back again. Once it is done, `gh
-   api …/git/ref/heads/main` answers `(HTTP 409)` for the empty repository before `0.3.0` (measured
-   2026-10-12, the day it was created), and the publisher reads it, or a `404`, as no `main`; any
+   api …/git/ref/heads/main` answers `(HTTP 409)` for the empty repository (measured 2026-10-12,
+   on the plugin repository before the rename, the day it was created), and the publisher reads it, or a `404`, as no `main`; any
    other failure there stops the release too. A ruleset that
    lists other patterns leaves the tag step 6 pushes movable; a `release tags` that anyone bypasses
    lets that one move it; a `release tag creation` with no `creation` rule, or with another bypass
@@ -188,7 +191,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    exists from `1.0.0` on (step 9).
 
 3. **Set it in the five places you edit by hand**, then let the lockfile follow:
-   `pyproject.toml`, `src/stayfixed/__init__.py`, both plugin manifests, and the `ref` of the
+   `pyproject.toml`, `src/drybag/__init__.py`, both plugin manifests, and the `ref` of the
    plugin entry in `.claude-plugin/marketplace.json`, `vX.Y.Z`.
 
    ```bash
@@ -200,16 +203,9 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    `CHANGELOG.md` is the seventh and is still behind here; a pending fragment is what lets it
    lag, and step 4 catches it up.
 
-   **And the release smoke's tag, which a test holds.** `.github/workflows/smoke-release.yml`
-   calls `check.yml@vX.Y.Z`, written out, because `uses:` takes no expression; set it to the
-   new version here, and in `mutations/`'s "the release smoke calls the alias a 0.x release does
-   not have", whose `before` is that line.
-   `tests/test_fixtures.py` fails until it names the version the tree carries, and the release
-   workflow runs the suite on the tag.
-
    **And the two example configurations, which a test holds.** `README.md`'s and `docs/cli.md`'s
-   example `stayfixed.toml` blocks each carry `version = "X.Y.Z"`, and a copy of a stale one
-   makes `stayfixed doctor` warn on a brand-new project. `scripts/release.py check` cannot see
+   example `drybag.toml` blocks each carry `version = "X.Y.Z"`, and a copy of a stale one
+   makes `drybag doctor` warn on a brand-new project. `scripts/release.py check` cannot see
    them, because they are examples and not sources, so `tests/test_documents.py` holds them
    instead: it fails until both name the version the tree carries, and the release workflow runs
    the suite on the tag.
@@ -241,14 +237,14 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
      the released code did, so you can look for the described bug in it. If the bug or the
      behaviour is not there, state the feature as what it now is and delete the fix; keep the
      ones a reader of the previous release has to act on — a grammar that refuses a
-     `stayfixed.toml` which loaded before, a flag that means something narrower than it sounds.
+     `drybag.toml` which loaded before, a flag that means something narrower than it sounds.
      `scripts/release.py check --tag` cannot judge this: it counts pending fragments and never
      reads them.
 
      **The first release is this rule with nothing to compare against.** There is no previous
      tag, so every `Fixed` entry in 0.1.0 described a bug no user could have met, and read as a
      warning about the release it shipped in. Fold them all into the features they repair
-     (`init`, `attach`, `doctor` and `overlay` each accumulated several), and do the same to a
+     (`attach`, `doctor` and `overlay` each accumulated several), and do the same to a
      `Changed` entry that changed something never released.
 
    - **Lead with what the user sees.** Open each entry with the outcome, then say why or how.
@@ -257,7 +253,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
      so a reader can find the one that is theirs.
 
    - **No internal terms without a user-facing meaning.** A reader of the changelog has not read
-     the code. 0.2.0's entries name "the note reader", "a real `stayfixed.toml`" (a file that is
+     the code. 0.2.0's entries name "the note reader", a "real" configuration file (one that is
      not a symlink), "the session-start line" and "the `preset-rules` and `standing-rules`
      bundle" (the first since removed) without saying what each is to someone using the tool;
      say what the user would see, or say the thing in the words the commands print.
@@ -266,7 +262,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
      it did, call out what a script or a habit can depend on, because a `Fixed` entry hides
      it: an `upgrading` fragment holds it as a list, one bullet per thing a caller relies on,
      each pointing at its full entry, and the notes render it first, as **Upgrading**. Two of
-     0.2.0's sat under `Fixed` and are what that hides: `stayfixed attach --check` exiting `2`
+     0.2.0's sat under `Fixed` and are what that hides: `attach --check` exiting `2`
      instead of `0` for a repository whose `memory.mode` is not `overlay` (`docs/cli.md`
      documents the exit codes as the way a caller tells a finding from a refusal, so a CI
      script that ran it goes red), and `attach` newly writing a marked block into
@@ -276,7 +272,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
 
 5. **Edit the README's install section, then commit.** `README.md`'s Install section names the
    release twice, in **Released as X.Y.Z.** and in the tagged `/plugin marketplace add
-   stayfixed/stayfixed@vX.Y.Z`; set both to the new version. `tests/test_documents.py` fails
+   dry-bag/drybag@vX.Y.Z`; set both to the new version. `tests/test_documents.py` fails
    until they name the version the tree carries, and the release workflow runs the suite on the
    tag. Do it now: the commit below is the release commit, and after step 6 the tag points at
    whatever this commit contains.
@@ -292,8 +288,8 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    git add .claude-plugin/marketplace.json && git commit --amend --no-edit
    ```
 
-   `pin` writes nothing unless the plugin commit's parent is `stayfixed/stayfixed-plugin`'s `main`
-   — both absent for `0.3.0`, and after it whatever plugin commit was pushed last, a spent
+   `pin` writes nothing unless the plugin commit's parent is `dry-bag/drybag-plugin`'s `main`
+   — the commit section 3 seeds it with, for the first release after the rename, and after it whatever plugin commit was pushed last, a spent
    release's included — because that `main` moves only by fast-forward. Its refusal names both
    commits; section 5 says what each means. It lists `main` with `git ls-remote` through your own
    git, which a `url.*.insteadOf` or a `GIT_CONFIG_*` variable can point elsewhere, so its check is
@@ -303,11 +299,11 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    commit, then run this step again from its first command.
 
 6. **Tag, twice, and check the tag.** `claude plugin tag` is the platform's own tool: it reads
-   the version from `plugin.json` and creates `stayfixed--vX.Y.Z` here. `vX.Y.Z` is the tag
+   the version from `plugin.json` and creates `drybag--vX.Y.Z` here. `vX.Y.Z` is the tag
    `release.yml` triggers on, the one `README.md`'s install paragraph hands a reader
    (`/plugin marketplace add` takes any git ref), and the one the marketplace entry's `ref` pins
    in the plugin repository. Both name the same commit. Nothing in the install path reads the
-   `stayfixed--` tag; it is what the platform's tool makes. `check --tag` computes the plugin
+   `drybag--` tag; it is what the platform's tool makes. `check --tag` computes the plugin
    commit of the tagged commit again and refuses a marketplace entry whose `sha` is another, so
    an edit to the plugin tree after `pin` stops here, before the push.
 
@@ -318,7 +314,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
 
    **Push the tags, not `main`.** A pending publisher does not reserve the PyPI name: until a
    distribution exists under it anyone may upload one, and the release commit's README already
-   tells a reader to `uv tool install stayfixed`. That text has to be in the release commit,
+   tells a reader to `uv tool install drybag`. That text has to be in the release commit,
    because the README is the package's long description and the wheel is built from the tag,
    so what waits is `main`: it moves in step 7, once `publish` has put the name in your hands,
    and not before.
@@ -327,7 +323,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    claude plugin tag .
    git tag vX.Y.Z
    uv run python scripts/release.py check --tag vX.Y.Z
-   git push origin vX.Y.Z stayfixed--vX.Y.Z
+   git push origin vX.Y.Z drybag--vX.Y.Z
    ```
 
 7. **Watch `build` and `attest`, publish the plugin, then approve.** Watch those two jobs, not
@@ -356,14 +352,14 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    The script reads `gh --version` before any other `gh` call and refuses a `gh` older than
    2.101.0, the version its attestation flags were measured on (upgrade `gh`), and a `gh`
    pre-release (install a released `gh`). It then asks
-   `gh auth status --hostname github.com --active`, and checks that GitHub's `stayfixed/stayfixed`
+   `gh auth status --hostname github.com --active`, and checks that GitHub's `dry-bag/drybag`
    names the same commit under the tag as this checkout does before it runs any of the tag's code;
    it builds the plugin commit with the tag's own `scripts/plugin_tree.py`, read out of the tag's
    objects, never this checkout's copy. The commit is the same on every run, so the dry run names
    the commit the `--yes` run pushes, and it is the `sha` the release commit pins.
 
    The plugin goes first because the release commit's marketplace names `ref: vX.Y.Z` and its
-   `sha` in `stayfixed/stayfixed-plugin`, a tag and a commit that exist there only once this has
+   `sha` in `dry-bag/drybag-plugin`, a tag and a commit that exist there only once this has
    run, and the approval is what makes the PyPI page and the GitHub Release public. Until then
    nothing public points at the tag, and somebody who finds it early gets an install error, not a
    wrong plugin.
@@ -410,7 +406,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
        `pypi` approval: `attest` has attested a manifest, and it is not the one the tag's code
        made here from the same commit, so what this run would push is not what was attested.
      - **`200` listing an attestation:** GitHub holds one that does not verify on this machine
-       against `stayfixed/stayfixed`'s `release.yml` at this tag and commit, which a wrong
+       against `dry-bag/drybag`'s `release.yml` at this tag and commit, which a wrong
        attestation and a `gh` or network that cannot verify here both look like. Run again; if it
        says the same with a working `gh` and network, once `build` and `attest` are green, reject
        the `pypi` approval.
@@ -432,8 +428,8 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    A run against another `--remote` than the default (a scratch repository, a rehearsal) is
    classified from `git ls-remote` alone, reads nothing back after its push, and its summary, like
    a rejection resting on that listing, says `not confirmed through GitHub's API`. The default is
-   `git@github.com:stayfixed/stayfixed-plugin.git`, and
-   `https://github.com/stayfixed/stayfixed-plugin.git`, spelled exactly, counts as it too.
+   `git@github.com:dry-bag/drybag-plugin.git`, and
+   `https://github.com/dry-bag/drybag-plugin.git`, spelled exactly, counts as it too.
 
    Then approve `pypi`. **Once section 3's `pypi` environment exists with a required reviewer**,
    `publish` and `github-release` both wait for it. An approval is given per environment, not
@@ -451,7 +447,7 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    gh run watch <id> --exit-status
    ```
 
-   When `publish` is green and `https://pypi.org/project/stayfixed/` lists you as owner, move
+   When `publish` is green and `https://pypi.org/project/drybag/` lists you as owner, move
    `main` to the release commit:
 
    ```bash
@@ -467,50 +463,39 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    key GitHub knows:
 
    ```bash
-   uv run python scripts/publish_template.py --owner stayfixed        # read the plan
-   uv run python scripts/publish_template.py --owner stayfixed --yes  # do it
+   uv run python scripts/publish_template.py --owner dry-bag       # read the plan
+   uv run python scripts/publish_template.py --owner dry-bag --yes  # do it
    ```
 
    Without `--yes` nothing outward-facing happens: it renders, asks `gh` what is there, and
    reports what it would create, mark and push. It is this repository's script and no command
-   stayfixed ships, since only a publisher publishes the template; an owner's
-   `stayfixed setup --overlay create:` generates from it.
+   drybag ships, since only a publisher publishes the template; an owner's
+   `drybag setup --overlay create:` generates from it.
 
 9. **Move the alias — from `1.0.0` on; a `0.x` release moves none.** The alias is the major:
-   a project that writes `@v1` takes every release the alias moves to. Under semantic
-   versioning a `0.x` minor may break what the one before it did, so a `v0` alias would hand
-   every project on it breaking changes unannounced, and `stayfixed doctor` knows `v1` and no
-   other alias. So a `0.x` project pins the commit `stayfixed init` writes, and this step starts
-   at the first `1.x` release:
+   a reference to `@v1` takes every release the alias moves to. Under semantic versioning a
+   `0.x` minor may break what the one before it did, so a `v0` alias would hand everything that
+   references it breaking changes unannounced, and this step starts at the first `1.x` release:
 
    ```bash
    git tag -f v1 vX.Y.Z && git push -f origin v1
    git ls-remote origin refs/tags/v1 refs/tags/vX.Y.Z   # both lines name one commit
    ```
 
-   The alias resolves as any tag does, which step 10 proves for the release tag itself; what
-   is left to check is that it names the release, and the listing above is that check.
-
-10. **Run the cross-repository smoke at the release tag**, at every release. It calls
-    `check.yml` at `@dev` and at the `vX.Y.Z` step 3 wrote into `smoke-release.yml`, which
-    resolves only now that the tag is pushed.
-
-    ```bash
-    gh workflow run smoke-release.yml
-    gh run watch <id> --exit-status
-    ```
+   The alias resolves as any tag does; what is left to check is that it names the release, and
+   the listing above is that check.
 
 ## 3. One-time setup
 
 **Trusted Publishing.** The workflow authenticates to PyPI with a short-lived OIDC token rather
 than a stored secret, which requires a one-time registration on PyPI:
 
-**PyPI → Your projects → stayfixed → Publishing → Add a new publisher (GitHub)**
+**PyPI → Your projects → drybag → Publishing → Add a new publisher (GitHub)**
 
 | Field | Value |
 |---|---|
-| Owner | `stayfixed` |
-| Repository | `stayfixed` |
+| Owner | `dry-bag` |
+| Repository | `drybag` |
 | Workflow | `release.yml` |
 | Environment | `pypi` |
 
@@ -538,7 +523,7 @@ reads back with zero rules fails whatever the variable says. Set it only after t
 and its reviewer exist.
 
 **Tag protection.** Two repository rulesets over `refs/tags/v*.*.*` and
-`refs/tags/stayfixed--v*`, both leaving the `v1` alias, once a `1.x` release creates it — it
+`refs/tags/drybag--v*`, both leaving the `v1` alias, once a `1.x` release creates it — it
 matches neither pattern — free to move:
 
 - `release tags`, with `deletion` and `update` rules and no bypass, so a semver tag is
@@ -550,8 +535,8 @@ matches neither pattern — free to move:
   where `RepositoryRole` `5` is the admin role.
 
 GitHub's REST reference does not name the built-in roles' ids, and step 1's read-back only echoes
-the id it was given; the settings page showed `5` as **Repository admin** on both repositories on
-2026-10-12. So after creating such a ruleset anew, here or in the plugin repository below, open it
+the id it was given; the settings page showed `5` as **Repository admin** on both repositories, before
+the rename, on 2026-10-12. So after creating such a ruleset anew, here or in the plugin repository below, open it
 under **Settings → Rules → Rulesets** and confirm that its bypass list reads **Repository admin**;
 any other role there is the one that can create a release tag.
 
@@ -563,21 +548,21 @@ existing one would leave two rulesets and fix neither:
 ```bash
 cat > "${TMPDIR:-/tmp}/release-tags.json" <<'JSON'
 {"name": "release tags", "target": "tag", "enforcement": "active",
- "conditions": {"ref_name": {"include": ["refs/tags/v*.*.*", "refs/tags/stayfixed--v*"], "exclude": []}},
+ "conditions": {"ref_name": {"include": ["refs/tags/v*.*.*", "refs/tags/drybag--v*"], "exclude": []}},
  "rules": [{"type": "deletion"}, {"type": "update"}]}
 JSON
 cat > "${TMPDIR:-/tmp}/release-tag-creation.json" <<'JSON'
 {"name": "release tag creation", "target": "tag", "enforcement": "active",
- "conditions": {"ref_name": {"include": ["refs/tags/v*.*.*", "refs/tags/stayfixed--v*"], "exclude": []}},
+ "conditions": {"ref_name": {"include": ["refs/tags/v*.*.*", "refs/tags/drybag--v*"], "exclude": []}},
  "rules": [{"type": "creation"}],
  "bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]}
 JSON
 release_ruleset() {  # $1 a ruleset's name, $2 its body: replace the one of that name, or create it
-  id=$(gh api repos/stayfixed/stayfixed/rulesets --jq ".[] | select(.name == \"$1\") | .id")
+  id=$(gh api repos/dry-bag/drybag/rulesets --jq ".[] | select(.name == \"$1\") | .id")
   if [ -n "$id" ]; then
-    gh api -X PUT "repos/stayfixed/stayfixed/rulesets/$id" --input "$2"
+    gh api -X PUT "repos/dry-bag/drybag/rulesets/$id" --input "$2"
   else
-    gh api -X POST repos/stayfixed/stayfixed/rulesets --input "$2"
+    gh api -X POST repos/dry-bag/drybag/rulesets --input "$2"
   fi
 }
 release_ruleset "release tags" "${TMPDIR:-/tmp}/release-tags.json"
@@ -587,8 +572,13 @@ release_ruleset "release tag creation" "${TMPDIR:-/tmp}/release-tag-creation.jso
 Then read the two back with section 2's step 1, one line each.
 
 **The plugin repository.** Before the first `scripts/publish_plugin.py --yes`, create
-`stayfixed/stayfixed-plugin`, public and empty — no README, licence or `.gitignore`, because its
-first commit is the one `publish_plugin.py` builds — and protect its tags and its `main`. A
+`dry-bag/drybag-plugin`, public and empty — no README, licence or `.gitignore` — then seed it and
+protect its tags and its `main`. The seed is the commit the first release's plugin commit follows, the
+`sha` `.claude-plugin/marketplace.json` pins, which is the last plugin commit pushed before the rename:
+from a clone of the plugin repository the earlier releases were published from, `git push
+git@github.com:dry-bag/drybag-plugin.git f6d299144481ccc0824c890913985abc16e0bc6f:refs/heads/main`.
+Without the seed `pin` refuses, since the new plugin commit has that parent and the repository has no
+`main`. A
 ruleset applies every rule it carries to every ref it matches and has one target, tags or
 branches, and its bypass applies to every rule it carries, so four rulesets: `release tags`, with
 `deletion` and `update` rules over `refs/tags/v*.*.*` and no bypass, so a published tag never
@@ -603,8 +593,8 @@ of them refuses your first push, which creates `main` and a tag the admin role m
 same create-or-replace as above, with the repository name changed:
 
 ```bash
-gh repo create stayfixed/stayfixed-plugin --public \
-  --description "The stayfixed plugin, generated from stayfixed/stayfixed at each release"
+gh repo create dry-bag/drybag-plugin --public \
+  --description "The drybag plugin, generated from dry-bag/drybag at each release"
 cat > "${TMPDIR:-/tmp}/plugin-release-tags.json" <<'JSON'
 {"name": "release tags", "target": "tag", "enforcement": "active",
  "conditions": {"ref_name": {"include": ["refs/tags/v*.*.*"], "exclude": []}},
@@ -627,11 +617,11 @@ cat > "${TMPDIR:-/tmp}/plugin-main.json" <<'JSON'
  "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}]}
 JSON
 ruleset() {  # $1 the ruleset's name, $2 its body: replace the one of that name, or create it
-  id=$(gh api repos/stayfixed/stayfixed-plugin/rulesets --jq ".[] | select(.name == \"$1\") | .id")
+  id=$(gh api repos/dry-bag/drybag-plugin/rulesets --jq ".[] | select(.name == \"$1\") | .id")
   if [ -n "$id" ]; then
-    gh api -X PUT "repos/stayfixed/stayfixed-plugin/rulesets/$id" --input "$2"
+    gh api -X PUT "repos/dry-bag/drybag-plugin/rulesets/$id" --input "$2"
   else
-    gh api -X POST repos/stayfixed/stayfixed-plugin/rulesets --input "$2"
+    gh api -X POST repos/dry-bag/drybag-plugin/rulesets --input "$2"
   fi
 }
 ruleset "release tags" "${TMPDIR:-/tmp}/plugin-release-tags.json"
@@ -648,7 +638,7 @@ answer is a repository to fix before anything is pushed to it.
 files send reporters to the advisory form, which exists only while the repository setting is on:
 
 ```bash
-gh api -X PUT repos/stayfixed/stayfixed/private-vulnerability-reporting
+gh api -X PUT repos/dry-bag/drybag/private-vulnerability-reporting
 ```
 
 **A conduct contact address.** `CODE_OF_CONDUCT.md` still routes a report through the security
@@ -662,7 +652,7 @@ second one runs are the same tool, and the two pins must move together. A global
 not a manifest, so Dependabot does not see either of them: bump both by hand, in one commit,
 and let the smoke run say whether an install still works.
 
-**The overlay template's own action pins.** `src/stayfixed/templates/overlay/.github/workflows/scan.yml`
+**The overlay template's own action pins.** `src/drybag/templates/overlay/.github/workflows/scan.yml`
 pins two actions by full-length sha, and this repository's `.github/dependabot.yml` scans
 `.github/workflows/` at the root and nothing else — a nested tree under `src/` is not a
 workflow directory the platform reads, so those two pins rot here until somebody looks.
@@ -675,22 +665,10 @@ A rendered overlay ships its own `dependabot.yml` and keeps itself current from 
 what this line is about is the state every *new* overlay starts from. Check them here, at
 the release that publishes the template.
 
-**The project workflow's pin, and what the first tag unlocks.** There is a second sha-pinned
-template now: `src/stayfixed/templates/project/stayfixed.yml`, the caller `stayfixed init` renders
-into an adopting project's `.github/workflows/`. Its `uses:` line is not pinned in the tree —
-the sha is filled in at render time, and it is the commit of the *released* stayfixed that did
-the rendering, read off this repository's own `v*` tags. So nothing here rots, and nothing here
-needs checking at a release; what a release changes is whether the workflow can be written at
-all. Before the first tag `init` finds no released commit to name, reports the workflow skipped
-with that reason, and writes nothing into `.github/` — which means every project initialised
-before the first release carries no CI caller and no `[ci] ref`, and gets both when `stayfixed
-upgrade` ships. The first tag is the event that changes that, and it changes it for new
-projects only.
-
 ## 5. If something goes wrong
 
 - **Anything goes wrong after the tags are pushed.** The ruleset refuses to delete or move a
-  pushed `vX.Y.Z` or `stayfixed--vX.Y.Z`, for everyone, so that version is spent whether or not
+  pushed `vX.Y.Z` or `drybag--vX.Y.Z`, for everyone, so that version is spent whether or not
   anything was published: a wrong tag, a red `build`, a rejected approval or a failed upload.
   A red `attest` that failed for a transient Sigstore or attestation-service error is not one:
   re-run that job (`gh run rerun <id> --failed`), which computes the same plugin commit of the
@@ -702,11 +680,12 @@ projects only.
 - **Which commit a release is cut on.** Always `origin/main`, as step 1 leaves it. A release
   commit's first parent decides its plugin commit's parent (section 1), and the plugin
   repository's `main` must be that parent, so:
-  - **`0.3.0`**, the first release the plugin repository holds, is cut on `main` once `dev` is
-    merged into it. `main` before that merge still holds the marketplace entry `"source": "./"`,
-    which `scripts/plugin_tree.py` refuses to read a pin from, since the entry's `source` is not
-    an object; the merge brings `dev`'s `url` entry, which pins no `sha`, so the first plugin
-    commit has no parent, as the plugin repository's absent `main` requires.
+  - **`0.3.0`**, the first release published from a plugin repository, before the rename, was cut
+    on `main` once `dev` was merged into it. `main` before that merge still held the marketplace
+    entry `"source": "./"`, which `scripts/plugin_tree.py` refuses to read a pin from, since the
+    entry's `source` is not an object; the merge brought `dev`'s `url` entry, which pinned no
+    `sha`, so the first plugin commit had no parent, as the plugin repository's absent `main`
+    required.
   - **Any later release** is cut on `main` once `dev` is merged into it, since `dev` carries the
     `sha` of the plugin commit pushed last ("How a release returns to `dev`", below).
   - **After a stopped release**, on `origin/main` too, never on the spent release commit, which
@@ -721,7 +700,7 @@ projects only.
 
   `pin` says which, before any tag is pushed: its refusal names the parent the plugin commit has
   and the commit the plugin repository's `main` holds, and `git ls-remote
-  https://github.com/stayfixed/stayfixed-plugin.git refs/tags/vSPENT` lists the spent version's
+  https://github.com/dry-bag/drybag-plugin.git refs/tags/vSPENT` lists the spent version's
   tag there when its plugin was pushed. A patch release of an older line, `0.3.1` after `0.4.0`,
   is not supported: its plugin commit's parent is not the plugin repository's `main`, so `pin`
   refuses it, and so would the publisher.
@@ -740,7 +719,7 @@ projects only.
 
   ```bash
   git reset --soft HEAD^   # the local release commit, undone; its edits stay staged
-  git ls-remote https://github.com/stayfixed/stayfixed-plugin.git refs/heads/main
+  git ls-remote https://github.com/dry-bag/drybag-plugin.git refs/heads/main
   # set the entry's "sha" in .claude-plugin/marketplace.json to the commit that printed, then:
   git commit -m "chore: restore the plugin pin" -- .claude-plugin/marketplace.json
   ```
@@ -758,7 +737,7 @@ projects only.
   repository's: its ruleset refuses to move or delete it, and the next release is X.Y.(Z+1). A
   push that went through for a release that then stopped — a rejected approval, a failed upload —
   stays, beside the spent tag of this repository that names it: `main` here still installs the
-  previous release, but the spent `stayfixed/stayfixed@vX.Y.Z` still installs that plugin, because
+  previous release, but the spent `dry-bag/drybag@vX.Y.Z` still installs that plugin, because
   its marketplace's `ref` and `sha` resolve. The next release is cut on `origin/main` all the
   same, and its restore commit pins that plugin commit, so the next one follows it ("Which commit
   a release is cut on", above).
@@ -772,8 +751,8 @@ projects only.
 
 ## 6. The release scripts
 
-`scripts/release.py` is this repository's own tooling, not a command stayfixed ships: it only
-ever checked the stayfixed repository itself. It runs through the same frame as the CLI, so
+`scripts/release.py` is this repository's own tooling, not a command drybag ships: it only
+ever checked the drybag repository itself. It runs through the same frame as the CLI, so
 `--json` is accepted anywhere on the line before a bare `--` and prints one object, and it exits `0` on success,
 `1` on findings and `2` on a refusal.
 
@@ -787,7 +766,7 @@ uv run python scripts/release.py pin [--remote URL]               # the plugin c
 disagrees. Its `--json` object carries `summary`, `versions` (every source and what it says) and
 `problems` (empty on a clean run), and it carries all three whether or not there is drift — the
 drift is in `problems`, not in the shape. A source it cannot parse at all is still a failure and
-prints `error` instead. `--tag` accepts both tag shapes, `vX.Y.Z` and `stayfixed--vX.Y.Z`, because
+prints `error` instead. `--tag` accepts both tag shapes, `vX.Y.Z` and `drybag--vX.Y.Z`, because
 either may be the ref a run was created from. Under `--tag`, once it finds the marketplace entry
 well-formed, it also runs `scripts/plugin_tree.py commit` on `HEAD` (an entry it finds malformed is
 reported once, as the entry's finding, and the rest is asked once it is fixed), and refuses a plugin
@@ -813,12 +792,12 @@ and prints the rendered section.
 **`pin`** is step 5's command: it computes the plugin commit of `HEAD` with
 `scripts/plugin_tree.py commit` and writes it into the marketplace entry's `sha`, once it has
 listed the plugin repository's `main` (`--remote`, by default
-`https://github.com/stayfixed/stayfixed-plugin.git`, only ever listed) and found it the commit's
+`https://github.com/dry-bag/drybag-plugin.git`, only ever listed) and found it the commit's
 parent. Everything it refuses, it refuses before writing: a tree that script cannot make the
 commit of, a marketplace on disk that cannot take the `sha`, a remote that cannot be listed, and a
 `main` that is not the parent (section 5). Two runs write the same file.
 
-**`scripts/plugin_tree.py`** names the plugin's ten paths once, in `PLUGIN_PATHS`, reads them
+**`scripts/plugin_tree.py`** names the plugin's nine paths once, in `PLUGIN_PATHS`, reads them
 from a commit and never from the disk, and writes the manifest a release attests and the plugin
 commit a release pins, `--no-parent` only ever for a scratch repository; its module docstring
 and `--help` are its reference.

@@ -11,14 +11,15 @@ from typing import NoReturn
 
 import pytest
 
-from stayfixed import fsops
-from stayfixed.fsops import (
+from drybag import fsops
+from drybag.fsops import (
     NEW_FILE_MODE,
     NotASymlink,
     NotRegularFile,
     UnsafePath,
     _mode_of,
     checked_components,
+    create_within,
     mkdirs_within,
     names_control_directory,
     open_within,
@@ -265,12 +266,12 @@ def test_gits_control_directory_is_reserved_at_every_depth_and_in_any_case() -> 
 
 def test_the_reserved_name_is_the_component_and_not_a_leading_dot() -> None:
     # The rule this branch cannot have: `.github/workflows/` is an artifact it ships and
-    # `.stayfixed/` holds the manifest, so refusing a leading dot would refuse stayfixed's own
+    # `.drybag/` holds the manifest, so refusing a leading dot would refuse drybag's own
     # footprint. And `.gitignore`, `.gitattributes` and `.gitkeep` are ordinary files that
     # merely start the same way, which an equality test on the whole component leaves alone.
     for target in (
-        ".github/workflows/stayfixed.yml",
-        ".stayfixed/manifest.json",
+        ".github/workflows/drybag.yml",
+        ".drybag/manifest.json",
         ".gitignore",
         ".gitattributes",
         "docs/.gitkeep",
@@ -283,7 +284,7 @@ def test_the_reserved_name_is_the_component_and_not_a_leading_dot() -> None:
 def test_an_existing_git_hook_is_never_rewritten_in_place(tmp_path: Path) -> None:
     # The impact, end to end and at the primitive. The developer's own `pre-commit` is a real
     # executable file, and `_mode_of` carries an existing file's mode onto the replacement — so
-    # before this rule, a write through here left a 0755 file with stayfixed's bytes appended to
+    # before this rule, a write through here left a 0755 file with drybag's bytes appended to
     # somebody else's hook. Mode and body are both asserted, and both after the refusal.
     hooks = tmp_path / ".git" / "hooks"
     hooks.mkdir(parents=True)
@@ -292,14 +293,14 @@ def test_an_existing_git_hook_is_never_rewritten_in_place(tmp_path: Path) -> Non
     hook.chmod(0o755)
 
     with pytest.raises(UnsafePath, match="control directory"):
-        write_within(tmp_path, ".git/hooks/pre-commit", "#!/bin/sh\n<!-- stayfixed -->\n")
+        write_within(tmp_path, ".git/hooks/pre-commit", "#!/bin/sh\n<!-- drybag -->\n")
     assert hook.read_text(encoding="utf-8") == "#!/bin/sh\necho real hook\n"
     assert stat.S_IMODE(hook.stat().st_mode) == 0o755
 
     # And nothing new is created inside it either, which is the other half of what a clone got
     # to choose: an arbitrary file at an arbitrary name in git's own directory.
     with pytest.raises(UnsafePath, match="control directory"):
-        write_within(tmp_path, ".git/stayfixed-roadmap.md", "# roadmap\n")
+        write_within(tmp_path, ".git/drybag-roadmap.md", "# roadmap\n")
     assert sorted(p.name for p in (tmp_path / ".git").iterdir()) == ["hooks"]
 
 
@@ -490,7 +491,7 @@ def test_a_name_is_utf_8_by_its_bytes_on_disk_not_by_its_str() -> None:
 
 def test_an_error_is_said_in_its_words_never_with_the_path_it_was_opened_by() -> None:
     # `str(OSError)` carries the file the call opened, by the path it was given — the absolute
-    # one under this machine's layout — so an error is said by its `strerror` alone. stayfixed's
+    # one under this machine's layout — so an error is said by its `strerror` alone. drybag's
     # own path refusal, `UnsafePath`, carries no errno and names the path relative to the root,
     # so it is said whole rather than as its class's name. Mutation: drop the fall-back to
     # `str(error)` in `said` — the second assertion reddens.
@@ -520,41 +521,6 @@ def test_no_module_but_fsops_says_an_error_by_its_strerror() -> None:
     )
     # The walk finds `said`'s own read, so a walk that stopped finding any cannot pass.
     assert len(found) == 1 and found[0].startswith("fsops.py:"), found
-
-
-def test_a_path_names_a_regular_file_or_no_file_and_any_other_fault_is_the_callers(
-    tmp_path: Path,
-) -> None:
-    # The probe `attach`'s ledger reader asks: a path that names no file is `False`, and a path it
-    # cannot ask about is raised, because the reader calls it an unreadable ledger.
-    regular = tmp_path / "regular"
-    regular.write_text("{}", encoding="utf-8")
-    assert fsops.names_regular_file(regular) is True
-    # Followed through a link, as `Path.is_file()` follows it.
-    (tmp_path / "to-regular").symlink_to(regular)
-    assert fsops.names_regular_file(tmp_path / "to-regular") is True
-    # Names no file: nothing there, a dangling link, a loop, a component that is not a directory,
-    # and something that is not a regular file. Mutations (oracle): `mutations/`'s "the
-    # regular-file probe is blind to a path that names no file" -> the first four raise; "the
-    # regular-file probe reads a path that is no regular file" -> the directory answers `True`.
-    (tmp_path / "dangling").symlink_to(tmp_path / "nothing-here")
-    (tmp_path / "loop").symlink_to(tmp_path / "loop")
-    (tmp_path / "directory").mkdir()
-    for path in (
-        tmp_path / "absent",
-        tmp_path / "dangling",
-        tmp_path / "loop",
-        regular / "below-a-file",
-        tmp_path / "directory",
-    ):
-        assert fsops.names_regular_file(path) is False, path
-    # A link to a name longer than a file name may be is a path a clone can commit, and it is not
-    # one that names no file: it is the caller's to classify. Mutation (oracle): `mutations/`'s
-    # "the regular-file probe reads a path it cannot ask about as no file" -> `False`.
-    (tmp_path / "past-a-name").symlink_to(tmp_path / ("x" * 300))
-    with pytest.raises(OSError) as raised:
-        fsops.names_regular_file(tmp_path / "past-a-name")
-    assert raised.value.errno not in fsops.NAMES_NO_FILE
 
 
 # What `is_file`, `is_dir`, `exists` and `is_symlink` answer for each shape, in that order, or
@@ -669,15 +635,6 @@ def test_vacant_raises_for_a_directory_it_cannot_list(
 OTHER_PREDICATES: dict[tuple[str, str, str], tuple[int, str]] = {
     ("areas.py", "_has_submodule", "is_file"): (2, "the package's own directory"),
     ("overlay/template.py", "templates", "is_dir"): (1, "the wheel's own template tree"),
-    ("project/templates.py", "read", "is_dir"): (1, "the wheel's own template tree"),
-    ("profiles/__init__.py", "stack_directories", "is_dir"): (1, "a resource of the package's own"),
-    ("profiles/__init__.py", "stack_directories", "is_file"): (
-        1,
-        "a resource of the package's own",
-    ),
-    ("profiles/__init__.py", "load_profile", "is_file"): (1, "a resource of the package's own"),
-    # `os.DirEntry`'s, which answers alike on every interpreter.
-    ("profiles/python/hygiene.py", "_bytecode", "is_dir"): (1, "an os.DirEntry"),
 }
 
 
@@ -766,7 +723,8 @@ def test_no_module_but_fsops_catches_the_runtime_error_a_symlink_loop_raised() -
     # answer was one hand-written `except (OSError, RuntimeError)` per site, while a site without
     # one ended in `internal error`. `fsops.resolved` is the one answer, so the walk refuses every
     # other `except` that names `RuntimeError` but the ones `OTHER_RUNTIME_ERRORS` gives a reason
-    # for. Mutation (`mutations/`'s "refs catches the RuntimeError of a loop by hand again").
+    # for. Mutation (`mutations/`'s "the prose path check catches the RuntimeError of a loop by
+    # hand again").
     source = Path(fsops.__file__).parent
     found: dict[tuple[str, str], int] = {}
     for path in sorted(source.rglob("*.py")):
@@ -794,7 +752,7 @@ def test_a_regular_file_is_read_through_a_link_and_anything_else_is_refused(
     tmp_path: Path,
 ) -> None:
     # The readers of `*.md` a repository commits followed a committed link to whatever it named:
-    # `/dev/zero` grew `bugs check` to 9 GB in 2 s, and `/dev/stdin` or a FIFO waited forever.
+    # `/dev/zero` grew one to 9 GB in 2 s, and `/dev/stdin` or a FIFO waited forever.
     # A link to a regular file is still read, because `attach` links each memory group and
     # `MEMORY.md` into the overlay; a link to `/dev/null` is refused, and it is the case that tells
     # the guard apart without being able to hang: unguarded, it reads as empty. Mutation
@@ -845,7 +803,7 @@ def test_a_fifo_is_refused_without_waiting_for_a_writer(tmp_path: Path) -> None:
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed import fsops\n"
+        "from drybag import fsops\n"
         "try:\n"
         "    fsops.open_regular(Path(sys.argv[1]))\n"
         "except fsops.NotRegularFile:\n"
@@ -874,7 +832,7 @@ def test_a_fifo_swapped_in_after_the_check_is_refused_without_waiting(tmp_path: 
     probe = (
         "import os, sys\n"
         "from pathlib import Path\n"
-        "from stayfixed import fsops\n"
+        "from drybag import fsops\n"
         "real = os.open\n"
         "os.open = lambda path, flags, *rest: real(sys.argv[2], flags, *rest)\n"
         "try:\n"
@@ -944,7 +902,7 @@ def test_a_bounded_read_under_a_root_follows_no_link_and_reads_only_a_regular_fi
     # Under a root the file is reached as a write reaches it: a link at the last component is
     # refused, and so is one above it, where without a root a link to a regular file is read. A
     # directory is refused as not a regular file. Mutation (declared): `mutations/`'s "a symlinked
-    # .pyc is followed" -> the linked file is read under the root.
+    # note is followed" -> the linked file is read under the root.
     (tmp_path / "real").mkdir()
     (tmp_path / "real" / "file.md").write_bytes(b"x")
     (tmp_path / "real" / "link.md").symlink_to(tmp_path / "real" / "file.md")
@@ -964,13 +922,13 @@ def test_a_fifo_under_a_root_is_refused_without_waiting_for_a_writer(tmp_path: P
     # The open under a root never waits, and what it opened is asked whether it is a regular file:
     # a FIFO opened without a writer reads as empty, so it must be refused by its descriptor. In a
     # child under a timeout, so a regression fails this case rather than hanging. Mutations
-    # (declared): `mutations/`'s "a .pyc that is a named pipe is opened waiting for a writer" -> the
-    # child times out; "a .pyc that is not a regular file is read" -> the FIFO reads as empty.
+    # (declared): `mutations/`'s "a note that is a named pipe is opened waiting for a writer" -> the
+    # child times out; "a note that is not a regular file is read" -> the FIFO reads as empty.
     os.mkfifo(tmp_path / "pipe.md")
     probe = (
         "import sys\n"
         "from pathlib import Path\n"
-        "from stayfixed import fsops\n"
+        "from drybag import fsops\n"
         "try:\n"
         "    print(fsops.read_bounded_within(Path(sys.argv[1]), 'pipe.md', 4))\n"
         "except fsops.NotRegularFile:\n"
@@ -1067,7 +1025,7 @@ def test_an_append_to_a_fifo_with_no_reader_is_refused_and_never_waits(tmp_path:
     probe = (
         "import errno, sys\n"
         "from pathlib import Path\n"
-        "from stayfixed import fsops\n"
+        "from drybag import fsops\n"
         "try:\n"
         "    with fsops.open_within(Path(sys.argv[1]), 'log.jsonl') as (dir_fd, name):\n"
         "        fsops.append_at(dir_fd, name, b'line\\n')\n"
@@ -1082,3 +1040,33 @@ def test_an_append_to_a_fifo_with_no_reader_is_refused_and_never_waits(tmp_path:
         check=False,
     )
     assert done.stdout == "ENXIO\n", (done.stdout, done.stderr)
+
+
+def test_create_within_refuses_a_name_that_is_there_and_never_follows_a_link(
+    tmp_path: Path,
+) -> None:
+    # Mutation (oracle): `mutations/`'s "owner-held files overwrite a present name" -> an existing
+    # file is written over and this reddens.
+    assert create_within(tmp_path, "new.txt", b"owned\n", mode=0o640)
+    assert (tmp_path / "new.txt").read_bytes() == b"owned\n"
+    assert stat.S_IMODE((tmp_path / "new.txt").stat().st_mode) == 0o640
+    # A file, a directory and a link, a dangling one included, are each left as they were.
+    (tmp_path / "file.txt").write_bytes(b"theirs\n")
+    (tmp_path / "directory").mkdir()
+    outside = tmp_path / "outside.txt"
+    (tmp_path / "dangling").symlink_to(outside)
+    os.mkfifo(tmp_path / "pipe")
+    for name in ("file.txt", "directory", "dangling", "pipe"):
+        assert create_within(tmp_path, name, b"owned\n", mode=0o600) is False
+    assert (tmp_path / "file.txt").read_bytes() == b"theirs\n"
+    assert (tmp_path / "directory").is_dir()
+    assert os.readlink(tmp_path / "dangling") == str(outside)
+    assert not outside.exists()
+    # A link on the way refuses the walk, and the parent of a name is not created.
+    (tmp_path / "away").symlink_to(tmp_path / "directory")
+    with pytest.raises(UnsafePath):
+        create_within(tmp_path, "away/x.txt", b"owned\n", mode=0o600)
+    assert not (tmp_path / "directory" / "x.txt").exists()
+    with pytest.raises(FileNotFoundError):
+        create_within(tmp_path, "missing/x.txt", b"owned\n", mode=0o600)
+    assert not (tmp_path / "missing").exists()

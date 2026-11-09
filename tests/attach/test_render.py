@@ -16,7 +16,18 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.attach.render import render
+from drybag.attach.binding import Binding
+from drybag.attach.permissions import codex_rules
+from drybag.attach.render import RenderRecord, read_parts, write
+from drybag.attach.rules import read as rules_read
+from drybag.attach.tags import collisions
+from drybag.config.plates import plates
+from tests.tagged import with_tags
+
+
+def render(overlay: Path, project: str, id: str) -> RenderRecord:
+    return write(id, read_parts(plates(overlay, project)[0]))
+
 
 ID = "0123456789abcdef0123456789abcdef"
 COMMON = {"type": "command", "command": "common.sh"}
@@ -27,7 +38,7 @@ GUARD = {"type": "command", "command": "guard.sh"}
 def _delivery(id: str = ID) -> Path:
     # Spelled out rather than asked of the module: the directory is the contract, and the test
     # suite gives every test a `HOME` of its own (`tests/conftest.py`).
-    return Path(os.environ["HOME"]) / ".local" / "share" / "stayfixed" / "delivery" / id
+    return Path(os.environ["HOME"]) / ".local" / "share" / "drybag" / "delivery" / id
 
 
 def _overlay(tmp_path: Path) -> Path:
@@ -88,7 +99,7 @@ def test_render_writes_the_marketplace_and_the_plugin_under_names_carrying_the_w
     delivery = _delivery()
     marketplace = _json(delivery / ".claude-plugin" / "marketplace.json")
     assert isinstance(marketplace, dict)
-    assert marketplace["name"] == f"stayfixed-delivery-{ID}"
+    assert marketplace["name"] == f"drybag-delivery-{ID}"
     assert [(p["name"], p["source"]) for p in marketplace["plugins"]] == [
         (f"overlay-{ID}", "./plugin")
     ]
@@ -174,14 +185,14 @@ def test_run_from_the_plugin_the_entry_runs_the_plugins_own_hook_wrapper(tmp_pat
 def test_run_from_an_installed_package_the_entry_runs_its_interpreter_isolated(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # No plugin root beside the module: the entry runs the interpreter this stayfixed runs under,
-    # by its absolute path, with `-I -m stayfixed`. A path a shell would read into is quoted so
+    # No plugin root beside the module: the entry runs the interpreter this drybag runs under,
+    # by its absolute path, with `-I -m drybag`. A path a shell would read into is quoted so
     # that `sh` hands it back as it is.
-    import stayfixed
+    import drybag
 
-    module = tmp_path / "site-packages" / "stayfixed" / "__init__.py"
+    module = tmp_path / "site-packages" / "drybag" / "__init__.py"
     interpreter = str(tmp_path / 'py "$HOME" `x` \\ 3' / "python3")
-    monkeypatch.setattr(stayfixed, "__file__", str(module))
+    monkeypatch.setattr(drybag, "__file__", str(module))
     monkeypatch.setattr(sys, "executable", interpreter)
     overlay = _overlay(tmp_path)
     _scoped_rule(overlay)
@@ -189,9 +200,9 @@ def test_run_from_an_installed_package_the_entry_runs_its_interpreter_isolated(
     entry = _scoped_entry()
     assert isinstance(entry, list)
     command = entry[0]["hooks"][0]["command"]
-    assert command.endswith(" -I -m stayfixed hook PostToolUse")
+    assert command.endswith(" -I -m drybag hook PostToolUse")
     assert entry == _entry(command)
-    quoted = command.removesuffix(" -I -m stayfixed hook PostToolUse")
+    quoted = command.removesuffix(" -I -m drybag hook PostToolUse")
     said = subprocess.run(
         ["/bin/sh", "-c", f"printf '%s' {quoted}"], capture_output=True, text=True, check=True
     )
@@ -211,9 +222,9 @@ def test_an_overlay_with_no_path_scoped_rule_renders_no_post_tool_use_entry(
 
 def test_a_fault_under_the_rendered_entry_is_exit_0(tmp_path: Path) -> None:
     # The entry's command, run as the harness runs it, under a `python3` that passes the wrapper's
-    # version probe and then fails as stayfixed: the wrapper answers exit 0 with one line, where a
-    # launcher run bare would hand its non-zero exit, and on `PostToolUse` an exit 2's stderr, to
-    # the session.
+    # version probe (printing its own path, as the probe asks) and then fails as drybag: the
+    # wrapper answers exit 0 with one line, where a launcher run bare would hand its non-zero exit,
+    # and on `PostToolUse` an exit 2's stderr, to the session.
     overlay = _overlay(tmp_path)
     _scoped_rule(overlay)
     render(overlay, "p", ID)
@@ -223,7 +234,9 @@ def test_a_fault_under_the_rendered_entry_is_exit_0(tmp_path: Path) -> None:
     bin = tmp_path / "bin"
     bin.mkdir()
     python = bin / "python3"
-    python.write_text('#!/bin/sh\ncase "$2" in -c) exit 0 ;; esac\nexit 3\n', encoding="utf-8")
+    python.write_text(
+        '#!/bin/sh\ncase "$2" in -c) echo "$0"; exit 0 ;; esac\nexit 3\n', encoding="utf-8"
+    )
     python.chmod(0o755)
     done = subprocess.run(
         ["/bin/sh", "-c", command],
@@ -234,4 +247,66 @@ def test_a_fault_under_the_rendered_entry_is_exit_0(tmp_path: Path) -> None:
         env={"PATH": str(bin), "CLAUDE_PROJECT_DIR": str(tmp_path)},
     )
     assert (done.returncode, done.stdout) == (0, "")
-    assert done.stderr == "stayfixed: stayfixed exited 3; continuing open\n"
+    assert done.stderr == "drybag: drybag exited 3; continuing open\n"
+
+
+def test_a_tag_hook_group_is_rendered_between_common_and_the_project(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    with_tags(overlay, "p", ["a"], "claude")
+    tagged = {"type": "command", "command": "tag.sh"}
+    (overlay / "groups" / "a" / "claude" / "hooks.json").write_text(
+        json.dumps({"hooks": {"SessionStart": [{"hooks": [tagged]}]}}), encoding="utf-8"
+    )
+    render(overlay, "p", ID)
+    hooks = _json(_delivery() / "plugin" / "hooks" / "hooks.json")
+    assert isinstance(hooks, dict)
+    assert hooks["hooks"]["SessionStart"] == [
+        {"hooks": [COMMON]},
+        {"hooks": [tagged]},
+        {"hooks": [PROJECT]},
+    ]
+
+
+def test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole(tmp_path: Path) -> None:
+    # A skill is the item its directory names: b's `review` replaces a's and common's whole, so no
+    # file of theirs reaches the render, which is what the collision sentence says. Mutation
+    # (oracle): `mutations/`'s "a skill is merged file by file across plates" -> a's `helper.sh`
+    # and common's `check.sh` arrive beside b's `SKILL.md`.
+    overlay = _overlay(tmp_path)
+    with_tags(overlay, "p", ["a", "b"], "claude")
+    for tag in ("a", "b"):
+        skills = overlay / "groups" / tag / "claude" / "skills"
+        (skills / "review").mkdir(parents=True)
+        (skills / "review" / "SKILL.md").write_text(f"review from {tag}\n", encoding="utf-8")
+        (skills / f"only-{tag}.md").write_text(f"{tag}\n", encoding="utf-8")
+    (overlay / "groups" / "a" / "claude" / "skills" / "review" / "helper.sh").write_text(
+        "from a only\n", encoding="utf-8"
+    )
+    render(overlay, "p", ID)
+    skills = _delivery() / "plugin" / "skills"
+    assert sorted(path.name for path in (skills / "review").iterdir()) == ["SKILL.md"]
+    assert (skills / "review" / "SKILL.md").read_text() == "review from b\n"
+    assert (skills / "only-a.md").read_text() == "a\n" and (skills / "only-b.md").is_file()
+    assert collisions(plates(overlay, "p")[0], ()) == (
+        "the skill review is held by the tags a, b: the later, b, wins",
+    )
+
+
+def test_a_rule_a_codex_file_and_a_skill_take_one_winner_and_one_order(tmp_path: Path) -> None:
+    # Each kind is folded alike: the later plate wins the whole item and takes that plate's place,
+    # so the common-only `y` comes before the tag's `x`, and common's `x/extra.md` is not copied.
+    overlay = _overlay(tmp_path)
+    with_tags(overlay, "p", ["a"], "claude")
+    for plate, name in (("common", "x"), ("common", "y"), ("groups/a", "x")):
+        for relative in ("claude/rules/{}.md", "codex/{}.rules", "claude/skills/{}/SKILL.md"):
+            (overlay / plate / relative.format(name)).parent.mkdir(parents=True, exist_ok=True)
+            (overlay / plate / relative.format(name)).write_text(f"{plate}\n", encoding="utf-8")
+    (overlay / "common" / "claude" / "skills" / "x" / "extra.md").write_text("", encoding="utf-8")
+    held = plates(overlay, "p")[0]
+    binding = Binding("p", overlay, tmp_path, None, None, "", plates=held)
+    rules = [(rule.name, rule.body) for rule in rules_read(held)]
+    codex = [(target, source.read_text()) for target, source in codex_rules(binding)]
+    skills = [(name, part.text) for name, part in read_parts(held).items() if "skills/" in name]
+    assert rules == [("y.md", "common"), ("x.md", "groups/a")]
+    assert codex == [(".codex/rules/y.rules", "common\n"), (".codex/rules/x.rules", "groups/a\n")]
+    assert skills[2:] == [("skills/y/SKILL.md", "common\n"), ("skills/x/SKILL.md", "groups/a\n")]

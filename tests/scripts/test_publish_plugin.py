@@ -2,7 +2,7 @@
 pushed to the plugin's own repository, and nothing else.
 
 Every case starts from `tests/plugintree.py`'s `tool_source`: one commit holding a file under each
-of the plugin's ten paths, this branch's `scripts/plugin_tree.py` and `src/stayfixed`, and a
+of the plugin's nine paths, this branch's `scripts/plugin_tree.py` and `src/drybag`, and a
 marketplace pinning the plugin commit its tree makes, tagged `v1.2.3` (annotated). The default one
 is built once per session and cloned per case; a case that changes the tag's own code patches its
 clone, or builds its own when the pin has to change with it. A bare repository in `tmp_path` stands
@@ -33,15 +33,15 @@ from typing import Any
 
 import pytest
 
-from stayfixed import gitenv
-from stayfixed.errors import Refusal
-from stayfixed.runner import Completed, subprocess_runner
+from drybag import gitenv
+from drybag.errors import Refusal
+from drybag.runner import Completed, subprocess_runner
 from tests.gitfixture import git, git_bytes, needs_git, run_git
 from tests.plugintree import (
     MARKETPLACE,
+    NINE,
     PLUGIN_FILES,
     REPOSITORY,
-    TEN,
     commit,
     hashed,
     literal,
@@ -57,7 +57,7 @@ from tests.runners import Recorder
 from tests.scriptload import plugin_tree as _tree_script
 from tests.scriptload import publish_plugin as _script
 from tests.scriptload import release as _release_script
-from tests.scriptload import without_stayfixed
+from tests.scriptload import without_drybag
 
 publish_plugin = _script()
 plugin_tree = _tree_script()
@@ -67,8 +67,8 @@ Rejected = publish_plugin.Rejected
 pytestmark = needs_git
 
 TAG = "v1.2.3"
-SOURCE_REPOSITORY = "stayfixed/stayfixed"
-PLUGIN_REPOSITORY = "stayfixed/stayfixed-plugin"
+SOURCE_REPOSITORY = "dry-bag/drybag"
+PLUGIN_REPOSITORY = "dry-bag/drybag-plugin"
 # GitHub's answers to a ref it does not hold and to any ref of an empty repository, as `gh api`
 # gives them (measured for a 404: exit 1, the body on stdout, the status on stderr).
 NOT_FOUND = Completed(
@@ -88,7 +88,7 @@ EMPTY = Completed(
 class GitHub(Recorder):
     """`gh`: `gh api … git/ref/<ref>` and `… git/tags/<id>` answered from the repository that
     `repositories` names for the API's, as GitHub answers them; `… attestations/sha256:<digest>`
-    of `stayfixed/stayfixed` answered `attestation`, whatever the digest, which a case asserts
+    of `dry-bag/drybag` answered `attestation`, whatever the digest, which a case asserts
     from the argv; and any other call, or one `answers` scripts, as the `Recorder` answers it.
     Read with `--no-replace-objects`: GitHub holds no replace refs. A private double rather than a
     `Recorder` alone because what it answers is a repository's state, which a case changes as it
@@ -172,7 +172,7 @@ def runner_for(
     before: Callable[[list[str]], None] = lambda argv: None,
     after: Callable[[list[str]], None] = lambda argv: None,
 ) -> Composite:
-    """A composite whose GitHub holds `source` as `stayfixed/stayfixed` and, when given, `plugin`
+    """A composite whose GitHub holds `source` as `dry-bag/drybag` and, when given, `plugin`
     as the plugin repository, and answers `attestation` for any attestation it is asked about and
     its `gh`
     is 2.101.0 unless `answers` scripts `gh --version`."""
@@ -264,7 +264,7 @@ def patched(old: bytes, new: bytes) -> bytes:
     return SCRIPT.replace(old, new)
 
 
-def manifest_of(root: Path, tag: str = TAG, paths: tuple[str, ...] = TEN) -> str:
+def manifest_of(root: Path, tag: str = TAG, paths: tuple[str, ...] = NINE) -> str:
     """The manifest of `paths` at `tag`, computed by the test from git's own listing and blobs:
     the format line, then `<mode> <sha256> <path>` per file, by path."""
     rows = []
@@ -274,7 +274,7 @@ def manifest_of(root: Path, tag: str = TAG, paths: tuple[str, ...] = TEN) -> str
             mode, _kind, obj = meta.split()
             digest = hashlib.sha256(git_bytes(root, "cat-file", "blob", obj)).hexdigest()
             rows.append((path, f"{mode} {digest} {path}\n"))
-    return "stayfixed-plugin-tree 1\n" + "".join(line for _, line in sorted(rows))
+    return "drybag-plugin-tree 1\n" + "".join(line for _, line in sorted(rows))
 
 
 def publish(
@@ -343,7 +343,7 @@ def test_the_commit_pushed_is_the_pinned_one(source: Path, tmp_path: Path) -> No
     assert listed(remote, TAG, exact=True) == listed(source, TAG)
     assert done.files == len(listed(source, TAG))
     assert listed(remote, TAG)["hooks/run-hook.sh"][1] == "100755"
-    assert listed(remote, TAG)["scripts/stayfixed"][1] == "100755"
+    assert listed(remote, TAG)["scripts/drybag"][1] == "100755"
 
 
 def test_without_yes_the_remote_is_unchanged(source: Path, tmp_path: Path) -> None:
@@ -424,13 +424,13 @@ def test_the_attestation_is_asked_with_an_exact_identity(source: Path, tmp_path:
     assert runner.gh.calls == [
         GH_VERSION,
         GH_AUTH,
-        ["gh", "api", "--hostname", "github.com", f"repos/stayfixed/stayfixed/git/ref/tags/{TAG}"],
+        ["gh", "api", "--hostname", "github.com", f"repos/dry-bag/drybag/git/ref/tags/{TAG}"],
         [
             "gh",
             "api",
             "--hostname",
             "github.com",
-            f"repos/stayfixed/stayfixed/git/tags/{tag_object}",
+            f"repos/dry-bag/drybag/git/tags/{tag_object}",
         ],
         [
             "gh",
@@ -440,9 +440,9 @@ def test_the_attestation_is_asked_with_an_exact_identity(source: Path, tmp_path:
             "--hostname",
             "github.com",
             "--repo",
-            "stayfixed/stayfixed",
+            "dry-bag/drybag",
             "--cert-identity",
-            "https://github.com/stayfixed/stayfixed/.github/workflows/release.yml@refs/tags/v1.2.3",
+            "https://github.com/dry-bag/drybag/.github/workflows/release.yml@refs/tags/v1.2.3",
             "--source-ref",
             "refs/tags/v1.2.3",
             "--source-digest",
@@ -452,7 +452,7 @@ def test_the_attestation_is_asked_with_an_exact_identity(source: Path, tmp_path:
     ]
     # The file it is asked about is the manifest of the plugin's files at the tag.
     assert manifest.read_text(encoding="utf-8") == manifest_of(source)
-    assert manifest_of(source).startswith("stayfixed-plugin-tree 1\n")
+    assert manifest_of(source).startswith("drybag-plugin-tree 1\n")
 
 
 def test_a_second_publish_of_the_same_tag_pushes_nothing(source: Path, tmp_path: Path) -> None:
@@ -480,13 +480,13 @@ def test_the_previous_release_is_replaced_whole(source: Path, tmp_path: Path) ->
     # holds the fast-forward end to end: the earlier release's file is gone from the new tree.
     remote = bare_remote(tmp_path)
     first, _ = publish(source, remote, tmp_path / "first")
-    (source / "agents" / "navigator.md").unlink()
-    pin = released(source, "1.2.4", files={"agents/other.md": (b"# other\n", "100644")})
+    (source / "skills" / "close-bug" / "SKILL.md").unlink()
+    pin = released(source, "1.2.4", files={"skills/other/SKILL.md": (b"# other\n", "100644")})
     done, _ = publish(source, remote, tmp_path / "second", tag="v1.2.4")
     assert done.commit == pin
     assert git(remote, "rev-parse", f"{pin}^").strip() == first.commit
     assert listed(remote, "v1.2.4", exact=True) == listed(source, "v1.2.4")
-    assert "agents/navigator.md" not in listed(remote, "v1.2.4", exact=True)
+    assert "skills/close-bug/SKILL.md" not in listed(remote, "v1.2.4", exact=True)
     assert refs(remote) == {
         "refs/heads/main": pin,
         f"refs/tags/{TAG}": first.commit,
@@ -691,7 +691,7 @@ def test_an_api_answer_that_is_neither_a_ref_nor_its_absence_is_refused(
 
 def test_a_tag_without_the_plugin_tree_script_is_refused(tmp_path: Path) -> None:
     # Mutation (declared): `mutations/`'s "the publisher runs a tag that predates it" -> the tag's
-    # `src/stayfixed` is extracted without a script to run, and the run fails in Python's words.
+    # `src/drybag` is extracted without a script to run, and the run fails in Python's words.
     source = plugin_source(tmp_path)
     git(source, "tag", "-a", TAG, "-m", TAG)
     runner, scratch = runner_for(source), tmp_path / "scratch"
@@ -705,19 +705,19 @@ def test_a_tag_without_the_plugin_tree_script_is_refused(tmp_path: Path) -> None
 def test_a_tag_without_the_package_its_tool_imports_is_refused(
     source: Path, tmp_path: Path
 ) -> None:
-    # A tag holding `scripts/plugin_tree.py` and no `src/stayfixed`: run, the script would import
-    # this checkout's `stayfixed` through the venv's path (`-I` keeps site-packages). Mutation
+    # A tag holding `scripts/plugin_tree.py` and no `src/drybag`: run, the script would import
+    # this checkout's `drybag` through the venv's path (`-I` keeps site-packages). Mutation
     # (declared): `mutations/`'s "the publisher runs a tag's tool without the tag's package" -> the
     # tag's script runs, on the checkout's package, and refuses the tree for its missing
-    # `src/stayfixed` (a plugin path) in its own words rather than the publisher's.
-    git(source, "rm", "-r", "-q", "src/stayfixed")
+    # `src/drybag` (a plugin path) in its own words rather than the publisher's.
+    git(source, "rm", "-r", "-q", "src/drybag")
     git(source, "commit", "-q", "--amend", "--no-edit")
     git(source, "tag", "-f", "-a", TAG, "-m", TAG)
     assert git(source, "ls-tree", "-r", "--name-only", TAG, "--", "src") == ""
     runner, scratch = runner_for(source), tmp_path / "scratch"
     with pytest.raises(Refusal, match="predates") as refused:
         publish(source, bare_remote(tmp_path), scratch, runner=runner)
-    assert "no src/stayfixed" in str(refused.value)
+    assert "no src/drybag" in str(refused.value)
     assert tool_runs(runner) == []
     assert not (scratch / "tool").exists()
 
@@ -726,11 +726,11 @@ def test_a_tool_file_that_is_not_regular_is_refused(source: Path, tmp_path: Path
     # Mutation (declared): `mutations/`'s "the publisher runs the tag's code from a file that is
     # not regular" -> the symlink is written as a file holding its target's name, and the tag's
     # code runs.
-    os.symlink("__init__.py", source / "src" / "stayfixed" / "linked.py")
+    os.symlink("__init__.py", source / "src" / "drybag" / "linked.py")
     commit(source, "a symlink among the tag's code")
     git(source, "tag", "-f", "-a", TAG, "-m", TAG)
     runner, scratch = runner_for(source), tmp_path / "scratch"
-    with pytest.raises(Refusal, match=r"src/stayfixed/linked\.py") as refused:
+    with pytest.raises(Refusal, match=r"src/drybag/linked\.py") as refused:
         publish(source, bare_remote(tmp_path), scratch, runner=runner)
     assert "120000" in str(refused.value)
     assert tool_runs(runner) == []
@@ -742,32 +742,32 @@ def test_a_tool_file_that_is_not_regular_is_refused(source: Path, tmp_path: Path
 
 def test_the_tag_s_own_plugin_tree_builds_the_commit(tmp_path: Path) -> None:
     # Mutation (declared): `mutations/`'s "the publisher runs the checkout's plugin_tree.py" ->
-    # the checkout's copy reads ten paths, so its commit is not the pin and the run is rejected
+    # the checkout's copy reads nine paths, so its commit is not the pin and the run is rejected
     # when the commit is built, before any manifest is compared.
-    eleven = (*TEN, "commands")
+    ten = (*NINE, "commands")
     script = patched(b'    "LICENSE",\n)', b'    "LICENSE",\n    "commands",\n)')
     extra = {"commands/a.md": (b"# a command\n", "100644")}
-    source = tool_source(tmp_path, plugin_tree=script, extra=extra, paths=eleven)
+    source = tool_source(tmp_path, plugin_tree=script, extra=extra, paths=ten)
     scratch = tmp_path / "scratch"
     done, _ = publish(source, bare_remote(tmp_path), scratch, yes=False)
     assert (done.outcome, done.commit) == ("would-push", pinned_at(source, TAG))
-    expected = manifest_of(source, TAG, eleven)
+    expected = manifest_of(source, TAG, ten)
     assert (scratch / "plugin-tree.txt").read_text(encoding="utf-8") == expected
     line = "100644 dcf4a2ae11e48a937801393a5a5521068b50366476f099740f5576f081a659a2 commands/a.md\n"
     assert line in expected
     assert done.files == expected.count("\n") - 1
 
 
-def test_the_tag_s_tool_imports_the_tag_s_stayfixed(
+def test_the_tag_s_tool_imports_the_tag_s_drybag(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Mutation (declared): `mutations/`'s "the publisher puts the tag's src after the checkout's"
     # -> the venv's path to this checkout's `src` is read first, and the tag's code runs on this
-    # checkout's `stayfixed`.
+    # checkout's `drybag`.
     marker = b"from __future__ import annotations\n"
     line = (
-        b"import os, stayfixed; "
-        b'open(os.environ["PUBLISH_TEST_IMPORTED"], "w").write(stayfixed.__file__)\n'
+        b"import os, drybag; "
+        b'open(os.environ["PUBLISH_TEST_IMPORTED"], "w").write(drybag.__file__)\n'
     )
     imported = tmp_path / "imported.txt"
     monkeypatch.setenv("PUBLISH_TEST_IMPORTED", str(imported))
@@ -775,7 +775,7 @@ def test_the_tag_s_tool_imports_the_tag_s_stayfixed(
     scratch = tmp_path / "scratch"
     publish(source, bare_remote(tmp_path), scratch, yes=False)
     written = Path(imported.read_text(encoding="utf-8")).resolve()
-    assert written == (scratch / "tool" / "src" / "stayfixed" / "__init__.py").resolve()
+    assert written == (scratch / "tool" / "src" / "drybag" / "__init__.py").resolve()
 
 
 @pytest.mark.parametrize(
@@ -813,11 +813,11 @@ def test_a_tool_answer_that_is_not_an_object_name_is_refused(
 def test_a_tool_answering_in_another_format_is_refused(source: Path, tmp_path: Path) -> None:
     # Mutation (declared): `mutations/`'s "the publisher reads a tool answer in another format" ->
     # both manifests are in the other format, they agree, and the run pushes.
-    old = b'FORMAT = "stayfixed-plugin-tree 1"'
-    with_tool(source, patched(old, b'FORMAT = "stayfixed-plugin-tree 2"'))
+    old = b'FORMAT = "drybag-plugin-tree 1"'
+    with_tool(source, patched(old, b'FORMAT = "drybag-plugin-tree 2"'))
     remote = bare_remote(tmp_path)
     runner = runner_for(source)
-    with pytest.raises(Refusal, match="stayfixed-plugin-tree 2"):
+    with pytest.raises(Refusal, match="drybag-plugin-tree 2"):
         publish(source, remote, tmp_path / "scratch", runner=runner)
     assert gh_asked(runner, "gh", "attestation") == []
     assert refs(remote) == {}
@@ -1015,7 +1015,7 @@ NO_KEY = Completed(0, json.dumps({"message": "OK"}), "")
 # The advice each answer chooses: an attestation that does not verify here, none yet, and an
 # answer that says neither.
 DOES_NOT_VERIFY_HERE = (
-    "does not verify on this machine against stayfixed/stayfixed's release.yml at v1.2.3",
+    "does not verify on this machine against dry-bag/drybag's release.yml at v1.2.3",
     "run again, and if it says the same with a working gh and network once the release's build "
     "and attest jobs are green, reject the release's approval",
 )
@@ -1075,7 +1075,7 @@ def test_a_failed_verify_is_refused_with_the_advice_github_s_listing_chooses(
         "api",
         "--hostname",
         "github.com",
-        f"repos/stayfixed/stayfixed/attestations/sha256:{digest}",
+        f"repos/dry-bag/drybag/attestations/sha256:{digest}",
     ]
     assert len(gh_asked(runner, "gh", "attestation", "verify")) == 1
     for word in ("ls-remote", "fetch", "push"):
@@ -1271,10 +1271,10 @@ def test_a_fetched_main_that_cannot_be_read_back_is_not_called_moved(
     def lose(argv: list[str]) -> None:
         if argv[:1] == ["git"] and "fetch" in argv:
             git_dir = scratch / "plugin.git"
-            git(git_dir, f"--git-dir={git_dir}", "update-ref", "-d", "refs/stayfixed/main")
+            git(git_dir, f"--git-dir={git_dir}", "update-ref", "-d", "refs/drybag/main")
 
     runner = runner_for(source, after=lose)
-    with pytest.raises(Refusal, match="git rev-parse of refs/stayfixed/main") as refused:
+    with pytest.raises(Refusal, match="git rev-parse of refs/drybag/main") as refused:
         publish(source, remote, scratch, yes=False, tag="v1.2.4", runner=runner)
     assert "moved" not in str(refused.value), str(refused.value)
     assert "run again" in str(refused.value)
@@ -1286,7 +1286,7 @@ def test_a_fetched_main_that_cannot_be_read_back_is_not_called_moved(
         pytest.param(("rev-parse", f"refs/tags/{TAG}^{{commit}}"), False, id="the-tag"),
         pytest.param(("ls-tree",), False, id="the-tag-s-code"),
         pytest.param(("cat-file", "--batch"), False, id="the-tag-s-blobs"),
-        pytest.param(("rev-parse", "refs/stayfixed/main"), True, id="the-fetched-main"),
+        pytest.param(("rev-parse", "refs/drybag/main"), True, id="the-fetched-main"),
     ],
 )
 def test_a_local_git_that_gave_no_answer_is_refused_in_no_answer_s_words(
@@ -1602,7 +1602,7 @@ def test_a_tool_that_prints_no_json_object_is_refused(source: Path, tmp_path: Pa
     # A tag whose code fails before the CLI frame runs exits 1 with a traceback, which is not the
     # frame's `Failure`: refused, not rejected. Mutation (declared): `mutations/`'s "the publisher
     # reads a tool that printed no JSON object" -> the missing object escapes as an internal error.
-    with_tool(source, b"import stayfixed.no_such_module\n")
+    with_tool(source, b"import drybag.no_such_module\n")
     runner = runner_for(source)
     with pytest.raises(Refusal) as refused:
         publish(source, bare_remote(tmp_path), tmp_path / "scratch", runner=runner)
@@ -1616,14 +1616,14 @@ def test_a_tool_that_refuses_is_refused(source: Path, tmp_path: Path) -> None:
     # The tag's own `plugin_tree.py` refusing is exit 2 (Ruling 8: CI ran the same code green).
     # Mutation (declared): `mutations/`'s "the publisher reads a tool that refused as an answer"
     # -> the refusal's object is read as `commit`'s, and refused for its format instead.
-    git(source, "rm", "-r", "-q", "agents")
+    git(source, "rm", "-r", "-q", "skills")
     git(source, "commit", "-q", "--amend", "--no-edit")
     git(source, "tag", "-f", "-a", TAG, "-m", TAG)
     with pytest.raises(Refusal) as refused:
         publish(source, bare_remote(tmp_path), tmp_path / "scratch")
     said = str(refused.value)
     assert "commit exited 2" in said, said
-    assert "agents is missing" in said, said
+    assert "skills is missing" in said, said
 
 
 @pytest.mark.parametrize("gone", ["git-dir", "manifest"])
@@ -1790,16 +1790,16 @@ def test_the_publisher_pushes_to_the_repository_the_marketplace_fetches_from() -
     remote = re.fullmatch(r"git@github\.com:([^/]+/[^/]+)\.git", publish_plugin.PLUGIN_REMOTE)
     url = re.fullmatch(r"https://github\.com/([^/]+/[^/]+)\.git", release_script.PLUGIN_URL)
     assert remote is not None and url is not None
-    assert remote.group(1) == url.group(1) == "stayfixed/stayfixed-plugin"
+    assert remote.group(1) == url.group(1) == "dry-bag/drybag-plugin"
     assert publish_plugin.PLUGIN_URL == release_script.PLUGIN_URL
     assert publish_plugin.PLUGIN_REPOSITORY == release_script.PLUGIN_REPOSITORY
-    assert release_script.PLUGIN_REPOSITORY == "stayfixed/stayfixed-plugin"
+    assert release_script.PLUGIN_REPOSITORY == "dry-bag/drybag-plugin"
 
 
 def test_the_cli_refuses_a_tag_that_is_not_a_plain_version(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # No mutation: the refusal is the CLI frame's (`stayfixed.cli.run`), whose own tests hold how
+    # No mutation: the refusal is the CLI frame's (`drybag.cli.run`), whose own tests hold how
     # a `Refusal` prints under `--json`, and the pattern's two entries redden
     # `test_a_tag_that_is_not_a_plain_version_is_refused`. What this holds is that the script's
     # `main` goes through that frame, and no one line of the script can stop it without also
@@ -1854,8 +1854,8 @@ def test_a_relative_remote_is_the_one_beside_the_owner_and_not_the_scratch_repos
 @pytest.mark.parametrize(
     "remote",
     [
-        "git@github.com:stayfixed/stayfixed-plugin.git",
-        "https://github.com/stayfixed/stayfixed-plugin.git",
+        "git@github.com:dry-bag/drybag-plugin.git",
+        "https://github.com/dry-bag/drybag-plugin.git",
         "file:///srv/plugin.git",
         "host:remote.git",
         "absent.git",
@@ -1987,8 +1987,8 @@ def _no_object_name(source: Path, remote: Path, monkeypatch: pytest.MonkeyPatch)
 
 
 def _another_format(source: Path, remote: Path, monkeypatch: pytest.MonkeyPatch) -> Arranged:
-    old = b'FORMAT = "stayfixed-plugin-tree 1"'
-    with_tool(source, patched(old, b'FORMAT = "stayfixed-plugin-tree 2"'))
+    old = b'FORMAT = "drybag-plugin-tree 1"'
+    with_tool(source, patched(old, b'FORMAT = "drybag-plugin-tree 2"'))
     return runner_for(source), TAG, str(remote)
 
 
@@ -2118,16 +2118,16 @@ def test_every_rejection_exits_1_and_every_refusal_exits_2(
 
 
 def test_run_without_its_package_it_refuses_with_exit_2_and_says_to_use_uv(tmp_path: Path) -> None:
-    # An owner who runs the publisher with a bare `python3` has no `stayfixed` to import, and the
+    # An owner who runs the publisher with a bare `python3` has no `drybag` to import, and the
     # traceback that ends such a run exits `1`, which `RELEASING.md` reads as "reject the
     # release's approval". The script says so itself, before the CLI frame exists, and exits `2`.
     # Mutations (declared): `mutations/`'s "the publisher exits 1 when its package cannot be
     # imported" and "the publisher refuses a missing package without saying to run it through
     # uv".
-    done = without_stayfixed("publish_plugin.py", tmp_path, "--tag", TAG)
+    done = without_drybag("publish_plugin.py", tmp_path, "--tag", TAG)
     assert done.returncode == 2, done.stdout + done.stderr
     assert done.stdout == "", done.stdout
-    assert "refused: No module named 'stayfixed'" in done.stderr, done.stderr
+    assert "refused: No module named 'drybag'" in done.stderr, done.stderr
     assert "uv run python scripts/publish_plugin.py" in done.stderr, done.stderr
     assert "Traceback" not in done.stderr, done.stderr
 
@@ -2136,7 +2136,7 @@ def test_two_equal_manifests_have_no_first_difference() -> None:
     # Called only once the two manifests differ, so two equal ones are a caller's bug, raised
     # rather than worded as a difference in a rejection. Mutation (declared): `mutations/`'s "the
     # publisher words two equal manifests as a difference".
-    manifest = b"stayfixed-plugin-tree 1\n100644 " + b"a" * 64 + b" README.md\n"
+    manifest = b"drybag-plugin-tree 1\n100644 " + b"a" * 64 + b" README.md\n"
     with pytest.raises(AssertionError):
         publish_plugin._first_difference(manifest, manifest)
     assert publish_plugin._first_difference(manifest, manifest + b"x\n").startswith("line 3 is ")

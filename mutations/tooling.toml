@@ -25,16 +25,16 @@ reddens = [
   "tests/scripts/test_mutation_oracle.py::test_a_tree_git_cannot_answer_about_is_refused_not_assumed_clean",
 ]
 
-# Both smoke scripts build a session on one base environment that strips every `STAYFIXED_*`
+# Both smoke scripts build a session on one base environment that strips every `DRYBAG_*`
 # variable; the suite's floor is the one it keeps, or their entries run under the bare bounds the
 # floor exists to lift.
 [[mutation]]
 name = "the hook smoke strips the suite's floor"
 file = "scripts/smoke_hooks.py"
-before = """        if k == FLOOR_VARIABLE or not k.startswith(("STAYFIXED_", "XDG_", "CLAUDE_", "PLUGIN_"))"""
-after = """        if not k.startswith(("STAYFIXED_", "XDG_", "CLAUDE_", "PLUGIN_"))"""
+before = """        if k == FLOOR_VARIABLE or not k.startswith(("DRYBAG_", "XDG_", "CLAUDE_", "PLUGIN_"))"""
+after = """        if not k.startswith(("DRYBAG_", "XDG_", "CLAUDE_", "PLUGIN_"))"""
 reddens = [
-  "tests/scripts/test_smoke_scripts.py::test_a_hook_entry_keeps_the_suite_floor_and_no_other_stayfixed_variable",
+  "tests/scripts/test_smoke_scripts.py::test_a_hook_entry_keeps_the_suite_floor_and_no_other_drybag_variable",
 ]
 
 # The oracle proves HEAD in a detached worktree. Three entries are on the run itself — this one,
@@ -154,22 +154,11 @@ reddens = [
 # workflow is otherwise proven only by the run that first executes it.
 [[mutation]]
 name = "a workflow splices an expression into a shell"
-file = ".github/workflows/check.yml"
-before = '          actual="$(git -C stayfixed rev-parse HEAD)"'
-after = '          actual="$(git -C stayfixed rev-parse ${{ github.ref }})"'
+file = ".github/workflows/smoke.yml"
+before = '          diff -r hooks "$INSTALLED/hooks"'
+after = '          diff -r hooks "${{ steps.install.outputs.root }}/hooks"'
 reddens = [
   "tests/test_fixtures.py::test_no_workflow_splices_an_expression_into_a_shell",
-]
-
-# The checkout step peels the ref the platform names to its commit before comparing it with the
-# commit the gates are handed.
-[[mutation]]
-name = "the checkout step compares the platform's workflow sha without peeling it"
-file = ".github/workflows/check.yml"
-before = """expected="$(git -C stayfixed rev-parse --verify --quiet "$EXPECTED^{commit}")""""
-after = """expected="$EXPECTED" && [ -n "$expected" ]"""
-reddens = [
-  "tests/test_check_workflow.py::test_the_checkout_step_peels_an_annotated_tag_to_the_commit_the_gates_are_handed",
 ]
 
 # The hook smoke is the only thing that feeds the INSTALLED plugin a real event, and every one
@@ -208,10 +197,10 @@ reddens = [
 [[mutation]]
 name = "the smoke job demands a hook summary the script no longer prints"
 file = ".github/workflows/smoke.yml"
-before = '          grep -qx "10 entries, 11 row(s), 0 failure(s)" "$RUNNER_TEMP/hooks.out"'
+before = '          grep -qx "12 entries, 13 row(s), 0 failure(s)" "$RUNNER_TEMP/hooks.out"'
 after = '          grep -qx "13 entries, 14 row(s), 0 failure(s)" "$RUNNER_TEMP/hooks.out"'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_job_demands_the_summary_the_hook_script_prints_over_every_entry",
+  "tests/test_workflows.py::test_the_smoke_job_demands_the_summary_the_hook_script_prints_over_every_entry",
 ]
 
 [[mutation]]
@@ -220,7 +209,7 @@ file = ".github/workflows/smoke.yml"
 before = "          grep -qx \"5 row(s), 0 failure(s)\" \"$RUNNER_TEMP/hostile.out\""
 after = "          grep -qx \"4 row(s), 0 failure(s)\" \"$RUNNER_TEMP/hostile.out\""
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_job_demands_the_summary_the_exfiltration_scenario_prints_over_every_row",
+  "tests/test_workflows.py::test_the_smoke_job_demands_the_summary_the_exfiltration_scenario_prints_over_every_row",
 ]
 
 # The plugin is published from a repository of its own whose root is the tree
@@ -236,7 +225,7 @@ file = ".github/workflows/smoke.yml"
 before = '          claude plugin marketplace add "$RUNNER_TEMP/market"'
 after = '          claude plugin marketplace add "$PWD"'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_installs_the_rendered_tree_and_never_the_checkout",
+  "tests/test_workflows.py::test_the_smoke_installs_the_rendered_tree_and_never_the_checkout",
 ]
 
 [[mutation]]
@@ -245,7 +234,7 @@ file = ".github/workflows/smoke.yml"
 before = '          PYTHONPATH: ${{ steps.install.outputs.root }}/src'
 after = '          PYTHONPATH: src'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_runs_doctor_from_the_installed_tree",
+  "tests/test_workflows.py::test_the_smoke_runs_doctor_from_the_installed_tree",
 ]
 
 [[mutation]]
@@ -254,7 +243,7 @@ file = ".github/workflows/smoke.yml"
 before = '          python3 scripts/smoke_hooks.py --plugin-root "$INSTALLED" \'
 after = '          python3 scripts/smoke_hooks.py --plugin-root . \'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_runs_its_hook_and_exfiltration_scripts_on_the_installed_tree[smoke_hooks.py]",
+  "tests/test_workflows.py::test_the_smoke_runs_its_hook_and_exfiltration_scripts_on_the_installed_tree[smoke_hooks.py]",
 ]
 
 [[mutation]]
@@ -263,7 +252,7 @@ file = ".github/workflows/smoke.yml"
 before = '          python3 scripts/smoke_exfiltration.py --plugin-root "$INSTALLED" \'
 after = '          python3 scripts/smoke_exfiltration.py --plugin-root . \'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_runs_its_hook_and_exfiltration_scripts_on_the_installed_tree[smoke_exfiltration.py]",
+  "tests/test_workflows.py::test_the_smoke_runs_its_hook_and_exfiltration_scripts_on_the_installed_tree[smoke_exfiltration.py]",
 ]
 
 [[mutation]]
@@ -280,7 +269,7 @@ after = '''      - name: Every hook entry, fed its sample event through the inst
           INSTALLED: ${{ github.workspace }}
 '''
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_runs_its_hook_and_exfiltration_scripts_on_the_installed_tree[smoke_hooks.py]",
+  "tests/test_workflows.py::test_the_smoke_runs_its_hook_and_exfiltration_scripts_on_the_installed_tree[smoke_hooks.py]",
 ]
 
 [[mutation]]
@@ -297,7 +286,7 @@ after = '''      - name: The clone-to-exfiltration scenario
           INSTALLED: ${{ github.workspace }}
 '''
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_runs_its_hook_and_exfiltration_scripts_on_the_installed_tree[smoke_exfiltration.py]",
+  "tests/test_workflows.py::test_the_smoke_runs_its_hook_and_exfiltration_scripts_on_the_installed_tree[smoke_exfiltration.py]",
 ]
 
 [[mutation]]
@@ -306,7 +295,7 @@ file = ".github/workflows/smoke.yml"
 before = '        run: diff -r -x .git -x .in_use "$RUNNER_TEMP/plugin-repo" "$INSTALLED"'
 after = '        run: "true"'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_holds_the_install_to_the_render",
+  "tests/test_workflows.py::test_the_smoke_holds_the_install_to_the_render",
 ]
 
 [[mutation]]
@@ -315,7 +304,7 @@ file = ".github/workflows/smoke.yml"
 before = '          uv run python scripts/plugin_tree.py render --root . --rev HEAD \'
 after = '          uv run python scripts/plugin_tree.py render --root . --rev HEAD^ \'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_installs_the_rendered_tree_and_never_the_checkout",
+  "tests/test_workflows.py::test_the_smoke_installs_the_rendered_tree_and_never_the_checkout",
 ]
 
 [[mutation]]
@@ -324,7 +313,7 @@ file = ".github/workflows/ci.yml"
 before = '        run: uv run python scripts/plugin_tree.py render --root . --rev HEAD --out "$RUNNER_TEMP/plugin"'
 after = '        run: uv run python scripts/plugin_tree.py render --root . --rev HEAD^ --out "$RUNNER_TEMP/plugin"'
 reddens = [
-  "tests/test_check_workflow.py::test_the_validator_reads_the_rendered_manifests",
+  "tests/test_workflows.py::test_the_validator_reads_the_rendered_manifests",
 ]
 
 [[mutation]]
@@ -333,7 +322,7 @@ file = ".github/workflows/ci.yml"
 before = "\n          claude plugin validate .claude-plugin/marketplace.json --strict"
 after = ""
 reddens = [
-  "tests/test_check_workflow.py::test_the_validator_reads_the_rendered_manifests",
+  "tests/test_workflows.py::test_the_validator_reads_the_rendered_manifests",
 ]
 
 [[mutation]]
@@ -342,7 +331,7 @@ file = ".github/workflows/ci.yml"
 before = '          claude plugin validate "$RUNNER_TEMP/plugin/.claude-plugin/plugin.json" --strict'
 after = '          claude plugin validate .claude-plugin/plugin.json --strict'
 reddens = [
-  "tests/test_check_workflow.py::test_the_validator_reads_the_rendered_manifests",
+  "tests/test_workflows.py::test_the_validator_reads_the_rendered_manifests",
 ]
 
 [[mutation]]
@@ -357,7 +346,7 @@ after = '''        # sha256 and its path, the tree of the commit handed on above
           subject-path: ${{ runner.temp }}/dist/*
 '''
 reddens = [
-  "tests/test_check_workflow.py::test_the_release_attests_the_plugin_tree_it_rendered_from_the_commit",
+  "tests/test_workflows.py::test_the_release_attests_the_plugin_tree_it_rendered_from_the_commit",
 ]
 
 [[mutation]]
@@ -366,7 +355,7 @@ file = ".github/workflows/release.yml"
 before = '          if-no-files-found: error'
 after = '          if-no-files-found: warn'
 reddens = [
-  "tests/test_check_workflow.py::test_the_release_attests_the_plugin_tree_it_rendered_from_the_commit",
+  "tests/test_workflows.py::test_the_release_attests_the_plugin_tree_it_rendered_from_the_commit",
 ]
 
 [[mutation]]
@@ -375,7 +364,7 @@ file = ".github/workflows/release.yml"
 before = ' dist/* "$RUNNER_TEMP/plugin-tree/plugin-tree.txt"'
 after = ' dist/*'
 reddens = [
-  "tests/test_check_workflow.py::test_the_release_attests_the_plugin_tree_it_rendered_from_the_commit",
+  "tests/test_workflows.py::test_the_release_attests_the_plugin_tree_it_rendered_from_the_commit",
 ]
 
 # The marketplace entry pins the plugin repository's commit by `sha`, a function of the release
@@ -391,7 +380,7 @@ file = ".github/workflows/release.yml"
 before = "          fetch-depth: 2\n          persist-credentials: false\n      - uses: astral-sh/setup-uv"
 after = "          persist-credentials: false\n      - uses: astral-sh/setup-uv"
 reddens = [
-  "tests/test_check_workflow.py::test_build_fetches_the_first_parent[build]",
+  "tests/test_workflows.py::test_build_fetches_the_first_parent[build]",
 ]
 
 [[mutation]]
@@ -400,7 +389,7 @@ file = ".github/workflows/release.yml"
 before = "  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 15\n    permissions:\n      contents: read\n"
 after = "  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 15\n    permissions:\n      id-token: write\n      contents: read\n"
 reddens = [
-  "tests/test_check_workflow.py::test_only_the_attest_job_can_attest",
+  "tests/test_workflows.py::test_only_the_attest_job_can_attest",
 ]
 
 [[mutation]]
@@ -409,7 +398,7 @@ file = ".github/workflows/release.yml"
 before = '            --require-pin --json > "$RUNNER_TEMP/plugin-commit.json"'
 after = '            --json > "$RUNNER_TEMP/plugin-commit.json"'
 reddens = [
-  "tests/test_check_workflow.py::test_the_attest_job_hands_on_the_commit_its_source_pins",
+  "tests/test_workflows.py::test_the_attest_job_hands_on_the_commit_its_source_pins",
 ]
 
 # The gated step is written twice, once in each job behind the approval, so each of these anchors
@@ -424,7 +413,7 @@ before = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git'''
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git'''
 after = '''      contents: read
     steps:
       - name: The plugin repository holds this release's commit
@@ -432,9 +421,9 @@ after = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugins.git'''
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugins.git'''
 reddens = [
-  "tests/test_check_workflow.py::test_one_plugin_repository_everywhere",
+  "tests/test_workflows.py::test_one_plugin_repository_everywhere",
 ]
 
 [[mutation]]
@@ -447,8 +436,8 @@ before = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
-            echo "::error::stayfixed/stayfixed-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
+            echo "::error::dry-bag/drybag-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
             exit 1
           }
           tagged=""
@@ -467,8 +456,8 @@ after = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
-            echo "::error::stayfixed/stayfixed-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
+            echo "::error::dry-bag/drybag-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
             exit 1
           }
           tagged=""
@@ -481,8 +470,8 @@ after = '''      contents: read
           done <<< "$listing"
           found="${tagged:-$peeled}"'''
 reddens = [
-  "tests/test_check_workflow.py::test_the_gated_step_compares_the_peeled_id[annotated-publish]",
-  "tests/test_check_workflow.py::test_the_gated_step_compares_the_peeled_id[annotated-tag-object-publish]",
+  "tests/test_workflows.py::test_the_gated_step_compares_the_peeled_id[annotated-publish]",
+  "tests/test_workflows.py::test_the_gated_step_compares_the_peeled_id[annotated-tag-object-publish]",
 ]
 
 [[mutation]]
@@ -495,8 +484,8 @@ before = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
-            echo "::error::stayfixed/stayfixed-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
+            echo "::error::dry-bag/drybag-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
             exit 1
           }
           tagged=""
@@ -512,8 +501,8 @@ after = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
-            echo "::error::stayfixed/stayfixed-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
+            echo "::error::dry-bag/drybag-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
             exit 1
           }
           tagged=""
@@ -523,8 +512,8 @@ after = '''      contents: read
               *"refs/tags/$TAG") tagged="$id" ;;
               *"refs/tags/$TAG^{}") peeled="$id" ;;'''
 reddens = [
-  "tests/test_check_workflow.py::test_the_gated_step_compares_the_peeled_id[decoy-publish]",
-  "tests/test_check_workflow.py::test_the_gated_step_compares_the_peeled_id[decoy-annotated-publish]",
+  "tests/test_workflows.py::test_the_gated_step_compares_the_peeled_id[decoy-publish]",
+  "tests/test_workflows.py::test_the_gated_step_compares_the_peeled_id[decoy-annotated-publish]",
 ]
 
 [[mutation]]
@@ -533,7 +522,7 @@ file = ".github/workflows/smoke.yml"
 before = '"ref": sys.argv[4], "sha": sys.argv[5]}'
 after = '"ref": sys.argv[4]}'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_installs_by_ref_and_sha",
+  "tests/test_workflows.py::test_the_smoke_installs_by_ref_and_sha",
 ]
 
 [[mutation]]
@@ -542,7 +531,7 @@ file = ".github/workflows/smoke.yml"
 before = '--git-dir "$RUNNER_TEMP/plugin-repo.git" --no-parent --json'
 after = '--git-dir "$RUNNER_TEMP/plugin-repo.git" --json'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_installs_by_ref_and_sha",
+  "tests/test_workflows.py::test_the_smoke_installs_by_ref_and_sha",
 ]
 
 [[mutation]]
@@ -551,7 +540,7 @@ file = ".github/workflows/ci.yml"
 before = "          entry[\"source\"][\"sha\"] = \"0\" * 40\n"
 after = ""
 reddens = [
-  "tests/test_check_workflow.py::test_the_validator_reads_a_catalog_whose_entry_pins_a_sha",
+  "tests/test_workflows.py::test_the_validator_reads_a_catalog_whose_entry_pins_a_sha",
 ]
 
 # The same jobs' remaining holds: what `attest` fetches, may write, installs and runs, the name it
@@ -564,7 +553,7 @@ file = ".github/workflows/release.yml"
 before = "          fetch-depth: 2\n          persist-credentials: false\n      - uses: actions/download-artifact"
 after = "          persist-credentials: false\n      - uses: actions/download-artifact"
 reddens = [
-  "tests/test_check_workflow.py::test_build_fetches_the_first_parent[attest]",
+  "tests/test_workflows.py::test_build_fetches_the_first_parent[attest]",
 ]
 
 [[mutation]]
@@ -573,7 +562,7 @@ file = ".github/workflows/release.yml"
 before = "          fetch-depth: 2\n          persist-credentials: false\n      - uses: actions/download-artifact"
 after = "          fetch-depth: 2\n      - uses: actions/download-artifact"
 reddens = [
-  "tests/test_check_workflow.py::test_no_checkout_in_the_release_keeps_its_token",
+  "tests/test_workflows.py::test_no_checkout_in_the_release_keeps_its_token",
 ]
 
 [[mutation]]
@@ -582,7 +571,7 @@ file = ".github/workflows/release.yml"
 before = "          name: dist\n          path: ${{ runner.temp }}/dist\n"
 after = "          name: dist\n          path: dist/\n"
 reddens = [
-  "tests/test_check_workflow.py::test_the_release_attests_the_plugin_tree_it_rendered_from_the_commit",
+  "tests/test_workflows.py::test_the_release_attests_the_plugin_tree_it_rendered_from_the_commit",
 ]
 
 [[mutation]]
@@ -591,7 +580,7 @@ file = ".github/workflows/release.yml"
 before = "      attestations: write\n      contents: read\n    outputs:"
 after = "      attestations: write\n      contents: write\n    outputs:"
 reddens = [
-  "tests/test_check_workflow.py::test_only_the_attest_job_can_attest",
+  "tests/test_workflows.py::test_only_the_attest_job_can_attest",
 ]
 
 [[mutation]]
@@ -600,7 +589,7 @@ file = ".github/workflows/release.yml"
 before = "      contents: write   # the one job that writes"
 after = "      id-token: write\n      contents: write   # the one job that writes"
 reddens = [
-  "tests/test_check_workflow.py::test_only_the_attest_job_can_attest",
+  "tests/test_workflows.py::test_only_the_attest_job_can_attest",
 ]
 
 [[mutation]]
@@ -609,7 +598,7 @@ file = ".github/workflows/release.yml"
 before = "    timeout-minutes: 5\n    permissions:\n      contents: read\n"
 after = "    timeout-minutes: 5\n    permissions:\n      attestations: write\n      contents: read\n"
 reddens = [
-  "tests/test_check_workflow.py::test_only_the_attest_job_can_attest",
+  "tests/test_workflows.py::test_only_the_attest_job_can_attest",
 ]
 
 [[mutation]]
@@ -618,7 +607,7 @@ file = ".github/workflows/release.yml"
 before = "      - name: The plugin commit of the commit this run builds\n"
 after = "      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0\n      - name: The plugin commit of the commit this run builds\n"
 reddens = [
-  "tests/test_check_workflow.py::test_only_the_attest_job_can_attest",
+  "tests/test_workflows.py::test_only_the_attest_job_can_attest",
 ]
 
 [[mutation]]
@@ -628,7 +617,7 @@ before = '          echo "commit=$commit" >> "$GITHUB_OUTPUT"'
 after = '''          python3 -m pytest -q
           echo "commit=$commit" >> "$GITHUB_OUTPUT"'''
 reddens = [
-  "tests/test_check_workflow.py::test_only_the_attest_job_can_attest",
+  "tests/test_workflows.py::test_only_the_attest_job_can_attest",
 ]
 
 [[mutation]]
@@ -637,7 +626,7 @@ file = ".github/workflows/release.yml"
 before = '          echo "commit=$commit" >> "$GITHUB_OUTPUT"'
 after = '          echo "sha=$commit" >> "$GITHUB_OUTPUT"'
 reddens = [
-  "tests/test_check_workflow.py::test_the_attest_job_hands_on_the_commit_its_source_pins",
+  "tests/test_workflows.py::test_the_attest_job_hands_on_the_commit_its_source_pins",
 ]
 
 [[mutation]]
@@ -646,10 +635,10 @@ file = ".github/workflows/release.yml"
 before = "      commit: ${{ steps.plugin-commit.outputs.commit }}"
 after = "      commit: ${{ steps.plugin-commit.outputs.sha }}"
 reddens = [
-  "tests/test_check_workflow.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
+  "tests/test_workflows.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
 ]
 
-# The runner's interpreter has no `stayfixed` of its own, so without the checkout's `src` the
+# The runner's interpreter has no `drybag` of its own, so without the checkout's `src` the
 # script fails to import; the suite's interpreter has one, so only the step's `env:` pin holds it.
 [[mutation]]
 name = "the attest job runs the plugin script without the checkout's package"
@@ -657,7 +646,7 @@ file = ".github/workflows/release.yml"
 before = "        env:\n          PYTHONPATH: src\n        run: |\n"
 after = "        run: |\n"
 reddens = [
-  "tests/test_check_workflow.py::test_the_attest_job_hands_on_the_commit_its_source_pins",
+  "tests/test_workflows.py::test_the_attest_job_hands_on_the_commit_its_source_pins",
 ]
 
 [[mutation]]
@@ -666,7 +655,7 @@ file = ".github/workflows/release.yml"
 before = "    needs: [build, environment-gate, attest]\n    runs-on: ubuntu-latest\n    timeout-minutes: 15"
 after = "    needs: [build, environment-gate]\n    runs-on: ubuntu-latest\n    timeout-minutes: 15"
 reddens = [
-  "tests/test_check_workflow.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
+  "tests/test_workflows.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
 ]
 
 [[mutation]]
@@ -685,7 +674,7 @@ after = '''      contents: read
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.build.outputs.commit }}'''
 reddens = [
-  "tests/test_check_workflow.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
+  "tests/test_workflows.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
 ]
 
 [[mutation]]
@@ -694,7 +683,7 @@ file = ".github/workflows/release.yml"
 before = "      contents: read\n    steps:\n      - name: The plugin repository holds this release's commit\n"
 after = "      contents: read\n    steps:\n      - name: The plugin repository holds this release's commit\n        continue-on-error: true\n"
 reddens = [
-  "tests/test_check_workflow.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
+  "tests/test_workflows.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
 ]
 
 [[mutation]]
@@ -705,26 +694,26 @@ before = '''this release pins, $PINNED"
 after = '''this release pins: $PINNED"
       - uses: actions/checkout'''
 reddens = [
-  "tests/test_check_workflow.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
+  "tests/test_workflows.py::test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin",
 ]
 
 [[mutation]]
 name = "the plugin gate takes an empty pin for a match"
 file = ".github/workflows/release.yml"
 before = '''          if ! [[ "$PINNED" =~ ^[0-9a-f]{40}$ ]] || [ "$found" != "$PINNED" ]; then
-            echo "::error::stayfixed/stayfixed-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
+            echo "::error::dry-bag/drybag-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
             exit 1
           fi
-          echo "stayfixed/stayfixed-plugin's $TAG is the plugin commit this release pins, $PINNED"
+          echo "dry-bag/drybag-plugin's $TAG is the plugin commit this release pins, $PINNED"
       - uses: actions/download-artifact'''
 after = '''          if [ "$found" != "$PINNED" ]; then
-            echo "::error::stayfixed/stayfixed-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
+            echo "::error::dry-bag/drybag-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
             exit 1
           fi
-          echo "stayfixed/stayfixed-plugin's $TAG is the plugin commit this release pins, $PINNED"
+          echo "dry-bag/drybag-plugin's $TAG is the plugin commit this release pins, $PINNED"
       - uses: actions/download-artifact'''
 reddens = [
-  "tests/test_check_workflow.py::test_the_gated_step_compares_the_peeled_id[nothing-pinned-publish]",
+  "tests/test_workflows.py::test_the_gated_step_compares_the_peeled_id[nothing-pinned-publish]",
 ]
 
 [[mutation]]
@@ -733,7 +722,7 @@ file = ".github/workflows/smoke.yml"
 before = 'update-ref "refs/tags/v$version" "$decoy"'
 after = 'update-ref "refs/tags/v$version" "$commit"'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_installs_by_ref_and_sha",
+  "tests/test_workflows.py::test_the_smoke_installs_by_ref_and_sha",
 ]
 
 [[mutation]]
@@ -742,7 +731,7 @@ file = ".github/workflows/smoke.yml"
 before = """printf '100644 blob %s\\tdecoy\\n' "$blob"; """
 after = ""
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_installs_by_ref_and_sha",
+  "tests/test_workflows.py::test_the_smoke_installs_by_ref_and_sha",
 ]
 
 # `plugin_tree.py commit --json` writes a refusal's sentence into the file the step reads, so the
@@ -753,7 +742,7 @@ file = ".github/workflows/smoke.yml"
 before = '|| { cat "$RUNNER_TEMP/plugin-commit.json" >&2; exit 1; }'
 after = '|| { exit 1; }'
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_says_why_it_built_no_plugin_commit",
+  "tests/test_workflows.py::test_the_smoke_says_why_it_built_no_plugin_commit",
 ]
 
 [[mutation]]
@@ -762,7 +751,7 @@ file = ".github/workflows/release.yml"
 before = '|| { cat "$RUNNER_TEMP/plugin-commit.json" >&2; exit 1; }'
 after = '|| { exit 1; }'
 reddens = [
-  "tests/test_check_workflow.py::test_the_attest_job_hands_on_the_commit_its_source_pins",
+  "tests/test_workflows.py::test_the_attest_job_hands_on_the_commit_its_source_pins",
 ]
 
 [[mutation]]
@@ -771,7 +760,7 @@ file = ".github/workflows/smoke.yml"
 before = '          git --git-dir="$RUNNER_TEMP/plugin-repo.git" update-ref refs/heads/main "$commit"'
 after = ""
 reddens = [
-  "tests/test_check_workflow.py::test_the_smoke_installs_by_ref_and_sha",
+  "tests/test_workflows.py::test_the_smoke_installs_by_ref_and_sha",
 ]
 
 [[mutation]]
@@ -780,7 +769,7 @@ file = ".github/workflows/ci.yml"
 before = '          claude plugin validate "$RUNNER_TEMP/pinned/.claude-plugin/marketplace.json" --strict'
 after = '          claude plugin validate "$RUNNER_TEMP/pinned/.claude-plugin/marketplace.json"'
 reddens = [
-  "tests/test_check_workflow.py::test_the_validator_reads_a_catalog_whose_entry_pins_a_sha",
+  "tests/test_workflows.py::test_the_validator_reads_a_catalog_whose_entry_pins_a_sha",
 ]
 
 # The scripts and the workflows each spell a commit id's shape, and a workflow's copy is reached
@@ -791,7 +780,7 @@ file = ".github/workflows/smoke.yml"
 before = '          if ! [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then'
 after = '          if ! [[ "$commit" =~ ^[0-9a-f]+$ ]]; then'
 reddens = [
-  "tests/test_check_workflow.py::test_one_commit_id_shape_everywhere",
+  "tests/test_workflows.py::test_one_commit_id_shape_everywhere",
 ]
 
 # The hook smoke's guard held one direction: it caught `hooks.json` gaining an event with no
@@ -912,7 +901,7 @@ reddens = [
 [[mutation]]
 name = "the sdist executable claim covers no file"
 file = "scripts/check_artifacts.py"
-before = 'SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/stayfixed")'
+before = 'SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/drybag")'
 after = "SDIST_EXECUTABLE = ()"
 reddens = [
   "tests/scripts/test_check_artifacts.py::test_a_wrapper_that_lost_its_executable_bit_in_the_sdist_is_named",
@@ -948,34 +937,17 @@ reddens = [
   "tests/test_fixtures.py::test_the_block_a_contributor_copies_is_the_one_ci_runs",
 ]
 
-# `scripts/check_artifacts.py` imported `stayfixed.overlay.layout` for the very constant
+# `scripts/check_artifacts.py` imported `drybag.overlay.layout` for the very constant
 # `overlay/api.py` said had been trimmed *because* nothing outside the area imported it. The
 # boundary walk stopped at `src/`, so the false docstring and the violation merged green together.
 # This is that import put back, against the widened walk.
 [[mutation]]
 name = "a script reaches past an area's api.py again"
 file = "scripts/check_artifacts.py"
-before = "from stayfixed.overlay.api import OVERLAY_FILES"
-after = "from stayfixed.overlay.layout import OVERLAY_FILES"
+before = "from drybag.overlay.api import OVERLAY_FILES"
+after = "from drybag.overlay.layout import OVERLAY_FILES"
 reddens = [
   "tests/boundaries/test_api_surface.py::test_no_module_reaches_into_another_packages_private_module",
-]
-
-# The step whose exit status is the verdict. `stayfixed gate` already exits 0 for an advisory
-# gate's findings, so `continue-on-error` there could only turn a refusal or an enforced gate's
-# failure green — and the job with it, for every caller.
-[[mutation]]
-name = "a judging step that may fail turns an enforced gate green"
-file = ".github/workflows/check.yml"
-before = """
-      - name: The configuration and the built-in gates
-"""
-after = """
-      - name: The configuration and the built-in gates
-        continue-on-error: true
-"""
-reddens = [
-  "tests/test_check_workflow.py::test_one_job_whose_judging_steps_may_not_fail_and_run_in_order",
 ]
 
 # The clean run is gated on `Outcome.passed` with a long paragraph about why an exit code alone
@@ -1202,489 +1174,6 @@ reddens = [
   "tests/scripts/test_mutation_oracle.py::test_every_run_keeps_its_temporary_files_to_itself",
 ]
 
-# The custom gates execute files the pull request can change. Under the default `if: success()`
-# they run only once the judging step passed; `if: always()` would run them after a refusal, in
-# a job whose verdict is already failing, and a step that may run whatever came before it is a
-# step nothing orders.
-[[mutation]]
-name = "the custom step runs after a refusal"
-file = ".github/workflows/check.yml"
-before = """
-      - name: The project's own gates
-"""
-after = """
-      - name: The project's own gates
-        if: always()
-"""
-reddens = [
-  "tests/test_check_workflow.py::test_one_job_whose_judging_steps_may_not_fail_and_run_in_order",
-]
-
-# `--builtin` is what keeps every command from `[gates.custom]` out of the process that decides
-# the verdict. Drop it and the judging step runs the pull request's own test suite, `Makefile`
-# or script, with the runner's privileges, before its exit status is read.
-[[mutation]]
-name = "the judging step runs the repository's own gate commands"
-file = ".github/workflows/check.yml"
-before = '          python3 -P -s -m stayfixed gate --builtin --root project \'
-after = '          python3 -P -s -m stayfixed gate --root project \'
-reddens = [
-  "tests/test_check_workflow.py::test_the_judging_step_runs_no_custom_gate_and_the_next_step_runs_them",
-]
-
-# The judging step hands `stayfixed gate` the platform's base, which it resolves to a commit and
-# judges against. Judged against the tree's own HEAD instead, every change to `stayfixed.toml`
-# compares equal to itself, and a pull request that stops enforcing a gate passes the
-# configuration check.
-[[mutation]]
-name = "the judging step judges the tree against itself"
-file = ".github/workflows/check.yml"
-before = '''
-          python3 -P -s -m stayfixed gate --builtin --root project \
-            --pr-base="$PR_BASE" --base-input="$INPUT_BASE" \
-            --default-branch="$DEFAULT_BRANCH" --path="$INPUT_PATH" \
-'''
-after = '''
-          python3 -P -s -m stayfixed gate --builtin --root project \
-            --base "$(git -C project rev-parse HEAD)" --path="$INPUT_PATH" \
-'''
-reddens = [
-  "tests/test_check_workflow.py::test_the_judging_step_fails_a_change_that_loosens_what_the_base_enforces",
-]
-
-# A refused key and an enforcing gate's findings reach the pull request's page as annotations.
-# Without `--annotate` the job fails with no line saying which key or which finding, and the
-# author reads the raw log to find out.
-[[mutation]]
-name = "the judging step stops annotating"
-file = ".github/workflows/check.yml"
-before = '''
-          python3 -P -s -m stayfixed gate --builtin --root project \
-            --pr-base="$PR_BASE" --base-input="$INPUT_BASE" \
-            --default-branch="$DEFAULT_BRANCH" --path="$INPUT_PATH" \
-            --workflow-sha "$WORKFLOW_SHA" --annotate --summary "$GITHUB_STEP_SUMMARY" "${only[@]}"'''
-after = '''
-          python3 -P -s -m stayfixed gate --builtin --root project \
-            --pr-base="$PR_BASE" --base-input="$INPUT_BASE" \
-            --default-branch="$DEFAULT_BRANCH" --path="$INPUT_PATH" \
-            --workflow-sha "$WORKFLOW_SHA" --summary "$GITHUB_STEP_SUMMARY" "${only[@]}"'''
-reddens = [
-  "tests/test_check_workflow.py::test_the_judging_step_fails_a_change_that_loosens_what_the_base_enforces",
-]
-
-# The job summary is the one place every gate's mode and outcome and every changed key's verdict
-# are listed together, uncapped by the platform's ten annotations per level.
-[[mutation]]
-name = "the judging step writes no job summary"
-file = ".github/workflows/check.yml"
-before = '''
-          python3 -P -s -m stayfixed gate --builtin --root project \
-            --pr-base="$PR_BASE" --base-input="$INPUT_BASE" \
-            --default-branch="$DEFAULT_BRANCH" --path="$INPUT_PATH" \
-            --workflow-sha "$WORKFLOW_SHA" --annotate --summary "$GITHUB_STEP_SUMMARY" "${only[@]}"'''
-after = '''
-          python3 -P -s -m stayfixed gate --builtin --root project \
-            --pr-base="$PR_BASE" --base-input="$INPUT_BASE" \
-            --default-branch="$DEFAULT_BRANCH" --path="$INPUT_PATH" \
-            --workflow-sha "$WORKFLOW_SHA" --annotate "${only[@]}"'''
-reddens = [
-  "tests/test_check_workflow.py::test_the_judging_step_fails_a_change_that_loosens_what_the_base_enforces",
-]
-
-# An upgrade's moved `[ci] ref` is admitted only at the commit the platform says is running.
-# Without `--workflow-sha` nothing names that commit, so every upgrade pull request that moves
-# the pin is refused and lands only by a direct push.
-[[mutation]]
-name = "the judging step drops the running workflow's commit"
-file = ".github/workflows/check.yml"
-before = '''
-          python3 -P -s -m stayfixed gate --builtin --root project \
-            --pr-base="$PR_BASE" --base-input="$INPUT_BASE" \
-            --default-branch="$DEFAULT_BRANCH" --path="$INPUT_PATH" \
-            --workflow-sha "$WORKFLOW_SHA" --annotate --summary "$GITHUB_STEP_SUMMARY" "${only[@]}"'''
-after = '''
-          python3 -P -s -m stayfixed gate --builtin --root project \
-            --pr-base="$PR_BASE" --base-input="$INPUT_BASE" \
-            --default-branch="$DEFAULT_BRANCH" --path="$INPUT_PATH" \
-            --annotate --summary "$GITHUB_STEP_SUMMARY" "${only[@]}"'''
-reddens = [
-  "tests/test_check_workflow.py::test_the_judging_step_passes_the_platform_s_workflow_sha_through_env",
-]
-
-# `python3 -m` puts the working directory first on `sys.path`. The gate steps run from the
-# workspace, which the pull request writes nothing into; `-P` is the second layer, and the one
-# that keeps a module the checkout carries from standing in for stayfixed's own if a gate step
-# ever runs from the caller's checkout, as the base step it replaced once did.
-[[mutation]]
-name = "the judging step imports from its working directory"
-file = ".github/workflows/check.yml"
-before = '          python3 -P -s -m stayfixed gate --builtin --root project \'
-after = '          python3 -s -m stayfixed gate --builtin --root project \'
-reddens = [
-  "tests/test_check_workflow.py::test_both_gate_steps_start_python_without_the_working_directory_on_its_path",
-]
-
-# `only:` is how a matrix caller gives each gate its own check row. Drop the loop and every leg
-# runs every gate, so each row reports the whole job's verdict under one gate's name.
-[[mutation]]
-name = "only: runs every gate whatever it names"
-file = ".github/workflows/check.yml"
-before = '''
-          for name in $ONLY; do only+=("--only=$name"); done
-          set +f
-          python3 -P -s -m stayfixed gate --builtin --root project \
-'''
-after = '''
-          :
-          set +f
-          python3 -P -s -m stayfixed gate --builtin --root project \
-'''
-reddens = [
-  "tests/test_check_workflow.py::test_only_runs_the_names_it_is_given_and_nothing_else",
-]
-
-# `$ONLY` is split unquoted, which is also where the shell globs: a name like `d*` would be
-# expanded against the workspace and reach `stayfixed gate` as whatever files matched.
-[[mutation]]
-name = "only: names are expanded as file patterns"
-file = ".github/workflows/check.yml"
-before = '''
-          set -f
-          only=()
-          for name in $ONLY; do only+=("--only=$name"); done
-          set +f
-          python3 -P -s -m stayfixed gate --builtin --root project \
-'''
-after = '''
-          :
-          only=()
-          for name in $ONLY; do only+=("--only=$name"); done
-          set +f
-          python3 -P -s -m stayfixed gate --builtin --root project \
-'''
-reddens = [
-  "tests/test_check_workflow.py::test_an_only_name_is_never_expanded_as_a_file_pattern",
-]
-
-# `-P` keeps the working directory off `sys.path` and nothing else: a `PYTHONPATH` entry inside
-# the caller's checkout puts every module the pull request adds ahead of the standard library in
-# the process that decides the verdict. Measured when the case was written: a planted
-# `tomllib.py` ran and the step still exited 0.
-[[mutation]]
-name = "the judging step's PYTHONPATH reaches into the checkout"
-file = ".github/workflows/check.yml"
-before = '''
-      - name: The configuration and the built-in gates
-        env:
-          PYTHONPATH: stayfixed/src
-'''
-after = '''
-      - name: The configuration and the built-in gates
-        env:
-          PYTHONPATH: stayfixed/src:project
-'''
-reddens = [
-  "tests/test_check_workflow.py::test_no_module_the_checkout_carries_is_imported_by_a_gate_step[judging]",
-  "tests/test_check_workflow.py::test_the_verdict_s_process_gets_only_the_environment_its_step_names",
-]
-
-# And in the custom step, where a planted module in stayfixed's own process could report an
-# enforcing custom gate as passing whatever its command exited with.
-[[mutation]]
-name = "the custom step's PYTHONPATH reaches into the checkout"
-file = ".github/workflows/check.yml"
-before = '''
-      - name: The project's own gates
-        env:
-          PYTHONPATH: ${{ github.workspace }}/stayfixed/src
-'''
-after = '''
-      - name: The project's own gates
-        env:
-          PYTHONPATH: ${{ github.workspace }}/stayfixed/src:project
-'''
-reddens = [
-  "tests/test_check_workflow.py::test_no_module_the_checkout_carries_is_imported_by_a_gate_step[custom]",
-  "tests/test_check_workflow.py::test_the_verdict_s_process_gets_only_the_environment_its_step_names",
-]
-
-# The judging step runs from the workspace, which the pull request writes nothing into. From the
-# caller's checkout, `-P` would be the only thing between a module the pull request adds and the
-# verdict, and a relative `PYTHONPATH` would resolve inside the checkout.
-[[mutation]]
-name = "the judging step runs from the caller's checkout"
-file = ".github/workflows/check.yml"
-before = '''
-      - name: The configuration and the built-in gates
-        env:
-'''
-after = '''
-      - name: The configuration and the built-in gates
-        working-directory: project
-        env:
-'''
-reddens = [
-  "tests/test_check_workflow.py::test_the_verdict_s_process_gets_only_the_environment_its_step_names",
-]
-
-# An `if:` on the job skips it, and a skipped job is a required check the platform reports as
-# passing: every step's own guard would hold while the verdict never ran.
-[[mutation]]
-name = "the gates job gains a condition of its own"
-file = ".github/workflows/check.yml"
-before = """
-    runs-on: ubuntu-latest
-"""
-after = """
-    if: false
-    runs-on: ubuntu-latest
-"""
-reddens = [
-  "tests/test_check_workflow.py::test_one_job_whose_judging_steps_may_not_fail_and_run_in_order",
-]
-
-# A program handed to an interpreter with `-c` runs with its working directory first on
-# `sys.path` unless a flag says otherwise, and a spelling check for `python3 -c` alone missed
-# `python3 -P -c`, `python -I -c` and every other spelling in between.
-[[mutation]]
-name = "a step hands the interpreter a program on the command line again"
-file = ".github/workflows/check.yml"
-before = "        run: python3 -m stayfixed --version"
-after = "        run: python3 -P -c 'import stayfixed'"
-reddens = [
-  "tests/test_check_workflow.py::test_both_gate_steps_start_python_without_the_working_directory_on_its_path",
-]
-
-# The custom step reads `only:` the way the judging step does, so a matrix leg named for one
-# gate runs that gate. Drop its loop and every leg runs every custom gate's command, each one
-# reported under the leg's name.
-[[mutation]]
-name = "the custom step runs every custom gate whatever only: names"
-file = ".github/workflows/check.yml"
-before = '''
-          for name in $ONLY; do only+=("--only=$name"); done
-          set +f
-          python3 -P -s -m stayfixed gate --custom --root project \
-'''
-after = '''
-          :
-          set +f
-          python3 -P -s -m stayfixed gate --custom --root project \
-'''
-reddens = [
-  "tests/test_check_workflow.py::test_the_custom_step_runs_only_the_custom_gates_only_names",
-]
-
-# The custom step's process reports whether an enforcing custom gate passed, so a module the
-# checkout carries must not load in it either.
-[[mutation]]
-name = "the custom step imports from its working directory"
-file = ".github/workflows/check.yml"
-before = '          python3 -P -s -m stayfixed gate --custom --root project \'
-after = '          python3 -s -m stayfixed gate --custom --root project \'
-reddens = [
-  "tests/test_check_workflow.py::test_both_gate_steps_start_python_without_the_working_directory_on_its_path",
-]
-
-# A step spelled `- run:` has no `- name:` line, and the step walk read it as more lines of the
-# step above: eight steps counted over nine, and a script the pull request supplied running
-# before the judging step, unseen.
-[[mutation]]
-name = "a step with no name hides inside the step above it"
-file = ".github/workflows/check.yml"
-before = """
-      - name: stayfixed runs at all
-"""
-after = """
-      - run: bash project/setup.sh
-      - name: stayfixed runs at all
-"""
-reddens = [
-  "tests/test_check_workflow.py::test_one_job_whose_judging_steps_may_not_fail_and_run_in_order",
-]
-
-# `-c` with its flags joined, `-Pc`, is the same program on the command line, and it slipped a
-# pattern written for `-c` alone.
-[[mutation]]
-name = "a step runs a program with joined short flags"
-file = ".github/workflows/check.yml"
-before = "        run: python3 -m stayfixed --version"
-after = "        run: python3 -Pc 'import stayfixed'"
-reddens = [
-  "tests/test_check_workflow.py::test_both_gate_steps_start_python_without_the_working_directory_on_its_path",
-]
-
-# A program on standard input puts the working directory first on `sys.path` just as `-c` does.
-[[mutation]]
-name = "a step runs a program from standard input"
-file = ".github/workflows/check.yml"
-before = "        run: python3 -m stayfixed --version"
-after = "        run: echo 'import stayfixed' | python3 -"
-reddens = [
-  "tests/test_check_workflow.py::test_both_gate_steps_start_python_without_the_working_directory_on_its_path",
-]
-
-# An earlier step's environment reaches the judging step through `$GITHUB_ENV` and `$GITHUB_PATH`
-# the moment that step runs anything the pull request wrote: `BASH_ENV` on the proof step
-# sources a file from the checkout before `python3 -m stayfixed --version`.
-[[mutation]]
-name = "the proof step's shell sources a file from the checkout"
-file = ".github/workflows/check.yml"
-before = """
-        env:
-          PYTHONPATH: stayfixed/src
-        run: python3 -m stayfixed --version
-"""
-after = """
-        env:
-          PYTHONPATH: stayfixed/src
-          BASH_ENV: project/.ci-env
-        run: python3 -m stayfixed --version
-"""
-reddens = [
-  "tests/test_check_workflow.py::test_the_verdict_s_process_gets_only_the_environment_its_step_names",
-]
-
-# And the checkout step, the one other step with a script before the judging step.
-[[mutation]]
-name = "the checkout step's shell sources a file from the checkout"
-file = ".github/workflows/check.yml"
-before = "          EXPECTED: ${{ job.workflow_sha }}"
-after = """          EXPECTED: ${{ job.workflow_sha }}
-          BASH_ENV: project/.ci-env"""
-reddens = [
-  "tests/test_check_workflow.py::test_the_verdict_s_process_gets_only_the_environment_its_step_names",
-]
-
-# A script that writes `$GITHUB_ENV` or `$GITHUB_PATH` chooses every later step's environment or
-# interpreter, outside any step's `env:` block, where no equality over the blocks can see it.
-[[mutation]]
-name = "the checkout step sets the environment of every later step"
-file = ".github/workflows/check.yml"
-before = """          echo "sha=$expected" >> "$GITHUB_OUTPUT\""""
-after = """          echo "sha=$expected" >> "$GITHUB_OUTPUT"
-          echo "PYTHONPATH=project" >> "$GITHUB_ENV\""""
-reddens = [
-  "tests/test_check_workflow.py::test_the_verdict_s_process_gets_only_the_environment_its_step_names",
-]
-
-# The whitelist read only what followed `python`: an assignment in front of the command, such as
-# `PYTHONUSERBASE=…`, passed it, and an assignment of another name reaches the interpreter too.
-[[mutation]]
-name = "the judging step's command gains an assignment in front of it"
-file = ".github/workflows/check.yml"
-before = '          python3 -P -s -m stayfixed gate --builtin --root project \'
-after = '          PYTHONUSERBASE=project/.local python3 -P -s -m stayfixed gate --builtin --root project \'
-reddens = [
-  "tests/test_check_workflow.py::test_both_gate_steps_start_python_without_the_working_directory_on_its_path",
-]
-
-# A script line that changes the verdict's process without being an invocation: an exported
-# variable reaches the interpreter, and a sourced file runs whatever it says. Every script is held
-# line for line.
-[[mutation]]
-name = "the judging step exports a user base inside the caller's checkout"
-file = ".github/workflows/check.yml"
-before = '''
-          set +f
-          python3 -P -s -m stayfixed gate --builtin --root project \
-'''
-after = '''
-          set +f
-          export PYTHONUSERBASE=project/.local
-          python3 -P -s -m stayfixed gate --builtin --root project \
-'''
-reddens = [
-  "tests/test_check_workflow.py::test_every_script_the_job_runs_is_held_line_for_line",
-]
-
-[[mutation]]
-name = "the custom step sources a file from the caller's checkout"
-file = ".github/workflows/check.yml"
-before = '''
-          set +f
-          python3 -P -s -m stayfixed gate --custom --root project \
-'''
-after = '''
-          set +f
-          [ -f project/.ci-env ] && . project/.ci-env || true
-          python3 -P -s -m stayfixed gate --custom --root project \
-'''
-reddens = [
-  "tests/test_check_workflow.py::test_every_script_the_job_runs_is_held_line_for_line",
-]
-
-# The same class in an earlier step: the gate steps' `PYTHONPATH` names `stayfixed/src`, and the
-# interpreter imports a `sitecustomize.py` it finds there at start-up, so a copy into stayfixed's
-# own checkout is code in the verdict's process.
-[[mutation]]
-name = "the checkout step copies a file into stayfixed's own checkout"
-file = ".github/workflows/check.yml"
-before = """
-          actual="$(git -C stayfixed rev-parse HEAD)"
-"""
-after = """
-          actual="$(git -C stayfixed rev-parse HEAD)"
-          cp project/.ci/sitecustomize.py stayfixed/src/ 2>/dev/null || true
-"""
-reddens = [
-  "tests/test_check_workflow.py::test_every_script_the_job_runs_is_held_line_for_line",
-]
-
-# An invocation matched as a prefix admitted a line that runs something else after it.
-[[mutation]]
-name = "the judging step's command line runs a second command before the gate"
-file = ".github/workflows/check.yml"
-before = '          python3 -P -s -m stayfixed gate --builtin --root project \'
-after = '          python3 -P -s -m stayfixed gate --help >/dev/null; PYTHONUSERBASE=project/.local python3 -P -s -m stayfixed gate --builtin --root project \'
-reddens = [
-  "tests/test_check_workflow.py::test_both_gate_steps_start_python_without_the_working_directory_on_its_path",
-  "tests/test_check_workflow.py::test_every_script_the_job_runs_is_held_line_for_line",
-]
-
-# The token's grant, held by value and not only by key: the project's own gates run with it in
-# reach, and the caller's grant is the ceiling for every step of the reusable workflow.
-[[mutation]]
-name = "the reusable workflow's token may write the repository"
-file = ".github/workflows/check.yml"
-before = "  contents: read"
-after = "  contents: write"
-reddens = [
-  "tests/test_check_workflow.py::test_the_job_s_token_can_read_the_repository_and_nothing_more",
-]
-
-# `-P` leaves the user site directory on, and a `.pth` file in it runs at the interpreter's
-# start-up; `-s` is what keeps one the pull request commits out of the gate steps' processes if
-# anything ever points the user base into the checkout.
-[[mutation]]
-name = "the judging step reads the user site directory again"
-file = ".github/workflows/check.yml"
-before = '          python3 -P -s -m stayfixed gate --builtin --root project \'
-after = '          python3 -P -m stayfixed gate --builtin --root project \'
-reddens = [
-  "tests/test_check_workflow.py::test_no_pth_file_under_a_user_base_in_the_checkout_runs_in_a_gate_step[judging]",
-]
-
-[[mutation]]
-name = "the custom step reads the user site directory again"
-file = ".github/workflows/check.yml"
-before = '          python3 -P -s -m stayfixed gate --custom --root project \'
-after = '          python3 -P -m stayfixed gate --custom --root project \'
-reddens = [
-  "tests/test_check_workflow.py::test_no_pth_file_under_a_user_base_in_the_checkout_runs_in_a_gate_step[custom]",
-]
-
-# RELEASING.md's last step dispatches the release smoke at every release, and a job naming a tag
-# that does not exist fails the whole dispatch before any job runs: during `0.x` that is `v1`.
-[[mutation]]
-name = "the release smoke calls the alias a 0.x release does not have"
-file = ".github/workflows/smoke-release.yml"
-before = "    uses: stayfixed/stayfixed/.github/workflows/check.yml@v0.6.1"
-after = "    uses: stayfixed/stayfixed/.github/workflows/check.yml@v1"
-reddens = [
-  "tests/test_fixtures.py::test_the_release_smoke_calls_the_release_this_tree_carries",
-]
-
 # CI's rendered-artifact check accepted any directory named `.git`, so an empty `mkdir .git` stood
 # in for the repository `setup --overlay <path>` makes on `main`.
 [[mutation]]
@@ -1713,11 +1202,11 @@ reddens = ["tests/scripts/test_mutation_oracle.py::test_the_oracle_reads_every_g
 [[mutation]]
 name = "the group table loses a row and its entries route to the catch-all"
 file = "scripts/mutation_oracle.py"
-before = '    ("src/stayfixed/doctor/", "doctor"),'
+before = '    ("src/drybag/doctor/", "doctor"),'
 after = ''
 reddens = ["tests/scripts/test_mutation_oracle.py::test_every_entry_lives_in_its_group_file"]
 
-# `GROUP_OF` routes by the longest prefix, so a row appended after `src/stayfixed/` is not dead;
+# `GROUP_OF` routes by the longest prefix, so a row appended after `src/drybag/` is not dead;
 # taken first-match, that catch-all row would take the new row's files without a sound.
 [[mutation]]
 name = "the group table routes a file by its first matching row again"
@@ -2258,7 +1747,7 @@ reddens = [
 name = "the release script tells its reader to run the command the CLI no longer ships"
 file = "scripts/release.py"
 before = 'COMMAND = "uv run python scripts/release.py"'
-after = 'COMMAND = "uv run stayfixed release"'
+after = 'COMMAND = "uv run drybag release"'
 reddens = [
   "tests/scripts/test_release.py::test_a_tag_with_pending_fragments_is_refused",
   "tests/scripts/test_release.py::test_a_version_that_is_not_the_projects_is_refused_before_anything_runs",
@@ -2270,7 +1759,7 @@ reddens = [
 name = "the release workflow runs the release check the CLI no longer ships"
 file = ".github/workflows/release.yml"
 before = '        run: uv run python scripts/release.py check --tag "$GITHUB_REF_NAME"'
-after = '        run: uv run stayfixed release check --tag "$GITHUB_REF_NAME"'
+after = '        run: uv run drybag release check --tag "$GITHUB_REF_NAME"'
 reddens = [
   "tests/test_fixtures.py::test_the_release_workflow_runs_the_release_check_in_the_one_spelling",
 ]
@@ -2302,7 +1791,7 @@ reddens = [
 name = "the release workflow builds after running the release check the CLI no longer ships"
 file = ".github/workflows/release.yml"
 before = "        run: uv build"
-after = "        run: uv run stayfixed release check && uv build"
+after = "        run: uv run drybag release check && uv build"
 reddens = [
   "tests/test_fixtures.py::test_the_release_workflow_runs_the_release_check_in_the_one_spelling",
 ]
@@ -2326,81 +1815,8 @@ before = '        return sub.add_parser(name, help=sentence, description=sentenc
 after = '        return sub.add_parser(name, help=None, epilog=JSON_EPILOG)'
 reddens = ["tests/scripts/test_release.py::test_every_command_opens_its_own_help_with_what_it_does"]
 
-# The wheel must carry the Python profile's code: the red-run hint is found and imported from the
-# installed package, and a build without it loses the Python note with nothing failing.
-[[mutation]]
-name = "the wheel need not carry the Python profile's hint"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/python/hygiene.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_the_python_profiles_code_is_named[stayfixed/profiles/python/hygiene.py]",
-]
-
-[[mutation]]
-name = "the wheel need not carry the Python profile's runner adapter"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/python/adapters.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_the_python_profiles_code_is_named[stayfixed/profiles/python/adapters.py]",
-]
-
-[[mutation]]
-name = "the wheel need not carry the Python profile's package marker"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/python/__init__.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_the_python_profiles_code_is_named[stayfixed/profiles/python/__init__.py]",
-]
-
 # A `--root` that is no repository root is no version disagreeing: printed under "version drift:",
 # it read as one.
-# The JavaScript stack ships adapters and no profile; the same walk finds them.
-[[mutation]]
-name = "the wheel need not carry the JavaScript runner adapters"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/javascript/adapters.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_a_stack_s_runner_adapters_is_named[stayfixed/profiles/javascript/adapters.py]",
-]
-
-[[mutation]]
-name = "the wheel need not carry the Go runner adapter"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/go/adapters.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_a_stack_s_runner_adapters_is_named[stayfixed/profiles/go/adapters.py]",
-]
-
-[[mutation]]
-name = "the wheel need not carry the Go stack's package marker"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/go/__init__.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_a_stack_s_runner_adapters_is_named[stayfixed/profiles/go/__init__.py]",
-]
-
-[[mutation]]
-name = "the wheel need not carry the JavaScript stack's package marker"
-file = "scripts/check_artifacts.py"
-before = """    "stayfixed/profiles/javascript/__init__.py",
-"""
-after = ""
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wheel_without_a_stack_s_runner_adapters_is_named[stayfixed/profiles/javascript/__init__.py]",
-]
-
 [[mutation]]
 name = "a root the release check cannot read is reported as version drift"
 file = "scripts/release.py"
@@ -2420,10 +1836,10 @@ reddens = ["tests/scripts/test_release.py::test_a_root_the_check_cannot_read_is_
 [[mutation]]
 name = "the plugin tree drops a path the runtime reads"
 file = "scripts/plugin_tree.py"
-before = """    "skills",
-    "agents",
+before = """    "src/drybag",
+    "skills",
     "README.md","""
-after = """    "skills",
+after = """    "src/drybag",
     "README.md","""
 reddens = [
   "tests/scripts/test_plugin_tree.py::test_members_lists_every_plugin_path_with_its_mode_and_nothing_else",
@@ -2482,15 +1898,15 @@ before = 'OBJECT_NAME = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")'
 after = 'OBJECT_NAME = re.compile(r"[0-9a-f]{40}")'
 reddens = [
   "tests/scripts/test_plugin_tree.py::test_peel_names_a_sha256_repository_s_commit",
-  "tests/test_check_workflow.py::test_one_commit_id_shape_everywhere",
+  "tests/test_workflows.py::test_one_commit_id_shape_everywhere",
 ]
 
 [[mutation]]
 name = "plugin_tree.py writes another manifest format than the publisher reads"
 file = "scripts/plugin_tree.py"
-before = 'FORMAT = "stayfixed-plugin-tree 1"'
-after = 'FORMAT = "stayfixed-plugin-tree 2"'
-reddens = ["tests/test_check_workflow.py::test_one_commit_id_shape_everywhere"]
+before = 'FORMAT = "drybag-plugin-tree 1"'
+after = 'FORMAT = "drybag-plugin-tree 2"'
+reddens = ["tests/test_workflows.py::test_one_commit_id_shape_everywhere"]
 
 [[mutation]]
 name = "the plugin tree takes any answer of rev-parse for an object name"
@@ -2736,8 +2152,8 @@ reddens = ["tests/scripts/test_plugin_tree.py::test_render_writes_into_an_empty_
 [[mutation]]
 name = "the plugin commit is dated a second after the epoch"
 file = "scripts/plugin_tree.py"
-before = 'IDENTITY = "stayfixed <release@stayfixed.invalid> 0 +0000"'
-after = 'IDENTITY = "stayfixed <release@stayfixed.invalid> 1 +0000"'
+before = 'IDENTITY = "drybag <release@drybag.invalid> 0 +0000"'
+after = 'IDENTITY = "drybag <release@drybag.invalid> 1 +0000"'
 reddens = [
   "tests/scripts/test_plugin_tree.py::test_commit_text_is_exactly_the_documented_bytes",
   "tests/scripts/test_plugin_tree.py::test_the_plugin_commit_is_what_git_computes",
@@ -3062,7 +2478,7 @@ reddens = [
   "tests/scripts/test_plugin_tree.py::test_a_plugin_json_version_that_is_not_x_y_z_in_ascii_digits_is_refused[a-tag]",
 ]
 
-# Run by an interpreter without this repository's `stayfixed`, `scripts/release.py` fails on its
+# Run by an interpreter without this repository's `drybag`, `scripts/release.py` fails on its
 # first import, before the CLI frame exists; a traceback would exit `1`, `check`'s findings.
 [[mutation]]
 name = "release.py exits 1 when its package cannot be imported"
@@ -3073,13 +2489,13 @@ reddens = [
   "tests/scripts/test_release.py::test_run_without_its_package_it_refuses_with_exit_2_and_says_to_use_uv",
 ]
 
-# `tomllib` came with Python 3.11, so an older `python3` fails on it as one without `stayfixed`
+# `tomllib` came with Python 3.11, so an older `python3` fails on it as one without `drybag`
 # does, and the same guard says so.
 [[mutation]]
 name = "release.py imports tomllib outside its guarded imports"
 file = "scripts/release.py"
-before = "try:\n    import tomllib\n\n    from stayfixed import fsops"
-after = "import tomllib\n\ntry:\n    from stayfixed import fsops"
+before = "try:\n    import tomllib\n\n    from drybag import fsops"
+after = "import tomllib\n\ntry:\n    from drybag import fsops"
 reddens = [
   "tests/scripts/test_release.py::test_run_on_a_python_without_tomllib_it_refuses_with_exit_2",
 ]
@@ -3093,7 +2509,7 @@ reddens = [
   "tests/scripts/test_release.py::test_run_without_its_package_it_refuses_with_exit_2_and_says_to_use_uv",
 ]
 
-# Run by an interpreter without this repository's `stayfixed`, the script fails on its first
+# Run by an interpreter without this repository's `drybag`, the script fails on its first
 # import, before the CLI frame exists; a traceback would exit `1`, `commit --require-pin`'s finding.
 [[mutation]]
 name = "plugin_tree.py exits 1 when its package cannot be imported"
@@ -3271,7 +2687,7 @@ file = ".github/workflows/release.yml"
 before = "      - name: The plugin commit of the commit this run builds\n"
 after = "      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0\n      - name: The plugin commit of the commit this run builds\n"
 reddens = [
-  "tests/test_check_workflow.py::test_only_the_attest_job_can_attest",
+  "tests/test_workflows.py::test_only_the_attest_job_can_attest",
 ]
 
 [[mutation]]
@@ -3282,7 +2698,7 @@ before = """        with:
       - uses: actions/download-artifact@"""
 after = """      - uses: actions/download-artifact@"""
 reddens = [
-  "tests/test_check_workflow.py::test_no_checkout_in_the_release_keeps_its_token",
+  "tests/test_workflows.py::test_no_checkout_in_the_release_keeps_its_token",
 ]
 
 [[mutation]]
@@ -3291,7 +2707,7 @@ file = "scripts/plugin_tree.py"
 before = 'SHA1 = re.compile(r"[0-9a-f]{40}")'
 after = 'SHA1 = re.compile(r"[0-9a-f]{40}", re.IGNORECASE)'
 reddens = [
-  "tests/test_check_workflow.py::test_one_commit_id_shape_everywhere",
+  "tests/test_workflows.py::test_one_commit_id_shape_everywhere",
 ]
 
 [[mutation]]
@@ -3309,7 +2725,7 @@ file = ".github/workflows/release.yml"
 before = "          fetch-depth: 2\n          persist-credentials: false\n      - uses: astral-sh/setup-uv"
 after = "          fetch-depth: 2\n      - uses: astral-sh/setup-uv"
 reddens = [
-  "tests/test_check_workflow.py::test_no_checkout_in_the_release_keeps_its_token",
+  "tests/test_workflows.py::test_no_checkout_in_the_release_keeps_its_token",
 ]
 
 # No script imports another, but the one exemption the rule names: `release.py` taking a sibling
@@ -3422,55 +2838,14 @@ reddens = [
 ]
 
 [[mutation]]
-name = "a failed scope job skips the runners job"
+name = "the demo job takes an action by its tag"
 file = ".github/workflows/ci.yml"
-before = '''  runners:
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}'''
-after = '''  runners:
-    needs: changes
-    if: ${{ needs.changes.outputs.code == 'true' }}'''
-reddens = [
-  "tests/test_ci_scope.py::test_every_job_that_reads_the_scope_runs_whole_on_any_answer_but_false",
-]
-
-# The `runners` job installs every real runner and is the one job where a missing one must fail:
-# a job that skipped them all would report green having run none.
-[[mutation]]
-name = "the runners job lets a missing runner skip"
-file = ".github/workflows/ci.yml"
-before = '''          STAYFIXED_REQUIRE_RUNNERS: "1"'''
-after = '''          STAYFIXED_REQUIRE_RUNNERS: "0"'''
-reddens = [
-  "tests/test_runners_job.py::test_the_runners_job_runs_the_runner_tests_with_a_missing_runner_failing",
-]
-
-[[mutation]]
-name = "the runners job takes an action by its tag"
-file = ".github/workflows/ci.yml"
-before = '''      - name: Go 1.27.2, the toolchain module, checked against its digest'''
+before = '''      - name: Install Claude Code for the attach act'''
 after = '''      - uses: actions/setup-go@v6
         with:
           go-version: "1.27.2"
-      - name: Go 1.27.2, the toolchain module, checked against its digest'''
+      - name: Install Claude Code for the attach act'''
 reddens = ["tests/test_fixtures.py::test_every_action_a_step_uses_is_pinned_by_a_commit_sha"]
-
-# The digest is the pin, recorded with its provenance in the fixtures' README.
-[[mutation]]
-name = "the runners job checks Go against a digest the README does not record"
-file = ".github/workflows/ci.yml"
-before = "          GO_ZIP_SHA256: 3a467ed067f27cd55bf3a702f8e2bf12479f53c9d8ae0de548f48ebcb3c67796"
-after = "          GO_ZIP_SHA256: 0a467ed067f27cd55bf3a702f8e2bf12479f53c9d8ae0de548f48ebcb3c67796"
-reddens = ["tests/test_runners_job.py::test_the_job_installs_the_pinned_node_and_go"]
-
-[[mutation]]
-name = "the runners job unpacks Go unchecked"
-file = ".github/workflows/ci.yml"
-before = '''          echo "$GO_ZIP_SHA256  $RUNNER_TEMP/go.zip" | sha256sum -c -
-          unzip -q "$RUNNER_TEMP/go.zip" -d "$RUNNER_TEMP/go"'''
-after = '''          unzip -q "$RUNNER_TEMP/go.zip" -d "$RUNNER_TEMP/go"
-          echo "$GO_ZIP_SHA256  $RUNNER_TEMP/go.zip" | sha256sum -c -'''
-reddens = ["tests/test_runners_job.py::test_the_job_installs_the_pinned_node_and_go"]
 
 [[mutation]]
 name = "a failed scope job skips the oracle"
@@ -3493,48 +2868,6 @@ after = '''      FULL: ${{ needs.changes.outputs.code == 'true' }}'''
 reddens = [
   "tests/test_ci_scope.py::test_every_job_that_reads_the_scope_runs_whole_on_any_answer_but_false",
 ]
-
-# Only the runners job opts the real-runner tests into the `node` and `go` on `PATH`.
-[[mutation]]
-name = "the runners job leaves the runners on PATH unused"
-file = ".github/workflows/ci.yml"
-before = '''          STAYFIXED_RUNNERS_ON_PATH: "1"'''
-after = '''          STAYFIXED_RUNNERS_ON_PATH: "0"'''
-reddens = [
-  "tests/test_runners_job.py::test_the_runners_job_runs_the_runner_tests_with_a_missing_runner_failing",
-]
-
-[[mutation]]
-name = "the judging step may be skipped"
-file = ".github/workflows/check.yml"
-before = """      - name: The configuration and the built-in gates
-        env:"""
-after = """      - name: The configuration and the built-in gates
-        if: always()
-        env:"""
-reddens = [
-  "tests/test_check_workflow.py::test_one_job_whose_judging_steps_may_not_fail_and_run_in_order",
-  "tests/test_check_workflow.py::test_the_verdict_s_process_gets_only_the_environment_its_step_names",
-]
-
-# Only the `runners` job takes `node` and `go` from `PATH` for the tests that run them; every other
-# job's tests skip there rather than run the hosted image's own.
-[[mutation]]
-name = "the checks job opts the tests into the runners on PATH"
-file = ".github/workflows/ci.yml"
-before = """        env:
-          STAYFIXED_OLD_PYTHON: ${{ steps.old-python.outputs.python-path }}"""
-after = """        env:
-          STAYFIXED_RUNNERS_ON_PATH: "1"
-          STAYFIXED_OLD_PYTHON: ${{ steps.old-python.outputs.python-path }}"""
-reddens = ["tests/test_runners_job.py::test_only_the_runners_job_opts_the_tests_into_the_runners_on_path"]
-
-[[mutation]]
-name = "the runners job leaves the pinned Go off PATH"
-file = ".github/workflows/ci.yml"
-before = """          echo "$RUNNER_TEMP/go/$GO_TOOLCHAIN/bin" >> "$GITHUB_PATH""""
-after = """          ls "$RUNNER_TEMP/go/$GO_TOOLCHAIN/bin""""
-reddens = ["tests/test_runners_job.py::test_the_runners_job_puts_the_pinned_go_first_on_path"]
 
 # --- scripts/publish_template.py: the overlay template's publisher -----------------------------
 #
@@ -3582,11 +2915,11 @@ reddens = [
 # every case in `tests/scripts/test_publish_template.py` still green.
 #
 # **Both strip lines, and this is the second time this entry was wrong.** Removing only the
-# `remove_within` left `rmdir_within` pointed at a `.stayfixed/` that still held the manifest,
+# `remove_within` left `rmdir_within` pointed at a `.drybag/` that still held the manifest,
 # which raises `OSError: Directory not empty` — so all twelve cases in the module failed and
 # the oracle said `caught` for a reason with nothing to do with the ledger. It would have gone
 # on saying `caught` with the assertion this entry exists to prove deleted. Measured with both
-# lines replaced: exactly one case fails, and it fails on `.stayfixed/manifest.json` being in
+# lines replaced: exactly one case fails, and it fails on `.drybag/manifest.json` being in
 # the render.
 [[mutation]]
 name = "publish-template publishes the scaffold ledger"

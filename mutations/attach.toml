@@ -8,7 +8,7 @@
 # parent is not.
 [[mutation]]
 name = "attach takes the overlay root from its argument instead of the machine file"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 # Widened past `read_binding`'s own line: `binding_for` has the same `overlay =
 # overlay_root(machine)` line, so a one-line `before` is not unique in this file — the oracle
 # refuses rather than mutating an ambiguous match, so a non-unique `before` goes uncaught until a
@@ -30,7 +30,7 @@ reddens = [
 # store could be checked against one root and bound under another if the file changed in between.
 [[mutation]]
 name = "read_binding reads the machine file a second time for the binding"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay)"
 after = "            f\"from an argument\"\n        )\n    return binding_for(root, config, machine=machine)"
 reddens = [
@@ -42,9 +42,9 @@ reddens = [
 # difference between an oracle and a smoke test.
 [[mutation]]
 name = "the permission diff starts reading the committed settings file"
-file = "src/stayfixed/attach/permissions.py"
-before = '    sources = _claude_sources(binding, PERMISSIONS_FILE)'
-after = '    sources = (*_claude_sources(binding, PERMISSIONS_FILE), (root / ".claude" / "settings.json", None))'
+file = "src/drybag/attach/permissions.py"
+before = '    sources = claude_sources(binding.plates, PERMISSIONS_FILE)'
+after = '    sources = (*claude_sources(binding.plates, PERMISSIONS_FILE), (root / ".claude" / "settings.json", None))'
 reddens = ["tests/attach/test_binding.py::test_a_committed_settings_file_can_never_contribute_a_rule"]
 
 # `memory.groups` is repository-authored and reaches no guard of its own (`config/paths.py`
@@ -64,7 +64,7 @@ reddens = ["tests/attach/test_binding.py::test_a_committed_settings_file_can_nev
 # that this check is asked, and the line that asks it is the one this entry should break.
 [[mutation]]
 name = "the memory.groups containment is asked at write time only"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "    _check_groups(binding, config)"
 after = "    pass  # `_check_groups` is not asked"
 reddens = [
@@ -78,7 +78,7 @@ reddens = [
 # for.
 [[mutation]]
 name = "the write-time containment on the overlay's store directory is swallowed"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = '''        except UnsafePath as exc:
             raise Refusal(GROUP_ESCAPES) from exc'''
 after = '''        except UnsafePath:
@@ -89,22 +89,18 @@ reddens = [
 
 # --- install path: the review's eight attach/doctor findings -----------------------------
 
-# `.stayfixed/local/attach.json` is a path a clone can commit — `.gitignore` does not untrack a
+# `.drybag/local/attach.json` is a path a clone can commit — `.gitignore` does not untrack a
 # committed file — and `detach` deletes by the strings in `rules` and pops settings keys by the
 # strings in `settings_keys`. `fsops.remove_within` contains the deletion to the root, and
 # `.github/workflows/`, `.pre-commit-config.yaml` and every source file are inside it, so
 # containment is not the guard. The guard is what `attach` could have written.
 [[mutation]]
 name = "detach deletes whatever file the ledger names"
-file = "src/stayfixed/attach/write.py"
-before = '''    prefix = f"{CODEX_RULES}/"
-    if not rule.startswith(prefix):
-        return False'''
-after = '''    prefix = f"{CODEX_RULES}/"
-    if True:
-        return True'''
+file = "src/drybag/attach/write.py"
+before = "            if (path := PurePosixPath(rule)).parent == PurePosixPath(CODEX_RULES)\n            and path.name != \"..\"\n"
+after = "            if True\n"
 reddens = [
-  "tests/attach/test_detach.py::test_a_ledger_naming_a_file_attach_could_not_have_written_removes_nothing",
+  "tests/attach/test_detach.py::test_a_ledger_naming_a_path_outside_the_rule_copies_removes_none_of_them",
 ]
 
 # The measured widening, and the other half of the same guard. `_withdraw_settings` assigns
@@ -113,9 +109,9 @@ reddens = [
 # deny rules included. A repository may not remove a deny rule by committing a JSON file.
 [[mutation]]
 name = "detach drops whatever settings key the ledger names"
-file = "src/stayfixed/attach/write.py"
-before = '    foreign += sum(1 for key in keys if key != POINTER_KEY)'
-after = '    foreign += 0'
+file = "src/drybag/attach/write.py"
+before = "        settings_keys=tuple(key for key in recorded.settings_keys if key == POINTER_KEY),"
+after = "        settings_keys=recorded.settings_keys,"
 reddens = [
   "tests/attach/test_detach.py::test_a_ledger_claiming_the_permissions_key_never_drops_the_owners_deny_rules",
 ]
@@ -127,42 +123,33 @@ reddens = [
 # on the same reasoning; an allow rule is less bounded than that, not more.
 [[mutation]]
 name = "detach prints the ledger's own strings"
-file = "src/stayfixed/attach/commands.py"
+file = "src/drybag/attach/commands.py"
 before = '        "allow_removed": len(removed.allow_removed),'
 after = '        "allow_removed": list(removed.allow_removed),'
 reddens = [
   "tests/attach/test_commands.py::test_nothing_the_ledger_holds_reaches_detachs_line_or_its_json",
 ]
 
-# `attach`'s own rule, one door over, and introduced by the commit that wrote the rule down.
-# `ledger()` refuses a ledger naming files or settings keys `attach` could not have written, and
-# `_write_ledger` was the thing that asked for it — from the fourth write of the run. A clone
-# committing such a ledger got the ignore region, the `.codex/rules/` copies and the settings
-# merge written before the exit 2, with the committed ledger still on disk for `doctor._attached`
-# to key on. The mutation puts a write above the read.
+# The ledger lives in the git common directory, which a branch cannot write. Kept in the working
+# tree, a branch's committed copy named hand-written Codex rules and typed allow rules for a
+# re-attach and a `detach` to remove.
 [[mutation]]
-name = "the ledger is read after attach has already written"
-file = "src/stayfixed/attach/write.py"
-before = '''    previous = existing_ledger(root)
-    memory = config.memory.mode == OVERLAY_MODE'''
-# The write is put above the read rather than the read moved below the writes: `previous` is also
-# read by the settings-candidate question above the first write, so moving the read would break
-# the name instead of the order.
-after = '''    fsops.write_within(root, ".stayfixed-probe", "")
-    previous = existing_ledger(root)
-    memory = config.memory.mode == OVERLAY_MODE'''
+name = "the ledger is read from the working tree"
+file = "src/drybag/attach/write.py"
+before = "        return read_ledger(common_directory(root) / LEDGER_FILE)\n    except NotALedger:"
+after = "        return read_ledger(root / \".drybag/local/attach.json\")\n    except NotALedger:"
 reddens = [
-  "tests/attach/test_write.py::test_a_ledger_no_attach_could_have_written_is_refused_before_the_first_write",
+  "tests/attach/test_detach.py::test_a_ledger_a_branch_commits_names_nothing_a_re_attach_or_detach_removes",
 ]
 
 # "An attach and a detach leave the tree byte-for-byte as it was" was false for directories, and
-# the round-trip test could not see it: `_snapshot` filters on `is_file()`, so `.stayfixed/local/`,
-# `.stayfixed/`, `.codex/rules/` and `.codex/` accumulated across every cycle with the suite green.
+# the round-trip test could not see it: `_snapshot` filters on `is_file()`, so `.drybag/local/`,
+# `.drybag/`, `.codex/rules/` and `.codex/` accumulated across every cycle with the suite green.
 # Recording what was absent above the first write is what makes the removal safe, and this is that
 # record's proof.
 [[mutation]]
 name = "detach leaves behind the directories the attach created"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = '    return tuple(name for name in CREATED_DIRS if not _reached_directory(root / name))'
 after = '    return ()'
 reddens = [
@@ -174,30 +161,30 @@ reddens = [
 # made themselves. "A detach must not remove a directory it did not create" is what this line is.
 [[mutation]]
 name = "attach records a directory that was already there"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = '    return tuple(name for name in CREATED_DIRS if not _reached_directory(root / name))'
 after = '    return CREATED_DIRS'
 reddens = [
   "tests/attach/test_detach.py::test_detach_leaves_a_directory_that_was_there_before_the_attach",
 ]
 
-# `.stayfixed/local/attach.json` is a path a clone can commit, and `directories` drives `rmdir`.
+# `.drybag/local/attach.json` is a path a clone can commit, and `directories` drives `rmdir`.
 # Held to the same closed list `rules` and `settings_keys` are, so a ledger naming anything else
 # is refused with nothing removed. Dropping the count is a partial defence reported as a success.
 [[mutation]]
 name = "the ledger's directory list stops being held to what attach could have created"
-file = "src/stayfixed/attach/write.py"
-before = '    foreign += sum(1 for name in directories if name not in CREATED_DIRS)'
-after = '    foreign += 0'
+file = "src/drybag/attach/write.py"
+before = "    for name in CREATED_DIRS:\n        # `is_dir()` before the call"
+after = "    for name in recorded.directories:\n        # `is_dir()` before the call"
 reddens = [
-  "tests/attach/test_detach.py::test_a_ledger_naming_a_directory_no_attach_creates_is_refused",
+  "tests/attach/test_detach.py::test_a_ledger_naming_a_directory_no_attach_creates_is_skipped",
 ]
 
 # `--check` promises to read the document the real run reads. Filtering a malformed
 # `permissions.allow` let it exit 0 promising one rule for a file the real run then refused.
 [[mutation]]
 name = "attach --check filters a malformed allow list the real run refuses"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = "        raise EntriesError(f\"{label}: 'permissions.allow' is not a list of strings\")"
 after = "        return []"
 reddens = [
@@ -206,7 +193,7 @@ reddens = [
 
 [[mutation]]
 name = "attach reads an overlay group's null hooks as none"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = '            entries = group.get("hooks", [])'
 after = '            entries = group.get("hooks") or []'
 reddens = [
@@ -217,8 +204,8 @@ reddens = [
 # Printing the path that embeds it is the same defect `permissions.check` was written to avoid.
 [[mutation]]
 name = "the --store refusal prints the path that embeds the project name"
-file = "src/stayfixed/attach/binding.py"
-before = 'f"records -- {overlay / PROJECTS}/<the name in stayfixed.toml>/{STORE_DIR} -- and "'
+file = "src/drybag/attach/binding.py"
+before = 'f"records -- {overlay / PROJECTS}/<the name in drybag.toml>/{STORE_DIR} -- and "'
 after = 'f"records ({expected}), and "'
 reddens = [
   "tests/attach/test_binding.py::test_a_project_name_reaches_neither_refusal_of_this_module",
@@ -229,7 +216,7 @@ reddens = [
 # argument restored two loads with the whole suite still green.
 [[mutation]]
 name = "check loads the configuration twice again"
-file = "src/stayfixed/attach/check.py"
+file = "src/drybag/attach/check.py"
 before = "    binding = read_binding(root, store=store, machine=machine, config=config)"
 after = "    binding = read_binding(root, store=store, machine=machine)"
 reddens = [
@@ -239,12 +226,12 @@ reddens = [
 # The fourth site of one family, repository bytes quoted back unbounded, whose third is
 # `mutations/`'s "a tomllib message is quoted back whole, so a hostile key reaches a refusal". The
 # file is the overlay's `projects/<name>/project.toml`, whose bytes are the machine owner's and may
-# print — except that the value stayfixed writes into it is this repository's `origin`, and a remote
+# print — except that the value drybag writes into it is this repository's `origin`, and a remote
 # URL may not print wherever it came from. `tomllib`'s message embeds the source for several of its
 # faults, so the whole exception is unbounded bytes in a `Failure` the attach skill relays.
 [[mutation]]
 name = "the binding record's parse failure is quoted back whole"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = '        raise UnreadableRecord(f"{where} is not valid TOML {toml_position(exc)}") from None'
 after = '        raise UnreadableRecord(f"{where} is not valid TOML: {exc}") from exc'
 reddens = [
@@ -253,11 +240,11 @@ reddens = [
 
 # The mirror of `mutations/`'s "check loads the configuration twice again", over the half that
 # writes. `attach` called `read_binding` without a `Config` and then loaded a second one for its own
-# `memory.groups` refusals, so one run read `stayfixed.toml` and the machine file twice and the two
+# `memory.groups` refusals, so one run read `drybag.toml` and the machine file twice and the two
 # halves were free to disagree about `project.name`, `memory.groups` and `paths.memory`.
 [[mutation]]
 name = "attach loads the configuration twice again"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "    binding = read_binding(root, store=store, machine=machine, config=config)"
 after = "    binding = read_binding(root, store=store, machine=machine)"
 reddens = [
@@ -272,7 +259,7 @@ reddens = [
 # true.
 [[mutation]]
 name = "a session with no upstream is told it has 0 unpushed commits"
-file = "src/stayfixed/attach/hooks.py"
+file = "src/drybag/attach/hooks.py"
 before = '''                if sync.ahead is None:
                     lines.append(NO_UPSTREAM.format(dirty=sync.dirty))
                 elif sync.dirty > 0 or sync.ahead > 0:
@@ -292,7 +279,7 @@ reddens = [
 # emptied, every invocation pays again, which is the state this gate was measured against.
 [[mutation]]
 name = "a compacted session re-pays the overlay sync"
-file = "src/stayfixed/attach/hooks.py"
+file = "src/drybag/attach/hooks.py"
 before = 'CONTINUED = frozenset({"compact"})'
 after = "CONTINUED = frozenset()"
 reddens = [
@@ -306,7 +293,7 @@ reddens = [
 # safety off the dispatcher's own catch: the two guards are independent.
 [[mutation]]
 name = "an open session handler lets an unforeseen failure out"
-file = "src/stayfixed/attach/hooks.py"
+file = "src/drybag/attach/hooks.py"
 # Widened past the `except` to its comment: the rule handlers beside it keep the same backstop.
 before = """    # An open handler never costs a session.
     except Exception:
@@ -323,7 +310,7 @@ reddens = [
 # parser as one that does not parse.
 [[mutation]]
 name = "attach meets an overlay record nested past the parser as an internal error"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    except UNPARSEABLE as exc:"
 after = "    except UNPARSEABLE[0] as exc:"
 reddens = [
@@ -332,13 +319,24 @@ reddens = [
 ]
 
 [[mutation]]
-name = "attach's first-attach date meets an overlay record nested past the parser as an internal error"
-file = "src/stayfixed/attach/write.py"
+name = "attach's record table meets an overlay record nested past the parser as an internal error"
+file = "src/drybag/attach/write.py"
 before = "    except (OSError, UnicodeDecodeError, *UNPARSEABLE):"
 after = "    except (OSError, UnicodeDecodeError, UNPARSEABLE[0]):"
 reddens = [
-  "tests/config/test_deep_toml.py::test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_deep_one[first-attach]",
-  "tests/config/test_deep_toml.py::test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_long_number[first-attach]",
+  "tests/config/test_deep_toml.py::test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_deep_one[record-table]",
+  "tests/config/test_deep_toml.py::test_a_reader_that_degrades_on_a_broken_record_degrades_on_a_long_number[record-table]",
+]
+
+# The record is the owner's: `tags`, comments and tables they wrote stay byte for byte, and attach
+# adds only the keys it owns above them.
+[[mutation]]
+name = "attach rewrites the whole project record"
+file = "src/drybag/attach/write.py"
+before = '''    fsops.write_within(binding.overlay, relative, tomlout.dumps({"": missing}) + text)'''
+after = '''    fsops.write_within(binding.overlay, relative, tomlout.dumps({"": {**held, **missing}}))'''
+reddens = [
+  "tests/attach/test_write.py::test_attach_keeps_every_key_and_byte_of_the_record_it_did_not_write",
 ]
 
 # A `.gitignore` that re-includes a placed path with a `!` line outranks the exclude block, so git
@@ -347,7 +345,7 @@ reddens = [
 # where git shows it.
 [[mutation]]
 name = "the ignore check skips the settings file"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "    if shown := exclude.unignored(root, planned.placed):"
 after = "    if shown := exclude.unignored(root, [p for p in planned.placed if p != LOCAL_SETTINGS]):"
 reddens = [
@@ -358,9 +356,9 @@ reddens = [
 # or one that opens a file the index tracks, is refused above every write, or `attach` writes over it.
 [[mutation]]
 name = "attach writes over a tracked placed path"
-file = "src/stayfixed/attach/write.py"
-before = "    if found := exclude.tracked(root, placed):"
-after = "    if found := exclude.tracked(root, ()):"
+file = "src/drybag/attach/write.py"
+before = "    if found := tuple(path for path in placed if path in tracked):"
+after = "    if found := ():"
 reddens = [
   "tests/attach/test_write.py::test_a_tracked_codex_rule_copy_is_refused_before_anything_is_written",
   "tests/attach/test_write.py::test_a_tracked_local_settings_file_is_refused_before_anything_is_written",
@@ -370,7 +368,7 @@ reddens = [
 # path's spelling, `ſ` to `s` on APFS among them: asked by identity, never by emulation.
 [[mutation]]
 name = "attach asks git alone whether a placed path is tracked"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "        if _folded(relative) in listed or _identity(root / relative) in files - {None}"
 after = "        if _folded(relative) in listed"
 reddens = [
@@ -382,22 +380,11 @@ reddens = [
 # visible writes the exclude block into that checkout, and the check after it refuses the run.
 [[mutation]]
 name = "attach treats an ignored path as not ignored"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '    hidden = {name for name in out.split("\0") if name}'
 after = "    hidden: set[str] = set()"
 reddens = [
   "tests/attach/test_write.py::test_a_checkout_that_already_hides_everything_is_not_touched",
-]
-
-# The ledger's path is the one project path `attach` writes that no exclude candidate names, so
-# nothing held it to the project by name above the first write.
-[[mutation]]
-name = "attach stops holding the ledger's path to the project"
-file = "src/stayfixed/attach/write.py"
-before = "    contained(root, ATTACH_LEDGER)"
-after = "    pass"
-reddens = [
-  "tests/attach/test_write.py::test_a_symlinked_stayfixed_directory_is_refused_before_anything_is_written",
 ]
 
 # A repository-authored group name holding U+2028 (or a NUL, or another character `str.splitlines`
@@ -406,7 +393,7 @@ reddens = [
 # path's pattern. Refusing only `\n` and `\r` lets every one of those names through.
 [[mutation]]
 name = "the exclude line refuses only a newline"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '    if relative.splitlines() != [relative] or "\0" in relative:'
 after = '    if "\n" in relative or "\r" in relative:'
 reddens = [
@@ -418,7 +405,7 @@ reddens = [
 # holding U+2028 came back as three and the rewritten block un-hid the owner's `.env`.
 [[mutation]]
 name = "the exclude block is re-read at every line separator"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '    return [line.removesuffix("\r") for line in (body or "").split("\n")]'
 after = "    return (body or \"\").splitlines()"
 reddens = [
@@ -432,7 +419,7 @@ reddens = [
 # alone, the checkout is the work tree again.
 [[mutation]]
 name = "the owner's exclude question reads the checkout's .gitignore"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '        asked = (*around, f"--work-tree={empty}", "check-ignore", "--no-index", "--stdin", "-z")'
 after = '        asked = (*around, "check-ignore", "--no-index", "--stdin", "-z")'
 reddens = [
@@ -444,7 +431,7 @@ reddens = [
 # exclude file is a symlink.
 [[mutation]]
 name = "the exclude block ignores what the owner's excludes hide"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "        unheld = set(_unmatched(root, relatives, *asked))"
 after = "        unheld = set(relatives)"
 reddens = [
@@ -458,7 +445,7 @@ reddens = [
 # Asked with the index, it took the repository's line for the owner's again.
 [[mutation]]
 name = "the owner's exclude question reads the index"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '        asked = (*around, f"--work-tree={empty}", "check-ignore", "--no-index", "--stdin", "-z")'
 after = '        asked = (*around, f"--work-tree={empty}", "check-ignore", "--stdin", "-z")'
 reddens = [
@@ -469,7 +456,7 @@ reddens = [
 # question is the empty directory: the owner's lines stood in for nothing there.
 [[mutation]]
 name = "the owner's relative excludes file is read from the empty work tree"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '    return ("-c", f"core.excludesFile={root / setting}")'
 after = "    return ()"
 reddens = [
@@ -480,7 +467,7 @@ reddens = [
 # alone dropped it: grant a rule between two attaches and the link tree showed in `git status`.
 [[mutation]]
 name = "the exclude block forgets what an earlier attach hid"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "    kept = _patterns(earlier)"
 after = "    kept: list[str] = []"
 reddens = [
@@ -490,7 +477,7 @@ reddens = [
 # An exclude file `attach` created for its block was left behind empty by `detach`.
 [[mutation]]
 name = "detach leaves the exclude file attach created"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "    if EXCLUDE_CREATED in records and not remaining:"
 after = "    if False:"
 reddens = [
@@ -501,7 +488,7 @@ reddens = [
 # line ending behind.
 [[mutation]]
 name = "detach keeps the line ending attach added"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "    if EXCLUDE_ENDED in records and current.startswith(remaining):"
 after = "    if False:"
 reddens = [
@@ -512,7 +499,7 @@ reddens = [
 # refused both `attach` and `detach`.
 [[mutation]]
 name = "the exclude file is read as UTF-8 text"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '    return raw.decode("utf-8", "surrogateescape")'
 after = '    return raw.decode("utf-8")'
 reddens = [
@@ -523,7 +510,7 @@ reddens = [
 # printed through `printed.quoted`; raw, a line break in it starts a line of the refusal.
 [[mutation]]
 name = "the exclude file's symlink refusal prints its path raw"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "        raise Refusal(LINKED.format(path=quoted(str(path))))"
 after = "        raise Refusal(LINKED.format(path=path))"
 reddens = [
@@ -535,7 +522,7 @@ reddens = [
 # copies. They are read while `attach` plans; this is the refusal that makes that read count.
 [[mutation]]
 name = "attach copies past an overlay rule that is not UTF-8"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = '            texts.append((target, source.read_text(encoding="utf-8")))'
 after = '            texts.append((target, source.read_text(encoding="utf-8", errors="replace")))'
 reddens = [
@@ -546,7 +533,7 @@ reddens = [
 # cannot be listed: one fault class, and the project's `codex/` carries `project.name`.
 [[mutation]]
 name = "an overlay rule file that cannot be read is printed raw"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "        with fsops.reading(quoted(str(source)), _nothing_written):\n"
 after = "        with fsops.reading(source, _nothing_written):\n"
 reddens = [
@@ -558,7 +545,7 @@ reddens = [
 # had its region.
 [[mutation]]
 name = "attach finds out the exclude file cannot be written by writing it"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "    if not fsops.creatable(path):\n        raise Refusal(UNWRITABLE.format(path=quoted(str(path))))\n    return ExcludeWrite(path, updated)"
 after = "    if False:\n        raise Refusal(UNWRITABLE.format(path=quoted(str(path))))\n    return ExcludeWrite(path, updated)"
 reddens = [
@@ -570,7 +557,7 @@ reddens = [
 # copies and the link tree were withdrawn, with the ledger and the block left in place.
 [[mutation]]
 name = "detach finds out the exclude file cannot be written by writing it"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "    if not fsops.creatable(path):\n        raise Refusal(UNWRITABLE.format(path=quoted(str(path))))\n    records = _lines(body)"
 after = "    if False:\n        raise Refusal(UNWRITABLE.format(path=quoted(str(path))))\n    records = _lines(body)"
 reddens = [
@@ -579,7 +566,7 @@ reddens = [
 
 [[mutation]]
 name = "a failed exclude write is an internal error"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = """    except OSError as exc:
         raise Refusal(
             NOT_WRITTEN"""
@@ -593,7 +580,7 @@ reddens = [
 # "region 'attach' is opened or closed twice" named the region and never the file.
 [[mutation]]
 name = "a doubled exclude block is refused without its file"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '        raise RegionError(f"{quoted(str(path))}: {exc}") from exc'
 after = "        raise"
 reddens = [
@@ -605,7 +592,7 @@ reddens = [
 # file was withdrawn, as `internal error: UnsafePath`.
 [[mutation]]
 name = "detach finds a linked .codex by removing through it"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = """    for rule in recorded.rules:
         _walked("""
 after = """    for rule in ():
@@ -619,7 +606,7 @@ reddens = [
 # in place.
 [[mutation]]
 name = "detach finds the exclude block after it has withdrawn the settings"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = """    hidden = exclude.withdrawn_block(root)
     settings = _planned_settings(root, recorded)
     # What the main checkout's settings file names, which decides each `claude plugin` call: read
@@ -642,14 +629,14 @@ reddens = [
 # named `*` unescaped hides every untracked note under `paths.memory`.
 [[mutation]]
 name = "the exclude line leaves a star unescaped"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '_SPECIAL = frozenset("\\*?[ ")'
 after = '_SPECIAL = frozenset("\\?[ ")'
 reddens = ["tests/attach/test_write.py::test_each_pattern_character_in_a_group_name_is_escaped[star]"]
 
 [[mutation]]
 name = "the exclude line leaves a question mark unescaped"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '_SPECIAL = frozenset("\\*?[ ")'
 after = '_SPECIAL = frozenset("\\*[ ")'
 reddens = [
@@ -658,7 +645,7 @@ reddens = [
 
 [[mutation]]
 name = "the exclude line leaves a bracket unescaped"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '_SPECIAL = frozenset("\\*?[ ")'
 after = '_SPECIAL = frozenset("\\*? ")'
 reddens = [
@@ -667,7 +654,7 @@ reddens = [
 
 [[mutation]]
 name = "the exclude line leaves a backslash unescaped"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '_SPECIAL = frozenset("\\*?[ ")'
 after = '_SPECIAL = frozenset("*?[ ")'
 reddens = [
@@ -678,7 +665,7 @@ reddens = [
 # `.claude` linked in from elsewhere was refused only by accident, by a later write.
 [[mutation]]
 name = "the exclude block stops holding placed paths to the project"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "        contained(root, relative, allow_final_symlink=True)"
 after = "        pass"
 reddens = [
@@ -689,7 +676,7 @@ reddens = [
 # through one and replace the link with a regular file.
 [[mutation]]
 name = "detach reads the block through a symlinked exclude file"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "    if fsops.is_symlink(path) or not fsops.is_file(path):"
 after = "    if not fsops.is_file(path):"
 reddens = [
@@ -701,18 +688,18 @@ reddens = [
 # a 0.1.x attach wrote, with no exclude block, which the next attach writes nothing into.
 [[mutation]]
 name = "attach leaves the settings file out of what it places"
-file = "src/stayfixed/attach/write.py"
-before = "    return (ATTACH_LEDGER, *rules, LOCAL_SETTINGS)"
-after = "    return (ATTACH_LEDGER, *rules)"
+file = "src/drybag/attach/write.py"
+before = "    return (*rules, LOCAL_SETTINGS)"
+after = "    return (*rules,)"
 reddens = [
   "tests/attach/test_write.py::test_a_settings_file_an_earlier_attach_wrote_is_hidden_by_the_next_one",
 ]
 
-# In the block led by `mutations/`'s "a hash region reads a lone carriage return as a line end": git
-# ends a line at `\n` alone.
+# git ends a line at `\n` alone: read as ended, a last line `/zz\r` had the block's first marker
+# glued onto it, and git lost the pattern.
 [[mutation]]
 name = "the exclude block reads a lone carriage return as a line end"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '            *((EXCLUDE_ENDED_AFTER_CR,) if current.endswith("\r") else ()),'
 after = ""
 reddens = [
@@ -721,7 +708,7 @@ reddens = [
 
 [[mutation]]
 name = "detach takes back half the CRLF attach added"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '    return "\r\n" if text.endswith("\r\n") else "\n" if text.endswith("\n") else ""'
 after = '    return "\n" if text.endswith("\n") else ""'
 reddens = [
@@ -733,7 +720,7 @@ reddens = [
 # `detach` removed the file and left the directory behind.
 [[mutation]]
 name = "detach leaves the info directory attach created"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "            if planned.directory_created:"
 after = "            if False:"
 reddens = [
@@ -742,7 +729,7 @@ reddens = [
 
 [[mutation]]
 name = "the exclude block forgets that it created the info directory"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "            *((EXCLUDE_DIRECTORY_CREATED,) if not fsops.is_dir(path.parent) else ()),"
 after = ""
 reddens = [
@@ -751,7 +738,7 @@ reddens = [
 
 [[mutation]]
 name = "detach removes an info directory the owner had"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = "        return ExcludeWrite(path, None, EXCLUDE_DIRECTORY_CREATED in records)"
 after = "        return ExcludeWrite(path, None, True)"
 reddens = [
@@ -760,47 +747,32 @@ reddens = [
 
 # Every path `detach` writes or removes is walked before the first withdrawal, with the removal's
 # own walk. The earlier check asked `contained` instead, which let `paths.memory`'s last component
-# be a link and asked nothing of the ledger or the settings file, so each of those linked in after
-# the attach ended as `internal error: UnsafePath` with the settings file already withdrawn.
-[[mutation]]
-name = "detach walks to the ledger only when it removes it"
-file = "src/stayfixed/attach/write.py"
-before = """    _walked(
-        root,
-        ATTACH_LEDGER,
-        what=f"the ledger, `{ATTACH_LEDGER}`",
-        where="`.stayfixed` or `.stayfixed/local`",
-    )"""
-after = ""
-reddens = [
-  "tests/attach/test_detach.py::test_a_directory_linked_in_after_attach_refuses_before_anything_is_withdrawn[stayfixed]",
-  "tests/attach/test_detach.py::test_a_directory_linked_in_after_attach_refuses_before_anything_is_withdrawn[stayfixed-local]",
-]
-
+# be a link and asked nothing of the settings file, so one linked in after the attach ended as
+# `internal error: UnsafePath` with the allow rules already withdrawn.
 [[mutation]]
 name = "detach walks to the settings file only when it rewrites it"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "    if settings.text is not None:"
 after = "    if False:"
 reddens = [
-  "tests/attach/test_detach.py::test_a_directory_linked_in_after_attach_refuses_before_anything_is_withdrawn[claude]",
+  "tests/attach/test_detach.py::test_a_directory_linked_in_after_attach_refuses_before_anything_is_withdrawn",
 ]
 
 # A rule copy that is itself a link is unlinked by the removal, which follows no final component;
 # a check that is not the walk refused it, blaming `.codex`.
 [[mutation]]
 name = "detach refuses a rule copy that is itself a symlink"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "        fsops.check_within(root, relative)"
 after = "        contained(root, relative)"
 reddens = [
   "tests/attach/test_detach.py::test_a_rule_copy_that_is_itself_a_symlink_is_withdrawn",
 ]
 
-# A settings file with nothing of stayfixed's in it was rewritten anyway, in another layout.
+# A settings file with nothing of drybag's in it was rewritten anyway, in another layout.
 [[mutation]]
 name = "detach rewrites a settings file it withdraws nothing from"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "        unchanged = remaining == held"
 after = "        unchanged = False"
 reddens = [
@@ -811,7 +783,7 @@ reddens = [
 # the file's own ending": git drops one `\r` before the `\n` that ends a line.
 [[mutation]]
 name = "detach leaves the newline it added after a lone carriage return"
-file = "src/stayfixed/attach/exclude.py"
+file = "src/drybag/attach/exclude.py"
 before = '        remaining = remaining.removesuffix("\n")'
 after = "        pass"
 reddens = [
@@ -823,19 +795,19 @@ reddens = [
 # read, the refusal still comes and the snapshot of what it left does not hold.
 [[mutation]]
 name = "attach reads the overlay's rule sources after its first write"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "    rules = _codex_rule_texts(binding)"
-after = """    fsops.write_within(root, ".stayfixed-probe", "")
+after = """    fsops.write_within(root, ".drybag-probe", "")
     rules = _codex_rule_texts(binding)"""
 reddens = [
   "tests/attach/test_write.py::test_an_overlay_rule_that_is_not_utf8_stops_attach_before_it_writes",
 ]
 
-# `.stayfixed/local/attach.json` is a file a clone can commit, so the row asks the overlay — the
-# trusted side — whether a binding stands behind it.
+# A ledger is one half of an attach and this machine's binding the other, so the row asks the
+# binding whether one stands behind it.
 [[mutation]]
-name = "a committed ledger counts as an attach again"
-file = "src/stayfixed/attach/doctor.py"
+name = "a ledger with no binding counts as an attach"
+file = "src/drybag/attach/doctor.py"
 before = "    if state == UNBOUND or id is None:"
 after = "    if False:"
 reddens = [
@@ -846,7 +818,7 @@ reddens = [
 # registry's docstring that lists it: the local settings file put back as a literal is one more.
 [[mutation]]
 name = "doctor spells the local settings file again"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = "    unread = POINTER_UNREAD.format(settings=LOCAL_SETTINGS)"
 after = "    unread = POINTER_UNREAD.format(settings=\".claude/settings.local.json\")"
 reddens = [
@@ -861,7 +833,7 @@ reddens = [
 # missing overlay into an accusation against the repository.
 [[mutation]]
 name = "a ledger naming a store the overlay does not permit is excused as our own input"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = """    except Refusal:
         return UNRESOLVED"""
 after = """    except Refusal:
@@ -872,7 +844,7 @@ reddens = [
 
 [[mutation]]
 name = "a machine with no overlay recorded is blamed on the repository"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = "    if context.overlay_root is None:\n        return NO_OVERLAY"
 after = "    if False:\n        return NO_OVERLAY"
 reddens = [
@@ -884,7 +856,7 @@ reddens = [
 # `mutations/`'s "a machine with no overlay recorded is blamed on the repository".
 [[mutation]]
 name = "the attached row reddens a ledger no overlay is recorded to check"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = """    if reason == NO_OVERLAY:
         return Row(
             SKIP,"""
@@ -895,93 +867,35 @@ reddens = [
   "tests/attach/test_doctor.py::test_a_ledger_on_a_machine_that_records_no_overlay_skips_and_never_reads_as_attached",
 ]
 
-# A ledger that will not parse is the repository's doing, and answering it as an overlay that
+# A ledger that will not parse is a fact about the ledger, and answering it as an overlay that
 # could not be asked makes the `attached` row a `skip` that blames `git`. `skip` never reaches the
-# exit code, so this is not only a wrong sentence: a clone's own committed, malformed ledger was
-# silent as well as misattributed.
+# exit code, so this is not only a wrong sentence: a malformed ledger was silent as well as
+# misattributed.
 [[mutation]]
-name = "doctor blames git for a ledger the repository committed"
-file = "src/stayfixed/attach/doctor.py"
-before = "    if isinstance(recorded, str):\n        return UNREADABLE_LEDGER"
+name = "doctor blames git for a ledger that will not parse"
+file = "src/drybag/attach/doctor.py"
+before = "    if isinstance(recorded, str):\n        return recorded"
 after = "    if isinstance(recorded, str):\n        return UNASKABLE"
 reddens = [
-  "tests/attach/test_doctor.py::test_a_ledger_that_cannot_be_read_is_this_repositorys_doing_and_never_blamed_on_git",
+  "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer",
 ]
 
 # The binding's row for a checkout that was never attached, captured from the code before the row
 # moved into this area: a reworded sentence is a change every reader of the report sees.
 [[mutation]]
 name = "the unattached row's sentence is reworded"
-file = "src/stayfixed/attach/doctor.py"
-before = '''            f"memory.mode is overlay and {ATTACH_LEDGER} does not exist, so nothing records an "'''
-after = '''            f"memory.mode is overlay and {ATTACH_LEDGER} is missing, so nothing records an "'''
+file = "src/drybag/attach/doctor.py"
+before = '''            f"memory.mode is overlay and {LEDGER_NAME} does not exist, so nothing records an "'''
+after = '''            f"memory.mode is overlay and {LEDGER_NAME} is missing, so nothing records an "'''
 reddens = [
   "tests/attach/test_doctor.py::test_an_unattached_project_reports_attached_as_it_did[overlay]",
-]
-
-# The attach ledger is a file a clone can commit, and its readers catch the reader's own `Failure`
-# and `Refusal`. A shape `attach` never writes that raised anything else reached `doctor`'s guard,
-# and `attached` read red, "this check could not run", on a file the repository
-# chose: a `store` holding a NUL, which `Path.resolve` meets with `ValueError`, one holding a
-# character no path can spell, which it meets with `UnicodeEncodeError`, and a list field holding a
-# number, which iterating it meets with `TypeError`.
-[[mutation]]
-name = "the attach ledger's reader takes a store holding a NUL"
-file = "src/stayfixed/attach/write.py"
-before = '    if "\0" in store:'
-after = '    if False:'
-reddens = [
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[store-nul]",
-]
-
-[[mutation]]
-name = "the attach ledger's reader takes a store no path can spell"
-file = "src/stayfixed/attach/write.py"
-before = "        os.fsencode(store)"
-after = "        pass"
-reddens = [
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[store-unencodable]",
-]
-
-[[mutation]]
-name = "the attach ledger's reader iterates a field that is not a list"
-file = "src/stayfixed/attach/write.py"
-before = '    if not isinstance(value, list):'
-after = '    if False:'
-reddens = [
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[allow-not-a-list]",
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[rules-not-a-list]",
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[settings-keys-not-a-list]",
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[directories-not-a-list]",
-]
-
-# The two fields the reader used to pass through `str()`: `{"store": 5}` read as the store `5`, and
-# on Python 3.14, whose parser follows deeper nesting than `str()` does, a deeply nested value raised
-# `RecursionError` past every reader's catch. The oracle runs on 3.13, where the nested cases skip,
-# so the entries name the cases that run there; the nested ones were measured by hand on 3.14.
-[[mutation]]
-name = "the attach ledger's reader reads a store that is not text"
-file = "src/stayfixed/attach/write.py"
-before = "    if not isinstance(store, str):\n"
-after = "    store = str(store)\n    if not isinstance(store, str):\n"
-reddens = [
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[store-not-text]",
-]
-
-[[mutation]]
-name = "the attach ledger's reader reads an entry's event that is not text"
-file = "src/stayfixed/attach/write.py"
-before = "    if isinstance(entries, dict) and not all(isinstance(v, str) for v in entries.values()):"
-after = "    if False:"
-reddens = [
-  "tests/attach/test_doctor.py::test_a_committed_ledger_of_a_shape_attach_never_writes_reads_as_unreadable[entry-event-not-text]",
 ]
 
 # The store a ledger names reaches `read_binding` from `doctor`, and Python 3.11 and 3.12 raise
 # `RuntimeError` resolving a path through a symlink loop a clone can commit beside it.
 [[mutation]]
 name = "read_binding lets a store it cannot resolve raise"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "        resolved: Path | None = fsops.resolved(store)"
 after = "        resolved: Path | None = store.resolve()"
 reddens = [
@@ -995,7 +909,7 @@ reddens = [
 # for as absent; read as a failure, it failed on a file no overlay can hold.
 [[mutation]]
 name = "a source the project's name rules out is an overlay that cannot be asked"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = "        if share is not None and cannot_exist(exc) and _names_no_directory(share):"
 after = "        if False:"
 reddens = [
@@ -1005,7 +919,7 @@ reddens = [
 
 [[mutation]]
 name = "a name longer than the filesystem allows is an overlay that cannot be asked"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    return isinstance(exc, NotADirectoryError) or exc.errno == errno.ENAMETOOLONG"
 after = "    return isinstance(exc, NotADirectoryError)"
 reddens = [
@@ -1014,7 +928,7 @@ reddens = [
 
 [[mutation]]
 name = "a file where the project's directory would be is an overlay that cannot be asked"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    return isinstance(exc, NotADirectoryError) or exc.errno == errno.ENAMETOOLONG"
 after = "    return exc.errno == errno.ENAMETOOLONG"
 reddens = [
@@ -1027,7 +941,7 @@ reddens = [
 # is one the overlay does not have, on every interpreter.
 [[mutation]]
 name = "a binding record the project's name rules out cannot be read"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "        if cannot_exist(exc):\n            return None"
 after = "        if False:\n            return None"
 reddens = [
@@ -1039,7 +953,7 @@ reddens = [
 # and the row warns.
 [[mutation]]
 name = "every fault reading the overlay's sources reads as no source"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = "        if share is not None and cannot_exist(exc) and _names_no_directory(share):"
 after = "        if share is not None:"
 reddens = [
@@ -1053,7 +967,7 @@ reddens = [
 # second `attach` stripped them from their settings.
 [[mutation]]
 name = "a fault below the project's own directory reads as no source"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = "        if share is not None and cannot_exist(exc) and _names_no_directory(share):"
 after = "        if share is not None and cannot_exist(exc):"
 reddens = [
@@ -1066,7 +980,7 @@ reddens = [
 # a source under it that is past the longest path is one the overlay has no file at.
 [[mutation]]
 name = "a source past the longest path under a project the overlay has no directory for cannot be asked"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = "        # No share, or no `projects/` above it: the overlay has no directory for this project.\n        return True"
 after = "        # No share, or no `projects/` above it: the overlay has no directory for this project.\n        return False"
 reddens = [
@@ -1079,9 +993,9 @@ reddens = [
 # entries read red, and `attach` went on without what `common/` grants.
 [[mutation]]
 name = "a common source the overlay cannot hold reads as no source"
-file = "src/stayfixed/attach/permissions.py"
-before = "        (binding.overlay / COMMON_CLAUDE / name, None),"
-after = "        (binding.overlay / COMMON_CLAUDE / name, binding.overlay / COMMON_CLAUDE),"
+file = "src/drybag/attach/permissions.py"
+before = "            plate.directory if plate.kind is PlateKind.PROJECT else None,"
+after = "            plate.directory / PROJECT_CLAUDE,"
 reddens = [
   "tests/attach/test_write.py::test_an_overlay_whose_common_claude_is_a_file_stops_attach_before_it_writes[attach]",
   "tests/attach/test_write.py::test_an_overlay_whose_common_claude_is_a_file_stops_attach_before_it_writes[check]",
@@ -1091,7 +1005,7 @@ reddens = [
 # `attach` before it writes; read as an empty settings file it stopped only at that file's write.
 [[mutation]]
 name = "the project's own settings file is read as leniently as an overlay source"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = "    return _read(root / LOCAL_SETTINGS, label=LOCAL_SETTINGS)"
 after = "    return _read(root / LOCAL_SETTINGS, label=LOCAL_SETTINGS, share=root / \".claude\")"
 reddens = [
@@ -1105,7 +1019,7 @@ reddens = [
 # refuses it as the run it previews would.
 [[mutation]]
 name = "attach writes for a project name the overlay has no directory for"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "    refuse_unless_share_can_exist(binding, config)\n"
 after = ""
 reddens = [
@@ -1117,7 +1031,7 @@ reddens = [
 
 [[mutation]]
 name = "a file where the project's directory would be is no reason to refuse attach"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    if mode is not None and not stat.S_ISDIR(mode):"
 after = "    if mode == 0:"
 reddens = [
@@ -1128,7 +1042,7 @@ reddens = [
 # A share that is absent is a project the overlay has never seen, and its first attach creates it.
 [[mutation]]
 name = "attach refuses a project the overlay has no directory for yet"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    except FileNotFoundError:\n        mode = None\n"
 after = "    except FileNotFoundError:\n        raise Refusal(SHARE_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))\n"
 reddens = [
@@ -1142,7 +1056,7 @@ reddens = [
 # predicate, asked of the paths the link tree is built from, is that refusal for both.
 [[mutation]]
 name = "attach and --check go on for a name whose share holds a path past the longest one"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "        if _too_long(path):"
 after = "        if False:"
 reddens = [
@@ -1159,37 +1073,40 @@ reddens = [
 # to an internal error after every write, which is the gap the record's own refusal left.
 [[mutation]]
 name = "attach and --check ask only the binding record whether it can exist"
-file = "src/stayfixed/attach/binding.py"
-before = "    made = (share / PROJECT_RECORD, *link_sources(binding.overlay, config))\n"
-after = "    made = (share / PROJECT_RECORD,)\n"
+file = "src/drybag/attach/binding.py"
+before = "    made = (share / RECORD, *link_sources(binding.overlay, config))\n"
+after = "    made = (share / RECORD,)\n"
 reddens = [
   "tests/attach/test_commands.py::test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_by_check_too[the-index]",
   "tests/attach/test_commands.py::test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_by_check_too[a-group]",
   "tests/attach/test_commands.py::test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_by_check_too[a-long-group]",
 ]
 
-# A committed ledger, or a directory above it, can be a symbolic link to a name longer than a file
+# The ledger, or the directory above it, can be a symbolic link to a name longer than a file
 # name may be. Raised past every catch to `_guarded`, `ENAMETOOLONG` puts its warning in place of the
-# whole row. `fsops.names_regular_file` raises it on every interpreter, and the ledger reads as one
-# that cannot be read.
+# whole row. The ledger reader raises `NotALedger` for it on every interpreter, and the ledger reads
+# as one that cannot be read.
 [[mutation]]
 name = "a ledger doctor cannot ask about reads as no ledger"
-file = "src/stayfixed/attach/doctor.py"
-before = "    except OSError:\n        return UNREADABLE_LEDGER"
-after = "    except OSError:\n        return NO_LEDGER"
+file = "src/drybag/attach/doctor.py"
+before = "    except NotALedger:\n        return UNREADABLE_LEDGER"
+after = "    except NotALedger:\n        return NO_LEDGER"
 reddens = [
   "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer[the-ledger]",
   "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer[its-directory]",
+  "tests/attach/test_doctor.py::test_a_ledger_that_does_not_parse_warns_and_never_reads_as_no_ledger",
+  "tests/attach/test_doctor.py::test_a_ledger_of_the_wrong_shape_warns_as_one_that_does_not_parse",
 ]
 
-# `attached` asks whether there is a ledger through the reading `register()` creates. Asked with `is_file()`, a ledger behind a link to a name longer
-# than a file name may be raised on Python 3.11 to 3.13, and `_guarded`'s warning stood in for the
-# row; on 3.14 the row said the ledger does not exist.
+# `attached` asks whether there is a ledger through the reading `register()` creates. Asked with
+# `is_file()`, a ledger behind a link to a name longer than a file name may be raised on Python 3.11
+# to 3.13, and `_guarded`'s warning stood in for the row; on 3.14 the row said the ledger does not
+# exist.
 [[mutation]]
 name = "attached asks is_file() of the ledger again"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = "    if ledger.state(main) == NO_LEDGER:"
-after = "    if not (main / ATTACH_LEDGER).is_file():"
+after = "    from drybag.binding import LEDGER_FILE, common_directory\n    if not (common_directory(main) / LEDGER_FILE).is_file():"
 reddens = [
   "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer[the-ledger]",
   "tests/attach/test_doctor.py::test_a_ledger_doctor_cannot_ask_about_leaves_the_attached_row_its_own_answer[its-directory]",
@@ -1200,9 +1117,9 @@ reddens = [
 # confined to `doctor.py` stop every hook, and loads the report on each one.
 [[mutation]]
 name = "attach's hooks import the area's doctor module"
-file = "src/stayfixed/attach/hooks.py"
-before = "from stayfixed.attach import ATTACH_COMMAND\n"
-after = "from stayfixed.attach import ATTACH_COMMAND\nfrom stayfixed.attach.doctor import NO_LEDGER\n"
+file = "src/drybag/attach/hooks.py"
+before = "from drybag.attach import ATTACH_COMMAND\n"
+after = "from drybag.attach import ATTACH_COMMAND\nfrom drybag.attach.doctor import NO_LEDGER\n"
 reddens = [
   "tests/attach/test_hooks.py::test_hook_discovery_in_a_clean_interpreter_loads_no_doctor_module",
 ]
@@ -1213,7 +1130,7 @@ reddens = [
 # ended in a raw `OSError` that printed the name. The name is asked by its length.
 [[mutation]]
 name = "attach reads a name longer than a file name as a first attach where projects/ is not there"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    if _name_too_long(there, binding.project):"
 after = "    if False:"
 reddens = [
@@ -1224,7 +1141,7 @@ reddens = [
 # first attach where the share is not there yet.
 [[mutation]]
 name = "attach reads a group longer than a file name as a first attach where the share is not there"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "        if any(_name_too_long(there, part) for part in path.relative_to(share).parts):"
 after = "        if False:"
 reddens = [
@@ -1238,7 +1155,7 @@ reddens = [
 # not a directory and ask for the overlay's repair.
 [[mutation]]
 name = "attach blames the project's name for an overlay whose projects/ or root is a file"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = """
     if damaged is not None:
         raise Refusal(OVERLAY_DAMAGED.format(path=damaged))
@@ -1254,7 +1171,7 @@ reddens = [
 
 [[mutation]]
 name = "the damaged-overlay probe never looks past the overlay root"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    for path in (overlay, overlay / PROJECTS):"
 after = "    for path in (overlay,):"
 reddens = [
@@ -1264,7 +1181,7 @@ reddens = [
 
 [[mutation]]
 name = "doctor tells a bound checkout of a damaged overlay that it has no binding"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = """
     damaged = damaged_overlay(answer.overlay)
     if damaged is not None:
@@ -1286,9 +1203,9 @@ reddens = [
 # no entry of its own.)
 [[mutation]]
 name = "attach encodes the settings merge with a bare json.dumps"
-file = "src/stayfixed/attach/write.py"
-before = '    text = settings_text(raw, LOCAL_SETTINGS) + "\n"'
-after = '    text = json.dumps(raw, indent=2) + "\n"'
+file = "src/drybag/attach/write.py"
+before = '    return settings_text(raw, LOCAL_SETTINGS) + "\n"'
+after = '    return json.dumps(raw, indent=2) + "\n"'
 reddens = [
   "tests/attach/test_write.py::test_a_settings_merge_the_encoder_cannot_write_back_is_refused_before_the_first_write",
 ]
@@ -1298,7 +1215,7 @@ reddens = [
 # filesystem takes. The lookup is stubbed in the test, so the count is caught on any OS.
 [[mutation]]
 name = "the share check counts a name's bytes"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = """
     if directory is None:
         return False
@@ -1321,7 +1238,7 @@ reddens = [
 # absolute path.
 [[mutation]]
 name = "the settings reader reads a file through any link"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = "        return read_regular_text(path)"
 after = '        return path.read_text(encoding="utf-8")'
 reddens = [
@@ -1332,11 +1249,11 @@ reddens = [
 
 [[mutation]]
 name = "the attach ledger is read through any link"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = """            text = fsops.read_regular_text(path)
-        except FileNotFoundError as exc:"""
+        except FileNotFoundError:"""
 after = """            text = path.read_text(encoding="utf-8")
-        except FileNotFoundError as exc:"""
+        except FileNotFoundError:"""
 reddens = ["tests/attach/test_detach.py::test_a_ledger_linked_to_a_device_stops_detach_and_is_never_read"]
 
 # In the block led by `mutations/`'s "the JSON writer lets an encode past the interpreter's
@@ -1345,7 +1262,7 @@ reddens = ["tests/attach/test_detach.py::test_a_ledger_linked_to_a_device_stops_
 # nested too deep.
 [[mutation]]
 name = "detach copies and compares the settings document unguarded"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = """
     except RecursionError:
         raise ParserLimitError(f"{LOCAL_SETTINGS} {NESTED}") from None
@@ -1364,7 +1281,7 @@ reddens = [
 # damage too, and asked with `stat` alone it read as an overlay with no `projects/` yet.
 [[mutation]]
 name = "the damaged-overlay probe follows a link that names nothing"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = """
             except OSError:
                 return path
@@ -1382,7 +1299,7 @@ reddens = [
 # a file the project names names it as the project does, never by the machine's absolute path.
 [[mutation]]
 name = "the settings refusal prints the path it opened"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = "    return _read(root / LOCAL_SETTINGS, label=LOCAL_SETTINGS)"
 after = "    return _read(root / LOCAL_SETTINGS)"
 reddens = [
@@ -1392,7 +1309,7 @@ reddens = [
 
 [[mutation]]
 name = "the settings refusal of a file that is not UTF-8 prints the path it opened"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = "    with fsops.reading(label or path, Failure):"
 after = "    with fsops.reading(path, Failure):"
 reddens = [
@@ -1401,14 +1318,14 @@ reddens = [
 
 [[mutation]]
 name = "the ledger refusal of a file that is not UTF-8 prints the path it opened"
-file = "src/stayfixed/attach/write.py"
-before = "    with fsops.reading(ATTACH_LEDGER, Failure):"
-after = "    with fsops.reading(path, Failure):"
+file = "src/drybag/attach/write.py"
+before = "    with fsops.reading(LEDGER_NAME, NotALedger):"
+after = "    with fsops.reading(path, NotALedger):"
 reddens = ["tests/attach/test_detach.py::test_a_ledger_that_is_not_utf8_is_named_as_the_project_names_it"]
 
 [[mutation]]
 name = "the allow-list refusal names the project's settings file by its absolute path"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = "    held = set(_allow_rules(document, Path(LOCAL_SETTINGS)))"
 after = "    held = set(_allow_rules(document, root / LOCAL_SETTINGS))"
 reddens = [
@@ -1419,28 +1336,28 @@ reddens = [
 # rather than dying as a broken check.
 [[mutation]]
 name = "the attached row dies on a home it cannot name"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = "    if owner_home() is None:"
 after = "    if False:"
 reddens = ["tests/attach/test_doctor.py::test_an_empty_home_is_told_it_is_home_that_names_none"]
 
-# The ledger is what `stayfixed uninstall` reads as "this repository is attached", so a detach that
-# left it behind would leave a repository uninstall refuses for good.
+# The ledger is what `doctor` reads as "this repository is attached", so a detach that left it
+# behind would leave a repository `doctor` still reports as attached.
 [[mutation]]
 name = "detach leaves its ledger behind"
-file = "src/stayfixed/attach/write.py"
-before = "    fsops.remove_within(root, ATTACH_LEDGER)\n    # Last, because the ledger lives in one of them."
-after = "    # Last, because the ledger lives in one of them."
-reddens = ["tests/attach/test_detach.py::test_uninstall_after_a_real_detach_takes_the_footprint_back"]
+file = "src/drybag/attach/write.py"
+before = "    fsops.remove_within(common_directory(root), LEDGER_FILE)\n"
+after = ""
+reddens = ["tests/attach/test_detach.py::test_a_real_detach_leaves_the_tree_the_attach_found"]
 
 # `write` imports `permissions` at module level, so `permissions` importing the writer back, even
 # inside a function where no import fails, is a cycle in the layering: the one `--check` made while
 # it lived in `permissions`.
 [[mutation]]
 name = "permissions reads the writer again inside a function"
-file = "src/stayfixed/attach/permissions.py"
+file = "src/drybag/attach/permissions.py"
 before = '    return _read(root / LOCAL_SETTINGS, label=LOCAL_SETTINGS)'
-after = '''    from stayfixed.attach.write import existing_ledger  # noqa: F401
+after = '''    from drybag.attach.write import existing_ledger  # noqa: F401
 
     return _read(root / LOCAL_SETTINGS, label=LOCAL_SETTINGS)'''
 reddens = [
@@ -1454,12 +1371,10 @@ reddens = [
 # on its own, measured by hand.
 [[mutation]]
 name = "check skips the reads the run makes before its first write"
-file = "src/stayfixed/attach/check.py"
-before = "    plan_writes(root, config, binding, diff)\n"
-after = ""
+file = "src/drybag/attach/check.py"
+before = "    planned = plan_writes(root, config, binding, diff)\n    return _report(binding, planned.diff, source)\n"
+after = "    return _report(binding, diff, source)\n"
 reddens = [
-  "tests/attach/test_commands.py::test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words[not-json]",
-  "tests/attach/test_commands.py::test_check_ends_on_a_ledger_the_run_cannot_take_with_the_runs_code_and_words[a-link]",
   "tests/attach/test_commands.py::test_check_ends_on_an_overlay_rule_that_is_not_utf8_with_the_runs_code_and_line",
   "tests/attach/test_commands.py::test_check_ends_on_each_refusal_past_the_runs_gates_with_the_runs_code_and_line[exclude-block-doubled]",
   "tests/attach/test_commands.py::test_check_ends_on_each_refusal_past_the_runs_gates_with_the_runs_code_and_line[claude-linked-in]",
@@ -1470,7 +1385,7 @@ reddens = [
 # in other words.
 [[mutation]]
 name = "the gates do not ask what the share holds"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "        refuse_unless_share_holds(binding, config)\n    return diff"
 after = "        pass\n    return diff"
 reddens = [
@@ -1479,7 +1394,7 @@ reddens = [
 
 [[mutation]]
 name = "attach words a group it cannot ask about as an escape"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "            raise Refusal(GROUP_UNASKED.format(fault=exc.fault)) from exc"
 after = "            raise Refusal(GROUP_ESCAPES) from exc"
 reddens = [
@@ -1491,7 +1406,7 @@ reddens = [
 # containment refusal that names the link comes after it, and an internal error came first.
 [[mutation]]
 name = "attach asks whether a directory it would create is there through a link it cannot follow"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = """
     try:
         return fsops.is_dir(path)
@@ -1509,13 +1424,9 @@ reddens = [
 # two apart; the test's `failed:` line does.
 [[mutation]]
 name = "an overlay codex directory that cannot be listed is an internal error"
-file = "src/stayfixed/attach/permissions.py"
-before = '''        except OSError as exc:
-            raise Failure(
-                f"{quoted(str(source))} cannot be listed'''
-after = '''        except ValueError as exc:
-            raise Failure(
-                f"{quoted(str(source))} cannot be listed'''
+file = "src/drybag/attach/permissions.py"
+before = "    winners = fold(binding.plates, CODEX_RULE, _unlisted).winners"
+after = "    winners = fold(binding.plates, CODEX_RULE, OSError).winners"
 reddens = [
   "tests/attach/test_write.py::test_an_unlistable_codex_directory_fails_and_writes_nothing[common-unlistable]",
   "tests/attach/test_write.py::test_an_unlistable_codex_directory_fails_and_writes_nothing[common-unsearchable]",
@@ -1528,7 +1439,7 @@ reddens = [
 # red on every checkout `attach` had just pointed.
 [[mutation]]
 name = "doctor reads the pointer at the composed store as a key set elsewhere"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = "    if value != str(composed):"
 after = "    if value == str(composed):"
 reddens = [
@@ -1539,9 +1450,9 @@ reddens = [
 # The overlay status is about the project, and silent without its configuration.
 [[mutation]]
 name = "the overlay status judges with no project configuration"
-file = "src/stayfixed/attach/hooks.py"
-before = "    if config is None or event.project_root is None or config.memory.mode != OVERLAY_MODE:"
-after = "    if event.project_root is None or config.memory.mode != OVERLAY_MODE:"
+file = "src/drybag/attach/hooks.py"
+before = "    if config is None or config.memory.mode != OVERLAY_MODE:"
+after = "    if config.memory.mode != OVERLAY_MODE:"
 reddens = [
   "tests/hooks/test_floor.py::test_project_handlers_speak_on_a_file_and_stay_silent_without_one[overlay_status]",
 ]
@@ -1550,7 +1461,7 @@ reddens = [
 # needs the project's name.
 [[mutation]]
 name = "the attached row reads a configuration that is not there"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = "    attached = configured(lambda context, config: _attached(context, config, ledger), attach=True)"
 after = "    attached = lambda context: _attached(context, context.attach_config, ledger)  # noqa: E731"
 reddens = [
@@ -1562,7 +1473,7 @@ reddens = [
 # not be read, and leaves the remedy to the `preferences` row, red on the same file.
 [[mutation]]
 name = "the attached row reads a machine file nobody could read as an overlay that could not be asked"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = "    if isinstance(context.overlay_root, MachineUnread):\n        return MACHINE_UNREAD"
 after = "    if False:\n        return MACHINE_UNREAD"
 reddens = [
@@ -1575,7 +1486,7 @@ reddens = [
 # can name.
 [[mutation]]
 name = "the rendered marketplace is named without the binding id"
-file = "src/stayfixed/attach/render.py"
+file = "src/drybag/attach/render.py"
 before = '    return f"{MARKETPLACE_PREFIX}{id}"'
 after = '    return MARKETPLACE_PREFIX.rstrip("-")'
 reddens = [
@@ -1587,7 +1498,7 @@ reddens = [
 # have `detach` delete it.
 [[mutation]]
 name = "detach deletes the directory the ledger names"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "        delivery = delivery_directory(id) if id is not None else None"
 after = "        delivery = Path(recorded.store) if id is not None else None"
 reddens = [
@@ -1599,7 +1510,7 @@ reddens = [
 # block hiding that file, and the ledger and the render a second `detach` finishes from, must stay.
 [[mutation]]
 name = "detach goes past a settings file that still names the plugin"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "    if left:\n        raise Failure(STILL_NAMED"
 after = "    if False:\n        raise Failure(STILL_NAMED"
 reddens = [
@@ -1607,10 +1518,10 @@ reddens = [
 ]
 
 # The binding id may be gone, and the settings file still names the delivery it bound: the check is
-# for any `stayfixed-delivery-` name, which needs no id, or `detach` unhid that file.
+# for any `drybag-delivery-` name, which needs no id, or `detach` unhid that file.
 [[mutation]]
 name = "detach asks the settings file about this binding id's delivery alone"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "    left = [key for key, names in named if any(MARKETPLACE_PREFIX in name for name in names)]"
 after = "    left = [key for key, names in named if any(id and id in name for name in names)]"
 reddens = [
@@ -1621,7 +1532,7 @@ reddens = [
 # goes, or it is the trace `git status` shows once the exclude block does. One holding more stays.
 [[mutation]]
 name = "detach keeps the settings file Claude Code's calls emptied"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "        fsops.remove_within(main, LOCAL_SETTINGS)"
 after = "        pass"
 reddens = [
@@ -1630,7 +1541,7 @@ reddens = [
 
 [[mutation]]
 name = "detach removes a settings file whatever it holds"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "        key in (ENABLED_PLUGINS, KNOWN_MARKETPLACES) and value == {}"
 after = "        True"
 reddens = [
@@ -1640,7 +1551,7 @@ reddens = [
 # The attach screen names this checkout's origin; a token in its userinfo is taken out first.
 [[mutation]]
 name = "the attach screen names an origin's credentials"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "        origin=None if binding.remote is None else without_userinfo(binding.remote),"
 after = "        origin=binding.remote,"
 reddens = ["tests/attach/test_commands.py::test_an_origin_carrying_credentials_is_neither_printed_nor_recorded_with_them"]
@@ -1649,7 +1560,7 @@ reddens = ["tests/attach/test_commands.py::test_an_origin_carrying_credentials_i
 # as the file, so a new session hears the rule again rather than inheriting another's silence.
 [[mutation]]
 name = "a path-scoped rule's once-per-file record is keyed by the path alone"
-file = "src/stayfixed/attach/rules.py"
+file = "src/drybag/attach/rules.py"
 before = '    return f"{_segment(session_id)}/{_segment(str(target))}"'
 after = "    return _segment(str(target))"
 reddens = [
@@ -1661,7 +1572,7 @@ reddens = [
 # loads nothing and says nothing, so the `attached` row is the one place that says so: red.
 [[mutation]]
 name = "the attached row reads a render directory that is gone as in place"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = "    elif not fsops.is_dir(directory):"
 after = "    elif False:"
 reddens = ["tests/attach/test_doctor.py::test_a_render_directory_that_is_gone_is_red_and_names_it"]
@@ -1670,7 +1581,7 @@ reddens = ["tests/attach/test_doctor.py::test_a_render_directory_that_is_gone_is
 # does: left, the harness reads the overlay's notes and writes into them.
 [[mutation]]
 name = "a re-attach out of overlay mode keeps the pointer"
-file = "src/stayfixed/attach/write.py"
+file = "src/drybag/attach/write.py"
 before = "        if previous is not None and POINTER_KEY in previous.settings_keys and _unpoint(root):"
 after = "        if False:"
 reddens = [
@@ -1680,30 +1591,30 @@ reddens = [
 # A composed store whose link dangles reads none of the notes behind it, though the pointer names it.
 [[mutation]]
 name = "the attached row reads a composed store whose link dangles as in place"
-file = "src/stayfixed/attach/doctor.py"
+file = "src/drybag/attach/doctor.py"
 before = "    if any(fsops.is_symlink(link) and not fsops.exists(link) for link in composed.iterdir()):"
 after = "    if False:"
 reddens = ["tests/attach/test_doctor.py::test_a_composed_store_whose_link_dangles_warns"]
 
-# A repository with no stayfixed.toml: which overlay project it attaches under
+# A repository with no drybag.toml: which overlay project it attaches under
 # (`binding.choose_project`). Each step is a convenience whose anchor is `origin`, and each entry
 # below breaks one decision of the order, or one refusal that names `--project` as the way out.
 # The owner's `--project` wins over everything below it.
 [[mutation]]
 name = "attach ignores --project"
-file = "src/stayfixed/attach/binding.py"
-before = "    if named is not None:\n        return named\n"
-after = "    if False:\n        return named\n"
+file = "src/drybag/attach/binding.py"
+before = "    if named is not None:\n        return Chosen(named, BY_FLAG)\n"
+after = "    if False:\n        return Chosen(named, BY_FLAG)\n"
 reddens = [
-  "tests/attach/test_project_choice.py::test_project_names_the_project_of_a_repository_with_no_stayfixed_toml",
+  "tests/attach/test_project_choice.py::test_project_names_the_project_of_a_repository_with_no_drybag_toml",
 ]
 
 # A re-attach takes the project this machine's binding records, not the remote's name.
 [[mutation]]
 name = "attach forgets this machine's binding"
-file = "src/stayfixed/attach/binding.py"
-before = "    found = bound_project(root)\n    if found is not None:\n        return found.project\n"
-after = "    found = None\n    if found is not None:\n        return found.project\n"
+file = "src/drybag/attach/binding.py"
+before = "    found = bound_project(root)\n    if found is not None:\n        return Chosen(found.project, BY_RECORD)\n"
+after = "    found = None\n    if found is not None:\n        return Chosen(found.project, BY_RECORD)\n"
 reddens = [
   "tests/attach/test_project_choice.py::test_a_later_attach_takes_the_project_this_machines_binding_records",
 ]
@@ -1711,7 +1622,7 @@ reddens = [
 # The overlay project whose record names this origin, in any of the three spellings, is the one.
 [[mutation]]
 name = "attach finds no overlay project by its remote"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    return recorded is not None and origin_note(recorded, origin) is None"
 after = "    return False"
 reddens = [
@@ -1721,7 +1632,7 @@ reddens = [
 # Two projects claiming one origin are the owner's to choose between.
 [[mutation]]
 name = "attach takes the first of several projects recording its remote"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    if len(matches) > 1:"
 after = "    if len(matches) > 2:"
 reddens = [
@@ -1731,7 +1642,7 @@ reddens = [
 # The derived name becomes a directory under the overlay's `projects/`, so it meets the name rule.
 [[mutation]]
 name = "attach takes a derived name the name rule refuses"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    if not PROJECT_NAME.match(derived):"
 after = "    if False:"
 reddens = [
@@ -1741,17 +1652,226 @@ reddens = [
 # With no origin and no binding nothing names the project, and the directory's name is a guess.
 [[mutation]]
 name = "attach takes the directory's name where nothing names the project"
-file = "src/stayfixed/attach/binding.py"
+file = "src/drybag/attach/binding.py"
 before = "    if origin is None:\n        raise Refusal(NO_PROJECT)"
-after = "    if origin is None:\n        return root.name"
+after = "    if origin is None:\n        return Chosen(root.name, BY_REMOTE)"
 reddens = [
   "tests/attach/test_project_choice.py::test_no_origin_and_no_binding_is_refused_naming_project",
 ]
 
-# A stayfixed.toml names the project, so `--project` beside it is refused rather than ignored.
+# A drybag.toml names the project, so `--project` beside it is refused rather than ignored.
 [[mutation]]
-name = "attach takes --project beside a stayfixed.toml"
-file = "src/stayfixed/attach/write.py"
+name = "attach takes --project beside a drybag.toml"
+file = "src/drybag/attach/write.py"
 before = "    if project is not None and not chosen:"
 after = "    if False:"
-reddens = ["tests/attach/test_project_choice.py::test_project_beside_a_stayfixed_toml_is_refused"]
+reddens = ["tests/attach/test_project_choice.py::test_project_beside_a_drybag_toml_is_refused"]
+
+# A later plate wins a rule's name, and the project is the last plate: a tag read after it would
+# replace the project's own rule.
+[[mutation]]
+name = "a tag's rule replaces the project's rule of its name"
+file = "src/drybag/attach/rules.py"
+before = "    winners = fold(held, RULE, _unreadable).winners"
+after = "    winners = fold(sorted(held, key=lambda p: p.kind.value == 'tag'), RULE, _unreadable).winners"
+reddens = ["tests/attach/test_rules.py::test_a_tag_rule_arrives_and_a_later_plate_wins_its_name"]
+
+# A skill is the item its directory names, and the later plate wins it whole: merged file by file,
+# a losing plate's helper script stays beside the winner's `SKILL.md`, which no plate holds.
+[[mutation]]
+name = "a skill is merged file by file across plates"
+file = "src/drybag/attach/render.py"
+before = "        for item in fold(held, kind, _unreadable).winners.values():"
+after = "        for item in [p.directory / kind.harness / kind.directory / n for n, plates in fold(held, kind).holders.items() for p in plates]:"
+reddens = ["tests/attach/test_render.py::test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole"]
+
+# A key whose class does not admit a tag layer is refused in every tag (`classes.resolve`), so no
+# tag wins it, and a sentence saying the later one does is false.
+[[mutation]]
+name = "a setting collision counts a key no tag may set"
+file = "src/drybag/attach/tags.py"
+before = "            for key in (key for key in layer.values if layer.name in ALLOWED[class_of(key)]):"
+after = "            for key in layer.values:"
+reddens = ["tests/attach/test_tags.py::test_a_setting_two_tag_layers_hold_is_named_and_a_common_one_is_not"]
+
+# The ledger names the allow rules that are `attach`'s: one the overlay stopped granting is taken
+# back, and a re-attach that kept it would leave an untagged tag's permission in force until
+# `detach`.
+[[mutation]]
+name = "re-attach keeps an allow rule the overlay no longer grants"
+file = "src/drybag/attach/permissions.py"
+before = "    taken = tuple(dict.fromkeys(rule for rule in recorded if rule in held and rule not in granted))"
+after = "    taken = ()"
+reddens = [
+  "tests/attach/test_write.py::test_untagging_takes_back_the_tags_allow_rule",
+  "tests/attach/test_write.py::test_check_counts_the_rules_it_would_take_back",
+]
+
+# The ledger is the witness of which allow rules are `attach`'s: one the overlay stopped granting
+# leaves it whether or not the file still held it, or a copy the owner types back is taken later.
+[[mutation]]
+name = "re-attach keeps a withdrawn allow rule in the ledger"
+file = "src/drybag/attach/write.py"
+before = "    allow = [rule for rule in previous.allow if rule in granted] if previous else []"
+after = "    allow = [r for r in previous.allow if r not in planned.diff.withdrawn_allow] if previous else []"
+reddens = [
+  "tests/attach/test_write.py::test_a_recorded_rule_removed_by_hand_is_not_an_error",
+]
+
+# A Codex copy the overlay stopped holding may since have been committed or edited by the team, so
+# a re-attach removes none: it names each, and `detach` removes the ones the ledger still records.
+[[mutation]]
+name = "re-attach removes a Codex copy the overlay dropped"
+file = "src/drybag/attach/write.py"
+before = "    rules = tuple(target for target, _ in planned.rules)\n    written"
+after = "    rules = tuple(target for target, _ in planned.rules)\n    for rule in previous.rules if previous else ():\n        if rule not in rules and fsops.is_file(root / rule):\n            fsops.remove_within(root, rule)\n    written"
+reddens = [
+  "tests/attach/test_write.py::test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it",
+]
+
+# The ledger keeps a Codex copy the overlay has since dropped while it is untracked and as written,
+# or the copy is left in `.codex/rules/` with nothing to name it to `detach`.
+[[mutation]]
+name = "the ledger forgets a Codex copy the overlay dropped"
+file = "src/drybag/attach/write.py"
+before = "    rules = {**planned.kept, **{t:"
+after = "    rules = {**{t:"
+reddens = [
+  "tests/attach/test_detach.py::test_detach_removes_a_rule_file_the_overlay_has_since_deleted",
+]
+
+# Any other dropped name is no longer attach's: kept, doctor reads a file the team committed as one
+# attach placed, and `detach` reaches a file attach never wrote.
+[[mutation]]
+name = "re-attach keeps every name the overlay dropped"
+file = "src/drybag/attach/write.py"
+before = "        if rule not in tracked and _as_written(root / rule, sha)\n"
+after = "        if True\n"
+reddens = [
+  "tests/attach/test_write.py::test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written[edited-False]",
+  "tests/attach/test_write.py::test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written[tracked-False]",
+  "tests/attach/test_write.py::test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written[deleted-False]",
+  "tests/attach/test_doctor.py::test_a_copy_the_team_committed_is_no_finding_once_the_overlay_dropped_it",
+]
+
+# The digest is the removal's anchor: what is at a recorded name is a branch's or the owner's, and
+# an uncommitted edit cannot be got back.
+[[mutation]]
+name = "detach removes a copy whatever its bytes"
+file = "src/drybag/attach/write.py"
+before = "        if _as_written(root / rule, sha):\n            fsops.remove_within(root, rule)"
+after = "        if fsops.is_file(root / rule):\n            fsops.remove_within(root, rule)"
+reddens = [
+  "tests/attach/test_detach.py::test_detach_leaves_and_names_a_copy_that_does_not_hold_what_attach_wrote",
+]
+
+# `read_ledger` answers a well-shaped ledger or `NotALedger`, and no consumer guards a field, so a
+# field of another shape reaches each of them as an internal error or as a run on nonsense.
+[[mutation]]
+name = "the ledger reader takes any field"
+file = "src/drybag/attach/write.py"
+before = "    if not _well_shaped(raw):\n"
+after = "    if False:\n"
+reddens = [
+  "tests/attach/test_write.py::test_attach_writes_a_file_that_is_no_ledger_whole",
+  "tests/attach/test_detach.py::test_a_ledger_of_the_wrong_shape_removes_nothing_and_says_so",
+]
+
+# An allow rule taken back is said on the screen the way a granted one is.
+[[mutation]]
+name = "the attach screen is silent about the allow rules it takes back"
+file = "src/drybag/attach/commands.py"
+before = '    lines += [f"allow rule withdrawn: {clipped(rule)}" for rule in attached.allow_withdrawn]'
+after = "    pass"
+reddens = [
+  "tests/attach/test_commands.py::test_a_re_attach_names_each_allow_rule_it_takes_back",
+]
+
+# The owner-held files are the owner's: a `.env*` file in `checkout/` holds secrets, and the prefix
+# rule is what keeps every one of them out of a worktree whatever its name continues with.
+[[mutation]]
+name = "owner-held files copy .env files"
+file = "src/drybag/attach/checkout.py"
+before = "        if name in LITTER or folded in NEVER or folded.startswith(NEVER_PREFIXES):"
+after = "        if name in LITTER or folded in NEVER:"
+reddens = [
+  "tests/attach/test_checkout.py::test_a_new_linked_worktree_gets_the_regular_files_and_nothing_else",
+]
+
+# The handler runs on every `SessionStart`: the one `rev-parse` that finds a linked worktree already
+# names the common directory the binding id is read from, and asking again doubles the launches of a
+# checkout it does not serve.
+[[mutation]]
+name = "owner-files asks git for the common directory twice"
+file = "src/drybag/attach/checkout.py"
+before = "    bound = bound_project(tree, common=common)"
+after = "    bound = bound_project(tree)"
+reddens = [
+  "tests/attach/test_checkout.py::test_the_handler_asks_git_once_before_it_knows_a_worktree_is_not_for_it",
+]
+
+# The main checkout already holds the owner's files and is the one a clone's `origin` points at;
+# only a linked worktree is new. Without the linked check every session start writes into it.
+[[mutation]]
+name = "owner-held files are placed in the main checkout"
+file = "src/drybag/attach/checkout.py"
+before = "    return (toplevel, common) if git_dir.parent == common / _WORKTREES else None"
+after = "    return (toplevel, common)"
+reddens = [
+  "tests/attach/test_checkout.py::test_the_main_checkout_gets_nothing",
+  "tests/attach/test_checkout.py::test_a_submodule_gets_nothing",
+]
+
+# A name is placed only where the owner's files hide it, asked before the file exists: a branch's
+# `.gitignore` can re-include a name (`!` outranks `info/exclude`), and a file created first would
+# show in `git status` and go out with the next `git add -A`.
+[[mutation]]
+name = "owner-held files are placed before git is asked whether they are ignored"
+file = "src/drybag/attach/checkout.py"
+before = "        shown = {*unignored(tree, vacant), *unhidden_by_owner(tree, vacant)}"
+after = "        shown = {*unhidden_by_owner(tree, vacant)}"
+reddens = [
+  "tests/attach/test_checkout.py::test_a_name_a_branch_gitignore_un_ignores_is_withheld_not_placed",
+]
+
+# A branch's `.gitignore` can hide a name and its next commit show it, so only the owner's own
+# files open the gate and a branch can make fewer files be placed, never more.
+[[mutation]]
+name = "a branch's .gitignore opens the owner-files gate"
+file = "src/drybag/attach/checkout.py"
+before = "        shown = {*unignored(tree, vacant), *unhidden_by_owner(tree, vacant)}"
+after = "        shown = {*unignored(tree, vacant)}"
+reddens = [
+  "tests/attach/test_checkout.py::test_a_branchs_gitignore_never_makes_a_name_be_placed",
+]
+
+# Where git cannot say what it ignores, nothing is placed: the control fails closed.
+[[mutation]]
+name = "owner-held files are placed where git cannot say what it ignores"
+file = "src/drybag/attach/checkout.py"
+before = "    except (Refusal, OSError):\n        return [], []"
+after = "    except (Refusal, OSError):\n        vacant, shown = _held(source), set()"
+reddens = [
+  "tests/attach/test_checkout.py::test_where_git_cannot_say_what_it_ignores_nothing_is_placed_or_said",
+]
+
+# `CLAUDE.md` placed alone must not send the session to a branch-authored `AGENTS.md`.
+[[mutation]]
+name = "owner-held files point at an AGENTS.md they did not place"
+file = "src/drybag/attach/checkout.py"
+before = '    if "AGENTS.md" in placed:'
+after = '    if "AGENTS.md" in placed or "CLAUDE.md" in placed:'
+reddens = [
+  "tests/attach/test_checkout.py::test_the_context_names_what_it_withheld_and_reads_agents_md_only_when_it_placed_it",
+]
+
+# A record that cannot be read lists no tags to a session, and a write run that took it so would
+# take back what the tags delivered: the refusal is what keeps it from untagging by accident.
+[[mutation]]
+name = "attach reads an unreadable project record as listing no tags"
+file = "src/drybag/attach/write.py"
+before = "    if (fault := record_fault(binding.overlay, binding.project)) is not None:"
+after = "    if (fault := None) is not None:"
+reddens = [
+  "tests/attach/test_write.py::test_an_unreadable_project_record_stops_attach_with_nothing_written",
+]

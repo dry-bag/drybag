@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from stayfixed import fsops
+from drybag import fsops
 
 
 def _refused(path: Path) -> PermissionError:

@@ -1,19 +1,19 @@
 """The three checks every `api.py` is held to, asked once of every package that publishes one:
-each area with a surface, and the `release` package, which is not an area and is held to its
-surface like one.
+each area with a surface, and the `release` and `trust` packages, which are not areas and are
+held to their surfaces like one.
 
 CONTRIBUTING states the contract once for all of them: "`api.py` is the area's import surface.
 Other areas import from it and from nothing else, and its `__all__` must equal exactly what it
 imports — a test parses the file and checks." Nine modules each carried a copy of that parse,
 eight of them byte-identical; six carried a copy of the derived signature check and four did
-not; and `stayfixed.hooks.api` had no surface test at all, because a contract enforced by ten
+not; and `drybag.hooks.api` had no surface test at all, because a contract enforced by ten
 hand-written copies is enforced only where somebody remembered to write the eleventh.
 
 What stays in `tests/<area>/test_surface.py` is the one thing that is genuinely the area's own:
 the list of names it publishes, with the argument for each beside it. That list is a decision
 per area. These three checks are not.
 
-`stayfixed.scaffold` is not here. It publishes from the package rather than from an `api.py` —
+`drybag.scaffold` is not here. It publishes from the package rather than from an `api.py` —
 the scaffold engine's contract, frozen — and `tests/scaffold/test_surface.py` holds it to its
 own shape.
 """
@@ -30,21 +30,21 @@ from types import ModuleType
 
 import pytest
 
-from stayfixed.config.schema import Config
-from stayfixed.config.session import SessionConfig
+from drybag.config.schema import Config
+from drybag.config.session import SessionConfig
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "src" / "stayfixed"
+SOURCE = ROOT / "src" / "drybag"
 
-# Every package with an `api.py`: the areas that publish one and the `release` package, which is
-# not an area; `AREAS` and the parameter `area` are named for the ten that are. Derived from the
-# tree rather than listed, so an area added tomorrow is covered the day it arrives — which is the
-# whole of what went wrong with `hooks`.
+# Every package with an `api.py`: the areas that publish one and the `release` and `trust`
+# packages, which are not areas; `AREAS` and the parameter `area` are named for the ten that are.
+# Derived from the tree rather than listed, so an area added tomorrow is covered the day it
+# arrives — which is the whole of what went wrong with `hooks`.
 AREAS = sorted(path.parent.name for path in SOURCE.glob("*/api.py"))
 
 # The one area whose `api.py` **defines** rather than re-exports, named rather than skipped silently
 # — for `tests/boundaries/test_api_surface.py`'s stated reason, that an exemption nobody can see is
-# how the violation a guard exists to catch gets merged green. `stayfixed.hooks.api`'s own docstring
+# how the violation a guard exists to catch gets merged green. `drybag.hooks.api`'s own docstring
 # argues it and CONTRIBUTING records it: the handler vocabulary is what `registry`, `dispatch`,
 # `sink` and every area's `hooks.py` import, so re-exporting a name defined in one of those would be
 # an import cycle. The back-door half of the rule still applies to it in full.
@@ -91,19 +91,16 @@ def _defined_here(tree: ast.AST) -> set[str]:
 def test_every_package_with_a_surface_is_walked() -> None:
     # The floor for the three parametrisations below: a `glob` that stopped matching would turn
     # all three into zero test cases, and a suite that collects nothing reports nothing. Pinned
-    # to the exact thirteen — twelve areas and the `release` package — because a package
-    # gaining or losing a published surface is a decision.
+    # to the exact twelve — ten areas and the `release` and `trust` packages — because a
+    # package gaining or losing a published surface is a decision.
     assert AREAS == [
         "attach",
         "docs",
         "doctor",
         "guards",
         "hooks",
-        "ledger",
         "memory",
         "overlay",
-        "project",
-        "prove",
         "release",
         "setup",
         "trust",
@@ -111,7 +108,7 @@ def test_every_package_with_a_surface_is_walked() -> None:
 
 
 def _surface(area: str) -> ModuleType:
-    return importlib.import_module(f"stayfixed.{area}.api")
+    return importlib.import_module(f"drybag.{area}.api")
 
 
 @pytest.mark.parametrize("area", AREAS)
@@ -134,14 +131,14 @@ def test_the_export_list_is_exactly_what_the_module_imports_from_its_area(area: 
         # The back-door half, and it holds for every area including the one that defines its own: a
         # surface that reached into another area would make this module a way past that area's
         # `api.py` with none of the crossings `tests/boundaries/test_api_surface.py` counts. Scoped
-        # to the other areas and not to every `stayfixed.` name, for that walk's own reason — the
-        # configuration layer and the leaves are not areas, and `stayfixed.hooks.api` names
-        # `stayfixed.config.session.SessionConfig` in `HandlerFn` because that is the handler
+        # to the other areas and not to every `drybag.` name, for that walk's own reason — the
+        # configuration layer and the leaves are not areas, and `drybag.hooks.api` names
+        # `drybag.config.session.SessionConfig` in `HandlerFn` because that is the handler
         # signature.
         parts = node.module.split(".")
-        elsewhere = parts[0] == "stayfixed" and parts[1:2] and parts[1] in set(AREAS) - {area}
+        elsewhere = parts[0] == "drybag" and parts[1:2] and parts[1] in set(AREAS) - {area}
         assert not elsewhere, node.module
-        if node.module.startswith(f"stayfixed.{area}."):
+        if node.module.startswith(f"drybag.{area}."):
             imported |= {alias.asname or alias.name for alias in node.names}
     defined = _defined_here(tree) if area in DEFINES_ITS_OWN else set()
     if area not in DEFINES_ITS_OWN:
@@ -169,7 +166,7 @@ def test_every_type_the_surface_names_in_a_signature_is_on_the_surface(area: str
 
     def area_types(annotation: object) -> set[str]:
         found: set[str] = set()
-        if isinstance(annotation, type) and annotation.__module__.startswith(f"stayfixed.{area}"):
+        if isinstance(annotation, type) and annotation.__module__.startswith(f"drybag.{area}"):
             found.add(annotation.__name__)
         for argument in typing.get_args(annotation):
             found |= area_types(argument)
@@ -201,7 +198,7 @@ def test_the_surface_is_a_module_not_the_package_init(area: str) -> None:
     # Measured: with the re-export list in `__init__.py`, `discover()` imports the whole area —
     # configuration layer included — on every call, because area discovery imports a package
     # before it imports the submodule it wants, and `tests/boundaries/test_discovery.py` goes red.
-    package = importlib.import_module(f"stayfixed.{area}")
+    package = importlib.import_module(f"drybag.{area}")
     init = Path(next(iter(package.__path__))) / "__init__.py"
     tree = ast.parse(init.read_text(encoding="utf-8"))
     assert not [n for n in ast.walk(tree) if isinstance(n, ast.Import | ast.ImportFrom)]

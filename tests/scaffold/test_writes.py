@@ -19,22 +19,8 @@ from typing import Any
 
 import pytest
 
-from stayfixed.config.loader import CONFIG_FILE, load
-from stayfixed.scaffold import Kind, Style, Template, apply, plan
-from stayfixed.scaffold.manifest import MANIFEST_PATH
-
-CONFIG = """
-[stayfixed]
-version = "0.1.0"
-preset = "recommended"
-profile = ""
-agents = ["claude"]
-
-[project]
-name = "widget"
-base_branch = "main"
-release_branch = "main"
-"""
+from drybag.scaffold import Template, apply, plan
+from drybag.scaffold.manifest import MANIFEST_PATH
 
 WRITING_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
 
@@ -119,21 +105,9 @@ def trace(monkeypatch: pytest.MonkeyPatch) -> Iterator[Trace]:
 
 def templates() -> list[Template]:
     return [
-        Template(
-            id="agents", kind=Kind.TEMPLATE, target="AGENTS.md", source="t", render=lambda: "A\n"
-        ),
-        Template(
-            id="ignore",
-            kind=Kind.MANAGED_REGION,
-            target=".gitignore",
-            source="t",
-            render=lambda: ".stayfixed/local/",
-            region="ignores",
-            style=Style.HASH,
-        ),
+        Template(id="agents", target="AGENTS.md", source="t", render=lambda: "A\n"),
         Template(
             id="doc",
-            kind=Kind.TEMPLATE,
             target="docs/specs/README.md",
             source="t",
             render=lambda: "S\n",
@@ -144,7 +118,6 @@ def templates() -> list[Template]:
 def a_project(tmp_path: Path) -> Path:
     root = tmp_path / "project"
     root.mkdir()
-    (root / CONFIG_FILE).write_text(CONFIG, encoding="utf-8")
     return root
 
 
@@ -154,15 +127,14 @@ def test_apply_touches_exactly_the_paths_the_plan_named(tmp_path: Path) -> None:
     (tmp_path / "sibling" / "untouched.txt").write_text("keep\n", encoding="utf-8")
 
     before = snapshot(tmp_path)
-    config = load(root, machine=tmp_path / "absent.toml")
-    planned = plan(root, config, templates())
+    planned = plan(root, templates())
     apply(root, planned)
     after = snapshot(tmp_path)
 
-    # The three targets `templates()` names, spelled out. Deriving them from `planned.writes`
+    # The two targets `templates()` names, spelled out. Deriving them from `planned.writes`
     # made this assertion agree with a planner that produced no actions at all: `apply` would
     # write only the manifest, and `changed` and `expected` would both be that one path.
-    targets = {"AGENTS.md", ".gitignore", "docs/specs/README.md"}
+    targets = {"AGENTS.md", "docs/specs/README.md"}
     assert set(planned.writes) == targets
     changed = {path for path in set(before) | set(after) if before.get(path) != after.get(path)}
     expected = {f"project/{target}" for target in targets} | {f"project/{MANIFEST_PATH}"}
@@ -173,8 +145,7 @@ def test_no_absolute_path_outside_the_project_root_is_opened_for_writing(
     tmp_path: Path, trace: Trace
 ) -> None:
     root = a_project(tmp_path)
-    config = load(root, machine=tmp_path / "absent.toml")
-    apply(root, plan(root, config, templates()))
+    apply(root, plan(root, templates()))
     assert trace.outside(root) == []
 
 
@@ -182,7 +153,7 @@ def test_the_trace_sees_a_write_the_tree_diff_cannot(tmp_path: Path, trace: Trac
     # The anti-vacuity guard for the test above, and the demonstration that this instrument is
     # strictly stronger than the diff: a write to $HOME is invisible to a walk of tmp_path.
     root = a_project(tmp_path)
-    outside = tmp_path.parent / "stayfixed-trace-probe.log"
+    outside = tmp_path.parent / "drybag-trace-probe.log"
     outside.write_text("x\n", encoding="utf-8")
     outside.unlink()
     assert trace.outside(root) == [str(outside)]

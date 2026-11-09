@@ -1,4 +1,4 @@
-"""The harness registry, and the one profile rendering there is: Claude Code's path-scoped rule."""
+"""The harness registry."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import harnesses
-from stayfixed.harnesses import (
+from drybag import harnesses
+from drybag.harnesses import (
     CANONICAL,
     CLAUDE,
     CODEX,
@@ -20,48 +20,17 @@ from stayfixed.harnesses import (
     Harness,
     Surface,
     detect,
-    select,
 )
-from stayfixed.profiles import load_profile
 from tests.test_language_neutral import _docstrings
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_the_claude_rule_is_path_scoped_and_points_at_the_one_copy() -> None:
-    profile = load_profile("python")
-    assert CLAUDE.render_profile is not None
-    rendition = CLAUDE.render_profile(profile, "docs/stayfixed/rules/python.md")
-    assert rendition.artifact_id == "claude-rules"
-    # `stayfixed-` says who owns the file and leaves `python.md` to the project.
-    assert rendition.target == ".claude/rules/stayfixed-python.md"
-    head, _, body = rendition.render().partition("---\n\n")
-    assert head.startswith("---\npaths:\n")
-    for glob in profile.scope:
-        assert f'  - "{glob}"\n' in head
-    # A pointer, not a copy: nothing of the rules' prose is in the file, so an edit to the one
-    # copy is what every session reads. Mutation: render `head + profile.rules` instead of the
-    # pointer -> the next two assertions redden.
-    assert "`docs/stayfixed/rules/python.md`" in body
-    assert profile.essentials[0] not in body and len(body.splitlines()) == 1
-
-
-def test_select_answers_the_listed_harnesses_and_counts_the_rest() -> None:
-    assert select(["claude", "codex"]) == ((CLAUDE, CODEX), 0)
-    assert select(["codex"]) == ((CODEX,), 0)
-    assert select(["claude", "cursor", "x\x1b"]) == ((CLAUDE,), 2)
-
-
 def test_every_harness_is_registered_once_and_codex_reads_only_the_standard() -> None:
     names = [harness.name for harness in HARNESSES]
     assert len(names) == len(set(names))
-    # Codex reads `AGENTS.md` and no other instruction file, so it has no rendering of its own
-    # and is served by the region alone.
-    assert CODEX.render_profile is None
     assert CLAUDE.settings == (".claude/settings.json",)
     assert CODEX.settings == (".codex/hooks.json",)
-    # `project.detect` reads these instead of spelling the directories a second time.
-    assert (CLAUDE.marker_dir, CODEX.marker_dir) == (".claude", ".codex")
 
 
 # What a hook may say about a tool call, in either harness's schema. A harness's `render` shapes
@@ -89,7 +58,6 @@ PAYLOADS: tuple[dict[str, object] | None, ...] = (
 # variable is in none of the inputs above, as a new harness's would be in neither of theirs.
 OTHER = Harness(
     name="other",
-    marker_dir=".other",
     settings=(),
     local_settings=(),
     project_dir_env=None,
@@ -157,7 +125,6 @@ def _keys(value: object) -> set[str]:
 # the event and the context, and nothing promises it emits JSON.
 TEXT = Harness(
     name="text",
-    marker_dir=".text",
     settings=(),
     local_settings=(),
     project_dir_env=None,
@@ -191,7 +158,7 @@ def test_every_harness_renders_through_the_canonical_render() -> None:
         assert harness.render is CANONICAL.render, (
             f"`{harness.name}` has a render of its own. A harness may get one only together with "
             "a detection signal a repository cannot steer: not the environment and not stdin, "
-            "but one the wrapper controls, such as its argv (`stayfixed.harnesses.detect`)."
+            "but one the wrapper controls, such as its argv (`drybag.harnesses.detect`)."
         )
 
 
@@ -234,7 +201,7 @@ def test_every_harness_states_every_surface() -> None:
         for surface, reach in harness.reach.items():
             assert reach.evidence, (harness.name, surface)
             # "Not claimed on this agent" is a statement a reader acts on, so it rests on evidence
-            # (a measured absence, or a measurement that stopped short of stayfixed's own
+            # (a measured absence, or a measurement that stopped short of drybag's own
             # surfaces); a surface nothing was measured of keeps the tier it was built for.
             if reach.tier is None:
                 assert reach.evidence != "unmeasured", (harness.name, surface)
@@ -268,39 +235,52 @@ _HARNESS_MENTION = re.compile(
 # a new item in that list. Counted, so a new constant beside a pardoned one reddens too. A site
 # whose constants make more than one fact gives a phrase for each.
 LISTED = {
-    ("src/stayfixed/setup/run.py", "claude"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
-    ("src/stayfixed/setup/run.py", "codex"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
-    ("src/stayfixed/attach/render.py", "claude"): (
+    ("src/drybag/setup/run.py", "claude"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
+    ("src/drybag/setup/run.py", "codex"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
+    ("src/drybag/setup/restore.py", "claude"): (5, "`install_listed` in `setup/restore.py`"),
+    ("src/drybag/attach/render.py", "claude"): (
         6,
         "`PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL`",
     ),
-    ("src/stayfixed/project/templates.py", "claude"): (5, "`init` renders `CLAUDE.md`"),
-    ("src/stayfixed/project/layout.py", "claude"): (1, "from the template `claude.md`"),
-    ("src/stayfixed/overlay/layout.py", "claude"): (1, "(`overlay.layout`"),
-    ("src/stayfixed/overlay/layout.py", "codex"): (1, "(`overlay.layout`"),
-    ("src/stayfixed/overlay/api.py", "claude"): (1, "re-exported by `overlay.api`"),
-    ("src/stayfixed/overlay/api.py", "codex"): (1, "re-exported by `overlay.api`"),
-    ("src/stayfixed/attach/permissions.py", "claude"): (
+    ("src/drybag/overlay/layout.py", "claude"): (1, "(`overlay.layout`"),
+    ("src/drybag/overlay/layout.py", "codex"): (1, "(`overlay.layout`"),
+    ("src/drybag/overlay/api.py", "claude"): (1, "re-exported by `overlay.api`"),
+    ("src/drybag/overlay/api.py", "codex"): (1, "re-exported by `overlay.api`"),
+    # The overlay's per-harness directories, and the kind of item a Codex rule file is.
+    ("src/drybag/attach/items.py", "claude"): (
         1,
-        "(`attach.permissions`, `attach.write`)",
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
-    ("src/stayfixed/attach/permissions.py", "codex"): (2, "(`attach.permissions`, `attach.write`)"),
-    ("src/stayfixed/attach/write.py", "claude"): (4, "(`attach.permissions`, `attach.write`)"),
-    ("src/stayfixed/attach/write.py", "codex"): (4, "(`attach.permissions`, `attach.write`)"),
-    ("src/stayfixed/hooks/api.py", "claude"): (1, "`hooks.api.DATA_ROOT_VARIABLES`"),
-    ("src/stayfixed/hooks/api.py", "plugin_data"): (2, "`hooks.api.DATA_ROOT_VARIABLES`"),
-    ("src/stayfixed/doctor/checks.py", "claude"): (
+    ("src/drybag/attach/items.py", "codex"): (
+        2,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
+    ("src/drybag/attach/permissions.py", "codex"): (
+        1,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
+    ("src/drybag/attach/write.py", "claude"): (
+        4,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
+    ("src/drybag/attach/write.py", "codex"): (
+        4,
+        "(`attach.items`, `attach.permissions`, `attach.write`)",
+    ),
+    ("src/drybag/hooks/api.py", "claude"): (1, "`hooks.api.DATA_ROOT_VARIABLES`"),
+    ("src/drybag/hooks/api.py", "plugin_data"): (2, "`hooks.api.DATA_ROOT_VARIABLES`"),
+    ("src/drybag/doctor/checks.py", "claude"): (
         3,
         "every variable under Claude Code's and Codex's",
     ),
-    ("src/stayfixed/doctor/checks.py", "codex"): (1, "names Codex in the `cli-path`"),
-    ("src/stayfixed/doctor/checks.py", "plugin_root"): (
+    ("src/drybag/doctor/checks.py", "codex"): (1, "names Codex in the `cli-path`"),
+    ("src/drybag/doctor/checks.py", "plugin_root"): (
         1,
         "names `CLAUDE_PLUGIN_ROOT` in the remedy",
     ),
-    ("src/stayfixed/doctor/checks.py", "plugin_data"): (1, "`${CLAUDE_PLUGIN_DATA}` in the"),
-    ("src/stayfixed/trust/boundary.py", "claude"): (2, "`trust.boundary` spells"),
-    ("src/stayfixed/guards/commands.py", "claude"): (
+    ("src/drybag/doctor/checks.py", "plugin_data"): (1, "`${CLAUDE_PLUGIN_DATA}` in the"),
+    ("src/drybag/trust/boundary.py", "claude"): (2, "`trust.boundary` spells"),
+    ("src/drybag/guards/commands.py", "claude"): (
         1,
         "`commit strip` gives way to Claude Code's `attribution.commit`",
     ),
@@ -308,26 +288,23 @@ LISTED = {
 # The mentions that are no fact the code acts on, each with how many constants make it and why.
 PROSE = {
     # Messages naming the Codex rule files `attach` places, and `--check` would place.
-    ("src/stayfixed/attach/check.py", "codex"): 1,
-    ("src/stayfixed/attach/commands.py", "codex"): 2,
+    ("src/drybag/attach/check.py", "codex"): 1,
+    ("src/drybag/attach/commands.py", "codex"): 4,
     # The advice `setup --approval-boundary` prints, which names the harness whose settings it is.
-    ("src/stayfixed/setup/commands.py", "claude"): 1,
+    ("src/drybag/setup/commands.py", "claude"): 1,
     # The commit-trailer guard's names of tools that sign commits as authors: the agent as an
-    # author of a commit, not as a harness stayfixed runs under.
-    ("src/stayfixed/guards/commit.py", "claude"): 2,
-    ("src/stayfixed/guards/commit.py", "codex"): 2,
-    # The recommended plugins question's lines, which say where `setup` installs them and how to
-    # take one out: Claude Code is the one harness with a verified marketplace for them.
-    ("src/stayfixed/project/questions.py", "claude"): 3,
+    # author of a commit, not as a harness drybag runs under.
+    ("src/drybag/guards/commit.py", "claude"): 2,
+    ("src/drybag/guards/commit.py", "codex"): 2,
 }
 
 
 def _harness_mentions() -> Counter[tuple[str, str]]:
     """How many string constants of each module outside the registry name each harness word."""
     found: Counter[tuple[str, str]] = Counter()
-    for path in sorted((ROOT / "src" / "stayfixed").rglob("*.py")):
+    for path in sorted((ROOT / "src" / "drybag").rglob("*.py")):
         relative = path.relative_to(ROOT).as_posix()
-        if relative == "src/stayfixed/harnesses.py":
+        if relative == "src/drybag/harnesses.py":
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         prose = _docstrings(tree)
