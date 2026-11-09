@@ -117,6 +117,44 @@ runpy.run_path({str(ROOT / "scripts" / "drybag")!r}, run_name="__main__")
 """
 
 
+# A launcher that is the real one for everything but `SessionEnd`, which it answers as 0.7.0 did.
+REFUSED_ON_SESSION_END = f"""
+import json, runpy, sys
+
+if sys.argv[1:3] == ["hook", "SessionEnd"]:
+    sys.stdin.read()
+    print(json.dumps({{"hookSpecificOutput": {{"hookEventName": "SessionEnd"}}}}))
+    sys.exit(0)
+runpy.run_path({str(ROOT / "scripts" / "drybag")!r}, run_name="__main__")
+"""
+
+
+@needs_git
+def test_a_session_end_entry_that_answers_with_the_refused_field_is_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # This row once demanded the field, which is the shape Claude Code refuses on this event.
+    # Mutation (declared, `mutations/`'s "the hook smoke accepts the field on SessionEnd"): the
+    # check never fires -> the row passes and this reddens.
+    smoke = _load("smoke_hooks")
+    code = smoke.main(
+        [
+            "--plugin-root",
+            str(_plugin(tmp_path, launcher=REFUSED_ON_SESSION_END)),
+            "--fixture",
+            str(ROOT / "tests" / "fixtures" / "smoke-project"),
+            "--scratch",
+            str(tmp_path / "s"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "stdout carries a hookSpecificOutput, which Claude Code refuses on SessionEnd" in out, (
+        out
+    )
+    assert "1 failure(s)" in out, out
+
+
 @needs_git
 def test_a_red_run_entry_that_says_nothing_is_reported(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]

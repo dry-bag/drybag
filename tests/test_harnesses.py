@@ -149,6 +149,19 @@ def test_no_harness_renders_a_decision(harness: Harness, event: str, context: st
     assert not _decisions(harness.render(event, context, context), context)
 
 
+@pytest.mark.parametrize("context", ["", "a note"])
+def test_session_end_answers_without_the_field_claude_code_refuses_there(context: str) -> None:
+    # Measured on Claude Code 2.1.319 with a bare hook for each event the dispatcher carries: the
+    # field fails validation on `SessionEnd`, with or without a context, and prints the expected
+    # schema at every exit, while `{}` passes. Every other event accepts the shape.
+    # Mutation (declared, `mutations/`'s "SessionEnd answers with the field Claude Code refuses"):
+    # the event's early answer goes -> the envelope comes back and this reddens.
+    assert CLAUDE.render("SessionEnd", context, "") == "{}"
+    assert json.loads(CLAUDE.render("Stop", "", "")) == {
+        "hookSpecificOutput": {"hookEventName": "Stop"}
+    }
+
+
 def test_every_harness_renders_through_the_canonical_render() -> None:
     # What `detect` answers is a repository's to steer, so while every value renders the same way
     # the answer changes nothing a harness receives. A value with a render of its own makes that

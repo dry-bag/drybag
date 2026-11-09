@@ -767,6 +767,16 @@ reddens = [
   "tests/test_harnesses.py::test_no_harness_renders_a_decision[plain-PreToolUse-claude]",
 ]
 
+# Claude Code refuses `hookSpecificOutput` on `SessionEnd` and prints the expected schema at every exit.
+[[mutation]]
+name = "SessionEnd answers with the field Claude Code refuses"
+file = "src/drybag/harnesses.py"
+before = '    if event_name == "SessionEnd":'
+after = '    if event_name == "SessionEnded":'
+reddens = [
+  "tests/test_harnesses.py::test_session_end_answers_without_the_field_claude_code_refuses_there[a note]",
+]
+
 # The detected harness is a repository's to steer (a committed `env` block can set `PLUGIN_ROOT`),
 # and the project root decides which configuration loads, so the event is read from every
 # registered harness's variable whichever one was detected, and is never told which.

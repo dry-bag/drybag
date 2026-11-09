@@ -252,10 +252,13 @@ def check_entry(
             emitted = json.loads(done.stdout)
         except json.JSONDecodeError:
             return "stdout is not JSON"
-        if emitted.get("hookSpecificOutput", {}).get("hookEventName") != event:
-            named = emitted.get("hookSpecificOutput", {}).get("hookEventName")
-            return f"stdout names {named!r}, not {event!r}"
-        context = str(emitted["hookSpecificOutput"].get("additionalContext", ""))
+        specific = emitted.get("hookSpecificOutput", {})
+        # The one event Claude Code refuses the field on (`hook_specific_output`).
+        if event == "SessionEnd" and "hookSpecificOutput" in emitted:
+            return "stdout carries a hookSpecificOutput, which Claude Code refuses on SessionEnd"
+        if event != "SessionEnd" and specific.get("hookEventName") != event:
+            return f"stdout names {specific.get('hookEventName')!r}, not {event!r}"
+        context = str(specific.get("additionalContext", ""))
     for phrase in sample.context_says:
         if phrase not in context:
             return f"the context does not say {phrase!r} ({len(context)} characters)"

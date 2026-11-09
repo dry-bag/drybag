@@ -154,7 +154,12 @@ def hook_specific_output(event_name: str, context: str, notice: str) -> str:
     `notice` is for the person, and goes out as `systemMessage`, which Claude Code shows a person
     in a terminal on `SessionStart` and never hands the model (`hooks.dispatch.NOTICE_EVENT` says
     where that was measured); the model's copy is the caller's to put into `context`. An empty one
-    adds no key."""
+    adds no key.
+
+    `SessionEnd` answers an empty object: Claude Code 2.1.319 refuses the field on that event, and
+    no model turn is left to read a context."""
+    if event_name == "SessionEnd":
+        return "{}"
     payload: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": event_name}}
     if context:
         payload["hookSpecificOutput"]["additionalContext"] = context

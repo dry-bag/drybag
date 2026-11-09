@@ -857,6 +857,16 @@ reddens = [
   "tests/scripts/test_smoke_scripts.py::test_a_red_run_entry_that_says_nothing_is_reported",
 ]
 
+# The field is what Claude Code refuses on `SessionEnd`, so the row holds its absence.
+[[mutation]]
+name = "the hook smoke accepts the field on SessionEnd"
+file = "scripts/smoke_hooks.py"
+before = """        if event == "SessionEnd" and "hookSpecificOutput" in emitted:"""
+after = """        if False:"""
+reddens = [
+  "tests/scripts/test_smoke_scripts.py::test_a_session_end_entry_that_answers_with_the_refused_field_is_reported",
+]
+
 # The registry's converse, which is the direction that fails silently: `SAMPLES` is keyed by
 # EVENT, so dropping one of the seven `SessionStart` entries leaves every event sampled, runs
 # one row fewer and prints a green summary.

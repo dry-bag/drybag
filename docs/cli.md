@@ -415,8 +415,7 @@ carries the red-run note (below); Codex reads the same file and ignores that key
 Codex CLI 0.162.0-alpha.17.2). `SessionStart` and `SessionEnd` carry `index-render`, which
 renders a bound overlay checkout's `MEMORY.md`
 ([`memory index`](#drybag-memory-index)). `Stop` and `SessionEnd` carry the note sync's handlers
-([Note sync](#note-sync)) and print nothing that blocks: each answers
-`{"hookSpecificOutput": {"hookEventName": …}}` with no `decision`, which on `Stop` would keep the
+([Note sync](#note-sync)) and print nothing that blocks: neither answer carries a `decision`, which on `Stop` would keep the
 turn from ending. An event Codex delivers from that file runs the same handlers behind the same
 per-machine switch, and that has not been measured on Codex. `drybag hook` dispatches eight
 events, those six and `UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses.
