@@ -307,7 +307,7 @@ def test_the_release_is_cut_on_origin_main_whatever_the_local_main_holds() -> No
     cut = [line for line in lines if line.startswith("git ")][:3]
     assert cut == [
         "git fetch origin",
-        "git log --oneline --decorate origin/main..main",
+        "git log --oneline --decorate --no-merges main --not origin/main origin/dev",
         "git switch -C main origin/main",
     ], cut
     assert not any("git pull" in line for line in lines), lines

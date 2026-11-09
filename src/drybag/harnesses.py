@@ -182,7 +182,6 @@ _IN_CI = Reach(
     Tier.CI, "unmeasured: the checks run in a project's own CI, where no agent takes part"
 )
 # The records the measurements below are kept in, named and not linked: the plugin ships no plan.
-_P0_SPIKES = "the spike record of 2026-09-05"
 _DELIVERY_SPIKE = "the delivery spike of 2026-10-02"
 # What is claimed of Codex's plugin hooks, which both hook surfaces rest on: no tier yet. Codex
 # runs a plugin's hooks once they are trusted in `/hooks` (an untrusted one is skipped without a
@@ -211,7 +210,7 @@ CLAUDE = Harness(
             Surface.NOTICES: Reach(
                 Tier.CONTEXT,
                 "a SessionStart hook's output arrived as context "
-                f"({_P0_SPIKES}, the hook output cap trial)",
+                "(the spike record of 2026-09-05, the hook output cap trial)",
                 measured_on="Claude Code 2.1.261",
             ),
             Surface.GATES: _IN_CI,

@@ -39,15 +39,10 @@ def _wheel(path: Path, *, without: str | None = None) -> Path:
 
 
 def _sdist(
-    path: Path,
-    module: ModuleType,
-    *,
-    wrapper_mode: int = 0o755,
-    without: str | None = None,
-    extra: str = "CHANGELOG.md",
+    path: Path, module: ModuleType, *, wrapper_mode: int = 0o755, without: str | None = None
 ) -> Path:
     with tarfile.open(path, "w:gz") as archive:
-        for name in {*module.SDIST_MUST, extra}:
+        for name in module.SDIST_MUST:
             if name == without:
                 continue
             info = tarfile.TarInfo(f"drybag-0.0.0/{name}")
@@ -73,10 +68,11 @@ def test_complete_artifacts_have_no_findings(tmp_path: Path) -> None:
     ids=["plans", "mutations", "a-fixture-of-the-same-name"],
 )
 def test_a_tree_the_sdist_must_not_carry_is_named(
-    tmp_path: Path, member: str, findings: list[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, member: str, findings: list[str]
 ) -> None:
     module = checker()
-    assert module.check_sdist(_sdist(tmp_path / "k.tar.gz", module, extra=member)) == findings
+    monkeypatch.setattr(module, "SDIST_MUST", (*module.SDIST_MUST, member))
+    assert module.check_sdist(_sdist(tmp_path / "k.tar.gz", module)) == findings
 
 
 def test_a_template_file_missing_from_the_wheel_is_named(tmp_path: Path) -> None:
