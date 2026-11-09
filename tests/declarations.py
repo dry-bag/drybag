@@ -17,9 +17,15 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import pytest
+
 from tests.scriptload import SCRIPTS, load
 
 SCRIPT = SCRIPTS / "mutation_oracle.py"
+# The sdist does not carry the entries, so what reads them skips in an unpacked one.
+needs_declarations = pytest.mark.skipif(
+    not (SCRIPTS.parent / "mutations").is_dir(), reason="the declarations are not in the sdist"
+)
 # How a comment cites an entry (CONTRIBUTING.md, "Tests"): the set, then the entry's quoted name.
 # Built in two pieces so that this line is not itself read as a citation of whatever follows it.
 ANCHOR = "`mutations" + "/`'s"

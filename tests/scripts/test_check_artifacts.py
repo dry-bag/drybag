@@ -104,22 +104,6 @@ def test_the_sdist_must_carry_the_hook_wrapper_hooks_file_and_launcher() -> None
     assert "hooks/hashes.json" not in module.SDIST_MUST
 
 
-def test_the_sdist_must_carry_every_mutation_group_file() -> None:
-    # The group files are globbed rather than spelled, and a glob that matches nothing — a moved
-    # directory, a mistyped pattern — drops the requirement without a sound: the sdist check stays
-    # green over an artifact a packager cannot run the oracle from. So the checkout's own set is
-    # the floor, and it is stated non-empty before it is compared.
-    #
-    # Mutation: the checker's pattern becomes `*.tom` -> no group file is required and the
-    # comparison reddens.
-    module = checker()
-    required = {name for name in module.SDIST_MUST if name.startswith("mutations/")}
-    declarations = SCRIPTS.parent / "mutations"
-    carried = {f"mutations/{path.name}" for path in declarations.glob("*.toml")}
-    assert carried  # a walk-based assertion states its walk is non-empty
-    assert required == carried
-
-
 def _rendered(root: Path, *, repository: bool = True) -> Path:
     """What `setup --overlay <path>` leaves: the shipped files, the manifest and a repository."""
     for relative in (*OVERLAY_FILES, str(MANIFEST_PATH)):

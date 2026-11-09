@@ -67,10 +67,12 @@ source-include = [
   "CODE_OF_CONDUCT.md",
   "RELEASING.md",
   "changelog.d/**",
-  "mutations/*.toml",
   ".claude-plugin/**",
   ".codex-plugin/**",
 ]
+# Internal working records, which PyPI's copy would keep for good. The mutation entries are kept
+# out by not being included above.
+source-exclude = ["/docs/plans"]
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-cov>=6", "pytest-xdist>=3", "ruff>=0.12", "mypy>=1.16", "towncrier>=26.9"]

@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.declarations import declared, relative
+from tests.declarations import declared, needs_declarations, relative
 from tests.gitfixture import needs_git, run_git
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -385,7 +385,10 @@ def test_the_gate_reads_the_whole_tree() -> None:
         assert wanted in names, wanted
     # The mutation declarations by their directory and not by a group file's name, which is
     # `GROUP_OF`'s to choose and to change.
-    assert any(name.startswith("mutations/") for name in names), "no declaration file is walked"
+    # Where the tree is there: the sdist does not carry it.
+    assert not (ROOT / "mutations").is_dir() or any(
+        name.startswith("mutations/") for name in names
+    ), "no declaration file is walked"
     # **One assertion per tracked top-level tree, because the two floors below cannot hold
     # this.** Measured 2026-09-19: `tracked_files()` made to drop every path whose first
     # component is `.github`, `skills`, `agents` or `changelog.d` — 58 of 347 files, every
@@ -541,6 +544,7 @@ def test_a_token_hit_names_the_offset_of_its_first_window() -> None:
     assert offending("fixed in 1b279648") == ["bare commit id"]
 
 
+@needs_declarations
 def test_the_mutation_declarations_carry_no_source_repository_string() -> None:
     # Every file in `mutations/` is walked whole under the public table by the parametrised test
     # below, like every other tracked document. This is the stricter half the two area-scoped gates
