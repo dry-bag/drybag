@@ -11,7 +11,7 @@
         "source": "url",
         "url": "https://github.com/dry-bag/drybag-plugin.git",
         "ref": "v0.7.1",
-        "sha": "f6d299144481ccc0824c890913985abc16e0bc6f"
+        "sha": "48a20a428a4427cf7d5073e3a98bc8a71b96de8a"
       },
       "description": "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check."
     }
