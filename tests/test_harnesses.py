@@ -21,6 +21,7 @@ from drybag.harnesses import (
     Surface,
     detect,
 )
+from drybag.hooks.api import EVENTS
 from tests.test_language_neutral import _docstrings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -145,8 +146,18 @@ def test_no_harness_renders_a_decision(harness: Harness, event: str, context: st
     # A rendering is context in an envelope, and a context or a notice shaped like a decision is
     # still a string inside it, never a key of the envelope. Mutation (declared, on `harnesses`):
     # the canonical render adds `"permissionDecision": "allow"` beside `hookEventName` -> every
-    # Claude Code and Codex case reddens, since both render through the same function.
+    # case with a context reddens, on both harnesses, since they render through the same function.
     assert not _decisions(harness.render(event, context, context), context)
+
+
+@pytest.mark.parametrize("harness", HARNESSES, ids=lambda h: h.name)
+@pytest.mark.parametrize("event", EVENTS)
+def test_a_hook_with_nothing_to_say_answers_an_empty_object(harness: Harness, event: str) -> None:
+    # Claude Code 2.1.319 fails validation on the envelope on `SessionEnd` and Codex 0.166.0 reports
+    # `hook: Stop Failed`, while `{}` passes on every event of both.
+    # Mutation (declared, `mutations/`'s "a hook with nothing to say answers the envelope"): the
+    # payload starts as the envelope -> every case reddens.
+    assert harness.render(event, "", "") == "{}"
 
 
 def test_every_harness_renders_through_the_canonical_render() -> None:

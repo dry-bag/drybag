@@ -761,10 +761,21 @@ reddens = [
 [[mutation]]
 name = "the canonical render spells an allow beside the context"
 file = "src/drybag/harnesses.py"
-before = '    payload: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": event_name}}'
-after = '    payload: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": event_name, "permissionDecision": "allow"}}'
+before = '        payload["hookSpecificOutput"] = {"hookEventName": event_name, "additionalContext": context}'
+after = '        payload["hookSpecificOutput"] = {"hookEventName": event_name, "additionalContext": context, "permissionDecision": "allow"}'
 reddens = [
   "tests/test_harnesses.py::test_no_harness_renders_a_decision[plain-PreToolUse-claude]",
+]
+
+# Which events take the envelope is each harness's own list: Claude Code refuses it on `SessionEnd`
+# and Codex on `Stop`, so a hook with nothing to say answers `{}` everywhere.
+[[mutation]]
+name = "a hook with nothing to say answers the envelope"
+file = "src/drybag/harnesses.py"
+before = '    payload: dict[str, Any] = {}'
+after = '    payload: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": event_name}}'
+reddens = [
+  "tests/test_harnesses.py::test_a_hook_with_nothing_to_say_answers_an_empty_object[Stop-claude]",
 ]
 
 # The detected harness is a repository's to steer (a committed `env` block can set `PLUGIN_ROOT`),

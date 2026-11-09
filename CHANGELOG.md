@@ -2,10 +2,12 @@
 
 <!-- towncrier release notes start -->
 
-## 0.7.0 (2026-11-09)
+## 0.7.1 (2026-11-09)
 
 ### Upgrading
 
+- 0.7.0 was tagged and never published: this release carries what it was to ship, so every entry
+  under it is a change from 0.6.1.
 - **stayfixed is now drybag.** The package and the command are `drybag`; the plugin is `drybag` in
   the marketplace `drybag` (`drybag@drybag`, from `dry-bag/drybag`, where it was
   `stayfixed@stayfixed-marketplace`); the configuration file is `drybag.toml` with the table
@@ -31,10 +33,10 @@
      by hand, and delete `.stayfixed/local/attach.json`, which holds your allow rules.
   2. Remove the old plugin and command: `/plugin marketplace remove stayfixed-marketplace`, which
      uninstalls the plugin, and `uv tool uninstall stayfixed`. Install drybag:
-     `uv tool install drybag`, `/plugin marketplace add dry-bag/drybag@v0.7.0`,
+     `uv tool install drybag`, `/plugin marketplace add dry-bag/drybag@v0.7.1`,
      `/plugin install drybag@drybag`.
   3. In a repository with a `stayfixed.toml`, rename it to `drybag.toml`, rename its table to
-     `[drybag]`, set `version = "0.7.0"` and delete the keys listed below. In a `local-only` project,
+     `[drybag]`, set `version = "0.7.1"` and delete the keys listed below. In a `local-only` project,
      also run `mkdir -p .drybag/local && mv .stayfixed/local/memory .drybag/local/` and add
      `.drybag/local/` to `.gitignore`.
   4. At your overlay's root, rename `stayfixed-overlay.toml` to `drybag-overlay.toml`; without it

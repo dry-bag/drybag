@@ -1,6 +1,6 @@
 {
   "name": "drybag",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check.",
   "author": { "name": "Nezhinskiy" },
   "repository": "https://github.com/dry-bag/drybag",

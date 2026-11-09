@@ -88,12 +88,11 @@ def _clamp(
     while the truncation mark claims it was handled. The envelope's width depends on the
     harness that renders it and on the event name, and JSON escaping widens the context itself,
     so the largest prefix that still fits, as `render` (the detected harness's) shapes it, is
-    searched for rather than computed. A cap that leaves no room even for the empty envelope
+    searched for rather than computed. A cap that leaves no room even for an empty answer
     emits nothing: an over-cap string would be replaced by a preview anyway.
 
     `notice` is rendered whole on every try, so it is counted inside the cap and never cut; the
-    context it also opens loses its tail first. A cap too small for the notice drops it before
-    the envelope.
+    context it also opens loses its tail first. A cap too small for the notice drops it.
     """
     best: str | None = None
     low, high = 0, min(len(context), cap)  # a kept character costs at least one of the cap

@@ -235,13 +235,18 @@ def main(argv: list[str]) -> int:
     try:
         envelope = json.loads(started.stdout)
     except json.JSONDecodeError:
-        envelope = {}
+        envelope = {"unparsed": True}
     specific = envelope.get("hookSpecificOutput", {})
     context = specific.get("additionalContext")
     report.row(
         started.returncode == 0
-        and specific.get("hookEventName") == "SessionStart"
-        and (context is None or UNREVIEWED_COUNT.fullmatch(str(context)) is not None)
+        and (
+            envelope == {}
+            or (
+                specific.get("hookEventName") == "SessionStart"
+                and UNREVIEWED_COUNT.fullmatch(str(context)) is not None
+            )
+        )
         and CANARY not in started.stdout
         and DELIMITER not in started.stdout,
         "the session-start hook answers its envelope and injects nothing from the clone",

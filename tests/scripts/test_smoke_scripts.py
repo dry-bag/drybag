@@ -104,17 +104,45 @@ def test_a_launcher_fault_is_not_mistaken_for_an_injection(
     assert "injected nothing carrying '<<<drybag:repository-data'" in out, out
 
 
-# A launcher that is the real one for everything but the red-run entry, which it answers as an
-# entry whose handler said nothing does: exit 0 and the event's envelope with no context in it.
-SILENT_ON_FAILURE = f"""
-import json, runpy, sys
+def _answering(event: str, stdout: str) -> str:
+    """A launcher that is the real one but for `event`, which it answers with `stdout`."""
+    return f"""
+import runpy, sys
 
-if sys.argv[1:3] == ["hook", "PostToolUseFailure"]:
+if sys.argv[1:3] == ["hook", {event!r}]:
     sys.stdin.read()
-    print(json.dumps({{"hookSpecificOutput": {{"hookEventName": "PostToolUseFailure"}}}}))
+    print({stdout!r})
     sys.exit(0)
 runpy.run_path({str(ROOT / "scripts" / "drybag")!r}, run_name="__main__")
 """
+
+
+@needs_git
+@pytest.mark.parametrize(
+    "stdout",
+    ['{"hookSpecificOutput": {"hookEventName": "SessionEnd"}}', '{"decision": "block"}', ""],
+    ids=["the old envelope", "a decision", "nothing"],
+)
+def test_a_quiet_entry_that_answers_anything_but_an_empty_object_is_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], stdout: str
+) -> None:
+    # Mutation (declared, `mutations/`'s "the hook smoke accepts any answer from a quiet entry"):
+    # the check never fires -> the row passes and this reddens.
+    smoke = _load("smoke_hooks")
+    code = smoke.main(
+        [
+            "--plugin-root",
+            str(_plugin(tmp_path, launcher=_answering("SessionEnd", stdout))),
+            "--fixture",
+            str(ROOT / "tests" / "fixtures" / "smoke-project"),
+            "--scratch",
+            str(tmp_path / "s"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "hook SessionEnd -> expected an empty object" in out, out
+    assert "1 failure(s)" in out, out
 
 
 @needs_git
@@ -130,7 +158,15 @@ def test_a_red_run_entry_that_says_nothing_is_reported(
     code = smoke.main(
         [
             "--plugin-root",
-            str(_plugin(tmp_path, launcher=SILENT_ON_FAILURE)),
+            str(
+                _plugin(
+                    tmp_path,
+                    launcher=_answering(
+                        "PostToolUseFailure",
+                        '{"hookSpecificOutput": {"hookEventName": "PostToolUseFailure"}}',
+                    ),
+                )
+            ),
             "--fixture",
             str(ROOT / "tests" / "fixtures" / "smoke-project"),
             "--scratch",

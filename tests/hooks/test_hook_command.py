@@ -101,14 +101,14 @@ BACKGROUND_SLEEP = {
 
 def hinted(completed: subprocess.CompletedProcess[str]) -> bool:
     """Whether a `PreToolUse` answer let the call through with the backgrounded-sleep hint."""
-    output = json.loads(completed.stdout)["hookSpecificOutput"]
+    output = json.loads(completed.stdout).get("hookSpecificOutput", {})
     return completed.returncode == 0 and output.get("additionalContext") == SLEEP_HINT
 
 
 def test_no_handlers_means_a_clean_empty_outcome(tmp_path: Path) -> None:
     completed = hook("SessionStart", json.dumps({"hook_event_name": "SessionStart"}), tmp_path)
     assert completed.returncode == 0
-    assert json.loads(completed.stdout)["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert json.loads(completed.stdout) == {}
 
 
 @pytest.mark.parametrize("event", ["PreToolUse", "SessionStart"])
@@ -159,7 +159,9 @@ def test_a_symlinked_config_gets_one_verdict_whatever_it_points_at(
 
 
 def test_argv_names_the_event_even_when_stdin_spells_it_differently(tmp_path: Path) -> None:
-    completed = hook("PreToolUse", json.dumps({"hook_event_name": "pre_tool_use"}), tmp_path)
+    completed = hook(
+        "PreToolUse", json.dumps({**BACKGROUND_SLEEP, "hook_event_name": "pre_tool_use"}), tmp_path
+    )
     assert completed.returncode == 0
     assert json.loads(completed.stdout)["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
 
@@ -169,9 +171,7 @@ def test_an_unknown_event_on_the_command_line_dispatches_to_nothing(tmp_path: Pa
     # validated, so a platform that adds an event must not make the wrapper refuse.
     completed = hook("SomethingNewEntirely", "{}", tmp_path)
     assert completed.returncode == 0
-    output = json.loads(completed.stdout)["hookSpecificOutput"]
-    assert output["hookEventName"] == "SomethingNewEntirely"
-    assert "additionalContext" not in output
+    assert json.loads(completed.stdout) == {}
 
 
 def test_a_repository_without_a_config_still_gets_the_shipped_cap() -> None:
@@ -240,7 +240,7 @@ def test_a_once_per_context_handler_really_runs_once(tmp_path: Path) -> None:
     second = hook("PostToolUse", payload, project, data=data)
     assert first.returncode == 0, first.stderr
     assert json.loads(first.stdout)["hookSpecificOutput"]["additionalContext"].startswith(LEAD)
-    assert json.loads(second.stdout)["hookSpecificOutput"].get("additionalContext") is None
+    assert json.loads(second.stdout) == {}
 
 
 # A directory name the repository chose and the loader's refusal would print: it is the one
@@ -316,7 +316,7 @@ def test_a_config_that_does_not_load_whole_never_refuses_a_tool_call(
     project = build(tmp_path)
     completed = hook("PreToolUse", json.dumps(TOOL_CALL), project)
     assert (completed.returncode, completed.stderr) == (0, "")
-    assert json.loads(completed.stdout) == {"hookSpecificOutput": {"hookEventName": "PreToolUse"}}
+    assert json.loads(completed.stdout) == {}
 
 
 @ROOT_SEARCHES_EVERYTHING

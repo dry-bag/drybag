@@ -148,16 +148,15 @@ class Harness:
 
 
 def hook_specific_output(event_name: str, context: str, notice: str) -> str:
-    """Claude Code's hook answer: the whole string a hook writes to stdout, which the harness
-    caps, rather than the field inside it.
+    """The hook answer: the whole string a hook writes to stdout, which the harness caps.
 
-    `notice` is for the person, and goes out as `systemMessage`, which Claude Code shows a person
-    in a terminal on `SessionStart` and never hands the model (`hooks.dispatch.NOTICE_EVENT` says
-    where that was measured); the model's copy is the caller's to put into `context`. An empty one
-    adds no key."""
-    payload: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": event_name}}
+    A hook with nothing to say answers `{}`, on every event: which events take the envelope is each
+    harness's own list, and no copy of one is kept here. `notice` goes out as `systemMessage`, which
+    Claude Code shows a person in a terminal on `SessionStart` and never hands the model
+    (`hooks.dispatch.NOTICE_EVENT`); the model's copy is the caller's to put into `context`."""
+    payload: dict[str, Any] = {}
     if context:
-        payload["hookSpecificOutput"]["additionalContext"] = context
+        payload["hookSpecificOutput"] = {"hookEventName": event_name, "additionalContext": context}
     if notice:
         payload["systemMessage"] = notice
     return json.dumps(payload)

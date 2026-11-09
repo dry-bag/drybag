@@ -29,6 +29,7 @@ from tests.declarations import (
     cited_names,
     declared,
     empty_anchors,
+    needs_declarations,
     unread_citations,
     unread_names,
 )
@@ -340,7 +341,7 @@ def test_a_mutation_nothing_notices_is_reported_as_surviving(tmp_path: Path) -> 
 # The guard exists because this script writes source files and restores them from memory; its
 # own comment says "refuse rather than risk it". It read any non-zero `git` exit as a clean
 # tree — and `git status` exits 128 outside a repository, which is exactly what an unpacked
-# sdist is (`scripts/**` and `mutations/` ship in it) and what a broken `git` produces.
+# sdist is (`scripts/**` ships in it) and what a broken `git` produces.
 
 
 @needs_git
@@ -1240,6 +1241,7 @@ def test_every_citation_is_spelled_the_way_the_citation_reader_reads() -> None:
 # the groups were sized for reaches them (CONTRIBUTING.md, "Tests").
 
 
+@needs_declarations
 def test_the_oracle_reads_every_group_file() -> None:
     # Mutation (declared): `declared()` reads only the first group file (`[:1]` on the sorted
     # glob) -> the count comes out at the first file's entries and the second assertion reddens.
@@ -1250,6 +1252,7 @@ def test_the_oracle_reads_every_group_file() -> None:
     assert len(module.declared()) == expected
 
 
+@needs_declarations
 def test_every_entry_lives_in_its_group_file() -> None:
     # Mutation (declared): `GROUP_OF` loses its `src/drybag/doctor/` row -> every `doctor`
     # entry routes to the package's catch-all group instead, and the first of them, still in the

@@ -857,6 +857,16 @@ reddens = [
   "tests/scripts/test_smoke_scripts.py::test_a_red_run_entry_that_says_nothing_is_reported",
 ]
 
+# A quiet entry's answer is exactly `{}`, so a `decision` or a refused envelope cannot pass as quiet.
+[[mutation]]
+name = "the hook smoke accepts any answer from a quiet entry"
+file = "scripts/smoke_hooks.py"
+before = """        if done.stdout.strip() != "{}":"""
+after = """        if False:"""
+reddens = [
+  "tests/scripts/test_smoke_scripts.py::test_a_quiet_entry_that_answers_anything_but_an_empty_object_is_reported[a decision]",
+]
+
 # The registry's converse, which is the direction that fails silently: `SAMPLES` is keyed by
 # EVENT, so dropping one of the seven `SessionStart` entries leaves every event sampled, runs
 # one row fewer and prints a green summary.

@@ -35,11 +35,6 @@ from pathlib import Path
 from drybag.overlay.api import OVERLAY_FILES
 from drybag.scaffold import MANIFEST_PATH
 
-# The mutation declarations, one file per group. The sdist must carry the files this checkout
-# carries, globbed rather than spelled: `GROUP_OF` in `scripts/mutation_oracle.py` is the one
-# place the groups are named, so a group added there ships with no edit here.
-DECLARATIONS = Path(__file__).resolve().parents[1] / "mutations"
-
 WHEEL_MUST = (
     "drybag/presets/recommended.toml",
     *(f"drybag/templates/overlay/{relative}" for relative in OVERLAY_FILES),
@@ -55,7 +50,6 @@ SDIST_MUST = (
     "hooks/run-hook.sh",
     "hooks/hooks.json",
     "scripts/drybag",
-    *(f"mutations/{path.name}" for path in sorted(DECLARATIONS.glob("*.toml"))),
 )
 SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/drybag")
 

@@ -49,8 +49,7 @@ def _attached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, bound: bool) -
 
 
 def _context(stdout: str) -> str | None:
-    output = json.loads(stdout)["hookSpecificOutput"]
-    context = output.get("additionalContext")
+    context = json.loads(stdout).get("hookSpecificOutput", {}).get("additionalContext")
     assert context is None or isinstance(context, str)
     return context
 
