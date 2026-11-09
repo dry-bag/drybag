@@ -7,7 +7,7 @@ imports — a test parses the file and checks."
 
 from __future__ import annotations
 
-import stayfixed.attach.api as attach
+import drybag.attach.api as attach
 
 
 def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
@@ -17,9 +17,9 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     # a consumer outside this area reaches for it, or because an exported name's signature or
     # vocabulary requires it — rather than freezing whatever the list happened to hold.
     #
-    # `attach` is not on it: `tests/test_install_path.py` drives it through the argument parser
-    # and imports only `stayfixed.doctor.api` and `stayfixed.memory.api`. `detach` is, since
-    # `project`'s `uninstall` runs it on an attached repository.
+    # `attach` is on it since `setup --restore` runs it on each checkout the overlay's projects
+    # file lists, with `Attached` it returns and `Carried`, the type of two of its fields.
+    # `detach` is not, since no area runs it once `uninstall` was deleted.
     #
     # No mutation entry: the mutation is adding an export, which is two lines in `api.py` (the
     # import and the `__all__` entry) and not one substituted line. Measured by hand instead —
@@ -33,7 +33,8 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
         "read_binding",
         "Binding",
         "LOCAL_SETTINGS",  # the file an earlier release merged the overlay's hook entries into
-        "detach",  # `project`'s `uninstall` detaches an attached repository first
-        "Detached",  # what `detach` returns
+        "attach",  # `setup --restore` attaches each listed checkout
+        "Attached",  # what `attach` returns
+        "Carried",  # the type of two of `Attached`'s fields
     }
     assert required == set(attach.__all__)

@@ -5,8 +5,8 @@
 # Named separately so a change to them is never skimmed as part of a larger diff: these are the
 # containment primitive, the trust gate, the machine anchors, and the workflow that runs
 # everything else.
-/src/stayfixed/fsops.py          @Nezhinskiy
-/src/stayfixed/config/machine.py @Nezhinskiy
-/src/stayfixed/memory/trust.py   @Nezhinskiy
+/src/drybag/fsops.py          @Nezhinskiy
+/src/drybag/config/machine.py @Nezhinskiy
+/src/drybag/memory/trust.py   @Nezhinskiy
 /.github/                        @Nezhinskiy
 /SECURITY.md                     @Nezhinskiy

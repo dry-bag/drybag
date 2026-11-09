@@ -2010,7 +2010,7 @@ release_branch = "main"
 [memory]
 mode = "in-repo"
 groups = ["developer", "project-stable", "project-volatile"]
-index_extra = ["docs/runbooks/ledger.md"]
+index_extra = ["docs/guides/ledger.md"]
 """
 
 GROUPS = ("developer", "project-stable", "project-volatile")
@@ -2107,7 +2107,7 @@ def test_the_volatile_section_carries_its_lead(tmp_path: Path) -> None:
 
 
 def test_index_extra_entries_are_rendered(tmp_path: Path) -> None:
-    assert "docs/runbooks/ledger.md" in rendered(tmp_path)
+    assert "docs/guides/ledger.md" in rendered(tmp_path)
 
 
 def test_an_empty_group_gets_no_heading(tmp_path: Path) -> None:

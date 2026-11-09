@@ -22,29 +22,28 @@ from pathlib import Path
 
 PLACEHOLDER = "${CLAUDE_PLUGIN_ROOT}"
 # What the wrapper and the dispatcher end a fault of their own with, and exit 0 after: a row that
-# carries it is stayfixed failing to answer, not answering.
+# carries it is drybag failing to answer, not answering.
 FAULT = "; continuing open"
-DELIMITER = "<<<stayfixed:repository-data"
+DELIMITER = "<<<drybag:repository-data"
 # What `tests/fixtures/smoke-project`'s own store puts in front of the model: its volatile note.
 # Its standing rule is the repository's, and no repository note is a standing rule, so the
 # standing-rules bundle renders nothing on it.
 VOLATILE_NOTE = "SMOKE-VOLATILE-NOTE"
-# The one `STAYFIXED_*` variable an entry keeps: the floor a test runner puts under the product's
-# own bounds on `git` (`stayfixed.gitenv.FLOOR_VARIABLE`, which can only raise them). Spelled out
-# rather than imported, because this script runs without `stayfixed` importable.
-FLOOR_VARIABLE = "STAYFIXED_GIT_FLOOR_SECONDS"
-# Counted against the shipped `hooks/hooks.json` and this fixture: ten entries, eleven rows
+# The one `DRYBAG_*` variable an entry keeps: the floor a test runner puts under the product's
+# own bounds on `git` (`drybag.gitenv.FLOOR_VARIABLE`, which can only raise them). Spelled out
+# rather than imported, because this script runs without `drybag` importable.
+FLOOR_VARIABLE = "DRYBAG_GIT_FLOOR_SECONDS"
+# Counted against the shipped `hooks/hooks.json` and this fixture: twelve entries, thirteen rows
 # (`PreToolUse` carries two samples), unchanged by the overlay's delivery, since its rules reach a
 # session through `hook SessionStart` and its path-scoped ones through the rendered plugin, neither
 # an entry of `hooks/hooks.json`. Both are asserted because a run that executes fewer rows
 # prints an identically green summary — the shape `unsampled` and `unentered` close for events
 # and nothing closed for rows.
-EXPECTED_ENTRIES = 10
-EXPECTED_ROWS = 11
-# What the red-run note opens with, `stayfixed.guards.hygiene.LEAD`, spelled out for the reason
+EXPECTED_ENTRIES = 12
+EXPECTED_ROWS = 13
+# What the red-run note opens with, `drybag.hints.hygiene.LEAD`, spelled out for the reason
 # `FLOOR_VARIABLE` is. The note is all a `PostToolUseFailure` entry is for, so its row asks for it
-# by its words and not only for an envelope naming the event, which an entry whose handler said
-# nothing also prints.
+# by its words and not only for an envelope naming the event.
 RED_RUN_NOTE = "Before calling this red a flake, pre-existing, or caused by the branch:"
 # The note speaks only of something in the tree that could have falsified the run, and the
 # fixture's tree is clean as committed, so the rows run over one uncommitted file: the dirty-tree
@@ -59,12 +58,19 @@ class Sample:
     label: str
     # What the stderr must never say: a fault the wrapper or the dispatcher degraded to exit 0.
     stderr_never: tuple[str, ...] = ()
-    # What the `additionalContext` a dispatched entry prints must say. Empty asks nothing of it.
+    # What the `additionalContext` a dispatched entry prints must say. Empty means it says nothing.
     context_says: tuple[str, ...] = ()
 
 
 SAMPLES: dict[str, tuple[Sample, ...]] = {
-    "SessionStart": (Sample({"source": "startup"}, 0, "a session starts"),),
+    "SessionStart": (
+        Sample(
+            {"source": "startup"},
+            0,
+            "a session starts",
+            context_says=("notes are unreviewed",),
+        ),
+    ),
     "PreToolUse": (
         Sample(
             {
@@ -93,6 +99,7 @@ SAMPLES: dict[str, tuple[Sample, ...]] = {
             0,
             "a failed test run is annotated, never blocked",
             stderr_never=(FAULT,),
+            context_says=(RED_RUN_NOTE,),
         ),
     ),
     # The shape Claude Code delivers a Bash command that exited non-zero in, measured on Claude
@@ -113,6 +120,11 @@ SAMPLES: dict[str, tuple[Sample, ...]] = {
             context_says=(RED_RUN_NOTE,),
         ),
     ),
+    # The note sync's triggers. The scratch `HOME` has no machine file, so the sync is off: the
+    # handler reads that and says nothing, so the answer is `{}`, with no `decision` that would keep
+    # a turn from ending.
+    "Stop": (Sample({"stop_hook_active": False}, 0, "a turn ends", stderr_never=(FAULT,)),),
+    "SessionEnd": (Sample({"reason": "other"}, 0, "a session ends", stderr_never=(FAULT,)),),
 }
 
 # What each `memory session-context` entry must have put in front of the model, by the part of
@@ -120,7 +132,7 @@ SAMPLES: dict[str, tuple[Sample, ...]] = {
 # part renders nothing on this fixture, so anything at all in its stdout is a finding.
 #
 # **Why this registry exists.** Before it, every one of these rows ran against a project with no
-# memory store: `stayfixed` answered "no memory store", the wrapper degraded that to 0, and each
+# memory store: `drybag` answered "no memory store", the wrapper degraded that to 0, and each
 # row asserted an exit code it would have had if `session-context` were
 # `/bin/false`. Measured 2026-09-19 on the storeless fixture: ten rows, 0 bytes of stdout, all
 # green. These are the entries that carry repository bytes toward the model, which is the one
@@ -173,18 +185,18 @@ def fixture_repository(fixture: Path, into: Path) -> Path:
 
 
 def developer_free_env() -> dict[str, str]:
-    """This process's environment with this developer's own harness and stayfixed stripped out,
+    """This process's environment with this developer's own harness and drybag stripped out,
     and the floor a test runner set kept: the base both smoke scripts build a session on.
     """
     return {
         k: v
         for k, v in os.environ.items()
-        if k == FLOOR_VARIABLE or not k.startswith(("STAYFIXED_", "XDG_", "CLAUDE_", "PLUGIN_"))
+        if k == FLOOR_VARIABLE or not k.startswith(("DRYBAG_", "XDG_", "CLAUDE_", "PLUGIN_"))
     }
 
 
 def session_env(*, plugin_root: Path, project: Path, home: Path, data: Path) -> dict[str, str]:
-    """The environment a hook entry meets, with this developer's own stayfixed stripped out."""
+    """The environment a hook entry meets, with this developer's own drybag stripped out."""
     env = developer_free_env()
     env.update(
         {
@@ -241,16 +253,21 @@ def check_entry(
             return f"this part renders nothing on the fixture, yet emitted {len(done.stdout)}"
     # Only the dispatcher's own entries (`… hook <event>`) speak JSON; the six
     # `memory session-context` entries print a bundle as prose, which is how they inject it.
-    context = ""
-    if "hook" in argv and done.stdout.strip():
-        try:
-            emitted = json.loads(done.stdout)
-        except json.JSONDecodeError:
-            return "stdout is not JSON"
-        if emitted.get("hookSpecificOutput", {}).get("hookEventName") != event:
-            named = emitted.get("hookSpecificOutput", {}).get("hookEventName")
-            return f"stdout names {named!r}, not {event!r}"
-        context = str(emitted["hookSpecificOutput"].get("additionalContext", ""))
+    if "hook" not in argv:
+        return None
+    if not sample.context_says:
+        # A hook with nothing to say answers `{}`: a `decision`, an envelope a harness refuses, or
+        # the empty stdout of a wrapper that never reached the dispatcher are all something else.
+        if done.stdout.strip() != "{}":
+            return f"expected an empty object, got {done.stdout.strip()[:200]!r}"
+        return None
+    try:
+        specific = json.loads(done.stdout).get("hookSpecificOutput", {})
+    except (json.JSONDecodeError, AttributeError):
+        return "stdout is not a JSON object"
+    if specific.get("hookEventName") != event:
+        return f"stdout names {specific.get('hookEventName')!r}, not {event!r}"
+    context = str(specific.get("additionalContext", ""))
     for phrase in sample.context_says:
         if phrase not in context:
             return f"the context does not say {phrase!r} ({len(context)} characters)"

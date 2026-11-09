@@ -1,6 +1,6 @@
 """A file a person or a repository owns that is not UTF-8 is its area's answer, never a crash.
 
-stayfixed reads every such file as UTF-8, and `read_text` raises `UnicodeDecodeError` for one
+drybag reads every such file as UTF-8, and `read_text` raises `UnicodeDecodeError` for one
 that is not: a `ValueError`, so an `except OSError` beside it caught nothing and the command
 ended in `internal error: UnicodeDecodeError` (exit 2) instead of the failure the same file
 gets when it cannot be read or parsed. Each case below plants the bytes `\\xff\\xfe` at one
@@ -10,8 +10,8 @@ unreadable file as absent, the same absent answer.
 
 Mutation (by hand, per case): take `UnicodeDecodeError` out of the reader's `except` -> that
 case reddens on the decode error itself. Three of these readers are declared: the two a
-command's first read meets, `stayfixed.toml` and the machine file, and the trust record's, as
-`mutations/`'s "a stayfixed.toml that is not UTF-8 crashes every command that loads it", "a
+command's first read meets, `drybag.toml` and the machine file, and the trust record's, as
+`mutations/`'s "a drybag.toml that is not UTF-8 crashes every command that loads it", "a
 machine file that is not UTF-8 crashes every command that loads the configuration" and "a trust
 record that is not UTF-8 crashes instead of refusing loudly".
 """
@@ -24,28 +24,28 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import fsops
-from stayfixed.attach import binding, permissions, write
-from stayfixed.attach.binding import Binding
-from stayfixed.config.layout import ATTACH_LEDGER
-from stayfixed.config.loader import CONFIG_FILE, load, read_document
-from stayfixed.config.overlay import overlay_root
-from stayfixed.config.reading import ConfigError, MachineConfigError
-from stayfixed.errors import Failure
-from stayfixed.memory import index, store
-from stayfixed.overlay import identity
-from stayfixed.overlay.api import COMMON_CODEX
-from stayfixed.overlay.layout import IDENTITY_RECORD
-from stayfixed.printed import quoted
-from stayfixed.project.init import _existing
-from stayfixed.setup.machine import read_machine
-from stayfixed.setup.run import _read_document
-from stayfixed.trust.record import UnreadableTrust, recorded
+import drybag
+from drybag import fsops
+from drybag.attach import binding, permissions, write
+from drybag.attach.binding import Binding
+from drybag.config.loader import CONFIG_FILE, load, read_document
+from drybag.config.overlay import overlay_root
+from drybag.config.plates import plates
+from drybag.config.reading import ConfigError, MachineConfigError
+from drybag.errors import Failure
+from drybag.memory import index, store
+from drybag.overlay import identity
+from drybag.overlay.api import COMMON_CODEX
+from drybag.overlay.layout import IDENTITY_RECORD
+from drybag.printed import quoted
+from drybag.setup.machine import read_machine
+from drybag.setup.run import _read_document
+from drybag.trust.record import UnreadableTrust, recorded
 from tests.cli import cli
-from tests.gitfixture import git, needs_git
-from tests.project.repos import DOCUMENT, repository
+from tests.gitfixture import git, needs_git, repository
 from tests.scriptload import release
 
+DOCUMENT = f'[drybag]\nversion = "{drybag.__version__}"\n\n[project]\nname = "widget"\n'
 # The repository's release script, whose version check is one more reader below.
 script = release()
 
@@ -65,16 +65,15 @@ def _config(root: Path) -> Path:
 # (id, what to plant under `tmp_path`, the call, the exception the reader answers with)
 RAISING: list[tuple[str, Callable[[Path], Callable[[], object]], type[Exception]]] = [
     (
-        "stayfixed.toml, as every command loads it",
+        "drybag.toml, as every command loads it",
         lambda t: (_config(t), lambda: load(t, machine=t / "absent.toml"))[1],
         ConfigError,
     ),
     (
-        "stayfixed.toml, as the editors read it",
+        "drybag.toml, as the editors read it",
         lambda t: (_config(t), lambda: read_document(t))[1],
         ConfigError,
     ),
-    ("stayfixed.toml, as init adopts it", lambda t: (_config(t), lambda: _existing(t))[1], Failure),
     (
         "the machine file, under the loader",
         lambda t: (
@@ -113,7 +112,7 @@ RAISING: list[tuple[str, Callable[[Path], Callable[[], object]], type[Exception]
     ),
     (
         "the attach ledger",
-        lambda t: (_plant(t / ATTACH_LEDGER), lambda: write.ledger(t))[1],
+        lambda t: (_plant(t / "attach.json"), lambda: write.read_ledger(t / "attach.json"))[1],
         Failure,
     ),
     (
@@ -121,7 +120,15 @@ RAISING: list[tuple[str, Callable[[Path], Callable[[], object]], type[Exception]
         lambda t: (
             _plant(t / "overlay" / COMMON_CODEX / "rules.md"),
             lambda: write._codex_rule_texts(
-                Binding("widget", t / "overlay", t / "store", None, None, "")
+                Binding(
+                    "widget",
+                    t / "overlay",
+                    t / "store",
+                    None,
+                    None,
+                    "",
+                    plates=plates(t / "overlay", "widget")[0],
+                )
             ),
         )[1],
         Failure,
@@ -175,8 +182,8 @@ ABSENT: list[tuple[str, Callable[[Path], Callable[[], object]], object]] = [
         [],
     ),
     (
-        "the attach record's first-attach date",
-        lambda t: lambda: write._first_attach(_plant(t / "project.toml")),
+        "the attach record's keys",
+        lambda t: lambda: write._record_table(_plant(t / "project.toml")),
         None,
     ),
 ]
@@ -217,45 +224,32 @@ def test_an_undecodable_worktree_back_pointer_is_no_registered_worktree(tmp_path
 @pytest.mark.parametrize(
     ("argv", "planted"),
     [
-        (("init", "--yes", "--dry-run", "--no-ci"), "machine"),
-        (("init", "--yes", "--dry-run", "--no-ci"), CONFIG_FILE),
-        (("bugs", "check"), CONFIG_FILE),
+        (("docs", "check"), "machine"),
+        (("docs", "check"), CONFIG_FILE),
     ],
-    ids=["init-machine", "init-stayfixed-toml", "bugs-check-stayfixed-toml"],
+    ids=["docs-check-machine", "docs-check-drybag-toml"],
 )
 def test_a_command_meeting_an_undecodable_file_fails_and_does_not_crash(
     tmp_path: Path, argv: tuple[str, ...], planted: str
 ) -> None:
     # Through the real parser: the exit code and the frame's own word for it are what a person
-    # and a relaying agent read, and `internal error` told them the fault was stayfixed's.
+    # and a relaying agent read, and `internal error` told them the fault was drybag's.
     root = repository(tmp_path)
     machine = _plant(tmp_path / "machine.toml") if planted == "machine" else None
     if planted == CONFIG_FILE:
         _config(root)
+    else:
+        (root / CONFIG_FILE).write_text(DOCUMENT, encoding="utf-8")
     code, _, stderr = cli(root, tmp_path, *argv, machine=machine)
     assert code == 1
     assert "failed:" in stderr and "not UTF-8 text" in stderr and "internal error" not in stderr
 
 
-@needs_git
-def test_the_questions_read_an_undecodable_machine_file_as_recording_no_overlay(
-    tmp_path: Path,
-) -> None:
-    # The machine file changes one title of the questions and nothing else, so a broken one
-    # reads as recording no overlay, however it is broken.
-    root = repository(tmp_path)
-    code, _, stderr = cli(
-        root, tmp_path, "init", "--questions", machine=_plant(tmp_path / "m.toml")
-    )
-    assert code == 0
-    assert "internal error" not in stderr
-
-
-# The neighbour the same probe found: `stayfixed.toml` and the machine file are the first thing
+# The neighbour the same probe found: `drybag.toml` and the machine file are the first thing
 # most commands read, and one that cannot be read at all — a directory at the path, or a
 # permission bit — also ended in `internal error`. Mutation (by hand, per case): the `except
 # OSError` taken out of that reader -> the case reddens on the `OSError` itself.
-def test_a_stayfixed_toml_that_is_a_directory_cannot_be_read_and_says_so(tmp_path: Path) -> None:
+def test_a_drybag_toml_that_is_a_directory_cannot_be_read_and_says_so(tmp_path: Path) -> None:
     (tmp_path / CONFIG_FILE).mkdir()
     with pytest.raises(ConfigError, match=r"cannot be read \(not a regular file\)"):
         load(tmp_path, machine=tmp_path / "absent.toml")
@@ -263,13 +257,13 @@ def test_a_stayfixed_toml_that_is_a_directory_cannot_be_read_and_says_so(tmp_pat
         read_document(tmp_path)
 
 
-def test_a_stayfixed_toml_past_the_read_cap_cannot_be_read_and_says_so(
+def test_a_drybag_toml_past_the_read_cap_cannot_be_read_and_says_so(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # `stayfixed.toml` is committed and is the first thing most commands and every hook read, so it
+    # `drybag.toml` is committed and is the first thing most commands and every hook read, so it
     # is read to the read cap by the bounded reader every committed file is read with, and one past
     # it is a file that cannot be read rather than one read to its end. The cap is lowered so the
-    # file is small. Mutation (oracle): `mutations/`'s "stayfixed.toml is read with no bound" -> the
+    # file is small. Mutation (oracle): `mutations/`'s "drybag.toml is read with no bound" -> the
     # document is read.
     limit = 4 * 1024
     (tmp_path / CONFIG_FILE).write_text("#" * (limit + 1), encoding="utf-8")
@@ -286,7 +280,7 @@ def test_a_file_without_read_permission_cannot_be_read_and_says_so(
     # `overlay-root` is the machine file again, through the one reader of its `[overlay] root`
     # key. Its `PermissionError` escaped as itself, past the `Failure` every caller of the overlay
     # root catches — the memory hooks among them. `setup` is the same file through the reader
-    # `stayfixed setup` merges into: without the arm, setup ended in an internal error quoting the
+    # `drybag setup` merges into: without the arm, setup ended in an internal error quoting the
     # operating system's message. Mutation (oracle): `mutations/`'s "the overlay root's reader lets
     # a machine file it cannot read raise past its callers".
     if os.geteuid() == 0:
@@ -308,14 +302,14 @@ def test_a_file_without_read_permission_cannot_be_read_and_says_so(
                 read_machine(machine)
         else:
             with pytest.raises(Failure, match=r"cannot be read \(Permission denied\)"):
-                _existing(tmp_path)
+                read_document(tmp_path)
     finally:
         locked.chmod(0o644)
 
 
 def test_a_machine_file_setup_cannot_parse_is_the_loaders_failure(tmp_path: Path) -> None:
     # The same reader's other broken shape: `read_machine` parsed with no answer for a file that
-    # is not TOML either, so `stayfixed setup` crashed on the stray bracket the loader names by
+    # is not TOML either, so `drybag setup` crashed on the stray bracket the loader names by
     # position. Mutation (by hand): the `TOMLDecodeError` arm removed -> this reddens on it.
     machine = tmp_path / "machine.toml"
     machine.write_text("[overlay\n", encoding="utf-8")

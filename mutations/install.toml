@@ -8,7 +8,7 @@
 # as two.
 [[mutation]]
 name = "the overlay's sync row counts a name holding a line separator twice"
-file = "src/stayfixed/overlay/sync.py"
+file = "src/drybag/overlay/sync.py"
 before = "    dirty = sum(1 for line in answer_lines(status) if line.strip())"
 after = "    dirty = sum(1 for line in status.splitlines() if line.strip())"
 reddens = ["tests/test_git_answers.py::test_a_dirty_name_holding_a_line_separator_is_one_entry"]
@@ -18,7 +18,7 @@ reddens = ["tests/test_git_answers.py::test_a_dirty_name_holding_a_line_separato
 # other tables and the settings file were written.
 [[mutation]]
 name = "setup records an overlay root the machine file cannot hold, after its first write"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    if not utf_8_name(str(root)):"
 after = "    if False:"
 reddens = [
@@ -31,11 +31,11 @@ reddens = [
 # bounds holds each to a second.
 [[mutation]]
 name = "the overlay sync's bound is shrunk below git's latency"
-file = "src/stayfixed/overlay/sync.py"
+file = "src/drybag/overlay/sync.py"
 before = "SYNC_TIMEOUT_SECONDS = 2.0"
 after = "SYNC_TIMEOUT_SECONDS = 0.001"
 reddens = [
-  "tests/test_git_run.py::test_a_named_git_bound_leaves_git_a_second_to_answer[stayfixed.overlay.sync.SYNC_TIMEOUT_SECONDS]",
+  "tests/test_git_run.py::test_a_named_git_bound_leaves_git_a_second_to_answer[drybag.overlay.sync.SYNC_TIMEOUT_SECONDS]",
 ]
 
 # The machine file is the owner's, by `README.md`'s own table, and every `setup` rewrites it.
@@ -52,7 +52,7 @@ reddens = [
 # gone and the property is declared here, where the code that keeps it is.
 [[mutation]]
 name = "write_machine replaces the overlay table instead of merging over it"
-file = "src/stayfixed/setup/machine.py"
+file = "src/drybag/setup/machine.py"
 before = '            **_table(existing, "overlay"),'
 after = '            **({}),'
 reddens = [
@@ -61,12 +61,12 @@ reddens = [
   "tests/setup/test_machine.py::test_a_rewrite_preserves_a_value_this_run_did_not_set",
 ]
 
-# The owner's own `~/.claude/settings.json` predates stayfixed on most machines. Without this
+# The owner's own `~/.claude/settings.json` predates drybag on most machines. Without this
 # guard, the first `setup` run on a real machine silently drops every deny rule the owner wrote
 # by hand and replaces it with only the preset's own.
 [[mutation]]
 name = "setup's settings merge stops reading the existing deny list"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "        [r for r in raw_deny if isinstance(r, str)] if isinstance(raw_deny, list) else []"
 after = "        []"
 reddens = [
@@ -74,12 +74,12 @@ reddens = [
 ]
 
 # Measured while this task was written: with `root=Path.cwd()`, the overlay-create branch put a
-# real `stayfixed-private/` inside whatever directory `setup` happened to be run from — this
+# real `drybag-private/` inside whatever directory `setup` happened to be run from — this
 # checkout, the first time a test exercised it. `setup` is a machine command; nothing about
 # where it is invoked from may decide where it writes.
 [[mutation]]
 name = "setup creates a new overlay under the caller's cwd instead of --home"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "            created = generate(owner, name, root=planned.destination.parent, runner=runner)"
 after = "            created = generate(owner, name, root=Path.cwd(), runner=runner)"
 reddens = [
@@ -90,7 +90,7 @@ reddens = [
 # `setup` run or by the owner's own hand — or a second `setup --preset recommended` resets it.
 [[mutation]]
 name = "setup resets a personal value the owner already set"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    return {k: v for k, v in _personal_defaults(preset).items() if k not in existing}"
 after = "    return _personal_defaults(preset)"
 reddens = [
@@ -104,7 +104,7 @@ reddens = [
 # added, which is why the mutation is a fat-fingered key rather than a deletion.
 [[mutation]]
 name = "setup's settings merge writes the deny rules under allow instead"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = 'permissions["deny"] = existing_deny + [r for r in deny_rules if r not in existing_deny]'
 after = 'permissions["allow"] = existing_deny + [r for r in deny_rules if r not in existing_deny]'
 reddens = ["tests/setup/test_setup.py::test_setup_writes_the_machine_file_and_the_deny_rules"]
@@ -114,7 +114,7 @@ reddens = ["tests/setup/test_setup.py::test_setup_writes_the_machine_file_and_th
 # plugin at all.
 [[mutation]]
 name = "setup reaches the plugin commands with no plugin named"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    if not selectors:\n        return (), ()"
 after = "    if False:\n        return (), ()"
 reddens = ["tests/setup/test_setup.py::test_a_run_that_names_no_plugin_asks_no_harness_anything"]
@@ -127,7 +127,7 @@ reddens = ["tests/setup/test_setup.py::test_a_run_that_names_no_plugin_asks_no_h
 # name: a mutation that reddens with an `AttributeError` proves nothing about the rule.
 [[mutation]]
 name = "setup touches the overlay even when the caller named no answer"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = """    if overlay is None:
         # Nothing was asked for, so nothing is touched: `--overlay` is the only way to reach the
         # overlay at all, and a default here would turn an omitted flag into a repository created
@@ -145,7 +145,7 @@ reddens = ["tests/setup/test_setup.py::test_the_overlay_offer_is_never_taken_wit
 # does not parse (`NOT_A_RECORD`), which names nothing to add.
 [[mutation]]
 name = "the overlay probe stops asking for the identity record"
-file = "src/stayfixed/overlay/identity.py"
+file = "src/drybag/overlay/identity.py"
 before = "    if not fsops.is_file(root / IDENTITY_RECORD):"
 after = "    if False:"
 reddens = [
@@ -154,11 +154,11 @@ reddens = [
 ]
 
 # The half that used to be worth nothing: the probe was once two manifests *existing*, which the
-# stayfixed checkout itself satisfied. What makes a tree an overlay is what its record says: layout
+# drybag checkout itself satisfied. What makes a tree an overlay is what its record says: layout
 # 1, and `true`, which Python compares equal to 1, is no layout.
 [[mutation]]
 name = "the overlay probe takes any record for an overlay"
-file = "src/stayfixed/overlay/identity.py"
+file = "src/drybag/overlay/identity.py"
 before = "    if type(layout) is not int or layout != LAYOUT:"
 after = "    if record is None:"
 reddens = [
@@ -169,7 +169,7 @@ reddens = [
 # The other half of the same line: `true` is an `int` equal to 1 in Python, and names no layout.
 [[mutation]]
 name = "the overlay probe takes true for layout 1"
-file = "src/stayfixed/overlay/identity.py"
+file = "src/drybag/overlay/identity.py"
 before = "    if type(layout) is not int or layout != LAYOUT:"
 after = "    if layout != LAYOUT:"
 reddens = [
@@ -180,7 +180,7 @@ reddens = [
 # asks GitHub nothing, where it would generate the repository again and fail on its name.
 [[mutation]]
 name = "create: generates again over the overlay an earlier run cloned"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = "    if overlay_fault(target) is None:"
 after = "    if False:"
 reddens = [
@@ -192,7 +192,7 @@ reddens = [
 # short or a template that is no overlay's was recorded as the machine's trust anchor.
 [[mutation]]
 name = "create: records whatever a clone left"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = """    if fault is not None:
         raise Refusal(f"{fault}. {_unrecorded(slug, target)}")"""
 after = """    if False:
@@ -206,7 +206,7 @@ reddens = [
 # is this warning: another repository can put files into the overlay from there.
 [[mutation]]
 name = "doctor says nothing of the work tree that holds the overlay"
-file = "src/stayfixed/overlay/doctor.py"
+file = "src/drybag/overlay/doctor.py"
 before = "    if holder is None or row.status not in (OK, SKIP):"
 after = "    if True:"
 reddens = [
@@ -215,11 +215,11 @@ reddens = [
 
 # The record has one reader, `identity.identity_record`, for the probe and the version floor. A
 # record nested past the parser or holding an integer longer than it converts is valid TOML that
-# `tomllib` meets with no `TOMLDecodeError`, and either would end `stayfixed setup --overlay` in an
+# `tomllib` meets with no `TOMLDecodeError`, and either would end `drybag setup --overlay` in an
 # internal error instead of a refusal.
 [[mutation]]
 name = "the identity record reader lets a document past the parser raise"
-file = "src/stayfixed/overlay/identity.py"
+file = "src/drybag/overlay/identity.py"
 before = "    except (OSError, UnicodeDecodeError, *UNPARSEABLE):"
 after = "    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):"
 reddens = [
@@ -231,7 +231,7 @@ reddens = [
 # (`requires_of`) for good.
 [[mutation]]
 name = "the identity record is read without asking what it is"
-file = "src/stayfixed/overlay/identity.py"
+file = "src/drybag/overlay/identity.py"
 before = "        return tomllib.loads(fsops.read_regular_text(root / IDENTITY_RECORD))"
 after = '        return tomllib.loads((root / IDENTITY_RECORD).read_text(encoding="utf-8"))'
 reddens = [
@@ -243,7 +243,7 @@ reddens = [
 # skipped as hand-edited by every later upgrade, so the floor never rose again.
 [[mutation]]
 name = "setup writes into the identity record it rendered"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = "def finish(root: Path, *, runner: Runner) -> str:"
 after = '''def finish(root: Path, *, runner: Runner) -> str:
     fsops.write_within(root, IDENTITY_RECORD, fsops.read_regular_text(root / IDENTITY_RECORD) + 'owner = "me"\n')'''
@@ -260,7 +260,7 @@ reddens = [
 # *move*, not a deletion: both calls still happen, in the wrong order.
 [[mutation]]
 name = "a plugin is installed before its marketplace is registered"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = """        added = runner.launch(add_argv_of(source), home)
         if added.code != 0:
             detail = answered(added)
@@ -299,7 +299,7 @@ reddens = ["tests/setup/test_setup.py::test_every_plugin_install_is_one_recorded
 # after the writes, which is the rule.
 [[mutation]]
 name = "setup asks whether --overlay is an overlay after it has already written"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "        planned = _requested_overlay(overlay, home=home)"
 after = "        planned = None if overlay is None else _Overlay(\"record\", Path(overlay).expanduser().resolve())"
 reddens = [
@@ -313,7 +313,7 @@ reddens = [
 # repository exists, and after the `gh` calls the tests assert never ran.
 [[mutation]]
 name = "setup asks about the create: destination after GitHub"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "        _judged(destination, overlay_fault, refused)"
 after = "        pass"
 reddens = [
@@ -328,7 +328,7 @@ reddens = [
 # answers yes, and for a directory that changes between the question and the call.
 [[mutation]]
 name = "setup stops asking whether --home can be used before its first write"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "        _check_home_usable(home, created=created)"
 after = "        pass"
 reddens = [
@@ -341,7 +341,7 @@ reddens = [
 # `.claude` in a writable home through to the second write.
 [[mutation]]
 name = "setup stops asking whether an existing .claude can be written"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    landing = [fsops.resolved(home / USER_SETTINGS)]"
 after = "    landing = [home / \"x\"]"
 reddens = [
@@ -354,14 +354,14 @@ reddens = [
 # clones nothing, and the home takes nothing.
 [[mutation]]
 name = "setup stops asking whether --home can take a created overlay"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    if created is not None and not fsops.exists(created):"
 after = "    if False:"
 reddens = ["tests/setup/test_setup.py::test_a_created_overlay_in_a_read_only_home_is_refused_before_gh_runs"]
 
 [[mutation]]
 name = "setup asks whether --home can take a created overlay that is already there"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    if created is not None and not fsops.exists(created):"
 after = "    if created is not None:"
 reddens = ["tests/setup/test_setup.py::test_a_created_overlay_already_in_a_read_only_home_is_set_up"]
@@ -370,7 +370,7 @@ reddens = ["tests/setup/test_setup.py::test_a_created_overlay_already_in_a_read_
 # stops at it, and asking whether a name can be made in a file said "is not writable".
 [[mutation]]
 name = "setup calls a regular file in --home's place not writable"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "        if fsops.is_dir(directory) and not fsops.creatable(path):"
 after = "        if not fsops.creatable(path):"
 reddens = [
@@ -380,7 +380,7 @@ reddens = [
 
 [[mutation]]
 name = "setup lets a failed --home mkdir reach the frame"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = """    try:
         home.mkdir(parents=True, exist_ok=True)
     except OSError as exc:"""
@@ -395,7 +395,7 @@ reddens = ["tests/setup/test_setup.py::test_a_home_mkdir_that_fails_is_a_refusal
 # a `create:` destination under such a home.
 [[mutation]]
 name = "setup lets a path it cannot ask about before its first write reach the frame"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = """    except OSError as exc:
         asked = (
             quoted(str(exc.filename))"""
@@ -413,7 +413,7 @@ reddens = [
 # words about a file in it rather than the directory that cannot be searched.
 [[mutation]]
 name = "setup stops asking whether the place --overlay names can be searched"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    if directory and not os.access(place, os.X_OK):"
 after = "    if False:"
 reddens = [
@@ -425,7 +425,7 @@ reddens = [
 # and not searched raised there all the same.
 [[mutation]]
 name = "setup asks whether the place --overlay names can be read, not searched"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    if directory and not os.access(place, os.X_OK):"
 after = "    if directory and not os.access(place, os.R_OK):"
 reddens = [
@@ -437,7 +437,7 @@ reddens = [
 # create`, whose clone failed on it, and left a repository on the owner's account nothing recorded.
 [[mutation]]
 name = "an empty directory this user cannot write reads as vacant"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    if directory and not os.access(place, os.R_OK | os.W_OK):"
 after = "    if directory and not os.access(place, os.R_OK):"
 reddens = [
@@ -449,7 +449,7 @@ reddens = [
 # repository nothing then records.
 [[mutation]]
 name = "setup takes whatever is at the place --overlay names for an overlay"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    if fault is None:\n        return True"
 after = "    if True:\n        return True"
 reddens = [
@@ -460,7 +460,7 @@ reddens = [
 # the render, a missing or unwritable parent refused after the machine file and the settings merge.
 [[mutation]]
 name = "setup renders an overlay under a directory it cannot create it in"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = '    if not fsops.is_dir(parent) or not fsops.creatable(candidate / "file"):'
 after = "    if False:"
 reddens = [
@@ -473,7 +473,7 @@ reddens = [
 # Writing a workflow file into a repository the owner may then commit is the concrete harm.
 [[mutation]]
 name = "overlay upgrade stops asking whether --root is an overlay"
-file = "src/stayfixed/overlay/upgrade.py"
+file = "src/drybag/overlay/upgrade.py"
 before = "    require_overlay(root, because=NOT_AN_OVERLAY)\n"
 after = ""
 reddens = [
@@ -486,7 +486,7 @@ reddens = [
 # with no word on installing it.
 [[mutation]]
 name = "create: asks GitHub about a `gh` that could not run"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = "    if created.code == NOT_FOUND:"
 after = "    if False:"
 reddens = [
@@ -501,7 +501,7 @@ reddens = [
 # into a silent switch of the template of a person who has one.
 [[mutation]]
 name = "create: never asks whose template to use"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = "            return mine if answer else theirs"
 after = "            return theirs"
 reddens = [
@@ -511,7 +511,7 @@ reddens = [
 
 [[mutation]]
 name = "create: treats a repository that is not a template as one"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = "            return mine if answer else theirs"
 after = "            return mine"
 reddens = [
@@ -520,7 +520,7 @@ reddens = [
 
 [[mutation]]
 name = "create: has no template to fall back on"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = """    elif probe.code not in (NOT_FOUND, TIMED_OUT) and NOT_FOUND_ANSWER in probe.stderr:
         return theirs"""
 after = """    elif probe.code not in (NOT_FOUND, TIMED_OUT) and NOT_FOUND_ANSWER in probe.stderr:
@@ -532,7 +532,7 @@ reddens = [
 
 [[mutation]]
 name = "create: reads any failed probe as no template of the owner's"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = "    elif probe.code not in (NOT_FOUND, TIMED_OUT) and NOT_FOUND_ANSWER in probe.stderr:"
 after = "    elif probe.code not in (NOT_FOUND, TIMED_OUT):"
 reddens = [
@@ -545,7 +545,7 @@ reddens = [
 # remote) does not begin with a `git init` nobody mentioned.
 [[mutation]]
 name = "a local render leaves no git repository"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = '''    done = runner.launch(["git", "init"], target)'''
 after = '''    done = Completed(0, "", "")'''
 reddens = [
@@ -553,12 +553,12 @@ reddens = [
   "tests/overlay/test_create.py::test_a_local_overlay_carries_a_real_repository_on_main",
 ]
 
-# `README.md` lists the machine file under "Written by: **you**, or `stayfixed setup`", so a table
+# `README.md` lists the machine file under "Written by: **you**, or `drybag setup`", so a table
 # this writer does not recognise is the ordinary case. Dropping it destroys the only copy of
 # something a person wrote, in a file they were invited to write in.
 [[mutation]]
 name = "a table the machine writer does not own is dropped on a rewrite"
-file = "src/stayfixed/setup/machine.py"
+file = "src/drybag/setup/machine.py"
 before = """        else:
             tables[name] = dict(value)"""
 after = """        else:
@@ -572,7 +572,7 @@ reddens = [
 # screen, and `setup` wrote the machine file's personal values over them on every run.
 [[mutation]]
 name = "setup overwrites a plugin option the user set"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "        options.setdefault(key, value)"
 after = "        options[key] = value"
 reddens = ["tests/setup/test_setup.py::test_a_plugin_config_value_the_user_set_survives_setup"]
@@ -585,7 +585,7 @@ reddens = ["tests/setup/test_setup.py::test_a_plugin_config_value_the_user_set_s
 # silently is the defect; a case that fails when it moves is how a reader finds out.
 [[mutation]]
 name = "a doctor row stops asking git where the overlay keeps its hooks"
-file = "src/stayfixed/overlay/doctor.py"
+file = "src/drybag/overlay/doctor.py"
 before = '    hooks = hooks_dir(overlay)'
 after = '    hooks = overlay / ".git" / "hooks"'
 reddens = [
@@ -595,7 +595,7 @@ reddens = [
 # The overlay's capability files are spelled once, and each is a file the overlay template ships.
 [[mutation]]
 name = "a capability file is named that the template does not ship"
-file = "src/stayfixed/overlay/layout.py"
+file = "src/drybag/overlay/layout.py"
 before = 'CAPABILITY_NAMES = (f"{COMMON_CLAUDE}/permissions.json", f"{COMMON_CLAUDE}/hooks.json")'
 after = 'CAPABILITY_NAMES = (f"{COMMON_CLAUDE}/permissions.json", f"{COMMON_CLAUDE}/allow.json")'
 reddens = [
@@ -609,7 +609,7 @@ reddens = [
 # command's success.
 [[mutation]]
 name = "the overlay's secret scan is asked for its version instead of installed"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = '    done: Completed = runner.launch(["pre-commit", "install"], root)'
 after = '    done: Completed = runner.launch(["pre-commit", "--version"], root)'
 reddens = [
@@ -620,7 +620,7 @@ reddens = [
 # no commit-time scan, and only `doctor` warned.
 [[mutation]]
 name = "setup records an existing overlay without its secret scan"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = '        return planned.root, f"{recorded}; {finish(planned.root, runner=runner)}"'
 after = "        return planned.root, recorded"
 reddens = [
@@ -642,7 +642,7 @@ reddens = [
 # the overlay. `memory.mode` is the gate, and it is compared and never printed.
 [[mutation]]
 name = "an unrelated overlay's declared floor reddens a project that never reads it"
-file = "src/stayfixed/overlay/doctor.py"
+file = "src/drybag/overlay/doctor.py"
 before = "        consults = context.config is not None and context.config.memory.mode == OVERLAY_MODE"
 after = "        consults = True"
 reddens = [
@@ -651,14 +651,14 @@ reddens = [
 ]
 
 # A compatibility gate, and the classic off-by-one site. `satisfies` is what tells a session and a
-# `doctor` row whether the overlay the machine records can be driven by the stayfixed that is
+# `doctor` row whether the overlay the machine records can be driven by the drybag that is
 # running; with `>` the version that meets a floor exactly is reported as not meeting it, so every
-# project on the released version an owner wrote into `stayfixed.requires` is told to install
+# project on the released version an owner wrote into `drybag.requires` is told to install
 # something else, and the overlay's own shipped template declares such a floor. The anchor is this
 # module's two grammars, in the installed package; what the owner authors is the floor.
 [[mutation]]
 name = "the declared floor stops being met by the version that equals it"
-file = "src/stayfixed/overlay/requires.py"
+file = "src/drybag/overlay/requires.py"
 before = "    return ours > wanted or (ours == wanted and not pre_release(version))"
 after = "    return ours > wanted"
 reddens = [
@@ -672,7 +672,7 @@ reddens = [
 # which `later` orders after it.
 [[mutation]]
 name = "the declared floor is met by a pre-release of it"
-file = "src/stayfixed/overlay/requires.py"
+file = "src/drybag/overlay/requires.py"
 before = "    return ours > wanted or (ours == wanted and not pre_release(version))"
 after = "    return ours >= wanted"
 reddens = [
@@ -684,7 +684,7 @@ reddens = [
 
 [[mutation]]
 name = "the declared floor is not met by the version equal to it"
-file = "src/stayfixed/overlay/requires.py"
+file = "src/drybag/overlay/requires.py"
 before = "    return ours > wanted or (ours == wanted and not pre_release(version))"
 after = "    return ours > wanted or (ours == wanted and pre_release(version))"
 reddens = [
@@ -698,7 +698,7 @@ reddens = [
 # `pre-commit`'s, which is how it inherited the defect; the sentences live in one place now.
 [[mutation]]
 name = "the two overlay rows call a moved overlay an unrecorded one"
-file = "src/stayfixed/overlay/doctor.py"
+file = "src/drybag/overlay/doctor.py"
 before = '''    if overlay is None:
         return Row(SKIP, NO_OVERLAY_RECORDED, "")
     if isinstance(overlay, MachineUnread):
@@ -714,7 +714,7 @@ reddens = [
 # red on it, carries the remedy.
 [[mutation]]
 name = "the two overlay rows say a machine file nobody could read records no overlay"
-file = "src/stayfixed/overlay/doctor.py"
+file = "src/drybag/overlay/doctor.py"
 before = '''        return Row(SKIP, MACHINE_UNREAD, "")'''
 after = '''        return Row(SKIP, NO_OVERLAY_RECORDED, "")'''
 reddens = [
@@ -722,10 +722,10 @@ reddens = [
 ]
 
 # The `key` half was pinned only by a direct call, so reverting the call site left `setup --preset`
-# telling a person to edit a `stayfixed.toml` it never read.
+# telling a person to edit a `drybag.toml` it never read.
 [[mutation]]
 name = "setup's preset refusal names the configuration key again"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = '        data = load_preset(preset, key="--preset")'
 after = "        data = load_preset(preset)"
 reddens = [
@@ -733,102 +733,22 @@ reddens = [
 ]
 
 # `gh` resolves an unqualified `OWNER/REPO` on `GH_HOST`, which the runner keeps, so on a GitHub
-# Enterprise host the fallback named whoever owns `stayfixed` there and the owner's private overlay
+# Enterprise host the fallback named whoever owns `drybag` there and the owner's private overlay
 # was generated from it. Named with its host, it is looked up on github.com.
 [[mutation]]
 name = "the publisher's template is named on whatever host gh defaults to"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = 'PUBLISHED_TEMPLATE = f"{TEMPLATE_PUBLISHER_HOST}/{TEMPLATE_PUBLISHER}/{TEMPLATE_REPOSITORY}"'
 after = 'PUBLISHED_TEMPLATE = f"{TEMPLATE_PUBLISHER}/{TEMPLATE_REPOSITORY}"'
 reddens = [
   "tests/overlay/test_create.py::test_the_publishers_template_is_used_when_the_owner_has_none",
 ]
 
-# Retiring the template's `attach` skill and the rules README left `skills/attach/`, `skills/` and
-# `common/rules/` behind, empty.
-[[mutation]]
-name = "overlay upgrade leaves the directories a retirement empties"
-file = "src/stayfixed/overlay/upgrade.py"
-before = "                    fsops.rmdir_parents_within(root, target)"
-after = "                    pass"
-reddens = [
-  "tests/overlay/test_upgrade.py::test_retiring_a_file_removes_the_directories_it_leaves_empty",
-]
-
-# A removal whose file was already gone unlinks nothing, and the directories above it held no file
-# of stayfixed's: a person may have made them, so they are not this run's to empty.
-[[mutation]]
-name = "overlay upgrade prunes above a file that was not there"
-file = "src/stayfixed/overlay/upgrade.py"
-before = "        present = [a.target for a in planned.actions if unlinks(a) and _exists(root, a.target)]"
-after = "        present = [a.target for a in planned.actions if unlinks(a)]"
-reddens = [
-  "tests/overlay/test_upgrade.py::test_an_empty_directory_no_file_was_removed_from_is_left",
-]
-
-# An overlay a template generated carries no ledger, so the bytes a release shipped are the only
-# evidence that its copy of a retired file is stayfixed's, and `common/rules/README.md` was one
-# file in 0.1.x and another in 0.2.0: each copy needs its own digest. A recorded copy is removed by
-# its record, so only the unrecorded 0.2.0 cases redden.
-[[mutation]]
-name = "the rules README 0.2.0 shipped is kept where no ledger records it"
-file = "src/stayfixed/overlay/template.py"
-before = '"62b01f752ee77c3c8fb5fcc0b78b14907a3b98072ff3c9b7e76f6b792e7c065b",'
-after = ""
-reddens = [
-  "tests/overlay/test_upgrade.py::test_each_released_copy_of_a_retired_file_is_removed[rules-readme-v0.2.0-no-ledger]",
-]
-
-[[mutation]]
-name = "the rules README 0.1.x shipped is kept where no ledger records it"
-file = "src/stayfixed/overlay/template.py"
-before = '"926060a042a6ab26f407fbe7fe84bf30771d8c279fdbce49848f051d710443d9",'
-after = ""
-reddens = [
-  "tests/overlay/test_upgrade.py::test_each_released_copy_of_a_retired_file_is_removed[rules-readme-v0.1-no-ledger]",
-]
-
-# With no digest held for it, an unrecorded copy of the template's `attach` skill is no file of
-# stayfixed's at all: neither removed nor named.
-[[mutation]]
-name = "the attach skill a release shipped is kept where no ledger records it"
-file = "src/stayfixed/overlay/template.py"
-before = '        frozenset({"845e67006aa4303a2c69d1601c987f58ca28acf806f2e89f272b63ae8bb572c9"}),'
-after = "        frozenset(),"
-reddens = [
-  "tests/overlay/test_upgrade.py::test_each_released_copy_of_a_retired_file_is_removed[attach-skill-no-ledger]",
-  "tests/overlay/test_upgrade.py::test_an_edited_retired_file_is_kept_and_named[attach-skill-no-ledger]",
-]
-
-# The hooks file the overlay fired while it was a plugin, which nothing reads now: with no digest
-# held for it, a generated overlay's unedited copy stayed for good, and an edited one went unnamed.
-[[mutation]]
-name = "the plugin hooks file a release shipped is kept where no ledger records it"
-file = "src/stayfixed/overlay/template.py"
-before = '        frozenset({"78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9"}),'
-after = "        frozenset(),"
-reddens = [
-  "tests/overlay/test_upgrade.py::test_each_released_copy_of_a_retired_file_is_removed[plugin-hooks-no-ledger]",
-  "tests/overlay/test_upgrade.py::test_an_edited_retired_file_is_kept_and_named[plugin-hooks-no-ledger]",
-]
-
-# A kept copy of the template's `attach` skill is named with the skill that replaces it, so the
-# owner knows the copy is safe to delete.
-[[mutation]]
-name = "a kept attach skill is not told the plugin's own replaces it"
-file = "src/stayfixed/overlay/template.py"
-before = """        "the plugin's own `attach` skill replaces it; delete this copy once you no longer need """"
-after = """        "delete this copy once you no longer need """"
-reddens = [
-  "tests/overlay/test_upgrade.py::test_an_edited_retired_file_is_kept_and_named[attach-skill-recorded]",
-  "tests/overlay/test_upgrade.py::test_an_edited_retired_file_is_kept_and_named[attach-skill-no-ledger]",
-]
-
 # `git init -b` arrived in git 2.28; an older `git` refused it and the `--local` overlay was left
 # without a repository.
 [[mutation]]
 name = "a local render asks git init for its branch"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = '    done = runner.launch(["git", "init"], target)'
 after = '    done = runner.launch(["git", "init", "-b", "main"], target)'
 reddens = [
@@ -838,55 +758,33 @@ reddens = [
 
 [[mutation]]
 name = "a git init that failed is said not to have run"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = '    return f"exited {done.code}"'
 after = '    return "did not run"'
 reddens = [
   "tests/overlay/test_create.py::test_a_git_init_that_ran_and_failed_is_said_to_have_failed",
 ]
 
-# `setup --overlay` is the one crossing from the core into delivery, and it is imported inside the
-# two functions that use it: `setup/api.py` re-exports from this module and `doctor` imports that,
-# so a module-level import here loads the private layer into every `doctor` run.
+# A crossing is pinned per statement, so a second statement beside a pinned one is a new crossing
+# even when it names the same module.
 [[mutation]]
-name = "setup loads the overlay area at import again"
-file = "src/stayfixed/setup/run.py"
-before = "from stayfixed.presets import defaults_of, load_preset\n"
-after = "from stayfixed.overlay.api import require_overlay, target_root\nfrom stayfixed.presets import defaults_of, load_preset\n"
+name = "setup adds a second import statement from the guards area beside the pinned one"
+file = "src/drybag/setup/commands.py"
+before = "    from drybag.guards.api import Found, install, uninstall\n"
+after = "    from drybag.guards.api import Found, install, uninstall\n    from drybag.guards.api import HOOK_NAME\n"
 reddens = [
-  "tests/boundaries/test_delivery.py::test_in_isolation_no_core_module_loads_a_delivery_area",
+  "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
 ]
 
-# Inside the function is not enough: the import has to sit below the return for a run with no
-# `--overlay`, or every `setup` loads the private layer whether or not it was asked for.
+# A pinned crossing is held in both directions: a row whose import statement has gone is a finding,
+# so a pardon cannot outlive the crossing it was written for.
 [[mutation]]
-name = "setup loads the overlay area with no --overlay again"
-file = "src/stayfixed/setup/run.py"
-before = """    if overlay is None:
-        # Nothing was asked for, so nothing is touched: `--overlay` is the only way to reach the
-        # overlay at all, and a default here would turn an omitted flag into a repository created
-        # on somebody's account.
-        return None
-    from stayfixed.overlay.api import overlay_fault, target_root
-"""
-after = """    from stayfixed.overlay.api import overlay_fault, target_root
-
-    if overlay is None:
-        return None
-"""
+name = "a pinned crossing's import goes while its row stays"
+file = "src/drybag/setup/commands.py"
+before = "    from drybag.guards.api import Found, install, uninstall\n\n"
+after = ""
 reddens = [
-  "tests/setup/test_setup.py::test_setup_with_no_overlay_never_loads_the_overlay_area",
-]
-
-# The crossing is pinned per statement and per name, so a second statement beside a pinned one is a
-# new crossing even when it names the same module.
-[[mutation]]
-name = "setup imports one more name from the overlay area in a statement of its own"
-file = "src/stayfixed/setup/run.py"
-before = "    from stayfixed.overlay.api import overlay_fault, target_root\n"
-after = "    from stayfixed.overlay.api import overlay_fault, target_root\n    from stayfixed.overlay.api import finish\n"
-reddens = [
-  "tests/boundaries/test_delivery.py::test_core_never_imports_delivery",
+  "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
 ]
 
 # `gh`'s answers are read by `setup --overlay create:` and `scripts/publish_template.py`. Each reader caught the
@@ -894,7 +792,7 @@ reddens = [
 # an integer longer than the interpreter converts — ended the command as an internal error.
 [[mutation]]
 name = "the template probe parses with a bare json.loads"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = '        document = json_object(printed_json, "`gh repo view`", error=ValueError)'
 after = "        document = json.loads(printed_json)"
 reddens = [
@@ -908,7 +806,7 @@ reddens = [
 # read and then too deep for the encoder is the reader's failure.
 [[mutation]]
 name = "setup encodes the owner's merged settings with a bare json.dumps"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = '    new_text = mark + json_text(document, str(path), error=Failure, indent=2, sort_keys=True) + "\n"'
 after = '    new_text = mark + __import__("json").dumps(document, indent=2, sort_keys=True) + "\n"'
 reddens = [
@@ -918,14 +816,14 @@ reddens = [
 # With no home there is no default machine file, and `setup` writes none.
 [[mutation]]
 name = "setup runs with no machine file to write"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = "    if home is None or machine is None:"
 after = "    if home is None:"
 reddens = ["tests/setup/test_commands.py::test_setup_with_no_home_names_machine_and_writes_nothing"]
 
 [[mutation]]
 name = "an unwritable machine file directory ends as an internal error"
-file = "src/stayfixed/setup/machine.py"
+file = "src/drybag/setup/machine.py"
 before = "    except OSError as exc:\n        if sandbox_refused(exc):\n            raise Refusal(SETUP_SANDBOXED) from None\n        linked = fsops.linked_directory(path)"
 after = "    except LookupError as exc:\n        if sandbox_refused(exc):\n            raise Refusal(SETUP_SANDBOXED) from None\n        linked = fsops.linked_directory(path)"
 reddens = [
@@ -934,7 +832,7 @@ reddens = [
 
 [[mutation]]
 name = "setup tells a run that named its machine file where the file goes without --machine"
-file = "src/stayfixed/setup/machine.py"
+file = "src/drybag/setup/machine.py"
 before = "            if path == machine_config_path()"
 after = "            if True"
 reddens = [
@@ -943,7 +841,7 @@ reddens = [
 
 [[mutation]]
 name = "setup's unwritable home no longer says it is the only place a hook reads"
-file = "src/stayfixed/setup/machine.py"
+file = "src/drybag/setup/machine.py"
 before = "            if path == machine_config_path()"
 after = "            if False"
 reddens = [
@@ -954,7 +852,7 @@ reddens = [
 # wrote the machine file and then refused to write `/.claude/settings.json`.
 [[mutation]]
 name = "setup takes the root directory for an empty HOME"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = "    if home is None or machine is None:"
 after = "    if machine is None:"
 reddens = ["tests/setup/test_commands.py::test_an_empty_home_is_no_default_for_home"]
@@ -964,7 +862,7 @@ reddens = ["tests/setup/test_commands.py::test_an_empty_home_is_no_default_for_h
 # the command line names is the floor's refusal on every interpreter.
 [[mutation]]
 name = "setup's command resolves --root past fsops"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = "        return fsops.resolved(Path(given))"
 after = "        return Path(given).resolve()"
 reddens = [
@@ -973,7 +871,7 @@ reddens = [
 
 [[mutation]]
 name = "setup resolves --overlay past fsops"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    candidate = fsops.resolved(named)"
 after = "    candidate = named.resolve()"
 reddens = [
@@ -987,7 +885,7 @@ reddens = [
 # read, above the first write.
 [[mutation]]
 name = "setup stops asking whether the settings write can read its directory"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    if fsops.is_dir(directory) and not os.access(directory, os.R_OK):"
 after = "    if False:"
 reddens = [
@@ -999,7 +897,7 @@ reddens = [
 # read the refusal. It prints it through `printed.quoted`.
 [[mutation]]
 name = "the floor prints the path it could not ask about raw"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "            quoted(str(exc.filename)) if exc.filename is not None else \"a path this run was given\""
 after = "            str(exc.filename) if exc.filename is not None else \"a path this run was given\""
 reddens = [
@@ -1010,7 +908,7 @@ reddens = [
 # summaries of `setup --git-hooks` printed it raw where its refusals quote it.
 [[mutation]]
 name = "setup --git-hooks prints the installed hook's path raw"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = "    hook = quoted(str(installed.path))"
 after = "    hook = str(installed.path)"
 reddens = [
@@ -1021,7 +919,7 @@ reddens = [
 
 [[mutation]]
 name = "setup --git-hooks --uninstall prints the hook's path raw"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = "        hook = quoted(str(removed.path))"
 after = "        hook = str(removed.path)"
 reddens = [
@@ -1030,7 +928,7 @@ reddens = [
 
 [[mutation]]
 name = "setup --git-hooks resolves --root past fsops"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = '    root = _root(args.root or ".")'
 after = '    root = Path(args.root or ".").resolve()'
 reddens = [
@@ -1044,7 +942,7 @@ reddens = [
 # the group of `fsops`, which answers it).
 [[mutation]]
 name = "setup records a created overlay at its link and not where it leads"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    root = fsops.resolved(created.root)"
 after = "    root = created.root"
 reddens = [
@@ -1056,7 +954,7 @@ reddens = [
 # printed it raw.
 [[mutation]]
 name = "the overlay probe prints the path it judged raw"
-file = "src/stayfixed/overlay/identity.py"
+file = "src/drybag/overlay/identity.py"
 before = "    shown = quoted(str(root))"
 after = "    shown = str(root)"
 reddens = [
@@ -1066,7 +964,7 @@ reddens = [
 # `create:` named its destination raw in three messages beside `UNRECORDED`, which quoted it.
 [[mutation]]
 name = "create: prints its destination raw"
-file = "src/stayfixed/overlay/create.py"
+file = "src/drybag/overlay/create.py"
 before = "    shown = quoted(str(target))"
 after = "    shown = str(target)"
 reddens = [
@@ -1077,7 +975,7 @@ reddens = [
 
 [[mutation]]
 name = "setup notes a recorded overlay's path raw"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = '        recorded = f"recorded the existing overlay at {quoted(str(planned.root))}"'
 after = '        recorded = f"recorded the existing overlay at {planned.root}"'
 reddens = [
@@ -1086,9 +984,9 @@ reddens = [
 
 [[mutation]]
 name = "setup reports the recorded overlay's path raw"
-file = "src/stayfixed/setup/commands.py"
-before = '            f"overlay recorded at {quoted(str(report.overlay))}"'
-after = '            f"overlay recorded at {report.overlay}"'
+file = "src/drybag/setup/commands.py"
+before = "            f\"overlay recorded at {quoted(data['overlay'])}\""
+after = "            f\"overlay recorded at {data['overlay']}\""
 reddens = [
   "tests/setup/test_setup.py::test_an_overlay_path_a_repository_spells_is_printed_quoted[the-summary]",
 ]
@@ -1097,7 +995,7 @@ reddens = [
 # stays: `os.replace` on the link's own name would put a regular file in its place.
 [[mutation]]
 name = "setup writes the settings file without resolving it"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "        fsops.write_atomically(fsops.resolved(path), new_text)"
 after = "        fsops.write_atomically(path, new_text)"
 reddens = [
@@ -1108,7 +1006,7 @@ reddens = [
 # `setup` records there.
 [[mutation]]
 name = "setup writes the machine file without resolving it"
-file = "src/stayfixed/setup/machine.py"
+file = "src/drybag/setup/machine.py"
 before = "        fsops.write_atomically(fsops.resolved(path), text)"
 after = "        fsops.write_atomically(path, text)"
 reddens = [
@@ -1119,7 +1017,7 @@ reddens = [
 # the write went.
 [[mutation]]
 name = "setup's write-through failure names the link's directory"
-file = "src/stayfixed/setup/machine.py"
+file = "src/drybag/setup/machine.py"
 before = "        if linked is not None:"
 after = "        if False:"
 reddens = [
@@ -1129,11 +1027,11 @@ reddens = [
 # With no project configuration the project does not consult the overlay, so an unmet floor warns.
 [[mutation]]
 name = "the overlay floor asks a project configuration that is not there"
-file = "src/stayfixed/overlay/doctor.py"
+file = "src/drybag/overlay/doctor.py"
 before = "        consults = context.config is not None and context.config.memory.mode == OVERLAY_MODE"
 after = "        consults = context.config.memory.mode == OVERLAY_MODE"
 reddens = [
-  "tests/doctor/test_floor_report.py::test_a_machine_with_an_overlay_and_no_stayfixed_toml_is_red_about_nothing",
+  "tests/doctor/test_floor_report.py::test_a_machine_with_an_overlay_and_no_drybag_toml_is_red_about_nothing",
 ]
 
 # `setup` run from an agent's sandboxed shell: each write the sandbox refuses, and the question
@@ -1141,7 +1039,7 @@ reddens = [
 
 [[mutation]]
 name = "setup says nothing of the sandbox that refused its machine file"
-file = "src/stayfixed/setup/machine.py"
+file = "src/drybag/setup/machine.py"
 before = "        if sandbox_refused(exc):\n            raise Refusal(SETUP_SANDBOXED) from None"
 after = "        if False:\n            raise Refusal(SETUP_SANDBOXED) from None"
 reddens = [
@@ -1150,7 +1048,7 @@ reddens = [
 
 [[mutation]]
 name = "setup says nothing of the sandbox that refused its settings file"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "        if sandbox_refused(exc):\n            raise Refusal(SETUP_SANDBOXED) from exc"
 after = "        if False:\n            raise Refusal(SETUP_SANDBOXED) from exc"
 reddens = [
@@ -1159,7 +1057,7 @@ reddens = [
 
 [[mutation]]
 name = "setup reads a directory the sandbox refuses as one its mode refuses"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    return Refusal(SETUP_SANDBOXED if owned else said)"
 after = "    return Refusal(said)"
 reddens = [
@@ -1168,7 +1066,7 @@ reddens = [
 
 [[mutation]]
 name = "setup reads a directory its mode refuses as the sandbox"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    return Refusal(SETUP_SANDBOXED if owned else said)"
 after = "    return Refusal(SETUP_SANDBOXED)"
 reddens = [
@@ -1179,7 +1077,7 @@ reddens = [
 # does, and keeps it.
 [[mutation]]
 name = "setup refuses a user settings file opening with a byte-order mark"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    return json_object(lenient_settings(text), str(path), error=Failure), text"
 after = "    return json_object(text, str(path), error=Failure), text"
 reddens = [
@@ -1188,7 +1086,7 @@ reddens = [
 
 [[mutation]]
 name = "setup drops the byte-order mark the owner's file opened with"
-file = "src/stayfixed/setup/run.py"
+file = "src/drybag/setup/run.py"
 before = "    mark = BYTE_ORDER_MARK if text.startswith(BYTE_ORDER_MARK) else \"\""
 after = "    mark = \"\""
 reddens = [
@@ -1199,7 +1097,7 @@ reddens = [
 # setup, and never beside a flag that names a write.
 [[mutation]]
 name = "setup --approval-boundary runs the machine setup"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = "        return run_boundary_advice(args)"
 after = "        pass"
 reddens = [
@@ -1207,30 +1105,19 @@ reddens = [
 ]
 
 [[mutation]]
-name = "setup --approval-boundary takes a flag that names a write"
-file = "src/stayfixed/setup/commands.py"
-before = "        if any(switched) or any(value is not None for value in named):"
-after = "        if any(switched):"
-reddens = [
-  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[preset]",
-  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[overlay]",
-  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[plugin]",
-]
-
-[[mutation]]
 name = "setup --approval-boundary takes --git-hooks"
-file = "src/stayfixed/setup/commands.py"
-before = "        switched = (args.git_hooks, args.uninstall)"
-after = "        switched = (args.uninstall,)"
+file = "src/drybag/setup/commands.py"
+before = "        if args.restore or args.git_hooks or args.uninstall or any(v is not None for v in named):"
+after = "        if args.restore or args.uninstall or any(v is not None for v in named):"
 reddens = [
   "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[git-hooks]",
 ]
 
 [[mutation]]
 name = "setup --approval-boundary takes --uninstall"
-file = "src/stayfixed/setup/commands.py"
-before = "        switched = (args.git_hooks, args.uninstall)"
-after = "        switched = (args.git_hooks,)"
+file = "src/drybag/setup/commands.py"
+before = "        if args.restore or args.git_hooks or args.uninstall or any(v is not None for v in named):"
+after = "        if args.restore or args.git_hooks or any(v is not None for v in named):"
 reddens = [
   "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[uninstall]",
 ]
@@ -1239,7 +1126,7 @@ reddens = [
 # nothing, where it was dropped and the machine setup ran.
 [[mutation]]
 name = "setup drops a lone --uninstall and runs the machine setup"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = "    if args.uninstall:\n        raise Refusal(_UNINSTALL_ALONE)"
 after = "    if False:\n        raise Refusal(_UNINSTALL_ALONE)"
 reddens = [
@@ -1250,39 +1137,48 @@ reddens = [
 # it and configured the machine, exit 0.
 [[mutation]]
 name = "setup drops --root and runs the machine setup"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = "    if args.root is not None:\n        raise Refusal(_ROOT_ALONE)"
 after = "    if False:\n        raise Refusal(_ROOT_ALONE)"
 reddens = ["tests/setup/test_commands.py::test_machine_setup_refuses_root_and_writes_nothing"]
 
-# `--git-hooks` takes no flag that asks machine setup to act: each refuses beside it, where all but
-# `--preset` were dropped and the hook installed.
+# `--git-hooks` and `--approval-boundary` take no flag that asks machine setup to act: each refuses
+# beside either, where beside `--git-hooks` all but `--preset` were dropped and the hook installed.
 [[mutation]]
-name = "setup --git-hooks drops --preset"
-file = "src/stayfixed/setup/commands.py"
-before = "        if args.preset is not None or args.overlay is not None or args.plugin is not None:"
-after = "        if args.overlay is not None or args.plugin is not None:"
-reddens = ["tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[preset]"]
+name = "setup --git-hooks and --approval-boundary drop --preset"
+file = "src/drybag/setup/commands.py"
+before = "    named = (args.preset, args.overlay, args.plugin)"
+after = "    named = (args.overlay, args.plugin)"
+reddens = [
+  "tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[preset]",
+  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[preset]",
+]
 
 [[mutation]]
-name = "setup --git-hooks drops --overlay"
-file = "src/stayfixed/setup/commands.py"
-before = "        if args.preset is not None or args.overlay is not None or args.plugin is not None:"
-after = "        if args.preset is not None or args.plugin is not None:"
-reddens = ["tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[overlay]"]
+name = "setup --git-hooks and --approval-boundary drop --overlay"
+file = "src/drybag/setup/commands.py"
+before = "    named = (args.preset, args.overlay, args.plugin)"
+after = "    named = (args.preset, args.plugin)"
+reddens = [
+  "tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[overlay]",
+  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[overlay]",
+]
 
 [[mutation]]
-name = "setup --git-hooks drops --plugin"
-file = "src/stayfixed/setup/commands.py"
-before = "        if args.preset is not None or args.overlay is not None or args.plugin is not None:"
-after = "        if args.preset is not None or args.overlay is not None:"
-reddens = ["tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[plugin]"]
+name = "setup --git-hooks and --approval-boundary drop --plugin"
+file = "src/drybag/setup/commands.py"
+before = "    named = (args.preset, args.overlay, args.plugin)"
+after = "    named = (args.preset, args.overlay)"
+reddens = [
+  "tests/setup/test_git_hooks.py::test_git_hooks_refuses_every_flag_that_asks_machine_setup_to_act[plugin]",
+  "tests/setup/test_approval_boundary.py::test_the_advice_beside_a_flag_that_writes_is_refused[plugin]",
+]
 
 # A plugin name is joined to the preset's marketplace into one argv element: one shaped like an
 # option, naming a marketplace of its own or carrying an escape reached `claude plugin install`.
 [[mutation]]
 name = "setup --plugin takes any name"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = 'PLUGIN_NAME = re.compile(r"\A[a-z0-9][a-z0-9-]*\Z")'
 after = 'PLUGIN_NAME = re.compile(r"\A.+\Z")'
 reddens = [
@@ -1292,7 +1188,7 @@ reddens = [
 
 [[mutation]]
 name = "setup --approval-boundary names a relative settings file as given"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = "    settings = (home / USER_SETTINGS).absolute()"
 after = "    settings = home / USER_SETTINGS"
 reddens = [
@@ -1303,26 +1199,17 @@ reddens = [
 # A symbolic-link loop at the machine file's directory is refused by name, never `internal error`.
 [[mutation]]
 name = "setup --approval-boundary lets a looping machine directory raise"
-file = "src/stayfixed/setup/commands.py"
+file = "src/drybag/setup/commands.py"
 before = "        rules = record_deny_rules(record)\n    except OSError as exc:"
 after = "        rules = record_deny_rules(record)\n    except LookupError as exc:"
 reddens = ["tests/setup/test_approval_boundary.py::test_a_looping_machine_directory_is_refused_by_name"]
-
-# `setup` takes the deny masks an earlier preset wrote back out of the user settings file, or a
-# machine that ran an older `setup` keeps refusing `.env.example` after an upgrade.
-[[mutation]]
-name = "setup leaves the retired deny rules in place"
-file = "src/stayfixed/setup/run.py"
-before = "    existing_deny = [r for r in existing_deny if r not in retired]"
-after = "    existing_deny = list(existing_deny)"
-reddens = ["tests/setup/test_setup.py::test_setup_takes_the_retired_env_masks_back_out_and_keeps_the_owners_rules"]
 
 # A tree is an overlay exactly when its identity record parses, so a render writes the record last
 # and a render cut short before it leaves no tree a later `setup --overlay` records. The mutation
 # puts the record first again, where a full disk part-way left it behind with half a tree.
 [[mutation]]
 name = "a render writes the identity record first"
-file = "src/stayfixed/overlay/layout.py"
+file = "src/drybag/overlay/layout.py"
 before = """OVERLAY_FILES = (
     f"{COMMON_MEMORY}/_README.md",
     *CAPABILITY_NAMES,
@@ -1349,4 +1236,48 @@ after = """OVERLAY_FILES = (
 )"""
 reddens = [
   "tests/setup/test_setup.py::test_a_render_cut_short_is_not_an_overlay_the_next_run_records",
+]
+
+# `setup --overlay` switches sync on for an overlay it makes (render, create) and leaves a recorded
+# one to its owner: a second machine's `false`, or an absent `[sync]`, stays as it was.
+[[mutation]]
+name = "recording an existing overlay switches sync on"
+file = "src/drybag/setup/run.py"
+before = '        switch = {"enabled": True} if planned_overlay.kind != "record" else {}'
+after = '        switch = {"enabled": True}'
+reddens = ["tests/setup/test_setup.py::test_setup_recording_an_overlay_leaves_sync_alone"]
+
+# A clone's tracked `drybag.toml` can claim another of the owner's projects. The store `setup
+# --restore` hands `attach` comes from the table key in the owner's `machine/projects.toml`, and
+# attach refuses a store that is not the checkout's own project's; with no store handed, attach
+# would take the project the clone names for itself and give it that project's notes.
+[[mutation]]
+name = "restore attaches without the store its table key names"
+file = "src/drybag/setup/restore.py"
+before = "                store=project_notes(overlay, item.name),"
+after = "                store=None,"
+reddens = [
+  "tests/setup/test_restore.py::test_a_checkout_whose_project_is_not_its_table_key_is_refused_and_the_rest_attach",
+]
+
+# `--yes` is the owner's word on their own command line that the overlay's notes are theirs;
+# without it `setup --restore` records nothing as reviewed, however many notes the overlay holds.
+[[mutation]]
+name = "restore records notes as reviewed without --yes"
+file = "src/drybag/setup/restore.py"
+before = "        if yes:"
+after = "        if True:"
+reddens = ["tests/setup/test_restore.py::test_without_yes_no_note_is_recorded_as_reviewed"]
+
+# A marketplace source that holds a key restore does not carry (a `git` source's `ref`, a `github`
+# source's `path` or `sparsePaths`) would be registered without it, unpinned or at the root, and
+# so not be the marketplace the overlay's settings name; it is a note and is not added.
+[[mutation]]
+name = "restore adds a marketplace whose source holds a key it does not carry"
+file = "src/drybag/setup/restore.py"
+before = '        elif extra := sorted(set(source) - {"source", key}):'
+after = "        elif extra := []:"
+reddens = [
+  "tests/setup/test_restore.py::test_a_marketplace_source_restore_does_not_carry_is_a_note_and_not_added[git-ref]",
+  "tests/setup/test_restore.py::test_a_marketplace_source_restore_does_not_carry_is_a_note_and_not_added[github-path]",
 ]

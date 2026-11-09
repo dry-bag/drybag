@@ -28,8 +28,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import __version__
-from stayfixed.cli import build_parser, discover_registrars, split_json_flag
+from drybag import __version__
+from drybag.cli import build_parser, discover_registrars, split_json_flag
 from tests.cli import subparsers
 from tests.scriptload import plugin_tree, publish_plugin
 from tests.test_neutral import tracked_files
@@ -79,7 +79,9 @@ def links_in(path: Path) -> list[str]:
 
 
 def public_documents() -> list[Path]:
-    return [README, ROOT / "docs" / "plans" / "README.md", *sorted(METHODOLOGY.glob("*.md"))]
+    # `docs/plans/` is outside the sdist, so its README is read where the tree is there.
+    plans = [ROOT / "docs" / "plans" / "README.md"] if (ROOT / "docs" / "plans").is_dir() else []
+    return [README, *plans, *sorted(METHODOLOGY.glob("*.md"))]
 
 
 def sources() -> dict[str, tuple[str, str, str, str, str, str]]:
@@ -249,6 +251,8 @@ _NUMBER_WORDS = {
     "twelve": 12,
     "thirteen": 13,
     "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
     "seventeen": 17,
     "eighteen": 18,
     "nineteen": 19,
@@ -281,11 +285,11 @@ _COMMANDS_BLOCK = re.compile(r"^## Commands\n.*?^```text\n(.*?)^```", re.MULTILI
 
 
 def readme_invocations() -> list[str]:
-    """Every `stayfixed …` line in the README's Commands block, comments stripped."""
+    """Every `drybag …` line in the README's Commands block, comments stripped."""
     match = _COMMANDS_BLOCK.search(README.read_text(encoding="utf-8"))
     assert match is not None, "README has no `## Commands` section with a ```text block"
     lines = (line.split("#", 1)[0].strip() for line in match.group(1).splitlines())
-    return [line for line in lines if line.startswith("stayfixed ")]
+    return [line for line in lines if line.startswith("drybag ")]
 
 
 def registered_commands() -> set[str]:
@@ -307,7 +311,7 @@ def registered_commands() -> set[str]:
 # when this test was written, and the number is here so that a walk which found nothing — or
 # half of them — cannot satisfy the subset check above it. A change that ships a command raises
 # the parser's count and leaves this alone.
-REGISTERED_COMMANDS_FLOOR = 20
+REGISTERED_COMMANDS_FLOOR = 15
 
 
 def test_the_parser_registers_what_this_test_expects_to_walk() -> None:
@@ -315,7 +319,7 @@ def test_the_parser_registers_what_this_test_expects_to_walk() -> None:
     # `_SubParsersAction` is a private name, so the day argparse renames it this reddens
     # instead of `registered_commands()` returning an empty set that satisfies `<=`.
     found = registered_commands()
-    assert {"memory index", "bugs check", "docs check", "plan check", "hook"} <= found
+    assert {"memory index", "docs check", "plan check", "hook"} <= found
     assert len(found) >= REGISTERED_COMMANDS_FLOOR
 
 
@@ -323,9 +327,9 @@ def test_the_parser_registers_what_this_test_expects_to_walk() -> None:
 # and on a line of a fenced block in a document. A mention wrapped onto the next line carries
 # the comment marker or the string-concatenation quotes that continue it, which `_WRAP` reads
 # as the space they stand for.
-_MENTION = re.compile(r"`stayfixed\s([^`]{1,300})`")
-_RUN = re.compile(r"\buv run stayfixed\s+([^\n`\"']*)")
-_FENCED_LINE = re.compile(r"^\s*(?:\$ )?stayfixed\s+([^\n]*)", re.MULTILINE)
+_MENTION = re.compile(r"`drybag\s([^`]{1,300})`")
+_RUN = re.compile(r"\buv run drybag\s+([^\n`\"']*)")
+_FENCED_LINE = re.compile(r"^\s*(?:\$ )?drybag\s+([^\n]*)", re.MULTILINE)
 _WRAP = re.compile(r'"?\s*\n\s*(?:#\s*|f?")?')
 _COMMAND_NAME = re.compile(r"[a-z][a-z0-9-]*")
 # What the walk does not read, and why: a plan, the changelog and its fragments are the record of
@@ -335,11 +339,11 @@ _NAMES_AS_THEY_WERE = ("docs/plans/", "changelog.d/", "mutations/", "CHANGELOG.m
 _NAMING_SUFFIXES = (".md", ".yml", ".yaml", ".toml", ".py")
 # A vacuity floor, not a count: the walk read 877 mentions when it was written, and a regex
 # that matched nothing would satisfy the check below it.
-NAMED_COMMANDS_FLOOR = 500
+NAMED_COMMANDS_FLOOR = 400
 
 
 def named_commands(relative: str, text: str) -> list[str]:
-    """The text after `stayfixed` in each place `text` names a command."""
+    """The text after `drybag` in each place `text` names a command."""
     found = [_WRAP.sub(" ", body) for body in _MENTION.findall(text)]
     found += _RUN.findall(text)
     if relative.endswith(".md"):
@@ -381,19 +385,19 @@ def test_the_command_name_walk_discriminates() -> None:
     # command the walk would then find in it.
     tick, run = "`", "uv run"
     old = [
-        f"run {tick}stayfixed release check{tick} first",
-        f"{tick}stayfixed adopt begin{tick} and {tick}stayfixed test audit-entrypoints{tick}",
-        f"# {tick}stayfixed overlay\n# publish{tick}",
-        f"        run: {run} stayfixed release check --tag x",
+        f"run {tick}drybag release check{tick} first",
+        f"{tick}drybag adopt begin{tick} and {tick}drybag test audit-entrypoints{tick}",
+        f"# {tick}drybag overlay\n# publish{tick}",
+        f"        run: {run} drybag release check --tag x",
     ]
     for text in old:
         assert unregistered(named_commands("x.py", text)), text
-    assert unregistered(named_commands("x.md", "```bash\nstayfixed release check\n```\n"))
+    assert unregistered(named_commands("x.md", "```bash\ndrybag release check\n```\n"))
     fine = [
-        f"{tick}stayfixed adopt promote{tick}, {tick}stayfixed hook <event>{tick}",
-        f"{tick}stayfixed <group>{tick}, {tick}stayfixed …{tick}, {tick}stayfixed {{name}}{tick}",
-        f'"{tick}stayfixed memory "\n    "index --check{tick}"',
-        f"{tick}stayfixed --version{tick}, {run} stayfixed init --yes",
+        f"{tick}drybag plan check{tick}, {tick}drybag hook <event>{tick}",
+        f"{tick}drybag <group>{tick}, {tick}drybag …{tick}, {tick}drybag {{name}}{tick}",
+        f'"{tick}drybag memory "\n    "index --check{tick}"',
+        f"{tick}drybag --version{tick}, {run} drybag plan check",
     ]
     for text in fine:
         named = named_commands("x.py", text)
@@ -423,7 +427,7 @@ def test_every_command_a_tracked_file_names_is_one_the_parser_registers() -> Non
 
 
 def test_every_registered_command_has_a_readme_row() -> None:
-    # Mutation: delete the `stayfixed docs trail` line from the README → reddens naming it.
+    # Mutation: delete the `drybag docs trail` line from the README → reddens naming it.
     # This is the test that makes the README a shared file every command owes a line to.
     named = {" ".join(line.split()[1:3]) for line in readme_invocations()}
     named |= {line.split()[1] for line in readme_invocations()}
@@ -432,7 +436,7 @@ def test_every_registered_command_has_a_readme_row() -> None:
 
 
 def test_every_readme_row_parses() -> None:
-    # Mutation: change the `bugs new` row's `--severity high` to `--severity critical` →
+    # Mutation: change the `memory index` row's `--check` to `--verify` →
     # reddens naming the line. Not `--sev high`, which parses: argparse accepts any
     # unambiguous prefix of a long option, so an abbreviated flag is the one mistake in a
     # row this test cannot catch.
@@ -449,9 +453,9 @@ def test_every_readme_row_parses() -> None:
 
 
 # `--json`'s one cross-command promise, in the README's Exit-codes paragraph. The sentence
-# named four commands while five emit the key — `memory refs` was missing — so a reader
-# scripting against it would have treated a `findings` list as "this command does not report
-# findings". Bound to the real parser's functions rather than to a second hand-written list.
+# once named four commands while five emitted the key, so a reader scripting against it would have
+# treated a `findings` list as "this command does not report findings". Bound to the real parser's
+# functions rather than to a second hand-written list.
 _FINDINGS_SENTENCE = re.compile(
     r"The commands that report a list of\s+findings — (.+?) —\s+all spell it `findings`", re.DOTALL
 )
@@ -483,10 +487,10 @@ def command_functions() -> dict[str, object]:
 
 
 def test_the_readme_names_every_command_whose_json_carries_findings() -> None:
-    # Mutation: drop `memory refs` from the README sentence -> reddens naming it.
+    # Mutation: drop `docs check` from the README sentence -> reddens naming it.
     # The floor first: a walk that resolved no functions would make the comparison below
-    # vacuously true, and a regex that stopped matching would look the same. Four emit the key
-    # today: `bugs check`, `docs check`, `memory refs` and `plan check`.
+    # vacuously true, and a regex that stopped matching would look the same. Two emit the key
+    # today: `docs check` and `plan check`.
     functions = command_functions()
     assert len(functions) >= REGISTERED_COMMANDS_FLOOR, sorted(functions)
     emitting = {
@@ -494,7 +498,7 @@ def test_the_readme_names_every_command_whose_json_carries_findings() -> None:
         for name, func in functions.items()
         if '"findings":' in inspect.getsource(func)  # type: ignore[arg-type]
     }
-    assert len(emitting) >= 4, sorted(emitting)
+    assert len(emitting) >= 2, sorted(emitting)
     match = _FINDINGS_SENTENCE.search(README.read_text(encoding="utf-8"))
     assert match is not None, "README's --json paragraph no longer names the findings commands"
     named = set(re.findall(r"`([^`]+)`", match.group(1)))
@@ -522,8 +526,8 @@ def test_the_readme_installs_the_release_the_tree_carries() -> None:
     section = match.group(1)
     version = __version__
     assert f"**Released as {version}.**" in section, section[:300]
-    assert f"/plugin marketplace add stayfixed/stayfixed@v{version}" in section, section[:300]
-    assert "uv tool install stayfixed\n" in section, section[:300]
+    assert f"/plugin marketplace add dry-bag/drybag@v{version}" in section, section[:300]
+    assert "uv tool install drybag\n" in section, section[:300]
     for stale in (
         "uv tool install git+",
         "Nothing is released yet",
@@ -584,8 +588,8 @@ NOT_REACHED = "not verified"
 
 def _reach_table() -> str:
     """The README's table as the harness registry states it: a row per surface, a column per
-    harness under the name `[stayfixed] agents` lists it by, and each cell its tier."""
-    from stayfixed.harnesses import HARNESSES, Surface
+    harness under its registry name, and each cell its tier."""
+    from drybag.harnesses import HARNESSES, Surface
 
     head = "| Surface | " + " | ".join(f"`{harness.name}`" for harness in HARNESSES) + " |"
     rule = "|---" * (len(HARNESSES) + 1) + "|"
@@ -614,17 +618,17 @@ def test_the_readme_states_each_agents_reach_as_the_registry_does() -> None:
     assert table == _reach_table(), table
 
 
-# A fenced `toml` block, and inside one the `[stayfixed]` table's `version =` line: the table
+# A fenced `toml` block, and inside one the `[drybag]` table's `version =` line: the table
 # runs to the next table header or the end of the block, so a `version` key in another table
 # is not taken for it.
 _TOML_FENCE = re.compile(r"^```toml\n(.*?)^```", re.MULTILINE | re.DOTALL)
-_STAYFIXED_TABLE = re.compile(r"^\[stayfixed\]\n((?:(?!\[).*\n)*)", re.MULTILINE)
+_DRYBAG_TABLE = re.compile(r"^\[drybag\]\n((?:(?!\[).*\n)*)", re.MULTILINE)
 _VERSION_KEY = re.compile(r'^version = "([^"]*)"', re.MULTILINE)
 
 
 @pytest.mark.parametrize("document", [README, ROOT / "docs" / "cli.md"], ids=lambda path: path.name)
 def test_the_example_configurations_carry_the_running_version(document: Path) -> None:
-    """`doctor` warns whenever `[stayfixed] version` is not `__version__`, so an example that
+    """`doctor` warns whenever `[drybag] version` is not `__version__`, so an example that
     kept the last release's number is a copy-paste that makes a brand-new project warn.
 
     `scripts/release.py check` reads seven sources and none of them is an example in a document, so
@@ -637,12 +641,12 @@ def test_the_example_configurations_carry_the_running_version(document: Path) ->
     versions = [
         key.group(1)
         for fence in _TOML_FENCE.finditer(document.read_text(encoding="utf-8"))
-        for table in _STAYFIXED_TABLE.finditer(fence.group(1))
+        for table in _DRYBAG_TABLE.finditer(fence.group(1))
         for key in _VERSION_KEY.finditer(table.group(1))
     ]
-    # A floor as well as the equality: a document whose example lost its `[stayfixed]` table
+    # A floor as well as the equality: a document whose example lost its `[drybag]` table
     # would otherwise compare an empty list and pass.
-    assert versions, f"{document.name} has no example `[stayfixed]` table with a version"
+    assert versions, f"{document.name} has no example `[drybag]` table with a version"
     assert versions == [__version__] * len(versions), (document.name, versions)
 
 
@@ -660,7 +664,7 @@ def test_the_readme_points_at_the_methodology_and_the_reference() -> None:
 # be one more place to forget when the plugin gains a path.
 PLUGIN_PATHS: tuple[str, ...] = plugin_tree().PLUGIN_PATHS
 # A link to a file of this repository as `main` holds it, which moves only at a release.
-_THIS_REPOSITORY_MAIN = re.compile(r"^https://github\.com/stayfixed/stayfixed/blob/main/([^#]+)")
+_THIS_REPOSITORY_MAIN = re.compile(r"^https://github\.com/dry-bag/drybag/blob/main/([^#]+)")
 
 
 def test_the_readme_links_only_inside_the_plugin_or_absolutely() -> None:
@@ -675,7 +679,7 @@ def test_the_readme_links_only_inside_the_plugin_or_absolutely() -> None:
     names a tracked file, which the link walk skips as a URL.
 
     Mutations (declared): the reference link made relative again, `](docs/cli.md)` -> `outside`
-    reddens; the same link spelled through a plugin path, `](src/stayfixed/../../docs/cli.md)`,
+    reddens; the same link spelled through a plugin path, `](src/drybag/../../docs/cli.md)`,
     which only the normalisation tells from one inside it -> `outside` reddens; the outbound
     walk's link naming a file that is not there -> `missing` reddens.
     """
@@ -683,7 +687,7 @@ def test_the_readme_links_only_inside_the_plugin_or_absolutely() -> None:
     # Floors: a README whose links all vanished, or a regex that stopped matching, would make
     # both walks vacuously true. `skills/README.md` and `LICENSE` stay relative today.
     assert len(relative) >= 2, relative
-    # Normalised first: `src/stayfixed/../../docs/cli.md` starts with a plugin path and names a
+    # Normalised first: `src/drybag/../../docs/cli.md` starts with a plugin path and names a
     # file outside every one of them.
     normal = [posixpath.normpath(target) for target in relative]
     outside = [
@@ -713,11 +717,11 @@ _TABLE_ROW = re.compile(r"^\| (?!Flag |Command and flag |---)(.+?) \| (.+?) \|$"
 def test_the_shared_flag_tables_are_the_constants_and_not_a_second_spelling() -> None:
     # No shared-flag sentence is spelled by hand, and that section of `docs/cli.md` spelled all nine
     # of them a second time in a document nothing checked — re-creating, one file over, exactly the
-    # drift one constant per flag exists to remove. Held row by row to `stayfixed.command`'s
+    # drift one constant per flag exists to remove. Held row by row to `drybag.command`'s
     # constants, the same way the README's Commands block is held to the real parser above.
     #
     # Mutation: change the `--machine` row's cell in `docs/cli.md` → reddens naming the row.
-    from stayfixed.command import (
+    from drybag.command import (
         ATTACH_CHECK_HELP,
         CHECK_HELP,
         DRY_RUN_HELP,
@@ -737,10 +741,10 @@ def test_the_shared_flag_tables_are_the_constants_and_not_a_second_spelling() ->
         "`--dry-run`": DRY_RUN_HELP,
         "`--home`": HOME_HELP,
         "`--check`": CHECK_HELP,
-        "`stayfixed overlay upgrade --root`": OVERLAY_ROOT_HELP,
-        "`stayfixed setup --root`": SETUP_ROOT_HELP,
-        "`stayfixed setup --machine`": SETUP_MACHINE_HELP,
-        "`stayfixed attach --check`": ATTACH_CHECK_HELP,
+        "`drybag overlay upgrade --root`": OVERLAY_ROOT_HELP,
+        "`drybag setup --root`": SETUP_ROOT_HELP,
+        "`drybag setup --machine`": SETUP_MACHINE_HELP,
+        "`drybag attach --check`": ATTACH_CHECK_HELP,
     }
     section = _SHARED_FLAGS_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
     assert section is not None, "docs/cli.md has no `## Shared flags` section"
@@ -776,14 +780,14 @@ def test_shared_flags_names_every_command_that_takes_neither_root_nor_machine() 
     assert section is not None, "docs/cli.md has no `## Shared flags` section"
     match = _TAKES_NEITHER.search(section.group(1))
     assert match is not None, "Shared flags no longer names the commands that take neither flag"
-    named = {" ".join(name.split()) for name in re.findall(r"`stayfixed ([^`]+)`", match.group(1))}
+    named = {" ".join(name.split()) for name in re.findall(r"`drybag ([^`]+)`", match.group(1))}
     options = {
         name: {flag for action in leaf._actions for flag in action.option_strings}
         for name, leaf in command_parsers().items()
     }
     # The walk's floor, for the reason the command-table test gives: a walk that found nothing
     # would make every comparison below vacuously true.
-    assert len(options) >= 20, sorted(options)
+    assert len(options) >= 15, sorted(options)
     neither = {name for name, flags in options.items() if not flags & _PROJECT_FLAGS}
     assert named == neither, (sorted(named), sorted(neither))
     overlay = {name for name in options if name.startswith("overlay ")} - neither
@@ -793,37 +797,11 @@ def test_shared_flags_names_every_command_that_takes_neither_root_nor_machine() 
     assert {name for name in rest if not options[name] >= _PROJECT_FLAGS} == set()
 
 
-_REUSABLE_WORKFLOW_SECTION = re.compile(
-    r"^## The reusable workflow\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL
-)
-# The repository settings the reusable workflow's verdict binds under. The caller file is
-# pull-request content, so without them the gates still run and report but a pull request can
-# edit its own caller; a section that lost one would read as if the verdict held without it.
-SETTINGS = (
-    "CODEOWNERS covering `/.github/`",
-    "Dismiss stale pull request approvals when new commits are pushed",
-    "the `check / gates` status check required",
-    "expected source set to GitHub Actions",
-    "branches required to be up to date before merging, or a merge queue",
-    "a `v*` tag ruleset on the stayfixed repository",
-)
-
-
-def test_the_reusable_workflow_names_every_setting_the_verdict_binds_under() -> None:
-    # No oracle entry: this holds a document, not a guard. Checked by hand when it was
-    # written: the "Dismiss stale" bullet deleted from the section reddens this case naming it.
-    section = _REUSABLE_WORKFLOW_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md has no `## The reusable workflow` section"
-    # Whitespace folded, so a setting wrapped across two lines is still found as one phrase.
-    text = " ".join(section.group(1).split())
-    assert [setting for setting in SETTINGS if setting not in text] == []
-
-
 # The configuration block in `docs/cli.md` is introduced as the grammar, and the loader
 # *refuses* an unknown section — so a section the block leaves out reads to a reader as a key
 # that is invalid. Three of the nine were missing (`[artifacts]`, `[ci]`, `[commit_messages]`),
 # which is the drift a binding prevents. `## Configuration` down to the next `## ` heading.
-# The FIRST fenced `toml` block under `## Configuration` — the `stayfixed.toml` one. The section
+# The FIRST fenced `toml` block under `## Configuration` — the `drybag.toml` one. The section
 # carries a second block, the machine file, whose `[personal]` and `[overlay]` are not sections
 # of this grammar at all; scoping to the first block is what keeps the two apart.
 _CONFIGURATION_BLOCK = re.compile(
@@ -833,8 +811,8 @@ _TOML_HEADER = re.compile(r"^\[([a-z_]+)\]", re.MULTILINE)
 
 
 def test_the_configuration_block_shows_every_section_the_loader_accepts() -> None:
-    # Mutation: drop the `[ci]` header from `docs/cli.md`'s block -> reddens naming it.
-    from stayfixed.config.loader import SECTIONS
+    # Mutation: drop the `[commit_messages]` header from `docs/cli.md`'s block -> reddens naming it.
+    from drybag.config.loader import SECTIONS
 
     section = _CONFIGURATION_BLOCK.search(CLI_REFERENCE.read_text(encoding="utf-8"))
     assert section is not None, "docs/cli.md's `## Configuration` has no ```toml block"
@@ -843,18 +821,6 @@ def test_the_configuration_block_shows_every_section_the_loader_accepts() -> Non
     shown = _TOML_HEADER.findall(section.group(1))
     assert len(shown) >= len(SECTIONS), shown
     assert set(shown) == set(SECTIONS), (sorted(set(shown)), sorted(SECTIONS))
-
-
-def test_the_configuration_block_lists_the_built_in_gates_in_their_one_order() -> None:
-    # The reference is prose and cannot import the tuple, so its one spelling of the built-in
-    # gates is pinned here. Mutation: reorder `builtin` in `docs/cli.md`'s block and this
-    # reddens.
-    from stayfixed.config.schema import BUILTIN_GATES
-
-    section = _CONFIGURATION_BLOCK.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md's `## Configuration` has no ```toml block"
-    listed = ", ".join(f'"{name}"' for name in BUILTIN_GATES)
-    assert f"\nbuiltin = [{listed}]" in section.group(1)
 
 
 # `plan check`'s rule count, stated in the reference and emitted by `docs/plans.py`. The
@@ -868,7 +834,7 @@ PLAN_REFUSAL_CODE = "base-unresolvable"
 def test_the_plan_rule_count_is_the_number_of_rules_plan_check_emits() -> None:
     # Mutation: change `Five rules` back to `Four rules` in `docs/cli.md` -> reddens naming
     # both numbers.
-    source = (ROOT / "src" / "stayfixed" / "docs" / "plans.py").read_text(encoding="utf-8")
+    source = (ROOT / "src" / "drybag" / "docs" / "plans.py").read_text(encoding="utf-8")
     codes = {c for c in _PLAN_FINDING_CODE.findall(source)} - {PLAN_REFUSAL_CODE}
     # The floor first: a regex that stopped matching would compare zero against a number word.
     assert len(codes) >= 5, sorted(codes)
@@ -877,17 +843,15 @@ def test_the_plan_rule_count_is_the_number_of_rules_plan_check_emits() -> None:
     assert _NUMBER_WORDS.get(match.group(1).lower()) == len(codes), (match.group(1), sorted(codes))
 
 
-# The `doctor` check table: seventeen rows, each spelling a check name, and the one
+# The `doctor` check table: fourteen rows, each spelling a check name, and the one
 # code-restating table in this document the branch that built this binding mechanism did not
 # bind. `tests/doctor/test_checks.py` pins each name as a literal exactly once *inside* the module
 # that registers it — `checks.py` or an area's `doctor.py` — so the document's copy is a *second*
-# spelling of each of the seventeen — one that
+# spelling of each of the fourteen — one that
 # guard cannot see, and a renamed check would leave this page green and wrong. That the unbound
 # ones drift is not a hypothesis: `len(OVERLAY_FILES)` was sixteen while four comments one
 # directory over still said fourteen.
-_DOCTOR_SECTION = re.compile(
-    r"^## `stayfixed doctor[^\n]*\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL
-)
+_DOCTOR_SECTION = re.compile(r"^## `drybag doctor[^\n]*\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL)
 # `| `name` | what it answers | what it reads |` — the first cell only, backticked.
 _CHECK_ROW = re.compile(r"^\| `([a-z-]+)` \| [^|]+ \| [^|]+ \|$", re.MULTILINE)
 
@@ -896,11 +860,11 @@ def test_the_doctor_table_is_the_registry_and_not_a_second_spelling() -> None:
     # Mutation: rename one check in `docs/cli.md`'s table -> reddens naming the row. In order
     # and not as a set, because the table's order is the report's order and the document says
     # so: the core's checks, then each area's contribution in area-name order.
-    from stayfixed.doctor.checks import CHECKS
-    from stayfixed.doctor.registry import contributions
+    from drybag.doctor.checks import CHECKS
+    from drybag.doctor.registry import contributions
 
     section = _DOCTOR_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md has no `stayfixed doctor` section"
+    assert section is not None, "docs/cli.md has no `drybag doctor` section"
     rows = _CHECK_ROW.findall(section.group(1))
     # The walk's floor before anything is compared, for the reason the Shared flags test gives:
     # a regex that matched nothing would make the comparison below vacuously true, and a
@@ -917,7 +881,7 @@ def test_the_doctor_table_is_the_registry_and_not_a_second_spelling() -> None:
 # README's two command summaries, the reference's opening line, the skill's first step and the smoke
 # workflow's assertion over an installed plugin's report.
 _DOCTOR_COUNTS = {
-    "README.md": re.compile(r"^stayfixed doctor +# (\w+) checks over this installation", re.M),
+    "README.md": re.compile(r"^drybag doctor +# (\w+) checks over this installation", re.M),
     "docs/cli.md": re.compile(r"^(\w+) checks over one installation", re.M),
     "skills/doctor/SKILL.md": re.compile(r"read the report: (\w+) checks"),
     ".github/workflows/smoke.yml": re.compile(r"assert len\(rows\) == (\d+), len\(rows\)"),
@@ -927,10 +891,9 @@ _DOCTOR_COUNTS = {
 def test_every_document_counts_the_rows_the_report_has() -> None:
     # The count was written in five places and held in none: a row added to the report left four
     # documents and the smoke workflow saying the old number. Mutation (`mutations/`'s "the
-    # reference counts the doctor rows it had before retired-deny"): `docs/cli.md` says
-    # eighteen.
-    from stayfixed.doctor.checks import CHECKS
-    from stayfixed.doctor.registry import contributions
+    # reference counts one doctor row more than the report has"): `docs/cli.md` says sixteen.
+    from drybag.doctor.checks import CHECKS
+    from drybag.doctor.registry import contributions
 
     expected = len(CHECKS) + sum(len(c.checks) for c in contributions(CHECKS))
     for name, pattern in _DOCTOR_COUNTS.items():
@@ -953,11 +916,11 @@ _ROW_ORDER = re.compile(
 def test_the_reference_counts_the_cores_rows_and_the_private_layers_apart() -> None:
     # Mutation (`mutations/`'s "the reference miscounts the installation's own doctor rows"):
     # reddens naming the word.
-    from stayfixed.doctor.checks import CHECKS
-    from stayfixed.doctor.registry import contributions
+    from drybag.doctor.checks import CHECKS
+    from drybag.doctor.registry import contributions
 
     section = _DOCTOR_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md has no `stayfixed doctor` section"
+    assert section is not None, "docs/cli.md has no `drybag doctor` section"
     found = _ROW_ORDER.findall(section.group(1))
     assert len(found) == 1, found
     core, layer = found[0]
@@ -979,40 +942,12 @@ def test_every_sentence_that_counts_the_names_doctor_shows_is_the_cap() -> None:
     # The cap was stated in words in the reference and held by nothing, while a comment beside it
     # said no shipped file stated it. Mutation (`mutations/`'s "doctor shows four noted names"):
     # the cap is four and the reference still says three.
-    from stayfixed.doctor.checks import NAMES_SHOWN
+    from drybag.doctor.checks import NAMES_SHOWN
 
     text = (ROOT / "docs" / "cli.md").read_text(encoding="utf-8")
     found = [word for pattern in _NAMES_SHOWN_SENTENCES for word in pattern.findall(text)]
     assert len(found) == 3, found
     assert [_NUMBER_WORDS[word] for word in found] == [NAMES_SHOWN] * 3
-
-
-# The five verdict sentences are `VERDICTS` in `stayfixed.guards.attribute` and are reproduced by
-# hand in `docs/cli.md`'s table; every test that had them read the expectation back out of
-# `VERDICTS`, which is shape 9 of the `sweep-defect-class` skill's own reference — both sides move
-# together under any reword. This is the same rule the Shared flags tables are held to, one section
-# over.
-_ATTRIBUTE_SECTION = re.compile(
-    r"^## `stayfixed test attribute[^\n]*\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL
-)
-# `| fails | passes | — | `sentence` |`: the three code columns, then the sentence in backticks.
-_VERDICT_ROW = re.compile(r"^\| (?:fails|passes) \| [^|]+ \| [^|]+ \| `(.+?)` \|$", re.MULTILINE)
-
-
-def test_the_verdict_table_is_the_shipped_sentences_and_not_a_second_spelling() -> None:
-    # Mutation: reword one sentence in `docs/cli.md`'s table — reddens naming the row.
-    from stayfixed.guards.attribute import VERDICTS
-
-    section = _ATTRIBUTE_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md has no `stayfixed test attribute` section"
-    rows = _VERDICT_ROW.findall(section.group(1))
-    # The walk's floor before anything is compared, for the reason the Shared flags test gives:
-    # a regex that matched nothing would make the comparison below vacuously true, and a
-    # section that lost its table would look exactly like one that never had it.
-    assert len(rows) == len(VERDICTS), rows
-    assert tuple(rows) == VERDICTS, [
-        (row, sentence) for row, sentence in zip(rows, VERDICTS, strict=True) if row != sentence
-    ]
 
 
 def _anchor(heading: str) -> str:
@@ -1026,90 +961,39 @@ def test_the_cli_reference_contents_lists_every_section_in_order() -> None:
     # Every `## ` heading after the Contents, in order, each linked by GitHub's anchor: a command
     # section added without its Contents line, or a heading renamed under a stale link, is
     # a reference a reader cannot navigate. The floor is today's count of sections after the
-    # Contents, 39, so a walk that found nothing, or half, cannot pass.
-    # Mutation (declared): drop the `memory fit` Contents line -> the lists differ.
+    # Contents, 22, so a walk that found nothing, or half, cannot pass.
+    # Mutation (declared): drop the `memory inventory` Contents line -> the lists differ.
     text = (ROOT / "docs" / "cli.md").read_text(encoding="utf-8")
     _, _, after = text.partition("## Contents\n")
     contents, _, rest = after.partition("\n## ")
     listed = re.findall(r"^- \[(.+)\]\(#([^)]+)\)$", contents, re.MULTILINE)
     headings = re.findall(r"^## (.+)$", "## " + rest, re.MULTILINE)
-    assert len(headings) >= 39, len(headings)
+    assert len(headings) >= 22, len(headings)
     assert listed == [(heading, _anchor(heading)) for heading in headings]
 
 
-# The `prove` section of `docs/cli.md`: its heading to the next `## ` heading.
-_PROVE_SECTION = re.compile(r"^## `stayfixed prove .*?\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL)
+# The "Note sync" section names what the sync keeps and every outcome it records, in words that
+# were written beside the code and are held to it here: a fifth file in the state directory, a new
+# outcome or a different throttle would leave the section true of a sync that is gone.
+_NOTE_SYNC_SECTION = re.compile(r"^## Note sync\n(.*?)(?=^## )", re.MULTILINE | re.DOTALL)
 
 
-def _prove_section() -> str:
-    section = _PROVE_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
-    assert section is not None, "docs/cli.md has no `stayfixed prove` section"
-    return section.group(1)
+def test_the_note_sync_section_names_what_the_sync_keeps_and_records() -> None:
+    # Mutation (declared): a sixth outcome in `state.OUTCOMES`, or `PENDING_FILE` renamed ->
+    # reddens naming the word the section lacks.
+    from drybag.sync import state
 
-
-def test_the_prove_section_states_the_bound_word_for_word() -> None:
-    # One source for the bound, which the section quotes as it is. Mutation (declared): the
-    # bound's text changed in `run.py` -> the section no longer holds it.
-    from stayfixed.prove.run import BOUND
-
-    assert f"**What `proved` means.** {BOUND}\n" in _prove_section()
-
-
-def test_the_json_keys_the_prove_section_lists_are_the_receipt_s_fields() -> None:
-    # The section lists `--json`'s keys in order, each with what it holds in parentheses.
-    # Mutation (declared): a field added to the receipt -> the section lists one key fewer.
-    import dataclasses
-
-    from stayfixed.prove.run import Receipt
-
-    section = _prove_section()
-    start = section.index("`--json` carries `verdict`") + len("`--json` carries ")
-    end = section.index("`untracked_more`.", start) + len("`untracked_more`")
-    listed = re.findall(r"`([a-z_]+)`", re.sub(r"\([^()]*\)", "", section[start:end]))
-    assert listed == [field.name for field in dataclasses.fields(Receipt)]
-
-
-# `| what holds | `verdict` | exit | reason(s) |`: a row of the prove section's verdict table.
-_CASCADE_ROW = re.compile(r"^\| [^|]+ \| `([a-z ]+)` \| (\d) \|([^|]*)\|$", re.MULTILINE)
-
-
-def test_the_prove_verdict_table_is_the_cascade_row_for_row() -> None:
-    # The table says it is `CASCADE`, the first row that holds winning: each row its verdict, its
-    # exit code and, where the cascade names one, its reason; a row whose reason is the step's
-    # that stopped the run lists some. Mutation (declared): `mutations/`'s "the cascade's
-    # green-but-exited row is no longer the table's" -> that row's verdict differs.
-    from stayfixed.prove.run import CASCADE, EXIT
-
-    rows = _CASCADE_ROW.findall(_prove_section())
-    # The walk's floor, for the reason the Shared flags test gives.
-    assert len(rows) == len(CASCADE), rows
-    for (verdict, code, reasons), (expected, reason, _) in zip(rows, CASCADE, strict=True):
-        assert (verdict, int(code)) == (expected, EXIT[expected]), (verdict, code)
-        if reason is None:
-            assert reasons.strip(), verdict
-        else:
-            assert reasons.strip() == (f"`{reason}`" if reason else ""), (verdict, reasons)
-
-
-def test_every_reason_constant_is_documented() -> None:
-    # Every reason a receipt can carry, the run's, the readers' and each shipped adapter's, is
-    # named in the section as its code span. Mutation (declared): a reason's text renamed -> the
-    # section no longer names it.
-    import sys
-
-    from stayfixed.profiles.adapters import shipped_adapters
-    from stayfixed.prove.run import WORDS
-
-    core = {reason for reason in WORDS if reason}
-    adapters: set[str] = set()
-    for adapter in shipped_adapters():
-        adapters |= set(sys.modules[type(adapter).__module__].REASONS)
-    # The receipt's line words an adapter's reason by the verdict it stopped the run with, and the
-    # core's by `WORDS`: a reason of both would be worded as the core's.
-    assert core.isdisjoint(adapters), sorted(core & adapters)
-    reasons = core | adapters
-    section = _prove_section()
-    # The walk's floor: the core's reasons alone, so a discovery that found no adapter cannot
-    # pass with nothing of theirs held.
-    assert adapters and len(reasons) > len(core), sorted(reasons)
-    assert [reason for reason in sorted(reasons) if f"`{reason}`" not in section] == []
+    section = _NOTE_SYNC_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
+    assert section is not None, "docs/cli.md has no `Note sync` section"
+    text = section.group(1)
+    kept = (
+        state.STATE_FILE,
+        state.LOCK_FILE,
+        state.SLEEPER_LOCK_FILE,
+        state.PENDING_FILE,
+        f"{state.SCRATCH}/",
+    )
+    absent = [f"`{word}`" for word in (*kept, *state.OUTCOMES) if f"`{word}`" not in text]
+    assert absent == [], absent
+    assert f"within {state.THROTTLE_SECONDS} seconds" in text
+    assert f"{state.BACK_OFF_MINUTES} minutes" in text

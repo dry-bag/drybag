@@ -13,7 +13,7 @@ from types import ModuleType
 
 import pytest
 
-from stayfixed import gitenv
+from drybag import gitenv
 from tests.floor import SUITE_GIT_FLOOR_SECONDS
 from tests.gitfixture import needs_git
 from tests.scriptload import SCRIPTS, load
@@ -33,7 +33,7 @@ def _plugin(tmp_path: Path, *, launcher: str | None = None, hooks: Path | None =
         shutil.copytree(ROOT / "scripts", planted / "scripts")
     else:
         (planted / "scripts").mkdir()
-        (planted / "scripts" / "stayfixed").write_text(launcher, encoding="utf-8")
+        (planted / "scripts" / "drybag").write_text(launcher, encoding="utf-8")
     return planted
 
 
@@ -76,7 +76,7 @@ def test_every_hook_entry_answers_its_sample_event_through_the_checkout(
     )
     out = capsys.readouterr().out
     assert code == 0, out
-    assert "10 entries, 11 row(s), 0 failure(s)" in out, out
+    assert "12 entries, 13 row(s), 0 failure(s)" in out, out
 
 
 @needs_git
@@ -101,20 +101,48 @@ def test_a_launcher_fault_is_not_mistaken_for_an_injection(
     #
     # Mutation (declared, `mutations/`'s "the hook smoke stops reading what an injection entry
     # injected"): the registry lookup answers `None` -> this reddens.
-    assert "injected nothing carrying '<<<stayfixed:repository-data'" in out, out
+    assert "injected nothing carrying '<<<drybag:repository-data'" in out, out
 
 
-# A launcher that is the real one for everything but the red-run entry, which it answers as an
-# entry whose handler said nothing does: exit 0 and the event's envelope with no context in it.
-SILENT_ON_FAILURE = f"""
-import json, runpy, sys
+def _answering(event: str, stdout: str) -> str:
+    """A launcher that is the real one but for `event`, which it answers with `stdout`."""
+    return f"""
+import runpy, sys
 
-if sys.argv[1:3] == ["hook", "PostToolUseFailure"]:
+if sys.argv[1:3] == ["hook", {event!r}]:
     sys.stdin.read()
-    print(json.dumps({{"hookSpecificOutput": {{"hookEventName": "PostToolUseFailure"}}}}))
+    print({stdout!r})
     sys.exit(0)
-runpy.run_path({str(ROOT / "scripts" / "stayfixed")!r}, run_name="__main__")
+runpy.run_path({str(ROOT / "scripts" / "drybag")!r}, run_name="__main__")
 """
+
+
+@needs_git
+@pytest.mark.parametrize(
+    "stdout",
+    ['{"hookSpecificOutput": {"hookEventName": "SessionEnd"}}', '{"decision": "block"}', ""],
+    ids=["the old envelope", "a decision", "nothing"],
+)
+def test_a_quiet_entry_that_answers_anything_but_an_empty_object_is_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], stdout: str
+) -> None:
+    # Mutation (declared, `mutations/`'s "the hook smoke accepts any answer from a quiet entry"):
+    # the check never fires -> the row passes and this reddens.
+    smoke = _load("smoke_hooks")
+    code = smoke.main(
+        [
+            "--plugin-root",
+            str(_plugin(tmp_path, launcher=_answering("SessionEnd", stdout))),
+            "--fixture",
+            str(ROOT / "tests" / "fixtures" / "smoke-project"),
+            "--scratch",
+            str(tmp_path / "s"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "hook SessionEnd -> expected an empty object" in out, out
+    assert "1 failure(s)" in out, out
 
 
 @needs_git
@@ -130,7 +158,15 @@ def test_a_red_run_entry_that_says_nothing_is_reported(
     code = smoke.main(
         [
             "--plugin-root",
-            str(_plugin(tmp_path, launcher=SILENT_ON_FAILURE)),
+            str(
+                _plugin(
+                    tmp_path,
+                    launcher=_answering(
+                        "PostToolUseFailure",
+                        '{"hookSpecificOutput": {"hookEventName": "PostToolUseFailure"}}',
+                    ),
+                )
+            ),
             "--fixture",
             str(ROOT / "tests" / "fixtures" / "smoke-project"),
             "--scratch",
@@ -140,7 +176,7 @@ def test_a_red_run_entry_that_says_nothing_is_reported(
     out = capsys.readouterr().out
     assert code == 1, out
     assert "the context does not say 'Before calling this red a flake" in out, out
-    assert "10 entries, 11 row(s), 1 failure(s)" in out, out
+    assert "12 entries, 13 row(s), 1 failure(s)" in out, out
 
 
 @needs_git
@@ -155,7 +191,7 @@ def test_a_wrapper_that_answers_wrongly_is_reported(
     _copy_hooks(ROOT / "hooks", planted)
     (planted / "hooks" / "run-hook.sh").write_text("#!/bin/sh\nexit 2\n", encoding="utf-8")
     (planted / "scripts").mkdir()
-    (planted / "scripts" / "stayfixed").write_text("raise SystemExit(0)\n", encoding="utf-8")
+    (planted / "scripts" / "drybag").write_text("raise SystemExit(0)\n", encoding="utf-8")
     code = smoke.main(
         [
             "--plugin-root",
@@ -277,7 +313,7 @@ def test_hooks_json_gaining_an_entry_is_reported_rather_than_quietly_run(
     )
     out = capsys.readouterr().out
     assert code == 1, out
-    assert "11 entries and 12 rows, expected 10 and 11" in out, out
+    assert "13 entries and 14 rows, expected 12 and 13" in out, out
 
 
 @needs_git
@@ -288,9 +324,9 @@ def test_the_exfiltration_scenario_holds_against_the_checkout(
     # a `project.name` naming another project, and a committed settings `env` block naming a
     # machine configuration inside the clone. Asserted separately: the clone's notes reach a
     # session only as data and never as a standing rule, the hook ignored the clone's
-    # STAYFIXED_CONFIG, and `attach` refuses.
+    # DRYBAG_CONFIG, and `attach` refuses.
     # The MCP arm is
-    # not run: stayfixed ships no MCP server yet (the README lists the memory MCP server under
+    # not run: drybag ships no MCP server yet (the README lists the memory MCP server under
     # "Not yet"), and the script says so in its own output.
     #
     # The count as well as the exit code, because four of the five rows assert an ABSENCE and a
@@ -340,26 +376,26 @@ def test_the_exfiltration_scenario_reports_a_row_that_went_the_wrong_way(
 
 
 def test_the_hook_smoke_asks_for_the_red_run_note_in_the_words_the_note_opens_with() -> None:
-    # `RED_RUN_NOTE` is copied from `stayfixed.guards.hygiene.LEAD` rather than imported, as
+    # `RED_RUN_NOTE` is copied from `drybag.hints.hygiene.LEAD` rather than imported, as
     # `FLOOR_VARIABLE` is, and held equal here: a lead reworded in the guard would otherwise turn
     # the `PostToolUseFailure` row red in CI for a note that still speaks. Mutation (oracle):
     # `mutations/`'s "the hook smoke asks for a red-run note the guard does not open with".
-    from stayfixed.guards.hygiene import LEAD
+    from drybag.hints.hygiene import LEAD
 
     assert _load("smoke_hooks").RED_RUN_NOTE == LEAD
 
 
-def test_a_hook_entry_keeps_the_suite_floor_and_no_other_stayfixed_variable(
+def test_a_hook_entry_keeps_the_suite_floor_and_no_other_drybag_variable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Both smoke scripts strip every `STAYFIXED_*` variable so an entry never reads this
-    # developer's own stayfixed, and without an exception that strip would take the suite's floor
+    # Both smoke scripts strip every `DRYBAG_*` variable so an entry never reads this
+    # developer's own drybag, and without an exception that strip would take the suite's floor
     # under the product's `git` bounds too. The floor alone is kept, spelled as the product
     # spells it, in the one base environment both scripts build on. Mutation (oracle):
     # `mutations/`'s "the hook smoke strips the suite's floor" -> this reddens.
     smoke = _load("smoke_hooks")
     assert smoke.FLOOR_VARIABLE == gitenv.FLOOR_VARIABLE
-    monkeypatch.setenv("STAYFIXED_CONFIG", str(tmp_path / "developer.toml"))
+    monkeypatch.setenv("DRYBAG_CONFIG", str(tmp_path / "developer.toml"))
     env = smoke.session_env(plugin_root=ROOT, project=tmp_path, home=tmp_path, data=tmp_path)
     assert env[gitenv.FLOOR_VARIABLE] == str(SUITE_GIT_FLOOR_SECONDS)
-    assert "STAYFIXED_CONFIG" not in env
+    assert "DRYBAG_CONFIG" not in env

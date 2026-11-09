@@ -8,9 +8,9 @@ generated from a template carries none, and publishing one would make every gene
 read as hand-edited to `overlay upgrade`), make sure the repository exists, is public and is
 marked as a template, clone it, replace its tree with the render, commit, and — only with
 `yes` — push. Everything that leaves this process goes through `Runner`, so a test asserts the
-argv and never reaches GitHub. The repository it publishes is the one `stayfixed setup --overlay
+argv and never reaches GitHub. The repository it publishes is the one `drybag setup --overlay
 create:<owner>/<name>` generates from when the owner has one. A maintainer's script rather than a
-command stayfixed ships: an owner creates an overlay, and only a publisher publishes the template.
+command drybag ships: an owner creates an overlay, and only a publisher publishes the template.
 
 **`yes` gates everything outward-facing**, which is three acts and not one: the repository's
 creation, its template flag, and the push. Without it the command renders, asks `gh` what
@@ -33,28 +33,28 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-# Before the CLI frame exists, so said here: an interpreter without this repository's `stayfixed`
+# Before the CLI frame exists, so said here: an interpreter without this repository's `drybag`
 # would otherwise end in a traceback.
 try:
-    import stayfixed
-    from stayfixed import fsops
-    from stayfixed.cli import JSON_EPILOG, run
-    from stayfixed.errors import Failure, Refusal
-    from stayfixed.jsonobject import json_object
-    from stayfixed.overlay.api import OVERLAY_FILES, TEMPLATE_REPOSITORY, render_template, segment
-    from stayfixed.printed import answered
-    from stayfixed.result import Result
-    from stayfixed.runner import NOT_FOUND, TIMED_OUT, Completed, Runner, subprocess_runner
-    from stayfixed.scaffold import MANIFEST_PATH
+    import drybag
+    from drybag import fsops
+    from drybag.cli import JSON_EPILOG, run
+    from drybag.errors import Failure, Refusal
+    from drybag.jsonobject import json_object
+    from drybag.overlay.api import OVERLAY_FILES, TEMPLATE_REPOSITORY, render_template, segment
+    from drybag.printed import answered
+    from drybag.result import Result
+    from drybag.runner import NOT_FOUND, TIMED_OUT, Completed, Runner, subprocess_runner
+    from drybag.scaffold import MANIFEST_PATH
 except ImportError as exc:
     sys.stderr.write(
         f"scripts/publish_template.py: refused: {exc}; run it with `uv run python "
-        "scripts/publish_template.py`, which puts this repository's stayfixed on the path; "
+        "scripts/publish_template.py`, which puts this repository's drybag on the path; "
         "nothing was run\n"
     )
     sys.exit(2)
 
-DESCRIPTION = "The template a stayfixed private overlay is generated from"
+DESCRIPTION = "The template a drybag private overlay is generated from"
 # The branch a repository this command just created has: `gh repo create` with no push leaves
 # no branch to read, so there is nothing to ask and the platform's own default is what a first
 # push names. An existing repository answers for itself through `Existing.default_branch`.
@@ -101,7 +101,7 @@ def _git(runner: Runner, argv: list[str], cwd: Path) -> Completed:
     `add -A` and `status --porcelain` — had their exit codes read by nothing. A `git` that is
     absent, hung, blocked by an `index.lock` another process left, or failed by a
     `core.hooksPath` pre-commit hook returns an empty `stdout`, so `changed` came out empty and
-    the publisher reported *"already carries this stayfixed's template; nothing to push"* and
+    the publisher reported *"already carries this drybag's template; nothing to push"* and
     exited 0. Four different causes, one message, none of them named, and the operator told the
     published template is current when nothing was examined and nothing was pushed.
 
@@ -274,7 +274,7 @@ def publish_template(
     account = segment("owner", owner.strip().lower())
     segment("name", name)
     slug = f"{account}/{name}"
-    with tempfile.TemporaryDirectory(prefix="stayfixed-publish-") as scratch_name:
+    with tempfile.TemporaryDirectory(prefix="drybag-publish-") as scratch_name:
         scratch = Path(scratch_name)
         rendered = render_template(scratch, "rendered")
         # The ledger is the scaffold engine's record of what the render wrote here. A repository
@@ -316,7 +316,7 @@ def publish_template(
             raise Failure(f"`git add -A` in the clone exited {added.code} ({answered(added)})")
         status = _git(runner, ["-C", str(clone), "status", "--porcelain"], clone)
         # Read before the emptiness of `stdout` is interpreted. An empty listing means "the
-        # published tree is already this stayfixed's" only when the question was actually
+        # published tree is already this drybag's" only when the question was actually
         # answered; a non-zero `git status` produces the same empty string and means nothing of
         # the kind.
         if status.code != 0:
@@ -326,9 +326,9 @@ def publish_template(
             )
         changed = tuple(line[3:] for line in status.stdout.splitlines() if line.strip())
         if not changed:
-            notes.append(f"{slug} already carries this stayfixed's template; nothing to push")
+            notes.append(f"{slug} already carries this drybag's template; nothing to push")
             return Published(slug, (), False, tuple(notes))
-        message = f"stayfixed overlay template {stayfixed.__version__}"
+        message = f"drybag overlay template {drybag.__version__}"
         committed = _git(runner, ["-C", str(clone), "commit", "-q", "-m", message], clone)
         if committed.code != 0:
             raise Failure(

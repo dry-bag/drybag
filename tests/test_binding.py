@@ -2,7 +2,7 @@
 
 The id is the anchor: repository bytes cannot write `.git/`, and a clone never carries it, so a
 checkout is bound only where this machine wrote an id into its common directory and a record
-under its own data directory. Nothing here reads `stayfixed.toml`.
+under its own data directory. Nothing here reads `drybag.toml`.
 """
 
 from __future__ import annotations
@@ -12,23 +12,23 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import binding
-from stayfixed.config.paths import data_directory
-from stayfixed.errors import Failure
-from stayfixed.gitenv import GitUnavailable
+from drybag import binding
+from drybag.config.paths import data_directory
+from drybag.errors import Failure
+from drybag.gitenv import GitUnavailable
 from tests.gitfixture import git, needs_git
 from tests.runners import git_that_cannot_run
 
 pytestmark = needs_git
 
 ORIGIN = "git@example.com:acme/widget.git"
-CONFIG = '[stayfixed]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
+CONFIG = '[drybag]\nversion = "0.1.0"\n\n[project]\nname = "widget"\n'
 
 
 def _repository(root: Path, *, commit: bool = False) -> Path:
     root.mkdir(parents=True)
     git(root, "init", "-q", "-b", "main")
-    (root / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG, encoding="utf-8")
     if commit:
         git(root, "add", "-A")
         git(root, "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-qm", "init")
@@ -38,7 +38,7 @@ def _repository(root: Path, *, commit: bool = False) -> Path:
 def test_two_worktrees_of_one_repository_read_the_same_id_from_its_common_directory(
     tmp_path: Path,
 ) -> None:
-    # `git rev-parse --git-path stayfixed/binding` resolves per worktree, so an id kept there would
+    # `git rev-parse --git-path drybag/binding` resolves per worktree, so an id kept there would
     # leave every linked worktree unbound; the common directory is one place for all of them.
     main = _repository(tmp_path / "main", commit=True)
     linked = tmp_path / "linked"
@@ -46,7 +46,7 @@ def test_two_worktrees_of_one_repository_read_the_same_id_from_its_common_direct
     made = binding.ensure_id(main)
     assert binding.common_directory(linked) == binding.common_directory(main)
     assert binding.read_id(linked) == made
-    assert (main / ".git" / "stayfixed" / "binding").is_file()
+    assert (main / ".git" / "drybag" / "binding").is_file()
     assert not list((main / ".git" / "worktrees").rglob("binding"))
     # A second ask reads the id rather than drawing another.
     assert binding.ensure_id(linked) == made
@@ -120,7 +120,7 @@ def test_an_id_is_read_only_when_it_is_exactly_32_lowercase_hex_characters(
 ) -> None:
     # Mutation (oracle): `mutations/`'s "read_id accepts a 31-character id".
     root = _repository(tmp_path / "root")
-    stored = root / ".git" / "stayfixed" / "binding"
+    stored = root / ".git" / "drybag" / "binding"
     stored.parent.mkdir()
     stored.write_text(text, encoding="utf-8")
     assert binding.read_id(root) == (text if read else None)
@@ -138,7 +138,7 @@ def test_a_fresh_id_is_32_lowercase_hex_characters_and_only_its_start_is_printed
 def test_the_data_directory_is_under_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "elsewhere"))
-    assert data_directory() == tmp_path / ".local" / "share" / "stayfixed"
+    assert data_directory() == tmp_path / ".local" / "share" / "drybag"
 
 
 def test_a_directory_git_cannot_place_is_cannot_tell_and_never_an_id(tmp_path: Path) -> None:

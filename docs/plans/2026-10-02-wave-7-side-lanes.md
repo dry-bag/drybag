@@ -758,6 +758,9 @@ reddens = ["tests/test_documents.py::test_no_module_imports_a_network_module"]
 
 ## Lane 2 — benchmark (part 1)
 
+**Superseded, 2026-10-28:** wave 10's BM lane rewrote this lane against the tree as
+`docs/plans/2026-10-28-wave-10-bench.md`; the text below stays as the record.
+
 The benchmark measures what the plugin changes in an agent's behaviour on brownfield code, with
 the plugin and without it, under traps a harness exists to catch. Part 1 builds the instrument
 and calibrates it on `v0.2.0`; it does not claim a result. Each case renders per repository:

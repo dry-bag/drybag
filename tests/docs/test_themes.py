@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.docs.themes import PATTERN_MAX_CHARS, RULE, TOO_LONG, compile_theme
+from drybag.docs.themes import PATTERN_MAX_CHARS, RULE, TOO_LONG, compile_theme
 
 TOKENS = ("a", "b", ".", ".*", "|", "^", "$", "\\.")
 NAMES = ["".join(chars) for n in range(5) for chars in itertools.product("ab.", repeat=n)]
@@ -92,7 +92,7 @@ def test_syntax_outside_the_language_is_refused_by_the_rule_alone(pattern: str) 
 # characters that hold no `b`. The language's matcher places each piece once.
 ADVERSARIAL = (
     "import pathlib, sys\n"
-    "from stayfixed.docs.trail import read_trail, theme_of\n"
+    "from drybag.docs.trail import read_trail, theme_of\n"
     "path = pathlib.Path(sys.argv[1]) / 'trail.toml'\n"
     "path.write_text('[[theme]]\\nlabel = \"x\"\\npattern = \"' + '.*a' * 8 + '.*b\"\\n')\n"
     "print(theme_of('a' * 300 + '.md', read_trail(path, 'docs/trail.toml')))\n"

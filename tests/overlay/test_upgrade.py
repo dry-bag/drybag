@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.cli import build_parser, discover_registrars, run
-from stayfixed.errors import Refusal
-from stayfixed.overlay.api import render
-from stayfixed.overlay.layout import IDENTITY_RECORD
-from stayfixed.overlay.template import retired, template_root
-from stayfixed.overlay.upgrade import upgrade
-from stayfixed.scaffold import MANIFEST_PATH, Verb, digest
+from drybag.cli import build_parser, discover_registrars, run
+from drybag.errors import Refusal
+from drybag.overlay.api import render
+from drybag.overlay.layout import IDENTITY_RECORD
+from drybag.overlay.template import template_root
+from drybag.overlay.upgrade import upgrade
+from drybag.scaffold import MANIFEST_PATH, Verb, digest
 from tests.runners import Recorder
 
 
@@ -61,7 +61,7 @@ def _a_release_that_raises_the_floor(
     text = record.read_text(encoding="utf-8")
     assert 'requires = ">=0.1.0"' in text, "the stand-in has no floor to raise"
     record.write_text(text.replace('">=0.1.0"', f'"{floor}"'), encoding="utf-8")
-    monkeypatch.setattr("stayfixed.overlay.template.template_root", lambda: shipped)
+    monkeypatch.setattr("drybag.overlay.template.template_root", lambda: shipped)
 
 
 def test_an_overlay_set_up_at_a_path_takes_a_raised_floor_with_nothing_for_its_owner_to_edit(
@@ -75,8 +75,8 @@ def test_an_overlay_set_up_at_a_path_takes_a_raised_floor_with_nothing_for_its_o
     #
     # Mutation: `mutations/`'s "setup writes into the identity record it rendered" -> the record
     # is skipped as hand-edited and this reddens.
-    from stayfixed.overlay.requires import requires_of
-    from stayfixed.setup.api import setup
+    from drybag.overlay.requires import requires_of
+    from drybag.setup.api import setup
 
     destination = tmp_path / "ov"
     report = setup(
@@ -100,11 +100,11 @@ def test_a_record_written_by_hand_as_the_upgrading_note_says_is_the_one_the_temp
     tmp_path: Path,
 ) -> None:
     # An overlay made before the record shipped is migrated by hand: the release note says to add
-    # `stayfixed-overlay.toml` holding `requires = ">=0.1.0"` and `layout = 1`. Written so, it is
+    # `drybag-overlay.toml` holding `requires = ">=0.1.0"` and `layout = 1`. Written so, it is
     # the shipped record byte for byte, so `overlay upgrade` reads it as up to date. While the
     # record also held an owner and a name, a record written as the note said never matched the
-    # template, and was skipped as a file stayfixed did not write. A ledger records only what
-    # stayfixed wrote, so such a record is still not refreshed once a later release changes it
+    # template, and was skipped as a file drybag did not write. A ledger records only what
+    # drybag wrote, so such a record is still not refreshed once a later release changes it
     # (`docs/cli.md`, `overlay upgrade`).
     root = _an_overlay(tmp_path)
     manifest = root / MANIFEST_PATH
@@ -124,6 +124,12 @@ def test_the_two_permission_files_are_asked_about_even_when_unchanged(tmp_path: 
     root = _an_overlay(tmp_path)
     decisions = upgrade(root, dry_run=True).decisions
     assert set(decisions) == {"common/claude/permissions.json", "common/claude/hooks.json"}
+
+
+def test_an_upgrade_of_a_fresh_overlay_plans_nothing(tmp_path: Path) -> None:
+    # The overlay this release renders is what this release would upgrade it to, so the first
+    # upgrade after a render has nothing to do; the case below relies on that.
+    assert upgrade(_an_overlay(tmp_path), dry_run=True).plan.actions == ()
 
 
 def test_a_dry_run_writes_nothing_where_a_real_run_would(tmp_path: Path) -> None:
@@ -146,7 +152,7 @@ def test_a_directory_that_is_not_an_overlay_is_refused_before_anything_is_writte
     tmp_path: Path,
 ) -> None:
     # `--root` defaults to `.` and was checked nowhere: in a directory
-    # holding a `README.md` and a `src/main.py`, `stayfixed overlay upgrade --root .` created
+    # holding a `README.md` and a `src/main.py`, `drybag overlay upgrade --root .` created
     # the whole overlay — both plugin manifests, `hooks/hooks.json`, `common/**`, `.gitignore`
     # and `.github/workflows/scan.yml` — reported them as work done and exited 0. (Fourteen
     # files when the defect was found; the count has moved since, which is why it is not
@@ -181,10 +187,8 @@ def test_the_cli_exits_two_rather_than_zero_on_a_directory_that_is_not_an_overla
 
 # --- a file an earlier release shipped and this one does not --------------------------------
 
-# The bytes 0.1.0 and 0.1.1 shipped at `common/memory/README.md`, whole: the note reader read the
-# file as a note with no frontmatter, so `memory index --check` failed in every project attached to
-# the overlay. Held here in full so the digest `overlay upgrade` removes the file by is checked
-# against the file it names rather than against itself.
+# The bytes 0.1.0 and 0.1.1 shipped at `common/memory/README.md`, whole: the bytes drybag wrote
+# there, which `overlay upgrade` once removed the file by.
 SHIPPED_MEMORY_README = (
     "# Cross-project notes\n"
     "\n"
@@ -203,408 +207,14 @@ SHIPPED_MEMORY_README = (
 MEMORY_README = "common/memory/README.md"
 
 
-def _with_a_retired_file(
-    root: Path, relative: str, *, ledger: bool, text: str, shipped: str, version: str
-) -> Path:
-    """An overlay carrying a retired file that holds `text`, with the ledger an earlier `--local`
-    render leaves, recording the bytes release `version` `shipped` there, or with none, as an
-    overlay generated from a template has (`scripts/publish_template.py` strips it)."""
-    path = root / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    manifest = root / MANIFEST_PATH
-    if not ledger:
-        if manifest.exists():
-            manifest.unlink()
-        return path
-    document = json.loads(manifest.read_text(encoding="utf-8"))
-    document["artifacts"][relative] = {
-        "id": relative,
-        "kind": "template",
-        "location": "repo",
-        "target": relative,
-        "template": f"overlay/{relative}",
-        "version": version,
-        "sha256": digest(shipped),
-    }
-    manifest.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    return path
-
-
-def _with_the_shipped_memory_readme(root: Path, *, ledger: bool, text: str) -> Path:
-    return _with_a_retired_file(
-        root,
-        MEMORY_README,
-        ledger=ledger,
-        text=text,
-        shipped=SHIPPED_MEMORY_README,
-        version="0.1.1",
-    )
-
-
-@pytest.mark.parametrize("ledger", [True, False], ids=["recorded", "no-ledger"])
-def test_the_memory_readme_a_release_shipped_is_removed(tmp_path: Path, ledger: bool) -> None:
-    # `common/memory/README.md` became `_README.md`, which the note reader skips, and `upgrade`
-    # created the new name beside the old one: the old one stayed, and `memory index --check`
-    # went on reporting it unreadable. An overlay `--local` rendered carries a ledger that
-    # records the file; one generated from a template carries none, and there the bytes a
-    # release shipped are the only evidence the file is stayfixed's.
-    #
-    # Mutations: `mutations/`'s "a retired overlay file the ledger records is kept" and "a
-    # retired overlay file holding the shipped bytes is kept".
+def test_upgrade_plans_nothing_for_a_formerly_retired_file(tmp_path: Path) -> None:
+    # `overlay upgrade` plans the shipped template files only: a file an earlier release shipped
+    # and this one does not is the owner's to delete, even holding the bytes drybag wrote.
     root = _an_overlay(tmp_path)
-    path = _with_the_shipped_memory_readme(root, ledger=ledger, text=SHIPPED_MEMORY_README)
+    (root / MANIFEST_PATH).unlink()
+    path = root / MEMORY_README
+    path.write_text(SHIPPED_MEMORY_README, encoding="utf-8")
     planned = upgrade(root, dry_run=True).plan
-    removed = [a for a in planned.actions if a.verb is Verb.REMOVE]
-    assert [a.target for a in removed] == [MEMORY_README]
-    # Non-vacuous: the dry run left it, and the real run takes it and keeps the new name.
-    assert path.is_file()
+    assert MEMORY_README not in {a.target for a in planned.actions}
     upgrade(root, dry_run=False)
-    assert not path.exists()
-    assert (root / "common" / "memory" / "_README.md").is_file()
-
-
-@pytest.mark.parametrize("ledger", [True, False], ids=["recorded", "no-ledger"])
-def test_an_edited_memory_readme_is_kept_and_the_report_says_what_to_do(
-    tmp_path: Path, ledger: bool
-) -> None:
-    # A copy that is not the shipped bytes may hold the owner's own words, and nothing else holds
-    # them, so it is never removed: the report names it and the way out, since the note reader
-    # still reads it as a note.
-    #
-    # Mutations: `mutations/`'s "a retired overlay file with no ledger is removed whatever it
-    # holds" and "a kept retired overlay file is named without its way out".
-    root = _an_overlay(tmp_path)
-    edited = SHIPPED_MEMORY_README + "\nMy own line.\n"
-    path = _with_the_shipped_memory_readme(root, ledger=ledger, text=edited)
-    planned = upgrade(root, dry_run=True).plan
-    kept = {a.target: a for a in planned.actions}[MEMORY_README]
-    assert kept.verb is Verb.SKIP_MODIFIED
-    assert "_README.md" in kept.reason
-    upgrade(root, dry_run=False)
-    assert path.read_text(encoding="utf-8") == edited
-
-
-def test_the_digest_held_for_the_retired_readme_is_the_shipped_files() -> None:
-    # The digest held for the file and the bytes it names, checked against each other. No
-    # mutation: a changed digest reddens the removal test above through the no-ledger case.
-    from stayfixed.overlay.template import retired
-
-    held = {template.id: template.shipped for template in retired()}[MEMORY_README]
-    assert held == frozenset({digest(SHIPPED_MEMORY_README)})
-
-
-@pytest.mark.parametrize("directory", [True, False], ids=["directory-there", "directory-gone"])
-def test_the_record_of_a_memory_readme_already_gone_is_dropped(
-    tmp_path: Path, directory: bool
-) -> None:
-    # The old memory README recorded in the ledger and already deleted: `upgrade` planned nothing
-    # for it, so its record stayed for good. It drops the record now, and writes `_README.md`.
-    # Mutation: `mutations/`'s "a retired record whose file is gone is kept for good".
-    root = _an_overlay(tmp_path)
-    successor = root / "common" / "memory" / "_README.md"
-    successor.unlink()
-    manifest = root / MANIFEST_PATH
-    document = json.loads(manifest.read_text(encoding="utf-8"))
-    del document["artifacts"]["common/memory/_README.md"]
-    manifest.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    _with_the_shipped_memory_readme(root, ledger=True, text=SHIPPED_MEMORY_README).unlink()
-    if not directory:
-        (root / "common" / "memory").rmdir()
-    upgrade(root, dry_run=False)
-    assert MEMORY_README not in json.loads(manifest.read_text(encoding="utf-8"))["artifacts"]
-    assert successor.is_file()
-
-
-# --- the template's own `attach` skill, and the README of a directory nothing read --------------
-
-# Every copy a release shipped of the two files, whole, taken from `git show <tag>:<path>` under
-# `src/stayfixed/templates/overlay/` and held here for the reason `SHIPPED_MEMORY_README` is: the
-# digests `overlay upgrade` removes these files by are checked against the files they name rather
-# than against themselves. The skill is the same bytes in 0.1.0, 0.1.1 and 0.2.0; the README
-# changed once, in 0.2.0, to say that nothing read its directory.
-SHIPPED_ATTACH_SKILL = (
-    "---\n"
-    "name: attach\n"
-    "description: Bind a repository to this private overlay and link its note store in. Use when a "
-    "session reports that a repository is not attached, or when the user asks to attach a clone to "
-    "their overlay.\n"
-    "---\n"
-    "\n"
-    "# Attaching a repository to this overlay\n"
-    "\n"
-    "1. Find the project's name — the `[project] name` in its `stayfixed.toml` — and check that\n"
-    "   `projects/<name>/` exists here. If it does not, this repository has not been bound yet "
-    "and\n"
-    "   the directory is created by the command below.\n"
-    "2. Run `stayfixed attach --store PATH --check` first, where `PATH` is this overlay's own\n"
-    "   `projects/<name>/memory`. It reports whether the record binds this repository's remote "
-    "and\n"
-    "   what permissions would change, and writes nothing. That path is the only one accepted;\n"
-    "   anything else is refused.\n"
-    "3. Relay that diff and wait for an answer. The command refuses to widen a permission without\n"
-    "   `--yes`, so this step is how a person comes to give it rather than what stands in for it.\n"
-    "   Once they agree, run the same command with `--yes` instead of `--check`, and relay what "
-    "it\n"
-    "   wrote.\n"
-    "4. Personal rules, notes and permissions live here and nowhere else. Never copy one into the\n"
-    "   project repository, and never widen a permission on the user's behalf.\n"
-)
-
-SHIPPED_RULES_README_0_1 = (
-    "# Personal standing rules\n"
-    "\n"
-    "One Markdown file per rule. These are yours: they hold across every project you work on, and\n"
-    "they reach a session at its start rather than being looked up, because by the time a rule\n"
-    "would be looked up the decision it governs has already been made.\n"
-    "\n"
-    "Rank a rule by giving it `startup` in its metadata. Ranked rules are injected first and are\n"
-    "the ones worth a session's attention budget; everything else waits to be asked for.\n"
-    "\n"
-    'Write a rule as an instruction, not as the story of the day you learned it. "Ask before\n'
-    'rewriting a migration" is a rule; "remember the incident in March" is a memory. If a rule '
-    "is\n"
-    "about one project only, it belongs in that project's directory under `projects/`, not here.\n"
-)
-
-SHIPPED_RULES_README_0_2 = (
-    "# Personal standing rules\n"
-    "\n"
-    "Nothing reads this directory yet. It is here because the layout reserves it, and a file you "
-    "put\n"
-    "here reaches no session.\n"
-    "\n"
-    "A personal standing rule is a note in `common/memory/` that carries `metadata.startup`, the\n"
-    "rank it is injected at:\n"
-    "\n"
-    "```\n"
-    "---\n"
-    "name: ask-before-rewriting-a-migration\n"
-    "description: one line saying what the rule is for\n"
-    "metadata:\n"
-    "  type: feedback\n"
-    "  startup: 1\n"
-    "---\n"
-    "\n"
-    "Ask before rewriting a migration.\n"
-    "```\n"
-    "\n"
-    "`stayfixed memory session-context --bundle standing-rules` injects every such note in full at "
-    "the\n"
-    "start of a session, lowest `startup` first, ahead of everything that is only looked up. The "
-    "rank\n"
-    "is what makes a rule worth a session's attention budget.\n"
-    "\n"
-    'Write a rule as an instruction, not as the story of the day you learned it. "Ask before\n'
-    'rewriting a migration" is a rule; "remember the incident in March" is a memory. If a rule '
-    "is\n"
-    "about one project only, it belongs in that project's `projects/<name>/memory/`, not here.\n"
-)
-# The hooks file the overlay fired while it was a plugin of its own, the same bytes from 0.1.0 to
-# 0.3.1. `attach` renders the overlay's hook entries from `common/claude/hooks.json` now, and
-# nothing reads this one.
-SHIPPED_PLUGIN_HOOKS = '{\n  "hooks": {}\n}\n'
-ATTACH_SKILL = "skills/attach/SKILL.md"
-RULES_README = "common/rules/README.md"
-PLUGIN_HOOKS = "hooks/hooks.json"
-RELEASED_COPIES = [
-    pytest.param(ATTACH_SKILL, SHIPPED_ATTACH_SKILL, "0.2.0", id="attach-skill"),
-    pytest.param(RULES_README, SHIPPED_RULES_README_0_1, "0.1.1", id="rules-readme-v0.1"),
-    pytest.param(RULES_README, SHIPPED_RULES_README_0_2, "0.2.0", id="rules-readme-v0.2.0"),
-    pytest.param(PLUGIN_HOOKS, SHIPPED_PLUGIN_HOOKS, "0.3.1", id="plugin-hooks"),
-]
-
-
-@pytest.mark.parametrize("ledger", [True, False], ids=["recorded", "no-ledger"])
-@pytest.mark.parametrize(("relative", "shipped", "version"), RELEASED_COPIES)
-def test_each_released_copy_of_a_retired_file_is_removed(
-    tmp_path: Path, relative: str, shipped: str, version: str, ledger: bool
-) -> None:
-    # The template shipped its own copy of the `attach` skill, a subset of the plugin's, which
-    # also covers detaching and a moved remote; and a README for `common/rules/`, a directory
-    # nothing read. Every overlay up to 0.2.0 carries both: recorded in the ledger where `--local`
-    # rendered it, unrecorded where a template generated it, and there the bytes a release
-    # shipped are the only evidence that a copy is stayfixed's. `overlay upgrade` removes them.
-    #
-    # The overlay's own `hooks/hooks.json`, which it fired as a plugin, went the same way when the
-    # overlay stopped being one.
-    #
-    # Mutation: `mutations/`'s "the rules README 0.2.0 shipped is kept where no ledger records
-    # it", "the rules README 0.1.x shipped is kept where no ledger records it", "the attach skill a
-    # release shipped is kept where no ledger records it" and "the plugin hooks file a release
-    # shipped is kept where no ledger records it", each dropping a digest held for the file. A
-    # recorded copy is removed by its record, so only the unrecorded case reddens.
-    root = _an_overlay(tmp_path)
-    path = _with_a_retired_file(
-        root, relative, ledger=ledger, text=shipped, shipped=shipped, version=version
-    )
-    planned = upgrade(root, dry_run=True).plan
-    assert [a.target for a in planned.actions if a.verb is Verb.REMOVE] == [relative]
-    # Non-vacuous: the dry run left it, and the real run takes it.
-    assert path.is_file()
-    upgrade(root, dry_run=False)
-    assert not path.exists()
-    manifest = root / MANIFEST_PATH
-    if ledger:
-        assert relative not in json.loads(manifest.read_text(encoding="utf-8"))["artifacts"]
-
-
-@pytest.mark.parametrize("ledger", [True, False], ids=["recorded", "no-ledger"])
-@pytest.mark.parametrize(
-    ("relative", "shipped", "remedy"),
-    [
-        pytest.param(
-            ATTACH_SKILL,
-            SHIPPED_ATTACH_SKILL,
-            "the plugin's own `attach` skill replaces it; delete this copy once you no longer "
-            "need your edits",
-            id="attach-skill",
-        ),
-        pytest.param(
-            RULES_README,
-            SHIPPED_RULES_README_0_2,
-            "a standing rule is a note with `metadata.startup`, so move your rules into such "
-            "notes and delete this copy",
-            id="rules-readme",
-        ),
-        pytest.param(
-            PLUGIN_HOOKS,
-            SHIPPED_PLUGIN_HOOKS,
-            "the overlay is no plugin any more and nothing reads this file; `stayfixed attach` "
-            "renders the hook entries in `common/claude/hooks.json`, so move yours there and "
-            "delete this copy",
-            id="plugin-hooks",
-        ),
-    ],
-)
-def test_an_edited_retired_file_is_kept_and_named(
-    tmp_path: Path, relative: str, shipped: str, remedy: str, ledger: bool
-) -> None:
-    # An owner may have written a skill of their own over the template's, or rules into the
-    # README, and nothing else holds those words: a copy that is not the bytes stayfixed wrote is
-    # left by `upgrade`, which names it with the way out. The verdict and the
-    # way out are the scaffold engine's, held by `mutations/`'s "a retired overlay file with no
-    # ledger is removed whatever it holds" and "a kept retired overlay file is named without its
-    # way out"; this holds that the three files reach them with a way out of their own, and
-    # `mutations/`'s "a kept attach skill is not told the plugin's own replaces it" breaks one.
-    root = _an_overlay(tmp_path)
-    edited = shipped + "\nMy own line.\n"
-    path = _with_a_retired_file(
-        root, relative, ledger=ledger, text=edited, shipped=shipped, version="0.2.0"
-    )
-    kept = {a.target: a for a in upgrade(root, dry_run=True).plan.actions}[relative]
-    assert kept.verb is Verb.SKIP_MODIFIED
-    assert remedy in kept.reason
-    upgrade(root, dry_run=False)
-    assert path.read_text(encoding="utf-8") == edited
-
-
-def test_retiring_a_file_removes_the_directories_it_leaves_empty(tmp_path: Path) -> None:
-    # Removing the template's `attach` skill and the rules README left `skills/attach/`,
-    # `skills/` and `common/rules/` behind, empty: git keeps no empty directory, so a clone never
-    # saw them, but a plugin added from the overlay's own path did. Each directory above a file the
-    # run removed goes once it is empty, up to the first that is not, which here is `common/`.
-    # Mutation (declared): `mutations/`'s "overlay upgrade leaves the directories a retirement
-    # empties".
-    root = _an_overlay(tmp_path)
-    for relative, text in (
-        (ATTACH_SKILL, SHIPPED_ATTACH_SKILL),
-        (RULES_README, SHIPPED_RULES_README_0_2),
-    ):
-        _with_a_retired_file(root, relative, ledger=True, text=text, shipped=text, version="0.2.0")
-    upgrade(root, dry_run=False)
-    assert not (root / ATTACH_SKILL).exists() and not (root / RULES_README).exists()
-    assert not (root / "skills").exists()
-    assert not (root / "common" / "rules").exists()
-    assert (root / "common" / "memory" / "_README.md").is_file()
-    assert root.is_dir()
-
-
-def test_a_directory_holding_the_owner_s_own_file_is_left(tmp_path: Path) -> None:
-    # `rmdir` refuses a directory with anything in it, which is the whole safety of the walk: a
-    # file of the owner's beside the retired one keeps its directory and every one above it.
-    # No mutation: what holds this is the kernel's refusal, not a line of the walk.
-    root = _an_overlay(tmp_path)
-    _with_a_retired_file(
-        root,
-        ATTACH_SKILL,
-        ledger=True,
-        text=SHIPPED_ATTACH_SKILL,
-        shipped=SHIPPED_ATTACH_SKILL,
-        version="0.2.0",
-    )
-    mine = root / "skills" / "attach" / "notes.md"
-    mine.write_text("mine\n", encoding="utf-8")
-    upgrade(root, dry_run=False)
-    assert not (root / ATTACH_SKILL).exists()
-    assert mine.read_text(encoding="utf-8") == "mine\n"
-
-
-def test_an_empty_directory_no_file_was_removed_from_is_left(tmp_path: Path) -> None:
-    # A record whose file is already gone is still a removal the engine plans, one that unlinks
-    # nothing. The directories above it held no file of stayfixed's when the run began, so
-    # emptying them is not this run's doing: a person may have made them, and they stay.
-    # Mutation (declared): `mutations/`'s "overlay upgrade prunes above a file that was not
-    # there".
-    root = _an_overlay(tmp_path)
-    old = ".stayfixed/local/artifacts/skills/attach/SKILL.md"
-    _with_a_retired_file(
-        root,
-        ATTACH_SKILL,
-        ledger=True,
-        text=SHIPPED_ATTACH_SKILL,
-        shipped=SHIPPED_ATTACH_SKILL,
-        version="0.2.0",
-    )
-    (root / ATTACH_SKILL).unlink()
-    manifest = root / MANIFEST_PATH
-    document = json.loads(manifest.read_text(encoding="utf-8"))
-    document["artifacts"][ATTACH_SKILL]["target"] = old
-    manifest.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    made = (root / old).parent
-    made.mkdir(parents=True)
-    planned = upgrade(root, dry_run=True).plan
-    assert [a.target for a in planned.actions if a.verb is Verb.REMOVE] == [old]
-    upgrade(root, dry_run=False)
-    assert made.is_dir()
-
-
-def test_an_overlay_without_the_retired_files_plans_nothing(tmp_path: Path) -> None:
-    # A fresh overlay carries neither file, and an overlay an upgrade has cleared of them has
-    # nothing left to remove: run again, `overlay upgrade` plans no action. Mutation (declared):
-    # `mutations/`'s "a retired overlay file that is absent is planned for removal" -> the first
-    # plan's assertion reddens. The engine's removal and record-dropping paths are the set's
-    # other retirement entries.
-    #
-    # Nor does it list a retired file that is gone and unrecorded among the unchanged: every
-    # run after the one that removed them told the owner that the files the release notes say
-    # were removed are "unchanged", and counted them, and so did a fresh overlay's first run.
-    # Mutation (declared): `mutations/`'s "a retired file that is gone and unrecorded is
-    # reported unchanged" -> both `unchanged` assertions redden.
-    gone = {template.id for template in retired()}
-    root = _an_overlay(tmp_path)
-    for relative in (ATTACH_SKILL, RULES_README):
-        assert not (root / relative).exists(), relative
-    fresh = upgrade(root, dry_run=True).plan
-    assert fresh.actions == ()
-    assert gone.isdisjoint(fresh.unchanged), fresh.unchanged
-    _with_a_retired_file(
-        root,
-        ATTACH_SKILL,
-        ledger=True,
-        text=SHIPPED_ATTACH_SKILL,
-        shipped=SHIPPED_ATTACH_SKILL,
-        version="0.2.0",
-    )
-    _with_a_retired_file(
-        root,
-        RULES_README,
-        ledger=True,
-        text=SHIPPED_RULES_README_0_2,
-        shipped=SHIPPED_RULES_README_0_2,
-        version="0.2.0",
-    )
-    upgrade(root, dry_run=False)
-    again = upgrade(root, dry_run=True).plan
-    assert again.actions == ()
-    assert gone.isdisjoint(again.unchanged), again.unchanged
+    assert path.read_text(encoding="utf-8") == SHIPPED_MEMORY_README

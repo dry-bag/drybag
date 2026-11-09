@@ -1,5 +1,5 @@
 name: Feature request
-description: Something stayfixed should do and does not
+description: Something drybag should do and does not
 labels: ["enhancement"]
 body:
   - type: textarea
@@ -21,6 +21,6 @@ body:
     id: alternatives
     attributes:
       label: What you tried instead
-      description: Existing commands, configuration, or a workaround outside stayfixed.
+      description: Existing commands, configuration, or a workaround outside drybag.
     validations:
       required: false

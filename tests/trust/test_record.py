@@ -1,6 +1,5 @@
-"""The machine's one trust record (`src/stayfixed/trust/record.py`): a versioned document of kinds
-and subjects beside the machine file, which reads the flat map `0.3.x` wrote as holding no approval
-and which `0.3.x` reads the same way."""
+"""The machine's one trust record (`src/drybag/trust/record.py`): a versioned document of kinds
+and subjects beside the machine file."""
 
 from __future__ import annotations
 
@@ -12,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed import fsops
-from stayfixed.config.machine import machine_config_path
-from stayfixed.errors import Failure
-from stayfixed.jsonobject import LONG_NUMBER, NESTED
-from stayfixed.trust.record import (
+from drybag import fsops
+from drybag.config.machine import machine_config_path
+from drybag.errors import Failure
+from drybag.jsonobject import LONG_NUMBER, NESTED
+from drybag.trust.record import (
     LATER_VERSION,
     NO_HOME,
     NOT_A_RECORD,
@@ -28,7 +27,6 @@ from stayfixed.trust.record import (
     approve_all,
     record_path,
     recorded,
-    revoke_all,
 )
 from tests import parserlimits
 
@@ -37,44 +35,25 @@ T0 = datetime(2026, 10, 16, 9, 30, tzinfo=UTC)
 APPROVAL = {"kind": "memory", "subject": "/s", "digest": "d", "approved_at": ""}
 
 
-def legacy_reader(path: Path) -> dict[str, str]:
-    """`0.3.0`'s reader of the record, copied as a literal: its filter keeps the entries whose
-    value is a string, which is every approval it can interpret."""
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    return {k: v for k, v in raw.items() if isinstance(v, str)}
-
-
 def machine(tmp_path: Path) -> Path:
     return tmp_path / "config.toml"
 
 
-def test_a_0_3_record_holds_no_approval_and_the_first_write_replaces_it(tmp_path: Path) -> None:
-    # Every entry of `0.3.x`'s flat map approved a whole store, which nothing asks about since,
-    # so an upgrade reads none of them and is never refused over the file it left; the first write
-    # is a version-1 record of what this release approved.
-    (tmp_path / RECORD).write_text(json.dumps({"/s": "d", "/t": "e"}), encoding="utf-8")
-    assert recorded(machine(tmp_path)) == {}
-    approve_all(machine(tmp_path), "reviewed", {"/n": "e"}, now=T0)
-    written = json.loads((tmp_path / RECORD).read_text(encoding="utf-8"))
-    assert written == {
-        "version": VERSION,
-        "approvals": [
-            {
-                "kind": "reviewed",
-                "subject": "/n",
-                "digest": "e",
-                "approved_at": "2026-10-16T09:30:00+00:00",
-            }
-        ],
-    }
-
-
-def test_0_3_0s_reader_sees_no_approval_in_a_version_1_record(tmp_path: Path) -> None:
-    # Downgrading: a `0.3.0` reading the record this release wrote reads no approval and asks again,
-    # never a stale one. No mutation of the source reaches it — it is a property of the record's
-    # shape against a reader frozen in `0.3.0` — so the shape is held exactly in the test above.
-    approve_all(machine(tmp_path), "memory", {"/s": "d"}, now=T0)
-    assert legacy_reader(tmp_path / RECORD) == {}
+def test_a_flat_map_with_no_version_is_refused_and_kept(tmp_path: Path) -> None:
+    # A flat map of paths to digests is no version-1 record, so it refuses as any other non-record
+    # does; read as empty, the next write would replace it.
+    path = tmp_path / RECORD
+    document = json.dumps({"/s": "d", "/t": "e"})
+    path.write_text(document, encoding="utf-8")
+    with pytest.raises(UnreadableTrust) as caught:
+        recorded(machine(tmp_path))
+    assert str(caught.value) == (
+        f"{path} is not a version-1 trust record, and nothing here will overwrite it; repair it "
+        "if it holds approvals you want to keep, or delete it to start a new record"
+    )
+    with pytest.raises(UnreadableTrust):
+        approve_all(machine(tmp_path), "reviewed", {"/n": "e"}, now=T0)
+    assert path.read_text(encoding="utf-8") == document
 
 
 @pytest.mark.parametrize(
@@ -123,13 +102,11 @@ def test_an_unreadable_record_refuses_and_is_never_overwritten(
 ) -> None:
     # Each arm of the version-1 reader has a case of its own: every other version-1 record in the
     # suite is one `approve_all` wrote, and it can write none of these. Only a version above this
-    # one sends its reader to a later stayfixed, and an object holding `approvals` is never
-    # `0.3.0`'s flat map. Mutations (`mutations/`'s "a trust record of a later version is read as
-    # empty" -> version 2 reads as no approval and the write replaces it; "a trust record of any
-    # other version is sent to a later stayfixed" -> `bool`, `version-0`, `negative` and `text` say
-    # `LATER_VERSION`; "a trust record with approvals and no version reads as 0.3.0's flat map" ->
-    # `no-version` reads as no approval and the next write erases it; "an approval over an
-    # unreadable trust record writes the record anyway" -> the write replaces every case; "a trust
+    # one sends its reader to a later drybag. Mutations (`mutations/`'s "a trust record of a
+    # later version is read as empty" -> version 2 reads as no approval and the write replaces it;
+    # "a trust record of any other version is sent to a later drybag" -> `bool`, `version-0`,
+    # `negative` and `text` say `LATER_VERSION`; "an approval over an unreadable trust record
+    # writes the record anyway" -> the write replaces every case; "a trust
     # record's approvals that are not a list read as none" -> `approvals-not-a-list` reads as no
     # approval; "a trust record with a stray key is read" -> `stray-key` reads; "a trust record's
     # digest that is not a string is read" -> `digest-not-a-string` reads as a lapsed approval; "a
@@ -144,8 +121,6 @@ def test_an_unreadable_record_refuses_and_is_never_overwritten(
         assert str(caught.value) == sentence.format(path=path)
     with pytest.raises(UnreadableTrust):
         approve_all(machine(tmp_path), "memory", {"/s": "d"}, now=T0)
-    with pytest.raises(UnreadableTrust):
-        revoke_all(machine(tmp_path), "memory", ["/s"])
     assert path.read_text(encoding="utf-8") == document
 
 
@@ -197,20 +172,6 @@ def test_two_kinds_never_share_a_subject(tmp_path: Path) -> None:
         ("memory", "/s"): "d",
         ("other", "/s"): "e",
     }
-    assert revoke_all(machine(tmp_path), "other", ["/s"]) == ["/s"]
-    assert list(recorded(machine(tmp_path))) == [("memory", "/s")]
-
-
-def test_revoke_of_nothing_says_so(tmp_path: Path) -> None:
-    # False, and the file is not rewritten. Mutation (`mutations/`'s "a revoke of nothing rewrites
-    # the trust record"): the file is replaced with the same approvals, under a new inode.
-    approve_all(machine(tmp_path), "memory", {"/s": "d"}, now=T0)
-    path = tmp_path / RECORD
-    before = (path.read_bytes(), path.stat().st_ino)
-    assert revoke_all(machine(tmp_path), "memory", ["/elsewhere"]) == []
-    assert (path.read_bytes(), path.stat().st_ino) == before
-    assert revoke_all(machine(tmp_path), "memory", ["/s"]) == ["/s"]
-    assert recorded(machine(tmp_path)) == {}
 
 
 def test_no_record_at_all_holds_no_approval(tmp_path: Path) -> None:
@@ -223,8 +184,8 @@ def test_the_record_ignores_xdg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     # The record beside the machine file is under `HOME`, whatever `XDG_CONFIG_HOME` says.
     monkeypatch.setenv("HOME", str(tmp_path / "owner"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-    assert machine_config_path() == tmp_path / "owner" / ".config" / "stayfixed" / "config.toml"
-    assert record_path(None) == tmp_path / "owner" / ".config" / "stayfixed" / RECORD
+    assert machine_config_path() == tmp_path / "owner" / ".config" / "drybag" / "config.toml"
+    assert record_path(None) == tmp_path / "owner" / ".config" / "drybag" / RECORD
     assert record_path(machine(tmp_path)) == tmp_path / RECORD
     # No home: no record, and nothing to fall back on.
     monkeypatch.setenv("HOME", "")
@@ -243,9 +204,9 @@ def test_a_record_past_the_parser_is_refused_and_never_overwritten(
     # past what it follows raises `RecursionError`, and an integer longer than the interpreter
     # converts (4,300 digits by default) a plain `ValueError`. The reader caught only the first
     # kind, so a write ended in an internal error quoting the interpreter, where a record it cannot
-    # read is refused in the record's own sentence: it holds every project's approval, and nothing
-    # overwrites it. Mutation (oracle): `mutations/`'s "the trust record's reader lets a document
-    # past the parser escape" -> the internal error comes back and both cases redden.
+    # read is refused in the record's own sentence: it holds every project's approval, and
+    # nothing overwrites it. Mutation (oracle): `mutations/`'s "the trust record's reader lets a
+    # document past the parser escape" -> the internal error comes back and both cases redden.
     path = tmp_path / RECORD
     path.write_text(document, encoding="utf-8")
     with pytest.raises(UnreadableTrust) as caught:
@@ -309,7 +270,7 @@ def test_a_home_that_cannot_be_written_fails_naming_the_directory(
     finally:
         locked.chmod(0o755)
     assert not isinstance(failed.value, SandboxedWrite)
-    assert str(failed.value).startswith(f"{locked / '.config' / 'stayfixed'} cannot be written")
+    assert str(failed.value).startswith(f"{locked / '.config' / 'drybag'} cannot be written")
 
 
 @pytest.mark.parametrize(
@@ -355,8 +316,8 @@ def test_the_sandbox_sentence_says_what_a_person_in_their_own_terminal_meets() -
     # immutable flag answers a person already in their own terminal, whom the sentence would
     # otherwise send there again. Mutation (`mutations/`'s "the sandbox sentence sends a person in
     # their own terminal there again"): the sentence ends at the sandbox.
-    from stayfixed.trust.boundary import OWN_TERMINAL_TOO
-    from stayfixed.trust.record import SANDBOXED
+    from drybag.trust.boundary import OWN_TERMINAL_TOO
+    from drybag.trust.record import SANDBOXED
 
     assert SANDBOXED.endswith(OWN_TERMINAL_TOO)
 
@@ -383,27 +344,6 @@ def test_every_subject_of_a_kind_is_approved_in_one_write(
         ("memory", "/a"): "new",
         ("memory", "/b"): "d",
     }
-
-
-def test_every_subject_of_a_kind_is_revoked_in_one_write(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Withdrawn as `approve_all` approves: one replacement of the record whatever the number of
-    # subjects, answering those that had an approval in the order given, and leaving the rest.
-    # Mutation (`mutations/`'s "revoking a kind writes the record once per subject"): two writes.
-    machine = tmp_path / "config.toml"
-    approve_all(machine, "memory", {"/a": "d", "/b": "e", "/c": "f"}, now=T0)
-    writes: list[Path] = []
-    real = fsops.write_atomically
-
-    def counting(path: Path, text: str) -> None:
-        writes.append(path)
-        real(path, text)
-
-    monkeypatch.setattr(fsops, "write_atomically", counting)
-    assert revoke_all(machine, "memory", ["/b", "/x", "/a"]) == ["/b", "/a"]
-    assert writes == [tmp_path / RECORD]
-    assert list(recorded(machine)) == [("memory", "/c")]
 
 
 def test_approving_no_subject_writes_nothing(tmp_path: Path) -> None:
@@ -452,10 +392,10 @@ def test_a_record_linked_into_a_directory_that_cannot_be_written_names_that_dire
     assert str(failed.value).startswith(f"{leads_to.parent} cannot be written (")
 
 
-def test_a_later_records_refusal_sends_its_reader_to_a_later_stayfixed() -> None:
-    # A record a later stayfixed wrote is met after a downgrade, where deleting it would destroy
-    # that release's approvals: the remedy is updating stayfixed, never deleting the file. No
+def test_a_later_records_refusal_sends_its_reader_to_a_later_drybag() -> None:
+    # A record a later drybag wrote is met after a downgrade, where deleting it would destroy
+    # that release's approvals: the remedy is updating drybag, never deleting the file. No
     # mutation of its own: the refusal is a constant, asserted whole by the unreadable-record cases
     # above.
-    assert LATER_VERSION.endswith("update stayfixed to read it")
+    assert LATER_VERSION.endswith("update drybag to read it")
     assert "delete" not in LATER_VERSION

@@ -1,6 +1,6 @@
-"""The outbound walk: every process stayfixed's package starts, found in the package's syntax.
+"""The outbound walk: every process drybag's package starts, found in the package's syntax.
 
-`tests/test_outbound.py` holds README.md's "What stayfixed sends where" to what this walk finds,
+`tests/test_outbound.py` holds README.md's "What drybag sends where" to what this walk finds,
 and this docstring is the one description of what it sees and what it cannot.
 
 **What it finds.** A *launch* is a call that starts a process, a launcher named without being
@@ -46,8 +46,7 @@ return nothing:
 - aliasing: a launcher named as `Annotated` metadata, which code reading the annotation could
   call;
 - values computed at run time: an argv element held in a variable is `Unread`, and the walk
-  does not follow where its value came from, so `sh -c` handed a script the package builds from
-  strings (`" ".join(["curl", url])`) is taken for the user's command, the `sh -c` row's;
+  does not follow where its value came from;
 - launches and connections the standard library makes on the package's behalf, at import or
   when called: `uuid.getnode()` can run `ifconfig`, `platform.architecture()` runs `file`,
   `xml.sax` fetches an external entity through `urllib.request`, `pydoc.browse` serves HTTP and
@@ -71,10 +70,10 @@ from functools import cache, cached_property
 from pathlib import Path
 from typing import TypeAlias
 
-from stayfixed.runner import Runner
+from drybag.runner import Runner
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "src" / "stayfixed"
+SRC = ROOT / "src" / "drybag"
 
 
 @dataclass(frozen=True)
@@ -344,8 +343,8 @@ def _module_file(module: str) -> str | None:
     """The package file that defines `module`, relative to the root, or `None` for any other.
 
     Looked up among the names the tree lists rather than asked of the disk: a disk that folds case,
-    as macOS's does by default, finds `scaffold/manifest.py` for `stayfixed.scaffold.Manifest`, and
-    the class `Manifest` imported from `stayfixed.scaffold` read as that module there and as a
+    as macOS's does by default, finds `scaffold/manifest.py` for `drybag.scaffold.Manifest`, and
+    the class `Manifest` imported from `drybag.scaffold` read as that module there and as a
     name everywhere else."""
     stem = module.replace(".", "/")
     for candidate in (f"src/{stem}.py", f"src/{stem}/__init__.py"):
@@ -413,8 +412,8 @@ def _resolved(
     names: Bindings, name: str, seen: frozenset[tuple[str, str]] = frozenset()
 ) -> Bindings:
     """What `name` is, bound as `name`: a name a package module only imports is what it imports
-    there, followed to the module that defines it, so `from stayfixed.memory.refs import
-    git_run` is `gitenv`'s `git_run`, which `refs` imports."""
+    there, followed to the module that defines it, so `from drybag.docs.trail import
+    git_run` is `gitenv`'s `git_run`, which `trail` imports."""
     resolved = Bindings(names.file, {}, {}, {})
     if name in names.stdlib:
         resolved.stdlib[name] = names.stdlib[name]

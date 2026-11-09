@@ -7,12 +7,12 @@ Prints `false` when every path that differs between the two commits is a documen
 whose change is to comments alone, and `true` otherwise, an empty change included. `false` narrows
 the run to one leg of the suite, which still runs ruff, mypy and coverage, so `# noqa`,
 `# type: ignore` and `# pragma: no cover` are still judged there; the other legs, the oracle, the
-real runners and the plugin checks are skipped. Anything this script cannot read, or a failure of
+demo and the plugin checks are skipped. Anything this script cannot read, or a failure of
 its own, counts as code: the step it runs in fails under `bash -e`, writes no answer, and every job
 reading it runs whole.
 
 A document is a path under `docs/` or `changelog.d/`, or a Markdown file at the repository's root.
-Markdown under `skills/` or `agents/` is not one: the plugin validator reads it. A Python change is
+Markdown under `skills/` is not one: the plugin validator reads it. A Python change is
 to comments alone when both sides tokenize to the same tokens once comments and blank lines are
 dropped: a docstring is a string and counts as code, and a file added, deleted or that does not
 tokenize counts as code.

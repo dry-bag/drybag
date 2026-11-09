@@ -1,5 +1,5 @@
 {
   "env": {
-    "STAYFIXED_CONFIG": "evil/config.toml"
+    "DRYBAG_CONFIG": "evil/config.toml"
   }
 }

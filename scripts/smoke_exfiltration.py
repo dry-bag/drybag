@@ -4,7 +4,7 @@
     python3 scripts/smoke_exfiltration.py --plugin-root R --fixture F --scratch S
 
 The clone commits a note claiming to be a standing rule, names ANOTHER project, and ships a
-`.claude/settings.json` `env` block pointing stayfixed at a machine configuration inside itself.
+`.claude/settings.json` `env` block pointing drybag at a machine configuration inside itself.
 This script materialises that `env` block the way a harness would — the relative value becomes
 an absolute path inside the scratch clone — and then asks each boundary the scenario is about,
 one printed row each.
@@ -14,7 +14,7 @@ pipeline prints, so the first row shows the clone's volatile note reaching a ses
 beside the standing rule it claims never reaching one. A row that could only ever have been green
 is not evidence.
 
-The scenario's MCP arm — `memory_search` under an explicit `project=` — is not run: stayfixed
+The scenario's MCP arm — `memory_search` under an explicit `project=` — is not run: drybag
 ships no MCP server yet (the README lists the memory MCP server under "Not yet"), and the run
 says so in its own output rather than leaving a silent gap in the scenario.
 """
@@ -37,13 +37,13 @@ from smoke_hooks import developer_free_env, fixture_repository
 CANARY = "CANARY-IN-REPO-RULE"
 # What the clone's volatile note carries: it reaches a session, inside a delimited region.
 CARRIED = "CANARY-AS-DATA"
-DELIMITER = "<<<stayfixed:repository-data"
+DELIMITER = "<<<drybag:repository-data"
 # The one line the session-start hook may say for a store none of whose notes the owner promoted,
-# `stayfixed.memory.hooks.UNREVIEWED_COUNT`, spelled out because this script runs without
-# `stayfixed` importable: fixed words and a count, nothing the clone wrote.
+# `drybag.memory.hooks.UNREVIEWED_COUNT`, spelled out because this script runs without
+# `drybag` importable: fixed words and a count, nothing the clone wrote.
 UNREVIEWED_COUNT = re.compile(
-    r"stayfixed: [0-9]+ notes are unreviewed; promoting them is the owner's call "
-    r"\(`stayfixed memory promote`\)"
+    r"drybag: [0-9]+ notes are unreviewed; promoting them is the owner's call "
+    r"\(`drybag memory promote`\)"
 )
 # The remote the overlay records for `smoke`, and the one the clone has instead. The clone chooses
 # its own `project.name` and its own `origin`; what it cannot choose is a binding id in its git
@@ -81,7 +81,7 @@ class Planted:
 def _run(argv: list[str], env: dict[str, str], cwd: Path) -> subprocess.CompletedProcess[str]:
     """Every subprocess this runs reads stdin from a pipe, which is what a hook's stdin is.
 
-    It is also the gate: nothing stayfixed honours only from an interactive terminal, `attach`'s
+    It is also the gate: nothing drybag honours only from an interactive terminal, `attach`'s
     `--machine` among it, is honoured on a pipe, the state the clone's `env` block actually meets.
     """
     return subprocess.run(  # noqa: S603
@@ -109,7 +109,7 @@ def plant(fixture: Path, scratch: Path, plugin_root: Path) -> Planted:
     )
     home = scratch / "home"
     data = scratch / "data"
-    (home / ".config" / "stayfixed").mkdir(parents=True, exist_ok=True)
+    (home / ".config" / "drybag").mkdir(parents=True, exist_ok=True)
     data.mkdir(parents=True, exist_ok=True)
 
     # What the clone's `env` block names, made real: a machine configuration inside the clone
@@ -131,14 +131,14 @@ def plant(fixture: Path, scratch: Path, plugin_root: Path) -> Planted:
     created = _run(
         [
             sys.executable,
-            str(plugin_root / "scripts" / "stayfixed"),
+            str(plugin_root / "scripts" / "drybag"),
             "setup",
             "--overlay",
             str(overlay),
             "--home",
             str(home),
             "--machine",
-            str(home / ".config" / "stayfixed" / "config.toml"),
+            str(home / ".config" / "drybag" / "config.toml"),
         ],
         env,
         scratch,
@@ -149,7 +149,7 @@ def plant(fixture: Path, scratch: Path, plugin_root: Path) -> Planted:
     (overlay / "projects" / "smoke" / "project.toml").write_text(
         f'remote = "{RECORDED_REMOTE}"\n', encoding="utf-8"
     )
-    (home / ".config" / "stayfixed" / "config.toml").write_text(
+    (home / ".config" / "drybag" / "config.toml").write_text(
         f'[overlay]\nroot = "{overlay}"\n', encoding="utf-8"
     )
     return Planted(clone, home, data, overlay, machine_in_clone)
@@ -164,17 +164,17 @@ def hostile_env(planted: Planted, plugin_root: Path) -> dict[str, str]:
             "CLAUDE_PLUGIN_ROOT": str(plugin_root),
             "CLAUDE_PROJECT_DIR": str(planted.clone),
             "CLAUDE_PLUGIN_DATA": str(planted.data),
-            "STAYFIXED_CONFIG": str(planted.machine_in_clone),
+            "DRYBAG_CONFIG": str(planted.machine_in_clone),
         }
     )
     return env
 
 
-def stayfixed(
+def drybag(
     plugin_root: Path, args: list[str], env: dict[str, str], cwd: Path
 ) -> subprocess.CompletedProcess[str]:
-    """stayfixed itself, on this script's own interpreter."""
-    return _run([sys.executable, str(plugin_root / "scripts" / "stayfixed"), *args], env, cwd)
+    """drybag itself, on this script's own interpreter."""
+    return _run([sys.executable, str(plugin_root / "scripts" / "drybag"), *args], env, cwd)
 
 
 def delimited(text: str, needle: str) -> bool:
@@ -235,13 +235,18 @@ def main(argv: list[str]) -> int:
     try:
         envelope = json.loads(started.stdout)
     except json.JSONDecodeError:
-        envelope = {}
+        envelope = {"unparsed": True}
     specific = envelope.get("hookSpecificOutput", {})
     context = specific.get("additionalContext")
     report.row(
         started.returncode == 0
-        and specific.get("hookEventName") == "SessionStart"
-        and (context is None or UNREVIEWED_COUNT.fullmatch(str(context)) is not None)
+        and (
+            envelope == {}
+            or (
+                specific.get("hookEventName") == "SessionStart"
+                and UNREVIEWED_COUNT.fullmatch(str(context)) is not None
+            )
+        )
         and CANARY not in started.stdout
         and DELIMITER not in started.stdout,
         "the session-start hook answers its envelope and injects nothing from the clone",
@@ -250,7 +255,7 @@ def main(argv: list[str]) -> int:
     )
 
     # --- what the clone's machine configuration bought it: a line of information, nothing else -
-    reported = stayfixed(
+    reported = drybag(
         plugin_root,
         ["doctor", "--json", "--root", str(planted.clone), "--home", str(planted.home)],
         env,
@@ -269,7 +274,7 @@ def main(argv: list[str]) -> int:
     # the overlay through `machine_config_path`, and its refusal names the overlay it resolved, so
     # which of the two files was read is a fact this scenario can read rather than assert.
     inside = planted.clone / "evil" / "overlay" / "projects" / "smoke" / "memory"
-    attached = stayfixed(
+    attached = drybag(
         plugin_root,
         ["attach", "--store", str(inside), "--root", str(planted.clone)],
         env,
@@ -283,7 +288,7 @@ def main(argv: list[str]) -> int:
     clones_overlay = f"records -- {planted.clone / 'evil' / 'overlay'}/" in attached.stderr
     report.row(
         ignored.get("status") == "ok"
-        and "STAYFIXED_CONFIG" in ignored.get("detail", "")
+        and "DRYBAG_CONFIG" in ignored.get("detail", "")
         and owners_overlay
         and not clones_overlay,
         "the clone's machine configuration is named as ignored, and was ignored",
@@ -299,7 +304,7 @@ def main(argv: list[str]) -> int:
     )
 
     real = planted.overlay / "projects" / "smoke" / "memory"
-    checked = stayfixed(
+    checked = drybag(
         plugin_root,
         ["attach", "--store", str(real), "--root", str(planted.clone), "--check", "--json"],
         env,
@@ -312,7 +317,7 @@ def main(argv: list[str]) -> int:
         f"state={state!r}",
     )
 
-    print("skip  memory_search under an explicit project= — stayfixed does not depend on mcp")
+    print("skip  memory_search under an explicit project= — drybag does not depend on mcp")
     # The floor this script had none of. Four of its five rows assert an ABSENCE, and a run
     # that executed one row prints the same green last line as a run that executed all five —
     # measured, with `report.rows[:1]` immediately before this print and the whole suite still

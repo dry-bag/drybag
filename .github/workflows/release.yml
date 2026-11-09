@@ -53,8 +53,8 @@ jobs:
       - name: Install
         run: uv sync --locked
       - name: Version discipline, against the tag
-        # The tag is the claim; the seven sources, the changelog and the hash record are what
-        # the claim has to agree with, and `scripts/release.py check --tag` holds all of them. A
+        # The tag is the claim; the seven sources and the changelog are what the claim has to
+        # agree with, and `scripts/release.py check --tag` holds all of them. A
         # tag that names a version no source carries is the one release mistake PyPI will not let
         # you undo. It also refuses a plugin tree over the plugin directory's file count, which
         # `tests/test_payload.py` holds on every pull request as well, and a marketplace entry
@@ -115,7 +115,7 @@ jobs:
             --require-pin --json > "$RUNNER_TEMP/plugin-commit.json" \
             || { cat "$RUNNER_TEMP/plugin-commit.json" >&2; exit 1; }
           commit="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["commit"])' "$RUNNER_TEMP/plugin-commit.json")"
-          # The script prints no other shape, so no test reaches this; `tests/test_check_workflow.py`
+          # The script prints no other shape, so no test reaches this; `tests/test_workflows.py`
           # holds its pattern to the scripts'.
           if ! [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::plugin_tree.py commit named no plugin commit: '$commit'"
@@ -203,7 +203,7 @@ jobs:
   # each line is selected by its whole ref name, because `ls-remote` matches a pattern against
   # the tail of a name and so also lists `refs/tags/x/refs/tags/vX.Y.Z`; the `^{}` line, when
   # the tag is annotated, is the commit it names. A step in each gated job and not a job of its
-  # own, which would ask for a second approval; `tests/test_check_workflow.py` holds the two
+  # own, which would ask for a second approval; `tests/test_workflows.py` holds the two
   # copies equal. No credential: the plugin repository is public.
   publish:
     needs: [build, environment-gate, attest]
@@ -222,8 +222,8 @@ jobs:
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
-            echo "::error::stayfixed/stayfixed-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
+            echo "::error::dry-bag/drybag-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
             exit 1
           }
           tagged=""
@@ -236,10 +236,10 @@ jobs:
           done <<< "$listing"
           found="${peeled:-$tagged}"
           if ! [[ "$PINNED" =~ ^[0-9a-f]{40}$ ]] || [ "$found" != "$PINNED" ]; then
-            echo "::error::stayfixed/stayfixed-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
+            echo "::error::dry-bag/drybag-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
             exit 1
           fi
-          echo "stayfixed/stayfixed-plugin's $TAG is the plugin commit this release pins, $PINNED"
+          echo "dry-bag/drybag-plugin's $TAG is the plugin commit this release pins, $PINNED"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dist
@@ -262,8 +262,8 @@ jobs:
           TAG: ${{ github.ref_name }}
           PINNED: ${{ needs.attest.outputs.commit }}
         run: |
-          listing="$(git ls-remote https://github.com/stayfixed/stayfixed-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
-            echo "::error::stayfixed/stayfixed-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
+          listing="$(git ls-remote https://github.com/dry-bag/drybag-plugin.git "refs/tags/$TAG" "refs/tags/$TAG^{}")" || {
+            echo "::error::dry-bag/drybag-plugin could not be listed; re-run this job, or see RELEASING.md section 2, step 7"
             exit 1
           }
           tagged=""
@@ -276,10 +276,10 @@ jobs:
           done <<< "$listing"
           found="${peeled:-$tagged}"
           if ! [[ "$PINNED" =~ ^[0-9a-f]{40}$ ]] || [ "$found" != "$PINNED" ]; then
-            echo "::error::stayfixed/stayfixed-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
+            echo "::error::dry-bag/drybag-plugin's $TAG names ${found:-no commit}, not the plugin commit '$PINNED' this release pins: publish it as RELEASING.md section 2, step 7 says, then re-run this job"
             exit 1
           fi
-          echo "stayfixed/stayfixed-plugin's $TAG is the plugin commit this release pins, $PINNED"
+          echo "dry-bag/drybag-plugin's $TAG is the plugin commit this release pins, $PINNED"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         # For `CHANGELOG.md` alone. `gh release create` authenticates with `GH_TOKEN`, so the
         # job's `contents: write` token is not left in `.git/config` for the steps after this.
@@ -311,4 +311,4 @@ jobs:
         # against the file this run attested.
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --title "stayfixed ${GITHUB_REF_NAME#v}" --notes-file "$RUNNER_TEMP/notes.md" dist/* "$RUNNER_TEMP/plugin-tree/plugin-tree.txt"
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --title "drybag ${GITHUB_REF_NAME#v}" --notes-file "$RUNNER_TEMP/notes.md" dist/* "$RUNNER_TEMP/plugin-tree/plugin-tree.txt"

@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.machine import machine_config_path, owner_home
+from drybag.config.machine import machine_config_path, owner_home
 
 
 @pytest.mark.parametrize(
     "variables",
     [
-        {"STAYFIXED_CONFIG": "hostile.toml", "XDG_CONFIG_HOME": "hostile-dir"},
+        {"DRYBAG_CONFIG": "hostile.toml", "XDG_CONFIG_HOME": "hostile-dir"},
         {"XDG_CONFIG_HOME": "hostile-dir"},
     ],
     ids=["both", "xdg-alone"],
@@ -19,8 +19,8 @@ def test_no_variable_moves_the_machine_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, variables: dict[str, str]
 ) -> None:
     # Both variables reach the same file, so the assertion is the *fallback* path and not the
-    # one either variable chose. Asserting `tmp_path / "stayfixed" / "config.toml"` here — the
-    # location `XDG_CONFIG_HOME` picks — is what let the gate on `STAYFIXED_CONFIG` pass while
+    # one either variable chose. Asserting `tmp_path / "drybag" / "config.toml"` here — the
+    # location `XDG_CONFIG_HOME` picks — is what let the gate on `DRYBAG_CONFIG` pass while
     # its ungated sibling three lines below honoured the repository's choice anyway. The variable
     # on its own costs a repository a path segment and nothing else, so it is a case alone.
     # Mutation (oracle): `mutations/`'s "the machine path honours XDG_CONFIG_HOME again".
@@ -28,7 +28,7 @@ def test_no_variable_moves_the_machine_file(
     monkeypatch.setenv("HOME", str(home))
     for name, value in variables.items():
         monkeypatch.setenv(name, str(tmp_path / value))
-    assert machine_config_path() == home / ".config" / "stayfixed" / "config.toml"
+    assert machine_config_path() == home / ".config" / "drybag" / "config.toml"
 
 
 def test_an_empty_home_names_no_home(monkeypatch: pytest.MonkeyPatch) -> None:

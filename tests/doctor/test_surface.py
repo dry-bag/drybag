@@ -7,7 +7,7 @@ imports — a test parses the file and checks."
 
 from __future__ import annotations
 
-import stayfixed.doctor.api as doctor
+import drybag.doctor.api as doctor
 
 
 def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
@@ -16,10 +16,10 @@ def test_the_surface_carries_what_every_consumer_reaches_for() -> None:
     # this set states the policy `api.py`'s docstring states rather than freezing today's list.
     # No mutation entry: the mutation is adding an export, which is two lines in `api.py` (the
     # import and the `__all__` entry) and not one substituted line. Measured by hand instead —
-    # re-exporting `checks.NAMED_ROOT_CAVEAT` reddens this test and this test alone.
+    # re-exporting `checks.RUN_FROM_OWN_ROOT` reddens this test and this test alone.
     required = {
         # the status vocabulary a reader of a `Check` branches on. `tests/test_install_path.py`
-        # branches on RED and SKIP (`stayfixed assess` runs no doctor check); the set is the
+        # branches on RED and SKIP; the set is the
         # export rather than the members that have a caller today, for the reason
         # `attach/api.py` gives about `Binding.state` — half a closed vocabulary is unreadable.
         "OK",

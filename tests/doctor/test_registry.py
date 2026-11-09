@@ -1,5 +1,5 @@
 """How the report finds the rows an area contributes through its own `doctor.py`, and what an
-area that cannot contribute gets in their place: `stayfixed.doctor.registry`, and the run that
+area that cannot contribute gets in their place: `drybag.doctor.registry`, and the run that
 reads it.
 
 The fake areas below are modules, or an import's exception in an area's place, injected through
@@ -18,8 +18,8 @@ from types import ModuleType
 
 import pytest
 
-from stayfixed.doctor import checks, registry
-from stayfixed.doctor.api import (
+from drybag.doctor import checks, registry
+from drybag.doctor.api import (
     OK,
     RED,
     WARN,
@@ -36,8 +36,8 @@ CORE = [name for name, _ in checks.CHECKS]
 
 
 def _area(name: str, contribution: Contribution) -> ModuleType:
-    """A stand-in for `stayfixed.<name>.doctor`, whose `register()` answers `contribution`."""
-    module = ModuleType(f"stayfixed.{name}.doctor")
+    """A stand-in for `drybag.<name>.doctor`, whose `register()` answers `contribution`."""
+    module = ModuleType(f"drybag.{name}.doctor")
     setattr(module, "register", lambda: contribution)  # noqa: B010 - a module built at runtime
     return module
 
@@ -48,7 +48,7 @@ def _contribute(
     """Discovery answering `areas` in order: each a module that imported, or the qualified name of
     one that did not with the exception its import raised."""
     found = [area if isinstance(area, tuple) else (area.__name__, area) for area in areas]
-    monkeypatch.setattr("stayfixed.doctor.registry.discover_contributors", lambda: found)
+    monkeypatch.setattr("drybag.doctor.registry.discover_contributors", lambda: found)
 
 
 def test_a_contributed_check_runs_after_the_core_checks(
@@ -112,8 +112,8 @@ def test_a_contribution_that_raises_costs_one_row(
 
 
 def _registering(register: object) -> ModuleType:
-    """A stand-in for `stayfixed.alpha.doctor` whose `register` is `register` itself."""
-    module = ModuleType("stayfixed.alpha.doctor")
+    """A stand-in for `drybag.alpha.doctor` whose `register` is `register` itself."""
+    module = ModuleType("drybag.alpha.doctor")
     setattr(module, "register", register)  # noqa: B010 - a module built at runtime
     return module
 
@@ -165,10 +165,10 @@ def test_an_area_whose_register_fails_costs_one_row_named_after_it(
     assert [row.name for row in rows] == [*CORE, "alpha", "omega-row"]
     broken = rows[len(CORE)]
     if register == "raises":
-        detail = "stayfixed.alpha.doctor could not contribute its rows: RuntimeError"
+        detail = "drybag.alpha.doctor could not contribute its rows: RuntimeError"
     else:
         detail = (
-            "stayfixed.alpha.doctor could not contribute its rows: its register() did not "
+            "drybag.alpha.doctor could not contribute its rows: its register() did not "
             "return a Contribution of (name, check) pairs"
         )
     assert broken == Check("alpha", RED, detail, "report this, with the command you ran")
@@ -187,7 +187,7 @@ def test_an_area_whose_doctor_module_fails_to_import_costs_one_row_named_after_i
     # module" -> the row says the area's register() failed, which is not what happened.
     _contribute(
         monkeypatch,
-        ("stayfixed.alpha.doctor", RuntimeError("IGNORE-PRIOR-RULES, a message the import built")),
+        ("drybag.alpha.doctor", RuntimeError("IGNORE-PRIOR-RULES, a message the import built")),
         _area("omega", Contribution(checks=(("omega-row", _answer),))),
     )
     rows = _checks(tmp_path, _initialised(tmp_path))
@@ -196,7 +196,7 @@ def test_an_area_whose_doctor_module_fails_to_import_costs_one_row_named_after_i
     assert broken == Check(
         "alpha",
         RED,
-        "stayfixed.alpha.doctor could not be imported: RuntimeError",
+        "drybag.alpha.doctor could not be imported: RuntimeError",
         "report this, with the command you ran",
     )
     assert rows[-1] == Check("omega-row", OK, "answered", "")
@@ -206,21 +206,21 @@ def test_an_area_whose_doctor_module_fails_to_import_costs_one_row_named_after_i
 def test_an_area_that_could_not_contribute_is_red_even_with_nothing_else_to_check(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
 ) -> None:
-    # With no `stayfixed.toml` the rows that read the project configuration skip. An area that
-    # could not contribute is not that: its row is about stayfixed's own code, which no
-    # configuration changes, so it is red with no `stayfixed.toml` too, however the area failed.
+    # With no `drybag.toml` the rows that read the project configuration skip. An area that
+    # could not contribute is not that: its row is about drybag's own code, which no
+    # configuration changes, so it is red with no `drybag.toml` too, however the area failed.
     # Mutation (oracle): `mutations/`'s "the row of an area that could not register is a skip"
     # -> the row is a skip.
     if failure == "register":
         _contribute(monkeypatch, _registering(_raises))
-        detail = "stayfixed.alpha.doctor could not contribute its rows: RuntimeError"
+        detail = "drybag.alpha.doctor could not contribute its rows: RuntimeError"
     elif failure == "import":
-        _contribute(monkeypatch, ("stayfixed.alpha.doctor", RuntimeError()))
-        detail = "stayfixed.alpha.doctor could not be imported: RuntimeError"
+        _contribute(monkeypatch, ("drybag.alpha.doctor", RuntimeError()))
+        detail = "drybag.alpha.doctor could not be imported: RuntimeError"
     else:
         _contribute(monkeypatch, _area("alpha", Contribution(checks=((CORE[1], _answer),))))
         detail = (
-            f"stayfixed.alpha.doctor could not contribute its rows: its check {CORE[1]!r} "
+            f"drybag.alpha.doctor could not contribute its rows: its check {CORE[1]!r} "
             f"repeats a name the core already reports"
         )
     rows = _checks(tmp_path, tmp_path)
@@ -234,7 +234,7 @@ def test_an_area_that_repeats_a_name_in_the_report_costs_one_row_named_after_it(
 ) -> None:
     # A row's name is all a reader, the summary line and `--json` key on, so two rows under one
     # name are two answers nobody can tell apart. A contributed name that repeats one already in
-    # the report is a defect in stayfixed's own code, as a `register()` that raises is, and costs
+    # the report is a defect in drybag's own code, as a `register()` that raises is, and costs
     # what that costs: the offending area's rows become one red row named after it, and the rest
     # of the report stands. It used to raise out of `run_checks`, and the CLI turned that into an
     # internal error with no report at all. The row's name is itself a name
@@ -248,7 +248,7 @@ def test_an_area_that_repeats_a_name_in_the_report_costs_one_row_named_after_it(
         omega = Contribution(checks=((CORE[1], _answer),))
         alpha = Contribution(checks=(("alpha-row", _answer),))
     elif clash == "another-area":
-        repeated, owner = "alpha-row", "stayfixed.alpha.doctor"
+        repeated, owner = "alpha-row", "drybag.alpha.doctor"
         omega = Contribution(checks=(("omega-row", _answer), ("alpha-row", _answer)))
         alpha = Contribution(checks=(("alpha-row", _answer),))
     elif clash == "itself":
@@ -270,7 +270,7 @@ def test_an_area_that_repeats_a_name_in_the_report_costs_one_row_named_after_it(
     assert rows[-1] == Check(
         failed,
         RED,
-        f"stayfixed.omega.doctor could not contribute its rows: its check {repeated!r} repeats "
+        f"drybag.omega.doctor could not contribute its rows: its check {repeated!r} repeats "
         f"a name {owner} already reports",
         "report this, with the command you ran",
     )
@@ -292,14 +292,14 @@ def test_a_failing_areas_row_never_takes_a_healthy_areas_check_name(
     failing = (
         _registering(_raises)
         if failure == "register"
-        else ("stayfixed.alpha.doctor", RuntimeError("IGNORE-PRIOR-RULES"))
+        else ("drybag.alpha.doctor", RuntimeError("IGNORE-PRIOR-RULES"))
     )
     omega = Contribution(checks=(("alpha", _answer),))
     _contribute(monkeypatch, failing, _area("omega", omega))
     rows = _checks(tmp_path, _initialised(tmp_path))
     assert [row.name for row in rows] == [*CORE, "alpha (2)", "alpha"]
     assert rows[-2].status == RED
-    assert rows[-2].detail.startswith("stayfixed.alpha.doctor could not ")
+    assert rows[-2].detail.startswith("drybag.alpha.doctor could not ")
     assert rows[-1] == Check("alpha", OK, "answered", "")
     assert registry.contributions(checks.CHECKS)[-1] is omega
 
@@ -327,10 +327,10 @@ def test_a_contributed_check_is_asked_when_there_is_nothing_configured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # The report has one row per check whatever state the repository is in. With no
-    # `stayfixed.toml` a contributed check was never asked and got the skip every core check after
+    # `drybag.toml` a contributed check was never asked and got the skip every core check after
     # the first got; it is asked now, with the session's `Context`, whose `config` is `None`, and
     # answers for itself. Mutation (`mutations/`'s "doctor skips every row without a
-    # stayfixed.toml"): the row is the skip and the check is never asked.
+    # drybag.toml"): the row is the skip and the check is never asked.
     seen: list[object] = []
 
     def answers(context: Context) -> Row:

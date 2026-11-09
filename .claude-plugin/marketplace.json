@@ -1,19 +1,19 @@
 {
-  "name": "stayfixed-marketplace",
-  "description": "stayfixed, a methodology harness for coding agents, published from its own repository.",
+  "name": "drybag",
+  "description": "drybag, private layers for coding agents, published from its own repository.",
   "owner": {
-    "name": "stayfixed"
+    "name": "drybag"
   },
   "plugins": [
     {
-      "name": "stayfixed",
+      "name": "drybag",
       "source": {
         "source": "url",
-        "url": "https://github.com/stayfixed/stayfixed-plugin.git",
-        "ref": "v0.6.1",
+        "url": "https://github.com/dry-bag/drybag-plugin.git",
+        "ref": "v0.7.1",
         "sha": "f6d299144481ccc0824c890913985abc16e0bc6f"
       },
-      "description": "A methodology harness for coding agents: bug ledger, working memory whose notes count once reviewed, and fail-closed guards."
+      "description": "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check."
     }
   ]
 }

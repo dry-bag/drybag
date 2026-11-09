@@ -1,7 +1,7 @@
 """The `changes` job of `ci.yml` and `smoke.yml`: what a change reaches, and the jobs that read it.
 
 A pull request that changes only documents, or Python comments, runs the suite on one leg and skips
-the other legs, the oracle, the real runners, the plugin validator and the install smoke. That is a
+the other legs, the oracle, the demo, the plugin validator and the install smoke. That is a
 narrowing, so it must be said in so many words: the scope step answers `false` only when
 `scripts/ci_scope.py` finds every path the merge commit changes against its first parent to be one
 of those, and every job that reads it treats any other answer, or none, as a change to code. The
@@ -218,11 +218,8 @@ def test_every_job_that_reads_the_scope_runs_whole_on_any_answer_but_false() -> 
     # "every checks leg narrows on a change to docs" and "a failed scope job skips the oracle".
     ci, smoke = _jobs(CI_WORKFLOW), _jobs(SMOKE_WORKFLOW)
     assert [name for name in ci if "needs" not in ci[name]] == ["changes"]
-    assert [name for name in smoke if "needs" not in smoke[name]] == [
-        "changes",
-        "same-repository-form",
-    ]
-    for job in (ci["oracle"], ci["plugin"], ci["runners"]):
+    assert [name for name in smoke if "needs" not in smoke[name]] == ["changes"]
+    for job in (ci["oracle"], ci["plugin"], ci["demo"]):
         assert job["needs"] == "changes" and job["if"] == NARROWED, job
     for job, full in ((ci["checks"], CHECKS_FULL), (smoke["installed-plugin"], SMOKE_FULL)):
         assert job["needs"] == "changes", job

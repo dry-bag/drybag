@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.overlay import overlay_root
-from stayfixed.config.reading import MachineConfigError
+from drybag.config.overlay import overlay_root
+from drybag.config.reading import MachineConfigError
 
 
 def test_a_recorded_root_is_answered_and_an_empty_machine_file_records_none(
@@ -32,7 +32,7 @@ def test_a_machine_file_that_is_not_valid_toml_is_not_an_unrecorded_overlay(
 ) -> None:
     # `config.owner.resolve_owner` raises `MachineConfigError` for this very file and this very
     # syntax error. This reader answered `None`, which the store renders as "no overlay root is
-    # recorded … run `stayfixed setup`" — wrong advice for a file that is already there. One
+    # recorded … run `drybag setup`" — wrong advice for a file that is already there. One
     # class, so the one file has one failure whichever reader meets it first.
     broken = tmp_path / "machine.toml"
     broken.write_text("[overlay\nroot = 'x'\n", encoding="utf-8")
@@ -75,8 +75,8 @@ def test_a_root_under_tilde_is_the_owners_home(
     owner = tmp_path / "owner"
     monkeypatch.setenv("HOME", str(owner))
     machine = tmp_path / "machine.toml"
-    machine.write_text('[overlay]\nroot = "~/stayfixed-private"\n', encoding="utf-8")
-    assert overlay_root(machine) == owner / "stayfixed-private"
+    machine.write_text('[overlay]\nroot = "~/drybag-private"\n', encoding="utf-8")
+    assert overlay_root(machine) == owner / "drybag-private"
     machine.write_text('[overlay]\nroot = "~"\n', encoding="utf-8")
     assert overlay_root(machine) == owner
 
@@ -88,5 +88,5 @@ def test_a_root_under_tilde_is_not_recorded_where_there_is_no_home(
     # inside the current one.
     monkeypatch.setenv("HOME", "")
     machine = tmp_path / "machine.toml"
-    machine.write_text('[overlay]\nroot = "~/stayfixed-private"\n', encoding="utf-8")
+    machine.write_text('[overlay]\nroot = "~/drybag-private"\n', encoding="utf-8")
     assert overlay_root(machine) is None

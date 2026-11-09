@@ -1,4 +1,4 @@
-# The records group: working memory, the project's documents, and the bug ledger.
+# The records group: working memory and the project's documents.
 # Which group an entry belongs in is `GROUP_OF` in `scripts/mutation_oracle.py`; what an entry is:
 # CONTRIBUTING.md, "Tests".
 
@@ -9,7 +9,7 @@
 # from full injection to descriptions only.
 [[mutation]]
 name = "group_order outranks the startup rank in the index order"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = '''        UNRANKED if rank is None else rank,
         UNRANKED if note.group_order is None else note.group_order,'''
 after = '''        UNRANKED if note.group_order is None else note.group_order,
@@ -20,7 +20,7 @@ reddens = [
 
 [[mutation]]
 name = "the volatile budget excludes the set that is exactly the budget"
-file = "src/stayfixed/memory/bundles.py"
+file = "src/drybag/memory/bundles.py"
 before = '    if sum(len(block.split()) for block in full) <= config.budgets.effective('
 after = '    if sum(len(block.split()) for block in full) < config.budgets.effective('
 reddens = [
@@ -33,7 +33,7 @@ reddens = [
 # state `trust.wrap`'s nonce region exists to make unreachable.
 [[mutation]]
 name = "an oversized part is handed out to be truncated again"
-file = "src/stayfixed/memory/bundles.py"
+file = "src/drybag/memory/bundles.py"
 before = '    if len(text) > cap:'
 after = '    if False:'
 reddens = [
@@ -43,7 +43,7 @@ reddens = [
 # A note in a nested group is keyed on the group the configuration names, not on its folder.
 [[mutation]]
 name = "a nested group is keyed on its folder rather than its configured name"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = '        return self.store_group or self.path.parent.name'
 after = '        return self.path.parent.name'
 reddens = [
@@ -53,7 +53,7 @@ reddens = [
 # A note whose body did not change is written back byte for byte, never renormalised.
 [[mutation]]
 name = "an unchanged note's body is renormalised on the way out"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = '    if note.verbatim is not None:'
 after = '    if False:'
 reddens = ["tests/memory/test_notes.py::test_an_unchanged_note_round_trips_byte_for_byte"]
@@ -71,149 +71,17 @@ reddens = ["tests/memory/test_notes.py::test_an_unchanged_note_round_trips_byte_
 # because the refactor that moved the test could not see an entry naming its old home.
 [[mutation]]
 name = "a type the surface names in a signature drops off the surface"
-file = "src/stayfixed/memory/api.py"
+file = "src/drybag/memory/api.py"
 before = '    "Store",'
 after = ''
 reddens = [
   "tests/test_surfaces.py::test_every_type_the_surface_names_in_a_signature_is_on_the_surface[memory]",
 ]
 
-# In the block led by `mutations/`'s "the hook path strips a checkout path that ends in a space": a
-# path answer loses its line ending and nothing else.
-[[mutation]]
-name = "the ledger sweep strips a root that ends in a space and walks the disk instead"
-file = "src/stayfixed/ledger/scan.py"
-before = '    toplevel = out.removesuffix("\n")'
-after = '    toplevel = out.strip()'
-reddens = [
-  "tests/test_git_answers.py::test_the_ledger_sweep_asks_git_for_a_root_whose_name_ends_in_a_space",
-]
-
-# A bare `#412 in the tracker` reads as a comment to a real YAML reader and the key as null;
-# the subset stays valid YAML only because the leading class is YAML's whole indicator set.
-[[mutation]]
-name = "the frontmatter reader accepts a bare value a YAML reader would misparse"
-file = "src/stayfixed/ledger/entries.py"
-before = '''_NEEDS_QUOTING = re.compile(r"\A[-?:,\[\]{}#&*!|>'\"%@`]|: | #|:\Z")'''
-after = '''_NEEDS_QUOTING = re.compile(r"\A[-?:,]|: | #|:\Z")'''
-reddens = ["tests/ledger/test_entries.py::test_a_value_that_is_not_a_plain_yaml_string_needs_quotes"]
-
-# Regenerating over content the tool did not write deletes it with no diff and exit 0.
-[[mutation]]
-name = "the index overwrite guard stops seeing foreign lines"
-file = "src/stayfixed/ledger/index.py"
-before = '    foreign = foreign_index_lines(root, current, register)'
-after = '    foreign: list[str] = []'
-reddens = ["tests/ledger/test_index.py::test_index_refuses_to_delete_any_content_it_did_not_generate"]
-
-# A placeholder that satisfies its own check is the failure mode the evidence rule prevents.
-[[mutation]]
-name = "the untouched evidence placeholder satisfies the boundary rule"
-file = "src/stayfixed/ledger/check.py"
-before = '    rf"^{re.escape(EVIDENCE_LABEL)}[^\S\n]*(?!{re.escape(EVIDENCE_PLACEHOLDER)})\S", re.MULTILINE'
-after = '    rf"^{re.escape(EVIDENCE_LABEL)}[^\S\n]*\S", re.MULTILINE'
-reddens = ["tests/ledger/test_check.py::test_the_untouched_scaffold_placeholder_does_not_satisfy_the_rule"]
-
-# The citation pattern is loose by design; the decision is the resolution.
-[[mutation]]
-name = "a citation is accepted without resolving it against the ledger directory"
-file = "src/stayfixed/ledger/scan.py"
-before = '    return target in (relative, rooted)'
-after = '    return True'
-reddens = ["tests/ledger/test_scan.py::test_a_citation_of_an_entry_file_is_resolved_two_ways"]
-
-# The fixture-holder marker is the one exclusion both the scan and the sweep honour.
-[[mutation]]
-name = "a fixture holder is scanned like any other file"
-file = "src/stayfixed/ledger/scan.py"
-before = '    return FIXTURE_MARKER.encode("utf-8") in head'
-after = '    return False'
-reddens = ["tests/ledger/test_scan.py::test_a_fixture_holder_is_excluded_from_the_scan"]
-
-# A listing git gave no answer for — git could not be run, or ran past its bound — read as an
-# empty one scanned no file and reported every reference absent. It falls back to the walk.
-[[mutation]]
-name = "the scan reads a listing git gave no answer for as no files"
-file = "src/stayfixed/ledger/scan.py"
-before = """    if code != 0:
-        return None
-    return [root / name for name in listed.split("\\0") if name]"""
-after = """    return [root / name for name in listed.split("\\0") if name]"""
-reddens = [
-  "tests/ledger/test_scan.py::test_a_listing_git_gave_no_answer_for_falls_back_to_the_walk_and_not_to_nothing",
-]
-
-# The allocator read a history git gave no answer for as an empty one, and `bugs new` handed
-# out a number another branch holds, silently. A history still unread — git could not be run, or
-# ran past its bound — is named in the warning.
-[[mutation]]
-name = "the allocator hands out a number with the history unread and no word"
-file = "src/stayfixed/ledger/write.py"
-before = """    if code != 0:
-        warning = _joined(warning, _uncounted(root, code))"""
-after = """    if False:
-        warning = _joined(warning, _uncounted(root, code))"""
-reddens = [
-  "tests/ledger/test_write.py::test_a_history_git_gave_no_answer_for_is_named_and_not_read_as_empty[-1]",
-  "tests/ledger/test_write.py::test_a_history_git_gave_no_answer_for_is_named_and_not_read_as_empty[128]",
-]
-
-# "No repository" is read off the disk: git refuses `rev-parse --is-inside-work-tree` on a
-# checkout it judges of dubious ownership exactly as it refused the log, and the allocator took
-# that for "no repository" and dropped the history with no word.
-[[mutation]]
-name = "the allocator reads a repository git refuses as no repository"
-file = "src/stayfixed/ledger/write.py"
-before = """    if not in_work_tree(root):
-        return None"""
-after = """    if git_run(root, "rev-parse", "--is-inside-work-tree")[0] != 0:
-        return None"""
-reddens = [
-  "tests/ledger/test_write.py::test_a_repository_git_refuses_to_read_is_not_mistaken_for_no_repository",
-]
-
-# A repository condition the operator can fix must reach them as findings (exit 1), never as an
-# internal error (exit 2): `cli.run` maps a `Failure` to 1 and everything else to 2.
-[[mutation]]
-name = "an undecodable ledger file is silently mangled instead of reported"
-file = "src/stayfixed/ledger/entries.py"
-before = "        return read_regular_text(path)"
-after = '        return path.read_bytes().decode("utf-8", errors="replace")'
-reddens = [
-  "tests/ledger/test_entries.py::test_a_ledger_file_that_is_not_utf8_is_a_ledger_error_naming_it",
-  "tests/ledger/test_check.py::test_an_entry_that_is_not_utf8_is_reported_rather_than_crashing_the_check",
-]
-
-# The allocator can only count what this repository can see; the file's existence decides.
-[[mutation]]
-name = "a freshly allocated identifier overwrites an existing entry file"
-file = "src/stayfixed/ledger/write.py"
-before = '    if fsops.exists(path):'
-after = '    if False:'
-reddens = ["tests/ledger/test_write.py::test_new_never_writes_over_an_entry_file_whatever_the_allocator_returns"]
-
-# A file the sweep could not read is reported, never assumed clean.
-[[mutation]]
-name = "the sweep skips an unreadable file in silence"
-file = "src/stayfixed/ledger/write.py"
-before = '            unswept.append(Unswept(item.relative.as_posix(), reason))'
-after = '            pass'
-reddens = ["tests/ledger/test_write.py::test_renumber_reports_a_file_it_could_not_sweep_and_keeps_both_endpoints"]
-
-# `renumber` regenerates the index after both endpoints and the whole sweep are on disk, so its
-# refusal is the one that has to come first. It is the same call `new` makes, at the call site
-# where dropping it costs the operator their hand-written lines.
-[[mutation]]
-name = "renumber regenerates over an index carrying content this tool did not generate"
-file = "src/stayfixed/ledger/write.py"
-before = '    refuse_index_overwrite(root, register, committed_index)'
-after = '    pass'
-reddens = ["tests/ledger/test_write.py::test_renumber_refuses_over_foreign_index_content_without_moving_anything"]
-
 # A substring search for the trail marker also matches a deeper heading that contains it.
 [[mutation]]
 name = "the roadmap prose is cut at a heading that merely contains the marker"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = '    return TRAIL_MARKER_LINE.split(text, 1)[0]'
 after = '    return text.split(TRAIL_MARKER, 1)[0]'
 reddens = ["tests/docs/test_hygiene.py::test_a_deeper_heading_containing_the_marker_does_not_split_the_prose"]
@@ -221,7 +89,7 @@ reddens = ["tests/docs/test_hygiene.py::test_a_deeper_heading_containing_the_mar
 # A renamed design would otherwise reappear as `delivered` and `--check` would stay green.
 [[mutation]]
 name = "a state naming a vanished document defaults instead of aborting"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '    stale = sorted(set(trail.states) - named)'
 after = '    stale: list[str] = []'
 reddens = ["tests/docs/test_trail.py::test_a_state_naming_a_vanished_document_aborts_instead_of_defaulting"]
@@ -229,7 +97,7 @@ reddens = ["tests/docs/test_trail.py::test_a_state_naming_a_vanished_document_ab
 # `check-ignore` without `--no-index` answers "not ignored" for anything tracked.
 [[mutation]]
 name = "an untracked document is listed as if CI could see it"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '    skip = _ignored(root, paths) | _untracked(root, paths)'
 after = '    skip = _ignored(root, paths)'
 reddens = ["tests/docs/test_trail.py::test_an_untracked_or_ignored_document_is_not_listed"]
@@ -238,17 +106,27 @@ reddens = ["tests/docs/test_trail.py::test_an_untracked_or_ignored_document_is_n
 # output; let the exception through and it ends as a bare `failed:` with no findings listed.
 [[mutation]]
 name = "plan check stops printing an unresolvable base as its finding"
-file = "src/stayfixed/docs/commands.py"
+file = "src/drybag/docs/commands.py"
 before = "    except BaseUnresolvable as exc:"
 after = "    except ():"
 reddens = ["tests/docs/test_plans.py::test_a_base_that_will_not_resolve_is_raised_never_an_ok"]
 
-# `docs check` reads no note store since the link graph moved to `memory refs`, so a `--store` it
+# Every `--check` carries the one help string, so a reader of `--help` gets one meaning for it.
+[[mutation]]
+name = "one --check spells its own help string again"
+file = "src/drybag/docs/commands.py"
+before = '    trail.add_argument("--check", action="store_true", help=CHECK_HELP)'
+after = '    trail.add_argument("--check", action="store_true", help="fail if the trail is stale")'
+reddens = [
+  "tests/test_command.py::test_every_shared_flag_carries_the_one_help_string_or_a_named_exception",
+]
+
+# `docs check` reads no note store since the link graph left it, so a `--store` it
 # accepted would be read by nothing: a person who passed it would get the answer they got without
 # it and no word that the option had done nothing.
 [[mutation]]
 name = "docs check accepts a store it never reads"
-file = "src/stayfixed/docs/commands.py"
+file = "src/drybag/docs/commands.py"
 before = '    check = common_flags(docs_sub.add_parser("check", help="budgets and link targets"))'
 after = '    check = common_flags(docs_sub.add_parser("check", help="budgets and link targets"), store=True)'
 reddens = ["tests/docs/test_commands.py::test_docs_check_takes_no_store"]
@@ -256,7 +134,7 @@ reddens = ["tests/docs/test_commands.py::test_docs_check_takes_no_store"]
 # `\s*` crosses newlines under MULTILINE, so an empty marker would be satisfied by any later text.
 [[mutation]]
 name = "an empty Premise marker is satisfied by text anywhere later in the plan"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = '_PREMISE_LINE = re.compile(r"^\*\*Premise[^:]*+(:\*\*[^\S\n]*\S)?", re.MULTILINE)'
 after = '_PREMISE_LINE = re.compile(r"^\*\*Premise[^:]*+(:\*\*\s*\S)?", re.MULTILINE)'
 reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_needs_a_premise_line_with_content"]
@@ -266,7 +144,7 @@ reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_needs_a_premise_line_wi
 # times as long at each doubling.
 [[mutation]]
 name = "a premise marker is read on from every marker"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    return any(marker.group(1) for marker in _PREMISE_LINE.finditer(prose))"
 after = '    return re.search(r"^\*\*Premise[^:]*:\*\*[^\S\n]*\S", prose, re.MULTILINE) is not None'
 reddens = ["tests/docs/test_plans.py::test_a_long_plan_is_linted_in_time_linear_in_its_length[premise markers]"]
@@ -276,7 +154,7 @@ reddens = ["tests/docs/test_plans.py::test_a_long_plan_is_linted_in_time_linear_
 # times as long at each doubling.
 [[mutation]]
 name = "a claim's sentence is looked for from its paragraph's start"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = """            while end is not None and end.end() <= match.start():
                 opening, end = end.end(), next(ends, None)"""
 after = "            opening = max((e.end() for e in _SENTENCE_END.finditer(text, 0, match.start())), default=0)"
@@ -287,7 +165,7 @@ reddens = [
 
 [[mutation]]
 name = "an expectation marker is looked for over the claim's whole sentence again"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "            if marker is not None and marker.end() <= match.end():"
 after = "            if _MARKED_AS_EXPECTATION.search(text[opening : match.end()]):"
 reddens = ["tests/docs/test_plans.py::test_a_paragraph_of_claims_is_read_in_time_linear_in_its_length[one sentence]"]
@@ -295,7 +173,7 @@ reddens = ["tests/docs/test_plans.py::test_a_paragraph_of_claims_is_read_in_time
 # A plan names what its tasks remove, so once they land a finished plan must not read as dead.
 [[mutation]]
 name = "a path a plan declares on a Delete line reads as a dead reference once it is gone"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = '_DECLARES = re.compile(r"^[^\S\n]*-\s*(?:Create|Test|Delete):\s*(.+)$", re.MULTILINE)'
 after = '_DECLARES = re.compile(r"^[^\S\n]*-\s*(?:Create|Test):\s*(.+)$", re.MULTILINE)'
 reddens = [
@@ -307,14 +185,14 @@ reddens = [
 # each doubling.
 [[mutation]]
 name = "a declaring line is read for from every blank line above it"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = '_DECLARES = re.compile(r"^[^\S\n]*-\s*(?:Create|Test|Delete):\s*(.+)$", re.MULTILINE)'
 after = '_DECLARES = re.compile(r"^\s*-\s*(?:Create|Test|Delete):\s*(.+)$", re.MULTILINE)'
 reddens = ["tests/docs/test_plans.py::test_a_long_plan_is_linted_in_time_linear_in_its_length[blank lines]"]
 
 [[mutation]]
 name = "a line a plan marks (delete) reads as a dead reference once its path is gone"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = '_LINE_MARK = re.compile(r"\((?:create|delete)\)", re.IGNORECASE)'
 after = '_LINE_MARK = re.compile(r"\((?:create)\)", re.IGNORECASE)'
 reddens = [
@@ -325,7 +203,7 @@ reddens = [
 # way through was to rewrite history.
 [[mutation]]
 name = "plan check judges an edited plan's untouched lines"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "        if not _LINE_MARK.search(line) and (judged is None or number in judged):"
 after = "        if not _LINE_MARK.search(line):"
 reddens = [
@@ -335,98 +213,11 @@ reddens = [
 # Against the base alone, a line the base rewrote since the fork reads as the change's own.
 [[mutation]]
 name = "plan check reads the lines a change wrote against the base alone"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    for since in (*_forks(root, base), base):"
 after = "    for since in (base,):"
 reddens = [
   "tests/docs/test_plans.py::test_a_line_the_base_rewrote_since_the_fork_is_not_the_change_s_to_answer_for",
-]
-
-# The ignore rules cover the whole store, so a note→note reference must be settled on disk.
-[[mutation]]
-name = "a reference into the store is asked of the ignore rules and disappears"
-file = "src/stayfixed/memory/refs.py"
-before = '    ignored = _ignored(root, {t for _, _, t in candidates if not _inside_store(root, store, t)})'
-after = '    ignored = _ignored(root, {t for _, _, t in candidates})'
-reddens = ["tests/memory/test_refs.py::test_a_reference_into_the_store_is_settled_against_the_filesystem_not_the_ignore_rules"]
-
-# Advice must never gate. The link graph is reported as notices because the store is shared by
-# every session on the machine, so a sibling's half-finished sweep is not this tree's fault to
-# fail on — and an exit code is the one part of that promise a caller acts on silently.
-[[mutation]]
-name = "an advisory memory-graph notice gates the exit code"
-file = "src/stayfixed/memory/commands.py"
-before = "    if report.findings:"
-after = "    if report.findings or report.notices:"
-reddens = ["tests/memory/test_graph.py::test_refs_reports_graph_notices_without_changing_its_exit"]
-
-# Nor does advice excuse: a stale path fails `memory refs` whatever notices sit beside it, and the
-# failing line still counts them.
-[[mutation]]
-name = "an advisory memory-graph notice clears a stale path's failure"
-file = "src/stayfixed/memory/commands.py"
-before = '    return Result("; ".join([*parts, *advice]), data, exit_code=1)'
-after = '    return Result("; ".join([*parts, *advice]), data, exit_code=0 if report.notices else 1)'
-reddens = ["tests/memory/test_refs.py::test_a_stale_path_fails_beside_a_graph_notice_and_the_line_counts_both"]
-
-[[mutation]]
-name = "the failing memory refs line stops counting the graph's notices"
-file = "src/stayfixed/memory/commands.py"
-before = '    return Result("; ".join([*parts, *advice]), data, exit_code=1)'
-after = '    return Result("; ".join(parts), data, exit_code=1)'
-reddens = ["tests/memory/test_refs.py::test_a_stale_path_fails_beside_a_graph_notice_and_the_line_counts_both"]
-
-# `memory refs` reads the store once: the graph's notices come from the walk made for the stale
-# paths. A second walk reached through the note module's own name, rather than through the name
-# `memory.refs` binds, is a second read of every note all the same.
-[[mutation]]
-name = "the memory graph walks the store a second time"
-file = "src/stayfixed/memory/graph.py"
-before = "    for note in walked.notes:"
-after = '    for note in __import__("stayfixed.memory.notes").memory.notes.walk(store.path, groups).notes:'
-reddens = ["tests/memory/test_graph.py::test_refs_walks_the_store_once_for_its_findings_and_the_graph"]
-
-# The same read without a second walk: each note re-read from disk through `read_note`.
-[[mutation]]
-name = "the memory graph reads every note a second time"
-file = "src/stayfixed/memory/graph.py"
-before = "        text = blank_code_spans(blank_fences(note.body))"
-after = '''        text = blank_code_spans(
-            blank_fences(__import__("stayfixed.memory.notes").memory.notes.read_note(note.path).body)
-        )'''
-reddens = ["tests/memory/test_graph.py::test_refs_walks_the_store_once_for_its_findings_and_the_graph"]
-
-# A link is read once: where none is found from an opening `[[`, none is from any `[[` before the
-# next `]`, so that stretch is taken whole. Found from every `[[`, 16,000 `[` took half a second,
-# four times as long at each doubling.
-[[mutation]]
-name = "a wiki link is read for again from every opening bracket"
-file = "src/stayfixed/memory/graph.py"
-before = "    return (link for link in _LINK.finditer(text) if link.group(1) is not None)"
-after = '    return re.finditer(r"\[\[([^\]]+)\]\]", text)'
-reddens = [
-  "tests/memory/test_graph.py::test_a_long_note_s_links_are_read_in_time_linear_in_its_length[opening brackets]",
-  "tests/memory/test_graph.py::test_a_long_note_s_links_are_read_in_time_linear_in_its_length[unclosed links]",
-]
-
-# The separators are possessive, so `re` keeps no record per separator: greedy, a mebibyte of
-# blanks between two links took 154 MiB more to read.
-[[mutation]]
-name = "the separators between two links are given back"
-file = "src/stayfixed/memory/graph.py"
-before = '_SEPARATORS = re.compile(r"(?:[,\s]|\band\b|\bor\b)*+")'
-after = '_SEPARATORS = re.compile(r"(?:[,\s]|\band\b|\bor\b)*")'
-reddens = ["tests/memory/test_graph.py::test_a_long_gap_between_two_links_is_read_in_memory_linear_in_its_length"]
-
-# Two links repeat only when separators fill the whole gap between them: code between them is not a
-# list of the same note.
-[[mutation]]
-name = "a repeat is noted across code between two links"
-file = "src/stayfixed/memory/graph.py"
-before = "            and _SEPARATORS.fullmatch(text, before.end(), link.start())"
-after = "            and _SEPARATORS.match(text, before.end(), link.start())"
-reddens = [
-  "tests/memory/test_graph.py::test_a_link_inside_a_code_span_or_fence_is_not_a_link_and_code_between_links_is_not_a_repeat",
 ]
 
 # `--` closes the pathspec but sits behind the slot the base interpolates into, so a `--base` of
@@ -435,7 +226,7 @@ reddens = [
 # reported OK having linted nothing, which is what raising `BaseUnresolvable` exists to prevent.
 [[mutation]]
 name = "an option-shaped base reaches a git argv slot ahead of `--`"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = '''    if base.startswith("-"):
         raise Refusal(f"{base!r} looks like an option, not a base ref")'''
 after = '''    if False:
@@ -448,7 +239,7 @@ reddens = ["tests/docs/test_plans.py::test_an_option_shaped_base_never_reaches_a
 # prose lands in a document agents load with no delimited region behind it.
 [[mutation]]
 name = "a theme label can carry the end marker into the generated roadmap"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '''        if not _interpolable(entry["label"]):
             raise Failure(
                 _UNINTERPOLABLE.format(path=shown, what="[[theme]] `label`", marker=MARKER)
@@ -461,7 +252,7 @@ reddens = [
 
 [[mutation]]
 name = "a declared state can carry the end marker into the generated roadmap"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '''    if not all(_interpolable(state) for state in states.values()):
         raise Failure(_UNINTERPOLABLE.format(path=shown, what="[states] value", marker=MARKER))'''
 after = "    pass"
@@ -474,7 +265,7 @@ reddens = [
 # printed it named nothing a reader can find in the repository.
 [[mutation]]
 name = "docs trail names a trail file that is not TOML by its absolute path"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = """        raise Failure(f"{shown} is not valid TOML {toml_position(exc)}") from None"""
 after = """        raise Failure(f"{path} is not valid TOML {toml_position(exc)}") from None"""
 reddens = [
@@ -483,7 +274,7 @@ reddens = [
 
 [[mutation]]
 name = "docs trail names a trail file that is not UTF-8 by its absolute path"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "        raw: dict[str, Any] = tomllib.loads(read_document(path, where))"
 after = "        raw: dict[str, Any] = tomllib.loads(read_document(path, path))"
 reddens = [
@@ -492,540 +283,18 @@ reddens = [
 
 [[mutation]]
 name = "docs trail names its trail file by the path it opened"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "    shown = quoted(where)"
 after = "    shown = path"
 reddens = [
   "tests/docs/test_trail.py::test_a_trail_message_names_the_project_relative_path[theme-not-a-list]",
 ]
 
-# The classifier, not the call: a line opening with `|` was tool-generated by fiat, so an index
-# row whose entry file no longer exists — the last record of that bug — was clean. `bugs check`
-# then reported `stale-index; run: stayfixed bugs index`, and that command deleted the record
-# with no diff and exit 0. `ENTRIES_MISSING` cannot see it: the ledger directory is still there.
-[[mutation]]
-name = "an index row is tool-generated by its shape, with no entry file behind it"
-file = "src/stayfixed/ledger/index.py"
-before = '            if line in column_lines or _row_identifier(line, ids) in present:'
-after = "            if True:"
-reddens = [
-  "tests/ledger/test_index.py::test_a_row_whose_entry_file_is_gone_is_foreign_and_not_a_stale_index",
-  "tests/ledger/test_index.py::test_an_injected_section_of_hand_written_rows_is_foreign",
-  "tests/ledger/test_index.py::test_an_index_over_an_empty_entry_directory_is_refused_row_by_row",
-]
-
-# `renumber` regenerates the index last, and that parses every entry file in the directory. One
-# malformed sibling the operator never touched therefore failed the command after both endpoints
-# and the whole sweep were on disk — and the retry was refused with "already has an entry file",
-# so the move could not be finished at all, against a docstring promising the opposite.
-[[mutation]]
-name = "renumber parses its siblings only after it has moved both endpoints"
-file = "src/stayfixed/ledger/write.py"
-before = "    entries = load_entries(root, register)"
-after = "    entries = []"
-reddens = [
-  "tests/ledger/test_write.py::test_renumber_rejects_a_malformed_sibling_before_it_moves_anything",
-]
-
-# A `renumber` killed between two of its writes left a tree the re-run refused as an occupied
-# target, and `bugs check` named only a stale index, whose remedy turned check green over two
-# live entries for one bug or over mentions the sweep never reached. The re-run tells this move's
-# own half-done states by their bytes and finishes them; anything else at the target stays an
-# entry of its own and is refused.
-[[mutation]]
-name = "a re-run of a renumber killed before its void pointer refuses again"
-file = "src/stayfixed/ledger/write.py"
-before = "    if held == moved:"
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_write.py::test_a_renumber_killed_at_any_write_is_finished_by_running_it_again[before-pointer]",
-]
-
-[[mutation]]
-name = "a re-run of a renumber killed after its void pointer writes both endpoints again"
-file = "src/stayfixed/ledger/write.py"
-before = "        return 2"
-after = "        return 0"
-reddens = [
-  "tests/ledger/test_write.py::test_a_renumber_killed_at_any_write_is_finished_by_running_it_again[before-sibling-sweep]",
-]
-
-[[mutation]]
-name = "a renumber resumes over a target that is not the moved text"
-file = "src/stayfixed/ledger/write.py"
-before = "    if held == moved:"
-after = "    if True:"
-reddens = [
-  "tests/ledger/test_write.py::test_the_occupied_target_refusal_still_holds_for_anything_but_this_moves_own_half",
-]
-
-[[mutation]]
-name = "a renumber resumes from any void entry toward its target"
-file = "src/stayfixed/ledger/write.py"
-before = "    if source_text == pointer:"
-after = "    if source.status == register.schema.void and source.related == (new,):"
-reddens = [
-  "tests/ledger/test_write.py::test_an_old_entry_that_relates_to_the_target_is_not_this_moves_pointer[void]",
-]
-
-[[mutation]]
-name = "a renumber resumes from any entry that relates to its target"
-file = "src/stayfixed/ledger/write.py"
-before = "    if source_text == pointer:"
-after = "    if source.related == (new,):"
-reddens = [
-  "tests/ledger/test_write.py::test_an_old_entry_that_relates_to_the_target_is_not_this_moves_pointer[open]",
-]
-
-# The pointer's title is the one byte range not compared: the target may be retitled after the
-# move, and a pointer rebuilt from its current title stopped matching then.
-[[mutation]]
-name = "the void pointer is recognised by the target's current title"
-file = "src/stayfixed/ledger/write.py"
-before = "    pointer = _void_pointer(register, old=old, new=new, title=source.title, today=day)"
-after = '''    pointer = _void_pointer(register, old=old, new=new, title=f"renumbered to {new} — {parse_entry(held, path=Path(register.directory) / f'{new}.md', register=register).title}", today=day)'''
-reddens = [
-  "tests/ledger/test_write.py::test_a_move_whose_target_was_retitled_after_its_void_pointer_is_still_finished",
-]
-
-[[mutation]]
-name = "the void pointer's title is not held to the prefix the move writes"
-file = "src/stayfixed/ledger/write.py"
-before = '''    if not source.title.startswith(f"renumbered to {new} — "):'''
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_write.py::test_a_pointer_shaped_old_entry_whose_title_is_not_the_moves_is_refused",
-]
-
-# The index is the move's last write: with the pointer in place a fresh one is a move that
-# finished, and a mention of the old number written since is one the pointer exists to resolve.
-[[mutation]]
-name = "a renumber that finished sweeps again when run again"
-file = "src/stayfixed/ledger/write.py"
-before = "    if written == 2 and committed_index == render_index(entries, register):"
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_commands.py::test_a_renumber_run_again_after_it_finished_says_so_and_rewrites_no_later_mention",
-]
-
-# A stale index a killed renumber left is the one the move found: `check` names the renumber that
-# finishes it, since `bugs index` turned the check green over a half-moved ledger.
-[[mutation]]
-name = "a stale index a killed renumber left is sent to bugs index"
-file = "src/stayfixed/ledger/check.py"
-before = "    return f\"is stale; run: {commands[0] if commands else f'stayfixed {register.name} index'}\""
-after = "    return f\"is stale; run: stayfixed {register.name} index\""
-reddens = [
-  "tests/ledger/test_check.py::test_a_stale_index_a_killed_renumber_left_names_the_renumber_that_finishes_it[before-pointer]",
-  "tests/ledger/test_check.py::test_a_stale_index_a_killed_renumber_left_names_the_renumber_that_finishes_it[before-sibling-sweep]",
-]
-
-# A write of the move's own that fails is the move's failure, naming the re-run that finishes it:
-# let out as the `OSError` it is, it was an internal error, exit 2, that named no way on.
-[[mutation]]
-name = "a renumber's failed target write escapes as an internal error"
-file = "src/stayfixed/ledger/write.py"
-before = '            raise unfinished(f"{directory}/{new}.md", error) from error'
-after = "            raise"
-reddens = ["tests/ledger/test_commands.py::test_a_renumber_whose_own_write_fails_names_the_re_run_that_finishes_it[target]"]
-
-[[mutation]]
-name = "a renumber's failed pointer write escapes as an internal error"
-file = "src/stayfixed/ledger/write.py"
-before = '            raise unfinished(f"{directory}/{old}.md", error) from error'
-after = "            raise"
-reddens = ["tests/ledger/test_commands.py::test_a_renumber_whose_own_write_fails_names_the_re_run_that_finishes_it[pointer]"]
-
-[[mutation]]
-name = "a renumber's failed index write escapes as an internal error"
-file = "src/stayfixed/ledger/write.py"
-before = "        raise unfinished(register.index, error) from error"
-after = "        raise"
-reddens = ["tests/ledger/test_commands.py::test_a_renumber_whose_own_write_fails_names_the_re_run_that_finishes_it[index]"]
-
-# The index written after `new` has filed its entry, and by `index` itself: a failure there is the
-# command's, naming what was filed and the command that finishes the job, never an internal error
-# after which an operator files the same report again.
-[[mutation]]
-name = "a filing whose index write fails escapes as an internal error"
-file = "src/stayfixed/ledger/write.py"
-before = "        _write_index(root, register)\n    except OSError as error:\n        unindexed = FILED_UNINDEXED.format("
-after = "        _write_index(root, register)\n    except OSError as error:\n        raise\n        unindexed = FILED_UNINDEXED.format("
-reddens = ["tests/ledger/test_commands.py::test_a_filing_whose_index_write_fails_names_the_entry_it_filed_and_bugs_index"]
-
-[[mutation]]
-name = "an index write that fails escapes as an internal error"
-file = "src/stayfixed/ledger/commands.py"
-before = "        reason = fsops.said(error)\n        raise Failure("
-after = "        raise\n        raise Failure("
-reddens = ["tests/ledger/test_commands.py::test_an_index_that_cannot_be_written_is_a_failure_naming_the_rerun"]
-
-# The allocator's warning says the number may be taken on a branch this checkout has not fetched,
-# and a filing that stops at the index is the one whose number the operator acts on next.
-[[mutation]]
-name = "a filing whose index write fails drops the allocator's warning"
-file = "src/stayfixed/ledger/write.py"
-before = '        warned = f"{unindexed}; {allocation.warning}" if allocation.warning else unindexed'
-after = "        warned = unindexed"
-reddens = ["tests/ledger/test_commands.py::test_a_filing_whose_index_write_fails_keeps_the_allocators_warning"]
-
-# Two entries that differ only in `id:`, which a `bugs new` run twice files, make a move of either
-# explain the same stale index, and naming the first voided the entry nobody moved.
-[[mutation]]
-name = "a stale index several renumbers explain names the first of them"
-file = "src/stayfixed/ledger/check.py"
-before = "    if len(commands) > 1:"
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_check.py::test_a_stale_index_more_than_one_renumber_explains_names_each_and_runs_none",
-]
-
-# The sweep runs before the index write and retitles the other entries that name the old number,
-# so each line of the entries as they stand is matched with the found index's line as it was or as
-# the sweep writes it: matched only as it was, the retitled rows, alone or beside a title that named
-# the new number before the move, left the check naming `bugs index`. And the moved entry's own row,
-# put back, is never swept, so the line as it was is half the rule.
-[[mutation]]
-name = "a stale index a killed renumber left is matched with the sweep left in place"
-file = "src/stayfixed/ledger/check.py"
-before = "        line in (before, sweep.sub(new, before)) for before, line in zip(was, now, strict=True)"
-after = "        line == before for before, line in zip(was, now, strict=True)"
-reddens = [
-  "tests/ledger/test_check.py::test_a_renumber_killed_at_its_index_names_itself_when_its_sweep_rewrote_a_row[a-chained-move]",
-  "tests/ledger/test_check.py::test_a_renumber_killed_at_its_index_names_itself_when_its_sweep_rewrote_a_row[a-title-naming-it]",
-  "tests/ledger/test_check.py::test_a_renumber_killed_at_its_index_names_itself_when_its_sweep_rewrote_a_row[both-kinds-of-row]",
-]
-
-[[mutation]]
-name = "a stale index a killed renumber left is matched only with the sweep applied"
-file = "src/stayfixed/ledger/check.py"
-before = "        line in (before, sweep.sub(new, before)) for before, line in zip(was, now, strict=True)"
-after = "        line == sweep.sub(new, before) for before, line in zip(was, now, strict=True)"
-reddens = [
-  "tests/ledger/test_check.py::test_a_renumber_killed_at_its_index_names_itself_when_its_sweep_rewrote_a_row[a-chained-move]",
-  "tests/ledger/test_check.py::test_a_renumber_killed_at_its_index_names_itself_when_its_sweep_rewrote_a_row[a-title-naming-it]",
-  "tests/ledger/test_check.py::test_a_renumber_killed_at_its_index_names_itself_when_its_sweep_rewrote_a_row[a-title-naming-the-new-number]",
-  "tests/ledger/test_check.py::test_a_renumber_killed_at_its_index_names_itself_when_its_sweep_rewrote_a_row[both-kinds-of-row]",
-]
-
-[[mutation]]
-name = "the occupied-target refusal does not say a final newline is the only difference"
-file = "src/stayfixed/ledger/write.py"
-before = '    if held.rstrip("\r\n") == moved.rstrip("\r\n"):'
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_write.py::test_a_half_moved_target_edited_since_is_refused_with_how_to_finish_by_hand[final-newline]",
-]
-
-[[mutation]]
-name = "renumber moves an entry onto its own identifier"
-file = "src/stayfixed/ledger/write.py"
-before = "    if old == new:"
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_write.py::test_renumbering_an_entry_to_its_own_identifier_is_refused_and_writes_nothing",
-]
-
-[[mutation]]
-name = "the occupied-target refusal says nothing of an interrupted move"
-file = "src/stayfixed/ledger/write.py"
-before = '    occupied = LedgerError(OCCUPIED.format(old=old, new=new, name=register.name, why=""))'
-after = '    occupied = LedgerError(f"{new} already has an entry file; pick a free identifier")'
-reddens = [
-  "tests/ledger/test_write.py::test_a_half_moved_target_edited_since_is_refused_with_how_to_finish_by_hand[body-edited]",
-]
-
-[[mutation]]
-name = "a renumber adopts a symlink at its target"
-file = "src/stayfixed/ledger/write.py"
-before = "    if fsops.is_symlink(target) or not fsops.is_file(target):"
-after = "    if not fsops.is_file(target):"
-reddens = [
-  "tests/ledger/test_write.py::test_the_occupied_target_refusal_still_holds_for_anything_but_this_moves_own_half",
-]
-
-# The ledger engine serves any register, and the bug ledger is one value of it. A literal the bug
-# ledger owns, reached by another register, is a second register inheriting the first one's
-# output; the bug ledger's own index, changed by one byte, is every project's index gone stale.
-[[mutation]]
-name = "every register's index is headed with the bug ledger's title"
-file = "src/stayfixed/ledger/index.py"
-before = '    return f"# {register.title}\n\n{marker}_\n"'
-after = '    return f"# Bug reports\n\n{marker}_\n"'
-reddens = [
-  "tests/ledger/test_register.py::test_no_bug_literal_reaches_a_second_registers_output",
-]
-
-[[mutation]]
-name = "every register files its entries from the bug ledger's template"
-file = "src/stayfixed/ledger/write.py"
-before = "    return register.schema.template.format("
-after = '    return __import__("stayfixed.ledger.register", fromlist=["BUG_SCHEMA"]).BUG_SCHEMA.template.format('
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_register_renders_its_own_title_prefix_and_fields",
-]
-
-[[mutation]]
-name = "one heading of the bug ledger's index sections changes"
-file = "src/stayfixed/ledger/register.py"
-before = '        Section("Partially fixed", ("partial",), _LIVE),'
-after = '        Section("Partly fixed", ("partial",), _LIVE),'
-reddens = [
-  "tests/ledger/test_register.py::test_the_bug_register_renders_the_index_byte_for_byte",
-]
-
-# A register declares what the engine may assume of it: a link it has, a date key, its void status.
-# The bug ledger's own literal, read in place of the declaration, is a second register inheriting it.
-[[mutation]]
-name = "the audits link follows the runbook rather than the register's audits directory"
-file = "src/stayfixed/ledger/index.py"
-before = "    if register.audits is not None:"
-after = "    if register.runbook is not None:"
-reddens = [
-  "tests/ledger/test_register.py::test_the_index_links_only_the_runbook_and_audits_its_register_declares[a-runbook-and-no-audits]",
-]
-
-[[mutation]]
-name = "the audits link is the relative path to the audits directory, not the ledger directory's link"
-file = "src/stayfixed/ledger/index.py"
-before = '''            f"({directory}/{register.audits}/)."'''
-after = '''            f"({_relative(register, f'{register.directory}/{register.audits}')}/)."'''
-reddens = [
-  "tests/ledger/test_register.py::test_the_bug_ledgers_header_and_links_keep_their_bytes_on_every_layout[bugs-is-index-dir-readme]",
-  "tests/ledger/test_register.py::test_the_bug_ledgers_header_and_links_keep_their_bytes_on_every_layout[bugs-is-index-dir-docs]",
-]
-
-[[mutation]]
-name = "the runbook link follows the register's audits directory"
-file = "src/stayfixed/ledger/index.py"
-before = "    if register.runbook is not None:"
-after = "    if register.audits is not None:"
-reddens = [
-  "tests/ledger/test_register.py::test_the_index_links_only_the_runbook_and_audits_its_register_declares[audits-and-no-runbook]",
-]
-
-[[mutation]]
-name = "the reader waives the required keys for the bug ledger's void status alone"
-file = "src/stayfixed/ledger/entries.py"
-before = "    if status != schema.void:"
-after = '    if status != "void":'
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_register_names_its_own_date_key_and_void_status",
-]
-
-[[mutation]]
-name = "the reader holds only the bug ledger's date key to the date rule"
-file = "src/stayfixed/ledger/entries.py"
-before = "    for key in schema.dates:"
-after = '    for key in ("found",):'
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_register_names_its_own_date_key_and_void_status",
-]
-
-[[mutation]]
-name = "the date refusal names the bug ledger's date key whatever the key"
-file = "src/stayfixed/ledger/entries.py"
-before = 'f"{_where(where)}: `{key}` must be an ISO date (YYYY-MM-DD), got {value!r}"'
-after = 'f"{_where(where)}: `found` must be an ISO date (YYYY-MM-DD), got {value!r}"'
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_register_names_its_own_date_key_and_void_status",
-]
-
-[[mutation]]
-name = "the bug ledger's date refusal changes its words"
-file = "src/stayfixed/ledger/entries.py"
-before = 'f"{_where(where)}: `{key}` names a date that does not exist: {value!r}"'
-after = 'f"{_where(where)}: `{key}` is not a date that exists: {value!r}"'
-reddens = [
-  "tests/ledger/test_register.py::test_the_bug_ledgers_date_refusals_keep_their_words[2026-02-30]",
-]
-
-# A value `new` is handed and its template has no line for is the caller's mistake, never a field
-# dropped in silence; a frozen record of this area hashes.
-[[mutation]]
-name = "a value the template has no line for is dropped in silence"
-file = "src/stayfixed/ledger/write.py"
-before = "    if unlined:"
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_write.py::test_a_value_the_template_has_no_line_for_is_refused_not_dropped[found]",
-  "tests/ledger/test_write.py::test_a_value_the_template_has_no_line_for_is_refused_not_dropped[fixed_in]",
-  "tests/ledger/test_write.py::test_a_value_the_template_has_no_line_for_is_refused_not_dropped[sevrity]",
-]
-
-[[mutation]]
-name = "an entry hashes its fields mapping with the rest"
-file = "src/stayfixed/ledger/entries.py"
-before = "    fields: Mapping[str, str] = field(hash=False)"
-after = "    fields: Mapping[str, str]"
-reddens = [
-  "tests/ledger/test_entries.py::test_an_entry_is_a_hashable_value",
-]
-
-[[mutation]]
-name = "renumber hands back its unswept files as a list"
-file = "src/stayfixed/ledger/write.py"
-before = "    return Renumbered(source, tuple(unswept), lists_naming_old=tuple(sorted(naming)))"
-after = "    return Renumbered(source, unswept, lists_naming_old=tuple(sorted(naming)))"
-reddens = [
-  "tests/ledger/test_write.py::test_renumber_moves_the_entry_rewrites_every_reference_and_leaves_a_void_pointer",
-]
-
-# A schema whose parts disagree is refused where it is built: each rule dropped lets one malformed
-# schema construct, to fail later on the first entry that reaches it.
-[[mutation]]
-name = "a schema need not require a key the reader takes from every entry"
-file = "src/stayfixed/ledger/register.py"
-before = '        if key != "related" and key not in schema.required:'
-after = "        if False:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[title-not-required]",
-]
-
-[[mutation]]
-name = "a schema's required keys and dates need not be keys"
-file = "src/stayfixed/ledger/register.py"
-before = "            if key not in keys:"
-after = "            if False:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[required-not-a-key]",
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[required-unless-void-not-a-key]",
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[date-not-a-key]",
-]
-
-[[mutation]]
-name = "a schema's date keys go unchecked"
-file = "src/stayfixed/ledger/register.py"
-before = '        ("dates", schema.dates),'
-after = ""
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[date-not-a-key]",
-]
-
-[[mutation]]
-name = "a schema's level need not be a key"
-file = "src/stayfixed/ledger/register.py"
-before = "    if schema.level not in keys:"
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[level-not-a-key]",
-]
-
-[[mutation]]
-name = "a schema's void status need not be a status"
-file = "src/stayfixed/ledger/register.py"
-before = "    if schema.void not in schema.statuses:"
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[void-not-a-status]",
-]
-
-[[mutation]]
-name = "a status no section gathers is left out of the index"
-file = "src/stayfixed/ledger/register.py"
-before = "        if gathered.count(status) != 1:"
-after = "        if gathered.count(status) > 1:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[status-in-no-section]",
-]
-
-[[mutation]]
-name = "a status two sections gather is listed twice"
-file = "src/stayfixed/ledger/register.py"
-before = "        if gathered.count(status) != 1:"
-after = "        if gathered.count(status) < 1:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[status-in-two-sections]",
-]
-
-[[mutation]]
-name = "a section may gather a status the schema lacks"
-file = "src/stayfixed/ledger/register.py"
-before = "            if status not in schema.statuses:"
-after = "            if False:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[section-status-not-a-status]",
-]
-
-[[mutation]]
-name = "a column may show a key the schema lacks"
-file = "src/stayfixed/ledger/register.py"
-before = '            if key not in keys or key == "related":'
-after = '            if key == "related":'
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[column-not-a-key]",
-]
-
-[[mutation]]
-name = "a column may show the related list"
-file = "src/stayfixed/ledger/register.py"
-before = '            if key not in keys or key == "related":'
-after = "            if key not in keys:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[column-is-related]",
-]
-
-[[mutation]]
-name = "a schema may list a key twice"
-file = "src/stayfixed/ledger/register.py"
-before = '    for name, named in (("key", schema.keys), ("list", schema.lists)):'
-after = '    for name, named in (("list", schema.lists),):'
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[key-listed-twice]",
-]
-
-[[mutation]]
-name = "a schema's level need not be required of a non-void entry"
-file = "src/stayfixed/ledger/register.py"
-before = '    if schema.level not in (*schema.required, *schema.required_unless_void):'
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[level-not-required]",
-]
-
-# The template is held to the entry grammar by a round trip through the reader, not by a second
-# reading of it: a template that leaves out a required key, or the related list, writes an entry
-# that reads back without it.
-[[mutation]]
-name = "the bug ledger's template writes no found line"
-file = "src/stayfixed/ledger/register.py"
-before = '''found: {{today}}
-{{source}}'''
-after = "{{source}}"
-reddens = [
-  "tests/ledger/test_register.py::test_what_new_writes_and_renumber_leaves_reads_back_through_the_entry_reader[default-bug_register]",
-  "tests/ledger/test_register.py::test_what_new_writes_and_renumber_leaves_reads_back_through_the_entry_reader[moved-and-renamed-bug_register]",
-]
-
-[[mutation]]
-name = "the bug ledger's template writes no related line"
-file = "src/stayfixed/ledger/register.py"
-before = '''fixed_in:
-{{related}}
-'''
-after = '''fixed_in:
-'''
-reddens = [
-  "tests/ledger/test_register.py::test_what_new_writes_and_renumber_leaves_reads_back_through_the_entry_reader[default-bug_register]",
-  "tests/ledger/test_register.py::test_what_new_writes_and_renumber_leaves_reads_back_through_the_entry_reader[moved-and-renamed-bug_register]",
-]
-
-# The entry `bugs new` writes names no one stack's file or location syntax; the old line was
-# a Python file and pytest's node id in every project.
-[[mutation]]
-name = "the bug entry template names a Python file again"
-file = "src/stayfixed/ledger/register.py"
-before = '- **Where:** `path/to/file`, and the symbol or line in it'
-after = '- **Where:** `path/to/file.py::symbol`'
-reddens = [
-  "tests/ledger/test_register.py::test_the_bug_entry_template_names_no_one_stacks_location_syntax",
-]
-
 # Each reader of a path claim asks `prose.present_within` rather than `exists()`, which follows a
 # committed symlink out of the tree and answers about the machine.
 [[mutation]]
 name = "the plan lint follows a symlink out of the tree"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "                if present_within(root, landed) is not False:"
 after = "                if landed.exists():"
 reddens = [
@@ -1034,20 +303,11 @@ reddens = [
 
 [[mutation]]
 name = "the AGENTS.md link check follows a symlink out of the tree"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "        if present_within(root, landed) is False"
 after = "        if not landed.exists()"
 reddens = [
   "tests/docs/test_hygiene.py::test_a_link_through_a_symlink_out_of_the_tree_is_not_asked_of_the_filesystem",
-]
-
-[[mutation]]
-name = "memory refs follows a symlink out of the tree"
-file = "src/stayfixed/memory/refs.py"
-before = "    return present_within(root, path) is not False"
-after = "    return path.exists()"
-reddens = [
-  "tests/memory/test_refs.py::test_a_reference_through_a_symlink_out_of_the_tree_is_not_asked_of_the_filesystem",
 ]
 
 # 2 is reserved for a refusal or an internal error, and a caller is told never to read it as
@@ -1056,7 +316,7 @@ reddens = [
 # being broken, with nothing in the message the operator can act on.
 [[mutation]]
 name = "a non-UTF-8 document reads as an internal error again"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = '''    except UnicodeDecodeError as error:
         raise Failure(f"{shown}: is not valid UTF-8 ({error.reason})") from None'''
 after = '''    except RecursionError as error:
@@ -1072,25 +332,13 @@ reddens = [
 # a latin-1 byte in a note escaped the walk instead of being quarantined onto `unreadable`.
 [[mutation]]
 name = "a non-UTF-8 note escapes the walk instead of being quarantined"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = '''    except UnicodeDecodeError as exc:
         raise NoteError(f"{path} is not valid UTF-8 ({exc.reason})") from None'''
 after = '''    except RecursionError as exc:
         raise NoteError(f"{path} is not valid UTF-8 ({exc})") from None'''
 reddens = [
   "tests/memory/test_notes.py::test_a_note_that_is_not_utf8_is_quarantined_rather_than_an_internal_error",
-  "tests/memory/test_refs.py::test_a_note_that_is_not_utf8_is_a_finding_not_an_internal_error",
-]
-
-[[mutation]]
-name = "a note that stops decoding after the walk is an internal error"
-file = "src/stayfixed/memory/refs.py"
-before = '''    except UnicodeDecodeError as exc:
-        raise Failure(f"{quoted(note.path.name)} is not valid UTF-8 ({exc.reason})") from None'''
-after = '''    except RecursionError as exc:
-        raise Failure(f"{quoted(note.path.name)} is not valid UTF-8 ({exc})") from None'''
-reddens = [
-  "tests/memory/test_refs.py::test_a_note_that_stops_decoding_after_the_walk_is_a_failure_not_an_internal_error",
 ]
 
 # `check-ignore` C-quotes a non-ASCII path on output, so the answer never equals the path that
@@ -1099,29 +347,18 @@ reddens = [
 # its author cannot satisfy, because creating an ignored file changes nothing.
 [[mutation]]
 name = "the roadmap's ignore check cannot match a non-ASCII path"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '''    stdin = "\0".join(p.relative_to(root).as_posix() for p in paths)
     code, out = git_run(root, "check-ignore", "--no-index", "--stdin", "-z", stdin=stdin)'''
 after = '''    stdin = "\n".join(p.relative_to(root).as_posix() for p in paths)
     code, out = git_run(root, "check-ignore", "--no-index", "--stdin", stdin=stdin)'''
 reddens = ["tests/docs/test_trail.py::test_an_ignored_document_whose_name_is_not_ascii_is_not_listed"]
 
-# The memory half of this is not reachable through a note today: the shared `prose` grammar
-# admits only `[A-Za-z0-9_./-]`, which git never quotes. The query is fixed and pinned anyway
-# because that class is the kind that widens — it already widened once, to `.ts`/`.tsx` — and a
-# widened grammar would arrive with the defect already in place. The test is at `_ignored`.
-[[mutation]]
-name = "the note reference guard's ignore check cannot match a non-ASCII path"
-file = "src/stayfixed/memory/refs.py"
-before = '''        root, "check-ignore", "--no-index", "--stdin", "-z", stdin="\0".join(sorted(targets))'''
-after = '''        root, "check-ignore", "--no-index", "--stdin", stdin="\n".join(sorted(targets))'''
-reddens = ["tests/memory/test_refs.py::test_the_ignore_query_matches_a_non_ascii_path_it_asked_about"]
-
 # A markdown link is read from its own document's directory; only the boundary is the root.
 # Containing against the document's directory instead refuses a link from `docs/` into `src/`.
 [[mutation]]
 name = "a link is contained against its own document's directory instead of the root"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = '        landed = resolves_within(root, target, base=agents_path.parent)'
 after = '        landed = resolves_within(agents_path.parent, target)'
 reddens = [
@@ -1135,7 +372,7 @@ reddens = [
 # stale forever with nothing to do about it short of renaming the file.
 [[mutation]]
 name = "a document filename carries the end marker into the generated roadmap"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '''        if not (_interpolable(row) and _interpolable(link) and utf_8_name(path.name)):
             raise Failure(_UNLISTABLE.format(row=row, roadmap=config.paths.roadmap, marker=MARKER))'''
 after = "        pass"
@@ -1150,7 +387,7 @@ reddens = [
 # `docs trail --check` stayed stale after every successful `docs trail`.
 [[mutation]]
 name = "a carriage return in a listed value reaches the generated roadmap"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '    return not ({"\n", "\r"} & set(value)) and MARKER not in value and END_MARKER not in value'
 after = '    return "\n" not in value and MARKER not in value and END_MARKER not in value'
 reddens = [
@@ -1161,7 +398,7 @@ reddens = [
 # hold": a name the disk holds in bytes that are not UTF-8 is never written into a UTF-8 file.
 [[mutation]]
 name = "the memory walk hands the index a note whose name it cannot write"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = """            if not utf_8_name(path.name):
                 unreadable.append((path, f"{path}: {NAME_NOT_UTF_8}"))
                 continue
@@ -1172,12 +409,12 @@ reddens = [
   "tests/memory/test_notes.py::test_a_note_named_in_bytes_that_are_not_utf_8_is_quarantined",
 ]
 
-# A checkout this machine binds to one project is not bound to another its `stayfixed.toml` names
+# A checkout this machine binds to one project is not bound to another its `drybag.toml` names
 # later: the name is the repository's, and a share it picks that the binding never named would
 # read another project's notes.
 [[mutation]]
 name = "a checkout's binding reads a project it was not bound to"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "    return BOUND if found is not None and found.project == project else UNBOUND"
 after = "    return BOUND if found is not None else UNBOUND"
 reddens = [
@@ -1189,25 +426,11 @@ reddens = [
 # frontmatter, and `memory index --check` fails in every project attached to a fresh overlay.
 [[mutation]]
 name = "the note walk stops skipping underscore-prefixed files"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = '''            if path.name.startswith((".", "_")):'''
 after = '''            if path.name.startswith("."):'''
 reddens = [
   "tests/overlay/test_template.py::test_nothing_in_a_fresh_common_memory_fails_the_note_reader",
-]
-
-# The rows and floors that report on quantities they never looked at.
-#
-# Three of the five smoke-fixture gate rows asserted `exit 0`, which is also what a torn-out
-# gate produces — the author closed exactly this for `plan check` and for none of the others.
-# Each such guard was removed on its own and `tests/test_fixtures.py` was 30 green every time.
-[[mutation]]
-name = "the bug ledger reports itself uninitialised and checks nothing"
-file = "src/stayfixed/ledger/check.py"
-before = "    return not fsops.is_dir(directory) and not is_generated_index(index_text(root, register))"
-after = "    return True"
-reddens = [
-  "tests/test_fixtures.py::test_the_gates_on_the_fixture_report_what_they_examined[bugs check]",
 ]
 
 # `docs check` is the row no success field can hold: it answers `findings: []` and the same
@@ -1215,7 +438,7 @@ reddens = [
 # violation per walk, so each walk has a mutation of its own.
 [[mutation]]
 name = "the documentation budget walk stops reporting a document over its budget"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "    if measured > limit:"
 after = "    if False:"
 reddens = [
@@ -1224,68 +447,41 @@ reddens = [
 
 [[mutation]]
 name = "the documentation link walk stops asking whether a target is there"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "    for target in local_markdown_targets(blank_fences(agents)):"
 after = "    for target in ():"
 reddens = [
   "tests/test_fixtures.py::test_docs_check_on_the_fixture_reads_the_documents_it_is_about",
 ]
 
-# --- One sentence per `--check` --------------------------------------------------------------
-# `--check` was registered five times with five sentences in the tree that built `command.py`'s
-# machinery for `--root`, `--machine`, `--store`, `--dry-run` and `--home`. The mutation is the
-# drift itself, restored: one parser spelling its own sentence again.
-[[mutation]]
-name = "one --check spells its own help string again"
-file = "src/stayfixed/ledger/commands.py"
-before = '    index.add_argument("--check", action="store_true", help=CHECK_HELP)'
-after = '    index.add_argument("--check", action="store_true", help="fail if the index is stale")'
-reddens = [
-  "tests/test_command.py::test_every_shared_flag_carries_the_one_help_string_or_a_named_exception",
-]
-
-# In the block led by `mutations/`'s "a gate that could not judge counts as passing": every
-# configured gate is a value CI reads, and each built-in finds what its area's command finds.
+# Each gate function finds what its area's command finds.
 [[mutation]]
 name = "the docs gate drops the budget checks"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "    return check_budgets(root, config) + check_links(root, config)"
 after = "    return check_links(root, config)"
-reddens = ["tests/assess/test_gates.py::test_the_docs_gate_finds_an_over_budget_agents_file"]
-
-[[mutation]]
-name = "the bugs gate finds nothing"
-file = "src/stayfixed/ledger/check.py"
-before = "    return register_gate(root, config, bug_register(config), base, locate=located_bug_register)"
-after = "    return []"
-reddens = ["tests/assess/test_gates.py::test_the_bugs_gate_finds_a_broken_entry"]
-
-[[mutation]]
-name = "the plan gate finds nothing"
-file = "src/stayfixed/docs/plans.py"
-before = "    return lint(root, config, plans=[], base=base).findings"
-after = "    return []"
-reddens = ["tests/assess/test_gates.py::test_the_plan_gate_finds_a_plan_the_change_touches"]
+reddens = [
+  "tests/docs/test_commands.py::test_a_non_utf8_roadmap_or_plan_exits_1_through_the_frame_and_never_2",
+]
 
 [[mutation]]
 name = "the trail gate reports a stale listing as current"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '    return [Finding(TRAIL_STALE, config.paths.roadmap, None, "")]'
 after = "    return []"
-reddens = ["tests/assess/test_gates.py::test_a_stale_trail_is_a_failing_gate"]
+reddens = [
+  "tests/docs/test_trail.py::test_the_trail_gate_passes_a_current_listing_and_names_a_stale_one",
+]
 
-# "No ledger yet" is read off the tree, which a pull request writes: with the arm answering
-# nothing, a change that deletes the ledger and its index switches an enforced `bugs` gate off
-# while code still cites entry files.
+# A missing roadmap is the trail gate not judging the tree: it raises, as every gate that cannot
+# judge does, and is read as could not run, which fails an enforced gate.
 [[mutation]]
-name = "a tree with no ledger reports no citation of an entry file"
-file = "src/stayfixed/ledger/check.py"
-before = "        return _unledgered(root, config, register, carried)"
+name = "a missing roadmap is a trail gate that passes"
+file = "src/drybag/docs/trail.py"
+before = '        raise Failure(f"{config.paths.roadmap} does not exist")'
 after = "        return []"
 reddens = [
-  "tests/ledger/test_check.py::test_with_no_ledger_every_citation_of_an_entry_file_dangles",
-  "tests/ledger/test_commands.py::test_check_reports_a_citation_when_there_is_no_ledger",
-  "tests/assess/test_gate_command.py::test_deleting_the_ledger_does_not_switch_an_enforced_bugs_gate_off",
+  "tests/docs/test_trail.py::test_a_missing_roadmap_is_a_gate_that_cannot_judge",
 ]
 
 # Inside a work tree, a filter git gave no answer for — it could not be run, ran past its time
@@ -1294,7 +490,7 @@ reddens = [
 # filter, because each names its own line.
 [[mutation]]
 name = "the trail reads an ignore question git gave no answer to as nothing ignored"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '        _unasked(root, "check-ignore", code, "ignores", "a local-only one")'
 after = "        pass"
 reddens = [
@@ -1304,7 +500,7 @@ reddens = [
 
 [[mutation]]
 name = "the trail reads an untracked question git gave no answer to as nothing untracked"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '        _unasked(root, "ls-files", code, "tracks", "an untracked one")'
 after = "        pass"
 reddens = [
@@ -1316,7 +512,7 @@ reddens = [
 # change's head made `plan check`'s range empty, and it printed OK having linted nothing.
 [[mutation]]
 name = "plan check's default base is a short name a tag can shadow"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    base = base or local_base(config)"
 after = '    base = base or f"origin/{config.project.base_branch}"'
 reddens = ["tests/docs/test_plans.py::test_a_tag_named_like_the_tracking_branch_does_not_choose_the_default_base"]
@@ -1326,7 +522,7 @@ reddens = ["tests/docs/test_plans.py::test_a_tag_named_like_the_tracking_branch_
 # parser as one that does not parse.
 [[mutation]]
 name = "a trail.toml nested past the parser escapes its reader"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "    except UNPARSEABLE as exc:"
 after = "    except tomllib.TOMLDecodeError as exc:"
 reddens = [
@@ -1340,7 +536,7 @@ reddens = [
 # else is refused.
 [[mutation]]
 name = "a theme pattern is compiled with re again, whose backtracking a repository can choose"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = '            themes.append((entry["label"], compile_theme(entry["pattern"])))'
 after = '            themes.append((entry["label"], re.compile(entry["pattern"])))'
 reddens = ["tests/docs/test_themes.py::test_a_pattern_re_would_backtrack_on_for_hours_answers_at_once"]
@@ -1350,33 +546,33 @@ reddens = ["tests/docs/test_themes.py::test_a_pattern_re_would_backtrack_on_for_
 # name.
 [[mutation]]
 name = "a theme pattern of any length is compiled"
-file = "src/stayfixed/docs/themes.py"
+file = "src/drybag/docs/themes.py"
 before = "    if len(pattern) > PATTERN_MAX_CHARS:"
 after = "    if False:"
 reddens = [
-  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_stayfixed_s_words",
+  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_drybag_s_words",
   "tests/docs/test_themes.py::test_a_pattern_is_compiled_up_to_its_bound_and_refused_past_it",
 ]
 
 [[mutation]]
 name = "a trail.toml of any number of themes is read"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "    if len(declared) > THEMES_MAX:"
 after = "    if False:"
 reddens = [
-  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_stayfixed_s_words",
+  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_drybag_s_words",
 ]
 
 [[mutation]]
 name = "a theme piece is looked for from the start of the name, not after the piece before it"
-file = "src/stayfixed/docs/themes.py"
+file = "src/drybag/docs/themes.py"
 before = "            at = _find(name, piece, position)"
 after = "            at = _find(name, piece, 0)"
 reddens = ["tests/docs/test_themes.py::test_every_pattern_in_the_language_matches_as_re_search_does"]
 
 [[mutation]]
 name = "regular-expression syntax outside the theme language is read as literal text"
-file = "src/stayfixed/docs/themes.py"
+file = "src/drybag/docs/themes.py"
 before = "        elif char in _REFUSED:"
 after = "        elif False:"
 reddens = ["tests/docs/test_themes.py::test_syntax_outside_the_language_is_refused_by_the_rule_alone"]
@@ -1385,126 +581,16 @@ reddens = ["tests/docs/test_themes.py::test_syntax_outside_the_language_is_refus
 # quadratic, over a document the change under review commits.
 [[mutation]]
 name = "the markdown link reader backtracks quadratically again"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = '_MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\[\]]+\]\(([^()]+)\)")'
 after = '_MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")'
 reddens = ["tests/docs/test_hygiene.py::test_a_text_of_unclosed_links_is_read_in_linear_time"]
-
-# "No ledger" is read off the tree, which a pull request writes: the `bugs` gate asks its base
-# whether it carried the ledger, and with no ledger in the tree every mention of an identifier
-# dangles as much as a citation of its file. A base git cannot list is could not run.
-[[mutation]]
-name = "the uninitialised arm ignores the base's ledger"
-file = "src/stayfixed/ledger/check.py"
-before = "    if base is not None and base.place is not None:"
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_check.py::test_a_tree_that_deleted_the_base_s_ledger_is_one_ledger_removed_finding",
-  "tests/ledger/test_commands.py::test_check_with_a_base_answers_for_a_ledger_the_base_carries",
-  "tests/assess/test_gate_command.py::test_deleting_the_ledger_and_its_index_fails_an_enforced_bugs_gate",
-]
-
-# Ledger entries are append-only: `bugs renumber` leaves a `void` entry at the number it moves
-# from. Deleting every entry while keeping the directory (a `.gitkeep`) and regenerating the empty
-# index left a ledger that was not "uninitialised", the base was asked nothing, and an enforced
-# `bugs` gate passed, with the mentions gone or kept under the fixtures marker. Against a base,
-# every entry file it carries that the tree lacks is `entry-removed`, in every arm.
-[[mutation]]
-name = "the entries the base carries are never compared with the tree's"
-file = "src/stayfixed/ledger/check.py"
-before = "        if name not in present"
-after = "        if False"
-reddens = [
-  "tests/ledger/test_check.py::test_an_entry_the_base_carries_and_the_tree_lacks_is_entry_removed",
-  "tests/ledger/test_check.py::test_one_entry_removed_of_several_is_named_and_the_rest_are_not",
-  "tests/ledger/test_check.py::test_a_ledger_whose_directory_went_and_index_stayed_names_each_removed_entry",
-  "tests/assess/test_gate_command.py::test_deleting_every_entry_but_keeping_the_directory_fails_an_enforced_bugs_gate",
-]
-
-# The ledger loads its entries by exact name, so the tree is asked for exact names too: looked up
-# one by one, a filesystem that folds case found `BR-001.md` at `br-001.md`, and a rename in case
-# alone passed on macOS while Linux refused it. The test makes the lookup fold on every runner.
-[[mutation]]
-name = "an entry the base carries is looked up by a name the filesystem may fold"
-file = "src/stayfixed/ledger/check.py"
-before = "        if name not in present"
-after = "        if not os.path.lexists(entry_dir(root, bug_register(config)) / name)"
-reddens = [
-  "tests/ledger/test_check.py::test_an_entry_renamed_only_in_case_is_entry_removed_where_the_filesystem_folds_case",
-]
-
-# Only a `<PREFIX>-nnn.md` directly under the ledger directory is an entry: a README, an audit in
-# a subdirectory or any other note there may be deleted without reading as a deleted entry.
-[[mutation]]
-name = "every markdown file the base carries under the ledger directory reads as an entry"
-file = "src/stayfixed/ledger/check.py"
-before = '            and held.ids.is_identifier(name.removeprefix(under).removesuffix(".md"))'
-after = "            and True"
-reddens = [
-  "tests/ledger/test_check.py::test_deleting_what_is_not_an_entry_under_the_ledger_directory_removes_no_entry",
-]
-
-[[mutation]]
-name = "the base's ledger is listed without its entries"
-file = "src/stayfixed/ledger/check.py"
-before = '            root, "ls-tree", "-r", "-z", "--name-only", fork, "--", held.directory, held.index'
-after = '            root, "ls-tree", "-z", "--name-only", fork, "--", held.directory, held.index'
-reddens = [
-  "tests/ledger/test_check.py::test_an_entry_the_base_carries_and_the_tree_lacks_is_entry_removed",
-  "tests/assess/test_gate_command.py::test_deleting_every_entry_but_keeping_the_directory_fails_an_enforced_bugs_gate",
-]
-
-# The bugs gate against a base: a base shaped like an option is refused before git sees it, a bare
-# mention still dangles where there is no ledger, and `bugs check --base` hands its base on.
-[[mutation]]
-name = "the bugs gate's base reaches git shaped like an option"
-file = "src/stayfixed/ledger/check.py"
-before = '    if base.startswith("-"):'
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_check.py::test_a_base_git_cannot_list_never_reads_as_a_base_with_no_ledger",
-]
-
-[[mutation]]
-name = "with no ledger a bare mention is not a finding"
-file = "src/stayfixed/ledger/check.py"
-before = "    found.extend(_dangling_mentions(root, config, register, empty))"
-after = "    pass"
-reddens = [
-  "tests/ledger/test_check.py::test_with_no_ledger_a_bare_mention_dangles_too",
-  "tests/assess/test_gate_command.py::test_deleting_the_ledger_and_its_index_fails_an_enforced_bugs_gate[mentioned]",
-]
-
-[[mutation]]
-name = "bugs check drops its --base"
-file = "src/stayfixed/ledger/commands.py"
-before = '    found = bugs_gate(root, config, args.base or "")'
-after = "    found = bugs_gate(root, config)"
-reddens = [
-  "tests/ledger/test_commands.py::test_check_with_a_base_answers_for_a_ledger_the_base_carries",
-]
-
-# `bugs check` answers with the `bugs` gate's own function, so a step either gains, a filter or a
-# register built another way, is the other's too: the command cannot pass what a gate run fails.
-# Reaching past the gate to the register gate it runs answers the same today, and only a finding
-# planted in `bugs_gate` alone tells the two apart.
-[[mutation]]
-name = "bugs check answers beside the bugs gate rather than through it"
-file = "src/stayfixed/ledger/commands.py"
-before = '''    # The `bugs` gate itself, so this command and a gate run cannot disagree.
-    found = bugs_gate(root, config, args.base or "")'''
-after = '''    from stayfixed.ledger.check import register_gate
-
-    found = register_gate(root, config, bug_register(config), args.base or "")'''
-reddens = [
-  "tests/ledger/test_commands.py::test_check_answers_with_the_bugs_gate_s_own_function",
-]
 
 # In the block led by `mutations/`'s "printable passes a name outside the grammar through": a name
 # the repository chose is printed through `printed.printable` or `printed.quoted`.
 [[mutation]]
 name = "the undeclared-document report prints a crafted name raw"
-file = "src/stayfixed/docs/commands.py"
+file = "src/drybag/docs/commands.py"
 before = "listed([printable(row) for row in undeclared])"
 after = "listed(undeclared)"
 reddens = [
@@ -1513,7 +599,7 @@ reddens = [
 
 [[mutation]]
 name = "a stale trail.toml key reaches the refusal unescaped"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "listed([clipped(key) for key in stale])"
 after = "listed(stale)"
 reddens = [
@@ -1522,7 +608,7 @@ reddens = [
 
 [[mutation]]
 name = "a document the docs area cannot read is named unescaped"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "    shown = quoted(Path(where).as_posix())"
 after = "    shown = str(where)"
 reddens = [
@@ -1530,44 +616,8 @@ reddens = [
 ]
 
 [[mutation]]
-name = "a ledger refusal names its entry file unescaped"
-file = "src/stayfixed/ledger/entries.py"
-before = "    return quoted(path.as_posix())"
-after = "    return path.as_posix()"
-reddens = [
-  "tests/ledger/test_commands.py::test_index_names_a_crafted_entry_it_cannot_read_escaped_never_raw",
-]
-
-[[mutation]]
-name = "a ledger entry that is not UTF-8 is named unescaped"
-file = "src/stayfixed/ledger/entries.py"
-before = "raise LedgerError(f\"{_where(where)}: is not valid UTF-8 ({error.reason})\") from error"
-after = "raise LedgerError(f\"{where}: is not valid UTF-8 ({error.reason})\") from error"
-reddens = [
-  "tests/ledger/test_commands.py::test_index_names_a_crafted_entry_it_cannot_read_escaped_never_raw",
-]
-
-[[mutation]]
-name = "a ledger entry's unknown key refusal names the file unescaped"
-file = "src/stayfixed/ledger/entries.py"
-before = "raise LedgerError(f\"{_where(path)}:{number}: unknown frontmatter key `{key}`\")"
-after = "raise LedgerError(f\"{path}:{number}: unknown frontmatter key `{key}`\")"
-reddens = [
-  "tests/ledger/test_commands.py::test_index_names_a_crafted_entry_it_cannot_read_escaped_never_raw",
-]
-
-[[mutation]]
-name = "bugs renumber lists a file it could not sweep raw"
-file = "src/stayfixed/ledger/commands.py"
-before = "printable(u.path)"
-after = "u.path"
-reddens = [
-  "tests/ledger/test_commands.py::test_renumber_fails_naming_a_file_the_sweep_could_not_rewrite",
-]
-
-[[mutation]]
 name = "memory joins the names it held back raw"
-file = "src/stayfixed/memory/commands.py"
+file = "src/drybag/memory/commands.py"
 before = "    return listed([printable(name) for name in names])"
 after = "    return listed(names)"
 reddens = [
@@ -1577,7 +627,7 @@ reddens = [
 
 [[mutation]]
 name = "memory index names the refused pointers raw"
-file = "src/stayfixed/memory/commands.py"
+file = "src/drybag/memory/commands.py"
 before = "_EXTRA_NOT_PUBLISHED.format(names=_printed(reconciled.refused_extra), index=index)"
 after = "_EXTRA_NOT_PUBLISHED.format(names=\", \".join(reconciled.refused_extra), index=index)"
 reddens = [
@@ -1586,7 +636,7 @@ reddens = [
 
 [[mutation]]
 name = "memory index names an unreadable note by its absolute path"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "unreadable=[path.relative_to(store.path).as_posix() for path, _ in reconciled.unreadable],"
 after = "unreadable=[str(path) for path, _ in reconciled.unreadable],"
 reddens = [
@@ -1596,13 +646,11 @@ reddens = [
 
 # A list of names on a summary line takes `findings.listed`'s one cap, `LISTED_LIMIT`, and
 # counts the rest; `--json` carries every name. The stale-key refusal has no `--json` and is
-# capped too, naming the first keys in sorted order and saying a re-run names the rest. And the
-# file `bugs renumber` could not sweep is named by its own field, never by splitting the
-# `"path: reason"` message at a colon the path itself may hold.
+# capped too, naming the first keys in sorted order and saying a re-run names the rest.
 
 [[mutation]]
 name = "the undeclared-document report names every document on the line"
-file = "src/stayfixed/docs/commands.py"
+file = "src/drybag/docs/commands.py"
 before = "listed([printable(row) for row in undeclared])"
 after = "', '.join(printable(row) for row in undeclared)"
 reddens = [
@@ -1611,7 +659,7 @@ reddens = [
 
 [[mutation]]
 name = "the stale trail.toml key refusal names every key"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "listed([clipped(key) for key in stale])"
 after = "\", \".join(clipped(key) for key in stale)"
 reddens = [
@@ -1620,31 +668,21 @@ reddens = [
 
 [[mutation]]
 name = "memory names every note or pointer it held back on the line"
-file = "src/stayfixed/memory/commands.py"
+file = "src/drybag/memory/commands.py"
 before = "    return listed([printable(name) for name in names])"
 after = "    return \", \".join(printable(name) for name in names)"
 reddens = [
   "tests/memory/test_commands.py::test_many_unreadable_notes_are_counted_and_named_at_most_to_the_listed_limit",
 ]
 
-[[mutation]]
-name = "bugs renumber names a file by its message cut at the first colon"
-file = "src/stayfixed/ledger/commands.py"
-before = "printable(u.path)"
-after = "printable(f\"{u.path}: {u.reason}\".split(':', 1)[0])"
-reddens = [
-  "tests/ledger/test_commands.py::test_renumber_fails_naming_a_file_the_sweep_could_not_rewrite[colon]",
-]
-
 # The bounds `findings.listed` sets, carried to the rest of the class. A name the refusal is the
 # only channel for is clipped to its start and its length when nothing bounds it upstream; the
-# re-run note is said only when keys were left off; a file `bugs renumber` could not sweep is
-# carried in `--json` as a path and a reason, the reason naming no absolute path; and the resolver's
+# re-run note is said only when keys were left off; and the resolver's
 # reason for a store with no group resolved is counted and capped.
 
 [[mutation]]
 name = "the stale-key refusal says a re-run names the rest at exactly the limit"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "if len(stale) > LISTED_LIMIT else \"\""
 after = "if len(stale) >= LISTED_LIMIT else \"\""
 reddens = [
@@ -1653,7 +691,7 @@ reddens = [
 
 [[mutation]]
 name = "a stale trail.toml key prints unclipped"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "listed([clipped(key) for key in stale])"
 after = "listed([repr(key) for key in stale])"
 reddens = [
@@ -1662,97 +700,11 @@ reddens = [
 
 [[mutation]]
 name = "a theme label prints unclipped in its refusal"
-file = "src/stayfixed/docs/trail.py"
+file = "src/drybag/docs/trail.py"
 before = "{clipped(entry['label'])}"
 after = "{clipped(entry['label'][:120]) + entry['label'][120:]}"
 reddens = [
-  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_stayfixed_s_words",
-]
-
-[[mutation]]
-name = "the sweep records a write failure in the error's own str"
-file = "src/stayfixed/ledger/write.py"
-before = "f\"could not be written ({fsops.said(error)})\""
-after = "f\"could not be written ({error})\""
-reddens = [
-  "tests/ledger/test_commands.py::test_renumber_fails_naming_a_file_the_sweep_could_not_rewrite[plain]",
-]
-
-[[mutation]]
-name = "bugs renumber carries each file as a path: reason string again"
-file = "src/stayfixed/ledger/commands.py"
-before = "\"unswept\": [asdict(u) for u in result.unswept],"
-after = "\"unswept\": [f\"{u.path}: {u.reason}\" for u in result.unswept],"
-reddens = [
-  "tests/ledger/test_commands.py::test_renumber_fails_naming_a_file_the_sweep_could_not_rewrite[colon]",
-  "tests/ledger/test_commands.py::test_renumber_names_a_file_it_could_not_read_without_this_machine_s_paths",
-]
-
-# In the block led by `mutations/`'s "init's custom-gate note keeps a limit of its own": every list
-# of names nothing bounds in number takes `findings.listed`.
-[[mutation]]
-name = "a duplicate identifier names every file that claims it"
-file = "src/stayfixed/ledger/check.py"
-before = "            joined = listed([str(h.path) for h in first])"
-after = "            joined = \", \".join(str(h.path) for h in first)"
-reddens = [
-  "tests/ledger/test_check.py::test_a_duplicate_identifier_names_at_most_the_listed_limit_of_its_files",
-]
-
-[[mutation]]
-name = "a duplicate identifier names its holders in path order"
-file = "src/stayfixed/ledger/check.py"
-before = "            first = sorted(holders, key=lambda h: h.path.stem != identifier)"
-after = "            first = holders"
-reddens = [
-  "tests/ledger/test_check.py::test_a_duplicate_identifier_names_its_own_file_first_whatever_the_sort",
-]
-
-# In the block led by `mutations/`'s "printable passes a name outside the grammar through": a name
-# the repository chose is printed through `printed.printable` or `printed.quoted`.
-[[mutation]]
-name = "memory refs names a note that stopped decoding unescaped"
-file = "src/stayfixed/memory/refs.py"
-before = "{quoted(note.path.name)} is not valid UTF-8"
-after = "{note.path.name} is not valid UTF-8"
-reddens = [
-  "tests/memory/test_refs.py::test_a_note_that_stops_decoding_is_named_escaped_never_raw",
-]
-
-[[mutation]]
-name = "the unresolved-groups line names the groups outside the data region"
-file = "src/stayfixed/memory/commands.py"
-before = "    \"{count} configured group(s) could not be resolved, so the walk read a subset and \""
-after = "    \"{count} configured group(s) could not be resolved ({names}), so the walk read a subset and \""
-reddens = [
-  "tests/memory/test_refs.py::test_the_unresolved_groups_line_names_no_group_outside_the_data_region",
-]
-
-[[mutation]]
-name = "the unresolved-groups reasons name each group unescaped"
-file = "src/stayfixed/memory/commands.py"
-before = "f\"{quoted(group)}: {unavailable[group]}\""
-after = "f\"{group}: {unavailable[group]}\""
-reddens = [
-  "tests/memory/test_refs.py::test_a_linked_group_with_no_overlay_is_named_escaped_never_raw",
-]
-
-[[mutation]]
-name = "the store names a linked group with no overlay unescaped"
-file = "src/stayfixed/memory/store.py"
-before = "f\"{clipped(group)} is a link and no overlay is recorded\""
-after = "f\"{group} is a link and no overlay is recorded\""
-reddens = [
-  "tests/memory/test_refs.py::test_a_linked_group_with_no_overlay_is_named_escaped_never_raw",
-]
-
-[[mutation]]
-name = "the store names a group linking outside the share unescaped"
-file = "src/stayfixed/memory/store.py"
-before = "f\"{clipped(group)} links outside this project's share of the overlay \""
-after = "f\"{group} links outside this project's share of the overlay \""
-reddens = [
-  "tests/memory/test_commands.py::test_a_group_linking_outside_the_share_is_named_escaped_never_raw",
+  "tests/docs/test_trail.py::test_a_theme_pattern_or_a_theme_count_past_its_bound_fails_in_drybag_s_words",
 ]
 
 # A gate that cannot answer must say so in its exit code; this one ran green for its whole
@@ -1760,7 +712,7 @@ reddens = [
 # `commit` could not, and `plan check` prints the cause as its own finding.
 [[mutation]]
 name = "an unresolvable base reads as a clean run"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = """    if isinstance(forks, ForkUnknown):
         raise _unresolved(forks, base, root)"""
 after = """    if isinstance(forks, ForkUnknown):
@@ -1769,14 +721,13 @@ reddens = [
   "tests/docs/test_plans.py::test_a_base_that_will_not_resolve_is_raised_never_an_ok",
   "tests/docs/test_plans.py::test_a_shallow_clone_is_a_base_that_will_not_resolve_never_an_older_fork_point",
   "tests/docs/test_plans.py::test_a_base_that_shares_no_history_with_the_tree_will_not_resolve",
-  "tests/assess/test_command.py::test_assess_after_init_with_no_origin_fetched_names_the_gates_that_cannot_judge",
 ]
 
 # A git that gave no answer is not a base that will not resolve: that finding's remedy is a deeper
 # checkout, sent to a clone that may hold every ref.
 [[mutation]]
 name = "plan reads a git that gave no answer as a base that will not resolve"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    if not unknown.answered:"
 after = "    if False:"
 reddens = [
@@ -1789,7 +740,7 @@ reddens = [
 # too, and merging it puts the plan back on the base unlinted.
 [[mutation]]
 name = "plan diffs against the one merge base git would pick"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    for fork in _forks(root, base):"
 after = "    for fork in _forks(root, base)[:1]:"
 reddens = [
@@ -1801,7 +752,7 @@ reddens = [
 # before the stack merged the base in, and fails on a file it never touched.
 [[mutation]]
 name = "plan lints a plan the base already holds as the change does"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = "    found &= changed(base)"
 after = "    found |= set()"
 reddens = [
@@ -1811,7 +762,7 @@ reddens = [
 # A diff git did not answer lists no plan, and no plan listed is an OK over nothing.
 [[mutation]]
 name = "plan reads a diff git did not answer as no plan changed"
-file = "src/stayfixed/docs/plans.py"
+file = "src/drybag/docs/plans.py"
 before = """    if code != 0:
         raise _unresolved(ForkUnknown.of(code), base, root)"""
 after = """    if False:
@@ -1820,92 +771,11 @@ reddens = [
   "tests/docs/test_plans.py::test_a_diff_git_gave_no_answer_for_is_not_a_shallow_checkout",
 ]
 
-# The ledger is compared with the commits HEAD forked from the base at, as `plan` compares with
-# them too: listed at the base's tip, an entry the base filed after a branch forked read as
-# one the branch deleted, and a branch forked before the first entry as deleting the ledger.
-[[mutation]]
-name = "the base's ledger is listed at its tip, not where the change forked from it"
-file = "src/stayfixed/ledger/check.py"
-before = """    forks = fork_points(root, base)
-    if isinstance(forks, ForkUnknown):"""
-after = """    forks = [base]
-    if isinstance(forks, ForkUnknown):"""
-reddens = [
-  "tests/ledger/test_check.py::test_a_branch_forked_before_the_base_filed_an_entry_deleted_nothing",
-  "tests/ledger/test_check.py::test_a_branch_forked_before_the_base_had_a_ledger_deleted_none",
-  "tests/ledger/test_check.py::test_a_deletion_is_named_on_a_stale_branch_and_on_a_merge_commit",
-  "tests/assess/test_gate_command.py::test_a_branch_behind_its_base_is_not_blamed_for_an_entry_the_base_filed_since",
-]
-
-# Every merge base is listed and their entries united: the one git picks alone can predate an
-# entry another carries, and a merge still deletes it.
-[[mutation]]
-name = "only the first of several merge bases is listed"
-file = "src/stayfixed/ledger/check.py"
-before = """    for fork in forks:
-        held = register"""
-after = """    for fork in forks[:1]:
-        held = register"""
-reddens = [
-  "tests/ledger/test_check.py::test_a_deletion_is_named_whichever_of_several_merge_bases_git_would_pick",
-]
-
-# Fork points that are not known are not "the base has no ledger", which would pass exactly the
-# deletion the question exists to catch.
-[[mutation]]
-name = "a fork point that is not known reads as a base with no ledger"
-file = "src/stayfixed/ledger/check.py"
-before = """    if isinstance(forks, ForkUnknown):
-        raise _unread(register, base, root, forks.cause, _paths(register))"""
-after = """    if isinstance(forks, ForkUnknown):
-        return _BaseLedger((), None)"""
-reddens = [
-  "tests/ledger/test_check.py::test_a_shallow_clone_is_a_failure_never_an_older_fork_point",
-  "tests/ledger/test_check.py::test_a_base_that_shares_no_history_with_the_tree_is_a_failure",
-  "tests/ledger/test_check.py::test_a_base_git_cannot_list_never_reads_as_a_base_with_no_ledger",
-  "tests/assess/test_gates.py::test_a_base_the_bugs_gate_cannot_list_is_a_gate_that_could_not_run",
-]
-
-# A listing git refuses at a fork point is no listing, and an empty one reads as no ledger.
-[[mutation]]
-name = "a listing git refuses reads as a base with no ledger"
-file = "src/stayfixed/ledger/check.py"
-before = """        if code != 0:
-            raise _unread(register, base, root, ForkUnknown.of(code).cause, _paths(held))"""
-after = """        if False:
-            raise _unread(register, base, root, ForkUnknown.of(code).cause, _paths(held))"""
-reddens = [
-  "tests/ledger/test_check.py::test_a_listing_git_refuses_at_a_merge_base_is_a_failure_never_an_empty_ledger",
-]
-
-# In the block led by `mutations/`'s "every file a gate reads reads as tracked": a gate's verdict is
-# taken over files git tracks, as CI's is.
-[[mutation]]
-name = "the trail gate's trail.toml is not asked about"
-file = "src/stayfixed/docs/trail.py"
-before = "    return [contained(root, config.paths.roadmap), trail_path(root, config)]"
-after = "    return [contained(root, config.paths.roadmap)]"
-reddens = [
-  "tests/assess/test_tracked.py::test_assess_reports_a_gate_that_reads_an_untracked_file_as_unable_to_judge_it[trail-toml]",
-]
-
-# `check_links` asks whether a target exists, and CI answers for the tracked tree: a link to a file
-# git does not track passes here and is `missing-link` there.
-[[mutation]]
-name = "the docs gate's link targets are not asked about"
-file = "src/stayfixed/docs/hygiene.py"
-before = "    return [contained(root, config.paths.agents_md), *linked]"
-after = "    return [contained(root, config.paths.agents_md)]"
-reddens = [
-  "tests/assess/test_tracked.py::test_a_file_the_always_loaded_document_links_to_is_read_by_the_docs_gate",
-  "tests/assess/test_tracked.py::test_a_linked_roadmap_git_does_not_track_is_read_by_both_gates",
-]
-
 # Overlay mode reads the composed store the binding names and nothing else: a `--store` naming a
 # directory the repository chose never stands in for the store that reaches the overlay's notes.
 [[mutation]]
 name = "overlay mode reads a named store"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "    if composed is not None:\n        # Overlay mode reads"
 after = "    if composed is not None and override is None:\n        # Overlay mode reads"
 reddens = [
@@ -1917,31 +787,31 @@ reddens = [
 # reason at all.
 [[mutation]]
 name = "a missing store directory is reported with no reason of its own"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "        return None, Unresolved(said, shown(base))"
 after = '        return None, Unresolved("", shown(base))'
 reddens = [
-  "tests/memory/test_refs.py::test_a_missing_store_directory_is_said_in_the_resolvers_own_words",
+  "tests/memory/test_commands.py::test_a_missing_store_directory_is_said_in_the_resolvers_own_words",
 ]
 
 # The resolver's detail carries the store's path, `paths.memory` or a group's name, all of them the
-# repository's, so a refusal prints stayfixed's sentence first and the detail only inside the
+# repository's, so a refusal prints drybag's sentence first and the detail only inside the
 # region `trust.wrap` marks as data. Joined into the lead, the detail prints ahead of the marker.
 [[mutation]]
 name = "a store refusal prints its repository-authored detail before the data region"
-file = "src/stayfixed/memory/commands.py"
+file = "src/drybag/memory/commands.py"
 before = "    lead = _SAID.format(said=reason.said)"
 after = "    lead = _SAID.format(said=str(reason))"
 reddens = [
-  "tests/memory/test_refs.py::test_a_missing_store_directory_is_said_in_the_resolvers_own_words",
+  "tests/memory/test_commands.py::test_a_missing_store_directory_is_said_in_the_resolvers_own_words",
 ]
 
 # A machine record naming an overlay root that is no longer there read as "no record of this
-# project; run `stayfixed attach`", and `attach --store <new place>` refuses a store outside the
+# project; run `drybag attach`", and `attach --store <new place>` refuses a store outside the
 # recorded root -- a refusal whose way out was a command that refuses.
 [[mutation]]
 name = "a recorded overlay root that is gone reads as an unrecorded project"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "        if not fsops.is_dir(overlay):"
 after = "        if False:"
 reddens = [
@@ -1952,34 +822,20 @@ reddens = [
 # region that marks repository text.
 [[mutation]]
 name = "the recorded overlay root is printed as repository text"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "            return None, Unresolved(OVERLAY_GONE.format(root=quoted(str(overlay))))"
 after = '            return None, Unresolved(OVERLAY_GONE.format(root="it"), quoted(str(overlay)))'
 reddens = [
   "tests/memory/test_commands.py::test_a_binding_refusal_names_its_own_cause_and_the_way_out_that_fits_it[overlay-gone]",
 ]
 
-# `bugs new` fetches for refs alone. Recursing into submodules, as git's default `on-demand` does,
-# asks each populated submodule's remote too: a destination the README does not disclose, whose
-# commit then lands in the submodule, and one whose failure fails the fetch and warns of a
-# collision nothing caused.
-[[mutation]]
-name = "the bugs new fetch recurses into submodules again"
-file = "src/stayfixed/ledger/write.py"
-before = '        "--no-recurse-submodules",'
-after = '        "--recurse-submodules=on-demand",'
-reddens = [
-  "tests/ledger/test_write.py::test_the_fetch_asks_origin_alone_and_never_a_submodules_remote[reachable]",
-  "tests/ledger/test_write.py::test_the_fetch_asks_origin_alone_and_never_a_submodules_remote[gone]",
-]
-
-# An area's `doctor.py` is imported by discovery and imports nothing of stayfixed at module level,
+# An area's `doctor.py` is imported by discovery and imports nothing of drybag at module level,
 # as CONTRIBUTING's "Areas" says. The mutation adds one module-level import to one of them.
 [[mutation]]
-name = "an area's doctor.py imports stayfixed at module level"
-file = "src/stayfixed/memory/doctor.py"
+name = "an area's doctor.py imports drybag at module level"
+file = "src/drybag/memory/doctor.py"
 before = "from typing import TYPE_CHECKING\n"
-after = "from typing import TYPE_CHECKING\n\nfrom stayfixed.errors import Failure\n"
+after = "from typing import TYPE_CHECKING\n\nfrom drybag.errors import Failure\n"
 reddens = [
   "tests/boundaries/test_discovery.py::test_an_areas_doctor_module_imports_only_inside_its_functions",
 ]
@@ -1987,10 +843,10 @@ reddens = [
 # The same import nested in a `try`, which runs on import all the same: a walk of the module's
 # top-level statements saw only the `try`.
 [[mutation]]
-name = "an area's doctor.py imports stayfixed at module level inside a try"
-file = "src/stayfixed/memory/doctor.py"
+name = "an area's doctor.py imports drybag at module level inside a try"
+file = "src/drybag/memory/doctor.py"
 before = "from typing import TYPE_CHECKING\n"
-after = "from typing import TYPE_CHECKING\n\ntry:\n    from stayfixed.memory.bundles import SLOTS\nexcept ImportError:\n    pass\n"
+after = "from typing import TYPE_CHECKING\n\ntry:\n    from drybag.memory.bundles import SLOTS\nexcept ImportError:\n    pass\n"
 reddens = [
   "tests/boundaries/test_discovery.py::test_an_areas_doctor_module_imports_only_inside_its_functions",
 ]
@@ -1999,371 +855,19 @@ reddens = [
 # store is a tree a clone commits.
 [[mutation]]
 name = "the note store's walk lists every entry"
-file = "src/stayfixed/memory/doctor.py"
+file = "src/drybag/memory/doctor.py"
 before = "            if listed > fsops.WALK_ENTRIES:"
 after = "            if False:"
 reddens = [
   "tests/memory/test_doctor.py::test_a_note_store_past_the_walk_cap_is_one_the_row_cannot_tell_about[4]",
 ]
 
-# A note's backticked path is resolved to ask whether it lies inside the store, and Python 3.11 and
-# 3.12 raise `RuntimeError` resolving a path through a symlink loop; the note and the loop are both
-# bytes a clone can commit, so the answer is a finding and never an internal error.
-[[mutation]]
-name = "refs lets a path it cannot resolve raise"
-file = "src/stayfixed/memory/refs.py"
-before = "        return resolved(root / target).is_relative_to(resolved(store.path))"
-after = "        return (root / target).resolve().is_relative_to(store.path.resolve())"
-reddens = [
-  "tests/memory/test_refs.py::test_a_reference_through_a_symlink_loop_is_a_finding_and_never_an_internal_error",
-]
-
-# A second register a project has not started reads its own directory, never the bug ledger's live one.
-[[mutation]]
-name = "the uninitialised arm reads the bug ledger's directory whatever the register"
-file = "src/stayfixed/ledger/check.py"
-before = "    directory = entry_dir(root, register)\n    return not fsops.is_dir(directory)"
-after = "    directory = root / \"docs/bugs\"\n    return not fsops.is_dir(directory)"
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_register_without_its_directory_is_inert_while_the_bug_ledger_is_live",
-]
-
-# The entries the base carries are named by the register's identifiers: read with the bug ledger's
-# default prefix, a second register's removed entry is no entry at all.
-[[mutation]]
-name = "the base's entries are read with the bug ledger's identifiers whatever the register"
-file = "src/stayfixed/ledger/check.py"
-before = '            and held.ids.is_identifier(name.removeprefix(under).removesuffix(".md"))'
-after = '            and type(held.ids)("BR").is_identifier(name.removeprefix(under).removesuffix(".md"))'
-reddens = [
-  "tests/ledger/test_register.py::test_the_gate_judges_a_second_register_against_its_base",
-]
-
-# Each text the gate renders names the register's own command group; the bug ledger's are pinned
-# to their old bytes by `test_the_bug_ledgers_refusals_are_unchanged`.
-[[mutation]]
-name = "the removed-entry refusal names the bug ledger's renumber whatever the register"
-file = "src/stayfixed/ledger/check.py"
-before = "    removed = ENTRY_REMOVED.format(name=register.name, void=register.schema.void)"
-after = '    removed = ENTRY_REMOVED.format(name="bugs", void=register.schema.void)'
-reddens = [
-  "tests/ledger/test_register.py::test_the_gate_judges_a_second_register_against_its_base",
-]
-
-[[mutation]]
-name = "the removed-ledger refusal names the bugs gate whatever the register"
-file = "src/stayfixed/ledger/check.py"
-before = "        removed = LEDGER_REMOVED.format(directory=directory, index=index, name=register.name)"
-after = '        removed = LEDGER_REMOVED.format(directory=directory, index=index, name="bugs")'
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_registers_findings_name_its_own_paths_and_commands",
-]
-
-[[mutation]]
-name = "an unread base names the bugs gate whatever the register"
-file = "src/stayfixed/ledger/check.py"
-before = '            what=what, name=register.name, base=quoted(base), root=root, cause=cause'
-after = '            what=what, name="bugs", base=quoted(base), root=root, cause=cause'
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_registers_findings_name_its_own_paths_and_commands",
-]
-
-[[mutation]]
-name = "a stale index is sent to the bug ledger's index command whatever the register"
-file = "src/stayfixed/ledger/check.py"
-before = "    return f\"is stale; run: {commands[0] if commands else f'stayfixed {register.name} index'}\""
-after = "    return f\"is stale; run: {commands[0] if commands else 'stayfixed bugs index'}\""
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_registers_findings_name_its_own_paths_and_commands",
-]
-
-# The body rules hold an entry to its register's levels: the evidence line to the levels the
-# register declares, the state bullet to the register's level key.
-[[mutation]]
-name = "the evidence line is required of the bug ledger's configured levels whatever the register"
-file = "src/stayfixed/ledger/check.py"
-before = "    required = set(register.evidence_boundary_for)"
-after = "    required = set(config.ledger.evidence_boundary_required_for)"
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_register_holds_its_own_level_to_the_body_rules[evidence-boundary]",
-]
-
-[[mutation]]
-name = "the state bullet is the bug ledger's severity whatever the register"
-file = "src/stayfixed/ledger/check.py"
-before = "    level = re.escape(register.schema.level.capitalize())"
-after = '    level = "Severity"'
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_register_holds_its_own_level_to_the_body_rules[state-in-body]",
-]
-
-# The scan looks where the project says and for what the register names.
-[[mutation]]
-name = "the mention scan reads the bug ledger's identifiers whatever the register"
-file = "src/stayfixed/ledger/scan.py"
-before = "    ids = register.ids\n    needle = f\"{ids.prefix}-\""
-after = "    ids = type(register.ids)(\"BR\")\n    needle = f\"{ids.prefix}-\""
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_registers_findings_name_its_own_paths_and_commands",
-]
-
-[[mutation]]
-name = "a citation is read with the bug ledger's prefix whatever the register"
-file = "src/stayfixed/ledger/scan.py"
-before = "    prefix = register.ids.prefix"
-after = '    prefix = "BR"'
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_registers_findings_name_its_own_paths_and_commands",
-]
-
-[[mutation]]
-name = "a citation is read under the bug ledger's directory name whatever the register"
-file = "src/stayfixed/ledger/scan.py"
-before = "    last = PurePosixPath(register.directory).name"
-after = '    last = "bugs"'
-reddens = [
-  "tests/ledger/test_register.py::test_a_second_registers_findings_name_its_own_paths_and_commands",
-]
-
-# The void entry `renumber` leaves is spelled from the register: the bug ledger's bytes are pinned by
-# `test_renumber_leaves_the_bug_ledgers_void_entry_byte_for_byte`.
-[[mutation]]
-name = "the void entry carries the bug ledger's void status whatever the register"
-file = "src/stayfixed/ledger/write.py"
-before = '        "status": f"status: {schema.void}",'
-after = '        "status": "status: void",'
-reddens = [
-  "tests/ledger/test_register.py::test_renumber_leaves_a_second_registers_own_void_entry",
-]
-
-[[mutation]]
-name = "the void entry dates the move under the bug ledger's found whatever the register"
-file = "src/stayfixed/ledger/write.py"
-before = '    lines.update((key, f"{key}: {today}") for key in schema.dates if key in schema.required)'
-after = '    lines.update(found=f"found: {today}")'
-reddens = [
-  "tests/ledger/test_register.py::test_renumber_leaves_a_second_registers_own_void_entry",
-]
-
-# A schema `renumber` could not leave a readable void entry for is refused where it is built.
-[[mutation]]
-name = "a schema may require a key the void entry cannot fill"
-file = "src/stayfixed/ledger/register.py"
-before = "        if key not in ENGINE_KEYS and key not in schema.dates:"
-after = "        if False:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[required-not-a-date]",
-]
-
-[[mutation]]
-name = "a schema need not carry the related key the void entry points through"
-file = "src/stayfixed/ledger/register.py"
-before = '    if "related" not in keys:'
-after = "    if False:"
-reddens = [
-  "tests/ledger/test_register.py::test_a_schema_built_wrong_is_refused_at_construction[no-related-key]",
-]
-
-# The plan lint and the memory graph read the bug ledger's identifiers through its register, as the
-# project configures them.
-[[mutation]]
-name = "the Fixes claim reads the default prefix whatever the project configures"
-file = "src/stayfixed/docs/plans.py"
-before = "    fixes = bug_register(config).ids.fixes"
-after = '    fixes = type(bug_register(config).ids)("BR").fixes'
-reddens = [
-  "tests/docs/test_plans.py::test_a_fixes_claim_names_the_bug_ledgers_configured_prefix",
-]
-
-[[mutation]]
-name = "the bracketed-identifier notice reads the default prefix whatever the project configures"
-file = "src/stayfixed/memory/graph.py"
-before = "    ids = bug_register(config).ids"
-after = '    ids = type(bug_register(config).ids)("BR")'
-reddens = [
-  "tests/memory/test_graph.py::test_a_bracketed_identifier_is_the_bug_ledgers_as_the_project_configures_it",
-]
-
-# The base's entries were listed at the tree's `[paths]`, so a change that moved the ledger found
-# none there on the base and could delete an entry in the same change: `bugs check --base`
-# passed, and so did `stayfixed gate` whenever the base enforced nothing. Each fork point's
-# ledger is read where its own `stayfixed.toml` kept it, and a copy that cannot say is no answer.
-[[mutation]]
-name = "the base's entries are listed at the tree's paths again"
-file = "src/stayfixed/ledger/check.py"
-before = "        held = register if locate is None else locate(fork)"
-after = "        held = register"
-reddens = [
-  "tests/ledger/test_check.py::test_a_ledger_moved_by_paths_is_read_on_the_base_where_the_base_kept_it",
-  "tests/assess/test_gate_command.py::test_a_ledger_moved_by_paths_takes_no_entry_past_the_run_that_enforces_bugs",
-]
-
-[[mutation]]
-name = "a base copy that does not load is read at the tree's paths"
-file = "src/stayfixed/ledger/check.py"
-before = '''    except Failure as exc:
-        raise does_not_load(exc) from None'''
-after = '''    except Failure:
-        return register'''
-reddens = [
-  "tests/ledger/test_check.py::test_a_base_copy_that_will_not_load_fails_the_check_and_never_reads_as_no_ledger[does-not-load]",
-]
-
-[[mutation]]
-name = "a base copy whose load meets a refusal is read at the tree's paths"
-file = "src/stayfixed/ledger/check.py"
-before = """    except Refusal as exc:
-        refused = FORK_REFUSED.format(base=quoted(base), name=register.name, reason=exc)
-        raise Refusal(refused) from None"""
-after = """    except Refusal:
-        return register"""
-reddens = [
-  "tests/ledger/test_check.py::test_a_base_copy_that_will_not_load_fails_the_check_and_never_reads_as_no_ledger[refused]",
-]
-
-[[mutation]]
-name = "a fork point with no stayfixed.toml fails the ledger's base comparison"
-file = "src/stayfixed/ledger/check.py"
-before = """    if raw is None:
-        return register"""
-after = """    if raw is None:
-        raise failed(1)"""
-reddens = [
-  "tests/ledger/test_check.py::test_a_base_with_no_stayfixed_toml_is_read_at_the_tree_s_paths",
-]
-
-[[mutation]]
-name = "a base copy that is not UTF-8 is parsed"
-file = "src/stayfixed/ledger/check.py"
-before = "        raise does_not_load(NOT_UTF8.format(path=FORK_COPY)) from None"
-after = "        decoded = text"
-reddens = [
-  "tests/ledger/test_check.py::test_a_base_copy_that_will_not_load_fails_the_check_and_never_reads_as_no_ledger[not-utf8]",
-]
-
-[[mutation]]
-name = "a base copy whose prefix is refused is said to have met a refusal on load"
-file = "src/stayfixed/ledger/check.py"
-before = "        unplaced = FORK_UNPLACED.format(base=quoted(base), name=register.name, prefix=prefix_named)"
-after = "        unplaced = FORK_REFUSED.format(base=quoted(base), name=register.name, reason=prefix_named)"
-reddens = [
-  "tests/ledger/test_check.py::test_a_base_copy_that_will_not_load_fails_the_check_and_never_reads_as_no_ledger[prefix-refused]",
-]
-
-# Locating the base's ledger needs its paths and identifiers and nothing of how it judges an
-# entry, so a level 0.2.0 accepted on the base does not refuse the change that corrects it; and a
-# ledger deleted along with a `[paths]` move is named where the base kept it.
-[[mutation]]
-name = "the base's ledger is located by a register that judges entries"
-file = "src/stayfixed/ledger/check.py"
-before = "    return register_gate(root, config, bug_register(config), base, locate=located_bug_register)"
-after = "    return register_gate(root, config, bug_register(config), base, locate=bug_register)"
-reddens = [
-  "tests/ledger/test_check.py::test_a_base_whose_boundary_level_names_no_severity_does_not_stop_the_change_that_corrects_it",
-]
-
-[[mutation]]
-name = "a removed ledger is named at the tree's paths"
-file = "src/stayfixed/ledger/check.py"
-before = "        directory, index = base.place"
-after = "        directory, index = register.directory, register.index"
-reddens = [
-  "tests/ledger/test_check.py::test_a_ledger_deleted_with_its_paths_moved_is_named_where_the_base_kept_it",
-]
-
-[[mutation]]
-name = "bugs check --base judges a root reached through a symlink at the link's target"
-file = "src/stayfixed/ledger/commands.py"
-before = "        repository_prefix(Path(args.root).absolute())"
-after = "        pass"
-reddens = [
-  "tests/assess/test_gate_command.py::test_a_project_root_a_change_made_a_symlink_is_refused_by_the_gate_and_by_bugs_check",
-]
-
-# What a base refusal prints is the caller's base through `printed.quoted`, the base's own prefix
-# through `printed.clipped`, and the paths the failing read asked about.
-[[mutation]]
-name = "an unread base is named raw"
-file = "src/stayfixed/ledger/check.py"
-before = "            what=what, name=register.name, base=quoted(base), root=root, cause=cause"
-after = "            what=what, name=register.name, base=base, root=root, cause=cause"
-reddens = [
-  "tests/ledger/test_check.py::test_the_base_a_caller_names_is_printed_as_data_in_every_base_refusal",
-]
-
-[[mutation]]
-name = "a base prefix the ledger refuses is named whole"
-file = "src/stayfixed/ledger/check.py"
-before = "        prefix_named = clipped(copy.ledger.id_prefix)"
-after = "        prefix_named = copy.ledger.id_prefix"
-reddens = [
-  "tests/ledger/test_check.py::test_a_base_prefix_the_ledger_refuses_is_clipped_where_it_is_named",
-]
-
-[[mutation]]
-name = "an unread fork configuration is named by the ledger's paths"
-file = "src/stayfixed/ledger/check.py"
-before = "        return _unread(register, base, root, ForkUnknown.of(code).cause, CONFIG_FILE)"
-after = "        return _unread(register, base, root, ForkUnknown.of(code).cause, _paths(register))"
-reddens = [
-  "tests/ledger/test_check.py::test_a_listing_of_the_base_s_configuration_git_refuses_is_a_failure_never_the_bootstrap",
-]
-
-[[mutation]]
-name = "an unread fork listing is named by the tree's paths"
-file = "src/stayfixed/ledger/check.py"
-before = "            raise _unread(register, base, root, ForkUnknown.of(code).cause, _paths(held))"
-after = "            raise _unread(register, base, root, ForkUnknown.of(code).cause, _paths(register))"
-reddens = [
-  "tests/ledger/test_check.py::test_a_listing_git_refuses_at_a_fork_names_the_paths_that_fork_kept_the_ledger_at",
-]
-
-[[mutation]]
-name = "the base's copy reads the default machine file"
-file = "src/stayfixed/ledger/check.py"
-before = "        copy = loads(decoded, root, label=FORK_COPY, personal=personal)"
-after = "        copy = loads(decoded, root, label=FORK_COPY)"
-reddens = [
-  "tests/ledger/test_check.py::test_the_base_s_copy_reads_no_machine_file_but_the_one_the_command_was_given",
-]
-
-# A `[ledger] evidence_boundary_required_for` level that names no severity loaded and enforced the
-# evidence line of no entry. `bug_register` refuses it, beside `id_prefix`'s refusal, so every
-# command that builds the register refuses it as a `Refusal` and `uninstall` is not stopped.
-[[mutation]]
-name = "a boundary level outside the severities builds the register"
-file = "src/stayfixed/ledger/register.py"
-before = "    if unknown:\n        raise Refusal(BOUNDARY_LEVELS_UNKNOWN"
-after = "    if False:\n        raise Refusal(BOUNDARY_LEVELS_UNKNOWN"
-reddens = [
-  "tests/ledger/test_register.py::test_a_boundary_level_that_names_no_severity_is_refused_and_never_quoted[levels0-1]",
-  "tests/ledger/test_commands.py::test_a_boundary_level_that_names_no_severity_is_a_refusal_in_every_command_that_reads_it[memory-refs]",
-]
-
-[[mutation]]
-name = "the boundary-level refusal quotes the values"
-file = "src/stayfixed/ledger/register.py"
-before = '        raise Refusal(BOUNDARY_LEVELS_UNKNOWN.format(count=len(unknown), known=", ".join(levels)))'
-after = '        raise Refusal(BOUNDARY_LEVELS_UNKNOWN.format(count=len(unknown), known=", ".join(levels)) + repr(unknown))'
-reddens = [
-  "tests/ledger/test_register.py::test_a_boundary_level_that_names_no_severity_is_refused_and_never_quoted[levels0-1]",
-]
-
 # In the block led by `mutations/`'s "the regular-file reader opens whatever a path names": each
 # reader of a committed file a glob found reads it through that reader, so a link to a device or a
 # FIFO is one more file it cannot read, in that reader's own words.
 [[mutation]]
-name = "the ledger's entry reader follows a link to a device"
-file = "src/stayfixed/ledger/entries.py"
-before = "        return read_regular_text(path)"
-after = '        return path.read_text(encoding="utf-8")'
-reddens = [
-  "tests/ledger/test_entries.py::test_a_ledger_file_linked_to_a_device_is_a_ledger_error_and_one_linked_to_a_file_is_read",
-]
-
-[[mutation]]
 name = "the note reader follows a link to a device"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = '        text = read_regular_text(path, newline="")'
 after = '        text = path.read_bytes().decode("utf-8")'
 reddens = [
@@ -2374,113 +878,16 @@ reddens = [
 # past it is drift, never read to its end.
 [[mutation]]
 name = "the harvest reads the index with no bound"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "        lines = read_regular_text(path).splitlines()"
 after = "        lines = path.read_text(encoding=\"utf-8\").splitlines()"
 reddens = [
   "tests/memory/test_index.py::test_an_index_past_the_read_cap_hands_the_harvest_nothing",
 ]
 
-# The reference check reads each note a second time for its line numbers, to the cap the walk read
-# it to, and a note past it by then is a failure naming it.
-[[mutation]]
-name = "the reference check reads a note again with no bound"
-file = "src/stayfixed/memory/refs.py"
-before = "        text = read_regular_text(note.path)"
-after = '        text = note.path.read_text(encoding="utf-8")'
-reddens = [
-  "tests/memory/test_refs.py::test_a_note_that_grew_past_the_read_cap_after_the_walk_is_a_failure_naming_it",
-]
-
-# The reference scan reads files a clone commits: to the read cap, and a file past it is one the
-# scan could not read, never one read to its end.
-[[mutation]]
-name = "the reference scan reads a file with no bound"
-file = "src/stayfixed/ledger/scan.py"
-before = "            raw = read_regular_bytes(path)"
-after = "            raw = path.read_bytes()"
-reddens = [
-  "tests/ledger/test_scan.py::test_a_file_past_the_read_cap_is_one_the_scan_could_not_read",
-]
-
-# A binary past the read cap is told by its first bytes and has no text and no error, as one under
-# the cap has: read as one the scan could not read, a model or a database in the tree made every
-# `bugs renumber` a "must be fixed by hand" that no re-run cleared.
-[[mutation]]
-name = "a file past the read cap is one the scan could not read whatever it holds"
-file = "src/stayfixed/ledger/scan.py"
-before = "            told = said(error) if _starts_as_text(path) else None"
-after = "            told = said(error)"
-reddens = [
-  "tests/ledger/test_scan.py::test_a_binary_past_the_read_cap_is_skipped_as_a_binary_is_and_text_past_it_is_not",
-  "tests/ledger/test_write.py::test_renumber_leaves_a_binary_past_the_read_cap_alone_and_reports_nothing",
-]
-
-[[mutation]]
-name = "the scan decodes the window that tells text as if it were the whole file"
-file = "src/stayfixed/ledger/scan.py"
-before = "    return any(_utf8(head[: len(head) - cut]) for cut in range(4))"
-after = "    return _utf8(head)"
-reddens = [
-  "tests/ledger/test_scan.py::test_a_binary_past_the_read_cap_is_skipped_as_a_binary_is_and_text_past_it_is_not",
-]
-
-# A citation is read a run at a time: the pattern it was read by tried every split of a run of
-# `../` between its two repeats, 8,000 of them in 0.7 s and four times as long at each doubling.
-[[mutation]]
-name = "a citation is read for at every split of a run of parent steps"
-file = "src/stayfixed/ledger/scan.py"
-before = "    for run in _CITING_RUN.finditer(text):"
-after = '''    cited = rf"((?:\.{{1,2}}/)*(?:[\w.-]+/)*{re.escape(last)}/({re.escape(prefix)}-\d+)\.md)"
-    old = re.compile(r"(?<![\w./-])" + cited)
-    yield from ((match.start(), match.group(1), match.group(2)) for match in old.finditer(text))
-    return
-    for run in _CITING_RUN.finditer(text):'''
-reddens = [
-  "tests/ledger/test_scan.py::test_a_long_file_s_citations_are_read_in_time_linear_in_its_length[a run of parent steps]",
-]
-
-# Nor by a pattern that keeps a record for each segment it might give back: linear in time without
-# the `../` repeat, and 140 MiB more over a citation behind a million segments.
-[[mutation]]
-name = "a citation's segments are read by a pattern that gives them back"
-file = "src/stayfixed/ledger/scan.py"
-before = "    for run in _CITING_RUN.finditer(text):"
-after = '''    cited = rf"((?:[\w.-]+/)*{re.escape(last)}/({re.escape(prefix)}-\d+)\.md)"
-    old = re.compile(r"(?<![\w./-])" + cited)
-    yield from ((match.start(), match.group(1), match.group(2)) for match in old.finditer(text))
-    return
-    for run in _CITING_RUN.finditer(text):'''
-reddens = [
-  "tests/ledger/test_scan.py::test_a_citation_behind_many_segments_is_read_in_memory_linear_in_its_length",
-]
-
-# A citation's line is counted on from the citation before it: from the file's start, a file of
-# 160,000 citations took 36 s, four times as long at each doubling.
-[[mutation]]
-name = "a citation's line is counted from the file's start"
-file = "src/stayfixed/ledger/scan.py"
-before = '            line += item.text.count("\n", counted, start)'
-after = '            line = item.text.count("\n", 0, start) + 1'
-reddens = [
-  "tests/ledger/test_scan.py::test_a_long_file_s_citations_are_read_in_time_linear_in_its_length[many citations]",
-]
-
-# The generated index's marker is read once: a run on either side of `index` read the span again
-# from each `index` in it, 16,000 of them in 2.6 s and four times as long at each doubling.
-[[mutation]]
-name = "the generated marker is read on from every index word"
-file = "src/stayfixed/ledger/index.py"
-before = '_GENERATED = re.compile(r"\A_Generated by `(?=[^`\n]*\bindex\b)[^`\n]*+` from ")'
-after = '_GENERATED = re.compile(r"\A_Generated by `[^`\n]*\bindex\b[^`\n]*` from ")'
-reddens = [
-  "tests/ledger/test_index.py::test_a_long_index_marker_is_read_in_time_linear_in_its_length[unclosed]",
-  "tests/ledger/test_index.py::test_a_long_index_marker_is_read_in_time_linear_in_its_length[closed without from]",
-]
-
 [[mutation]]
 name = "the index check reads the index with no bound"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "        current = read_regular_text(path) if fsops.is_file(path) else None"
 after = '        current = path.read_text(encoding="utf-8") if fsops.is_file(path) else None'
 reddens = [
@@ -2489,7 +896,7 @@ reddens = [
 
 [[mutation]]
 name = "the document reader follows a link to a device"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = "        return read_regular_text(path)"
 after = '        return path.read_text(encoding="utf-8")'
 reddens = [
@@ -2498,16 +905,16 @@ reddens = [
 
 # CONTRIBUTING makes `api.py` the only cross-area import surface, and before this guard nothing
 # asserted it: `memory/commands.py` reached into `hooks.dispatch` and `doctor/checks.py` into
-# `hooks.sink`, and both merged green. The guard now walks every module under `src/stayfixed/`.
-# This mutation puts a violation back — the plan check reading the ledger area's private
-# `register` module for a name its `api.py` publishes — and the guard must name it. The name still
+# `hooks.sink`, and both merged green. The guard now walks every module under `src/drybag/`.
+# This mutation puts a violation back — the reviewed-note reader taking a name from the trust
+# package's private `record` module that its `api.py` publishes — and the guard must name it. The name still
 # exists at the private spelling, so the mutated tree imports and runs: what goes red is the
 # boundary assertion and nothing else.
 [[mutation]]
 name = "an area reaches past another area's api.py again"
-file = "src/stayfixed/docs/plans.py"
-before = 'from stayfixed.ledger.api import bug_register'
-after = 'from stayfixed.ledger.register import bug_register'
+file = "src/drybag/memory/reviewed.py"
+before = 'from drybag.trust.api import UnreadableTrust, approve_all, recorded'
+after = 'from drybag.trust.record import UnreadableTrust, approve_all, recorded'
 reddens = [
   "tests/boundaries/test_api_surface.py::test_no_module_reaches_into_another_packages_private_module",
 ]
@@ -2516,7 +923,7 @@ reddens = [
 # error's own fields again is a private copy of it, and the four there were each said less.
 [[mutation]]
 name = "a reader spells the error's words again rather than saying them"
-file = "src/stayfixed/docs/hygiene.py"
+file = "src/drybag/docs/hygiene.py"
 before = '        raise Failure(f"{shown}: could not be read ({said(error)})") from None'
 after = '        raise Failure(f"{shown}: could not be read ({error.strerror or error})") from None'
 reddens = ["tests/test_fsops.py::test_no_module_but_fsops_says_an_error_by_its_strerror"]
@@ -2525,7 +932,7 @@ reddens = ["tests/test_fsops.py::test_no_module_but_fsops_says_an_error_by_its_s
 # words that name that, and not as a link or an escape it is not.
 [[mutation]]
 name = "the store words a local-only store it cannot ask about as a link"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = """
             return None, Unresolved(
                 "a directory on the way to the local-only store cannot be checked for a symlink","""
@@ -2538,32 +945,18 @@ reddens = [
 
 [[mutation]]
 name = "the store words a paths.memory it cannot ask about as an escape"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = '            "a directory on the way to paths.memory cannot be checked for a symlink",'
 after = '            "paths.memory does not stay inside the project",'
 reddens = [
   "tests/memory/test_store.py::test_a_paths_memory_that_cannot_be_asked_about_is_refused_for_that",
 ]
 
-# In the block led by `mutations/`'s "fsops.resolved answers a loop with a path where the
-# interpreter does": a hand-written `except (OSError, RuntimeError)` is the answer
-# `fsops.resolved` replaced, and a walk of `src/` refuses one outside `fsops`.
-[[mutation]]
-name = "refs catches the RuntimeError of a loop by hand again"
-file = "src/stayfixed/memory/refs.py"
-before = """    except OSError:
-        return False"""
-after = """    except (OSError, RuntimeError):
-        return False"""
-reddens = [
-  "tests/test_fsops.py::test_no_module_but_fsops_catches_the_runtime_error_a_symlink_loop_raised",
-]
-
 # A note may carry its short index line under `metadata:`; `memory index` passed it over and wrote
 # the description, or the description the native writer appended to `MEMORY.md`, as its `index:`.
 [[mutation]]
 name = "memory index passes over a note's metadata index line"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "        own = _metadata_index(note)\n"
 after = "        own = None\n"
 reddens = [
@@ -2575,7 +968,7 @@ reddens = [
 # rather than taking an index line of blanks.
 [[mutation]]
 name = "a metadata index of only spaces becomes the note's index line"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = '    line = note.metadata.get("index", "").strip()'
 after = '    line = note.metadata.get("index", "")'
 reddens = [
@@ -2584,7 +977,7 @@ reddens = [
 
 [[mutation]]
 name = "the index link rule lets a symlink loop out"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = """    try:
         resolved = fsops.resolved(target)
     except OSError:
@@ -2596,21 +989,21 @@ reddens = [
   "tests/memory/test_index.py::test_an_index_link_that_is_a_symlink_loop_is_refused_and_sources_nothing",
 ]
 
-# `memory session-context` reads `stayfixed.toml` the way the session it feeds does.
+# `memory session-context` reads `drybag.toml` the way the session it feeds does.
 [[mutation]]
 name = "memory session-context refuses what a session reads"
-file = "src/stayfixed/memory/commands.py"
-before = "    config = session_config(root, machine=machine).config"
-after = "    config = load(root, machine=machine)"
+file = "src/drybag/memory/commands.py"
+before = "    config = session.acting\n"
+after = "    config = load(root, machine=machine)\n"
 reddens = ["tests/hooks/test_floor.py::test_memory_session_context_reads_a_newer_key_with_a_note"]
 
 # The `bundles` row skips in the core's words with no project configuration: the store and its
 # bundles are the project's file's to say.
 [[mutation]]
 name = "the bundles row reads a configuration that is not there"
-file = "src/stayfixed/memory/doctor.py"
-before = "            (\"bundles\", configured(lambda context, config: _bundles(context, config, answers))),"
-after = "            (\"bundles\", lambda context: _bundles(context, context.config, answers)),"
+file = "src/drybag/memory/doctor.py"
+before = "                configured(lambda context, config: _bundles(context, config, answers), attach=True),"
+after = "                lambda context: _bundles(context, context.config, answers),"
 reddens = [
   "tests/doctor/test_checks.py::test_a_repository_without_a_configuration_skips_only_the_rows_that_read_one",
 ]
@@ -2619,591 +1012,17 @@ reddens = [
 # `[overlay] root` takes such a file for no overlay recorded rather than ending the session's notes.
 [[mutation]]
 name = "the store's overlay read lets a machine file it cannot read end a session's notes"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "    except MachineConfigError:\n        return None"
 after = "    except FileNotFoundError:\n        return None"
 reddens = [
   "tests/hooks/test_floor.py::test_memory_session_context_reads_past_a_broken_machine_file",
 ]
 
-# The bug ledger held to its bytes before the register engine learnt a list field
-# (`tests/ledger/test_literals.py`): a writer that changes one byte of an entry, or a finding that
-# drops a word of its detail, reddens the literal it moved.
-[[mutation]]
-name = "an empty field is written with a trailing space"
-file = "src/stayfixed/ledger/entries.py"
-before = '    return f"{key}: {written}" if written else f"{key}:"'
-after = '    return f"{key}: {written}"'
-reddens = [
-  "tests/ledger/test_literals.py::test_new_writes_the_entry_it_wrote[new-bare]",
-]
-
-[[mutation]]
-name = "every frontmatter value is quoted"
-file = "src/stayfixed/ledger/entries.py"
-before = "    return quote(value) if _NEEDS_QUOTING.search(value) else value"
-after = "    return quote(value)"
-reddens = [
-  "tests/ledger/test_literals.py::test_new_writes_the_entry_it_wrote[new]",
-  "tests/ledger/test_literals.py::test_new_writes_the_entry_it_wrote[new-bare]",
-]
-
-# `_stale`'s line, not the `bugs index --check` line in `commands.py` that also says "is stale;
-# run:": the `--json` detail carries the remedy, the text line labels only.
-[[mutation]]
-name = "the stale index's finding drops its remedy"
-file = "src/stayfixed/ledger/check.py"
-before = "    return f\"is stale; run: {commands[0] if commands else f'stayfixed {register.name} index'}\""
-after = '    return "is stale"'
-reddens = [
-  "tests/ledger/test_literals.py::test_the_ledger_prints_its_captured_output[json-check-broken]",
-]
-
-# The register engine's list field, read-only: the bug entry's `regression`, an inline list of
-# double-quoted argv items (`tests/ledger/test_list_field.py`). Each refusal of the reader is its own
-# entry, so a grammar relaxed toward what a YAML reader also takes reddens the case it lets through.
-[[mutation]]
-name = "a quoted item cannot hold a comma"
-file = "src/stayfixed/ledger/entries.py"
-before = '''_QUOTED = r'"(?:[^"\\]|\\.)*"''''
-after = '''_QUOTED = r'"(?:[^"\\,]|\\.)*"''''
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_regression_reads_as_its_argv",
-  "tests/ledger/test_register.py::test_what_new_writes_and_renumber_leaves_reads_back_through_the_entry_reader[default-bug_register]",
-]
-
-[[mutation]]
-name = "the list reader takes a tab for a separator"
-file = "src/stayfixed/ledger/entries.py"
-before = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]", re.DOTALL)'
-after = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *,[ \t]*{_QUOTED})* *)?\]", re.DOTALL)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[tab-separator]",
-]
-
-[[mutation]]
-name = "the list reader accepts an empty item"
-file = "src/stayfixed/ledger/entries.py"
-before = "        if not item:"
-after = "        if False:"
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[empty-item]",
-]
-
-[[mutation]]
-name = "the list reader lets a control character into an item"
-file = "src/stayfixed/ledger/entries.py"
-before = "        if _CONTROL_CHARACTER.search(item):"
-after = "        if False:"
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[c0-control]",
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[del]",
-]
-
-[[mutation]]
-name = "the list reader takes text after its closing bracket"
-file = "src/stayfixed/ledger/entries.py"
-before = '    if not _QUOTED_LIST.fullmatch(raw):'
-after = '    if not _QUOTED_LIST.match(raw):'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[text-after]",
-]
-
-# A YAML reader takes `[pytest]`; this one quotes the bare item in place and reads on.
-[[mutation]]
-name = "the list reader takes a bare item"
-file = "src/stayfixed/ledger/entries.py"
-before = '''_QUOTED = r'"(?:[^"\\]|\\.)*"''''
-after = '''_QUOTED = r'"(?:[^"\\]|\\.)*"|\w+''''
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[bare-item]",
-  "tests/ledger/test_list_field.py::test_bugs_check_reports_a_malformed_regression_as_unreadable",
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_beside_it_refuses_new_and_index_writing_nothing",
-]
-
-[[mutation]]
-name = "the list reader takes a value with no opening bracket"
-file = "src/stayfixed/ledger/entries.py"
-before = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]", re.DOTALL)'
-after = '_QUOTED_LIST = re.compile(rf"[\[(] *(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]", re.DOTALL)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[wrong-opening-bracket]",
-]
-
-[[mutation]]
-name = "the list reader takes an item with no closing quote"
-file = "src/stayfixed/ledger/entries.py"
-before = '''_QUOTED = r'"(?:[^"\\]|\\.)*"''''
-after = '''_QUOTED = r'"(?:[^"\\]|\\.)*"?''''
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[unterminated-item]",
-]
-
-[[mutation]]
-name = "an entry hashes its lists mapping with the rest"
-file = "src/stayfixed/ledger/entries.py"
-before = '    lists: Mapping[str, tuple[str, ...]] = field(default_factory=dict, hash=False)'
-after = '    lists: Mapping[str, tuple[str, ...]] = field(default_factory=dict)'
-reddens = [
-  "tests/ledger/test_entries.py::test_an_entry_is_a_hashable_value",
-]
-
-[[mutation]]
-name = "an entry leaves its lists out of its equality"
-file = "src/stayfixed/ledger/entries.py"
-before = '    lists: Mapping[str, tuple[str, ...]] = field(default_factory=dict, hash=False)'
-after = '    lists: Mapping[str, tuple[str, ...]] = field(default_factory=dict, hash=False, compare=False)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_two_entries_that_differ_only_in_their_regression_are_two_values",
-]
-
-[[mutation]]
-name = "a list key is read as a scalar again"
-file = "src/stayfixed/ledger/register.py"
-before = "        return tuple(key for key in self.keys if key not in self.lists)"
-after = "        return self.keys"
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_regression_reads_as_its_argv",
-  "tests/ledger/test_register.py::test_what_new_writes_and_renumber_leaves_reads_back_through_the_entry_reader[default-bug_register]",
-  "tests/ledger/test_list_field.py::test_the_bug_ledger_declares_regression_as_its_one_list",
-]
-
-[[mutation]]
-name = "the bug ledger declares no list"
-file = "src/stayfixed/ledger/register.py"
-before = '    lists=("regression",),'
-after = "    lists=(),"
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_regression_reads_as_its_argv",
-  "tests/ledger/test_list_field.py::test_the_bug_ledger_declares_regression_as_its_one_list",
-  "tests/ledger/test_list_field.py::test_an_entry_with_a_regression_passes_bugs_check",
-  "tests/ledger/test_list_field.py::test_renumber_carries_a_regression_byte_for_byte",
-  "tests/ledger/test_entries.py::test_the_writers_and_the_reader_agree_on_the_key_set",
-  "tests/ledger/test_list_field.py::test_new_beside_an_entry_with_a_regression_writes_what_it_writes_beside_none",
-]
-
-[[mutation]]
-name = "the sweep rewrites an argv inside a list value"
-file = "src/stayfixed/ledger/write.py"
-before = '        lambda match: match[0] if any(b <= match.start() < e for b, e in kept) else new, text'
-after = '        lambda match: new, text'
-reddens = [
-  "tests/ledger/test_list_field.py::test_renumber_leaves_an_argv_naming_the_old_identifier",
-  "tests/ledger/test_list_field.py::test_a_renumber_killed_after_its_pointer_finishes_the_tree_with_its_argvs",
-]
-
-# One reader of where a frontmatter value sits, for the reader and the sweep alike: the fences and
-# line breaks on the file's own endings, the lines split as `str.splitlines` splits them.
-[[mutation]]
-name = "the frontmatter reader knows only LF line endings"
-file = "src/stayfixed/ledger/entries.py"
-before = '_BREAK = r"(?:\r\n|\r(?!\n)|\n)"'
-after = '_BREAK = r"\n"'
-reddens = [
-  "tests/ledger/test_list_field.py::test_renumber_leaves_an_argv_naming_the_old_identifier[crlf]",
-  "tests/ledger/test_list_field.py::test_renumber_leaves_an_argv_naming_the_old_identifier[cr]",
-  "tests/ledger/test_list_field.py::test_a_list_value_lies_where_the_reader_reads_it_whatever_the_endings",
-]
-
-[[mutation]]
-name = "the frontmatter reader takes a CRLF for two line breaks"
-file = "src/stayfixed/ledger/entries.py"
-before = '_BREAK = r"(?:\r\n|\r(?!\n)|\n)"'
-after = '_BREAK = r"(?:\r\n|\r|\n)"'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_crlf_is_one_line_break_to_the_reader",
-]
-
-[[mutation]]
-name = "the frontmatter reader reads a line separator as part of a line"
-file = "src/stayfixed/ledger/entries.py"
-before = '    for number, piece in enumerate(match.group(1).splitlines(keepends=True), start=2):'
-after = '    for number, piece in enumerate(re.sub("[\x85\N{LINE SEPARATOR}\x0b]", " ", match.group(1)).splitlines(keepends=True), start=2):'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_line_break_inside_an_item_refuses_the_entry",
-]
-
-# A list is padded by spaces and tabs alone; a scalar keeps `str.strip`.
-[[mutation]]
-name = "a list's value is stripped as a scalar's is"
-file = "src/stayfixed/ledger/entries.py"
-before = '        raw = raw.strip(" \t") if key in schema.lists else raw.strip()'
-after = '        raw = raw.strip()'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[no-break-space-before]",
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[no-break-space-after]",
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[ideographic-space-after]",
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[unit-separator-after]",
-]
-
-[[mutation]]
-name = "a list's value is stripped of nothing"
-file = "src/stayfixed/ledger/entries.py"
-before = '        raw = raw.strip(" \t") if key in schema.lists else raw.strip()'
-after = '        raw = raw if key in schema.lists else raw.strip()'
-reddens = [
-  "tests/ledger/test_list_field.py::test_spaces_and_tabs_after_a_list_are_no_text",
-]
-
-[[mutation]]
-name = "an unsupported escape names its character raw"
-file = "src/stayfixed/ledger/entries.py"
-before = '            shown = following if following.isprintable() else quoted(following)'
-after = '            shown = following'
-reddens = [
-  "tests/ledger/test_list_field.py::test_an_unsupported_escape_is_named_without_driving_the_terminal[escape-character]",
-]
-
-# Only an entry file keeps its list values from the sweep.
-# The sweep knows its own files by identity, not spelling. That the spelling would be wrong
-# shows only where case folds (`test_renumber_knows_its_files_by_identity_where_the_directory_
-# differs_in_case`, no entry); that the endpoints are left out at all shows everywhere.
-[[mutation]]
-name = "the sweep rewrites the move's own endpoints"
-file = "src/stayfixed/ledger/write.py"
-before = '        if identity in excluded:'
-after = '        if False:'
-reddens = [
-  "tests/ledger/test_literals.py::test_renumber_leaves_the_files_it_left",
-]
-
-[[mutation]]
-name = "the sweep keeps list values in every file it rewrites"
-file = "src/stayfixed/ledger/write.py"
-before = '        kept = list_value_spans(item.text, register.schema.lists) if identity in entry_files else []'
-after = '        kept = list_value_spans(item.text, register.schema.lists)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_renumber_sweeps_a_regression_line_in_a_file_that_is_no_entry",
-]
-
-# The schema's rules for a list key, one entry per rule, each dropping its check.
-# `renumber` names each entry whose list still names the old identifier, and leaves the argv.
-[[mutation]]
-name = "renumber names no entry whose list names the old identifier"
-file = "src/stayfixed/ledger/write.py"
-before = '    return any(b <= match.start() < e for match in pattern.finditer(text) for b, e in spans)'
-after = '    return False'
-reddens = [
-  "tests/ledger/test_list_field.py::test_renumber_names_an_entry_whose_list_still_names_the_old_identifier[by-name]",
-  "tests/ledger/test_list_field.py::test_renumber_names_an_entry_whose_list_still_names_the_old_identifier[in-a-path]",
-  "tests/ledger/test_list_field.py::test_renumber_leaves_an_argv_naming_the_old_identifier[lf]",
-]
-
-[[mutation]]
-name = "renumber leaves the moved entry out of the entries it names"
-file = "src/stayfixed/ledger/write.py"
-before = '    if _names(pattern, moved, list_value_spans(moved, register.schema.lists)):'
-after = '    if False:'
-reddens = [
-  "tests/ledger/test_list_field.py::test_renumber_names_an_entry_whose_list_still_names_the_old_identifier[by-name]",
-  "tests/ledger/test_list_field.py::test_renumber_names_an_entry_whose_list_still_names_the_old_identifier[in-a-path]",
-]
-
-[[mutation]]
-name = "renumber names a list holding the old identifier inside a word"
-file = "src/stayfixed/ledger/write.py"
-before = '    return any(b <= match.start() < e for match in pattern.finditer(text) for b, e in spans)'
-after = '    return any(b <= match.start() < e for match in re.finditer(re.escape(pattern.pattern[2:-2].replace(chr(92), "")), text) for b, e in spans)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_renumber_names_an_entry_whose_list_still_names_the_old_identifier[no-word-boundary]",
-]
-
-[[mutation]]
-name = "bugs renumber's line names no entry whose list names the old identifier"
-file = "src/stayfixed/ledger/commands.py"
-before = '    if result.lists_naming_old:'
-after = '    if False:'
-reddens = [
-  "tests/ledger/test_list_field.py::test_renumber_leaves_an_argv_naming_the_old_identifier[lf]",
-  "tests/ledger/test_list_field.py::test_renumber_names_an_entry_whose_list_still_names_the_old_identifier[by-name]",
-]
-
-[[mutation]]
-name = "bugs renumber's --json drops the entries naming the old identifier"
-file = "src/stayfixed/ledger/commands.py"
-before = '        "lists_naming_old": list(result.lists_naming_old),'
-after = '        "lists_naming_old": [],'
-reddens = [
-  "tests/ledger/test_list_field.py::test_renumber_names_an_entry_whose_list_still_names_the_old_identifier[by-name]",
-]
-
-[[mutation]]
-name = "a list key need not be a key"
-file = "src/stayfixed/ledger/register.py"
-before = '        ("lists", schema.lists),'
-after = ""
-reddens = ["tests/ledger/test_list_field.py::test_a_list_key_is_held_to_what_reads_it[key]"]
-
-[[mutation]]
-name = "a list key may be required"
-file = "src/stayfixed/ledger/register.py"
-before = '                yield f"list `{key}` is {name}, and a list may be left out"'
-after = "                pass"
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_list_key_is_held_to_what_reads_it[required]",
-  "tests/ledger/test_list_field.py::test_a_list_key_is_held_to_what_reads_it[required-unless-void]",
-]
-
-[[mutation]]
-name = "a list key may be a date"
-file = "src/stayfixed/ledger/register.py"
-before = "        if key in schema.dates:"
-after = "        if False:"
-reddens = ["tests/ledger/test_list_field.py::test_a_list_key_is_held_to_what_reads_it[date]"]
-
-[[mutation]]
-name = "a list key may be a placeholder of the template"
-file = "src/stayfixed/ledger/register.py"
-before = '        if key in schema.line_keys:'
-after = '        if False:'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_list_key_is_held_to_what_reads_it[placeholder]",
-]
-
-[[mutation]]
-name = "a list key may be related"
-file = "src/stayfixed/ledger/register.py"
-before = '        if key == "related":'
-after = "        if False:"
-reddens = ["tests/ledger/test_list_field.py::test_a_list_key_is_held_to_what_reads_it[related]"]
-
-[[mutation]]
-name = "an index cell may show a list key"
-file = "src/stayfixed/ledger/register.py"
-before = "        if key in shown:"
-after = "        if False:"
-reddens = ["tests/ledger/test_list_field.py::test_a_list_key_is_held_to_what_reads_it[column]"]
-
-# The list reader's empty and escape paths, and the bug ledger's declaration of its list.
-[[mutation]]
-name = "the list reader skips one character after a backslash"
-file = "src/stayfixed/ledger/entries.py"
-before = '''_QUOTED = r'"(?:[^"\\]|\\.)*"''''
-after = '''_QUOTED = r'"(?:[^"\\]|\\)*"''''
-reddens = [
-  "tests/ledger/test_list_field.py::test_escapes_read_as_titles_read_them",
-  "tests/ledger/test_entries.py::test_parse_entry_reads_every_field",
-]
-
-[[mutation]]
-name = "the list reader refuses an empty value"
-file = "src/stayfixed/ledger/entries.py"
-before = '''
-    if not raw:
-        return ()
-    if not _QUOTED_LIST.fullmatch(raw):'''
-after = '    if not _QUOTED_LIST.fullmatch(raw):'
-reddens = [
-  "tests/ledger/test_list_field.py::test_an_empty_regression_is_no_regression[bare]",
-  "tests/ledger/test_list_field.py::test_a_regression_left_out_is_no_regression",
-]
-
-[[mutation]]
-name = "the list reader takes no space after its opening bracket"
-file = "src/stayfixed/ledger/entries.py"
-before = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]", re.DOTALL)'
-after = '_QUOTED_LIST = re.compile(rf"\[(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]", re.DOTALL)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_an_empty_regression_is_no_regression[spaced]",
-]
-
-[[mutation]]
-name = "the list reader refuses an empty list"
-file = "src/stayfixed/ledger/entries.py"
-before = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]", re.DOTALL)'
-after = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *, *{_QUOTED})* *)\]", re.DOTALL)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_an_empty_regression_is_no_regression[brackets]",
-  "tests/ledger/test_list_field.py::test_an_empty_regression_is_no_regression[spaced]",
-]
-
-# A YAML reader takes `["a",]`; this one stops at the `]` after the comma.
-[[mutation]]
-name = "the list reader takes a trailing comma"
-file = "src/stayfixed/ledger/entries.py"
-before = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]", re.DOTALL)'
-after = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *, *{_QUOTED})* *,?)?\]", re.DOTALL)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[trailing-comma]",
-]
-
-# A YAML reader takes `"a"` as a string; this one takes it for a list of that one item.
-[[mutation]]
-name = "the list reader reads a lone quoted value as one item"
-file = "src/stayfixed/ledger/entries.py"
-before = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]", re.DOTALL)'
-after = '_QUOTED_LIST = re.compile(rf"\[? *(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]?", re.DOTALL)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[no-brackets]",
-]
-
-[[mutation]]
-name = "the list reader takes a list with no closing bracket"
-file = "src/stayfixed/ledger/entries.py"
-before = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]", re.DOTALL)'
-after = '_QUOTED_LIST = re.compile(rf"\[ *(?:{_QUOTED}(?: *, *{_QUOTED})* *)?\]?", re.DOTALL)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[unclosed-list]",
-]
-
-[[mutation]]
-name = "a quoted item takes an unescaped quote"
-file = "src/stayfixed/ledger/entries.py"
-before = '''_QUOTED = r'"(?:[^"\\]|\\.)*"''''
-after = '''_QUOTED = r'"(?:[^\\]|\\.)*"''''
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_malformed_regression_is_refused_in_its_own_words[unescaped-quote]",
-]
-
-[[mutation]]
-name = "an unsupported escape quotes a printable character"
-file = "src/stayfixed/ledger/entries.py"
-before = '            shown = following if following.isprintable() else quoted(following)'
-after = '            shown = quoted(following)'
-reddens = [
-  "tests/ledger/test_list_field.py::test_an_unsupported_escape_is_named_without_driving_the_terminal[punctuation]",
-]
-
-[[mutation]]
-name = "a padded list reads as the empty list"
-file = "src/stayfixed/ledger/entries.py"
-before = '        raw = raw.strip(" \t") if key in schema.lists else raw.strip()'
-after = '        raw = ("[]" if raw != raw.rstrip(" \t") else raw) if key in schema.lists else raw.strip()'
-reddens = [
-  "tests/ledger/test_list_field.py::test_spaces_and_tabs_after_a_list_are_no_text[space]",
-  "tests/ledger/test_list_field.py::test_spaces_and_tabs_after_a_list_are_no_text[tab]",
-]
-
-[[mutation]]
-name = "a list may be listed twice"
-file = "src/stayfixed/ledger/register.py"
-before = '    for name, named in (("key", schema.keys), ("list", schema.lists)):'
-after = '    for name, named in (("key", schema.keys),):'
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_list_key_is_held_to_what_reads_it[listed-twice]",
-]
-
-[[mutation]]
-name = "an entry carries none of its lists"
-file = "src/stayfixed/ledger/entries.py"
-before = "        lists=lists,"
-after = ""
-reddens = [
-  "tests/ledger/test_list_field.py::test_a_regression_left_out_is_no_regression",
-  "tests/ledger/test_register.py::test_what_new_writes_and_renumber_leaves_reads_back_through_the_entry_reader[default-bug_register]",
-]
-
-[[mutation]]
-name = "the bug ledger's regression key comes before related"
-file = "src/stayfixed/ledger/register.py"
-before = """
-        "related",
-        "regression","""
-after = """
-        "regression",
-        "related","""
-reddens = ["tests/ledger/test_list_field.py::test_the_bug_ledger_declares_regression_as_its_one_list"]
-
-# Each case of the ledger's literals, by a line that prints or writes its bytes.
-[[mutation]]
-name = "bugs new names its entry by its absolute path"
-file = "src/stayfixed/ledger/commands.py"
-before = '    summary = f"filed {relative}" + (f"; {filed.warning}" if filed.warning else "")'
-after = '    summary = f"filed {filed.path}" + (f"; {filed.warning}" if filed.warning else "")'
-reddens = [
-  "tests/ledger/test_literals.py::test_the_ledger_prints_its_captured_output[text-new]",
-  "tests/ledger/test_literals.py::test_the_ledger_prints_its_captured_output[text-new-bare]",
-]
-
-[[mutation]]
-name = "bugs new's --json drops its warning"
-file = "src/stayfixed/ledger/commands.py"
-before = '    return Result(summary, {"id": filed.identifier, "path": relative, "warning": filed.warning})'
-after = '    return Result(summary, {"id": filed.identifier, "path": relative})'
-reddens = [
-  "tests/ledger/test_literals.py::test_the_ledger_prints_its_captured_output[json-new]",
-  "tests/ledger/test_literals.py::test_the_ledger_prints_its_captured_output[json-new-bare]",
-]
-
-[[mutation]]
-name = "bugs check's clean line says less"
-file = "src/stayfixed/ledger/commands.py"
-before = '_OK = "OK: bug ledger entries, index freshness, and identifier references"'
-after = '_OK = "OK"'
-reddens = [
-  "tests/ledger/test_literals.py::test_the_ledger_prints_its_captured_output[text-check-clean]",
-  "tests/ledger/test_literals.py::test_the_ledger_prints_its_captured_output[json-check-clean]",
-]
-
-[[mutation]]
-name = "bugs check passes a ledger with findings"
-file = "src/stayfixed/ledger/commands.py"
-before = '    return Result(f"FAIL: {len(found)} ledger problem(s): {labels(found)}", data, exit_code=1)'
-after = '    return Result(f"FAIL: {len(found)} ledger problem(s): {labels(found)}", data)'
-reddens = [
-  "tests/ledger/test_literals.py::test_the_ledger_prints_its_captured_output[text-check-broken]",
-]
-
-[[mutation]]
-name = "bugs renumber's line names no void pointer"
-file = "src/stayfixed/ledger/commands.py"
-before = '    return Result(f"{args.old} -> {args.new}; a void pointer remains at {void}{naming}", data)'
-after = '    return Result(f"{args.old} -> {args.new}{naming}", data)'
-reddens = [
-  "tests/ledger/test_literals.py::test_the_ledger_prints_its_captured_output[text-renumber]",
-]
-
-[[mutation]]
-name = "bugs renumber's --json drops its unswept files"
-file = "src/stayfixed/ledger/commands.py"
-before = '        "unswept": [asdict(u) for u in result.unswept],'
-after = ""
-reddens = [
-  "tests/ledger/test_literals.py::test_the_ledger_prints_its_captured_output[json-renumber]",
-]
-
-[[mutation]]
-name = "renumber's void pointer relates to nothing"
-file = "src/stayfixed/ledger/write.py"
-before = '        "related": f"related: [{new}]",'
-after = '        "related": "related:",'
-reddens = ["tests/ledger/test_literals.py::test_renumber_leaves_the_files_it_left"]
-
-[[mutation]]
-name = "the index stops counting a section's entries"
-file = "src/stayfixed/ledger/index.py"
-before = '        parts.append(f"\n## {section.heading} ({len(selected)})\n\n")'
-after = '        parts.append(f"\n## {section.heading}\n\n")'
-reddens = ["tests/ledger/test_literals.py::test_the_index_is_the_one_it_rendered"]
-
-# `bugs regressions` runs a fixed entry's regression and no other's, counts only `proved` as
-# proved, and starts nothing after a run an interrupt ended. Each is reddened by a case that runs
-# no real runner.
-[[mutation]]
-name = "bugs regressions runs an entry of any status"
-file = "src/stayfixed/ledger/regressions.py"
-before = '        if entry.status != "fixed" or not argv:'
-after = "        if not argv:"
-reddens = ["tests/ledger/test_regressions.py::test_only_fixed_entries_run"]
-
-[[mutation]]
-name = "bugs regressions counts every verdict as proved"
-file = "src/stayfixed/ledger/commands.py"
-before = "    not_proved = sum(1 for _, receipt in ran if receipt.verdict is not Verdict.PROVED)"
-after = "    not_proved = sum(1 for _, receipt in ran if False)"
-reddens = ["tests/ledger/test_regressions.py::test_an_argv_no_adapter_recognises_is_not_proved"]
-
-[[mutation]]
-name = "bugs regressions goes on past an interrupt"
-file = "src/stayfixed/ledger/regressions.py"
-before = "        if receipt.reason == INTERRUPTED:\n            break"
-after = "        if False:\n            break"
-reddens = ["tests/ledger/test_regressions.py::test_an_interrupted_regression_starts_no_further_one"]
-
 # The origin note names both remotes; a token in either one's userinfo is taken out before it does.
 [[mutation]]
 name = "the origin note names a remote's credentials"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = "        origin=NO_REMOTE_SAID if origin is None else quoted(without_userinfo(origin)),"
 after = "        origin=NO_REMOTE_SAID if origin is None else quoted(origin),"
 reddens = ["tests/attach/test_commands.py::test_an_origin_carrying_credentials_is_neither_printed_nor_recorded_with_them"]
@@ -3212,7 +1031,7 @@ reddens = ["tests/attach/test_commands.py::test_an_origin_carrying_credentials_i
 # is repeated until the nonce is one the note does not contain.
 [[mutation]]
 name = "wrap keeps a nonce the note already holds"
-file = "src/stayfixed/memory/trust.py"
+file = "src/drybag/memory/trust.py"
 before = "    while nonce in text:\n        nonce = new_nonce()"
 after = "    while False:\n        nonce = new_nonce()"
 reddens = [
@@ -3223,7 +1042,7 @@ reddens = [
 # record holds, so an edit after promoting is a note to review again.
 [[mutation]]
 name = "a stale digest still reads as reviewed"
-file = "src/stayfixed/memory/reviewed.py"
+file = "src/drybag/memory/reviewed.py"
 before = "    return REVIEWED if current in held else UNREVIEWED"
 after = "    return REVIEWED if held else UNREVIEWED"
 reddens = [
@@ -3234,7 +1053,7 @@ reddens = [
 # path through `store.shown`, which cuts the id to its short form.
 [[mutation]]
 name = "a store path is printed with the whole binding id"
-file = "src/stayfixed/memory/store.py"
+file = "src/drybag/memory/store.py"
 before = '    return "/".join([str(base), f"{short(id)}…", *rest])'
 after = "    return str(path)"
 reddens = [
@@ -3245,7 +1064,7 @@ reddens = [
 # region, the last render's line for an edited note was written into it as the native writer's.
 [[mutation]]
 name = "the harvest reads the rendered region"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "        return lines[:start] + lines[end + 1 :]"
 after = "        return lines"
 reddens = [
@@ -3256,7 +1075,7 @@ reddens = [
 # store's own index, never one a repository commits or the overlay shares.
 [[mutation]]
 name = "the index labels an unreviewed note outside a composed store"
-file = "src/stayfixed/memory/index.py"
+file = "src/drybag/memory/index.py"
 before = "    if stores_holding(_destination(store, config)) is not None:"
 after = "    if True:"
 reddens = [
@@ -3267,7 +1086,7 @@ reddens = [
 # through it, a file outside it or a note promoted elsewhere.
 [[mutation]]
 name = "a symlinked note is walked"
-file = "src/stayfixed/memory/notes.py"
+file = "src/drybag/memory/notes.py"
 before = "            if fsops.is_symlink(path):\n                skipped.append(path)"
 after = "            if False:\n                skipped.append(path)"
 reddens = [
@@ -3277,9 +1096,128 @@ reddens = [
 # Only a reviewed note is a standing rule, whatever `startup` rank a note claims about itself.
 [[mutation]]
 name = "the standing rules admit an unreviewed note"
-file = "src/stayfixed/memory/bundles.py"
+file = "src/drybag/memory/bundles.py"
 before = "        return _standing([note for note in notes if note.path in reviewed], config)"
 after = "        return _standing(notes, config)"
 reddens = [
   "tests/memory/test_reviewed.py::test_a_note_with_no_record_is_unreviewed_and_no_standing_rule_whatever_it_ranks",
 ]
+
+# Delivery and the pack import each other only through pinned statements. The note graph's import
+# of the bug register is one; the note store's own import of the same register is a crossing no row
+# pins.
+[[mutation]]
+name = "the note store imports the documentation area"
+file = "src/drybag/memory/store.py"
+before = "from drybag.config.reading import MachineConfigError\n"
+after = "from drybag.config.reading import MachineConfigError\nfrom drybag.docs.api import check_links\n"
+reddens = [
+  "tests/boundaries/test_delivery.py::test_delivery_and_the_pack_import_each_other_only_where_pinned",
+]
+
+# The project side gives up the `tag-` prefix of the composed store's link names, so a project
+# memory directory named in the tag namespace never takes the name a tag's own link needs.
+[[mutation]]
+name = "the composed store links a project directory in the tag namespace"
+file = "src/drybag/memory/composed.py"
+before = "        if not reserved(entry):"
+after = "        if True:"
+reddens = [
+  "tests/memory/test_composed.py::test_a_project_memory_directory_in_the_tag_namespace_is_not_linked",
+]
+
+# A link of the composed store is followed only into the project's permitted roots, and a tag's
+# notes are among them: without them the resolver refuses the link `attach` made for the tag.
+[[mutation]]
+name = "permitted roots leave out the tags' notes"
+file = "src/drybag/memory/store.py"
+before = "        allowed = _notes(held)"
+after = "        allowed = _notes((held[0], held[-1]))"
+reddens = [
+  "tests/memory/test_store.py::test_a_tags_memory_is_linked_under_its_tag_name",
+]
+
+# Every reader of the store walks one group list, the configured groups and the tags' notes after
+# the common ones, so the index lists and the bundles deliver a tag's notes.
+[[mutation]]
+name = "walked groups leave out the tags"
+file = "src/drybag/memory/store.py"
+before = "    return [*walked[:at], *tagged, *walked[at:]]"
+after = "    return walked"
+reddens = [
+  "tests/memory/test_bundles.py::test_a_standing_rule_in_a_tags_notes_is_in_the_standing_rules_bundle",
+  "tests/memory/test_index.py::test_the_index_has_a_section_per_tag_after_the_common_notes",
+]
+
+# A bound checkout with no `drybag.toml` has the configuration `attach` acted on
+# (`Context.attach_config`): the note store resolves through it, so the walk that counts its notes
+# and the `bundles` row must read it too, or they report a store they never walked.
+[[mutation]]
+name = "the note store's unreviewed count ignores a bound checkout's configuration"
+file = "src/drybag/memory/doctor.py"
+before = "        config = context.attach_config\n"
+after = "        config = context.config\n"
+reddens = [
+  "tests/memory/test_doctor.py::test_the_note_store_rows_read_a_bound_checkouts_configuration",
+]
+
+[[mutation]]
+name = "the bundles row skips a bound checkout with no drybag.toml"
+file = "src/drybag/memory/doctor.py"
+before = "_bundles(context, config, answers), attach=True),"
+after = "_bundles(context, config, answers)),"
+reddens = [
+  "tests/memory/test_doctor.py::test_the_note_store_rows_read_a_bound_checkouts_configuration",
+]
+
+# The in-process render is `memory index`'s own: it writes the lines a session appended into
+# their notes before it renders.
+[[mutation]]
+name = "the in-process render harvests no appended line"
+file = "src/drybag/memory/index.py"
+before = "        reconciled = reconcile(store, config, write=True)"
+after = "        reconciled = reconcile(store, config, write=False)"
+reddens = [
+  "tests/memory/test_index.py::test_session_end_harvests_an_appended_line_before_the_sync_runs",
+]
+
+# Each machine renders its own index (the note sync moves none): on `SessionEnd`, before the
+# sync's handler starts the job, so the notes the harvest wrote travel in it.
+[[mutation]]
+name = "the session end renders no index"
+file = "src/drybag/memory/hooks.py"
+before = """        Handler(name="index-render", event="SessionEnd", run=_render),
+"""
+after = ""
+reddens = [
+  "tests/memory/test_index.py::test_session_end_harvests_an_appended_line_before_the_sync_runs",
+]
+
+# A bound checkout with no `drybag.toml` has no file to load; its index is rendered from the
+# session's bound configuration (`SessionConfig.acting`), as the unreviewed count reads it.
+[[mutation]]
+name = "the index render skips a bound checkout with no drybag.toml"
+file = "src/drybag/memory/hooks.py"
+before = "    config = session.acting\n    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
+after = "    config = session.config\n    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
+reddens = [
+  "tests/memory/test_index.py::test_a_bound_checkout_with_no_file_is_rendered_too",
+]
+
+# Outside overlay mode the index is the repository's file, which nobody's session rewrites.
+[[mutation]]
+name = "a repository-mode checkout's index is rendered by a hook"
+file = "src/drybag/memory/hooks.py"
+before = "    if event.project_root is None or config is None or config.memory.mode != OVERLAY_MODE:"
+after = "    if event.project_root is None or config is None:"
+reddens = [
+  "tests/memory/test_index.py::test_a_repository_mode_checkout_is_not_rendered",
+]
+
+# A claim on fewer than three digits is not a bug identifier.
+[[mutation]]
+name = "a Fixes claim accepts fewer than three digits"
+file = "src/drybag/docs/plans.py"
+before = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d{3,}\b")'
+after = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d+\b")'
+reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_takes_three_digits_or_more"]

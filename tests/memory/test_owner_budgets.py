@@ -2,7 +2,7 @@
 they reach the session (`config.loader.load` folds the owner's layer that `config.session` folds).
 
 A command and a session that read one machine file on two sets of budgets gave two answers to one
-question: with `[budgets] volatile_notes_words` raised in the machine file, `memory fit` passed a
+question: with `[budgets] volatile_notes_words` raised in the machine file, a command passed a
 bundle the session rendered into a part no hook slot holds, while `doctor`'s `bundles` row, which
 reads the session's configuration, was red; and `memory_index_words` from the machine file reached
 nothing a command enforced.
@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from stayfixed.config.loader import load
-from stayfixed.config.owner import GATE_BUDGET, IGNORED_NOTE, MACHINE_RESET_NOTE
-from stayfixed.config.reading import NOT_A_SWITCH, MachineConfigError
-from stayfixed.config.session import session_config
-from stayfixed.doctor.api import OK, RED
+from drybag.config.loader import load
+from drybag.config.owner import GATE_BUDGET, IGNORED_NOTE, MACHINE_RESET_NOTE
+from drybag.config.reading import NOT_A_SWITCH, MachineConfigError
+from drybag.config.session import session_config
+from drybag.doctor.api import OK, RED
 from tests.doctor.test_checks import _by_name, _checks
 from tests.memory.test_commands import CONFIG, NOTE, invoke
 
@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not 
 def _project(tmp_path: Path, machine: str, *, volatile: int = 0) -> tuple[Path, Path]:
     """A local-only project with `volatile` long volatile notes, and its machine file."""
     root = tmp_path / "project"
-    base = root / ".stayfixed" / "local" / "memory"
+    base = root / ".drybag" / "local" / "memory"
     for group in ("developer", "project-volatile"):
         (base / group).mkdir(parents=True)
     (base / "developer" / "a.md").write_text(
@@ -43,7 +43,7 @@ def _project(tmp_path: Path, machine: str, *, volatile: int = 0) -> tuple[Path, 
         (base / "project-volatile" / f"v{n:02}.md").write_text(
             NOTE.format(name=f"v{n:02}", meta=meta, body=body), encoding="utf-8"
         )
-    (root / "stayfixed.toml").write_text(CONFIG, encoding="utf-8")
+    (root / "drybag.toml").write_text(CONFIG, encoding="utf-8")
     path = tmp_path / "machine.toml"
     path.write_text(machine, encoding="utf-8")
     return root, path
@@ -85,23 +85,17 @@ def test_memory_index_judges_by_the_owners_budget(
 
 
 @pytest.mark.parametrize(
-    ("machine", "code", "status"),
-    [("", 0, OK), ("[budgets]\nvolatile_notes_words = 999999\n", 1, RED)],
+    ("machine", "status"),
+    [("", OK), ("[budgets]\nvolatile_notes_words = 999999\n", RED)],
     ids=["preset-budget", "owner-raised-budget"],
 )
-def test_memory_fit_and_doctor_answer_alike_under_the_owners_budget(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], machine: str, code: int, status: str
+def test_doctor_judges_the_bundles_by_the_owners_budget(
+    tmp_path: Path, machine: str, status: str
 ) -> None:
     # Twelve long volatile notes fit their slots under the preset's budget, and need a fourth part,
-    # which no hook slot holds, once the machine file raises it. `memory fit` is the command a
-    # person runs to ask exactly what `doctor`'s `bundles` row answers, so the two agree. Mutation
-    # (`mutations/`'s "a command's load reads no machine file for the owner's layer"): `memory fit`
-    # passes the raised budget's bundle while the row is red.
+    # which no hook slot holds, once the machine file raises it, so `doctor`'s `bundles` row reads
+    # the machine file as the session does.
     root, path = _project(tmp_path, machine, volatile=12)
-    common = ["--root", str(root), "--machine", str(path)]
-    assert invoke(["memory", "fit", "--json", *common]) == code
-    report = json.loads(capsys.readouterr().out)["bundles"]["volatile-notes"]
-    assert bool(report["overflow"] or report["oversized"]) is bool(code)
     row = _by_name(_checks(tmp_path, root, machine=path), "bundles")
     assert row.status == status, row.detail
 
@@ -127,7 +121,7 @@ def test_memory_fit_and_doctor_answer_alike_under_the_owners_budget(
 def test_a_command_reads_past_a_machine_file_key_it_cannot_use_and_says_so(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], table: str, note: str
 ) -> None:
-    # What the owner sets is honoured and what this stayfixed cannot use is said, never a block: a
+    # What the owner sets is honoured and what this drybag cannot use is said, never a block: a
     # key a later release's `setup` writes once stopped every older command on the machine. A
     # command goes on as a session does, on the preset's value, and says the key on stderr; the
     # load itself says nothing, since a command that loads twice would say it twice. Mutations
@@ -138,8 +132,8 @@ def test_a_command_reads_past_a_machine_file_key_it_cannot_use_and_says_so(
     config = load(root, machine=machine)
     assert config.budgets.effective("agents_md_lines") != 9
     assert capsys.readouterr().err == ""
-    invoke(["--json", "memory", "fit", "--root", str(root), "--machine", str(machine)])
-    assert capsys.readouterr().err == f"stayfixed: {note.format(machine=machine)}\n"
+    invoke(["--json", "memory", "inventory", "--root", str(root), "--machine", str(machine)])
+    assert capsys.readouterr().err == f"drybag: {note.format(machine=machine)}\n"
 
 
 def test_a_command_refuses_a_machine_file_that_does_not_load(tmp_path: Path) -> None:

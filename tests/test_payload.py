@@ -531,7 +531,7 @@ def test_the_payload_is_the_generated_plugin_tree() -> None:
     outside = [
         path
         for path, _ in entries
-        if not any(path == nine or path.startswith(nine + "/") for nine in NINE)
+        if not any(path == entry or path.startswith(entry + "/") for entry in NINE)
     ]
     assert outside == []
 

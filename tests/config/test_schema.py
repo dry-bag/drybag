@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from stayfixed.config.schema import Budgets, NativeCaps
-from stayfixed.presets import load_preset
+from drybag.config.schema import Budgets, NativeCaps
+from drybag.presets import load_preset
 
 
 def test_recommended_preset_carries_every_budget_and_cap_the_schema_knows() -> None:

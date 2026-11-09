@@ -29,6 +29,7 @@ from tests.declarations import (
     cited_names,
     declared,
     empty_anchors,
+    needs_declarations,
     unread_citations,
     unread_names,
 )
@@ -195,7 +196,7 @@ def test_the_loader_aims_every_deletion_this_module_drives_at_its_own_scratch(
 
     `main` sweeps `TEMPDIR` for leaked scratch checkouts and removes what it finds. With the
     real temporary directory in place, every test here that calls `main` swept the developer's
-    own — measured by planting a `stayfixed-oracle-canary` directory in it and running this
+    own — measured by planting a `drybag-oracle-canary` directory in it and running this
     module, which removed it — and a concurrently running oracle would have lost its checkout
     mid-run. A suite that can delete a developer's files is a defect whatever it is testing.
 
@@ -340,7 +341,7 @@ def test_a_mutation_nothing_notices_is_reported_as_surviving(tmp_path: Path) -> 
 # The guard exists because this script writes source files and restores them from memory; its
 # own comment says "refuse rather than risk it". It read any non-zero `git` exit as a clean
 # tree — and `git status` exits 128 outside a repository, which is exactly what an unpacked
-# sdist is (`scripts/**` and `mutations/` ship in it) and what a broken `git` produces.
+# sdist is (`scripts/**` ships in it) and what a broken `git` produces.
 
 
 @needs_git
@@ -914,7 +915,7 @@ def test_the_housekeeping_sweep_leaves_the_lock_alone(tmp_path: Path) -> None:
     # wrong.** `sweep_stale_scratch` has two halves: the `tempdir` glob, which `tempdir=` aims
     # wherever a caller says, and a walk over `git worktree list` run in `ROOT`, which `tempdir=`
     # does not scope at all. With `ROOT` left at the real repository, the second half removed
-    # every registered `stayfixed-oracle-*/tree` — including the live checkout of the oracle
+    # every registered `drybag-oracle-*/tree` — including the live checkout of the oracle
     # running this very test. It passed locally, where no oracle was running, and CI reported
     # `0 test(s) ran` on the clean tree: this test destroyed the run that was executing it, which
     # is precisely the hazard the lock it is testing exists to prevent. The loader above states
@@ -1240,6 +1241,7 @@ def test_every_citation_is_spelled_the_way_the_citation_reader_reads() -> None:
 # the groups were sized for reaches them (CONTRIBUTING.md, "Tests").
 
 
+@needs_declarations
 def test_the_oracle_reads_every_group_file() -> None:
     # Mutation (declared): `declared()` reads only the first group file (`[:1]` on the sorted
     # glob) -> the count comes out at the first file's entries and the second assertion reddens.
@@ -1250,8 +1252,9 @@ def test_the_oracle_reads_every_group_file() -> None:
     assert len(module.declared()) == expected
 
 
+@needs_declarations
 def test_every_entry_lives_in_its_group_file() -> None:
-    # Mutation (declared): `GROUP_OF` loses its `src/stayfixed/doctor/` row -> every `doctor`
+    # Mutation (declared): `GROUP_OF` loses its `src/drybag/doctor/` row -> every `doctor`
     # entry routes to the package's catch-all group instead, and the first of them, still in the
     # file its old row named, reddens this.
     module = oracle()
@@ -1264,13 +1267,13 @@ def test_every_entry_lives_in_its_group_file() -> None:
 
 def test_a_row_routes_its_files_wherever_it_stands_in_the_table() -> None:
     # `GROUP_OF` once took the first prefix that matched, so a row appended after
-    # `src/stayfixed/` was dead without a sound: its files went on routing to `core`. Mutation
+    # `src/drybag/` was dead without a sound: its files went on routing to `core`. Mutation
     # (declared): `group_for` takes the first match again -> the appended row routes nothing and
     # this reddens.
     module = oracle()
-    module.__dict__["GROUP_OF"] = (*module.GROUP_OF, ("src/stayfixed/newarea/", "newarea"))
-    assert module.group_for("src/stayfixed/newarea/x.py") == "newarea"
-    assert module.group_for("src/stayfixed/fsops.py") == "core"
+    module.__dict__["GROUP_OF"] = (*module.GROUP_OF, ("src/drybag/newarea/", "newarea"))
+    assert module.group_for("src/drybag/newarea/x.py") == "newarea"
+    assert module.group_for("src/drybag/fsops.py") == "core"
     assert module.group_for("README.md") == "repository"
     assert module.group_for(".github/workflows/ci.yml") == "tooling"
 
@@ -1278,6 +1281,6 @@ def test_a_row_routes_its_files_wherever_it_stands_in_the_table() -> None:
 def test_no_prefix_is_routed_twice() -> None:
     # Longest-prefix matching makes the order meaningless only while each prefix has one row: a
     # repeated prefix would route to whichever `max` met first. Mutation: none of the code's; the
-    # subject is the table, watched red by appending a second `("src/stayfixed/", "records")` row.
+    # subject is the table, watched red by appending a second `("src/drybag/", "records")` row.
     prefixes = [prefix for prefix, _ in oracle().GROUP_OF]
     assert len(prefixes) == len(set(prefixes)), prefixes
