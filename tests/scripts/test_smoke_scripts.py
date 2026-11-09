@@ -80,7 +80,7 @@ def test_every_hook_entry_answers_its_sample_event_through_the_checkout(
     code = _main(smoke, ROOT, tmp_path)
     out = capsys.readouterr().out
     assert code == 0, out
-    assert "12 entries, 13 row(s), 0 failure(s)" in out, out
+    assert "11 entries, 12 row(s), 0 failure(s)" in out, out
 
 
 @needs_git
@@ -161,7 +161,7 @@ def test_a_red_run_entry_that_says_nothing_is_reported(
     out = capsys.readouterr().out
     assert code == 1, out
     assert says in out, out
-    assert "12 entries, 13 row(s), 1 failure(s)" in out, out
+    assert "11 entries, 12 row(s), 1 failure(s)" in out, out
 
 
 @needs_git
@@ -193,8 +193,8 @@ def test_hooks_json_losing_an_event_fails_instead_of_running_fewer_rows(
     # smoke-tested and the script said nothing. That is the vacuous shape this repository names,
     # arriving through the guard written to prevent it.
     #
-    # `PostToolUse` is the event removed because it is the one with exactly one sample, so its
-    # rows are the whole of what goes missing.
+    # `PostToolUseFailure` is the event removed because it is the one with exactly one sample, so
+    # its rows are the whole of what goes missing.
     #
     # Mutation (declared, `mutations/`'s "the hook smoke stops noticing an event that lost its
     # entry"): the `unentered` set is emptied -> the run proceeds on the remaining entries, every
@@ -205,12 +205,12 @@ def test_hooks_json_losing_an_event_fails_instead_of_running_fewer_rows(
     shutil.copytree(ROOT / "scripts", planted / "scripts")
     entries = planted / "hooks" / "hooks.json"
     document = json.loads(entries.read_text(encoding="utf-8"))
-    assert "PostToolUse" in document["hooks"], "the fixture removes an event that is there"
-    del document["hooks"]["PostToolUse"]
+    assert "PostToolUseFailure" in document["hooks"], "the fixture removes an event that is there"
+    del document["hooks"]["PostToolUseFailure"]
     entries.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     code = _main(smoke, planted, tmp_path)
     assert code == 1
-    assert "no hook entry for ['PostToolUse']" in capsys.readouterr().out
+    assert "no hook entry for ['PostToolUseFailure']" in capsys.readouterr().out
 
 
 @needs_git
@@ -262,7 +262,7 @@ def test_hooks_json_gaining_an_entry_is_reported_rather_than_quietly_run(
     code = _main(smoke, planted, tmp_path / "s")
     out = capsys.readouterr().out
     assert code == 1, out
-    assert "13 entries and 14 rows, expected 12 and 13" in out, out
+    assert "12 entries and 13 rows, expected 11 and 12" in out, out
 
 
 @needs_git

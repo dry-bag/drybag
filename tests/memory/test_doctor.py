@@ -14,12 +14,15 @@ from pathlib import Path
 
 import pytest
 
+import drybag
 import drybag.memory.answers as answers_module
 from drybag import fsops
 from drybag.config.loader import load
 from drybag.doctor.api import OK, RED, SKIP, WARN, Check
 from drybag.errors import Refusal
+from drybag.gitenv import GitUnavailable
 from drybag.memory.doctor import NEARLY_FULL
+from drybag.memory.store import NOTES_UNDELIVERED
 from drybag.overlay.api import COMMON_MEMORY
 from tests.cli import cli
 from tests.doctor.test_checks import (
@@ -260,3 +263,45 @@ def test_the_note_store_rows_read_a_bound_checkouts_configuration(tmp_path: Path
     rows = {row.name: row for row in _checks(tmp_path, root, machine=tmp_path / "machine.toml")}
     assert "2 unreviewed note(s)" in rows["memory"].detail
     assert rows["bundles"].status != SKIP
+
+
+@pytest.mark.parametrize(
+    ("template", "note", "status"),
+    [
+        (HARNESS, True, WARN),
+        (HARNESS, False, OK),
+        (HARNESS + '\n[memory]\nmode = "harness"\n', True, OK),
+    ],
+    ids=["unset-with-notes", "unset-without-notes", "chosen-harness"],
+)
+def test_notes_in_the_overlay_with_no_mode_set_warn(
+    tmp_path: Path, template: str, note: bool, status: str
+) -> None:
+    # Bound, delivered and every row green, with no note reaching a session: a mode someone chose
+    # is theirs and says nothing. Mutation (`mutations/`'s "doctor stops warning that the overlay's
+    # notes reach no session").
+    root = _attached(tmp_path)
+    (root / "drybag.toml").write_text(template.format(version=drybag.__version__), "utf-8")
+    if note:
+        (tmp_path / "overlay" / COMMON_MEMORY / "a.md").write_text(
+            "---\nname: a\n---\nb\n", "utf-8"
+        )
+    rows = {row.name: row for row in _checks(tmp_path, root, machine=_machine(tmp_path))}
+    assert rows["memory"].status == status, rows["memory"]
+    assert (NOTES_UNDELIVERED in rows["memory"].detail) is (status == WARN)
+
+
+def test_a_git_that_does_not_answer_costs_the_warning_and_not_the_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The warning is a convenience, so it never reddens `doctor` or changes its exit code.
+    root = _attached(tmp_path)
+    (root / "drybag.toml").write_text(HARNESS.format(version=drybag.__version__), "utf-8")
+    (tmp_path / "overlay" / COMMON_MEMORY / "a.md").write_text("---\nname: a\n---\nb\n", "utf-8")
+
+    def no_answer(*args: object, **kwargs: object) -> None:
+        raise GitUnavailable("git did not answer")
+
+    monkeypatch.setattr("drybag.binding.read_id", no_answer)
+    rows = {row.name: row for row in _checks(tmp_path, root, machine=_machine(tmp_path))}
+    assert rows["memory"].status == OK, rows["memory"]

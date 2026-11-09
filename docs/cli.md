@@ -410,8 +410,8 @@ The two harnesses do not run `drybag` directly. Every entry in `hooks/hooks.json
 run-hook.sh <drybag args…>
 ```
 
-`hooks/hooks.json` files its entries under six events: `SessionStart`, `PreToolUse`,
-`PostToolUse`, `PostToolUseFailure`, `Stop` and `SessionEnd`, each tool event matched on `Bash`.
+`hooks/hooks.json` files its entries under five events: `SessionStart`, `PreToolUse`,
+`PostToolUseFailure`, `Stop` and `SessionEnd`, each tool event matched on `Bash`.
 `PostToolUseFailure` is where Claude Code delivers a `Bash` call that exited non-zero, and it
 carries the red-run note (below); Codex reads the same file and ignores that key (measured on
 Codex CLI 0.162.0-alpha.17.2). `SessionStart` and `SessionEnd` carry `index-render`, which
@@ -422,7 +422,8 @@ turn from ending. A `drybag hook` entry with nothing to say answers `{}`, on eve
 on `Stop` or `SessionEnd` is refused, and no shipped handler gives one there. An event Codex
 delivers from that file runs the same handlers behind the same
 per-machine switch, and that has not been measured on Codex. `drybag hook` dispatches eight
-events, those six and `UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses.
+events: those five, `PostToolUse`, which only the plugin `attach` renders uses, and
+`UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses.
 
 **The red-run note.** The environment fault that makes a red test run unattributable:
 uncommitted changes in the tree. The note counts them across the whole repository — a dirty tree
@@ -431,10 +432,7 @@ anywhere makes a red run unattributable — and says nothing when the tree is cl
 The `PostToolUseFailure` `Bash` hook delivers the note once per context after a red test run:
 Claude Code delivers a command that exited non-zero on that event, with `error` beginning `Exit code
 N`, and an `error` that begins otherwise, or with a run of more than nine digits, which no exit code
-has, gets no note. The same handler is registered on `PostToolUse` too, where no measured harness
-delivers an exit code: Codex delivers a failed command there with none, so the note does not speak,
-and the registration is a placeholder for parity with Codex. The two share one once-per-context key,
-so a context gets at most one note, whichever event carries it. The note is given by the command
+has, gets no note. The note is given by the command
 that failed rather than by configuration: it speaks when a simple command of the red run starts
 with a test runner's command in the hints' runner table (`pytest`, `python -m pytest`, `cargo test`,
 `go test`, `npm test` and the other common runners), read by the program's file name and never by
@@ -499,7 +497,7 @@ goes **red** on a cleared bit, and under a root the environment named hands you 
 plugin directory.
 
 **What a session hears about the overlay it is bound to: `overlay-status`.** Beside the two that
-deliver the overlay's rules (above), the `attach` area registers one `SessionStart` handler, with a
+deliver the overlay's rules (above), the `attach` area registers this `SessionStart` handler, with a
 `once_key`, so it speaks **at most** once
 per session: the marker is banked only when the handler had something to say, so a session that
 hears a line hears it once, and a repository with nothing to report is asked again on every
@@ -1409,8 +1407,7 @@ with part of the attach already undone:
 ## `drybag setup [--preset NAME] [--plugin NAME …] [--home PATH] [--machine PATH] [--overlay VALUE]`
 
 Configures this machine from a preset, `recommended` unless `--preset` names another: the
-machine configuration file's `[personal]` and `[machine]` tables, the deny rules and personal
-values in `<home>/.claude/settings.json`, and each plugin `--plugin` names, one install per plugin
+machine configuration file's `[personal]` and `[machine]` tables, the deny rules in `<home>/.claude/settings.json`, and each plugin `--plugin` names, one install per plugin
 per configured harness. Without `--plugin` no plugin is installed and no plugin command runs. That file is read as Claude Code reads it, past a leading byte-order mark,
 which a rewrite keeps. The deny rules are merged in beside the owner's own, and none is removed.
 `recommended` denies the env files by name: `.env`, `.env.local`, `.env.*.local`, `.env.dev`,
@@ -1445,12 +1442,6 @@ hand — is never overwritten by the preset's own default, and an overlay root a
 recorded survives a run that only changes something else. A table `setup` knows nothing about is
 carried through untouched, and so is a key at the top level; **comments are not** — the file is
 parsed and rewritten, and there is no standard-library parser that keeps them.
-
-The `[personal]` values are copied into `pluginConfigs` in `<home>/.claude/settings.json`, where
-Claude Code reads this plugin's own options, only where it holds no value for them: a value
-already there — one you set in Claude Code's plugin-config screen, or one an earlier `setup`
-copied — is kept on every run. So a personal value you change in the machine file after the first
-run does not reach `pluginConfigs`; change it there too, or delete it there and run `setup` again.
 
 **From an agent's sandboxed shell** `setup` cannot write the machine directory or the user
 settings: with Claude Code's sandbox on, an agent's shell writes nothing outside the working
@@ -1828,7 +1819,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `ignored-env` | as information, never a status: `DRYBAG_CONFIG` set, or `XDG_CONFIG_HOME` set to anything but the `.config` of the home every command reads under (`HOME`, or the password database's where `HOME` is unset), and not honoured by any command; and a `HOME` that is not the home the password database records for this user, since drybag follows `HOME` | the environment, the password database |
 | `attached` | the overlay binding, what it delivers, and, where `memory.mode` is `overlay`, the `autoMemoryDirectory` pointer at the composed store, read alike from every checkout (the states are below the table) | the ledger `drybag/attach.json` in the git common directory, the main checkout's `.claude/settings.local.json`, `~/.local/share/drybag/delivery/<id>/`, `~/.local/share/drybag/stores/<id>/`, the overlay's executable parts, `git` on the paths `attach` placed |
 | `bundles` | a bundle that does not fit its slots, and one whose part reaches the cap | the note store |
-| `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning only for files in the note store that are not notes, counted (at most 500,000 entries) | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
+| `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning for files in the note store that are not notes, counted (at most 500,000 entries), and, where no layer sets the mode, for an overlay holding notes that reach no session | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
 | `pre-commit` | whether the overlay's commit-time secret scan is installed on this machine | the overlay |
 | `overlay-requires` | whether the overlay this machine records requires a drybag the running one satisfies — red when this project keeps its notes in that overlay, a warning when it does not — and, where that finds nothing, a warning when another repository's work tree holds the overlay root (a `.git` in a directory above it), naming that directory, since that repository can put files into the overlay | the overlay's `drybag-overlay.toml`, `drybag.toml`, the directories above the overlay root |
 | `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when no `gitleaks` is on `PATH` (nothing is then committed or pushed; `setup --overlay` switches the sync on without installing one, and the job fails closed), when a hold stands (the paths or commits, and the review command, which names the recorded sha only when it is a whole one), when the record of the job cannot be read, or when the last outcome is anything but `ok`, with the outcome and the first line of its detail: for `skipped` the guard's reason and its remedy (the job acts once it is resolved, and the next session event runs it), for a failure a rerun meets again (`conflict`, `auth_failed`, `hook_failed`, `scan_unavailable`, `signing_failed`, `secret_found`, `waiting_clean_tree`) that it does until you act on what the line says, for any other that a later session event retries, and for `raced` beside an `index.lock` older than a whole job runs (the path `git rev-parse --git-path index.lock` gives, so a linked worktree's too), that lock and to remove it if no git is running; green for `ok`, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, `PATH`, `~/.local/share/drybag/sync/state.json` |

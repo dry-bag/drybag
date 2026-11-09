@@ -1,0 +1,1 @@
+A session is told when a `.gitignore` has re-included files `drybag attach` placed, so `git add -A` would stage them. `drybag attach` and `drybag doctor` warn when the overlay holds notes that reach no session because the memory mode is `harness`.

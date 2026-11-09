@@ -29,7 +29,9 @@ directory, which the `attach` area's `doctor.py` compares the pointer with, and 
 links point at in the overlay, which `attach` asks the length of before its first write
 (`build_composed`, `composed_directory`, `render_missing_index`, `withdraw_composed`,
 `link_sources`), the project's memory directories the store leaves unlinked for being in the tag
-namespace, which `attach`'s doctor row names (`reserved_project_groups`), and the trust region
+namespace, which `attach`'s doctor row names (`reserved_project_groups`), whether the overlay
+holds notes and what `attach` says when none reaches a session (`holds_notes`, `NOTES_UNDELIVERED`,
+`NOTES_UNDELIVERED_REMEDY`), and the trust region
 `tests/test_install_path.py` asserts end to end (`DELIMITER`, `markers`). The note walk and
 `resolved` have no reader outside this area and are not here. The overlay root the machine file
 records and the checkout's
@@ -87,6 +89,8 @@ from drybag.memory.store import (
     BINDING_STATES,
     BOUND,
     COMMON,
+    NOTES_UNDELIVERED,
+    NOTES_UNDELIVERED_REMEDY,
     PROJECTS,
     RECORD,
     STORE_DIR,
@@ -94,6 +98,7 @@ from drybag.memory.store import (
     Store,
     binding_state,
     composed_directory,
+    holds_notes,
     origin_note,
     project_notes,
     read_binding_record,
@@ -109,6 +114,8 @@ __all__ = [
     "COMMON",
     "DELIMITER",
     "INDEX_NAME",
+    "NOTES_UNDELIVERED",
+    "NOTES_UNDELIVERED_REMEDY",
     "PROJECTS",
     "RECORD",
     "SLOTS",
@@ -118,6 +125,7 @@ __all__ = [
     "binding_state",
     "build_composed",
     "composed_directory",
+    "holds_notes",
     "link_sources",
     "markers",
     "origin_note",

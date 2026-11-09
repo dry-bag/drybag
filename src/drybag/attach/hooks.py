@@ -102,6 +102,10 @@ NO_OVERLAY = (
     "run `drybag setup --preset recommended --overlay <path>`"
 )
 NOT_ASKABLE = "drybag: the overlay binding could not be checked on this machine"
+PLACED_SHOWN = (
+    "drybag: a `.gitignore` here re-includes {count} file(s) `drybag attach` placed for this "
+    "machine alone, so `git add -A` would stage them; `drybag doctor` names them"
+)
 NOT_ATTACHED = (
     "drybag: this repository is not attached to the overlay this machine records; "
     f"run `{ATTACH_COMMAND} --check`"
@@ -240,6 +244,25 @@ def _scoped_rules(event: HookEvent, session: SessionConfig) -> HookResult:
         return HookResult()
 
 
+def _placed_shown(event: HookEvent, session: SessionConfig) -> HookResult:
+    """The placed paths a `.gitignore` has re-included since `attach`, counted once per session.
+
+    A hint and no control: a branch that brings such a line is the adversary, and it can arrive
+    after this has run, so nothing here refuses and `drybag doctor` stays the row that goes red.
+    Anchored on the ledger, so the mode decides nothing. A count, because the names are the ones
+    a repository can choose. A `compact` is the same context asking again, and pays no `git`."""
+    if event.project_root is None or _asked_before(event):
+        return HookResult()
+    try:
+        from drybag.attach.write import shown_placed
+
+        count = shown_placed(event.project_root)
+    # An open handler never costs a session, as `_overlay_status` says.
+    except Exception:
+        return HookResult()
+    return HookResult(context=PLACED_SHOWN.format(count=count) if count else None)
+
+
 def _owner_files(event: HookEvent, session: SessionConfig) -> HookResult:
     """The owner-held files a new linked worktree lacks (`attach.checkout`), placed on every
     `SessionStart` and said when something was placed. Anchored on the binding and never on a
@@ -264,6 +287,12 @@ def register() -> list[Handler]:
             event="SessionStart",
             run=_overlay_status,
             once_key="overlay-status",
+        ),
+        Handler(
+            name="overlay-placed-shown",
+            event="SessionStart",
+            run=_placed_shown,
+            once_key="overlay-placed-shown",
         ),
         Handler(name="overlay-rules", event="SessionStart", run=_standing_rules),
         Handler(name="overlay-path-rules", event="PostToolUse", run=_scoped_rules),

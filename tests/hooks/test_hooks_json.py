@@ -47,7 +47,7 @@ SESSION_SOURCES = {"startup", "resume", "clear", "compact", "fork"}
 def test_there_are_entries_at_all() -> None:
     # The non-vacuity guard every walk-driven assertion below depends on: an empty `hooks`
     # object satisfies all six of them.
-    assert len(_entries()) == 12
+    assert len(_entries()) == 11
 
 
 def test_every_command_parses_against_the_real_parser() -> None:
@@ -105,8 +105,8 @@ def test_there_is_one_session_start_entry_per_declared_bundle_slot() -> None:
 
 def test_every_dispatched_event_has_at_least_one_handler() -> None:
     # An entry for an event nothing handles spawns a process to answer `{}`, and
-    # looks installed in doctor's listing. The dispatcher carries six events; two of them
-    # have no handler in this build, and a handler added for one arrives with its entry.
+    # looks installed in doctor's listing. Two of the dispatcher's events have no handler
+    # in this build, and a handler added for one arrives with its entry.
     events = {handler.event for handler in discover()}
     for _, _matcher, entry in _entries():
         words = entry["command"].split()
@@ -122,7 +122,8 @@ def test_every_registered_handler_has_an_entry() -> None:
         for _, _matcher, entry in _entries()
         if (words := entry["command"].split())[1] == "hook"
     }
-    assert {handler.event for handler in discover()} <= dispatched
+    # `PostToolUse` carries only the path-scoped rules, whose entry `attach` renders.
+    assert {handler.event for handler in discover()} - {"PostToolUse"} <= dispatched
 
 
 def test_no_entry_is_async() -> None:
@@ -190,7 +191,7 @@ def test_every_entry_is_filed_under_the_event_its_command_dispatches() -> None:
     # dispatches on the key -- emitted nothing for it ever again. The key is what runs the
     # entry, so the key is what is asserted, against `hooks.api.EVENTS` and against the argv.
     #
-    # Mutation: rename the `"PostToolUse"` key to `"PostToolUSe"` in hooks/hooks.json -> reddens.
+    # Mutation: rename the `"Stop"` key to `"StOp"` in hooks/hooks.json -> reddens.
     keys = list(HOOKS["hooks"])
     assert keys, "no event keys at all, so the assertions below measure nothing"
     for key in keys:
@@ -205,7 +206,7 @@ def test_the_shipped_hooks_register_post_tool_use_failure_for_bash() -> None:
     # Claude Code delivers a Bash command that exits non-zero to `PostToolUseFailure`, so the
     # red-run hint has an entry there, matched on the shell tool, and dispatching that
     # event. Codex reads this file too and ignores the key (measured on Codex CLI
-    # 0.162.0-alpha.17.2); it delivers a failed command on `PostToolUse`, whose entry stays.
+    # 0.162.0-alpha.17.2).
     # Mutation: `mutations/`'s "the hooks file loses the entry for a failed command".
     groups = HOOKS["hooks"].get("PostToolUseFailure")
     assert groups == [

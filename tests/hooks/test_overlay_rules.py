@@ -100,5 +100,5 @@ def test_a_read_of_a_scoped_file_carries_its_rule_once_per_session(
     assert read("Read", "s1") == said
     assert read("Edit", "s1") is None
     assert read("Write", "s2") == said
-    # The core plugin's own `PostToolUse` entry matches `Bash`, whose input names no file.
+    # A `Bash` call's input names no file.
     assert read("Bash", "s3") is None

@@ -147,21 +147,43 @@ def _debris(store: Store) -> Row | None:
     return Row(WARN, DEBRIS.format(count=found), DEBRIS_REMEDY) if found else None
 
 
+def _undelivered(context: Context) -> bool:
+    """Whether this checkout is bound to an overlay that holds notes."""
+    from pathlib import Path
+
+    from drybag.binding import bound_project
+    from drybag.config.plates import plates
+    from drybag.errors import resolved_or_none
+    from drybag.memory.store import holds_notes
+
+    overlay = context.overlay_root
+    if not isinstance(overlay, Path):
+        return False
+
+    def asked() -> bool:
+        bound = bound_project(context.root)
+        return bound is not None and holds_notes(plates(overlay, bound.project)[0])
+
+    # All of it inside: a warning that cannot ask is no warning, and never a red row.
+    return bool(resolved_or_none(asked))
+
+
 def _memory(context: Context, answers: Answers) -> Row:
     """The memory this session gets: the active mode and the layer that chose it, the store, the
     settings file that sets the harness's `autoMemoryDirectory`, and the store's unreviewed notes
     and files that are not notes, as counts.
 
-    Runs with no `drybag.toml` too, where memory is the harness's own. Only files that are not
-    notes, or a walk that could not finish, warn: every other part is information, a store that
+    Runs with no `drybag.toml` too, where memory is the harness's own. Files that are not notes,
+    a walk that could not finish, and an overlay's notes reaching no session warn: every other part
+    is information, a store that
     does not resolve among them, since `memory index` says why and a `local-only` store before its
     first note is an ordinary state.
     """
     from drybag.config.schema import HARNESS_MODE
-    from drybag.doctor.api import OK, Row
+    from drybag.doctor.api import OK, WARN, Row
     from drybag.memory.notes import walk
     from drybag.memory.reviewed import unreviewed
-    from drybag.memory.store import walked_groups
+    from drybag.memory.store import NOTES_UNDELIVERED, NOTES_UNDELIVERED_REMEDY, walked_groups
     from drybag.printed import printable
 
     resolution = context.session.resolution
@@ -193,6 +215,8 @@ def _memory(context: Context, answers: Answers) -> Row:
     parts.append(_pointer(context))
     if debris is not None:
         return Row(debris.status, "; ".join([*parts, debris.detail]), debris.remedy)
+    if "memory.mode" not in resolution.provenance and _undelivered(context):
+        return Row(WARN, "; ".join([*parts, NOTES_UNDELIVERED]), NOTES_UNDELIVERED_REMEDY)
     if store is not None:
         parts.append("the note store holds notes and nothing else")
     return Row(OK, "; ".join(parts))

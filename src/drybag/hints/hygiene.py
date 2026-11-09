@@ -19,8 +19,7 @@ no test run (`simple_commands`).
 Which harness field says a run was red is read from the documentation, not guessed: the Claude
 Code hooks reference gives the Bash `tool_response` as `stdout`, `stderr`, `interrupted` and
 `isImage` with no exit code, and a non-zero exit arriving on `PostToolUseFailure` as
-`error: "Exit code N\\n…"`. `red_exit` reads both that shape and a `tool_response.exit_code`,
-so the notice is keyed on whichever the harness sends rather than on a field one lacks.
+`error: "Exit code N\\n…"`, which is what `red_exit` reads.
 
 Nothing a repository authored leaves this module. The notice carries the fixed sentences below and
 a count this module computed.
@@ -77,16 +76,7 @@ def simple_commands(command: str) -> list[list[str]]:
 
 
 def red_exit(raw: Mapping[str, Any]) -> int | None:
-    """The non-zero exit code this payload reports, in either shape, or `None`.
-
-    `isinstance(code, bool)` is excluded on purpose: `True` is an `int` equal to 1 in Python,
-    so a harness that put a boolean in `exit_code` would otherwise be read as "exited 1".
-    """
-    response = raw.get("tool_response")
-    if isinstance(response, dict):
-        code = response.get("exit_code")
-        if isinstance(code, int) and not isinstance(code, bool) and code != 0:
-            return code
+    """The non-zero exit code this payload's `error` reports, or `None`."""
     error = raw.get("error")
     if isinstance(error, str):
         match = _EXIT_CODE_ERROR.match(error)

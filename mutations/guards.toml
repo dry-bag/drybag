@@ -122,9 +122,8 @@ reddens = [
   "tests/hints/test_hooks.py::test_a_red_run_on_post_tool_use_failure_is_annotated[killed-at-its-timeout]",
 ]
 
-# The red-run hint is registered on both events a failed command can arrive on, under one
-# `once_key`, which the dispatcher banks per session: a red run noted on either event is not noted
-# again on the other. Without the key on one registration, that one notes every red run.
+# The dispatcher banks the red-run hint's `once_key` per session. Without the key every red run
+# is noted.
 [[mutation]]
 name = "the red-run hint on a failure forgets that the note was delivered"
 file = "src/drybag/hints/hooks.py"
@@ -137,26 +136,7 @@ after = """            event="PostToolUseFailure",
             once_key=None,
 """
 reddens = [
-  "tests/hints/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[post-first]",
-  "tests/hints/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[failure-first]",
-  "tests/hints/test_hooks.py::test_the_hygiene_notice_has_one_once_key_on_each_event[PostToolUseFailure]",
-]
-
-[[mutation]]
-name = "the red-run hint after a successful call forgets that the note was delivered"
-file = "src/drybag/hints/hooks.py"
-before = """            event="PostToolUse",
-            run=_test_hygiene,
-            once_key=ONCE_TEST_HYGIENE,
-"""
-after = """            event="PostToolUse",
-            run=_test_hygiene,
-            once_key=None,
-"""
-reddens = [
-  "tests/hints/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[post-first]",
-  "tests/hints/test_hooks.py::test_the_red_run_note_is_delivered_once_per_context_whichever_event_carries_it[failure-first]",
-  "tests/hints/test_hooks.py::test_the_hygiene_notice_has_one_once_key_on_each_event[PostToolUse]",
+  "tests/hooks/test_hook_command.py::test_a_once_per_context_handler_really_runs_once",
 ]
 
 # A value that reaches a subprocess is untrusted. Without the check a range shaped like an option is
@@ -667,7 +647,6 @@ after = """def _memory_registrar() -> object:
 
     return [r for r in discover_registrars() if r.__module__ == "drybag.memory.commands"]
 
-
 def context_for(command: str, root: Path) -> str | None:"""
 reddens = ["tests/boundaries/test_discovery.py::test_discovery_is_asked_only_for_the_submodules_it_names"]
 
@@ -885,7 +864,7 @@ file = "src/drybag/hints/hygiene.py"
 before = '_EXIT_CODE_ERROR = re.compile(r"\AExit code (\d{1,9})(?!\d)")'
 after = '_EXIT_CODE_ERROR = re.compile(r"\AExit code (\d+)")'
 reddens = [
-  'tests/hints/test_hygiene.py::test_red_exit_reads_both_payload_shapes[raw8-None]',
+  'tests/hints/test_hygiene.py::test_red_exit_reads_the_error_field[raw4-None]',
 ]
 
 # The red-run note is about the project, and silent without its configuration.

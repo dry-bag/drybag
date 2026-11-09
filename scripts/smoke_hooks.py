@@ -33,14 +33,14 @@ VOLATILE_NOTE = "SMOKE-VOLATILE-NOTE"
 # own bounds on `git` (`drybag.gitenv.FLOOR_VARIABLE`, which can only raise them). Spelled out
 # rather than imported, because this script runs without `drybag` importable.
 FLOOR_VARIABLE = "DRYBAG_GIT_FLOOR_SECONDS"
-# Counted against the shipped `hooks/hooks.json` and this fixture: twelve entries, thirteen rows
+# Counted against the shipped `hooks/hooks.json` and this fixture: eleven entries, twelve rows
 # (`PreToolUse` carries two samples), unchanged by the overlay's delivery, since its rules reach a
 # session through `hook SessionStart` and its path-scoped ones through the rendered plugin, neither
 # an entry of `hooks/hooks.json`. Both are asserted because a run that executes fewer rows
 # prints an identically green summary — the shape `unsampled` and `unentered` close for events
 # and nothing closed for rows.
-EXPECTED_ENTRIES = 12
-EXPECTED_ROWS = 13
+EXPECTED_ENTRIES = 11
+EXPECTED_ROWS = 12
 # What the red-run note opens with, `drybag.hints.hygiene.LEAD`, spelled out for the reason
 # `FLOOR_VARIABLE` is. The note is all a `PostToolUseFailure` entry is for, so its row asks for it
 # by its words and not only for an answer naming the event.
@@ -89,26 +89,11 @@ SAMPLES: dict[str, tuple[Sample, ...]] = {
             stderr_never=(FAULT,),
         ),
     ),
-    "PostToolUse": (
-        Sample(
-            {
-                "tool_name": "Bash",
-                "tool_input": {"command": "uv run pytest -q"},
-                "tool_response": {"exit_code": 1},
-            },
-            0,
-            "a failed test run is annotated, never blocked",
-            stderr_never=(FAULT,),
-            context_says=(RED_RUN_NOTE,),
-        ),
-    ),
     # The shape Claude Code delivers a Bash command that exited non-zero in, measured on Claude
     # Code 2.1.296 for `false`: no `tool_response`, and `error` the exit code alone.
     "PostToolUseFailure": (
         Sample(
             {
-                # A session of its own: the note is delivered once per session whichever event
-                # carried it, and the `PostToolUse` row above has spent the shared session's.
                 "session_id": "smoke-failure",
                 "tool_name": "Bash",
                 "tool_input": {"command": "uv run pytest -q"},

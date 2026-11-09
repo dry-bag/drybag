@@ -1221,3 +1221,13 @@ file = "src/drybag/docs/plans.py"
 before = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d{3,}\b")'
 after = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d+\b")'
 reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_takes_three_digits_or_more"]
+
+# A store row that is green while the overlay's notes reach no session says nothing was wrong.
+[[mutation]]
+name = "doctor stops warning that the overlay's notes reach no session"
+file = "src/drybag/memory/doctor.py"
+before = '    if "memory.mode" not in resolution.provenance and _undelivered(context):'
+after = "    if False:"
+reddens = [
+  "tests/memory/test_doctor.py::test_notes_in_the_overlay_with_no_mode_set_warn",
+]
