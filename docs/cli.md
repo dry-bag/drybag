@@ -83,7 +83,9 @@ What it does, in order:
    `- [trigger → answer](group/note.md)` lines to `MEMORY.md`. For a note with neither key, those
    are read back into its `index:` frontmatter, marked `index_provenance: native`, so nothing a
    session wrote is lost by regenerating. Only lines outside the region the render writes are
-   read (step 4), so the render's own lines are never read back into a note. A note written so is unreviewed until promoted again
+   read (step 4), so a line between its markers is not read back; an index an earlier release
+   rendered under other markers is outside it, so its lines are harvested too. Each note is
+   written once, since it then has `index:`, and is unreviewed until promoted again
    ([`memory promote`](#drybag-memory-promote-note----changed)).
 3. **Renders what is missing.** A note with none of these is rendered with its `description`, and
    is not written. A line an earlier release wrote into a note as `index_provenance: provisional`
