@@ -1963,3 +1963,14 @@ after = "    for plate in [p for p in plates if p.machine is None]:\n        dir
 reddens = [
   "tests/attach/test_items.py::test_a_sub_plate_skill_wins_its_parents",
 ]
+
+# A later plate's `"on"` is a state and never a definition: it restores what an earlier plate
+# defined. Letting it reset the definition serves nothing for a server the owner only switched back on.
+[[mutation]]
+name = "an on entry resets the definition an earlier plate gave"
+file = "src/drybag/attach/mcp.py"
+before = "                states[name] = (value == ON, plate)"
+after = "                states[name] = (value == ON, plate)\n                definitions.pop(name, None)"
+reddens = [
+  "tests/attach/test_mcp.py::test_on_restores_an_earlier_definition",
+]
