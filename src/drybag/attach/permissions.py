@@ -168,6 +168,24 @@ def allow_list(raw: dict[str, Any], label: str) -> list[str]:
     return list(allow)
 
 
+DENIED_KEY = "deniedMcpServers"
+
+
+def denied_list(raw: dict[str, Any], label: str) -> list[Any]:
+    """The `deniedMcpServers` list of a settings document `settings_object` read, or a refusal.
+
+    The reader of that list beside `allow_list`, with the same rule: an absent key is no entries,
+    and a key that is there must hold a list. Its entries stay as they are, whatever their shape,
+    because an entry the owner wrote is the owner's and is never read for what it means.
+    """
+    if DENIED_KEY not in raw:
+        return []
+    denied = raw[DENIED_KEY]
+    if not isinstance(denied, list):
+        raise EntriesError(f"{label}: '{DENIED_KEY}' is not a list")
+    return list(denied)
+
+
 def _allow_rules(document: str, path: Path) -> tuple[str, ...]:
     """The `permissions.allow` list of one settings-shaped document, read by `allow_list`."""
     label = str(path)

@@ -18,7 +18,7 @@ import pytest
 
 from drybag import fsops, jsonobject
 from drybag.attach.write import Attached, Detached, attach, detach
-from drybag.binding import LEDGER_NAME
+from drybag.binding import LEDGER_NAME, MCP_LEDGER_FILE, common_directory
 from drybag.errors import Failure, Refusal
 from drybag.printed import quoted
 from drybag.scaffold.regions import extract
@@ -1396,3 +1396,42 @@ def test_a_settings_write_back_past_the_read_cap_is_refused_and_removes_nothing(
     with pytest.raises(Refusal, match=jsonobject.WRITTEN_PAST):
         _detach(root)
     assert_snapshot_unchanged(root, before)
+
+
+def _off(overlay: Path, *names: str) -> None:
+    (overlay / "common" / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": {name: "off" for name in names}}), encoding="utf-8"
+    )
+
+
+def test_owner_deny_entries_survive_attach_and_detach(tmp_path: Path) -> None:
+    root, store, machine = _bound(tmp_path)
+    overlay = store.parents[2]
+    settings = root / SETTINGS
+    settings.parent.mkdir()
+    owner = [{"serverName": "srv9"}, {"other": 1}]
+    settings.write_text(json.dumps({"deniedMcpServers": owner}), encoding="utf-8")
+    # `srv9` is switched off by the overlay too, but the owner already denied it: not recorded.
+    _off(overlay, "srv1", "srv9")
+    _attach(root, store, machine)
+    held = json.loads(settings.read_text(encoding="utf-8"))["deniedMcpServers"]
+    assert held == [*owner, {"serverName": "srv1"}]
+    # Both come back on: only the recorded one goes.
+    _off(overlay)
+    _attach(root, store, machine)
+    assert json.loads(settings.read_text(encoding="utf-8"))["deniedMcpServers"] == owner
+    _off(overlay, "srv1")
+    _attach(root, store, machine)
+    _detach(root)
+    assert json.loads(settings.read_text(encoding="utf-8")) == {"deniedMcpServers": owner}
+
+
+def test_detach_removes_the_deny_entries_and_the_mcp_ledger(tmp_path: Path) -> None:
+    root, store, machine = _bound(tmp_path)
+    _off(store.parents[2], "srv1")
+    before = snapshot(root)
+    _attach(root, store, machine)
+    assert (common_directory(root) / MCP_LEDGER_FILE).exists()
+    _detach(root)
+    assert_snapshot_unchanged(root, before)
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()

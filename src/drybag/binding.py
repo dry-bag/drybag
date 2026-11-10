@@ -46,6 +46,12 @@ ID_FILE = "drybag/binding"
 # or a re-attach takes back. `LEDGER_NAME` is how a message calls it.
 LEDGER_FILE = "drybag/attach.json"
 LEDGER_NAME = f"`{LEDGER_FILE}` in the git common directory"
+# The MCP half of that record, a file of its own: `attach.json` is written whole by whichever drybag
+# ran last and ignores a key it does not know, so a field a newer release added there would be
+# dropped by an older one and the entries it names orphaned. A file an older release never opens
+# cannot lose a field.
+MCP_LEDGER_FILE = "drybag/attach-mcp.json"
+MCP_LEDGER_NAME = f"`{MCP_LEDGER_FILE}` in the git common directory"
 BINDINGS = "bindings"
 DELIVERY = "delivery"
 # Exactly what `secrets.token_hex(16)` draws; anything else at `ID_FILE` is no id.

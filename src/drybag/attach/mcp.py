@@ -20,9 +20,12 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 from drybag import fsops
+from drybag.binding import MCP_LEDGER_FILE, MCP_LEDGER_NAME, common_directory
 from drybag.config.plates import Plate
 from drybag.printed import quoted
 
@@ -123,3 +126,57 @@ def fold_mcp(plates: Sequence[Plate]) -> Fold:
             definition, defined_plate = definitions[name]
             served[name] = Served(definition, digest(definition), defined_plate, state_plate)
     return Fold(served, off, tuple(notes))
+
+
+MCP_LEDGER_FORMAT = 1
+BAD_LEDGER = "{name} is not a ledger `drybag attach` wrote, so it records nothing"
+
+
+@dataclass(frozen=True)
+class McpLedger:
+    """What `attach` recorded of the MCP servers, in `attach-mcp.json`.
+
+    `deny` is the server names whose `deniedMcpServers` entry `attach` added, and the only entries
+    a later run or `detach` may take out. `mcp` is the digest of each server `attach` delivered,
+    `None` for one it could not; it is empty until a run delivers any. `notes` is what reading
+    the file said and is no part of the record.
+    """
+
+    deny: tuple[str, ...] = ()
+    mcp: dict[str, str | None] = field(default_factory=dict)
+    notes: tuple[str, ...] = field(default=(), compare=False)
+
+
+def _ledger_shaped(raw: object) -> bool:
+    if not isinstance(raw, dict) or raw.get("format") != MCP_LEDGER_FORMAT:
+        return False
+    deny, mcp = raw.get("deny"), raw.get("mcp", {})
+    return (
+        isinstance(deny, list)
+        and all(isinstance(name, str) for name in deny)
+        and isinstance(mcp, dict)
+        and all(isinstance(v, str) or v is None for v in mcp.values())
+    )
+
+
+def read_mcp_ledger(root: Path) -> McpLedger:
+    """The MCP ledger in `root`'s git common directory. A file that is absent is an empty ledger,
+    and one that cannot be read or is not well shaped is an empty ledger with a note: `attach`
+    then writes it whole, and no entry is withdrawn by a guess."""
+    path = common_directory(root) / MCP_LEDGER_FILE
+    try:
+        raw: Any = json.loads(fsops.read_regular_text(path))
+    except FileNotFoundError:
+        return McpLedger()
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError):
+        return McpLedger(notes=(BAD_LEDGER.format(name=MCP_LEDGER_NAME),))
+    if not _ledger_shaped(raw):
+        return McpLedger(notes=(BAD_LEDGER.format(name=MCP_LEDGER_NAME),))
+    return McpLedger(deny=tuple(raw["deny"]), mcp=dict(raw.get("mcp", {})))
+
+
+def write_mcp_ledger(root: Path, ledger: McpLedger) -> None:
+    """Write `ledger` whole, through the same contained write as the other ledger."""
+    document = {"format": MCP_LEDGER_FORMAT, "deny": list(ledger.deny), "mcp": ledger.mcp}
+    text = json.dumps(document, indent=2, sort_keys=True) + "\n"
+    fsops.write_within(common_directory(root), MCP_LEDGER_FILE, text)

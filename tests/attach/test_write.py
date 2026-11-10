@@ -26,6 +26,7 @@ from drybag.attach.api import ledger
 from drybag.attach.binding import OVERLAY_DAMAGED
 from drybag.attach.check import check
 from drybag.attach.exclude import NOT_IGNORED, TRACKED
+from drybag.attach.mcp import McpLedger, read_mcp_ledger
 from drybag.attach.permissions import settings_document
 from drybag.attach.write import (
     GROUP_ESCAPES,
@@ -36,7 +37,7 @@ from drybag.attach.write import (
     Attached,
     attach,
 )
-from drybag.binding import LEDGER_FILE, common_directory
+from drybag.binding import LEDGER_FILE, MCP_LEDGER_FILE, common_directory
 from drybag.config.loader import CONFIG_FILE, load
 from drybag.errors import Failure, Refusal
 from drybag.memory.api import RECORD, link_sources
@@ -2694,3 +2695,62 @@ def test_attach_says_when_the_overlays_notes_reach_no_session(tmp_path: Path) ->
     layer = store.parents[2] / step[3].replace("<name>", store.parent.name)
     layer.write_text(f"[{step[2]}]\n{step[1]}\n", encoding="utf-8")
     assert said not in _attach_it(root, store, machine).notes
+
+
+DENIED = "deniedMcpServers"
+
+
+def _mcp(store: Path, **servers: object) -> None:
+    """The overlay's `common/claude/mcp.json`, holding `servers`."""
+    (store.parents[2] / COMMON_CLAUDE / "mcp.json").write_text(
+        json.dumps({"mcpServers": servers}), encoding="utf-8"
+    )
+
+
+def _settings(root: Path) -> dict[str, Any]:
+    result: dict[str, Any] = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+    return result
+
+
+def test_off_names_become_server_name_entries(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, srv1="off", srv2={"command": "x"})
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _settings(root)[DENIED] == [{"serverName": "srv1"}]
+    assert read_mcp_ledger(root).deny == ("srv1",)
+
+
+def test_on_withdraws_the_deny_entry(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _mcp(store, srv1="off")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    _mcp(store, srv1="on")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    # The key goes with its last entry, as the allow list does, and the ledger forgets the name.
+    assert DENIED not in _settings(root)
+    assert read_mcp_ledger(root).deny == ()
+
+
+def test_no_mcp_ledger_file_reads_as_empty(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+    assert read_mcp_ledger(root) == McpLedger()
+    assert read_mcp_ledger(root).mcp == {}
+
+
+def test_a_ledger_that_is_not_well_shaped_reads_as_empty_with_a_note(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    (common_directory(root) / MCP_LEDGER_FILE).write_text('{"format": 1, "deny": 3}')
+    read = read_mcp_ledger(root)
+    assert read.deny == () and len(read.notes) == 1
+
+
+def test_attach_json_is_unchanged_by_deny_entries(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, srv1="off")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    keys = set(json.loads(ledger_file(root).read_text(encoding="utf-8")))
+    assert keys == {"format", "store", "allow", "rules", "settings_keys", "directories", "render"}
+    assert DENIED not in json.loads(ledger_file(root).read_text(encoding="utf-8"))
