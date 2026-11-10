@@ -1952,3 +1952,14 @@ reddens = [
   "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command0]",
   "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command1]",
 ]
+
+# A sub-plate is a plate like any other to the fold; a fold that skipped them would leave every
+# reader of items blind to the machine's own copy, and nothing else reads one through a reader.
+[[mutation]]
+name = "the item fold skips the machine sub-plates"
+file = "src/drybag/attach/items.py"
+before = "    for plate in plates:\n        directory = plate.directory / kind.harness / kind.directory"
+after = "    for plate in [p for p in plates if p.machine is None]:\n        directory = plate.directory / kind.harness / kind.directory"
+reddens = [
+  "tests/attach/test_items.py::test_a_sub_plate_skill_wins_its_parents",
+]
