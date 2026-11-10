@@ -199,7 +199,7 @@ def refuse_unless_share_can_exist(binding: Binding, config: Config) -> None:
         mode = 0
     if mode is not None and not stat.S_ISDIR(mode):
         raise Refusal(SHARE_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
-    made = (share / RECORD, *link_sources(binding.overlay, config, binding.machine_name))
+    made = (share / RECORD, *link_sources(binding.overlay, config, machine=binding.machine_name))
     for path in (path for path in made if path.is_relative_to(share)):
         if any(_name_too_long(there, part) for part in path.relative_to(share).parts):
             raise Refusal(PATH_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))

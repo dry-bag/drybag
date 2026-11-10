@@ -445,7 +445,7 @@ def _notes(held: Sequence[Plate]) -> tuple[Path, ...]:
     return tuple(plate.directory / STORE_DIR for plate in held)
 
 
-def permitted_roots(overlay: Path, project: str, machine: str | None = None) -> tuple[Path, ...]:
+def permitted_roots(overlay: Path, project: str, *, machine: str | None) -> tuple[Path, ...]:
     """This project's whole share of the overlay: the common notes, the notes of each tag its
     record lists (`config.plates.plates`, in list order) and its own, last, each followed by the
     notes of its sub-plate on the machine named `machine`."""

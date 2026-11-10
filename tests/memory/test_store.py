@@ -254,7 +254,7 @@ def test_overlay_mode_reads_the_composed_store_and_no_tree_in_the_checkout(tmp_p
     binding.record(root, "widget", REMOTE)
     id = binding.read_id(root)
     assert id is not None
-    build(overlay, "widget", id)
+    build(overlay, "widget", id, machine=None)
     store = resolve(root, a_config(root, "overlay"), machine=a_machine_file(tmp_path, overlay))
     assert store is not None
     assert store.path == store_directory(id)
@@ -306,7 +306,7 @@ def test_a_tags_memory_is_linked_under_its_tag_name(tmp_path: Path) -> None:
     binding.record(root, "widget", REMOTE)
     id = binding.read_id(root)
     assert id is not None
-    build(overlay, "widget", id)
+    build(overlay, "widget", id, machine=None)
     config = a_config(root, "overlay", '["developer", "project-stable"]')
     store = resolve(root, config, machine=a_machine_file(tmp_path, overlay))
     assert store is not None

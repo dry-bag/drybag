@@ -1076,7 +1076,7 @@ reddens = [
 [[mutation]]
 name = "attach and --check ask only the binding record whether it can exist"
 file = "src/drybag/attach/binding.py"
-before = "    made = (share / RECORD, *link_sources(binding.overlay, config, binding.machine_name))\n"
+before = "    made = (share / RECORD, *link_sources(binding.overlay, config, machine=binding.machine_name))\n"
 after = "    made = (share / RECORD,)\n"
 reddens = [
   "tests/attach/test_commands.py::test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_by_check_too[the-index]",

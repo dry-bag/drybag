@@ -951,7 +951,7 @@ def _carry_out(
         # back after `record` above wrote it, never `[project] name` on its own.
         project = (bound_project(root) or bound).project
         written = (
-            _point(root, build_composed(binding.overlay, project, id, binding.machine_name))
+            _point(root, build_composed(binding.overlay, project, id, machine=binding.machine_name))
             or written
         )
         render_missing_index(root, config, machine=machine)

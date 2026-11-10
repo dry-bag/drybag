@@ -534,7 +534,7 @@ def test_session_start_bundle_carries_a_machine_sub_plate_note(tmp_path: Path) -
         machine.write_text(
             f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "{name}"\n', encoding="utf-8"
         )
-        build(overlay, "widget", id, name)
+        build(overlay, "widget", id, machine=name)
         store = resolve(root, load(root, machine=machine), machine=machine)
         assert store is not None
         review(store)
@@ -570,7 +570,7 @@ def test_a_sub_plates_note_reaches_the_bundle_where_its_parent_has_no_notes(
     machine.write_text(f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "m1"\n', "utf-8")
     id = binding.read_id(root)
     assert id is not None
-    build(overlay, "widget", id, "m1")
+    build(overlay, "widget", id, machine="m1")
     store = resolve(root, load(root, machine=machine), machine=machine)
     assert store is not None
     review(store)

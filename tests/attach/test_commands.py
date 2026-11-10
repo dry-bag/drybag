@@ -539,7 +539,9 @@ def test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_
     configure("p")
     share = projects / "p"
     made = [
-        path for path in link_sources(overlay, load(root, machine=machine)) if share in path.parents
+        path
+        for path in link_sources(overlay, load(root, machine=machine), machine=None)
+        if share in path.parents
     ]
     reach = max(len(str(path)) for path in made) - len(str(share))
     assert reach > len(str(share / RECORD)) - len(str(share))
@@ -889,7 +891,9 @@ def test_a_first_attach_under_an_overlay_root_too_deep_for_its_links_is_refused_
     # How far past the overlay root the longest path the first attach links under `projects/p`
     # reaches, off the paths the composed store's links point at.
     shallow = store.parents[2]
-    linked = link_sources(shallow, load(root, machine=_machine(tmp_path, overlay=shallow)))
+    linked = link_sources(
+        shallow, load(root, machine=_machine(tmp_path, overlay=shallow)), machine=None
+    )
     tail = max(len(str(path)) for path in linked if store.parent in path.parents) - len(
         str(shallow)
     )

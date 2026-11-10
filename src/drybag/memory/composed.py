@@ -55,7 +55,7 @@ from drybag.memory.store import (
 )
 
 
-def link_sources(overlay: Path, config: Config, machine: str | None = None) -> tuple[Path, ...]:
+def link_sources(overlay: Path, config: Config, *, machine: str | None) -> tuple[Path, ...]:
     """Every path in the overlay a link of the store points at for the configured groups: the
     index in this project's share, then each group's directory. `attach` asks each, above its
     first write, whether a path that long can exist on this machine
@@ -110,7 +110,7 @@ def _links(directory: Path) -> list[str]:
     return sorted(name for name in os.listdir(directory) if fsops.is_symlink(directory / name))
 
 
-def build(overlay: Path, project: str, id: str, machine: str | None = None) -> Path:
+def build(overlay: Path, project: str, id: str, *, machine: str | None) -> Path:
     """Make `<data>/stores/<id>/` hold a link to each of the overlay's groups for `project` and to
     its index, and no other link, and return it. A file that is not a link is left where it is.
     `machine` is this machine's name, whose sub-plates' notes are linked too."""

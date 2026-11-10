@@ -172,7 +172,7 @@ def test_walked_groups_follows_the_tag_list_order(tmp_path: Path) -> None:
     binding.record(root, "widget", REMOTE)
     id = binding.read_id(root)
     assert id is not None
-    build(overlay, "widget", id)
+    build(overlay, "widget", id, machine=None)
     config = a_config(root, "overlay", '["project-stable", "developer"]')
     store = resolve(root, config, machine=a_machine_file(tmp_path, overlay))
     assert store is not None
@@ -1162,7 +1162,7 @@ def _an_attached_checkout(tmp_path: Path, *, bound: bool = True) -> tuple[Path, 
     a_config(root, "overlay")
     if bound:
         binding.record(root, "widget", REMOTE)
-        build_composed(overlay, "widget", binding.ensure_id(root))
+        build_composed(overlay, "widget", binding.ensure_id(root), machine=None)
     return root, overlay, machine
 
 
@@ -1320,7 +1320,7 @@ def test_walked_groups_reads_machine_groups_after_their_parent(tmp_path: Path) -
     binding.record(root, "widget", REMOTE)
     id = binding.read_id(root)
     assert id is not None
-    build(overlay, "widget", id, "m1")
+    build(overlay, "widget", id, machine="m1")
     machine = tmp_path / "machine.toml"
     machine.write_text(f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "m1"\n', "utf-8")
     config = a_config(root, "overlay", '["project-stable", "developer"]')
@@ -1365,7 +1365,7 @@ def test_a_configured_group_named_machine_dash_that_is_no_link_is_walked(tmp_pat
     binding.record(root, "widget", REMOTE)
     id = binding.read_id(root)
     assert id is not None
-    build(overlay, "widget", id, "m1")
+    build(overlay, "widget", id, machine="m1")
     machine = tmp_path / "machine.toml"
     machine.write_text(f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "m1"\n', "utf-8")
     config = a_config(root, "overlay", '["developer", "machine-notes"]')
