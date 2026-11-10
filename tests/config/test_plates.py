@@ -230,9 +230,7 @@ def test_an_overlay_drybag_toml_cannot_set_the_machine(tmp_path: Path) -> None:
     root = with_sub_plates(tmp_path, "m1", "m2")
     (root / "common" / "drybag.toml").write_text('[machine]\nname = "m2"\n', encoding="utf-8")
     machine = tmp_path / "machine.toml"
-    machine.write_text(
-        f'[overlay]\nroot = "{root}"\n[machine]\nname = "m1"\n', encoding="utf-8"
-    )
+    machine.write_text(f'[overlay]\nroot = "{root}"\n[machine]\nname = "m1"\n', encoding="utf-8")
 
     record = machine_record(machine)
     assert record.name == "m1"
