@@ -1897,3 +1897,25 @@ after = "    if False:"
 reddens = [
   "tests/attach/test_write.py::test_attach_says_when_the_overlays_notes_reach_no_session",
 ]
+
+# A tag's sub-plate refines the tag, so a skill both hold is not a collision of two tags.
+[[mutation]]
+name = "a tag's sub-plate is counted as a tag of its own"
+file = "src/drybag/attach/tags.py"
+before = "            tags = list(dict.fromkeys(p.name for p in holders if p.kind is PlateKind.TAG))"
+after = "            tags = [p.name for p in holders if p.kind is PlateKind.TAG]"
+reddens = [
+  "tests/attach/test_tags.py::test_a_tag_and_its_sub_plate_do_not_collide",
+  "tests/attach/test_tags.py::test_two_tags_sub_plates_still_collide",
+]
+
+# The same for a key two layers set: a sub-plate's label is its tag's and `on <machine>`.
+[[mutation]]
+name = "a tag's sub-plate layer is counted as a tag of its own"
+file = "src/drybag/attach/tags.py"
+before = "                if (tag := parent_label(layer.label)) not in held_by:"
+after = "                if (tag := layer.label) not in held_by:"
+reddens = [
+  "tests/attach/test_tags.py::test_a_tag_and_its_sub_plate_setting_one_key_do_not_collide",
+  "tests/attach/test_tags.py::test_two_tags_sub_plates_still_collide",
+]

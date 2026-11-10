@@ -348,6 +348,7 @@ REPORT = (
     "cli-path",
     "diagnostics",
     "ignored-env",
+    "machine",
     "attached",
     "bundles",
     "memory",
@@ -359,7 +360,7 @@ REPORT = (
 
 def test_every_check_has_one_row_in_one_report(tmp_path: Path) -> None:
     # Moving a check into its area must not cost it its row, nor give it a second one: the
-    # fourteen are the same fourteen, once each. A literal tuple and not the registry read back,
+    # fifteen are the same fifteen, once each. A literal tuple and not the registry read back,
     # so a check that dropped out of both the core and the areas reddens here. Mutation (oracle):
     # `mutations/`'s "doctor drops the checks an area contributes" -> the five delivery rows are
     # missing. The fixture is an initialised project with nothing else to look at -- no overlay,
@@ -1167,7 +1168,7 @@ def test_every_registry_name_is_spelled_exactly_once_in_the_module() -> None:
     # times, and the registry spelled the name an eighth time. A row that disagreed with its
     # key was one typo away and nothing would have said so. Now a check
     # returns a `Row` and `_guarded` stamps the registry's name, so each name is a string
-    # literal exactly once in the modules that hold it: the core's eight in `CHECKS`, counted
+    # literal exactly once in the modules that hold it: the core's nine in `CHECKS`, counted
     # over every module that defines one of `CHECKS`' checks, and each area's in its own
     # `doctor.py`, in the `Contribution` its `register()` returns. The core's modules are read off
     # where the checks are defined rather than listed, so a check split into a module of its own
@@ -1192,7 +1193,7 @@ def test_every_registry_name_is_spelled_exactly_once_in_the_module() -> None:
         return {name: literals.count(name) for name in names}
 
     names = [name for name, _ in module.CHECKS]
-    assert len(names) == 8
+    assert len(names) == 9
     core = [module, *{sys.modules[check.__module__] for _, check in module.CHECKS} - {module}]
     assert spelled(core, names) == dict.fromkeys(names, 1)
     found = registry.discover_contributors()
@@ -1364,3 +1365,41 @@ def test_the_preferences_row_names_the_overlay_layers_notes_as_information(
     missing = quoted(str(overlay / "projects" / "p" / CONFIG_FILE))
     assert NOT_THERE.format(path=missing, layer="overlay project") in preferences.detail
     assert preferences.status == OK
+
+
+def _machine_named(tmp_path: Path, name: str) -> Path:
+    path = tmp_path / "machine.toml"
+    path.write_text(
+        f'[overlay]\nroot = "{tmp_path / "overlay"}"\n\n[machine]\nname = {name}\n',
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_machine_row_names_the_machine(tmp_path: Path) -> None:
+    # Mutation (oracle): `mutations/`'s "the machine row reads no name".
+    _overlay(tmp_path)
+    root = _initialised(tmp_path)
+    rows = _checks(tmp_path, root, machine=_machine_named(tmp_path, '"m1"'))
+    assert _by_name(rows, "machine") == Check("machine", OK, "this machine is m1", "")
+    bare = _checks(tmp_path, root, machine=_machine(tmp_path))
+    assert _by_name(bare, "machine") == Check(
+        "machine", OK, "no [machine] name, so no machine sub-plate applies", ""
+    )
+
+
+def test_machine_row_warns_on_a_bad_directory(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    (overlay / "common" / "machines" / "Bad Name").mkdir(parents=True)
+    (overlay / "projects" / "p" / "machines" / "Other One").mkdir(parents=True)
+    root = _initialised(tmp_path)
+    _git(root, "init", "-q", "-b", "main")
+    binding.record(root, "p", None)
+    row = _by_name(_checks(tmp_path, root, machine=_machine_named(tmp_path, '"m1"')), "machine")
+    assert row.status == WARN
+    assert row.detail.startswith("this machine is m1; ")
+    assert "Bad Name" in row.detail and "Other One" in row.detail
+    # A name outside the shape is the machine file's note, a warning too, and never red.
+    bad = _by_name(_checks(tmp_path, root, machine=_machine_named(tmp_path, '"M1"')), "machine")
+    assert bad.status == WARN and "M1" in bad.detail
+    assert RED not in {row.status, bad.status}

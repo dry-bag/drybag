@@ -83,3 +83,45 @@ def test_a_name_held_by_a_tag_and_the_project_alone_is_precedence_and_not_named(
     _hold(overlay, "projects/p", "claude/rules/r.md")
     _hold(overlay, "common", "claude/rules/r.md")
     assert collisions(plates(overlay, "p", machine=None)[0], ()) == ()
+
+
+def _sub_plate(overlay: Path, plate: str, relative: str, machine: str = "m1") -> None:
+    _hold(overlay, f"{plate}/machines/{machine}", relative)
+
+
+def test_a_tag_and_its_sub_plate_do_not_collide(tmp_path: Path) -> None:
+    # A sub-plate refines its own tag, which is precedence and is not named. Mutation (oracle):
+    # `mutations/`'s "a tag's sub-plate is counted as a tag of its own".
+    overlay = _overlay(tmp_path, "t1")
+    _hold(overlay, "tags/t1", "claude/skills/review/SKILL.md")
+    _sub_plate(overlay, "tags/t1", "claude/skills/review/SKILL.md")
+    assert collisions(plates(overlay, "p", machine="m1")[0], ()) == ()
+
+
+def test_a_tag_and_its_sub_plate_setting_one_key_do_not_collide(tmp_path: Path) -> None:
+    # The value path keys a layer by its label, `t1 on m1` for the sub-plate's. Mutation (oracle):
+    # `mutations/`'s "a tag's sub-plate layer is counted as a tag of its own".
+    layers = (
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "harness"}, "t1"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t1 on m1"),
+        Layer(LayerName.OVERLAY_COMMON, {"memory.mode": "overlay"}, "on m1"),
+    )
+    overlay = _overlay(tmp_path, "t1")
+    assert collisions(plates(overlay, "p", machine="m1")[0], layers) == ()
+
+
+def test_two_tags_sub_plates_still_collide(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path, "t1", "t2")
+    for tag in ("t1", "t2"):
+        _hold(overlay, f"tags/{tag}", "claude/skills/review/SKILL.md")
+        _sub_plate(overlay, f"tags/{tag}", "claude/skills/review/SKILL.md")
+    layers = (
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "harness"}, "t1"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t1 on m1"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "harness"}, "t2"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t2 on m1"),
+    )
+    assert collisions(plates(overlay, "p", machine="m1")[0], layers) == (
+        "the skill review is held by the tags t1, t2: the later, t2, wins",
+        "the setting memory.mode is held by the tags t1, t2: the later, t2, wins",
+    )

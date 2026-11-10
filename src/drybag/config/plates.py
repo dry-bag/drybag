@@ -167,11 +167,7 @@ def plates(
     used, notes = tags(overlay, project)
     name = machine
     found = [*notes]
-    parents = (
-        Plate(PlateKind.COMMON, COMMON, overlay / COMMON),
-        *(Plate(PlateKind.TAG, tag, overlay / TAGS / tag) for tag in used),
-        Plate(PlateKind.PROJECT, project, overlay / PROJECTS / project),
-    )
+    parents = _parents(overlay, project, used)
     ordered: list[Plate] = []
     for parent in parents:
         ordered.append(parent)
@@ -181,6 +177,24 @@ def plates(
                 Plate(parent.kind, parent.name, parent.directory / MACHINES / name, machine=name)
             )
     return tuple(ordered), tuple(found)
+
+
+def _parents(overlay: Path, project: str, used: tuple[str, ...]) -> tuple[Plate, ...]:
+    """The plates that have no machine: `common`, the usable tags `used`, the project."""
+    return (
+        Plate(PlateKind.COMMON, COMMON, overlay / COMMON),
+        *(Plate(PlateKind.TAG, tag, overlay / TAGS / tag) for tag in used),
+        Plate(PlateKind.PROJECT, project, overlay / PROJECTS / project),
+    )
+
+
+def bad_machine_directories(overlay: Path, project: str) -> tuple[str, ...]:
+    """The notes `plates` gives for the `machines/` directories of `project`'s plates whose names
+    are outside `TAG`, and no other: what `doctor`'s `machine` row says of them."""
+    parents = _parents(overlay, project, tags(overlay, project)[0])
+    return tuple(
+        note for parent in parents for note in _bad_machine_directories(parent.directory / MACHINES)
+    )
 
 
 def _bad_machine_directories(machines: Path) -> list[str]:

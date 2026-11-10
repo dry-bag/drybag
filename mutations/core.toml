@@ -5452,3 +5452,13 @@ after = "    for layer in sorted(reversed(stack), key=lambda layer: _RANK[layer.
 reddens = [
   "tests/config/test_overlay_layers.py::test_sub_plate_value_beats_its_parent_and_loses_to_the_next_tag",
 ]
+
+# It asks each plate of the bound project, not the common plate alone.
+[[mutation]]
+name = "the machine row asks only the common plate's machines directory"
+file = "src/drybag/config/plates.py"
+before = "        note for parent in parents for note in _bad_machine_directories(parent.directory / MACHINES)"
+after = "        note for parent in parents[:1] for note in _bad_machine_directories(parent.directory / MACHINES)"
+reddens = [
+  "tests/doctor/test_checks.py::test_machine_row_warns_on_a_bad_directory",
+]

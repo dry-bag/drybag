@@ -5,7 +5,8 @@ skill, an agent, a Codex rule file or a setting are settled by their order in th
 (`tags` in `projects/<name>/project.toml`), and the owner may not have meant that order to decide.
 `collisions` names each such name, the tags that hold it in list order and the one that wins. A tag
 and `common` or the project holding one name is precedence and is not named: it is how a plate
-overrides the plate beneath it.
+overrides the plate beneath it, and so is a tag and its own sub-plate on this machine
+(`machines/<name>/`), which counts as the tag.
 
 **A convenience and not a control.** The overlay and its record are the owner's own, and the
 sentences are for the owner, so nothing here refuses and nothing is gated on it; `doctor` warns. The
@@ -18,6 +19,7 @@ from collections.abc import Sequence
 
 from drybag.attach.items import KINDS, fold
 from drybag.config.classes import ALLOWED, Layer, LayerName, class_of
+from drybag.config.overlay_layers import parent_label
 from drybag.config.plates import Plate, PlateKind
 from drybag.printed import quoted
 
@@ -34,7 +36,8 @@ def collisions(held: Sequence[Plate], layers: Sequence[Layer]) -> tuple[str, ...
     found: list[str] = []
     for kind in KINDS:
         for name, holders in fold(held, kind).holders.items():
-            tags = [plate.name for plate in holders if plate.kind is PlateKind.TAG]
+            # A sub-plate is its tag's own refinement, so each tag counts once.
+            tags = list(dict.fromkeys(p.name for p in holders if p.kind is PlateKind.TAG))
             if len(tags) > 1:
                 found.append(_sentence(kind.said, name, tags))
     keys: dict[str, list[str]] = {}
@@ -42,7 +45,10 @@ def collisions(held: Sequence[Plate], layers: Sequence[Layer]) -> tuple[str, ...
         if layer.name is LayerName.OVERLAY_TAG:
             # Only a key `resolve` admits the tag layer for: of any other no tag wins anything.
             for key in (key for key in layer.values if layer.name in ALLOWED[class_of(key)]):
-                keys.setdefault(key, []).append(layer.label)
+                held_by = keys.setdefault(key, [])
+                # `t1 on m1` is `t1`'s sub-plate: one tag, whichever of its layers set the key.
+                if (tag := parent_label(layer.label)) not in held_by:
+                    held_by.append(tag)
     found.extend(_sentence("setting", key, tags) for key, tags in keys.items() if len(tags) > 1)
     return tuple(found)
 

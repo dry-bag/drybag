@@ -58,6 +58,7 @@ from drybag.config.machine import (
     owner_home,
     passwd_home,
 )
+from drybag.config.plates import bad_machine_directories
 from drybag.config.schema import MEMORY_MODES, Config
 from drybag.config.session import (
     SESSION_READ_LIMIT,
@@ -75,10 +76,12 @@ from drybag.doctor.model import (
     Check,
     Context,
     Contribution,
+    MachineUnread,
     Row,
     configured,
 )
 from drybag.doctor.registry import contributions
+from drybag.errors import resolved_or_none
 from drybag.findings import listed
 from drybag.grammar import PATH_VALUE
 from drybag.harnesses import CANONICAL, CLAUDE, HARNESSES
@@ -662,6 +665,43 @@ def _ignored_env(context: Context) -> Row:
     return Row(OK, detail)
 
 
+MACHINE_REMEDY = (
+    "name this machine with `[machine] name` in the machine file, 1 to 40 lowercase letters, "
+    "digits and hyphens, and rename or remove each `machines/` directory the detail names"
+)
+NO_MACHINE_NAME = "no [machine] name, so no machine sub-plate applies"
+
+
+def _machine(context: Context) -> Row:
+    """This machine's name, which picks each plate's `machines/<name>/` sub-plate
+    (`config.plates`), and what is wrong with it or beside it.
+
+    The name is the machine file's alone (`config.overlay`), read once for the report
+    (`Context.machine_record`). A name outside the shape, a machine file that cannot be read and a
+    `machines/` directory of the bound project's plates whose name is outside the shape are each a
+    warning in the words that named them, and never red: the machine row says what applies, it
+    refuses nothing (a session never dies of its configuration), and the machine file's own refusal
+    is the `preferences` row's.
+    """
+    record = context.machine_record
+    if isinstance(record, MachineUnread):
+        return Row(WARN, f"{record.reason}, so no machine sub-plate applies", PREFERENCES_REMEDY)
+    name = None if record is None else record.name
+    said = NO_MACHINE_NAME if name is None else f"this machine is {name}"
+    notes = [] if record is None or record.note is None else [record.note]
+    overlay = context.overlay_root
+    if isinstance(overlay, Path):
+
+        def asked() -> tuple[str, ...]:
+            project = context.session.bound_to
+            return () if project is None else bad_machine_directories(overlay, project)
+
+        notes.extend(resolved_or_none(asked) or ())
+    if not notes:
+        return Row(OK, said)
+    return Row(WARN, f"{said}; {'; '.join(notes)}", MACHINE_REMEDY)
+
+
 # The core's checks, in the order the `doctor` table in `docs/cli.md` lists them, ahead of every
 # row an area contributes. The list is the report's order and the core's only registry: a check
 # added here needs no other edit, and a check missing from it is a check nothing runs. An area adds
@@ -675,6 +715,7 @@ CHECKS: tuple[tuple[str, Callable[[Context], Row]], ...] = (
     ("cli-path", _cli_path),
     ("diagnostics", _diagnostics),
     ("ignored-env", _ignored_env),
+    ("machine", _machine),
 )
 
 
