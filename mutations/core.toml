@@ -5400,3 +5400,14 @@ after = "    if project is None or read.config is not None:"
 reddens = [
   "tests/config/test_session.py::test_a_checkout_whose_file_does_not_load_has_no_bound_configuration",
 ]
+
+# The machine's name picks sub-plates, so a value outside the tag shape is a note and no name.
+[[mutation]]
+name = "a machine name of any string is a name"
+file = "src/drybag/config/overlay.py"
+before = "    if isinstance(value, str) and TAG.fullmatch(value):"
+after = "    if isinstance(value, str):"
+reddens = [
+  "tests/config/test_machine_name.py::test_name_outside_the_tag_shape_is_a_note",
+  "tests/config/test_machine_name.py::test_a_very_long_name_is_clipped_in_the_note",
+]
