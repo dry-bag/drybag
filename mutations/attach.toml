@@ -1919,3 +1919,24 @@ reddens = [
   "tests/attach/test_tags.py::test_a_tag_and_its_sub_plate_setting_one_key_do_not_collide",
   "tests/attach/test_tags.py::test_two_tags_sub_plates_still_collide",
 ]
+
+# The plates' notes, a `machines/` directory outside the tag shape and a bad `[machine] name`
+# among them, are said where `attach` says every other note.
+[[mutation]]
+name = "attach says no note of the plates"
+file = "src/drybag/attach/write.py"
+before = "    notes.extend(binding.plate_notes)"
+after = "    notes.extend(())"
+reddens = [
+  "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command0]",
+]
+
+# The same for `attach --check`, on its one line.
+[[mutation]]
+name = "attach --check says no note of the plates"
+file = "src/drybag/attach/check.py"
+before = "    for note in binding.plate_notes:"
+after = "    for note in ():"
+reddens = [
+  "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command1]",
+]

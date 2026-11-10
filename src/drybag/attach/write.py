@@ -964,6 +964,9 @@ def _carry_out(
         notes.append(NO_ORIGIN_NOTE)
     elif binding.note is not None:
         notes.append(binding.note)
+    # What the plates gave: a tag, record or `machines/` directory that is no plate, and a bad
+    # `[machine] name`.
+    notes.extend(binding.plate_notes)
     if config.memory.mode == HARNESS_MODE and holds_notes(binding.plates):
         notes.append(f"{NOTES_UNDELIVERED}: {NOTES_UNDELIVERED_REMEDY}")
     return Attached(
