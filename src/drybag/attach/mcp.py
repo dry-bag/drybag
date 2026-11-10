@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from drybag import fsops
+from drybag.attach.items import PROJECT_CLAUDE
 from drybag.binding import MCP_LEDGER_FILE, MCP_LEDGER_NAME, common_directory
 from drybag.config.plates import Plate
 from drybag.printed import quoted
@@ -73,7 +74,7 @@ def digest(definition: Mapping[str, object]) -> str:
 
 def _entries(plate: Plate, notes: list[str]) -> dict[str, object]:
     """The `mcpServers` object of `plate`'s file, or nothing with a note."""
-    path = plate.directory / "claude" / MCP_FILE
+    path = plate.directory / PROJECT_CLAUDE / MCP_FILE
     shown = quoted(str(path))
     try:
         text = fsops.read_regular_text(path)

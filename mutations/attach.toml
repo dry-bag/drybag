@@ -610,13 +610,15 @@ reddens = [
 name = "detach finds the exclude block after it has withdrawn the settings"
 file = "src/drybag/attach/write.py"
 before = """    hidden = exclude.withdrawn_block(root)
-    settings = _planned_settings(root, recorded)
+    held = read_mcp_ledger(root)
+    settings = _planned_settings(root, recorded, held.deny)
     # What the main checkout's settings file names, which decides each `claude plugin` call: read
     # here, so a file that cannot be read refuses while nothing is withdrawn.
     plugin = None if main is None else (id, main, _plugin_keys(main))
     _refuse_unwithdrawable(root, recorded, settings)
     allow_removed = _withdraw_settings(root, settings)"""
-after = """    settings = _planned_settings(root, recorded)
+after = """    held = read_mcp_ledger(root)
+    settings = _planned_settings(root, recorded, held.deny)
     # What the main checkout's settings file names, which decides each `claude plugin` call: read
     # here, so a file that cannot be read refuses while nothing is withdrawn.
     plugin = None if main is None else (id, main, _plugin_keys(main))
