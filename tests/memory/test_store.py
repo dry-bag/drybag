@@ -286,11 +286,11 @@ def test_a_link_into_another_project_inside_the_same_overlay_is_refused(tmp_path
 
 
 def a_tagged_overlay(base: Path, *tags: str) -> Path:
-    """An overlay whose record of `widget` lists `tags`, each with a `groups/<tag>/memory/` holding
+    """An overlay whose record of `widget` lists `tags`, each with a `tags/<tag>/memory/` holding
     a note of its own."""
     overlay = with_tags(an_overlay(base), "widget", list(tags), "memory")
     for tag in tags:
-        (overlay / "groups" / tag / "memory" / f"{tag}.md").write_text("x", encoding="utf-8")
+        (overlay / "tags" / tag / "memory" / f"{tag}.md").write_text("x", encoding="utf-8")
     return overlay
 
 
@@ -310,7 +310,7 @@ def test_a_tags_memory_is_linked_under_its_tag_name(tmp_path: Path) -> None:
     config = a_config(root, "overlay", '["developer", "project-stable"]')
     store = resolve(root, config, machine=a_machine_file(tmp_path, overlay))
     assert store is not None
-    assert store.groups["tag-a"].resolve() == (overlay / "groups" / "a" / "memory").resolve()
+    assert store.groups["tag-a"].resolve() == (overlay / "tags" / "a" / "memory").resolve()
 
 
 def test_a_link_outside_the_permitted_roots_is_not_read(tmp_path: Path) -> None:
@@ -319,10 +319,10 @@ def test_a_link_outside_the_permitted_roots_is_not_read(tmp_path: Path) -> None:
     root = tmp_path / "project"
     a_repo(root)
     overlay = a_tagged_overlay(tmp_path, "a")
-    (overlay / "groups" / "b" / "memory").mkdir(parents=True)
+    (overlay / "tags" / "b" / "memory").mkdir(parents=True)
     a_tree(root, overlay)
     memory = composed_directory(binding.ensure_id(root))
-    (memory / "tag-a").symlink_to(overlay / "groups" / "b" / "memory", target_is_directory=True)
+    (memory / "tag-a").symlink_to(overlay / "tags" / "b" / "memory", target_is_directory=True)
     config = a_config(root, "overlay", '["developer", "project-stable", "tag-a"]')
     store = resolve(root, config, machine=a_machine_file(tmp_path, overlay))
     assert store is not None

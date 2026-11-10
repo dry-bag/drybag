@@ -77,7 +77,7 @@ def test_a_memory_only_upstream_fast_forwards_onto_the_checked_sha(overlays: Ove
 
 
 def test_an_upstream_group_note_is_integrated(overlays: Overlays) -> None:
-    note = f"groups/{TAG}/memory/{TAG}-from-b.md"
+    note = f"tags/{TAG}/memory/{TAG}-from-b.md"
     u = push_note(overlays.b, note, note_text("from-b"))
 
     assert J.integrate(context(overlays, overlays.a), fetched(overlays, overlays.a)) is None
@@ -531,8 +531,8 @@ def test_incoming_notes_are_written_and_the_owners_staging_kept(overlays: Overla
     commit_all(b, "memory: from b")
     git(b, "push", "-q", "origin", "main")
     write(a, "README.md", "overlay\nstaged line\n")
-    write(a, f"groups/{TAG}/memory/{TAG}-one.md", "staged by the owner\n")
-    git(a, "add", "README.md", f"groups/{TAG}/memory/{TAG}-one.md")
+    write(a, f"tags/{TAG}/memory/{TAG}-one.md", "staged by the owner\n")
+    git(a, "add", "README.md", f"tags/{TAG}/memory/{TAG}-one.md")
     write(a, "common/claude/hooks/untracked.py", "print('mine')\n")
     cached = git(a, "diff", "--cached")
 

@@ -254,7 +254,7 @@ def test_a_tag_hook_group_is_rendered_between_common_and_the_project(tmp_path: P
     overlay = _overlay(tmp_path)
     with_tags(overlay, "p", ["a"], "claude")
     tagged = {"type": "command", "command": "tag.sh"}
-    (overlay / "groups" / "a" / "claude" / "hooks.json").write_text(
+    (overlay / "tags" / "a" / "claude" / "hooks.json").write_text(
         json.dumps({"hooks": {"SessionStart": [{"hooks": [tagged]}]}}), encoding="utf-8"
     )
     render(overlay, "p", ID)
@@ -275,11 +275,11 @@ def test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole(tmp_path: Path)
     overlay = _overlay(tmp_path)
     with_tags(overlay, "p", ["a", "b"], "claude")
     for tag in ("a", "b"):
-        skills = overlay / "groups" / tag / "claude" / "skills"
+        skills = overlay / "tags" / tag / "claude" / "skills"
         (skills / "review").mkdir(parents=True)
         (skills / "review" / "SKILL.md").write_text(f"review from {tag}\n", encoding="utf-8")
         (skills / f"only-{tag}.md").write_text(f"{tag}\n", encoding="utf-8")
-    (overlay / "groups" / "a" / "claude" / "skills" / "review" / "helper.sh").write_text(
+    (overlay / "tags" / "a" / "claude" / "skills" / "review" / "helper.sh").write_text(
         "from a only\n", encoding="utf-8"
     )
     render(overlay, "p", ID)
@@ -297,7 +297,7 @@ def test_a_rule_a_codex_file_and_a_skill_take_one_winner_and_one_order(tmp_path:
     # so the common-only `y` comes before the tag's `x`, and common's `x/extra.md` is not copied.
     overlay = _overlay(tmp_path)
     with_tags(overlay, "p", ["a"], "claude")
-    for plate, name in (("common", "x"), ("common", "y"), ("groups/a", "x")):
+    for plate, name in (("common", "x"), ("common", "y"), ("tags/a", "x")):
         for relative in ("claude/rules/{}.md", "codex/{}.rules", "claude/skills/{}/SKILL.md"):
             (overlay / plate / relative.format(name)).parent.mkdir(parents=True, exist_ok=True)
             (overlay / plate / relative.format(name)).write_text(f"{plate}\n", encoding="utf-8")
@@ -307,6 +307,6 @@ def test_a_rule_a_codex_file_and_a_skill_take_one_winner_and_one_order(tmp_path:
     rules = [(rule.name, rule.body) for rule in rules_read(held)]
     codex = [(target, source.read_text()) for target, source in codex_rules(binding)]
     skills = [(name, part.text) for name, part in read_parts(held).items() if "skills/" in name]
-    assert rules == [("y.md", "common"), ("x.md", "groups/a")]
-    assert codex == [(".codex/rules/y.rules", "common\n"), (".codex/rules/x.rules", "groups/a\n")]
-    assert skills[2:] == [("skills/y/SKILL.md", "common\n"), ("skills/x/SKILL.md", "groups/a\n")]
+    assert rules == [("y.md", "common"), ("x.md", "tags/a")]
+    assert codex == [(".codex/rules/y.rules", "common\n"), (".codex/rules/x.rules", "tags/a\n")]
+    assert skills[2:] == [("skills/y/SKILL.md", "common\n"), ("skills/x/SKILL.md", "tags/a\n")]

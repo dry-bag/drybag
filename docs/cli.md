@@ -144,7 +144,7 @@ there is one.
 `~/.local/share/drybag/stores/<id>/`, named by the checkout's binding id and holding one link per
 group into the overlay, and `--store` is not read. In every other mode `--store` is resolved at the
 path it names, under the same rules as the configured store. The groups include the notes of each tag
-the project lists, as `tag-<tag>` (`groups/<tag>/memory/` in the overlay), which every `memory`
+the project lists, as `tag-<tag>` (`tags/<tag>/memory/` in the overlay), which every `memory`
 command, the index and the bundles read after the common notes and in the order the project lists
 its tags, whether or not `memory.groups` names them. A note's review is
 recorded by its path, so renaming a tag, which moves its notes' path in the store, makes them
@@ -336,7 +336,7 @@ runs without some of its configuration (`config-fallback`).
 **The overlay's rules.** In a checkout this machine binds to an overlay project
 ([`attach`](#drybag-attach---store-path---project-name---check---root-path---machine-path)), `SessionStart`
 carries the overlay's standing rules — every `*.md` file in `claude/rules/` of `common/`, of each
-tag the project lists (`groups/<tag>/`) and of `projects/<name>/` whose frontmatter has no `paths:`
+tag the project lists (`tags/<tag>/`) and of `projects/<name>/` whose frontmatter has no `paths:`
 key, in that order and each in name order, a later plate's file replacing the earlier plate's file of
 its name —
 under one fixed lead line, on every event the matcher covers, since a compacted or cleared context
@@ -607,7 +607,7 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
 5. **Push.** The checked sha, `<sha>:refs/heads/main`, never forced and with no tag, after the
    secret scan of the range and only when every commit in it is memory.
 
-**What moves.** Three globs only: `common/memory/**`, `groups/*/memory/**` and
+**What moves.** Three globs only: `common/memory/**`, `tags/*/memory/**` and
 `projects/*/memory/**`, less each project's own `MEMORY.md` (`projects/*/memory/MEMORY.md`), which
 never moves: it is a rendering of the notes beside it and of what this machine's sessions appended,
 so each machine renders its own ([`memory index`](#drybag-memory-index), on `SessionStart` and
@@ -1105,7 +1105,7 @@ screen or in the note naming both remotes, and before it is recorded; an ssh URL
 
 **Reads** the overlay's `common/claude/permissions.json`, `common/claude/hooks.json` and the files
 under `common/claude/skills/` and `common/claude/agents/` (dot-named ones left out), the same
-`claude/` files of each tag the project lists in `projects/<name>/project.toml` (`groups/<tag>/`,
+`claude/` files of each tag the project lists in `projects/<name>/project.toml` (`tags/<tag>/`,
 in list order), this project's `projects/<name>/claude/` equivalents, the `codex/` rules of
 `common/`, of each tag and of `projects/<name>/`, a later plate winning a name over an earlier one
 (the order is `common`, the tags, the project), and this repository's existing
@@ -1126,7 +1126,7 @@ swapped into place, the render before removed whole) and, through the two `claud
 Claude Code's own records of the marketplace and the plugin and the main checkout's
 `.claude/settings.local.json`; where the notes are composed, the composed store
 `$HOME/.local/share/drybag/stores/<id>/` (a link per group of the overlay's for this project,
-`tag-<tag>` to `groups/<tag>/memory/` for each tag the project lists where that is a directory, and
+`tag-<tag>` to `tags/<tag>/memory/` for each tag the project lists where that is a directory, and
 one to its `MEMORY.md`; a directory of the project's `memory/` whose name starts with `tag-` is not
 linked, the prefix being the tags'; each run makes its links exactly the overlay's current set, so
 untagging takes the link and a rename of a tag moves it, and leaves any file there that is not a
@@ -1633,7 +1633,7 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
 
 4. with `--yes` only, the overlay's notes recorded as reviewed on this machine: after each project
    it attached, every note of the overlay's share for its table key (`common/memory`, each listed
-   tag's `groups/<tag>/memory`, and each group under `projects/<name>/memory/`) not already
+   tag's `tags/<tag>/memory`, and each group under `projects/<name>/memory/`) not already
    reviewed at its current bytes is recorded in the trust record beside the machine file, notes
    written on another machine that nobody reviewed included. Only overlay paths are walked,
    whatever the checkout's memory mode, a group directory that is a link is followed, and a note
@@ -1849,7 +1849,7 @@ nothing.
 | drift | the overlay's hooks, skills or agents changed since the last render | `warn` | `attach`, which renders the overlay as it is now |
 | overlay unreadable | the overlay's executable parts could not be read | `warn` | `attach --check`, which says why |
 | `origin` moved | this checkout's `origin` is not the one the binding was recorded with | `warn` | `attach`, which records the new one |
-| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting a tag may set (the later tag wins), a listed tag is not a usable name, is not a string, or has no `groups/<tag>/` directory (each said once, however often it is listed), or a directory of the project's `memory/` starts with `tag-` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | in the overlay, fix each tag, record or directory a note names; for a name two tags hold, rename one of them or reorder `tags` in the project's `project.toml` |
+| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting a tag may set (the later tag wins), a listed tag is not a usable name, is not a string, or has no `tags/<tag>/` directory (each said once, however often it is listed), or a directory of the project's `memory/` starts with `tag-` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | in the overlay, fix each tag, record or directory a note names; for a name two tags hold, rename one of them or reorder `tags` in the project's `project.toml` |
 
 **How `attached` reads the memory pointer.** Where `memory.mode` is `overlay`, the row reads
 `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json`, which Claude Code reads

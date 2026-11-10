@@ -1,5 +1,5 @@
 """The overlay fixture every tag test builds on: a project's record listing tags, and the
-`groups/<tag>/` directories they name."""
+`tags/<tag>/` directories they name."""
 
 from __future__ import annotations
 
@@ -19,10 +19,10 @@ def list_tags(overlay: Path, project: str, tags: list[str]) -> None:
 
 
 def with_tags(overlay: Path, project: str, tags: list[str], *inside: str) -> Path:
-    """`list_tags`, and for each tag `groups/<tag>/<name>` for each name in `inside` (`groups/<tag>`
+    """`list_tags`, and for each tag `tags/<tag>/<name>` for each name in `inside` (`tags/<tag>`
     alone given none); the overlay's root."""
     list_tags(overlay, project, tags)
     for tag in tags:
         for name in inside or ("",):
-            (overlay / "groups" / tag / name).mkdir(parents=True, exist_ok=True)
+            (overlay / "tags" / tag / name).mkdir(parents=True, exist_ok=True)
     return overlay

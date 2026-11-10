@@ -50,12 +50,12 @@ def overlay(tmp_path: Path, *, common: str = "", sample: str | None = None) -> P
 
 
 def tagged(root: Path, listed: list[str], **files: str) -> None:
-    """The project `sample`'s record listing `listed`, and `groups/<tag>/drybag.toml` for each
+    """The project `sample`'s record listing `listed`, and `tags/<tag>/drybag.toml` for each
     tag in `files`, holding what it is given."""
     list_tags(root, "sample", listed)
     for tag, text in files.items():
-        (root / "groups" / tag).mkdir(parents=True)
-        (root / "groups" / tag / "drybag.toml").write_text(text, encoding="utf-8")
+        (root / "tags" / tag).mkdir(parents=True)
+        (root / "tags" / tag / "drybag.toml").write_text(text, encoding="utf-8")
 
 
 def mode(value: str) -> str:
@@ -216,7 +216,7 @@ def test_a_tag_file_that_is_not_toml_is_a_note_and_no_layer(tmp_path: Path) -> N
     binding.record(root, "sample", None)
     layers, notes, _ = overlay_layers.read(root, machine=machine(tmp_path, recorded))
     assert LayerName.OVERLAY_TAG not in [layer.name for layer in layers]
-    path = quoted(str(recorded / "groups" / "a" / "drybag.toml"))
+    path = quoted(str(recorded / "tags" / "a" / "drybag.toml"))
     assert any(
         path in note and "is not valid TOML" in note and "overlay tag a" in note for note in notes
     )
