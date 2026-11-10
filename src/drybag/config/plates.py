@@ -166,17 +166,15 @@ def plates(
     caller says which machine it is. The project's plate is present whether or not its directory
     exists: readers already handle an absent share."""
     used, notes = tags(overlay, project)
-    name = machine
     found = [*notes]
     parents = _parents(overlay, project, used)
     ordered: list[Plate] = []
     for parent in parents:
         ordered.append(parent)
         found.extend(_bad_machine_directories(parent.directory / MACHINES))
-        if name is not None and _directory(parent.directory / MACHINES / name):
-            ordered.append(
-                Plate(parent.kind, parent.name, parent.directory / MACHINES / name, machine=name)
-            )
+        if machine is not None and _directory(parent.directory / MACHINES / machine):
+            directory = parent.directory / MACHINES / machine
+            ordered.append(Plate(parent.kind, parent.name, directory, machine=machine))
     return tuple(ordered), tuple(found)
 
 

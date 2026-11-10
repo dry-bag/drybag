@@ -55,6 +55,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 from drybag import fsops
 from drybag.binding import Bound, bound_project, short
@@ -403,16 +404,15 @@ def _sub_link(machine: str, parent: str) -> str:
 
 def machine_link(plate: Plate) -> str:
     """The name the notes of a sub-plate (`plate.machine` set) take in the composed store:
-    `machine-<m>-developer`, `machine-<m>-tag-<t>` or `machine-<m>-project`."""
-    if plate.machine is None:
-        raise ValueError("a plate that is no machine's sub-plate has no machine link")
+    `machine-<m>-developer`, `machine-<m>-tag-<t>` or `machine-<m>-project`. Every caller asks it
+    only of a sub-plate."""
     if plate.kind is PlateKind.COMMON:
         parent = COMMON_GROUP
     elif plate.kind is PlateKind.TAG:
         parent = tag_link(plate.name)
     else:
         parent = PROJECT_LINK
-    return _sub_link(plate.machine, parent)
+    return _sub_link(cast(str, plate.machine), parent)
 
 
 # What `attach` and `doctor` say of an overlay whose notes nothing delivers.

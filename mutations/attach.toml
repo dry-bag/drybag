@@ -33,7 +33,7 @@ reddens = [
 [[mutation]]
 name = "read_binding reads the machine file a second time for the binding"
 file = "src/drybag/attach/binding.py"
-before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay, record)"
+before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay, record.name, record.note)"
 after = "            f\"from an argument\"\n        )\n    return binding_for(root, config, machine=machine)"
 reddens = [
   "tests/attach/test_binding.py::test_read_binding_reads_the_machine_file_once",

@@ -60,14 +60,12 @@ def link_sources(overlay: Path, config: Config, machine: str | None = None) -> t
     index in this project's share, then each group's directory. `attach` asks each, above its
     first write, whether a path that long can exist on this machine
     (`attach.binding.refuse_unless_share_can_exist`): the index is what `render_missing_index`
-    writes and every group's but the common one a directory `attach` creates. `machine` is this
-    machine's name, whose sub-plates' notes directories are sources too."""
+    writes and every group's but the common one a directory `attach` creates."""
     project = config.project.name
     held = plates(overlay, project, machine=machine)[0]
     return (
         project_notes(overlay, project) / INDEX_NAME,
         *(overlay_group_target(held, g) for g in config.memory.groups),
-        *(plate.directory / STORE_DIR for plate in held if plate.machine is not None),
     )
 
 

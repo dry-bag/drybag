@@ -40,7 +40,7 @@ from pathlib import Path
 from drybag import fsops
 from drybag.binding import bound_project
 from drybag.config.loader import load
-from drybag.config.overlay import MachineRecord, machine_record, overlay_root
+from drybag.config.overlay import machine_record, overlay_root
 from drybag.config.plates import Plate, plates
 from drybag.config.reading import UNPARSEABLE, toml_position
 from drybag.config.schema import NAME_RULE, PROJECT_NAME, Config
@@ -344,11 +344,14 @@ def binding_for(root: Path, config: Config, *, machine: Path | None) -> Binding:
     record = machine_record(machine)
     if record.overlay is None:
         raise Refusal(NO_OVERLAY)
-    return _bound(root, config, record.overlay, record)
+    return _bound(root, config, record.overlay, record.name, record.note)
 
 
-def _bound(root: Path, config: Config, overlay: Path, record: MachineRecord) -> Binding:
-    """The binding under an overlay root the caller has already read out of the machine file.
+def _bound(
+    root: Path, config: Config, overlay: Path, machine: str | None, named: str | None
+) -> Binding:
+    """The binding under an overlay root the caller has already read out of the machine file, with
+    the machine name (`machine`) and its note (`named`) from that same read.
 
     One read per binding: `read_binding` checks `--store` against the root it read and binds under
     that same root, rather than handing `binding_for` the machine file to read a second time, which
@@ -366,22 +369,11 @@ def _bound(root: Path, config: Config, overlay: Path, record: MachineRecord) -> 
     against = found.origin if found is not None and state == BOUND else recorded
     note = origin_note(against, origin) if state == BOUND or against is not None else None
     earlier = found.project if found is not None else None
-    held, notes = plates(overlay, project, machine=record.name)
-    if record.note is not None:
-        notes = (*notes, record.note)
+    held, notes = plates(overlay, project, machine=machine)
+    if named is not None:
+        notes = (*notes, named)
     return Binding(
-        project,
-        overlay,
-        store,
-        origin,
-        recorded,
-        state,
-        note,
-        earlier,
-        fault,
-        held,
-        notes,
-        record.name,
+        project, overlay, store, origin, recorded, state, note, earlier, fault, held, notes, machine
     )
 
 
@@ -495,7 +487,7 @@ def read_binding(
         raise Refusal(NO_OVERLAY)
     expected = project_notes(overlay, config.project.name)
     if store is None:
-        return _bound(root, config, overlay, record)
+        return _bound(root, config, overlay, record.name, record.note)
     try:
         resolved: Path | None = fsops.resolved(store)
     except OSError:
@@ -511,4 +503,4 @@ def read_binding(
             f"{store} is not it. The overlay root comes from the machine configuration and never "
             f"from an argument"
         )
-    return _bound(root, config, overlay, record)
+    return _bound(root, config, overlay, record.name, record.note)
