@@ -169,13 +169,13 @@ def test_the_json_form_carries_every_check_and_its_remedy(
 ) -> None:
     # The skill relays remedies verbatim, so a remedy missing from `--json` is a remedy the
     # user never sees — and the summary line has room for none of them. The count is the
-    # report's fifteen rows, held beside `README.md`, `docs/cli.md`, the doctor skill and the
+    # report's fourteen rows, held beside `README.md`, `docs/cli.md`, the doctor skill and the
     # smoke workflow by `tests/test_documents.py`.
     (tmp_path / "drybag.toml").write_text("[[[", encoding="utf-8")
     code = invoke(["doctor", "--root", str(tmp_path), "--home", str(tmp_path / "home"), "--json"])
     assert code == 1
     report = json.loads(capsys.readouterr().out)
-    assert len(report["checks"]) == 15
+    assert len(report["checks"]) == 14
     assert all({"name", "status", "detail", "remedy"} <= set(check) for check in report["checks"])
     red = next(check for check in report["checks"] if check["status"] == "red")
     assert red["remedy"]

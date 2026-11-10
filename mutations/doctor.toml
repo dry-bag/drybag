@@ -733,23 +733,3 @@ after = "            if main is None:"
 reddens = [
   "tests/attach/test_project_choice.py::test_doctor_reads_a_worktree_whose_main_checkout_has_a_drybag_toml_as_it_did",
 ]
-
-# The machine row says which machine this is, from the report's one read of the machine file.
-[[mutation]]
-name = "the machine row reads no name"
-file = "src/drybag/doctor/checks.py"
-before = "    name = None if record is None else record.name"
-after = "    name = None"
-reddens = [
-  "tests/doctor/test_checks.py::test_machine_row_names_the_machine",
-]
-
-# A `machines/` directory outside the name shape is no machine's sub-plate, and the row says so.
-[[mutation]]
-name = "the machine row ignores a bad machines directory"
-file = "src/drybag/doctor/checks.py"
-before = "        notes.extend(resolved_or_none(asked) or ())"
-after = "        notes.extend(())"
-reddens = [
-  "tests/doctor/test_checks.py::test_machine_row_warns_on_a_bad_directory",
-]

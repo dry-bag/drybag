@@ -5,7 +5,7 @@ description: Diagnose a drybag installation — hooks, memory store, budgets, ov
 
 # Diagnosing an installation
 
-1. Run `drybag doctor --json` and read the report: fifteen checks, each with a status, a
+1. Run `drybag doctor --json` and read the report: fourteen checks, each with a status, a
    detail and a remedy. Between them they answer whether the repository is initialised, whether
    the hook wrapper can reach drybag at all, whether this checkout is attached, whether the
    overlay's delivery is in place and what shape its memory path has, each budget raised or

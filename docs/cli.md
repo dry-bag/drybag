@@ -1784,10 +1784,10 @@ and `managed`.
 
 ## `drybag doctor [--json] [--root PATH] [--home PATH] [--machine PATH]`
 
-Fifteen checks over one installation. It **reports and never repairs**: every finding
+Fourteen checks over one installation. It **reports and never repairs**: every finding
 carries the command that would fix it, and not one of them is run for you. Nothing is written.
 
-The rows come in a fixed order: the installation's own nine first, then the six about the
+The rows come in a fixed order: the installation's own eight first, then the six about the
 private layer — the binding's (`attached`), memory's (`bundles`, `memory`), the
 private overlay's (`pre-commit`, `overlay-requires`) and its note sync's (`sync`). Match a row by its `name`, never by its
 position.
@@ -1826,7 +1826,6 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `cli-path` | whether `drybag` resolves on `PATH` | `PATH` |
 | `diagnostics` | how many reasons the hook sink recorded — a count, never a line of the file | `${CLAUDE_PLUGIN_DATA}/drybag/diagnostics.jsonl` |
 | `ignored-env` | as information, never a status: `DRYBAG_CONFIG` set, or `XDG_CONFIG_HOME` set to anything but the `.config` of the home every command reads under (`HOME`, or the password database's where `HOME` is unset), and not honoured by any command; and a `HOME` that is not the home the password database records for this user, since drybag follows `HOME` | the environment, the password database |
-| `machine` | this machine's name, which picks each plate's `machines/<name>/` sub-plate: ok with the name, or with none and no sub-plate applying; a warning, never red, for a `[machine] name` outside the tag shape, a machine file that cannot be read, or a `machines/` directory of the bound project's plates with such a name, said in the note that names it | the machine file, the overlay's `machines/` directories |
 | `attached` | the overlay binding, what it delivers, and, where `memory.mode` is `overlay`, the `autoMemoryDirectory` pointer at the composed store, read alike from every checkout (the states are below the table) | the ledger `drybag/attach.json` in the git common directory, the main checkout's `.claude/settings.local.json`, `~/.local/share/drybag/delivery/<id>/`, `~/.local/share/drybag/stores/<id>/`, the overlay's executable parts, `git` on the paths `attach` placed |
 | `bundles` | a bundle that does not fit its slots, and one whose part reaches the cap | the note store |
 | `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning for files in the note store that are not notes, counted (at most 500,000 entries), and, where no layer sets the mode, for an overlay holding notes that reach no session | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
@@ -1859,7 +1858,7 @@ nothing.
 | drift | the overlay's hooks, skills or agents changed since the last render | `warn` | `attach`, which renders the overlay as it is now |
 | overlay unreadable | the overlay's executable parts could not be read | `warn` | `attach --check`, which says why |
 | `origin` moved | this checkout's `origin` is not the one the binding was recorded with | `warn` | `attach`, which records the new one |
-| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting a tag may set (the later tag wins), a listed tag is not a usable name, is not a string, or has no `tags/<tag>/` directory (each said once, however often it is listed), or a directory of the project's `memory/` has a link's name, `tag-<tag>` or `machine-<m>-developer`, `machine-<m>-project` or `machine-<m>-tag-<t>` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | in the overlay, fix each tag, record or directory a note names; for a name two tags hold, rename one of them or reorder `tags` in the project's `project.toml` |
+| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting a tag may set (the later tag wins), a listed tag is not a usable name, is not a string, or has no `tags/<tag>/` directory (each said once, however often it is listed), a `machines/` directory of the project's plates or the machine file's `[machine] name` is outside the tag shape, or a directory of the project's `memory/` has a link's name, `tag-<tag>` or `machine-<m>-developer`, `machine-<m>-project` or `machine-<m>-tag-<t>` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | in the overlay, fix each tag, record or directory a note names, and in the machine file a `[machine] name` one names; for a name two tags hold, rename one of them or reorder `tags` in the project's `project.toml` |
 
 **How `attached` reads the memory pointer.** Where `memory.mode` is `overlay`, the row reads
 `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json`, which Claude Code reads
@@ -1877,7 +1876,7 @@ the harness's to decide, and this row does not read that file.
 | missing | no `autoMemoryDirectory` | `warn` | `attach`, which writes it |
 | unreadable | a file that cannot be read as one JSON object | `warn` | make it one JSON object, then `attach` |
 
-**Eight of the fifteen have a `skip` arm — eighteen arms between them, every one on a state of
+**Eight of the fourteen have a `skip` arm — eighteen arms between them, every one on a state of
 this machine or this repository.** A `skip` is **not** a finding and never reaches the exit code, so
 read the detail — each one says which measurement it is missing. No row skips for want of a build
 that can answer it: `codex-hooks`, the one that did, left the report, and what holds on Codex is the

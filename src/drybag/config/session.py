@@ -162,9 +162,6 @@ class SessionConfig:
     document: Mapping[str, Any] = field(default_factory=dict)
     resolution: Resolution = field(default_factory=lambda: Resolution({}, {}, ()))
     bound: Config | None = None
-    # The project this machine's binding record names for the checkout, from the one read of it
-    # the overlay's layers made (`overlay_layers.read`); `None` where it names none.
-    bound_to: str | None = None
 
     @property
     def acting(self) -> Config | None:
@@ -193,7 +190,7 @@ def session_config(root: Path | None, *, machine: Path | None = None) -> Session
     path = machine if machine is not None else machine_config_path()
     overlays, notes, project = overlay_layers.read(root, machine=path)
     read = _read(root, path)
-    resolved = replace(_resolved(read, overlays, notes), bound_to=project)
+    resolved = _resolved(read, overlays, notes)
     if project is None or read.config is not None or read.project_warnings:
         return resolved
     # No file, and this machine binds the checkout: `bound_config`'s answer, from the layers and

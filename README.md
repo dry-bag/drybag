@@ -173,7 +173,7 @@ mkdir -p .drybag/local/memory/developer
 printf -- '---\nname: first-note\ndescription: "When to open this note"\n---\n\nThe note.\n' \
   > .drybag/local/memory/developer/first-note.md
 drybag memory index      # renders .drybag/local/memory/MEMORY.md from the notes
-drybag doctor            # fifteen checks over this installation, one line; --json has the remedies
+drybag doctor            # fourteen checks over this installation, one line; --json has the remedies
 ```
 
 These notes are inside the repository, so they reach a session as data and never as standing
@@ -368,7 +368,7 @@ drybag setup --git-hooks --uninstall                # remove it; restore the hoo
 drybag setup --approval-boundary                    # print the deny rule and sandbox settings that keep an agent out of the trust record; writes nothing
 
 # Diagnosing an installation
-drybag doctor                                       # fifteen checks over this installation, one line
+drybag doctor                                       # fourteen checks over this installation, one line
 drybag doctor --json                                # every check with its status, detail and remedy
 
 # Internal

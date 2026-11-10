@@ -136,7 +136,8 @@ RESERVED_GROUP: Final = (
     "is not linked"
 )
 TAGS_REMEDY: Final = (
-    "in the overlay, fix each tag, record or directory a note names; for a name two tags hold, "
+    "in the overlay, fix each tag, record or directory a note names, and in the machine file a "
+    "`[machine] name` one names; for a name two tags hold, "
     "rename one of them or reorder `tags` in the project's `project.toml`"
 )
 

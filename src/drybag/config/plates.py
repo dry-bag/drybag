@@ -189,15 +189,6 @@ def _parents(overlay: Path, project: str, used: tuple[str, ...]) -> tuple[Plate,
     )
 
 
-def bad_machine_directories(overlay: Path, project: str) -> tuple[str, ...]:
-    """The notes `plates` gives for the `machines/` directories of `project`'s plates whose names
-    are outside `TAG`, and no other: what `doctor`'s `machine` row says of them."""
-    parents = _parents(overlay, project, tags(overlay, project)[0])
-    return tuple(
-        note for parent in parents for note in _bad_machine_directories(parent.directory / MACHINES)
-    )
-
-
 def _bad_machine_directories(machines: Path) -> list[str]:
     """One note for each directory of `machines` whose name is outside `TAG`; a `machines` that is
     absent or cannot be listed has none."""
