@@ -19,7 +19,7 @@ def skill(parent: Path, name: str, text: str) -> Path:
 
 
 def test_a_sub_plate_skill_wins_its_parents(tmp_path: Path) -> None:
-    # Mutation ("the fold skips the sub-plates"): every reader of items would then ignore the
+    # Mutation (`mutations/`'s "the item fold skips the machine sub-plates"): every reader of items would then ignore the
     # machine's own copy, and no other test reads a sub-plate through a reader.
     root = tmp_path / "overlay"
     common = root / "common"

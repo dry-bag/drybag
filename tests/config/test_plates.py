@@ -225,8 +225,8 @@ def test_bad_machine_directory_is_a_note(tmp_path: Path) -> None:
 
 
 def test_an_overlay_drybag_toml_cannot_set_the_machine(tmp_path: Path) -> None:
-    # Mutation ("the overlay layer accepts a [machine] table"): an overlay file would then be read
-    # as if it held a setting, where only the machine file names this machine.
+    # Mutation (`mutations/`'s "the overlay layer accepts a [machine] table"): an overlay file would
+    # then hold a setting no reader refuses, where only the machine file names this machine.
     root = with_sub_plates(tmp_path, "m1", "m2")
     (root / "common" / "drybag.toml").write_text('[machine]\nname = "m2"\n', encoding="utf-8")
     machine = tmp_path / "machine.toml"
