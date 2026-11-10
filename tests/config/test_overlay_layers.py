@@ -308,3 +308,22 @@ def test_sub_plate_may_set_only_its_parents_keys(tmp_path: Path) -> None:
     assert REFUSED_LAYER_NOTE.format(
         key=f"budgets.{GATE_BUDGET}", layer="overlay tag t1 on m1"
     ) in (session.resolution.notes)
+
+
+def test_a_tag_named_on_and_its_sub_plate_are_one_tag(tmp_path: Path) -> None:
+    # A sub-plate's layer carries its machine as a field, not inside its label, so a tag named
+    # `on` is told from its sub-plate by no parse of its label. Mutation (oracle): `mutations/`'s
+    # "a tag's sub-plate layer is counted as a tag of its own".
+    from drybag.attach.tags import collisions
+    from drybag.config.plates import plates
+
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["on"], on=mode("harness"))
+    sub_plate(recorded / "tags", "on", mode("overlay"))
+    binding.record(root, "sample", None)
+    named = machine(tmp_path, recorded, '[machine]\nname = "m1"\n')
+    layers, _, _ = overlay_layers.read(root, machine=named)
+    assert collisions(plates(recorded, "sample", machine="m1")[0], layers) == ()
+    session = session_config(root, machine=named)
+    assert session.resolution.said("memory.mode") == "overlay tag on on m1"

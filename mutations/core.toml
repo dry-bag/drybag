@@ -5450,3 +5450,27 @@ after = "    for layer in sorted(reversed(stack), key=lambda layer: _RANK[layer.
 reddens = [
   "tests/config/test_overlay_layers.py::test_sub_plate_value_beats_its_parent_and_loses_to_the_next_tag",
 ]
+
+# A sub-plate's layer is printed `<plate's label> on <machine>`, built from its `machine` field, in
+# the provenance `preferences` shows and in a refused key's note.
+[[mutation]]
+name = "a sub-plate's layer label does not name its machine"
+file = "src/drybag/config/classes.py"
+before = '''    return label if machine is None else f"{label} on {machine}".lstrip()'''
+after = '''    return label'''
+reddens = [
+  "tests/config/test_overlay_layers.py::test_sub_plate_value_beats_its_parent_and_loses_to_the_next_tag",
+  "tests/config/test_overlay_layers.py::test_sub_plate_may_set_only_its_parents_keys",
+  "tests/config/test_overlay_layers.py::test_a_tag_named_on_and_its_sub_plate_are_one_tag",
+]
+
+# `read` hands each sub-plate's machine to its layer, which is what tells the sub-plate apart.
+[[mutation]]
+name = "a sub-plate's layer is read with no machine"
+file = "src/drybag/config/overlay_layers.py"
+before = '''    return Layer(name, _values(raw, shown, name, notes), label, machine)'''
+after = '''    return Layer(name, _values(raw, shown, name, notes), label)'''
+reddens = [
+  "tests/config/test_overlay_layers.py::test_sub_plate_value_beats_its_parent_and_loses_to_the_next_tag",
+  "tests/config/test_overlay_layers.py::test_a_tag_named_on_and_its_sub_plate_are_one_tag",
+]

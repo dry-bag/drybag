@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from drybag import fsops
-from drybag.config.classes import ALLOWED, Layer, LayerName, class_of, said
+from drybag.config.classes import ALLOWED, Layer, LayerName, class_of, labelled, said
 from drybag.config.overlay import machine_record
 from drybag.config.owner import Guards
 from drybag.config.plates import COMMON, Plate, PlateKind, plates
@@ -67,10 +67,6 @@ NO_GIT = "{cause}, so the overlay project layer sets nothing"
 UNKNOWN = "{path}: {name} is not a setting this drybag reads; it is ignored"
 NOT_A_TABLE = "{path}: [{table}] must be a table; it is ignored"
 UNUSABLE = "{path}: {problem}; the value beneath it applies"
-
-# A sub-plate's layer keeps its parent's name and is told apart by this label: `t1 on m1`, `on m1`
-# for `common`'s. `parent_label` is its inverse.
-ON_MACHINE = "{label} on {machine}"
 
 _NAME_OF = {
     PlateKind.COMMON: LayerName.OVERLAY_COMMON,
@@ -120,18 +116,10 @@ def read(
     for plate in found:
         name = _NAME_OF[plate.kind]
         label = plate.name if plate.kind is PlateKind.TAG else ""
-        if plate.machine is not None:
-            label = ON_MACHINE.format(label=label, machine=plate.machine).strip()
         layer = _layer(plate.directory / CONFIG_FILE, name, label, notes, plate.machine)
         if layer is not None:
             layers.append(layer)
     return tuple(layers), tuple(notes), project
-
-
-def parent_label(label: str) -> str:
-    """The label of the plate a layer's `label` is for, a sub-plate's label without its machine:
-    `t1` for `t1 on m1`, and none for `common`'s `on m1`. A tag is `TAG`, which holds no space."""
-    return f" {label}".partition(" on ")[0].strip()
 
 
 def _bound(root: Path | None, notes: list[str]) -> str | None:
@@ -158,16 +146,17 @@ def _layer(
     with a note where it cannot be read. A tag with no file sets nothing and says nothing: a tag
     is often only notes. So is a sub-plate (`machine` set), which is often only notes too."""
     shown = quoted(str(path))
+    layer = said(name, labelled(label, machine))
     try:
         raw = tomllib.loads(fsops.read_regular_text(path, limit=READ_LIMIT))
     except FileNotFoundError:
         if name is not LayerName.OVERLAY_TAG and machine is None:
-            notes.append(NOT_THERE.format(path=shown, layer=said(name, label)))
+            notes.append(NOT_THERE.format(path=shown, layer=layer))
         return None
     except (UnicodeDecodeError, OSError, *UNPARSEABLE) as exc:
-        notes.append(read_fault(shown, exc, f"so the {said(name, label)} layer sets nothing"))
+        notes.append(read_fault(shown, exc, f"so the {layer} layer sets nothing"))
         return None
-    return Layer(name, _values(raw, shown, name, notes), label)
+    return Layer(name, _values(raw, shown, name, notes), label, machine)
 
 
 def _values(

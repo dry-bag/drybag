@@ -1909,15 +1909,15 @@ reddens = [
   "tests/attach/test_tags.py::test_two_tags_sub_plates_still_collide",
 ]
 
-# The same for a key two layers set: a sub-plate's label is its tag's and `on <machine>`.
+# The same for a key two layers set: a sub-plate's layer has its tag's label and its machine apart.
 [[mutation]]
 name = "a tag's sub-plate layer is counted as a tag of its own"
 file = "src/drybag/attach/tags.py"
-before = "                if (tag := parent_label(layer.label)) not in held_by:"
-after = "                if (tag := layer.label) not in held_by:"
+before = "                if layer.label not in held_by:"
+after = "                if True:"
 reddens = [
   "tests/attach/test_tags.py::test_a_tag_and_its_sub_plate_setting_one_key_do_not_collide",
-  "tests/attach/test_tags.py::test_two_tags_sub_plates_still_collide",
+  "tests/config/test_overlay_layers.py::test_a_tag_named_on_and_its_sub_plate_are_one_tag",
 ]
 
 # The plates' notes, a `machines/` directory outside the tag shape and a bad `[machine] name`

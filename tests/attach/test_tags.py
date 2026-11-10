@@ -99,12 +99,12 @@ def test_a_tag_and_its_sub_plate_do_not_collide(tmp_path: Path) -> None:
 
 
 def test_a_tag_and_its_sub_plate_setting_one_key_do_not_collide(tmp_path: Path) -> None:
-    # The value path keys a layer by its label, `t1 on m1` for the sub-plate's. Mutation (oracle):
-    # `mutations/`'s "a tag's sub-plate layer is counted as a tag of its own".
+    # The value path keys a layer by its label, which a sub-plate's layer shares with its tag.
+    # Mutation (oracle): `mutations/`'s "a tag's sub-plate layer is counted as a tag of its own".
     layers = (
         Layer(LayerName.OVERLAY_TAG, {"memory.mode": "harness"}, "t1"),
-        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t1 on m1"),
-        Layer(LayerName.OVERLAY_COMMON, {"memory.mode": "overlay"}, "on m1"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t1", "m1"),
+        Layer(LayerName.OVERLAY_COMMON, {"memory.mode": "overlay"}, "", "m1"),
     )
     overlay = _overlay(tmp_path, "t1")
     assert collisions(plates(overlay, "p", machine="m1")[0], layers) == ()
@@ -117,9 +117,9 @@ def test_two_tags_sub_plates_still_collide(tmp_path: Path) -> None:
         _sub_plate(overlay, f"tags/{tag}", "claude/skills/review/SKILL.md")
     layers = (
         Layer(LayerName.OVERLAY_TAG, {"memory.mode": "harness"}, "t1"),
-        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t1 on m1"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t1", "m1"),
         Layer(LayerName.OVERLAY_TAG, {"memory.mode": "harness"}, "t2"),
-        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t2 on m1"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t2", "m1"),
     )
     assert collisions(plates(overlay, "p", machine="m1")[0], layers) == (
         "the skill review is held by the tags t1, t2: the later, t2, wins",

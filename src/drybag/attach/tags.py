@@ -19,7 +19,6 @@ from collections.abc import Sequence
 
 from drybag.attach.items import KINDS, fold
 from drybag.config.classes import ALLOWED, Layer, LayerName, class_of
-from drybag.config.overlay_layers import parent_label
 from drybag.config.plates import Plate, PlateKind
 from drybag.printed import quoted
 
@@ -46,9 +45,9 @@ def collisions(held: Sequence[Plate], layers: Sequence[Layer]) -> tuple[str, ...
             # Only a key `resolve` admits the tag layer for: of any other no tag wins anything.
             for key in (key for key in layer.values if layer.name in ALLOWED[class_of(key)]):
                 held_by = keys.setdefault(key, [])
-                # `t1 on m1` is `t1`'s sub-plate: one tag, whichever of its layers set the key.
-                if (tag := parent_label(layer.label)) not in held_by:
-                    held_by.append(tag)
+                # A sub-plate's layer has its tag's label: one tag, whichever of its layers set it.
+                if layer.label not in held_by:
+                    held_by.append(layer.label)
     found.extend(_sentence("setting", key, tags) for key, tags in keys.items() if len(tags) > 1)
     return tuple(found)
 

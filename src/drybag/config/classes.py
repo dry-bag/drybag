@@ -153,15 +153,23 @@ def said(name: LayerName, label: str = "") -> str:
     return f"{name} {label}" if label else str(name)
 
 
+def labelled(label: str, machine: str | None) -> str:
+    """A layer's label as printed: its plate's, then `on <machine>` for a machine's sub-plate,
+    `t1 on m1`, or `on m1` for the common plate's."""
+    return label if machine is None else f"{label} on {machine}".lstrip()
+
+
 @dataclass(frozen=True)
 class Layer:
     """One layer's values, keyed by dotted key. `label` tells apart the layers of one name: the
     tag an `OVERLAY_TAG` layer is for, which the owner wrote and `config.plates` held to `TAG`, so
-    it prints as is."""
+    it prints as is. `machine` is set on a machine's sub-plate (`machines/<machine>/`), which keeps
+    its plate's name and label."""
 
     name: LayerName
     values: Mapping[str, object]
     label: str = ""
+    machine: str | None = None
 
 
 @dataclass(frozen=True)
@@ -203,10 +211,11 @@ def resolve(
     # sub-plate (the same `LayerName` as its parent, placed right after it) wins over its parent
     # and loses to the next plate. Reversing or re-keying this sort breaks that.
     for layer in sorted(stack, key=lambda layer: _RANK[layer.name]):
+        shown = labelled(layer.label, layer.machine)
         for key, value in layer.values.items():
             if layer.name not in ALLOWED[class_of(key)]:
                 notes.append(
-                    REFUSED_LAYER_NOTE.format(key=clipped(key), layer=said(layer.name, layer.label))
+                    REFUSED_LAYER_NOTE.format(key=clipped(key), layer=said(layer.name, shown))
                 )
                 continue
             if key in folds and key in values:
@@ -214,7 +223,7 @@ def resolve(
             else:
                 values[key] = value
             provenance[key] = layer.name
-            labels[key] = layer.label
+            labels[key] = shown
     return Resolution(
         values=MappingProxyType(values),
         provenance=MappingProxyType(provenance),
