@@ -1,5 +1,5 @@
 """The overlay's layers of a session's preferences: `<overlay>/common/drybag.toml` for every
-checkout, and for a checkout this machine binds, `<overlay>/groups/<tag>/drybag.toml` for each
+checkout, and for a checkout this machine binds, `<overlay>/tags/<tag>/drybag.toml` for each
 tag the project's record lists and `<overlay>/projects/<project>/drybag.toml`, in the order of
 `config.plates` (a later layer wins).
 

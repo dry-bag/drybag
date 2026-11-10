@@ -153,11 +153,11 @@ def test_whether_a_scoped_rule_exists_decides_the_rendered_entry(tmp_path: Path)
 
 
 def _tagged(overlay: Path, **rules: str) -> None:
-    """Project `p` listing the tags named by the keywords (in order), each `groups/<tag>/` holding
+    """Project `p` listing the tags named by the keywords (in order), each `tags/<tag>/` holding
     the rule file `x.md` with the body given."""
     with_tags(overlay, "p", list(rules), "claude/rules")
     for tag, body in rules.items():
-        (overlay / "groups" / tag / "claude" / "rules" / "x.md").write_text(
+        (overlay / "tags" / tag / "claude" / "rules" / "x.md").write_text(
             f"{body}\n", encoding="utf-8"
         )
 
@@ -173,7 +173,7 @@ def test_a_tag_rule_arrives_and_a_later_plate_wins_its_name(tmp_path: Path) -> N
     (rules / "only-common.md").write_text("Only common.\n", encoding="utf-8")
     (project / "only-project.md").write_text("Only project.\n", encoding="utf-8")
     _tagged(overlay, a="Tag x.")
-    (overlay / "groups" / "a" / "claude" / "rules" / "only-tag.md").write_text(
+    (overlay / "tags" / "a" / "claude" / "rules" / "only-tag.md").write_text(
         "Only tag.\n", encoding="utf-8"
     )
     root = _checkout(tmp_path)

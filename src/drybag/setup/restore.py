@@ -244,7 +244,7 @@ def restore(
     machine (`promote_share`), counted in the outcome's `promoted`; a project whose notes cannot be
     recorded is `failed`, attached all the same. **The notes recorded are every unreviewed note of
     the overlay's share for the table key of the owner's projects file, which no repository
-    writes:** `common/memory`, each listed tag's `groups/<tag>/memory` and the project's own groups,
+    writes:** `common/memory`, each listed tag's `tags/<tag>/memory` and the project's own groups,
     notes written on another machine that nobody reviewed included. Only overlay paths are walked,
     and a group directory that is a link is followed. Without `yes` nothing is recorded as
     reviewed, whatever the overlay holds.

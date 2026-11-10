@@ -863,7 +863,7 @@ def test_the_attached_row_reads_the_main_checkouts_pointer_from_every_checkout(
 
 
 def _tag_file(overlay: Path, tag: str, relative: str, text: str = "x\n") -> None:
-    path = overlay / "groups" / tag / relative
+    path = overlay / "tags" / tag / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
 
@@ -895,10 +895,10 @@ def test_two_tags_setting_one_key_is_a_warning(tmp_path: Path) -> None:
 def test_a_listed_tag_with_no_directory_is_a_warning(tmp_path: Path) -> None:
     root = _attached(tmp_path)
     with_tags(tmp_path / "overlay", "p", ["a"])
-    shutil.rmtree(tmp_path / "overlay" / "groups" / "a")
+    shutil.rmtree(tmp_path / "overlay" / "tags" / "a")
     row = _delivered_row(tmp_path, root)
     assert row.status == WARN and row.remedy == attach_doctor.TAGS_REMEDY
-    assert "the tag a has no directory groups/a; it is skipped" in row.detail
+    assert "the tag a has no directory tags/a; it is skipped" in row.detail
 
 
 def test_doctor_names_a_project_memory_directory_in_the_tag_namespace(tmp_path: Path) -> None:

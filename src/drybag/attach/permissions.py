@@ -95,7 +95,7 @@ def _read(path: Path, *, share: Path | None = None, label: str | None = None) ->
     permission, a directory where the file goes, and a path ruled out *below* a directory the name
     does pick out -- the name holds no `/`, so a file where `claude/` goes is the owner's own
     state, and read as absent it granted nothing: the owner's entries read red and `attach`
-    stripped them. So is any fault under `common/` or a tag's `groups/<tag>/`, whose spelling the
+    stripped them. So is any fault under `common/` or a tag's `tags/<tag>/`, whose spelling the
     overlay alone chooses. The project's own `.claude/` is never read this way: a `.claude` that is
     a file has to stop `attach` before it writes, and read as an empty settings file it would stop
     only at the write of that file.

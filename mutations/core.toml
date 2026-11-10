@@ -4317,17 +4317,17 @@ reddens = ["tests/sync/test_state.py::test_back_off_needs_a_hold_the_same_head_a
 [[mutation]]
 name = "the memory pathspecs drop glob magic"
 file = "src/drybag/sync/rules.py"
-before = '    f":(top,glob){GROUPS}/*/{STORE_DIR}/**",'
-after = '    f":(top){GROUPS}/*/{STORE_DIR}/**",'
+before = '    f":(top,glob){TAGS}/*/{STORE_DIR}/**",'
+after = '    f":(top){TAGS}/*/{STORE_DIR}/**",'
 reddens = [
   "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
   "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",
 ]
 
 [[mutation]]
-name = "a group's notes are not memory"
+name = "a tag's notes are not memory"
 file = "src/drybag/sync/rules.py"
-before = '''    f":(top,glob){GROUPS}/*/{STORE_DIR}/**",
+before = '''    f":(top,glob){TAGS}/*/{STORE_DIR}/**",
 '''
 after = ""
 reddens = [
@@ -4336,9 +4336,9 @@ reddens = [
 ]
 
 [[mutation]]
-name = "the parse stops reading a group's notes as memory"
+name = "the parse stops reading a tag's notes as memory"
 file = "src/drybag/sync/rules.py"
-before = '_NAMED_TOPS = {"group": GROUPS, "project": PROJECTS}'
+before = '_NAMED_TOPS = {"tag": TAGS, "project": PROJECTS}'
 after = '_NAMED_TOPS = {"project": PROJECTS}'
 reddens = [
   "tests/sync/test_rules.py::test_the_layout_takes_a_path_apart",
@@ -5116,12 +5116,12 @@ before = '    if (event != "SessionEnd" or state.holds.any) and _backed_off(over
 after = "    if _backed_off(overlay, state, tree, now):"
 reddens = ["tests/sync/test_hooks.py::test_session_end_never_waits_out_a_standing_failure"]
 
-# The overlay's group directory is named `groups`: `sync`'s pathspecs are derived from the name.
+# The overlay's tag directory is named `tags`: `sync`'s pathspecs are derived from the name.
 [[mutation]]
-name = "a group's directory is not named groups"
+name = "a tag's directory is not named tags"
 file = "src/drybag/config/plates.py"
-before = 'GROUPS = "groups"'
-after = 'GROUPS = "group"'
+before = 'TAGS = "tags"'
+after = 'TAGS = "tag"'
 reddens = [
   "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
   "tests/sync/test_rules.py::test_the_pathspecs_are_derived_from_the_layout_in_three_scopes",

@@ -2421,13 +2421,13 @@ def test_attach_from_a_linked_worktree_writes_the_main_checkout_only(tmp_path: P
 
 
 def _tagged(store: Path, *tags: str) -> Path:
-    """The overlay of `_attachable`, its project listing `tags`, each with a `groups/<tag>/`
+    """The overlay of `_attachable`, its project listing `tags`, each with a `tags/<tag>/`
     directory; the overlay's root."""
     return with_tags(store.parents[2], store.parent.name, list(tags), "claude", "codex")
 
 
 def _tag_grants(overlay: Path, tag: str, *allow: str) -> None:
-    (overlay / "groups" / tag / "claude" / "permissions.json").write_text(
+    (overlay / "tags" / tag / "claude" / "permissions.json").write_text(
         json.dumps({"permissions": {"allow": list(allow)}}), encoding="utf-8"
     )
 
@@ -2438,12 +2438,10 @@ def test_a_tag_codex_rule_is_placed_and_a_later_plate_wins_its_name(tmp_path: Pa
     (store.parent / "codex").mkdir()
     (store.parent / "codex" / "project.rules").write_text("# project\n", encoding="utf-8")
     for tag in ("a", "b"):
-        (overlay / "groups" / tag / "codex" / "common.rules").write_text(
+        (overlay / "tags" / tag / "codex" / "common.rules").write_text(
             f"# from {tag}\n", encoding="utf-8"
         )
-        (overlay / "groups" / tag / "codex" / f"{tag}.rules").write_text(
-            "# tag\n", encoding="utf-8"
-        )
+        (overlay / "tags" / tag / "codex" / f"{tag}.rules").write_text("# tag\n", encoding="utf-8")
     attached = attach(root, store=store, machine=machine, runner=Recorder())
     rules = root / ".codex" / "rules"
     assert (rules / "common.rules").read_text(encoding="utf-8") == "# from b\n"
@@ -2474,7 +2472,7 @@ def test_an_unreadable_tag_file_stops_attach_with_nothing_written(
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
     root, store, machine = _attachable(tmp_path, allow=(RULE,))
-    hooks = _tagged(store, "a") / "groups" / "a" / "claude" / "hooks.json"
+    hooks = _tagged(store, "a") / "tags" / "a" / "claude" / "hooks.json"
     hooks.write_text("{}", encoding="utf-8")
     hooks.chmod(0o000)
     flags = ("--store", str(store))
@@ -2490,7 +2488,7 @@ def test_an_unreadable_tag_file_stops_attach_with_nothing_written(
 
 
 def _untag(store: Path) -> None:
-    """The project's record listing no tag any more; the `groups/` directories stay."""
+    """The project's record listing no tag any more; the `tags/` directories stay."""
     (store.parent / RECORD).write_text("tags = []\n", encoding="utf-8")
 
 

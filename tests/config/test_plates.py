@@ -10,9 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from drybag.config.plates import (
-    GROUPS,
     PROJECTS,
     RECORD,
+    TAGS,
     Plate,
     PlateKind,
     plates,
@@ -25,11 +25,11 @@ PROJECT = "sample"
 
 
 def overlay(tmp_path: Path, record: str | None, *groups: str) -> Path:
-    """An overlay holding `groups/<group>/` for each group and, given, the project's record."""
+    """An overlay holding `tags/<group>/` for each group and, given, the project's record."""
     root = tmp_path / "overlay"
     (root / "common").mkdir(parents=True)
     for group in groups:
-        (root / GROUPS / group).mkdir(parents=True)
+        (root / TAGS / group).mkdir(parents=True)
     if record is not None:
         (root / PROJECTS / PROJECT).mkdir(parents=True)
         (root / PROJECTS / PROJECT / RECORD).write_text(record, encoding="utf-8")
@@ -52,7 +52,7 @@ def test_plates_are_common_then_tags_in_list_order_then_the_project(tmp_path: Pa
         PlateKind.PROJECT,
     ]
     assert [plate.name for plate in found] == ["common", "b", "a", PROJECT]
-    assert found[1] == Plate(PlateKind.TAG, "b", root / GROUPS / "b")
+    assert found[1] == Plate(PlateKind.TAG, "b", root / TAGS / "b")
     assert found[0].directory == root / "common"
     assert found[3].directory == root / PROJECTS / PROJECT
     assert notes == ()
@@ -94,8 +94,8 @@ def test_a_tag_with_no_directory_is_skipped_with_a_note(tmp_path: Path) -> None:
 
 def test_a_tag_that_is_a_file_is_not_a_directory(tmp_path: Path) -> None:
     root = overlay(tmp_path, 'tags = ["file"]\n')
-    (root / GROUPS).mkdir()
-    (root / GROUPS / "file").write_text("", encoding="utf-8")
+    (root / TAGS).mkdir()
+    (root / TAGS / "file").write_text("", encoding="utf-8")
     used, notes = tags(root, PROJECT)
     assert used == () and len(notes) == 1
 
@@ -104,8 +104,8 @@ def test_a_tag_that_links_to_a_directory_is_a_directory(tmp_path: Path) -> None:
     # The overlay is the owner's, so a link of theirs is theirs to make.
     root = overlay(tmp_path, 'tags = ["linked"]\n')
     (tmp_path / "elsewhere").mkdir()
-    (root / GROUPS).mkdir()
-    (root / GROUPS / "linked").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    (root / TAGS).mkdir()
+    (root / TAGS / "linked").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
     assert tags(root, PROJECT) == (("linked",), ())
 
 

@@ -26,7 +26,7 @@ ledger and the code-free method skills left and are not published separately yet
 **Private layers.** Your hooks, skills, agents, allow rules, rules and notes live in a private
 overlay: a versioned repository of your own, named by its identity record and with its own upgrade
 manifest, rather than a dotfiles sync. `drybag setup --overlay` renders or generates one. It is
-layered: `common/`, each tag a project lists (`groups/<tag>/`), `projects/<name>/`, then the machine
+layered: `common/`, each tag a project lists (`tags/<tag>/`), `projects/<name>/`, then the machine
 file, the later one winning. `drybag attach` binds a checkout to it and delivers it into that
 repository's sessions, and what it places in the checkout is hidden from git, so the project tracks
 none of it ([What it writes, and where](#what-it-writes-and-where) lists every path);

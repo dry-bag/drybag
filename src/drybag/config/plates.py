@@ -1,7 +1,7 @@
 """The overlay's plates for a bound project, in the one order every reader takes them.
 
 A plate is a directory of the owner's overlay that holds layers of one kind: `common/`, then one
-`groups/<tag>/` for each tag the project lists, then `projects/<name>/`. A later plate wins a value
+`tags/<tag>/` for each tag the project lists, then `projects/<name>/`. A later plate wins a value
 or an item name and content otherwise unions, so the order is the precedence: `common`, the
 project's tags in list order, the project, and (for a value) the machine file after all of them.
 
@@ -10,10 +10,10 @@ record is `projects/<name>/project.toml`, its `tags` key a list of names, and th
 one this machine's binding record names (`binding.bound_project`), so a clone that commits a
 `drybag.toml` or a note naming a tag chooses none: the owner's overlay and the owner's machine
 are the anchors, and the repository can write neither. A tag is `TAG`, a name that is also a
-directory name, a link name and a TOML string; one outside it, one with no `groups/<tag>/`
+directory name, a link name and a TOML string; one outside it, one with no `tags/<tag>/`
 directory and a record that cannot be read are each a note and no plate, never a refusal, because
 a session never dies of its configuration. A tag listed twice is one plate, at its first place; a
-`groups/<tag>` that is a link to a directory is a directory, the overlay being the owner's.
+`tags/<tag>` that is a link to a directory is a directory, the overlay being the owner's.
 
 The record has one reader, `read_record`, which raises what it meets and has no policy of its own:
 `tags` says what an unreadable record means here (a note), and `memory.store.read_binding_record`
@@ -34,7 +34,7 @@ from drybag.config.reading import UNPARSEABLE, read_fault
 from drybag.printed import clipped, quoted
 
 COMMON = "common"
-GROUPS = "groups"
+TAGS = "tags"
 PROJECTS = "projects"
 RECORD = "project.toml"
 # The name a tag's notes take as a link in the composed store, `tag-<tag>`: the project side of the
@@ -53,7 +53,7 @@ NOT_A_TAG = (
     "{path}: the tag {tag} is not 1 to 40 lowercase letters, digits and hyphens, "
     "starting with a letter or digit; it is skipped"
 )
-NO_GROUP = "{path}: the tag {tag} has no directory {group}; it is skipped"
+NO_TAG_DIRECTORY = "{path}: the tag {tag} has no directory {directory}; it is skipped"
 
 
 class PlateKind(StrEnum):
@@ -113,7 +113,7 @@ def record_fault(overlay: Path, project: str) -> str | None:
 
 def tags(overlay: Path, project: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """The usable tags of `project` in list order, each once, and the notes: `record_fault`, a tag
-    outside `TAG`, an entry that is not a string and a tag with no `groups/<tag>/` directory, each
+    outside `TAG`, an entry that is not a string and a tag with no `tags/<tag>/` directory, each
     noted once however often it is listed."""
     listed, fault = _listed(overlay, project)
     if fault is not None:
@@ -131,8 +131,10 @@ def tags(overlay: Path, project: str) -> tuple[tuple[str, ...], tuple[str, ...]]
         seen.add(tag)
         if TAG.match(tag) is None:
             notes.append(NOT_A_TAG.format(path=shown, tag=clipped(tag)))
-        elif not _directory(overlay / GROUPS / tag):
-            notes.append(NO_GROUP.format(path=shown, tag=tag, group=quoted(f"{GROUPS}/{tag}")))
+        elif not _directory(overlay / TAGS / tag):
+            notes.append(
+                NO_TAG_DIRECTORY.format(path=shown, tag=tag, directory=quoted(f"{TAGS}/{tag}"))
+            )
         else:
             usable.append(tag)
     return tuple(usable), tuple(notes)
@@ -146,7 +148,7 @@ def plates(overlay: Path, project: str) -> tuple[tuple[Plate, ...], tuple[str, .
     return (
         (
             Plate(PlateKind.COMMON, COMMON, overlay / COMMON),
-            *(Plate(PlateKind.TAG, tag, overlay / GROUPS / tag) for tag in used),
+            *(Plate(PlateKind.TAG, tag, overlay / TAGS / tag) for tag in used),
             Plate(PlateKind.PROJECT, project, overlay / PROJECTS / project),
         ),
         notes,

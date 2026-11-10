@@ -258,8 +258,8 @@ def test_the_note_store_rows_read_a_bound_checkouts_configuration(tmp_path: Path
     root = _bound_without_file(tmp_path)
     overlay = tmp_path / "overlay"
     with_tags(overlay, "widget", ["a"], "memory")
-    (overlay / "groups" / "a" / "memory" / "t.md").write_text(BARE_NOTE, encoding="utf-8")
-    (_composed(root) / "tag-a").symlink_to(overlay / "groups" / "a" / "memory")
+    (overlay / "tags" / "a" / "memory" / "t.md").write_text(BARE_NOTE, encoding="utf-8")
+    (_composed(root) / "tag-a").symlink_to(overlay / "tags" / "a" / "memory")
     rows = {row.name: row for row in _checks(tmp_path, root, machine=tmp_path / "machine.toml")}
     assert "2 unreviewed note(s)" in rows["memory"].detail
     assert rows["bundles"].status != SKIP

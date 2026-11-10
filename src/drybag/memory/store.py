@@ -8,7 +8,7 @@ checked, and each closes a hole the other three leave open:
    machine's data directory, named by the checkout's binding id (`composed_directory`), holding
    one link per group: `developer` points into the overlay's `common/memory`, which is shared
    across projects and cannot live under `projects/<name>/`, and `tag-<tag>` into the
-   `groups/<tag>/memory` of each tag the project's record lists. It is the directory the harness
+   `tags/<tag>/memory` of each tag the project's record lists. It is the directory the harness
    reads through `autoMemoryDirectory`, so drybag's bundles and the harness read one store. In
    `in-repo` mode `paths.memory` is a real directory, never one link for the whole store.
 2. **Containment inside the store.** A group name is repository-controlled — `memory.groups`

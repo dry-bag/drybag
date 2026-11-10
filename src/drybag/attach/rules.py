@@ -1,7 +1,7 @@
 """The overlay's rules: standing ones for every session, path-scoped ones once per file per session.
 
 **Where they live.** `claude/rules/*.md` in each plate of the overlay (`config.plates`):
-`common/`, each tag of the project (`groups/<tag>/`), then `projects/<project>/`, beside the
+`common/`, each tag of the project (`tags/<tag>/`), then `projects/<project>/`, beside the
 overlay's `permissions.json` and `hooks.json`. A rule whose frontmatter has a `paths:` key is
 path-scoped; any other is a standing rule. The plates come in that order, each in name order, and
 a later plate's rule replaces the earlier plate's rule of the same file name and takes its place,

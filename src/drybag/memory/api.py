@@ -15,7 +15,7 @@ area and why — it does not import a private module of this area.
 The names imported from outside this area today, by the `attach` and `overlay` areas and by this
 repository's tests: the resolver (`resolve` and `project_notes`), the overlay layout `attach`
 writes and `overlay` renders (`PROJECTS`, `RECORD`, `STORE_DIR`), the
-note roots `sync`'s pathspecs are built from beside `config.plates.GROUPS` (`COMMON`,
+note roots `sync`'s pathspecs are built from beside `config.plates.TAGS` (`COMMON`,
 `PROJECTS`), and the index's name, which those pathspecs leave out under each project, since each
 machine renders its own (`INDEX_NAME`), the one
 reader of the overlay's project record, which `attach` reads it with and answers its own way when
