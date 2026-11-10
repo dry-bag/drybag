@@ -1109,7 +1109,11 @@ under `common/claude/skills/` and `common/claude/agents/` (dot-named ones left o
 in list order), this project's `projects/<name>/claude/` equivalents, the `codex/` rules of
 `common/`, of each tag and of `projects/<name>/`, a later plate winning a name over an earlier one
 (the order is `common`, the tags, the project), and this repository's existing
-`.claude/settings.local.json`; for a
+`.claude/settings.local.json`. Every plate reserves `machines/<name>/`, a sub-plate read right
+after its plate on the machine whose machine file says `[machine] name = "<name>"` (the tag shape:
+1 to 40 lowercase letters, digits and hyphens), so on that machine it wins over its plate and loses
+to the next one; no `drybag.toml` can set the name, and a `machines/<x>` directory outside the tag
+shape is a note and no sub-plate. For a
 repository with no `drybag.toml` whose project neither `--project` nor this machine's binding
 names, every `projects/<name>/project.toml` in the overlay.
 `.claude/settings.json` — the committed one — is read for **nothing**: it is repository-controlled,

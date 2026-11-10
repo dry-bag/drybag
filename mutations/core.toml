@@ -5411,3 +5411,34 @@ reddens = [
   "tests/config/test_machine_name.py::test_name_outside_the_tag_shape_is_a_note",
   "tests/config/test_machine_name.py::test_a_very_long_name_is_clipped_in_the_note",
 ]
+
+# A machine's sub-plate refines its plate: it is folded right after it, so on that machine it wins.
+[[mutation]]
+name = "a sub-plate comes before its parent plate"
+file = "src/drybag/config/plates.py"
+before = '''        ordered.append(parent)
+        found.extend(_bad_machine_directories(parent.directory / MACHINES))
+        if name is not None and _directory(parent.directory / MACHINES / name):
+            ordered.append(
+                Plate(parent.kind, parent.name, parent.directory / MACHINES / name, machine=name)
+            )'''
+after = '''        found.extend(_bad_machine_directories(parent.directory / MACHINES))
+        if name is not None and _directory(parent.directory / MACHINES / name):
+            ordered.append(
+                Plate(parent.kind, parent.name, parent.directory / MACHINES / name, machine=name)
+            )
+        ordered.append(parent)'''
+reddens = [
+  "tests/config/test_plates.py::test_sub_plates_follow_each_parent",
+  "tests/attach/test_items.py::test_a_sub_plate_skill_wins_its_parents",
+]
+
+# A `machines/<x>` that is no machine name is said, once, and is no sub-plate.
+[[mutation]]
+name = "a machines directory outside the tag shape is not noted"
+file = "src/drybag/config/plates.py"
+before = "        and TAG.fullmatch(entry) is None"
+after = "        and TAG.fullmatch(entry) is not None"
+reddens = [
+  "tests/config/test_plates.py::test_bad_machine_directory_is_a_note",
+]

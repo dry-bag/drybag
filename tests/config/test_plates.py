@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from drybag.config import overlay_layers
 from drybag.config.plates import (
+    MACHINES,
     PROJECTS,
     RECORD,
     TAGS,
@@ -162,3 +164,89 @@ def test_no_record_gives_no_tags_and_no_note(tmp_path: Path) -> None:
 
 def test_a_record_with_no_tags_key_gives_no_tags_and_no_note(tmp_path: Path) -> None:
     assert tags(overlay(tmp_path, 'remote = "r"\n'), PROJECT) == ((), ())
+
+
+def machine(tmp_path: Path, name: str | None) -> Path:
+    """A machine file naming `name`, or setup's `[machine]` table alone."""
+    path = tmp_path / "machine.toml"
+    body = '[machine]\nversion = "1"\n' if name is None else f'[machine]\nname = "{name}"\n'
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def with_sub_plates(tmp_path: Path, *names: str) -> Path:
+    """An overlay of `common`, tags `t1` and `t2` and the project, each holding `machines/<name>/`
+    for each name."""
+    root = overlay(tmp_path, 'tags = ["t1", "t2"]\n', "t1", "t2")
+    for parent in (
+        root / "common",
+        root / TAGS / "t1",
+        root / TAGS / "t2",
+        root / PROJECTS / PROJECT,
+    ):
+        for name in names:
+            (parent / MACHINES / name).mkdir(parents=True)
+    return root
+
+
+def shown(found: tuple[Plate, ...]) -> list[str]:
+    return [p.name if p.machine is None else f"{p.name}/{p.machine}" for p in found]
+
+
+def test_sub_plates_follow_each_parent(tmp_path: Path) -> None:
+    # Mutation ("a sub-plate comes before its parent"): the machine's directory would lose to its
+    # parent, and the order every reader folds would not be the order the docs state.
+    root = with_sub_plates(tmp_path, "m1")
+    found, notes = plates(root, PROJECT, machine_file=machine(tmp_path, "m1"))
+    assert shown(found) == [
+        "common", "common/m1", "t1", "t1/m1", "t2", "t2/m1", PROJECT, f"{PROJECT}/m1",
+    ]  # fmt: skip
+    assert found[1] == Plate(
+        PlateKind.COMMON, "common", root / "common" / MACHINES / "m1", machine="m1"
+    )
+    assert notes == ()
+
+
+def test_other_machines_sub_plates_are_absent(tmp_path: Path) -> None:
+    root = with_sub_plates(tmp_path, "m1", "m2")
+    found, _ = plates(root, PROJECT, machine_file=machine(tmp_path, "m1"))
+    assert all(plate.machine in (None, "m1") for plate in found)
+    assert len(found) == 8
+
+
+def test_no_machine_name_means_no_sub_plates(tmp_path: Path) -> None:
+    root = with_sub_plates(tmp_path, "m1")
+    for file in (machine(tmp_path, None), tmp_path / "absent.toml"):
+        found, notes = plates(root, PROJECT, machine_file=file)
+        assert shown(found) == ["common", "t1", "t2", PROJECT]
+        assert notes == ()
+
+
+def test_a_bad_machine_name_is_a_note_and_no_sub_plates(tmp_path: Path) -> None:
+    root = with_sub_plates(tmp_path, "m1")
+    found, notes = plates(root, PROJECT, machine_file=machine(tmp_path, "M1"))
+    assert shown(found) == ["common", "t1", "t2", PROJECT]
+    assert len(notes) == 1
+
+
+def test_bad_machine_directory_is_a_note(tmp_path: Path) -> None:
+    root = with_sub_plates(tmp_path)
+    (root / "common" / MACHINES / "Bad").mkdir(parents=True)
+    (root / "common" / MACHINES / "stray.txt").write_text("", encoding="utf-8")
+    found, notes = plates(root, PROJECT, machine_file=machine(tmp_path, "m1"))
+    assert shown(found) == ["common", "t1", "t2", PROJECT]
+    assert len(notes) == 1
+    assert "Bad" in notes[0]
+
+
+def test_an_overlay_drybag_toml_cannot_set_the_machine(tmp_path: Path) -> None:
+    # The name is the machine file's alone: an overlay file naming another machine changes no plate,
+    # and `overlay_layers.read` reports the key as it reports every unknown one.
+    root = with_sub_plates(tmp_path, "m1", "m2")
+    (root / "common" / "drybag.toml").write_text('[machine]\nname = "m2"\n', encoding="utf-8")
+    file = tmp_path / "machine.toml"
+    file.write_text(f'[machine]\nname = "m1"\n[overlay]\nroot = "{root}"\n', encoding="utf-8")
+    found, _ = plates(root, PROJECT, machine_file=file)
+    assert {plate.machine for plate in found} == {None, "m1"}
+    _, notes, _ = overlay_layers.read(None, machine=file)
+    assert any("machine" in note and "not a setting" in note for note in notes)
