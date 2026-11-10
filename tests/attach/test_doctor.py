@@ -780,7 +780,9 @@ def test_a_launcher_the_path_scoped_rules_run_through_that_is_gone_warns(tmp_pat
     (rules / "scoped.md").write_text("---\npaths: src/**\n---\nA rule.\n", encoding="utf-8")
     gone = tmp_path / "gone" / "run-hook.sh"
     command = f'"{gone}" hook PostToolUse'
-    rendered = render_write(_id(root), read_parts(plates(overlay, "p")[0], command=command))
+    rendered = render_write(
+        _id(root), read_parts(plates(overlay, "p", machine=None)[0], command=command)
+    )
     _ledger_field(root, render={"digest": rendered.digest})
     assert _delivered_row(tmp_path, root) == Check(
         "attached",

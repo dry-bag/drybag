@@ -40,7 +40,7 @@ from pathlib import Path
 from drybag import fsops
 from drybag.binding import bound_project
 from drybag.config.loader import load
-from drybag.config.overlay import overlay_root
+from drybag.config.overlay import MachineRecord, machine_record, overlay_root
 from drybag.config.plates import Plate, plates
 from drybag.config.reading import UNPARSEABLE, toml_position
 from drybag.config.schema import NAME_RULE, PROJECT_NAME, Config
@@ -338,13 +338,13 @@ def binding_for(root: Path, config: Config, *, machine: Path | None) -> Binding:
     The session-start handler is handed its `Config` by the dispatcher and must not load it a
     second time; `read_binding` is the command-line wrapper that loads and checks `--store`.
     """
-    overlay = overlay_root(machine)
-    if overlay is None:
+    record = machine_record(machine)
+    if record.overlay is None:
         raise Refusal(NO_OVERLAY)
-    return _bound(root, config, overlay)
+    return _bound(root, config, record.overlay, record)
 
 
-def _bound(root: Path, config: Config, overlay: Path) -> Binding:
+def _bound(root: Path, config: Config, overlay: Path, record: MachineRecord) -> Binding:
     """The binding under an overlay root the caller has already read out of the machine file.
 
     One read per binding: `read_binding` checks `--store` against the root it read and binds under
@@ -363,7 +363,9 @@ def _bound(root: Path, config: Config, overlay: Path) -> Binding:
     against = found.origin if found is not None and state == BOUND else recorded
     note = origin_note(against, origin) if state == BOUND or against is not None else None
     earlier = found.project if found is not None else None
-    held, notes = plates(overlay, project)
+    held, notes = plates(overlay, project, machine=record.name)
+    if record.note is not None:
+        notes = (*notes, record.note)
     return Binding(
         project, overlay, store, origin, recorded, state, note, earlier, fault, held, notes
     )
@@ -473,12 +475,13 @@ def read_binding(
     project's own directory in that overlay, derived and never read.
     """
     config = load(root, machine=machine) if config is None else config
-    overlay = overlay_root(machine)
+    record = machine_record(machine)
+    overlay = record.overlay
     if overlay is None:
         raise Refusal(NO_OVERLAY)
     expected = project_notes(overlay, config.project.name)
     if store is None:
-        return _bound(root, config, overlay)
+        return _bound(root, config, overlay, record)
     try:
         resolved: Path | None = fsops.resolved(store)
     except OSError:
@@ -494,4 +497,4 @@ def read_binding(
             f"{store} is not it. The overlay root comes from the machine configuration and never "
             f"from an argument"
         )
-    return _bound(root, config, overlay)
+    return _bound(root, config, overlay, record)

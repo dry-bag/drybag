@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from drybag.config import overlay_layers
+from drybag.config.overlay import machine_record
 from drybag.config.plates import (
     MACHINES,
     PROJECTS,
@@ -46,7 +49,7 @@ def test_plates_are_common_then_tags_in_list_order_then_the_project(tmp_path: Pa
     # Mutation (`mutations/`'s "plates keeps the tags in sorted order instead of list order"):
     # `["b", "a"]` would come back `a`, `b`, and the later tag would not be the one that wins.
     root = overlay(tmp_path, 'tags = ["b", "a"]\n', "a", "b")
-    found, notes = plates(root, PROJECT)
+    found, notes = plates(root, PROJECT, machine=None)
     assert [plate.kind for plate in found] == [
         PlateKind.COMMON,
         PlateKind.TAG,
@@ -62,7 +65,7 @@ def test_plates_are_common_then_tags_in_list_order_then_the_project(tmp_path: Pa
 
 def test_the_project_plate_is_there_whether_or_not_its_directory_is(tmp_path: Path) -> None:
     # Readers already handle an absent share, so the plate list does not decide it.
-    found, notes = plates(overlay(tmp_path, None), PROJECT)
+    found, notes = plates(overlay(tmp_path, None), PROJECT, machine=None)
     assert [plate.name for plate in found] == ["common", PROJECT]
     assert notes == ()
 
@@ -197,7 +200,7 @@ def test_sub_plates_follow_each_parent(tmp_path: Path) -> None:
     # Mutation ("a sub-plate comes before its parent"): the machine's directory would lose to its
     # parent, and the order every reader folds would not be the order the docs state.
     root = with_sub_plates(tmp_path, "m1")
-    found, notes = plates(root, PROJECT, machine_file=machine(tmp_path, "m1"))
+    found, notes = plates(root, PROJECT, machine="m1")
     assert shown(found) == [
         "common", "common/m1", "t1", "t1/m1", "t2", "t2/m1", PROJECT, f"{PROJECT}/m1",
     ]  # fmt: skip
@@ -209,31 +212,37 @@ def test_sub_plates_follow_each_parent(tmp_path: Path) -> None:
 
 def test_other_machines_sub_plates_are_absent(tmp_path: Path) -> None:
     root = with_sub_plates(tmp_path, "m1", "m2")
-    found, _ = plates(root, PROJECT, machine_file=machine(tmp_path, "m1"))
+    found, _ = plates(root, PROJECT, machine="m1")
     assert all(plate.machine in (None, "m1") for plate in found)
     assert len(found) == 8
 
 
 def test_no_machine_name_means_no_sub_plates(tmp_path: Path) -> None:
     root = with_sub_plates(tmp_path, "m1")
-    for file in (machine(tmp_path, None), tmp_path / "absent.toml"):
-        found, notes = plates(root, PROJECT, machine_file=file)
-        assert shown(found) == ["common", "t1", "t2", PROJECT]
-        assert notes == ()
-
-
-def test_a_bad_machine_name_is_a_note_and_no_sub_plates(tmp_path: Path) -> None:
-    root = with_sub_plates(tmp_path, "m1")
-    found, notes = plates(root, PROJECT, machine_file=machine(tmp_path, "M1"))
+    found, notes = plates(root, PROJECT, machine=None)
     assert shown(found) == ["common", "t1", "t2", PROJECT]
-    assert len(notes) == 1
+    assert notes == ()
+
+
+def test_plates_reads_no_machine_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The name is the caller's: with the machine file absent or broken the sub-plates are there
+    # all the same, and no read of any machine file is made.
+    def refused(path: Path) -> None:
+        raise AssertionError(f"read {path}")
+
+    monkeypatch.setattr("drybag.config.reading.read_machine_toml", refused)
+    monkeypatch.setattr("drybag.config.overlay.read_machine_toml", refused)
+    (tmp_path / ".config").mkdir()
+    root = with_sub_plates(tmp_path, "m1")
+    found, _ = plates(root, PROJECT, machine="m1")
+    assert shown(found)[:2] == ["common", "common/m1"]
 
 
 def test_bad_machine_directory_is_a_note(tmp_path: Path) -> None:
     root = with_sub_plates(tmp_path)
     (root / "common" / MACHINES / "Bad").mkdir(parents=True)
     (root / "common" / MACHINES / "stray.txt").write_text("", encoding="utf-8")
-    found, notes = plates(root, PROJECT, machine_file=machine(tmp_path, "m1"))
+    found, notes = plates(root, PROJECT, machine="m1")
     assert shown(found) == ["common", "t1", "t2", PROJECT]
     assert len(notes) == 1
     assert "Bad" in notes[0]
@@ -246,7 +255,8 @@ def test_an_overlay_drybag_toml_cannot_set_the_machine(tmp_path: Path) -> None:
     (root / "common" / "drybag.toml").write_text('[machine]\nname = "m2"\n', encoding="utf-8")
     file = tmp_path / "machine.toml"
     file.write_text(f'[machine]\nname = "m1"\n[overlay]\nroot = "{root}"\n', encoding="utf-8")
-    found, _ = plates(root, PROJECT, machine_file=file)
+    record = machine_record(file)
+    found, _ = plates(root, PROJECT, machine=record.name)
     assert {plate.machine for plate in found} == {None, "m1"}
     _, notes, _ = overlay_layers.read(None, machine=file)
     assert any("machine" in note and "not a setting" in note for note in notes)

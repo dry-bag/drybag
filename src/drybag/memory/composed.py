@@ -59,7 +59,7 @@ def link_sources(overlay: Path, config: Config) -> tuple[Path, ...]:
     (`attach.binding.refuse_unless_share_can_exist`): the index is what `render_missing_index`
     writes and every group's but the common one a directory `attach` creates."""
     project = config.project.name
-    held = plates(overlay, project)[0]
+    held = plates(overlay, project, machine=None)[0]
     return (
         project_notes(overlay, project) / INDEX_NAME,
         *(overlay_group_target(held, g) for g in config.memory.groups),
@@ -71,7 +71,7 @@ def _sources(overlay: Path, project: str) -> dict[str, Path]:
     `tag-<t>` for each usable tag whose `memory/` is a directory (a link at none would take a
     note written through it into nowhere), each directory of the project's share that is not in
     the reserved names, and the index."""
-    held = plates(overlay, project)[0]
+    held = plates(overlay, project, machine=None)[0]
     share = project_notes(overlay, project)
     found = {COMMON_GROUP: overlay_group_target(held, COMMON_GROUP)}
     for plate in held:

@@ -417,7 +417,7 @@ def _notes(held: Sequence[Plate]) -> tuple[Path, ...]:
 def permitted_roots(overlay: Path, project: str) -> tuple[Path, ...]:
     """This project's whole share of the overlay: the common notes, the notes of each tag its
     record lists (`config.plates.plates`, in list order) and its own, last."""
-    return _notes(plates(overlay, project)[0])
+    return _notes(plates(overlay, project, machine=None)[0])
 
 
 # The one group whose notes are not this project's, and `common/memory` *is* its store rather
@@ -501,7 +501,7 @@ def _group_targets(base: Path, config: Config, overlay: Path | None) -> dict[str
     allowed: tuple[Path, ...] = ()
     linked: list[str] = []
     if overlay is not None:
-        held = plates(overlay, config.project.name)[0]
+        held = plates(overlay, config.project.name, machine=None)[0]
         allowed = _notes(held)
         linked = [tag_link(plate.name) for plate in held if plate.kind is PlateKind.TAG]
     # The tags' links last and in the project's list order (`walked_groups`).

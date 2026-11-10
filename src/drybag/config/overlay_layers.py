@@ -28,7 +28,7 @@ from typing import Any
 
 from drybag import fsops
 from drybag.config.classes import ALLOWED, Layer, LayerName, class_of, said
-from drybag.config.overlay import overlay_root
+from drybag.config.overlay import machine_record
 from drybag.config.owner import Guards
 from drybag.config.plates import COMMON, Plate, PlateKind, plates
 from drybag.config.reading import (
@@ -98,16 +98,19 @@ def read(
     common layer only, as an unbound checkout does."""
     notes: list[str] = []
     try:
-        overlay = overlay_root(machine)
+        record = machine_record(machine)
     except MachineConfigError as exc:
         return (), (MACHINE_UNREAD.format(error=exc),), None
+    overlay = record.overlay
     if overlay is None:
         return (), (NO_OVERLAY,), None
+    if record.note is not None:
+        notes.append(record.note)
     project = _bound(root, notes)
     if project is None:
         found: tuple[Plate, ...] = (Plate(PlateKind.COMMON, COMMON, overlay / COMMON),)
     else:
-        found, listed = plates(overlay, project)
+        found, listed = plates(overlay, project, machine=record.name)
         notes.extend(listed)
     layers: list[Layer] = []
     for plate in found:

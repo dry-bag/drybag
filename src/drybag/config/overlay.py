@@ -16,8 +16,10 @@ reports a `[machine]` table there as unknown, the note every unknown key gets.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 
 from drybag.config.machine import in_owner_home, machine_config_path
+from drybag.config.plates import TAG
 from drybag.config.reading import read_machine_toml
 from drybag.printed import clipped
 
@@ -44,10 +46,30 @@ def overlay_root(machine: Path | None) -> Path | None:
     set a variable in a session no person is watching. A machine with no home
     (`config.machine.owner_home`) has no such file, and records no overlay.
     """
+    return machine_record(machine).overlay
+
+
+class MachineRecord(NamedTuple):
+    """What the machine file records that a plate reader needs, from one read of it: the overlay
+    root, this machine's name and the note a bad name gave."""
+
+    overlay: Path | None
+    name: str | None
+    note: str | None
+
+
+def machine_record(machine: Path | None) -> MachineRecord:
+    """`overlay_root` and `machine_name` from one read of the machine file, for a caller that
+    needs both and must not read the file twice. Raises as `overlay_root` does."""
     path = machine_config_path() if machine is None else machine
     raw = None if path is None else read_machine_toml(path)
-    if raw is None:
-        return None
+    if raw is None or path is None:
+        return MachineRecord(None, None, None)
+    name, note = _name(raw, path)
+    return MachineRecord(_overlay(raw), name, note)
+
+
+def _overlay(raw: dict[str, object]) -> Path | None:
     section = raw.get("overlay")
     if not isinstance(section, dict):
         return None
@@ -61,13 +83,11 @@ def machine_name(machine: Path | None) -> tuple[str | None, str | None]:
     `[machine]` table or its `name` is absent (setup's own `[machine]` keys, `version` and
     `installed`, are the usual case), and `(None, note)` for a value that is not a string in the
     tag shape. A file that cannot be read raises as `overlay_root` does."""
-    # Imported here: `config.plates` asks this module for the name.
-    from drybag.config.plates import TAG
+    record = machine_record(machine)
+    return record.name, record.note
 
-    path = machine_config_path() if machine is None else machine
-    raw = None if path is None else read_machine_toml(path)
-    if raw is None or path is None:
-        return None, None
+
+def _name(raw: dict[str, object], path: Path) -> tuple[str | None, str | None]:
     section = raw.get("machine")
     value = section.get("name") if isinstance(section, dict) else None
     if value is None:

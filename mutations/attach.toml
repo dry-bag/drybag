@@ -9,8 +9,8 @@
 [[mutation]]
 name = "attach takes the overlay root from its argument instead of the machine file"
 file = "src/drybag/attach/binding.py"
-# Widened past `read_binding`'s own line: `binding_for` has the same `overlay =
-# overlay_root(machine)` line, so a one-line `before` is not unique in this file — the oracle
+# Widened past `read_binding`'s own line: `binding_for` has the same `record =
+# machine_record(machine)` line, so a one-line `before` is not unique in this file — the oracle
 # refuses rather than mutating an ambiguous match, so a non-unique `before` goes uncaught until a
 # sweep broader than the entry's own filter string surfaces it.
 #
@@ -18,8 +18,10 @@ file = "src/drybag/attach/binding.py"
 # the first of the two lines is spelled. The mutation is the second line -- the guard -- and the
 # first is here only for uniqueness.
 before = '''    config = load(root, machine=machine) if config is None else config
-    overlay = overlay_root(machine)'''
+    record = machine_record(machine)
+    overlay = record.overlay'''
 after = '''    config = load(root, machine=machine) if config is None else config
+    record = machine_record(machine)
     overlay = store.parents[2]'''
 reddens = [
   "tests/attach/test_binding.py::test_the_overlay_root_comes_from_the_machine_file_and_not_from_the_argument",
@@ -31,7 +33,7 @@ reddens = [
 [[mutation]]
 name = "read_binding reads the machine file a second time for the binding"
 file = "src/drybag/attach/binding.py"
-before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay)"
+before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay, record)"
 after = "            f\"from an argument\"\n        )\n    return binding_for(root, config, machine=machine)"
 reddens = [
   "tests/attach/test_binding.py::test_read_binding_reads_the_machine_file_once",

@@ -6,10 +6,11 @@ or an item name and content otherwise unions, so the order is the precedence: `c
 project's tags in list order, the project, and (for a value) the machine file after all of them.
 
 **A plate's `machines/<name>/` is a sub-plate** on the machine whose name is `[machine] name` in
-the machine file (`config.overlay.machine_name`, read from that file alone). It comes right after
-its parent and before the next plate, so on that machine it wins over its parent and loses to
-every later plate. A machine with no name, and every other machine's directory, has no sub-plate; a
-`machines/<x>` directory whose name is outside `TAG` is a note and no plate.
+the machine file (`config.overlay.machine_name`; this module reads no file, its caller says which
+machine it is). It comes right after its parent and before the next plate, so on that machine it
+wins over its parent and loses to every later plate. A machine with no name, and every other
+machine's directory, has no sub-plate; a `machines/<x>` directory
+whose name is outside `TAG` is a note and no plate.
 
 **The tags are read from the overlay's record of the project, never from the repository.** The
 record is `projects/<name>/project.toml`, its `tags` key a list of names, and the project is the
@@ -37,7 +38,6 @@ from pathlib import Path
 from typing import Any
 
 from drybag import fsops
-from drybag.config.overlay import machine_name
 from drybag.config.reading import UNPARSEABLE, read_fault
 from drybag.printed import clipped, quoted
 
@@ -157,15 +157,16 @@ def tags(overlay: Path, project: str) -> tuple[tuple[str, ...], tuple[str, ...]]
 
 
 def plates(
-    overlay: Path, project: str, *, machine_file: Path | None = None
+    overlay: Path, project: str, *, machine: str | None
 ) -> tuple[tuple[Plate, ...], tuple[str, ...]]:
     """`common`, each usable tag of `project`, then the project, each followed by its sub-plate on
-    this machine (`machines/<name>/`, the name from `machine_name(machine_file)`) where that
-    directory exists, and the notes `tags` and the machine gave. The project's plate is present
-    whether or not its directory exists: readers already handle an absent share."""
+    this machine (`machines/<machine>/`, `machine` being this machine's name or `None`) where that
+    directory exists, and the notes `tags` and the sub-plates gave. It reads no machine file: every
+    caller says which machine it is. The project's plate is present whether or not its directory
+    exists: readers already handle an absent share."""
     used, notes = tags(overlay, project)
-    name, name_note = machine_name(machine_file)
-    found = [*notes] if name_note is None else [*notes, name_note]
+    name = machine
+    found = [*notes]
     parents = (
         Plate(PlateKind.COMMON, COMMON, overlay / COMMON),
         *(Plate(PlateKind.TAG, tag, overlay / TAGS / tag) for tag in used),

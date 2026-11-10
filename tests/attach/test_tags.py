@@ -35,7 +35,7 @@ def test_each_kind_of_item_is_named_with_its_tags_in_list_order_and_the_winner(
         _hold(overlay, f"tags/{tag}", "claude/rules/.hidden.md")
         _hold(overlay, f"tags/{tag}", "claude/rules/notes.txt")
     _hold(overlay, "tags/a", "claude/rules/only-a.md")
-    found = collisions(plates(overlay, "p")[0], ())
+    found = collisions(plates(overlay, "p", machine=None)[0], ())
     assert sorted(found) == sorted(
         f"the {kind} {name} is held by the tags b, a: the later, a, wins"
         for kind, name in (
@@ -61,7 +61,7 @@ def test_a_setting_two_tag_layers_hold_is_named_and_a_common_one_is_not(tmp_path
         Layer(LayerName.OVERLAY_PROJECT, {"memory.mode": "overlay", "personal.x": 2}),
     )
     overlay = _overlay(tmp_path, "a", "b")
-    assert collisions(plates(overlay, "p")[0], layers) == (
+    assert collisions(plates(overlay, "p", machine=None)[0], layers) == (
         "the setting memory.mode is held by the tags a, b: the later, b, wins",
     )
 
@@ -71,7 +71,7 @@ def test_a_name_off_the_overlays_disk_prints_quoted(tmp_path: Path) -> None:
     overlay = _overlay(tmp_path, "a", "b")
     for tag in ("a", "b"):
         _hold(overlay, f"tags/{tag}", "claude/rules/x\n::error::y.md")
-    (sentence,) = collisions(plates(overlay, "p")[0], ())
+    (sentence,) = collisions(plates(overlay, "p", machine=None)[0], ())
     assert "\n" not in sentence and "\\n::error::y.md" in sentence
 
 
@@ -82,4 +82,4 @@ def test_a_name_held_by_a_tag_and_the_project_alone_is_precedence_and_not_named(
     _hold(overlay, "tags/a", "claude/rules/r.md")
     _hold(overlay, "projects/p", "claude/rules/r.md")
     _hold(overlay, "common", "claude/rules/r.md")
-    assert collisions(plates(overlay, "p")[0], ()) == ()
+    assert collisions(plates(overlay, "p", machine=None)[0], ()) == ()

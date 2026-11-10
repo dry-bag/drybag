@@ -269,7 +269,7 @@ def _rendered(root: Path, overlay: Path) -> RenderRecord:
     """The overlay's parts rendered for `root`'s binding, under the `HOME` this process has now."""
     id = binding.read_id(root)
     assert id is not None
-    return write(id, read_parts(plates(overlay, "p")[0]))
+    return write(id, read_parts(plates(overlay, "p", machine=None)[0]))
 
 
 def test_a_repository_without_a_configuration_skips_only_the_rows_that_read_one(

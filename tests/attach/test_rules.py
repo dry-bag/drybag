@@ -143,13 +143,13 @@ def test_paths_are_read_in_each_frontmatter_form(tmp_path: Path) -> None:
 
 def test_whether_a_scoped_rule_exists_decides_the_rendered_entry(tmp_path: Path) -> None:
     overlay = tmp_path / "overlay"
-    assert not scoped_exist(plates(overlay, "p")[0])
+    assert not scoped_exist(plates(overlay, "p", machine=None)[0])
     rules = overlay / "common" / "claude" / "rules"
     rules.mkdir(parents=True)
     (rules / "standing.md").write_text("Standing.\n", encoding="utf-8")
-    assert not scoped_exist(plates(overlay, "p")[0])
+    assert not scoped_exist(plates(overlay, "p", machine=None)[0])
     (rules / "scoped.md").write_text('---\npaths: ["a/**"]\n---\nScoped.\n', encoding="utf-8")
-    assert scoped_exist(plates(overlay, "p")[0])
+    assert scoped_exist(plates(overlay, "p", machine=None)[0])
 
 
 def _tagged(overlay: Path, **rules: str) -> None:

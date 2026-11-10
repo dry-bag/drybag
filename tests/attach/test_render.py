@@ -26,7 +26,7 @@ from tests.tagged import with_tags
 
 
 def render(overlay: Path, project: str, id: str) -> RenderRecord:
-    return write(id, read_parts(plates(overlay, project)[0]))
+    return write(id, read_parts(plates(overlay, project, machine=None)[0]))
 
 
 ID = "0123456789abcdef0123456789abcdef"
@@ -287,7 +287,7 @@ def test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole(tmp_path: Path)
     assert sorted(path.name for path in (skills / "review").iterdir()) == ["SKILL.md"]
     assert (skills / "review" / "SKILL.md").read_text() == "review from b\n"
     assert (skills / "only-a.md").read_text() == "a\n" and (skills / "only-b.md").is_file()
-    assert collisions(plates(overlay, "p")[0], ()) == (
+    assert collisions(plates(overlay, "p", machine=None)[0], ()) == (
         "the skill review is held by the tags a, b: the later, b, wins",
     )
 
@@ -302,7 +302,7 @@ def test_a_rule_a_codex_file_and_a_skill_take_one_winner_and_one_order(tmp_path:
             (overlay / plate / relative.format(name)).parent.mkdir(parents=True, exist_ok=True)
             (overlay / plate / relative.format(name)).write_text(f"{plate}\n", encoding="utf-8")
     (overlay / "common" / "claude" / "skills" / "x" / "extra.md").write_text("", encoding="utf-8")
-    held = plates(overlay, "p")[0]
+    held = plates(overlay, "p", machine=None)[0]
     binding = Binding("p", overlay, tmp_path, None, None, "", plates=held)
     rules = [(rule.name, rule.body) for rule in rules_read(held)]
     codex = [(target, source.read_text()) for target, source in codex_rules(binding)]
