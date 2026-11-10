@@ -139,7 +139,7 @@ def _resolved_if_permitted(store: Store, config: Config, target: Path) -> Path |
     overlay = overlay_root(store.machine)
     if overlay is None:
         return None
-    allowed = permitted_roots(overlay, config.project.name)
+    allowed = permitted_roots(overlay, config.project.name, machine=store.machine_name)
     try:
         resolved = fsops.resolved(target)
     except OSError:

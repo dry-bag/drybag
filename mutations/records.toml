@@ -1142,8 +1142,8 @@ reddens = [
 [[mutation]]
 name = "walked groups leave out the tags"
 file = "src/drybag/memory/store.py"
-before = "    return [*walked[:at], *tagged, *walked[at:]]"
-after = "    return walked"
+before = "    return [*head, *common, *tagged, *rest, *after(PROJECT_LINK)]"
+after = "    return [*head, *rest]"
 reddens = [
   "tests/memory/test_bundles.py::test_a_standing_rule_in_a_tags_notes_is_in_the_standing_rules_bundle",
   "tests/memory/test_index.py::test_the_index_has_a_section_per_tag_after_the_common_notes",
@@ -1230,4 +1230,109 @@ before = '    if "memory.mode" not in resolution.provenance and _undelivered(con
 after = "    if False:"
 reddens = [
   "tests/memory/test_doctor.py::test_notes_in_the_overlay_with_no_mode_set_warn",
+]
+
+# A sub-plate's notes are linked under a `machine-<m>-...` link name, which the project's own
+# directories give up as they give up `tag-`.
+[[mutation]]
+name = "the machine namespace is not reserved"
+file = "src/drybag/memory/store.py"
+before = "    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX) or machine_link_shaped(name)"
+after = "    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_composed.py::test_a_project_group_shaped_like_a_machine_link_is_reserved",
+]
+
+# `attach`'s doctor row names a share directory in the machine namespace as it names one in the
+# tag namespace.
+[[mutation]]
+name = "the reserved project groups leave out the machine namespace"
+file = "src/drybag/memory/store.py"
+before = "        if name.startswith(TAG_LINK_PREFIX) or machine_link_shaped(name)"
+after = "        if name.startswith(TAG_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_composed.py::test_a_project_group_shaped_like_a_machine_link_is_reserved",
+  "tests/attach/test_doctor.py::test_doctor_names_a_project_memory_directory_in_the_tag_namespace",
+]
+
+# Only the three link shapes are the machine namespace: a group `machine-notes` is the project's
+# own, linked and walked as it was before sub-plates.
+[[mutation]]
+name = "the whole machine- prefix is a link name"
+file = "src/drybag/memory/store.py"
+before = "    return _MACHINE_LINK.fullmatch(name) is not None"
+after = "    return name.startswith(MACHINE_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_index.py::test_a_configured_group_named_machine_dash_that_is_no_link_is_walked",
+  "tests/memory/test_composed.py::test_a_project_group_shaped_like_a_machine_link_is_reserved",
+]
+
+# Every reader walks the store through `walked_groups`: a sub-plate's group it leaves out is
+# composed and never read.
+[[mutation]]
+name = "the walk leaves out the machine groups"
+file = "src/drybag/memory/store.py"
+before = "        return [sub] if sub in store.groups else []"
+after = "        return []"
+reddens = [
+  "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
+  "tests/memory/test_bundles.py::test_session_start_bundle_carries_a_machine_sub_plate_note",
+]
+
+# The resolver follows a sub-plate's link only inside the permitted roots, which hold the
+# sub-plates of this machine.
+[[mutation]]
+name = "the store's group targets ignore this machine's sub-plates"
+file = "src/drybag/memory/store.py"
+before = "        held = plates(overlay, config.project.name, machine=machine)[0]"
+after = "        held = plates(overlay, config.project.name, machine=None)[0]"
+reddens = [
+  "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
+  "tests/memory/test_bundles.py::test_session_start_bundle_carries_a_machine_sub_plate_note",
+]
+
+# The composed store links each sub-plate whose `memory/` is a directory.
+[[mutation]]
+name = "the composed store links no machine sub-plate"
+file = "src/drybag/memory/composed.py"
+before = '''            if fsops.is_dir(target):
+                found[machine_link(plate)] = target'''
+after = '''            if False:
+                found[machine_link(plate)] = target'''
+reddens = [
+  "tests/memory/test_composed.py::test_sub_plate_memory_links_under_machine_prefix",
+  "tests/memory/test_composed.py::test_a_note_written_to_a_machine_link_lands_in_the_sub_plate",
+]
+
+# A sub-plate's group is read where its parent's is, or would be: a tag of `claude/` items only has
+# no `tag-<t>` link, and its sub-plate's notes are read all the same.
+[[mutation]]
+name = "the walk reaches a tag's sub-plate only through the tag's link"
+file = "src/drybag/memory/store.py"
+before = "        if g.startswith(TAG_LINK_PREFIX) or (sub_tag is not None and g.startswith(sub_tag))"
+after = "        if g.startswith(TAG_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_bundles.py::test_a_sub_plates_note_reaches_the_bundle_where_its_parent_has_no_notes[tag]",
+]
+
+# The same for an overlay with no `common/memory/`: `developer` listed and holding nothing still
+# places the common sub-plate's notes.
+[[mutation]]
+name = "the walk reaches the common sub-plate only through the common notes"
+file = "src/drybag/memory/store.py"
+before = "    common = after(COMMON_GROUP) if at else []"
+after = "    common = after(COMMON_GROUP) if COMMON_GROUP in store.groups else []"
+reddens = [
+  "tests/memory/test_bundles.py::test_a_sub_plates_note_reaches_the_bundle_where_its_parent_has_no_notes[common]",
+]
+
+# The common sub-plate's notes go with the common notes: with no `developer` listed, neither is
+# read.
+[[mutation]]
+name = "the common sub-plate is walked though developer is not listed"
+file = "src/drybag/memory/store.py"
+before = "    common = after(COMMON_GROUP) if at else []"
+after = "    common = after(COMMON_GROUP)"
+reddens = [
+  "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
 ]

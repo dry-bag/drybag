@@ -539,7 +539,9 @@ def test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_
     configure("p")
     share = projects / "p"
     made = [
-        path for path in link_sources(overlay, load(root, machine=machine)) if share in path.parents
+        path
+        for path in link_sources(overlay, load(root, machine=machine), machine=None)
+        if share in path.parents
     ]
     reach = max(len(str(path)) for path in made) - len(str(share))
     assert reach > len(str(share / RECORD)) - len(str(share))
@@ -889,7 +891,9 @@ def test_a_first_attach_under_an_overlay_root_too_deep_for_its_links_is_refused_
     # How far past the overlay root the longest path the first attach links under `projects/p`
     # reaches, off the paths the composed store's links point at.
     shallow = store.parents[2]
-    linked = link_sources(shallow, load(root, machine=_machine(tmp_path, overlay=shallow)))
+    linked = link_sources(
+        shallow, load(root, machine=_machine(tmp_path, overlay=shallow)), machine=None
+    )
     tail = max(len(str(path)) for path in linked if store.parent in path.parents) - len(
         str(shallow)
     )
@@ -1020,3 +1024,24 @@ def test_a_group_name_is_judged_by_what_the_filesystem_takes_and_not_by_its_byte
         refused = f"drybag: refused: {PATH_CANNOT_EXIST.format(projects=store.parents[1])}"
         assert invoke(["attach", "--check", *flags]) == 2
         assert refused in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("command", [["attach"], ["attach", "--check"]])
+def test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], command: list[str]
+) -> None:
+    # The plates' notes (`Binding.plate_notes`) are said on the line every other note is, so the
+    # owner meets a `machines/` directory or a `[machine] name` outside the tag shape where they
+    # attach. Mutation (oracle): `mutations/`'s "attach says no note of the plates" and "attach
+    # --check says no note of the plates".
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    _overlay_grants(store)
+    overlay = store.parents[2]
+    (overlay / "common" / "machines" / "Bad").mkdir(parents=True)
+    machine = _machine(tmp_path, overlay=overlay)
+    with machine.open("a", encoding="utf-8") as file:
+        file.write('\n[machine]\nname = "Mine"\n')
+    assert invoke([*command, *_flags(root, store, machine)]) == 0
+    line = capsys.readouterr().out.splitlines()[0]
+    assert "the directory Bad is not 1 to 40 lowercase letters" in line
+    assert "[machine] name Mine is not 1 to 40 lowercase letters" in line

@@ -9,8 +9,8 @@
 [[mutation]]
 name = "attach takes the overlay root from its argument instead of the machine file"
 file = "src/drybag/attach/binding.py"
-# Widened past `read_binding`'s own line: `binding_for` has the same `overlay =
-# overlay_root(machine)` line, so a one-line `before` is not unique in this file — the oracle
+# Widened past `read_binding`'s own line: `binding_for` has the same `record =
+# machine_record(machine)` line, so a one-line `before` is not unique in this file — the oracle
 # refuses rather than mutating an ambiguous match, so a non-unique `before` goes uncaught until a
 # sweep broader than the entry's own filter string surfaces it.
 #
@@ -18,8 +18,10 @@ file = "src/drybag/attach/binding.py"
 # the first of the two lines is spelled. The mutation is the second line -- the guard -- and the
 # first is here only for uniqueness.
 before = '''    config = load(root, machine=machine) if config is None else config
-    overlay = overlay_root(machine)'''
+    record = machine_record(machine)
+    overlay = record.overlay'''
 after = '''    config = load(root, machine=machine) if config is None else config
+    record = machine_record(machine)
     overlay = store.parents[2]'''
 reddens = [
   "tests/attach/test_binding.py::test_the_overlay_root_comes_from_the_machine_file_and_not_from_the_argument",
@@ -31,7 +33,7 @@ reddens = [
 [[mutation]]
 name = "read_binding reads the machine file a second time for the binding"
 file = "src/drybag/attach/binding.py"
-before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay)"
+before = "            f\"from an argument\"\n        )\n    return _bound(root, config, overlay, record.name, record.note)"
 after = "            f\"from an argument\"\n        )\n    return binding_for(root, config, machine=machine)"
 reddens = [
   "tests/attach/test_binding.py::test_read_binding_reads_the_machine_file_once",
@@ -1074,7 +1076,7 @@ reddens = [
 [[mutation]]
 name = "attach and --check ask only the binding record whether it can exist"
 file = "src/drybag/attach/binding.py"
-before = "    made = (share / RECORD, *link_sources(binding.overlay, config))\n"
+before = "    made = (share / RECORD, *link_sources(binding.overlay, config, machine=binding.machine_name))\n"
 after = "    made = (share / RECORD,)\n"
 reddens = [
   "tests/attach/test_commands.py::test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_by_check_too[the-index]",
@@ -1894,4 +1896,70 @@ before = "    if config.memory.mode == HARNESS_MODE and holds_notes(binding.plat
 after = "    if False:"
 reddens = [
   "tests/attach/test_write.py::test_attach_says_when_the_overlays_notes_reach_no_session",
+]
+
+# A tag's sub-plate refines the tag, so a skill both hold is not a collision of two tags.
+[[mutation]]
+name = "a tag's sub-plate is counted as a tag of its own"
+file = "src/drybag/attach/tags.py"
+before = "            tags = list(dict.fromkeys(p.name for p in holders if p.kind is PlateKind.TAG))"
+after = "            tags = [p.name for p in holders if p.kind is PlateKind.TAG]"
+reddens = [
+  "tests/attach/test_tags.py::test_a_tag_and_its_sub_plate_do_not_collide",
+  "tests/attach/test_tags.py::test_two_tags_sub_plates_still_collide",
+]
+
+# The same for a key two layers set: a sub-plate's layer has its tag's label and its machine apart.
+[[mutation]]
+name = "a tag's sub-plate layer is counted as a tag of its own"
+file = "src/drybag/attach/tags.py"
+before = "                if layer.label not in held_by:"
+after = "                if True:"
+reddens = [
+  "tests/attach/test_tags.py::test_a_tag_and_its_sub_plate_setting_one_key_do_not_collide",
+  "tests/config/test_overlay_layers.py::test_a_tag_named_on_and_its_sub_plate_are_one_tag",
+]
+
+# The plates' notes, a `machines/` directory outside the tag shape and a bad `[machine] name`
+# among them, are said where `attach` says every other note.
+[[mutation]]
+name = "attach says no note of the plates"
+file = "src/drybag/attach/write.py"
+before = "    notes.extend(binding.plate_notes)"
+after = "    notes.extend(())"
+reddens = [
+  "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command0]",
+]
+
+# The same for `attach --check`, on its one line.
+[[mutation]]
+name = "attach --check says no note of the plates"
+file = "src/drybag/attach/check.py"
+before = "    for note in binding.plate_notes:"
+after = "    for note in ():"
+reddens = [
+  "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command1]",
+]
+
+# A `[machine] name` outside the tag shape is a note of the plates, which `attach`, `--check` and
+# the `attached` row say.
+[[mutation]]
+name = "a bad machine name is no note of the plates"
+file = "src/drybag/attach/binding.py"
+before = "    if named is not None:\n        notes = (*notes, named)"
+after = "    if False:\n        notes = (*notes, named)"
+reddens = [
+  "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command0]",
+  "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command1]",
+]
+
+# A sub-plate is a plate like any other to the fold; a fold that skipped them would leave every
+# reader of items blind to the machine's own copy, and nothing else reads one through a reader.
+[[mutation]]
+name = "the item fold skips the machine sub-plates"
+file = "src/drybag/attach/items.py"
+before = "    for plate in plates:\n        directory = plate.directory / kind.harness / kind.directory"
+after = "    for plate in [p for p in plates if p.machine is None]:\n        directory = plate.directory / kind.harness / kind.directory"
+reddens = [
+  "tests/attach/test_items.py::test_a_sub_plate_skill_wins_its_parents",
 ]

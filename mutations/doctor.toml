@@ -198,13 +198,14 @@ reddens = [
 ]
 
 # The overlay root is the machine file's, the core's, and more than one area reads it: the report's
-# `Context` resolves it on first read and keeps the answer, so one report asks the machine file once
-# however many rows read it. A plain property would ask it again for every reader.
+# `Context` resolves it on first read and keeps the answer (as `machine_record`, which
+# `overlay_root` and `machine_name` read), so one report asks the machine file once however many
+# rows read it. A plain property would ask it again for every reader.
 [[mutation]]
 name = "the report resolves the overlay root for every reader"
 file = "src/drybag/doctor/model.py"
-before = "    @cached_property\n    def overlay_root(self) -> Path | MachineUnread | None:"
-after = "    @property\n    def overlay_root(self) -> Path | MachineUnread | None:"
+before = "    @cached_property\n    def machine_record(self) -> MachineRecord | MachineUnread | None:"
+after = "    @property\n    def machine_record(self) -> MachineRecord | MachineUnread | None:"
 reddens = [
   "tests/attach/test_doctor.py::test_one_report_resolves_the_overlay_root_once_for_every_area",
 ]

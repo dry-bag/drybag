@@ -246,3 +246,84 @@ def test_a_gate_parameter_in_a_tag_file_never_reaches_the_config(tmp_path: Path)
     assert REFUSED_LAYER_NOTE.format(key=f"budgets.{GATE_BUDGET}", layer="overlay tag a") in (
         session.resolution.notes
     )
+
+
+def sub_plate(root: Path, plate: str, text: str | None) -> None:
+    """`plate`'s (`tags/t1`, `common`) `machines/m1/drybag.toml`, holding `text` where given."""
+    directory = root / plate / "machines" / "m1"
+    directory.mkdir(parents=True)
+    if text is not None:
+        (directory / "drybag.toml").write_text(text, encoding="utf-8")
+
+
+def test_sub_plate_value_beats_its_parent_and_loses_to_the_next_tag(tmp_path: Path) -> None:
+    # Mutation: sorting the reversed stack puts `t2` beneath `t1 on m1`, and the winner and its
+    # label change.
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["t1", "t2"], t1=mode("harness"), t2=mode("harness"))
+    sub_plate(recorded / "tags", "t1", mode("overlay"))
+    binding.record(root, "sample", None)
+    named = machine(tmp_path, recorded, '[machine]\nname = "m1"\n')
+    session = session_config(root, machine=named)
+    assert session.resolution.values["memory.mode"] == "harness"
+    assert session.resolution.said("memory.mode") == "overlay tag t2"
+    tagged(recorded, ["t1"])
+    session = session_config(root, machine=named)
+    assert session.resolution.values["memory.mode"] == "overlay"
+    assert session.resolution.said("memory.mode") == "overlay tag t1 on m1"
+    other = machine(tmp_path, recorded, '[machine]\nname = "m2"\n')
+    assert session_config(root, machine=other).resolution.values["memory.mode"] == "harness"
+
+
+def test_absent_sub_plate_file_says_nothing(tmp_path: Path) -> None:
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["t1"], t1="")
+    sub_plate(recorded / "tags", "t1", None)
+    sub_plate(recorded, "common", None)
+    sub_plate(recorded / "projects", "sample", None)
+    binding.record(root, "sample", None)
+    layers, notes, _ = overlay_layers.read(
+        root, machine=machine(tmp_path, recorded, '[machine]\nname = "m1"\n')
+    )
+    assert [layer.name for layer in layers] == [
+        LayerName.OVERLAY_COMMON,
+        LayerName.OVERLAY_TAG,
+        LayerName.OVERLAY_PROJECT,
+    ]
+    assert notes == ()
+
+
+def test_sub_plate_may_set_only_its_parents_keys(tmp_path: Path) -> None:
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["t1"], t1="")
+    sub_plate(recorded / "tags", "t1", f"[budgets]\n{GATE_BUDGET} = 999\n")
+    binding.record(root, "sample", None)
+    session = session_config(root, machine=machine(tmp_path, recorded, '[machine]\nname = "m1"\n'))
+    preset = load_preset("recommended")["budgets"][GATE_BUDGET]
+    assert session.config is not None
+    assert session.config.budgets.effective(GATE_BUDGET) == preset
+    assert REFUSED_LAYER_NOTE.format(
+        key=f"budgets.{GATE_BUDGET}", layer="overlay tag t1 on m1"
+    ) in (session.resolution.notes)
+
+
+def test_a_tag_named_on_and_its_sub_plate_are_one_tag(tmp_path: Path) -> None:
+    # A sub-plate's layer carries its machine as a field, not inside its label, so a tag named
+    # `on` is told from its sub-plate by no parse of its label. Mutation (oracle): `mutations/`'s
+    # "a tag's sub-plate layer is counted as a tag of its own".
+    from drybag.attach.tags import collisions
+    from drybag.config.plates import plates
+
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["on"], on=mode("harness"))
+    sub_plate(recorded / "tags", "on", mode("overlay"))
+    binding.record(root, "sample", None)
+    named = machine(tmp_path, recorded, '[machine]\nname = "m1"\n')
+    layers, _, _ = overlay_layers.read(root, machine=named)
+    assert collisions(plates(recorded, "sample", machine="m1")[0], layers) == ()
+    session = session_config(root, machine=named)
+    assert session.resolution.said("memory.mode") == "overlay tag on on m1"

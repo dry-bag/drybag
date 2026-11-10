@@ -162,7 +162,9 @@ def _undelivered(context: Context) -> bool:
 
     def asked() -> bool:
         bound = bound_project(context.root)
-        return bound is not None and holds_notes(plates(overlay, bound.project)[0])
+        return bound is not None and holds_notes(
+            plates(overlay, bound.project, machine=context.machine_name)[0]
+        )
 
     # All of it inside: a warning that cannot ask is no warning, and never a red row.
     return bool(resolved_or_none(asked))

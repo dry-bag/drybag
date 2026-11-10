@@ -950,7 +950,10 @@ def _carry_out(
         # the key (`carried`). The project is the one this machine's binding record names, read
         # back after `record` above wrote it, never `[project] name` on its own.
         project = (bound_project(root) or bound).project
-        written = _point(root, build_composed(binding.overlay, project, id)) or written
+        written = (
+            _point(root, build_composed(binding.overlay, project, id, machine=binding.machine_name))
+            or written
+        )
         render_missing_index(root, config, machine=machine)
     notes: list[str] = []
     if binding.fault is not None:
@@ -961,6 +964,9 @@ def _carry_out(
         notes.append(NO_ORIGIN_NOTE)
     elif binding.note is not None:
         notes.append(binding.note)
+    # What the plates gave: a tag, record or `machines/` directory that is no plate, and a bad
+    # `[machine] name`.
+    notes.extend(binding.plate_notes)
     if config.memory.mode == HARNESS_MODE and holds_notes(binding.plates):
         notes.append(f"{NOTES_UNDELIVERED}: {NOTES_UNDELIVERED_REMEDY}")
     return Attached(

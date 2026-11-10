@@ -417,16 +417,16 @@ def test_one_report_resolves_the_overlay_root_once_for_every_area(
     # nothing caches the `git` answers they ask, so this counts only the reads through the
     # `Context`. Mutation (oracle): `mutations/`'s "the report resolves the overlay root for every
     # reader" -> five reads, three of `attach`'s and two of `overlay`'s.
-    from drybag.config.overlay import overlay_root
+    from drybag.config.overlay import MachineRecord, machine_record
 
     asked: list[Path | None] = []
 
-    def counted(machine: Path | None) -> Path | None:
+    def counted(machine: Path | None) -> MachineRecord:
         asked.append(machine)
-        return overlay_root(machine)
+        return machine_record(machine)
 
     # The name the report's `Context` calls the machine file's reader by, in `doctor.model`.
-    monkeypatch.setattr("drybag.doctor.model.recorded_overlay_root", counted)
+    monkeypatch.setattr("drybag.doctor.model.recorded_machine_record", counted)
     root = _attached(tmp_path)
     rows = _checks(tmp_path, root, machine=_machine(tmp_path))
     # Non-vacuous: both areas read the root, and found the overlay there.
@@ -780,7 +780,9 @@ def test_a_launcher_the_path_scoped_rules_run_through_that_is_gone_warns(tmp_pat
     (rules / "scoped.md").write_text("---\npaths: src/**\n---\nA rule.\n", encoding="utf-8")
     gone = tmp_path / "gone" / "run-hook.sh"
     command = f'"{gone}" hook PostToolUse'
-    rendered = render_write(_id(root), read_parts(plates(overlay, "p")[0], command=command))
+    rendered = render_write(
+        _id(root), read_parts(plates(overlay, "p", machine=None)[0], command=command)
+    )
     _ledger_field(root, render={"digest": rendered.digest})
     assert _delivered_row(tmp_path, root) == Check(
         "attached",
@@ -903,15 +905,19 @@ def test_a_listed_tag_with_no_directory_is_a_warning(tmp_path: Path) -> None:
 
 def test_doctor_names_a_project_memory_directory_in_the_tag_namespace(tmp_path: Path) -> None:
     # `tag-` is a tag's link name in the composed store, so the project's own directory of that
-    # name is not linked: the warning names it, in the tags finding.
+    # name is not linked: the warning names it, in the tags finding. So is a machine sub-plate's
+    # link shape, and no other `machine-...` name.
     root = _attached(tmp_path)
     memory = tmp_path / "overlay" / PROJECTS / "p" / "memory"
     (memory / "tag-a").mkdir(parents=True)
     (memory / "tag-file").write_text("not a directory\n", encoding="utf-8")
+    (memory / "machine-m1-project").mkdir()
+    (memory / "machine-notes").mkdir()
     row = _delivered_row(tmp_path, root)
     assert row.status == WARN and row.remedy == attach_doctor.TAGS_REMEDY
     assert attach_doctor.RESERVED_GROUP.format(name="tag-a") in row.detail
-    assert "tag-file" not in row.detail
+    assert attach_doctor.RESERVED_GROUP.format(name="machine-m1-project") in row.detail
+    assert "tag-file" not in row.detail and "machine-notes" not in row.detail
 
 
 def test_a_tag_warning_never_hides_a_red_finding(tmp_path: Path) -> None:

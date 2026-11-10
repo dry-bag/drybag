@@ -42,7 +42,7 @@ from pathlib import Path
 from drybag import fsops
 from drybag.attach.items import RULE, fold
 from drybag.binding import bound_project
-from drybag.config.overlay import overlay_root
+from drybag.config.overlay import machine_record
 from drybag.config.paths import data_directory
 from drybag.config.plates import Plate, plates
 from drybag.errors import Failure
@@ -155,10 +155,10 @@ def _bound(root: Path) -> list[Rule]:
     """The rules of the project this machine binds `root` to, in the overlay the machine file
     records; none for an unbound checkout or a machine that records no overlay."""
     bound = bound_project(root)
-    overlay = overlay_root(None) if bound is not None else None
-    if bound is None or overlay is None:
+    record = machine_record(None) if bound is not None else None
+    if bound is None or record is None or record.overlay is None:
         return []
-    return read(plates(overlay, bound.project)[0])
+    return read(plates(record.overlay, bound.project, machine=record.name)[0])
 
 
 def standing(root: Path) -> str:

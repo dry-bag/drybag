@@ -7,8 +7,9 @@ checked, and each closes a hole the other three leave open:
 1. **The shape.** In overlay mode the store is the composed store `attach` builds under this
    machine's data directory, named by the checkout's binding id (`composed_directory`), holding
    one link per group: `developer` points into the overlay's `common/memory`, which is shared
-   across projects and cannot live under `projects/<name>/`, and `tag-<tag>` into the
-   `tags/<tag>/memory` of each tag the project's record lists. It is the directory the harness
+   across projects and cannot live under `projects/<name>/`, `tag-<tag>` into the
+   `tags/<tag>/memory` of each tag the project's record lists, and `machine-<m>-...` into the
+   `memory` of each of this machine's sub-plates (`machine_link`). It is the directory the harness
    reads through `autoMemoryDirectory`, so drybag's bundles and the harness read one store. In
    `in-repo` mode `paths.memory` is a real directory, never one link for the whole store.
 2. **Containment inside the store.** A group name is repository-controlled — `memory.groups`
@@ -50,19 +51,22 @@ about the whole module rather than about `resolve` alone.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 from drybag import fsops
 from drybag.binding import Bound, bound_project, short
-from drybag.config.overlay import overlay_root
+from drybag.config.overlay import machine_record
 from drybag.config.paths import PathEscape, PathUnasked, contained, data_directory
 from drybag.config.plates import COMMON as COMMON_PLATE
 from drybag.config.plates import PROJECTS as PROJECTS
 from drybag.config.plates import RECORD as RECORD
 from drybag.config.plates import (
     TAG_LINK_PREFIX,
+    TAG_SHAPE,
     Plate,
     PlateKind,
     plates,
@@ -129,6 +133,9 @@ class Store:
     # `Store` is frozen and `resolve` builds it exactly once, from the `machine` it was given.
     # Putting the value here makes the mismatch unrepresentable instead of documented.
     machine: Path | None = None
+    # This machine's name, from the same read of the machine file that gave the store its overlay
+    # root (`config.overlay.machine_record`): the walk needs it to place a sub-plate's groups.
+    machine_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -384,6 +391,30 @@ def tag_link(tag: str) -> str:
     return TAG_LINK_PREFIX + tag
 
 
+# The name a machine sub-plate's notes take in the composed store, `machine-<m>-<parent's link>`:
+# the project side gives up the names of that shape (`machine_link_shaped`), as it gives up `tag-`.
+MACHINE_LINK_PREFIX = "machine-"
+
+
+def _sub_link(machine: str, parent: str) -> str:
+    """The one spelling of a sub-plate's link name, given its parent's: `developer` for the common
+    notes, `tag-<t>` for a tag's, `project` for the project's."""
+    return f"{MACHINE_LINK_PREFIX}{machine}-{parent}"
+
+
+def machine_link(plate: Plate) -> str:
+    """The name the notes of a sub-plate (`plate.machine` set) take in the composed store:
+    `machine-<m>-developer`, `machine-<m>-tag-<t>` or `machine-<m>-project`. Every caller asks it
+    only of a sub-plate."""
+    if plate.kind is PlateKind.COMMON:
+        parent = COMMON_GROUP
+    elif plate.kind is PlateKind.TAG:
+        parent = tag_link(plate.name)
+    else:
+        parent = PROJECT_LINK
+    return _sub_link(cast(str, plate.machine), parent)
+
+
 # What `attach` and `doctor` say of an overlay whose notes nothing delivers.
 NOTES_UNDELIVERED = (
     "the overlay holds notes and none reaches a session while `[memory] mode` is `harness`"
@@ -414,10 +445,11 @@ def _notes(held: Sequence[Plate]) -> tuple[Path, ...]:
     return tuple(plate.directory / STORE_DIR for plate in held)
 
 
-def permitted_roots(overlay: Path, project: str) -> tuple[Path, ...]:
+def permitted_roots(overlay: Path, project: str, *, machine: str | None) -> tuple[Path, ...]:
     """This project's whole share of the overlay: the common notes, the notes of each tag its
-    record lists (`config.plates.plates`, in list order) and its own, last."""
-    return _notes(plates(overlay, project)[0])
+    record lists (`config.plates.plates`, in list order) and its own, last, each followed by the
+    notes of its sub-plate on the machine named `machine`."""
+    return _notes(plates(overlay, project, machine=machine)[0])
 
 
 # The one group whose notes are not this project's, and `common/memory` *is* its store rather
@@ -427,12 +459,27 @@ def permitted_roots(overlay: Path, project: str) -> tuple[Path, ...]:
 # `permitted_roots` because the composed store is built from this routing; a second spelling is one
 # more place for them to stop agreeing.
 COMMON_GROUP = "developer"
+# The project's own notes have no link of their own (its share is the store's base); this is the
+# name its sub-plate's link takes after `machine-<m>-`.
+PROJECT_LINK = "project"
+_MACHINE_LINK = re.compile(
+    rf"{MACHINE_LINK_PREFIX}{TAG_SHAPE}-(?:{COMMON_GROUP}|{PROJECT_LINK}|{TAG_LINK_PREFIX}{TAG_SHAPE})"
+)
+
+
+def machine_link_shaped(name: str) -> bool:
+    """`name` has the shape of a sub-plate's link on some machine, `machine-<m>-developer`,
+    `machine-<m>-project` or `machine-<m>-tag-<t>` (`<m>` and `<t>` each a `TAG`): the machine
+    namespace. Any other name that starts with `machine-` is an ordinary group. The one test of it,
+    for `reserved`, `reserved_project_groups` and `walked_groups`."""
+    return _MACHINE_LINK.fullmatch(name) is not None
 
 
 def reserved(name: str) -> bool:
     """`name` is a link name the project's own memory directories do not take: `developer`, the
-    common notes', and anything in the tag namespace, `tag-<tag>` (`TAG_LINK_PREFIX`)."""
-    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX)
+    common notes', anything in the tag namespace, `tag-<tag>` (`TAG_LINK_PREFIX`), and anything in
+    the machine namespace (`machine_link_shaped`)."""
+    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX) or machine_link_shaped(name)
 
 
 def share_directories(overlay: Path, project: str) -> tuple[str, ...]:
@@ -453,9 +500,12 @@ def share_directories(overlay: Path, project: str) -> tuple[str, ...]:
 
 def reserved_project_groups(overlay: Path, project: str) -> tuple[str, ...]:
     """The directories under `projects/<project>/memory/` that are not linked because they are in
-    the tag namespace, sorted; `developer` is not among them, having been left out always."""
+    the tag or the machine namespace, sorted; `developer` is not among them, having been left out
+    always."""
     return tuple(
-        name for name in share_directories(overlay, project) if name.startswith(TAG_LINK_PREFIX)
+        name
+        for name in share_directories(overlay, project)
+        if name.startswith(TAG_LINK_PREFIX) or machine_link_shaped(name)
     )
 
 
@@ -466,16 +516,20 @@ def overlay_group_target(held: Sequence[Plate], group: str) -> Path:
     A rule and deliberately not a probe over what happens to exist: a group directory that is
     not there yet is a first attach, not a reason to link somewhere else. `developer` is the
     common notes, `tag-<t>` is a listed tag's notes, and any other name is the project's own
-    directory. The answer is always inside `permitted_roots`, which is what the resolver then
-    checks the link against.
+    directory, and `machine-<m>-...` is the notes of the sub-plate that link names. The answer is
+    always inside `permitted_roots`, which is what the resolver then checks the link against.
     """
     if group == COMMON_GROUP:
         return held[0].directory / STORE_DIR
     tag = group.removeprefix(TAG_LINK_PREFIX) if group.startswith(TAG_LINK_PREFIX) else None
     for plate in held:
-        if plate.kind is PlateKind.TAG and plate.name == tag:
+        if plate.machine is not None:
+            if machine_link(plate) == group:
+                return plate.directory / STORE_DIR
+        elif plate.kind is PlateKind.TAG and plate.name == tag:
             return plate.directory / STORE_DIR
-    return held[-1].directory / STORE_DIR / group
+    own = next(plate for plate in reversed(held) if plate.machine is None)
+    return own.directory / STORE_DIR / group
 
 
 def _declared(root: Path, config: Config) -> Path | Unresolved:
@@ -494,17 +548,23 @@ def _declared(root: Path, config: Config) -> Path | Unresolved:
         )
 
 
-def _group_targets(base: Path, config: Config, overlay: Path | None) -> dict[str, Path]:
+def _group_targets(
+    base: Path, config: Config, overlay: Path | None, machine: str | None
+) -> dict[str, Path]:
     """Each group of `memory.groups` this store holds and may read, by its directory; a group
     whose directory escapes the store, or links where it may not, is left out."""
     groups: dict[str, Path] = {}
     allowed: tuple[Path, ...] = ()
     linked: list[str] = []
     if overlay is not None:
-        held = plates(overlay, config.project.name)[0]
+        held = plates(overlay, config.project.name, machine=machine)[0]
         allowed = _notes(held)
-        linked = [tag_link(plate.name) for plate in held if plate.kind is PlateKind.TAG]
-    # The tags' links last and in the project's list order (`walked_groups`).
+        linked = [
+            machine_link(plate) if plate.machine is not None else tag_link(plate.name)
+            for plate in held
+            if plate.machine is not None or plate.kind is PlateKind.TAG
+        ]
+    # The tags' and sub-plates' links last, in the plates' order (`walked_groups` places them).
     for group in [*config.memory.groups, *linked]:
         try:
             target = contained(base, group, allow_final_symlink=True)
@@ -528,9 +588,9 @@ def _group_targets(base: Path, config: Config, overlay: Path | None) -> dict[str
 Resolution = tuple[Store, None] | tuple[None, Unresolved]
 
 
-def _recorded_overlay(machine: Path | None) -> Path | None:
-    """The overlay root the machine file records, or `None` where it records none or cannot be
-    read.
+def _recorded_overlay(machine: Path | None) -> tuple[Path | None, str | None]:
+    """The overlay root the machine file records and this machine's name, from one read of it;
+    `(None, None)` where it records none or cannot be read.
 
     A command never meets a machine file it cannot read here: its load refuses that file first
     (`config.loader`). A session does, since it reads the configuration that file leaves it
@@ -538,9 +598,10 @@ def _recorded_overlay(machine: Path | None) -> Path | None:
     (`MACHINE_FILE_WARNING`), so the store resolves as one with no overlay recorded, and the
     session's standing rules and volatile notes still arrive where they are not the overlay's."""
     try:
-        return overlay_root(machine)
+        record = machine_record(machine)
     except MachineConfigError:
-        return None
+        return None, None
+    return record.overlay, record.name
 
 
 def _resolve_at(
@@ -550,7 +611,7 @@ def _resolve_at(
     if mode == HARNESS_MODE and override is None:
         # Memory is the harness's own: drybag delivers nothing, so there is no store to read.
         return None, Unresolved(LEFT_TO_HARNESS)
-    overlay = _recorded_overlay(machine)
+    overlay, name = _recorded_overlay(machine)
     composed: Path | None = None
     if mode == OVERLAY_MODE:
         if overlay is None:
@@ -607,8 +668,8 @@ def _resolve_at(
         # elsewhere it refuses, so it is named as the way out only there.
         said = STORE_MISSING + (BUILT_BY_ATTACH if mode == OVERLAY_MODE else "")
         return None, Unresolved(said, shown(base))
-    groups = _group_targets(base, config, overlay if mode == OVERLAY_MODE else None)
-    return Store(base, mode, root, groups, machine), None
+    groups = _group_targets(base, config, overlay if mode == OVERLAY_MODE else None, name)
+    return Store(base, mode, root, groups, machine, name), None
 
 
 def resolved(
@@ -664,11 +725,30 @@ def walked_groups(store: Store, config: Config) -> list[str]:
     """The groups every reader of the store walks, in the order they are read: `memory.groups` as
     configured, each only where the store holds it, and the tags' notes (`tag-<t>`, in the
     project's list order, which the store holds them in) after the common notes, or first where
-    the configuration lists none. The one spelling of the walk: no reader keeps its own."""
-    tagged = [g for g in store.groups if g.startswith(TAG_LINK_PREFIX)]
-    walked = [g for g in config.memory.groups if g in store.groups and g not in tagged]
-    at = walked.index(COMMON_GROUP) + 1 if COMMON_GROUP in walked else 0
-    return [*walked[:at], *tagged, *walked[at:]]
+    the configuration lists none. A machine sub-plate's group (`machine_link`) is read where its
+    parent's group is, or would be where the parent holds no notes: the common notes' after
+    `developer` where that is listed, a tag's after that tag, the project's after the configured
+    groups. The one spelling of the walk: no reader keeps its own."""
+    name = store.machine_name
+
+    def after(parent: str) -> list[str]:
+        sub = None if name is None else _sub_link(name, parent)
+        return [sub] if sub in store.groups else []
+
+    # The tags' links and their sub-plates', in the plates' order the store holds them in: a
+    # sub-plate's link is there whether or not its tag holds notes of its own.
+    sub_tag = None if name is None else _sub_link(name, TAG_LINK_PREFIX)
+    tagged = [
+        g
+        for g in store.groups
+        if g.startswith(TAG_LINK_PREFIX) or (sub_tag is not None and g.startswith(sub_tag))
+    ]
+    configured = [g for g in config.memory.groups if g not in tagged and not machine_link_shaped(g)]
+    at = configured.index(COMMON_GROUP) + 1 if COMMON_GROUP in configured else 0
+    common = after(COMMON_GROUP) if at else []
+    head = [g for g in configured[:at] if g in store.groups]
+    rest = [g for g in configured[at:] if g in store.groups]
+    return [*head, *common, *tagged, *rest, *after(PROJECT_LINK)]
 
 
 def in_repository(store: Store, path: Path) -> bool:

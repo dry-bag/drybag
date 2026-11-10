@@ -27,8 +27,8 @@ from pathlib import Path
 from typing import Any
 
 from drybag import fsops
-from drybag.config.classes import ALLOWED, Layer, LayerName, class_of, said
-from drybag.config.overlay import overlay_root
+from drybag.config.classes import ALLOWED, Layer, LayerName, class_of, labelled, said
+from drybag.config.overlay import machine_record
 from drybag.config.owner import Guards
 from drybag.config.plates import COMMON, Plate, PlateKind, plates
 from drybag.config.reading import (
@@ -98,22 +98,25 @@ def read(
     common layer only, as an unbound checkout does."""
     notes: list[str] = []
     try:
-        overlay = overlay_root(machine)
+        record = machine_record(machine)
     except MachineConfigError as exc:
         return (), (MACHINE_UNREAD.format(error=exc),), None
+    overlay = record.overlay
     if overlay is None:
         return (), (NO_OVERLAY,), None
+    if record.note is not None:
+        notes.append(record.note)
     project = _bound(root, notes)
     if project is None:
         found: tuple[Plate, ...] = (Plate(PlateKind.COMMON, COMMON, overlay / COMMON),)
     else:
-        found, listed = plates(overlay, project)
+        found, listed = plates(overlay, project, machine=record.name)
         notes.extend(listed)
     layers: list[Layer] = []
     for plate in found:
         name = _NAME_OF[plate.kind]
         label = plate.name if plate.kind is PlateKind.TAG else ""
-        layer = _layer(plate.directory / CONFIG_FILE, name, label, notes)
+        layer = _layer(plate.directory / CONFIG_FILE, name, label, notes, plate.machine)
         if layer is not None:
             layers.append(layer)
     return tuple(layers), tuple(notes), project
@@ -136,21 +139,24 @@ def _bound(root: Path | None, notes: list[str]) -> str | None:
     return None if bound is None else bound.project
 
 
-def _layer(path: Path, name: LayerName, label: str, notes: list[str]) -> Layer | None:
+def _layer(
+    path: Path, name: LayerName, label: str, notes: list[str], machine: str | None = None
+) -> Layer | None:
     """The file at `path` as the layer `name` (`label` the tag a tag's layer is for), or `None`
     with a note where it cannot be read. A tag with no file sets nothing and says nothing: a tag
-    is often only notes."""
+    is often only notes. So is a sub-plate (`machine` set), which is often only notes too."""
     shown = quoted(str(path))
+    layer = said(name, labelled(label, machine))
     try:
         raw = tomllib.loads(fsops.read_regular_text(path, limit=READ_LIMIT))
     except FileNotFoundError:
-        if name is not LayerName.OVERLAY_TAG:
-            notes.append(NOT_THERE.format(path=shown, layer=said(name, label)))
+        if name is not LayerName.OVERLAY_TAG and machine is None:
+            notes.append(NOT_THERE.format(path=shown, layer=layer))
         return None
     except (UnicodeDecodeError, OSError, *UNPARSEABLE) as exc:
-        notes.append(read_fault(shown, exc, f"so the {said(name, label)} layer sets nothing"))
+        notes.append(read_fault(shown, exc, f"so the {layer} layer sets nothing"))
         return None
-    return Layer(name, _values(raw, shown, name, notes), label)
+    return Layer(name, _values(raw, shown, name, notes), label, machine)
 
 
 def _values(

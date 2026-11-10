@@ -131,11 +131,13 @@ OVERLAY_UNREAD: Final = (
 # What the project's tags leave unresolved, as `plates` and `attach.tags` say it: a warning, never
 # a refusal, since the order of `tags` settles every collision.
 RESERVED_GROUP: Final = (
-    "the memory directory {name} of the project starts with `tag-`, which is a tag's link name in "
-    "the composed store, so it is not linked"
+    "the memory directory {name} of the project has the name of a link of the composed store, "
+    "`tag-<tag>`, `machine-<m>-developer`, `machine-<m>-project` or `machine-<m>-tag-<t>`, so it "
+    "is not linked"
 )
 TAGS_REMEDY: Final = (
-    "in the overlay, fix each tag, record or directory a note names; for a name two tags hold, "
+    "in the overlay, fix each tag, record or directory a note names, and in the machine file a "
+    "`[machine] name` one names; for a name two tags hold, "
     "rename one of them or reorder `tags` in the project's `project.toml`"
 )
 

@@ -5,6 +5,13 @@ A plate is a directory of the owner's overlay that holds layers of one kind: `co
 or an item name and content otherwise unions, so the order is the precedence: `common`, the
 project's tags in list order, the project, and (for a value) the machine file after all of them.
 
+**A plate's `machines/<name>/` is a sub-plate** on the machine whose name is `[machine] name` in
+the machine file (`config.overlay.machine_record`; this module reads no file, its caller says which
+machine it is). It comes right after its parent and before the next plate, so on that machine it
+wins over its parent and loses to every later plate. A machine with no name, and every other
+machine's directory, has no sub-plate; a `machines/<x>` directory
+whose name is outside `TAG` is a note and no plate.
+
 **The tags are read from the overlay's record of the project, never from the repository.** The
 record is `projects/<name>/project.toml`, its `tags` key a list of names, and the project is the
 one this machine's binding record names (`binding.bound_project`), so a clone that commits a
@@ -22,6 +29,7 @@ and `attach` say what it means to them.
 
 from __future__ import annotations
 
+import os
 import re
 import tomllib
 from dataclasses import dataclass
@@ -35,6 +43,7 @@ from drybag.printed import clipped, quoted
 
 COMMON = "common"
 TAGS = "tags"
+MACHINES = "machines"
 PROJECTS = "projects"
 RECORD = "project.toml"
 # The name a tag's notes take as a link in the composed store, `tag-<tag>`: the project side of the
@@ -44,7 +53,8 @@ TAG_LINK_PREFIX = "tag-"
 # A named cap: a tag is at most forty characters, from a lowercase letter or digit, then those and
 # hyphens. The name becomes a directory name, a link name, an index heading and a TOML string, and
 # forty is past every tag a person types. No shipped file states it.
-TAG = re.compile(r"\A[a-z0-9][a-z0-9-]{0,39}\Z")
+TAG_SHAPE = r"[a-z0-9][a-z0-9-]{0,39}"
+TAG = re.compile(rf"\A{TAG_SHAPE}\Z")
 
 UNLISTED = "so the project lists no tags"
 NOT_A_LIST = "{path}: tags must be a list, so the project lists no tags"
@@ -52,6 +62,10 @@ NOT_A_STRING = "{path}: the tags entry {position} is not a string; it is skipped
 NOT_A_TAG = (
     "{path}: the tag {tag} is not 1 to 40 lowercase letters, digits and hyphens, "
     "starting with a letter or digit; it is skipped"
+)
+BAD_MACHINE_DIRECTORY = (
+    "{path}: the directory {name} is not 1 to 40 lowercase letters, digits and hyphens, "
+    "starting with a letter or digit, so it is no machine's sub-plate"
 )
 NO_TAG_DIRECTORY = "{path}: the tag {tag} has no directory {directory}; it is skipped"
 
@@ -66,11 +80,14 @@ class PlateKind(StrEnum):
 
 @dataclass(frozen=True)
 class Plate:
-    """One directory of the overlay: `name` is `common`, the tag, or the project's name."""
+    """One directory of the overlay: `name` is `common`, the tag, or the project's name. A
+    sub-plate (`machines/<machine>/` of a plate) keeps its parent's `kind` and `name` and sets
+    `machine`."""
 
     kind: PlateKind
     name: str
     directory: Path
+    machine: str | None = None
 
 
 def read_record(path: Path) -> dict[str, Any]:
@@ -140,19 +157,52 @@ def tags(overlay: Path, project: str) -> tuple[tuple[str, ...], tuple[str, ...]]
     return tuple(usable), tuple(notes)
 
 
-def plates(overlay: Path, project: str) -> tuple[tuple[Plate, ...], tuple[str, ...]]:
-    """`common`, each usable tag of `project`, then the project, and the notes `tags` gave. The
-    project's plate is present whether or not its directory exists: readers already handle an
-    absent share."""
+def plates(
+    overlay: Path, project: str, *, machine: str | None
+) -> tuple[tuple[Plate, ...], tuple[str, ...]]:
+    """`common`, each usable tag of `project`, then the project, each followed by its sub-plate on
+    this machine (`machines/<machine>/`, `machine` being this machine's name or `None`) where that
+    directory exists, and the notes `tags` and the sub-plates gave. It reads no machine file: every
+    caller says which machine it is. The project's plate is present whether or not its directory
+    exists: readers already handle an absent share."""
     used, notes = tags(overlay, project)
+    found = [*notes]
+    parents = _parents(overlay, project, used)
+    ordered: list[Plate] = []
+    for parent in parents:
+        ordered.append(parent)
+        found.extend(_bad_machine_directories(parent.directory / MACHINES))
+        if machine is not None and _directory(parent.directory / MACHINES / machine):
+            directory = parent.directory / MACHINES / machine
+            ordered.append(Plate(parent.kind, parent.name, directory, machine=machine))
+    return tuple(ordered), tuple(found)
+
+
+def _parents(overlay: Path, project: str, used: tuple[str, ...]) -> tuple[Plate, ...]:
+    """The plates that have no machine: `common`, the usable tags `used`, the project."""
     return (
-        (
-            Plate(PlateKind.COMMON, COMMON, overlay / COMMON),
-            *(Plate(PlateKind.TAG, tag, overlay / TAGS / tag) for tag in used),
-            Plate(PlateKind.PROJECT, project, overlay / PROJECTS / project),
-        ),
-        notes,
+        Plate(PlateKind.COMMON, COMMON, overlay / COMMON),
+        *(Plate(PlateKind.TAG, tag, overlay / TAGS / tag) for tag in used),
+        Plate(PlateKind.PROJECT, project, overlay / PROJECTS / project),
     )
+
+
+def _bad_machine_directories(machines: Path) -> list[str]:
+    """One note for each directory of `machines` whose name is outside `TAG`; a `machines` that is
+    absent or cannot be listed has none."""
+    try:
+        if not fsops.is_dir(machines):
+            return []
+        listed = sorted(os.listdir(machines))
+    except OSError:
+        return []
+    return [
+        BAD_MACHINE_DIRECTORY.format(path=quoted(str(machines / entry)), name=clipped(entry))
+        for entry in listed
+        if not entry.startswith(".")
+        and TAG.fullmatch(entry) is None
+        and _directory(machines / entry)
+    ]
 
 
 def _directory(path: Path) -> bool:

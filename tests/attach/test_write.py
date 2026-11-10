@@ -2134,7 +2134,7 @@ def test_a_source_past_the_longest_path_under_a_project_with_no_directory_is_no_
     # How far past the project's directory the longest path `attach` links there reaches, off the
     # paths the link tree is built from for the fixture's own name.
     share = store.parent
-    linked = link_sources(store.parents[2], load(root, machine=machine))
+    linked = link_sources(store.parents[2], load(root, machine=machine), machine=None)
     reach = max(len(str(path)) for path in linked if share in path.parents) - len(str(share))
     # The project's directory one character shorter than that path needs, its name a file name
     # that may be, its binding record and every linked path under the longest path and its

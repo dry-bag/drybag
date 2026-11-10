@@ -20,7 +20,8 @@ from typing import Final, Literal
 
 from drybag.binding import main_checkout_or_none
 from drybag.config.loader import read_document
-from drybag.config.overlay import overlay_root as recorded_overlay_root
+from drybag.config.overlay import MachineRecord
+from drybag.config.overlay import machine_record as recorded_machine_record
 from drybag.config.reading import MachineConfigError
 from drybag.config.schema import Config
 from drybag.config.session import SessionConfig, bound_config
@@ -125,12 +126,27 @@ class Context:
     session: SessionConfig = field(kw_only=True)
 
     @cached_property
+    def machine_record(self) -> MachineRecord | MachineUnread | None:
+        """What the machine file records, from one read of it: the overlay root and this machine's
+        name (`config.overlay.machine_record`); `MachineUnread` when the machine file itself
+        cannot be read or parsed, and `None` for any other failure, the way
+        `errors.resolved_or_none` reads one. `overlay_root` and `machine_name` are read from it and
+        cache nothing of their own, so a report reads the file once however many rows ask."""
+        try:
+            return recorded_machine_record(self.machine)
+        except MachineConfigError as exc:
+            return MachineUnread(str(exc))
+        except (Failure, Refusal, OSError):
+            return None
+
+    @property
     def overlay_root(self) -> Path | MachineUnread | None:
         """The overlay root the machine file records, whether or not anything is there; `None`
         when it records none, or when the root it records cannot be resolved; `MachineUnread`
         when the machine file itself cannot be read or parsed.
 
-        Resolved on first read and never again for this report: `cached_property` keeps the
+        Resolved on first read and never again for this report (`machine_record`, whose
+        `cached_property` holds it): `cached_property` keeps the
         answer in the instance's `__dict__` without going through `__setattr__`, which is why a
         frozen dataclass without slots can carry it, and an answer that is itself `None` is kept
         as well. A fresh `Context` per report is a fresh answer per report, so nothing one run
@@ -144,12 +160,17 @@ class Context:
         could read was false; any other failure the way `errors.resolved_or_none` reads one, as
         nothing to look at.
         """
-        try:
-            return recorded_overlay_root(self.machine)
-        except MachineConfigError as exc:
-            return MachineUnread(str(exc))
-        except (Failure, Refusal, OSError):
-            return None
+        record = self.machine_record
+        if isinstance(record, MachineUnread):
+            return record
+        return None if record is None else record.overlay
+
+    @property
+    def machine_name(self) -> str | None:
+        """This machine's name, `None` where the machine file records none or cannot be read
+        (`overlay_root` says the latter); from the same read as `overlay_root`."""
+        record = self.machine_record
+        return None if record is None or isinstance(record, MachineUnread) else record.name
 
     @cached_property
     def attach_config(self) -> Config | None:

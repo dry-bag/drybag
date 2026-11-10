@@ -74,6 +74,8 @@ def _report(binding: Binding, diff: PermissionDiff, source: str) -> Result:
         summary += f"; {binding.note}"
     if binding.fault is not None:
         summary += f"; {binding.fault}"
+    for note in binding.plate_notes:
+        summary += f"; {note}"
     if rules:
         summary += "\n" + "\n".join(f"  {target}" for target in rules)
     data = {
