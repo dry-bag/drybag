@@ -199,6 +199,9 @@ def resolve(
     provenance: dict[str, LayerName] = {}
     labels: dict[str, str] = {}
     notes: list[str] = []
+    # `sorted` is stable: layers of one rank keep their order in `stack`, which is how a machine
+    # sub-plate (the same `LayerName` as its parent, placed right after it) wins over its parent
+    # and loses to the next plate. Reversing or re-keying this sort breaks that.
     for layer in sorted(stack, key=lambda layer: _RANK[layer.name]):
         for key, value in layer.values.items():
             if layer.name not in ALLOWED[class_of(key)]:

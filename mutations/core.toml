@@ -5442,3 +5442,13 @@ after = "        and TAG.fullmatch(entry) is not None"
 reddens = [
   "tests/config/test_plates.py::test_bad_machine_directory_is_a_note",
 ]
+
+# A sub-plate has its parent's rank and wins by the stack's order, which `sorted` keeps.
+[[mutation]]
+name = "the layers are sorted against the stack's order"
+file = "src/drybag/config/classes.py"
+before = "    for layer in sorted(stack, key=lambda layer: _RANK[layer.name]):"
+after = "    for layer in sorted(reversed(stack), key=lambda layer: _RANK[layer.name]):"
+reddens = [
+  "tests/config/test_overlay_layers.py::test_sub_plate_value_beats_its_parent_and_loses_to_the_next_tag",
+]
