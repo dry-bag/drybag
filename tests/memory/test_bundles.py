@@ -550,8 +550,8 @@ def test_a_sub_plates_note_reaches_the_bundle_where_its_parent_has_no_notes(
 ) -> None:
     # A tag of `claude/` items only, or an overlay with no `common/memory/`: the sub-plate's group
     # is walked where its parent's would be. Mutation (oracle): `mutations/`'s "the walk reaches a
-    # tag's sub-plate only through the tag's link" and "... the common sub-plate only through the
-    # common notes".
+    # tag's sub-plate only through the tag's link" and "the walk reaches the common sub-plate only
+    # through the common notes".
     from drybag.memory.composed import build
 
     _store, _config, machine, overlay = a_resolved_overlay_store(tmp_path)
