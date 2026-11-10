@@ -2831,8 +2831,8 @@ reddens = ["tests/config/test_classes.py::test_a_key_with_no_class_is_a_key_erro
 [[mutation]]
 name = "a refused layer's note prints its key raw"
 file = "src/drybag/config/classes.py"
-before = "                    REFUSED_LAYER_NOTE.format(key=clipped(key), layer=said(layer.name, layer.label))"
-after = "                    REFUSED_LAYER_NOTE.format(key=key, layer=said(layer.name, layer.label))"
+before = "                    REFUSED_LAYER_NOTE.format(key=clipped(key), layer=said(layer.name, shown))"
+after = "                    REFUSED_LAYER_NOTE.format(key=key, layer=said(layer.name, shown))"
 reddens = [
   "tests/config/test_classes.py::test_a_refused_layer_note_carries_neither_its_value_nor_a_raw_key",
 ]
