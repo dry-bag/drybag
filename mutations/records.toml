@@ -1142,8 +1142,8 @@ reddens = [
 [[mutation]]
 name = "walked groups leave out the tags"
 file = "src/drybag/memory/store.py"
-before = "    return [*walked[:at], *common, *tags, *walked[at:], *after(PROJECT_LINK)]"
-after = "    return walked"
+before = "    return [*head, *common, *tagged, *rest, *after(PROJECT_LINK)]"
+after = "    return [*head, *rest]"
 reddens = [
   "tests/memory/test_bundles.py::test_a_standing_rule_in_a_tags_notes_is_in_the_standing_rules_bundle",
   "tests/memory/test_index.py::test_the_index_has_a_section_per_tag_after_the_common_notes",
@@ -1278,4 +1278,26 @@ after = '''            if False:
 reddens = [
   "tests/memory/test_composed.py::test_sub_plate_memory_links_under_machine_prefix",
   "tests/memory/test_composed.py::test_a_note_written_to_a_machine_link_lands_in_the_sub_plate",
+]
+
+# A sub-plate's group is read where its parent's is, or would be: a tag of `claude/` items only has
+# no `tag-<t>` link, and its sub-plate's notes are read all the same.
+[[mutation]]
+name = "the walk reaches a tag's sub-plate only through the tag's link"
+file = "src/drybag/memory/store.py"
+before = "        if g.startswith(TAG_LINK_PREFIX) or (sub_tag is not None and g.startswith(sub_tag))"
+after = "        if g.startswith(TAG_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_bundles.py::test_a_sub_plates_note_reaches_the_bundle_where_its_parent_has_no_notes[tag]",
+]
+
+# The same for an overlay with no `common/memory/`: `developer` listed and holding nothing still
+# places the common sub-plate's notes.
+[[mutation]]
+name = "the walk reaches the common sub-plate only through the common notes"
+file = "src/drybag/memory/store.py"
+before = "    common = after(COMMON_GROUP) if at else []"
+after = "    common = after(COMMON_GROUP) if COMMON_GROUP in store.groups else []"
+reddens = [
+  "tests/memory/test_bundles.py::test_a_sub_plates_note_reaches_the_bundle_where_its_parent_has_no_notes[common]",
 ]

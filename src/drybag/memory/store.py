@@ -711,25 +711,32 @@ def walked_groups(store: Store, config: Config) -> list[str]:
     """The groups every reader of the store walks, in the order they are read: `memory.groups` as
     configured, each only where the store holds it, and the tags' notes (`tag-<t>`, in the
     project's list order, which the store holds them in) after the common notes, or first where
-    the configuration lists none. A machine sub-plate's group (`machine_link`) follows the group
-    of its parent: the common notes' after them, a tag's after that tag, the project's after the
-    configured groups. The one spelling of the walk: no reader keeps its own."""
-    tagged = [g for g in store.groups if g.startswith(TAG_LINK_PREFIX)]
-    walked = [
-        g
-        for g in config.memory.groups
-        if g in store.groups and g not in tagged and not g.startswith(MACHINE_LINK_PREFIX)
-    ]
+    the configuration lists none. A machine sub-plate's group (`machine_link`) is read where its
+    parent's group is, or would be where the parent holds no notes: the common notes' after
+    `developer` where that is listed, a tag's after that tag, the project's after the configured
+    groups. The one spelling of the walk: no reader keeps its own."""
     name = store.machine_name
 
     def after(parent: str) -> list[str]:
         sub = None if name is None else _sub_link(name, parent)
         return [sub] if sub in store.groups else []
 
-    at = walked.index(COMMON_GROUP) + 1 if COMMON_GROUP in walked else 0
-    common = after(COMMON_GROUP) if COMMON_GROUP in walked else []
-    tags = [link for tag in tagged for link in (tag, *after(tag))]
-    return [*walked[:at], *common, *tags, *walked[at:], *after(PROJECT_LINK)]
+    # The tags' links and their sub-plates', in the plates' order the store holds them in: a
+    # sub-plate's link is there whether or not its tag holds notes of its own.
+    sub_tag = None if name is None else _sub_link(name, TAG_LINK_PREFIX)
+    tagged = [
+        g
+        for g in store.groups
+        if g.startswith(TAG_LINK_PREFIX) or (sub_tag is not None and g.startswith(sub_tag))
+    ]
+    configured = [
+        g for g in config.memory.groups if g not in tagged and not g.startswith(MACHINE_LINK_PREFIX)
+    ]
+    at = configured.index(COMMON_GROUP) + 1 if COMMON_GROUP in configured else 0
+    common = after(COMMON_GROUP) if at else []
+    head = [g for g in configured[:at] if g in store.groups]
+    rest = [g for g in configured[at:] if g in store.groups]
+    return [*head, *common, *tagged, *rest, *after(PROJECT_LINK)]
 
 
 def in_repository(store: Store, path: Path) -> bool:
