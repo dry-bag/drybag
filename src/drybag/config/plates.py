@@ -53,7 +53,8 @@ TAG_LINK_PREFIX = "tag-"
 # A named cap: a tag is at most forty characters, from a lowercase letter or digit, then those and
 # hyphens. The name becomes a directory name, a link name, an index heading and a TOML string, and
 # forty is past every tag a person types. No shipped file states it.
-TAG = re.compile(r"\A[a-z0-9][a-z0-9-]{0,39}\Z")
+TAG_SHAPE = r"[a-z0-9][a-z0-9-]{0,39}"
+TAG = re.compile(rf"\A{TAG_SHAPE}\Z")
 
 UNLISTED = "so the project lists no tags"
 NOT_A_LIST = "{path}: tags must be a list, so the project lists no tags"

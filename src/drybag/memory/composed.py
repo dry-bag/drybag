@@ -2,9 +2,10 @@
 
 **One directory, named by the binding id, outside every checkout.** `<data>/stores/<id>/` holds a
 link per group into the overlay — `developer` to `<overlay>/common/memory`, the shared notes,
-`tag-<tag>` to the `memory/` of each tag the project's record lists (where that is a directory) and
-each directory of `<overlay>/projects/<project>/memory/` to itself, but for the names that start
-with `tag-` — and `MEMORY.md`, a link to the index `drybag memory index` renders in that share.
+`tag-<tag>` to the `memory/` of each tag the project's record lists (where that is a directory),
+`machine-<m>-...` to the `memory/` of each of this machine's sub-plates (likewise) and each
+directory of `<overlay>/projects/<project>/memory/` to itself, but for the names `reserved` keeps
+for those links — and `MEMORY.md`, a link to the index `drybag memory index` renders in that share.
 `attach` builds it in `overlay` mode and
 writes its absolute path as `autoMemoryDirectory` into the main checkout's excluded
 `settings.local.json`, which Claude Code reads from every worktree, so the harness reads the

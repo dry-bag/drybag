@@ -235,22 +235,25 @@ def test_sub_plate_memory_links_under_machine_prefix(tmp_path: Path) -> None:
     assert not any(entry.name.startswith("machine-") for entry in bare.iterdir())
 
 
-def test_project_group_named_machine_dash_is_reserved(tmp_path: Path) -> None:
-    # The project side gives up the `machine-` prefix as it gives up `tag-`, so a share directory
-    # cannot take the name a sub-plate's link needs. Mutation (oracle): `mutations/`'s
-    # "the machine namespace is not reserved".
+def test_a_project_group_shaped_like_a_machine_link_is_reserved(tmp_path: Path) -> None:
+    # The project side gives up the three link shapes, on any machine, as it gives up `tag-`, so
+    # a share directory cannot take the name a sub-plate's link needs; any other `machine-...` is
+    # the project's own. Mutation (oracle): `mutations/`'s "the machine namespace is not
+    # reserved", "the reserved project groups leave out the machine namespace" and "the whole
+    # machine- prefix is a link name".
     from drybag.memory.store import reserved, reserved_project_groups
 
     overlay, share = a_machine_overlay(tmp_path)
-    (share / "machine-x").mkdir()
-    (share / "machine-m1-developer").mkdir()
+    for name in ("machine-x", "machine-m1-developer", "machine-m2-tag-t9"):
+        (share / name).mkdir()
     store = build(overlay, "p", ID, "m1")
-    assert not (store / "machine-x").exists() and not (store / "machine-x").is_symlink()
+    assert (store / "machine-x").resolve() == (share / "machine-x").resolve()
+    assert not (store / "machine-m2-tag-t9").is_symlink()
     assert (store / "machine-m1-developer").resolve() == (
         overlay / "common" / "machines" / "m1" / "memory"
     ).resolve()
-    assert reserved("machine-x") and not reserved("machines")
-    assert reserved_project_groups(overlay, "p") == ("machine-m1-developer", "machine-x")
+    assert not reserved("machine-x") and reserved("machine-m2-project")
+    assert reserved_project_groups(overlay, "p") == ("machine-m1-developer", "machine-m2-tag-t9")
 
 
 def test_a_note_written_to_a_machine_link_lands_in_the_sub_plate(tmp_path: Path) -> None:

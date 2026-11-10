@@ -146,7 +146,10 @@ group into the overlay, and `--store` is not read. In every other mode `--store`
 path it names, under the same rules as the configured store. The groups include the notes of each tag
 the project lists, as `tag-<tag>` (`tags/<tag>/memory/` in the overlay), which every `memory`
 command, the index and the bundles read after the common notes and in the order the project lists
-its tags, whether or not `memory.groups` names them. A note's review is
+its tags, whether or not `memory.groups` names them. They include this machine's sub-plates' notes
+too (`machines/<m>/memory/` of `common/`, a tag or the project, `<m>` being `[machine] name`), as
+`machine-<m>-developer`, `machine-<m>-tag-<t>` and `machine-<m>-project`, each read where its
+parent's notes are. A note's review is
 recorded by its path, so renaming a tag, which moves its notes' path in the store, makes them
 unreviewed once.
 
@@ -1130,9 +1133,11 @@ swapped into place, the render before removed whole) and, through the two `claud
 Claude Code's own records of the marketplace and the plugin and the main checkout's
 `.claude/settings.local.json`; where the notes are composed, the composed store
 `$HOME/.local/share/drybag/stores/<id>/` (a link per group of the overlay's for this project,
-`tag-<tag>` to `tags/<tag>/memory/` for each tag the project lists where that is a directory, and
-one to its `MEMORY.md`; a directory of the project's `memory/` whose name starts with `tag-` is not
-linked, the prefix being the tags'; each run makes its links exactly the overlay's current set, so
+`tag-<tag>` to `tags/<tag>/memory/` for each tag the project lists where that is a directory,
+`machine-<m>-developer`, `machine-<m>-tag-<t>` and `machine-<m>-project` to the `memory/` of this
+machine's sub-plates where each is a directory, and one to its `MEMORY.md`; a directory of the
+project's `memory/` whose name starts with `tag-` or has one of the three `machine-` shapes is not
+linked, those names being the links'; each run makes its links exactly the overlay's current set, so
 untagging takes the link and a rename of a tag moves it, and leaves any file there that is not a
 link, such as a note the harness wrote), the key `autoMemoryDirectory`
 naming that directory, absolute, in the main checkout's `.claude/settings.local.json`, which Claude
@@ -1854,7 +1859,7 @@ nothing.
 | drift | the overlay's hooks, skills or agents changed since the last render | `warn` | `attach`, which renders the overlay as it is now |
 | overlay unreadable | the overlay's executable parts could not be read | `warn` | `attach --check`, which says why |
 | `origin` moved | this checkout's `origin` is not the one the binding was recorded with | `warn` | `attach`, which records the new one |
-| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting a tag may set (the later tag wins), a listed tag is not a usable name, is not a string, or has no `tags/<tag>/` directory (each said once, however often it is listed), or a directory of the project's `memory/` starts with `tag-` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | in the overlay, fix each tag, record or directory a note names; for a name two tags hold, rename one of them or reorder `tags` in the project's `project.toml` |
+| tags unresolved | two of the project's `tags` hold one rule, skill, agent, Codex rule file or setting a tag may set (the later tag wins), a listed tag is not a usable name, is not a string, or has no `tags/<tag>/` directory (each said once, however often it is listed), or a directory of the project's `memory/` has a link's name, `tag-<tag>` or `machine-<m>-developer`, `machine-<m>-project` or `machine-<m>-tag-<t>` (the composed store links none); said after the other warnings, and a record that cannot be read answers with its own fault | `warn` | in the overlay, fix each tag, record or directory a note names; for a name two tags hold, rename one of them or reorder `tags` in the project's `project.toml` |
 
 **How `attached` reads the memory pointer.** Where `memory.mode` is `overlay`, the row reads
 `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json`, which Claude Code reads

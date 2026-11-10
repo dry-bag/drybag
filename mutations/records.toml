@@ -1232,15 +1232,39 @@ reddens = [
   "tests/memory/test_doctor.py::test_notes_in_the_overlay_with_no_mode_set_warn",
 ]
 
-# A sub-plate's notes are linked under the `machine-` prefix, which the project's own directories
-# give up as they give up `tag-`.
+# A sub-plate's notes are linked under a `machine-<m>-...` link name, which the project's own
+# directories give up as they give up `tag-`.
 [[mutation]]
 name = "the machine namespace is not reserved"
 file = "src/drybag/memory/store.py"
-before = "    return name == COMMON_GROUP or name.startswith((TAG_LINK_PREFIX, MACHINE_LINK_PREFIX))"
+before = "    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX) or machine_link_shaped(name)"
 after = "    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX)"
 reddens = [
-  "tests/memory/test_composed.py::test_project_group_named_machine_dash_is_reserved",
+  "tests/memory/test_composed.py::test_a_project_group_shaped_like_a_machine_link_is_reserved",
+]
+
+# `attach`'s doctor row names a share directory in the machine namespace as it names one in the
+# tag namespace.
+[[mutation]]
+name = "the reserved project groups leave out the machine namespace"
+file = "src/drybag/memory/store.py"
+before = "        if name.startswith(TAG_LINK_PREFIX) or machine_link_shaped(name)"
+after = "        if name.startswith(TAG_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_composed.py::test_a_project_group_shaped_like_a_machine_link_is_reserved",
+  "tests/attach/test_doctor.py::test_doctor_names_a_project_memory_directory_in_the_tag_namespace",
+]
+
+# Only the three link shapes are the machine namespace: a group `machine-notes` is the project's
+# own, linked and walked as it was before sub-plates.
+[[mutation]]
+name = "the whole machine- prefix is a link name"
+file = "src/drybag/memory/store.py"
+before = "    return _MACHINE_LINK.fullmatch(name) is not None"
+after = "    return name.startswith(MACHINE_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_index.py::test_a_configured_group_named_machine_dash_that_is_no_link_is_walked",
+  "tests/memory/test_composed.py::test_a_project_group_shaped_like_a_machine_link_is_reserved",
 ]
 
 # Every reader walks the store through `walked_groups`: a sub-plate's group it leaves out is

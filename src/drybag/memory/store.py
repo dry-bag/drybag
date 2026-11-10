@@ -7,8 +7,9 @@ checked, and each closes a hole the other three leave open:
 1. **The shape.** In overlay mode the store is the composed store `attach` builds under this
    machine's data directory, named by the checkout's binding id (`composed_directory`), holding
    one link per group: `developer` points into the overlay's `common/memory`, which is shared
-   across projects and cannot live under `projects/<name>/`, and `tag-<tag>` into the
-   `tags/<tag>/memory` of each tag the project's record lists. It is the directory the harness
+   across projects and cannot live under `projects/<name>/`, `tag-<tag>` into the
+   `tags/<tag>/memory` of each tag the project's record lists, and `machine-<m>-...` into the
+   `memory` of each of this machine's sub-plates (`machine_link`). It is the directory the harness
    reads through `autoMemoryDirectory`, so drybag's bundles and the harness read one store. In
    `in-repo` mode `paths.memory` is a real directory, never one link for the whole store.
 2. **Containment inside the store.** A group name is repository-controlled — `memory.groups`
@@ -50,6 +51,7 @@ about the whole module rather than about `resolve` alone.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -63,6 +65,7 @@ from drybag.config.plates import PROJECTS as PROJECTS
 from drybag.config.plates import RECORD as RECORD
 from drybag.config.plates import (
     TAG_LINK_PREFIX,
+    TAG_SHAPE,
     Plate,
     PlateKind,
     plates,
@@ -388,7 +391,7 @@ def tag_link(tag: str) -> str:
 
 
 # The name a machine sub-plate's notes take in the composed store, `machine-<m>-<parent's link>`:
-# the project side gives up the prefix, as it does `tag-` (`reserved`).
+# the project side gives up the names of that shape (`machine_link_shaped`), as it gives up `tag-`.
 MACHINE_LINK_PREFIX = "machine-"
 
 
@@ -459,13 +462,24 @@ COMMON_GROUP = "developer"
 # The project's own notes have no link of their own (its share is the store's base); this is the
 # name its sub-plate's link takes after `machine-<m>-`.
 PROJECT_LINK = "project"
+_MACHINE_LINK = re.compile(
+    rf"{MACHINE_LINK_PREFIX}{TAG_SHAPE}-(?:{COMMON_GROUP}|{PROJECT_LINK}|{TAG_LINK_PREFIX}{TAG_SHAPE})"
+)
+
+
+def machine_link_shaped(name: str) -> bool:
+    """`name` has the shape of a sub-plate's link on some machine, `machine-<m>-developer`,
+    `machine-<m>-project` or `machine-<m>-tag-<t>` (`<m>` and `<t>` each a `TAG`): the machine
+    namespace. Any other name that starts with `machine-` is an ordinary group. The one test of it,
+    for `reserved`, `reserved_project_groups` and `walked_groups`."""
+    return _MACHINE_LINK.fullmatch(name) is not None
 
 
 def reserved(name: str) -> bool:
     """`name` is a link name the project's own memory directories do not take: `developer`, the
-    common notes', and anything in the tag namespace, `tag-<tag>` (`TAG_LINK_PREFIX`), or in the
-    machine namespace, `machine-<m>-...` (`MACHINE_LINK_PREFIX`)."""
-    return name == COMMON_GROUP or name.startswith((TAG_LINK_PREFIX, MACHINE_LINK_PREFIX))
+    common notes', anything in the tag namespace, `tag-<tag>` (`TAG_LINK_PREFIX`), and anything in
+    the machine namespace (`machine_link_shaped`)."""
+    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX) or machine_link_shaped(name)
 
 
 def share_directories(overlay: Path, project: str) -> tuple[str, ...]:
@@ -491,7 +505,7 @@ def reserved_project_groups(overlay: Path, project: str) -> tuple[str, ...]:
     return tuple(
         name
         for name in share_directories(overlay, project)
-        if name.startswith((TAG_LINK_PREFIX, MACHINE_LINK_PREFIX))
+        if name.startswith(TAG_LINK_PREFIX) or machine_link_shaped(name)
     )
 
 
@@ -729,9 +743,7 @@ def walked_groups(store: Store, config: Config) -> list[str]:
         for g in store.groups
         if g.startswith(TAG_LINK_PREFIX) or (sub_tag is not None and g.startswith(sub_tag))
     ]
-    configured = [
-        g for g in config.memory.groups if g not in tagged and not g.startswith(MACHINE_LINK_PREFIX)
-    ]
+    configured = [g for g in config.memory.groups if g not in tagged and not machine_link_shaped(g)]
     at = configured.index(COMMON_GROUP) + 1 if COMMON_GROUP in configured else 0
     common = after(COMMON_GROUP) if at else []
     head = [g for g in configured[:at] if g in store.groups]

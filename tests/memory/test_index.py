@@ -1347,3 +1347,30 @@ def test_walked_groups_reads_machine_groups_after_their_parent(tmp_path: Path) -
         "project-stable",
         "machine-m1-project",
     ]
+
+
+def test_a_configured_group_named_machine_dash_that_is_no_link_is_walked(tmp_path: Path) -> None:
+    # Only the three link shapes are the machine namespace: a share group `machine-notes` is the
+    # project's own, linked, walked and not warned about, as it was before sub-plates. Mutation
+    # (oracle): `mutations/`'s "the whole machine- prefix is a link name".
+    from drybag import binding
+    from drybag.memory.composed import build
+    from drybag.memory.store import reserved, reserved_project_groups, resolve, walked_groups
+    from tests.memory.test_store import REMOTE, a_config, a_repo, an_overlay
+
+    root = tmp_path / "project"
+    a_repo(root)
+    overlay = an_overlay(tmp_path)
+    (overlay / "projects" / "widget" / "memory" / "machine-notes").mkdir()
+    binding.record(root, "widget", REMOTE)
+    id = binding.read_id(root)
+    assert id is not None
+    build(overlay, "widget", id, "m1")
+    machine = tmp_path / "machine.toml"
+    machine.write_text(f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "m1"\n', "utf-8")
+    config = a_config(root, "overlay", '["developer", "machine-notes"]')
+    store = resolve(root, config, machine=machine)
+    assert store is not None
+    assert walked_groups(store, config) == ["developer", "machine-notes"]
+    assert reserved_project_groups(overlay, "widget") == ()
+    assert not reserved("machine-notes")
