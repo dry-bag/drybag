@@ -130,8 +130,8 @@ class Context:
         """What the machine file records, from one read of it: the overlay root and this machine's
         name (`config.overlay.machine_record`); `MachineUnread` when the machine file itself
         cannot be read or parsed, and `None` for any other failure, the way
-        `errors.resolved_or_none` reads one. `overlay_root` and `machine_name` are read from it, so
-        a report reads the file once for both, as it caches either."""
+        `errors.resolved_or_none` reads one. `overlay_root` and `machine_name` are read from it and
+        cache nothing of their own, so a report reads the file once however many rows ask."""
         try:
             return recorded_machine_record(self.machine)
         except MachineConfigError as exc:
@@ -139,13 +139,14 @@ class Context:
         except (Failure, Refusal, OSError):
             return None
 
-    @cached_property
+    @property
     def overlay_root(self) -> Path | MachineUnread | None:
         """The overlay root the machine file records, whether or not anything is there; `None`
         when it records none, or when the root it records cannot be resolved; `MachineUnread`
         when the machine file itself cannot be read or parsed.
 
-        Resolved on first read and never again for this report: `cached_property` keeps the
+        Resolved on first read and never again for this report (`machine_record`, whose
+        `cached_property` holds it): `cached_property` keeps the
         answer in the instance's `__dict__` without going through `__setattr__`, which is why a
         frozen dataclass without slots can carry it, and an answer that is itself `None` is kept
         as well. A fresh `Context` per report is a fresh answer per report, so nothing one run
@@ -164,7 +165,7 @@ class Context:
             return record
         return None if record is None else record.overlay
 
-    @cached_property
+    @property
     def machine_name(self) -> str | None:
         """This machine's name, `None` where the machine file records none or cannot be read
         (`overlay_root` says the latter); from the same read as `overlay_root`."""
