@@ -199,7 +199,7 @@ def refuse_unless_share_can_exist(binding: Binding, config: Config) -> None:
         mode = 0
     if mode is not None and not stat.S_ISDIR(mode):
         raise Refusal(SHARE_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
-    made = (share / RECORD, *link_sources(binding.overlay, config))
+    made = (share / RECORD, *link_sources(binding.overlay, config, binding.machine_name))
     for path in (path for path in made if path.is_relative_to(share)):
         if any(_name_too_long(there, part) for part in path.relative_to(share).parts):
             raise Refusal(PATH_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
@@ -277,6 +277,9 @@ class Binding:
     # once per binding, so a run that reads the overlay's items reads no other copy.
     plates: tuple[Plate, ...] = ()
     plate_notes: tuple[str, ...] = ()
+    # This machine's name, from the one read of the machine file that gave `overlay`: the composed
+    # store links its sub-plates' notes (`memory.composed.build`).
+    machine_name: str | None = None
 
 
 class UnreadableRecord(Failure):
@@ -367,7 +370,18 @@ def _bound(root: Path, config: Config, overlay: Path, record: MachineRecord) -> 
     if record.note is not None:
         notes = (*notes, record.note)
     return Binding(
-        project, overlay, store, origin, recorded, state, note, earlier, fault, held, notes
+        project,
+        overlay,
+        store,
+        origin,
+        recorded,
+        state,
+        note,
+        earlier,
+        fault,
+        held,
+        notes,
+        record.name,
     )
 
 

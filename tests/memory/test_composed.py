@@ -208,3 +208,56 @@ def test_a_bound_checkout_whose_composed_store_is_gone_hears_it_once(tmp_path: P
     assert f"{short(id)}…" in out and id not in out
     for bundle, part in (("standing-rules", "2"), ("volatile-notes", "1")):
         assert cli(root, tmp_path, *entry, bundle, "--part", part, machine=machine) == (0, "\n", "")
+
+
+def a_machine_overlay(tmp_path: Path) -> tuple[Path, Path]:
+    """`a_tagged_overlay` for tag `t1` where `common`, `t1` and project `p` each hold a
+    `machines/m1/memory/` and a `machines/m2/memory/` too."""
+    overlay, share = a_tagged_overlay(tmp_path, "t1")
+    for plate in (overlay / "common", overlay / "tags" / "t1", overlay / "projects" / "p"):
+        for machine in ("m1", "m2"):
+            (plate / "machines" / machine / "memory").mkdir(parents=True)
+    return overlay, share
+
+
+def test_sub_plate_memory_links_under_machine_prefix(tmp_path: Path) -> None:
+    overlay, _share = a_machine_overlay(tmp_path)
+    store = build(overlay, "p", ID, "m1")
+    links = {entry.name: entry.resolve() for entry in store.iterdir() if entry.is_symlink()}
+    sub = {name: path for name, path in links.items() if name.startswith("machine-")}
+    assert sub == {
+        "machine-m1-developer": (overlay / "common" / "machines" / "m1" / "memory").resolve(),
+        "machine-m1-tag-t1": (overlay / "tags" / "t1" / "machines" / "m1" / "memory").resolve(),
+        "machine-m1-project": (overlay / "projects" / "p" / "machines" / "m1" / "memory").resolve(),
+    }
+    # A machine with no name has no sub-plate link.
+    bare = build(overlay, "p", ID, None)
+    assert not any(entry.name.startswith("machine-") for entry in bare.iterdir())
+
+
+def test_project_group_named_machine_dash_is_reserved(tmp_path: Path) -> None:
+    # The project side gives up the `machine-` prefix as it gives up `tag-`, so a share directory
+    # cannot take the name a sub-plate's link needs. Mutation (oracle): `mutations/`'s
+    # "the machine namespace is not reserved".
+    from drybag.memory.store import reserved, reserved_project_groups
+
+    overlay, share = a_machine_overlay(tmp_path)
+    (share / "machine-x").mkdir()
+    (share / "machine-m1-developer").mkdir()
+    store = build(overlay, "p", ID, "m1")
+    assert not (store / "machine-x").exists() and not (store / "machine-x").is_symlink()
+    assert (store / "machine-m1-developer").resolve() == (
+        overlay / "common" / "machines" / "m1" / "memory"
+    ).resolve()
+    assert reserved("machine-x") and not reserved("machines")
+    assert reserved_project_groups(overlay, "p") == ("machine-m1-developer", "machine-x")
+
+
+def test_a_note_written_to_a_machine_link_lands_in_the_sub_plate(tmp_path: Path) -> None:
+    overlay, _share = a_machine_overlay(tmp_path)
+    store = build(overlay, "p", ID, "m1")
+    (store / "machine-m1-tag-t1" / "n.md").write_text("note", encoding="utf-8")
+    assert (overlay / "tags" / "t1" / "machines" / "m1" / "memory" / "n.md").read_text(
+        encoding="utf-8"
+    ) == "note"
+    assert not (overlay / "tags" / "t1" / "memory" / "n.md").exists()

@@ -1142,7 +1142,7 @@ reddens = [
 [[mutation]]
 name = "walked groups leave out the tags"
 file = "src/drybag/memory/store.py"
-before = "    return [*walked[:at], *tagged, *walked[at:]]"
+before = "    return [*walked[:at], *common, *tags, *walked[at:], *after(PROJECT_LINK)]"
 after = "    return walked"
 reddens = [
   "tests/memory/test_bundles.py::test_a_standing_rule_in_a_tags_notes_is_in_the_standing_rules_bundle",
@@ -1230,4 +1230,52 @@ before = '    if "memory.mode" not in resolution.provenance and _undelivered(con
 after = "    if False:"
 reddens = [
   "tests/memory/test_doctor.py::test_notes_in_the_overlay_with_no_mode_set_warn",
+]
+
+# A sub-plate's notes are linked under the `machine-` prefix, which the project's own directories
+# give up as they give up `tag-`.
+[[mutation]]
+name = "the machine namespace is not reserved"
+file = "src/drybag/memory/store.py"
+before = "    return name == COMMON_GROUP or name.startswith((TAG_LINK_PREFIX, MACHINE_LINK_PREFIX))"
+after = "    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_composed.py::test_project_group_named_machine_dash_is_reserved",
+]
+
+# Every reader walks the store through `walked_groups`: a sub-plate's group it leaves out is
+# composed and never read.
+[[mutation]]
+name = "the walk leaves out the machine groups"
+file = "src/drybag/memory/store.py"
+before = "        return [sub] if sub in store.groups else []"
+after = "        return []"
+reddens = [
+  "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
+  "tests/memory/test_bundles.py::test_session_start_bundle_carries_a_machine_sub_plate_note",
+]
+
+# The resolver follows a sub-plate's link only inside the permitted roots, which hold the
+# sub-plates of this machine.
+[[mutation]]
+name = "the store's group targets ignore this machine's sub-plates"
+file = "src/drybag/memory/store.py"
+before = "        held = plates(overlay, config.project.name, machine=machine)[0]"
+after = "        held = plates(overlay, config.project.name, machine=None)[0]"
+reddens = [
+  "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
+  "tests/memory/test_bundles.py::test_session_start_bundle_carries_a_machine_sub_plate_note",
+]
+
+# The composed store links each sub-plate whose `memory/` is a directory.
+[[mutation]]
+name = "the composed store links no machine sub-plate"
+file = "src/drybag/memory/composed.py"
+before = '''            if fsops.is_dir(target):
+                found[machine_link(plate)] = target'''
+after = '''            if False:
+                found[machine_link(plate)] = target'''
+reddens = [
+  "tests/memory/test_composed.py::test_sub_plate_memory_links_under_machine_prefix",
+  "tests/memory/test_composed.py::test_a_note_written_to_a_machine_link_lands_in_the_sub_plate",
 ]

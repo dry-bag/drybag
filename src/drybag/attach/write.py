@@ -950,7 +950,10 @@ def _carry_out(
         # the key (`carried`). The project is the one this machine's binding record names, read
         # back after `record` above wrote it, never `[project] name` on its own.
         project = (bound_project(root) or bound).project
-        written = _point(root, build_composed(binding.overlay, project, id)) or written
+        written = (
+            _point(root, build_composed(binding.overlay, project, id, binding.machine_name))
+            or written
+        )
         render_missing_index(root, config, machine=machine)
     notes: list[str] = []
     if binding.fault is not None:

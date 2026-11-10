@@ -1303,3 +1303,47 @@ def test_an_unbound_checkout_is_not_rendered(
 
     assert capsys.readouterr().err == ""
     assert (share / INDEX_NAME).read_text(encoding="utf-8") == EMPTY_REGION
+
+
+def test_walked_groups_reads_machine_groups_after_their_parent(tmp_path: Path) -> None:
+    # Mutation (oracle): `mutations/`'s "the walk leaves out the machine groups".
+    from drybag import binding
+    from drybag.memory.composed import build
+    from drybag.memory.store import resolve, walked_groups
+    from tests.memory.test_store import REMOTE, a_config, a_repo, a_tagged_overlay
+
+    root = tmp_path / "project"
+    a_repo(root)
+    overlay = a_tagged_overlay(tmp_path, "t1", "t2")
+    for plate in (overlay / "common", overlay / "tags" / "t1", overlay / "projects" / "widget"):
+        (plate / "machines" / "m1" / "memory").mkdir(parents=True)
+    binding.record(root, "widget", REMOTE)
+    id = binding.read_id(root)
+    assert id is not None
+    build(overlay, "widget", id, "m1")
+    machine = tmp_path / "machine.toml"
+    machine.write_text(f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "m1"\n', "utf-8")
+    config = a_config(root, "overlay", '["project-stable", "developer"]')
+    store = resolve(root, config, machine=machine)
+    assert store is not None
+    assert walked_groups(store, config) == [
+        "project-stable",
+        "developer",
+        "machine-m1-developer",
+        "tag-t1",
+        "machine-m1-tag-t1",
+        "tag-t2",
+        "machine-m1-project",
+    ]
+    # With no `developer` listed the common sub-plate goes with its parent, and the project's
+    # sub-plate still ends the walk.
+    bare = a_config(root, "overlay", '["project-stable"]')
+    again = resolve(root, bare, machine=machine)
+    assert again is not None
+    assert walked_groups(again, bare) == [
+        "tag-t1",
+        "machine-m1-tag-t1",
+        "tag-t2",
+        "project-stable",
+        "machine-m1-project",
+    ]

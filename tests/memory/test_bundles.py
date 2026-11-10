@@ -513,3 +513,31 @@ def test_the_standing_rules_bundle_carries_a_reviewed_note_with_no_file(
     code, out, err = cli(root, tmp_path, *argv, machine=machine)
     assert (code, err) == (0, "")
     assert "keep" in out
+
+
+@needs_git
+def test_session_start_bundle_carries_a_machine_sub_plate_note(tmp_path: Path) -> None:
+    # The oracle that the feature is alive, through the real reader: a note in
+    # `common/machines/m1/memory/` reaches the bundle a session start reads, on m1 and not on m2.
+    # Mutation (oracle): `mutations/`'s "the walk leaves out the machine groups".
+    from drybag.memory.composed import build
+
+    _store, _config, machine, overlay = a_resolved_overlay_store(tmp_path)
+    root = tmp_path / "project"
+    sub = overlay / "common" / "machines" / "m1" / "memory"
+    sub.mkdir(parents=True)
+    (sub / "on-m1.md").write_text(note("on-m1", startup="3"), encoding="utf-8")
+    id = binding.read_id(root)
+    assert id is not None
+    argv = ("memory", "session-context", "--bundle", "standing-rules", "--part", "1")
+    for name, expected in (("m1", True), ("m2", False)):
+        machine.write_text(
+            f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "{name}"\n', encoding="utf-8"
+        )
+        build(overlay, "widget", id, name)
+        store = resolve(root, load(root, machine=machine), machine=machine)
+        assert store is not None
+        review(store)
+        code, out, err = cli(root, tmp_path, *argv, machine=machine)
+        assert (code, err) == (0, "")
+        assert ("on-m1" in out) is expected

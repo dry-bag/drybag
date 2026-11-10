@@ -417,16 +417,16 @@ def test_one_report_resolves_the_overlay_root_once_for_every_area(
     # nothing caches the `git` answers they ask, so this counts only the reads through the
     # `Context`. Mutation (oracle): `mutations/`'s "the report resolves the overlay root for every
     # reader" -> five reads, three of `attach`'s and two of `overlay`'s.
-    from drybag.config.overlay import overlay_root
+    from drybag.config.overlay import MachineRecord, machine_record
 
     asked: list[Path | None] = []
 
-    def counted(machine: Path | None) -> Path | None:
+    def counted(machine: Path | None) -> MachineRecord:
         asked.append(machine)
-        return overlay_root(machine)
+        return machine_record(machine)
 
     # The name the report's `Context` calls the machine file's reader by, in `doctor.model`.
-    monkeypatch.setattr("drybag.doctor.model.recorded_overlay_root", counted)
+    monkeypatch.setattr("drybag.doctor.model.recorded_machine_record", counted)
     root = _attached(tmp_path)
     rows = _checks(tmp_path, root, machine=_machine(tmp_path))
     # Non-vacuous: both areas read the root, and found the overlay there.
