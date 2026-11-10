@@ -1946,8 +1946,8 @@ reddens = [
 [[mutation]]
 name = "a bad machine name is no note of the plates"
 file = "src/drybag/attach/binding.py"
-before = "    if named is not None:"
-after = "    if False:"
+before = "    if named is not None:\n        notes = (*notes, named)"
+after = "    if False:\n        notes = (*notes, named)"
 reddens = [
   "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command0]",
   "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command1]",
