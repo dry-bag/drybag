@@ -1974,3 +1974,57 @@ after = "                states[name] = (value == ON, plate)\n                de
 reddens = [
   "tests/attach/test_mcp.py::test_on_restores_an_earlier_definition",
 ]
+
+# `deniedMcpServers` entries are written and withdrawn by the ledger's record and nothing else: an entry
+# the owner wrote is never touched.
+[[mutation]]
+name = "attach withdraws every serverName entry the overlay no longer switches off, not only the recorded ones"
+file = "src/drybag/attach/write.py"
+before = '''        name for name in ledger.deny if name not in wanted and _server_entry(name) in entries
+'''
+after = '''        e["serverName"]
+        for e in entries
+        if isinstance(e, dict) and set(e) == {"serverName"} and e["serverName"] not in wanted
+'''
+reddens = [
+  "tests/attach/test_detach.py::test_owner_deny_entries_survive_attach_and_detach",
+]
+
+[[mutation]]
+name = "attach records a deny entry the owner already wrote as its own"
+file = "src/drybag/attach/write.py"
+before = '''    return (*kept, *(name for name in change.add if name not in kept))'''
+after = '''    return (*kept, *(name for name in wanted if name not in kept))'''
+reddens = [
+  "tests/attach/test_detach.py::test_owner_deny_entries_survive_attach_and_detach",
+]
+
+[[mutation]]
+name = "detach takes no deny entry out of the settings file"
+file = "src/drybag/attach/write.py"
+before = '''settings = _planned_settings(root, recorded, held.deny)'''
+after = '''settings = _planned_settings(root, recorded, ())'''
+reddens = [
+  "tests/attach/test_detach.py::test_detach_removes_the_deny_entries_and_the_mcp_ledger",
+]
+
+[[mutation]]
+name = "a take-back leaves an emptied deniedMcpServers list in the settings file"
+file = "src/drybag/attach/write.py"
+before = '''    if denied and raw.get(DENIED_KEY) == []:
+        raw.pop(DENIED_KEY)
+'''
+after = ''''''
+reddens = [
+  "tests/attach/test_write.py::test_on_withdraws_the_deny_entry",
+]
+
+[[mutation]]
+name = "detach leaves the MCP ledger file behind"
+file = "src/drybag/attach/write.py"
+before = '''    fsops.remove_within(common_directory(root), MCP_LEDGER_FILE)
+'''
+after = ''''''
+reddens = [
+  "tests/attach/test_detach.py::test_detach_removes_the_deny_entries_and_the_mcp_ledger",
+]
