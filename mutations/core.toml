@@ -5428,7 +5428,6 @@ after = '''        found.extend(_bad_machine_directories(parent.directory / MACH
         ordered.append(parent)'''
 reddens = [
   "tests/config/test_plates.py::test_sub_plates_follow_each_parent",
-  "tests/attach/test_items.py::test_a_sub_plate_skill_wins_its_parents",
 ]
 
 # A `machines/<x>` that is no machine name is said, once, and is no sub-plate.
@@ -5473,4 +5472,75 @@ after = '''    return Layer(name, _values(raw, shown, name, notes), label)'''
 reddens = [
   "tests/config/test_overlay_layers.py::test_sub_plate_value_beats_its_parent_and_loses_to_the_next_tag",
   "tests/config/test_overlay_layers.py::test_a_tag_named_on_and_its_sub_plate_are_one_tag",
+]
+
+# The name in the machine file's `[machine]` table is this machine's.
+[[mutation]]
+name = "a machine name in the tag shape is not read"
+file = "src/drybag/config/overlay.py"
+before = "        return value, None"
+after = "        return None, None"
+reddens = [
+  "tests/config/test_machine_name.py::test_name_comes_from_the_machine_table",
+]
+
+# A `[machine]` table with no `name`, setup's own, is no name and no note.
+[[mutation]]
+name = "a machine table with no name is a note"
+file = "src/drybag/config/overlay.py"
+before = '''    if value is None:
+        return None, None'''
+after = '''    if False:
+        return None, None'''
+reddens = [
+  "tests/config/test_machine_name.py::test_no_file_or_no_table_is_no_name",
+  "tests/config/test_machine_name.py::test_setups_machine_table_without_a_name_is_no_name",
+]
+
+# An absent machine file records nothing: no overlay and no name.
+[[mutation]]
+name = "an absent machine file is read for a name"
+file = "src/drybag/config/overlay.py"
+before = "    if raw is None or path is None:"
+after = "    if path is None:"
+reddens = [
+  "tests/config/test_machine_name.py::test_no_file_or_no_table_is_no_name",
+]
+
+# Only this machine's `machines/<name>/` is a sub-plate: another machine's is not, and a machine
+# with no name has none.
+[[mutation]]
+name = "every machines directory is a sub-plate, whatever this machine's name"
+file = "src/drybag/config/plates.py"
+before = '''        if machine is not None and _directory(parent.directory / MACHINES / machine):
+            directory = parent.directory / MACHINES / machine
+            ordered.append(Plate(parent.kind, parent.name, directory, machine=machine))'''
+after = '''        if _directory(parent.directory / MACHINES):
+            for directory in sorted((parent.directory / MACHINES).iterdir()):
+                ordered.append(Plate(parent.kind, parent.name, directory, machine=directory.name))'''
+reddens = [
+  "tests/config/test_plates.py::test_other_machines_sub_plates_are_absent",
+  "tests/config/test_plates.py::test_no_machine_name_means_no_sub_plates",
+  "tests/memory/test_composed.py::test_sub_plate_memory_links_under_machine_prefix",
+]
+
+# A sub-plate is often only notes, so a missing `drybag.toml` there says nothing.
+[[mutation]]
+name = "a sub-plate with no drybag.toml is noted"
+file = "src/drybag/config/overlay_layers.py"
+before = "        if name is not LayerName.OVERLAY_TAG and machine is None:"
+after = "        if name is not LayerName.OVERLAY_TAG:"
+reddens = [
+  "tests/config/test_overlay_layers.py::test_absent_sub_plate_file_says_nothing",
+]
+
+# A sub-plate's layer keeps its plate's name, so it may set only what its plate may: a tag's
+# sub-plate sets no gate budget.
+[[mutation]]
+name = "a sub-plate's layer may set what the repository may"
+file = "src/drybag/config/overlay_layers.py"
+before = "        name = _NAME_OF[plate.kind]"
+after = "        name = _NAME_OF[plate.kind] if plate.machine is None else LayerName.REPOSITORY"
+reddens = [
+  "tests/config/test_overlay_layers.py::test_sub_plate_may_set_only_its_parents_keys",
 ]

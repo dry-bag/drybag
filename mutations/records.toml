@@ -1325,3 +1325,14 @@ after = "    common = after(COMMON_GROUP) if COMMON_GROUP in store.groups else [
 reddens = [
   "tests/memory/test_bundles.py::test_a_sub_plates_note_reaches_the_bundle_where_its_parent_has_no_notes[common]",
 ]
+
+# The common sub-plate's notes go with the common notes: with no `developer` listed, neither is
+# read.
+[[mutation]]
+name = "the common sub-plate is walked though developer is not listed"
+file = "src/drybag/memory/store.py"
+before = "    common = after(COMMON_GROUP) if at else []"
+after = "    common = after(COMMON_GROUP)"
+reddens = [
+  "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
+]
