@@ -6,7 +6,7 @@ or an item name and content otherwise unions, so the order is the precedence: `c
 project's tags in list order, the project, and (for a value) the machine file after all of them.
 
 **A plate's `machines/<name>/` is a sub-plate** on the machine whose name is `[machine] name` in
-the machine file (`config.overlay.machine_name`; this module reads no file, its caller says which
+the machine file (`config.overlay.machine_record`; this module reads no file, its caller says which
 machine it is). It comes right after its parent and before the next plate, so on that machine it
 wins over its parent and loses to every later plate. A machine with no name, and every other
 machine's directory, has no sub-plate; a `machines/<x>` directory

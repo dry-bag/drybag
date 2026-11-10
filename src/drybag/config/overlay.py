@@ -59,8 +59,11 @@ class MachineRecord(NamedTuple):
 
 
 def machine_record(machine: Path | None) -> MachineRecord:
-    """`overlay_root` and `machine_name` from one read of the machine file, for a caller that
-    needs both and must not read the file twice. Raises as `overlay_root` does."""
+    """The overlay root and this machine's name from one read of the machine file, for a caller
+    that needs both and must not read the file twice. The name is `None` where the file, its
+    `[machine]` table or its `name` is absent (setup's own `[machine]` keys, `version` and
+    `installed`, are the usual case), and `None` with a note for a value that is not a string in
+    the tag shape. Raises as `overlay_root` does."""
     path = machine_config_path() if machine is None else machine
     raw = None if path is None else read_machine_toml(path)
     if raw is None or path is None:
@@ -76,15 +79,6 @@ def _overlay(raw: dict[str, object]) -> Path | None:
     value = section.get("root")
     # A leading `~` is the home this file lives under (`config.machine.owner_home`).
     return in_owner_home(value) if isinstance(value, str) and value else None
-
-
-def machine_name(machine: Path | None) -> tuple[str | None, str | None]:
-    """This machine's name and a note: `(name, None)`, `(None, None)` when the file, its
-    `[machine]` table or its `name` is absent (setup's own `[machine]` keys, `version` and
-    `installed`, are the usual case), and `(None, note)` for a value that is not a string in the
-    tag shape. A file that cannot be read raises as `overlay_root` does."""
-    record = machine_record(machine)
-    return record.name, record.note
 
 
 def _name(raw: dict[str, object], path: Path) -> tuple[str | None, str | None]:

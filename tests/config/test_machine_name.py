@@ -1,4 +1,4 @@
-"""This machine's name, read from the machine file alone (`config.overlay.machine_name`)."""
+"""This machine's name, read from the machine file alone (`config.overlay.machine_record`)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from drybag.config.overlay import machine_name
+from drybag.config.overlay import machine_record
 from drybag.printed import clipped
+
+
+def machine_name(path: Path) -> tuple[str | None, str | None]:
+    record = machine_record(path)
+    return record.name, record.note
 
 
 def machine_file(tmp_path: Path, text: str) -> Path:
