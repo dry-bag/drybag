@@ -5544,3 +5544,18 @@ after = "        name = _NAME_OF[plate.kind] if plate.machine is None else Layer
 reddens = [
   "tests/config/test_overlay_layers.py::test_sub_plate_may_set_only_its_parents_keys",
 ]
+
+# No overlay file names this machine: the machine file alone does. The narrowest single-line change
+# that reaches the test is to let the overlay layer accept a `[machine]` table, since no reader
+# takes the name from an overlay file to be bent.
+[[mutation]]
+name = "the overlay layer accepts a [machine] table"
+file = "src/drybag/config/overlay_layers.py"
+before = '''    "guards": Guards,
+}'''
+after = '''    "guards": Guards,
+    "machine": Drybag,
+}'''
+reddens = [
+  "tests/config/test_plates.py::test_an_overlay_drybag_toml_cannot_set_the_machine",
+]

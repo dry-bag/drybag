@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from drybag.config import overlay_layers
+from drybag.config.overlay import machine_record
 from drybag.config.plates import (
     MACHINES,
     PROJECTS,
@@ -220,3 +222,25 @@ def test_bad_machine_directory_is_a_note(tmp_path: Path) -> None:
     assert shown(found) == ["common", "t1", "t2", PROJECT]
     assert len(notes) == 1
     assert "Bad" in notes[0]
+
+
+def test_an_overlay_drybag_toml_cannot_set_the_machine(tmp_path: Path) -> None:
+    # Mutation ("the overlay layer accepts a [machine] table"): an overlay file would then be read
+    # as if it held a setting, where only the machine file names this machine.
+    root = with_sub_plates(tmp_path, "m1", "m2")
+    (root / "common" / "drybag.toml").write_text('[machine]\nname = "m2"\n', encoding="utf-8")
+    machine = tmp_path / "machine.toml"
+    machine.write_text(
+        f'[overlay]\nroot = "{root}"\n[machine]\nname = "m1"\n', encoding="utf-8"
+    )
+
+    record = machine_record(machine)
+    assert record.name == "m1"
+    found, _ = plates(root, PROJECT, machine=record.name)
+    sub = root / "common" / MACHINES
+    assert sub / "m1" in [plate.directory for plate in found]
+    assert sub / "m2" not in [plate.directory for plate in found]
+
+    _, notes, _ = overlay_layers.read(None, machine=machine)
+    path = quoted(str(root / "common" / "drybag.toml"))
+    assert overlay_layers.UNKNOWN.format(path=path, name="machine") in notes
