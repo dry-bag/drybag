@@ -92,7 +92,7 @@ def claude_code(main: Path, *, ignoring: tuple[str, ...] = ()) -> Callable[[list
 
     def on_call(argv: list[str], cwd: Path) -> None:
         verb = " ".join(argv[2:4]) if argv[2] == "marketplace" else argv[2]
-        if argv[0] != "claude" or verb in ignoring:
+        if argv[:2] != ["claude", "plugin"] or verb in ignoring:
             return
         document = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
         plugins = document.setdefault("enabledPlugins", {})

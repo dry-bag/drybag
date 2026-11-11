@@ -1279,6 +1279,4 @@ name = "setup --restore reports an attach whose MCP server failed as attached"
 file = "src/drybag/setup/restore.py"
 before = """        state: Literal["attached", "failed"] = "failed" if attached.mcp_failed else "attached""""
 after = """        state: Literal["attached", "failed"] = "attached""""
-reddens = [
-  "tests/setup/test_restore.py::test_a_project_whose_mcp_server_failed_is_failed_naming_it",
-]
+reddens = ["tests/setup/test_restore.py::test_a_project_whose_mcp_server_failed_is_failed_naming_it"]

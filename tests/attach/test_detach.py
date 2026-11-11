@@ -1498,19 +1498,31 @@ def test_detach_settles_the_mcp_ledger_an_older_detach_left(tmp_path: Path) -> N
     assert "deniedMcpServers" not in json.loads(left)
 
 
-def test_detach_keeps_unsettled_names_when_claude_is_missing(tmp_path: Path) -> None:
-    # `remove` with no `claude` on `PATH` exits 127 and leaves the entry: the name stays recorded,
-    # the command says so, and a second `detach` finishes from the ledgers it kept.
-    from drybag.runner import Completed
+def test_detach_keeps_the_mcp_names_when_claude_is_missing(tmp_path: Path) -> None:
+    # With no `claude` on `PATH` every call exits 127, so the plugin's withdrawal stops the run
+    # first: the MCP names stay recorded, and a second `detach` finishes from the ledgers it kept.
+    root, store, machine = _bound(tmp_path)
+    _served_and_off(store.parents[2])
+    attach(root, store=store, machine=machine, runner=Recorder(on_call=claude_code(root)))
+    owned = read_mcp_ledger(root)
+    with pytest.raises(Failure, match="run `drybag detach` again"):
+        _detach(root, Recorder(code=127, stderr="claude: command not found"))
+    assert read_mcp_ledger(root) == owned and owned.mcp
+    _detach(root, Recorder(on_call=claude_code(root)))
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+
+
+def test_detach_keeps_a_name_whose_remove_did_not_finish(tmp_path: Path) -> None:
+    # A `remove` that timed out may have left the entry: the name stays recorded, the command says
+    # so, and a second `detach` finishes from the ledgers it kept.
+    from drybag.runner import TIMED_OUT, Completed
 
     root, store, machine = _bound(tmp_path)
-    (store.parents[2] / "common" / "claude" / "mcp.json").write_text(
-        json.dumps({"mcpServers": {"m1": {"command": "a"}}}), encoding="utf-8"
-    )
+    _served_and_off(store.parents[2])
     _attach(root, store, machine)
-    missing = Completed(127, "", "claude could not be run")
+    hung = Completed(TIMED_OUT, "", "claude did not finish within 60s")
     with pytest.raises(Failure, match="m1"):
-        _detach(root, Recorder(answers={"claude mcp": missing}))
+        _detach(root, Recorder(answers={"claude mcp remove": hung}))
     assert read_mcp_ledger(root).mcp == {"m1": None}
     _detach(root)
     assert not (common_directory(root) / MCP_LEDGER_FILE).exists()

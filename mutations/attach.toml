@@ -2062,18 +2062,24 @@ before = """    if held.notes:
         return tuple(MCP_LEDGER_KEPT"""
 after = """    if False:
         return tuple(MCP_LEDGER_KEPT"""
-reddens = [
-  "tests/attach/test_detach.py::test_detach_keeps_a_damaged_mcp_ledger_and_says_so",
-]
+reddens = ["tests/attach/test_detach.py::test_detach_keeps_a_damaged_mcp_ledger_and_says_so"]
 
 [[mutation]]
 name = "detach with no attach.json leaves the MCP ledger an older detach left"
 file = "src/drybag/attach/write.py"
 before = "        if held.deny or held.mcp:"
 after = "        if False:"
-reddens = [
-  "tests/attach/test_detach.py::test_detach_settles_the_mcp_ledger_an_older_detach_left",
-]
+reddens = ["tests/attach/test_detach.py::test_detach_settles_the_mcp_ledger_an_older_detach_left"]
+
+[[mutation]]
+name = "detach takes the MCP servers back before the plugin's withdrawal can stop it"
+file = "src/drybag/attach/write.py"
+before = """    if plugin is not None:
+        _withdraw_plugin(*plugin, runner)"""
+after = """    _take_back_mcp(root, held, runner)
+    if plugin is not None:
+        _withdraw_plugin(*plugin, runner)"""
+reddens = ["tests/attach/test_detach.py::test_detach_keeps_the_mcp_names_when_claude_is_missing"]
 
 # The reconcile of the overlay's MCP servers at local scope (`attach.mcp.reconcile`). The name is
 # the overlay's: before `--`, a name `-h` makes `add-json` print usage and exit 0 having written
@@ -2224,7 +2230,7 @@ before = '''    if mcp.failed:
 after = '''    if False:
         raise Failure(NOT_TAKEN_BACK.format(servers=_failed_servers(mcp.failed)))'''
 reddens = [
-  "tests/attach/test_detach.py::test_detach_keeps_unsettled_names_when_claude_is_missing",
+  "tests/attach/test_detach.py::test_detach_keeps_a_name_whose_remove_did_not_finish",
 ]
 
 # The `attached` row's MCP finding reads the overlay and the MCP ledger alone: no `claude`, and no
