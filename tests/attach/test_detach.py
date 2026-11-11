@@ -17,10 +17,10 @@ from typing import Any
 import pytest
 
 from drybag import fsops, jsonobject
-from drybag.attach.mcp import read_mcp_ledger
+from drybag.attach.mcp import BAD_LEDGER, read_mcp_ledger
 from drybag.attach.permissions import DENIED_NOT_A_LIST
 from drybag.attach.write import Attached, Detached, attach, detach
-from drybag.binding import LEDGER_NAME, MCP_LEDGER_FILE, common_directory
+from drybag.binding import LEDGER_NAME, MCP_LEDGER_FILE, MCP_LEDGER_NAME, common_directory
 from drybag.errors import Failure, Refusal
 from drybag.printed import quoted
 from drybag.scaffold.regions import extract
@@ -1461,6 +1461,41 @@ def test_detach_removes_every_owned_name_and_empties_the_field(tmp_path: Path) -
     removed = [argv for argv in runner.calls if argv[:3] == ["claude", "mcp", "remove"]]
     assert sorted(argv[-1] for argv in removed) == ["m1", "m2"]
     assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+
+
+def _served_and_off(overlay: Path) -> None:
+    (overlay / "common" / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": {"m1": {"command": "a"}, "srv1": "off"}}), encoding="utf-8"
+    )
+
+
+def test_detach_keeps_a_damaged_mcp_ledger_and_says_so(tmp_path: Path) -> None:
+    # A ledger that cannot be read records nothing to take back; deleted, the local entries it
+    # named would be orphaned with no record at all.
+    root, store, machine = _bound(tmp_path)
+    _served_and_off(store.parents[2])
+    _attach(root, store, machine)
+    path = common_directory(root) / MCP_LEDGER_FILE
+    path.write_text("{", encoding="utf-8")
+    notes = _detach(root).notes
+    assert any(note.startswith(BAD_LEDGER.format(name=MCP_LEDGER_NAME)) for note in notes)
+    assert path.read_text(encoding="utf-8") == "{"
+
+
+def test_detach_settles_the_mcp_ledger_an_older_detach_left(tmp_path: Path) -> None:
+    # An older drybag's `detach` removed `attach.json` and never opened `attach-mcp.json`: the
+    # next one takes its names and deny entries back, then says what a missing ledger says.
+    root, store, machine = _bound(tmp_path)
+    _served_and_off(store.parents[2])
+    _attach(root, store, machine)
+    ledger_file(root).unlink()
+    runner = Recorder()
+    with pytest.raises(Failure, match="is not there"):
+        _detach(root, runner)
+    assert [argv[2:] for argv in runner.calls] == [["remove", "--scope", "local", "--", "m1"]]
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+    left = (root / SETTINGS).read_text(encoding="utf-8") if (root / SETTINGS).exists() else "{}"
+    assert "deniedMcpServers" not in json.loads(left)
 
 
 def test_detach_keeps_unsettled_names_when_claude_is_missing(tmp_path: Path) -> None:

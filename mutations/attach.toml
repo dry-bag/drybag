@@ -2055,6 +2055,28 @@ reddens = [
   "tests/attach/test_detach.py::test_detach_removes_the_deny_entries_and_the_mcp_ledger",
 ]
 
+# An MCP ledger `detach` cannot read is kept, its entries' only record, and one an older `detach`
+# left without `attach.json` is settled all the same.
+[[mutation]]
+name = "detach deletes an MCP ledger it could not read"
+file = "src/drybag/attach/write.py"
+before = """    if held.notes:
+        return tuple(MCP_LEDGER_KEPT"""
+after = """    if False:
+        return tuple(MCP_LEDGER_KEPT"""
+reddens = [
+  "tests/attach/test_detach.py::test_detach_keeps_a_damaged_mcp_ledger_and_says_so",
+]
+
+[[mutation]]
+name = "detach with no attach.json leaves the MCP ledger an older detach left"
+file = "src/drybag/attach/write.py"
+before = "        if held.deny or held.mcp:"
+after = "        if False:"
+reddens = [
+  "tests/attach/test_detach.py::test_detach_settles_the_mcp_ledger_an_older_detach_left",
+]
+
 # The reconcile of the overlay's MCP servers at local scope (`attach.mcp.reconcile`). The name is
 # the overlay's: before `--`, a name `-h` makes `add-json` print usage and exit 0 having written
 # nothing, which would record a digest for an entry that is not there.

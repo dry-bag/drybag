@@ -1360,7 +1360,9 @@ takes the `deniedMcpServers` entries `attach` recorded out of the settings file 
 <name>` from the main checkout, then deletes that file; a `remove` Claude Code did not answer (no
 `claude` on `PATH`, say) fails (`1`) naming the server and Claude Code's message, with the name
 still recorded and the exclude block, the ledgers and the render kept, so running `detach` again
-finishes. The render directory and the composed store are derived
+finishes. A `drybag/attach-mcp.json` that cannot be read is left in place and said, and
+with no `drybag/attach.json` beside it (an older drybag's `detach` removed that one alone) its
+servers and deny entries are taken back before the missing ledger is said. The render directory and the composed store are derived
 from the binding id and never read from the ledger, so a ledger naming another directory removes nothing
 outside it. The plugin goes before the exclude block, so Claude Code takes the plugin's entries,
 which name the id, out of `.claude/settings.local.json` while that file is still hidden. Each call

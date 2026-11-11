@@ -1448,6 +1448,28 @@ def _failed_servers(failed: Iterable[tuple[str, str]]) -> str:
     return ", ".join(f"{quoted(name)} ({said})" for name, said in failed)
 
 
+# Said of an MCP ledger `detach` could not read: deleted, the entries it named would have no record.
+MCP_LEDGER_KEPT = "{note}; it was left in place, and no MCP server it may name was taken back"
+# What `detach` reads of a ledger it has no `attach.json` beside: nothing but the MCP ledger's.
+_NOTHING = AttachLedger(store="", allow=(), rules={}, settings_keys=())
+
+
+def _take_back_mcp(root: Path, held: McpLedger, runner: Runner) -> tuple[str, ...]:
+    """Take back every MCP server `held` records, as a reconcile that serves nothing, then delete
+    the MCP ledger. A name Claude Code did not answer for stays recorded and fails the run
+    (`NOT_TAKEN_BACK`); a ledger that could not be read records nothing and is kept, which the
+    notes returned say."""
+    mcp = reconcile(
+        root, {}, held.mcp, runner, lambda owned: write_mcp_ledger(root, replace(held, mcp=owned))
+    )
+    if mcp.failed:
+        raise Failure(NOT_TAKEN_BACK.format(servers=_failed_servers(mcp.failed)))
+    if held.notes:
+        return tuple(MCP_LEDGER_KEPT.format(note=note) for note in held.notes)
+    fsops.remove_within(common_directory(root), MCP_LEDGER_FILE)
+    return ()
+
+
 def detach(root: Path, *, runner: Runner) -> Detached:
     """Remove exactly what `attach` added, reading the ledger for what that was, and withdraw the
     rendered plugin and the composed store, whose directories are derived from the binding id and
@@ -1482,10 +1504,20 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     """
     main = main_checkout_or_none(root)
     root = main if main is not None else root
+    held = read_mcp_ledger(root)
     try:
         recorded = _removable(ledger(root))
     except NotALedger as exc:
         raise NotALedger(f"{exc}; it records nothing, so nothing was removed") from exc
+    except Failure:
+        # No `attach.json`: an older drybag's `detach` removed it and never opened the MCP ledger,
+        # whose names and deny entries are taken back here before the missing file is said.
+        if held.deny or held.mcp:
+            settings = _planned_settings(root, _NOTHING, held.deny)
+            _refuse_unwithdrawable(root, _NOTHING, settings)
+            _withdraw_settings(root, settings)
+            _take_back_mcp(root, held, runner)
+        raise
     # The rendered plugin, named by the id and installed in the main checkout. Its render directory
     # is derived from the id and never read from the ledger, whose `store` and `render` a clone can
     # commit; asked here, before the first withdrawal, since the id is read through `git`.
@@ -1498,7 +1530,6 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     # The `info/exclude` block is found above the first withdrawal for the same reason: `git`
     # names the file and a region opened twice refuses, and both are knowable now.
     hidden = exclude.withdrawn_block(root)
-    held = read_mcp_ledger(root)
     settings = _planned_settings(root, recorded, held.deny)
     # What the main checkout's settings file names, which decides each `claude plugin` call: read
     # here, so a file that cannot be read refuses while nothing is withdrawn.
@@ -1519,13 +1550,9 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     # run here, with the exclude block, the ledger and the render kept.
     if plugin is not None:
         _withdraw_plugin(*plugin, runner)
-    # The overlay's MCP servers, taken back as a reconcile that serves nothing. A name Claude Code
-    # did not answer for stays recorded, and everything still to withdraw is kept, as above.
-    mcp = reconcile(
-        root, {}, held.mcp, runner, lambda owned: write_mcp_ledger(root, replace(held, mcp=owned))
-    )
-    if mcp.failed:
-        raise Failure(NOT_TAKEN_BACK.format(servers=_failed_servers(mcp.failed)))
+    # The overlay's MCP servers. A name Claude Code did not answer for stays recorded, and
+    # everything still to withdraw is kept, as above.
+    kept = _take_back_mcp(root, held, runner)
     removed = False
     if delivery is not None and (fsops.is_dir(delivery) or fsops.is_symlink(delivery)):
         _remove_render(delivery)
@@ -1538,7 +1565,6 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     if hidden is not None:
         exclude.write(hidden)
     fsops.remove_within(common_directory(root), LEDGER_FILE)
-    fsops.remove_within(common_directory(root), MCP_LEDGER_FILE)
     directories = _withdraw_directories(root, recorded)
     return Detached(
         allow_removed,
@@ -1549,5 +1575,5 @@ def detach(root: Path, *, runner: Runner) -> Detached:
         tuple(rules_left),
         removed,
         store_kept,
-        settings.notes,
+        (*settings.notes, *kept),
     )
