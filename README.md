@@ -182,7 +182,7 @@ Add `.drybag/local/` to `.gitignore` if it is not there already.
 
 The other commands in [Commands](#commands) expect more of a repository than those three keys
 create: `docs trail` wants a `docs/roadmap.md`, `docs check` an
-`AGENTS.md`. Both are yours to write ([docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md#drybag-docs-trail---check---design) gives the roadmap's shape), and `docs
+`AGENTS.md`. Both are yours to write ([docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md#drybag-docs-trail---check) gives the roadmap's shape), and `docs
 check` names `AGENTS.md` until you do. In a repository you would rather grow by hand, add each path as you
 start using the command that reads it — [docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md#configuration) lists every default.
 

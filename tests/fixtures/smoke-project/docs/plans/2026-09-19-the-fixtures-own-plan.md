@@ -1,10 +1,11 @@
 # The fixture's own plan
 
 **Scope:** this document, and nothing else. It exists so that `drybag plan check` has a
-plan to lint in this project, and so that the four
+plan to lint in this project, and so that the
 rules that command holds a plan to are exercised by a document that satisfies them.
 
-**Spec:** `docs/specs/README.md`, the project keeping specs being what makes this line owed.
+**Spec:** none — a fixture's plan implements no design; the project keeping specs is what makes
+this line owed.
 
 ## Context
 

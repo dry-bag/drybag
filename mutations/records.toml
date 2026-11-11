@@ -100,10 +100,7 @@ name = "an untracked document is listed as if CI could see it"
 file = "src/drybag/docs/trail.py"
 before = '    skip = _ignored(root, paths) | _untracked(root, paths)'
 after = '    skip = _ignored(root, paths)'
-reddens = [
-  "tests/docs/test_trail.py::test_an_untracked_or_ignored_document_is_not_listed",
-  "tests/docs/test_commands.py::test_docs_trail_and_plan_check_run_on_a_design_folder_with_no_drybag_toml",
-]
+reddens = ["tests/docs/test_trail.py::test_an_untracked_or_ignored_document_is_not_listed"]
 
 # `plan check` is the one surface that prints an unresolvable base as a finding, its documented
 # output; let the exception through and it ends as a bare `failed:` with no findings listed.
@@ -207,8 +204,8 @@ reddens = [
 [[mutation]]
 name = "plan check judges an edited plan's untouched lines"
 file = "src/drybag/docs/plans.py"
-before = "        if not _LINE_MARK.search(line) and (judged is None or number in judged):"
-after = "        if not _LINE_MARK.search(line):"
+before = "        if settled and not _LINE_MARK.search(line) and (judged is None or number in judged):"
+after = "        if settled and not _LINE_MARK.search(line):"
 reddens = [
   "tests/docs/test_plans.py::test_an_edit_to_a_plan_is_held_to_the_references_on_the_lines_it_writes",
 ]
@@ -1340,72 +1337,68 @@ reddens = [
   "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
 ]
 
-# A plan names its spec wherever the project keeps specs.
+# A project that keeps specs holds every plan to naming the one it implements.
 [[mutation]]
 name = "plan check owes no Spec line"
 file = "src/drybag/docs/plans.py"
-before = "    if specs and not spec_lines:"
-after = "    if False:"
-reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_where_the_project_keeps_specs"]
+before = "    spec = _spec_finding(prose, where, root) if specs else None"
+after = "    spec = None"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
 
-# A project with no specs folder has no spec to name, and is never refused for one.
+# A bare `none` says nothing; the reason is what a reader of the plan needs.
 [[mutation]]
-name = "the Spec rule runs without a specs folder"
+name = "a Spec line's none needs no reason"
 file = "src/drybag/docs/plans.py"
-before = "    specs = fsops.is_dir(contained(root, config.paths.specs))"
-after = "    specs = True"
-reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_where_the_project_keeps_specs"]
+before = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*[—-]+[^\S\n]*\S")'
+after = '_SPEC_NONE = re.compile(r"[^\S\n]*none")'
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
 
-# A spec named after a sentence of context wraps onto the paragraph's next line.
+# Any backticked text passing would teach a placeholder; the spec must be there.
 [[mutation]]
-name = "a wrapped Spec line is not read"
+name = "a Spec path need not resolve"
 file = "src/drybag/docs/plans.py"
-before = "        paragraph = bool(_SPEC_LINE.match(line)) or (paragraph and not _SPEC_ENDS.match(line))"
-after = "        paragraph = bool(_SPEC_LINE.match(line))"
-reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_where_the_project_keeps_specs"]
+before = "            if landed is not None and present_within(root, landed) is True:"
+after = "            if True:"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
 
-# A design folder's plans name the project's repository, which the folder does not hold.
+# The Spec rule settles its own line; the reference rule reporting it as well says it twice.
 [[mutation]]
-name = "a design folder settles every path"
+name = "a Spec line's path is reported twice"
 file = "src/drybag/docs/plans.py"
-before = "        judged = spec_lines"
-after = "        judged = None"
-reddens = ["tests/docs/test_plans.py::test_a_design_folder_settles_only_the_spec_paragraphs_paths"]
+before = "        settled = not (specs and _SPEC_LINE.match(line))"
+after = "        settled = True"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
 
-# A design folder's diff is the enclosing repository's, whose paths do not start at the folder.
+# A local specs folder a fresh clone does not hold must not refuse what CI passes.
 [[mutation]]
-name = "a design folder reads a diff"
+name = "the Spec rule reads the specs folder off the disk"
 file = "src/drybag/docs/plans.py"
-before = "    if design and not plans:"
-after = "    if False:"
-reddens = ["tests/docs/test_plans.py::test_a_design_folder_lints_only_the_plans_it_is_given"]
+before = "    return bool(out)"
+after = "    return fsops.is_dir(specs)"
+reddens = ["tests/docs/test_plans.py::test_the_spec_rule_applies_where_git_tracks_a_spec"]
 
-# A design folder holds no `drybag.toml`, and one placed beside it would be configuration for
-# whatever else loads it.
+# git names a changed path from the work tree's top; read as the root's own, no plan matched.
 [[mutation]]
-name = "docs trail --design reads drybag.toml"
+name = "a root below the git top reads the diff from the top"
+file = "src/drybag/docs/plans.py"
+before = '        out = _diff(root, base, "--name-only", "--relative", "-z", since, "HEAD", "--", relative)'
+after = '        out = _diff(root, base, "--name-only", "-z", since, "HEAD", "--", relative)'
+reddens = ["tests/docs/test_plans.py::test_a_root_below_the_git_top_lints_the_plans_its_change_touches"]
+
+# The porcelain status names a path from the work tree's top whatever directory asks.
+[[mutation]]
+name = "a root below the git top reads the status from the top"
+file = "src/drybag/docs/plans.py"
+before = '            found.append(root / path.removeprefix(prefix.rstrip("\n")))'
+after = "            found.append(root / path)"
+reddens = ["tests/docs/test_plans.py::test_a_root_below_the_git_top_lints_the_plans_its_change_touches"]
+
+# The success line says only what ran: with no specs folder no Spec line was asked for.
+[[mutation]]
+name = "plan check claims a Spec rule that did not run"
 file = "src/drybag/docs/commands.py"
-before = "    if not args.design:"
-after = "    if True:"
+before = '    summary = _PLAN_OK.format(n=len(linted)) + (_PLAN_SPEC_OK if result.specs else "")'
+after = "    summary = _PLAN_OK.format(n=len(linted)) + _PLAN_SPEC_OK"
 reddens = [
-  "tests/docs/test_commands.py::test_docs_trail_and_plan_check_run_on_a_design_folder_with_no_drybag_toml",
-]
-
-# A compact header puts `**Scope:**` or a file list right under the Spec line; their paths are not
-# the spec's, and would otherwise satisfy the rule and be settled in a design folder.
-[[mutation]]
-name = "the Spec paragraph runs on into the next field"
-file = "src/drybag/docs/plans.py"
-before = '_SPEC_ENDS = re.compile(r"^\s*(?:$|\*\*|[-*+]\s|\d+[.)]\s|#|>)")'
-after = '_SPEC_ENDS = re.compile(r"^\s*$")'
-reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_where_the_project_keeps_specs"]
-
-# `plan check --design` settles only the Spec paragraph because the command hands `--design` on.
-[[mutation]]
-name = "plan check drops --design"
-file = "src/drybag/docs/commands.py"
-before = "            design=args.design,"
-after = "            design=False,"
-reddens = [
-  "tests/docs/test_commands.py::test_docs_trail_and_plan_check_run_on_a_design_folder_with_no_drybag_toml",
+  "tests/docs/test_commands.py::test_plan_check_lints_the_named_plans_and_counts_them",
 ]

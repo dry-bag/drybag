@@ -830,7 +830,7 @@ PLAN_REFUSAL_CODE = "base-unresolvable"
 
 
 def test_the_plan_rule_count_is_the_number_of_rules_plan_check_emits() -> None:
-    # Mutation: change `Five rules` back to `Four rules` in `docs/cli.md` -> reddens naming
+    # Mutation: change `Six rules` back to `Five rules` in `docs/cli.md` -> reddens naming
     # both numbers.
     source = (ROOT / "src" / "drybag" / "docs" / "plans.py").read_text(encoding="utf-8")
     codes = {c for c in _PLAN_FINDING_CODE.findall(source)} - {PLAN_REFUSAL_CODE}

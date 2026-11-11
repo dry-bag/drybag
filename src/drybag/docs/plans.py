@@ -1,4 +1,4 @@
-"""Lint implementation plans: references, verification steps, `Scope:`, and `Premise:`.
+"""Lint implementation plans: references, verification steps, `Scope:`, `Premise:` and `Spec:`.
 
 The first two rules come from one branch's retro. A plan contradicted itself about a test
 location and the stale pointer survived into three later tasks — so every reference must
@@ -18,6 +18,12 @@ The `Scope:` and `Premise:` rules come from the same retro: an unrelated change 
 plan because nothing on the plan named what belonged to it, and a fix's own discriminator
 outran the entry evidence it was supposedly fixing because nothing forced that evidence onto
 the page.
+
+A project that keeps specs holds every plan to naming the one it implements, on a `**Spec:**`
+line: a path in backticks that resolves inside the project, or `none — <reason>`, so a plan with no
+design says so instead of naming any file that happens to exist. Whether the project keeps specs is
+git's answer, as the trail's listing is: a `[paths] specs` folder that holds nothing tracked is not
+one, so a local folder cannot refuse here what a fresh clone passes.
 
 The mutation-outcome rule comes from the next branch's, where one plan wrote three
 discrimination proofs as settled results and all three were wrong. The first reddened every
@@ -50,11 +56,6 @@ source line, so a report still names the line the claim starts on. The `Expected
 read over the claim's own SENTENCE, which is the unit that marker marks: a marker in a
 neighbouring sentence of the same paragraph exempts nothing, and one written after the claim is
 not read at all.
-
-A plan names the spec it implements on a `**Spec:**` line wherever the project keeps specs: a plan
-the trail cannot tie to its design is one nobody can check against it. A project with no specs
-folder owes none. In a design folder kept apart from its repository (`--design`) only that line's
-paths are settled, since the plan's others name a tree the folder does not hold.
 
 These are floors. A regular expression cannot judge whether a computed number's model covers
 its subject; that rule lives in the plan template and the review lens.
@@ -122,13 +123,11 @@ _LEADING = re.compile(
 # empty `**Scope:**`/`**Premise:**` marker would be satisfied by any non-whitespace character
 # anywhere later in the document — exactly the unfilled-marker case these rules exist to catch.
 # Anchoring to non-newline whitespace forces the content onto the marker's own line.
-# A plan's `**Spec:**` line: owed where the project keeps specs, and read for the paths its
-# paragraph carries, which name the spec. The paragraph ends at a blank line or at a line that
-# opens another field, a list item, a heading or a quote: a compact header puts `**Scope:**` and a
-# file list right under it, and their paths are not the spec's.
-_SPEC_LINE = re.compile(r"^\*\*Spec:\*\*")
-_SPEC_ENDS = re.compile(r"^\s*(?:$|\*\*|[-*+]\s|\d+[.)]\s|#|>)")
 _SCOPE_LINE = re.compile(r"^\*\*Scope:\*\*[^\S\n]*\S", re.MULTILINE)
+# A `**Spec:**` line, a list item's included, and what follows the marker on it: the line alone is
+# read, as the Scope and Premise markers are.
+_SPEC_LINE = re.compile(r"^(?:[-*+][^\S\n]+)?\*\*Spec:\*\*(.*)$", re.MULTILINE)
+_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*[—-]+[^\S\n]*\S")
 #
 # A premise marker, read to the first colon after it, past line ends; the group holds when the
 # marker closes there and has content on its line. Every marker before that colon reaches the same
@@ -176,13 +175,12 @@ _SCOPE_MISSING = (
     'no `**Scope:**` admission criterion — one line saying "a change belongs to this branch '
     'iff …", so a mid-plan arrival is screened'
 )
+_SPEC_MISSING = "no `**Spec:**` line: name the spec in backticks, or write `none — <reason>`"
+_SPEC_NO_PATH = "the `**Spec:**` line names no path in backticks and is not `none — <reason>`"
+_SPEC_UNRESOLVED = "no path the `**Spec:**` line names in backticks resolves inside the project"
 _PREMISE_MISSING = (
     "claims `Fixes` with no `**Premise:**` line quoting the entry evidence that establishes "
     "its central predicate"
-)
-_SPEC_MISSING = "no `**Spec:**` line naming the spec this plan implements by its path"
-_DESIGN_NAMES_PLANS = (
-    "--design lints the plans it is given and reads no diff: name them as PATH arguments"
 )
 _LEADING_STEP = (
     'verification step embeds its expected answer; write "determine whether …; if '
@@ -210,6 +208,7 @@ class Lint:
     findings: list[Finding]
     linted: list[Path]
     unlinted: list[Path]
+    specs: bool = False  # whether the Spec rule applied
 
 
 def _is_git_repo(root: Path) -> bool:
@@ -267,7 +266,7 @@ def touched_plans(root: Path, base: str, plans_dir: Path) -> list[Path]:
     relative = plans_dir.relative_to(root).as_posix()
 
     def changed(since: str) -> set[str]:
-        out = _diff(root, base, "--name-only", "-z", since, "HEAD", "--", relative)
+        out = _diff(root, base, "--name-only", "--relative", "-z", since, "HEAD", "--", relative)
         return {name for name in out.split("\0") if name.endswith(".md")}
 
     found: set[str] = set()
@@ -323,7 +322,10 @@ def unlinted_plans(root: Path, plans_dir: Path) -> list[Path] | None:
     code, out = git_run(
         root, "status", "--porcelain", "--untracked-files=all", "-z", "--", relative
     )
-    if code != 0:
+    # The porcelain names a path from the work tree's top whatever directory asks, so a root
+    # below the top strips its own prefix.
+    asked, prefix = git_run(root, "rev-parse", "--show-prefix")
+    if code != 0 or asked != 0:
         return None
     found: list[Path] = []
     entries = iter(out.split("\0"))
@@ -336,7 +338,7 @@ def unlinted_plans(root: Path, plans_dir: Path) -> list[Path] | None:
         if "D" in status:
             continue  # deleted in the working tree: nothing left there to lint
         if path.endswith(".md"):
-            found.append(root / path)
+            found.append(root / path.removeprefix(prefix.rstrip("\n")))
     return found
 
 
@@ -427,6 +429,38 @@ def _has_premise(prose: str) -> bool:
     return any(marker.group(1) for marker in _PREMISE_LINE.finditer(prose))
 
 
+def _spec_finding(prose: str, where: str, root: Path) -> Finding | None:
+    """The Spec rule's finding on the plan's first `**Spec:**` line, or on the plan when it has
+    none; `None` when that line says `none — <reason>` or names a spec that resolves."""
+    for marker in _SPEC_LINE.finditer(prose):
+        number = prose.count("\n", 0, marker.start()) + 1
+        rest = marker.group(1)
+        if _SPEC_NONE.match(rest):
+            return None
+        targets = list(path_references(rest))
+        if not targets:
+            return Finding("spec-missing", where, number, _SPEC_NO_PATH)
+        for target in targets:
+            landed = resolves_within(root, target)
+            if landed is not None and present_within(root, landed) is True:
+                return None
+        return Finding("spec-missing", where, number, _SPEC_UNRESOLVED)
+    return Finding("spec-missing", where, None, _SPEC_MISSING)
+
+
+def _keeps_specs(root: Path, config: Config) -> bool:
+    """Whether the project keeps specs: git tracks a file under `[paths] specs`, or, outside a
+    work tree, that folder exists. A question git gives no answer to fails."""
+    specs = contained(root, config.paths.specs)
+    if not _is_git_repo(root):
+        return fsops.is_dir(specs)
+    code, out = git_run(root, "ls-files", "-z", "--", specs.relative_to(root).as_posix())
+    if code != 0:
+        cause = NO_ANSWER if code == -1 else f"`git ls-files` exited {code}"
+        raise Failure(f"{cause}, so whether {config.paths.specs} holds specs is not known")
+    return bool(out)
+
+
 def _lint_one(
     path: Path,
     where: str,
@@ -434,38 +468,31 @@ def _lint_one(
     *,
     judged: set[int] | None = None,
     specs: bool = False,
-    design: bool = False,
 ) -> list[Finding]:
     """Every finding one plan carries, with the line numbers of the file as it is on disk.
 
     `judged`, when given, is the lines whose references are settled against the tree: the ones
     the change wrote (`written_lines`). Every other rule reads the whole plan either way.
-    `specs` and `design` are the Spec rule's, as the module docstring says.
+    `specs` is whether the project keeps specs, which makes a `**Spec:**` line owed; that line is
+    then the Spec rule's to settle, and not the reference rule's as well.
     """
     # Fenced code is not plan prose: its fixtures name deliberately fake paths.
     prose = blank_fences(read_document(path, where))
     found: list[Finding] = []
-    # The `**Spec:**` paragraph (`_SPEC_ENDS`): a spec named after a sentence of context wraps.
-    spec_lines: set[int] = set()
-    paragraph = False
-    for number, line in enumerate(prose.splitlines(), 1):
-        paragraph = bool(_SPEC_LINE.match(line)) or (paragraph and not _SPEC_ENDS.match(line))
-        if paragraph and any(path_references(line)):
-            spec_lines.add(number)
-    if design:
-        judged = spec_lines
     # Per plan, not per line: these are properties of the document, not of one line in it.
     if not _SCOPE_LINE.search(prose):
         found.append(Finding("scope-missing", where, None, _SCOPE_MISSING))
     if BUG_FIXES.search(prose) and not _has_premise(prose):
         found.append(Finding("premise-missing", where, None, _PREMISE_MISSING))
-    if specs and not spec_lines:
-        found.append(Finding("spec-missing", where, None, _SPEC_MISSING))
+    spec = _spec_finding(prose, where, root) if specs else None
+    if spec is not None:
+        found.append(spec)
     declared: set[str] = set()
     for line in _DECLARES.findall(prose):
         declared |= set(path_references(line))
     for number, line in enumerate(prose.splitlines(), 1):
-        if not _LINE_MARK.search(line) and (judged is None or number in judged):
+        settled = not (specs and _SPEC_LINE.match(line))
+        if settled and not _LINE_MARK.search(line) and (judged is None or number in judged):
             for target in path_references(line):
                 # A claim that lands outside the root is not asked of the filesystem: the
                 # answer would be about this disk rather than about the repository, and a plan
@@ -484,18 +511,8 @@ def _lint_one(
     return found
 
 
-def lint(
-    root: Path,
-    config: Config,
-    *,
-    plans: list[Path],
-    base: str | None = None,
-    design: bool = False,
-) -> Lint:
-    if design and not plans:
-        raise Refusal(_DESIGN_NAMES_PLANS)
+def lint(root: Path, config: Config, *, plans: list[Path], base: str | None = None) -> Lint:
     plans_dir = contained(root, config.paths.plans)
-    specs = fsops.is_dir(contained(root, config.paths.specs))
     base = base or local_base(config)
     unlinted: list[Path] = []
     diff_scoped = False
@@ -528,8 +545,9 @@ def lint(
     else:
         selected = sorted(plans_dir.glob("*.md")) if fsops.is_dir(plans_dir) else []
     findings: list[Finding] = []
+    specs = _keeps_specs(root, config)
     for path in sorted(selected):
         judged = written_lines(root, base, path) if diff_scoped else None
         where = path.relative_to(root).as_posix()
-        findings.extend(_lint_one(path, where, root, judged=judged, specs=specs, design=design))
-    return Lint(findings, sorted(selected), sorted(unlinted))
+        findings.extend(_lint_one(path, where, root, judged=judged, specs=specs))
+    return Lint(findings, sorted(selected), sorted(unlinted), specs)

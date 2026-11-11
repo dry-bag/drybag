@@ -8,9 +8,7 @@ from pathlib import Path
 
 from drybag import fsops
 from drybag.areas import SubParsers
-from drybag.command import CHECK_HELP, command_owner, common_flags, root_and_config
-from drybag.config.loader import design_config
-from drybag.config.schema import Config
+from drybag.command import CHECK_HELP, common_flags, root_and_config
 from drybag.findings import Finding, labels, listed
 from drybag.printed import printable
 from drybag.result import Result
@@ -18,8 +16,10 @@ from drybag.result import Result
 _OK = "OK: documentation budgets and link targets"
 _PLAN_OK = (
     "OK: linted {n} plan(s) — references resolve, steps are non-leading, mutation outcomes are "
-    "expectations, Scope/Premise/Spec are present"
+    "expectations, Scope/Premise are present"
 )
+# Said only where the Spec rule ran: a project with no tracked specs owes no Spec line.
+_PLAN_SPEC_OK = ", each names its spec"
 
 
 def run_docs_check(args: argparse.Namespace) -> Result:
@@ -45,20 +45,6 @@ def run_docs_check(args: argparse.Namespace) -> Result:
     return Result(_OK, data)
 
 
-DESIGN_HELP = (
-    "--root is a design folder (README.md, trail.toml, specs/, plans/); read no drybag.toml"
-)
-
-
-def _root_and_config(args: argparse.Namespace) -> tuple[Path, Config]:
-    """`root_and_config`, or under `--design` the design folder's own (`design_config`)."""
-    if not args.design:
-        return root_and_config(args)
-    root = Path(args.root).resolve()
-    owner = command_owner(Path(args.machine) if args.machine else None)
-    return root, design_config(root, owner=owner)
-
-
 def run_docs_trail(args: argparse.Namespace) -> Result:
     from drybag.config.paths import contained
     from drybag.docs.hygiene import read_document
@@ -69,7 +55,7 @@ def run_docs_trail(args: argparse.Namespace) -> Result:
         undeclared_new_documents,
     )
 
-    root, config = _root_and_config(args)
+    root, config = root_and_config(args)
     # The roadmap first, for both: the `trail` gate raises for a missing one, as a gate that
     # cannot judge the tree does, and this command answers it in its own words.
     roadmap = contained(root, config.paths.roadmap)
@@ -80,8 +66,7 @@ def run_docs_trail(args: argparse.Namespace) -> Result:
         if not trail_gate(root, config):
             return Result(f"OK: {config.paths.roadmap} trail listing is current", {"stale": False})
         return Result(
-            f"{config.paths.roadmap} trail listing is stale; run: drybag docs trail"
-            + (" --design" if args.design else ""),
+            f"{config.paths.roadmap} trail listing is stale; run: drybag docs trail",
             {"stale": True},
             exit_code=1,
         )
@@ -114,15 +99,9 @@ def run_docs_trail(args: argparse.Namespace) -> Result:
 def run_plan_check(args: argparse.Namespace) -> Result:
     from drybag.docs.plans import BaseUnresolvable, Lint, lint
 
-    root, config = _root_and_config(args)
+    root, config = root_and_config(args)
     try:
-        result = lint(
-            root,
-            config,
-            plans=[Path(p).resolve() for p in args.paths],
-            base=args.base,
-            design=args.design,
-        )
+        result = lint(root, config, plans=[Path(p).resolve() for p in args.paths], base=args.base)
     except BaseUnresolvable as exc:
         # The command's own output, as documented: a finding, exit 1. A gate run reads the same
         # cause as a gate that could not run.
@@ -140,7 +119,7 @@ def run_plan_check(args: argparse.Namespace) -> Result:
             data,
             exit_code=1,
         )
-    summary = _PLAN_OK.format(n=len(linted))
+    summary = _PLAN_OK.format(n=len(linted)) + (_PLAN_SPEC_OK if result.specs else "")
     if unlinted:
         summary += f"; {len(unlinted)} uncommitted plan(s) not linted — name them as PATH arguments"
     return Result(summary, data)
@@ -157,7 +136,6 @@ def register(groups: SubParsers) -> None:
         docs_sub.add_parser("trail", help="regenerate the design-and-plan trail in the roadmap")
     )
     trail.add_argument("--check", action="store_true", help=CHECK_HELP)
-    trail.add_argument("--design", action="store_true", help=DESIGN_HELP)
     trail.set_defaults(func=run_docs_trail)
 
     plan = groups.add_parser("plan", help="implementation-plan lint")
@@ -168,6 +146,5 @@ def register(groups: SubParsers) -> None:
     lint.add_argument(
         "--base", default=None, help="base ref (default: refs/remotes/origin/<project.base_branch>)"
     )
-    lint.add_argument("--design", action="store_true", help=DESIGN_HELP)
     lint.add_argument("paths", nargs="*", help="plans to lint instead of the diff")
     lint.set_defaults(func=run_plan_check)
