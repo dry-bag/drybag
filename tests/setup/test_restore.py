@@ -303,6 +303,16 @@ def test_one_failed_attach_leaves_the_others_and_exits_1(tmp_path: Path) -> None
     }
 
 
+def test_a_project_whose_mcp_server_failed_is_failed_naming_it(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path)
+    (overlay / COMMON_CLAUDE / "mcp.json").write_text('{"mcpServers": {"m1": {"command": "a"}}}')
+    alpha = _checkout(tmp_path, "alpha")
+    runner = Recorder(answers={"claude mcp add-json": Completed(1, "", "Invalid input")})
+    report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha), runner=runner)
+    assert _states(report) == {"alpha": "failed"}
+    assert "MCP servers not settled: m1 (" in report.projects[0].detail
+
+
 def test_a_failed_project_makes_the_command_exit_1(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

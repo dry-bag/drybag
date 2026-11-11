@@ -278,6 +278,11 @@ def restore(
             continue
         recorded = "recorded" if attached.binding_recorded else "already recorded"
         detail = "; ".join((f"binding {attached.binding} {recorded}", *attached.notes))
+        # A server Claude Code did not take is a partly failed attach, which `attach` exits 1 on.
+        state: Literal["attached", "failed"] = "failed" if attached.mcp_failed else "attached"
+        if attached.mcp_failed:
+            servers = (f"{quoted(name)} ({said})" for name, said in attached.mcp_failed)
+            detail += f"; MCP servers not settled: {', '.join(servers)}"
         if yes:
             try:
                 promoted = len(promote_share(overlay, item.name, machine=machine))
@@ -285,9 +290,9 @@ def restore(
                 said = f"{detail}; its notes were not recorded as reviewed: {exc}"
                 outcomes.append(Outcome(item.name, item.dir, "failed", said, 0))
                 continue
-            outcomes.append(Outcome(item.name, item.dir, "attached", detail, promoted))
+            outcomes.append(Outcome(item.name, item.dir, state, detail, promoted))
         else:
-            outcomes.append(Outcome(item.name, item.dir, "attached", detail, 0))
+            outcomes.append(Outcome(item.name, item.dir, state, detail, 0))
     notes = (*listing_notes, *install_notes)
     return RestoreReport(missing_tools(), installed, notes, tuple(outcomes))
 
