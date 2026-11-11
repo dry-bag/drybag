@@ -18,6 +18,9 @@ import pytest
 from drybag.config.loader import load
 from drybag.config.schema import Config
 from drybag.docs.plans import (
+    _SPEC_MISSING,
+    _SPEC_NO_PATH,
+    _SPEC_UNRESOLVED,
     BUG_FIXES,
     BaseUnresolvable,
     asserted_outcomes,
@@ -206,6 +209,72 @@ def test_a_plan_without_a_scope_line_fails_and_a_bare_marker_does_not_count(
     assert rules(root, config, plan(root, "no scope here\n")) == ["scope-missing"]
     assert rules(root, config, plan(root, "**Scope:**\n\nlater text\n")) == ["scope-missing"]
     assert rules(root, config, plan(root, "```\n**Scope:** in a fence\n```\n")) == ["scope-missing"]
+
+
+def test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs(tmp_path: Path) -> None:
+    # The `**Spec:**` line alone is read: any span in backticks on it that resolves inside the
+    # project, an anchor dropped, names the spec, and the finding names what is wrong on the
+    # line. Mutations (declared): `mutations/`'s "plan check owes no Spec line", "a Spec line's
+    # none needs no reason", "a Spec path need not resolve", "a Spec span must be shaped like a
+    # path" and "a Spec span keeps its anchor".
+    root, config = project(tmp_path)
+    assert rules(root, config, plan(root, SCOPE)) == []  # no specs folder, no Spec line owed
+    (root / "docs" / "specs").mkdir()
+    (root / "docs" / "specs" / "a.md").write_text("# a\n", encoding="utf-8")
+    (root / "DESIGN.md").write_text("# d\n", encoding="utf-8")
+
+    def spec(line: str) -> list[tuple[str, int | None, str]]:
+        found = lint(root, config, plans=[plan(root, SCOPE + line)]).findings
+        return [(f.rule, f.line, f.detail) for f in found]
+
+    for named in ("`docs/specs/a.md`", "`DESIGN.md`", "`docs/specs`", "`docs/specs/a.md#part`"):
+        assert spec(f"**Spec:** {named}\n") == []
+    assert spec("- **Spec:** `docs/specs/a.md`\n") == []
+    assert spec("**Spec:** none — a fix with no design\n") == []
+    assert spec("") == [("spec-missing", None, _SPEC_MISSING)]
+    assert spec("**Spec:** none\n") == [("spec-missing", 3, _SPEC_NO_PATH)]
+    assert spec("**Spec:** the design,\n`docs/specs/a.md`\n") == [
+        ("spec-missing", 3, _SPEC_NO_PATH)
+    ]
+    for gone in ("`docs/specs/b.md` (create)", "`../specs/a.md`"):
+        assert spec(f"**Spec:** {gone}\n") == [("spec-missing", 3, _SPEC_UNRESOLVED)]
+
+
+def test_a_spec_line_is_held_to_the_reference_rule_like_any_other(tmp_path: Path) -> None:
+    # Keeping specs never weakens the reference rule: a second dead path on the Spec line, one in
+    # a `none` reason and one on a later Spec line are each reported once. Mutation (declared):
+    # `mutations/`'s "the Spec line is exempt from the reference rule".
+    root, config = project(tmp_path)
+    (root / "docs" / "specs").mkdir()
+    (root / "docs" / "specs" / "a.md").write_text("# a\n", encoding="utf-8")
+    body = (
+        "**Spec:** `docs/specs/a.md`, superseding `docs/specs/gone.md`\n\n## Later\n\n"
+        "**Spec:** none — `docs/specs/dropped.md` was dropped\n"
+    )
+    found = lint(root, config, plans=[plan(root, SCOPE + body)]).findings
+    assert [(f.rule, f.line, f.detail) for f in found] == [
+        ("dead-reference", 3, "docs/specs/gone.md"),
+        ("dead-reference", 7, "docs/specs/dropped.md"),
+    ]
+    dead = lint(root, config, plans=[plan(root, SCOPE + "**Spec:** `docs/specs/b.md`\n")])
+    assert [(f.rule, f.line) for f in dead.findings] == [
+        ("spec-missing", 3),
+        ("dead-reference", 3),
+    ]
+
+
+@needs_git
+def test_the_spec_rule_applies_where_git_tracks_a_spec(tmp_path: Path) -> None:
+    # A local specs folder a fresh clone does not hold must not refuse here what CI passes.
+    # Mutation (declared): `mutations/`'s "the Spec rule reads the specs folder off the disk".
+    root, config = project(tmp_path)
+    (root / "docs" / "specs").mkdir()
+    (root / "docs" / "specs" / ".DS_Store").write_text("x", encoding="utf-8")
+    git(root, "init", "-q", "-b", "main")
+    path = plan(root, SCOPE)
+    assert rules(root, config, path) == []
+    git(root, "add", "docs/specs")
+    assert rules(root, config, path) == ["spec-missing"]
 
 
 def test_a_fixes_claim_needs_a_premise_line_with_content(tmp_path: Path) -> None:
@@ -775,6 +844,27 @@ def test_an_uncommitted_plan_is_reported_as_unlinted_and_linted_when_named(tmp_p
     assert result.unlinted == [draft] and result.linted == []
     named = lint(root, config, plans=[draft])
     assert named.linted == [draft] and [f.rule for f in named.findings] == ["scope-missing"]
+
+
+@needs_git
+def test_a_root_below_the_git_top_lints_the_plans_its_change_touches(tmp_path: Path) -> None:
+    # git names a changed path from the work tree's top, so read as the root's own, every plan
+    # missed the plans folder and the gate was green having linted nothing. Mutations
+    # (declared): `mutations/`'s "a root below the git top reads the diff from the top" and "a
+    # root below the git top reads the status from the top".
+    root, config = project(tmp_path)
+    git(tmp_path, "init", "-q", "-b", "main")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-qm", "seed")
+    git(tmp_path, "remote", "add", "origin", str(tmp_path))
+    git(tmp_path, "fetch", "-q", "origin")
+    new = plan(root, "no scope\n", "2026-01-02-new.md")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-qm", "plan")
+    draft = plan(root, "a draft\n", "2026-01-03-draft.md")
+    result = lint(root, config, plans=[])
+    assert result.linted == [new] and result.unlinted == [draft]
+    assert [f.rule for f in result.findings] == ["scope-missing"]
 
 
 def test_a_named_plan_that_does_not_exist_is_a_failure(tmp_path: Path) -> None:

@@ -1336,3 +1336,85 @@ after = "    common = after(COMMON_GROUP)"
 reddens = [
   "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
 ]
+
+# A project that keeps specs holds every plan to naming the one it implements.
+[[mutation]]
+name = "plan check owes no Spec line"
+file = "src/drybag/docs/plans.py"
+before = "    spec = _spec_finding(prose, where, root) if specs else None"
+after = "    spec = None"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# A bare `none` says nothing; the reason is what a reader of the plan needs.
+[[mutation]]
+name = "a Spec line's none needs no reason"
+file = "src/drybag/docs/plans.py"
+before = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*[—-]+[^\S\n]*\S")'
+after = '_SPEC_NONE = re.compile(r"[^\S\n]*none")'
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# Any backticked text passing would teach a placeholder; the spec must be there.
+[[mutation]]
+name = "a Spec path need not resolve"
+file = "src/drybag/docs/plans.py"
+before = "            if landed is not None and present_within(root, landed) is True:"
+after = "            if True:"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# Keeping specs never weakens the reference rule: a Spec line's paths are judged like any line's.
+[[mutation]]
+name = "the Spec line is exempt from the reference rule"
+file = "src/drybag/docs/plans.py"
+before = "        if not _LINE_MARK.search(line) and (judged is None or number in judged):"
+after = "        if not (_LINE_MARK.search(line) or _SPEC_LINE.match(line)) and (judged is None or number in judged):"
+reddens = ["tests/docs/test_plans.py::test_a_spec_line_is_held_to_the_reference_rule_like_any_other"]
+
+# A spec at the top, a folder of specs, or a section of one is named in backticks all the same.
+[[mutation]]
+name = "a Spec span must be shaped like a path"
+file = "src/drybag/docs/plans.py"
+before = '        targets = [span.split("#", 1)[0] for span in _BACKTICKED.findall(rest)]'
+after = "        targets = list(path_references(rest))"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# A spec's section is named by an anchor; the file is what has to resolve.
+[[mutation]]
+name = "a Spec span keeps its anchor"
+file = "src/drybag/docs/plans.py"
+before = '        targets = [span.split("#", 1)[0] for span in _BACKTICKED.findall(rest)]'
+after = "        targets = _BACKTICKED.findall(rest)"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# A local specs folder a fresh clone does not hold must not refuse what CI passes.
+[[mutation]]
+name = "the Spec rule reads the specs folder off the disk"
+file = "src/drybag/docs/plans.py"
+before = "    return bool(out)"
+after = "    return fsops.is_dir(specs)"
+reddens = ["tests/docs/test_plans.py::test_the_spec_rule_applies_where_git_tracks_a_spec"]
+
+# git names a changed path from the work tree's top; read as the root's own, no plan matched.
+[[mutation]]
+name = "a root below the git top reads the diff from the top"
+file = "src/drybag/docs/plans.py"
+before = '        out = _diff(root, base, "--name-only", "--relative", "-z", since, "HEAD", "--", relative)'
+after = '        out = _diff(root, base, "--name-only", "-z", since, "HEAD", "--", relative)'
+reddens = ["tests/docs/test_plans.py::test_a_root_below_the_git_top_lints_the_plans_its_change_touches"]
+
+# The porcelain status names a path from the work tree's top whatever directory asks.
+[[mutation]]
+name = "a root below the git top reads the status from the top"
+file = "src/drybag/docs/plans.py"
+before = '            found.append(root / path.removeprefix(prefix.rstrip("\n")))'
+after = "            found.append(root / path)"
+reddens = ["tests/docs/test_plans.py::test_a_root_below_the_git_top_lints_the_plans_its_change_touches"]
+
+# The success line says only what ran: with no specs folder no Spec line was asked for.
+[[mutation]]
+name = "plan check claims a Spec rule that did not run"
+file = "src/drybag/docs/commands.py"
+before = '    summary = _PLAN_OK.format(n=len(linted)) + (_PLAN_SPEC_OK if result.specs else "")'
+after = "    summary = _PLAN_OK.format(n=len(linted)) + _PLAN_SPEC_OK"
+reddens = [
+  "tests/docs/test_commands.py::test_plan_check_lints_the_named_plans_and_counts_them",
+]

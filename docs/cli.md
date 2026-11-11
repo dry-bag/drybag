@@ -881,14 +881,17 @@ merging the change could alter on `REF`, `REF` defaulting to
 whose copy in `HEAD` differs from `REF`'s and from that of any commit `git merge-base --all REF
 HEAD` names: a copy equal to every merge base's leaves the merge taking `REF`'s, and one equal to
 `REF`'s leaves it as it is. Every merge base, not the one `REF...HEAD` diffs against, which can
-already hold an old plan the change puts back. Five rules, each from a retrospective: every
+already hold an old plan the change puts back. Six rules, each from a retrospective: every
 backticked path resolves unless the line says `(create)` or `(delete)`, or the plan declares it
 on a `Create:`, `Test:` or `Delete:` line; no step is phrased as already knowing its answer
 (`confirm that nothing …`, `verify no …`, `check that it does not …`); a `**Scope:**` line
 with content is present; a plan claiming `Fixes BR-nnn` (no other prefix is judged) carries a `**Premise:**` line with
 content; and a mutation's outcome stated as fact in the present tense (`-> the test reddens`,
 `watch it go red`, `reddens 8 assertions`) is a finding unless its own sentence marks it an
-expectation. Without `PATH`, the first rule reads only the lines the change wrote — those that
+expectation; and where git tracks a file under `[paths] specs`, a plan's first `**Spec:**` line
+names its spec in backticks, any span there that resolves inside the project once an anchor after
+`#` is dropped, or says `none — <reason>` (the line alone is read, a list item's included; its paths
+are held to the first rule as every line's are). Without `PATH`, the first rule reads only the lines the change wrote — those that
 differ from every merge base's copy and from `REF`'s — so a change editing a delivered plan, an
 `Interfaces:` block say, is held to its own lines and never to paths the tree has moved since the
 plan was written; a new plan is all such lines. Naming a plan as `PATH` settles every reference in
