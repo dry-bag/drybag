@@ -162,6 +162,7 @@ def run_detach(args: argparse.Namespace) -> Result:
         f"{len(removed.directories_removed)} directory(ies){withdrawn}; "
         f"the binding record was left in place"
     )
+    line = "; ".join((line, *removed.notes))
     left = (
         f"Codex rule copy left: {quoted(rule)} (it does not hold the bytes attach wrote)"
         for rule in removed.rules_left

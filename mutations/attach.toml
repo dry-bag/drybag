@@ -2021,6 +2021,19 @@ reddens = [
   "tests/attach/test_write.py::test_on_withdraws_the_deny_entry",
 ]
 
+# A `deniedMcpServers` that is no list is a note, never a refusal, on `attach` and on `detach`.
+[[mutation]]
+name = "a deniedMcpServers that is no list refuses again"
+file = "src/drybag/attach/permissions.py"
+before = '''    return list(denied) if isinstance(denied, list) else None'''
+after = '''    if not isinstance(denied, list):
+        raise EntriesError(DENIED_NOT_A_LIST)
+    return list(denied)'''
+reddens = [
+  "tests/attach/test_write.py::test_a_denied_key_that_is_no_list_is_a_note_and_every_other_step_runs",
+  "tests/attach/test_detach.py::test_detach_past_a_denied_key_that_is_no_list_says_so",
+]
+
 [[mutation]]
 name = "detach leaves the MCP ledger file behind"
 file = "src/drybag/attach/write.py"

@@ -27,7 +27,7 @@ from drybag.attach.binding import OVERLAY_DAMAGED
 from drybag.attach.check import check
 from drybag.attach.exclude import NOT_IGNORED, TRACKED
 from drybag.attach.mcp import McpLedger, digest, read_mcp_ledger
-from drybag.attach.permissions import settings_document
+from drybag.attach.permissions import DENIED_NOT_A_LIST, settings_document
 from drybag.attach.write import (
     GROUP_ESCAPES,
     GROUP_UNASKED,
@@ -2804,3 +2804,18 @@ def test_attach_with_no_mcp_files_calls_no_claude_mcp(tmp_path: Path) -> None:
     assert runner.calls, "the plugin calls ran, so the recorder saw the run"
     assert _mcp_calls(runner) == []
     assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+
+
+def test_a_denied_key_that_is_no_list_is_a_note_and_every_other_step_runs(tmp_path: Path) -> None:
+    # Every fault is a note: under a `deniedMcpServers` that is no list drybag writes and takes
+    # back no entry, and the allow rules, the server and the ledger are delivered all the same.
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _mcp(store, srv1="off", m1=SERVER)
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps({DENIED: {"x": 1}}), encoding="utf-8")
+    assert check(root, store=store, machine=machine).data["mcp_deny"] == []
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    assert DENIED_NOT_A_LIST in attached.notes
+    assert _settings(root)[DENIED] == {"x": 1}
+    assert _settings(root)["permissions"]["allow"] == [RULE]
+    assert read_mcp_ledger(root) == McpLedger(mcp={"m1": digest(SERVER)})

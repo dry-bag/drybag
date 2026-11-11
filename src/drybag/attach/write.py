@@ -75,6 +75,7 @@ from drybag.attach.mcp import (
 from drybag.attach.permissions import (
     CODEX_RULES,
     DENIED_KEY,
+    DENIED_NOT_A_LIST,
     LOCAL_SETTINGS,
     PermissionDiff,
     allow_list,
@@ -367,6 +368,7 @@ class DenyChange:
 
     add: tuple[str, ...] = ()
     withdraw: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
 
 
 def _server_entry(name: str) -> dict[str, str]:
@@ -379,7 +381,9 @@ def _deny_change(document: str, off: Iterable[str], ledger: McpLedger) -> DenyCh
     does not record, or whose shape is not exactly `{"serverName": <name>}`, is the owner's and
     is neither counted nor touched."""
     wanted = tuple(sorted(off))
-    entries = denied_list(settings_document(document), LOCAL_SETTINGS)
+    entries = denied_list(settings_document(document))
+    if entries is None:
+        return DenyChange(notes=(DENIED_NOT_A_LIST,))
     add = tuple(name for name in wanted if _server_entry(name) not in entries)
     withdraw = tuple(
         name for name in ledger.deny if name not in wanted and _server_entry(name) in entries
@@ -410,7 +414,7 @@ def _merged_settings(document: str, diff: PermissionDiff, deny: DenyChange) -> s
         permissions["allow"] = allow
         raw["permissions"] = permissions
     if deny.add or deny.withdraw:
-        denied = denied_list(raw, LOCAL_SETTINGS)
+        denied = denied_list(raw) or []
         denied = [e for e in denied if not any(e == _server_entry(n) for n in deny.withdraw)]
         denied += [_server_entry(n) for n in deny.add if _server_entry(n) not in denied]
         if denied or DENIED_KEY in raw:
@@ -951,7 +955,7 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         parts=parts,
         deny=deny,
         mcp_ledger=mcp_ledger,
-        mcp_notes=(*fold.notes, *held.notes),
+        mcp_notes=(*fold.notes, *held.notes, *deny.notes),
         served=fold.served,
         mcp_held=held,
     )
@@ -1242,6 +1246,8 @@ class Detached:
     # The composed store was kept, its links taken, because it holds a file that is not a link: a
     # note the harness wrote there, which nothing of drybag's placed.
     store_kept: bool = False
+    # What reading the settings file and the MCP ledger said, a note and never a refusal.
+    notes: tuple[str, ...] = ()
 
 
 def _emptied(raw: dict[str, Any], *, denied: bool = False) -> dict[str, Any]:
@@ -1275,6 +1281,7 @@ class SettingsWithdrawal:
 
     removed: tuple[str, ...]
     text: str | None
+    notes: tuple[str, ...] = ()
 
 
 def _planned_settings(
@@ -1299,13 +1306,10 @@ def _planned_settings(
         for key in recorded.settings_keys:
             raw.pop(key, None)
         # The `deniedMcpServers` entries the MCP ledger recorded, each only in its exact shape.
-        gone = [n for n in deny if _server_entry(n) in denied_list(raw, LOCAL_SETTINGS)]
+        denied = denied_list(raw)
+        gone = [n for n in deny if _server_entry(n) in (denied or [])]
         if gone:
-            raw[DENIED_KEY] = [
-                e
-                for e in denied_list(raw, LOCAL_SETTINGS)
-                if not any(e == _server_entry(n) for n in gone)
-            ]
+            raw[DENIED_KEY] = [e for e in denied or [] if e not in map(_server_entry, gone)]
         # Through `settings_text`, as every write-back of a parsed settings document: on Python
         # 3.12 an indented encode stops near 994 levels, under what the parser read.
         remaining = _emptied(raw, denied=bool(gone))
@@ -1313,11 +1317,12 @@ def _planned_settings(
         unchanged = remaining == held
     except RecursionError:
         raise ParserLimitError(f"{LOCAL_SETTINGS} {NESTED}") from None
+    notes = () if denied is not None else (DENIED_NOT_A_LIST,)
     if unchanged:
-        return SettingsWithdrawal(removed, None)
+        return SettingsWithdrawal(removed, None, notes)
     # `{}` is not what the file looked like before `attach`; a file holding nothing is one this
     # command created and is the last thing it takes away.
-    return SettingsWithdrawal(removed, emptied if remaining else "")
+    return SettingsWithdrawal(removed, emptied if remaining else "", notes)
 
 
 def _withdraw_settings(root: Path, planned: SettingsWithdrawal) -> tuple[str, ...]:
@@ -1544,4 +1549,5 @@ def detach(root: Path, *, runner: Runner) -> Detached:
         tuple(rules_left),
         removed,
         store_kept,
+        settings.notes,
     )

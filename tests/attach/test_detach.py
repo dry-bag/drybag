@@ -18,6 +18,7 @@ import pytest
 
 from drybag import fsops, jsonobject
 from drybag.attach.mcp import read_mcp_ledger
+from drybag.attach.permissions import DENIED_NOT_A_LIST
 from drybag.attach.write import Attached, Detached, attach, detach
 from drybag.binding import LEDGER_NAME, MCP_LEDGER_FILE, common_directory
 from drybag.errors import Failure, Refusal
@@ -1425,6 +1426,16 @@ def test_owner_deny_entries_survive_attach_and_detach(tmp_path: Path) -> None:
     _attach(root, store, machine)
     _detach(root)
     assert json.loads(settings.read_text(encoding="utf-8")) == {"deniedMcpServers": owner}
+
+
+def test_detach_past_a_denied_key_that_is_no_list_says_so(tmp_path: Path) -> None:
+    root, store, machine = _bound(tmp_path)
+    _off(store.parents[2], "srv1")
+    _attach(root, store, machine)
+    (root / SETTINGS).write_text(json.dumps({"deniedMcpServers": "srv1"}), encoding="utf-8")
+    assert DENIED_NOT_A_LIST in _detach(root).notes
+    assert json.loads((root / SETTINGS).read_text(encoding="utf-8")) == {"deniedMcpServers": "srv1"}
+    assert not ledger_file(root).exists()
 
 
 def test_detach_removes_the_deny_entries_and_the_mcp_ledger(tmp_path: Path) -> None:
