@@ -1977,6 +1977,17 @@ reddens = [
   "tests/attach/test_mcp.py::test_on_restores_an_earlier_definition",
 ]
 
+# An entry no `claude mcp` call can take is a note from the fold: no digest, ledger or launch sees it.
+[[mutation]]
+name = "the MCP fold keeps an entry with a NUL in its name or a lone surrogate"
+file = "src/drybag/attach/mcp.py"
+before = "        elif not _passable(name, value):"
+after = "        elif False:"
+reddens = [
+  "tests/attach/test_mcp.py::test_an_entry_no_claude_mcp_call_can_take_is_a_note",
+  "tests/attach/test_doctor.py::test_an_mcp_entry_no_claude_call_can_take_leaves_the_row_unred",
+]
+
 # `deniedMcpServers` entries are written and withdrawn by the ledger's record and nothing else: an entry
 # the owner wrote is never touched.
 [[mutation]]

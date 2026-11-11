@@ -53,6 +53,10 @@ SERVERS_NOT_AN_OBJECT = "{path}: mcpServers is not an object, so it holds no MCP
 BAD_VALUE = (
     '{path}: an mcpServers entry is not an object, "off" or "on"; it is skipped (entry {position})'
 )
+UNPASSABLE = (
+    "{path}: an mcpServers entry holds a NUL in its name or a lone surrogate, which no `claude "
+    "mcp` call can be given; it is skipped (entry {position})"
+)
 
 
 @dataclass(frozen=True)
@@ -109,11 +113,23 @@ def _entries(plate: Plate, notes: list[str]) -> dict[str, object]:
         return {}
     kept: dict[str, object] = {}
     for position, (name, value) in enumerate(servers.items(), 1):
-        if isinstance(value, dict) or value in (OFF, ON):
-            kept[name] = value
-        else:
+        if not isinstance(value, dict) and value not in (OFF, ON):
             notes.append(BAD_VALUE.format(path=shown, position=position))
+        elif not _passable(name, value):
+            notes.append(UNPASSABLE.format(path=shown, position=position))
+        else:
+            kept[name] = value
     return kept
+
+
+def _passable(name: str, value: object) -> bool:
+    """Whether `name` can be an argv word and `value` digested: a NUL ends the word, and a lone
+    surrogate, which `json.loads` makes of a `\\ud800`, encodes as no UTF-8."""
+    try:
+        json.dumps([name, value], ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return "\0" not in name
 
 
 def fold_mcp(plates: Sequence[Plate]) -> Fold:

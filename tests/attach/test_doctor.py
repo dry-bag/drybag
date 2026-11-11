@@ -983,6 +983,12 @@ def test_doctor_attributes_each_served_name_to_its_plates(tmp_path: Path) -> Non
     ) in row.detail
 
 
+def test_an_mcp_entry_no_claude_call_can_take_leaves_the_row_unred(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"m1": {"command": "a", "args": ["\ud800"]}})
+    assert _mcp_row(tmp_path, root).status != RED
+
+
 def test_doctor_lists_unsettled_names(tmp_path: Path) -> None:
     # A name the ledger holds with no digest is one a call was started for and not known to have
     # settled; a name it holds under a digest is no such name, whether or not it is still served.

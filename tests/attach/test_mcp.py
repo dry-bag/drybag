@@ -88,6 +88,18 @@ def test_bad_values_are_notes_and_never_print_a_value(tmp_path: Path) -> None:
     assert str(bad_value.directory / "claude" / "mcp.json") in fold.notes[0]
 
 
+def test_an_entry_no_claude_mcp_call_can_take_is_a_note(tmp_path: Path) -> None:
+    # A NUL ends an argv word and a lone surrogate encodes as no UTF-8, so neither reaches the
+    # digest, the ledger or a launch; the name's own rule is Claude Code's, and stays its own.
+    lone, nul = "\ud800", "\0"
+    entries = {f"m{nul}1": {"command": "a"}, f"m{lone}2": "off", "m3": {"args": [lone]}}
+    plate = _plate(tmp_path, PlateKind.COMMON, "c1", _servers(**entries, **{"m.4": "off"}))
+    fold = fold_mcp([plate])
+    assert (fold.served, list(fold.off)) == ({}, ["m.4"])
+    assert len(fold.notes) == 3
+    assert all(lone not in note and nul not in note for note in fold.notes)
+
+
 def test_a_sub_plate_definition_wins_its_parents(tmp_path: Path) -> None:
     parent = _plate(tmp_path, PlateKind.PROJECT, "p", _servers(srv1={"command": "a"}))
     sub = _plate(tmp_path, PlateKind.PROJECT, "p", _servers(srv1={"command": "m"}), machine="m1")
