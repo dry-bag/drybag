@@ -1374,7 +1374,7 @@ reddens = [
 [[mutation]]
 name = "check skips the reads the run makes before its first write"
 file = "src/drybag/attach/check.py"
-before = "    planned = plan_writes(root, config, binding, diff)\n    return _report(binding, planned.diff, source, _mcp_heads(planned))\n"
+before = "    planned = plan_writes(root, config, binding, diff)\n    return _report(binding, planned.diff, source, _mcp_heads(planned), planned.mcp_notes)\n"
 after = "    return _report(binding, diff, source)\n"
 reddens = [
   "tests/attach/test_commands.py::test_check_ends_on_an_overlay_rule_that_is_not_utf8_with_the_runs_code_and_line",
@@ -1935,8 +1935,8 @@ reddens = [
 [[mutation]]
 name = "attach --check says no note of the plates"
 file = "src/drybag/attach/check.py"
-before = "    for note in binding.plate_notes:"
-after = "    for note in ():"
+before = "    for note in (*binding.plate_notes, *mcp_notes):"
+after = "    for note in mcp_notes:"
 reddens = [
   "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command1]",
 ]
@@ -2188,6 +2188,15 @@ before = '''            remote = head == "mcp_readd" and "url" in planned.served
 after = '''            remote = False'''
 reddens = [
   "tests/attach/test_commands.py::test_check_lists_mcp_changes_and_launches_nothing",
+]
+
+[[mutation]]
+name = "attach --check leaves out the MCP notes the run says"
+file = "src/drybag/attach/check.py"
+before = '''    for note in (*binding.plate_notes, *mcp_notes):'''
+after = '''    for note in binding.plate_notes:'''
+reddens = [
+  "tests/attach/test_write.py::test_check_says_the_mcp_notes_the_run_says",
 ]
 
 [[mutation]]

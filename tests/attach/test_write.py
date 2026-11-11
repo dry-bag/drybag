@@ -2819,3 +2819,18 @@ def test_a_denied_key_that_is_no_list_is_a_note_and_every_other_step_runs(tmp_pa
     assert _settings(root)[DENIED] == {"x": 1}
     assert _settings(root)["permissions"]["allow"] == [RULE]
     assert read_mcp_ledger(root) == McpLedger(mcp={"m1": digest(SERVER)})
+
+
+def test_check_says_the_mcp_notes_the_run_says(tmp_path: Path) -> None:
+    # An "off" under a `deniedMcpServers` that is no list takes no effect, and a skipped entry
+    # delivers nothing: `--check` says both where the run says them, after its other notes.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, srv1="off", bad=3)
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps({DENIED: {"x": 1}}), encoding="utf-8")
+    checked = check(root, store=store, machine=machine)
+    notes = attach(root, store=store, machine=machine, runner=Recorder()).notes
+    said = [note for note in notes if "mcpServers" in note or note == DENIED_NOT_A_LIST]
+    assert len(said) == 2 and said[-1] == DENIED_NOT_A_LIST
+    assert checked.summary.split("\n")[0].endswith("; " + "; ".join(said))
+    assert checked.data["notes"] == said

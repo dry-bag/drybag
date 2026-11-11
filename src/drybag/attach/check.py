@@ -50,7 +50,7 @@ def check(
     binding = read_binding(root, store=store, machine=machine, config=config)
     diff = gates(root, config, binding)
     planned = plan_writes(root, config, binding, diff)
-    return _report(binding, planned.diff, source, _mcp_heads(planned))
+    return _report(binding, planned.diff, source, _mcp_heads(planned), planned.mcp_notes)
 
 
 # The MCP servers the run would change: each head's names, as `--json` carries them, and a line
@@ -91,11 +91,16 @@ SIGNS_OUT = " (signs a remote server out)"
 
 
 def _report(
-    binding: Binding, diff: PermissionDiff, source: str, mcp: McpHeads = ({}, [])
+    binding: Binding,
+    diff: PermissionDiff,
+    source: str,
+    mcp: McpHeads = ({}, []),
+    mcp_notes: tuple[str, ...] = (),
 ) -> Result:
     """The report of a check that met no refusal: the project and where its name came from, the
     binding, the diff and the rule files. The project is a name the repository or the overlay
-    chose, so it prints quoted on the line and through `printable` in `--json`."""
+    chose, so it prints quoted on the line and through `printable` in `--json`. `mcp_notes` are the
+    run's own (`AttachPlan.mcp_notes`), said after the plates' notes where the run says them."""
     # Named and not merely counted, and on this result rather than in `PermissionDiff`: the
     # diff's fields say what `attach` would add, what is already there and what it would take
     # back, and a file list of another kind would blur what they mean. These names come out of the
@@ -114,7 +119,7 @@ def _report(
         summary += f"; {binding.note}"
     if binding.fault is not None:
         summary += f"; {binding.fault}"
-    for note in binding.plate_notes:
+    for note in (*binding.plate_notes, *mcp_notes):
         summary += f"; {note}"
     if rules:
         summary += "\n" + "\n".join(f"  {target}" for target in rules)
@@ -132,6 +137,8 @@ def _report(
         # `settings.local.json`, which a clone can commit, so it is repository-authored.
         "already_present": len(diff.already_present),
         "rules_to_write": list(rules),
+        # The run's MCP notes, as its `--json` carries them; no definition, value or argv is in one.
+        "notes": list(mcp_notes),
         **heads,
     }
     return Result(summary, data)
