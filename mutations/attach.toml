@@ -2093,15 +2093,25 @@ reddens = [
   "tests/attach/test_mcp_reconcile.py::test_option_shaped_name_follows_a_double_dash",
 ]
 
-# Only Claude Code's own answer to `remove`, exit 0 or 1, drops a name: with no `claude` on `PATH`
-# the entry stays, and dropping the name would orphan it.
+# Only Claude Code's own answer to `remove`, exit 0 or its answer that the name is absent, drops a
+# name: with no `claude` on `PATH`, or a `remove` that could not write, the entry stays, and
+# dropping the name would orphan it.
 [[mutation]]
 name = "a take-back drops the name whatever remove exited with"
 file = "src/drybag/attach/mcp.py"
-before = '''        if answer.code in _ANSWERED:'''
+before = '''        if answer.code == 0 or absent:'''
 after = '''        if True:'''
 reddens = [
   "tests/attach/test_mcp_reconcile.py::test_take_back_keeps_unsettled_when_claude_is_missing",
+]
+
+[[mutation]]
+name = "a take-back drops the name on any exit 1"
+file = "src/drybag/attach/mcp.py"
+before = '''        absent = answer.code == 1 and ABSENT.format(name=retired) in answer.stderr'''
+after = '''        absent = answer.code == 1'''
+reddens = [
+  "tests/attach/test_mcp_reconcile.py::test_take_back_keeps_a_name_whose_remove_exits_1_for_another_reason",
 ]
 
 [[mutation]]

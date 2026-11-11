@@ -14,6 +14,7 @@ import pytest
 
 from drybag.attach.mcp import UNSETTLED, Reconciled, Served, digest, fold_mcp, reconcile
 from drybag.config.plates import Plate, PlateKind
+from drybag.printed import quoted
 from drybag.runner import Completed
 from tests.runners import Recorder
 
@@ -21,7 +22,8 @@ MARKER = "sekret-marker-5c1"
 DEFINITION: Mapping[str, object] = {"command": "srv", "args": ["--stdio"]}
 REMOVE = "claude mcp remove --scope local --"
 ADD = "claude mcp add-json --scope local --"
-# What Claude Code 2.1.319 answered, measured on a scratch home.
+# What Claude Code 2.1.319 answered, measured on a scratch home: `remove` of a name local scope
+# does not hold, and a definition it refuses.
 ABSENT = Completed(1, "", 'No MCP server named "m1" in local scope')
 INVALID = Completed(1, "", "Invalid configuration: : Invalid input")
 
@@ -114,14 +116,27 @@ def test_failed_add_stays_unsettled_with_claude_codes_message(tmp_path: Path) ->
     assert MARKER not in message
 
 
-def test_take_back_drops_on_exit_0_and_1(tmp_path: Path) -> None:
-    runner = Recorder(answers={f"{REMOVE} gone": ABSENT})
-    owned = {"kept": digest(DEFINITION), "gone": UNSETTLED}
+def test_take_back_drops_on_exit_0_or_claude_codes_answer_that_the_name_is_absent(
+    tmp_path: Path,
+) -> None:
+    runner = Recorder(answers={f"{REMOVE} m1": ABSENT})
+    owned = {"kept": digest(DEFINITION), "m1": UNSETTLED}
     done, saves = _run(tmp_path, {}, owned, runner)
-    assert sorted(argv[-1] for argv in runner.calls) == ["gone", "kept"]
+    assert sorted(argv[-1] for argv in runner.calls) == ["kept", "m1"]
     assert done.owned == {}
     assert done.failed == ()
-    assert saves == [{"kept": UNSETTLED, "gone": UNSETTLED}, {}]
+    assert saves == [{"kept": UNSETTLED, "m1": UNSETTLED}, {}]
+
+
+def test_take_back_keeps_a_name_whose_remove_exits_1_for_another_reason(tmp_path: Path) -> None:
+    # Claude Code exits 1 for a name it could not remove too (measured on 2.1.316, a read-only
+    # `~/.claude.json`), and for another name's absence: only its answer that this name is absent
+    # drops the record, so a wording it changes leaves a name unsettled and never loses one.
+    for said in ('MCP server "m1" was not removed from the file', 'No MCP server named "m10"'):
+        done, saves = _run(tmp_path, {}, {"m1": digest(DEFINITION)}, Recorder(code=1, stderr=said))
+        assert done.owned == {"m1": UNSETTLED}
+        assert saves[-1] == {"m1": UNSETTLED}
+        assert done.failed == (("m1", quoted(said)),)
 
 
 class _CannotLaunch:
@@ -136,7 +151,7 @@ def test_take_back_keeps_unsettled_when_claude_is_missing(
     tmp_path: Path, runner: Recorder | _CannotLaunch
 ) -> None:
     # `remove` with no `claude` on `PATH` exits 127 and leaves the entry where it is (measured):
-    # only Claude Code's own answer, exit 0 or 1, may drop the record, or the entry is orphaned.
+    # only Claude Code's own answer may drop the record, or the entry is orphaned.
     saves = _Saves()
     done = reconcile(tmp_path, {}, {"m1": digest(DEFINITION)}, runner, saves)
     assert done.owned == {"m1": UNSETTLED}

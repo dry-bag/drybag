@@ -217,10 +217,11 @@ def write_mcp_ledger(root: Path, ledger: McpLedger) -> None:
 
 # A name the ledger owns whose call was started and whose outcome is not known to be good.
 UNSETTLED = None
-# `remove`'s exits that are Claude Code's own answer: run from the main checkout, 0 removed the
-# entry and 1 found none, so the name is absent at local scope either way. Any other (no `claude`,
-# a spawn error, a signal, a timeout) leaves the entry where it was.
-_ANSWERED = (0, 1)
+# Claude Code's answer to `remove` of a name local scope does not hold, measured on 2.1.319 as exit
+# 1 and `No MCP server named "q" in local scope`. Exit 1 also answers a `remove` that could not
+# write, so only exit 0 or this answer for the name drops it; any other (no `claude`, a spawn
+# error, a signal, a timeout, another wording) leaves the name unsettled, never lost.
+ABSENT = 'No MCP server named "{name}"'
 
 
 @dataclass(frozen=True)
@@ -272,7 +273,7 @@ def reconcile(
     save: Callable[[dict[str, str | None]], None],
 ) -> Reconciled:
     """Mark, deliver, take back, then save what is left; every call runs from `main`, the main
-    checkout, which is what makes `remove`'s exit 1 mean the name is absent there."""
+    checkout, which is what makes `remove`'s answer that a name is absent mean absent there."""
     plan = planned_mcp(served, owned)
     marked = (*plan.add, *plan.readd, *plan.take_back)
     left = dict(owned)
@@ -294,7 +295,8 @@ def reconcile(
             failed.append((name, answered(added)))
     for retired in plan.take_back:
         answer = _launch(runner, filled(MCP_REMOVE_LOCAL, retired), main)
-        if answer.code in _ANSWERED:
+        absent = answer.code == 1 and ABSENT.format(name=retired) in answer.stderr
+        if answer.code == 0 or absent:
             del left[retired]
         else:
             failed.append((retired, answered(answer)))

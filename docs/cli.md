@@ -1357,8 +1357,8 @@ wrote: it stays, and so does the directory, which the line says and `--json` rep
 the ledger, `drybag/attach.json` in the git common directory. Before the render directory goes it
 takes the `deniedMcpServers` entries `attach` recorded out of the settings file and each MCP server
 `drybag/attach-mcp.json` records out of `~/.claude.json`, with `claude mcp remove --scope local --
-<name>` from the main checkout, then deletes that file; a `remove` Claude Code did not answer (no
-`claude` on `PATH`, say) fails (`1`) naming the server and Claude Code's message, with the name
+<name>` from the main checkout, then deletes that file; a `remove` that neither succeeded nor
+answered `No MCP server named "<name>"` (no `claude` on `PATH`, say) fails (`1`) naming the server and Claude Code's message, with the name
 still recorded and the exclude block, the ledgers and the render kept, so running `detach` again
 finishes. A `drybag/attach-mcp.json` that cannot be read is left in place and said, and
 with no `drybag/attach.json` beside it (an older drybag's `detach` removed that one alone) its
