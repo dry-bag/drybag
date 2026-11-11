@@ -2772,7 +2772,7 @@ def test_attach_delivers_and_records_digests(tmp_path: Path) -> None:
     launched = zip(runner.calls, runner.cwds, strict=True)
     assert {cwd for argv, cwd in launched if argv[1] == "mcp"} == {root}
     assert read_mcp_ledger(root).mcp == {"m1": digest(SERVER)}
-    assert attached.mcp_delivered == ("m1",)
+    assert (attached.mcp_delivered, attached.mcp_replaced) == (("m1",), ())
     # A second run with the same definition launches nothing for it.
     again = Recorder()
     attach(root, store=store, machine=machine, runner=again)

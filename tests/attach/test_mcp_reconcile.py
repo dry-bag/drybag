@@ -20,11 +20,8 @@ from tests.runners import Recorder
 
 MARKER = "sekret-marker-5c1"
 DEFINITION: Mapping[str, object] = {"command": "srv", "args": ["--stdio"]}
-REMOVE = "claude mcp remove --scope local --"
 ADD = "claude mcp add-json --scope local --"
-# What Claude Code 2.1.319 answered, measured on a scratch home: `remove` of a name local scope
-# does not hold, and a definition it refuses.
-ABSENT = Completed(1, "", 'No MCP server named "m1" in local scope')
+# What Claude Code 2.1.319 answered for a definition it refuses, measured on a scratch home.
 INVALID = Completed(1, "", "Invalid configuration: : Invalid input")
 
 
@@ -55,7 +52,7 @@ def _run(
 
 def test_new_name_is_removed_then_added_and_digested(tmp_path: Path) -> None:
     served = _served(tmp_path, m1=DEFINITION)
-    runner = Recorder(answers={REMOVE: ABSENT})
+    runner = Recorder()
     done, saves = _run(tmp_path, served, {}, runner)
     assert runner.calls == [
         ["claude", "mcp", "remove", "--scope", "local", "--", "m1"],
@@ -106,7 +103,7 @@ def test_changed_definition_is_re_added(tmp_path: Path) -> None:
 
 def test_failed_add_stays_unsettled_with_claude_codes_message(tmp_path: Path) -> None:
     served = _served(tmp_path, m1={"command": "srv", "env": {"TOKEN": MARKER}})
-    runner = Recorder(answers={REMOVE: ABSENT, ADD: INVALID})
+    runner = Recorder(answers={ADD: INVALID})
     done, saves = _run(tmp_path, served, {}, runner)
     assert done.owned == {"m1": UNSETTLED}
     assert saves[-1] == {"m1": UNSETTLED}
@@ -119,7 +116,7 @@ def test_failed_add_stays_unsettled_with_claude_codes_message(tmp_path: Path) ->
 def test_take_back_drops_on_exit_0_or_claude_codes_answer_that_the_name_is_absent(
     tmp_path: Path,
 ) -> None:
-    runner = Recorder(answers={f"{REMOVE} m1": ABSENT})
+    runner = Recorder(local={"kept"})
     owned = {"kept": digest(DEFINITION), "m1": UNSETTLED}
     done, saves = _run(tmp_path, {}, owned, runner)
     assert sorted(argv[-1] for argv in runner.calls) == ["kept", "m1"]
@@ -164,7 +161,7 @@ def test_replacement_is_reported_for_a_name_without_a_digest(tmp_path: Path) -> 
     # run. Said for a name with no digest at the start, and never for one this ledger delivered.
     served = _served(tmp_path, fresh=DEFINITION, unsettled=DEFINITION, changed=DEFINITION)
     owned = {"unsettled": UNSETTLED, "changed": digest({"command": "old"})}
-    done, _ = _run(tmp_path, served, owned, Recorder())
+    done, _ = _run(tmp_path, served, owned, Recorder(local={"fresh", "unsettled", "changed"}))
     assert done.replaced == ("fresh", "unsettled")
 
 
@@ -183,7 +180,7 @@ def test_interrupted_after_the_mark_settles_next_run(tmp_path: Path) -> None:
     with pytest.raises(_Killed):
         reconcile(tmp_path, served, {}, Recorder(on_call=kill_after_the_remove), saves)
     assert saves == [{"m1": UNSETTLED}]
-    runner = Recorder(answers={REMOVE: ABSENT})
+    runner = Recorder()
     done = reconcile(tmp_path, served, saves[-1], runner, saves)
     assert [argv[2] for argv in runner.calls] == ["remove", "add-json"]
     assert done.owned == {"m1": digest(DEFINITION)}

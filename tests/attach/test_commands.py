@@ -1144,3 +1144,30 @@ def test_failure_screen_prints_names_never_a_definition(
     said = quoted("Invalid configuration: : Invalid input")
     assert f"MCP server failed: m1: {said}" in out.splitlines()
     assert MARKER not in out + err
+
+
+def test_attach_screen_says_each_server_delivered_replaced_and_taken_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    common = store.parents[2] / "common"
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    _mcp_file(common, {"m1": {"command": "a"}, "m2": {"command": "b"}})
+    runner = _recorded(monkeypatch)
+    # `m2` is a local entry made by hand, which the first delivery replaces.
+    runner.local.add("m2")
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    said = [line.split(" (")[0] for line in lines if line.startswith("MCP server")]
+    assert said == [
+        "MCP server delivered: m1",
+        "MCP server delivered: m2",
+        "MCP server replaced: m2",
+    ]
+    _mcp_file(common, {"m2": {"command": "b"}})
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [line for line in lines if line.startswith("MCP server")] == [
+        "MCP server taken back: m1"
+    ]
+    assert runner.local == {"m2"}
