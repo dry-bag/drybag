@@ -25,7 +25,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from drybag.attach.binding import Binding
+    from drybag.attach.mcp import McpLedger
     from drybag.attach.write import AttachLedger
+    from drybag.config.plates import Plate
     from drybag.config.schema import Config
     from drybag.doctor.api import Context, Contribution, Row, Status
 
@@ -38,26 +40,29 @@ NO_LEDGER: Final = "no-ledger"
 UNREADABLE_LEDGER: Final = "unreadable-ledger"
 
 
-def _ledger_state(root: Path) -> AttachLedger | str:
+def _ledger_state(root: Path) -> tuple[AttachLedger | str, Path | None]:
     """This repository's attach ledger, `NO_LEDGER` when no file is there, or `UNREADABLE_LEDGER`
-    for `read_ledger`'s `NotALedger`. `root` is the main checkout (`_owner`); the ledger is in the
-    git common directory, so any checkout names it. Where git cannot be run, the row cannot say
-    (`UNASKABLE`); in no repository there is no ledger.
+    for `read_ledger`'s `NotALedger`, and the git common directory it is in, `None` where git
+    named none. `root` is the main checkout (`_owner`); the ledger is in the git common directory,
+    so any checkout names it. Where git cannot be run, the row cannot say (`UNASKABLE`); in no
+    repository there is no ledger.
     """
     from drybag.attach.write import NotALedger, read_ledger
     from drybag.binding import LEDGER_FILE, common_directory
     from drybag.errors import Failure
     from drybag.gitenv import GitUnavailable
 
+    common = None
     try:
-        recorded = read_ledger(common_directory(root) / LEDGER_FILE)
+        common = common_directory(root)
+        recorded = read_ledger(common / LEDGER_FILE)
     except NotALedger:
-        return UNREADABLE_LEDGER
+        return UNREADABLE_LEDGER, common
     except GitUnavailable:
-        return UNASKABLE
+        return UNASKABLE, common
     except Failure:
-        return NO_LEDGER
-    return NO_LEDGER if recorded is None else recorded
+        return NO_LEDGER, common
+    return NO_LEDGER if recorded is None else recorded, common
 
 
 class _Ledger:
@@ -65,16 +70,24 @@ class _Ledger:
 
     Created once per report by `register()`, so every question `attached` asks of the file gets
     one answer: no arm can read the ledger as there while another reads it as absent or
-    unreadable.
+    unreadable. The MCP ledger beside it is read from the common directory that read found, so
+    reading it asks `git` nothing more.
     """
 
     def __init__(self) -> None:
-        self._state: tuple[AttachLedger | str] | None = None
+        self._state: tuple[AttachLedger | str, Path | None] | None = None
 
     def state(self, root: Path) -> AttachLedger | str:
         if self._state is None:
-            self._state = (_ledger_state(root),)
+            self._state = _ledger_state(root)
         return self._state[0]
+
+    def mcp(self, root: Path) -> McpLedger:
+        from drybag.attach.mcp import McpLedger, mcp_ledger_in
+
+        self.state(root)
+        common = (self._state or (None, None))[1]
+        return McpLedger() if common is None else mcp_ledger_in(common)
 
 
 # The remedy for an overlay project record that cannot be read: it binds nothing, so the binding
@@ -335,8 +348,8 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
 
     Every checkout reads the main checkout's ledger and settings file (`_owner`): `attach` writes
     both there, whichever worktree it ran from, and Claude Code reads that settings file from every
-    worktree. The delivery and the pointer are said side by side, and the row takes the worse
-    status of the two and the worse one's remedy first.
+    worktree. The delivery, the pointer and the overlay's MCP servers (`_mcp`) are said side by
+    side, and the row takes the worst status of them and the worst one's remedy first.
     """
     from drybag.attach import ATTACH_COMMAND
     from drybag.binding import LEDGER_NAME
@@ -402,19 +415,18 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
     recorded = ledger.state(main)
     if isinstance(recorded, str):  # `_binding_answer` answered a binding, so never
         return _uncorroborated(recorded)
-    delivery = _delivery(context, main, recorded, answer, id)
-    if not linked:
-        return Row(
-            delivery.status, f"attached; {delivery.clause}; the binding is {state}", delivery.remedy
-        )
-    pointer = _pointer(main, id)
+    findings = [
+        _delivery(context, main, recorded, answer, id),
+        *([_pointer(main, id)] if linked else []),
+        *_mcp(answer, ledger.mcp(main)),
+    ]
     rank = {OK: 0, WARN: 1, RED: 2}
-    pair = (delivery.status, delivery.remedy), (pointer.status, pointer.remedy)
-    (status, worse), (_, other) = sorted(pair, key=lambda each: -rank[each[0]])
+    ranked = sorted(findings, key=lambda each: -rank[each.status])
+    clauses = "; ".join(each.clause for each in findings)
     return Row(
-        status,
-        f"attached; {delivery.clause}; {pointer.clause}; the binding is {state}",
-        "; ".join(dict.fromkeys(remedy for remedy in (worse, other) if remedy)),
+        ranked[0].status,
+        f"attached; {clauses}; the binding is {state}",
+        "; ".join(dict.fromkeys(each.remedy for each in ranked if each.remedy)),
     )
 
 
@@ -565,6 +577,80 @@ def _pointer(main: Path, id: str) -> _Finding:
     if any(fsops.is_symlink(link) and not fsops.exists(link) for link in composed.iterdir()):
         return _Finding(WARN, STORE_DANGLES, f"{rerun}, which links it again")
     return _Finding(OK, POINTER_IN_PLACE, "")
+
+
+# What `_mcp` says of the overlay's MCP servers: names, the plates they come from and drybag's own
+# words, never a definition, which holds argv and environment.
+MCP_UNSETTLED: Final = (
+    "unsettled MCP servers: {names}; `attach` did not finish delivering or taking these back; run "
+    "it again, and its screen gives Claude Code's reason if it fails"
+)
+# A connector is switched off by its display name, `claude.ai <name>`, and a desktop app session
+# registers the account's connectors in-process, where no MCP setting reaches them.
+CONNECTOR_PREFIX: Final = "claude.ai "
+MCP_CONNECTOR: Final = (
+    "in desktop app sessions the account's connectors load in every project; disconnect one at "
+    "claude.ai/customize/connectors to drop it everywhere"
+)
+MCP_UNSEEN: Final = (
+    "`drybag doctor` runs no `claude` command, so it cannot see whether a delivered server is "
+    "still in ~/.claude.json"
+)
+
+
+def _plate(overlay: Path, plate: Plate) -> str:
+    """A plate as the overlay spells its directory, `tags/t1`, and a machine's sub-plate as its
+    parent's with the machine, `tags/t1 on m1`."""
+    from drybag.config.classes import labelled
+    from drybag.printed import quoted
+
+    parent = plate.directory if plate.machine is None else plate.directory.parent.parent
+    return labelled(quoted(parent.relative_to(overlay).as_posix()), plate.machine)
+
+
+def _mcp(bound: Binding, recorded: McpLedger) -> list[_Finding]:
+    """The overlay's MCP servers, read from its `claude/mcp.json` files and the MCP ledger alone:
+    each name it delivers with the plate whose definition wins and the one that switched it on,
+    each name it switches off with its plate, and the names the ledger holds unsettled, the one
+    warning. Nothing where none of the three holds a name.
+
+    **No `claude` is run, and no `~/.claude.json` read**: `claude mcp get` and `list`
+    health-check what they name, spawning a stdio server and running a `headersHelper`, so the
+    row says once that it cannot see a delivered entry."""
+    from drybag.attach import ATTACH_COMMAND
+    from drybag.attach.mcp import UNSETTLED, fold_mcp
+    from drybag.doctor.api import OK, WARN
+    from drybag.printed import quoted
+
+    fold = fold_mcp(bound.plates)
+    unsettled = sorted(name for name, sha in recorded.mcp.items() if sha is UNSETTLED)
+    said = []
+    if fold.served:
+        delivered = []
+        for name, served in sorted(fold.served.items()):
+            where = _plate(bound.overlay, served.defined_in)
+            if served.state_in != served.defined_in:
+                where = (
+                    f"defined in {where}, switched on in {_plate(bound.overlay, served.state_in)}"
+                )
+            delivered.append(f"{quoted(name)} ({where})")
+        said.append(f"MCP servers the overlay delivers: {', '.join(delivered)}")
+    if fold.off:
+        off = (
+            f"{quoted(name)} ({_plate(bound.overlay, at)})" for name, at in sorted(fold.off.items())
+        )
+        said.append(f"MCP servers the overlay switches off: {', '.join(off)}")
+        if any(name.startswith(CONNECTOR_PREFIX) for name in fold.off):
+            said.append(MCP_CONNECTOR)
+    if unsettled:
+        said.append(MCP_UNSETTLED.format(names=", ".join(quoted(name) for name in unsettled)))
+    if fold.served:
+        said.append(MCP_UNSEEN)
+    if not said:
+        return []
+    if unsettled:
+        return [_Finding(WARN, "; ".join(said), f"run `{ATTACH_COMMAND}`")]
+    return [_Finding(OK, "; ".join(said), "")]
 
 
 def _owner(context: Context) -> Path:

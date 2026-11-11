@@ -51,7 +51,9 @@ package that names a harness is pardoned there, each pardon by one of these item
 - `attach` delivers the overlay's MCP servers at Claude Code's local scope with Claude Code's
   verbs, `MCP_ADD_JSON_LOCAL` and `MCP_REMOVE_LOCAL` beside those, run by `attach.mcp`, switches
   outside servers off with Claude Code's `deniedMcpServers`, and `detach` names `claude mcp` where
-  it could not take one back, so another harness is other verbs and another key.
+  it could not take one back, so another harness is other verbs and another key. `doctor`'s
+  `attached` row says those servers in Claude Code's terms: its `claude.ai` connectors and desktop
+  app, its `~/.claude.json`, and its folder trust a `headersHelper` waits for.
 - The overlay spells each harness's half by name: `common/claude` and `common/codex`
   (`overlay.layout`, re-exported by `overlay.api`), and the per-project `claude` and `codex`
   directories, `.codex/rules` and the directories it creates in a project, which `attach` reads

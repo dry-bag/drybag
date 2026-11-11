@@ -174,7 +174,13 @@ def read_mcp_ledger(root: Path) -> McpLedger:
     """The MCP ledger in `root`'s git common directory. A file that is absent is an empty ledger,
     and one that cannot be read or is not well shaped is an empty ledger with a note: `attach`
     then writes it whole, and no entry is withdrawn by a guess."""
-    path = common_directory(root) / MCP_LEDGER_FILE
+    return mcp_ledger_in(common_directory(root))
+
+
+def mcp_ledger_in(common: Path) -> McpLedger:
+    """`read_mcp_ledger` in the git common directory `common`, for a reader that has already asked
+    `git` for it (`doctor`)."""
+    path = common / MCP_LEDGER_FILE
     try:
         raw: Any = json.loads(fsops.read_regular_text(path))
     except FileNotFoundError:

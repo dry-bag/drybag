@@ -9,9 +9,12 @@ fixtures are the doctor area's own (`tests/doctor/test_checks.py`), shared rathe
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import subprocess
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -20,6 +23,7 @@ from drybag.attach import doctor as attach_doctor
 from drybag.attach import hooks as attach_hooks
 from drybag.attach.api import LOCAL_SETTINGS
 from drybag.attach.check import check as attach_check
+from drybag.attach.mcp import McpLedger, write_mcp_ledger
 from drybag.attach.render import MARKETPLACE_FILE, read_parts
 from drybag.attach.render import write as render_write
 from drybag.attach.write import attach
@@ -930,3 +934,132 @@ def test_a_tag_warning_never_hides_a_red_finding(tmp_path: Path) -> None:
     assert row.status == RED
     assert attach_doctor.TAGS_REMEDY not in row.remedy
     assert "render directory" in row.detail
+
+
+# --- the overlay's MCP servers, read from the overlay and the ledger alone ---------------------
+
+
+def _mcp_file(overlay: Path, plate: str, servers: dict[str, object]) -> None:
+    path = overlay / plate / "claude" / "mcp.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"mcpServers": servers}), encoding="utf-8")
+
+
+def _named_machine(tmp_path: Path, name: str) -> Path:
+    """`_machine`, with `[machine] name` set, so the plates' `machines/<name>/` sub-plates apply."""
+    path = _machine(tmp_path)
+    with path.open("a", encoding="utf-8") as file:
+        file.write(f'[machine]\nname = "{name}"\n')
+    return path
+
+
+def _mcp_row(tmp_path: Path, root: Path, machine: Path | None = None) -> Check:
+    return _by_name(_checks(tmp_path, root, machine=machine or _machine(tmp_path)), "attached")
+
+
+def test_doctor_attributes_each_served_name_to_its_plates(tmp_path: Path) -> None:
+    # Each name the overlay delivers with the plate whose definition wins and, where another one
+    # set its state, that plate too; each name switched off with the plate that said so. A
+    # sub-plate is its parent's path and the machine, as the values' provenance says it.
+    root = _attached(tmp_path)
+    overlay = with_tags(tmp_path / "overlay", "p", ["t1"])
+    _mcp_file(overlay, "common", {"alpha": {"command": "a"}, "gamma": {"command": "g"}})
+    _mcp_file(overlay, "tags/t1/machines/m1", {"alpha": "on", "beta": "off"})
+    _mcp_file(overlay, "projects/p", {"delta": {"command": "d"}, "gamma": "off"})
+    row = _mcp_row(tmp_path, root, _named_machine(tmp_path, "m1"))
+    assert row.status == OK, row
+    assert (
+        "MCP servers the overlay delivers: alpha (defined in common, switched on in tags/t1 on "
+        "m1), delta (projects/p)" in row.detail
+    )
+    assert (
+        "MCP servers the overlay switches off: beta (tags/t1 on m1), gamma (projects/p)"
+        in row.detail
+    )
+    assert (
+        "`drybag doctor` runs no `claude` command, so it cannot see whether a delivered server "
+        "is still in ~/.claude.json"
+    ) in row.detail
+
+
+def test_doctor_lists_unsettled_names(tmp_path: Path) -> None:
+    # A name the ledger holds with no digest is one a call was started for and not known to have
+    # settled; a name it holds under a digest is no such name, whether or not it is still served.
+    root = _attached(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": {"command": "a"}})
+    write_mcp_ledger(root, McpLedger(mcp={"alpha": None, "beta": "0" * 64}))
+    row = _mcp_row(tmp_path, root)
+    assert (row.status, row.remedy) == (WARN, RERUN), row
+    assert (
+        "unsettled MCP servers: alpha; `attach` did not finish delivering or taking these back; "
+        "run it again, and its screen gives Claude Code's reason if it fails"
+    ) in row.detail
+    assert "beta" not in row.detail
+
+
+def test_doctor_states_the_desktop_connector_limit_for_a_connector_off(tmp_path: Path) -> None:
+    connector = (
+        "in desktop app sessions the account's connectors load in every project; disconnect one "
+        "at claude.ai/customize/connectors to drop it everywhere"
+    )
+    root = _attached(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": "off"})
+    assert connector not in _mcp_row(tmp_path, root).detail
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": "off", "claude.ai Alpha": "off"})
+    row = _mcp_row(tmp_path, root)
+    assert row.status == OK, row
+    assert row.detail.count(connector) == 1
+
+
+def _names_claude(argv: list[str]) -> bool:
+    """Whether any word of `argv` is a `claude` executable, by name or by path."""
+    return any(Path(word).name == "claude" for item in argv for word in item.split())
+
+
+def _launches(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Every process this process starts from here on, by argv, at each layer a launch reaches:
+    `subprocess.Popen`, under `subprocess.run` and every runner, and the `os` calls beneath and
+    beside it. A `claude` launch is recorded, then refused before it can start."""
+    launched: list[list[str]] = []
+
+    def watched(original: Any, at: int, keyword: str = "args") -> Any:
+        def launch(*args: Any, **kwargs: Any) -> Any:
+            raw = kwargs[keyword] if keyword in kwargs else args[at]
+            items = [raw] if isinstance(raw, (str, bytes, os.PathLike)) else list(raw)
+            argv = [os.fsdecode(item) for item in items]
+            launched.append(argv)
+            if _names_claude(argv):
+                raise AssertionError(f"a claude launch: {argv}")
+            return original(*args, **kwargs)
+
+        return launch
+
+    monkeypatch.setattr(subprocess.Popen, "__init__", watched(subprocess.Popen.__init__, 1))
+    monkeypatch.setattr(os, "system", watched(os.system, 0, "command"))
+    for name in ("posix_spawn", "posix_spawnp", "execv", "execve", "execvp", "execvpe"):
+        if hasattr(os, name):
+            monkeypatch.setattr(os, name, watched(getattr(os, name), 1, "argv"))
+    return launched
+
+
+def test_doctor_runs_no_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # `claude mcp get` and `list` health-check what they name: they spawn a stdio server and run a
+    # `headersHelper`. So the finding reads the overlay and the ledger and launches nothing: the
+    # report of a checkout whose ledger owns names starts exactly the processes the same report
+    # with the finding and its ledger read taken out starts, and no `claude` among them.
+    root = _attached(tmp_path)
+    machine = _machine(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": {"command": "a"}, "beta": "off"})
+    write_mcp_ledger(root, McpLedger(mcp={"alpha": None, "gamma": "0" * 64}))
+    launched = _launches(monkeypatch)
+    with monkeypatch.context() as without_mcp:
+        without_mcp.setattr(attach_doctor._Ledger, "mcp", lambda _self, _root: McpLedger())
+        without_mcp.setattr(attach_doctor, "_mcp", lambda _bound, _recorded: [])
+        _checks(tmp_path, root, machine=machine)
+    without = list(launched)
+    assert without, "the patched layers saw no launch at all, so they watch nothing"
+    launched.clear()
+    row = _by_name(_checks(tmp_path, root, machine=machine), "attached")
+    assert not [argv for argv in launched if _names_claude(argv)], launched
+    assert launched == without
+    assert "alpha" in row.detail, row

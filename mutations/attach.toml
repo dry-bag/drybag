@@ -2191,3 +2191,89 @@ after = '''    if False:
 reddens = [
   "tests/attach/test_detach.py::test_detach_keeps_unsettled_names_when_claude_is_missing",
 ]
+
+# The `attached` row's MCP finding reads the overlay and the MCP ledger alone: no `claude`, and no
+# process at all, since `claude mcp get` and `list` start each server they name.
+[[mutation]]
+name = "doctor asks claude about each MCP server the ledger owns"
+file = "src/drybag/attach/doctor.py"
+before = '''    fold = fold_mcp(bound.plates)
+'''
+after = '''    import subprocess
+
+    for owned in recorded.mcp:
+        subprocess.run(["claude", "mcp", "get", "--", owned], check=False)
+    fold = fold_mcp(bound.plates)
+'''
+reddens = [
+  "tests/attach/test_doctor.py::test_doctor_runs_no_claude",
+]
+
+[[mutation]]
+name = "doctor asks git again for the MCP ledger"
+file = "src/drybag/attach/doctor.py"
+before = '''        return McpLedger() if common is None else mcp_ledger_in(common)'''
+after = '''        from drybag.attach.mcp import read_mcp_ledger
+
+        return read_mcp_ledger(root)'''
+reddens = [
+  "tests/attach/test_doctor.py::test_doctor_runs_no_claude",
+]
+
+[[mutation]]
+name = "doctor names no plate that switched an MCP server on"
+file = "src/drybag/attach/doctor.py"
+before = '''            if served.state_in != served.defined_in:'''
+after = '''            if False:'''
+reddens = [
+  "tests/attach/test_doctor.py::test_doctor_attributes_each_served_name_to_its_plates",
+]
+
+[[mutation]]
+name = "doctor names a machine's sub-plate by its own directory"
+file = "src/drybag/attach/doctor.py"
+before = '''    parent = plate.directory if plate.machine is None else plate.directory.parent.parent'''
+after = '''    parent = plate.directory'''
+reddens = [
+  "tests/attach/test_doctor.py::test_doctor_attributes_each_served_name_to_its_plates",
+]
+
+[[mutation]]
+name = "doctor does not say it cannot see a delivered MCP entry"
+file = "src/drybag/attach/doctor.py"
+before = '''    if fold.served:
+        said.append(MCP_UNSEEN)'''
+after = '''    if False:
+        said.append(MCP_UNSEEN)'''
+reddens = [
+  "tests/attach/test_doctor.py::test_doctor_attributes_each_served_name_to_its_plates",
+]
+
+[[mutation]]
+name = "doctor lists no unsettled MCP server"
+file = "src/drybag/attach/doctor.py"
+before = '''    unsettled = sorted(name for name, sha in recorded.mcp.items() if sha is UNSETTLED)'''
+after = '''    unsettled = sorted(name for name, sha in recorded.mcp.items() if False)'''
+reddens = [
+  "tests/attach/test_doctor.py::test_doctor_lists_unsettled_names",
+]
+
+[[mutation]]
+name = "doctor's unsettled MCP servers are no warning"
+file = "src/drybag/attach/doctor.py"
+before = '''    if unsettled:
+        return [_Finding(WARN,'''
+after = '''    if False:
+        return [_Finding(WARN,'''
+reddens = [
+  "tests/attach/test_doctor.py::test_doctor_lists_unsettled_names",
+]
+
+[[mutation]]
+name = "doctor states no desktop connector limit"
+file = "src/drybag/attach/doctor.py"
+before = '''        if any(name.startswith(CONNECTOR_PREFIX) for name in fold.off):'''
+after = '''        if False:'''
+reddens = [
+  "tests/attach/test_doctor.py::test_doctor_states_the_desktop_connector_limit_for_a_connector_off",
+]

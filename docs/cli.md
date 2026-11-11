@@ -1857,7 +1857,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `cli-path` | whether `drybag` resolves on `PATH` | `PATH` |
 | `diagnostics` | how many reasons the hook sink recorded — a count, never a line of the file | `${CLAUDE_PLUGIN_DATA}/drybag/diagnostics.jsonl` |
 | `ignored-env` | as information, never a status: `DRYBAG_CONFIG` set, or `XDG_CONFIG_HOME` set to anything but the `.config` of the home every command reads under (`HOME`, or the password database's where `HOME` is unset), and not honoured by any command; and a `HOME` that is not the home the password database records for this user, since drybag follows `HOME` | the environment, the password database |
-| `attached` | the overlay binding, what it delivers, and, where `memory.mode` is `overlay`, the `autoMemoryDirectory` pointer at the composed store, read alike from every checkout (the states are below the table) | the ledger `drybag/attach.json` in the git common directory, the main checkout's `.claude/settings.local.json`, `~/.local/share/drybag/delivery/<id>/`, `~/.local/share/drybag/stores/<id>/`, the overlay's executable parts, `git` on the paths `attach` placed |
+| `attached` | the overlay binding, what it delivers, where `memory.mode` is `overlay` the `autoMemoryDirectory` pointer at the composed store, and the overlay's MCP servers, read alike from every checkout (the states are below the table) | the ledger `drybag/attach.json` in the git common directory and `drybag/attach-mcp.json` beside it, the main checkout's `.claude/settings.local.json`, `~/.local/share/drybag/delivery/<id>/`, `~/.local/share/drybag/stores/<id>/`, the overlay's executable parts and `claude/mcp.json` files, `git` on the paths `attach` placed |
 | `bundles` | a bundle that does not fit its slots, and one whose part reaches the cap | the note store |
 | `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning for files in the note store that are not notes, counted (at most 500,000 entries), and, where no layer sets the mode, for an overlay holding notes that reach no session | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
 | `pre-commit` | whether the overlay's commit-time secret scan is installed on this machine | the overlay |
@@ -1906,6 +1906,20 @@ the harness's to decide, and this row does not read that file.
 | elsewhere | `autoMemoryDirectory` naming anything else | `red` | remove the key from that file, then `attach` |
 | missing | no `autoMemoryDirectory` | `warn` | `attach`, which writes it |
 | unreadable | a file that cannot be read as one JSON object | `warn` | make it one JSON object, then `attach` |
+
+**How `attached` reads the overlay's MCP servers.** Beside the delivery and the pointer, the row
+names each MCP server the overlay delivers with the plate whose definition wins and, where another
+plate switched it on, that plate too (`tags/t1`, and `tags/t1 on m1` for a machine's sub-plate),
+and each name the overlay switches off with the plate that says so. When a name switched off is a
+connector's, `claude.ai <name>`, it adds that in desktop app sessions the account's connectors load
+in every project, and that a connector disconnected at claude.ai/customize/connectors is dropped
+everywhere. All of that is information and never changes the status. A name
+`drybag/attach-mcp.json` holds unsettled, one whose call `attach` started and did not see succeed,
+is a warning whose remedy is `attach`, whose screen gives Claude Code's reason if it fails again.
+The row reads only the overlay's `claude/mcp.json` files and that ledger: it runs no `claude`,
+since `claude mcp get` and `list` start each server they name and run its `headersHelper`, and
+reads no `~/.claude.json`, so it says once that it cannot see whether a delivered entry is still
+there.
 
 **Eight of the fourteen have a `skip` arm — eighteen arms between them, every one on a state of
 this machine or this repository.** A `skip` is **not** a finding and never reaches the exit code, so
