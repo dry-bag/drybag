@@ -168,6 +168,25 @@ def allow_list(raw: dict[str, Any], label: str) -> list[str]:
     return list(allow)
 
 
+DENIED_KEY = "deniedMcpServers"
+
+
+DENIED_NOT_A_LIST = (
+    f"{LOCAL_SETTINGS}: {DENIED_KEY} is not a list, so drybag writes and takes back no entry there"
+)
+
+
+def denied_list(raw: dict[str, Any]) -> list[Any] | None:
+    """The `deniedMcpServers` list of a settings document `settings_object` read: an absent key is
+    no entries, and a key that holds anything but a list is `None`, a note (`DENIED_NOT_A_LIST`)
+    and never a refusal, under which no entry is written or taken back. Its entries stay as they
+    are, whatever their shape, because an entry the owner wrote is the owner's and is never read
+    for what it means.
+    """
+    denied = raw.get(DENIED_KEY, [])
+    return list(denied) if isinstance(denied, list) else None
+
+
 def _allow_rules(document: str, path: Path) -> tuple[str, ...]:
     """The `permissions.allow` list of one settings-shaped document, read by `allow_list`."""
     label = str(path)

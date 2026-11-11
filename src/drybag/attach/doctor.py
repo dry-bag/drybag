@@ -22,10 +22,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final, NamedTuple
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     from drybag.attach.binding import Binding
+    from drybag.attach.mcp import McpLedger
     from drybag.attach.write import AttachLedger
+    from drybag.config.plates import Plate
     from drybag.config.schema import Config
     from drybag.doctor.api import Context, Contribution, Row, Status
 
@@ -335,10 +338,11 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
 
     Every checkout reads the main checkout's ledger and settings file (`_owner`): `attach` writes
     both there, whichever worktree it ran from, and Claude Code reads that settings file from every
-    worktree. The delivery and the pointer are said side by side, and the row takes the worse
-    status of the two and the worse one's remedy first.
+    worktree. The delivery, the pointer and the overlay's MCP servers (`_mcp`) are said side by
+    side, and the row takes the worst status of them and the worst one's remedy first.
     """
     from drybag.attach import ATTACH_COMMAND
+    from drybag.attach.mcp import read_mcp_ledger
     from drybag.binding import LEDGER_NAME
     from drybag.config.machine import owner_home
     from drybag.config.schema import OVERLAY_MODE
@@ -402,19 +406,18 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
     recorded = ledger.state(main)
     if isinstance(recorded, str):  # `_binding_answer` answered a binding, so never
         return _uncorroborated(recorded)
-    delivery = _delivery(context, main, recorded, answer, id)
-    if not linked:
-        return Row(
-            delivery.status, f"attached; {delivery.clause}; the binding is {state}", delivery.remedy
-        )
-    pointer = _pointer(main, id)
+    findings = [
+        _delivery(context, main, recorded, answer, id),
+        *([_pointer(main, id)] if linked else []),
+        *_mcp(answer, read_mcp_ledger(main)),
+    ]
     rank = {OK: 0, WARN: 1, RED: 2}
-    pair = (delivery.status, delivery.remedy), (pointer.status, pointer.remedy)
-    (status, worse), (_, other) = sorted(pair, key=lambda each: -rank[each[0]])
+    ranked = sorted(findings, key=lambda each: -rank[each.status])
+    clauses = "; ".join(each.clause for each in findings)
     return Row(
-        status,
-        f"attached; {delivery.clause}; {pointer.clause}; the binding is {state}",
-        "; ".join(dict.fromkeys(remedy for remedy in (worse, other) if remedy)),
+        ranked[0].status,
+        f"attached; {clauses}; the binding is {state}",
+        "; ".join(dict.fromkeys(each.remedy for each in ranked if each.remedy)),
     )
 
 
@@ -565,6 +568,100 @@ def _pointer(main: Path, id: str) -> _Finding:
     if any(fsops.is_symlink(link) and not fsops.exists(link) for link in composed.iterdir()):
         return _Finding(WARN, STORE_DANGLES, f"{rerun}, which links it again")
     return _Finding(OK, POINTER_IN_PLACE, "")
+
+
+# What `_mcp` says of the overlay's MCP servers: names, the plates they come from and drybag's own
+# words, never a definition, which holds argv and environment.
+MCP_PENDING: Final = (
+    "MCP servers `attach` has yet to deliver or take back, as the overlay and {ledger} differ or a "
+    "call did not finish: {names}"
+)
+MCP_UNSEEN: Final = (
+    "`drybag doctor` launches nothing, so it cannot see whether a delivered server is still in "
+    "place"
+)
+# The `env` and `headers` values a definition writes into the overlay's files, which sync pushes.
+SECRET_TABLES: Final = ("env", "headers")
+MCP_WRITTEN: Final = (
+    "MCP server {name} writes values into the overlay's files, which are pushed: {keys}"
+)
+MCP_REPAIR: Final = "make each MCP file named readable, then run `{command}`"
+
+
+def _written(name: str, definition: Mapping[str, object]) -> list[str]:
+    """`MCP_WRITTEN` for the `env` and `headers` keys of `definition` that hold a string, naming
+    the server and each key and never a value."""
+    from drybag.printed import quoted
+
+    keys = [
+        quoted(f"{table}.{key}")
+        for table in SECRET_TABLES
+        if isinstance(values := definition.get(table), dict)
+        for key, value in values.items()
+        if isinstance(value, str)
+    ]
+    return [MCP_WRITTEN.format(name=quoted(name), keys=", ".join(keys))] if keys else []
+
+
+def _plate(overlay: Path, plate: Plate) -> str:
+    """A plate as the overlay spells its directory, `tags/t1`, and a machine's sub-plate as its
+    parent's with the machine, `tags/t1 on m1`."""
+    from drybag.config.classes import labelled
+    from drybag.printed import quoted
+
+    parent = plate.directory if plate.machine is None else plate.directory.parent.parent
+    return labelled(quoted(parent.relative_to(overlay).as_posix()), plate.machine)
+
+
+def _mcp(bound: Binding, recorded: McpLedger) -> list[_Finding]:
+    """The overlay's MCP servers, read from its `claude/mcp.json` files and the MCP ledger alone:
+    each name it delivers with the plate whose definition wins and the one that switched it on,
+    each name it switches off with its plate, the `env` and `headers` keys a definition writes
+    (`_written`), and what reading them noted. A name `attach` would deliver or take back, as
+    `attach.mcp.planned_mcp` marks it, is the warning, as a drifted hook is; so is a file under
+    which `attach` changes nothing. Nothing where none of them holds a name.
+
+    No process is launched and the harness's own record is not read, since its commands that get
+    or list a server start it, so the row says once that it cannot see a delivered entry."""
+    from drybag.attach import ATTACH_COMMAND
+    from drybag.attach.mcp import fold_mcp, planned_mcp
+    from drybag.binding import MCP_LEDGER_NAME
+    from drybag.doctor.api import OK, WARN
+    from drybag.printed import quoted
+
+    fold = fold_mcp(bound.plates)
+    said = list(fold.notes) + ([] if recorded.fault is None else [recorded.fault])
+    if fold.served:
+        delivered = []
+        for name, served in sorted(fold.served.items()):
+            where = _plate(bound.overlay, served.defined_in)
+            if served.state_in != served.defined_in:
+                where = (
+                    f"defined in {where}, switched on in {_plate(bound.overlay, served.state_in)}"
+                )
+            delivered.append(f"{quoted(name)} ({where})")
+        said.append(f"MCP servers the overlay delivers: {', '.join(delivered)}")
+    if fold.off:
+        off = (
+            f"{quoted(name)} ({_plate(bound.overlay, at)})" for name, at in sorted(fold.off.items())
+        )
+        said.append(f"MCP servers the overlay switches off: {', '.join(off)}")
+    usable = fold.usable and recorded.fault is None
+    plan = planned_mcp(fold.served, recorded.mcp)
+    pending = sorted({*plan.add, *plan.readd, *plan.take_back}) if usable else []
+    if pending:
+        names = ", ".join(quoted(name) for name in pending)
+        said.append(MCP_PENDING.format(ledger=MCP_LEDGER_NAME, names=names))
+    for name, served in sorted(fold.served.items()):
+        said += _written(name, served.definition)
+    if fold.served:
+        said.append(MCP_UNSEEN)
+    if not said:
+        return []
+    remedy = f"run `{ATTACH_COMMAND}`" if pending else ""
+    if not usable:
+        remedy = MCP_REPAIR.format(command=ATTACH_COMMAND)
+    return [_Finding(WARN if remedy else OK, "; ".join(said), remedy)]
 
 
 def _owner(context: Context) -> Path:

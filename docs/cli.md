@@ -1010,7 +1010,7 @@ overlay's `common/drybag.toml`, its `projects/<name>/drybag.toml` once the bindi
 file, as a session resolves its preferences; so `memory.mode` is the preset's,
 `harness`, unless an overlay file sets `overlay`. Where the repository has a `drybag.toml`, its
 `[project] name` names the project and nothing above applies; `--project` beside it is refused
-(`2`).
+(`2`) unless it names that same project, to rebind the checkout (below).
 
 **The notes are composed only in overlay mode; the rest is delivered whatever the mode.** A
 `drybag.toml` whose `memory.mode` is not `overlay` keeps its notes elsewhere, so for it `attach`
@@ -1042,7 +1042,10 @@ overlay is named here first. It asks what the real run asks before its first wri
 run's own code, so where the run fails or refuses there, in any case the two lists below give before
 the first write, `--check` ends with the same code and the same line; otherwise it exits `0`.
 
-`rules_to_write` in the `--json` output lists those standing-rule files.
+`rules_to_write` in the `--json` output lists those standing-rule files. It also names, one line
+each, the overlay's MCP servers the run would add, re-add (a changed definition, or one an earlier
+run left unsettled) and take back, and the server names it would deny or stop denying, as `mcp_add`, `mcp_readd`,
+`mcp_take_back`, `mcp_deny` and `mcp_undeny` in `--json`. It launches no `claude` for them.
 
 **What the overlay grants is shown, not gated.** The overlay is yours, written by you and your
 agents, and its hooks run scripts from the overlay checkout in place, so `attach` asks for no
@@ -1055,9 +1058,16 @@ agent (by its file) the render adds or removes against the render the last run l
 rule this run merges or takes back. A hook's command and an allow rule that do not fit a plain name are printed
 escaped, and cut to their first 120 characters and their length. `--json` carries the same lists
 as `hooks_added`, `hooks_removed`, `skills_added`, `skills_removed`, `agents_added`,
-`agents_removed`, `allow_added`, `allow_withdrawn` and `rules_left`, and no remote and no project of their own. A re-attach that
-binds the checkout to another project than this machine's record named — a `[project] name`
-renamed in a pulled commit moves every worktree's binding — says so on one line naming both.
+`agents_removed`, `allow_added`, `allow_withdrawn` and `rules_left`, and no remote and no project of their own. Then come the
+overlay's MCP servers this run delivered, took back, replaced a local entry of (one made by hand,
+or left by an interrupted run) and could not deliver or take back, each by name with Claude Code's
+own message for a failure and never its definition, and the server names whose `deniedMcpServers`
+entry it added and withdrew; `mcp_delivered`, `mcp_taken_back`, `mcp_replaced`, `mcp_failed`,
+`mcp_denied` and `mcp_undenied` carry the names in `--json`. A failure exits `1` once every other step ran, and the next run tries the name again. A re-attach of a
+checkout this machine binds to another project than its `[project] name` names — a name renamed in
+a pulled commit would move every worktree's binding, with its servers, rules and hooks — is
+refused (`2`) by `attach` and `--check` alike, naming both projects, unless `--project` names the
+file's project; that rebind says so on one line naming both.
 `--check`'s line names no project.
 
 **The overlay's hooks, skills and agents are delivered as a plugin.** Every run renders them into
@@ -1168,6 +1178,26 @@ and goes on recording a dropped one only while its file is untracked and holds t
 the file is yours. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `drybag:ignore` region an earlier
 release wrote there stays until you remove it.
+
+**The overlay's MCP servers.** Each plate's `claude/mcp.json` (`machines/<name>/` sub-plates
+included) maps a server name to a definition in Claude Code's `.mcp.json` shape, to `"off"` or to
+`"on"`; the last plate's definition wins whole, and the last plate's word, a definition counting as
+on, decides whether it is on. **Writes** each served server into `~/.claude.json` as a local-scope
+entry of the main checkout, only through `claude mcp remove --scope local -- <name>` and `claude mcp
+add-json --scope local -- <name> <json>` run from the main checkout, the definition passed as the
+JSON it parses to (written again, so its spacing and escapes are not kept); a name whose
+definition did not change is not touched, and one the overlay no longer serves is removed. **Writes** a `{"serverName": "<name>"}` entry under `deniedMcpServers` in the
+main checkout's `.claude/settings.local.json` for each name switched off, and takes back only the
+entries it added; both are recorded in `drybag/attach-mcp.json` in the git common directory, by
+name and digest, never a definition. A name the overlay delivers is drybag's at local scope: a local
+entry of that name you made by hand is replaced, with any sign-in it held, and `claude mcp remove`
+of a remote server signs it out, so a remote server is signed out only when its definition changes,
+when it is taken back, or when an unsettled name is retried. An entry you edit or remove by hand is
+not noticed until its definition changes or `detach` runs. A plate's `claude/mcp.json` that is
+there and is no JSON object whose `mcpServers` is an object, or a `drybag/attach-mcp.json` this
+drybag cannot read (damaged, or a newer one's), is said, and no server or deny entry then changes.
+An entry that is no definition, `"off"` or `"on"`, a definition holding `NaN` or `Infinity`, a
+name no command line carries, and an `"on"` no plate defines or switches off are said and skipped.
 
 **`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
 writes: [`owner-files`](#hooks) places them in each new linked worktree.
@@ -1333,7 +1363,16 @@ there unlinked, then every link in the composed store `$HOME/.local/share/drybag
 and the directory where nothing else is left (a file there that is not a link is a note the harness
 wrote: it stays, and so does the directory, which the line says and `--json` reports as
 `store_kept: true`) — removes the `drybag:attach` block in the repository's exclude file, and deletes
-the ledger, `drybag/attach.json` in the git common directory. The render directory and the composed store are derived
+the ledger, `drybag/attach.json` in the git common directory. Before the render directory goes it
+takes the `deniedMcpServers` entries `attach` recorded out of the settings file and each MCP server
+`drybag/attach-mcp.json` records out of `~/.claude.json`, with `claude mcp remove --scope local --
+<name>` from the main checkout, then deletes that file, naming each server and deny entry it took; a `remove` that neither succeeded nor
+answered `No MCP server named "<name>"` (no `claude` on `PATH`, say) fails (`1`) naming the server and Claude Code's message, with the name
+still recorded and the exclude block, the ledgers and the render kept, so running `detach` again
+finishes. A `drybag/attach-mcp.json` that cannot be read is left in place and said, and
+with no `drybag/attach.json` beside it (an older drybag's `detach` removed that one alone) its
+servers and deny entries are taken back, and the failure says so. Where git names no main
+checkout, `attach` delivered no server, and no `claude mcp` runs. The render directory and the composed store are derived
 from the binding id and never read from the ledger, so a ledger naming another directory removes nothing
 outside it. The plugin goes before the exclude block, so Claude Code takes the plugin's entries,
 which name the id, out of `.claude/settings.local.json` while that file is still hidden. Each call
@@ -1639,7 +1678,7 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
    attached under the project its table key names, as `attach --project` would; a checkout `attach`
    refuses (one whose `drybag.toml` names another project than its table key) is `refused`, and one whose attach
    fails (a plain directory, or a failure part-way) is `failed`, each with attach's own message, and the rest go
-   on. The exit code is `1` when a project was refused or failed, and `0` otherwise, `absent`
+   on. One whose overlay MCP server Claude Code did not take is `failed` too, naming the server. The exit code is `1` when a project was refused or failed, and `0` otherwise, `absent`
    included. A run twice attaches nothing new, and a project removed from the file stays attached
    until `drybag detach` there.
 
@@ -1804,9 +1843,9 @@ checkout is the main one (`git worktree list`), whose settings file the binding'
 common and its own git directory), which the `memory` row asks to read the main checkout's settings
 file a linked worktree reads too, whether a path `attach` placed is tracked (`git ls-files`) or ignored (`git check-ignore`) and whether a
 tracked file names the delivery (`git grep`), which the binding's row asks of a bound checkout, and the
-binding's common directory once more, which the binding's row asks to read the overlay's tag layers.
-Sixteen of those are measured on a green attached installation whose machine file switches the
-note sync on, as `setup --overlay` does for an overlay it makes — the wrapper probe and fifteen
+binding's common directory twice more, which the binding's row asks to read the overlay's tag layers
+and the MCP ledger. Seventeen of those are measured on a green attached installation whose machine
+file switches the note sync on, as `setup --overlay` does for an overlay it makes — the wrapper probe and sixteen
 `git` questions, the `sync` row's `git version` among them — and not one of them leaves this
 machine. The `git` questions are `gitenv`'s five seconds each, and the wrapper probe is this
 area's own thirty seconds. The `sync` row's `git version`, of the overlay's `git`, is bounded at
@@ -1829,7 +1868,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `cli-path` | whether `drybag` resolves on `PATH` | `PATH` |
 | `diagnostics` | how many reasons the hook sink recorded — a count, never a line of the file | `${CLAUDE_PLUGIN_DATA}/drybag/diagnostics.jsonl` |
 | `ignored-env` | as information, never a status: `DRYBAG_CONFIG` set, or `XDG_CONFIG_HOME` set to anything but the `.config` of the home every command reads under (`HOME`, or the password database's where `HOME` is unset), and not honoured by any command; and a `HOME` that is not the home the password database records for this user, since drybag follows `HOME` | the environment, the password database |
-| `attached` | the overlay binding, what it delivers, and, where `memory.mode` is `overlay`, the `autoMemoryDirectory` pointer at the composed store, read alike from every checkout (the states are below the table) | the ledger `drybag/attach.json` in the git common directory, the main checkout's `.claude/settings.local.json`, `~/.local/share/drybag/delivery/<id>/`, `~/.local/share/drybag/stores/<id>/`, the overlay's executable parts, `git` on the paths `attach` placed |
+| `attached` | the overlay binding, what it delivers, where `memory.mode` is `overlay` the `autoMemoryDirectory` pointer at the composed store, and the overlay's MCP servers, read alike from every checkout (the states are below the table) | the ledger `drybag/attach.json` in the git common directory and `drybag/attach-mcp.json` beside it, the main checkout's `.claude/settings.local.json`, `~/.local/share/drybag/delivery/<id>/`, `~/.local/share/drybag/stores/<id>/`, the overlay's executable parts and `claude/mcp.json` files, `git` on the paths `attach` placed |
 | `bundles` | a bundle that does not fit its slots, and one whose part reaches the cap | the note store |
 | `memory` | the memory a session gets: the active `memory.mode` and the layer that set it (or that none does, and memory is the coding agent's own), the store, which settings file sets the harness's `autoMemoryDirectory` — the checkout's `.claude/settings.local.json`, the main checkout's, the committed `.claude/settings.json` or `~/.claude/settings.json`, the first that holds it, named as information and never with its value, since a committed file may point the harness elsewhere — and the store's unreviewed notes as a count; a warning for files in the note store that are not notes, counted (at most 500,000 entries), and, where no layer sets the mode, for an overlay holding notes that reach no session | the resolution `preferences` reads, the note store, the machine's trust record, those settings files |
 | `pre-commit` | whether the overlay's commit-time secret scan is installed on this machine | the overlay |
@@ -1878,6 +1917,18 @@ the harness's to decide, and this row does not read that file.
 | elsewhere | `autoMemoryDirectory` naming anything else | `red` | remove the key from that file, then `attach` |
 | missing | no `autoMemoryDirectory` | `warn` | `attach`, which writes it |
 | unreadable | a file that cannot be read as one JSON object | `warn` | make it one JSON object, then `attach` |
+
+**How `attached` reads the overlay's MCP servers.** Beside the delivery and the pointer, the row
+names each MCP server the overlay delivers with the plate whose definition wins and, where another
+plate switched it on, that plate too (`tags/t1`, and `tags/t1 on m1` for a machine's sub-plate),
+each name the overlay switches off with the plate that says so, and each `env` and `headers` key a
+served definition keeps in the overlay's files, by key and never by value; all of that is
+information. A name `attach` would deliver or take back, as `--check` would list it (served and not
+delivered, under another definition or unsettled, or held by `drybag/attach-mcp.json` and no
+longer served), is a warning whose remedy is `attach`, as a drifted hook is. The notes reading the
+files gave are said, and a file under which `attach` changes nothing is a warning whose remedy is
+to make it readable. The row launches nothing, so it says it cannot see whether a delivered entry
+is still in place.
 
 **Eight of the fourteen have a `skip` arm — eighteen arms between them, every one on a state of
 this machine or this repository.** A `skip` is **not** a finding and never reaches the exit code, so

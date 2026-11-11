@@ -264,8 +264,11 @@ LISTED = {
     ("src/drybag/setup/run.py", "codex"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
     ("src/drybag/setup/restore.py", "claude"): (5, "`install_listed` in `setup/restore.py`"),
     ("src/drybag/attach/render.py", "claude"): (
-        6,
-        "`PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL`",
+        8,
+        (
+            "`PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL`",
+            "`MCP_ADD_JSON_LOCAL` and `MCP_REMOVE_LOCAL`",
+        ),
     ),
     ("src/drybag/overlay/layout.py", "claude"): (1, "(`overlay.layout`"),
     ("src/drybag/overlay/layout.py", "codex"): (1, "(`overlay.layout`"),
@@ -285,8 +288,11 @@ LISTED = {
         "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
     ("src/drybag/attach/write.py", "claude"): (
-        4,
-        "(`attach.items`, `attach.permissions`, `attach.write`)",
+        5,
+        (
+            "(`attach.items`, `attach.permissions`, `attach.write`)",
+            "`detach` names `claude mcp` where",
+        ),
     ),
     ("src/drybag/attach/write.py", "codex"): (
         4,

@@ -14,8 +14,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from drybag.attach.binding import Binding, read_binding
+from drybag.attach.mcp import planned_mcp
 from drybag.attach.permissions import PermissionDiff, codex_rules
-from drybag.attach.write import configured, gates, main_checkout_of, plan_writes
+from drybag.attach.write import AttachPlan, configured, gates, main_checkout_of, plan_writes
 from drybag.config.owner import Owner
 from drybag.printed import printable, quoted
 from drybag.result import Result
@@ -49,13 +50,54 @@ def check(
     binding = read_binding(root, store=store, machine=machine, config=config)
     diff = gates(root, config, binding)
     planned = plan_writes(root, config, binding, diff)
-    return _report(binding, planned.diff, source)
+    return _report(binding, planned.diff, source, _mcp_heads(planned), planned.mcp_notes)
 
 
-def _report(binding: Binding, diff: PermissionDiff, source: str) -> Result:
+# The MCP servers the run would change: each head's names, as `--json` carries them, and a line
+# for each name.
+McpHeads = tuple[dict[str, list[str]], list[str]]
+
+
+def _mcp_heads(planned: AttachPlan) -> McpHeads:
+    """The MCP servers the run would change, by name under five heads, and a line for each: what
+    `reconcile` marks, asked through the same `planned_mcp`, and the `deniedMcpServers` entries of
+    the run's merge. Nothing is launched and nothing written."""
+    owned = planned.mcp_held.mcp if planned.served is not None else {}
+    plan = planned_mcp(planned.served or {}, owned)
+    heads = {
+        "mcp_add": list(plan.add),
+        "mcp_readd": list(plan.readd),
+        "mcp_take_back": list(plan.take_back),
+        "mcp_deny": list(planned.deny.add),
+        "mcp_undeny": list(planned.deny.withdraw),
+    }
+    lines = [
+        f"{_MCP_LINES[head]}: {quoted(name)}" for head, names in heads.items() for name in names
+    ]
+    return heads, lines
+
+
+# How `--check` says each head, one line a name.
+_MCP_LINES = {
+    "mcp_add": "MCP server would be added",
+    "mcp_readd": "MCP server would be re-added",
+    "mcp_take_back": "MCP server would be taken back",
+    "mcp_deny": "MCP server would be denied",
+    "mcp_undeny": "MCP server deny entry would be withdrawn",
+}
+
+
+def _report(
+    binding: Binding,
+    diff: PermissionDiff,
+    source: str,
+    mcp: McpHeads = ({}, []),
+    mcp_notes: tuple[str, ...] = (),
+) -> Result:
     """The report of a check that met no refusal: the project and where its name came from, the
     binding, the diff and the rule files. The project is a name the repository or the overlay
-    chose, so it prints quoted on the line and through `printable` in `--json`."""
+    chose, so it prints quoted on the line and through `printable` in `--json`. `mcp_notes` are the
+    run's own (`AttachPlan.mcp_notes`), said after the plates' notes where the run says them."""
     # Named and not merely counted, and on this result rather than in `PermissionDiff`: the
     # diff's fields say what `attach` would add, what is already there and what it would take
     # back, and a file list of another kind would blur what they mean. These names come out of the
@@ -74,10 +116,13 @@ def _report(binding: Binding, diff: PermissionDiff, source: str) -> Result:
         summary += f"; {binding.note}"
     if binding.fault is not None:
         summary += f"; {binding.fault}"
-    for note in binding.plate_notes:
+    for note in (*binding.plate_notes, *mcp_notes):
         summary += f"; {note}"
     if rules:
         summary += "\n" + "\n".join(f"  {target}" for target in rules)
+    heads, lines = mcp
+    if lines:
+        summary += "\n" + "\n".join(lines)
     data = {
         # The state and the counts, this command's own, and the project with where its name came
         # from (a phrase of `binding`'s own).
@@ -89,5 +134,6 @@ def _report(binding: Binding, diff: PermissionDiff, source: str) -> Result:
         # `settings.local.json`, which a clone can commit, so it is repository-authored.
         "already_present": len(diff.already_present),
         "rules_to_write": list(rules),
+        **heads,
     }
     return Result(summary, data)

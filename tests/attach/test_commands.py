@@ -19,6 +19,7 @@ from drybag import fsops
 from drybag.cli import build_parser, discover_registrars, run
 from drybag.config.schema import Config
 from drybag.printed import quoted
+from drybag.runner import Completed
 from tests.attach.test_binding import _machine, _project_and_store
 from tests.attach.test_write import ENTRY, RULE, SETTINGS, _overlay_grants, _wide, ledger_file
 from tests.runners import Recorder
@@ -111,12 +112,16 @@ def test_the_attach_screen_and_check_name_the_project_quoted(
     assert attached["binding"] == binding.short(made)
 
 
-def test_a_reattach_that_binds_another_project_says_both_on_one_line(
+def test_a_reattach_under_another_project_name_is_refused_unless_project_names_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # A pulled commit that renames `[project] name` to another of the owner's projects moves the
-    # whole repository's binding, every worktree's, on the next routine attach. The screen says so
-    # on one line naming both, each quoted, where it used to read as an ordinary re-attach.
+    # A pulled commit that renames `[project] name` to another of the owner's projects would move
+    # the whole repository's binding, every worktree's, with that project's servers, rules and
+    # hooks: `attach` and `--check` refuse, naming both and the remedy, and `--project` rebinds.
+    from drybag import binding
+    from drybag.attach.binding import REBIND
+    from drybag.attach.write import REBOUND
+
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     machine = _machine(tmp_path, overlay=store.parents[2])
     assert invoke(["attach", *_flags(root, store, machine)]) == 0
@@ -124,11 +129,13 @@ def test_a_reattach_that_binds_another_project_says_both_on_one_line(
     root, other = _project_and_store(
         tmp_path, recorded=None, origin="git@example.com:o/p.git", name="q"
     )
-    assert invoke(["attach", *_flags(root, other, machine)]) == 0
-    out = capsys.readouterr().out
-    from drybag.attach.write import REBOUND
-
-    assert REBOUND.format(earlier=quoted("p"), project=quoted("q")) in out
+    for command in (["attach"], ["attach", "--check"]):
+        assert invoke([*command, *_flags(root, other, machine)]) == 2
+        assert REBIND.format(bound="p", named="q") in capsys.readouterr().err
+    found = binding.bound_project(root)
+    assert found is not None and found.project == "p"
+    assert invoke(["attach", "--project", "q", *_flags(root, other, machine)]) == 0
+    assert REBOUND.format(earlier=quoted("p"), project=quoted("q")) in capsys.readouterr().out
 
 
 def test_an_attach_after_an_added_hook_entry_proceeds_and_shows_the_binding_and_what_runs(
@@ -1045,3 +1052,109 @@ def test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name(
     line = capsys.readouterr().out.splitlines()[0]
     assert "the directory Bad is not 1 to 40 lowercase letters" in line
     assert "[machine] name Mine is not 1 to 40 lowercase letters" in line
+
+
+MARKER = "sekret-marker-a41"
+
+
+def _mcp_file(plate: Path, servers: dict[str, object]) -> None:
+    (plate / "claude").mkdir(parents=True, exist_ok=True)
+    (plate / "claude" / "mcp.json").write_text(json.dumps({"mcpServers": servers}), "utf-8")
+
+
+def _recorded(
+    monkeypatch: pytest.MonkeyPatch, answers: dict[str, Completed] | None = None
+) -> Recorder:
+    runner = Recorder(answers=answers or {})
+    monkeypatch.setattr("drybag.runner.subprocess_runner", lambda **_: runner)
+    return runner
+
+
+def test_check_lists_mcp_changes_and_launches_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Attached with `kept`, `changed` and `retired` delivered and `undenied` off, the overlay then
+    # adds `fresh`, changes `changed`, drops `retired`, switches `denied` off and `undenied` on.
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    common = store.parents[2] / "common"
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    old, new = {"command": "a"}, {"command": "b"}
+    _mcp_file(common, {"kept": old, "changed": old, "retired": old, "undenied": "off"})
+    _recorded(monkeypatch)
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    _mcp_file(common, {"kept": old, "changed": new, "fresh": old, "denied": "off"})
+    capsys.readouterr()
+    runner = _recorded(monkeypatch)
+    before = snapshot(root)
+    held = (root / ".git" / "drybag").iterdir()
+    ledgers = {path.name: path.read_bytes() for path in held if path.suffix == ".json"}
+    assert set(ledgers) == {"attach.json", "attach-mcp.json"}
+    assert invoke(["attach", "--check", *_flags(root, store, machine), "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert (data["mcp_add"], data["mcp_readd"], data["mcp_take_back"]) == (
+        ["fresh"],
+        ["changed"],
+        ["retired"],
+    )
+    assert (data["mcp_deny"], data["mcp_undeny"]) == (["denied"], ["undenied"])
+    assert invoke(["attach", "--check", *_flags(root, store, machine)]) == 0
+    out = capsys.readouterr().out
+    assert "MCP server would be re-added: changed" in out.splitlines()
+    assert runner.calls == []
+    assert_snapshot_unchanged(root, before)
+    for name, text in ledgers.items():
+        assert (root / ".git" / "drybag" / name).read_bytes() == text
+
+
+def test_failure_screen_prints_names_never_a_definition(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A definition is argv and environment, and a `headersHelper` is a command that reads a secret:
+    # the screen names the server and relays Claude Code's message, and never prints the call.
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    _overlay_grants(store)
+    helper = {"type": "http", "url": "https://example.com/mcp", "headersHelper": MARKER}
+    _mcp_file(store.parents[2] / "common", {"m1": helper})
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    refused = Completed(1, "", "Invalid configuration: : Invalid input")
+    _recorded(monkeypatch, answers={"claude mcp add-json": refused})
+    assert invoke(["attach", *_flags(root, store, machine)]) == 1
+    out, err = capsys.readouterr()
+    said = quoted("Invalid configuration: : Invalid input")
+    assert f"MCP server failed: m1: {said}" in out.splitlines()
+    assert MARKER not in out + err
+
+
+def test_attach_and_detach_screens_name_each_server_and_deny_entry(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    common = store.parents[2] / "common"
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    runner = _recorded(monkeypatch)
+    # `m2` is a local entry made by hand, which the first delivery replaces.
+    runner.local.add("m2")
+
+    def said(command: str, servers: dict[str, object]) -> list[str]:
+        _mcp_file(common, servers)
+        flags = _flags(root, store, machine) if command == "attach" else ["--root", str(root)]
+        assert invoke([command, *flags]) == 0
+        lines = capsys.readouterr().out.splitlines()
+        return [line.split(" (")[0] for line in lines if line.startswith("MCP server")]
+
+    assert said("attach", {"m1": {"command": "a"}, "m2": {"command": "b"}, "s1": "off"}) == [
+        "MCP server delivered: m1",
+        "MCP server delivered: m2",
+        "MCP server replaced: m2",
+        "MCP server denied: s1",
+    ]
+    assert said("attach", {"m2": {"command": "b"}}) == [
+        "MCP server taken back: m1",
+        "MCP server deny entry withdrawn: s1",
+    ]
+    said("attach", {"m2": {"command": "b"}, "s1": "off"})
+    assert said("detach", {}) == [
+        "MCP server taken back: m2",
+        "MCP server deny entry withdrawn: s1",
+    ]
+    assert runner.local == set()
