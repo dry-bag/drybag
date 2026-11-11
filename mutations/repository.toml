@@ -1043,8 +1043,8 @@ reddens = [
 [[mutation]]
 name = "docs/cli.md counts `plan check`'s rules wrong again"
 file = "docs/cli.md"
-before = "Five rules, each from a"
-after = "Four rules, each from a"
+before = "Six rules, each from a"
+after = "Five rules, each from a"
 reddens = [
   "tests/test_documents.py::test_the_plan_rule_count_is_the_number_of_rules_plan_check_emits",
 ]

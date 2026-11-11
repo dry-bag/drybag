@@ -18,6 +18,8 @@ _PLAN_OK = (
     "OK: linted {n} plan(s) — references resolve, steps are non-leading, mutation outcomes are "
     "expectations, Scope/Premise are present"
 )
+# Said only where the Spec rule ran: a project with no tracked specs owes no Spec line.
+_PLAN_SPEC_OK = ", each names its spec"
 
 
 def run_docs_check(args: argparse.Namespace) -> Result:
@@ -117,7 +119,7 @@ def run_plan_check(args: argparse.Namespace) -> Result:
             data,
             exit_code=1,
         )
-    summary = _PLAN_OK.format(n=len(linted))
+    summary = _PLAN_OK.format(n=len(linted)) + (_PLAN_SPEC_OK if result.specs else "")
     if unlinted:
         summary += f"; {len(unlinted)} uncommitted plan(s) not linted — name them as PATH arguments"
     return Result(summary, data)

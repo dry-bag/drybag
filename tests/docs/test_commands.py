@@ -283,12 +283,18 @@ def test_plan_check_lints_the_named_plans_and_counts_them(
 ) -> None:
     root, common = project(tmp_path)
     plan = root / "docs" / "plans" / "2026-01-01-x.md"
-    plan.write_text("**Scope:** iff x.\n", encoding="utf-8")
+    plan.write_text("**Scope:** iff x.\n\n**Spec:** none — a fixture\n", encoding="utf-8")
     assert invoke(["plan", "check", str(plan), *common]) == 0
-    assert capsys.readouterr().out == (
+    ok = (
         "OK: linted 1 plan(s) — references resolve, steps are non-leading, mutation outcomes "
-        "are expectations, Scope/Premise are present\n"
+        "are expectations, Scope/Premise are present"
     )
+    assert capsys.readouterr().out == ok + ", each names its spec\n"
+    # The line says only what ran: with no specs folder no Spec line was asked for. Mutation
+    # (declared): `mutations/`'s "plan check claims a Spec rule that did not run".
+    (root / "docs" / "specs").rmdir()
+    assert invoke(["plan", "check", str(plan), *common]) == 0
+    assert capsys.readouterr().out == ok + "\n"
     plan.write_text("no scope\n", encoding="utf-8")
     assert invoke(["plan", "check", str(plan), "--json", *common]) == 1
     data = json.loads(capsys.readouterr().out)
