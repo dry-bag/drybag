@@ -64,7 +64,14 @@ from drybag.attach.binding import (
     read_binding,
     refuse_unless_share_can_exist,
 )
-from drybag.attach.mcp import McpLedger, fold_mcp, read_mcp_ledger, write_mcp_ledger
+from drybag.attach.mcp import (
+    McpLedger,
+    Served,
+    fold_mcp,
+    read_mcp_ledger,
+    reconcile,
+    write_mcp_ledger,
+)
 from drybag.attach.permissions import (
     CODEX_RULES,
     DENIED_KEY,
@@ -226,6 +233,14 @@ class Attached:
     allow_added: tuple[str, ...] = ()
     allow_withdrawn: tuple[str, ...] = ()
     rules_left: tuple[str, ...] = ()
+    # The overlay's MCP servers this run delivered, took back and replaced a local entry of, each
+    # failed one with Claude Code's message (`attach.mcp.Reconciled`), and every name it leaves
+    # unsettled; all are names, never a definition.
+    mcp_delivered: tuple[str, ...] = ()
+    mcp_taken_back: tuple[str, ...] = ()
+    mcp_replaced: tuple[str, ...] = ()
+    mcp_failed: tuple[tuple[str, str], ...] = ()
+    mcp_unsettled: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -732,6 +747,9 @@ class AttachPlan:
     deny: DenyChange
     mcp_ledger: McpLedger | None
     mcp_notes: tuple[str, ...]
+    # The servers the fold delivers, and the MCP ledger as this run read it.
+    served: dict[str, Served]
+    mcp_held: McpLedger
 
 
 def attach(
@@ -935,6 +953,8 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         deny=deny,
         mcp_ledger=mcp_ledger,
         mcp_notes=(*fold.notes, *held.notes),
+        served=fold.served,
+        mcp_held=held,
     )
 
 
@@ -1003,6 +1023,17 @@ def _carry_out(
             written, carried = True, ()
         withdraw_composed(id)
     _write_ledger(root, planned, carried, rendered.rendered)
+    # The overlay's MCP servers at local scope, from the main checkout as the plugin calls are. A
+    # call that fails leaves its name unsettled for the next run and the command exits 1 once
+    # every other step ran (`commands.run_attach`).
+    held = planned.mcp_ledger or planned.mcp_held
+    mcp = reconcile(
+        root,
+        planned.served,
+        held.mcp,
+        runner,
+        lambda owned: write_mcp_ledger(root, replace(held, mcp=owned)),
+    )
     if memory:
         _prepare_store(binding, config)
         # The composed store, rebuilt, and the one key that points the harness at it, in the main
@@ -1047,6 +1078,13 @@ def _carry_out(
             for rule in (previous.rules if previous is not None else ())
             if rule not in rules and fsops.is_file(root / rule)
         ),
+        mcp_delivered=tuple(
+            name for name, sha in mcp.owned.items() if sha is not None and sha != held.mcp.get(name)
+        ),
+        mcp_taken_back=tuple(name for name in held.mcp if name not in mcp.owned),
+        mcp_replaced=mcp.replaced,
+        mcp_failed=mcp.failed,
+        mcp_unsettled=tuple(name for name, sha in mcp.owned.items() if sha is None),
     )
 
 
@@ -1394,6 +1432,19 @@ def _removable(recorded: AttachLedger) -> AttachLedger:
     )
 
 
+# Said where `detach` could not take an MCP server back: each name with what Claude Code said.
+NOT_TAKEN_BACK = (
+    "the overlay's MCP servers {servers} were not taken back from Claude Code's local scope, so "
+    "they stay recorded and the exclude block, the ledgers and the render were kept; run `drybag "
+    "detach` again once `claude mcp` runs here"
+)
+
+
+def _failed_servers(failed: Iterable[tuple[str, str]]) -> str:
+    """Each failed server's name, quoted, and the message `printed.answered` gave."""
+    return ", ".join(f"{quoted(name)} ({said})" for name, said in failed)
+
+
 def detach(root: Path, *, runner: Runner) -> Detached:
     """Remove exactly what `attach` added, reading the ledger for what that was, and withdraw the
     rendered plugin and the composed store, whose directories are derived from the binding id and
@@ -1465,6 +1516,13 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     # run here, with the exclude block, the ledger and the render kept.
     if plugin is not None:
         _withdraw_plugin(*plugin, runner)
+    # The overlay's MCP servers, taken back as a reconcile that serves nothing. A name Claude Code
+    # did not answer for stays recorded, and everything still to withdraw is kept, as above.
+    mcp = reconcile(
+        root, {}, held.mcp, runner, lambda owned: write_mcp_ledger(root, replace(held, mcp=owned))
+    )
+    if mcp.failed:
+        raise Failure(NOT_TAKEN_BACK.format(servers=_failed_servers(mcp.failed)))
     removed = False
     if delivery is not None and (fsops.is_dir(delivery) or fsops.is_symlink(delivery)):
         _remove_render(delivery)

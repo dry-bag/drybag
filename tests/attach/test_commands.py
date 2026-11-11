@@ -19,6 +19,7 @@ from drybag import fsops
 from drybag.cli import build_parser, discover_registrars, run
 from drybag.config.schema import Config
 from drybag.printed import quoted
+from drybag.runner import Completed
 from tests.attach.test_binding import _machine, _project_and_store
 from tests.attach.test_write import ENTRY, RULE, SETTINGS, _overlay_grants, _wide, ledger_file
 from tests.runners import Recorder
@@ -1045,3 +1046,103 @@ def test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name(
     line = capsys.readouterr().out.splitlines()[0]
     assert "the directory Bad is not 1 to 40 lowercase letters" in line
     assert "[machine] name Mine is not 1 to 40 lowercase letters" in line
+
+
+MARKER = "sekret-marker-a41"
+
+
+def _mcp_file(plate: Path, servers: dict[str, object]) -> None:
+    (plate / "claude").mkdir(parents=True, exist_ok=True)
+    (plate / "claude" / "mcp.json").write_text(json.dumps({"mcpServers": servers}), "utf-8")
+
+
+def _recorded(
+    monkeypatch: pytest.MonkeyPatch, answers: dict[str, Completed] | None = None
+) -> Recorder:
+    runner = Recorder(answers=answers or {})
+    monkeypatch.setattr("drybag.runner.subprocess_runner", lambda **_: runner)
+    return runner
+
+
+def _mcp_names(runner: Recorder) -> set[str]:
+    return {argv[6] for argv in runner.calls if argv[:2] == ["claude", "mcp"]}
+
+
+def _changed_since_attach(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path, Path, list[str]]:
+    """A checkout attached with `kept`, `changed` and `retired` delivered and `undenied` switched
+    off, whose overlay then adds `fresh`, gives `changed` a remote definition, drops `retired`,
+    switches `denied` off and `undenied` back on."""
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    _overlay_grants(store)
+    common = store.parents[2] / "common"
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    old = {"command": "a"}
+    _mcp_file(common, {"kept": old, "changed": old, "retired": old, "undenied": "off"})
+    _recorded(monkeypatch)
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    remote = {"type": "http", "url": "https://example.com/mcp"}
+    _mcp_file(common, {"kept": old, "changed": remote, "fresh": old, "denied": "off"})
+    return root, store, machine, ["kept", "changed", "fresh"]
+
+
+def test_check_lists_mcp_changes_and_launches_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store, machine, _ = _changed_since_attach(tmp_path, monkeypatch)
+    capsys.readouterr()
+    runner = _recorded(monkeypatch)
+    before = snapshot(root)
+    common = (root / ".git" / "drybag").iterdir()
+    ledgers = {path.name: path.read_bytes() for path in common if path.suffix == ".json"}
+    assert set(ledgers) == {"attach.json", "attach-mcp.json"}
+    assert invoke(["attach", "--check", *_flags(root, store, machine), "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert (data["mcp_add"], data["mcp_readd"], data["mcp_take_back"]) == (
+        ["fresh"],
+        ["changed"],
+        ["retired"],
+    )
+    assert (data["mcp_deny"], data["mcp_undeny"]) == (["denied"], ["undenied"])
+    assert invoke(["attach", "--check", *_flags(root, store, machine)]) == 0
+    out = capsys.readouterr().out
+    assert "MCP server would be re-added: changed (signs a remote server out)" in out
+    assert runner.calls == []
+    assert_snapshot_unchanged(root, before)
+    for name, held in ledgers.items():
+        assert (root / ".git" / "drybag" / name).read_bytes() == held
+
+
+def test_check_and_attach_agree_on_what_changes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store, machine, _ = _changed_since_attach(tmp_path, monkeypatch)
+    capsys.readouterr()
+    assert invoke(["attach", "--check", *_flags(root, store, machine), "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    listed = {*data["mcp_add"], *data["mcp_readd"], *data["mcp_take_back"]}
+    runner = _recorded(monkeypatch)
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    assert _mcp_names(runner) == listed == {"fresh", "changed", "retired"}
+
+
+def test_failure_screen_prints_names_never_a_definition(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A definition is argv and environment, and a `headersHelper` is a command that reads a secret:
+    # the screen names the server and relays Claude Code's message, and never prints the call.
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    _overlay_grants(store)
+    helper = {"type": "http", "url": "https://example.com/mcp", "headersHelper": MARKER}
+    _mcp_file(store.parents[2] / "common", {"m1": helper})
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    refused = Completed(1, "", "Invalid configuration: : Invalid input")
+    _recorded(monkeypatch, answers={"claude mcp add-json": refused})
+    assert invoke(["attach", *_flags(root, store, machine)]) == 1
+    out, err = capsys.readouterr()
+    said = quoted("Invalid configuration: : Invalid input")
+    assert f"MCP server failed: m1: {said}" in out.splitlines()
+    # The closing line says the name stays unsettled, so the next run is what settles it.
+    assert out.splitlines()[-1].startswith("unsettled MCP server(s): m1;")
+    assert MARKER not in out + err

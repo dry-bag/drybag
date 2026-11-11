@@ -1039,7 +1039,11 @@ overlay is named here first. It asks what the real run asks before its first wri
 run's own code, so where the run fails or refuses there, in any case the two lists below give before
 the first write, `--check` ends with the same code and the same line; otherwise it exits `0`.
 
-`rules_to_write` in the `--json` output lists those standing-rule files.
+`rules_to_write` in the `--json` output lists those standing-rule files. It also names, one line
+each, the overlay's MCP servers the run would add, re-add (a changed definition, or one an earlier
+run left unsettled; marked "signs a remote server out" where the definition has a `url`) and take
+back, and the server names it would deny or stop denying, as `mcp_add`, `mcp_readd`,
+`mcp_take_back`, `mcp_deny` and `mcp_undeny` in `--json`. It launches no `claude` for them.
 
 **What the overlay grants is shown, not gated.** The overlay is yours, written by you and your
 agents, and its hooks run scripts from the overlay checkout in place, so `attach` asks for no
@@ -1052,7 +1056,12 @@ agent (by its file) the render adds or removes against the render the last run l
 rule this run merges or takes back. A hook's command and an allow rule that do not fit a plain name are printed
 escaped, and cut to their first 120 characters and their length. `--json` carries the same lists
 as `hooks_added`, `hooks_removed`, `skills_added`, `skills_removed`, `agents_added`,
-`agents_removed`, `allow_added`, `allow_withdrawn` and `rules_left`, and no remote and no project of their own. A re-attach that
+`agents_removed`, `allow_added`, `allow_withdrawn` and `rules_left`, and no remote and no project of their own. Then come the
+overlay's MCP servers this run delivered, took back, replaced a local entry of (one made by hand,
+or left by an interrupted run) and could not deliver or take back, each by name with Claude Code's
+own message for a failure and never its definition, and last the names left unsettled;
+`mcp_delivered`, `mcp_taken_back`, `mcp_replaced`, `mcp_failed` and `mcp_unsettled` carry the names
+in `--json`. A failure exits `1` once every other step ran, and the next run tries the name again. A re-attach that
 binds the checkout to another project than this machine's record named — a `[project] name`
 renamed in a pulled commit moves every worktree's binding — says so on one line naming both.
 `--check`'s line names no project.
@@ -1165,6 +1174,22 @@ and goes on recording a dropped one only while its file is untracked and holds t
 the file is yours. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `drybag:ignore` region an earlier
 release wrote there stays until you remove it.
+
+**The overlay's MCP servers.** Each plate's `claude/mcp.json` (`machines/<name>/` sub-plates
+included) maps a server name to a definition in Claude Code's `.mcp.json` shape, to `"off"` or to
+`"on"`; the last plate's definition wins whole, and the last plate's word, a definition counting as
+on, decides whether it is on. **Writes** each served server into `~/.claude.json` as a local-scope
+entry of the main checkout, only through `claude mcp remove --scope local -- <name>` and `claude mcp
+add-json --scope local -- <name> <json>` run from the main checkout, the definition passed exactly
+as written; a name whose definition did not change is not touched, and one the overlay no longer
+serves is removed. **Writes** a `{"serverName": "<name>"}` entry under `deniedMcpServers` in the
+main checkout's `.claude/settings.local.json` for each name switched off, and takes back only the
+entries it added; both are recorded in `drybag/attach-mcp.json` in the git common directory, by
+name and digest, never a definition. A name the overlay delivers is drybag's at local scope: a local
+entry of that name you made by hand is replaced, with any sign-in it held, and `claude mcp remove`
+of a remote server signs it out, so a remote server is signed out only when its definition changes,
+when it is taken back, or when an unsettled name is retried. An entry you edit or remove by hand is
+not noticed until its definition changes or `detach` runs.
 
 **`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
 writes: [`owner-files`](#hooks) places them in each new linked worktree.
@@ -1330,7 +1355,13 @@ there unlinked, then every link in the composed store `$HOME/.local/share/drybag
 and the directory where nothing else is left (a file there that is not a link is a note the harness
 wrote: it stays, and so does the directory, which the line says and `--json` reports as
 `store_kept: true`) — removes the `drybag:attach` block in the repository's exclude file, and deletes
-the ledger, `drybag/attach.json` in the git common directory. The render directory and the composed store are derived
+the ledger, `drybag/attach.json` in the git common directory. Before the render directory goes it
+takes the `deniedMcpServers` entries `attach` recorded out of the settings file and each MCP server
+`drybag/attach-mcp.json` records out of `~/.claude.json`, with `claude mcp remove --scope local --
+<name>` from the main checkout, then deletes that file; a `remove` Claude Code did not answer (no
+`claude` on `PATH`, say) fails (`1`) naming the server and Claude Code's message, with the name
+still recorded and the exclude block, the ledgers and the render kept, so running `detach` again
+finishes. The render directory and the composed store are derived
 from the binding id and never read from the ledger, so a ledger naming another directory removes nothing
 outside it. The plugin goes before the exclude block, so Claude Code takes the plugin's entries,
 which name the id, out of `.claude/settings.local.json` while that file is still hidden. Each call

@@ -288,8 +288,11 @@ LISTED = {
         "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
     ("src/drybag/attach/write.py", "claude"): (
-        4,
-        "(`attach.items`, `attach.permissions`, `attach.write`)",
+        5,
+        (
+            "(`attach.items`, `attach.permissions`, `attach.write`)",
+            "`detach` names `claude mcp` where",
+        ),
     ),
     ("src/drybag/attach/write.py", "codex"): (
         4,

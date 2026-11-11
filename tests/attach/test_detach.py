@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from drybag import fsops, jsonobject
+from drybag.attach.mcp import read_mcp_ledger
 from drybag.attach.write import Attached, Detached, attach, detach
 from drybag.binding import LEDGER_NAME, MCP_LEDGER_FILE, common_directory
 from drybag.errors import Failure, Refusal
@@ -1434,4 +1435,36 @@ def test_detach_removes_the_deny_entries_and_the_mcp_ledger(tmp_path: Path) -> N
     assert (common_directory(root) / MCP_LEDGER_FILE).exists()
     _detach(root)
     assert_snapshot_unchanged(root, before)
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+
+
+def test_detach_removes_every_owned_name_and_empties_the_field(tmp_path: Path) -> None:
+    root, store, machine = _bound(tmp_path)
+    servers = {"m1": {"command": "a"}, "m2": {"command": "b"}}
+    (store.parents[2] / "common" / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": servers}), encoding="utf-8"
+    )
+    _attach(root, store, machine)
+    runner = Recorder()
+    _detach(root, runner)
+    removed = [argv for argv in runner.calls if argv[:3] == ["claude", "mcp", "remove"]]
+    assert sorted(argv[-1] for argv in removed) == ["m1", "m2"]
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+
+
+def test_detach_keeps_unsettled_names_when_claude_is_missing(tmp_path: Path) -> None:
+    # `remove` with no `claude` on `PATH` exits 127 and leaves the entry: the name stays recorded,
+    # the command says so, and a second `detach` finishes from the ledgers it kept.
+    from drybag.runner import Completed
+
+    root, store, machine = _bound(tmp_path)
+    (store.parents[2] / "common" / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": {"m1": {"command": "a"}}}), encoding="utf-8"
+    )
+    _attach(root, store, machine)
+    missing = Completed(127, "", "claude could not be run")
+    with pytest.raises(Failure, match="m1"):
+        _detach(root, Recorder(answers={"claude mcp": missing}))
+    assert read_mcp_ledger(root).mcp == {"m1": None}
+    _detach(root)
     assert not (common_directory(root) / MCP_LEDGER_FILE).exists()

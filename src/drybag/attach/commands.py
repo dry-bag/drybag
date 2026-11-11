@@ -66,6 +66,12 @@ def run_attach(args: argparse.Namespace) -> Result:
         "allow_added": list(attached.allow_added),
         "allow_withdrawn": list(attached.allow_withdrawn),
         "rules_left": list(attached.rules_left),
+        # The overlay's MCP servers by name, the owner's own; never a definition or a message.
+        "mcp_delivered": list(attached.mcp_delivered),
+        "mcp_taken_back": list(attached.mcp_taken_back),
+        "mcp_replaced": list(attached.mcp_replaced),
+        "mcp_failed": [name for name, _ in attached.mcp_failed],
+        "mcp_unsettled": list(attached.mcp_unsettled),
     }
     summary = "; ".join(
         (
@@ -76,7 +82,9 @@ def run_attach(args: argparse.Namespace) -> Result:
             *attached.notes,
         )
     )
-    return Result("\n".join((summary, *_screen(attached))), data)
+    # A server Claude Code did not take is the one failure that waits until every step ran.
+    failed = 1 if attached.mcp_failed else 0
+    return Result("\n".join((summary, *_screen(attached))), data, exit_code=failed)
 
 
 def _screen(attached: Attached) -> list[str]:
@@ -104,6 +112,20 @@ def _screen(attached: Attached) -> list[str]:
         "detach` removes it only while it is untracked and holds the bytes attach wrote)"
         for rule in attached.rules_left
     ]
+    lines += [f"MCP server delivered: {quoted(name)}" for name in attached.mcp_delivered]
+    lines += [f"MCP server taken back: {quoted(name)}" for name in attached.mcp_taken_back]
+    lines += [
+        f"MCP server replaced: {quoted(name)} (a local entry of that name, made by hand or left by "
+        "an interrupted run, was removed first)"
+        for name in attached.mcp_replaced
+    ]
+    lines += [f"MCP server failed: {quoted(name)}: {said}" for name, said in attached.mcp_failed]
+    if attached.mcp_unsettled:
+        names = ", ".join(quoted(name) for name in attached.mcp_unsettled)
+        lines.append(
+            f"unsettled MCP server(s): {names}; `drybag attach` did not finish delivering or "
+            "taking these back, run it again"
+        )
     return lines
 
 

@@ -26,7 +26,7 @@ from drybag.attach.api import ledger
 from drybag.attach.binding import OVERLAY_DAMAGED
 from drybag.attach.check import check
 from drybag.attach.exclude import NOT_IGNORED, TRACKED
-from drybag.attach.mcp import McpLedger, read_mcp_ledger
+from drybag.attach.mcp import McpLedger, digest, read_mcp_ledger
 from drybag.attach.permissions import settings_document
 from drybag.attach.write import (
     GROUP_ESCAPES,
@@ -2754,3 +2754,53 @@ def test_attach_json_is_unchanged_by_deny_entries(tmp_path: Path) -> None:
     keys = set(json.loads(ledger_file(root).read_text(encoding="utf-8")))
     assert keys == {"format", "store", "allow", "rules", "settings_keys", "directories", "render"}
     assert DENIED not in json.loads(ledger_file(root).read_text(encoding="utf-8"))
+
+
+SERVER = {"command": "srv", "args": ["--stdio"]}
+
+
+def _mcp_calls(runner: Recorder) -> list[list[str]]:
+    return [argv for argv in runner.calls if argv[:2] == ["claude", "mcp"]]
+
+
+def test_attach_delivers_and_records_digests(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, m1=SERVER)
+    runner = Recorder()
+    attached = attach(root, store=store, machine=machine, runner=runner)
+    assert [argv[2] for argv in _mcp_calls(runner)] == ["remove", "add-json"]
+    launched = zip(runner.calls, runner.cwds, strict=True)
+    assert {cwd for argv, cwd in launched if argv[1] == "mcp"} == {root}
+    assert read_mcp_ledger(root).mcp == {"m1": digest(SERVER)}
+    assert attached.mcp_delivered == ("m1",)
+    # A second run with the same definition launches nothing for it.
+    again = Recorder()
+    attach(root, store=store, machine=machine, runner=again)
+    assert _mcp_calls(again) == []
+
+
+def test_attach_takes_back_a_server_switched_off_later(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, m1=SERVER)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    # The project's plate, after `common`, switches the name off: nothing is delivered, the deny
+    # entry is written, and the local entry `attach` owns is taken back.
+    (store.parent / "claude").mkdir()
+    (store.parent / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": {"m1": "off"}}), encoding="utf-8"
+    )
+    runner = Recorder()
+    attached = attach(root, store=store, machine=machine, runner=runner)
+    assert _mcp_calls(runner) == [["claude", "mcp", "remove", "--scope", "local", "--", "m1"]]
+    assert attached.mcp_taken_back == ("m1",)
+    assert read_mcp_ledger(root) == McpLedger(deny=("m1",))
+    assert _settings(root)[DENIED] == [{"serverName": "m1"}]
+
+
+def test_attach_with_no_mcp_files_calls_no_claude_mcp(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    runner = Recorder()
+    attach(root, store=store, machine=machine, runner=runner)
+    assert runner.calls, "the plugin calls ran, so the recorder saw the run"
+    assert _mcp_calls(runner) == []
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()

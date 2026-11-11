@@ -49,9 +49,9 @@ package that names a harness is pardoned there, each pardon by one of these item
   `attach.render`, and `detach` withdraws it with `PLUGIN_UNINSTALL_LOCAL` and
   `PLUGIN_MARKETPLACE_REMOVE` beside them, so another harness is another render and other verbs.
 - `attach` delivers the overlay's MCP servers at Claude Code's local scope with Claude Code's
-  verbs, `MCP_ADD_JSON_LOCAL` and `MCP_REMOVE_LOCAL` beside those, run by `attach.mcp`, and
-  switches outside servers off with Claude Code's `deniedMcpServers`, so another harness is other
-  verbs and another key.
+  verbs, `MCP_ADD_JSON_LOCAL` and `MCP_REMOVE_LOCAL` beside those, run by `attach.mcp`, switches
+  outside servers off with Claude Code's `deniedMcpServers`, and `detach` names `claude mcp` where
+  it could not take one back, so another harness is other verbs and another key.
 - The overlay spells each harness's half by name: `common/claude` and `common/codex`
   (`overlay.layout`, re-exported by `overlay.api`), and the per-project `claude` and `codex`
   directories, `.codex/rules` and the directories it creates in a project, which `attach` reads

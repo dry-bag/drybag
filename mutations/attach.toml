@@ -1376,7 +1376,7 @@ reddens = [
 [[mutation]]
 name = "check skips the reads the run makes before its first write"
 file = "src/drybag/attach/check.py"
-before = "    planned = plan_writes(root, config, binding, diff)\n    return _report(binding, planned.diff, source)\n"
+before = "    planned = plan_writes(root, config, binding, diff)\n    return _report(binding, planned.diff, source, _mcp_heads(planned))\n"
 after = "    return _report(binding, diff, source)\n"
 reddens = [
   "tests/attach/test_commands.py::test_check_ends_on_an_overlay_rule_that_is_not_utf8_with_the_runs_code_and_line",
@@ -2103,4 +2103,91 @@ before = '''        return runner.launch(argv, main)'''
 after = '''        return runner.launch(argv, Path.cwd())'''
 reddens = [
   "tests/attach/test_mcp_reconcile.py::test_every_launch_runs_in_the_main_checkout",
+]
+
+# `attach` and `detach` run the reconcile, and `--check` lists what it would mark without it. A
+# definition is argv and environment, so no line names one: the failure line is a name and what
+# Claude Code said.
+[[mutation]]
+name = "a failed MCP call is reported by its argv"
+file = "src/drybag/attach/mcp.py"
+before = '''            failed.append((name, answered(added)))'''
+after = '''            failed.append((name, " ".join(filled(MCP_ADD_JSON_LOCAL, name, definition))))'''
+reddens = [
+  "tests/attach/test_commands.py::test_failure_screen_prints_names_never_a_definition",
+]
+
+[[mutation]]
+name = "attach --check runs the MCP reconcile"
+file = "src/drybag/attach/check.py"
+before = '''    plan = planned_mcp(planned.served, (planned.mcp_ledger or planned.mcp_held).mcp)'''
+after = '''    from drybag.attach.mcp import reconcile
+    from drybag.runner import subprocess_runner
+
+    owned = (planned.mcp_ledger or planned.mcp_held).mcp
+    reconcile(Path.cwd(), planned.served, owned, subprocess_runner(), lambda _: None)
+    plan = planned_mcp(planned.served, owned)'''
+reddens = [
+  "tests/attach/test_commands.py::test_check_lists_mcp_changes_and_launches_nothing",
+]
+
+[[mutation]]
+name = "attach --check marks no remote server's re-add as a sign-out"
+file = "src/drybag/attach/check.py"
+before = '''            remote = head == "mcp_readd" and "url" in planned.served[name].definition'''
+after = '''            remote = False'''
+reddens = [
+  "tests/attach/test_commands.py::test_check_lists_mcp_changes_and_launches_nothing",
+]
+
+[[mutation]]
+name = "attach exits 0 when an MCP server was not delivered"
+file = "src/drybag/attach/commands.py"
+before = '''    failed = 1 if attached.mcp_failed else 0'''
+after = '''    failed = 0'''
+reddens = [
+  "tests/attach/test_commands.py::test_failure_screen_prints_names_never_a_definition",
+]
+
+[[mutation]]
+name = "attach says no unsettled MCP server"
+file = "src/drybag/attach/commands.py"
+before = '''    if attached.mcp_unsettled:'''
+after = '''    if False:'''
+reddens = [
+  "tests/attach/test_commands.py::test_failure_screen_prints_names_never_a_definition",
+]
+
+[[mutation]]
+name = "attach reconciles against an empty MCP ledger"
+file = "src/drybag/attach/write.py"
+before = '''        planned.served,
+        held.mcp,
+'''
+after = '''        planned.served,
+        {},
+'''
+reddens = [
+  "tests/attach/test_write.py::test_attach_delivers_and_records_digests",
+  "tests/attach/test_write.py::test_attach_takes_back_a_server_switched_off_later",
+]
+
+[[mutation]]
+name = "detach takes back no MCP server"
+file = "src/drybag/attach/write.py"
+before = '''        root, {}, held.mcp, runner, lambda owned:'''
+after = '''        root, {}, {}, runner, lambda owned:'''
+reddens = [
+  "tests/attach/test_detach.py::test_detach_removes_every_owned_name_and_empties_the_field",
+]
+
+[[mutation]]
+name = "detach finishes past an MCP server it could not take back"
+file = "src/drybag/attach/write.py"
+before = '''    if mcp.failed:
+        raise Failure(NOT_TAKEN_BACK.format(servers=_failed_servers(mcp.failed)))'''
+after = '''    if False:
+        raise Failure(NOT_TAKEN_BACK.format(servers=_failed_servers(mcp.failed)))'''
+reddens = [
+  "tests/attach/test_detach.py::test_detach_keeps_unsettled_names_when_claude_is_missing",
 ]
