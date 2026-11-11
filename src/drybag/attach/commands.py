@@ -193,7 +193,10 @@ def register(groups: SubParsers) -> None:
         "--project",
         type=grammar(PROJECT_NAME, f"not {NAME_RULE}"),
         default=None,
-        help="the overlay project to attach a repository with no drybag.toml to",
+        help=(
+            "the overlay project to attach a repository with no drybag.toml to, or the one its "
+            "drybag.toml names, to rebind a checkout this machine binds to another"
+        ),
     )
     attach.set_defaults(func=run_attach)
 

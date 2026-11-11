@@ -1665,7 +1665,7 @@ reddens = [
 [[mutation]]
 name = "attach takes --project beside a drybag.toml"
 file = "src/drybag/attach/write.py"
-before = "    if project is not None and not chosen:"
+before = "    if project is not None and project != named:"
 after = "    if False:"
 reddens = ["tests/attach/test_project_choice.py::test_project_beside_a_drybag_toml_is_refused"]
 
@@ -2460,4 +2460,15 @@ before = '''    held = read_mcp_ledger(root) if main is not None else McpLedger(
 after = '''    held = read_mcp_ledger(root)'''
 reddens = [
   "tests/attach/test_detach.py::test_detach_in_a_bare_repositorys_worktree_withdraws_this_checkouts_own_parts",
+]
+
+# A checkout bound on this machine is rebound to the project its `drybag.toml` now names only on
+# `--project`: a pulled rename would otherwise move every worktree's servers, rules and hooks.
+[[mutation]]
+name = "attach rebinds a checkout to the project its drybag.toml names without --project"
+file = "src/drybag/attach/write.py"
+before = "    if project is None and found is not None and found.project != named:"
+after = "    if False:"
+reddens = [
+  "tests/attach/test_commands.py::test_a_reattach_under_another_project_name_is_refused_unless_project_names_it",
 ]

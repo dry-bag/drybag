@@ -112,12 +112,16 @@ def test_the_attach_screen_and_check_name_the_project_quoted(
     assert attached["binding"] == binding.short(made)
 
 
-def test_a_reattach_that_binds_another_project_says_both_on_one_line(
+def test_a_reattach_under_another_project_name_is_refused_unless_project_names_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # A pulled commit that renames `[project] name` to another of the owner's projects moves the
-    # whole repository's binding, every worktree's, on the next routine attach. The screen says so
-    # on one line naming both, each quoted, where it used to read as an ordinary re-attach.
+    # A pulled commit that renames `[project] name` to another of the owner's projects would move
+    # the whole repository's binding, every worktree's, with that project's servers, rules and
+    # hooks: `attach` and `--check` refuse, naming both and the remedy, and `--project` rebinds.
+    from drybag import binding
+    from drybag.attach.binding import REBIND
+    from drybag.attach.write import REBOUND
+
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     machine = _machine(tmp_path, overlay=store.parents[2])
     assert invoke(["attach", *_flags(root, store, machine)]) == 0
@@ -125,11 +129,13 @@ def test_a_reattach_that_binds_another_project_says_both_on_one_line(
     root, other = _project_and_store(
         tmp_path, recorded=None, origin="git@example.com:o/p.git", name="q"
     )
-    assert invoke(["attach", *_flags(root, other, machine)]) == 0
-    out = capsys.readouterr().out
-    from drybag.attach.write import REBOUND
-
-    assert REBOUND.format(earlier=quoted("p"), project=quoted("q")) in out
+    for command in (["attach"], ["attach", "--check"]):
+        assert invoke([*command, *_flags(root, other, machine)]) == 2
+        assert REBIND.format(bound="p", named="q") in capsys.readouterr().err
+    found = binding.bound_project(root)
+    assert found is not None and found.project == "p"
+    assert invoke(["attach", "--project", "q", *_flags(root, other, machine)]) == 0
+    assert REBOUND.format(earlier=quoted("p"), project=quoted("q")) in capsys.readouterr().out
 
 
 def test_an_attach_after_an_added_hook_entry_proceeds_and_shows_the_binding_and_what_runs(

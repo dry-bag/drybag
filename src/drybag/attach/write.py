@@ -58,6 +58,7 @@ from drybag.attach import exclude
 from drybag.attach.binding import (
     BY_FILE,
     NAMED_BY_FILE,
+    REBIND,
     Binding,
     Chosen,
     choose_project,
@@ -852,8 +853,8 @@ def configured(
 ) -> tuple[Config, str]:
     """The run's one `Config`, its project chosen where the repository has no `drybag.toml`
     (`binding.choose_project`, asked only then), and where the project's name came from
-    (`binding.BY_FILE` or the phrase of the way it was chosen). `project` is `--project`, refused
-    beside the file, which names the project already."""
+    (`binding.BY_FILE` or the phrase of the way it was chosen). `project` is `--project`, which
+    beside the file only confirms a rebind to the project the file names (`REBIND`)."""
     chosen: list[Chosen] = []
 
     def unnamed() -> str:
@@ -861,9 +862,15 @@ def configured(
         return chosen[0].name
 
     config = command_config(root, machine=machine, owner=owner, unnamed=unnamed)
-    if project is not None and not chosen:
+    if chosen:
+        return config, chosen[0].source
+    named = config.project.name
+    if project is not None and project != named:
         raise Refusal(NAMED_BY_FILE)
-    return config, chosen[0].source if chosen else BY_FILE
+    found = bound_project(root)
+    if project is None and found is not None and found.project != named:
+        raise Refusal(REBIND.format(bound=quoted(found.project), named=quoted(named)))
+    return config, BY_FILE
 
 
 def _plan(

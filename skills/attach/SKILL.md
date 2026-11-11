@@ -9,7 +9,9 @@ The store is `<overlay>/projects/<project name>/memory`, where the name is the `
 in this repository's `drybag.toml`, and `attach` derives it: the overlay root comes from the
 machine configuration, not from what is typed here. With no `drybag.toml`, the project is the
 one the overlay records this checkout's remote for, or one named after that remote; where the
-user wants another, or `attach` asks for one, pass `--project NAME`.
+user wants another, or `attach` asks for one, pass `--project NAME`. When `attach` refuses because
+this machine binds the checkout to another project, show the user both names, and rebind with
+`--project` only on their word.
 
 1. Run `drybag attach --check` first. It reports whether this machine already
    binds this checkout (`bound` or `unbound`), and which allow rules would be added. It

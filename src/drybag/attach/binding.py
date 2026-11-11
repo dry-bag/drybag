@@ -392,8 +392,15 @@ NOT_A_NAME = (
     "with `--project`"
 )
 NAMED_BY_FILE = (
-    "--project names the project of a repository with no drybag.toml, and this one's "
-    "[project] name names it already"
+    "--project beside a drybag.toml may only name the project its [project] name names, to rebind "
+    "the checkout to it"
+)
+# A bound checkout whose `[project] name` is not the project this machine's record binds it to: a
+# pulled commit can rename it, and a rebind moves every worktree's servers, rules and hooks, so it
+# is made only on `--project`, from the record no repository byte writes.
+REBIND = (
+    "this machine binds the checkout to project {bound} and its drybag.toml names {named}; to "
+    "rebind it, and every worktree of it, run `drybag attach --project {named}`"
 )
 
 

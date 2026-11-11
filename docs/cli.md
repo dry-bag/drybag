@@ -1007,7 +1007,7 @@ overlay's `common/drybag.toml`, its `projects/<name>/drybag.toml` once the bindi
 file, as a session resolves its preferences; so `memory.mode` is the preset's,
 `harness`, unless an overlay file sets `overlay`. Where the repository has a `drybag.toml`, its
 `[project] name` names the project and nothing above applies; `--project` beside it is refused
-(`2`).
+(`2`) unless it names that same project, to rebind the checkout (below).
 
 **The notes are composed only in overlay mode; the rest is delivered whatever the mode.** A
 `drybag.toml` whose `memory.mode` is not `overlay` keeps its notes elsewhere, so for it `attach`
@@ -1060,9 +1060,11 @@ overlay's MCP servers this run delivered, took back, replaced a local entry of (
 or left by an interrupted run) and could not deliver or take back, each by name with Claude Code's
 own message for a failure and never its definition, and the server names whose `deniedMcpServers`
 entry it added and withdrew; `mcp_delivered`, `mcp_taken_back`, `mcp_replaced`, `mcp_failed`,
-`mcp_denied` and `mcp_undenied` carry the names in `--json`. A failure exits `1` once every other step ran, and the next run tries the name again. A re-attach that
-binds the checkout to another project than this machine's record named — a `[project] name`
-renamed in a pulled commit moves every worktree's binding — says so on one line naming both.
+`mcp_denied` and `mcp_undenied` carry the names in `--json`. A failure exits `1` once every other step ran, and the next run tries the name again. A re-attach of a
+checkout this machine binds to another project than its `[project] name` names — a name renamed in
+a pulled commit would move every worktree's binding, with its servers, rules and hooks — is
+refused (`2`) by `attach` and `--check` alike, naming both projects, unless `--project` names the
+file's project; that rebind says so on one line naming both.
 `--check`'s line names no project.
 
 **The overlay's hooks, skills and agents are delivered as a plugin.** Every run renders them into

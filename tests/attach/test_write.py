@@ -508,8 +508,8 @@ def test_the_composed_store_is_the_recorded_projects_and_moves_only_when_attach_
 ) -> None:
     # The project a composed store is built for is the one this machine's binding record names,
     # never the repository's `[project] name` read on its own: a checkout bound to `p` whose
-    # `drybag.toml` now names `q` keeps `p`'s store until `attach` records the new binding, and
-    # then gets `q`'s.
+    # `drybag.toml` now names `q` keeps `p`'s store until `attach --project q` records the new
+    # binding, and then gets `q`'s.
     from drybag import binding
     from drybag.memory.store import composed_directory as store_directory
 
@@ -523,7 +523,7 @@ def test_the_composed_store_is_the_recorded_projects_and_moves_only_when_attach_
     root, other = _project_and_store(tmp_path, recorded=None, origin="git@x:o/p.git", name="q")
     (other / "project-stable").mkdir(exist_ok=True)
     assert (composed / "MEMORY.md").readlink() == overlay / "projects/p/memory/MEMORY.md"
-    attach(root, store=other, machine=machine, runner=Recorder())
+    attach(root, store=other, machine=machine, runner=Recorder(), project="q")
     found = binding.bound_project(root)
     assert found is not None and found.project == "q"
     assert (composed / "MEMORY.md").readlink() == overlay / "projects/q/memory/MEMORY.md"
