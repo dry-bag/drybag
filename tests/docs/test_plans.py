@@ -212,20 +212,23 @@ def test_a_plan_without_a_scope_line_fails_and_a_bare_marker_does_not_count(
 
 
 def test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs(tmp_path: Path) -> None:
-    # The `**Spec:**` line alone is read. A path counts only when it resolves inside the project,
-    # and the finding names what is wrong on the line. Mutations (declared): `mutations/`'s "plan
-    # check owes no Spec line", "a Spec line's none needs no reason", "a Spec path need not
-    # resolve" and "a Spec line's path is reported twice".
+    # The `**Spec:**` line alone is read: any span in backticks on it that resolves inside the
+    # project, an anchor dropped, names the spec, and the finding names what is wrong on the
+    # line. Mutations (declared): `mutations/`'s "plan check owes no Spec line", "a Spec line's
+    # none needs no reason", "a Spec path need not resolve", "a Spec span must be shaped like a
+    # path" and "a Spec span keeps its anchor".
     root, config = project(tmp_path)
     assert rules(root, config, plan(root, SCOPE)) == []  # no specs folder, no Spec line owed
     (root / "docs" / "specs").mkdir()
     (root / "docs" / "specs" / "a.md").write_text("# a\n", encoding="utf-8")
+    (root / "DESIGN.md").write_text("# d\n", encoding="utf-8")
 
     def spec(line: str) -> list[tuple[str, int | None, str]]:
         found = lint(root, config, plans=[plan(root, SCOPE + line)]).findings
         return [(f.rule, f.line, f.detail) for f in found]
 
-    assert spec("**Spec:** `docs/specs/a.md`\n") == []
+    for named in ("`docs/specs/a.md`", "`DESIGN.md`", "`docs/specs`", "`docs/specs/a.md#part`"):
+        assert spec(f"**Spec:** {named}\n") == []
     assert spec("- **Spec:** `docs/specs/a.md`\n") == []
     assert spec("**Spec:** none — a fix with no design\n") == []
     assert spec("") == [("spec-missing", None, _SPEC_MISSING)]
@@ -233,8 +236,31 @@ def test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs(tmp_pa
     assert spec("**Spec:** the design,\n`docs/specs/a.md`\n") == [
         ("spec-missing", 3, _SPEC_NO_PATH)
     ]
-    for gone in ("`docs/specs/b.md`", "`docs/specs/b.md` (create)", "`../specs/a.md`"):
+    for gone in ("`docs/specs/b.md` (create)", "`../specs/a.md`"):
         assert spec(f"**Spec:** {gone}\n") == [("spec-missing", 3, _SPEC_UNRESOLVED)]
+
+
+def test_a_spec_line_is_held_to_the_reference_rule_like_any_other(tmp_path: Path) -> None:
+    # Keeping specs never weakens the reference rule: a second dead path on the Spec line, one in
+    # a `none` reason and one on a later Spec line are each reported once. Mutation (declared):
+    # `mutations/`'s "the Spec line is exempt from the reference rule".
+    root, config = project(tmp_path)
+    (root / "docs" / "specs").mkdir()
+    (root / "docs" / "specs" / "a.md").write_text("# a\n", encoding="utf-8")
+    body = (
+        "**Spec:** `docs/specs/a.md`, superseding `docs/specs/gone.md`\n\n## Task 2\n\n"
+        "**Spec:** none — `docs/specs/dropped.md` was dropped\n"
+    )
+    found = lint(root, config, plans=[plan(root, SCOPE + body)]).findings
+    assert [(f.rule, f.line, f.detail) for f in found] == [
+        ("dead-reference", 3, "docs/specs/gone.md"),
+        ("dead-reference", 7, "docs/specs/dropped.md"),
+    ]
+    dead = lint(root, config, plans=[plan(root, SCOPE + "**Spec:** `docs/specs/b.md`\n")])
+    assert [(f.rule, f.line) for f in dead.findings] == [
+        ("spec-missing", 3),
+        ("dead-reference", 3),
+    ]
 
 
 @needs_git

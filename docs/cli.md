@@ -889,8 +889,9 @@ with content is present; a plan claiming `Fixes BR-nnn` (no other prefix is judg
 content; and a mutation's outcome stated as fact in the present tense (`-> the test reddens`,
 `watch it go red`, `reddens 8 assertions`) is a finding unless its own sentence marks it an
 expectation; and where git tracks a file under `[paths] specs`, a plan's first `**Spec:**` line
-names its spec by a backticked path that resolves inside the project, or says `none — <reason>`
-(the line alone is read, a list item's included). Without `PATH`, the first rule reads only the lines the change wrote — those that
+names its spec in backticks, any span there that resolves inside the project once an anchor after
+`#` is dropped, or says `none — <reason>` (the line alone is read, a list item's included; its paths
+are held to the first rule as every line's are). Without `PATH`, the first rule reads only the lines the change wrote — those that
 differ from every merge base's copy and from `REF`'s — so a change editing a delivered plan, an
 `Interfaces:` block say, is held to its own lines and never to paths the tree has moved since the
 plan was written; a new plan is all such lines. Naming a plan as `PATH` settles every reference in

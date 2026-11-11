@@ -128,6 +128,9 @@ _SCOPE_LINE = re.compile(r"^\*\*Scope:\*\*[^\S\n]*\S", re.MULTILINE)
 # read, as the Scope and Premise markers are.
 _SPEC_LINE = re.compile(r"^(?:[-*+][^\S\n]+)?\*\*Spec:\*\*(.*)$", re.MULTILINE)
 _SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*[—-]+[^\S\n]*\S")
+# Any backticked span on the Spec line may name the spec: a top-level file or a folder is a spec as
+# well as `docs/specs/x.md`, which `prose.path_references` alone would not read as paths.
+_BACKTICKED = re.compile(r"`([^`\n]+)`")
 #
 # A premise marker, read to the first colon after it, past line ends; the group holds when the
 # marker closes there and has content on its line. Every marker before that colon reaches the same
@@ -176,8 +179,8 @@ _SCOPE_MISSING = (
     'iff …", so a mid-plan arrival is screened'
 )
 _SPEC_MISSING = "no `**Spec:**` line: name the spec in backticks, or write `none — <reason>`"
-_SPEC_NO_PATH = "the `**Spec:**` line names no path in backticks and is not `none — <reason>`"
-_SPEC_UNRESOLVED = "no path the `**Spec:**` line names in backticks resolves inside the project"
+_SPEC_NO_PATH = "the `**Spec:**` line has nothing in backticks and is not `none — <reason>`"
+_SPEC_UNRESOLVED = "nothing the `**Spec:**` line names in backticks resolves inside the project"
 _PREMISE_MISSING = (
     "claims `Fixes` with no `**Premise:**` line quoting the entry evidence that establishes "
     "its central predicate"
@@ -431,16 +434,18 @@ def _has_premise(prose: str) -> bool:
 
 def _spec_finding(prose: str, where: str, root: Path) -> Finding | None:
     """The Spec rule's finding on the plan's first `**Spec:**` line, or on the plan when it has
-    none; `None` when that line says `none — <reason>` or names a spec that resolves."""
+    none; `None` when that line says `none — <reason>` or a backticked span on it, an anchor
+    after `#` dropped, resolves. Its paths are the reference rule's as well, as every line's are:
+    this rule asks only whether the plan names a spec."""
     for marker in _SPEC_LINE.finditer(prose):
         number = prose.count("\n", 0, marker.start()) + 1
         rest = marker.group(1)
         if _SPEC_NONE.match(rest):
             return None
-        targets = list(path_references(rest))
+        targets = [span.split("#", 1)[0] for span in _BACKTICKED.findall(rest)]
         if not targets:
             return Finding("spec-missing", where, number, _SPEC_NO_PATH)
-        for target in targets:
+        for target in filter(None, targets):
             landed = resolves_within(root, target)
             if landed is not None and present_within(root, landed) is True:
                 return None
@@ -473,8 +478,7 @@ def _lint_one(
 
     `judged`, when given, is the lines whose references are settled against the tree: the ones
     the change wrote (`written_lines`). Every other rule reads the whole plan either way.
-    `specs` is whether the project keeps specs, which makes a `**Spec:**` line owed; that line is
-    then the Spec rule's to settle, and not the reference rule's as well.
+    `specs` is whether the project keeps specs, which makes a `**Spec:**` line owed.
     """
     # Fenced code is not plan prose: its fixtures name deliberately fake paths.
     prose = blank_fences(read_document(path, where))
@@ -491,8 +495,7 @@ def _lint_one(
     for line in _DECLARES.findall(prose):
         declared |= set(path_references(line))
     for number, line in enumerate(prose.splitlines(), 1):
-        settled = not (specs and _SPEC_LINE.match(line))
-        if settled and not _LINE_MARK.search(line) and (judged is None or number in judged):
+        if not _LINE_MARK.search(line) and (judged is None or number in judged):
             for target in path_references(line):
                 # A claim that lands outside the root is not asked of the filesystem: the
                 # answer would be about this disk rather than about the repository, and a plan

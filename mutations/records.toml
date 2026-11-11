@@ -204,8 +204,8 @@ reddens = [
 [[mutation]]
 name = "plan check judges an edited plan's untouched lines"
 file = "src/drybag/docs/plans.py"
-before = "        if settled and not _LINE_MARK.search(line) and (judged is None or number in judged):"
-after = "        if settled and not _LINE_MARK.search(line):"
+before = "        if not _LINE_MARK.search(line) and (judged is None or number in judged):"
+after = "        if not _LINE_MARK.search(line):"
 reddens = [
   "tests/docs/test_plans.py::test_an_edit_to_a_plan_is_held_to_the_references_on_the_lines_it_writes",
 ]
@@ -1361,12 +1361,28 @@ before = "            if landed is not None and present_within(root, landed) is 
 after = "            if True:"
 reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
 
-# The Spec rule settles its own line; the reference rule reporting it as well says it twice.
+# Keeping specs never weakens the reference rule: a Spec line's paths are judged like any line's.
 [[mutation]]
-name = "a Spec line's path is reported twice"
+name = "the Spec line is exempt from the reference rule"
 file = "src/drybag/docs/plans.py"
-before = "        settled = not (specs and _SPEC_LINE.match(line))"
-after = "        settled = True"
+before = "        if not _LINE_MARK.search(line) and (judged is None or number in judged):"
+after = "        if not (_LINE_MARK.search(line) or _SPEC_LINE.match(line)) and (judged is None or number in judged):"
+reddens = ["tests/docs/test_plans.py::test_a_spec_line_is_held_to_the_reference_rule_like_any_other"]
+
+# A spec at the top, a folder of specs, or a section of one is named in backticks all the same.
+[[mutation]]
+name = "a Spec span must be shaped like a path"
+file = "src/drybag/docs/plans.py"
+before = '        targets = [span.split("#", 1)[0] for span in _BACKTICKED.findall(rest)]'
+after = "        targets = list(path_references(rest))"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# A spec's section is named by an anchor; the file is what has to resolve.
+[[mutation]]
+name = "a Spec span keeps its anchor"
+file = "src/drybag/docs/plans.py"
+before = '        targets = [span.split("#", 1)[0] for span in _BACKTICKED.findall(rest)]'
+after = "        targets = _BACKTICKED.findall(rest)"
 reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
 
 # A local specs folder a fresh clone does not hold must not refuse what CI passes.
