@@ -894,7 +894,8 @@ with content is present; a plan claiming `Fixes BR-nnn` (no other prefix is judg
 content; and a mutation's outcome stated as fact in the present tense (`-> the test reddens`,
 `watch it go red`, `reddens 8 assertions`) is a finding unless its own sentence marks it an
 expectation; and where `[paths] specs` is a directory, a plan carries a `**Spec:**` line naming
-its spec by a backticked path, on that line or the next ones of its paragraph (a project that
+its spec by a backticked path, on that line or the next ones of its paragraph, which a blank
+line, another `**…:**` field, a list item, a heading or a quote ends (a project that
 keeps no specs owes none, and the path is settled as the first rule settles any other). Without
 `PATH`, the first rule reads only the lines the change wrote — those that
 differ from every merge base's copy and from `REF`'s — so a change editing a delivered plan, an
