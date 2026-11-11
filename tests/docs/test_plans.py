@@ -248,7 +248,7 @@ def test_a_spec_line_is_held_to_the_reference_rule_like_any_other(tmp_path: Path
     (root / "docs" / "specs").mkdir()
     (root / "docs" / "specs" / "a.md").write_text("# a\n", encoding="utf-8")
     body = (
-        "**Spec:** `docs/specs/a.md`, superseding `docs/specs/gone.md`\n\n## Task 2\n\n"
+        "**Spec:** `docs/specs/a.md`, superseding `docs/specs/gone.md`\n\n## Later\n\n"
         "**Spec:** none — `docs/specs/dropped.md` was dropped\n"
     )
     found = lint(root, config, plans=[plan(root, SCOPE + body)]).findings
