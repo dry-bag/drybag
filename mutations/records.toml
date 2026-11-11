@@ -100,7 +100,10 @@ name = "an untracked document is listed as if CI could see it"
 file = "src/drybag/docs/trail.py"
 before = '    skip = _ignored(root, paths) | _untracked(root, paths)'
 after = '    skip = _ignored(root, paths)'
-reddens = ["tests/docs/test_trail.py::test_an_untracked_or_ignored_document_is_not_listed"]
+reddens = [
+  "tests/docs/test_trail.py::test_an_untracked_or_ignored_document_is_not_listed",
+  "tests/docs/test_commands.py::test_docs_trail_and_plan_check_run_on_a_design_folder_with_no_drybag_toml",
+]
 
 # `plan check` is the one surface that prints an unresolvable base as a finding, its documented
 # output; let the exception through and it ends as a bare `failed:` with no findings listed.
@@ -1357,7 +1360,7 @@ reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_where_the_proje
 [[mutation]]
 name = "a wrapped Spec line is not read"
 file = "src/drybag/docs/plans.py"
-before = "        paragraph = bool(_SPEC_LINE.match(line)) or (paragraph and bool(line.strip()))"
+before = "        paragraph = bool(_SPEC_LINE.match(line)) or (paragraph and not _SPEC_ENDS.match(line))"
 after = "        paragraph = bool(_SPEC_LINE.match(line))"
 reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_where_the_project_keeps_specs"]
 
@@ -1384,6 +1387,25 @@ name = "docs trail --design reads drybag.toml"
 file = "src/drybag/docs/commands.py"
 before = "    if not args.design:"
 after = "    if True:"
+reddens = [
+  "tests/docs/test_commands.py::test_docs_trail_and_plan_check_run_on_a_design_folder_with_no_drybag_toml",
+]
+
+# A compact header puts `**Scope:**` or a file list right under the Spec line; their paths are not
+# the spec's, and would otherwise satisfy the rule and be settled in a design folder.
+[[mutation]]
+name = "the Spec paragraph runs on into the next field"
+file = "src/drybag/docs/plans.py"
+before = '_SPEC_ENDS = re.compile(r"^\s*(?:$|\*\*|[-*+]\s|\d+[.)]\s|#|>)")'
+after = '_SPEC_ENDS = re.compile(r"^\s*$")'
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_where_the_project_keeps_specs"]
+
+# `plan check --design` settles only the Spec paragraph because the command hands `--design` on.
+[[mutation]]
+name = "plan check drops --design"
+file = "src/drybag/docs/commands.py"
+before = "            design=args.design,"
+after = "            design=False,"
 reddens = [
   "tests/docs/test_commands.py::test_docs_trail_and_plan_check_run_on_a_design_folder_with_no_drybag_toml",
 ]

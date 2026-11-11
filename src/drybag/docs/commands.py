@@ -80,7 +80,8 @@ def run_docs_trail(args: argparse.Namespace) -> Result:
         if not trail_gate(root, config):
             return Result(f"OK: {config.paths.roadmap} trail listing is current", {"stale": False})
         return Result(
-            f"{config.paths.roadmap} trail listing is stale; run: drybag docs trail",
+            f"{config.paths.roadmap} trail listing is stale; run: drybag docs trail"
+            + (" --design" if args.design else ""),
             {"stale": True},
             exit_code=1,
         )

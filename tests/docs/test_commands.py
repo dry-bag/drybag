@@ -12,6 +12,7 @@ from drybag.docs.trail import END_MARKER, MARKER
 from drybag.findings import LISTED_LIMIT, Finding
 from drybag.printed import CLIPPED_CHARS, UNPRINTABLE
 from tests.crafted import CRAFTED, CRAFTED_TOML, assert_never_raw
+from tests.gitfixture import git
 
 CONFIG = """
 [drybag]
@@ -102,23 +103,32 @@ def test_docs_trail_and_plan_check_run_on_a_design_folder_with_no_drybag_toml(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # A design folder holds no `drybag.toml`, and one placed beside it would be configuration
-    # for whatever else loads it. Mutation (declared): `mutations/`'s "docs trail --design reads
-    # drybag.toml".
-    root = tmp_path / "design"
+    # for whatever else loads it; it sits below the top of a git work tree, whose answers on
+    # what is tracked still hold. Its plans name another repository's paths, which only
+    # `--design` leaves unsettled. Mutations (declared): `mutations/`'s "docs trail --design reads
+    # drybag.toml", "plan check drops --design" and "an untracked document is listed as if CI
+    # could see it".
+    root = tmp_path / "overlay" / "projects" / "widget" / "design"
     for name in ("specs", "plans"):
         (root / name).mkdir(parents=True)
     (root / "README.md").write_text(f"# R\n\n{MARKER}\n{END_MARKER}\n", encoding="utf-8")
     (root / "specs" / "2026-01-01-a.md").write_text("# a\n", encoding="utf-8")
     plan = root / "plans" / "2026-01-02-a.md"
-    plan.write_text("**Scope:** iff a.\n\n**Spec:** `specs/2026-01-01-a.md`\n", "utf-8")
+    plan.write_text(
+        "**Scope:** iff a.\n\n**Spec:** `specs/2026-01-01-a.md`\n\nEdit `src/widget/a.py`.\n",
+        "utf-8",
+    )
+    git(tmp_path / "overlay", "init", "-q")
+    git(tmp_path / "overlay", "add", ".")
+    (root / "plans" / "2026-01-03-local.md").write_text("# l\n", encoding="utf-8")
     common = ["--root", str(root), "--machine", str(tmp_path / "m.toml")]
     assert invoke(["docs", "trail", *common]) == 1
     capsys.readouterr()
     assert invoke(["docs", "trail", "--design", *common]) == 0
     assert capsys.readouterr().out == "rewrote README.md\n"
-    assert "- [`plans/2026-01-02-a.md`](plans/2026-01-02-a.md) — delivered" in (
-        root / "README.md"
-    ).read_text(encoding="utf-8")
+    listing = (root / "README.md").read_text(encoding="utf-8")
+    assert "- [`plans/2026-01-02-a.md`](plans/2026-01-02-a.md) — delivered" in listing
+    assert "2026-01-03-local.md" not in listing
     assert invoke(["docs", "trail", "--design", "--check", *common]) == 0
     assert invoke(["plan", "check", "--design", str(plan), "--json", *common]) == 0
     capsys.readouterr()

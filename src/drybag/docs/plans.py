@@ -123,8 +123,11 @@ _LEADING = re.compile(
 # anywhere later in the document — exactly the unfilled-marker case these rules exist to catch.
 # Anchoring to non-newline whitespace forces the content onto the marker's own line.
 # A plan's `**Spec:**` line: owed where the project keeps specs, and read for the paths its
-# paragraph carries, which name the spec.
+# paragraph carries, which name the spec. The paragraph ends at a blank line or at a line that
+# opens another field, a list item, a heading or a quote: a compact header puts `**Scope:**` and a
+# file list right under it, and their paths are not the spec's.
 _SPEC_LINE = re.compile(r"^\*\*Spec:\*\*")
+_SPEC_ENDS = re.compile(r"^\s*(?:$|\*\*|[-*+]\s|\d+[.)]\s|#|>)")
 _SCOPE_LINE = re.compile(r"^\*\*Scope:\*\*[^\S\n]*\S", re.MULTILINE)
 #
 # A premise marker, read to the first colon after it, past line ends; the group holds when the
@@ -442,12 +445,11 @@ def _lint_one(
     # Fenced code is not plan prose: its fixtures name deliberately fake paths.
     prose = blank_fences(read_document(path, where))
     found: list[Finding] = []
-    # The `**Spec:**` paragraph: its marker line and the lines up to the next blank one, since a
-    # spec named after a sentence of context wraps onto the next line.
+    # The `**Spec:**` paragraph (`_SPEC_ENDS`): a spec named after a sentence of context wraps.
     spec_lines: set[int] = set()
     paragraph = False
     for number, line in enumerate(prose.splitlines(), 1):
-        paragraph = bool(_SPEC_LINE.match(line)) or (paragraph and bool(line.strip()))
+        paragraph = bool(_SPEC_LINE.match(line)) or (paragraph and not _SPEC_ENDS.match(line))
         if paragraph and any(path_references(line)):
             spec_lines.add(number)
     if design:

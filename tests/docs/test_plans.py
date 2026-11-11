@@ -226,6 +226,11 @@ def test_a_plan_names_its_spec_where_the_project_keeps_specs(tmp_path: Path) -> 
     assert rules(root, config, plan(root, wrapped)) == []
     after_a_blank = SCOPE + "**Spec:** the design.\n\n`docs/specs/a.md`\n"
     assert rules(root, config, plan(root, after_a_blank)) == ["spec-missing"]
+    # A compact header's next field or file list is not the spec's paragraph. Mutation (declared):
+    # `mutations/`'s "the Spec paragraph runs on into the next field".
+    for under in ("**Scope:** `docs/specs/a.md`\n", "- Modify: `docs/specs/a.md`\n"):
+        compact = SCOPE + "**Spec:** none yet\n" + under
+        assert rules(root, config, plan(root, compact)) == ["spec-missing"]
 
 
 def design_folder(tmp_path: Path) -> tuple[Path, Config]:
