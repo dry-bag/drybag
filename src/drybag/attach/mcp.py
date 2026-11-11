@@ -13,22 +13,32 @@ some plate defined it; it is *off* when its state is off, defined or not.
 
 Every fault of the file is a note and never a refusal, and a note names the file's path and never a
 value: a definition holds argv and environment, which may hold a secret.
+
+**The reconcile** brings Claude Code's local-scope entries of the main checkout in line with the
+served names, through `claude mcp add-json` and `remove` alone, under a ledger that holds each name
+`attach` owns with the digest it delivered, or `UNSETTLED` where a call for it was started and its
+outcome is not known to be good. Every name to touch is marked `UNSETTLED` in one save before the
+first call, so no state exists in which an entry `attach` wrote is in `~/.claude.json` and the
+ledger does not hold its name, and an interrupted run is settled by the next one with no advice. A
+name whose digest is unchanged is never touched, since `remove` of a remote server signs it out.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from drybag import fsops
 from drybag.attach.items import PROJECT_CLAUDE
+from drybag.attach.render import MCP_ADD_JSON_LOCAL, MCP_REMOVE_LOCAL, filled
 from drybag.binding import MCP_LEDGER_FILE, MCP_LEDGER_NAME, common_directory
 from drybag.config.plates import Plate
-from drybag.printed import quoted
+from drybag.printed import answered, quoted
+from drybag.runner import NOT_FOUND, Completed, Runner
 
 MCP_FILE = "mcp.json"
 SERVERS_KEY = "mcpServers"
@@ -181,3 +191,90 @@ def write_mcp_ledger(root: Path, ledger: McpLedger) -> None:
     document = {"format": MCP_LEDGER_FORMAT, "deny": list(ledger.deny), "mcp": ledger.mcp}
     text = json.dumps(document, indent=2, sort_keys=True) + "\n"
     fsops.write_within(common_directory(root), MCP_LEDGER_FILE, text)
+
+
+# A name the ledger owns whose call was started and whose outcome is not known to be good.
+UNSETTLED = None
+# `remove`'s exits that are Claude Code's own answer: run from the main checkout, 0 removed the
+# entry and 1 found none, so the name is absent at local scope either way. Any other (no `claude`,
+# a spawn error, a signal, a timeout) leaves the entry where it was.
+_ANSWERED = (0, 1)
+
+
+@dataclass(frozen=True)
+class McpPlan:
+    """What a reconcile changes, by name: `add` the served names the ledger does not hold,
+    `readd` those it holds under another digest or `UNSETTLED`, and `take_back` the names it holds
+    that are not served. `attach --check` lists it; `reconcile` marks exactly these."""
+
+    add: tuple[str, ...]
+    readd: tuple[str, ...]
+    take_back: tuple[str, ...]
+
+
+def planned_mcp(served: Mapping[str, Served], owned: Mapping[str, str | None]) -> McpPlan:
+    """The one marking rule, so `attach --check` and `attach` cannot disagree about a name."""
+    held = {name: owned[name] for name in served if name in owned}
+    return McpPlan(
+        tuple(sorted(name for name in served if name not in held)),
+        tuple(sorted(name for name, value in held.items() if value != served[name].digest)),
+        tuple(sorted(name for name in owned if name not in served)),
+    )
+
+
+@dataclass(frozen=True)
+class Reconciled:
+    """`owned` is the ledger the reconcile leaves; `replaced` the served names whose `remove`
+    found an entry though the ledger held no digest for them at the start, one made by hand or left
+    by an interrupted run; `failed` each name a call did not settle, with what Claude Code said,
+    through `printed.answered`."""
+
+    owned: dict[str, str | None]
+    replaced: tuple[str, ...] = ()
+    failed: tuple[tuple[str, str], ...] = ()
+
+
+def _launch(runner: Runner, argv: list[str], main: Path) -> Completed:
+    """`runner.launch`, with a launch that raised read as one that could not start."""
+    try:
+        return runner.launch(argv, main)
+    except OSError as exc:
+        return Completed(NOT_FOUND, "", f"the call could not be started ({fsops.said(exc)})")
+
+
+def reconcile(
+    main: Path,
+    served: Mapping[str, Served],
+    owned: Mapping[str, str | None],
+    runner: Runner,
+    save: Callable[[dict[str, str | None]], None],
+) -> Reconciled:
+    """Mark, deliver, take back, then save what is left; every call runs from `main`, the main
+    checkout, which is what makes `remove`'s exit 1 mean the name is absent there."""
+    plan = planned_mcp(served, owned)
+    marked = (*plan.add, *plan.readd, *plan.take_back)
+    left = dict(owned)
+    if not marked:
+        return Reconciled(left)
+    left.update(dict.fromkeys(marked, UNSETTLED))
+    save(dict(left))
+    replaced: list[str] = []
+    failed: list[tuple[str, str]] = []
+    for name in sorted((*plan.add, *plan.readd)):
+        removed = _launch(runner, filled(MCP_REMOVE_LOCAL, name), main)
+        if removed.code == 0 and owned.get(name) is None:
+            replaced.append(name)
+        definition = json.dumps(served[name].definition)
+        added = _launch(runner, filled(MCP_ADD_JSON_LOCAL, name, definition), main)
+        if added.code == 0:
+            left[name] = served[name].digest
+        else:
+            failed.append((name, answered(added)))
+    for retired in plan.take_back:
+        answer = _launch(runner, filled(MCP_REMOVE_LOCAL, retired), main)
+        if answer.code in _ANSWERED:
+            del left[retired]
+        else:
+            failed.append((retired, answered(answer)))
+    save(dict(left))
+    return Reconciled(left, tuple(replaced), tuple(failed))

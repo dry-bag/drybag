@@ -213,6 +213,15 @@ PASS_THROUGH: dict[tuple[str, str, str], frozenset[str]] = {
         "_withdraw_plugin",
         "filled(PLUGIN_MARKETPLACE_REMOVE, marketplace_name(id))",
     ): frozenset({"claude plugin"}),
+    # `claude mcp remove --scope local -- <name>` and `claude mcp add-json --scope local -- <name>
+    # <definition>`, `attach.render`'s tables with their slots filled, run from the main checkout:
+    # each writes or removes one local-scope entry of the overlay's in `~/.claude.json` and reaches
+    # nothing past this machine. `remove` of a remote server deletes its stored sign-in there.
+    ("src/drybag/attach/mcp.py", "reconcile", "filled(MCP_REMOVE_LOCAL, name)"): NO_ROWS,
+    ("src/drybag/attach/mcp.py", "reconcile", "filled(MCP_ADD_JSON_LOCAL, name, definition)"): (
+        NO_ROWS
+    ),
+    ("src/drybag/attach/mcp.py", "reconcile", "filled(MCP_REMOVE_LOCAL, retired)"): NO_ROWS,
     # `git [-c core.excludesFile=…] --git-dir=… --work-tree=<empty> check-ignore --no-index
     # --stdin -z`, assembled in `asked`: the owner's own exclude files, asked about.
     ("src/drybag/attach/exclude.py", "unhidden_by_owner", "*asked"): NO_ROWS,

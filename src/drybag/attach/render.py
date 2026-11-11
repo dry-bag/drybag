@@ -92,6 +92,12 @@ PLUGIN_INSTALL_LOCAL = ("claude", "plugin", "install", SLOT, "--scope", "local")
 # removed from every scope, since Claude Code records it machine-wide and no other scope names it.
 PLUGIN_UNINSTALL_LOCAL = ("claude", "plugin", "uninstall", SLOT, "--scope", "local")
 PLUGIN_MARKETPLACE_REMOVE = ("claude", "plugin", "marketplace", "remove", SLOT)
+# The two that deliver and take back one of the overlay's MCP servers at local scope (`attach.mcp`),
+# from the same checkout: `SLOT` is filled with the server's name and, for `add-json`, its
+# definition. Options first and both after `--`, since the name is the overlay's and a name `-h`
+# would otherwise print usage and exit 0 having written nothing.
+MCP_ADD_JSON_LOCAL = ("claude", "mcp", "add-json", "--scope", "local", "--", SLOT, SLOT)
+MCP_REMOVE_LOCAL = ("claude", "mcp", "remove", "--scope", "local", "--", SLOT)
 
 
 class Part(NamedTuple):
@@ -130,9 +136,10 @@ def plugin_name(id: str) -> str:
     return f"{PLUGIN_PREFIX}{id}"
 
 
-def filled(table: tuple[str, ...], value: str) -> list[str]:
-    """`table`'s argv with its `SLOT` replaced by `value`."""
-    return [value if word == SLOT else word for word in table]
+def filled(table: tuple[str, ...], *values: str) -> list[str]:
+    """`table`'s argv with each `SLOT` replaced by the next of `values`, in order."""
+    fill = iter(values)
+    return [next(fill) if word == SLOT else word for word in table]
 
 
 def _unreadable(sentence: str) -> Failure:
