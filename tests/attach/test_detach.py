@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from drybag import fsops, jsonobject
-from drybag.attach.mcp import BAD_LEDGER, read_mcp_ledger
+from drybag.attach.mcp import BAD_LEDGER, McpLedger, read_mcp_ledger, write_mcp_ledger
 from drybag.attach.permissions import DENIED_NOT_A_LIST
 from drybag.attach.write import Attached, Detached, attach, detach
 from drybag.binding import LEDGER_NAME, MCP_LEDGER_FILE, MCP_LEDGER_NAME, common_directory
@@ -435,6 +435,8 @@ def test_detach_in_a_bare_repositorys_worktree_withdraws_this_checkouts_own_part
     ledger_file(side).write_text(json.dumps(ledgered), encoding="utf-8")
     (side / ".claude").mkdir()
     (side / SETTINGS).write_text(json.dumps({"permissions": {"allow": [RULE]}}), encoding="utf-8")
+    # Nor did it deliver an MCP server there, so no `claude mcp` runs on the names a ledger holds.
+    write_mcp_ledger(side, McpLedger(mcp={"m1": "0" * 64}))
     runner = Recorder()
     removed = _detach(side, runner)
     assert removed.allow_removed == (RULE,)
@@ -1444,7 +1446,7 @@ def test_detach_removes_the_deny_entries_and_the_mcp_ledger(tmp_path: Path) -> N
     before = snapshot(root)
     _attach(root, store, machine)
     assert (common_directory(root) / MCP_LEDGER_FILE).exists()
-    _detach(root)
+    assert _detach(root).mcp_undenied == ("srv1",)
     assert_snapshot_unchanged(root, before)
     assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
 
@@ -1456,8 +1458,8 @@ def test_detach_removes_every_owned_name_and_empties_the_field(tmp_path: Path) -
         json.dumps({"mcpServers": servers}), encoding="utf-8"
     )
     _attach(root, store, machine)
-    runner = Recorder()
-    _detach(root, runner)
+    runner = Recorder(local={"m1", "m2"})
+    assert _detach(root, runner).mcp_taken_back == ("m1", "m2")
     removed = [argv for argv in runner.calls if argv[:3] == ["claude", "mcp", "remove"]]
     assert sorted(argv[-1] for argv in removed) == ["m1", "m2"]
     assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
@@ -1490,8 +1492,9 @@ def test_detach_settles_the_mcp_ledger_an_older_detach_left(tmp_path: Path) -> N
     _attach(root, store, machine)
     ledger_file(root).unlink()
     runner = Recorder()
-    with pytest.raises(Failure, match="is not there"):
+    with pytest.raises(Failure, match="is not there") as raised:
         _detach(root, runner)
+    assert "taken back: 1 MCP server(s) and 1 deny entry(ies)" in str(raised.value)
     assert [argv[2:] for argv in runner.calls] == [["remove", "--scope", "local", "--", "m1"]]
     assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
     left = (root / SETTINGS).read_text(encoding="utf-8") if (root / SETTINGS).exists() else "{}"

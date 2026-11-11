@@ -62,7 +62,8 @@ def _mcp_heads(planned: AttachPlan) -> McpHeads:
     """The MCP servers the run would change, by name under five heads, and a line for each: what
     `reconcile` marks, asked through the same `planned_mcp`, and the `deniedMcpServers` entries of
     the run's merge. Nothing is launched and nothing written."""
-    plan = planned_mcp(planned.served, (planned.mcp_ledger or planned.mcp_held).mcp)
+    owned = planned.mcp_held.mcp if planned.served is not None else {}
+    plan = planned_mcp(planned.served or {}, owned)
     heads = {
         "mcp_add": list(plan.add),
         "mcp_readd": list(plan.readd),
@@ -70,16 +71,13 @@ def _mcp_heads(planned: AttachPlan) -> McpHeads:
         "mcp_deny": list(planned.deny.add),
         "mcp_undeny": list(planned.deny.withdraw),
     }
-    lines = []
-    for head, names in heads.items():
-        for name in names:
-            remote = head == "mcp_readd" and "url" in planned.served[name].definition
-            lines.append(f"{_MCP_LINES[head]}: {quoted(name)}{SIGNS_OUT if remote else ''}")
+    lines = [
+        f"{_MCP_LINES[head]}: {quoted(name)}" for head, names in heads.items() for name in names
+    ]
     return heads, lines
 
 
-# How `--check` says each head, one line a name. A re-add of a server with a `url` removes its
-# entry first, and Claude Code's `remove` deletes a remote server's stored sign-in with it.
+# How `--check` says each head, one line a name.
 _MCP_LINES = {
     "mcp_add": "MCP server would be added",
     "mcp_readd": "MCP server would be re-added",
@@ -87,7 +85,6 @@ _MCP_LINES = {
     "mcp_deny": "MCP server would be denied",
     "mcp_undeny": "MCP server deny entry would be withdrawn",
 }
-SIGNS_OUT = " (signs a remote server out)"
 
 
 def _report(
@@ -137,8 +134,6 @@ def _report(
         # `settings.local.json`, which a clone can commit, so it is repository-authored.
         "already_present": len(diff.already_present),
         "rules_to_write": list(rules),
-        # The run's MCP notes, as its `--json` carries them; no definition, value or argv is in one.
-        "notes": list(mcp_notes),
         **heads,
     }
     return Result(summary, data)

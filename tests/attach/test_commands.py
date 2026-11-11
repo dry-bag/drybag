@@ -1107,7 +1107,7 @@ def test_check_lists_mcp_changes_and_launches_nothing(
     assert (data["mcp_deny"], data["mcp_undeny"]) == (["denied"], ["undenied"])
     assert invoke(["attach", "--check", *_flags(root, store, machine)]) == 0
     out = capsys.readouterr().out
-    assert "MCP server would be re-added: changed (signs a remote server out)" in out
+    assert "MCP server would be re-added: changed" in out.splitlines()
     assert runner.calls == []
     assert_snapshot_unchanged(root, before)
     for name, held in ledgers.items():
@@ -1146,28 +1146,36 @@ def test_failure_screen_prints_names_never_a_definition(
     assert MARKER not in out + err
 
 
-def test_attach_screen_says_each_server_delivered_replaced_and_taken_back(
+def test_attach_and_detach_screens_name_each_server_and_deny_entry(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     common = store.parents[2] / "common"
     machine = _machine(tmp_path, overlay=store.parents[2])
-    _mcp_file(common, {"m1": {"command": "a"}, "m2": {"command": "b"}})
     runner = _recorded(monkeypatch)
     # `m2` is a local entry made by hand, which the first delivery replaces.
     runner.local.add("m2")
-    assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    lines = capsys.readouterr().out.splitlines()
-    said = [line.split(" (")[0] for line in lines if line.startswith("MCP server")]
-    assert said == [
+
+    def said(command: str, servers: dict[str, object]) -> list[str]:
+        _mcp_file(common, servers)
+        flags = _flags(root, store, machine) if command == "attach" else ["--root", str(root)]
+        assert invoke([command, *flags]) == 0
+        lines = capsys.readouterr().out.splitlines()
+        return [line.split(" (")[0] for line in lines if line.startswith("MCP server")]
+
+    assert said("attach", {"m1": {"command": "a"}, "m2": {"command": "b"}, "s1": "off"}) == [
         "MCP server delivered: m1",
         "MCP server delivered: m2",
         "MCP server replaced: m2",
+        "MCP server denied: s1",
     ]
-    _mcp_file(common, {"m2": {"command": "b"}})
-    assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    lines = capsys.readouterr().out.splitlines()
-    assert [line for line in lines if line.startswith("MCP server")] == [
-        "MCP server taken back: m1"
+    assert said("attach", {"m2": {"command": "b"}}) == [
+        "MCP server taken back: m1",
+        "MCP server deny entry withdrawn: s1",
     ]
-    assert runner.local == {"m2"}
+    said("attach", {"m2": {"command": "b"}, "s1": "off"})
+    assert said("detach", {}) == [
+        "MCP server taken back: m2",
+        "MCP server deny entry withdrawn: s1",
+    ]
+    assert runner.local == set()

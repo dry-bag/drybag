@@ -1979,11 +1979,10 @@ reddens = [
 [[mutation]]
 name = "the MCP fold keeps an entry with a NUL in its name or a lone surrogate"
 file = "src/drybag/attach/mcp.py"
-before = "        elif not _passable(name, value):"
-after = "        elif False:"
+before = '''        if "\0" in name or not _encodes(name):'''
+after = "        if False:"
 reddens = [
   "tests/attach/test_mcp.py::test_an_entry_no_claude_mcp_call_can_take_is_a_note",
-  "tests/attach/test_doctor.py::test_an_mcp_entry_no_claude_call_can_take_leaves_the_row_unred",
 ]
 
 # `deniedMcpServers` entries are written and withdrawn by the ledger's record and nothing else: an entry
@@ -2004,8 +2003,8 @@ reddens = [
 [[mutation]]
 name = "attach records a deny entry the owner already wrote as its own"
 file = "src/drybag/attach/write.py"
-before = '''    return (*kept, *(name for name in change.add if name not in kept))'''
-after = '''    return (*kept, *(name for name in wanted if name not in kept))'''
+before = '''    return DenyChange(add, withdraw, (*kept, *(name for name in add if name not in kept)))'''
+after = '''    return DenyChange(add, withdraw, (*kept, *(name for name in wanted if name not in kept)))'''
 reddens = [
   "tests/attach/test_detach.py::test_owner_deny_entries_survive_attach_and_detach",
 ]
@@ -2022,7 +2021,7 @@ reddens = [
 [[mutation]]
 name = "a take-back leaves an emptied deniedMcpServers list in the settings file"
 file = "src/drybag/attach/write.py"
-before = '''    if denied and raw.get(DENIED_KEY) == []:
+before = '''    elif denied != held:
         raw.pop(DENIED_KEY)
 '''
 after = ''''''
@@ -2058,17 +2057,17 @@ reddens = [
 [[mutation]]
 name = "detach deletes an MCP ledger it could not read"
 file = "src/drybag/attach/write.py"
-before = """    if held.notes:
-        return tuple(MCP_LEDGER_KEPT"""
+before = """    if held.fault is not None:
+        return ()"""
 after = """    if False:
-        return tuple(MCP_LEDGER_KEPT"""
+        return ()"""
 reddens = ["tests/attach/test_detach.py::test_detach_keeps_a_damaged_mcp_ledger_and_says_so"]
 
 [[mutation]]
 name = "detach with no attach.json leaves the MCP ledger an older detach left"
 file = "src/drybag/attach/write.py"
-before = "        if held.deny or held.mcp:"
-after = "        if False:"
+before = "        if not (held.deny or held.mcp):"
+after = "        if True:"
 reddens = ["tests/attach/test_detach.py::test_detach_settles_the_mcp_ledger_an_older_detach_left"]
 
 [[mutation]]
@@ -2103,6 +2102,26 @@ before = '''        if answer.code == 0 or absent:'''
 after = '''        if True:'''
 reddens = [
   "tests/attach/test_mcp_reconcile.py::test_take_back_keeps_unsettled_when_claude_is_missing",
+]
+
+[[mutation]]
+name = "the MCP name is handed to remove before the double dash"
+file = "src/drybag/attach/render.py"
+before = '''MCP_REMOVE_LOCAL = ("claude", "mcp", "remove", "--scope", "local", "--", SLOT)'''
+after = '''MCP_REMOVE_LOCAL = ("claude", "mcp", "remove", "--scope", "local", SLOT)'''
+reddens = [
+  "tests/attach/test_mcp_reconcile.py::test_option_shaped_name_follows_a_double_dash",
+]
+
+# A `claude` that is missing or hung answers every later call alike, so none is launched.
+[[mutation]]
+name = "the reconcile goes on launching after claude was missing or hung"
+file = "src/drybag/attach/mcp.py"
+before = '''    return answer if answer.code in (NOT_FOUND, TIMED_OUT) else None'''
+after = '''    return None'''
+reddens = [
+  "tests/attach/test_mcp_reconcile.py::test_a_missing_or_hung_claude_stops_every_later_launch[127]",
+  "tests/attach/test_mcp_reconcile.py::test_a_missing_or_hung_claude_stops_every_later_launch[124]",
 ]
 
 [[mutation]]
@@ -2159,8 +2178,8 @@ reddens = [
 [[mutation]]
 name = "a claude mcp call runs from the current directory"
 file = "src/drybag/attach/mcp.py"
-before = '''        return runner.launch(argv, main)'''
-after = '''        return runner.launch(argv, Path.cwd())'''
+before = '''        removed = stopped or runner.launch(filled(MCP_REMOVE_LOCAL, name), main)'''
+after = '''        removed = stopped or runner.launch(filled(MCP_REMOVE_LOCAL, name), Path.cwd())'''
 reddens = [
   "tests/attach/test_mcp_reconcile.py::test_every_launch_runs_in_the_main_checkout",
 ]
@@ -2180,22 +2199,12 @@ reddens = [
 [[mutation]]
 name = "attach --check runs the MCP reconcile"
 file = "src/drybag/attach/check.py"
-before = '''    plan = planned_mcp(planned.served, (planned.mcp_ledger or planned.mcp_held).mcp)'''
+before = '''    plan = planned_mcp(planned.served or {}, owned)'''
 after = '''    from drybag.attach.mcp import reconcile
     from drybag.runner import subprocess_runner
 
-    owned = (planned.mcp_ledger or planned.mcp_held).mcp
-    reconcile(Path.cwd(), planned.served, owned, subprocess_runner(), lambda _: None)
-    plan = planned_mcp(planned.served, owned)'''
-reddens = [
-  "tests/attach/test_commands.py::test_check_lists_mcp_changes_and_launches_nothing",
-]
-
-[[mutation]]
-name = "attach --check marks no remote server's re-add as a sign-out"
-file = "src/drybag/attach/check.py"
-before = '''            remote = head == "mcp_readd" and "url" in planned.served[name].definition'''
-after = '''            remote = False'''
+    reconcile(Path.cwd(), planned.served or {}, owned, subprocess_runner(), lambda _: None)
+    plan = planned_mcp(planned.served or {}, owned)'''
 reddens = [
   "tests/attach/test_commands.py::test_check_lists_mcp_changes_and_launches_nothing",
 ]
@@ -2221,11 +2230,11 @@ reddens = [
 [[mutation]]
 name = "attach reconciles against an empty MCP ledger"
 file = "src/drybag/attach/write.py"
-before = '''        planned.served,
-        held.mcp,
+before = '''            planned.served,
+            mcp_ledger.mcp,
 '''
-after = '''        planned.served,
-        {},
+after = '''            planned.served,
+            {},
 '''
 reddens = [
   "tests/attach/test_write.py::test_attach_delivers_and_records_digests",
@@ -2374,4 +2383,81 @@ before = '''    if HELPER in definition:'''
 after = '''    if False:'''
 reddens = [
   "tests/attach/test_doctor.py::test_headers_helper_gets_the_trust_hint",
+]
+
+# A plate's `mcp.json` that is there and unusable, and an MCP ledger this drybag cannot read (damaged,
+# or a newer drybag's), stop every MCP change: read as "serves nothing" or "owns nothing", the first
+# takes every server back and the second is written over, orphaning what it named.
+[[mutation]]
+name = "an unusable mcp.json reads as an overlay that serves nothing"
+file = "src/drybag/attach/write.py"
+before = '''    usable = fold.usable and held.fault is None'''
+after = '''    usable = held.fault is None'''
+reddens = [
+  "tests/attach/test_write.py::test_an_unusable_mcp_json_changes_no_server_and_no_deny_entry",
+]
+
+[[mutation]]
+name = "an MCP ledger this drybag cannot read is written over"
+file = "src/drybag/attach/write.py"
+before = '''    usable = fold.usable and held.fault is None'''
+after = '''    usable = fold.usable'''
+reddens = [
+  "tests/attach/test_write.py::test_an_mcp_ledger_this_drybag_cannot_read_is_kept_and_nothing_mcp_changes[newer-format]",
+  "tests/attach/test_write.py::test_an_mcp_ledger_this_drybag_cannot_read_is_kept_and_nothing_mcp_changes[misshaped]",
+]
+
+[[mutation]]
+name = "the MCP ledger reader takes a newer format as its own"
+file = "src/drybag/attach/mcp.py"
+before = '''        raw.get("format") == MCP_LEDGER_FORMAT
+'''
+after = '''        True
+'''
+reddens = [
+  "tests/attach/test_write.py::test_an_mcp_ledger_this_drybag_cannot_read_is_kept_and_nothing_mcp_changes[newer-format]",
+]
+
+[[mutation]]
+name = "the MCP ledger reader takes a digest of any shape"
+file = "src/drybag/attach/mcp.py"
+before = '''        and all(isinstance(sha, str) or sha is UNSETTLED for sha in mcp.values())
+'''
+after = ''''''
+reddens = [
+  "tests/attach/test_write.py::test_an_mcp_ledger_this_drybag_cannot_read_is_kept_and_nothing_mcp_changes[misshaped]",
+]
+
+# A deny entry `attach` writes is recorded before the settings file holds it, or a run stopped in
+# between leaves an entry no later run withdraws; and the ledger the reconcile saves carries the
+# deny record this run wrote.
+[[mutation]]
+name = "attach writes a deny entry before recording it"
+file = "src/drybag/attach/write.py"
+before = '''    if (holding := replace(mcp_ledger, deny=(*deny.record, *deny.withdraw))) != planned.mcp_held:
+        write_mcp_ledger(root, holding)
+'''
+after = ''''''
+reddens = [
+  "tests/attach/test_write.py::test_a_deny_entry_is_recorded_before_the_settings_file_holds_it",
+]
+
+[[mutation]]
+name = "the reconcile saves the deny record the run read, not the one it wrote"
+file = "src/drybag/attach/write.py"
+before = '''    deny, mcp_ledger = planned.deny, replace(planned.mcp_held, deny=planned.deny.record)'''
+after = '''    deny, mcp_ledger = planned.deny, planned.mcp_held'''
+reddens = [
+  "tests/attach/test_write.py::test_attach_takes_back_a_server_switched_off_later",
+]
+
+# `attach` refuses where git names no main checkout, so an MCP ledger there is none it wrote: no
+# `claude mcp` runs on the names a clone could commit.
+[[mutation]]
+name = "detach takes back the MCP servers of a ledger in a bare repository's worktree"
+file = "src/drybag/attach/write.py"
+before = '''    held = read_mcp_ledger(root) if main is not None else McpLedger()'''
+after = '''    held = read_mcp_ledger(root)'''
+reddens = [
+  "tests/attach/test_detach.py::test_detach_in_a_bare_repositorys_worktree_withdraws_this_checkouts_own_parts",
 ]

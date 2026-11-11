@@ -26,7 +26,7 @@ from drybag.attach.api import ledger
 from drybag.attach.binding import OVERLAY_DAMAGED
 from drybag.attach.check import check
 from drybag.attach.exclude import NOT_IGNORED, TRACKED
-from drybag.attach.mcp import McpLedger, digest, read_mcp_ledger
+from drybag.attach.mcp import BAD_LEDGER, UNUSABLE, McpLedger, digest, read_mcp_ledger
 from drybag.attach.permissions import DENIED_NOT_A_LIST, settings_document
 from drybag.attach.write import (
     GROUP_ESCAPES,
@@ -37,7 +37,7 @@ from drybag.attach.write import (
     Attached,
     attach,
 )
-from drybag.binding import LEDGER_FILE, MCP_LEDGER_FILE, common_directory
+from drybag.binding import LEDGER_FILE, MCP_LEDGER_FILE, MCP_LEDGER_NAME, common_directory
 from drybag.config.loader import CONFIG_FILE, load
 from drybag.errors import Failure, Refusal
 from drybag.memory.api import RECORD, link_sources
@@ -2744,7 +2744,7 @@ def test_a_ledger_that_is_not_well_shaped_reads_as_empty_with_a_note(tmp_path: P
     attach(root, store=store, machine=machine, runner=Recorder())
     (common_directory(root) / MCP_LEDGER_FILE).write_text('{"format": 1, "deny": 3}')
     read = read_mcp_ledger(root)
-    assert read.deny == () and len(read.notes) == 1
+    assert read.deny == () and read.fault is not None
 
 
 def test_attach_json_is_unchanged_by_deny_entries(tmp_path: Path) -> None:
@@ -2833,4 +2833,71 @@ def test_check_says_the_mcp_notes_the_run_says(tmp_path: Path) -> None:
     said = [note for note in notes if "mcpServers" in note or note == DENIED_NOT_A_LIST]
     assert len(said) == 2 and said[-1] == DENIED_NOT_A_LIST
     assert checked.summary.split("\n")[0].endswith("; " + "; ".join(said))
-    assert checked.data["notes"] == said
+
+
+def test_an_unusable_mcp_json_changes_no_server_and_no_deny_entry(tmp_path: Path) -> None:
+    # A conflict marker in a plate's `mcp.json` is a fault of the file, not "the overlay serves
+    # nothing": nothing is taken back, no deny entry withdrawn, and the run says which file.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, m1=SERVER, srv1="off")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    held, settings = read_mcp_ledger(root), _settings(root)
+    path = store.parents[2] / COMMON_CLAUDE / "mcp.json"
+    path.write_text("<<<<<<< HEAD\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
+    data = check(root, store=store, machine=machine).data
+    assert [data[head] for head in ("mcp_add", "mcp_take_back", "mcp_undeny")] == [[], [], []]
+    runner = Recorder()
+    attached = attach(root, store=store, machine=machine, runner=runner)
+    assert _mcp_calls(runner) == []
+    assert (read_mcp_ledger(root), _settings(root)) == (held, settings)
+    assert UNUSABLE.format(path=quoted(str(path))) in attached.notes
+
+
+@pytest.mark.parametrize(
+    "recorded",
+    [{"format": 2, "deny": [], "mcp": {}}, {"format": 1, "deny": [], "mcp": {"m1": 3}}],
+    ids=["newer-format", "misshaped"],
+)
+def test_an_mcp_ledger_this_drybag_cannot_read_is_kept_and_nothing_mcp_changes(
+    tmp_path: Path, recorded: dict[str, object]
+) -> None:
+    # A newer drybag's ledger, or a damaged one, is the only record of its entries: written over,
+    # they would be orphaned, so it is kept and named and no server or deny entry changes.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, m1=SERVER, srv1="off")
+    path = common_directory(root) / MCP_LEDGER_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(recorded), encoding="utf-8")
+    runner = Recorder()
+    attached = attach(root, store=store, machine=machine, runner=runner)
+    assert _mcp_calls(runner) == []
+    assert path.read_text(encoding="utf-8") == json.dumps(recorded)
+    assert not (root / SETTINGS).exists() or DENIED not in _settings(root)
+    assert BAD_LEDGER.format(name=MCP_LEDGER_NAME) in attached.notes
+
+
+def test_a_deny_entry_is_recorded_before_the_settings_file_holds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, srv1="off")
+    real = fsops.write_within
+
+    def full(base: Path, relative: str, text: str) -> None:
+        if relative == SETTINGS:
+            raise OSError(28, "No space left on device")
+        real(base, relative, text)
+
+    monkeypatch.setattr(fsops, "write_within", full)
+    with pytest.raises(OSError):
+        attach(root, store=store, machine=machine, runner=Recorder())
+    assert read_mcp_ledger(root).deny == ("srv1",)
+
+
+def test_a_deny_only_merge_leaves_the_owners_permissions_as_they_are(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps({"permissions": {"deny": [RULE]}}), encoding="utf-8")
+    _mcp(store, srv1="off")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _settings(root)["permissions"] == {"deny": [RULE]}

@@ -15,7 +15,7 @@ import pytest
 from drybag.attach.mcp import UNSETTLED, Reconciled, Served, digest, fold_mcp, reconcile
 from drybag.config.plates import Plate, PlateKind
 from drybag.printed import quoted
-from drybag.runner import Completed
+from drybag.runner import NOT_FOUND, TIMED_OUT, Completed
 from tests.runners import Recorder
 
 MARKER = "sekret-marker-5c1"
@@ -136,24 +136,24 @@ def test_take_back_keeps_a_name_whose_remove_exits_1_for_another_reason(tmp_path
         assert done.failed == (("m1", quoted(said)),)
 
 
-class _CannotLaunch:
-    """A runner whose launch itself fails, as a spawn error does."""
-
-    def launch(self, argv: list[str], cwd: Path) -> Completed:
-        raise FileNotFoundError(2, "No such file or directory", "claude")
-
-
-@pytest.mark.parametrize("runner", [Recorder(code=127), _CannotLaunch()], ids=["127", "oserror"])
-def test_take_back_keeps_unsettled_when_claude_is_missing(
-    tmp_path: Path, runner: Recorder | _CannotLaunch
-) -> None:
+def test_take_back_keeps_unsettled_when_claude_is_missing(tmp_path: Path) -> None:
     # `remove` with no `claude` on `PATH` exits 127 and leaves the entry where it is (measured):
     # only Claude Code's own answer may drop the record, or the entry is orphaned.
     saves = _Saves()
-    done = reconcile(tmp_path, {}, {"m1": digest(DEFINITION)}, runner, saves)
+    done = reconcile(tmp_path, {}, {"m1": digest(DEFINITION)}, Recorder(code=127), saves)
     assert done.owned == {"m1": UNSETTLED}
     assert saves[-1] == {"m1": UNSETTLED}
     assert [name for name, _ in done.failed] == ["m1"]
+
+
+@pytest.mark.parametrize("code", [NOT_FOUND, TIMED_OUT])
+def test_a_missing_or_hung_claude_stops_every_later_launch(tmp_path: Path, code: int) -> None:
+    runner = Recorder(code=code, stderr="claude: not run")
+    owned = {"m2": digest(DEFINITION), "m3": digest(DEFINITION)}
+    done, saves = _run(tmp_path, _served(tmp_path, m1=DEFINITION), owned, runner)
+    assert len(runner.calls) == 1
+    assert done.owned == dict.fromkeys(("m1", "m2", "m3"), UNSETTLED) == saves[-1]
+    assert done.failed == tuple((name, quoted("claude: not run")) for name in ("m1", "m2", "m3"))
 
 
 def test_replacement_is_reported_for_a_name_without_a_digest(tmp_path: Path) -> None:

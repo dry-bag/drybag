@@ -12,7 +12,10 @@ definition switches the server off without losing it. A name is *served* when it
 some plate defined it; it is *off* when its state is off, defined or not.
 
 Every fault of the file is a note and never a refusal, and a note names the file's path and never a
-value: a definition holds argv and environment, which may hold a secret.
+value: a definition holds argv and environment, which may hold a secret. A file that is there and
+cannot be read as an object of servers makes the fold unusable (`Fold.usable`), and then no
+server is delivered or taken back and no deny entry written or withdrawn: a merge's conflict
+markers must not read as "the overlay serves nothing".
 
 **The reconcile** brings Claude Code's local-scope entries of the main checkout in line with the
 served names, through `claude mcp add-json` and `remove` alone, under a ledger that holds each name
@@ -30,33 +33,35 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from drybag import fsops
 from drybag.attach.items import PROJECT_CLAUDE
 from drybag.attach.render import MCP_ADD_JSON_LOCAL, MCP_REMOVE_LOCAL, filled
 from drybag.binding import MCP_LEDGER_FILE, MCP_LEDGER_NAME, common_directory
 from drybag.config.plates import Plate
+from drybag.jsonobject import json_object
 from drybag.printed import answered, quoted
-from drybag.runner import NOT_FOUND, Completed, Runner
+from drybag.runner import NOT_FOUND, TIMED_OUT, Completed, Runner
 
 MCP_FILE = "mcp.json"
 SERVERS_KEY = "mcpServers"
 OFF = "off"
 ON = "on"
 
-UNREADABLE = "{path}: the file cannot be read, so it holds no MCP servers"
-NOT_PARSEABLE = "{path}: the file does not parse, so it holds no MCP servers"
-NOT_AN_OBJECT = "{path}: the top level is not an object, so it holds no MCP servers"
+UNUSABLE = (
+    "{path} cannot be read as a JSON object whose mcpServers is an object, so no MCP server or "
+    "deny entry changes until it can"
+)
 NOT_THE_KEY = "{path}: a top-level key other than mcpServers is ignored"
-SERVERS_NOT_AN_OBJECT = "{path}: mcpServers is not an object, so it holds no MCP servers"
 BAD_VALUE = (
-    '{path}: an mcpServers entry is not an object, "off" or "on"; it is skipped (entry {position})'
+    '{path}: an mcpServers entry is not an object, "off" or "on", or holds NaN or Infinity; it is '
+    "skipped (entry {position})"
 )
 UNPASSABLE = (
-    "{path}: an mcpServers entry holds a NUL in its name or a lone surrogate, which no command "
-    "line can carry; it is skipped (entry {position})"
+    "{path}: an mcpServers name holds a NUL or a lone surrogate, which no command line can carry; "
+    "it is skipped (entry {position})"
 )
+ON_ALONE = '{path}: {name} is "on" and no plate defines it or switches it off, so it does nothing'
 
 
 @dataclass(frozen=True)
@@ -78,58 +83,61 @@ class Fold:
     served: dict[str, Served]
     off: dict[str, Plate]
     notes: tuple[str, ...]
+    usable: bool = True
 
 
 def digest(definition: Mapping[str, object]) -> str:
     """The sha256 of a definition's canonical JSON, so key order is no difference."""
     text = json.dumps(definition, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return hashlib.sha256(text.encode("utf-8", "surrogatepass")).hexdigest()
 
 
-def _entries(plate: Plate, notes: list[str]) -> dict[str, object]:
-    """The `mcpServers` object of `plate`'s file, or nothing with a note."""
+def _entries(plate: Plate, notes: list[str]) -> dict[str, object] | None:
+    """The `mcpServers` object of `plate`'s file, nothing where there is no file, and `None` with
+    a note where the file is there and unusable."""
     path = plate.directory / PROJECT_CLAUDE / MCP_FILE
     shown = quoted(str(path))
     try:
-        text = fsops.read_regular_text(path)
+        document = json_object(fsops.read_regular_text(path), shown, error=ValueError)
+        servers = document.get(SERVERS_KEY, {})
+        if not isinstance(servers, dict):
+            raise ValueError(SERVERS_KEY)
     except FileNotFoundError:
         return {}
-    except (OSError, UnicodeDecodeError):
-        notes.append(UNREADABLE.format(path=shown))
-        return {}
-    try:
-        document = json.loads(text)
-    except (ValueError, RecursionError):
-        notes.append(NOT_PARSEABLE.format(path=shown))
-        return {}
-    if not isinstance(document, dict):
-        notes.append(NOT_AN_OBJECT.format(path=shown))
-        return {}
+    except (OSError, ValueError):
+        notes.append(UNUSABLE.format(path=shown))
+        return None
     if any(key != SERVERS_KEY for key in document):
         notes.append(NOT_THE_KEY.format(path=shown))
-    servers = document.get(SERVERS_KEY, {})
-    if not isinstance(servers, dict):
-        notes.append(SERVERS_NOT_AN_OBJECT.format(path=shown))
-        return {}
     kept: dict[str, object] = {}
     for position, (name, value) in enumerate(servers.items(), 1):
-        if not isinstance(value, dict) and value not in (OFF, ON):
-            notes.append(BAD_VALUE.format(path=shown, position=position))
-        elif not _passable(name, value):
+        if "\0" in name or not _encodes(name):
             notes.append(UNPASSABLE.format(path=shown, position=position))
+        elif value not in (OFF, ON) and not (isinstance(value, dict) and _finite(value)):
+            notes.append(BAD_VALUE.format(path=shown, position=position))
         else:
             kept[name] = value
     return kept
 
 
-def _passable(name: str, value: object) -> bool:
-    """Whether `name` can be an argv word and `value` digested: a NUL ends the word, and a lone
-    surrogate, which `json.loads` makes of a `\\ud800`, encodes as no UTF-8."""
+def _encodes(name: str) -> bool:
+    """Whether `name` can be an argv word: a lone surrogate, which `json.loads` makes of a
+    `\\ud800`, encodes as no UTF-8. A definition is passed as ASCII JSON and always can."""
     try:
-        json.dumps([name, value], ensure_ascii=False).encode("utf-8")
+        name.encode("utf-8")
     except UnicodeEncodeError:
         return False
-    return "\0" not in name
+    return True
+
+
+def _finite(definition: dict[str, object]) -> bool:
+    """Whether `definition` holds no `NaN` or `Infinity`, which `json.loads` reads and Claude Code
+    refuses on every run."""
+    try:
+        json.dumps(definition, allow_nan=False)
+    except ValueError:
+        return False
+    return True
 
 
 def fold_mcp(plates: Sequence[Plate]) -> Fold:
@@ -137,13 +145,19 @@ def fold_mcp(plates: Sequence[Plate]) -> Fold:
     notes: list[str] = []
     definitions: dict[str, tuple[Mapping[str, object], Plate]] = {}
     states: dict[str, tuple[bool, Plate]] = {}
+    switched: set[str] = set()
+    usable = True
     for plate in plates:
-        for name, value in _entries(plate, notes).items():
+        entries = _entries(plate, notes)
+        usable = usable and entries is not None
+        for name, value in (entries or {}).items():
             if isinstance(value, dict):
                 definitions[name] = (value, plate)
                 states[name] = (True, plate)
             else:
                 states[name] = (value == ON, plate)
+                if value == OFF:
+                    switched.add(name)
     served: dict[str, Served] = {}
     off: dict[str, Plate] = {}
     for name, (on, state_plate) in states.items():
@@ -152,11 +166,22 @@ def fold_mcp(plates: Sequence[Plate]) -> Fold:
         elif name in definitions:
             definition, defined_plate = definitions[name]
             served[name] = Served(definition, digest(definition), defined_plate, state_plate)
-    return Fold(served, off, tuple(notes))
+        elif name not in switched:
+            path = state_plate.directory / PROJECT_CLAUDE / MCP_FILE
+            notes.append(ON_ALONE.format(path=quoted(str(path)), name=quoted(name)))
+    return Fold(served, off, tuple(notes), usable)
 
 
 MCP_LEDGER_FORMAT = 1
-BAD_LEDGER = "{name} is not a ledger `drybag attach` wrote, so it records nothing"
+# A name the ledger owns whose call was started and whose outcome is not known to be good.
+UNSETTLED = None
+# An MCP ledger that is there and unreadable here, damaged or a newer drybag's, is the only record
+# of the entries it names in `~/.claude.json`: it is never written over, and no MCP change is made.
+BAD_LEDGER = (
+    "{name} is not a ledger this drybag can read (damaged, or a newer drybag's), so no MCP server "
+    "or deny entry changes: repair it, or remove it once you have taken back by hand every server "
+    "it names"
+)
 
 
 @dataclass(frozen=True)
@@ -165,47 +190,42 @@ class McpLedger:
 
     `deny` is the server names whose `deniedMcpServers` entry `attach` added, and the only entries
     a later run or `detach` may take out. `mcp` is the digest of each server `attach` delivered,
-    `None` for one it could not; it is empty until a run delivers any. `notes` is what reading
-    the file said and is no part of the record.
+    `None` for one it could not; it is empty until a run delivers any. `fault` is `BAD_LEDGER`
+    where the file is there and records nothing this drybag can read.
     """
 
     deny: tuple[str, ...] = ()
     mcp: dict[str, str | None] = field(default_factory=dict)
-    notes: tuple[str, ...] = field(default=(), compare=False)
-
-
-def _ledger_shaped(raw: object) -> bool:
-    if not isinstance(raw, dict) or raw.get("format") != MCP_LEDGER_FORMAT:
-        return False
-    deny, mcp = raw.get("deny"), raw.get("mcp", {})
-    return (
-        isinstance(deny, list)
-        and all(isinstance(name, str) for name in deny)
-        and isinstance(mcp, dict)
-        and all(isinstance(v, str) or v is None for v in mcp.values())
-    )
+    fault: str | None = field(default=None, compare=False)
 
 
 def read_mcp_ledger(root: Path) -> McpLedger:
     """The MCP ledger in `root`'s git common directory. A file that is absent is an empty ledger,
-    and one that cannot be read or is not well shaped is an empty ledger with a note: `attach`
-    then writes it whole, and no entry is withdrawn by a guess."""
+    and one that cannot be read, is not well shaped or is of another format is an empty ledger
+    with its `fault`."""
     return mcp_ledger_in(common_directory(root))
 
 
 def mcp_ledger_in(common: Path) -> McpLedger:
     """`read_mcp_ledger` in the git common directory `common`, for a reader that has already asked
     `git` for it (`doctor`)."""
-    path = common / MCP_LEDGER_FILE
     try:
-        raw: Any = json.loads(fsops.read_regular_text(path))
+        text = fsops.read_regular_text(common / MCP_LEDGER_FILE)
+        raw = json_object(text, MCP_LEDGER_NAME, error=ValueError)
     except FileNotFoundError:
         return McpLedger()
-    except (OSError, UnicodeDecodeError, ValueError, RecursionError):
-        return McpLedger(notes=(BAD_LEDGER.format(name=MCP_LEDGER_NAME),))
-    if not _ledger_shaped(raw):
-        return McpLedger(notes=(BAD_LEDGER.format(name=MCP_LEDGER_NAME),))
-    return McpLedger(deny=tuple(raw["deny"]), mcp=dict(raw.get("mcp", {})))
+    except (OSError, ValueError):
+        raw = {}
+    deny, mcp = raw.get("deny"), raw.get("mcp", {})
+    if (
+        raw.get("format") == MCP_LEDGER_FORMAT
+        and isinstance(deny, list)
+        and all(isinstance(name, str) for name in deny)
+        and isinstance(mcp, dict)
+        and all(isinstance(sha, str) or sha is UNSETTLED for sha in mcp.values())
+    ):
+        return McpLedger(tuple(deny), dict(mcp))
+    return McpLedger(fault=BAD_LEDGER.format(name=MCP_LEDGER_NAME))
 
 
 def write_mcp_ledger(root: Path, ledger: McpLedger) -> None:
@@ -215,8 +235,6 @@ def write_mcp_ledger(root: Path, ledger: McpLedger) -> None:
     fsops.write_within(common_directory(root), MCP_LEDGER_FILE, text)
 
 
-# A name the ledger owns whose call was started and whose outcome is not known to be good.
-UNSETTLED = None
 # Claude Code's answer to `remove` of a name local scope does not hold, measured on 2.1.319 as exit
 # 1 and `No MCP server named "q" in local scope`. Exit 1 also answers a `remove` that could not
 # write, so only exit 0 or this answer for the name drops it; any other (no `claude`, a spawn
@@ -257,12 +275,9 @@ class Reconciled:
     failed: tuple[tuple[str, str], ...] = ()
 
 
-def _launch(runner: Runner, argv: list[str], main: Path) -> Completed:
-    """`runner.launch`, with a launch that raised read as one that could not start."""
-    try:
-        return runner.launch(argv, main)
-    except OSError as exc:
-        return Completed(NOT_FOUND, "", f"the call could not be started ({fsops.said(exc)})")
+def _stopping(answer: Completed) -> Completed | None:
+    """`answer` where it says `claude` is missing or hung, which every later call would say too."""
+    return answer if answer.code in (NOT_FOUND, TIMED_OUT) else None
 
 
 def reconcile(
@@ -273,7 +288,9 @@ def reconcile(
     save: Callable[[dict[str, str | None]], None],
 ) -> Reconciled:
     """Mark, deliver, take back, then save what is left; every call runs from `main`, the main
-    checkout, which is what makes `remove`'s answer that a name is absent mean absent there."""
+    checkout, which is what makes `remove`'s answer that a name is absent mean absent there. Once
+    a call finds `claude` missing or hung, nothing more is launched and every name left fails with
+    that answer, unsettled."""
     plan = planned_mcp(served, owned)
     marked = (*plan.add, *plan.readd, *plan.take_back)
     left = dict(owned)
@@ -283,18 +300,22 @@ def reconcile(
     save(dict(left))
     replaced: list[str] = []
     failed: list[tuple[str, str]] = []
+    stopped: Completed | None = None
     for name in sorted((*plan.add, *plan.readd)):
-        removed = _launch(runner, filled(MCP_REMOVE_LOCAL, name), main)
+        removed = stopped or runner.launch(filled(MCP_REMOVE_LOCAL, name), main)
         if removed.code == 0 and owned.get(name) is None:
             replaced.append(name)
+        stopped = stopped or _stopping(removed)
         definition = json.dumps(served[name].definition)
-        added = _launch(runner, filled(MCP_ADD_JSON_LOCAL, name, definition), main)
+        added = stopped or runner.launch(filled(MCP_ADD_JSON_LOCAL, name, definition), main)
+        stopped = stopped or _stopping(added)
         if added.code == 0:
             left[name] = served[name].digest
         else:
             failed.append((name, answered(added)))
     for retired in plan.take_back:
-        answer = _launch(runner, filled(MCP_REMOVE_LOCAL, retired), main)
+        answer = stopped or runner.launch(filled(MCP_REMOVE_LOCAL, retired), main)
+        stopped = stopped or _stopping(answer)
         absent = answer.code == 1 and ABSENT.format(name=retired) in answer.stderr
         if answer.code == 0 or absent:
             del left[retired]

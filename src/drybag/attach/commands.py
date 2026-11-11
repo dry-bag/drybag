@@ -71,6 +71,8 @@ def run_attach(args: argparse.Namespace) -> Result:
         "mcp_taken_back": list(attached.mcp_taken_back),
         "mcp_replaced": list(attached.mcp_replaced),
         "mcp_failed": [name for name, _ in attached.mcp_failed],
+        "mcp_denied": list(attached.mcp_denied),
+        "mcp_undenied": list(attached.mcp_undenied),
     }
     summary = "; ".join(
         (
@@ -119,6 +121,8 @@ def _screen(attached: Attached) -> list[str]:
         for name in attached.mcp_replaced
     ]
     lines += [f"MCP server failed: {quoted(name)}: {said}" for name, said in attached.mcp_failed]
+    lines += [f"MCP server denied: {quoted(name)}" for name in attached.mcp_denied]
+    lines += [f"MCP server deny entry withdrawn: {quoted(name)}" for name in attached.mcp_undenied]
     return lines
 
 
@@ -149,6 +153,9 @@ def run_detach(args: argparse.Namespace) -> Result:
         "delivery_removed": removed.delivery_removed,
         # A boolean this command computed, so it prints.
         "store_kept": removed.store_kept,
+        # Counts, as above: the names are read out of the MCP ledger, in the git common directory.
+        "mcp_taken_back": len(removed.mcp_taken_back),
+        "mcp_undenied": len(removed.mcp_undenied),
     }
     withdrawn = "; the overlay's plugin was withdrawn" if removed.delivery_removed else ""
     if removed.store_kept:
@@ -163,10 +170,12 @@ def run_detach(args: argparse.Namespace) -> Result:
         f"the binding record was left in place"
     )
     line = "; ".join((line, *removed.notes))
-    left = (
+    left = [
         f"Codex rule copy left: {quoted(rule)} (it does not hold the bytes attach wrote)"
         for rule in removed.rules_left
-    )
+    ]
+    left += [f"MCP server taken back: {quoted(name)}" for name in removed.mcp_taken_back]
+    left += [f"MCP server deny entry withdrawn: {quoted(name)}" for name in removed.mcp_undenied]
     return Result("\n".join((line, *left)), data)
 
 

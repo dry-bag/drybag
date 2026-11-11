@@ -983,7 +983,7 @@ def test_doctor_attributes_each_served_name_to_its_plates(tmp_path: Path) -> Non
     ) in row.detail
 
 
-def test_an_mcp_entry_no_claude_call_can_take_leaves_the_row_unred(tmp_path: Path) -> None:
+def test_a_lone_surrogate_in_an_mcp_definition_leaves_the_row_unred(tmp_path: Path) -> None:
     root = _attached(tmp_path)
     _mcp_file(tmp_path / "overlay", "common", {"m1": {"command": "a", "args": ["\ud800"]}})
     assert _mcp_row(tmp_path, root).status != RED

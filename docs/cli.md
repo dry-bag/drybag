@@ -1041,8 +1041,7 @@ the first write, `--check` ends with the same code and the same line; otherwise 
 
 `rules_to_write` in the `--json` output lists those standing-rule files. It also names, one line
 each, the overlay's MCP servers the run would add, re-add (a changed definition, or one an earlier
-run left unsettled; marked "signs a remote server out" where the definition has a `url`) and take
-back, and the server names it would deny or stop denying, as `mcp_add`, `mcp_readd`,
+run left unsettled) and take back, and the server names it would deny or stop denying, as `mcp_add`, `mcp_readd`,
 `mcp_take_back`, `mcp_deny` and `mcp_undeny` in `--json`. It launches no `claude` for them.
 
 **What the overlay grants is shown, not gated.** The overlay is yours, written by you and your
@@ -1059,8 +1058,9 @@ as `hooks_added`, `hooks_removed`, `skills_added`, `skills_removed`, `agents_add
 `agents_removed`, `allow_added`, `allow_withdrawn` and `rules_left`, and no remote and no project of their own. Then come the
 overlay's MCP servers this run delivered, took back, replaced a local entry of (one made by hand,
 or left by an interrupted run) and could not deliver or take back, each by name with Claude Code's
-own message for a failure and never its definition; `mcp_delivered`, `mcp_taken_back`,
-`mcp_replaced` and `mcp_failed` carry the names in `--json`. A failure exits `1` once every other step ran, and the next run tries the name again. A re-attach that
+own message for a failure and never its definition, and the server names whose `deniedMcpServers`
+entry it added and withdrew; `mcp_delivered`, `mcp_taken_back`, `mcp_replaced`, `mcp_failed`,
+`mcp_denied` and `mcp_undenied` carry the names in `--json`. A failure exits `1` once every other step ran, and the next run tries the name again. A re-attach that
 binds the checkout to another project than this machine's record named — a `[project] name`
 renamed in a pulled commit moves every worktree's binding — says so on one line naming both.
 `--check`'s line names no project.
@@ -1179,16 +1179,22 @@ included) maps a server name to a definition in Claude Code's `.mcp.json` shape,
 `"on"`; the last plate's definition wins whole, and the last plate's word, a definition counting as
 on, decides whether it is on. **Writes** each served server into `~/.claude.json` as a local-scope
 entry of the main checkout, only through `claude mcp remove --scope local -- <name>` and `claude mcp
-add-json --scope local -- <name> <json>` run from the main checkout, the definition passed exactly
-as written; a name whose definition did not change is not touched, and one the overlay no longer
-serves is removed. **Writes** a `{"serverName": "<name>"}` entry under `deniedMcpServers` in the
+add-json --scope local -- <name> <json>` run from the main checkout, the definition passed as the
+JSON it parses to (written again, so its spacing and escapes are not kept); a name whose
+definition did not change is not touched, and one the overlay no longer serves is removed. **Writes** a `{"serverName": "<name>"}` entry under `deniedMcpServers` in the
 main checkout's `.claude/settings.local.json` for each name switched off, and takes back only the
 entries it added; both are recorded in `drybag/attach-mcp.json` in the git common directory, by
 name and digest, never a definition. A name the overlay delivers is drybag's at local scope: a local
 entry of that name you made by hand is replaced, with any sign-in it held, and `claude mcp remove`
 of a remote server signs it out, so a remote server is signed out only when its definition changes,
 when it is taken back, or when an unsettled name is retried. An entry you edit or remove by hand is
-not noticed until its definition changes or `detach` runs.
+not noticed until its definition changes or `detach` runs. A plate's `claude/mcp.json` that is
+there and cannot be read as a JSON object whose `mcpServers` is an object, and a
+`drybag/attach-mcp.json` this drybag cannot read (damaged, or a newer drybag's), are each said, and
+the run then changes no server and no deny entry, and never writes over that ledger. An entry
+whose value is not a definition, `"off"` or `"on"`, or whose definition holds `NaN` or `Infinity`,
+and a name no command line can carry, are skipped and said, as is an `"on"` for a name no plate
+defines or switches off.
 
 **`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
 writes: [`owner-files`](#hooks) places them in each new linked worktree.
@@ -1357,12 +1363,13 @@ wrote: it stays, and so does the directory, which the line says and `--json` rep
 the ledger, `drybag/attach.json` in the git common directory. Before the render directory goes it
 takes the `deniedMcpServers` entries `attach` recorded out of the settings file and each MCP server
 `drybag/attach-mcp.json` records out of `~/.claude.json`, with `claude mcp remove --scope local --
-<name>` from the main checkout, then deletes that file; a `remove` that neither succeeded nor
+<name>` from the main checkout, then deletes that file, naming each server and deny entry it took; a `remove` that neither succeeded nor
 answered `No MCP server named "<name>"` (no `claude` on `PATH`, say) fails (`1`) naming the server and Claude Code's message, with the name
 still recorded and the exclude block, the ledgers and the render kept, so running `detach` again
 finishes. A `drybag/attach-mcp.json` that cannot be read is left in place and said, and
 with no `drybag/attach.json` beside it (an older drybag's `detach` removed that one alone) its
-servers and deny entries are taken back before the missing ledger is said. The render directory and the composed store are derived
+servers and deny entries are taken back, and the failure says how many. Where git names no main
+checkout, `attach` delivered no server, and no `claude mcp` runs. The render directory and the composed store are derived
 from the binding id and never read from the ledger, so a ledger naming another directory removes nothing
 outside it. The plugin goes before the exclude block, so Claude Code takes the plugin's entries,
 which name the id, out of `.claude/settings.local.json` while that file is still hidden. Each call
