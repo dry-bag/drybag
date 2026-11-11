@@ -54,8 +54,8 @@ BAD_VALUE = (
     '{path}: an mcpServers entry is not an object, "off" or "on"; it is skipped (entry {position})'
 )
 UNPASSABLE = (
-    "{path}: an mcpServers entry holds a NUL in its name or a lone surrogate, which no `claude "
-    "mcp` call can be given; it is skipped (entry {position})"
+    "{path}: an mcpServers entry holds a NUL in its name or a lone surrogate, which no command "
+    "line can carry; it is skipped (entry {position})"
 )
 
 
