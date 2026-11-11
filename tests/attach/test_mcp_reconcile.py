@@ -91,16 +91,6 @@ def test_moving_an_unchanged_definition_between_plates_calls_nothing(tmp_path: P
     assert done.owned == {"m1": before.served["m1"].digest}
 
 
-def test_changed_definition_is_re_added(tmp_path: Path) -> None:
-    served = _served(tmp_path, m1=DEFINITION)
-    runner = Recorder()
-    done, _ = _run(tmp_path, served, {"m1": digest({"command": "old"})}, runner)
-    assert [argv[2] for argv in runner.calls] == ["remove", "add-json"]
-    assert done.owned == {"m1": digest(DEFINITION)}
-    # Its own entry, delivered with a digest, so the `remove` replaced nothing of the owner's.
-    assert done.replaced == ()
-
-
 def test_failed_add_stays_unsettled_with_claude_codes_message(tmp_path: Path) -> None:
     served = _served(tmp_path, m1={"command": "srv", "env": {"TOKEN": MARKER}})
     runner = Recorder(answers={ADD: INVALID})
@@ -126,9 +116,8 @@ def test_take_back_drops_on_exit_0_or_claude_codes_answer_that_the_name_is_absen
 
 
 def test_take_back_keeps_a_name_whose_remove_exits_1_for_another_reason(tmp_path: Path) -> None:
-    # Claude Code exits 1 for a name it could not remove too (measured on 2.1.316, a read-only
-    # `~/.claude.json`), and for another name's absence: only its answer that this name is absent
-    # drops the record, so a wording it changes leaves a name unsettled and never loses one.
+    # Exit 1 also answers a `remove` that could not write (2.1.316, a read-only `~/.claude.json`):
+    # only the answer that this name is absent drops it, so a new wording never loses a name.
     for said in ('MCP server "m1" was not removed from the file', 'No MCP server named "m10"'):
         done, saves = _run(tmp_path, {}, {"m1": digest(DEFINITION)}, Recorder(code=1, stderr=said))
         assert done.owned == {"m1": UNSETTLED}

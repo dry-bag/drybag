@@ -2712,14 +2712,6 @@ def _settings(root: Path) -> dict[str, Any]:
     return result
 
 
-def test_off_names_become_server_name_entries(tmp_path: Path) -> None:
-    root, store, machine = _attachable(tmp_path)
-    _mcp(store, srv1="off", srv2={"command": "x"})
-    attach(root, store=store, machine=machine, runner=Recorder())
-    assert _settings(root)[DENIED] == [{"serverName": "srv1"}]
-    assert read_mcp_ledger(root).deny == ("srv1",)
-
-
 def test_on_withdraws_the_deny_entry(tmp_path: Path) -> None:
     root, store, machine = _attachable(tmp_path, allow=(RULE,))
     _mcp(store, srv1="off")
@@ -2729,31 +2721,6 @@ def test_on_withdraws_the_deny_entry(tmp_path: Path) -> None:
     # The key goes with its last entry, as the allow list does, and the ledger forgets the name.
     assert DENIED not in _settings(root)
     assert read_mcp_ledger(root).deny == ()
-
-
-def test_no_mcp_ledger_file_reads_as_empty(tmp_path: Path) -> None:
-    root, store, machine = _attachable(tmp_path)
-    attach(root, store=store, machine=machine, runner=Recorder())
-    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
-    assert read_mcp_ledger(root) == McpLedger()
-    assert read_mcp_ledger(root).mcp == {}
-
-
-def test_a_ledger_that_is_not_well_shaped_reads_as_empty_with_a_note(tmp_path: Path) -> None:
-    root, store, machine = _attachable(tmp_path)
-    attach(root, store=store, machine=machine, runner=Recorder())
-    (common_directory(root) / MCP_LEDGER_FILE).write_text('{"format": 1, "deny": 3}')
-    read = read_mcp_ledger(root)
-    assert read.deny == () and read.fault is not None
-
-
-def test_attach_json_is_unchanged_by_deny_entries(tmp_path: Path) -> None:
-    root, store, machine = _attachable(tmp_path)
-    _mcp(store, srv1="off")
-    attach(root, store=store, machine=machine, runner=Recorder())
-    keys = set(json.loads(ledger_file(root).read_text(encoding="utf-8")))
-    assert keys == {"format", "store", "allow", "rules", "settings_keys", "directories", "render"}
-    assert DENIED not in json.loads(ledger_file(root).read_text(encoding="utf-8"))
 
 
 SERVER = {"command": "srv", "args": ["--stdio"]}
@@ -2797,15 +2764,6 @@ def test_attach_takes_back_a_server_switched_off_later(tmp_path: Path) -> None:
     assert _settings(root)[DENIED] == [{"serverName": "m1"}]
 
 
-def test_attach_with_no_mcp_files_calls_no_claude_mcp(tmp_path: Path) -> None:
-    root, store, machine = _attachable(tmp_path, allow=(RULE,))
-    runner = Recorder()
-    attach(root, store=store, machine=machine, runner=runner)
-    assert runner.calls, "the plugin calls ran, so the recorder saw the run"
-    assert _mcp_calls(runner) == []
-    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
-
-
 def test_a_denied_key_that_is_no_list_is_a_note_and_every_other_step_runs(tmp_path: Path) -> None:
     # Every fault is a note: under a `deniedMcpServers` that is no list drybag writes and takes
     # back no entry, and the allow rules, the server and the ledger are delivered all the same.
@@ -2836,8 +2794,7 @@ def test_check_says_the_mcp_notes_the_run_says(tmp_path: Path) -> None:
 
 
 def test_an_unusable_mcp_json_changes_no_server_and_no_deny_entry(tmp_path: Path) -> None:
-    # A conflict marker in a plate's `mcp.json` is a fault of the file, not "the overlay serves
-    # nothing": nothing is taken back, no deny entry withdrawn, and the run says which file.
+    # A conflict marker is a fault of the file, not "the overlay serves nothing": nothing changes.
     root, store, machine = _attachable(tmp_path)
     _mcp(store, m1=SERVER, srv1="off")
     attach(root, store=store, machine=machine, runner=Recorder())

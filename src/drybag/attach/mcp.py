@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -61,6 +62,9 @@ UNPASSABLE = (
     "{path}: an mcpServers name holds a NUL or a lone surrogate, which no command line can carry; "
     "it is skipped (entry {position})"
 )
+# A NUL ends an argv word, and a lone surrogate, which `json.loads` makes of a `\ud800`, encodes as
+# no UTF-8; a definition is passed as ASCII JSON, so only a name can hold what no call carries.
+_UNCARRIED = re.compile("[\0\ud800-\udfff]")
 ON_ALONE = '{path}: {name} is "on" and no plate defines it or switches it off, so it does nothing'
 
 
@@ -111,23 +115,13 @@ def _entries(plate: Plate, notes: list[str]) -> dict[str, object] | None:
         notes.append(NOT_THE_KEY.format(path=shown))
     kept: dict[str, object] = {}
     for position, (name, value) in enumerate(servers.items(), 1):
-        if "\0" in name or not _encodes(name):
+        if _UNCARRIED.search(name):
             notes.append(UNPASSABLE.format(path=shown, position=position))
         elif value not in (OFF, ON) and not (isinstance(value, dict) and _finite(value)):
             notes.append(BAD_VALUE.format(path=shown, position=position))
         else:
             kept[name] = value
     return kept
-
-
-def _encodes(name: str) -> bool:
-    """Whether `name` can be an argv word: a lone surrogate, which `json.loads` makes of a
-    `\\ud800`, encodes as no UTF-8. A definition is passed as ASCII JSON and always can."""
-    try:
-        name.encode("utf-8")
-    except UnicodeEncodeError:
-        return False
-    return True
 
 
 def _finite(definition: dict[str, object]) -> bool:

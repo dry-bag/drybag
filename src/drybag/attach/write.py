@@ -67,7 +67,6 @@ from drybag.attach.binding import (
 )
 from drybag.attach.mcp import (
     McpLedger,
-    Reconciled,
     Served,
     fold_mcp,
     read_mcp_ledger,
@@ -1006,6 +1005,8 @@ def _carry_out(
     # A deny entry is recorded before the settings file holds it, and stays recorded until the file
     # no longer does, so no entry `attach` wrote is ever one no later run takes back.
     deny, mcp_ledger = planned.deny, replace(planned.mcp_held, deny=planned.deny.record)
+    # Where no MCP change may be made, the reconcile is handed nothing to serve and nothing owned.
+    owned = mcp_ledger.mcp if planned.served is not None else {}
     if (holding := replace(mcp_ledger, deny=(*deny.record, *deny.withdraw))) != planned.mcp_held:
         write_mcp_ledger(root, holding)
     if planned.settings is not None:
@@ -1053,16 +1054,12 @@ def _carry_out(
     # The overlay's MCP servers at local scope, from the main checkout as the plugin calls are. A
     # call that fails leaves its name unsettled for the next run and the command exits 1 once
     # every other step ran (`commands.run_attach`).
-    mcp = (
-        Reconciled(mcp_ledger.mcp)
-        if planned.served is None
-        else reconcile(
-            root,
-            planned.served,
-            mcp_ledger.mcp,
-            runner,
-            lambda owned: write_mcp_ledger(root, replace(mcp_ledger, mcp=owned)),
-        )
+    mcp = reconcile(
+        root,
+        planned.served or {},
+        owned,
+        runner,
+        lambda left: write_mcp_ledger(root, replace(mcp_ledger, mcp=left)),
     )
     if memory:
         _prepare_store(binding, config)
@@ -1109,11 +1106,9 @@ def _carry_out(
             if rule not in rules and fsops.is_file(root / rule)
         ),
         mcp_delivered=tuple(
-            name
-            for name, sha in mcp.owned.items()
-            if sha is not None and sha != mcp_ledger.mcp.get(name)
+            name for name, sha in mcp.owned.items() if sha is not None and sha != owned.get(name)
         ),
-        mcp_taken_back=tuple(name for name in mcp_ledger.mcp if name not in mcp.owned),
+        mcp_taken_back=tuple(name for name in owned if name not in mcp.owned),
         mcp_replaced=mcp.replaced,
         mcp_failed=mcp.failed,
         mcp_denied=deny.add,
@@ -1504,8 +1499,8 @@ def _take_back_mcp(root: Path, held: McpLedger, runner: Runner) -> tuple[str, ..
 # Said where `detach` finds no `attach.json`, as an older drybag's `detach` leaves it, beside an MCP
 # ledger whose servers and deny entries it then took back.
 OLDER_DETACH = (
-    "{ledger} is not there, as an older drybag's `detach` leaves it; what {mcp} recorded was taken "
-    "back: {count} MCP server(s) and {denied} deny entry(ies)"
+    f"{LEDGER_NAME} is not there, as an older drybag's `detach` leaves it; what {MCP_LEDGER_NAME} "
+    "recorded was taken back"
 )
 
 
@@ -1558,15 +1553,8 @@ def detach(root: Path, *, runner: Runner) -> Detached:
         settings = _planned_settings(root, _NOTHING, held.deny)
         _refuse_unwithdrawable(root, _NOTHING, settings)
         _withdraw_settings(root, settings)
-        taken = _take_back_mcp(root, held, runner)
-        raise Failure(
-            OLDER_DETACH.format(
-                ledger=LEDGER_NAME,
-                mcp=MCP_LEDGER_NAME,
-                count=len(taken),
-                denied=len(settings.undenied),
-            )
-        ) from None
+        _take_back_mcp(root, held, runner)
+        raise Failure(OLDER_DETACH) from None
     # The rendered plugin, named by the id and installed in the main checkout. Its render directory
     # is derived from the id and never read from the ledger, whose `store` and `render` a clone can
     # commit; asked here, before the first withdrawal, since the id is read through `git`.

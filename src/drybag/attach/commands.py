@@ -153,9 +153,6 @@ def run_detach(args: argparse.Namespace) -> Result:
         "delivery_removed": removed.delivery_removed,
         # A boolean this command computed, so it prints.
         "store_kept": removed.store_kept,
-        # Counts, as above: the names are read out of the MCP ledger, in the git common directory.
-        "mcp_taken_back": len(removed.mcp_taken_back),
-        "mcp_undenied": len(removed.mcp_undenied),
     }
     withdrawn = "; the overlay's plugin was withdrawn" if removed.delivery_removed else ""
     if removed.store_kept:

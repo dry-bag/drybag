@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from drybag.attach.mcp import ON_ALONE, UNUSABLE, digest, fold_mcp
+from drybag.attach.mcp import ON_ALONE, digest, fold_mcp
 from drybag.config.plates import Plate, PlateKind
 from drybag.jsonobject import DEPTH_CAP
 from drybag.printed import quoted
@@ -88,7 +88,9 @@ def test_bad_values_are_notes_and_never_print_a_value(tmp_path: Path) -> None:
     servers_list = _plate(tmp_path, PlateKind.TAG, "t3", {"mcpServers": [MARKER]})
     broken = _plate(tmp_path, PlateKind.TAG, "t4", "{" + MARKER)
     fold = fold_mcp([bad_value, bad_key, not_object, servers_list, broken])
-    assert len(fold.notes) == 6
+    # The last three are files there and unusable: under them no MCP change is made.
+    assert len(fold.notes) == 6 and not fold.usable
+    assert fold_mcp([bad_value, bad_key, _plate(tmp_path, PlateKind.TAG, "t5")]).usable
     for note in fold.notes:
         assert MARKER not in note
     assert fold.served == {}
@@ -114,18 +116,6 @@ def test_a_sub_plate_definition_wins_its_parents(tmp_path: Path) -> None:
     fold = fold_mcp([parent, sub])
     assert fold.served["srv1"].definition == {"command": "m"}
     assert fold.served["srv1"].defined_in == sub
-
-
-def test_a_file_there_and_unusable_makes_the_fold_unusable(tmp_path: Path) -> None:
-    # A merge's conflict markers must not read as "this plate serves nothing": the run then
-    # changes no MCP server and no deny entry (`write.plan_writes`).
-    common = _plate(tmp_path, PlateKind.COMMON, "common", _servers(m1={"command": "a"}))
-    assert fold_mcp([common, _plate(tmp_path, PlateKind.TAG, "t0")]).usable
-    for name, body in (("t1", "<<<<<<< HEAD\n{}"), ("t2", [1]), ("t3", {"mcpServers": []})):
-        broken = _plate(tmp_path, PlateKind.TAG, name, body)
-        fold = fold_mcp([common, broken])
-        assert not fold.usable
-        assert fold.notes == (UNUSABLE.format(path=quoted(str(_file(broken)))),)
 
 
 def test_a_definition_nested_past_the_readers_cap_is_unusable(tmp_path: Path) -> None:

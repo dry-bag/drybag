@@ -1979,7 +1979,7 @@ reddens = [
 [[mutation]]
 name = "the MCP fold keeps an entry with a NUL in its name or a lone surrogate"
 file = "src/drybag/attach/mcp.py"
-before = '''        if "\0" in name or not _encodes(name):'''
+before = '''        if _UNCARRIED.search(name):'''
 after = "        if False:"
 reddens = [
   "tests/attach/test_mcp.py::test_an_entry_no_claude_mcp_call_can_take_is_a_note",
@@ -2092,6 +2092,15 @@ reddens = [
   "tests/attach/test_mcp_reconcile.py::test_option_shaped_name_follows_a_double_dash",
 ]
 
+[[mutation]]
+name = "the MCP name is handed to remove before the double dash"
+file = "src/drybag/attach/render.py"
+before = '''MCP_REMOVE_LOCAL = ("claude", "mcp", "remove", "--scope", "local", "--", SLOT)'''
+after = '''MCP_REMOVE_LOCAL = ("claude", "mcp", "remove", "--scope", "local", SLOT)'''
+reddens = [
+  "tests/attach/test_mcp_reconcile.py::test_option_shaped_name_follows_a_double_dash",
+]
+
 # Only Claude Code's own answer to `remove`, exit 0 or its answer that the name is absent, drops a
 # name: with no `claude` on `PATH`, or a `remove` that could not write, the entry stays, and
 # dropping the name would orphan it.
@@ -2104,16 +2113,6 @@ reddens = [
   "tests/attach/test_mcp_reconcile.py::test_take_back_keeps_unsettled_when_claude_is_missing",
 ]
 
-[[mutation]]
-name = "the MCP name is handed to remove before the double dash"
-file = "src/drybag/attach/render.py"
-before = '''MCP_REMOVE_LOCAL = ("claude", "mcp", "remove", "--scope", "local", "--", SLOT)'''
-after = '''MCP_REMOVE_LOCAL = ("claude", "mcp", "remove", "--scope", "local", SLOT)'''
-reddens = [
-  "tests/attach/test_mcp_reconcile.py::test_option_shaped_name_follows_a_double_dash",
-]
-
-# A `claude` that is missing or hung answers every later call alike, so none is launched.
 [[mutation]]
 name = "a take-back drops the name on any exit 1"
 file = "src/drybag/attach/mcp.py"
@@ -2211,11 +2210,11 @@ reddens = [
 [[mutation]]
 name = "attach reconciles against an empty MCP ledger"
 file = "src/drybag/attach/write.py"
-before = '''            planned.served,
-            mcp_ledger.mcp,
+before = '''        planned.served or {},
+        owned,
 '''
-after = '''            planned.served,
-            {},
+after = '''        planned.served or {},
+        {},
 '''
 reddens = [
   "tests/attach/test_write.py::test_attach_delivers_and_records_digests",

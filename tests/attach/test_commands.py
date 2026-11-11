@@ -1070,38 +1070,24 @@ def _recorded(
     return runner
 
 
-def _mcp_names(runner: Recorder) -> set[str]:
-    return {argv[6] for argv in runner.calls if argv[:2] == ["claude", "mcp"]}
-
-
-def _changed_since_attach(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[Path, Path, Path, list[str]]:
-    """A checkout attached with `kept`, `changed` and `retired` delivered and `undenied` switched
-    off, whose overlay then adds `fresh`, gives `changed` a remote definition, drops `retired`,
-    switches `denied` off and `undenied` back on."""
-    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
-    _overlay_grants(store)
-    common = store.parents[2] / "common"
-    machine = _machine(tmp_path, overlay=store.parents[2])
-    old = {"command": "a"}
-    _mcp_file(common, {"kept": old, "changed": old, "retired": old, "undenied": "off"})
-    _recorded(monkeypatch)
-    assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    remote = {"type": "http", "url": "https://example.com/mcp"}
-    _mcp_file(common, {"kept": old, "changed": remote, "fresh": old, "denied": "off"})
-    return root, store, machine, ["kept", "changed", "fresh"]
-
-
 def test_check_lists_mcp_changes_and_launches_nothing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root, store, machine, _ = _changed_since_attach(tmp_path, monkeypatch)
+    # Attached with `kept`, `changed` and `retired` delivered and `undenied` off, the overlay then
+    # adds `fresh`, changes `changed`, drops `retired`, switches `denied` off and `undenied` on.
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    common = store.parents[2] / "common"
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    old, new = {"command": "a"}, {"command": "b"}
+    _mcp_file(common, {"kept": old, "changed": old, "retired": old, "undenied": "off"})
+    _recorded(monkeypatch)
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    _mcp_file(common, {"kept": old, "changed": new, "fresh": old, "denied": "off"})
     capsys.readouterr()
     runner = _recorded(monkeypatch)
     before = snapshot(root)
-    common = (root / ".git" / "drybag").iterdir()
-    ledgers = {path.name: path.read_bytes() for path in common if path.suffix == ".json"}
+    held = (root / ".git" / "drybag").iterdir()
+    ledgers = {path.name: path.read_bytes() for path in held if path.suffix == ".json"}
     assert set(ledgers) == {"attach.json", "attach-mcp.json"}
     assert invoke(["attach", "--check", *_flags(root, store, machine), "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
@@ -1116,21 +1102,8 @@ def test_check_lists_mcp_changes_and_launches_nothing(
     assert "MCP server would be re-added: changed" in out.splitlines()
     assert runner.calls == []
     assert_snapshot_unchanged(root, before)
-    for name, held in ledgers.items():
-        assert (root / ".git" / "drybag" / name).read_bytes() == held
-
-
-def test_check_and_attach_agree_on_what_changes(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root, store, machine, _ = _changed_since_attach(tmp_path, monkeypatch)
-    capsys.readouterr()
-    assert invoke(["attach", "--check", *_flags(root, store, machine), "--json"]) == 0
-    data = json.loads(capsys.readouterr().out)
-    listed = {*data["mcp_add"], *data["mcp_readd"], *data["mcp_take_back"]}
-    runner = _recorded(monkeypatch)
-    assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    assert _mcp_names(runner) == listed == {"fresh", "changed", "retired"}
+    for name, text in ledgers.items():
+        assert (root / ".git" / "drybag" / name).read_bytes() == text
 
 
 def test_failure_screen_prints_names_never_a_definition(

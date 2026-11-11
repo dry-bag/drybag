@@ -1191,12 +1191,10 @@ entry of that name you made by hand is replaced, with any sign-in it held, and `
 of a remote server signs it out, so a remote server is signed out only when its definition changes,
 when it is taken back, or when an unsettled name is retried. An entry you edit or remove by hand is
 not noticed until its definition changes or `detach` runs. A plate's `claude/mcp.json` that is
-there and cannot be read as a JSON object whose `mcpServers` is an object, and a
-`drybag/attach-mcp.json` this drybag cannot read (damaged, or a newer drybag's), are each said, and
-the run then changes no server and no deny entry, and never writes over that ledger. An entry
-whose value is not a definition, `"off"` or `"on"`, or whose definition holds `NaN` or `Infinity`,
-and a name no command line can carry, are skipped and said, as is an `"on"` for a name no plate
-defines or switches off.
+there and is no JSON object whose `mcpServers` is an object, or a `drybag/attach-mcp.json` this
+drybag cannot read (damaged, or a newer one's), is said, and no server or deny entry then changes.
+An entry that is no definition, `"off"` or `"on"`, a definition holding `NaN` or `Infinity`, a
+name no command line carries, and an `"on"` no plate defines or switches off are said and skipped.
 
 **`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
 writes: [`owner-files`](#hooks) places them in each new linked worktree.
@@ -1370,7 +1368,7 @@ answered `No MCP server named "<name>"` (no `claude` on `PATH`, say) fails (`1`)
 still recorded and the exclude block, the ledgers and the render kept, so running `detach` again
 finishes. A `drybag/attach-mcp.json` that cannot be read is left in place and said, and
 with no `drybag/attach.json` beside it (an older drybag's `detach` removed that one alone) its
-servers and deny entries are taken back, and the failure says how many. Where git names no main
+servers and deny entries are taken back, and the failure says so. Where git names no main
 checkout, `attach` delivered no server, and no `claude mcp` runs. The render directory and the composed store are derived
 from the binding id and never read from the ledger, so a ledger naming another directory removes nothing
 outside it. The plugin goes before the exclude block, so Claude Code takes the plugin's entries,
@@ -1922,13 +1920,12 @@ names each MCP server the overlay delivers with the plate whose definition wins 
 plate switched it on, that plate too (`tags/t1`, and `tags/t1 on m1` for a machine's sub-plate),
 each name the overlay switches off with the plate that says so, and each `env` and `headers` key a
 served definition keeps in the overlay's files, by key and never by value; all of that is
-information. A name `attach` would deliver or take back, as `--check` would list it (a served name
-not delivered, delivered under another definition or left unsettled by a call that did not finish,
-and one `drybag/attach-mcp.json` holds that the overlay no longer serves), is a warning whose remedy
-is `attach`, as a drifted hook is. The notes reading the files gave are said too, and a
-`claude/mcp.json` or `drybag/attach-mcp.json` under which `attach` changes nothing is a warning
-whose remedy is to make it readable. The row reads only those files: it launches nothing, so it
-says once that it cannot see whether a delivered entry is still in place.
+information. A name `attach` would deliver or take back, as `--check` would list it (served and not
+delivered, under another definition or unsettled, or held by `drybag/attach-mcp.json` and no
+longer served), is a warning whose remedy is `attach`, as a drifted hook is. The notes reading the
+files gave are said, and a file under which `attach` changes nothing is a warning whose remedy is
+to make it readable. The row launches nothing, so it says it cannot see whether a delivered entry
+is still in place.
 
 **Eight of the fourteen have a `skip` arm — eighteen arms between them, every one on a state of
 this machine or this repository.** A `skip` is **not** a finding and never reaches the exit code, so
