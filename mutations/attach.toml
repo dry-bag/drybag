@@ -2150,15 +2150,6 @@ reddens = [
 ]
 
 [[mutation]]
-name = "attach says no unsettled MCP server"
-file = "src/drybag/attach/commands.py"
-before = '''    if attached.mcp_unsettled:'''
-after = '''    if False:'''
-reddens = [
-  "tests/attach/test_commands.py::test_failure_screen_prints_names_never_a_definition",
-]
-
-[[mutation]]
 name = "attach reconciles against an empty MCP ledger"
 file = "src/drybag/attach/write.py"
 before = '''        planned.served,

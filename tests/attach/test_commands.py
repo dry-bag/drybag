@@ -1143,6 +1143,4 @@ def test_failure_screen_prints_names_never_a_definition(
     out, err = capsys.readouterr()
     said = quoted("Invalid configuration: : Invalid input")
     assert f"MCP server failed: m1: {said}" in out.splitlines()
-    # The closing line says the name stays unsettled, so the next run is what settles it.
-    assert out.splitlines()[-1].startswith("unsettled MCP server(s): m1;")
     assert MARKER not in out + err

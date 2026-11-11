@@ -234,13 +234,12 @@ class Attached:
     allow_withdrawn: tuple[str, ...] = ()
     rules_left: tuple[str, ...] = ()
     # The overlay's MCP servers this run delivered, took back and replaced a local entry of, each
-    # failed one with Claude Code's message (`attach.mcp.Reconciled`), and every name it leaves
-    # unsettled; all are names, never a definition.
+    # failed one with Claude Code's message (`attach.mcp.Reconciled`); all are names, never a
+    # definition.
     mcp_delivered: tuple[str, ...] = ()
     mcp_taken_back: tuple[str, ...] = ()
     mcp_replaced: tuple[str, ...] = ()
     mcp_failed: tuple[tuple[str, str], ...] = ()
-    mcp_unsettled: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1084,7 +1083,6 @@ def _carry_out(
         mcp_taken_back=tuple(name for name in held.mcp if name not in mcp.owned),
         mcp_replaced=mcp.replaced,
         mcp_failed=mcp.failed,
-        mcp_unsettled=tuple(name for name, sha in mcp.owned.items() if sha is None),
     )
 
 

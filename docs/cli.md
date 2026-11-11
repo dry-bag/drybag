@@ -1059,9 +1059,8 @@ as `hooks_added`, `hooks_removed`, `skills_added`, `skills_removed`, `agents_add
 `agents_removed`, `allow_added`, `allow_withdrawn` and `rules_left`, and no remote and no project of their own. Then come the
 overlay's MCP servers this run delivered, took back, replaced a local entry of (one made by hand,
 or left by an interrupted run) and could not deliver or take back, each by name with Claude Code's
-own message for a failure and never its definition, and last the names left unsettled;
-`mcp_delivered`, `mcp_taken_back`, `mcp_replaced`, `mcp_failed` and `mcp_unsettled` carry the names
-in `--json`. A failure exits `1` once every other step ran, and the next run tries the name again. A re-attach that
+own message for a failure and never its definition; `mcp_delivered`, `mcp_taken_back`,
+`mcp_replaced` and `mcp_failed` carry the names in `--json`. A failure exits `1` once every other step ran, and the next run tries the name again. A re-attach that
 binds the checkout to another project than this machine's record named — a `[project] name`
 renamed in a pulled commit moves every worktree's binding — says so on one line naming both.
 `--check`'s line names no project.

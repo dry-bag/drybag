@@ -71,7 +71,6 @@ def run_attach(args: argparse.Namespace) -> Result:
         "mcp_taken_back": list(attached.mcp_taken_back),
         "mcp_replaced": list(attached.mcp_replaced),
         "mcp_failed": [name for name, _ in attached.mcp_failed],
-        "mcp_unsettled": list(attached.mcp_unsettled),
     }
     summary = "; ".join(
         (
@@ -120,12 +119,6 @@ def _screen(attached: Attached) -> list[str]:
         for name in attached.mcp_replaced
     ]
     lines += [f"MCP server failed: {quoted(name)}: {said}" for name, said in attached.mcp_failed]
-    if attached.mcp_unsettled:
-        names = ", ".join(quoted(name) for name in attached.mcp_unsettled)
-        lines.append(
-            f"unsettled MCP server(s): {names}; `drybag attach` did not finish delivering or "
-            "taking these back, run it again"
-        )
     return lines
 
 
