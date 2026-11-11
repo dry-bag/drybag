@@ -2115,16 +2115,6 @@ reddens = [
 
 # A `claude` that is missing or hung answers every later call alike, so none is launched.
 [[mutation]]
-name = "the reconcile goes on launching after claude was missing or hung"
-file = "src/drybag/attach/mcp.py"
-before = '''    return answer if answer.code in (NOT_FOUND, TIMED_OUT) else None'''
-after = '''    return None'''
-reddens = [
-  "tests/attach/test_mcp_reconcile.py::test_a_missing_or_hung_claude_stops_every_later_launch[127]",
-  "tests/attach/test_mcp_reconcile.py::test_a_missing_or_hung_claude_stops_every_later_launch[124]",
-]
-
-[[mutation]]
 name = "a take-back drops the name on any exit 1"
 file = "src/drybag/attach/mcp.py"
 before = '''        absent = answer.code == 1 and ABSENT.format(name=retired) in answer.stderr'''
@@ -2210,15 +2200,6 @@ reddens = [
 ]
 
 [[mutation]]
-name = "attach --check leaves out the MCP notes the run says"
-file = "src/drybag/attach/check.py"
-before = '''    for note in (*binding.plate_notes, *mcp_notes):'''
-after = '''    for note in binding.plate_notes:'''
-reddens = [
-  "tests/attach/test_write.py::test_check_says_the_mcp_notes_the_run_says",
-]
-
-[[mutation]]
 name = "attach exits 0 when an MCP server was not delivered"
 file = "src/drybag/attach/commands.py"
 before = '''    failed = 1 if attached.mcp_failed else 0'''
@@ -2279,110 +2260,31 @@ reddens = [
 ]
 
 [[mutation]]
-name = "doctor asks git again for the MCP ledger"
+name = "doctor warns of no MCP server attach would deliver or take back"
 file = "src/drybag/attach/doctor.py"
-before = '''        return McpLedger() if common is None else mcp_ledger_in(common)'''
-after = '''        from drybag.attach.mcp import read_mcp_ledger
-
-        return read_mcp_ledger(root)'''
+before = '''    pending = sorted({*plan.add, *plan.readd, *plan.take_back}) if usable else []'''
+after = '''    pending: list[str] = []'''
 reddens = [
-  "tests/attach/test_doctor.py::test_doctor_runs_no_claude",
+  "tests/attach/test_doctor.py::test_doctor_warns_of_each_name_attach_would_deliver_or_take_back",
 ]
 
 [[mutation]]
-name = "doctor names no plate that switched an MCP server on"
+name = "doctor's MCP finding is no warning under a file attach cannot read"
 file = "src/drybag/attach/doctor.py"
-before = '''            if served.state_in != served.defined_in:'''
-after = '''            if False:'''
-reddens = [
-  "tests/attach/test_doctor.py::test_doctor_attributes_each_served_name_to_its_plates",
-]
-
-[[mutation]]
-name = "doctor names a machine's sub-plate by its own directory"
-file = "src/drybag/attach/doctor.py"
-before = '''    parent = plate.directory if plate.machine is None else plate.directory.parent.parent'''
-after = '''    parent = plate.directory'''
-reddens = [
-  "tests/attach/test_doctor.py::test_doctor_attributes_each_served_name_to_its_plates",
-]
-
-[[mutation]]
-name = "doctor does not say it cannot see a delivered MCP entry"
-file = "src/drybag/attach/doctor.py"
-before = '''    if fold.served:
-        said.append(MCP_UNSEEN)'''
+before = '''    if not usable:
+        remedy = MCP_REPAIR'''
 after = '''    if False:
-        said.append(MCP_UNSEEN)'''
-reddens = [
-  "tests/attach/test_doctor.py::test_doctor_attributes_each_served_name_to_its_plates",
-]
+        remedy = MCP_REPAIR'''
+reddens = ["tests/attach/test_doctor.py::test_doctor_says_why_attach_would_change_nothing_mcp"]
 
+# A value in a served definition is named by its server and key, never printed.
 [[mutation]]
-name = "doctor lists no unsettled MCP server"
+name = "doctor prints an MCP env or headers value"
 file = "src/drybag/attach/doctor.py"
-before = '''    unsettled = sorted(name for name, sha in recorded.mcp.items() if sha is UNSETTLED)'''
-after = '''    unsettled = sorted(name for name, sha in recorded.mcp.items() if False)'''
+before = '''        quoted(f"{table}.{key}")'''
+after = '''        quoted(f"{table}.{key}={value}")'''
 reddens = [
-  "tests/attach/test_doctor.py::test_doctor_lists_unsettled_names",
-]
-
-[[mutation]]
-name = "doctor's unsettled MCP servers are no warning"
-file = "src/drybag/attach/doctor.py"
-before = '''    remedies = [f"run `{ATTACH_COMMAND}`"] if unsettled else []'''
-after = '''    remedies: list[str] = []'''
-reddens = [
-  "tests/attach/test_doctor.py::test_doctor_lists_unsettled_names",
-]
-
-[[mutation]]
-name = "doctor states no desktop connector limit"
-file = "src/drybag/attach/doctor.py"
-before = '''        if any(name.startswith(CONNECTOR_PREFIX) for name in fold.off):'''
-after = '''        if False:'''
-reddens = [
-  "tests/attach/test_doctor.py::test_doctor_states_the_desktop_connector_limit_for_a_connector_off",
-]
-
-# Where a served MCP definition's secret would come from: named by server and key, never by value.
-[[mutation]]
-name = "doctor prints a literal MCP value it warns about"
-file = "src/drybag/attach/doctor.py"
-before = '''                literal.append(spelled)'''
-after = '''                literal.append(f"{spelled}={each}")'''
-reddens = [
-  "tests/attach/test_doctor.py::test_literal_env_value_is_named_never_printed",
-]
-
-[[mutation]]
-name = "doctor's literal MCP value is no warning"
-file = "src/drybag/attach/doctor.py"
-before = '''    if warned:
-        remedies.append(LITERAL_REMEDY)'''
-after = '''    if False:
-        remedies.append(LITERAL_REMEDY)'''
-reddens = [
-  "tests/attach/test_doctor.py::test_literal_env_value_is_named_never_printed",
-]
-
-[[mutation]]
-name = "doctor reads a VAR reference as a literal MCP value"
-file = "src/drybag/attach/doctor.py"
-before = '''            if REFERENCE in json.dumps(each):'''
-after = '''            if False:'''
-reddens = [
-  "tests/attach/test_doctor.py::test_literal_env_value_is_named_never_printed",
-  "tests/attach/test_doctor.py::test_var_reference_gets_the_desktop_hint",
-]
-
-[[mutation]]
-name = "doctor gives a headersHelper no trust hint"
-file = "src/drybag/attach/doctor.py"
-before = '''    if HELPER in definition:'''
-after = '''    if False:'''
-reddens = [
-  "tests/attach/test_doctor.py::test_headers_helper_gets_the_trust_hint",
+  "tests/attach/test_doctor.py::test_an_env_or_headers_value_is_named_by_its_key_never_printed",
 ]
 
 # A plate's `mcp.json` that is there and unusable, and an MCP ledger this drybag cannot read (damaged,

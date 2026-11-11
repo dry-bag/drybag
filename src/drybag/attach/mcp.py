@@ -203,14 +203,8 @@ def read_mcp_ledger(root: Path) -> McpLedger:
     """The MCP ledger in `root`'s git common directory. A file that is absent is an empty ledger,
     and one that cannot be read, is not well shaped or is of another format is an empty ledger
     with its `fault`."""
-    return mcp_ledger_in(common_directory(root))
-
-
-def mcp_ledger_in(common: Path) -> McpLedger:
-    """`read_mcp_ledger` in the git common directory `common`, for a reader that has already asked
-    `git` for it (`doctor`)."""
     try:
-        text = fsops.read_regular_text(common / MCP_LEDGER_FILE)
+        text = fsops.read_regular_text(common_directory(root) / MCP_LEDGER_FILE)
         raw = json_object(text, MCP_LEDGER_NAME, error=ValueError)
     except FileNotFoundError:
         return McpLedger()

@@ -294,7 +294,6 @@ LISTED = {
             "`detach` names `claude mcp` where",
         ),
     ),
-    ("src/drybag/attach/doctor.py", "claude"): (5, "`attached` row says those servers in"),
     ("src/drybag/attach/write.py", "codex"): (
         4,
         "(`attach.items`, `attach.permissions`, `attach.write`)",

@@ -45,16 +45,7 @@ And these are the machinery. Leave them alone unless you know why:
 | `.drybag/manifest.json` | the digest of every file above as `drybag setup --overlay <path>` rendered it. `drybag overlay upgrade` compares against it to tell a file you have edited from one you have not, and refreshes only the second kind. It is the twelfth file, and the one nothing in `templates/overlay/` holds: the scaffold engine writes it when it renders the rest. |
 
 A server's secret never goes into `mcp.json`, since this repository is pushed: `drybag doctor`
-names a literal value in `env` or `headers`. Give it through a command that reads the keychain,
-for a remote server a `headersHelper`:
-
-```json
-"headersHelper": "/bin/sh -c 'printf \"{\\\"Authorization\\\": \\\"Bearer %s\\\"}\" \"$(security find-generic-password -s my-mcp-token -w)\"'"
-```
-
-and for a local one a `"command": "/bin/sh"` with `"args": ["-c", "TOKEN=$(security
-find-generic-password -s my-mcp-token -w) exec my-server"]`. A `${VAR}` reference works in a
-terminal, and is empty in a desktop app session, which does not read your shell profile.
+names each `env` and `headers` key a definition keeps here.
 
 Your `.env` files are denied to the agent by `drybag setup`, which writes those deny rules into
 `~/.claude/settings.json` at machine scope — once, for every project on the machine. They are not

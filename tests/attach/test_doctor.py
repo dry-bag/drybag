@@ -24,11 +24,17 @@ from drybag.attach import doctor as attach_doctor
 from drybag.attach import hooks as attach_hooks
 from drybag.attach.api import LOCAL_SETTINGS
 from drybag.attach.check import check as attach_check
-from drybag.attach.mcp import McpLedger, write_mcp_ledger
+from drybag.attach.mcp import BAD_LEDGER, UNUSABLE, McpLedger, digest, write_mcp_ledger
 from drybag.attach.render import MARKETPLACE_FILE, read_parts
 from drybag.attach.render import write as render_write
 from drybag.attach.write import attach
-from drybag.binding import LEDGER_NAME, delivery_directory
+from drybag.binding import (
+    LEDGER_NAME,
+    MCP_LEDGER_FILE,
+    MCP_LEDGER_NAME,
+    common_directory,
+    delivery_directory,
+)
 from drybag.config.loader import CONFIG_FILE, load
 from drybag.config.plates import plates
 from drybag.doctor import checks as doctor_checks
@@ -939,6 +945,8 @@ def test_a_tag_warning_never_hides_a_red_finding(tmp_path: Path) -> None:
 
 # --- the overlay's MCP servers, read from the overlay and the ledger alone ---------------------
 
+A, D = {"command": "a"}, {"command": "d"}
+
 
 def _mcp_file(overlay: Path, plate: str, servers: Mapping[str, object]) -> None:
     path = overlay / plate / "claude" / "mcp.json"
@@ -964,9 +972,10 @@ def test_doctor_attributes_each_served_name_to_its_plates(tmp_path: Path) -> Non
     # sub-plate is its parent's path and the machine, as the values' provenance says it.
     root = _attached(tmp_path)
     overlay = with_tags(tmp_path / "overlay", "p", ["t1"])
-    _mcp_file(overlay, "common", {"alpha": {"command": "a"}, "gamma": {"command": "g"}})
+    _mcp_file(overlay, "common", {"alpha": A, "gamma": {"command": "g"}})
     _mcp_file(overlay, "tags/t1/machines/m1", {"alpha": "on", "beta": "off"})
-    _mcp_file(overlay, "projects/p", {"delta": {"command": "d"}, "gamma": "off"})
+    _mcp_file(overlay, "projects/p", {"delta": D, "gamma": "off"})
+    write_mcp_ledger(root, McpLedger(mcp={"alpha": digest(A), "delta": digest(D)}))
     row = _mcp_row(tmp_path, root, _named_machine(tmp_path, "m1"))
     assert row.status == OK, row
     assert (
@@ -977,45 +986,39 @@ def test_doctor_attributes_each_served_name_to_its_plates(tmp_path: Path) -> Non
         "MCP servers the overlay switches off: beta (tags/t1 on m1), gamma (projects/p)"
         in row.detail
     )
-    assert (
-        "`drybag doctor` runs no `claude` command, so it cannot see whether a delivered server "
-        "is still in ~/.claude.json"
-    ) in row.detail
+    assert attach_doctor.MCP_UNSEEN in row.detail
+
+
+def test_doctor_warns_of_each_name_attach_would_deliver_or_take_back(tmp_path: Path) -> None:
+    # As a drifted hook is: a served name not delivered, one under another digest or unsettled,
+    # and one the ledger owns that the overlay no longer serves.
+    root = _attached(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": A, "beta": A, "delta": D, "eps": A})
+    owned = {"alpha": None, "beta": digest(D), "eps": digest(A), "gone": digest(A)}
+    write_mcp_ledger(root, McpLedger(mcp=owned))
+    row = _mcp_row(tmp_path, root)
+    assert (row.status, row.remedy) == (WARN, RERUN), row
+    names = "alpha, beta, delta, gone"
+    pending = attach_doctor.MCP_PENDING.format(ledger=MCP_LEDGER_NAME, names=names)
+    assert pending in row.detail
+
+
+def test_doctor_says_why_attach_would_change_nothing_mcp(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    path = tmp_path / "overlay" / "common" / "claude" / "mcp.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<<<<<<< HEAD", encoding="utf-8")
+    (common_directory(root) / MCP_LEDGER_FILE).write_text('{"format": 2}', encoding="utf-8")
+    row = _mcp_row(tmp_path, root)
+    assert row.status == WARN and row.remedy.startswith("make each MCP file named readable"), row
+    assert UNUSABLE.format(path=quoted(str(path))) in row.detail
+    assert BAD_LEDGER.format(name=MCP_LEDGER_NAME) in row.detail
 
 
 def test_a_lone_surrogate_in_an_mcp_definition_leaves_the_row_unred(tmp_path: Path) -> None:
     root = _attached(tmp_path)
     _mcp_file(tmp_path / "overlay", "common", {"m1": {"command": "a", "args": ["\ud800"]}})
     assert _mcp_row(tmp_path, root).status != RED
-
-
-def test_doctor_lists_unsettled_names(tmp_path: Path) -> None:
-    # A name the ledger holds with no digest is one a call was started for and not known to have
-    # settled; a name it holds under a digest is no such name, whether or not it is still served.
-    root = _attached(tmp_path)
-    _mcp_file(tmp_path / "overlay", "common", {"alpha": {"command": "a"}})
-    write_mcp_ledger(root, McpLedger(mcp={"alpha": None, "beta": "0" * 64}))
-    row = _mcp_row(tmp_path, root)
-    assert (row.status, row.remedy) == (WARN, RERUN), row
-    assert (
-        "unsettled MCP servers: alpha; `attach` did not finish delivering or taking these back; "
-        "run it again, and its screen gives Claude Code's reason if it fails"
-    ) in row.detail
-    assert "beta" not in row.detail
-
-
-def test_doctor_states_the_desktop_connector_limit_for_a_connector_off(tmp_path: Path) -> None:
-    connector = (
-        "in desktop app sessions the account's connectors load in every project; disconnect one "
-        "at claude.ai/customize/connectors to drop it everywhere"
-    )
-    root = _attached(tmp_path)
-    _mcp_file(tmp_path / "overlay", "common", {"alpha": "off"})
-    assert connector not in _mcp_row(tmp_path, root).detail
-    _mcp_file(tmp_path / "overlay", "common", {"alpha": "off", "claude.ai Alpha": "off"})
-    row = _mcp_row(tmp_path, root)
-    assert row.status == OK, row
-    assert row.detail.count(connector) == 1
 
 
 def _names_claude(argv: list[str]) -> bool:
@@ -1053,14 +1056,13 @@ def test_doctor_runs_no_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     # `claude mcp get` and `list` health-check what they name: they spawn a stdio server and run a
     # `headersHelper`. So the finding reads the overlay and the ledger and launches nothing: the
     # report of a checkout whose ledger owns names starts exactly the processes the same report
-    # with the finding and its ledger read taken out starts, and no `claude` among them.
+    # with the finding taken out starts, and no `claude` among them.
     root = _attached(tmp_path)
     machine = _machine(tmp_path)
-    _mcp_file(tmp_path / "overlay", "common", {"alpha": {"command": "a"}, "beta": "off"})
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": A, "beta": "off"})
     write_mcp_ledger(root, McpLedger(mcp={"alpha": None, "gamma": "0" * 64}))
     launched = _launches(monkeypatch)
     with monkeypatch.context() as without_mcp:
-        without_mcp.setattr(attach_doctor._Ledger, "mcp", lambda _self, _root: McpLedger())
         without_mcp.setattr(attach_doctor, "_mcp", lambda _bound, _recorded: [])
         _checks(tmp_path, root, machine=machine)
     without = list(launched)
@@ -1072,53 +1074,17 @@ def test_doctor_runs_no_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert "alpha" in row.detail, row
 
 
-# --- where an MCP secret would come from ------------------------------------------------------
-
 # A value only a secret would hold, absent from every row of the report whatever it says.
 MARKER = "sk-marker-not-for-output"
 
 
-def _report_text(tmp_path: Path, root: Path) -> str:
-    return repr(_checks(tmp_path, root, machine=_machine(tmp_path)))
-
-
-def test_literal_env_value_is_named_never_printed(tmp_path: Path) -> None:
+def test_an_env_or_headers_value_is_named_by_its_key_never_printed(tmp_path: Path) -> None:
     root = _attached(tmp_path)
-    servers = {"alpha": {"command": "a", "env": {"TOKEN": MARKER, "REF": "${ALPHA_REF}"}}}
-    _mcp_file(tmp_path / "overlay", "common", servers)
-    row = _mcp_row(tmp_path, root)
-    assert row.status == WARN, row
-    assert "MCP server alpha holds a literal value at env.TOKEN" in row.detail
-    assert "env.REF" not in row.detail.split("literal value at", 1)[1].split(";", 1)[0]
-    assert attach_doctor.LITERAL_REMEDY in row.remedy
-    assert MARKER not in _report_text(tmp_path, root)
-
-
-def test_var_reference_gets_the_desktop_hint(tmp_path: Path) -> None:
-    root = _attached(tmp_path)
-    servers = {"alpha": {"command": "a", "args": ["${ALPHA_ROOT}"], "env": {"TOKEN": "${A_T}"}}}
-    _mcp_file(tmp_path / "overlay", "common", servers)
+    alpha = {"command": "a", "env": {"TOKEN": MARKER}, "headers": {"X": "${X}"}, "args": [MARKER]}
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": alpha})
+    write_mcp_ledger(root, McpLedger(mcp={"alpha": digest(alpha)}))
     row = _mcp_row(tmp_path, root)
     assert row.status == OK, row
-    assert (
-        "MCP server alpha reads args, env.TOKEN from the environment: desktop app sessions do not "
-        "inherit your shell profile; give this server its value through a command "
-        "(`headersHelper` or a `sh -c` wrapper)"
-    ) in row.detail
-    assert "literal" not in row.detail
-
-
-def test_headers_helper_gets_the_trust_hint(tmp_path: Path) -> None:
-    root = _attached(tmp_path)
-    helper = f"/bin/sh -c 'printf {MARKER}'"
-    servers = {
-        "alpha": {"type": "http", "url": "https://example.invalid/mcp", "headersHelper": helper}
-    }
-    _mcp_file(tmp_path / "overlay", "common", servers)
-    row = _mcp_row(tmp_path, root)
-    assert row.status == OK, row
-    assert (
-        "MCP server alpha has a headersHelper: until this checkout's folder is trusted in Claude "
-        "Code the helper does not run, and the server is still contacted without its header"
-    ) in row.detail
-    assert MARKER not in _report_text(tmp_path, root)
+    written = attach_doctor.MCP_WRITTEN.format(name="alpha", keys="env.TOKEN, headers.X")
+    assert written in row.detail
+    assert MARKER not in repr(_checks(tmp_path, root, machine=_machine(tmp_path)))

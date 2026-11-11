@@ -41,29 +41,26 @@ NO_LEDGER: Final = "no-ledger"
 UNREADABLE_LEDGER: Final = "unreadable-ledger"
 
 
-def _ledger_state(root: Path) -> tuple[AttachLedger | str, Path | None]:
+def _ledger_state(root: Path) -> AttachLedger | str:
     """This repository's attach ledger, `NO_LEDGER` when no file is there, or `UNREADABLE_LEDGER`
-    for `read_ledger`'s `NotALedger`, and the git common directory it is in, `None` where git
-    named none. `root` is the main checkout (`_owner`); the ledger is in the git common directory,
-    so any checkout names it. Where git cannot be run, the row cannot say (`UNASKABLE`); in no
-    repository there is no ledger.
+    for `read_ledger`'s `NotALedger`. `root` is the main checkout (`_owner`); the ledger is in the
+    git common directory, so any checkout names it. Where git cannot be run, the row cannot say
+    (`UNASKABLE`); in no repository there is no ledger.
     """
     from drybag.attach.write import NotALedger, read_ledger
     from drybag.binding import LEDGER_FILE, common_directory
     from drybag.errors import Failure
     from drybag.gitenv import GitUnavailable
 
-    common = None
     try:
-        common = common_directory(root)
-        recorded = read_ledger(common / LEDGER_FILE)
+        recorded = read_ledger(common_directory(root) / LEDGER_FILE)
     except NotALedger:
-        return UNREADABLE_LEDGER, common
+        return UNREADABLE_LEDGER
     except GitUnavailable:
-        return UNASKABLE, common
+        return UNASKABLE
     except Failure:
-        return NO_LEDGER, common
-    return NO_LEDGER if recorded is None else recorded, common
+        return NO_LEDGER
+    return NO_LEDGER if recorded is None else recorded
 
 
 class _Ledger:
@@ -71,24 +68,16 @@ class _Ledger:
 
     Created once per report by `register()`, so every question `attached` asks of the file gets
     one answer: no arm can read the ledger as there while another reads it as absent or
-    unreadable. The MCP ledger beside it is read from the common directory that read found, so
-    reading it asks `git` nothing more.
+    unreadable.
     """
 
     def __init__(self) -> None:
-        self._state: tuple[AttachLedger | str, Path | None] | None = None
+        self._state: tuple[AttachLedger | str] | None = None
 
     def state(self, root: Path) -> AttachLedger | str:
         if self._state is None:
-            self._state = _ledger_state(root)
+            self._state = (_ledger_state(root),)
         return self._state[0]
-
-    def mcp(self, root: Path) -> McpLedger:
-        from drybag.attach.mcp import McpLedger, mcp_ledger_in
-
-        self.state(root)
-        common = (self._state or (None, None))[1]
-        return McpLedger() if common is None else mcp_ledger_in(common)
 
 
 # The remedy for an overlay project record that cannot be read: it binds nothing, so the binding
@@ -353,6 +342,7 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
     side, and the row takes the worst status of them and the worst one's remedy first.
     """
     from drybag.attach import ATTACH_COMMAND
+    from drybag.attach.mcp import read_mcp_ledger
     from drybag.binding import LEDGER_NAME
     from drybag.config.machine import owner_home
     from drybag.config.schema import OVERLAY_MODE
@@ -419,7 +409,7 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
     findings = [
         _delivery(context, main, recorded, answer, id),
         *([_pointer(main, id)] if linked else []),
-        *_mcp(answer, ledger.mcp(main)),
+        *_mcp(answer, read_mcp_ledger(main)),
     ]
     rank = {OK: 0, WARN: 1, RED: 2}
     ranked = sorted(findings, key=lambda each: -rank[each.status])
@@ -582,69 +572,35 @@ def _pointer(main: Path, id: str) -> _Finding:
 
 # What `_mcp` says of the overlay's MCP servers: names, the plates they come from and drybag's own
 # words, never a definition, which holds argv and environment.
-MCP_UNSETTLED: Final = (
-    "unsettled MCP servers: {names}; `attach` did not finish delivering or taking these back; run "
-    "it again, and its screen gives Claude Code's reason if it fails"
-)
-# A connector is switched off by its display name, `claude.ai <name>`, and a desktop app session
-# registers the account's connectors in-process, where no MCP setting reaches them.
-CONNECTOR_PREFIX: Final = "claude.ai "
-MCP_CONNECTOR: Final = (
-    "in desktop app sessions the account's connectors load in every project; disconnect one at "
-    "claude.ai/customize/connectors to drop it everywhere"
+MCP_PENDING: Final = (
+    "MCP servers `attach` has yet to deliver or take back, as the overlay and {ledger} differ or a "
+    "call did not finish: {names}"
 )
 MCP_UNSEEN: Final = (
-    "`drybag doctor` runs no `claude` command, so it cannot see whether a delivered server is "
-    "still in ~/.claude.json"
+    "`drybag doctor` launches nothing, so it cannot see whether a delivered server is still in "
+    "place"
 )
-# Where a served definition's secret would come from, each said of a server and a key, never of a
-# value: a literal value in `env` or `headers` is in a file the overlay pushes, a `${VAR}` reference
-# is empty in a desktop app session, and a `headersHelper` waits for the folder's trust.
+# The `env` and `headers` values a definition writes into the overlay's files, which sync pushes.
 SECRET_TABLES: Final = ("env", "headers")
-REFERENCE: Final = "${"
-HELPER: Final = "headersHelper"
-MCP_LITERAL: Final = "MCP server {name} holds a literal value at {keys}"
-LITERAL_REMEDY: Final = (
-    "give each literal value of an overlay MCP server through a command that reads it, a "
-    "`headersHelper` or a `sh -c` wrapper around the keychain, so no secret is pushed with the "
-    "overlay"
+MCP_WRITTEN: Final = (
+    "MCP server {name} writes values into the overlay's files, which are pushed: {keys}"
 )
-MCP_REFERENCE: Final = (
-    "MCP server {name} reads {keys} from the environment: desktop app sessions do not inherit your "
-    "shell profile; give this server its value through a command (`headersHelper` or a `sh -c` "
-    "wrapper)"
-)
-MCP_HELPER: Final = (
-    "MCP server {name} has a headersHelper: until this checkout's folder is trusted in Claude Code "
-    "the helper does not run, and the server is still contacted without its header"
-)
+MCP_REPAIR: Final = "make each MCP file named readable, then run `{command}`"
 
 
-def _secrets(name: str, definition: Mapping[str, object]) -> tuple[list[str], list[str]]:
-    """Where `definition`'s secrets would come from: its literal `env` and `headers` values, a
-    warning, then its `${VAR}` references and its `headersHelper`, information. Each says the
-    server and the key, never the value."""
-    import json
-
+def _written(name: str, definition: Mapping[str, object]) -> list[str]:
+    """`MCP_WRITTEN` for the `env` and `headers` keys of `definition` that hold a string, naming
+    the server and each key and never a value."""
     from drybag.printed import quoted
 
-    literal, referenced = [], []
-    for key, value in definition.items():
-        table = (
-            value.items() if key in SECRET_TABLES and isinstance(value, dict) else [(None, value)]
-        )
-        for inner, each in table:
-            spelled = quoted(key if inner is None else f"{key}.{inner}")
-            if REFERENCE in json.dumps(each):
-                referenced.append(spelled)
-            elif inner is not None and isinstance(each, str):
-                literal.append(spelled)
-    shown = quoted(name)
-    warned = [MCP_LITERAL.format(name=shown, keys=", ".join(literal))] if literal else []
-    told = [MCP_REFERENCE.format(name=shown, keys=", ".join(referenced))] if referenced else []
-    if HELPER in definition:
-        told.append(MCP_HELPER.format(name=shown))
-    return warned, told
+    keys = [
+        quoted(f"{table}.{key}")
+        for table in SECRET_TABLES
+        if isinstance(values := definition.get(table), dict)
+        for key, value in values.items()
+        if isinstance(value, str)
+    ]
+    return [MCP_WRITTEN.format(name=quoted(name), keys=", ".join(keys))] if keys else []
 
 
 def _plate(overlay: Path, plate: Plate) -> str:
@@ -660,21 +616,21 @@ def _plate(overlay: Path, plate: Plate) -> str:
 def _mcp(bound: Binding, recorded: McpLedger) -> list[_Finding]:
     """The overlay's MCP servers, read from its `claude/mcp.json` files and the MCP ledger alone:
     each name it delivers with the plate whose definition wins and the one that switched it on,
-    each name it switches off with its plate, and the names the ledger holds unsettled, the one
-    warning, and where each served definition's secrets would come from (`_secrets`). Nothing
-    where none of the three holds a name.
+    each name it switches off with its plate, the `env` and `headers` keys a definition writes
+    (`_written`), and what reading them noted. A name `attach` would deliver or take back, as
+    `attach.mcp.planned_mcp` marks it, is the warning, as a drifted hook is; so is a file under
+    which `attach` changes nothing. Nothing where none of them holds a name.
 
-    **No `claude` is run, and no `~/.claude.json` read**: `claude mcp get` and `list`
-    health-check what they name, spawning a stdio server and running a `headersHelper`, so the
-    row says once that it cannot see a delivered entry."""
+    No process is launched and the harness's own record is not read, since its commands that get
+    or list a server start it, so the row says once that it cannot see a delivered entry."""
     from drybag.attach import ATTACH_COMMAND
-    from drybag.attach.mcp import UNSETTLED, fold_mcp
+    from drybag.attach.mcp import fold_mcp, planned_mcp
+    from drybag.binding import MCP_LEDGER_NAME
     from drybag.doctor.api import OK, WARN
     from drybag.printed import quoted
 
     fold = fold_mcp(bound.plates)
-    unsettled = sorted(name for name, sha in recorded.mcp.items() if sha is UNSETTLED)
-    said = []
+    said = list(fold.notes) + ([] if recorded.fault is None else [recorded.fault])
     if fold.served:
         delivered = []
         for name, served in sorted(fold.served.items()):
@@ -690,24 +646,22 @@ def _mcp(bound: Binding, recorded: McpLedger) -> list[_Finding]:
             f"{quoted(name)} ({_plate(bound.overlay, at)})" for name, at in sorted(fold.off.items())
         )
         said.append(f"MCP servers the overlay switches off: {', '.join(off)}")
-        if any(name.startswith(CONNECTOR_PREFIX) for name in fold.off):
-            said.append(MCP_CONNECTOR)
-    if unsettled:
-        said.append(MCP_UNSETTLED.format(names=", ".join(quoted(name) for name in unsettled)))
-    warned, told = [], []
+    usable = fold.usable and recorded.fault is None
+    plan = planned_mcp(fold.served, recorded.mcp)
+    pending = sorted({*plan.add, *plan.readd, *plan.take_back}) if usable else []
+    if pending:
+        names = ", ".join(quoted(name) for name in pending)
+        said.append(MCP_PENDING.format(ledger=MCP_LEDGER_NAME, names=names))
     for name, served in sorted(fold.served.items()):
-        literal, hinted = _secrets(name, served.definition)
-        warned += literal
-        told += hinted
-    said += [*warned, *told]
+        said += _written(name, served.definition)
     if fold.served:
         said.append(MCP_UNSEEN)
     if not said:
         return []
-    remedies = [f"run `{ATTACH_COMMAND}`"] if unsettled else []
-    if warned:
-        remedies.append(LITERAL_REMEDY)
-    return [_Finding(WARN if remedies else OK, "; ".join(said), "; ".join(remedies))]
+    remedy = f"run `{ATTACH_COMMAND}`" if pending else ""
+    if not usable:
+        remedy = MCP_REPAIR.format(command=ATTACH_COMMAND)
+    return [_Finding(WARN if remedy else OK, "; ".join(said), remedy)]
 
 
 def _owner(context: Context) -> Path:

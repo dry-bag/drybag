@@ -1920,24 +1920,15 @@ the harness's to decide, and this row does not read that file.
 **How `attached` reads the overlay's MCP servers.** Beside the delivery and the pointer, the row
 names each MCP server the overlay delivers with the plate whose definition wins and, where another
 plate switched it on, that plate too (`tags/t1`, and `tags/t1 on m1` for a machine's sub-plate),
-and each name the overlay switches off with the plate that says so. When a name switched off is a
-connector's, `claude.ai <name>`, it adds that in desktop app sessions the account's connectors load
-in every project, and that a connector disconnected at claude.ai/customize/connectors is dropped
-everywhere. All of that is information and never changes the status. A name
-`drybag/attach-mcp.json` holds unsettled, one whose call `attach` started and did not see succeed,
-is a warning whose remedy is `attach`, whose screen gives Claude Code's reason if it fails again.
-The row reads only the overlay's `claude/mcp.json` files and that ledger: it runs no `claude`,
-since `claude mcp get` and `list` start each server they name and run its `headersHelper`, and
-reads no `~/.claude.json`, so it says once that it cannot see whether a delivered entry is still
-there.
-
-**Where an MCP secret would come from.** For each server the overlay delivers the row names, by
-server and key and never by value, a literal value in `env` or `headers` (one with no `${`), which
-is a warning since the overlay's files are pushed, and whose remedy is to give the value through a
-command, a `headersHelper` or a `sh -c` wrapper around the keychain; a `${VAR}` reference, with
-the information that desktop app sessions do not inherit your shell profile; and a
-`headersHelper`, with the information that until the checkout's folder is trusted in Claude Code
-the helper does not run, and the server is still contacted without its header.
+each name the overlay switches off with the plate that says so, and each `env` and `headers` key a
+served definition keeps in the overlay's files, by key and never by value; all of that is
+information. A name `attach` would deliver or take back, as `--check` would list it (a served name
+not delivered, delivered under another definition or left unsettled by a call that did not finish,
+and one `drybag/attach-mcp.json` holds that the overlay no longer serves), is a warning whose remedy
+is `attach`, as a drifted hook is. The notes reading the files gave are said too, and a
+`claude/mcp.json` or `drybag/attach-mcp.json` under which `attach` changes nothing is a warning
+whose remedy is to make it readable. The row reads only those files: it launches nothing, so it
+says once that it cannot see whether a delivered entry is still in place.
 
 **Eight of the fourteen have a `skip` arm — eighteen arms between them, every one on a state of
 this machine or this repository.** A `skip` is **not** a finding and never reaches the exit code, so
