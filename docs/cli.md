@@ -1840,9 +1840,9 @@ checkout is the main one (`git worktree list`), whose settings file the binding'
 common and its own git directory), which the `memory` row asks to read the main checkout's settings
 file a linked worktree reads too, whether a path `attach` placed is tracked (`git ls-files`) or ignored (`git check-ignore`) and whether a
 tracked file names the delivery (`git grep`), which the binding's row asks of a bound checkout, and the
-binding's common directory once more, which the binding's row asks to read the overlay's tag layers.
-Sixteen of those are measured on a green attached installation whose machine file switches the
-note sync on, as `setup --overlay` does for an overlay it makes — the wrapper probe and fifteen
+binding's common directory twice more, which the binding's row asks to read the overlay's tag layers
+and the MCP ledger. Seventeen of those are measured on a green attached installation whose machine
+file switches the note sync on, as `setup --overlay` does for an overlay it makes — the wrapper probe and sixteen
 `git` questions, the `sync` row's `git version` among them — and not one of them leaves this
 machine. The `git` questions are `gitenv`'s five seconds each, and the wrapper probe is this
 area's own thirty seconds. The `sync` row's `git version`, of the overlay's `git`, is bounded at
