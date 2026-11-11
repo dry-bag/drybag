@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -939,7 +940,7 @@ def test_a_tag_warning_never_hides_a_red_finding(tmp_path: Path) -> None:
 # --- the overlay's MCP servers, read from the overlay and the ledger alone ---------------------
 
 
-def _mcp_file(overlay: Path, plate: str, servers: dict[str, object]) -> None:
+def _mcp_file(overlay: Path, plate: str, servers: Mapping[str, object]) -> None:
     path = overlay / plate / "claude" / "mcp.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"mcpServers": servers}), encoding="utf-8")
@@ -1063,3 +1064,55 @@ def test_doctor_runs_no_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert not [argv for argv in launched if _names_claude(argv)], launched
     assert launched == without
     assert "alpha" in row.detail, row
+
+
+# --- where an MCP secret would come from ------------------------------------------------------
+
+# A value only a secret would hold, absent from every row of the report whatever it says.
+MARKER = "sk-marker-not-for-output"
+
+
+def _report_text(tmp_path: Path, root: Path) -> str:
+    return repr(_checks(tmp_path, root, machine=_machine(tmp_path)))
+
+
+def test_literal_env_value_is_named_never_printed(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    servers = {"alpha": {"command": "a", "env": {"TOKEN": MARKER, "REF": "${ALPHA_REF}"}}}
+    _mcp_file(tmp_path / "overlay", "common", servers)
+    row = _mcp_row(tmp_path, root)
+    assert row.status == WARN, row
+    assert "MCP server alpha holds a literal value at env.TOKEN" in row.detail
+    assert "env.REF" not in row.detail.split("literal value at", 1)[1].split(";", 1)[0]
+    assert attach_doctor.LITERAL_REMEDY in row.remedy
+    assert MARKER not in _report_text(tmp_path, root)
+
+
+def test_var_reference_gets_the_desktop_hint(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    servers = {"alpha": {"command": "a", "args": ["${ALPHA_ROOT}"], "env": {"TOKEN": "${A_T}"}}}
+    _mcp_file(tmp_path / "overlay", "common", servers)
+    row = _mcp_row(tmp_path, root)
+    assert row.status == OK, row
+    assert (
+        "MCP server alpha reads args, env.TOKEN from the environment: desktop app sessions do not "
+        "inherit your shell profile; give this server its value through a command "
+        "(`headersHelper` or a `sh -c` wrapper)"
+    ) in row.detail
+    assert "literal" not in row.detail
+
+
+def test_headers_helper_gets_the_trust_hint(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    helper = f"/bin/sh -c 'printf {MARKER}'"
+    servers = {
+        "alpha": {"type": "http", "url": "https://example.invalid/mcp", "headersHelper": helper}
+    }
+    _mcp_file(tmp_path / "overlay", "common", servers)
+    row = _mcp_row(tmp_path, root)
+    assert row.status == OK, row
+    assert (
+        "MCP server alpha has a headersHelper: until this checkout's folder is trusted in Claude "
+        "Code the helper does not run, and the server is still contacted without its header"
+    ) in row.detail
+    assert MARKER not in _report_text(tmp_path, root)

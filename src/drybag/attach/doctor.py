@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final, NamedTuple
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     from drybag.attach.binding import Binding
@@ -596,6 +597,54 @@ MCP_UNSEEN: Final = (
     "`drybag doctor` runs no `claude` command, so it cannot see whether a delivered server is "
     "still in ~/.claude.json"
 )
+# Where a served definition's secret would come from, each said of a server and a key, never of a
+# value: a literal value in `env` or `headers` is in a file the overlay pushes, a `${VAR}` reference
+# is empty in a desktop app session, and a `headersHelper` waits for the folder's trust.
+SECRET_TABLES: Final = ("env", "headers")
+REFERENCE: Final = "${"
+HELPER: Final = "headersHelper"
+MCP_LITERAL: Final = "MCP server {name} holds a literal value at {keys}"
+LITERAL_REMEDY: Final = (
+    "give each literal value of an overlay MCP server through a command that reads it, a "
+    "`headersHelper` or a `sh -c` wrapper around the keychain, so no secret is pushed with the "
+    "overlay"
+)
+MCP_REFERENCE: Final = (
+    "MCP server {name} reads {keys} from the environment: desktop app sessions do not inherit your "
+    "shell profile; give this server its value through a command (`headersHelper` or a `sh -c` "
+    "wrapper)"
+)
+MCP_HELPER: Final = (
+    "MCP server {name} has a headersHelper: until this checkout's folder is trusted in Claude Code "
+    "the helper does not run, and the server is still contacted without its header"
+)
+
+
+def _secrets(name: str, definition: Mapping[str, object]) -> tuple[list[str], list[str]]:
+    """Where `definition`'s secrets would come from: its literal `env` and `headers` values, a
+    warning, then its `${VAR}` references and its `headersHelper`, information. Each says the
+    server and the key, never the value."""
+    import json
+
+    from drybag.printed import quoted
+
+    literal, referenced = [], []
+    for key, value in definition.items():
+        table = (
+            value.items() if key in SECRET_TABLES and isinstance(value, dict) else [(None, value)]
+        )
+        for inner, each in table:
+            spelled = quoted(key if inner is None else f"{key}.{inner}")
+            if REFERENCE in json.dumps(each):
+                referenced.append(spelled)
+            elif inner is not None and isinstance(each, str):
+                literal.append(spelled)
+    shown = quoted(name)
+    warned = [MCP_LITERAL.format(name=shown, keys=", ".join(literal))] if literal else []
+    told = [MCP_REFERENCE.format(name=shown, keys=", ".join(referenced))] if referenced else []
+    if HELPER in definition:
+        told.append(MCP_HELPER.format(name=shown))
+    return warned, told
 
 
 def _plate(overlay: Path, plate: Plate) -> str:
@@ -612,7 +661,8 @@ def _mcp(bound: Binding, recorded: McpLedger) -> list[_Finding]:
     """The overlay's MCP servers, read from its `claude/mcp.json` files and the MCP ledger alone:
     each name it delivers with the plate whose definition wins and the one that switched it on,
     each name it switches off with its plate, and the names the ledger holds unsettled, the one
-    warning. Nothing where none of the three holds a name.
+    warning, and where each served definition's secrets would come from (`_secrets`). Nothing
+    where none of the three holds a name.
 
     **No `claude` is run, and no `~/.claude.json` read**: `claude mcp get` and `list`
     health-check what they name, spawning a stdio server and running a `headersHelper`, so the
@@ -644,13 +694,20 @@ def _mcp(bound: Binding, recorded: McpLedger) -> list[_Finding]:
             said.append(MCP_CONNECTOR)
     if unsettled:
         said.append(MCP_UNSETTLED.format(names=", ".join(quoted(name) for name in unsettled)))
+    warned, told = [], []
+    for name, served in sorted(fold.served.items()):
+        literal, hinted = _secrets(name, served.definition)
+        warned += literal
+        told += hinted
+    said += [*warned, *told]
     if fold.served:
         said.append(MCP_UNSEEN)
     if not said:
         return []
-    if unsettled:
-        return [_Finding(WARN, "; ".join(said), f"run `{ATTACH_COMMAND}`")]
-    return [_Finding(OK, "; ".join(said), "")]
+    remedies = [f"run `{ATTACH_COMMAND}`"] if unsettled else []
+    if warned:
+        remedies.append(LITERAL_REMEDY)
+    return [_Finding(WARN if remedies else OK, "; ".join(said), "; ".join(remedies))]
 
 
 def _owner(context: Context) -> Path:

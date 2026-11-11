@@ -1921,6 +1921,14 @@ since `claude mcp get` and `list` start each server they name and run its `heade
 reads no `~/.claude.json`, so it says once that it cannot see whether a delivered entry is still
 there.
 
+**Where an MCP secret would come from.** For each server the overlay delivers the row names, by
+server and key and never by value, a literal value in `env` or `headers` (one with no `${`), which
+is a warning since the overlay's files are pushed, and whose remedy is to give the value through a
+command, a `headersHelper` or a `sh -c` wrapper around the keychain; a `${VAR}` reference, with
+the information that desktop app sessions do not inherit your shell profile; and a
+`headersHelper`, with the information that until the checkout's folder is trusted in Claude Code
+the helper does not run, and the server is still contacted without its header.
+
 **Eight of the fourteen have a `skip` arm — eighteen arms between them, every one on a state of
 this machine or this repository.** A `skip` is **not** a finding and never reaches the exit code, so
 read the detail — each one says which measurement it is missing. No row skips for want of a build

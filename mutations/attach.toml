@@ -2261,10 +2261,8 @@ reddens = [
 [[mutation]]
 name = "doctor's unsettled MCP servers are no warning"
 file = "src/drybag/attach/doctor.py"
-before = '''    if unsettled:
-        return [_Finding(WARN,'''
-after = '''    if False:
-        return [_Finding(WARN,'''
+before = '''    remedies = [f"run `{ATTACH_COMMAND}`"] if unsettled else []'''
+after = '''    remedies: list[str] = []'''
 reddens = [
   "tests/attach/test_doctor.py::test_doctor_lists_unsettled_names",
 ]
@@ -2276,4 +2274,44 @@ before = '''        if any(name.startswith(CONNECTOR_PREFIX) for name in fold.of
 after = '''        if False:'''
 reddens = [
   "tests/attach/test_doctor.py::test_doctor_states_the_desktop_connector_limit_for_a_connector_off",
+]
+
+# Where a served MCP definition's secret would come from: named by server and key, never by value.
+[[mutation]]
+name = "doctor prints a literal MCP value it warns about"
+file = "src/drybag/attach/doctor.py"
+before = '''                literal.append(spelled)'''
+after = '''                literal.append(f"{spelled}={each}")'''
+reddens = [
+  "tests/attach/test_doctor.py::test_literal_env_value_is_named_never_printed",
+]
+
+[[mutation]]
+name = "doctor's literal MCP value is no warning"
+file = "src/drybag/attach/doctor.py"
+before = '''    if warned:
+        remedies.append(LITERAL_REMEDY)'''
+after = '''    if False:
+        remedies.append(LITERAL_REMEDY)'''
+reddens = [
+  "tests/attach/test_doctor.py::test_literal_env_value_is_named_never_printed",
+]
+
+[[mutation]]
+name = "doctor reads a VAR reference as a literal MCP value"
+file = "src/drybag/attach/doctor.py"
+before = '''            if REFERENCE in json.dumps(each):'''
+after = '''            if False:'''
+reddens = [
+  "tests/attach/test_doctor.py::test_literal_env_value_is_named_never_printed",
+  "tests/attach/test_doctor.py::test_var_reference_gets_the_desktop_hint",
+]
+
+[[mutation]]
+name = "doctor gives a headersHelper no trust hint"
+file = "src/drybag/attach/doctor.py"
+before = '''    if HELPER in definition:'''
+after = '''    if False:'''
+reddens = [
+  "tests/attach/test_doctor.py::test_headers_helper_gets_the_trust_hint",
 ]
