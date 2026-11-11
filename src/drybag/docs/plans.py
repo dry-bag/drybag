@@ -437,9 +437,7 @@ def _lint_one(
 
     `judged`, when given, is the lines whose references are settled against the tree: the ones
     the change wrote (`written_lines`). Every other rule reads the whole plan either way.
-    `specs` is whether the project keeps specs, which is what makes a `**Spec:**` line owed. In a
-    `design` folder only the `**Spec:**` paragraph's paths are settled: the plan's other paths
-    name the project's repository, which the folder does not hold.
+    `specs` and `design` are the Spec rule's, as the module docstring says.
     """
     # Fenced code is not plan prose: its fixtures name deliberately fake paths.
     prose = blank_fences(read_document(path, where))
@@ -492,8 +490,6 @@ def lint(
     base: str | None = None,
     design: bool = False,
 ) -> Lint:
-    """`design` is a design folder kept apart from its project's repository (`--design`): its
-    plans are linted only when named, since its diff is the enclosing repository's."""
     if design and not plans:
         raise Refusal(_DESIGN_NAMES_PLANS)
     plans_dir = contained(root, config.paths.plans)
