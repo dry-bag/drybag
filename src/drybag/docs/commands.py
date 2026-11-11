@@ -8,7 +8,9 @@ from pathlib import Path
 
 from drybag import fsops
 from drybag.areas import SubParsers
-from drybag.command import CHECK_HELP, common_flags, root_and_config
+from drybag.command import CHECK_HELP, command_owner, common_flags, root_and_config
+from drybag.config.loader import design_config
+from drybag.config.schema import Config
 from drybag.findings import Finding, labels, listed
 from drybag.printed import printable
 from drybag.result import Result
@@ -16,7 +18,7 @@ from drybag.result import Result
 _OK = "OK: documentation budgets and link targets"
 _PLAN_OK = (
     "OK: linted {n} plan(s) — references resolve, steps are non-leading, mutation outcomes are "
-    "expectations, Scope/Premise are present"
+    "expectations, Scope/Premise/Spec are present"
 )
 
 
@@ -43,6 +45,20 @@ def run_docs_check(args: argparse.Namespace) -> Result:
     return Result(_OK, data)
 
 
+DESIGN_HELP = (
+    "--root is a design folder (README.md, trail.toml, specs/, plans/); read no drybag.toml"
+)
+
+
+def _root_and_config(args: argparse.Namespace) -> tuple[Path, Config]:
+    """`root_and_config`, or under `--design` the design folder's own (`design_config`)."""
+    if not args.design:
+        return root_and_config(args)
+    root = Path(args.root).resolve()
+    owner = command_owner(Path(args.machine) if args.machine else None)
+    return root, design_config(root, owner=owner)
+
+
 def run_docs_trail(args: argparse.Namespace) -> Result:
     from drybag.config.paths import contained
     from drybag.docs.hygiene import read_document
@@ -53,7 +69,7 @@ def run_docs_trail(args: argparse.Namespace) -> Result:
         undeclared_new_documents,
     )
 
-    root, config = root_and_config(args)
+    root, config = _root_and_config(args)
     # The roadmap first, for both: the `trail` gate raises for a missing one, as a gate that
     # cannot judge the tree does, and this command answers it in its own words.
     roadmap = contained(root, config.paths.roadmap)
@@ -97,9 +113,15 @@ def run_docs_trail(args: argparse.Namespace) -> Result:
 def run_plan_check(args: argparse.Namespace) -> Result:
     from drybag.docs.plans import BaseUnresolvable, Lint, lint
 
-    root, config = root_and_config(args)
+    root, config = _root_and_config(args)
     try:
-        result = lint(root, config, plans=[Path(p).resolve() for p in args.paths], base=args.base)
+        result = lint(
+            root,
+            config,
+            plans=[Path(p).resolve() for p in args.paths],
+            base=args.base,
+            design=args.design,
+        )
     except BaseUnresolvable as exc:
         # The command's own output, as documented: a finding, exit 1. A gate run reads the same
         # cause as a gate that could not run.
@@ -134,6 +156,7 @@ def register(groups: SubParsers) -> None:
         docs_sub.add_parser("trail", help="regenerate the design-and-plan trail in the roadmap")
     )
     trail.add_argument("--check", action="store_true", help=CHECK_HELP)
+    trail.add_argument("--design", action="store_true", help=DESIGN_HELP)
     trail.set_defaults(func=run_docs_trail)
 
     plan = groups.add_parser("plan", help="implementation-plan lint")
@@ -144,5 +167,6 @@ def register(groups: SubParsers) -> None:
     lint.add_argument(
         "--base", default=None, help="base ref (default: refs/remotes/origin/<project.base_branch>)"
     )
+    lint.add_argument("--design", action="store_true", help=DESIGN_HELP)
     lint.add_argument("paths", nargs="*", help="plans to lint instead of the diff")
     lint.set_defaults(func=run_plan_check)

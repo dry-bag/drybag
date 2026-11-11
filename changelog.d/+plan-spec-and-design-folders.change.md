@@ -1,0 +1,1 @@
+`drybag plan check` now requires a `**Spec:**` line naming the plan's spec wherever the project keeps a specs folder (`[paths] specs`); a project without one is unaffected. `drybag docs trail` and `drybag plan check` take `--design`, which runs them on a design folder (`README.md`, `trail.toml`, `specs/`, `plans/`) that has no `drybag.toml` of its own.

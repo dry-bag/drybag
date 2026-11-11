@@ -1336,3 +1336,54 @@ after = "    common = after(COMMON_GROUP)"
 reddens = [
   "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
 ]
+
+# A plan names its spec wherever the project keeps specs.
+[[mutation]]
+name = "plan check owes no Spec line"
+file = "src/drybag/docs/plans.py"
+before = "    if specs and not spec_lines:"
+after = "    if False:"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_where_the_project_keeps_specs"]
+
+# A project with no specs folder has no spec to name, and is never refused for one.
+[[mutation]]
+name = "the Spec rule runs without a specs folder"
+file = "src/drybag/docs/plans.py"
+before = "    specs = fsops.is_dir(contained(root, config.paths.specs))"
+after = "    specs = True"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_where_the_project_keeps_specs"]
+
+# A spec named after a sentence of context wraps onto the paragraph's next line.
+[[mutation]]
+name = "a wrapped Spec line is not read"
+file = "src/drybag/docs/plans.py"
+before = "        paragraph = bool(_SPEC_LINE.match(line)) or (paragraph and bool(line.strip()))"
+after = "        paragraph = bool(_SPEC_LINE.match(line))"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_where_the_project_keeps_specs"]
+
+# A design folder's plans name the project's repository, which the folder does not hold.
+[[mutation]]
+name = "a design folder settles every path"
+file = "src/drybag/docs/plans.py"
+before = "        judged = spec_lines"
+after = "        judged = None"
+reddens = ["tests/docs/test_plans.py::test_a_design_folder_settles_only_the_spec_paragraphs_paths"]
+
+# A design folder's diff is the enclosing repository's, whose paths do not start at the folder.
+[[mutation]]
+name = "a design folder reads a diff"
+file = "src/drybag/docs/plans.py"
+before = "    if design and not plans:"
+after = "    if False:"
+reddens = ["tests/docs/test_plans.py::test_a_design_folder_lints_only_the_plans_it_is_given"]
+
+# A design folder holds no `drybag.toml`, and one placed beside it would be configuration for
+# whatever else loads it.
+[[mutation]]
+name = "docs trail --design reads drybag.toml"
+file = "src/drybag/docs/commands.py"
+before = "    if not args.design:"
+after = "    if True:"
+reddens = [
+  "tests/docs/test_commands.py::test_docs_trail_and_plan_check_run_on_a_design_folder_with_no_drybag_toml",
+]

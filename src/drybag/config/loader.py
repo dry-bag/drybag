@@ -317,6 +317,24 @@ def load(root: Path, *, machine: Path | None = None, owner: Owner | None = None)
     return loads(text, root, machine=machine, owner=owner)
 
 
+# A design folder kept apart from any repository: its roadmap, `trail.toml` beside it, and its
+# specs and plans. `docs trail --design` and `plan check --design` read one with no `drybag.toml`,
+# since a `drybag.toml` placed beside it would be read as configuration by whatever else loads it.
+DESIGN_PATHS = {"roadmap": "README.md", "specs": "specs", "plans": "plans"}
+
+
+def design_config(root: Path, *, owner: Owner) -> Config:
+    """The preset's configuration over the design folder at `root`, read from no file: its
+    `[paths]` are `DESIGN_PATHS`, and the project name, which nothing reading a design folder
+    uses, is the word `design`."""
+    raw = {
+        "drybag": {"version": __version__},
+        "project": {"name": "design"},
+        "paths": DESIGN_PATHS,
+    }
+    return _built(raw, root, machine=None, owner=owner)
+
+
 def read_document(root: Path, *, limit: int | None = None) -> str | None:
     """`drybag.toml` exactly as it is on disk, or `None` when there is none.
 

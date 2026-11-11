@@ -98,6 +98,35 @@ def test_docs_trail_writes_the_listing_and_check_reports_staleness(
     assert invoke(["docs", "trail", "--check", *common]) == 0
 
 
+def test_docs_trail_and_plan_check_run_on_a_design_folder_with_no_drybag_toml(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A design folder holds no `drybag.toml`, and one placed beside it would be configuration
+    # for whatever else loads it. Mutation (declared): `mutations/`'s "docs trail --design reads
+    # drybag.toml".
+    root = tmp_path / "design"
+    for name in ("specs", "plans"):
+        (root / name).mkdir(parents=True)
+    (root / "README.md").write_text(f"# R\n\n{MARKER}\n{END_MARKER}\n", encoding="utf-8")
+    (root / "specs" / "2026-01-01-a.md").write_text("# a\n", encoding="utf-8")
+    plan = root / "plans" / "2026-01-02-a.md"
+    plan.write_text("**Scope:** iff a.\n\n**Spec:** `specs/2026-01-01-a.md`\n", "utf-8")
+    common = ["--root", str(root), "--machine", str(tmp_path / "m.toml")]
+    assert invoke(["docs", "trail", *common]) == 1
+    capsys.readouterr()
+    assert invoke(["docs", "trail", "--design", *common]) == 0
+    assert capsys.readouterr().out == "rewrote README.md\n"
+    assert "- [`plans/2026-01-02-a.md`](plans/2026-01-02-a.md) — delivered" in (
+        root / "README.md"
+    ).read_text(encoding="utf-8")
+    assert invoke(["docs", "trail", "--design", "--check", *common]) == 0
+    assert invoke(["plan", "check", "--design", str(plan), "--json", *common]) == 0
+    capsys.readouterr()
+    plan.write_text("**Scope:** iff a.\n", "utf-8")
+    assert invoke(["plan", "check", "--design", str(plan), "--json", *common]) == 1
+    assert json.loads(capsys.readouterr().out)["findings"][0]["rule"] == "spec-missing"
+
+
 def test_docs_trail_check_names_a_missing_roadmap_in_its_own_words(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -283,11 +312,11 @@ def test_plan_check_lints_the_named_plans_and_counts_them(
 ) -> None:
     root, common = project(tmp_path)
     plan = root / "docs" / "plans" / "2026-01-01-x.md"
-    plan.write_text("**Scope:** iff x.\n", encoding="utf-8")
+    plan.write_text("**Scope:** iff x.\n\n**Spec:** `docs/guide.md`\n", encoding="utf-8")
     assert invoke(["plan", "check", str(plan), *common]) == 0
     assert capsys.readouterr().out == (
         "OK: linted 1 plan(s) — references resolve, steps are non-leading, mutation outcomes "
-        "are expectations, Scope/Premise are present\n"
+        "are expectations, Scope/Premise/Spec are present\n"
     )
     plan.write_text("no scope\n", encoding="utf-8")
     assert invoke(["plan", "check", str(plan), "--json", *common]) == 1

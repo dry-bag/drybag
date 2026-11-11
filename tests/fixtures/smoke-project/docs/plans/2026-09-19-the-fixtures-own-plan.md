@@ -4,6 +4,8 @@
 plan to lint in this project, and so that the four
 rules that command holds a plan to are exercised by a document that satisfies them.
 
+**Spec:** `docs/specs/README.md`, the project keeping specs being what makes this line owed.
+
 ## Context
 
 `plan check` lints the plans a range touches. A project whose plans directory held only a

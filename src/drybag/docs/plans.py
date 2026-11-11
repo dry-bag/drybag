@@ -51,6 +51,11 @@ read over the claim's own SENTENCE, which is the unit that marker marks: a marke
 neighbouring sentence of the same paragraph exempts nothing, and one written after the claim is
 not read at all.
 
+A plan names the spec it implements on a `**Spec:**` line wherever the project keeps specs: a plan
+the trail cannot tie to its design is one nobody can check against it. A project with no specs
+folder owes none. In a design folder kept apart from its repository (`--design`) only that line's
+paths are settled, since the plan's others name a tree the folder does not hold.
+
 These are floors. A regular expression cannot judge whether a computed number's model covers
 its subject; that rule lives in the plan template and the review lens.
 
@@ -117,6 +122,9 @@ _LEADING = re.compile(
 # empty `**Scope:**`/`**Premise:**` marker would be satisfied by any non-whitespace character
 # anywhere later in the document — exactly the unfilled-marker case these rules exist to catch.
 # Anchoring to non-newline whitespace forces the content onto the marker's own line.
+# A plan's `**Spec:**` line: owed where the project keeps specs, and read for the paths its
+# paragraph carries, which name the spec.
+_SPEC_LINE = re.compile(r"^\*\*Spec:\*\*")
 _SCOPE_LINE = re.compile(r"^\*\*Scope:\*\*[^\S\n]*\S", re.MULTILINE)
 #
 # A premise marker, read to the first colon after it, past line ends; the group holds when the
@@ -168,6 +176,10 @@ _SCOPE_MISSING = (
 _PREMISE_MISSING = (
     "claims `Fixes` with no `**Premise:**` line quoting the entry evidence that establishes "
     "its central predicate"
+)
+_SPEC_MISSING = "no `**Spec:**` line naming the spec this plan implements by its path"
+_DESIGN_NAMES_PLANS = (
+    "--design lints the plans it is given and reads no diff: name them as PATH arguments"
 )
 _LEADING_STEP = (
     'verification step embeds its expected answer; write "determine whether …; if '
@@ -413,21 +425,42 @@ def _has_premise(prose: str) -> bool:
 
 
 def _lint_one(
-    path: Path, where: str, root: Path, *, judged: set[int] | None = None
+    path: Path,
+    where: str,
+    root: Path,
+    *,
+    judged: set[int] | None = None,
+    specs: bool = False,
+    design: bool = False,
 ) -> list[Finding]:
     """Every finding one plan carries, with the line numbers of the file as it is on disk.
 
     `judged`, when given, is the lines whose references are settled against the tree: the ones
     the change wrote (`written_lines`). Every other rule reads the whole plan either way.
+    `specs` is whether the project keeps specs, which is what makes a `**Spec:**` line owed. In a
+    `design` folder only the `**Spec:**` paragraph's paths are settled: the plan's other paths
+    name the project's repository, which the folder does not hold.
     """
     # Fenced code is not plan prose: its fixtures name deliberately fake paths.
     prose = blank_fences(read_document(path, where))
     found: list[Finding] = []
+    # The `**Spec:**` paragraph: its marker line and the lines up to the next blank one, since a
+    # spec named after a sentence of context wraps onto the next line.
+    spec_lines: set[int] = set()
+    paragraph = False
+    for number, line in enumerate(prose.splitlines(), 1):
+        paragraph = bool(_SPEC_LINE.match(line)) or (paragraph and bool(line.strip()))
+        if paragraph and any(path_references(line)):
+            spec_lines.add(number)
+    if design:
+        judged = spec_lines
     # Per plan, not per line: these are properties of the document, not of one line in it.
     if not _SCOPE_LINE.search(prose):
         found.append(Finding("scope-missing", where, None, _SCOPE_MISSING))
     if BUG_FIXES.search(prose) and not _has_premise(prose):
         found.append(Finding("premise-missing", where, None, _PREMISE_MISSING))
+    if specs and not spec_lines:
+        found.append(Finding("spec-missing", where, None, _SPEC_MISSING))
     declared: set[str] = set()
     for line in _DECLARES.findall(prose):
         declared |= set(path_references(line))
@@ -451,8 +484,20 @@ def _lint_one(
     return found
 
 
-def lint(root: Path, config: Config, *, plans: list[Path], base: str | None = None) -> Lint:
+def lint(
+    root: Path,
+    config: Config,
+    *,
+    plans: list[Path],
+    base: str | None = None,
+    design: bool = False,
+) -> Lint:
+    """`design` is a design folder kept apart from its project's repository (`--design`): its
+    plans are linted only when named, since its diff is the enclosing repository's."""
+    if design and not plans:
+        raise Refusal(_DESIGN_NAMES_PLANS)
     plans_dir = contained(root, config.paths.plans)
+    specs = fsops.is_dir(contained(root, config.paths.specs))
     base = base or local_base(config)
     unlinted: list[Path] = []
     diff_scoped = False
@@ -488,5 +533,5 @@ def lint(root: Path, config: Config, *, plans: list[Path], base: str | None = No
     for path in sorted(selected):
         judged = written_lines(root, base, path) if diff_scoped else None
         where = path.relative_to(root).as_posix()
-        findings.extend(_lint_one(path, where, root, judged=judged))
+        findings.extend(_lint_one(path, where, root, judged=judged, specs=specs, design=design))
     return Lint(findings, sorted(selected), sorted(unlinted))

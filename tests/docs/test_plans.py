@@ -15,7 +15,8 @@ from typing import Any
 
 import pytest
 
-from drybag.config.loader import load
+from drybag.config.loader import design_config, load
+from drybag.config.owner import resolve_owner
 from drybag.config.schema import Config
 from drybag.docs.plans import (
     BUG_FIXES,
@@ -206,6 +207,54 @@ def test_a_plan_without_a_scope_line_fails_and_a_bare_marker_does_not_count(
     assert rules(root, config, plan(root, "no scope here\n")) == ["scope-missing"]
     assert rules(root, config, plan(root, "**Scope:**\n\nlater text\n")) == ["scope-missing"]
     assert rules(root, config, plan(root, "```\n**Scope:** in a fence\n```\n")) == ["scope-missing"]
+
+
+def test_a_plan_names_its_spec_where_the_project_keeps_specs(tmp_path: Path) -> None:
+    # Owed only where a specs folder exists, so a project without specs is never refused; the
+    # path may wrap onto the paragraph's next line. Mutations (declared): `mutations/`'s "plan
+    # check owes no Spec line", "the Spec rule runs without a specs folder" and "a wrapped Spec
+    # line is not read".
+    root, config = project(tmp_path)
+    assert rules(root, config, plan(root, SCOPE)) == []
+    (root / "docs" / "specs").mkdir()
+    (root / "docs" / "specs" / "a.md").write_text("# a\n", encoding="utf-8")
+    assert rules(root, config, plan(root, SCOPE)) == ["spec-missing"]
+    assert rules(root, config, plan(root, SCOPE + "**Spec:** the owner's word\n")) == [
+        "spec-missing"
+    ]
+    wrapped = SCOPE + "**Spec:** the design,\n`docs/specs/a.md`.\n"
+    assert rules(root, config, plan(root, wrapped)) == []
+    after_a_blank = SCOPE + "**Spec:** the design.\n\n`docs/specs/a.md`\n"
+    assert rules(root, config, plan(root, after_a_blank)) == ["spec-missing"]
+
+
+def design_folder(tmp_path: Path) -> tuple[Path, Config]:
+    root = tmp_path / "design"
+    for name in ("specs", "plans"):
+        (root / name).mkdir(parents=True)
+    (root / "specs" / "a.md").write_text("# a\n", encoding="utf-8")
+    return root, design_config(root, owner=resolve_owner(tmp_path / "m.toml", strict=True))
+
+
+def test_a_design_folder_settles_only_the_spec_paragraphs_paths(tmp_path: Path) -> None:
+    # A design folder's plans name the project's repository, which the folder does not hold, so
+    # only the spec's path is settled there. Mutation (declared): `mutations/`'s "a design folder
+    # settles every path".
+    root, config = design_folder(tmp_path)
+    path = root / "plans" / "2026-01-01-x.md"
+    path.write_text(SCOPE + "**Spec:** `specs/a.md`\n\nEdit `src/widget/x.py`.\n", "utf-8")
+    assert [f.rule for f in lint(root, config, plans=[path], design=True).findings] == []
+    path.write_text(SCOPE + "**Spec:** `specs/gone.md`\n", "utf-8")
+    found = lint(root, config, plans=[path], design=True).findings
+    assert [(f.rule, f.line) for f in found] == [("dead-reference", 3)]
+
+
+def test_a_design_folder_lints_only_the_plans_it_is_given(tmp_path: Path) -> None:
+    # Its diff is the enclosing repository's, whose paths do not start at the folder. Mutation
+    # (declared): `mutations/`'s "a design folder reads a diff".
+    root, config = design_folder(tmp_path)
+    with pytest.raises(Refusal, match="name them as PATH arguments"):
+        lint(root, config, plans=[], design=True)
 
 
 def test_a_fixes_claim_needs_a_premise_line_with_content(tmp_path: Path) -> None:

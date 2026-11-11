@@ -44,8 +44,8 @@ Three things hold everywhere:
 - [`drybag commit check --range RANGE`](#drybag-commit-check---range-range)
 - [`drybag commit strip FILE`](#drybag-commit-strip-file)
 - [`drybag docs check [--budgets] [--links]`](#drybag-docs-check---budgets---links)
-- [`drybag docs trail [--check]`](#drybag-docs-trail---check)
-- [`drybag plan check [--base REF] [PATH …]`](#drybag-plan-check---base-ref-path-)
+- [`drybag docs trail [--check] [--design]`](#drybag-docs-trail---check---design)
+- [`drybag plan check [--base REF] [--design] [PATH …]`](#drybag-plan-check---base-ref---design-path-)
 - [`drybag overlay upgrade [--root PATH] [--dry-run]`](#drybag-overlay-upgrade---root-path---dry-run)
 - [`drybag attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#drybag-attach---store-path---project-name---check---root-path---machine-path)
 - [`drybag detach [--root PATH] [--machine PATH]`](#drybag-detach---root-path---machine-path)
@@ -818,7 +818,7 @@ effective ones — the preset's, or the value `[budgets]` sets in its place.
 
 **Writes** nothing.
 
-## `drybag docs trail [--check]`
+## `drybag docs trail [--check] [--design]`
 
 Rewrite the listing between `## Design and plan trail` and `<!-- end design and plan trail -->`
 in the roadmap: every `*.md` under `[paths] specs` and `[paths] plans` that git tracks and does
@@ -856,6 +856,11 @@ a question git gives no answer to — which documents it ignores or tracks, when
 runs past its time limit or refuses the checkout — fails (`1`) with nothing written, rather than
 listing every document on disk; outside one, every document is listed.
 
+`--design` reads no `drybag.toml`: `--root` is then a design folder kept apart from any
+repository's configuration, whose roadmap is `README.md`, with `trail.toml` beside it and its
+documents in `specs/` and `plans/`; everything else is the preset's. The folder may sit anywhere
+inside a git work tree, and git's answers about it are read as they are for a project.
+
 Nothing writes the roadmap or `trail.toml` for you, and without them the command has nothing to
 check. Write the roadmap (`[paths] roadmap`, `docs/roadmap.md` by default) by hand, with a line
 `## Design and plan trail` and, below it, a line `<!-- end design and plan trail -->`, between
@@ -873,7 +878,7 @@ pattern = ".*"
 
 **Writes** `[paths] roadmap`.
 
-## `drybag plan check [--base REF] [PATH …]`
+## `drybag plan check [--base REF] [--design] [PATH …]`
 
 With `PATH` arguments, lint exactly those plans; without, the plans under `[paths] plans` that
 merging the change could alter on `REF`, `REF` defaulting to
@@ -881,14 +886,17 @@ merging the change could alter on `REF`, `REF` defaulting to
 whose copy in `HEAD` differs from `REF`'s and from that of any commit `git merge-base --all REF
 HEAD` names: a copy equal to every merge base's leaves the merge taking `REF`'s, and one equal to
 `REF`'s leaves it as it is. Every merge base, not the one `REF...HEAD` diffs against, which can
-already hold an old plan the change puts back. Five rules, each from a retrospective: every
+already hold an old plan the change puts back. Six rules, each from a retrospective: every
 backticked path resolves unless the line says `(create)` or `(delete)`, or the plan declares it
 on a `Create:`, `Test:` or `Delete:` line; no step is phrased as already knowing its answer
 (`confirm that nothing …`, `verify no …`, `check that it does not …`); a `**Scope:**` line
 with content is present; a plan claiming `Fixes BR-nnn` (no other prefix is judged) carries a `**Premise:**` line with
 content; and a mutation's outcome stated as fact in the present tense (`-> the test reddens`,
 `watch it go red`, `reddens 8 assertions`) is a finding unless its own sentence marks it an
-expectation. Without `PATH`, the first rule reads only the lines the change wrote — those that
+expectation; and where `[paths] specs` is a directory, a plan carries a `**Spec:**` line naming
+its spec by a backticked path, on that line or the next ones of its paragraph (a project that
+keeps no specs owes none, and the path is settled as the first rule settles any other). Without
+`PATH`, the first rule reads only the lines the change wrote — those that
 differ from every merge base's copy and from `REF`'s — so a change editing a delivered plan, an
 `Interfaces:` block say, is held to its own lines and never to paths the tree has moved since the
 plan was written; a new plan is all such lines. Naming a plan as `PATH` settles every reference in
@@ -907,6 +915,12 @@ words. A `REF`
 shaped like an option is refused (`2`) before git sees it. Uncommitted plans
 are not in the diff; the line counts them and `--json` names them, and naming one as `PATH`
 lints it.
+
+`--design` takes `--root` as a design folder, as `docs trail --design` does, and reads no
+`drybag.toml`. It lints only the plans named as `PATH`, refusing (`2`) without one, since the
+folder's diff is that of the repository around it; and of a plan's backticked paths it settles
+only the `**Spec:**` paragraph's, because the others name the project's own repository, which
+the folder does not hold.
 
 **Writes** nothing.
 
