@@ -6,7 +6,7 @@ sources that back it and a plain statement of how well they do.
 
 Two files:
 
-- [principles.md](principles.md) — ten numbered principles. Each one has a statement, what
+- [principles.md](principles.md) — nine numbered principles. Each one has a statement, what
   drybag does about it today, its sources, and a **Backing** line.
 - [sources.md](sources.md) — the citation pack. Every `[S<n>]` in the principles resolves to
   a row here; every row is cited at least once. A test holds both directions.
@@ -27,7 +27,7 @@ words what the sources do not reach:
   of the claim.
 - **thin** — the principle is a working rule that has earned its place in practice and has
   no independent backing beyond that. It is stated as a rule because the alternative is to
-  hide it inside the tooling and pretend it is a fact. Three of the ten are thin, and each
+  hide it inside the tooling and pretend it is a fact. Two of the nine are thin, and each
   says what would change its label.
 
 The line is the label, a full stop, and then prose: `**Backing:** sourced. The mechanism is

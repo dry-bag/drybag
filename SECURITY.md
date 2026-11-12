@@ -74,7 +74,8 @@ Out of scope:
   `XDG_*` variable, from a project's or a local `env` block: its settings reference says so under
   "Variables Claude Code ignores in `env`", and Claude Code 2.1.293 was measured keeping the real
   `HOME` and an empty `XDG_CONFIG_HOME` in project and plugin hooks. `XDG_CONFIG_HOME`, git's other door to that
-  configuration, is dropped before any `git` runs.
+  configuration, is dropped before any `git` drybag starts; the hook wrapper's own `git rev-parse
+  --show-toplevel`, run where the harness names no project directory, inherits the hook's environment.
 - An agent with an unsandboxed shell writing an approval itself. An approval in `trust.json`
   holds against a repository's bytes: drybag never writes the record from them, and a clone, a
   pull or a pull request does not reach it. A repository whose hooks
@@ -106,6 +107,15 @@ Out of scope:
   session and its subprocesses, and once you trust a folder, that folder's `env` block and its
   hooks run in your shells before drybag starts. Trust a folder in Claude Code only as far as
   you would run its code.
+
+## Known limits
+
+- **A promoted note is recognised by its bytes, wherever they sit.** `drybag memory promote`
+  records the digest of a note's bytes, and a note holding those bytes counts as promoted in any
+  store. So in `in-repo` mode, which a repository's `drybag.toml` may choose, a repository that
+  commits the same bytes as a note you promoted elsewhere has that note delivered as yours, as a
+  standing rule where it carries `metadata.startup`, and its relative references then name that
+  repository's files. Binding an approval to the repository it was given in is planned.
 
 ## Supported versions
 
