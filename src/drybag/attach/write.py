@@ -58,15 +58,16 @@ from drybag.attach import exclude
 from drybag.attach.binding import (
     BY_FILE,
     NAMED_BY_FILE,
-    REBIND,
     Binding,
     Chosen,
     choose_project,
     read_binding,
+    refuse_a_rebind,
     refuse_unless_share_can_exist,
 )
 from drybag.attach.mcp import (
     McpLedger,
+    Reconciled,
     Served,
     fold_mcp,
     read_mcp_ledger,
@@ -143,7 +144,7 @@ from drybag.memory.api import (
     withdraw_composed,
 )
 from drybag.printed import quoted
-from drybag.runner import Runner
+from drybag.runner import NOT_FOUND, Runner
 from drybag.scaffold import ParserLimitError, settings_text
 
 LEDGER_FORMAT = 1
@@ -219,9 +220,8 @@ class Attached:
     `binding_recorded` says whether this run bound a checkout this machine did not bind before.
     `added` and `removed` are the executable diff against the render the last run left, and
     `allow_added` the allow rules this run merged and `allow_withdrawn` those it took back; all
-    four are the overlay's. `rules_left` is each `.codex/rules/` copy an earlier attach placed that
-    the overlay no longer holds and that is still there: a re-attach removes no Codex copy, and
-    `detach` removes one only while the ledger records it (`_write_ledger`).
+    four are the overlay's. `rules_left` is each `.codex/rules/` file this run left as it is, no
+    longer or never attach's (`plan_writes`), and `rules_taken_back` each copy it removed.
     """
 
     settings_written: bool
@@ -236,6 +236,7 @@ class Attached:
     allow_added: tuple[str, ...] = ()
     allow_withdrawn: tuple[str, ...] = ()
     rules_left: tuple[str, ...] = ()
+    rules_taken_back: tuple[str, ...] = ()
     # The overlay's MCP servers this run delivered, took back and replaced a local entry of, each
     # failed one with Claude Code's message (`attach.mcp.Reconciled`); all are names, never a
     # definition.
@@ -279,9 +280,9 @@ class AttachLedger:
 
 
 class NotALedger(Failure):
-    """A file at the ledger's path that is not one `attach` wrote: it cannot be read, does not
-    parse, or holds a field of another shape. It records nothing: `attach` writes the ledger whole,
-    `detach` removes nothing and says so, and `doctor` warns."""
+    """A file at the ledger's path that is not one this `attach` wrote: it cannot be read, does
+    not parse, holds a field of another shape or another `format`. Nothing it records can be told:
+    `attach` and `detach` change nothing and say so, and `doctor` warns."""
 
 
 def ledger(root: Path) -> AttachLedger:
@@ -304,7 +305,8 @@ def _well_shaped(raw: dict[str, Any]) -> bool:
     """Whether every field of `raw` has the shape `_write_ledger` gives it."""
     render = raw.get("render")
     return (
-        isinstance(raw.get("store"), str)
+        raw.get("format") == LEDGER_FORMAT
+        and isinstance(raw.get("store"), str)
         and all(_strings(raw.get(key)) for key in ("allow", "settings_keys", "directories"))
         and isinstance(raw.get("rules"), dict)
         and _strings(list(raw["rules"].values()))
@@ -344,19 +346,27 @@ def read_ledger(path: Path) -> AttachLedger | None:
 
 def shown_placed(root: Path) -> int:
     """How many paths the last `attach` placed git would no longer ignore in the main checkout,
-    where it places them from any worktree; `0` where no ledger records any."""
+    where it places them from any worktree; `0` where there is no ledger, `NotALedger` for one."""
     main = main_checkout_or_none(root) or root
     recorded = existing_ledger(main)
     return 0 if recorded is None else len(exclude.unignored(main, placed_paths(recorded.rules)))
 
 
+# Said where `attach` meets a ledger it cannot read: written over, what it witnessed would stay
+# in place with nothing left to name it to `detach`.
+LEDGER_KEPT = (
+    "{fault}, so what it records cannot be told and nothing was written; take back by hand what it "
+    "records, move it aside, then run `drybag attach` again"
+)
+
+
 def existing_ledger(root: Path) -> AttachLedger | None:
-    """The ledger, or `None` when there is none or the file is `NotALedger`, which `attach` then
-    writes whole. `attach` and `attach --check` both read it here."""
+    """The ledger, `None` when there is none, or `NotALedger` (`LEDGER_KEPT`), as `detach` refuses
+    one. `attach` and `attach --check` both read it here."""
     try:
         return read_ledger(common_directory(root) / LEDGER_FILE)
-    except NotALedger:
-        return None
+    except NotALedger as exc:
+        raise NotALedger(LEDGER_KEPT.format(fault=exc)) from exc
 
 
 def _allow_list(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
@@ -547,6 +557,16 @@ def _as_written(path: Path, digest: str) -> bool:
         return False
 
 
+def _foreign(path: Path, digest: str | None) -> bool:
+    """Whether something attach did not write is at `path`: anything there but the bytes `digest`,
+    the ledger's, records. A path that cannot be asked answers no; the write's walk refuses it."""
+    try:
+        there = fsops.exists(path) or fsops.is_symlink(path)
+    except OSError:
+        return False
+    return there and (digest is None or not _as_written(path, digest))
+
+
 def _reached_directory(path: Path) -> bool:
     """`fsops.is_dir`, and `True` for a path no write of this run can reach; see above."""
     try:
@@ -588,9 +608,9 @@ def _write_ledger(
     just wrote. `_plan` reads it once, above every write.
     """
     previous, binding = planned.previous, planned.binding
-    # What this run wrote, and the copies `plan_writes` kept: a file deleted from the overlay is
-    # not written this time, while its copy is still where Codex reads it as a standing instruction.
-    rules = {**planned.kept, **{t: _digest(text.encode("utf-8")) for t, text in planned.rules}}
+    # What this run wrote and nothing else: a copy the overlay dropped is taken back or left as no
+    # longer attach's (`plan_writes`).
+    rules = {t: _digest(text.encode("utf-8")) for t, text in planned.rules}
     # Only the rules the overlay grants now: one it no longer grants leaves the ledger whether or
     # not the settings file still held it, or a copy the owner types by hand later would be taken.
     granted = planned.diff.granted
@@ -754,10 +774,11 @@ class AttachPlan:
     # them, or `None` when the owner's own excludes hide them all.
     placed: tuple[str, ...]
     hidden: exclude.ExcludeWrite | None
-    # Each `.codex/rules/` target and the text to copy there.
+    # Each `.codex/rules/` target this run writes and the text to copy there, each file it leaves
+    # as it is, and each copy the overlay dropped that it takes back.
     rules: tuple[tuple[str, str], ...]
-    # Each copy the overlay no longer holds that the ledger goes on recording, with its digest.
-    kept: dict[str, str]
+    left: tuple[str, ...]
+    taken: tuple[str, ...]
     # What the rendered plugin carries, read from the overlay (`render.read_parts`).
     parts: dict[str, Part]
     # The overlay's MCP servers: the ones to deliver, `None` where an unusable `mcp.json` or MCP
@@ -853,7 +874,7 @@ def configured(
     """The run's one `Config`, its project chosen where the repository has no `drybag.toml`
     (`binding.choose_project`, asked only then), and where the project's name came from
     (`binding.BY_FILE` or the phrase of the way it was chosen). `project` is `--project`, which
-    beside the file only confirms a rebind to the project the file names (`REBIND`)."""
+    beside the file only confirms a rebind to the project the file names (`RebindRefused`)."""
     chosen: list[Chosen] = []
 
     def unnamed() -> str:
@@ -866,9 +887,8 @@ def configured(
     named = config.project.name
     if project is not None and project != named:
         raise Refusal(NAMED_BY_FILE)
-    found = bound_project(root)
-    if project is None and found is not None and found.project != named:
-        raise Refusal(REBIND.format(bound=quoted(found.project), named=quoted(named)))
+    if project is None:
+        refuse_a_rebind(root, named)
     return config, BY_FILE
 
 
@@ -930,21 +950,30 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     merged = _merged_settings(document, diff, deny)
     written = merged != document
     targets = tuple(target for target, _ in codex_rules(binding))
-    placed = placed_paths(targets)
     recorded = previous.rules if previous is not None else {}
     dropped = {rule: sha for rule, sha in recorded.items() if rule not in targets}
-    tracked = exclude.tracked(root, (*placed, *dropped))
+    tracked = exclude.tracked(root, (*placed_paths(targets), *dropped))
     # One rule for every placed path: none tracked, asked here above every write, and each ignored,
     # asked once the block stands (`_carry_out`).
-    if found := tuple(path for path in placed if path in tracked):
+    if found := tuple(path for path in placed_paths(targets) if path in tracked):
         raise Refusal(exclude.TRACKED.format(paths=named_placed(found)))
-    # A re-attach removes no copy. It goes on recording one the overlay dropped only while the file
-    # is untracked and as attach wrote it, so `detach` can take it; any other is no longer attach's.
-    kept = {
-        rule: sha
+    # A data-loss guard, anchored on the ledger's digest in the git common directory, which only
+    # `attach` writes: a target is written only where nothing is, or where the file holds the bytes
+    # the ledger records. Anything else there is the owner's, left, unrecorded and given no
+    # exclude line, though it hold the overlay's very bytes.
+    foreign = tuple(target for target in targets if _foreign(root / target, recorded.get(target)))
+    # A copy the overlay dropped is taken back while it is untracked and as attach wrote it, as
+    # `detach` takes it; any other is no longer attach's, and is left.
+    taken = tuple(
+        rule
         for rule, sha in dropped.items()
         if rule not in tracked and _as_written(root / rule, sha)
-    }
+    )
+    left = (
+        *foreign,
+        *(rule for rule in dropped if rule not in taken and fsops.is_file(root / rule)),
+    )
+    placed = placed_paths(tuple(target for target in targets if target not in foreign))
     # What git already hides decides the `info/exclude` block: a line for each path `attach` places
     # that the owner's own excludes do not hide (`exclude.unhidden_by_owner`). It can refuse — git
     # cannot answer, a path leaves the project, the exclude file is a symlink — and each refusal is
@@ -953,7 +982,7 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     # The reads the writes below would otherwise make for themselves, each of which can refuse
     # after the first write: the overlay's rule sources (a file that is not UTF-8) and what the
     # rendered plugin carries (a hook file of a shape it cannot read, a skill that cannot be read).
-    rules = _codex_rule_texts(binding)
+    rules = tuple((t, text) for t, text in _codex_rule_texts(binding) if t not in foreign)
     parts = read_parts(binding.plates)
     return AttachPlan(
         config=config,
@@ -970,7 +999,8 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         placed=placed,
         hidden=hidden,
         rules=rules,
-        kept=kept,
+        left=left,
+        taken=taken,
         parts=parts,
         served=fold.served if usable else None,
         deny=deny,
@@ -998,6 +1028,8 @@ def _carry_out(
     # The rule's second half: a `.gitignore` re-including a placed path (`!`) outranks the block.
     if shown := exclude.unignored(root, planned.placed):
         raise Refusal(exclude.NOT_IGNORED.format(paths=named_placed(shown)))
+    for rule in planned.taken:
+        fsops.remove_within(root, rule)
     for target, text in planned.rules:
         fsops.write_within(root, target, text)
     rules = tuple(target for target, _ in planned.rules)
@@ -1039,10 +1071,12 @@ def _carry_out(
     # Installed on every run, since both calls are idempotent: what Claude Code knows is its own
     # state, which a copy's detach or a lost id can take away whatever this ledger says. A call
     # that fails exits 1 with no render recorded and the exclude block standing, so a re-run
-    # completes.
-    if (failed := _install(id, root, runner)) is not None:
+    # completes; a `claude` not on `PATH` fails nothing, and the run says what it did not install.
+    failed = _install(id, root, runner)
+    absent = failed is not None and failed[1] == NOT_FOUND
+    if failed is not None and not absent:
         _write_ledger(root, planned, carried, None)
-        raise Failure(failed)
+        raise Failure(NOT_INSTALLED.format(verb=failed[0], code=failed[1]))
     if not memory:
         # Out of overlay mode, the pointer an earlier attach recorded and the composed store it
         # named are taken back, as `detach` takes them: left, the harness would go on reading the
@@ -1050,16 +1084,20 @@ def _carry_out(
         if previous is not None and POINTER_KEY in previous.settings_keys and _unpoint(root):
             written, carried = True, ()
         withdraw_composed(id)
-    _write_ledger(root, planned, carried, rendered.rendered)
+    _write_ledger(root, planned, carried, None if absent else rendered.rendered)
     # The overlay's MCP servers at local scope, from the main checkout as the plugin calls are. A
     # call that fails leaves its name unsettled for the next run and the command exits 1 once
-    # every other step ran (`commands.run_attach`).
-    mcp = reconcile(
-        root,
-        planned.served or {},
-        owned,
-        runner,
-        lambda left: write_mcp_ledger(root, replace(mcp_ledger, mcp=left)),
+    # every other step ran (`commands.run_attach`); with no `claude`, none is asked.
+    mcp = (
+        Reconciled(dict(owned))
+        if absent
+        else reconcile(
+            root,
+            planned.served or {},
+            owned,
+            runner,
+            lambda left: write_mcp_ledger(root, replace(mcp_ledger, mcp=left)),
+        )
     )
     if memory:
         _prepare_store(binding, config)
@@ -1073,7 +1111,7 @@ def _carry_out(
             or written
         )
         render_missing_index(root, config, machine=machine)
-    notes: list[str] = []
+    notes = [CLAUDE_ABSENT] if absent else []
     if binding.fault is not None:
         notes.append(binding.fault)
     if binding.bound is not None and binding.bound != binding.project:
@@ -1100,11 +1138,8 @@ def _carry_out(
         removed=before.without(after),
         allow_added=planned.diff.added_allow,
         allow_withdrawn=planned.diff.withdrawn_allow,
-        rules_left=tuple(
-            rule
-            for rule in (previous.rules if previous is not None else ())
-            if rule not in rules and fsops.is_file(root / rule)
-        ),
+        rules_left=planned.left,
+        rules_taken_back=planned.taken,
         mcp_delivered=tuple(
             name for name, sha in mcp.owned.items() if sha is not None and sha != owned.get(name)
         ),
@@ -1172,21 +1207,26 @@ NOT_INSTALLED = (
     "`claude plugin {verb}` did not succeed (exit {code}), so the overlay's hooks, skills and "
     "agents are rendered but not installed; run `drybag attach` again"
 )
+# Said instead where `claude` is not on `PATH`, a Codex-only machine's ordinary state: the notes
+# are composed all the same.
+CLAUDE_ABSENT = (
+    "`claude` is not on PATH, so the overlay's hooks, skills, agents and MCP servers are rendered "
+    "but not installed; they are installed by the next `drybag attach` that finds it"
+)
 
 
-def _install(id: str, main: Path, runner: Runner) -> str | None:
+def _install(id: str, main: Path, runner: Runner) -> tuple[str, int] | None:
     """Register the render as a marketplace of the main checkout and install its plugin there, or
-    say which call failed. Run from the main checkout, whose `settings.local.json` Claude Code reads
-    from every worktree and writes the plugin's entry into."""
+    the verb and exit code of the call that failed. Run from the main checkout, whose
+    `settings.local.json` Claude Code reads from every worktree and writes the plugin's entry
+    into."""
     added = runner.launch(filled(PLUGIN_MARKETPLACE_ADD_LOCAL, str(delivery_directory(id))), main)
     if added.code != 0:
-        return NOT_INSTALLED.format(verb="marketplace add", code=added.code)
+        return "marketplace add", added.code
     done = runner.launch(
         filled(PLUGIN_INSTALL_LOCAL, f"{plugin_name(id)}@{marketplace_name(id)}"), main
     )
-    if done.code != 0:
-        return NOT_INSTALLED.format(verb="install", code=done.code)
-    return None
+    return None if done.code == 0 else ("install", done.code)
 
 
 # Said where the main checkout's settings file still names the plugin once `detach` asked Claude

@@ -13,9 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from drybag.attach.binding import Binding, read_binding
+from drybag.attach.binding import read_binding
 from drybag.attach.mcp import planned_mcp
-from drybag.attach.permissions import PermissionDiff, codex_rules
 from drybag.attach.write import AttachPlan, configured, gates, main_checkout_of, plan_writes
 from drybag.config.owner import Owner
 from drybag.printed import printable, quoted
@@ -50,7 +49,7 @@ def check(
     binding = read_binding(root, store=store, machine=machine, config=config)
     diff = gates(root, config, binding)
     planned = plan_writes(root, config, binding, diff)
-    return _report(binding, planned.diff, source, _mcp_heads(planned), planned.mcp_notes)
+    return _report(planned, source)
 
 
 # The MCP servers the run would change: each head's names, as `--json` carries them, and a line
@@ -87,22 +86,17 @@ _MCP_LINES = {
 }
 
 
-def _report(
-    binding: Binding,
-    diff: PermissionDiff,
-    source: str,
-    mcp: McpHeads = ({}, []),
-    mcp_notes: tuple[str, ...] = (),
-) -> Result:
+def _report(planned: AttachPlan, source: str) -> Result:
     """The report of a check that met no refusal: the project and where its name came from, the
     binding, the diff and the rule files. The project is a name the repository or the overlay
-    chose, so it prints quoted on the line and through `printable` in `--json`. `mcp_notes` are the
-    run's own (`AttachPlan.mcp_notes`), said after the plates' notes where the run says them."""
+    chose, so it prints quoted on the line and through `printable` in `--json`. The MCP notes are
+    the run's own (`AttachPlan.mcp_notes`), said after the plates' notes where the run says them."""
+    binding, diff = planned.binding, planned.diff
     # Named and not merely counted, and on this result rather than in `PermissionDiff`: the
     # diff's fields say what `attach` would add, what is already there and what it would take
     # back, and a file list of another kind would blur what they mean. These names come out of the
-    # overlay, so they are the owner's own and may be printed.
-    rules = tuple(target for target, _ in codex_rules(binding))
+    # overlay or the ledger, so they are the owner's own and may be printed.
+    rules = tuple(target for target, _ in planned.rules)
     summary = (
         f"project {quoted(binding.project)} ({source}); "
         f"{binding.state}; "
@@ -116,11 +110,13 @@ def _report(
         summary += f"; {binding.note}"
     if binding.fault is not None:
         summary += f"; {binding.fault}"
-    for note in (*binding.plate_notes, *mcp_notes):
+    for note in (*binding.plate_notes, *planned.mcp_notes):
         summary += f"; {note}"
     if rules:
         summary += "\n" + "\n".join(f"  {target}" for target in rules)
-    heads, lines = mcp
+    summary += "".join(f"\nCodex rule file would be left: {quoted(rule)}" for rule in planned.left)
+    summary += "".join(f"\nCodex rule copy would be taken back: {quoted(r)}" for r in planned.taken)
+    heads, lines = _mcp_heads(planned)
     if lines:
         summary += "\n" + "\n".join(lines)
     data = {
@@ -129,11 +125,13 @@ def _report(
         "project": printable(binding.project),
         "project_source": source,
         "state": binding.state,
-        "added_allow": list(diff.added_allow),
+        "allow_added": list(diff.added_allow),
         # A count and not the strings: this list comes out of the project's own
         # `settings.local.json`, which a clone can commit, so it is repository-authored.
         "already_present": len(diff.already_present),
-        "rules_to_write": list(rules),
+        "rules_written": list(rules),
+        "rules_left": list(planned.left),
+        "rules_taken_back": list(planned.taken),
         **heads,
     }
     return Result(summary, data)
