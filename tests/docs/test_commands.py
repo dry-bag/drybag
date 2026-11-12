@@ -11,6 +11,7 @@ from drybag.cli import build_parser, discover_registrars, run
 from drybag.docs.trail import END_MARKER, MARKER
 from drybag.findings import LISTED_LIMIT, Finding
 from drybag.printed import CLIPPED_CHARS, UNPRINTABLE
+from tests.cli import subparsers
 from tests.crafted import CRAFTED, CRAFTED_TOML, assert_never_raw
 
 CONFIG = """
@@ -289,7 +290,7 @@ def test_plan_check_lints_the_named_plans_and_counts_them(
         "OK: linted 1 plan(s) — references resolve, steps are non-leading, mutation outcomes "
         "are expectations, Scope/Premise are present"
     )
-    assert capsys.readouterr().out == ok + ", each names its spec\n"
+    assert capsys.readouterr().out == ok + ", each names its spec or says why none\n"
     # The line says only what ran: with no specs folder no Spec line was asked for. Mutation
     # (declared): `mutations/`'s "plan check claims a Spec rule that did not run".
     (root / "docs" / "specs").rmdir()
@@ -300,6 +301,30 @@ def test_plan_check_lints_the_named_plans_and_counts_them(
     data = json.loads(capsys.readouterr().out)
     assert data["findings"][0]["rule"] == "scope-missing"
     assert data["linted"] == ["docs/plans/2026-01-01-x.md"]
+
+
+def test_the_success_line_says_none_where_one_was_read(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, common = project(tmp_path)
+    (root / "docs" / "specs" / "a.md").write_text("# a\n", encoding="utf-8")
+    named = root / "docs" / "plans" / "2026-01-01-x.md"
+    named.write_text("**Scope:** iff x.\n\n**Spec:** `docs/specs/a.md`\n", encoding="utf-8")
+    assert invoke(["plan", "check", str(named), *common]) == 0
+    assert capsys.readouterr().out.endswith("Scope/Premise are present, each names its spec\n")
+    none = root / "docs" / "plans" / "2026-01-02-y.md"
+    none.write_text("**Scope:** iff y.\n\n**Spec:** none — a fixture\n", encoding="utf-8")
+    assert invoke(["plan", "check", str(named), str(none), *common]) == 0
+    assert capsys.readouterr().out.endswith(", each names its spec or says why none\n")
+
+
+def test_docs_check_flags_have_help() -> None:
+    groups = subparsers(build_parser(discover_registrars()))
+    docs = subparsers(groups.choices["docs"]) if groups is not None else None
+    assert docs is not None
+    check = docs.choices["check"]
+    helps = {a.option_strings[0]: a.help for a in check._actions if a.option_strings}
+    assert helps["--budgets"] and helps["--links"]
 
 
 def test_a_non_utf8_roadmap_or_plan_exits_1_through_the_frame_and_never_2(

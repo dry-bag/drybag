@@ -1349,9 +1349,17 @@ reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_wh
 [[mutation]]
 name = "a Spec line's none needs no reason"
 file = "src/drybag/docs/plans.py"
-before = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*[—-]+[^\S\n]*\S")'
+before = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*—[^\S\n]*\S")'
 after = '_SPEC_NONE = re.compile(r"[^\S\n]*none")'
 reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# Only the em dash says none: a second spelling passing would be taught to the next plan.
+[[mutation]]
+name = "a Spec line's none takes a hyphen"
+file = "src/drybag/docs/plans.py"
+before = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*—[^\S\n]*\S")'
+after = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*[—-]+[^\S\n]*\S")'
+reddens = ["tests/docs/test_plans.py::test_none_with_a_hyphen_is_a_finding_that_names_the_spelling"]
 
 # Any backticked text passing would teach a placeholder; the spec must be there.
 [[mutation]]
@@ -1413,8 +1421,8 @@ reddens = ["tests/docs/test_plans.py::test_a_root_below_the_git_top_lints_the_pl
 [[mutation]]
 name = "plan check claims a Spec rule that did not run"
 file = "src/drybag/docs/commands.py"
-before = '    summary = _PLAN_OK.format(n=len(linted)) + (_PLAN_SPEC_OK if result.specs else "")'
-after = "    summary = _PLAN_OK.format(n=len(linted)) + _PLAN_SPEC_OK"
+before = '    summary = _PLAN_OK.format(n=len(linted)) + (spec_ok if result.specs else "")'
+after = "    summary = _PLAN_OK.format(n=len(linted)) + spec_ok"
 reddens = [
   "tests/docs/test_commands.py::test_plan_check_lints_the_named_plans_and_counts_them",
 ]

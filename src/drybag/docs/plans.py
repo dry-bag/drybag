@@ -124,10 +124,13 @@ _LEADING = re.compile(
 # anywhere later in the document — exactly the unfilled-marker case these rules exist to catch.
 # Anchoring to non-newline whitespace forces the content onto the marker's own line.
 _SCOPE_LINE = re.compile(r"^\*\*Scope:\*\*[^\S\n]*\S", re.MULTILINE)
-# A `**Spec:**` line, a list item's included, and what follows the marker on it: the line alone is
-# read, as the Scope and Premise markers are.
-_SPEC_LINE = re.compile(r"^(?:[-*+][^\S\n]+)?\*\*Spec:\*\*(.*)$", re.MULTILINE)
-_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*[—-]+[^\S\n]*\S")
+# A `**Spec:**` line, indented or not and behind one list or quote marker (`-`, `*`, `+`, `1.`,
+# `1)`, `>`), and what follows the marker on it: the line alone is read, as the Scope and Premise
+# markers are. `none` takes the em dash only, the one spelling the findings teach.
+_SPEC_LINE = re.compile(
+    r"^[^\S\n]*(?:(?:[-*+]|[0-9]{1,9}[.)])[^\S\n]+|>[^\S\n]*)?\*\*Spec:\*\*(.*)$", re.MULTILINE
+)
+_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*—[^\S\n]*\S")
 # Any backticked span on the Spec line may name the spec: a top-level file or a folder is a spec as
 # well as `docs/specs/x.md`, which `prose.path_references` alone would not read as paths.
 _BACKTICKED = re.compile(r"`([^`\n]+)`")
@@ -212,6 +215,7 @@ class Lint:
     linted: list[Path]
     unlinted: list[Path]
     specs: bool = False  # whether the Spec rule applied
+    nones: bool = False  # whether a plan's Spec line said `none — <reason>`
 
 
 def _is_git_repo(root: Path) -> bool:
@@ -453,6 +457,12 @@ def _spec_finding(prose: str, where: str, root: Path) -> Finding | None:
     return Finding("spec-missing", where, None, _SPEC_MISSING)
 
 
+def _says_none(prose: str) -> bool:
+    """Whether the plan's first `**Spec:**` line says `none — <reason>`."""
+    marker = _SPEC_LINE.search(prose)
+    return marker is not None and _SPEC_NONE.match(marker.group(1)) is not None
+
+
 def _keeps_specs(root: Path, config: Config) -> bool:
     """Whether the project keeps specs: git tracks a file under `[paths] specs`, or, outside a
     work tree, that folder exists. A question git gives no answer to fails."""
@@ -473,8 +483,9 @@ def _lint_one(
     *,
     judged: set[int] | None = None,
     specs: bool = False,
-) -> list[Finding]:
-    """Every finding one plan carries, with the line numbers of the file as it is on disk.
+) -> tuple[list[Finding], bool]:
+    """Every finding one plan carries, with the line numbers of the file as it is on disk, and
+    whether its Spec line, where one is owed, says `none — <reason>`.
 
     `judged`, when given, is the lines whose references are settled against the tree: the ones
     the change wrote (`written_lines`). Every other rule reads the whole plan either way.
@@ -511,7 +522,7 @@ def _lint_one(
     found.extend(
         Finding("asserted-outcome", where, number, _ASSERTED) for number in asserted_outcomes(prose)
     )
-    return found
+    return found, specs and _says_none(prose)
 
 
 def lint(root: Path, config: Config, *, plans: list[Path], base: str | None = None) -> Lint:
@@ -549,8 +560,11 @@ def lint(root: Path, config: Config, *, plans: list[Path], base: str | None = No
         selected = sorted(plans_dir.glob("*.md")) if fsops.is_dir(plans_dir) else []
     findings: list[Finding] = []
     specs = _keeps_specs(root, config)
+    nones = False
     for path in sorted(selected):
         judged = written_lines(root, base, path) if diff_scoped else None
         where = path.relative_to(root).as_posix()
-        findings.extend(_lint_one(path, where, root, judged=judged, specs=specs))
-    return Lint(findings, sorted(selected), sorted(unlinted), specs)
+        found, said_none = _lint_one(path, where, root, judged=judged, specs=specs)
+        findings.extend(found)
+        nones = nones or said_none
+    return Lint(findings, sorted(selected), sorted(unlinted), specs, nones)
