@@ -407,17 +407,25 @@ reddens = [
   "tests/memory/test_notes.py::test_a_note_named_in_bytes_that_are_not_utf_8_is_quarantined",
 ]
 
-# The index links a note by its file's name on one line, so a name that breaks a line would write
-# lines of its own choosing into `MEMORY.md`.
+# The index links a note by its group and file name on one line, so a name that breaks a line would
+# write lines of its own choosing into `MEMORY.md`.
 [[mutation]]
 name = "the memory walk hands the index a note whose name breaks a line"
 file = "src/drybag/memory/notes.py"
-before = """            if not is_one_line(path.name):
+before = """            if not is_one_line(f"{group}/{path.name}"):
                 unreadable.append((path, f"{path}: {NAME_NOT_ONE_LINE}"))
                 continue
 """
 after = ""
 reddens = ["tests/memory/test_index.py::test_a_note_whose_name_breaks_a_line_is_unreadable"]
+
+# The group, which `drybag.toml` names, is the other half of that name.
+[[mutation]]
+name = "the memory walk asks the note's file name alone"
+file = "src/drybag/memory/notes.py"
+before = '            if not is_one_line(f"{group}/{path.name}"):'
+after = "            if not is_one_line(path.name):"
+reddens = ["tests/memory/test_index.py::test_a_group_whose_name_breaks_a_line_is_unreadable"]
 
 # A `startup` rank makes a note a standing rule, so a value that is not an integer is no rank.
 [[mutation]]
