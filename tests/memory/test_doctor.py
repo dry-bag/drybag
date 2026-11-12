@@ -223,6 +223,41 @@ def test_a_note_store_holding_something_that_is_not_a_note_is_reported(tmp_path:
     assert "scratch.txt" not in check.detail
 
 
+INDEX_REMEDY = "run `drybag memory index --check`"
+
+
+def test_the_memory_row_warns_on_a_stale_index(tmp_path: Path) -> None:
+    # `memory index --check` failed on an index that no longer said what the store holds while
+    # this row stayed green. Written, the index is current and the row is again.
+    root = _initialised(tmp_path)
+    store = root / ".drybag" / "local" / "memory" / "developer"
+    store.mkdir(parents=True)
+    (store / "kept.md").write_text("---\nname: kept\ndescription: d\n---\n\nbody\n")
+    check = _memory_row(tmp_path, root)
+    assert check.status == WARN, check
+    assert "the index is out of date" in check.detail
+    assert check.remedy == INDEX_REMEDY
+    assert cli(root, tmp_path, "memory", "index", machine=tmp_path / "no-machine.toml")[0] == 0
+    assert _memory_row(tmp_path, root).status == OK
+
+
+def test_the_memory_row_counts_unreadable_notes(tmp_path: Path) -> None:
+    # A note the reader cannot parse reaches no session, and the row said nothing of it. Counted
+    # and not named: the file names are the store's.
+    root = _initialised(tmp_path)
+    store = root / ".drybag" / "local" / "memory" / "developer"
+    store.mkdir(parents=True)
+    (store / "kept.md").write_text("---\nname: kept\ndescription: d\n---\n\nbody\n")
+    assert cli(root, tmp_path, "memory", "index", machine=tmp_path / "no-machine.toml")[0] == 0
+    (store / "broken.md").write_text("no frontmatter\n", encoding="utf-8")
+    check = _memory_row(tmp_path, root)
+    assert check.status == WARN, check
+    assert "1 file(s) in the store cannot be read as a note" in check.detail
+    assert "out of date" not in check.detail
+    assert "broken.md" not in check.detail
+    assert check.remedy == INDEX_REMEDY
+
+
 @pytest.mark.parametrize("entries", [3, 4])
 def test_a_note_store_past_the_walk_cap_is_one_the_row_cannot_tell_about(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entries: int
@@ -237,6 +272,7 @@ def test_a_note_store_past_the_walk_cap_is_one_the_row_cannot_tell_about(
     store.mkdir(parents=True)
     for index in range(entries):
         (store / f"n{index}.md").write_text("---\nname: n\ndescription: d\n---\n\nbody\n")
+    assert cli(root, tmp_path, "memory", "index", machine=tmp_path / "no-machine.toml")[0] == 0
     check = _memory_row(tmp_path, root)
     if entries == 3:
         assert check.status == OK

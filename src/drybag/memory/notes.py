@@ -30,7 +30,6 @@ from pathlib import Path
 from drybag import fsops
 from drybag.errors import Failure
 from drybag.fsops import read_regular_text, said, utf_8_name, write_atomically
-from drybag.printed import quoted
 
 FENCE = "---"
 _KEY = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_]*):(?P<rest>.*)$")
@@ -456,7 +455,7 @@ def walk(store: Path, groups: Sequence[str]) -> Walk:
                 unreadable.append((path, f"{path}: {NAME_NOT_UTF_8}"))
                 continue
             if not is_one_line(path.name):
-                unreadable.append((path, f"{quoted(str(path))}: {NAME_NOT_ONE_LINE}"))
+                unreadable.append((path, f"{path}: {NAME_NOT_ONE_LINE}"))
                 continue
             try:
                 found.append(replace(read_note(path), store_group=group))

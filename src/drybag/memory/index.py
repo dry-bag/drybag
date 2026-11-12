@@ -446,7 +446,7 @@ class IndexCheck:
     over_budget: bool
     over_caps: list[str]
     provisional: list[str]
-    unreadable: list[str]  # store-relative
+    unreadable: list[tuple[str, str]]  # (store-relative path, why the reader refused it)
 
 
 def _destination(store: Store, config: Config) -> Path:
@@ -528,9 +528,12 @@ def check_index(store: Store, config: Config, reconciled: Reconciliation) -> Ind
         over_budget=len(text.split()) > config.budgets.effective("memory_index_words"),
         over_caps=caps,
         provisional=list(reconciled.provisional),
-        # Store-relative, as the summary line names it: one file has one name
-        # in one answer, and the absolute prefix is this machine's, not the store's.
-        unreadable=[path.relative_to(store.path).as_posix() for path, _ in reconciled.unreadable],
+        # Store-relative, as the summary line names it: one file has one name in one answer, and
+        # the absolute prefix is this machine's, not the store's, so the reason drops it too.
+        unreadable=[
+            (path.relative_to(store.path).as_posix(), why.removeprefix(str(path)).lstrip(": "))
+            for path, why in reconciled.unreadable
+        ],
     )
 
 

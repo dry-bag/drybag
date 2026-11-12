@@ -164,6 +164,32 @@ def test_an_area_whose_doctor_module_fails_to_import_costs_one_red_row_and_not_t
     assert "IGNORE" not in out
 
 
+def test_the_memory_row_reads_the_home_settings_by_default(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Without `--home` the row skipped `~/.claude/settings.json`, so a machine whose own settings
+    # point the harness's memory elsewhere was reported as the harness's default store.
+    root = _initialised(tmp_path)
+    settings = tmp_path / "home" / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text('{"autoMemoryDirectory": "/elsewhere"}', encoding="utf-8")
+    invoke(["doctor", "--root", str(root), "--json"])
+    rows = {check["name"]: check for check in json.loads(capsys.readouterr().out)["checks"]}
+    assert "autoMemoryDirectory is set by ~/.claude/settings.json" in rows["memory"]["detail"]
+
+
+def test_doctor_refuses_a_root_that_is_not_a_directory(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Every row ran against a root that is not there, and the `wrapper` row's launch from it
+    # failed as "check that ... exists", a remedy about the plugin for a typo in `--root`.
+    missing = tmp_path / "no\nsuch"
+    assert invoke(["doctor", "--root", str(missing), "--home", str(tmp_path / "home")]) == 2
+    captured = capsys.readouterr()
+    assert repr(str(missing)) in captured.err
+    assert "wrapper" not in captured.out + captured.err
+
+
 def test_the_json_form_carries_every_check_and_its_remedy(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

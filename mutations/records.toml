@@ -415,7 +415,7 @@ reddens = [
 name = "the memory walk hands the index a note whose name breaks a line"
 file = "src/drybag/memory/notes.py"
 before = """            if not is_one_line(path.name):
-                unreadable.append((path, f"{quoted(str(path))}: {NAME_NOT_ONE_LINE}"))
+                unreadable.append((path, f"{path}: {NAME_NOT_ONE_LINE}"))
                 continue
 """
 after = ""
