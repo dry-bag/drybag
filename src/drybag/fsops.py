@@ -156,6 +156,23 @@ def is_symlink(path: Path) -> bool:
     return mode is not None and stat.S_ISLNK(mode)
 
 
+def stored_name(path: Path, listings: dict[Path, dict[str, int]]) -> tuple[str, int] | None:
+    """The name `path`'s directory lists for what `lstat(path)` reaches (`path.name`, or a case or
+    normalisation variant this volume answers for: the listed entry with that inode), and its
+    mode; `None` when nothing is there. `listings` keeps each directory's listing for reuse."""
+    found = _reached_mode(path, follow=False)
+    if found is None:
+        return None
+    if path.parent not in listings:
+        with os.scandir(path.parent) as listed:
+            listings[path.parent] = {entry.name: entry.inode() for entry in listed}
+    names = listings[path.parent]
+    if path.name in names:
+        return path.name, found
+    inode = os.lstat(path).st_ino
+    return next((name for name, each in names.items() if each == inode), path.name), found
+
+
 def vacant(path: Path) -> bool:
     """Whether nothing is at `path`, or an empty directory that is no link: what a clone or a
     render may go into. A link, dangling or not, leads either wherever it points, so it is never
