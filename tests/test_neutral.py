@@ -262,7 +262,6 @@ def tracked_files() -> list[Path]:
 
 
 @needs_git
-@pytest.mark.skipif(not (ROOT / ".git").exists(), reason="no git checkout to ask")
 def test_a_coverage_worker_file_is_not_a_file_the_gate_walks(tmp_path: Path) -> None:
     """The suite runs across workers, and under `--cov` each one leaves its own data file in
     the root while the others still run — `.coverage.<host>.pid<pid>.X<random>x`, SQLite and

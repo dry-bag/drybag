@@ -79,9 +79,7 @@ def links_in(path: Path) -> list[str]:
 
 
 def public_documents() -> list[Path]:
-    # `docs/plans/` is outside the sdist, so its README is read where the tree is there.
-    plans = [ROOT / "docs" / "plans" / "README.md"] if (ROOT / "docs" / "plans").is_dir() else []
-    return [README, *plans, *sorted(METHODOLOGY.glob("*.md"))]
+    return [README, ROOT / "docs" / "plans" / "README.md", *sorted(METHODOLOGY.glob("*.md"))]
 
 
 def sources() -> dict[str, tuple[str, str, str, str, str, str]]:
