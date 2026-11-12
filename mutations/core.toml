@@ -5583,6 +5583,15 @@ reddens = [
   "tests/config/test_machine_name.py::test_no_file_or_no_table_is_no_name",
 ]
 
+# A relative `[overlay] root` names a directory under wherever a command runs, a clone's checkout
+# on the hook path, so it is a fault of the machine file and never a root.
+[[mutation]]
+name = "a relative overlay root is read from the working directory"
+file = "src/drybag/config/overlay.py"
+before = "    if root is not None and not root.is_absolute():"
+after = "    if False:"
+reddens = ["tests/config/test_overlay_root.py::test_a_relative_overlay_root_is_a_machine_file_fault"]
+
 # Only this machine's `machines/<name>/` is a sub-plate: another machine's is not, and a machine
 # with no name has none.
 [[mutation]]

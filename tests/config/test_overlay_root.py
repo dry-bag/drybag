@@ -81,6 +81,21 @@ def test_a_root_under_tilde_is_the_owners_home(
     assert overlay_root(machine) == owner
 
 
+@pytest.mark.parametrize("root", ["drybag-private", "./o"])
+def test_a_relative_overlay_root_is_a_machine_file_fault(tmp_path: Path, root: str) -> None:
+    # Read as it stands, a relative root names a directory under wherever the command runs, a
+    # clone's checkout on the hook path, as a relative `HOME` would (`owner_home`). Refused in the
+    # words every command prints for a machine file that does not load. Mutation (oracle):
+    # `mutations/`'s "a relative overlay root is read from the working directory" -> this reddens.
+    machine = tmp_path / "machine.toml"
+    machine.write_text(f'[overlay]\nroot = "{root}"\n', encoding="utf-8")
+    with pytest.raises(MachineConfigError) as raised:
+        overlay_root(machine)
+    assert str(raised.value) == (
+        f"{machine}: [overlay] root must be an absolute path or start with ~/"
+    )
+
+
 def test_a_root_under_tilde_is_not_recorded_where_there_is_no_home(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -89,4 +104,7 @@ def test_a_root_under_tilde_is_not_recorded_where_there_is_no_home(
     monkeypatch.setenv("HOME", "")
     machine = tmp_path / "machine.toml"
     machine.write_text('[overlay]\nroot = "~/drybag-private"\n', encoding="utf-8")
+    assert overlay_root(machine) is None
+    # Nor a `~user` the password database does not list, which `Path.expanduser` raised for.
+    machine.write_text('[overlay]\nroot = "~drybag-no-such-user/o"\n', encoding="utf-8")
     assert overlay_root(machine) is None

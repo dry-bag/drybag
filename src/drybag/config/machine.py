@@ -59,12 +59,14 @@ def owner_home() -> Path | None:
 
 
 def in_owner_home(value: str) -> Path | None:
-    """`value` with a leading `~` read as `owner_home`, or `None` when it begins with `~` and
-    there is no such home, rather than a `~` left to be read as a directory name."""
+    """`value` with a leading `~` read as `owner_home` (`~user` as the password database has it),
+    or `None` when it begins with `~` and there is no such home, rather than a `~` left to be read
+    as a directory name."""
     if value == "~" or value.startswith("~/"):
         home = owner_home()
         return None if home is None else home / value[2:]
-    return Path(value).expanduser()
+    named = os.path.expanduser(value)
+    return None if named.startswith("~") else Path(named)
 
 
 def machine_config_path() -> Path | None:

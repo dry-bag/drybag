@@ -79,6 +79,7 @@ from typing import Any, Literal
 from drybag import REPOSITORY_URL, __version__, fsops
 from drybag.config.machine import in_owner_home
 from drybag.config.overlay import overlay_root as recorded_root
+from drybag.config.reading import MachineConfigError
 from drybag.errors import Failure, Refusal
 from drybag.fsops import utf_8_name
 from drybag.harnesses import BYTE_ORDER_MARK, HARNESSES, lenient_settings
@@ -626,7 +627,11 @@ def setup(
 
     overlay_root: Path | None = None
     if planned_overlay is not None:
-        previous = recorded_root(machine)
+        try:
+            previous = recorded_root(machine)
+        except MachineConfigError:
+            # A relative root, the one fault that loads: this run is its remedy.
+            previous = None
         overlay_root, note = _apply_overlay(planned_overlay, runner=runner)
         notes.append(note)
         if previous is not None and previous != overlay_root:
