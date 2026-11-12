@@ -315,5 +315,5 @@ def test_check_json_keeps_its_existing_fields(
     # The project and its source are added beside the report's fields, never in place of one.
     root, _, machine = _clone(tmp_path, origin="https://example.com/Owner/Widget-Kit.git")
     _, data = _checked(capsys, root, machine)
-    assert {"state", "added_allow", "already_present", "rules_to_write"} <= set(data)
+    assert {"state", "allow_added", "already_present", "rules_written"} <= set(data)
     assert data["state"] == "unbound"

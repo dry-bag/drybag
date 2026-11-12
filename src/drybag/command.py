@@ -52,6 +52,9 @@ SETUP_MACHINE_HELP = (
 # which `attach` shows and proceeds with, so a `--check` that failed on it would make reading the
 # diff first a failure. It ends with the run's own code where the run would refuse or fail.
 ATTACH_CHECK_HELP = "report the binding and the diff, and write nothing"
+# `attach --store` takes one value, the directory attach derives, where `memory`'s resolves the
+# store wherever it is pointed.
+ATTACH_STORE_HELP = "this project's own <overlay>/projects/<name>/memory, the one path accepted"
 
 
 def grammar(pattern: re.Pattern[str], rule: str) -> Callable[[str], str]:
@@ -67,12 +70,17 @@ def grammar(pattern: re.Pattern[str], rule: str) -> Callable[[str], str]:
 
 
 def common_flags(
-    parser: argparse.ArgumentParser, *, store: bool = False
+    parser: argparse.ArgumentParser,
+    *,
+    store: bool = False,
+    machine: bool = True,
+    store_help: str = STORE_HELP,
 ) -> argparse.ArgumentParser:
     parser.add_argument("--root", default=".", help=ROOT_HELP)
-    parser.add_argument("--machine", default=None, help=MACHINE_HELP)
+    if machine:
+        parser.add_argument("--machine", default=None, help=MACHINE_HELP)
     if store:
-        parser.add_argument("--store", default=None, help=STORE_HELP)
+        parser.add_argument("--store", default=None, help=store_help)
     return parser
 
 

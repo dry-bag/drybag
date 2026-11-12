@@ -12,7 +12,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from drybag.areas import SubParsers
-from drybag.command import ATTACH_CHECK_HELP, command_owner, common_flags, grammar
+from drybag.command import (
+    ATTACH_CHECK_HELP,
+    ATTACH_STORE_HELP,
+    command_owner,
+    common_flags,
+    grammar,
+)
 from drybag.config.schema import NAME_RULE, PROJECT_NAME
 from drybag.printed import clipped, quoted
 from drybag.result import Result
@@ -184,6 +190,7 @@ def register(groups: SubParsers) -> None:
             "attach", help="bind this repository to the overlay and point the harness at its notes"
         ),
         store=True,
+        store_help=ATTACH_STORE_HELP,
     )
     attach.add_argument("--check", action="store_true", help=ATTACH_CHECK_HELP)
     # Held to `[project] name`'s rule before anything runs: the name becomes
@@ -199,9 +206,9 @@ def register(groups: SubParsers) -> None:
     )
     attach.set_defaults(func=run_attach)
 
-    # `--machine` is taken as every project command takes it (docs/cli.md, "Shared flags"), and
-    # read by nothing here: every path `detach` withdraws is the ledger's or derived from the id.
+    # No `--machine`: every path `detach` withdraws is the ledger's or derived from the id.
     detach = common_flags(
-        groups.add_parser("detach", help="remove what attach added, and leave the binding")
+        groups.add_parser("detach", help="remove what attach added, and leave the binding"),
+        machine=False,
     )
     detach.set_defaults(func=run_detach)

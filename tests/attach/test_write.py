@@ -2151,7 +2151,7 @@ def test_a_source_past_the_longest_path_under_a_project_with_no_directory_is_no_
         shutil.rmtree(projects_dir)
     result = check(root, store=projects_dir / name / "memory", machine=machine)
     assert result.exit_code == 0, result.summary
-    assert result.data["added_allow"] == [RULE]
+    assert result.data["allow_added"] == [RULE]
 
 
 # The two shapes of an overlay that is damaged rather than one a project's name rules out: its
@@ -2655,6 +2655,13 @@ def test_attach_leaves_a_hand_made_rule_file(tmp_path: Path, text: str) -> None:
     assert again.rules_left == (copy,) and copy not in ledger(root).rules
     detach(root, runner=Recorder())
     assert (root / copy).read_text(encoding="utf-8") == text
+
+
+def test_the_attach_ledger_has_exactly_its_keys(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    keys = ("format", "store", "allow", "rules", "settings_keys", "directories", "render")
+    assert sorted(json.loads(ledger_file(root).read_text(encoding="utf-8"))) == sorted(keys)
 
 
 def test_a_reattach_overwrites_its_own_unchanged_copy(tmp_path: Path) -> None:

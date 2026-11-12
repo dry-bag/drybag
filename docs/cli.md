@@ -48,7 +48,7 @@ Three things hold everywhere:
 - [`drybag plan check [--base REF] [PATH …]`](#drybag-plan-check---base-ref-path-)
 - [`drybag overlay upgrade [--root PATH] [--dry-run]`](#drybag-overlay-upgrade---root-path---dry-run)
 - [`drybag attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#drybag-attach---store-path---project-name---check---root-path---machine-path)
-- [`drybag detach [--root PATH] [--machine PATH]`](#drybag-detach---root-path---machine-path)
+- [`drybag detach [--root PATH]`](#drybag-detach---root-path)
 - [`drybag setup [--preset NAME] [--plugin NAME …] [--home PATH] [--machine PATH] [--overlay VALUE]`](#drybag-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
 - [`drybag setup --git-hooks [--uninstall] [--root PATH]`](#drybag-setup---git-hooks---uninstall---root-path)
 - [`drybag setup --approval-boundary [--home PATH] [--machine PATH]`](#drybag-setup---approval-boundary---home-path---machine-path)
@@ -1043,7 +1043,7 @@ overlay is named here first. It asks what the real run asks before its first wri
 run's own code, so where the run fails or refuses there, in any case the two lists below give before
 the first write, `--check` ends with the same code and the same line; otherwise it exits `0`.
 
-`rules_to_write`, `rules_left` and `rules_taken_back` in the `--json` output list those files. It also names, one line
+`allow_added` lists those allow rules, and `rules_written`, `rules_left` and `rules_taken_back` those files, the keys the run's `--json` uses. It also names, one line
 each, the overlay's MCP servers the run would add, re-add (a changed definition, or one an earlier
 run left unsettled) and take back, and the server names it would deny or stop denying, as `mcp_add`, `mcp_readd`,
 `mcp_take_back`, `mcp_deny` and `mcp_undeny` in `--json`. It launches no `claude` for them.
@@ -1335,7 +1335,7 @@ repository and the overlay as they were. What is left can only happen once writi
 
 ---
 
-## `drybag detach [--root PATH] [--machine PATH]`
+## `drybag detach [--root PATH]`
 
 Removes exactly what `attach` added, and leaves the binding alone: the binding id, this machine's
 record of it and the overlay's `projects/<name>/project.toml` stay, so a later `attach` binds the
@@ -1883,7 +1883,9 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `sync` | whether the [note sync](#note-sync) can run here and what its last job left: a skip while the machine file does not say `[sync] enabled = true`, naming the file and the key; a warning when it is on and the machine records no overlay (or one that is not a directory), when `git` is older than 2.43 (the job does nothing), when no `gitleaks` is on `PATH` (nothing is then committed or pushed; `setup --overlay` switches the sync on without installing one, and the job fails closed), when a hold stands (the paths or commits, and the review command, which names the recorded sha only when it is a whole one), when the record of the job cannot be read, or when the last outcome is anything but `ok`, with the outcome and the first line of its detail: for `skipped` the guard's reason and its remedy (the job acts once it is resolved, and the next session event runs it), for a failure a rerun meets again (`conflict`, `auth_failed`, `hook_failed`, `scan_unavailable`, `signing_failed`, `secret_found`, `waiting_clean_tree`) that it does until you act on what the line says, for any other that a later session event retries, and for `raced` beside an `index.lock` older than a whole job runs (the path `git rev-parse --git-path index.lock` gives, so a linked worktree's too), that lock and to remove it if no git is running; green for `ok`, with the time of the last job. A record made for another overlay reads as never run | the machine file, `git version`, `PATH`, `~/.local/share/drybag/sync/state.json` |
 
 **How `attached` reads the delivery.** With no ledger, a repository whose `memory.mode` is not
-`overlay` is simply not attached, and the row is green. Once this machine's binding confirms the
+`overlay` is simply not attached, and the row is green. A ledger of a checkout this machine binds
+to another project than its `[project] name` names warns in `attach`'s own words, naming both, with
+`attach --project <name>` as the remedy. Once this machine's binding confirms the
 ledger, the row reads what `attach` left: the render under `~/.local/share/drybag/delivery/<id>/`,
 named only by the binding id's first eight characters, and the paths `attach` placed in the main
 checkout, beside the ledger every checkout reads. Every state is read, and the first red one answers,
@@ -1934,7 +1936,7 @@ information. A name `attach` would deliver or take back, as `--check` would list
 delivered, under another definition or unsettled, or held by `drybag/attach-mcp.json` and no
 longer served), is a warning whose remedy is `attach`, as a drifted hook is. The notes reading the
 files gave are said, and a file under which `attach` changes nothing is a warning whose remedy is
-to make it readable. The row launches nothing, so it says it cannot see whether a delivered entry
+to make it readable. The row runs no `claude`, so it says it cannot see whether a delivered entry
 is still in place.
 
 **Eight of the fourteen have a `skip` arm — eighteen arms between them, every one on a state of
@@ -2051,7 +2053,7 @@ in a parser, which is the whole point of the rule.
 anything differs. `drybag docs trail` and `drybag memory index` both
 take it with that meaning.
 
-Three commands mean something else by a shared name, `setup` by two. Each of the four is a
+Three commands mean something else by a shared name, `setup` and `attach` by two each. Each of the five is a
 **named exception** — a decision that the flag means something else, not a sentence that drifted —
 and each has its own constant beside the six above:
 
@@ -2061,6 +2063,7 @@ and each has its own constant beside the six above:
 | `drybag setup --root` | the repository --git-hooks installs into (default: .) |
 | `drybag setup --machine` | the machine configuration file to write (default: ~/.config/drybag/config.toml, the file every reader reads) |
 | `drybag attach --check` | report the binding and the diff, and write nothing |
+| `drybag attach --store` | this project's own <overlay>/projects/<name>/memory, the one path accepted |
 
 `attach --check` reports the way the three `--check`s above do and exits differently on purpose: never on a
 non-empty diff. A diff carrying allow rules is the ordinary state of a first attach, which
@@ -2074,7 +2077,7 @@ because none of them reads a project's configuration: the first reads the messag
 handed and your own `~/.claude/settings.json`, and `hook` finds the project from the harness's own
 event.
 `overlay upgrade` takes `--root` alone, in the sense the second table gives it, and reads no
-`drybag.toml`; `setup` takes both, in its own senses. `tests/test_documents.py` holds both
+`drybag.toml`; `detach` takes `--root` alone too, since every path it withdraws is its ledger's; `setup` takes both, in its own senses. `tests/test_documents.py` holds both
 lists to the real parser.
 
 ---

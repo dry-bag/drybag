@@ -404,6 +404,18 @@ REBIND = (
 )
 
 
+class RebindRefused(Refusal):
+    """`REBIND`, a refusal of its own so `doctor` can tell it from a store that is not this
+    project's."""
+
+
+def refuse_a_rebind(root: Path, named: str) -> None:
+    """`RebindRefused` where this machine binds the checkout to another project than `named`."""
+    found = bound_project(root)
+    if found is not None and found.project != named:
+        raise RebindRefused(REBIND.format(bound=quoted(found.project), named=quoted(named)))
+
+
 # Where a project's name came from, in `attach --check`'s words: one phrase for each of the four
 # ways `choose_project` finds it, and one for the file that names it (`write.configured`).
 BY_FLAG = "named by --project"

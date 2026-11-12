@@ -125,11 +125,11 @@ def _report(planned: AttachPlan, source: str) -> Result:
         "project": printable(binding.project),
         "project_source": source,
         "state": binding.state,
-        "added_allow": list(diff.added_allow),
+        "allow_added": list(diff.added_allow),
         # A count and not the strings: this list comes out of the project's own
         # `settings.local.json`, which a clone can commit, so it is repository-authored.
         "already_present": len(diff.already_present),
-        "rules_to_write": list(rules),
+        "rules_written": list(rules),
         "rules_left": list(planned.left),
         "rules_taken_back": list(planned.taken),
         **heads,

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from drybag.attach.binding import Binding
+    from drybag.attach.binding import Binding, RebindRefused
     from drybag.attach.mcp import McpLedger
     from drybag.attach.write import AttachLedger
     from drybag.config.plates import Plate
@@ -347,7 +347,9 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
     from drybag.config.machine import owner_home
     from drybag.config.schema import OVERLAY_MODE
     from drybag.doctor.api import OK, RED, WARN, Row
+    from drybag.errors import Refusal
     from drybag.memory.api import UNBOUND
+    from drybag.printed import quoted
 
     main = _owner(context)
     linked = config.memory.mode == OVERLAY_MODE
@@ -374,6 +376,9 @@ def _attached(context: Context, config: Config, ledger: _Ledger) -> Row:
     # to print the word "attached".
     if isinstance(answer, str):
         return _uncorroborated(answer)
+    if isinstance(answer, Refusal):
+        rebind = f"run `{ATTACH_COMMAND} --project {quoted(config.project.name)}`"
+        return Row(WARN, f"{LEDGER_NAME} records an attach, but {answer}", rebind)
     state = answer.state
     from drybag.attach.binding import OVERLAY_REPAIR, damaged_overlay
     from drybag.binding import read_id
@@ -577,7 +582,7 @@ MCP_PENDING: Final = (
     "call did not finish: {names}"
 )
 MCP_UNSEEN: Final = (
-    "`drybag doctor` launches nothing, so it cannot see whether a delivered server is still in "
+    "`drybag doctor` runs no `claude`, so it cannot see whether a delivered server is still in "
     "place"
 )
 # The `env` and `headers` values a definition writes into the overlay's files, which sync pushes.
@@ -678,8 +683,11 @@ def _owner(context: Context) -> Path:
         return context.root
 
 
-def _binding_answer(context: Context, config: Config, ledger: _Ledger, main: Path) -> Binding | str:
-    """The overlay binding this repository would attach under, or the label of why there is none.
+def _binding_answer(
+    context: Context, config: Config, ledger: _Ledger, main: Path
+) -> Binding | str | RebindRefused:
+    """The overlay binding this repository would attach under, the label of why there is none, or
+    the refusal of a checkout this machine binds to another project, said in `attach`'s words.
 
     Three different situations are three answers and never one `None` — a ledger naming a store
     the overlay does not permit, a machine that records no overlay at all, and a machine with no
@@ -701,7 +709,7 @@ def _binding_answer(context: Context, config: Config, ledger: _Ledger, main: Pat
     """
     from pathlib import Path
 
-    from drybag.attach.binding import read_binding
+    from drybag.attach.binding import RebindRefused, read_binding, refuse_a_rebind
     from drybag.doctor.api import MachineUnread
     from drybag.errors import Failure, Refusal
     from drybag.gitenv import GitUnavailable
@@ -717,10 +725,15 @@ def _binding_answer(context: Context, config: Config, ledger: _Ledger, main: Pat
     if isinstance(recorded, str):
         return recorded
     try:
+        # A renamed `[project] name` makes the ledger's store another project's: said as the
+        # rebind it is, with `attach`'s own cause and remedy.
+        refuse_a_rebind(context.root, config.project.name)
         # The report's own `Config`, which `read_binding` would otherwise load a second time.
         return read_binding(
             context.root, store=Path(recorded.store), machine=context.machine, config=config
         )
+    except RebindRefused as exc:
+        return exc
     except Refusal:
         return UNRESOLVED
     except (Failure, GitUnavailable):

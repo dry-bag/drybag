@@ -58,11 +58,11 @@ from drybag.attach import exclude
 from drybag.attach.binding import (
     BY_FILE,
     NAMED_BY_FILE,
-    REBIND,
     Binding,
     Chosen,
     choose_project,
     read_binding,
+    refuse_a_rebind,
     refuse_unless_share_can_exist,
 )
 from drybag.attach.mcp import (
@@ -865,7 +865,7 @@ def configured(
     """The run's one `Config`, its project chosen where the repository has no `drybag.toml`
     (`binding.choose_project`, asked only then), and where the project's name came from
     (`binding.BY_FILE` or the phrase of the way it was chosen). `project` is `--project`, which
-    beside the file only confirms a rebind to the project the file names (`REBIND`)."""
+    beside the file only confirms a rebind to the project the file names (`RebindRefused`)."""
     chosen: list[Chosen] = []
 
     def unnamed() -> str:
@@ -878,9 +878,8 @@ def configured(
     named = config.project.name
     if project is not None and project != named:
         raise Refusal(NAMED_BY_FILE)
-    found = bound_project(root)
-    if project is None and found is not None and found.project != named:
-        raise Refusal(REBIND.format(bound=quoted(found.project), named=quoted(named)))
+    if project is None:
+        refuse_a_rebind(root, named)
     return config, BY_FILE
 
 
