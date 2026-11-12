@@ -193,7 +193,7 @@ def test_attach_without_claude_composes_the_notes_and_exits_zero(
     overlay = _overlay_grants(store, allow=(RULE,))
     mcp = {"mcpServers": {"m1": {"command": "srv"}}}
     (overlay / "common" / "claude" / "mcp.json").write_text(json.dumps(mcp), encoding="utf-8")
-    missing = Recorder(code=NOT_FOUND)
+    missing = Recorder(answers={"claude": Completed(NOT_FOUND, "", "", found=False)})
     monkeypatch.setattr("drybag.runner.subprocess_runner", lambda **_: missing)
     assert invoke(["attach", "--json", *_flags(root, store, machine)]) == 0
     data = json.loads(capsys.readouterr().out)
@@ -211,6 +211,25 @@ def test_a_failing_claude_still_exits_one(
     monkeypatch.setattr("drybag.runner.subprocess_runner", lambda **_: Recorder(code=1))
     assert invoke(["attach", *_flags(root, store, machine)]) == 1
     assert NOT_INSTALLED.format(verb="marketplace add", code=1) in capsys.readouterr().err
+
+
+def test_a_claude_that_cannot_start_is_a_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An npm `claude` whose `node` is gone: `env` exits 127, which reads as absent by code alone.
+    # Mutation (declared): every failed call reads as absent.
+    from drybag.attach.write import NOT_INSTALLED
+    from drybag.runner import NOT_FOUND, _SubprocessRunner
+
+    monkeypatch.setattr("drybag.runner.subprocess_runner", _SubprocessRunner)
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    (bin := tmp_path / "bin").mkdir()
+    (bin / "claude").write_text("#!/usr/bin/env drybag-no-such-node\n", encoding="utf-8")
+    (bin / "claude").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin}{os.pathsep}{os.environ['PATH']}")
+    assert invoke(["attach", *_flags(root, store, machine)]) == 1
+    assert NOT_INSTALLED.format(verb="marketplace add", code=NOT_FOUND) in capsys.readouterr().err
 
 
 def test_a_re_attach_names_each_codex_rule_copy_it_takes_back_and_each_file_it_leaves(

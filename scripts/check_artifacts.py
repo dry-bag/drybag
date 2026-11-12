@@ -13,9 +13,8 @@ Three things this looks at, each of which was an inline CI step or nothing at al
   the overlay template or the project footprint's templates would break every `uv tool install`
   while the workflow stayed green. `resources.files` resolves to the checkout under `uv run`,
   which is why no test in `tests/` can see this.
-* **The sdist.** It carries the plugin's static files and the documents beside `src/`, and no
-  `tests/`, `scripts/`, `mutations/` or plans: the suite runs from a checkout of the tag. And
-  `tar` preserves the mode: a wrapper unpacked at 0644 exits 126 for every hook entry.
+* **The sdist.** It carries the documents beside `src/`, and no `tests/`, `scripts/`,
+  `mutations/` or plans: the suite runs from a checkout of the tag.
 * **A rendered overlay.** `setup --overlay <path>` at a path that names nothing is the one working
   source for a first overlay with no network call, and what it leaves behind has to be the files
   the package ships plus the scaffold ledger — no more and no less — inside a git repository, which
@@ -37,8 +36,7 @@ WHEEL_MUST = (
     *(f"drybag/templates/overlay/{relative}" for relative in OVERLAY_FILES),
 )
 # What `pyproject.toml`'s `source-include` names, one file of each tree.
-SDIST_MUST = ("CHANGELOG.md", "skills/README.md", "hooks/run-hook.sh", "hooks/hooks.json")
-SDIST_EXECUTABLE = ("hooks/run-hook.sh",)
+SDIST_MUST = ("CHANGELOG.md", "docs/cli.md")
 # Kept out by `pyproject.toml`, because PyPI keeps its copy of an sdist for good.
 SDIST_MUST_NOT = ("docs/plans/", "mutations/", "tests/", "scripts/")
 
@@ -58,10 +56,6 @@ def check_sdist(path: Path) -> list[str]:
         for tree in SDIST_MUST_NOT
         if any(n.startswith(tree) for n in members)
     ]
-    for name in SDIST_EXECUTABLE:
-        member = members.get(name)
-        if member is not None and member.mode & 0o111 == 0:
-            findings.append(f"sdist: {name} is not executable")
     return findings
 
 

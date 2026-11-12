@@ -38,16 +38,13 @@ def _wheel(path: Path, *, without: str | None = None) -> Path:
     return path
 
 
-def _sdist(
-    path: Path, module: ModuleType, *, wrapper_mode: int = 0o755, without: str | None = None
-) -> Path:
+def _sdist(path: Path, module: ModuleType, *, without: str | None = None) -> Path:
     with tarfile.open(path, "w:gz") as archive:
         for name in module.SDIST_MUST:
             if name == without:
                 continue
             info = tarfile.TarInfo(f"drybag-0.0.0/{name}")
             info.size = 1
-            info.mode = wrapper_mode if name in module.SDIST_EXECUTABLE else 0o644
             archive.addfile(info, io.BytesIO(b"x"))
     return path
 
@@ -78,46 +75,21 @@ def test_a_tree_the_sdist_must_not_carry_is_named(
 
 
 def test_a_template_file_missing_from_the_wheel_is_named(tmp_path: Path) -> None:
-    # Mutation: none of its own — the wheel check is a set difference; the sdist mode check
-    # below carries the declared mutation.
+    # Mutation: none of its own — the wheel check is a set difference.
     module = checker()
     missing = f"drybag/templates/overlay/{OVERLAY_FILES[-1]}"
     findings = module.check_wheel(_wheel(tmp_path / "k.whl", without=missing))
     assert findings == [f"wheel: missing {missing}"]
 
 
-def test_a_wrapper_that_lost_its_executable_bit_in_the_sdist_is_named(tmp_path: Path) -> None:
-    # `tar` preserves the mode, and a downstream packager unpacks it: a wrapper at 0644 exits
-    # 126 for every hook entry, which Claude Code reads as permission.
-    #
-    # **The literal names, because the comparison this replaced was a tautology.** It built the
-    # expected list out of `module.SDIST_EXECUTABLE` — the same tuple `_sdist` builds the
-    # archive from — so `SDIST_EXECUTABLE = ()` made the fixture write every member at 0644,
-    # `check_sdist` find nothing, and `[] == []` hold: measured, 5 passed with the executable
-    # claim covering no file at all.
-    #
-    # Mutations (declared): drop the mode check; empty `SDIST_EXECUTABLE`.
-    module = checker()
-    findings = module.check_sdist(_sdist(tmp_path / "k.tar.gz", module, wrapper_mode=0o644))
-    assert findings == ["sdist: hooks/run-hook.sh is not executable"], findings
-
-
 def test_a_member_missing_from_the_sdist_is_named(tmp_path: Path) -> None:
     # `_sdist`'s `without=` parameter existed and was passed by nothing, so the packager-facing
-    # half of the gate — that `CHANGELOG.md`, `skills/` and `hooks/` actually ship — was checked
-    # by no test.
+    # half of the gate — that the documents actually ship — was checked by no test.
     #
     # Mutation (declared): the missing-member finding is deleted.
     module = checker()
     findings = module.check_sdist(_sdist(tmp_path / "k.tar.gz", module, without="CHANGELOG.md"))
     assert findings == ["sdist: missing CHANGELOG.md"], findings
-
-
-def test_the_sdist_must_carry_the_hook_wrapper_and_hooks_file() -> None:
-    # Spelled out so a checker that drops one from its list reddens here.
-    module = checker()
-    assert {"hooks/run-hook.sh", "hooks/hooks.json"} <= set(module.SDIST_MUST)
-    assert "hooks/hashes.json" not in module.SDIST_MUST
 
 
 def _rendered(root: Path, *, repository: bool = True) -> Path:

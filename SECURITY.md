@@ -112,10 +112,13 @@ Out of scope:
 
 - **A promoted note is recognised by its bytes, wherever they sit.** `drybag memory promote`
   records the digest of a note's bytes, and a note holding those bytes counts as promoted in any
-  store. So in `in-repo` mode, which a repository's `drybag.toml` may choose, a repository that
+  store. So in `in-repo` or `local-only` mode, which a repository's `drybag.toml` may choose and
+  whose store sits in its work tree (`local-only`'s at `.drybag/local/memory`), a repository that
   commits the same bytes as a note you promoted elsewhere has that note delivered as yours, as a
-  standing rule where it carries `metadata.startup`, and its relative references then name that
-  repository's files. Binding an approval to the repository it was given in is planned.
+  standing rule where it carries `metadata.startup` in a group whose name does not end in
+  `volatile`: the groups are the repository's, whichever held your original. Its relative
+  references then name that repository's files. Binding an approval to the repository it was
+  given in is planned.
 
 ## Supported versions
 

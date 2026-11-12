@@ -91,6 +91,8 @@ class Completed:
     code: int
     stdout: str
     stderr: str
+    # False only where the launch found no program: one that ran and exited `NOT_FOUND` was found.
+    found: bool = True
 
 
 class Runner(Protocol):
@@ -131,7 +133,7 @@ class _SubprocessRunner:
         except subprocess.TimeoutExpired:
             return Completed(TIMED_OUT, "", f"{argv[0]} did not finish within {bound}s")
         except FileNotFoundError as exc:
-            return Completed(NOT_FOUND, "", f"{argv[0]} could not be run: {exc}")
+            return Completed(NOT_FOUND, "", f"{argv[0]} could not be run: {exc}", found=False)
         except (OSError, subprocess.SubprocessError) as exc:
             return Completed(NOT_STARTED, "", f"{argv[0]} could not be run: {exc}")
         return Completed(done.returncode, done.stdout, done.stderr)

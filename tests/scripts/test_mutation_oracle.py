@@ -1178,7 +1178,6 @@ def test_a_citation_reads_every_name_of_an_arrow_list_and_no_quote_past_its_line
 
 
 @needs_git
-@pytest.mark.skipif(not (REPOSITORY / ".git").exists(), reason="no git checkout to ask")
 def test_every_cited_entry_name_is_declared() -> None:
     """Every citation of an entry in a tracked file outside `docs/plans/` names a declared entry.
 
@@ -1264,7 +1263,6 @@ def test_an_anchor_that_reads_no_name_is_told() -> None:
 
 
 @needs_git
-@pytest.mark.skipif(not (REPOSITORY / ".git").exists(), reason="no git checkout to ask")
 def test_every_citation_is_spelled_the_way_the_citation_reader_reads() -> None:
     # The walk `test_every_cited_entry_name_is_declared` makes, asking the other question: a
     # citation it cannot read is one whose name nothing checks. That is a citation spelled another

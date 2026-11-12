@@ -39,7 +39,7 @@ DECLARED = ("name", "description", "index", "index_provenance", "group", "group_
 # name, verbatim, one line each, and `MEMORY.md` is UTF-8.
 NAME_NOT_UTF_8 = "the file's name is not UTF-8, so the index cannot name it; rename the file"
 NAME_NOT_ONE_LINE = (
-    "the file's name holds a line break, so the index cannot name it; rename the file"
+    "the file's name or its group's holds a line break, so the index cannot name it; rename it"
 )
 
 
@@ -441,13 +441,13 @@ def walk(store: Path, groups: Sequence[str]) -> Walk:
             if fsops.is_symlink(path):
                 skipped.append(path)
                 continue
-            # The index names a note by its file's name, on one line, and `MEMORY.md` is UTF-8:
-            # a name the disk holds in other bytes, or one that breaks a line, cannot be written
-            # into it, so the note is unreadable.
+            # The index names a note by its group and file name, on one line, and `MEMORY.md` is
+            # UTF-8: a name the disk holds in other bytes, or one that breaks a line, cannot be
+            # written into it, so the note is unreadable.
             if not utf_8_name(path.name):
                 unreadable.append((path, f"{path}: {NAME_NOT_UTF_8}"))
                 continue
-            if not is_one_line(path.name):
+            if not is_one_line(f"{group}/{path.name}"):
                 unreadable.append((path, f"{path}: {NAME_NOT_ONE_LINE}"))
                 continue
             try:

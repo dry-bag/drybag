@@ -41,16 +41,11 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = "src"
-# The sdist carries `src/`, the plugin's static files and the documents, and neither `tests/` nor
-# `scripts/`: the suite needs `uv.lock`, `.github/` and `examples/` as well, so a packager runs it
-# from a checkout of the tag. `scripts/check_artifacts.py` holds what is in and what is out.
+# The sdist carries `src/` and the documents. The suite needs `uv.lock`, `.github/` and `examples/`
+# as well, so a packager runs it from a checkout of the tag; the plugin is published from the
+# repository tree, and its hook wrapper needs `scripts/`. `scripts/check_artifacts.py` holds what
+# is in and what is out.
 source-include = [
-  "skills/**",
-  # `hooks/` and not `templates/`: the harness reads this tree from the plugin root and Python
-  # never does, so the sdist is the only artifact that has to be told about it. The overlay
-  # template is the other way round — `setup --overlay <path>` reads it at runtime, so it lives
-  # under the module root beside `presets/` and the wheel carries it without a line here.
-  "hooks/**",
   "CHANGELOG.md",
   "SECURITY.md",
   "docs/**",
@@ -58,8 +53,6 @@ source-include = [
   "CODE_OF_CONDUCT.md",
   "RELEASING.md",
   "changelog.d/**",
-  ".claude-plugin/**",
-  ".codex-plugin/**",
 ]
 # Internal working records, which PyPI's copy would keep for good. The mutation entries, the
 # tests and the scripts are kept out by not being included above.

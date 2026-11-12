@@ -530,8 +530,7 @@ def test_a_copy_the_team_committed_is_no_finding_once_the_overlay_dropped_it(
 def test_the_attached_row_names_a_refused_rebind(tmp_path: Path) -> None:
     # A pulled commit renames `[project] name`, so the ledger's store is another project's: the row
     # said only that the store is not this project's directory. It says the rebind as `attach`
-    # refuses it, with `--project` as the way out. Mutation: `mutations/`'s "the attached row reads
-    # a rebind as a store that is not this project's".
+    # refuses it, with `--project` as the way out. A message, so no mutation entry.
     from drybag.attach.binding import REBIND
 
     root, store, machine = _attachable(tmp_path)

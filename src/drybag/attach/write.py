@@ -144,7 +144,7 @@ from drybag.memory.api import (
     withdraw_composed,
 )
 from drybag.printed import quoted
-from drybag.runner import NOT_FOUND, Runner
+from drybag.runner import Completed, Runner
 from drybag.scaffold import ParserLimitError, settings_text
 
 LEDGER_FORMAT = 1
@@ -1065,10 +1065,10 @@ def _carry_out(
     # that fails exits 1 with no render recorded and the exclude block standing, so a re-run
     # completes; a `claude` not on `PATH` fails nothing, and the run says what it did not install.
     failed = _install(id, root, runner)
-    absent = failed is not None and failed[1] == NOT_FOUND
+    absent = failed is not None and not failed[1].found
     if failed is not None and not absent:
         _write_ledger(root, planned, carried, None)
-        raise Failure(NOT_INSTALLED.format(verb=failed[0], code=failed[1]))
+        raise Failure(NOT_INSTALLED.format(verb=failed[0], code=failed[1].code))
     if not memory:
         # Out of overlay mode, the pointer an earlier attach recorded and the composed store it
         # named are taken back, as `detach` takes them: left, the harness would go on reading the
@@ -1207,18 +1207,18 @@ CLAUDE_ABSENT = (
 )
 
 
-def _install(id: str, main: Path, runner: Runner) -> tuple[str, int] | None:
+def _install(id: str, main: Path, runner: Runner) -> tuple[str, Completed] | None:
     """Register the render as a marketplace of the main checkout and install its plugin there, or
-    the verb and exit code of the call that failed. Run from the main checkout, whose
+    the verb and answer of the call that failed. Run from the main checkout, whose
     `settings.local.json` Claude Code reads from every worktree and writes the plugin's entry
     into."""
     added = runner.launch(filled(PLUGIN_MARKETPLACE_ADD_LOCAL, str(delivery_directory(id))), main)
     if added.code != 0:
-        return "marketplace add", added.code
+        return "marketplace add", added
     done = runner.launch(
         filled(PLUGIN_INSTALL_LOCAL, f"{plugin_name(id)}@{marketplace_name(id)}"), main
     )
-    return None if done.code == 0 else ("install", done.code)
+    return None if done.code == 0 else ("install", done)
 
 
 # Said where the main checkout's settings file still names the plugin once `detach` asked Claude

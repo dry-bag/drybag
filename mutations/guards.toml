@@ -293,15 +293,20 @@ reddens = [
 [[mutation]]
 name = "the hook falls back to a drybag module the work tree can shadow"
 file = "src/drybag/guards/githooks.py"
-before = """    runner="drybag"
-fi"""
-after = """    runner="drybag"
-elif python3 -c 'import drybag' >/dev/null 2>&1; then
-    runner="python3 -m drybag"
-fi"""
+before = 'case $runner in /*) ;; *) runner="" ;; esac'
+after = """case $runner in /*) ;; *) runner="" ;; esac
+[ -n "$runner" ] || ! python3 -c 'import drybag' 2>/dev/null || runner=python3"""
 reddens = [
   "tests/guards/test_githooks.py::test_the_hook_never_imports_a_drybag_the_repository_tracks",
 ]
+
+# In the work tree an empty `PATH` entry names the repository's `./drybag`, ahead of the owner's.
+[[mutation]]
+name = "the hook resolves drybag in the work tree"
+file = "src/drybag/guards/githooks.py"
+before = 'runner=$(cd / && command -v drybag 2>/dev/null) || runner=""'
+after = 'runner=$(command -v drybag 2>/dev/null) || runner=""'
+reddens = ["tests/guards/test_githooks.py::test_the_hook_never_runs_a_drybag_the_work_tree_holds"]
 
 # A commit git replays (a cherry-pick, a rebase's pick) keeps its author's message.
 [[mutation]]
