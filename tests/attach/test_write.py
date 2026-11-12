@@ -29,6 +29,7 @@ from drybag.attach.exclude import NOT_IGNORED, TRACKED
 from drybag.attach.mcp import BAD_LEDGER, UNUSABLE, McpLedger, digest, read_mcp_ledger
 from drybag.attach.permissions import DENIED_NOT_A_LIST, settings_document
 from drybag.attach.write import (
+    CLAUDE_ABSENT,
     GROUP_ESCAPES,
     GROUP_UNASKED,
     NO_MAIN_CHECKOUT,
@@ -44,7 +45,7 @@ from drybag.memory.api import RECORD, link_sources
 from drybag.memory.store import NOTES_UNDELIVERED, NOTES_UNDELIVERED_REMEDY
 from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from drybag.printed import quoted
-from drybag.runner import Completed
+from drybag.runner import NOT_FOUND, Completed
 from drybag.scaffold import EntriesError, drop, extract
 from tests.attach.test_binding import CONFIG, DEFAULT_MEMORY, _machine, _project_and_store
 from tests.cli import cli
@@ -2797,6 +2798,23 @@ def test_attach_delivers_and_records_digests(tmp_path: Path) -> None:
     again = Recorder()
     attach(root, store=store, machine=machine, runner=again)
     assert _mcp_calls(again) == []
+
+
+def test_attach_without_claude_then_with_it_settles_everything(tmp_path: Path) -> None:
+    # A Codex-only machine has no `claude`, and `attach` exited 1 there on every run before it
+    # composed the notes. The first run composes them and leaves the plugin and every MCP name for
+    # the next run that finds `claude`, which installs and settles them.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, m1=SERVER)
+    missing = Recorder(code=NOT_FOUND)
+    first = attach(root, store=store, machine=machine, runner=missing)
+    assert first.notes.count(CLAUDE_ABSENT) == 1 and first.mcp_failed == ()
+    assert [argv[:3] for argv in missing.calls] == [["claude", "plugin", "marketplace"]]
+    assert ledger(root).render is None and read_mcp_ledger(root).mcp == {}
+    assert Path(_settings(root)[POINTER]).is_dir()
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    assert CLAUDE_ABSENT not in again.notes and again.mcp_delivered == ("m1",)
+    assert ledger(root).render is not None and read_mcp_ledger(root).mcp == {"m1": digest(SERVER)}
 
 
 def test_attach_takes_back_a_server_switched_off_later(tmp_path: Path) -> None:

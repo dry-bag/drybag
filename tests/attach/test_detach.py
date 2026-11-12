@@ -396,18 +396,18 @@ def test_a_detach_that_cannot_read_the_id_keeps_a_settings_file_naming_a_deliver
 def test_detach_after_an_attach_whose_marketplace_add_failed_runs_no_call_and_finishes(
     tmp_path: Path,
 ) -> None:
-    # A `claude` that is not on `PATH` failed the first call, so Claude Code wrote nothing and the
-    # attach exited 1. The settings file names no plugin, so `detach` asks Claude Code to forget
-    # nothing and withdraws: it used to run `marketplace remove` regardless, fail on it, and promise
-    # that running it again would finish, which it never did.
+    # A `claude` that failed the first call wrote nothing, and the attach exited 1. The settings
+    # file names no plugin, so `detach` asks Claude Code to forget nothing and withdraws: it used
+    # to run `marketplace remove` regardless, fail on it, and promise that running it again would
+    # finish, which it never did.
     from drybag.attach.write import attach
     from drybag.runner import Completed
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
-    absent = Recorder(answers={"claude": Completed(127, "", "")})
+    failing = Recorder(answers={"claude": Completed(1, "", "")})
     with pytest.raises(Failure):
-        attach(root, store=store, machine=machine, runner=absent)
+        attach(root, store=store, machine=machine, runner=failing)
     _, delivery = _render_of(root)
     runner = Recorder(answers={"claude": Completed(127, "", "")})
     _detach(root, runner)

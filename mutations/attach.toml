@@ -1759,6 +1759,17 @@ reddens = [
   "tests/attach/test_write.py::test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it",
 ]
 
+# A `claude` not on `PATH` is a Codex-only machine's ordinary state and fails nothing: the notes are
+# composed and the run says what it did not install. Any other failed call still exits 1.
+[[mutation]]
+name = "attach fails on a claude that is not on PATH"
+file = "src/drybag/attach/write.py"
+before = "    absent = failed is not None and failed[1] == NOT_FOUND\n"
+after = "    absent = False\n"
+reddens = [
+  "tests/attach/test_commands.py::test_attach_without_claude_composes_the_notes_and_exits_zero",
+]
+
 # The digest is the removal's anchor: what is at a recorded name is a branch's or the owner's, and
 # an uncommitted edit cannot be got back.
 [[mutation]]
@@ -2213,11 +2224,11 @@ reddens = [
 [[mutation]]
 name = "attach reconciles against an empty MCP ledger"
 file = "src/drybag/attach/write.py"
-before = '''        planned.served or {},
-        owned,
+before = '''            planned.served or {},
+            owned,
 '''
-after = '''        planned.served or {},
-        {},
+after = '''            planned.served or {},
+            {},
 '''
 reddens = [
   "tests/attach/test_write.py::test_attach_delivers_and_records_digests",

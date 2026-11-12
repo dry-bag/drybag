@@ -178,6 +178,40 @@ def test_a_re_attach_names_each_allow_rule_it_takes_back(
     assert f"allow rule withdrawn: {quoted(RULE)}" in capsys.readouterr().out
 
 
+def test_attach_without_claude_composes_the_notes_and_exits_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A Codex-only user is legitimate: with `claude` not on `PATH` the notes are composed, the
+    # screen says once what was not installed, and an MCP name waiting for `claude` is no failure.
+    # Mutation: `mutations/`'s "attach fails on a claude that is not on PATH".
+    from drybag.attach.write import CLAUDE_ABSENT
+    from drybag.runner import NOT_FOUND
+
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    overlay = _overlay_grants(store, allow=(RULE,))
+    mcp = {"mcpServers": {"m1": {"command": "srv"}}}
+    (overlay / "common" / "claude" / "mcp.json").write_text(json.dumps(mcp), encoding="utf-8")
+    missing = Recorder(code=NOT_FOUND)
+    monkeypatch.setattr("drybag.runner.subprocess_runner", lambda **_: missing)
+    assert invoke(["attach", "--json", *_flags(root, store, machine)]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["notes"].count(CLAUDE_ABSENT) == 1 and data["mcp_failed"] == []
+    assert "autoMemoryDirectory" in json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+
+
+def test_a_failing_claude_still_exits_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from drybag.attach.write import NOT_INSTALLED
+
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    monkeypatch.setattr("drybag.runner.subprocess_runner", lambda **_: Recorder(code=1))
+    assert invoke(["attach", *_flags(root, store, machine)]) == 1
+    assert NOT_INSTALLED.format(verb="marketplace add", code=1) in capsys.readouterr().err
+
+
 def test_a_re_attach_names_each_codex_rule_copy_it_takes_back_and_each_file_it_leaves(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -67,6 +67,7 @@ from drybag.attach.binding import (
 )
 from drybag.attach.mcp import (
     McpLedger,
+    Reconciled,
     Served,
     fold_mcp,
     read_mcp_ledger,
@@ -143,7 +144,7 @@ from drybag.memory.api import (
     withdraw_composed,
 )
 from drybag.printed import quoted
-from drybag.runner import Runner
+from drybag.runner import NOT_FOUND, Runner
 from drybag.scaffold import ParserLimitError, settings_text
 
 LEDGER_FORMAT = 1
@@ -1062,10 +1063,12 @@ def _carry_out(
     # Installed on every run, since both calls are idempotent: what Claude Code knows is its own
     # state, which a copy's detach or a lost id can take away whatever this ledger says. A call
     # that fails exits 1 with no render recorded and the exclude block standing, so a re-run
-    # completes.
-    if (failed := _install(id, root, runner)) is not None:
+    # completes; a `claude` not on `PATH` fails nothing, and the run says what it did not install.
+    failed = _install(id, root, runner)
+    absent = failed is not None and failed[1] == NOT_FOUND
+    if failed is not None and not absent:
         _write_ledger(root, planned, carried, None)
-        raise Failure(failed)
+        raise Failure(NOT_INSTALLED.format(verb=failed[0], code=failed[1]))
     if not memory:
         # Out of overlay mode, the pointer an earlier attach recorded and the composed store it
         # named are taken back, as `detach` takes them: left, the harness would go on reading the
@@ -1073,16 +1076,20 @@ def _carry_out(
         if previous is not None and POINTER_KEY in previous.settings_keys and _unpoint(root):
             written, carried = True, ()
         withdraw_composed(id)
-    _write_ledger(root, planned, carried, rendered.rendered)
+    _write_ledger(root, planned, carried, None if absent else rendered.rendered)
     # The overlay's MCP servers at local scope, from the main checkout as the plugin calls are. A
     # call that fails leaves its name unsettled for the next run and the command exits 1 once
-    # every other step ran (`commands.run_attach`).
-    mcp = reconcile(
-        root,
-        planned.served or {},
-        owned,
-        runner,
-        lambda left: write_mcp_ledger(root, replace(mcp_ledger, mcp=left)),
+    # every other step ran (`commands.run_attach`); with no `claude`, none is asked.
+    mcp = (
+        Reconciled(dict(owned))
+        if absent
+        else reconcile(
+            root,
+            planned.served or {},
+            owned,
+            runner,
+            lambda left: write_mcp_ledger(root, replace(mcp_ledger, mcp=left)),
+        )
     )
     if memory:
         _prepare_store(binding, config)
@@ -1096,7 +1103,7 @@ def _carry_out(
             or written
         )
         render_missing_index(root, config, machine=machine)
-    notes: list[str] = []
+    notes = [CLAUDE_ABSENT] if absent else []
     if binding.fault is not None:
         notes.append(binding.fault)
     if binding.bound is not None and binding.bound != binding.project:
@@ -1192,20 +1199,26 @@ NOT_INSTALLED = (
     "`claude plugin {verb}` did not succeed (exit {code}), so the overlay's hooks, skills and "
     "agents are rendered but not installed; run `drybag attach` again"
 )
+# Said instead where `claude` is not on `PATH`, a Codex-only machine's ordinary state: the notes
+# are composed all the same.
+CLAUDE_ABSENT = (
+    "`claude` is not on PATH, so the overlay's hooks, skills, agents and MCP servers are rendered "
+    "but not installed; they are installed by the next `drybag attach` that finds it"
+)
 
 
-def _install(id: str, main: Path, runner: Runner) -> str | None:
+def _install(id: str, main: Path, runner: Runner) -> tuple[str, int] | None:
     """Register the render as a marketplace of the main checkout and install its plugin there, or
-    say which call failed. Run from the main checkout, whose `settings.local.json` Claude Code reads
-    from every worktree and writes the plugin's entry into."""
-    added = runner.launch(filled(PLUGIN_MARKETPLACE_ADD_LOCAL, str(delivery_directory(id))), main)
-    if added.code != 0:
-        return NOT_INSTALLED.format(verb="marketplace add", code=added.code)
-    done = runner.launch(
-        filled(PLUGIN_INSTALL_LOCAL, f"{plugin_name(id)}@{marketplace_name(id)}"), main
-    )
-    if done.code != 0:
-        return NOT_INSTALLED.format(verb="install", code=done.code)
+    the verb and exit code of the call that failed. Run from the main checkout, whose
+    `settings.local.json` Claude Code reads from every worktree and writes the plugin's entry
+    into."""
+    plugin = f"{plugin_name(id)}@{marketplace_name(id)}"
+    for verb, argv in (
+        ("marketplace add", filled(PLUGIN_MARKETPLACE_ADD_LOCAL, str(delivery_directory(id)))),
+        ("install", filled(PLUGIN_INSTALL_LOCAL, plugin)),
+    ):
+        if (code := runner.launch(argv, main).code) != 0:
+            return verb, code
     return None
 
 

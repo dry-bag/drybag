@@ -1091,7 +1091,11 @@ than of the ledger. A linked worktree of a bare repository has no main checkout,
 it (`2`) before anything is written, saying it cannot tell which checkout is the main one. A call
 that does not succeed fails the run (`1`), naming the call and its exit code and never what it
 printed, since that names the plugin; the ledger records no render, the exclude block stays, and the
-next `attach` installs it again. Claude Code records a local-scope marketplace for the whole
+next `attach` installs it again. **`claude` is not required**: where it is not on `PATH` (a
+Codex-only machine, say), the run renders the plugin, composes the notes and exits `0`, saying once
+that the hooks, skills, agents and MCP servers were rendered but not installed; the ledger records
+no render and no server, so the next `attach` that finds `claude` installs and delivers them all.
+Claude Code records a local-scope marketplace for the whole
 machine, so the names carry the whole id, which a clone never sees; the plugin's entry is the reason
 `.claude/settings.local.json` is placed and hidden on every run (below). No hook entry goes into
 `.claude/settings.local.json` any more, since Claude Code rewrites that file whole: the entries an
@@ -1246,8 +1250,8 @@ with and the harness read one directory. Nothing is placed under `paths.memory` 
 `~/.claude/projects/`: the link tree and the harness memory link an earlier release made there are
 yours to remove by hand.
 
-Exits `0` on success. A failure or refusal below that the run meets before its first write ends
-`--check` with the run's code and line.
+Exits `0` on success, `claude` missing from `PATH` included. A failure or refusal below that the
+run meets before its first write ends `--check` with the run's code and line.
 
 A real run exits `1` on a failure, something it reads that cannot be read or a `git` that cannot
 answer, in the order the run meets them:
