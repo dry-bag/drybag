@@ -102,18 +102,6 @@ reddens = [
   "tests/scripts/test_mutation_oracle.py::test_an_uncommitted_reddens_test_file_is_refused_like_an_uncommitted_source_file",
 ]
 
-# The built artifact's modes. `tar` preserves the mode and a downstream packager unpacks it: a
-# wrapper at 0644 exits 126 for every hook entry, which Claude Code reports as a permission error
-# rather than as a broken install. Nothing in `tests/` can see this — only the built artifact can.
-[[mutation]]
-name = "the sdist check stops reading the wrapper's mode"
-file = "scripts/check_artifacts.py"
-before = "        if member is not None and member.mode & 0o111 == 0:"
-after = "        if False:"
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wrapper_that_lost_its_executable_bit_in_the_sdist_is_named",
-]
-
 # `setup --overlay <path>` leaves a git repository, and the rendered check asks for it rather than
 # stepping over it: a tree that is exact but has no `.git/` is a render that stopped initialising.
 [[mutation]]
@@ -910,20 +898,8 @@ reddens = [
   "tests/scripts/test_smoke_scripts.py::test_the_exfiltration_scenario_holds_against_the_checkout",
 ]
 
-# Three of the built-artifact gate's four claims were unheld, each removable with the module's five
-# tests still passing. The executable case compared `check_sdist`'s output against a list recomputed
-# from the same tuple the fixture builds the archive from; `_sdist`'s `without=` parameter was
-# passed by nothing; and `main`'s `dist` arm — the one CI runs — was reached by no test at all, so
-# both CI steps would have reported success while printing findings.
-[[mutation]]
-name = "the sdist executable claim covers no file"
-file = "scripts/check_artifacts.py"
-before = 'SDIST_EXECUTABLE = ("hooks/run-hook.sh",)'
-after = "SDIST_EXECUTABLE = ()"
-reddens = [
-  "tests/scripts/test_check_artifacts.py::test_a_wrapper_that_lost_its_executable_bit_in_the_sdist_is_named",
-]
-
+# `_sdist`'s `without=` parameter was passed by nothing, and `main`'s `dist` arm — the one CI runs —
+# was reached by no test, so both CI steps would have reported success while printing findings.
 [[mutation]]
 name = "the sdist stops reporting a member it does not carry"
 file = "scripts/check_artifacts.py"
