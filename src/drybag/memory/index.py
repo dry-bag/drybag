@@ -14,7 +14,6 @@ declares; nesting the group under its folder is the reading that keeps both rule
 
 from __future__ import annotations
 
-import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -323,14 +322,10 @@ def reconcile(store: Store, config: Config, *, write: bool) -> Reconciliation:
     )
 
 
-def _order(note: Note) -> tuple[float, float, str]:
+def _order(note: Note) -> tuple[bool, int, bool, int, str]:
     """A note with no `startup` rank, or no `group_order`, sorts after every one that has one."""
-    rank = note.startup
-    return (
-        math.inf if rank is None else rank,
-        math.inf if note.group_order is None else note.group_order,
-        note.name,
-    )
+    rank, order = note.startup, note.group_order
+    return (rank is None, rank or 0, order is None, order or 0, note.name)
 
 
 def _entry(note: Note, unreviewed: set[Path]) -> str:

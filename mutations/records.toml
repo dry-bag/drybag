@@ -10,10 +10,8 @@
 [[mutation]]
 name = "group_order outranks the startup rank in the index order"
 file = "src/drybag/memory/index.py"
-before = '''        math.inf if rank is None else rank,
-        math.inf if note.group_order is None else note.group_order,'''
-after = '''        math.inf if note.group_order is None else note.group_order,
-        math.inf if rank is None else rank,'''
+before = "    return (rank is None, rank or 0, order is None, order or 0, note.name)"
+after = "    return (order is None, order or 0, rank is None, rank or 0, note.name)"
 reddens = [
   "tests/memory/test_index.py::test_the_startup_rank_outranks_group_order_everywhere_it_is_read",
 ]
@@ -657,8 +655,8 @@ reddens = [
 [[mutation]]
 name = "memory index names an unreadable note by its absolute path"
 file = "src/drybag/memory/index.py"
-before = "unreadable=[path.relative_to(store.path).as_posix() for path, _ in reconciled.unreadable],"
-after = "unreadable=[str(path) for path, _ in reconciled.unreadable],"
+before = "            (path.relative_to(store.path).as_posix(), why.removeprefix(str(path)).lstrip(\": \"))"
+after = "            (str(path), why.removeprefix(str(path)).lstrip(\": \"))"
 reddens = [
   "tests/memory/test_commands.py::test_an_unparseable_note_with_a_crafted_name_is_counted_and_never_printed_raw",
   "tests/memory/test_commands.py::test_an_unreadable_note_is_named_store_relative_on_the_line_and_in_json_alike",
@@ -1246,7 +1244,7 @@ reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_takes_three_digits_or_m
 [[mutation]]
 name = "doctor stops warning that the overlay's notes reach no session"
 file = "src/drybag/memory/doctor.py"
-before = '    if "memory.mode" not in resolution.provenance and _undelivered(context):'
+before = '    if not warnings and "memory.mode" not in resolution.provenance and _undelivered(context):'
 after = "    if False:"
 reddens = [
   "tests/memory/test_doctor.py::test_notes_in_the_overlay_with_no_mode_set_warn",
