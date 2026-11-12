@@ -16,6 +16,7 @@ from drybag import binding
 from drybag.config.paths import data_directory
 from drybag.errors import Failure
 from drybag.gitenv import GitUnavailable
+from drybag.printed import quoted
 from tests.gitfixture import git, needs_git
 from tests.runners import git_that_cannot_run
 
@@ -144,6 +145,15 @@ def test_the_data_directory_is_under_home(tmp_path: Path, monkeypatch: pytest.Mo
 def test_a_directory_git_cannot_place_is_cannot_tell_and_never_an_id(tmp_path: Path) -> None:
     with pytest.raises(Failure, match="cannot tell"):
         binding.common_directory(tmp_path)
+
+
+def test_attach_outside_a_repository_says_so(tmp_path: Path) -> None:
+    # `git worktree list` exits 128 there, which was blamed on this machine's `git`.
+    with pytest.raises(Failure) as failed:
+        binding.main_checkout_or_none(tmp_path)
+    assert str(failed.value) == binding.NOT_A_REPOSITORY.format(quoted(str(tmp_path)))
+    git(tmp_path, "init", "-q", "--bare", "bare.git")
+    assert binding.main_checkout_or_none(tmp_path / "bare.git") is None
 
 
 def test_no_repository_is_no_id_and_a_git_that_cannot_run_is_never_no_id(
