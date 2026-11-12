@@ -5377,11 +5377,22 @@ reddens = [
 [[mutation]]
 name = "a file above an incoming note is replaced"
 file = "src/drybag/sync/job.py"
-before = "            elif depth == len(parts) or not stat.S_ISDIR(found[1]):"
+before = "            elif depth == len(parts) or not stat.S_ISDIR(mode):"
 after = "            elif depth == len(parts):"
 reddens = [
   "tests/sync/test_integrate.py::test_an_ignored_file_in_the_way_of_an_incoming_note_waits[parent]",
   "tests/sync/test_integrate.py::test_a_link_above_an_incoming_note_waits_and_the_link_stays",
+]
+
+# A tracked note is itself wherever the volume finds it, whatever spelling its directory lists.
+[[mutation]]
+name = "a tracked note spelled otherwise here is in the way"
+file = "src/drybag/sync/job.py"
+before = "            if here in owners.get(its, ()):  # the tracked path itself, however it is spelled here"
+after = "            if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_tracked_note_spelled_otherwise_here_takes_its_upstream_change",
+  "tests/sync/test_integrate.py::test_a_note_rewritten_unchanged_does_not_block_its_incoming_version",
 ]
 
 [[mutation]]

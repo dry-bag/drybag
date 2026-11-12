@@ -615,9 +615,10 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    write over an ignored file, so the job first asks this volume what is at each path upstream
    brings and at each directory above it: an untracked or ignored file that does not already hold
    the note's content, or anything but a directory where one is needed, stops it before anything is
-   written (`waiting_clean_tree`, naming it). A tracked note the volume takes for an incoming one
-   (a case or Unicode-normalisation variant) is a hold naming both, since only upstream or you can
-   settle two notes that collide. Anything else is a hold, and `HEAD` stays as it is.
+   written (`waiting_clean_tree`, naming it). A tracked note found under another spelling (a case
+   or Unicode-normalisation variant) is that note itself; another tracked note the volume takes for
+   an incoming one is a hold naming both, since only upstream or you can settle two notes that
+   collide. Anything else is a hold, and `HEAD` stays as it is.
 5. **Push.** The checked sha, `<sha>:refs/heads/main`, never forced and with no tag, after the
    secret scan of the range and only when every commit in it is memory.
 

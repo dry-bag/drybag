@@ -654,6 +654,30 @@ def test_an_incoming_note_this_volume_takes_for_a_tracked_one_is_held(
     assert set(ctx.holds.upstream_paths) == {f"common/memory/{local}", f"common/memory/{incoming}"}
 
 
+@pytest.mark.parametrize(
+    ("tracked", "respelled", "incoming"),
+    [(NFC, NFD, NFC), ("Topic.md", "topic.md", "Topic.md"), ("sub", "Sub", "sub/new.md")],
+    ids=["normalisation", "case", "directory"],
+)
+def test_a_tracked_note_spelled_otherwise_here_takes_its_upstream_change(
+    overlays: Overlays, tracked: str, respelled: str, incoming: str
+) -> None:
+    # A tool here respelled a tracked note or its directory: a folding volume finds the note
+    # itself, another an untracked file git leaves be. Mutation (oracle): `mutations/`'s "a
+    # tracked note spelled otherwise here is in the way".
+    a, b, memory = overlays.a, overlays.b, overlays.a / "common/memory"
+    push_note(b, f"common/memory/{tracked}" + ("/n.md" if "." not in tracked else ""), "v1\n")
+    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
+    os.rename(memory / tracked, memory / respelled)
+    folds = (memory / tracked).exists()
+    push_note(b, f"common/memory/{incoming}", "v2 from b\n")
+
+    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
+
+    assert head(a) == head(b) and (memory / incoming).read_text() == "v2 from b\n"
+    assert folds or (memory / respelled).exists()
+
+
 def test_a_case_only_rename_upstream_is_integrated(overlays: Overlays) -> None:
     # The note this volume answers for is the one upstream removes: no collision, on any volume.
     b = overlays.b

@@ -551,8 +551,8 @@ def _in_the_way(
     than the incoming ones (or that git cannot hash), and a non-directory where one is needed.
 
     Adversary: another machine's push, naming a note this volume takes for one already here or
-    for an ignored file of the owner's. Anchors: this volume's own answer (`fsops.stored_name`),
-    never a model of case or normalisation, and git's blob ids of the bytes as they are."""
+    for an ignored file of the owner's. Anchors: the volume's own answer, the entry `lstat` finds
+    for each name (`fsops.stored_name`), never a model of case or normalisation; git's blob ids."""
     tracked = set(_nul(_ok(ctx, "ls-tree", "-r", "-z", "--name-only", "--end-of-options", head)))
     gone = {entry.path for entry in entries if entry.new_mode == DELETED_MODE}
     known, kept = (  # each path, and each directory above one
@@ -560,6 +560,10 @@ def _in_the_way(
         for paths in (tracked, tracked - gone)
     )
     listings: dict[Path, dict[str, int]] = {}
+    owners: dict[tuple[int, int], set[str]] = {}  # each entry here, and the tracked paths it is
+    for path in known:
+        if (at := fsops.stored_name(ctx.overlay / path, listings)) is not None:
+            owners.setdefault((at[1].st_dev, at[1].st_ino), set()).add(path)
     collide: list[tuple[str, str]] = []
     wait: list[str] = []
     hashed: dict[str, str] = {}
@@ -570,17 +574,16 @@ def _in_the_way(
             found = fsops.stored_name(ctx.overlay / here, listings)
             if found is None:
                 break
-            if found[0] != part:  # the volume answers for this name with another entry
-                there = "/".join([*parts[: depth - 1], found[0]])
-                collide.extend([(entry.path, there)] if there in kept else [])
-                wait.extend([] if there in known else [there])
-                break
-            if here in known:
+            name, mode, its = found[0], found[1].st_mode, (found[1].st_dev, found[1].st_ino)
+            if here in owners.get(its, ()):  # the tracked path itself, however it is spelled here
                 continue
-            if depth == len(parts) and stat.S_ISREG(found[1]):
+            if its in owners:  # another tracked path, which the volume takes for this one
+                collide.extend((entry.path, there) for there in sorted(owners[its] & kept))
+                break
+            if depth == len(parts) and stat.S_ISREG(mode) and name == part:
                 hashed[here] = entry.blob
-            elif depth == len(parts) or not stat.S_ISDIR(found[1]):
-                wait.append(here)
+            elif depth == len(parts) or not stat.S_ISDIR(mode):
+                wait.append("/".join([*parts[: depth - 1], name]))
                 break
     asked = b"".join(answer_bytes(str(ctx.overlay.absolute() / path)) + b"\n" for path in hashed)
     blobs = _git(ctx, "hash-object", "--no-filters", "--stdin-paths", stdin=asked)
