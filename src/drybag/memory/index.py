@@ -25,7 +25,6 @@ from drybag.config.schema import OVERLAY_MODE, Config
 from drybag.errors import Failure, Refusal
 from drybag.fsops import TooLarge, read_regular_text, write_atomically
 from drybag.memory.notes import (
-    UNRANKED,
     Note,
     Provenance,
     is_one_line,
@@ -323,13 +322,10 @@ def reconcile(store: Store, config: Config, *, write: bool) -> Reconciliation:
     )
 
 
-def _order(note: Note) -> tuple[int, int, str]:
-    rank = note.startup
-    return (
-        UNRANKED if rank is None else rank,
-        UNRANKED if note.group_order is None else note.group_order,
-        note.name,
-    )
+def _order(note: Note) -> tuple[bool, int, bool, int, str]:
+    """A note with no `startup` rank, or no `group_order`, sorts after every one that has one."""
+    rank, order = note.startup, note.group_order
+    return (rank is None, rank or 0, order is None, order or 0, note.name)
 
 
 def _entry(note: Note, unreviewed: set[Path]) -> str:
@@ -445,7 +441,7 @@ class IndexCheck:
     over_budget: bool
     over_caps: list[str]
     provisional: list[str]
-    unreadable: list[str]  # store-relative
+    unreadable: list[tuple[str, str]]  # (store-relative path, why the reader refused it)
 
 
 def _destination(store: Store, config: Config) -> Path:
@@ -527,9 +523,12 @@ def check_index(store: Store, config: Config, reconciled: Reconciliation) -> Ind
         over_budget=len(text.split()) > config.budgets.effective("memory_index_words"),
         over_caps=caps,
         provisional=list(reconciled.provisional),
-        # Store-relative, as the summary line names it: one file has one name
-        # in one answer, and the absolute prefix is this machine's, not the store's.
-        unreadable=[path.relative_to(store.path).as_posix() for path, _ in reconciled.unreadable],
+        # Store-relative, as the summary line names it: one file has one name in one answer, and
+        # the absolute prefix is this machine's, not the store's, so the reason drops it too.
+        unreadable=[
+            (path.relative_to(store.path).as_posix(), why.removeprefix(str(path)).lstrip(": "))
+            for path, why in reconciled.unreadable
+        ],
     )
 
 

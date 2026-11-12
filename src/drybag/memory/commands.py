@@ -169,10 +169,14 @@ def _findings(report: IndexCheck, config: Config) -> list[str]:
         found.append(
             _UNREADABLE_NOTES.format(
                 count=len(report.unreadable),
-                paths=_printed(report.unreadable),
+                paths=_printed([path for path, _ in report.unreadable]),
             )
         )
     return found
+
+
+def _unreadable(report: IndexCheck) -> list[dict[str, str]]:
+    return [{"path": path, "reason": reason} for path, reason in report.unreadable]
 
 
 def run_index(args: argparse.Namespace) -> Result:
@@ -200,7 +204,7 @@ def run_index(args: argparse.Namespace) -> Result:
                 "over_caps": report.over_caps,
                 "provisional": report.provisional,
                 "refused_extra": reconciled.refused_extra,
-                "unreadable": report.unreadable,
+                "unreadable": _unreadable(report),
             },
             # The same list the summary is built from, so the two can no longer disagree.
             exit_code=1 if findings else 0,
@@ -222,7 +226,7 @@ def run_index(args: argparse.Namespace) -> Result:
             "harvested": reconciled.harvested,
             "provisional": reconciled.provisional,
             "refused_extra": reconciled.refused_extra,
-            "unreadable": report.unreadable,
+            "unreadable": _unreadable(report),
             "over_budget": report.over_budget,
             "over_caps": report.over_caps,
         },

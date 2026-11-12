@@ -12,6 +12,7 @@ from drybag.config.loader import CONFIG_FILE, load
 from drybag.config.schema import Config
 from drybag.memory.bundles import (
     CAP_MARGIN,
+    PENDING_LEAD,
     SLOTS,
     STANDING_LEAD,
     VOLATILE_LEAD,
@@ -179,12 +180,28 @@ def test_an_in_repo_store_reaches_volatile_notes_as_data_and_never_the_standing_
     store, config = a_store(tmp_path, mode="in-repo", reviewed=False)
     volatile = blocks(Bundle.VOLATILE_NOTES, store, config)
     assert volatile[0] == VOLATILE_LEAD
-    assert volatile[1:] != []
-    assert all(block.startswith(DELIMITER) for block in volatile[1:])
+    notes = [block for block in volatile if block not in (VOLATILE_LEAD, PENDING_LEAD)]
+    assert notes != []
+    assert all(block.startswith(DELIMITER) for block in notes)
     assert "fresh" in "\n".join(volatile)
     assert "### first [unreviewed]" in "\n".join(volatile)
     assert blocks(Bundle.STANDING_RULES, store, config) == []
     assert not (tmp_path / "trust.json").exists()
+
+
+@pytest.mark.parametrize("budget", [2500, 1], ids=["in-full", "over-budget"])
+def test_an_unreviewed_standing_note_has_its_own_lead(tmp_path: Path, budget: int) -> None:
+    # A note ranked for the session and not yet promoted was said under the volatile lead, as a
+    # dated, perishable fact to verify and delete, which it is not. It has a lead of its own after
+    # the volatile notes, and stays labelled and inside the data region.
+    store, config = a_store(tmp_path, mode="in-repo", reviewed=False, volatile_words=budget)
+    volatile = blocks(Bundle.VOLATILE_NOTES, store, config)
+    assert volatile[0] == VOLATILE_LEAD
+    lead = volatile.index(PENDING_LEAD)
+    before, after = "\n".join(volatile[:lead]), "\n".join(volatile[lead + 1 :])
+    assert "fresh" in before and "first" not in before
+    assert "first [unreviewed]" in after and "fresh" not in after
+    assert all(block.startswith(DELIMITER) for block in volatile[lead + 1 :])
 
 
 def test_an_overlay_store_is_not_wrapped_as_repository_data(tmp_path: Path) -> None:

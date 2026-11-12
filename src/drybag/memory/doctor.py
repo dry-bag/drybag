@@ -87,6 +87,7 @@ WALK_STOPPED = (
     "holds files that are not notes"
 )
 WALK_REMEDY = "run `drybag memory inventory` to see what the store holds"
+INDEX_REMEDY = "run `drybag memory index --check`"
 
 
 def _pointer(context: Context) -> str:
@@ -147,6 +148,30 @@ def _debris(store: Store) -> Row | None:
     return Row(WARN, DEBRIS.format(count=found), DEBRIS_REMEDY) if found else None
 
 
+def _index(store: Store, config: Config) -> str | None:
+    """What `memory index --check` fails on, as counts, or `None` when it would pass. A store the
+    check cannot read says nothing here, as `memory index` says why, and neither does the missing
+    index of a store before its first note, which is an ordinary state."""
+    from drybag.errors import resolved_or_none
+    from drybag.memory.index import IndexCheck, check_index, reconcile
+
+    def checked() -> tuple[bool, IndexCheck]:
+        reconciled = reconcile(store, config, write=False)
+        return bool(reconciled.notes), check_index(store, config, reconciled)
+
+    answer = resolved_or_none(checked)
+    if answer is None:
+        return None
+    notes, report = answer
+    found = ["the index is out of date"] if report.drifted and notes else []
+    if report.unreadable:
+        found.append(f"{len(report.unreadable)} file(s) in the store cannot be read as a note")
+    limits = int(report.over_budget) + len(report.over_caps)
+    if limits:
+        found.append(f"the index is over {limits} of its size limit(s)")
+    return "; ".join(found) or None
+
+
 def _undelivered(context: Context) -> bool:
     """Whether this checkout is bound to an overlay that holds notes."""
     from pathlib import Path
@@ -176,8 +201,8 @@ def _memory(context: Context, answers: Answers) -> Row:
     and files that are not notes, as counts.
 
     Runs with no `drybag.toml` too, where memory is the harness's own. Files that are not notes,
-    a walk that could not finish, and an overlay's notes reaching no session warn: every other part
-    is information, a store that
+    a walk that could not finish, what `memory index --check` fails on (`_index`) and an overlay's
+    notes reaching no session warn: every other part is information, a store that
     does not resolve among them, since `memory index` says why and a `local-only` store before its
     first note is an ordinary state.
     """
@@ -197,7 +222,7 @@ def _memory(context: Context, answers: Answers) -> Row:
     )
     parts = [f"mode {mode}, {setter}"]
     store = answers.store(context)
-    debris = None
+    warnings: list[tuple[str, str]] = []
     if store is None:
         parts.append(
             "no store: memory is the harness's own"
@@ -214,11 +239,17 @@ def _memory(context: Context, answers: Answers) -> Row:
         pending = len(unreviewed(store.machine, walk(store.path, groups).notes))
         parts.append(f"store {where}, {pending} unreviewed note(s)")
         debris = _debris(store)
+        if debris is not None:
+            warnings.append((debris.detail, debris.remedy or ""))
+        index = _index(store, config) if config else None
+        if index is not None:
+            warnings.append((index, INDEX_REMEDY))
     parts.append(_pointer(context))
-    if debris is not None:
-        return Row(debris.status, "; ".join([*parts, debris.detail]), debris.remedy)
-    if "memory.mode" not in resolution.provenance and _undelivered(context):
-        return Row(WARN, "; ".join([*parts, NOTES_UNDELIVERED]), NOTES_UNDELIVERED_REMEDY)
+    if not warnings and "memory.mode" not in resolution.provenance and _undelivered(context):
+        warnings.append((NOTES_UNDELIVERED, NOTES_UNDELIVERED_REMEDY))
+    if warnings:
+        details, remedies = zip(*warnings, strict=True)
+        return Row(WARN, "; ".join([*parts, *details]), "; ".join(remedies))
     if store is not None:
         parts.append("the note store holds notes and nothing else")
     return Row(OK, "; ".join(parts))
