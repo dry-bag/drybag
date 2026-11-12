@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from drybag.semver import later
+from drybag.semver import later, pre_release
 
 
 def test_a_component_past_nine_digits_is_no_version_and_never_an_exception() -> None:
@@ -65,8 +65,8 @@ def test_later_reads_each_version_s_leading_triple_and_answers_none_without_one(
         ("1.0.0.post1", "1.0.0", None),
         ("1.0.0", "1.0.0.post1", None),
         ("1.0.0+local", "1.0.0", None),
-        # A suffix that begins as a pre-release and goes on past one is not a pre-release.
-        ("1.0.0", "1.0.0rc1.post2", None),
+        # A post-release of a pre-release still comes before the release, as PEP 440 orders it.
+        ("1.0.0", "1.0.0rc1.post2", True),
         # The triple still decides whenever it differs, whatever follows it.
         ("1.0.1rc1", "1.0.0", True),
         ("0.9.9", "1.0.0rc1", False),
@@ -77,6 +77,21 @@ def test_equal_triples_order_a_release_after_its_pre_release_and_nothing_else(
 ) -> None:
     # Mutation (oracle): `mutations/`'s "a release reads as older than its own pre-release" -> the
     # rows whose answer is `True` with a bare `version` redden.
-    # Measured by hand: `_PRE_RELEASE` without its closing `\Z` -> `1.0.0rc1.post2` reads as a
-    # pre-release and its row answers `True`.
     assert later(version, than) is answer
+
+
+# Every spelling the two pre-release grammars once read apart (`.0rc1`, `rc1+local`,
+# `.dev3+g1234abc`, `rc1.post2`, `rc1post2`), beside ones they agreed on.
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        *("a1", "alpha", "b2", "beta", "c1", "rc1", "-rc.1", "pre1", "preview", "dev1", ".dev1"),
+        *("rc1.post2", "rc1post2", ".0rc1", "rc1+local", ".dev3+g1234abc", ".post1", ".1rc1"),
+    ],
+)
+def test_pre_release_and_later_agree_on_every_probe(suffix: str) -> None:
+    # `later` orders a release after a version exactly when `pre_release` reads that version as a
+    # pre-release of it: one grammar, so the `requires` floor and `doctor` cannot disagree.
+    version = f"1.0.0{suffix}"
+    assert (later("1.0.0", version) is True) is pre_release(version)
+    assert (later(version, "1.0.0") is False) is pre_release(version)

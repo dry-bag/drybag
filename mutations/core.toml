@@ -2163,8 +2163,8 @@ reddens = [
 [[mutation]]
 name = "a release reads as older than its own pre-release"
 file = "src/drybag/semver.py"
-before = "    if not suffix and _PRE_RELEASE.match(other):\n        return True"
-after = "    if not suffix and _PRE_RELEASE.match(other):\n        return False"
+before = "    if not suffix and pre_release(than):\n        return True"
+after = "    if not suffix and pre_release(than):\n        return False"
 reddens = [
   "tests/test_semver.py::test_equal_triples_order_a_release_after_its_pre_release_and_nothing_else",
 ]
