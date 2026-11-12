@@ -2956,10 +2956,10 @@ reddens = [
 # hung or blocked: the `git` half of the module had no `_gh`-style guard, and an empty `git status`
 # stdout read as "already current".
 [[mutation]]
-name = "the git half of publish-template stops guarding the two sentinels"
+name = "the git half of publish-template stops guarding the seam's own codes"
 file = "scripts/publish_template.py"
 before = """
-    if done.code in (NOT_FOUND, TIMED_OUT):
+    if done.code in (NOT_FOUND, NOT_STARTED, TIMED_OUT):
         raise Failure(
             f"`git """
 after = """

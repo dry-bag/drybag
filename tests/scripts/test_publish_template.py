@@ -11,7 +11,7 @@ import pytest
 from drybag import jsonobject
 from drybag.errors import Failure, Refusal
 from drybag.overlay.api import OVERLAY_FILES, TEMPLATE_REPOSITORY
-from drybag.runner import NOT_FOUND, Completed
+from drybag.runner import NOT_FOUND, NOT_STARTED, Completed
 from drybag.scaffold import MANIFEST_PATH
 from tests.parserlimits import DEEPER_THAN_FOUR, LONG_NUMBER, NESTED
 from tests.scriptload import publish_template as script
@@ -184,11 +184,12 @@ def test_an_existing_repository_not_yet_a_template_is_marked_and_not_recreated(
     assert ["gh", "repo", "edit", f"owner/{TEMPLATE_REPOSITORY}", "--template"] in argv
 
 
-def test_a_gh_that_cannot_run_is_a_failure_naming_it(tmp_path: Path) -> None:
+@pytest.mark.parametrize("code", [NOT_FOUND, NOT_STARTED])
+def test_a_gh_that_cannot_run_is_a_failure_naming_it(tmp_path: Path, code: int) -> None:
     class _NoGh(_GitHub):
         def launch(self, argv: list[str], cwd: Path) -> Completed:
             if argv[0] == "gh":
-                return Completed(NOT_FOUND, "", "gh could not be run")
+                return Completed(code, "", "gh could not be run")
             return super().launch(argv, cwd)
 
     with pytest.raises(Failure, match="gh repo view"):
@@ -227,7 +228,10 @@ def test_a_repository_gh_really_cannot_find_is_still_reported_as_absent() -> Non
     assert any("would create" in note for note in result.notes), result.notes
 
 
-def test_a_git_that_cannot_run_is_a_failure_and_not_a_report_that_nothing_changed() -> None:
+@pytest.mark.parametrize("code", [NOT_FOUND, NOT_STARTED])
+def test_a_git_that_cannot_run_is_a_failure_and_not_a_report_that_nothing_changed(
+    code: int,
+) -> None:
     # The `gh` half had this guard and the `git` half did not. Measured before the fix, with
     # every `git` argv answering `Completed(NOT_FOUND, "", …)` and `gh` answering normally:
     #
@@ -239,12 +243,12 @@ def test_a_git_that_cannot_run_is_a_failure_and_not_a_report_that_nothing_change
     # exit 0, and the operator told the published template is current when nothing was
     # examined and nothing was pushed. The same output came from `git` timing out, from an
     # `index.lock` another process left, and from a `core.hooksPath` hook failing `git add`.
-    # Mutation (declared): `_git` stops raising on the two sentinels -> the note comes back.
+    # Mutation (declared): `_git` stops raising on the seam's own codes -> the note comes back.
     class _NoGit(_GitHub):
         def launch(self, argv: list[str], cwd: Path) -> Completed:
             if argv[0] == "git":
                 self.calls.append((argv, cwd))
-                return Completed(NOT_FOUND, "", "git could not be run: [Errno 2]")
+                return Completed(code, "", "git could not be run: [Errno 2]")
             return super().launch(argv, cwd)
 
     stub = _NoGit()

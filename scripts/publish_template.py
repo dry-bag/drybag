@@ -44,7 +44,14 @@ try:
     from drybag.overlay.api import OVERLAY_FILES, TEMPLATE_REPOSITORY, render_template, segment
     from drybag.printed import answered
     from drybag.result import Result
-    from drybag.runner import NOT_FOUND, TIMED_OUT, Completed, Runner, subprocess_runner
+    from drybag.runner import (
+        NOT_FOUND,
+        NOT_STARTED,
+        TIMED_OUT,
+        Completed,
+        Runner,
+        subprocess_runner,
+    )
     from drybag.scaffold import MANIFEST_PATH
 except ImportError as exc:
     sys.stderr.write(
@@ -86,7 +93,7 @@ class Existing:
 
 def _gh(runner: Runner, argv: list[str], cwd: Path) -> Completed:
     done = runner.launch(["gh", *argv], cwd)
-    if done.code in (NOT_FOUND, TIMED_OUT):
+    if done.code in (NOT_FOUND, NOT_STARTED, TIMED_OUT):
         raise Failure(
             f"`gh {' '.join(argv[:2])} …` could not be run ({answered(done)}); install and "
             f"authenticate gh"
@@ -105,11 +112,11 @@ def _git(runner: Runner, argv: list[str], cwd: Path) -> Completed:
     exited 0. Four different causes, one message, none of them named, and the operator told the
     published template is current when nothing was examined and nothing was pushed.
 
-    `NOT_FOUND` and `TIMED_OUT` are the two the seam invents rather than `git` reporting, which
-    is why they get their own sentence: neither is an answer from `git` at all.
+    `NOT_FOUND`, `NOT_STARTED` and `TIMED_OUT` are the three the seam invents rather than `git`
+    reporting, which is why they get their own sentence: none is an answer from `git` at all.
     """
     done = runner.launch(["git", *argv], cwd)
-    if done.code in (NOT_FOUND, TIMED_OUT):
+    if done.code in (NOT_FOUND, NOT_STARTED, TIMED_OUT):
         raise Failure(
             f"`git {' '.join(argv[2:4])} …` could not be run ({answered(done)}); this command "
             f"needs git on PATH to publish"

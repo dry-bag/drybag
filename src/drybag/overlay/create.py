@@ -33,7 +33,7 @@ from drybag.overlay.identity import overlay_fault, segment
 from drybag.overlay.layout import IDENTITY_RECORD
 from drybag.overlay.template import templates
 from drybag.printed import answered, quoted
-from drybag.runner import NOT_FOUND, TIMED_OUT, Completed, Runner
+from drybag.runner import NOT_FOUND, NOT_STARTED, TIMED_OUT, Completed, Runner
 from drybag.scaffold import apply, plan
 
 TEMPLATE_REPOSITORY = "drybag-overlay-template"
@@ -183,7 +183,7 @@ def _ended(done: Completed) -> str:
     """How a subprocess that did not succeed ended, in words true of each way: one that could
     not be launched did not run, one that hung did not finish, and one that ran has an exit
     code."""
-    if done.code == NOT_FOUND:
+    if done.code in (NOT_FOUND, NOT_STARTED):
         return "could not be run"
     if done.code == TIMED_OUT:
         return "did not finish"
@@ -217,7 +217,7 @@ def _template_for(owner: str, *, root: Path, runner: Runner) -> str:
         return theirs
     # `gh` could not be launched, hung, was declined, or answered something this cannot read.
     # `gh repo create` is the irreversible act, and it has not run.
-    launched = probe.code not in (NOT_FOUND, TIMED_OUT)
+    launched = probe.code not in (NOT_FOUND, NOT_STARTED, TIMED_OUT)
     if not launched:
         what = "could not be run"
     elif probe.code == 0:

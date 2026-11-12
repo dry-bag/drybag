@@ -8,10 +8,11 @@ have run* against a stub instead of shelling out to `gh`, `git` or `pre-commit`.
 a way a user notices: a missing `--private` publishes somebody's private overlay.
 
 A missing binary is a finding, never a traceback: drybag installs none of `gh`, `git` and
-`pre-commit`, and has to report on a machine that lacks any of them. So an `OSError` from the launch
-becomes `Completed(NOT_FOUND, ...)` and the caller turns it into a note. A binary that ran and never
-returned gets its own code, `TIMED_OUT`, because "not installed" and "hung for five minutes" are
-different findings.
+`pre-commit`, and has to report on a machine that lacks any of them. So a binary the launch did not
+find becomes `Completed(NOT_FOUND, ...)` and the caller turns it into a note. One that is there and
+could not start (an argv past the system's limit, no permission to run it) gets its own code,
+`NOT_STARTED`, and so does a binary that ran and never returned, `TIMED_OUT`, because "not
+installed", "could not start this once" and "hung for five minutes" are different findings.
 """
 
 from __future__ import annotations
@@ -24,9 +25,11 @@ from typing import Protocol
 
 from drybag.gitenv import scrubbed_env
 
-# The shell's own code for "command not found", used here for a binary that could not be
-# launched at all, so a caller has one number to read rather than an exception to catch.
+# The shell's own code for "command not found", used here for a binary the launch did not find,
+# so a caller has one number to read rather than an exception to catch.
 NOT_FOUND = 127
+# The shell's own code for "found but cannot run", used here for any other failure to launch.
+NOT_STARTED = 126
 # `timeout(1)`'s own code, and a separate one on purpose. `TimeoutExpired` is a
 # `SubprocessError`, so a `gh` that hung for the full `NETWORK_TIMEOUT_SECONDS` used to arrive
 # as `NOT_FOUND` -- which every caller reads as "gh is not installed". A wrong finding is worse
@@ -130,8 +133,10 @@ class _SubprocessRunner:
             )
         except subprocess.TimeoutExpired:
             return Completed(TIMED_OUT, "", f"{argv[0]} did not finish within {bound}s")
-        except (OSError, subprocess.SubprocessError) as exc:
+        except FileNotFoundError as exc:
             return Completed(NOT_FOUND, "", f"{argv[0]} could not be run: {exc}")
+        except (OSError, subprocess.SubprocessError) as exc:
+            return Completed(NOT_STARTED, "", f"{argv[0]} could not be run: {exc}")
         return Completed(done.returncode, done.stdout, done.stderr)
 
 
