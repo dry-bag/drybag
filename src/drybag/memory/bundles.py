@@ -77,6 +77,7 @@ VOLATILE_LEAD = (
     "were true when written: verify any path, flag or date before acting on one, and delete a "
     "note once it is resolved."
 )
+PENDING_LEAD = "Notes that would be standing rules once you promote them:"
 
 
 @dataclass(frozen=True)
@@ -129,9 +130,13 @@ def _standing(notes: list[Note], config: Config) -> list[str]:
     return blocks
 
 
+def _led(lead: str, blocks: list[str]) -> list[str]:
+    return [lead, *blocks] if blocks else []
+
+
 def _volatile(notes: list[Note], reviewed: set[Path], config: Config) -> list[str]:
-    """The volatile notes, and every unreviewed note a standing rank would otherwise have made a
-    standing rule; each unreviewed one labelled and inside the data region."""
+    """The volatile notes, and, under `PENDING_LEAD`, every unreviewed note a standing rank would
+    otherwise have made a standing rule; each unreviewed one labelled and inside the data region."""
     notes = [
         note
         for note in notes
@@ -170,22 +175,27 @@ def _volatile(notes: list[Note], reviewed: set[Path], config: Config) -> list[st
     if sum(len(block.split()) for block in full) <= config.budgets.effective(
         "volatile_notes_words"
     ):
+        pairs = list(zip(notes, full, strict=True))
         return [
-            VOLATILE_LEAD,
-            *(data(note, block) for note, block in zip(notes, full, strict=True)),
+            *_led(VOLATILE_LEAD, [data(n, b) for n, b in pairs if is_volatile(n.group_name)]),
+            *_led(PENDING_LEAD, [data(n, b) for n, b in pairs if not is_volatile(n.group_name)]),
         ]
     lines = [
         (note, f"- {note.name}{_flag(note, today, ttl)}{label(note)} — {note.description}")
         for note in notes
     ]
     owned = "\n".join(line for note, line in lines if note.path in reviewed)
-    others = "\n".join(line for note, line in lines if note.path not in reviewed)
+    others = "\n".join(
+        line for note, line in lines if note.path not in reviewed and is_volatile(note.group_name)
+    )
+    pending = "\n".join(line for note, line in lines if not is_volatile(note.group_name))
     return [
         VOLATILE_LEAD,
         "Volatile memory has outgrown its budget; listing descriptions only — open any note "
         "that matters:",
         *([owned] if owned else []),
         *([trust.wrap(others)] if others else []),
+        *_led(PENDING_LEAD, [trust.wrap(pending)] if pending else []),
     ]
 
 
