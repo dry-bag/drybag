@@ -118,9 +118,8 @@ class Rendered:
 
 @dataclass(frozen=True)
 class RenderRecord:
-    """One render: the id it is named by and the digest over its files."""
+    """One render: the digest over its files."""
 
-    id: str
     digest: str
 
     @property
@@ -329,7 +328,7 @@ def write(id: str, parts: Mapping[str, Part]) -> RenderRecord:
         remove_tree(before)
     except OSError as exc:
         raise unwritten(directory.parent, id, exc) from None
-    return RenderRecord(id, _digest(files))
+    return RenderRecord(_digest(files))
 
 
 def remove_tree(directory: Path) -> None:

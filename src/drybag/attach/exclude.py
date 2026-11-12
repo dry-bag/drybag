@@ -126,8 +126,7 @@ TRACKED = (
 NOT_IGNORED = (
     "git would not ignore {paths}, which `attach` places for this machine alone, so nothing past "
     "the exclude block was written: a `.gitignore` line starting with `!` that re-includes a path "
-    "outranks that block, and a memory group whose name holds a line break gets no line in it; "
-    "take that line out of the `.gitignore`, or rename the group, and run `drybag attach` again"
+    "outranks that block; take that line out of the `.gitignore` and run `drybag attach` again"
 )
 
 

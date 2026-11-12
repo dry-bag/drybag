@@ -1608,19 +1608,10 @@ reddens = [
 [[mutation]]
 name = "a finding's label prints its path unbounded"
 file = "src/drybag/findings.py"
-before = "        where = printable(self.path, withheld) if self.path else \"-\""
+before = "        where = printable(self.path) if self.path else \"-\""
 after = "        where = self.path or \"-\""
 reddens = [
   "tests/test_findings.py::test_a_path_outside_the_grammar_never_reaches_a_label_raw",
-]
-
-[[mutation]]
-name = "a finding's label ignores the caller's stand-in"
-file = "src/drybag/findings.py"
-before = "        where = printable(self.path, withheld) if self.path else \"-\""
-after = "        where = printable(self.path) if self.path else \"-\""
-reddens = [
-  "tests/test_findings.py::test_a_caller_without_json_names_its_own_stand_in",
 ]
 
 # In the block led by `mutations/`'s "the stale-key refusal says a re-run names the rest at exactly

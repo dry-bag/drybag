@@ -91,7 +91,6 @@ class Bound:
 
     project: str
     origin: str | None
-    checkout: Path
     id: str
 
 
@@ -198,7 +197,7 @@ def bound_project(root: Path, *, common: Path | None = None) -> Bound | None:
     project, origin, checkout = raw.get("project"), raw.get("origin"), raw.get("checkout")
     if not (isinstance(project, str) and project and isinstance(checkout, str) and checkout):
         return None
-    return Bound(project, origin if isinstance(origin, str) else None, Path(checkout), id)
+    return Bound(project, origin if isinstance(origin, str) else None, id)
 
 
 def record(root: Path, project: str, origin: str | None) -> Bound:
@@ -219,7 +218,7 @@ def record(root: Path, project: str, origin: str | None) -> Bound:
         fsops.write_atomically(_record_path(id), tomlout.dumps({"": fields}))
     except OSError as exc:
         raise unwritten(data_directory() / BINDINGS, id, exc) from None
-    return Bound(project, kept, root, id)
+    return Bound(project, kept, id)
 
 
 def unwritten(directory: Path, id: str, error: OSError) -> Failure:
