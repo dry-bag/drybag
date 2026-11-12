@@ -2328,6 +2328,15 @@ reddens = [
 ]
 
 [[mutation]]
+name = "the MCP ledger reader takes a deny of any shape"
+file = "src/drybag/attach/mcp.py"
+before = '''        and isinstance(deny, list)
+'''
+after = '''        and True
+'''
+reddens = ["tests/attach/test_mcp.py::test_an_mcp_ledger_whose_deny_is_not_a_list_is_bad"]
+
+[[mutation]]
 name = "the MCP ledger reader takes a digest of any shape"
 file = "src/drybag/attach/mcp.py"
 before = '''        and all(isinstance(sha, str) or sha is UNSETTLED for sha in mcp.values())

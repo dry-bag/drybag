@@ -690,6 +690,15 @@ reddens = [
   "tests/test_runner.py::test_a_command_that_hangs_is_not_reported_as_one_that_is_missing",
 ]
 
+# Only a binary the launch did not find is NOT_FOUND, which a caller reads as "not installed"; an
+# argv past the system's limit made the MCP reconcile stop asking a `claude` that was there.
+[[mutation]]
+name = "a launch that could not start is reported as a missing program"
+file = "src/drybag/runner.py"
+before = "        except FileNotFoundError as exc:"
+after = "        except OSError as exc:"
+reddens = ["tests/test_runner.py::test_a_launch_that_fails_for_another_reason_is_not_not_found"]
+
 # --- follow-up to the second pull request: the review's important findings, each a guard
 # something reads ---
 

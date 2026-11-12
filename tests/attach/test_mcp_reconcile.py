@@ -15,7 +15,7 @@ import pytest
 from drybag.attach.mcp import UNSETTLED, Reconciled, Served, digest, fold_mcp, reconcile
 from drybag.config.plates import Plate, PlateKind
 from drybag.printed import quoted
-from drybag.runner import NOT_FOUND, TIMED_OUT, Completed
+from drybag.runner import NOT_FOUND, NOT_STARTED, TIMED_OUT, Completed
 from tests.runners import Recorder
 
 MARKER = "sekret-marker-5c1"
@@ -143,6 +143,16 @@ def test_a_missing_or_hung_claude_stops_every_later_launch(tmp_path: Path, code:
     assert len(runner.calls) == 1
     assert done.owned == dict.fromkeys(("m1", "m2", "m3"), UNSETTLED) == saves[-1]
     assert done.failed == tuple((name, quoted("claude: not run")) for name in ("m1", "m2", "m3"))
+
+
+def test_an_oversized_definition_does_not_stop_the_reconcile(tmp_path: Path) -> None:
+    # A definition past the argv limit cannot start; `claude` is still there for the next name.
+    big = Completed(NOT_STARTED, "", "claude could not be run: [Errno 7] Argument list too long")
+    runner = Recorder(answers={f"{ADD} m1": big})
+    done, _ = _run(tmp_path, _served(tmp_path, m1=DEFINITION, m2=DEFINITION), {}, runner)
+    assert len(runner.calls) == 4
+    assert done.owned == {"m1": UNSETTLED, "m2": digest(DEFINITION)}
+    assert [name for name, _ in done.failed] == ["m1"]
 
 
 def test_replacement_is_reported_for_a_name_without_a_digest(tmp_path: Path) -> None:
