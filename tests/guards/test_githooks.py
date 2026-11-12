@@ -281,6 +281,23 @@ def test_the_hook_never_imports_a_drybag_the_repository_tracks(tmp_path: Path) -
     assert "drybag: not installed for this shell" in done.stderr
 
 
+def test_the_hook_never_runs_a_drybag_the_work_tree_holds(tmp_path: Path) -> None:
+    # git runs the hook in the work tree, where an empty `PATH` entry names the repository's
+    # `./drybag`. Mutation (declared): resolved in the work tree -> the trailer stays.
+    root = repo(tmp_path)
+    marker = tmp_path / "ran"
+    (root / "drybag").write_text(f"#!/bin/sh\n: > {str(marker)!r}\n", encoding="utf-8")
+    (root / "drybag").chmod(0o755)
+    git(tmp_path, root, "add", "drybag")
+    install(root)
+    env = launching(tmp_path)
+    done = gitfixture.run_git(
+        root, "commit", "-q", "-m", TRAILER, home=tmp_path, **{**env, "PATH": f":{env['PATH']}"}
+    )
+    assert done.returncode == 0 and not marker.exists(), done.stderr
+    assert git(tmp_path, root, "log", "-1", "--format=%B").strip() == CLEAN
+
+
 SIGNED = "fix: thing\n\nSigned-off-by: Jane Doe <jane@anthropic.com>"
 REPLAYS = {
     "cherry-pick": ("main", "cherry-pick", "side"),

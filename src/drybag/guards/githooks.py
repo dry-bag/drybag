@@ -68,13 +68,12 @@ failed="drybag: commit strip failed; $gate"
 absent="drybag: not installed for this shell; trailers are not stripped locally; $gate"
 quiet='^nothing to strip'
 
-# Only ever "drybag", the executable on the owner's `PATH`, or empty. Never `python3 -m drybag`:
-# git runs this hook in the work tree, which `-c` and `-m` put first on `sys.path`, so that would
-# import whatever `drybag` module the repository commits.
-runner=""
-if command -v drybag >/dev/null 2>&1; then
-    runner="drybag"
-fi
+# Only ever the absolute path of the `drybag` on `PATH`, or empty. Git runs this hook in the work
+# tree, so `python3 -m drybag` would import the repository's module, and an empty or relative
+# `PATH` entry would name its file: it is resolved in `/`, as `hooks/run-hook.sh` resolves its
+# interpreter. The adversary is the repository's bytes; the anchor, the owner's absolute `PATH`.
+runner=$(cd / && command -v drybag 2>/dev/null) || runner=""
+case $runner in /*) ;; *) runner="" ;; esac
 
 # `commit strip` prints one line on stdout: "stripped N ...", "nothing to strip", or, where the
 # owner's own harness settings say what a commit carries, "kept N ..." with that reason. A
@@ -96,7 +95,7 @@ if [ -n "$replay" ]; then
     :
 elif [ -z "$runner" ]; then
     printf '%s\\n' "$absent" >&2
-elif out=$($runner commit strip "$msg_file"); then
+elif out=$("$runner" commit strip "$msg_file"); then
     printf '%s\\n' "$out" | grep -v "$quiet" >&2 || true
 else
     printf '%s\\n' "$failed" >&2
