@@ -6,10 +6,11 @@ This file is that, so the bus factor of the release process is not one.
 
 The sequence, once, before the detail: `scripts/release.py check` → towncrier assembles
 `CHANGELOG.md` from the `changelog.d/` fragments → the release commit, into whose marketplace
-entry `scripts/release.py pin` writes the plugin commit it releases → `claude plugin tag` and the
-`vX.Y.Z` tag, pushed without `main` → the release workflow's `build` job checks the tag, the pin
-included, tests and builds, and the same workflow's `attest` job computes the plugin commit again
-and attests the packages and the plugin tree's manifest → `scripts/publish_plugin.py` pushes that
+entry `scripts/release.py pin` writes the plugin commit it releases → `ci.yml` green on that exact
+commit, pushed to `next` → `claude plugin tag` and the `vX.Y.Z` tag, pushed without `main` → the
+release workflow's `check` job checks the tag, the pin included, and tests, its `build` job builds
+from the tag's tracked files alone, and its `attest` job computes the plugin commit again and
+attests the packages and the plugin tree's manifest → `scripts/publish_plugin.py` pushes that
 pinned commit to `dry-bag/drybag-plugin`, the repository the plugin is installed from, from
 your own authenticated checkout → the `pypi` approval, whose two jobs first check that the plugin
 repository's tag names the pinned commit and then release the PyPI upload and the GitHub Release,
@@ -328,6 +329,18 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    so what waits is `main`: it moves in step 7, once `publish` has put the name in your hands,
    and not before.
 
+   **Tag only a commit `ci.yml` ran green.** The suite, its six configurations and the oracle
+   have not run on this commit: `release.yml` runs the suite once, on one configuration. A push to
+   `next` runs all of them, and `next` holds nothing but the release commit waiting for its run, so
+   push it there and wait. A red run stops the release here, before anything is spent: fix it on
+   `dev` and start again from step 1.
+
+   ```bash
+   git push --force origin HEAD:next
+   gh run list --workflow ci --commit "$(git rev-parse HEAD)"   # its id, once the run is listed
+   gh run watch <id> --exit-status
+   ```
+
    ```bash
    claude plugin tag .
    git tag vX.Y.Z
@@ -335,21 +348,22 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    git push origin vX.Y.Z drybag--vX.Y.Z
    ```
 
-7. **Watch `build` and `attest`, publish the plugin, then approve.** Watch those two jobs, not
+7. **Watch `check`, `build` and `attest`, publish the plugin, then approve.** Watch those jobs, not
    the whole run: the run goes on waiting for the `pypi` approval, and the plugin goes out before
    it.
 
    ```bash
    gh run list --workflow release --limit 1
    gh run view <id> --json jobs \
-     --jq '.jobs[] | select(.name == "build" or .name == "attest") | "\(.name) \(.conclusion)"'
-   # build success, then attest success, once each has finished; no conclusion while it runs
+     --jq '.jobs[] | select(.name == "check" or .name == "build" or .name == "attest") | "\(.name) \(.conclusion)"'
+   # check, build and attest success, once each has finished; no conclusion while it runs
    ```
 
-   `build` runs the gate against the tag, the pin included, tests and builds the packages.
+   `check` runs the gate against the tag, the pin included, and the tests. `build` restores no
+   cache, installs nothing, builds the packages from `git archive` of the tag and checks them.
    `attest`, which runs no suite and installs nothing, computes the plugin commit of the tag's
    commit with `scripts/plugin_tree.py commit --require-pin`, which fails on a marketplace entry
-   pinning another, and attests both the packages and the plugin tree's manifest. Once both are
+   pinning another, and attests both the packages and the plugin tree's manifest. Once all three are
    green the attestations exist, and before you approve anything, push the plugin, from this
    checkout, with `gh` 2.101.0 or later logged in to `github.com`, and an SSH key GitHub knows:
 
@@ -678,7 +692,8 @@ the release that publishes the template.
 
 - **Anything goes wrong after the tags are pushed.** The ruleset refuses to delete or move a
   pushed `vX.Y.Z` or `drybag--vX.Y.Z`, for everyone, so that version is spent whether or not
-  anything was published: a wrong tag, a red `build`, a rejected approval or a failed upload.
+  anything was published: a wrong tag, a red `check` or `build`, a rejected approval or a failed
+  upload.
   A red `attest` that failed for a transient Sigstore or attestation-service error is not one:
   re-run that job (`gh run rerun <id> --failed`), which computes the same plugin commit of the
   same tag and attests the same files.

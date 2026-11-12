@@ -26,18 +26,17 @@ from tests.test_fixtures import (
     RELEASE_WORKFLOW,
     RELEASING,
     ROOT,
+    SCRIPTED,
     SMOKE_WORKFLOW,
+    WORKFLOWS,
     needs_bash,
-    needs_ci_workflow,
-    needs_release_workflow,
-    needs_smoke_workflow,
     step_script,
 )
 from tests.workflow_yaml import Node, load
 
 
 def _document(workflow: Path) -> dict[str, Node]:
-    """A workflow, read at call time (the sdist carries no `.github/`) by the strict reader."""
+    """A workflow, read at call time by the strict reader."""
     document = load(workflow.read_text(encoding="utf-8"))
     assert isinstance(document, dict), workflow
     return document
@@ -120,7 +119,6 @@ def _demanded_summary(step_name: str, output: str) -> str:
     return str(found[0])
 
 
-@needs_smoke_workflow
 def test_the_smoke_job_demands_the_summary_the_hook_script_prints_over_every_entry() -> None:
     # Each smoke script holds its own floor in constants and prints a summary that is green after
     # one row as after all of them; the job's `grep -qx` is the CI side of that floor, and a copy
@@ -135,7 +133,6 @@ def test_the_smoke_job_demands_the_summary_the_hook_script_prints_over_every_ent
     assert _demanded_summary(step, "hooks.out") == expected
 
 
-@needs_smoke_workflow
 def test_the_smoke_job_demands_the_summary_the_exfiltration_scenario_prints_over_every_row() -> (
     None
 ):
@@ -256,7 +253,6 @@ def _install_id() -> str:
     return ident
 
 
-@needs_smoke_workflow
 def test_the_smoke_installs_the_rendered_tree_and_never_the_checkout() -> None:
     # The install is the smoke's subject: every later step runs hooks, `doctor` and the
     # exfiltration scenario from what it installed. This repository's catalog names the plugin
@@ -282,7 +278,6 @@ def test_the_smoke_installs_the_rendered_tree_and_never_the_checkout() -> None:
         assert argument.startswith('"$RUNNER_TEMP/'), added
 
 
-@needs_smoke_workflow
 def test_the_smoke_runs_doctor_from_the_installed_tree() -> None:
     # `doctor` judges the checkout it was imported from (`_own_root`), and `PYTHONPATH: src`
     # imports it from this checkout, so the step reported on the repository and not on the
@@ -299,7 +294,6 @@ def test_the_smoke_runs_doctor_from_the_installed_tree() -> None:
     assert env.get("PYTHONPATH") == "${{ steps." + _install_id() + ".outputs.root }}/src", env
 
 
-@needs_smoke_workflow
 @pytest.mark.parametrize("script", ["smoke_hooks.py", "smoke_exfiltration.py"])
 def test_the_smoke_runs_its_hook_and_exfiltration_scripts_on_the_installed_tree(
     script: str,
@@ -326,7 +320,6 @@ def test_the_smoke_runs_its_hook_and_exfiltration_scripts_on_the_installed_tree(
     assert env.get("INSTALLED") == "${{ steps." + _install_id() + ".outputs.root }}", env
 
 
-@needs_smoke_workflow
 def test_the_smoke_holds_the_install_to_the_render() -> None:
     # The harness copies what the marketplace's source names into its cache, and only a
     # comparison can say it copied all of it and added nothing: the hooks, `doctor` and the
@@ -351,7 +344,6 @@ def test_the_smoke_holds_the_install_to_the_render() -> None:
     assert env.get("INSTALLED") == "${{ steps." + _install_id() + ".outputs.root }}", env
 
 
-@needs_ci_workflow
 def test_the_validator_reads_the_rendered_manifests() -> None:
     # The validator judges the two manifests the plugin repository's root will hold, so it reads
     # them out of the render; the marketplace is this repository's catalog and is read where it
@@ -377,7 +369,6 @@ def test_the_validator_reads_the_rendered_manifests() -> None:
     assert ".claude-plugin/marketplace.json" in validated, validated
 
 
-@needs_release_workflow
 def test_the_release_attests_the_plugin_tree_it_rendered_from_the_commit() -> None:
     # The `attest` job computes the plugin commit of the commit this run builds, writes the
     # manifest of its tree beside it, and attests that manifest at the same pinned action as
@@ -469,13 +460,12 @@ PLUGIN_REPOSITORY = "dry-bag/drybag-plugin"
 TAG = "v1.2.3"
 
 
-@needs_release_workflow
-@pytest.mark.parametrize("job", ["build", "attest"])
+@pytest.mark.parametrize("job", ["check", "attest"])
 def test_build_fetches_the_first_parent(job: str) -> None:
     # `release.py check --tag` and the plugin commit both read the `sha` the release commit's
     # first parent pins, as the commit's parent; `actions/checkout` fetches one commit unless told
     # otherwise, and the reader then refuses, naming `fetch-depth: 2`, rather than read the parent
-    # as none. Mutations (oracle): `mutations/`'s "the release build fetches the tag's commit
+    # as none. Mutations (oracle): `mutations/`'s "the release check fetches the tag's commit
     # alone" and "the attest job fetches the tag's commit alone" drop `fetch-depth: 2` from each.
     checkouts = [
         step for step in _steps_of(RELEASE_WORKFLOW, job) if _uses(step) == "actions/checkout"
@@ -485,15 +475,14 @@ def test_build_fetches_the_first_parent(job: str) -> None:
     assert _with(checkouts[0], "fetch-depth") == "2", checkouts[0]
 
 
-@needs_release_workflow
 def test_only_the_attest_job_can_attest() -> None:
     # An attestation is signed with the job's OIDC token, so a job holding `id-token: write` and
     # running the suite runs every test, and every dependency the lock installs, with the means to
-    # sign. The suite stays in `build`, which holds `contents: read` and nothing else, and the
+    # sign. The suite stays in `check`, which holds `contents: read` and nothing else, and the
     # job that signs runs this repository's own script on the runner's interpreter and installs
     # nothing. `publish` holds `id-token: write` too, for Trusted Publishing, and attests nothing.
-    # Mutations (oracle): `mutations/`'s "the release build can sign again" -> `id-token: write`
-    # on `build`; "the attest job can write the repository" -> `contents: write` on `attest`; "the
+    # Mutations (oracle): `mutations/`'s "the release check can sign again" -> `id-token: write`
+    # on `check`; "the attest job can write the repository" -> `contents: write` on `attest`; "the
     # Release job can sign" -> `id-token: write` on `github-release`; and "the environment gate
     # can record attestations" -> `attestations: write` on `environment-gate`.
     jobs = _jobs(RELEASE_WORKFLOW)
@@ -546,31 +535,68 @@ def test_only_the_attest_job_can_attest() -> None:
     assert running == [], running
 
 
-@needs_release_workflow
-def test_no_checkout_in_the_release_keeps_its_token() -> None:
+def test_every_checkout_persists_no_credentials() -> None:
     # `actions/checkout` writes the job's token into `.git/config` unless told not to, where every
-    # later step of the job can read it, and no step of the release needs it there: `build` runs
-    # the suite and pushes nothing, `attest` runs a script, and `github-release` authenticates `gh`
-    # with `GH_TOKEN`. Held for every checkout rather than for the jobs judged able to write, so a
-    # `permissions: write-all`, or a job inheriting a widened top-level block, is held too.
-    # Mutations (oracle): `mutations/`'s "the release build keeps a token in its checkout", "the
-    # attest job keeps a token in its checkout" and "the Release job keeps a token in its
-    # checkout".
-    checkouts = {
-        name: [
-            step for step in _steps_of(RELEASE_WORKFLOW, name) if _uses(step) == "actions/checkout"
-        ]
-        for name in _jobs(RELEASE_WORKFLOW)
-    }
-    # The walk's count, so the loop reads every checkout there is.
-    assert {name: len(found) for name, found in checkouts.items() if found} == {
-        "build": 1,
-        "attest": 1,
-        "github-release": 1,
-    }, checkouts
-    for name, found in checkouts.items():
-        for checkout in found:
-            assert _with(checkout, "persist-credentials") == "false", (name, checkout)
+    # later step, and the pull request's code a step runs, can read it; no job here pushes with it,
+    # and `github-release` authenticates `gh` with `GH_TOKEN`. Held for every checkout rather than
+    # for the jobs judged able to write. Mutations (oracle): `mutations/`'s "the release check
+    # keeps a token in its checkout", "the attest job keeps a token in its checkout" and "the
+    # Release job keeps a token in its checkout".
+    checkouts = [
+        (workflow.name, name, step.get("with") or {})
+        for workflow in sorted(WORKFLOWS.glob("*.yml"))
+        for name in _jobs(workflow)
+        for step in _steps_of(workflow, name)
+        if _uses(step) == "actions/checkout"
+    ]
+    assert {found[0] for found in checkouts} == SCRIPTED, checkouts
+    kept = [found for found in checkouts if "'persist-credentials': 'false'" not in str(found[2])]
+    assert kept == [], kept
+
+
+def test_dev_and_the_release_commit_run_ci_on_push() -> None:
+    # A merge into `dev` is tested as it lands, and the release commit before it is tagged:
+    # RELEASING.md pushes it to a branch `ci.yml` runs on and tags it once that run is green.
+    on = _document(CI_WORKFLOW)["on"]
+    assert isinstance(on, dict) and isinstance(on["push"], dict), on
+    branches = on["push"]["branches"]
+    assert isinstance(branches, list) and "dev" in branches, branches
+    pushed = re.findall(r"^ +git push --force origin HEAD:(\S+)$", RELEASING.read_text(), re.M)
+    assert len(pushed) == 1 and pushed[0] in branches, (pushed, branches)
+
+
+def test_the_release_build_is_hermetic() -> None:
+    # The packages attested and published come from a job that restores no cache, installs
+    # nothing, builds from the tag's tracked files with a uv inside the `uv_build` bound (so the
+    # backend it carries builds them), checks them, and uploads what it checked. Mutation
+    # (oracle): `mutations/`'s "the release build restores a cache".
+    steps = _steps_of(RELEASE_WORKFLOW, "build")
+    shapes = [_uses(step) or step.get("name") for step in steps]
+    assert shapes == [
+        "actions/checkout",
+        "astral-sh/setup-uv",
+        "Build and check the packages",
+        "actions/upload-artifact",
+    ], shapes
+    assert _with(steps[1], "enable-cache") == "false", steps[1]
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    bound = re.search(r'"uv_build>=([\d.]+),<([\d.]+)"', pyproject)
+    assert bound is not None
+    low, high, pin = (
+        tuple(map(int, v.split("."))) for v in (*bound.groups(), _with(steps[1], "version"))
+    )
+    assert low <= pin < high, (pin, bound.groups())
+    assert _lines(_run(steps[2])) == [
+        'mkdir "$RUNNER_TEMP/tree"',
+        'git archive HEAD | tar -x -C "$RUNNER_TEMP/tree"',
+        'cd "$RUNNER_TEMP/tree"',
+        "uv build",
+        "PYTHONPATH=src python3 scripts/check_artifacts.py dist",
+    ], steps[2]
+    assert _with(steps[3], "path") == "$RUNNER_TEMP/tree/dist/", steps[3]
+    jobs = _jobs(RELEASE_WORKFLOW)
+    building = [n for n in jobs for s in _steps_of(RELEASE_WORKFLOW, n) if "uv build" in _run(s)]
+    assert building == ["build"], building
 
 
 def _outputs(path: Path) -> dict[str, str]:
@@ -636,7 +662,6 @@ def _attest(tmp_path: Path, source: Path) -> tuple[subprocess.CompletedProcess[s
 
 @needs_git
 @needs_bash
-@needs_release_workflow
 def test_the_attest_job_hands_on_the_commit_its_source_pins(tmp_path: Path) -> None:
     # The gated jobs compare the plugin repository's tag with what `attest` hands on, so `attest`
     # hands on the commit the release commit's tree makes, and only when the release commit pins
@@ -668,7 +693,6 @@ def test_the_attest_job_hands_on_the_commit_its_source_pins(tmp_path: Path) -> N
     assert f"pins {'f' * 40}, and the plugin commit its tree makes is " in done.stderr, done.stderr
 
 
-@needs_release_workflow
 def test_the_gated_jobs_refuse_until_the_plugin_tag_names_the_pin() -> None:
     # Every job behind the `pypi` approval starts by asking the plugin repository whether its tag
     # names the commit `attest` computed: the step is first, before any checkout or download, so a
@@ -741,7 +765,6 @@ DECOY_REF, DECOY_PEELED_REF = f"refs/tags/x/{TAG_REF}", f"refs/tags/x/{PEELED_RE
 
 
 @needs_bash
-@needs_release_workflow
 @pytest.mark.parametrize("job", GATED)
 @pytest.mark.parametrize(
     ("listing", "pinned", "code"),
@@ -818,8 +841,6 @@ def _pattern(value: object) -> str:
     return pattern
 
 
-@needs_release_workflow
-@needs_smoke_workflow
 def test_one_commit_id_shape_everywhere() -> None:
     # A `sha` is 40 lowercase hex characters, and each reader spells that itself: the scripts may
     # not import one another, and a workflow cannot import at all. `plugin_tree.py` checks the
@@ -868,7 +889,6 @@ def test_one_commit_id_shape_everywhere() -> None:
     assert set(names.values()) == {"[0-9a-f]{40}|[0-9a-f]{64}"}, names
 
 
-@needs_release_workflow
 def test_one_plugin_repository_everywhere() -> None:
     # The scripts may not import one another, so each spells the plugin repository itself: the
     # release check holds the marketplace entry's `url` to `release.py`'s `PLUGIN_URL`, the
@@ -963,7 +983,6 @@ def _smoke_programs(tmp_path: Path, source: Path) -> tuple[Path, Path]:
 
 @needs_git
 @needs_bash
-@needs_smoke_workflow
 def test_the_smoke_installs_by_ref_and_sha(tmp_path: Path) -> None:
     # A user's harness clones the plugin repository at the marketplace entry's `ref` and checks out
     # its `sha`, so the smoke installs the same way: from a scratch repository holding the commit
@@ -1029,7 +1048,6 @@ PINNED_CATALOG = "A catalog whose entry pins a commit by sha validates"
 
 
 @needs_bash
-@needs_ci_workflow
 def test_the_validator_reads_a_catalog_whose_entry_pins_a_sha(tmp_path: Path) -> None:
     # Once a release commit pins the plugin commit, this repository's catalog carries a `sha`
     # beside its `ref`, and on `dev` it may carry none; the validator is asked about that shape
@@ -1058,7 +1076,6 @@ def test_the_validator_reads_a_catalog_whose_entry_pins_a_sha(tmp_path: Path) ->
 
 @needs_git
 @needs_bash
-@needs_smoke_workflow
 def test_the_smoke_says_why_it_built_no_plugin_commit(tmp_path: Path) -> None:
     # `--json` writes a refusal's sentence into the file the step reads, so the step prints the
     # file when the script fails; without it the job stops with an exit code and no reason. A

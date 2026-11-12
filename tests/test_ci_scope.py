@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -24,8 +25,6 @@ from tests.test_fixtures import (
     CI_WORKFLOW,
     SMOKE_WORKFLOW,
     needs_bash,
-    needs_ci_workflow,
-    needs_smoke_workflow,
     step_script,
 )
 from tests.workflow_yaml import Node, load
@@ -50,7 +49,12 @@ def _jobs(workflow: Path) -> dict[str, dict[str, Node]]:
     return {name: job for name, job in jobs.items() if isinstance(job, dict)}
 
 
-def _merge(tmp_path: Path, change: dict[str, str | None], renames: dict[str, str]) -> Path:
+def _merge(
+    tmp_path: Path,
+    change: dict[str, str | None],
+    renames: dict[str, str],
+    then: Callable[[Path], object] = Path,
+) -> Path:
     """A repository whose `HEAD` is a merge commit, as the platform checks a pull request out: the
     first parent is the base, the second a branch that writes `change` (`None` deletes) and moves
     each `renames` key to its value. The base moves on beside it, so the merge is a real one."""
@@ -75,6 +79,8 @@ def _merge(tmp_path: Path, change: dict[str, str | None], renames: dict[str, str
     for old, new in renames.items():
         (root / new).parent.mkdir(parents=True, exist_ok=True)
         git(root, "mv", old, new)
+    then(root)
+    git(root, "add", "-A")
     git(root, "commit", "-q", "--allow-empty", "-m", "change")
     git(root, "checkout", "-q", "base")
     (root / "LICENSE").write_text("moved on\n", encoding="utf-8")
@@ -109,8 +115,6 @@ def _scope(root: Path, event: str) -> tuple[subprocess.CompletedProcess[str], di
     return done, dict(line.split("=", 1) for line in written.splitlines())
 
 
-@needs_ci_workflow
-@needs_smoke_workflow
 def test_both_workflows_run_one_scope_step() -> None:
     # `smoke.yml` cannot read `ci.yml`'s job, so it carries its own; the two may not drift.
     assert step_script(SMOKE_WORKFLOW, SCOPE) == step_script(CI_WORKFLOW, SCOPE)
@@ -118,7 +122,6 @@ def test_both_workflows_run_one_scope_step() -> None:
 
 @needs_git
 @needs_bash
-@needs_ci_workflow
 @pytest.mark.parametrize(
     ("change", "renames", "code"),
     [
@@ -160,6 +163,7 @@ def test_both_workflows_run_one_scope_step() -> None:
             {"src/widget.py": WIDGET.replace("Make", "Build")}, {}, "true", id="a-docstring"
         ),
         pytest.param({"src/new.py": "# nothing yet\n"}, {}, "true", id="a-python-file-added"),
+        pytest.param({"docs/new.py": "# nothing yet\n"}, {}, "true", id="python-under-docs"),
         pytest.param(
             {"src/widget.py": WIDGET + '"""\n'}, {}, "true", id="python-that-does-not-tokenize"
         ),
@@ -183,7 +187,24 @@ def test_the_scope_step_answers_false_only_for_documents_and_comments(
 
 @needs_git
 @needs_bash
-@needs_ci_workflow
+@pytest.mark.parametrize(
+    "then",
+    [
+        pytest.param(lambda r: (r / "src/widget.py").chmod(0o755), id="a-mode-change"),
+        pytest.param(lambda r: (r / "docs/guide.md").chmod(0o755), id="an-executable-under-docs"),
+        pytest.param(lambda r: (r / "docs/link.md").symlink_to("guide.md"), id="a-symlink"),
+    ],
+)
+def test_a_mode_or_link_change_is_code(tmp_path: Path, then: Callable[[Path], object]) -> None:
+    # A link, an executable or a mode the plugin tree records is code whatever its text. Mutation
+    # (oracle): `mutations/`'s "the scope step reads no modes".
+    done, outputs = _scope(_merge(tmp_path, {}, {}, then), "pull_request")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert outputs == {"code": "true"}, outputs
+
+
+@needs_git
+@needs_bash
 def test_a_push_reaches_everything_whatever_it_changed(tmp_path: Path) -> None:
     done, outputs = _scope(_merge(tmp_path, {"docs/guide.md": "edited\n"}, {}), "push")
     assert done.returncode == 0, done.stdout + done.stderr
@@ -192,7 +213,6 @@ def test_a_push_reaches_everything_whatever_it_changed(tmp_path: Path) -> None:
 
 @needs_git
 @needs_bash
-@needs_ci_workflow
 def test_a_checkout_with_no_first_parent_fails_the_step_and_answers_nothing(
     tmp_path: Path,
 ) -> None:
@@ -209,8 +229,6 @@ def test_a_checkout_with_no_first_parent_fails_the_step_and_answers_nothing(
     assert outputs == {}, outputs
 
 
-@needs_ci_workflow
-@needs_smoke_workflow
 def test_every_job_that_reads_the_scope_runs_whole_on_any_answer_but_false() -> None:
     # `!cancelled()` runs a job whose `changes` failed, which `needs` alone would skip and report
     # as a success; `!= 'false'` turns the empty answer of a failed `changes` into a full run.
@@ -231,7 +249,6 @@ def test_every_job_that_reads_the_scope_runs_whole_on_any_answer_but_false() -> 
         assert all(isinstance(step, dict) and step.get("if") == GATE for step in steps), steps
 
 
-@needs_ci_workflow
 def test_the_leg_that_runs_on_a_change_to_docs_is_a_leg_of_the_matrix() -> None:
     # A `FULL` naming a leg the matrix lacks would skip the suite on every leg.
     strategy = _jobs(CI_WORKFLOW)["checks"]["strategy"]

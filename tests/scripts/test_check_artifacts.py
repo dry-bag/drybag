@@ -63,9 +63,11 @@ def test_complete_artifacts_have_no_findings(tmp_path: Path) -> None:
     [
         ("docs/plans/a.md", ["sdist: carries docs/plans/"]),
         ("mutations/core.toml", ["sdist: carries mutations/"]),
-        ("tests/fixtures/smoke-project/docs/plans/a.md", []),
+        ("tests/test_fsops.py", ["sdist: carries tests/"]),
+        ("scripts/drybag", ["sdist: carries scripts/"]),
+        ("src/drybag/docs/plans.py", []),
     ],
-    ids=["plans", "mutations", "a-fixture-of-the-same-name"],
+    ids=["plans", "mutations", "tests", "scripts", "a-module-of-the-same-name"],
 )
 def test_a_tree_the_sdist_must_not_carry_is_named(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, member: str, findings: list[str]
@@ -97,15 +99,13 @@ def test_a_wrapper_that_lost_its_executable_bit_in_the_sdist_is_named(tmp_path: 
     # Mutations (declared): drop the mode check; empty `SDIST_EXECUTABLE`.
     module = checker()
     findings = module.check_sdist(_sdist(tmp_path / "k.tar.gz", module, wrapper_mode=0o644))
-    assert "sdist: hooks/run-hook.sh is not executable" in findings, findings
-    assert "sdist: scripts/drybag is not executable" in findings, findings
-    assert len(findings) == 2, findings
+    assert findings == ["sdist: hooks/run-hook.sh is not executable"], findings
 
 
 def test_a_member_missing_from_the_sdist_is_named(tmp_path: Path) -> None:
     # `_sdist`'s `without=` parameter existed and was passed by nothing, so the packager-facing
-    # half of the gate — that `tests/`, `CHANGELOG.md`, `skills/` and `mutations/` actually
-    # ship — was checked by no test.
+    # half of the gate — that `CHANGELOG.md`, `skills/` and `hooks/` actually ship — was checked
+    # by no test.
     #
     # Mutation (declared): the missing-member finding is deleted.
     module = checker()
@@ -113,11 +113,10 @@ def test_a_member_missing_from_the_sdist_is_named(tmp_path: Path) -> None:
     assert findings == ["sdist: missing CHANGELOG.md"], findings
 
 
-def test_the_sdist_must_carry_the_hook_wrapper_hooks_file_and_launcher() -> None:
-    # The three files the harness runs with no interpreter of ours in front of them, spelled out
-    # so a checker that drops one from its list reddens here.
+def test_the_sdist_must_carry_the_hook_wrapper_and_hooks_file() -> None:
+    # Spelled out so a checker that drops one from its list reddens here.
     module = checker()
-    assert {"hooks/run-hook.sh", "hooks/hooks.json", "scripts/drybag"} <= set(module.SDIST_MUST)
+    assert {"hooks/run-hook.sh", "hooks/hooks.json"} <= set(module.SDIST_MUST)
     assert "hooks/hashes.json" not in module.SDIST_MUST
 
 
