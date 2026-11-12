@@ -189,6 +189,32 @@ def test_a_mutation_that_breaks_collection_is_a_finding_and_not_a_catch(tmp_path
     assert subject.read_text(encoding="utf-8") == "GUARD = True\n"
 
 
+@pytest.mark.parametrize(
+    ("after", "crash"),
+    [("    return NOT_IMPORTED", "NameError"), ("    return None.real", None)],
+    ids=["name-error", "attribute-error"],
+)
+def test_a_mutation_that_raises_name_error_is_a_finding(
+    tmp_path: Path, after: str, crash: str | None
+) -> None:
+    # Function-level imports turn an `after` that breaks a name into a test that ran and went
+    # red, so `executed == 0` above cannot see it, and it read as caught: the test never reached
+    # its assertion about the guard. An `AttributeError` stays a catch, which is the bound.
+    # Mutation (declared): the crash check skipped -> the name-error case reads as caught.
+    module = oracle(root=tmp_path)
+    subject = tmp_path / "subject.py"
+    subject.write_text("def guard() -> bool:\n    return True\n", encoding="utf-8")
+    (tmp_path / "test_subject.py").write_text(
+        "import subject\n\n\ndef test_the_guard_holds() -> None:\n    assert subject.guard()\n",
+        encoding="utf-8",
+    )
+    entry = module.Mutation(
+        "probe", subject, "    return True", after, ("test_subject.py::test_the_guard_holds",)
+    )
+    finding = module._check(entry, tmp_path)
+    assert finding is None if crash is None else f"crashed with {crash}" in str(finding), finding
+
+
 def test_the_loader_aims_every_deletion_this_module_drives_at_its_own_scratch(
     tmp_path: Path,
 ) -> None:

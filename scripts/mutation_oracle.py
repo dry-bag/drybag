@@ -362,10 +362,61 @@ class Outcome:
 
     code: int
     executed: int
+    # What the red tests raised, when every one of them raised only `CRASHES`; empty otherwise.
+    crashed: frozenset[str] = frozenset()
 
     @property
     def passed(self) -> bool:
         return self.code == 0 and self.executed > 0
+
+
+# What a mutation that broke the module rather than the guard raises: a name it no longer
+# defines or imports, or source that no longer parses. A test that went red with only these
+# never reached its assertion about the guard. `AttributeError` and `TypeError` stay catches, and
+# that is the bound: an honest guard returning `None` or the wrong type raises them too.
+CRASHES = frozenset(
+    {"NameError", "UnboundLocalError", "ImportError", "ModuleNotFoundError", "SyntaxError"}
+)
+# Loaded into every run by `_run`: the report names a failure's exception only inside a prose
+# message, so this records each raise's type and its bases as a property of the test.
+_RAISED = "drybag_oracle_raised"
+_RAISED_SOURCE = """\
+def pytest_exception_interact(node, call, report):
+    if hasattr(node, "user_properties"):
+        raised = " ".join(kind.__name__ for kind in call.excinfo.type.__mro__)
+        node.user_properties.append(("raised", raised))
+"""
+
+
+def _parsed(report: Path) -> ElementTree.Element | None:
+    """The root of the JUnit report pytest wrote, or `None` for one it never wrote or finished."""
+    if not report.is_file():
+        return None
+    try:
+        # `S314`: not untrusted input. The pytest this process launched wrote it moments ago into
+        # a directory this process created, and nothing a repository authors reaches it except
+        # through pytest's own attribute escaping.
+        return ElementTree.parse(report).getroot()  # noqa: S314
+    except ElementTree.ParseError:
+        return None
+
+
+def _crashed(report: Path) -> frozenset[str]:
+    """The `CRASHES` the red tests raised, or nothing unless every red test raised only those."""
+    root = _parsed(report)
+    raised: set[str] = set()
+    for case in [] if root is None else root.iter("testcase"):
+        if case.find("failure") is None and case.find("error") is None:
+            continue
+        kinds = [
+            CRASHES.intersection(found.get("value", "").split())
+            for found in case.iter("property")
+            if found.get("name") == "raised"
+        ]
+        if not kinds or not all(kinds):
+            return frozenset()
+        raised.update(*kinds)
+    return frozenset(raised)
 
 
 def _executed(report: Path) -> int:
@@ -385,16 +436,8 @@ def _executed(report: Path) -> int:
     and a mistyped id are all "no". Subtracting them is what lets `_check` tell a mutation that
     reddened a guard from one that stopped the guard's test from running at all.
     """
-    if not report.is_file():
-        return 0
-    try:
-        # `S314`, with the reasoning where a reviewer sees it, as the two `subprocess` sites
-        # below already do. This document is not untrusted input: it was written moments ago by
-        # the pytest this process launched, into a `TemporaryDirectory` this process created,
-        # and it is read before that directory is removed. Nothing a repository authors reaches
-        # it except through pytest's own attribute escaping.
-        root = ElementTree.parse(report).getroot()  # noqa: S314
-    except ElementTree.ParseError:
+    root = _parsed(report)
+    if root is None:
         return 0
     suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
     return sum(
@@ -491,6 +534,9 @@ def _run(targets: tuple[str, ...], cwd: Path, *, cache: Path | None = None) -> O
     """
     with tempfile.TemporaryDirectory(prefix=f"{SCRATCH_PREFIX}cache-", dir=TEMPDIR) as scratch:
         report = Path(scratch) / "report.xml"
+        (Path(scratch) / f"{_RAISED}.py").write_text(_RAISED_SOURCE, encoding="utf-8")
+        env = _environment(cwd, cache or Path(scratch), writes_bytecode=False)
+        env["PYTHONPATH"] += os.pathsep + scratch
         with _living:
             if _stopping.is_set():
                 raise Stopped("the run is being stopped; no further pytest is started")
@@ -503,6 +549,8 @@ def _run(targets: tuple[str, ...], cwd: Path, *, cache: Path | None = None) -> O
                     "-q",
                     "-p",
                     "no:cacheprovider",
+                    "-p",
+                    _RAISED,
                     "--no-header",
                     f"--basetemp={Path(scratch) / 'basetemp'}",
                     f"--junit-xml={report}",
@@ -514,7 +562,7 @@ def _run(targets: tuple[str, ...], cwd: Path, *, cache: Path | None = None) -> O
                 # reads — a strict decode then killed the run on a mutation it had caught.
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                env=_environment(cwd, cache or Path(scratch), writes_bytecode=False),
+                env=env,
             )
             _live.add(child)
         try:
@@ -528,7 +576,7 @@ def _run(targets: tuple[str, ...], cwd: Path, *, cache: Path | None = None) -> O
         finally:
             with _living:
                 _live.discard(child)
-        return Outcome(child.returncode, _executed(report))
+        return Outcome(child.returncode, _executed(report), _crashed(report))
 
 
 class Stopped(RuntimeError):
@@ -782,13 +830,9 @@ def _check(mutation: Mutation, tree: Path, *, cache: Path | None = None) -> str 
         os.utime(subject, ns=(head.st_atime_ns, head.st_mtime_ns))
     if mutated.code == 0:
         return f"survived — {', '.join(mutation.reddens)} still passed with the guard broken"
-    # **The clean run's reasoning, applied to the mutated run, which is the half that was
-    # left open.** The paragraphs above argue at length that an exit code alone cannot tell a
-    # green assertion from an absent one — and then judged the mutated run by `mutated.code`
-    # alone, computing `mutated.executed` and discarding it. A mutation that makes the module
-    # unimportable exits 2 from a collection error, which is not zero, which read as `caught`
-    # although the named test never ran. Demonstrated on a synthetic entry whose `after` was
-    # `import a_module_that_does_not_exist`: `caught`, `all 1 mutations were caught`, exit 0.
+    # The clean run's reasoning, applied to the mutated run: a mutation that makes the module
+    # unimportable exits 2 from a collection error, which is not zero, and the named test never
+    # ran. And past that, a test that ran and went red only by crashing (`CRASHES`).
     #
     # Not an equality with `clean.executed`, because a guard that legitimately stops one
     # parametrised case from being generated is a real thing; zero is the line, and a count
@@ -799,6 +843,12 @@ def _check(mutation: Mutation, tree: Path, *, cache: Path | None = None) -> str 
             f"({clean.executed} test(s) ran on the clean tree, 0 with the mutation applied) "
             "rather than reddening them — pytest's exit code says only that something went "
             "wrong, and this entry proves nothing about the guard"
+        )
+    if mutated.crashed:
+        return (
+            f"the mutation crashed with {', '.join(sorted(mutated.crashed))} in every red test of "
+            f"{', '.join(mutation.reddens)}: it broke the module rather than the guard, so it "
+            "proves nothing about the guard — make the `after` fail the guard's assertion"
         )
     return None
 

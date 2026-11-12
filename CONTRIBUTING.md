@@ -459,8 +459,10 @@ whose `before` line appears more than once in the file, because then the entry d
 line; and one whose named tests do not pass on a clean tree before the mutation is applied,
 because a test that is red, skipped or misspelled cannot prove anything about a guard. A fifth is
 not a finding about your entry but about the mutation you chose: one that stops the named tests
-from *running* — an `after` that breaks the import, say — is reported as proving nothing, because
-pytest's non-zero exit there says only that something went wrong. This is not a coverage
+from *running* — an `after` that breaks the import, say — or reddens every one of them only with a
+`NameError`, `UnboundLocalError`, `ImportError`, `ModuleNotFoundError` or `SyntaxError`, is
+reported as proving nothing, because pytest's non-zero exit there says only that something went
+wrong; an `AttributeError` or a `TypeError` still counts as caught. This is not a coverage
 substitute; `--cov` is the breadth measure. It is the set of guards whose load-bearingness has
 to be proven rather than merely executed, which is exactly the distinction that let
 `fsops.open_within` be covered by twelve tests and contain nothing.

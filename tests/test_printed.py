@@ -62,7 +62,8 @@ def test_a_name_outside_the_grammar_arrives_whole_and_inert_through_quoted(name:
     # back to it) and cannot start a line or drive a terminal (every character is printable).
     # Mutation: return the name unchecked from `quoted`, or return `UNPRINTABLE` — each reddens.
     shown = quoted(name)
-    assert ast.literal_eval(shown) == name
+    # A literal first, so a withheld name fails here and not as the parser's `SyntaxError`.
+    assert shown[:1] in "'\"" and ast.literal_eval(shown) == name, shown
     assert shown.isprintable()
 
 

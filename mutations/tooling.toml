@@ -973,6 +973,17 @@ reddens = [
   "tests/scripts/test_mutation_oracle.py::test_a_mutation_that_breaks_collection_is_a_finding_and_not_a_catch",
 ]
 
+# The same hole one step later: a function-level import turns a broken name into a test that ran
+# and went red with a `NameError`, never reaching its assertion about the guard.
+[[mutation]]
+name = "a mutation that only crashes its tests reads as caught again"
+file = "scripts/mutation_oracle.py"
+before = "    if mutated.crashed:"
+after = "    if False:"
+reddens = [
+  "tests/scripts/test_mutation_oracle.py::test_a_mutation_that_raises_name_error_is_a_finding[name-error]",
+]
+
 # An interrupted run left a `git worktree` registration that `git worktree prune` will not take,
 # because prune only drops entries whose directory is gone and the `mkdtemp` tree is still standing.
 # One was live in the development repository at review time, 6.5 MB.
@@ -3001,6 +3012,8 @@ before = """
         view.stdout or "{}",
 """
 after = """
+    import json
+
     document = json.loads(view.stdout or "{}") or json_object(
         view.stdout or "{}",
 """
