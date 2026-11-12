@@ -33,6 +33,7 @@ from drybag.config.machine import machine_config_path
 from drybag.config.overlay import overlay_root
 from drybag.config.owner import resolve_owner
 from drybag.gitenv import Called, answer_bytes, pipe_encoding
+from drybag.printed import quoted
 from drybag.sync import scan
 from drybag.sync.git import (
     JOB_SETTINGS,
@@ -539,6 +540,31 @@ def _lost(
     return [sha for sha in local if sha in had], [sha for sha in incoming if sha in gone]
 
 
+def _ignored_in_the_way(ctx: JobContext, tip: str, incoming: list[str]) -> list[str]:
+    """The ignored untracked files at the paths `tip` brings whose content is not what it brings,
+    which `read-tree -m -u` would write over without a word. Anchor: git's own ignore rules and
+    blob ids; a file git cannot hash is in the way."""
+    ignored = _nul(
+        checked(
+            _git(ctx, "ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--",
+                 *incoming, env=_LITERAL),
+            "git ls-files",
+        ).out
+    )  # fmt: skip
+    if not ignored:
+        return []
+    listed = _git(ctx, "ls-tree", "-r", "-z", "--end-of-options", tip, "--", *ignored, env=_LITERAL)
+    brought = {}
+    for line in _nul(checked(listed, "git ls-tree").out):
+        meta, _, path = line.partition("\t")
+        brought[path] = meta.split(" ")[2]
+    hashed = timed(_git(ctx, "hash-object", "--", *ignored), "git hash-object")
+    have = hashed.out.split() if hashed.code == 0 else []
+    if len(have) != len(ignored):
+        return ignored
+    return [path for path, blob in zip(ignored, have, strict=True) if blob != brought.get(path)]
+
+
 def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Outcome | None:
     """Bring the checked sha `upstream` in, if `HEAD..upstream` is memory-only and so is every
     local commit; the outcome that stops the job, or `None`. `recorded` is the sha the last job
@@ -619,6 +645,13 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
     unmerged = _unmerged_now(ctx)
     if unmerged is not None:
         return unmerged
+    in_the_way = _ignored_in_the_way(ctx, tip, incoming)
+    if in_the_way:
+        detail = (
+            "an ignored file where an incoming note lands holds other bytes, and git would write "
+            f"over it: {', '.join(map(quoted, in_the_way))}; move it aside for the next job"
+        )
+        return _outcome(ctx, "waiting_clean_tree", detail)
     # git writes the incoming notes and the index first, refusing before it writes anything a
     # note changed here, an untracked file or a link in the way; only then does `main` move. A
     # kill between the two leaves the notes staged on the old `main`, which the next job commits

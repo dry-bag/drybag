@@ -594,7 +594,9 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    intent-to-add first (`git add -N`), so each is judged by what git would record from the working
    tree. One that may not move (below), or that a link or a file stands above, is left out and named;
    one the secret scan finds something in is left out and named with its remedy (`secret_found`)
-   while the others commit; and the intent-to-add entry of a note left out is removed again. git
+   while the others commit; and the intent-to-add entry of a note left out is removed again. The
+   message, `memory: <n> notes from <host>` and a line for each `common`, `tags/<tag>` or
+   `projects/<project>` it touched, carries this machine's host name to the remote. git
    moves `main` and updates the real index for those notes alone, so your staged work stays staged
    and your next `git commit` carries no old note back. A signature is made when `commit.gpgsign` is
    set, and never switched off.
@@ -605,8 +607,10 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    index (`git read-tree -m -u`), keeping your staged work and your untracked files, and only then
    does `main` move to the result, by a compare-and-swap. A note changed here and not committed yet,
    an untracked file where a note lands, or a link where git needs a directory makes git refuse
-   before it writes anything (`waiting_clean_tree`, with git's words). Anything else is a hold, and
-   `HEAD` stays as it is.
+   before it writes anything (`waiting_clean_tree`, with git's words). git would write over an
+   ignored file where a note lands, so the job asks first: one that does not already hold the
+   note's content stops it before anything is written (`waiting_clean_tree`, naming the file).
+   Anything else is a hold, and `HEAD` stays as it is.
 5. **Push.** The checked sha, `<sha>:refs/heads/main`, never forced and with no tag, after the
    secret scan of the range and only when every commit in it is memory.
 
@@ -687,7 +691,8 @@ commit conflicts with upstream, and `main` was not moved); `raced` (another git 
 (`origin/main` moved before the push; the next trigger fetches and retries); `offline`,
 `auth_failed` and `timeout` (the remote or a step); `hook_failed` (a step failed, or paths were
 left out of a commit); `scan_unavailable`; `signing_failed`; `secret_found`; `waiting_clean_tree`
-(git refused to write an incoming note: one changed here, an untracked file or a link in its way).
+(an incoming note cannot be written: one changed here, an untracked file, an ignored file holding
+other content, or a link in its way).
 A failure is retried by a later trigger, throttled and
 never forced; one only you can clear waits out the back-off above, and `doctor` says a rerun
 meets it again until you act on what the first line of its detail says.

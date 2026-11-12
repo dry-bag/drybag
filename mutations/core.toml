@@ -5324,6 +5324,14 @@ reddens = [
   "tests/sync/test_integrate.py::test_a_link_above_an_incoming_note_waits_and_the_link_stays",
 ]
 
+# git writes over an ignored file without a word, so the job asks before `read-tree -m -u`.
+[[mutation]]
+name = "an ignored file where a note lands is written over"
+file = "src/drybag/sync/job.py"
+before = "    if in_the_way:"
+after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_an_ignored_file_where_a_note_lands_waits"]
+
 [[mutation]]
 name = "the index is not refreshed before the write"
 file = "src/drybag/sync/job.py"

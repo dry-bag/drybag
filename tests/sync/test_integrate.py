@@ -596,6 +596,34 @@ def test_an_untracked_file_where_a_note_lands_waits(overlays: Overlays) -> None:
     assert (a / "common/memory/from-b.md").read_text() == "written here first\n"
 
 
+def _ignored_where_a_note_lands(overlays: Overlays, text: str) -> Path:
+    """Upstream brings `from-b.md`; here an ignored untracked file holding `text` is at its path."""
+    push_note(overlays.b, "common/memory/from-b.md", "from b\n")
+    (overlays.a / ".git/info/exclude").write_text("from-b.md\n", encoding="utf-8")
+    return write(overlays.a, "common/memory/from-b.md", text)
+
+
+def test_an_ignored_file_where_a_note_lands_waits(overlays: Overlays) -> None:
+    # `read-tree -m -u` writes over an ignored file without a word, so the job asks first.
+    # Mutation (oracle): `mutations/`'s "an ignored file where a note lands is written over".
+    before = head(overlays.a)
+    mine = _ignored_where_a_note_lands(overlays, "written here first\n")
+
+    outcome = J.integrate(context(overlays, overlays.a), fetched(overlays, overlays.a))
+
+    assert outcome is not None and outcome.state == "waiting_clean_tree"
+    assert "common/memory/from-b.md" in str(outcome.detail)
+    assert head(overlays.a) == before and mine.read_text() == "written here first\n"
+
+
+def test_an_ignored_note_with_the_incoming_bytes_does_not_wait(overlays: Overlays) -> None:
+    mine = _ignored_where_a_note_lands(overlays, "from b\n")
+
+    assert J.integrate(context(overlays, overlays.a), fetched(overlays, overlays.a)) is None
+
+    assert head(overlays.a) == head(overlays.b) and mine.read_text() == "from b\n"
+
+
 def test_an_index_rendered_here_never_blocks_an_incoming_note(overlays: Overlays) -> None:
     # The index is this machine's rendering, not a note: dirty here, it is neither waited on nor
     # written, and the note upstream brings arrives beside it.
