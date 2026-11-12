@@ -132,15 +132,11 @@ UNPUSHED = (
     "drybag: the overlay has {ahead} unpushed commit(s) and {dirty} uncommitted change(s); "
     "push it so the other machine sees them"
 )
-# The two lines above are mutually exclusive, and that is the fix rather than a tidying.
-# `Sync.ahead` is `None` when `git rev-list @{upstream}..HEAD` could not be answered, which for a
-# branch with no upstream means *every* commit on it is unpushed -- the count is unknown, not
-# zero. The sink read `if sync.ahead is None` and then, on the next `if`, formatted
-# `ahead=sync.ahead or 0`, so a session with no upstream and a dirty tree heard "nothing backs it
-# up" and "0 unpushed commit(s)" in one breath: the second sentence says the opposite of the
-# first and is the one carrying a number. `NO_UPSTREAM` carries the dirty count itself so the
-# no-upstream case still reports the half that is knowable, and `UNPUSHED` is reached only with
-# a real `ahead` to print.
+# The two lines above are mutually exclusive. `Sync.ahead` is `None` when `git rev-list
+# @{upstream}..HEAD` could not be answered, which for a branch with no upstream means *every*
+# commit on it is unpushed -- the count is unknown, not zero, so no "0 unpushed commit(s)" may
+# follow "nothing backs it up". `NO_UPSTREAM` carries the dirty count itself, and `UNPUSHED` is
+# reached only with a real `ahead` to print.
 
 
 def _asked_before(event: HookEvent) -> bool:

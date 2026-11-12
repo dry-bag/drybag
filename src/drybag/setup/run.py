@@ -7,39 +7,25 @@ only for the plugins the caller named, register the marketplace the preset decla
 from it, per configured harness; report whether `drybag` itself resolves on `PATH`; and, only
 when the caller named an answer, create, render or record the private overlay.
 
-**A preset default never overwrites a value already recorded.** The first draft of this module
-rebuilt `[personal]` from the preset's own defaults on every run, which meant a second
-`setup --preset recommended` reset a personal value back to the preset's after the owner set it by
-hand — exactly the value `setup.machine`'s own docstring promises survives a rewrite that "only
-set one of them". `_new_personal_values` computes only the keys the machine file does not already
-carry, and that is what `write_machine` receives — an empty dict on every run after the first,
-once every key has a recorded value.
+**A preset default never overwrites a value already recorded.** `_new_personal_values` computes
+only the keys the machine file does not already carry, so a personal value set by hand survives a
+second `setup --preset recommended`.
 
 **A plugin is installed only when it is named.** A third-party plugin runs in every session of its
 harness, its hooks included, and the preset pins none, so `setup --plugin NAME`
 installs one and the README recommends them.
 
 **Marketplaces are registered before anything is installed from them, and per-plugin sources are
-never guessed.** The first draft attempted `claude plugin install superpowers@obra` on a fresh
-machine and always failed there — `obra` and `upstash` are GitHub accounts, not marketplace names,
-and every measured successful install in this tree's own spike record
-is preceded by a `marketplace add`. Checked
-before writing this fix (`gh api repos/...`, `claude plugin marketplace list` on the machine this
-was written on): `superpowers` and `context7` both ship in Anthropic's own official marketplace,
-`anthropics/claude-plugins-official`, which a Claude Code install already carries — the
-`marketplace add` this module still issues is idempotent defence in depth, not a first registration,
-and its own real output confirms that (`✔ Marketplace 'claude-plugins-official' already on disk`).
-No non-interactive, non-guessed source could be established for Codex, so nothing is attempted there
-for these two plugins; the recommended preset's own `[plugins.claude]` table and the README carry
-the reasoning and the recommendation respectively.
+never guessed.** `obra` and `upstash` are GitHub accounts, not marketplace names. `superpowers`
+and `context7` ship in `anthropics/claude-plugins-official`, which a Claude Code install already
+carries, so the `marketplace add` is idempotent. No non-interactive source is known for Codex, so
+nothing is attempted there for these two plugins.
 
-**Two harnesses, two verbs, and no unmeasured flags.** Claude Code installs a plugin with `claude
-plugin install <name>@<marketplace>`, bare — the spike record's own transcript reports
-`(scope: user)` as the *default* a bare install already gets, not something a flag adds, and `-y`
-appears in that record only on `plugin uninstall`, never `install`. Codex adds one with
-`codex plugin add <name>@<marketplace>` when a marketplace is declared for it — measured, not
-assumed, in that same spike record. A harness or a plugin with no declared marketplace gets a note,
-never a guessed argv.
+**Two harnesses, two verbs, and no guessed flags.** Claude Code installs a plugin with `claude
+plugin install <name>@<marketplace>`, bare: a bare install already gets `(scope: user)`, and `-y`
+belongs to `plugin uninstall` only. Codex adds one with `codex plugin add <name>@<marketplace>`
+when a marketplace is declared for it. A harness or a plugin with no declared marketplace gets a
+note, never a guessed argv.
 
 **The overlay is validated before anything is written**, in `_requested_overlay`, asked in
 `_before_the_first_write` — above the machine file, the settings merge and the plugin installs,
@@ -100,13 +86,11 @@ from drybag.trust.api import sandbox_refused
 
 # The release tag scheme (`vX.Y.Z`); `uv tool install` has no `--from`, so the positional git URL
 # form pinned to a release tag is the install form (`git+https://…@<tag>`; principle 9: the CLI
-# installs from a git tag). An f-string with a doubled brace, because the concatenation it replaces
-# read as somebody having forgotten one: `{version}` is meant to survive into the template and be
-# filled by the caller, and `{{version}}` says so.
+# installs from a git tag). `{{version}}` survives into the template for the caller to fill.
 INSTALL_COMMAND = f"uv tool install git+{REPOSITORY_URL}@v{{version}}"
 # One verb pair per harness, fixed here rather than in the preset: which CLI verb installs a
-# plugin is a property of the harness, never of any one plugin, and the two differ (measured;
-# the module docstring's "Two harnesses, two verbs" paragraph).
+# plugin is a property of the harness, never of any one plugin, and the two differ (the module
+# docstring's "Two harnesses, two verbs" paragraph).
 _MARKETPLACE_ADD = {
     "claude": lambda source: ["claude", "plugin", "marketplace", "add", source],
     "codex": lambda source: ["codex", "plugin", "marketplace", "add", source],
@@ -192,7 +176,7 @@ def _marketplace(preset: dict[str, Any], agent: str) -> tuple[str, str] | None:
     """`(source, marketplace name)` for `agent`, or `None` when the preset declares none.
 
     `None` is not a fault: nothing is vendored for a harness on a guess, and the caller reports
-    it as a note rather than attempting an argv nobody measured.
+    it as a note rather than attempting a guessed argv.
     """
     table = preset.get("plugins", {}).get(agent)
     if not isinstance(table, dict):
@@ -309,11 +293,11 @@ def _not_writable(directory: Path, said: str) -> Refusal:
     """The refusal of `directory`, which `os.access` says this user may not write: `SETUP_SANDBOXED`
     where its mode lets its owner, this user, write and search it, and `said` otherwise.
 
-    An agent's sandbox answers `os.access` as it answers the write (measured with `sandbox-exec`
-    on macOS 27 on 2026-10-16: `os.access(W_OK)` was false for a directory the profile denied and
-    whose mode allowed the write), so a directory its mode does not refuse is refused by something
-    else -- the sandbox, or a read-only mount, whose answer is the same for a person: run it from
-    their own terminal. A mode that refuses the user is not the sandbox, and keeps `said`.
+    An agent's sandbox answers `os.access` as it answers the write (`sandbox-exec` on macOS answers
+    `W_OK` false for a directory its profile denies), so a directory its mode does not refuse is
+    refused by something else -- the sandbox, or a read-only mount, whose answer is the same for a
+    person: run it from their own terminal. A mode that refuses the user is not the sandbox, and
+    keeps `said`.
     """
     try:
         found = os.stat(directory)
@@ -327,10 +311,7 @@ def _not_writable(directory: Path, said: str) -> Refusal:
 def _check_home_usable(home: Path, *, created: Path | None = None) -> None:
     """Refuse a `--home` this command cannot write into — above the first write.
 
-    `home.mkdir(parents=True)` under a read-only parent raised `PermissionError` into the frame,
-    `drybag: internal error`, exit 2; and a home that was there with mode 555 had the machine
-    file written into the machine configuration before `_write_user_settings` refused. The
-    question is `fsops.creatable`'s, and it is asked of each place a write under `home` lands —
+    The question is `fsops.creatable`'s, and it is asked of each place a write under `home` lands —
     never of `home` for its own sake: a home with a writable `.claude` already in it takes no
     write at all.
 
@@ -388,9 +369,8 @@ class _Overlay:
 def _recordable(root: Path) -> None:
     """Refuse an overlay root the machine file cannot hold: it is UTF-8 TOML, and a path the
     disk holds in other bytes — a directory named in latin-1, on Linux — reaches Python with
-    surrogate escapes and raised `UnicodeEncodeError` at the last write, after the machine
-    file's other tables and the settings file were written. Asked with the tree checks, above
-    every write."""
+    surrogate escapes that the last write cannot encode. Asked with the tree checks, above every
+    write."""
     if not utf_8_name(str(root)):
         raise Refusal(
             f"{quoted(str(root))} is not UTF-8 text, so the machine configuration, a UTF-8 file, "
@@ -401,16 +381,12 @@ def _recordable(root: Path) -> None:
 def _requested_overlay(overlay: str | None, *, home: Path) -> _Overlay | None:
     """What `--overlay` names, and every refusal its arguments and its tree's identity can raise.
 
-    The first step of `_before_the_first_write`. The first draft called the equivalent of this from
-    the bottom
-    of `setup`, so `--overlay /typo` had already written the machine file, merged the settings
-    file and installed two plugins before it refused, and `--overlay create:` had already
-    created a private repository on GitHub.
+    The first step of `_before_the_first_write`, so `--overlay /typo` refuses before the machine
+    file, the settings file or a plugin is touched, and `--overlay create:` before GitHub is.
 
     `home`, never `Path.cwd()`, is what a *created* overlay is created in: this is a machine
     command, run from wherever the owner happened to be sitting, and a created overlay must not
-    depend on that. Measured while that was written: `root=Path.cwd()` created a real
-    `drybag-private/` inside this very checkout the first time a test exercised the branch.
+    depend on that.
     """
     if overlay is None:
         # Nothing was asked for, so nothing is touched: `--overlay` is the only way to reach the
@@ -541,8 +517,7 @@ def _before_the_first_write(
        is not one path segment, a root the machine file cannot hold; for a path holding something,
        a tree that is not an overlay; for one holding nothing, a directory this user cannot render
        it in; and for `create:`, a destination `gh` could not clone into.
-    2. **The preset** (`load_preset`): a mistyped `--preset`. It used to come one line after the
-       home tree had been created for it.
+    2. **The preset** (`load_preset`): a mistyped `--preset`.
     3. **Where a write under `--home` lands** (`_check_home_usable`): the settings file's
        directory, the `mkdir` of a home not there yet, and a `create:` destination not there yet.
 

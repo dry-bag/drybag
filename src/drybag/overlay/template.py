@@ -13,14 +13,10 @@ runs is the one on `PATH`, and a render absent from the wheel is no way at all.
 `hooks/` stays at the plugin root, because the *harness* reads it from there and Python never
 does.
 
-`template_root()` is still a function rather than a constant, because `resources.files` is what
-answers for an installed package and a checkout alike. **There is no checkout fallback**, and
-that is the point of the move: an earlier revision carried one, copying the scaffold engine's
-checkout probe, since deleted, and its `parents[3]` arithmetic into this area — a second
-spelling of one rule, across two areas, and after the move an unreachable one. A source
-checkout is an `src/` layout, so `resources.files("drybag")` answers `src/drybag` there and
-the tree is under it; there is no arrangement left in which the package probe misses and a
-repository-root walk would have found it.
+`template_root()` is a function rather than a constant, because `resources.files` is what
+answers for an installed package and a checkout alike. **There is no checkout fallback**: a
+source checkout is an `src/` layout, so `resources.files("drybag")` answers `src/drybag` there
+and the tree is under it.
 """
 
 from __future__ import annotations

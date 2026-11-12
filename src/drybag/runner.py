@@ -30,10 +30,8 @@ from drybag.gitenv import scrubbed_env
 NOT_FOUND = 127
 # The shell's own code for "found but cannot run", used here for any other failure to launch.
 NOT_STARTED = 126
-# `timeout(1)`'s own code, and a separate one on purpose. `TimeoutExpired` is a
-# `SubprocessError`, so a `gh` that hung for the full `NETWORK_TIMEOUT_SECONDS` used to arrive
-# as `NOT_FOUND` -- which every caller reads as "gh is not installed". A wrong finding is worse
-# than a slow one, and the two states have different remedies.
+# `timeout(1)`'s own code, and a separate one on purpose: every caller reads `NOT_FOUND` as "gh is
+# not installed", and a hung `gh` has a different remedy.
 TIMED_OUT = 124
 # Wall-clock bound on one call: a named cap (CONTRIBUTING.md#named-caps), and no shipped file
 # changes with it. Deliberately far wider than `gitenv.GIT_TIMEOUT_SECONDS`, which bounds a local,
@@ -50,16 +48,15 @@ NETWORK_TIMEOUT_SECONDS = 300
 # different index or object store, than the directory it was given -- which is exactly what a
 # program that runs git for us (`gh repo create --clone`, `pre-commit`) must not inherit.
 #
-# **This list is a trade-off and is not exhaustive, and the comment that said it was the two
-# that redirect git was wrong.** `GH_HOST` and `GH_CONFIG_DIR` redirect `gh` the same way and
-# are kept deliberately: they are how a GitHub Enterprise owner reaches their own host, and
-# dropping them would break that installation outright to close a gap the inherited token does
-# not have. A caller that needs them gone should say which call and why.
+# **This list is a trade-off and is not exhaustive.** `GH_HOST` and `GH_CONFIG_DIR` redirect `gh`
+# the same way and are kept deliberately: they are how a GitHub Enterprise owner reaches their own
+# host, and dropping them would break that installation outright to close a gap the inherited token
+# does not have. A caller that needs them gone should say which call and why.
 #
 # `GH_FORCE_TTY` and `CLICOLOR_FORCE` are dropped for the reason `_ENV_FORCE` below exists: every
 # call here captures its output, so terminal behaviour is never wanted, and either one makes `gh`
-# colour its JSON (measured with gh 2.101.0: `gh api` and `gh repo view --json` start with an
-# escape sequence), which every caller that parses it then reads as no answer. `NO_COLOR` and
+# colour its JSON (`gh api` and `gh repo view --json` start with an escape sequence), which
+# every caller that parses it then reads as no answer. `NO_COLOR` and
 # `CLICOLOR=0` do not undo either, so the variables go rather than a third one being added.
 _ENV_DROP = (
     "GIT_DIR",

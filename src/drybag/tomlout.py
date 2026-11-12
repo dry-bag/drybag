@@ -2,7 +2,7 @@
 
 One serialiser and not one per area. `attach` writes the overlay's `projects/<name>/project.toml`
 and `setup` writes the machine configuration; hand-rolled, that is two writers in two areas with no
-edge between them and no escaping rule — and the value this was written for is a **git remote URL**,
+edge between them and no escaping rule — and one value it writes is a **git remote URL**,
 which is repository-authored (principle 5). A URL carrying a quote and a newline closes its own
 string and writes further keys into a record that decides what `attach` trusts.
 
@@ -15,17 +15,11 @@ rather than being mangled. Silently dropping an unexpected type, or `str()`-ing 
 capability record acquires a value nobody wrote. Keys are held to the bare-key grammar for the
 same reason — quoting an unexpected key would let `[project]` hold a name nobody chose to write.
 
-**Every value `tomllib` can parse, this can emit, at any depth.** That is a wider contract than
-the first draft's ("two callers and both know their own types"), and a third input made it
-necessary: `setup` rewrites `~/.config/drybag/config.toml`, a file `README.md` documents the
-owner as writing by hand. The document read back off that file is not a caller's own dict — it is
-whatever a person wrote — and refusing a type merely because no caller of ours produces it wedged
-the command permanently: `[personal] scale = 1.5` or `[personal.editor] name = "nvim"` made every
-future `drybag setup` exit 2 naming a serialiser the owner has never heard of. So floats, the
-four TOML date and time types, and tables nested to any depth are emitted, inside arrays as well
-as outside them — "at any depth" is the part the first attempt got wrong, and a table inside an
-inline table inside an array was the same permanent wedge one level further in. What is left
-refused is what no TOML document could have held, which is a caller bug and still worth refusing.
+**Every value `tomllib` can parse, this can emit, at any depth.** `setup` rewrites
+`~/.config/drybag/config.toml`, which the owner writes by hand, so refusing `[personal] scale =
+1.5` would wedge every later `drybag setup`. Floats, the four TOML date and time types, and tables
+nested to any depth are emitted, inside arrays as well as outside them. What is left refused is
+what no TOML document could have held, which is a caller bug and still worth refusing.
 
 **One exception, and it is about keys rather than values.** `BARE_KEY` is untouched: a key this
 cannot write bare is still refused, because quoting one here would record a name nobody chose to
@@ -192,9 +186,7 @@ def dumps(tables: dict[str, dict[str, object]]) -> str:
     """`{table: {key: value}}` as TOML text, in the order given; `""` names the root table.
 
     The root table is emitted first whatever position it holds in `tables`. `_emit` writes no
-    header for it, so a root that followed `[n]` bound its keys to `[n]` -- the misplacement
-    this module exists to prevent, arrived at by ordering rather than by escaping. Both callers
-    happened to put it first; the serialiser no longer depends on that.
+    header for it, so a root that followed `[n]` would bind its keys to `[n]`.
     """
     lines: list[str] = []
     for name, table in sorted(tables.items(), key=lambda item: item[0] != ""):

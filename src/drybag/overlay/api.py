@@ -20,18 +20,8 @@ stop.
 
 `OVERLAY_FILES` is here for `scripts/check_artifacts.py`, which asks whether a built wheel
 carries every template file and can only answer that against this list. It is the one consumer
-outside `src/`, and the reason this docstring names it is that an earlier trim removed the
-export on the strength of "nothing outside this area imports it" while that script, added in the
-same branch, imported it out of `layout` — a sentence and a violation merged green together,
-because the surface rule walked `src/` alone. It walks `scripts/` too now
-(`tests/boundaries/test_api_surface.py`).
-
-**Trimmed, when the area boundaries were drawn tight.** `COMMON` had no importer anywhere.
-`CAPABILITY_FILES`, `template_root`, `templates`, `upgrade` and `OverlayUpgrade` had none outside
-this area: `upgrade` is driven by this area's own command module, and the template tree was
-published against a sentence predicting that the `release` package would need it,
-which nothing in `drybag.release` does. If it ever does, it grows the list then, which is what
-this docstring asks of every other area.
+outside `src/`; the surface rule walks `scripts/` too (`tests/boundaries/test_api_surface.py`).
+`upgrade` is driven by this area's own command module.
 
 `requires_of`, `satisfies`, `Sync` and `overlay_sync` are published for the `attach` area's
 session-start handler. The floor is one grammar and two readers, and the other is this area's own

@@ -27,15 +27,15 @@ and `detach` act on the main checkout whichever worktree they run from: its sett
 `.codex/rules/` copies and its ledger. Nothing is placed per worktree. Where git names no main
 checkout, a bare repository's worktree, `attach` refuses with "cannot tell" (`NO_MAIN_CHECKOUT`).
 
-**Nothing goes into `.gitignore`, and every placed path is ignored before the first write after
-the exclude block.** `.gitignore` is tracked, so a line `attach` wrote there was a change every
-collaborator got. Everything `attach` places in the checkout is listed in the `info/exclude` block
+**Nothing goes into `.gitignore`, and every placed path is ignored before the first write after the
+exclude block.** `.gitignore` is tracked, so a line `attach` wrote there would be a change every
+collaborator gets. Everything `attach` places in the checkout is listed in the `info/exclude` block
 (`attach.exclude`), which no clone carries; the block is written first, and git is then asked
-whether each placed path is ignored, so a `.gitignore` that re-includes one (a `!` line outranks
-the exclude file) stops the run before that path is written. The binding id and the ledger, which
-holds the owner's personal allow rules, are placed too, but in the git common directory, which git
-never tracks and a branch cannot write, so they are neither listed nor asked about. A
-`drybag:ignore` region in `.gitignore` is not this module's: it neither writes nor withdraws one.
+whether each placed path is ignored, so a `.gitignore` that re-includes one (a `!` line outranks the
+exclude file) stops the run before that path is written. The binding id and the ledger, which holds
+the owner's personal allow rules, are placed too, but in the git common directory, which git never
+tracks and a branch cannot write, so they are neither listed nor asked about. A `drybag:ignore`
+region in `.gitignore` is not this module's: it neither writes nor withdraws one.
 
 **Every write goes through a primitive that already exists.** `fsops.write_within(root, …)` for
 everything inside the project, `fsops.write_within(overlay, …)` for the overlay's project record,
@@ -253,10 +253,9 @@ class Attached:
 class AttachLedger:
     """The only witness an allow rule has, and the record `detach` acts from.
 
-    **The anchor is the git common directory**, which a branch cannot write: the ledger sat in the
-    working tree once, and a branch that committed one made `detach` and every re-attach delete
-    files and withdraw allow rules by strings the branch chose. Nothing is read from that old path
-    now, and `attach` is the file's only writer. `read_ledger` answers this shape or `NotALedger`,
+    **The anchor is the git common directory**, which a branch cannot write: a ledger in the
+    working tree would let a branch that committed one choose what `detach` deletes and
+    withdraws. `attach` is the file's only writer. `read_ledger` answers this shape or `NotALedger`,
     so no consumer guards a field. `detach` still removes a rule copy only from one segment under
     `.codex/rules/`, a settings key only if it is the pointer, and a directory only from
     `CREATED_DIRS` (`_removable`).
@@ -616,11 +615,11 @@ def _write_ledger(
     granted = planned.diff.granted
     allow = [rule for rule in previous.allow if rule in granted] if previous else []
     allow += [rule for rule in planned.diff.added_allow if rule not in allow]
-    # The same union as `allow` and `rules`, for the same reason sharpened once more: the second
-    # attach in a repository finds every one of these directories already there and would record
-    # none, so a ledger built from this run alone would leave `detach` unable to remove what the
-    # first attach created. Ordered by `CREATED_DIRS` rather than by either input, so the written
-    # list is deepest-first whatever order it was unioned in.
+    # The same union as `allow` and `rules`: the second attach in a repository finds every one of
+    # these directories already there and would record none, so a ledger built from this run alone
+    # would leave `detach` unable to remove what the first attach created. Ordered by `CREATED_DIRS`
+    # rather than by either input, so the written list is deepest-first whatever order it was
+    # unioned in.
     made = set(previous.directories if previous is not None else ()) | set(planned.absent)
     document = {
         "format": LEDGER_FORMAT,
@@ -656,20 +655,14 @@ def _check_groups(binding: Binding, config: Config) -> None:
     """Refuse a `memory.groups` entry that leaves this project's share of the overlay — first.
 
     `memory.groups` is repository-authored (principle 5) and reaches no guard of its own —
-    `config/paths.py` says so in as many words, and leaves the containment to the module that
-    consumes the field. This module was calling it, and calling it too late: the refusal came
-    out of `_prepare_store`, which runs after the ignore region, the `.codex/rules/` copies, the
-    settings merge, the ledger **and** the overlay's binding record. So a clone committing
-    `groups = ["../../escape"]` got `attach` to write five artifacts and exit 2, with
-    `doctor._attached` — which keys on the ledger existing — then reporting the repository
-    attached and the binding *bound*, because the record had been written too.
+    `config/paths.py` leaves the containment to the module that consumes the field. Asked above
+    every write, so a clone committing `groups = ["../../escape"]` gets no artifact written and no
+    binding recorded.
 
-    Hoisting it here is not only a reordering: it is this project's own two-stage rule, which
-    `attach` was skipping for this one path. `config.paths.contained` "decides whether a
-    configured path *may* be written — it gives a user-facing refusal and catches a committed
-    symlink", and `fsops.mkdirs_within` then does the write through an `O_NOFOLLOW` walk so a
-    component that becomes a symlink *after* the check cannot redirect it. `attach` had only the
-    second half, which is why its user-facing refusal arrived at write time.
+    This is the project's two-stage rule: `config.paths.contained` decides whether a configured
+    path *may* be written, with a user-facing refusal, and `fsops.mkdirs_within` then does the
+    write through an `O_NOFOLLOW` walk so a component that becomes a symlink *after* the check
+    cannot redirect it.
 
     `resolved_root` is passed because this validates many paths against one root, which is the
     parameter's documented reason for existing.
@@ -692,12 +685,11 @@ def _prepare_store(binding: Binding, config: Config) -> None:
     target does not exist as an empty one, so the native writer's notes would have no group.
 
     **The `UnsafePath` arm is the floor under `_check_groups` and is not dead.** A spelling that
-    escapes was already refused above every write, so that half reaching here means the hoist
-    drifted. The other half cannot be hoisted and should not be: `contained` asks the filesystem
-    a question and this walk asks it again at the moment of writing, so a component of the
-    overlay that became a symlink in between refuses here and nowhere earlier. That is the
-    interval the `O_NOFOLLOW` walk exists for, and it is the one remaining way this refusal can
-    arrive after a write.
+    escapes is refused above every write, so that half reaching here means the check drifted. The
+    other half cannot be hoisted and should not be: `contained` asks the filesystem a question and
+    this walk asks it again at the moment of writing, so a component of the overlay that became a
+    symlink in between refuses here and nowhere earlier. That is the interval the `O_NOFOLLOW` walk
+    exists for, and it is the one remaining way this refusal can arrive after a write.
     """
     for relative in _group_directories(binding, config):
         try:
@@ -929,8 +921,8 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     overlay's rule sources and the parts the rendered plugin carries, in that order.
 
     `attach --check` calls it too and drops the plan, which is how the preview meets every one of
-    these refusals with the run's code and line: each read here was once left out of the preview,
-    and `--check` answered clean over a checkout the run then stopped on.
+    these refusals with the run's code and line, and never answers clean over a checkout the run
+    would stop on.
     """
     previous = existing_ledger(root)
     memory = config.memory.mode == OVERLAY_MODE

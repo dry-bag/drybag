@@ -1,12 +1,9 @@
 """Lint implementation plans: references, verification steps, `Scope:`, `Premise:` and `Spec:`.
 
-The first two rules come from one branch's retro. A plan contradicted itself about a test
-location and the stale pointer survived into three later tasks — so every reference must
-resolve unless the line says `(create)`. And a step phrased "confirm nothing bounds X" embeds
-its own expected answer: the author already doubted it enough to write the check and hid that
-doubt from whoever executes it. That one shipped an open defect. The verb is not special to
-"confirm" — "verify" and "check" hide the same doubt the same way — so all three are covered,
-guarded against the compound-word false positive a bare `no` produces (`no-op` is not the
+Every reference must resolve unless the line says `(create)`, so a stale pointer cannot survive into
+later tasks. A step phrased "confirm nothing bounds X" embeds its own expected answer and hides the
+author's doubt from whoever executes it; "verify" and "check" hide it the same way, so all three are
+covered, guarded against the compound-word false positive a bare `no` produces (`no-op` is not the
 negation `no`).
 
 A path the plan removes is the first rule's claim run backwards: it resolves until its task lands
@@ -14,10 +11,8 @@ and never after, and a finished plan is history that a later change may still ed
 `Delete:` line declares its paths as `Create:` does, and `(delete)` marks its line as `(create)`
 does.
 
-The `Scope:` and `Premise:` rules come from the same retro: an unrelated change rode a bugfix
-plan because nothing on the plan named what belonged to it, and a fix's own discriminator
-outran the entry evidence it was supposedly fixing because nothing forced that evidence onto
-the page.
+`Scope:` names what belongs to a plan, so an unrelated change cannot ride it, and `Premise:`
+puts a fix's entry evidence on the page.
 
 A project that keeps specs holds every plan to naming the one it implements, on a `**Spec:**`
 line: a path in backticks that resolves inside the project, or `none — <reason>`, so a plan with no
@@ -25,15 +20,9 @@ design says so instead of naming any file that happens to exist. Whether the pro
 git's answer, as the trail's listing is: a `[paths] specs` folder that holds nothing tracked is not
 one, so a local folder cannot refuse here what a fresh clone passes.
 
-The mutation-outcome rule comes from the next branch's, where one plan wrote three
-discrimination proofs as settled results and all three were wrong. The first reddened every
-test in its module instead of the one named, at import, because the removal it described broke
-a key-parity invariant. The second could not have gone red at all: the function it mutated
-swallows everything in its own `try`/`catch`. And the third predicted a fail-closed test would
-stay green under a mutation that test's own call-count assertion cannot survive. Written as
-predictions they would have been checked; written as facts they were read as evidence the
-assertions discriminated, and the branch shipped believing three oracles nobody had watched
-fail.
+The mutation-outcome rule: a discrimination proof written as a settled result is read as
+evidence the assertion discriminates, though nobody has watched it fail; written as a
+prediction, it is checked.
 
 Prediction and report are told apart by TENSE, not by a keyword either has to carry. A plan is
 written before the work and a report after it, so "the test reddens" is a forecast while "the
@@ -42,16 +31,13 @@ rule's vocabulary is present tense and nothing else: a plan reporting a mutation
 is not exempted, it is never matched. `Expected:` is the one marker the rule does read, because
 it is how an author says a present-tense sentence is a forecast on purpose. The vocabulary is
 the colour idiom, present tense, and deliberately not `fails`/`passes`, which every plan uses
-for the TDD red step; measured on the corpus this lint was written against, admitting them
-multiplied the findings by thirty and almost all of the rise was correct prose. Bounding the
+for the TDD red step, where admitting them would flag mostly correct prose. Bounding the
 outcome to within `_OUTCOME_SPAN` characters of the instruction that governs it is the other
 half of that narrowing — it separates a consequence from an unrelated later clause of a long
 paragraph.
 
-The claim is a SENTENCE, so the rule reads paragraphs and not lines. Scanning line by line made
-catching a false discrimination proof depend on where the text happened to wrap: an arrow
-ending one line with `redden` opening the next went unflagged while the identical claim two
-lines below, short enough to fit, was flagged. Blocks are joined and each character keeps its
+The claim is a SENTENCE, so the rule reads paragraphs and not lines, and where the text wraps
+decides nothing. Blocks are joined and each character keeps its
 source line, so a report still names the line the claim starts on. The `Expected:` marker is
 read over the claim's own SENTENCE, which is the unit that marker marks: a marker in a
 neighbouring sentence of the same paragraph exempts nothing, and one written after the claim is

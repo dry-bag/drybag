@@ -2,12 +2,11 @@
 
 `attach` puts machine-local files into the main checkout: the Codex rule copies under
 `.codex/rules/` and `.claude/settings.local.json`. None of them is anything a collaborator should
-see, and none was ignored, so every `git status` listed them and a `git add -A` committed the
-owner's personal rules. `.gitignore` is the wrong place to
-hide them: it is committed, so the hiding would itself be a change every collaborator gets, and
-`attach` writes nothing there. `info/exclude` is the
-repository's own exclude file, which no clone carries, and git resolves it in the common
-directory, so one block covers the main checkout and every worktree.
+see, and unignored, `git add -A` would commit the owner's personal rules. `.gitignore` is the wrong
+place to hide them: it is committed, so the hiding would itself be a change every collaborator gets,
+and `attach` writes nothing there. `info/exclude` is the repository's own exclude file, which no
+clone carries, and git resolves it in the common directory, so one block covers the main checkout
+and every worktree.
 
 **Only what the owner's own excludes do not hide already.** A path gets a line unless the two
 files the owner holds, this repository's `info/exclude` and the global excludes file

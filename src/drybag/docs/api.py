@@ -6,13 +6,9 @@ before it imports the submodule it wants, so a re-export list in `__init__.py` w
 whole area — and with it the configuration layer — into every `discover()` call.
 `tests/docs/test_surface.py` asserts the `__init__` imports nothing at all.
 
-**Nothing outside this area imports any name on this list**, measured over `src/`,
-`scripts/` and `tests/`: this area's own tests reach `drybag.docs.plans`,
-`drybag.docs.hygiene` and `drybag.docs.trail` directly, and every other area runs the
-commands.
-So every name below is here on an argument rather than on a caller, and the argument is
-written beside it — a surface that survives a trim with no explanation is what made the trim
-necessary.
+**Nothing outside this area imports any name on this list** in `src/`, `scripts/` or `tests/`:
+this area's own tests reach `drybag.docs.plans`, `drybag.docs.hygiene` and `drybag.docs.trail`
+directly, and every other area runs the commands.
 
 The two are checks this area *is*, one call each: `check_budgets` and
 `check_links` each answer one question about the documentation tree and return `Finding`s from

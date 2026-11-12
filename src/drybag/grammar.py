@@ -2,8 +2,6 @@
 outside it, and by `printed`, which prints a name by it.
 
 A leaf that imports nothing from the package, so both read it and neither imports the other for it.
-In `config.schema`, beside the configuration's other grammars, it made the configuration,
-`findings` and `printed` import one another, since the configuration prints through `findings`.
 """
 
 from __future__ import annotations
@@ -14,21 +12,17 @@ import re
 # decides whether it may be written, and a shape rule cannot bound a charset.
 #
 # The segment shape is part of the grammar because the two readers of a path have to agree about
-# what a path is. A charset alone admitted `docs//x.md`, `docs/x/` and `./docs`: `contained()`
-# read them through `Path(relative).parts`, which drops an empty component, a trailing slash and
-# a leading `./` without a word, so `plan()` reported no refusal — while `fsops` splits the raw
-# string and refuses all three, so `apply()` raised part-way through a pass that had already put
-# earlier artifacts on disk and whose `finally` had already persisted the manifest. The value
-# was never writable; only the two spellings of "a path" disagreed about saying so.
+# what a path is: `Path(relative).parts` drops an empty component, a trailing slash and a leading
+# `./` without a word, while `fsops` splits the raw string and refuses all three, so a charset
+# alone would let `plan()` pass `docs//x.md` that `apply()` refuses part-way through a pass.
 #
 # So the grammar says it of every segment: exactly one `/` between segments, no segment empty, and
 # no segment that is `.` or `..`, which the charset alone cannot say. `.` and `..` are spelled
 # entirely out of the charset the segments already use, so a segment rule without that lookahead
-# admits `./docs`, `docs/../x` and `..` itself — measured, on the charset-plus-segments form this
-# started from. `.hidden` and `..foo` are ordinary names and stay admitted: the lookahead refuses
-# a segment that is one or two dots *and nothing else*. What is left is exactly the set
-# `fsops.checked_components` accepts, intersected with the charset, and `contained()` asks that
-# function for the component rule rather than keeping a second copy of it.
+# admits `./docs`, `docs/../x` and `..` itself. `.hidden` and `..foo` are ordinary names and stay
+# admitted: the lookahead refuses a segment that is one or two dots *and nothing else*. What is left
+# is exactly the set `fsops.checked_components` accepts, intersected with the charset, and
+# `contained()` asks that function for the component rule rather than keeping a second copy of it.
 #
 # The rules are lookaheads over the whole value, then the charset, and no group is repeated: `re`
 # keeps a record for every pass of a repeated group it might give back, 62 MiB over a value of

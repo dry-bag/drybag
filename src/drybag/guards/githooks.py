@@ -176,10 +176,9 @@ def _ours(path: Path, outcome: str) -> Hook:
     that are not UTF-8 are not drybag's.
 
     Read as a regular file only, to the read cap (`fsops.read_regular_bytes`): a FIFO there is
-    never waited on, as `read_text` waited on it. A hook that cannot be read is neither ours nor
-    foreign, and is refused, ending in `outcome`, what the caller did not do: read as foreign, it
-    was "not drybag's" to `uninstall` and renamed and chained by `install` when it was
-    drybag's own at mode 000. A regular file past the cap is the exception, and is foreign:
+    never waited on. A hook that cannot be read is neither ours nor foreign, and is refused,
+    ending in `outcome`, what the caller did not do: drybag's own hook at mode 000 must not be
+    renamed and chained as foreign. A regular file past the cap is the exception, and is foreign:
     drybag's own hook is a couple of kilobytes, so one that long is certainly not it.
     """
     try:

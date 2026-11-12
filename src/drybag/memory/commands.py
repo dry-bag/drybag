@@ -7,9 +7,8 @@ real configuration.
 
 It is threaded exactly twice, into `command_config` (`session_config` for `session-context`,
 which reads the file the way a session does) and into `resolve`, and never again: `resolve` puts
-it on the `Store` it builds, so every later call takes it from there. It used to be an optional
-keyword on about twenty functions, and the only thing keeping a command's overlay and its index
-destination in agreement was that each of those call sites remembered to pass it.
+it on the `Store` it builds, so every later call takes it from there and a command's overlay and
+its index destination cannot disagree.
 """
 
 from __future__ import annotations
@@ -206,7 +205,7 @@ def run_index(args: argparse.Namespace) -> Result:
                 "refused_extra": reconciled.refused_extra,
                 "unreadable": _unreadable(report),
             },
-            # The same list the summary is built from, so the two can no longer disagree.
+            # The same list the summary is built from, so the two cannot disagree.
             exit_code=1 if findings else 0,
         )
     text = render_index(reconciled, config, store)

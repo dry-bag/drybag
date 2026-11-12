@@ -21,21 +21,16 @@ from drybag.config.machine import machine_config_path
 from drybag.config.owner import Owner, resolve_owner, said_on_stderr
 from drybag.config.schema import Config
 
-# One sentence per shared flag. `--root` and `--machine` were spelled by hand in three
-# parsers besides this one and had already drifted from these words; `--home` appeared in two
-# areas with two sentences, one saying "read" and the other "write". A flag that means the same
-# thing across eight commands says the same thing, and `tests/test_command.py` walks the real
-# parser and holds every occurrence to the constant.
+# One sentence per shared flag: a flag that means the same thing across eight commands says the
+# same thing, and `tests/test_command.py` walks the real parser and holds every occurrence to the
+# constant.
 ROOT_HELP = "project root (default: current directory)"
 MACHINE_HELP = "machine configuration file to read"
 STORE_HELP = "resolve the memory store at this path"
 DRY_RUN_HELP = "report what would change and write nothing"
 HOME_HELP = "the home directory to read and write under (default: the real one)"
-# `--check` was registered five times with five sentences — "fail if the index is stale", "fail
-# if the listing is stale", "report drift instead of writing", "report drift and write nothing",
-# "report the binding and the diff, and write nothing" — in the tree that built this machinery
-# for the five above. Four of the five mean one thing: read, report, write nothing, and fail if
-# anything differs. The fifth is a real exception and is below.
+# `--check`, for every command but one: read, report, write nothing, and fail if anything
+# differs. The exception is below.
 CHECK_HELP = "report drift instead of writing, and fail if there is any"
 # The named exceptions: each is one sentence, spelled here and used by exactly one parser,
 # and `tests/test_command.py` holds the parser to it by name. An entry is a decision that the
@@ -90,8 +85,8 @@ def command_owner(machine: Path | None) -> Owner:
     on what it read past said on stderr here and nowhere else.
 
     A command hands this to every load it makes (`config.loader.loads`' `owner`), which stands it
-    on the preset each document names. Said by the load instead, the notes were said once a
-    document, so a command that loads two documents said each note twice.
+    on the preset each document names, so a command that loads two documents says each note
+    once.
     """
     return said_on_stderr(
         resolve_owner(machine_config_path() if machine is None else machine, strict=True)

@@ -183,9 +183,8 @@ def refuse_unless_share_can_exist(binding: Binding, config: Config) -> None:
         raise Refusal(OVERLAY_DAMAGED.format(path=damaged))
     # A name, or a group, longer than a file name may be is asked of the nearest directory that is
     # there and not of the path it will have: an overlay with no `projects/` yet answers every path
-    # under it with "no such file", the over-long name included, so a 300-character name read as a
-    # first attach and the run failed at the record's write, after the ignore region and the
-    # ledger, printing the name.
+    # under it with "no such file", the over-long name included, so a 300-character name would
+    # read as a first attach and fail only at the record's write.
     there = _nearest_directory(binding.overlay / PROJECTS)
     if _name_too_long(there, binding.project):
         raise Refusal(SHARE_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
