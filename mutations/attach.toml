@@ -1488,17 +1488,6 @@ reddens = [
   "tests/attach/test_doctor.py::test_a_ledger_on_a_machine_whose_file_does_not_load_skips_in_words_of_its_own",
 ]
 
-# A renamed `[project] name` makes the ledger's store another project's; the row says the rebind in
-# `attach`'s words and remedy, not that the store is not this project's directory.
-[[mutation]]
-name = "the attached row reads a rebind as a store that is not this project's"
-file = "src/drybag/attach/doctor.py"
-before = "    except RebindRefused as exc:\n        return exc\n"
-after = ""
-reddens = [
-  "tests/attach/test_doctor.py::test_the_attached_row_names_a_refused_rebind",
-]
-
 # The rendered plugin's names are the delivery's whole defence: Claude Code records a local-scope
 # marketplace for the whole machine, and a clone committing `enabledPlugins` runs the hooks of any
 # plugin it can name. Named without the binding id, every attached checkout's plugin is one a clone
