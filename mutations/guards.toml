@@ -303,6 +303,17 @@ reddens = [
   "tests/guards/test_githooks.py::test_the_hook_never_imports_a_drybag_the_repository_tracks",
 ]
 
+# A commit git replays (a cherry-pick, a rebase's pick) keeps its author's message.
+[[mutation]]
+name = "the hook strips the message of a commit git replays"
+file = "src/drybag/guards/githooks.py"
+before = '        replay="yes"'
+after = '        replay=""'
+reddens = [
+  "tests/guards/test_githooks.py::test_a_commit_git_replays_keeps_its_message[cherry-pick-True]",
+  "tests/guards/test_githooks.py::test_a_commit_git_replays_keeps_its_message[rebase-True]",
+]
+
 # The two-paragraph attribution block, and the reason the paragraph rule needed a walk rather
 # than a wider net. The canonical harness attribution is a `Generated with` footer, a blank
 # line, then a `Co-Authored-By:` trailer; judging the final paragraph alone removed the trailer
