@@ -470,12 +470,12 @@ TAG = "v1.2.3"
 
 
 @needs_release_workflow
-@pytest.mark.parametrize("job", ["build", "attest"])
+@pytest.mark.parametrize("job", ["check", "attest"])
 def test_build_fetches_the_first_parent(job: str) -> None:
     # `release.py check --tag` and the plugin commit both read the `sha` the release commit's
     # first parent pins, as the commit's parent; `actions/checkout` fetches one commit unless told
     # otherwise, and the reader then refuses, naming `fetch-depth: 2`, rather than read the parent
-    # as none. Mutations (oracle): `mutations/`'s "the release build fetches the tag's commit
+    # as none. Mutations (oracle): `mutations/`'s "the release check fetches the tag's commit
     # alone" and "the attest job fetches the tag's commit alone" drop `fetch-depth: 2` from each.
     checkouts = [
         step for step in _steps_of(RELEASE_WORKFLOW, job) if _uses(step) == "actions/checkout"
@@ -489,11 +489,11 @@ def test_build_fetches_the_first_parent(job: str) -> None:
 def test_only_the_attest_job_can_attest() -> None:
     # An attestation is signed with the job's OIDC token, so a job holding `id-token: write` and
     # running the suite runs every test, and every dependency the lock installs, with the means to
-    # sign. The suite stays in `build`, which holds `contents: read` and nothing else, and the
+    # sign. The suite stays in `check`, which holds `contents: read` and nothing else, and the
     # job that signs runs this repository's own script on the runner's interpreter and installs
     # nothing. `publish` holds `id-token: write` too, for Trusted Publishing, and attests nothing.
-    # Mutations (oracle): `mutations/`'s "the release build can sign again" -> `id-token: write`
-    # on `build`; "the attest job can write the repository" -> `contents: write` on `attest`; "the
+    # Mutations (oracle): `mutations/`'s "the release check can sign again" -> `id-token: write`
+    # on `check`; "the attest job can write the repository" -> `contents: write` on `attest`; "the
     # Release job can sign" -> `id-token: write` on `github-release`; and "the environment gate
     # can record attestations" -> `attestations: write` on `environment-gate`.
     jobs = _jobs(RELEASE_WORKFLOW)
@@ -549,11 +549,11 @@ def test_only_the_attest_job_can_attest() -> None:
 @needs_release_workflow
 def test_no_checkout_in_the_release_keeps_its_token() -> None:
     # `actions/checkout` writes the job's token into `.git/config` unless told not to, where every
-    # later step of the job can read it, and no step of the release needs it there: `build` runs
+    # later step of the job can read it, and no step of the release needs it there: `check` runs
     # the suite and pushes nothing, `attest` runs a script, and `github-release` authenticates `gh`
     # with `GH_TOKEN`. Held for every checkout rather than for the jobs judged able to write, so a
     # `permissions: write-all`, or a job inheriting a widened top-level block, is held too.
-    # Mutations (oracle): `mutations/`'s "the release build keeps a token in its checkout", "the
+    # Mutations (oracle): `mutations/`'s "the release check keeps a token in its checkout", "the
     # attest job keeps a token in its checkout" and "the Release job keeps a token in its
     # checkout".
     checkouts = {
@@ -564,6 +564,7 @@ def test_no_checkout_in_the_release_keeps_its_token() -> None:
     }
     # The walk's count, so the loop reads every checkout there is.
     assert {name: len(found) for name, found in checkouts.items() if found} == {
+        "check": 1,
         "build": 1,
         "attest": 1,
         "github-release": 1,
@@ -571,6 +572,41 @@ def test_no_checkout_in_the_release_keeps_its_token() -> None:
     for name, found in checkouts.items():
         for checkout in found:
             assert _with(checkout, "persist-credentials") == "false", (name, checkout)
+
+
+@needs_release_workflow
+def test_the_release_build_is_hermetic() -> None:
+    # The packages attested and published come from a job that restores no cache, installs
+    # nothing, builds from the tag's tracked files with a uv inside the `uv_build` bound (so the
+    # backend it carries builds them), checks them, and uploads what it checked. Mutation
+    # (oracle): `mutations/`'s "the release build restores a cache".
+    steps = _steps_of(RELEASE_WORKFLOW, "build")
+    shapes = [_uses(step) or step.get("name") for step in steps]
+    assert shapes == [
+        "actions/checkout",
+        "astral-sh/setup-uv",
+        "Build and check the packages",
+        "actions/upload-artifact",
+    ], shapes
+    assert _with(steps[1], "enable-cache") == "false", steps[1]
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    bound = re.search(r'"uv_build>=([\d.]+),<([\d.]+)"', pyproject)
+    assert bound is not None
+    low, high, pin = (
+        tuple(map(int, v.split("."))) for v in (*bound.groups(), _with(steps[1], "version"))
+    )
+    assert low <= pin < high, (pin, bound.groups())
+    assert _lines(_run(steps[2])) == [
+        'mkdir "$RUNNER_TEMP/tree"',
+        'git archive HEAD | tar -x -C "$RUNNER_TEMP/tree"',
+        'cd "$RUNNER_TEMP/tree"',
+        "uv build",
+        "PYTHONPATH=src python3 scripts/check_artifacts.py dist",
+    ], steps[2]
+    assert _with(steps[3], "path") == "$RUNNER_TEMP/tree/dist/", steps[3]
+    jobs = _jobs(RELEASE_WORKFLOW)
+    building = [n for n in jobs for s in _steps_of(RELEASE_WORKFLOW, n) if "uv build" in _run(s)]
+    assert building == ["build"], building
 
 
 def _outputs(path: Path) -> dict[str, str]:

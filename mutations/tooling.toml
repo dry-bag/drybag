@@ -375,19 +375,28 @@ reddens = [
 # `ref` alone or builds a commit whose parent its scratch repository lacks, and the validator
 # stops seeing an entry that carries a `sha`.
 [[mutation]]
-name = "the release build fetches the tag's commit alone"
+name = "the release check fetches the tag's commit alone"
 file = ".github/workflows/release.yml"
 before = "          fetch-depth: 2\n          persist-credentials: false\n      - uses: astral-sh/setup-uv"
 after = "          persist-credentials: false\n      - uses: astral-sh/setup-uv"
 reddens = [
-  "tests/test_workflows.py::test_build_fetches_the_first_parent[build]",
+  "tests/test_workflows.py::test_build_fetches_the_first_parent[check]",
 ]
 
 [[mutation]]
-name = "the release build can sign again"
+name = "the release build restores a cache"
 file = ".github/workflows/release.yml"
-before = "  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 15\n    permissions:\n      contents: read\n"
-after = "  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 15\n    permissions:\n      id-token: write\n      contents: read\n"
+before = "          enable-cache: false\n"
+after = "          enable-cache: true\n"
+reddens = [
+  "tests/test_workflows.py::test_the_release_build_is_hermetic",
+]
+
+[[mutation]]
+name = "the release check can sign again"
+file = ".github/workflows/release.yml"
+before = "  check:\n    runs-on: ubuntu-latest\n    timeout-minutes: 15\n    permissions:\n      contents: read\n"
+after = "  check:\n    runs-on: ubuntu-latest\n    timeout-minutes: 15\n    permissions:\n      id-token: write\n      contents: read\n"
 reddens = [
   "tests/test_workflows.py::test_only_the_attest_job_can_attest",
 ]
@@ -1800,8 +1809,8 @@ reddens = [
 [[mutation]]
 name = "the release workflow builds after running the release check the CLI no longer ships"
 file = ".github/workflows/release.yml"
-before = "        run: uv build"
-after = "        run: uv run drybag release check && uv build"
+before = "          uv build\n"
+after = "          uv run drybag release check && uv build\n"
 reddens = [
   "tests/test_fixtures.py::test_the_release_workflow_runs_the_release_check_in_the_one_spelling",
 ]
@@ -2730,7 +2739,7 @@ reddens = [
 ]
 
 [[mutation]]
-name = "the release build keeps a token in its checkout"
+name = "the release check keeps a token in its checkout"
 file = ".github/workflows/release.yml"
 before = "          fetch-depth: 2\n          persist-credentials: false\n      - uses: astral-sh/setup-uv"
 after = "          fetch-depth: 2\n      - uses: astral-sh/setup-uv"
