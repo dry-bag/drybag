@@ -10,10 +10,10 @@
 [[mutation]]
 name = "group_order outranks the startup rank in the index order"
 file = "src/drybag/memory/index.py"
-before = '''        UNRANKED if rank is None else rank,
-        UNRANKED if note.group_order is None else note.group_order,'''
-after = '''        UNRANKED if note.group_order is None else note.group_order,
-        UNRANKED if rank is None else rank,'''
+before = '''        math.inf if rank is None else rank,
+        math.inf if note.group_order is None else note.group_order,'''
+after = '''        math.inf if note.group_order is None else note.group_order,
+        math.inf if rank is None else rank,'''
 reddens = [
   "tests/memory/test_index.py::test_the_startup_rank_outranks_group_order_everywhere_it_is_read",
 ]
@@ -408,6 +408,26 @@ reddens = [
   "tests/memory/test_notes.py::test_a_note_whose_name_is_not_utf_8_is_quarantined_by_its_name",
   "tests/memory/test_notes.py::test_a_note_named_in_bytes_that_are_not_utf_8_is_quarantined",
 ]
+
+# The index links a note by its file's name on one line, so a name that breaks a line would write
+# lines of its own choosing into `MEMORY.md`.
+[[mutation]]
+name = "the memory walk hands the index a note whose name breaks a line"
+file = "src/drybag/memory/notes.py"
+before = """            if not is_one_line(path.name):
+                unreadable.append((path, f"{quoted(str(path))}: {NAME_NOT_ONE_LINE}"))
+                continue
+"""
+after = ""
+reddens = ["tests/memory/test_index.py::test_a_note_whose_name_breaks_a_line_is_unreadable"]
+
+# A `startup` rank makes a note a standing rule, so a value that is not an integer is no rank.
+[[mutation]]
+name = "a startup that is not an integer still ranks a note"
+file = "src/drybag/memory/notes.py"
+before = "        return _parse_int(raw)"
+after = "        return 10_000 if _parse_int(raw) is None else _parse_int(raw)"
+reddens = ["tests/memory/test_notes.py::test_a_startup_that_is_not_an_integer_is_no_rank"]
 
 # A checkout this machine binds to one project is not bound to another its `drybag.toml` names
 # later: the name is the repository's, and a share it picks that the binding never named would

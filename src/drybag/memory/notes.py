@@ -30,18 +30,18 @@ from pathlib import Path
 from drybag import fsops
 from drybag.errors import Failure
 from drybag.fsops import read_regular_text, said, utf_8_name, write_atomically
+from drybag.printed import quoted
 
-# Sort sentinel for a note whose `startup` metadata could not be parsed as an int. Not a named cap
-# (CONTRIBUTING.md#named-caps): it bounds nothing, and only needs to sort after every real startup
-# rank the corpus can hold.
-UNRANKED = 10_000
 FENCE = "---"
 _KEY = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_]*):(?P<rest>.*)$")
 _NOT_A_RULE = frozenset({"false", "no", "off"})
 DECLARED = ("name", "description", "index", "index_provenance", "group", "group_order")
 # Why `walk` quarantines a note by its file's name alone: the index links to every note by that
-# name, verbatim, and `MEMORY.md` is UTF-8.
+# name, verbatim, one line each, and `MEMORY.md` is UTF-8.
 NAME_NOT_UTF_8 = "the file's name is not UTF-8, so the index cannot name it; rename the file"
+NAME_NOT_ONE_LINE = (
+    "the file's name holds a line break, so the index cannot name it; rename the file"
+)
 
 
 class NoteError(Failure):
@@ -191,10 +191,8 @@ class Note:
         raw = self.metadata.get("startup")
         if raw is None or raw.strip().lower() in _NOT_A_RULE:
             return None
-        try:
-            return int(raw)
-        except ValueError:
-            return UNRANKED
+        # A rank makes the note a standing rule, so a value that is not one is no rank.
+        return _parse_int(raw)
 
     @property
     def as_of(self) -> date | None:
@@ -451,10 +449,14 @@ def walk(store: Path, groups: Sequence[str]) -> Walk:
             if fsops.is_symlink(path):
                 skipped.append(path)
                 continue
-            # The index names a note by its file's name, and `MEMORY.md` is UTF-8: a name the
-            # disk holds in other bytes cannot be written into it, so the note is unreadable.
+            # The index names a note by its file's name, on one line, and `MEMORY.md` is UTF-8:
+            # a name the disk holds in other bytes, or one that breaks a line, cannot be written
+            # into it, so the note is unreadable.
             if not utf_8_name(path.name):
                 unreadable.append((path, f"{path}: {NAME_NOT_UTF_8}"))
+                continue
+            if not is_one_line(path.name):
+                unreadable.append((path, f"{quoted(str(path))}: {NAME_NOT_ONE_LINE}"))
                 continue
             try:
                 found.append(replace(read_note(path), store_group=group))

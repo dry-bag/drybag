@@ -14,6 +14,7 @@ declares; nesting the group under its folder is the reading that keeps both rule
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,7 +26,6 @@ from drybag.config.schema import OVERLAY_MODE, Config
 from drybag.errors import Failure, Refusal
 from drybag.fsops import TooLarge, read_regular_text, write_atomically
 from drybag.memory.notes import (
-    UNRANKED,
     Note,
     Provenance,
     is_one_line,
@@ -323,11 +323,12 @@ def reconcile(store: Store, config: Config, *, write: bool) -> Reconciliation:
     )
 
 
-def _order(note: Note) -> tuple[int, int, str]:
+def _order(note: Note) -> tuple[float, float, str]:
+    """A note with no `startup` rank, or no `group_order`, sorts after every one that has one."""
     rank = note.startup
     return (
-        UNRANKED if rank is None else rank,
-        UNRANKED if note.group_order is None else note.group_order,
+        math.inf if rank is None else rank,
+        math.inf if note.group_order is None else note.group_order,
         note.name,
     )
 
