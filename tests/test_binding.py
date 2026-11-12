@@ -78,7 +78,7 @@ def test_a_checkout_with_no_id_is_unbound_even_when_its_name_is_a_bound_projects
     clone = _repository(tmp_path / "clone")
     recorded = binding.record(owner, "widget", ORIGIN)
     assert binding.bound_project(owner) == recorded
-    assert recorded.project == "widget" and recorded.checkout == owner
+    assert recorded.project == "widget"
     assert binding.bound_project(clone) is None
 
 
@@ -103,7 +103,7 @@ def test_a_record_on_one_machine_leaves_another_machines_record_for_the_project_
     assert {path: path.read_bytes() for path in data_directory().rglob("*.toml")} == kept
     id = binding.read_id(here)
     assert id is not None
-    assert binding.bound_project(here) == binding.Bound("widget", ORIGIN, here, id)
+    assert binding.bound_project(here) == binding.Bound("widget", ORIGIN, id)
 
 
 @pytest.mark.parametrize(

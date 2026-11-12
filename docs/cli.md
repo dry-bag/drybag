@@ -1884,7 +1884,7 @@ check with `name`, `status`, `detail` and `remedy`, so every remedy is there.
 | `versions` | whether the project's `[drybag] version` is the drybag running; with no project configuration, which drybag runs | `drybag.toml`, the package |
 | `wrapper` | whether the wrapper can actually reach drybag on this machine: red when it writes a fault to stderr or cannot be run; under a root the environment named, which it never runs, red when the wrapper is not executable and a skip otherwise; a stale `hooks/hooks.json`, an edited wrapper that still runs or a changed `scripts/drybag` is not reported | one `run-hook.sh --version`, and only under the plugin root this drybag is part of; under a named root, `hooks/run-hook.sh`'s mode |
 | `budgets` | every budget set above the preset, named raised, and every one set below it, named lowered | `drybag.toml`, the machine file, the preset |
-| `preferences` | each personal value, guard switch, preference and session budget a session resolves, with the layer its value came from — the preset, the repository, the overlay's common file (`overlay common`), its file for the project this checkout is bound to (`overlay project`) or the machine file — and the value only where it is a boolean, a number or one of drybag's own words; then, as information that never changes the row's status, every note reading the overlay's layers gave — no overlay recorded, a file not there or not loading, a key it cannot use or may not set; red when the machine file does not load, in the words every command refuses it in, which name the file and where the parser stopped; a warning naming the file when a key in it could not be used | `drybag.toml`, the preset, the overlay's two `drybag.toml` files, the machine file |
+| `preferences` | each personal value, guard switch, preference and session budget a session resolves, with the layer its value came from — the preset, the repository, the overlay's common file (`overlay common`), its file for the project this checkout is bound to (`overlay project`) or the machine file — and the value only where it is a boolean, a number or one of drybag's own words; then, as information that never changes the row's status, every note reading the overlay's layers gave — no overlay recorded, a file not there or not loading, a key it cannot use or may not set; red when the machine file does not load, in the words every command refuses it in, which name the file and where the parser stopped; a warning naming the file when a key in it could not be used | `drybag.toml`, the preset, the overlay's `drybag.toml` layers, the machine file |
 | `cli-path` | whether `drybag` resolves on `PATH` | `PATH` |
 | `diagnostics` | how many reasons the hook sink recorded — a count, never a line of the file | `${CLAUDE_PLUGIN_DATA}/drybag/diagnostics.jsonl` |
 | `ignored-env` | as information, never a status: `DRYBAG_CONFIG` set, or `XDG_CONFIG_HOME` set to anything but the `.config` of the home every command reads under (`HOME`, or the password database's where `HOME` is unset), and not honoured by any command; and a `HOME` that is not the home the password database records for this user, since drybag follows `HOME` | the environment, the password database |
@@ -2231,14 +2231,16 @@ this file when the session starts and `drybag doctor`'s `preferences` row red.
 With no `drybag.toml` in the repository a session still reads this file: `bg_cleanup = false`
 turns the guard off there too.
 
-Between the repository's file and this one, a session reads the overlay's two, under the overlay
-`[overlay] root` names: `<overlay>/common/drybag.toml` for every checkout, and
-`<overlay>/projects/<name>/drybag.toml` for a checkout this machine binds to `<name>` — by the
-binding id `drybag attach` records, never by the repository's own `[project] name`, so a clone
-that names one of your projects gets the common file alone. Each may set a `[personal]` value, a
-`[guards]` switch, a preference (`[memory] mode`, `groups` and `index_extra`) and a session
-budget; the project file wins over the common one, and this file over
-both. They are read the way a session reads `drybag.toml`: an unknown name is ignored, and a
+Between the repository's file and this one, a session reads the overlay's layers, under the
+overlay `[overlay] root` names, in this order: `<overlay>/common/drybag.toml` for every checkout;
+for a checkout this machine binds to `<name>`, `<overlay>/tags/<tag>/drybag.toml` for each tag
+`projects/<name>/project.toml` lists, then `<overlay>/projects/<name>/drybag.toml`; and right
+after each of these, its `machines/<machine>/drybag.toml`, where `<machine>` is this machine
+file's `[machine] name`. The binding is by the id `drybag attach` records, never by the
+repository's own `[project] name`, so a clone that names one of your projects gets the common
+layers alone. Each may set a `[personal]` value, a `[guards]` switch, a preference (`[memory]
+mode`, `groups` and `index_extra`) and a session budget; a later layer wins over an earlier one,
+and this file over all of them. They are read the way a session reads `drybag.toml`: an unknown name is ignored, and a
 value this drybag cannot use is left out so the layer beneath applies; a gate's input or a fact
 about the repository written there is never taken from it. A missing file, an overlay this file
 does not record, or this file not loading sets nothing. A session, `doctor`, `memory

@@ -1,8 +1,8 @@
 """Name what could have falsified a red test run, before the diff is blamed.
 
 Uncommitted work in the tree produces a red run that no baseline A/B can attribute, because both
-halves of the A/B run inside it: the measurement describes a tree nobody is merging. It has cost
-real time, twice in one branch's retro. It belongs to no stack.
+halves of the A/B run inside it: the run describes a tree nobody is merging. It belongs to no
+stack.
 
 Warn-only by construction: the tool has already run, and the verdict this guards is the
 human's next sentence, not the command. Once per context, which the dispatcher's `once_key`
@@ -37,7 +37,7 @@ from drybag.hints import bashscan
 from drybag.hints.runners import names_a_test_run
 
 # Anchored TWICE, redundantly: the `\A` here and the `.match` at the call site each pin the read
-# to index 0, so removing either one alone is a no-op -- measured, in both directions -- and only
+# to index 0, so removing either one alone is a no-op and only
 # removing BOTH unanchors it. Do not read one of them as dead weight: unanchored, a number is
 # read out of arbitrary captured stderr, and a line of test output that merely quotes an exit
 # code is then taken for the run's own. The documented shape puts `Exit code N` at the very

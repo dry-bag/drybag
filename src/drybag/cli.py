@@ -54,14 +54,12 @@ def _finish(groups: SubParsers) -> None:
     """Give every command the help text it registered with, and list groups in name order.
 
     An area registers a command as `add_parser(name, help=...)`, and argparse keeps that
-    sentence for the *parent's* listing only: the command's own `--help` opened with `usage:`
-    and went straight to the options, with nothing about what the command does. The one
-    sentence each area already wrote becomes the command's description here, so no area has to
-    spell it twice. The `--json` epilog rides along for the same reason it is on the root.
+    sentence for the *parent's* listing only. The one sentence each area already wrote becomes
+    the command's description here, so no area has to spell it twice. The `--json` epilog rides
+    along for the same reason it is on the root.
 
-    The group listing is sorted because discovery is by area and registration within one, so
-    `commit` (from `guards`) landed between `doctor` and `hook`; `discover_registrars` says "in
-    name order", and that is now true of what the user sees and not only of the modules.
+    The group listing is sorted because discovery is by area and registration within one, which
+    would put `commit` (from `guards`) between `doctor` and `hook`.
 
     `_choices_actions` and `_name_parser_map` are argparse's own bookkeeping, unchanged since
     Python 3.2 and declared in typeshed; the alternative is every `add_parser` call passing the

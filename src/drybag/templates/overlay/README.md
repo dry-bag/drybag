@@ -63,8 +63,9 @@ kept here, because a second copy of a security rule is a copy that drifts.
 ## Making it yours
 
 `drybag setup --overlay` made this repository, installed the secret scan, and recorded it as
-this machine's overlay. On another machine, clone it and record it there with `drybag setup
---overlay <path>`, which installs the secret scan in that clone too. After that, `drybag attach` binds a repository to it — drybag renders what this
+this machine's overlay. On another machine, clone it and run `drybag setup --restore --overlay
+<path>`, which records it, installs the secret scan in that clone too and attaches the projects
+it lists. After that, `drybag attach` binds a repository to it — drybag renders what this
 overlay holds into a plugin of its own on each machine, so nothing here is installed by hand — and
 `drybag overlay upgrade` refreshes the files you have not edited when a new drybag is
 released.

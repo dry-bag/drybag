@@ -116,19 +116,16 @@ class Handler:
 
 
 # The sink's on-disk layout, which is a contract between two areas rather than one area's
-# detail: `drybag.hooks.sink` writes this tree and `drybag.doctor` reports on it. Both used
-# to reach for `sink.py` directly — doctor by a private cross-area import it wrote a paragraph
-# to excuse — because a re-export could not live here without a cycle. Defining them here costs
-# `sink.py` one import and gives doctor the published name it was owed.
+# detail: `drybag.hooks.sink` writes this tree and `drybag.doctor` reports on it. Defined here,
+# because a re-export of `sink.py`'s names could not live here without a cycle.
 DIRECTORY = "drybag"
 MARKERS = "markers"
 DIAGNOSTICS = "diagnostics.jsonl"
 DIAGNOSTICS_MAX_BYTES = 256 * 1024
 
 # The variables a harness names its data root for this plugin in, asked in this order.
-# `PLUGIN_DATA` is Codex's name for the same directory: the spike record
-# measured Codex's hook launch setting it
-# beside `CLAUDE_PLUGIN_DATA` in its *Codex plugin hooks* trial.
+# `PLUGIN_DATA` is Codex's name for the same directory, which its hook launch sets beside
+# `CLAUDE_PLUGIN_DATA`.
 DATA_ROOT_VARIABLES = ("CLAUDE_PLUGIN_DATA", "PLUGIN_DATA")
 
 

@@ -689,9 +689,9 @@ def test_a_missing_drybag_on_path_is_a_note(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # `uv tool install` has no `--from`, so the positional git URL form pinned to a release tag
-    # (principle 9: the CLI installs from a git tag) is what the note must name; asserted here
-    # rather than left to eyeballing, since it is the one line a typo in the URL or the tag would
-    # hide from every other test in this module.
+    # (principle 9: what `setup` suggests where none is on `PATH`) is what the note must name;
+    # asserted here rather than left to eyeballing, since it is the one line a typo in the URL or
+    # the tag would hide from every other test in this module.
     monkeypatch.setattr("shutil.which", lambda name: None)
     report = setup(
         "recommended",

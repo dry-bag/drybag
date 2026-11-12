@@ -39,8 +39,7 @@ def check(
     loading a second one. Two loads could disagree, and a `--check` whose two halves read
     different documents is exactly what it exists to rule out. Past the binding it takes the run's
     gates and plans the run's writes (`gates`, `plan_writes`), so a refusal or failure there ends
-    this command with the run's code and line: each of them was once left out here, and `--check`
-    answered clean over a checkout the run then stopped on. `owner` is the owner's layer the
+    this command with the run's code and line. `owner` is the owner's layer the
     command resolved (`config.loader.loads`' own), and `project` is `--project`, which names the
     project of a repository with no `drybag.toml` as the run's does (`write.configured`).
     """

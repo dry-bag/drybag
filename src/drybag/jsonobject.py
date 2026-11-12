@@ -34,15 +34,11 @@ LONG_NUMBER = "holds a number longer than this reader converts"
 # 6,000 lists deep is 72 MB written back.
 WRITTEN_PAST = "would be longer than this reader reads once written back"
 # A named cap: the deepest nesting a document read here may hold, counting the top-level object
-# as one. The parser's own reach differs by interpreter — measured, 992 levels on 3.11, 9,997 on
-# 3.12, 9,998 on 3.13 and about 57,800 on 3.14 — and on 3.14 it passes what the rest of the
-# interpreter follows: on 3.14.7, nested objects stopped at about 21,700 levels for `==`, 28,900
-# for `json.dumps(indent=2)` and 34,700 for `str` (nested lists go deeper), so a document 3.13
-# refuses was read on 3.14 and then ended `detach` and the settings engine in an internal error
-# when they wrote it back. Just above 3.13's reach, so 3.11 to 3.13 refuse nothing they read
-# today, and 3.14 refuses what 3.13 refuses, in the same words; more than twice under where 3.14's
-# `==` stops, though on 3.14 those limits follow the stack size and shrink under a smaller
-# `ulimit -s`. It is not 3.12's indenting encoder's reach, near 994 levels: `json_text` answers
+# as one. The parser reaches 9,998 levels on 3.13 and about 57,800 on 3.14, past where 3.14's own
+# `==` (about 21,700, following the stack size) stops, so a deeper document would end `detach` and
+# the settings engine in an internal error at the write back. Just above 3.13's reach, so 3.11 to
+# 3.13 refuse nothing they read, and 3.14 refuses what 3.13 refuses, in the same words. It is not
+# 3.12's indenting encoder's reach, near 994 levels: `json_text` answers
 # that one where it is met. No shipped file states it: a settings file nests five levels.
 DEPTH_CAP = 10_000
 
@@ -103,11 +99,10 @@ def json_text(
     """`value` as JSON text, for a document `json_object` read and a caller writes back.
 
     Read is not written: on Python 3.12 the C encoder does not handle `indent`, so
-    `json.dumps(indent=2)` runs the pure-Python encoder, which stops at the interpreter's
-    recursion limit -- about 994 levels -- while the parser follows about 9,996. A document
-    between the two was read and then ended its writer in `RecursionError`, an internal error.
-    That is answered as the reader answers a document nested past the parser, with the same
-    `label`, `error` and `limit`.
+    `json.dumps(indent=2)` runs the pure-Python encoder, which stops at the interpreter's recursion
+    limit -- about 994 levels -- while the parser follows about 9,996, so a document between the two
+    would end its writer in `RecursionError`. That is answered as the reader answers a document
+    nested past the parser, with the same `label`, `error` and `limit`.
 
     Nor is every text written one the next read takes: a text longer than
     `fsops.REGULAR_READ_LIMIT` is refused, `<label>` before `WRITTEN_PAST`, in the same way and

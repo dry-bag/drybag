@@ -108,7 +108,7 @@ def _months(stamp: str) -> int:
     return int(year) * 12 + int(month)
 
 
-# Vacuity floors, not coverage: the table has 32 rows and the principles 10 sections today,
+# Vacuity floors, not coverage: the table has 31 rows and the principles 9 sections today,
 # and these numbers say only "not empty enough to be a mistake". Pinning the exact counts
 # would make every added source a test edit; the cited/citing tests below hold the content.
 SOURCES_FLOOR = 20

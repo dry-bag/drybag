@@ -16,19 +16,13 @@ import re
 # Nine ASCII digits a component, and both halves of that bound are load-bearing.
 #
 # *Bounded*, because `int()` is not total. CPython 3.11 caps integer-string conversion at 4300
-# digits, so an unbounded `(\d+)` let a manifest declare `>=999…9.0.0` and made `satisfies`
-# raise `ValueError` out of a function whose docstring promises `None` for anything it cannot
-# read. `doctor` rendered that as "this check could not run: ValueError", and the session
-# handler's `except Exception` swallowed it whole — taking `NOT_ATTACHED` and every other line
-# of the same result with it, so an overlay manifest silenced the one line that says the
-# project is not attached. Nine digits is past every version anyone releases and far under the
-# cap, and the value that exceeds it is now unreadable rather than fatal.
+# digits, so an unbounded `(\d+)` would let a manifest's `>=999…9.0.0` raise `ValueError` out of
+# `satisfies`, which promises `None` for anything it cannot read. Nine digits is past every
+# version anyone releases and far under the cap.
 #
-# *ASCII*, because `\d` is not. It matches every Unicode decimal digit and `int()` accepts
-# them, so a floor spelled in Eastern Arabic-Indic numerals validated, compared as `>=1.0.0`,
-# and printed back verbatim into a session line and a `doctor` row — `requires_of` returns the
-# overlay's own bytes, and "the one owner-authored string that prints" is meant to be a
-# version, not an arbitrary numeral system. `tests/test_semver.py` and
+# *ASCII*, because `\d` is not: it matches every Unicode decimal digit and `int()` accepts them,
+# and `requires_of` prints the overlay's own bytes back into a session line and a `doctor` row,
+# which is meant to be a version, not an arbitrary numeral system. `tests/test_semver.py` and
 # `tests/overlay/test_requires.py` spell the digits.
 COMPONENT = r"([0-9]{1,9})"
 # A version's leading `X.Y.Z`, whatever follows it: the triple `later` orders versions by first,
@@ -38,10 +32,9 @@ VERSION = re.compile(rf"^{COMPONENT}\.{COMPONENT}\.{COMPONENT}")
 # those three components. Further release components, then at most one pre-release segment (`a`,
 # `b`, `rc` and their spellings), one post-release (`post`, `rev`, `r`, or `-N`) and one
 # development segment (`dev`), in that order and each with or without a separator before it, then
-# a local label after `+`, which is no segment of the version's. Read as one grammar because a
-# search for each segment as a word of its own kept missing spellings PEP 440 allows: segments run
-# together with no separator (`1.0.0.post1dev2`, `1.0.0rc1post2`) were read as other segments, or
-# as none.
+# a local label after `+`, which is no segment of the version's. Read as one grammar because PEP
+# 440 lets segments run together with no separator (`1.0.0.post1dev2`, `1.0.0rc1post2`), which a
+# search for each segment as a word of its own misreads.
 _SUFFIX = re.compile(
     r"\A(?P<release>(?:\.[0-9]+)*)"
     r"(?P<pre>[-_.]?(?:alpha|a|beta|b|preview|pre|c|rc)[-_.]?[0-9]*)?"

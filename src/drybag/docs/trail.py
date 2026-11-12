@@ -62,10 +62,8 @@ _ROW = re.compile(r"^- \[`([^`]+)`\]", re.MULTILINE)
 # routes and their remedies differ. A `trail.toml` `label` or `state` is caught in `read_trail`,
 # beside the type checks, because a `trail.toml` outside the contract must read as that file
 # being wrong. A document's own FILENAME reaches the listing as both the row and the link,
-# straight off `glob("*.md")` with no file to be outside a contract — and guarding only the
-# first half left the defect whole: a tracked `…-a<!-- end design and plan trail -->b.md` grew
-# the roadmap 18 → 22 → 26 lines over three runs, each exiting 0, with the end-marker count
-# going 2 → 4 → 6, and `--check` stale forever. It is caught in `render_listing`, after the
+# straight off `glob("*.md")` with no file to be outside a contract, and a name holding the end
+# marker would grow the roadmap on every run. It is caught in `render_listing`, after the
 # ignored and untracked documents are dropped, so a sibling session's oddly named local file
 # cannot fail the command for everybody — the same reason `_untracked` exists.
 _UNINTERPOLABLE = (

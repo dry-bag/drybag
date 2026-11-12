@@ -223,8 +223,8 @@ def write_mcp_ledger(root: Path, ledger: McpLedger) -> None:
     fsops.write_within(common_directory(root), MCP_LEDGER_FILE, text)
 
 
-# Claude Code's answer to `remove` of a name local scope does not hold, measured on 2.1.319 as exit
-# 1 and `No MCP server named "q" in local scope`. Exit 1 also answers a `remove` that could not
+# Claude Code's answer to `remove` of a name local scope does not hold: exit 1 and
+# `No MCP server named "q" in local scope`. Exit 1 also answers a `remove` that could not
 # write, so only exit 0 or this answer for the name drops it; any other (no `claude`, a spawn
 # error, a signal, a timeout, another wording) leaves the name unsettled, never lost.
 ABSENT = 'No MCP server named "{name}"'

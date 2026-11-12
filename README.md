@@ -180,8 +180,10 @@ drybag memory index      # renders .drybag/local/memory/MEMORY.md from the notes
 drybag doctor            # fourteen checks over this installation, one line; --json has the remedies
 ```
 
-These notes are inside the repository, so they reach a session as data and never as standing
-rules; [The threat model, in one paragraph](#the-threat-model-in-one-paragraph) says why.
+These notes are inside the repository, so they reach a session as data, and as a standing rule only
+once promoted with `metadata.startup` set; [The threat model, in one
+paragraph](#the-threat-model-in-one-paragraph) says why, and
+[SECURITY.md](https://github.com/dry-bag/drybag/blob/main/SECURITY.md#known-limits) names the limit.
 Add `.drybag/local/` to `.gitignore` if it is not there already.
 
 The other commands in [Commands](#commands) expect more of a repository than those three keys

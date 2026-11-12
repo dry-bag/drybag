@@ -29,7 +29,6 @@ from tests.declarations import (
     cited_names,
     declared,
     empty_anchors,
-    needs_declarations,
     unread_citations,
     unread_names,
 )
@@ -1061,7 +1060,6 @@ def test_an_entry_anchored_on_a_rewritten_action_pin_is_a_finding(tmp_path: Path
     ]
 
 
-@needs_declarations
 def test_every_declared_entry_is_sound_before_any_run() -> None:
     """`static_findings` over the real `mutations/` finds nothing.
 
@@ -1303,7 +1301,6 @@ def test_every_citation_is_spelled_the_way_the_citation_reader_reads() -> None:
 # the groups were sized for reaches them (CONTRIBUTING.md, "Tests").
 
 
-@needs_declarations
 def test_the_oracle_reads_every_group_file() -> None:
     # Mutation (declared): `declared()` reads only the first group file (`[:1]` on the sorted
     # glob) -> the count comes out at the first file's entries and the second assertion reddens.
@@ -1314,7 +1311,6 @@ def test_the_oracle_reads_every_group_file() -> None:
     assert len(module.declared()) == expected
 
 
-@needs_declarations
 def test_every_entry_lives_in_its_group_file() -> None:
     # Mutation (declared): `GROUP_OF` loses its `src/drybag/doctor/` row -> every `doctor`
     # entry routes to the package's catch-all group instead, and the first of them, still in the

@@ -34,20 +34,16 @@ from drybag.printed import quoted
 from drybag.result import Result
 from drybag.runner import Runner, subprocess_runner
 
-# Imported at module scope, and not deferred into `run_setup` the way `setup.run.setup` still
-# is: a test that wants to keep this command away from a real `claude`/`codex` binary has to
-# monkeypatch a name it can see, and `drybag.setup.commands.subprocess_runner` is one hop
-# rather than two — `run_setup` calling straight into `drybag.runner`'s own attribute
-# left the patch depending on an import this module does not own the shape of. The runner was
-# the `overlay` area's when that was written; it has since become the leaf module `runner.py`,
-# and this sentence follows it. `commands.py` is never imported by the hook registry (only
+# Imported at module scope, and not deferred into `run_setup` the way `setup.run.setup`
+# is: a test that wants to keep this command away from a real `claude`/`codex` binary
+# monkeypatches `drybag.setup.commands.subprocess_runner`, one hop rather than two.
+# `commands.py` is never imported by the hook registry (only
 # `hooks.py` files are), so a module-scope import here does not reach the clean-interpreter
 # `discover()` that `tests/boundaries/test_discovery.py` holds `hooks.py` to.
 
 # `--git-hooks` installs a hook into one repository and does nothing of machine setup's, so a flag
-# that asks machine setup to do something has no run to belong to beside it: `--preset` was
-# refused, and `--overlay` was dropped, exit 0, the hook installed, for a person who asked for
-# both. Refused alike. `--home` and `--machine` say only where machine setup
+# that asks machine setup to do something has no run to belong to beside it, and is refused.
+# `--home` and `--machine` say only where machine setup
 # would write, ask nothing done, and are ignored here, as `docs/cli.md` says.
 _HOOKS_ALONE = (
     "--git-hooks installs a hook into one repository and does nothing of machine setup's, so it "
@@ -55,8 +51,7 @@ _HOOKS_ALONE = (
     "separately"
 )
 # `--uninstall` removes the hook `--git-hooks` installed, and means nothing to machine setup: on
-# its own it was dropped and the machine setup ran, exit 0, for a person who asked for a hook to be
-# removed. Refused before anything is written, naming the flag that gives it a meaning.
+# its own it is refused before anything is written, naming the flag that gives it a meaning.
 _UNINSTALL_ALONE = (
     "--uninstall removes the commit-message hook and is taken only with --git-hooks; run "
     "`drybag setup --git-hooks --uninstall` to remove it, and nothing was written"
@@ -168,7 +163,7 @@ _RESTORE_NEEDS_AN_OVERLAY = (
 )
 # What `--approval-boundary` prints: the deny rule over the trust record's directory and the user
 # settings file it belongs in, the setting that turns the sandbox on, and the managed settings that
-# keep a repository from turning it off (`trust.boundary` says where each was measured).
+# keep a repository from turning it off (`trust.boundary` says where each comes from).
 BOUNDARY_ADVICE = (
     "setup wrote nothing; an approval holds against repository bytes, and against an agent only "
     "while the agent's shell cannot write the trust record, which Claude Code's sandbox stops "
@@ -349,8 +344,7 @@ def register(groups: SubParsers) -> None:
         "--preset", default=None, help="the preset to install (default: recommended)"
     )
     # Both defaults are `None` and are resolved in `run_setup`. A path computed here is computed
-    # when the parser is built, which is every run of every command — and printed by
-    # `drybag setup --help`, where it was the developer's own home directory.
+    # when the parser is built, which is every run of every command, and printed by `--help`.
     setup.add_argument("--home", default=None, help=HOME_HELP)
     setup.add_argument("--machine", default=None, help=SETUP_MACHINE_HELP)
     setup.add_argument(

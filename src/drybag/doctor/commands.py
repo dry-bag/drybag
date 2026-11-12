@@ -4,7 +4,7 @@ One command and not a group, the shape `docs/cli.md` documents and the shape the
 invokes.
 
 **A `skip` is not a finding.** A check this build cannot answer at all — the hash Codex keys hook
-trust on, which no spike has measured — skips on every installation, so an exit code that counted
+trust on, which nothing here knows — skips on every installation, so an exit code that counted
 skips would make `doctor` red on every correct one. Every other skip is a state of the machine or
 of the repository, and which of those states is the ordinary one can move with things no code
 here decides, so nothing

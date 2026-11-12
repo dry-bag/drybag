@@ -57,11 +57,10 @@ DIAGNOSTIC_FIELD_CHARS = 2_000
 # however long a machine runs. A named cap (CONTRIBUTING.md#named-caps); no shipped file changes
 # with it.
 MARKER_SESSIONS_KEPT = 50
-# A session id the payload did not carry. `read_event` types `session_id` as `str | None`, and
-# every such invocation used to share one constant segment -- `sha256("")`, a hex pair anything
-# can precompute. That made the unkeyed case the one direction a *read* out of this tree could
-# be used in: a data root the environment names, plus a payload with no session id, is enough
-# to **plant** a marker at a known path and silence a `once_key` handler before it ever runs.
+# A session id the payload did not carry. `read_event` types `session_id` as `str | None`, and a
+# constant segment for it (`sha256("")`) is one anything can precompute: a data root the
+# environment names, plus a payload with no session id, would **plant** a marker at a known path
+# and silence a `once_key` handler before it ever runs.
 #
 # Per process instead, so nothing can be laid down in advance. The cost is that `once_key`
 # degrades from "once per context" to "every invocation" for a payload with no session id --
