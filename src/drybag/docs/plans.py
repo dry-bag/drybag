@@ -56,12 +56,11 @@ at the file on disk, not at a commit that does not exist yet; the plans the work
 beyond the diff are reported as `unlinted` rather than linted silently, so the remedy is to name
 the file.
 
-The same holds within a plan. A delivered plan's `Interfaces:` blocks are kept current, so a later
-change edits plans whose other lines name paths the tree has since moved or removed, and holding
-it to those made the only way through a rewrite of history. In the diff-scoped mode a reference
-is therefore settled only on a line the change wrote (`written_lines`): a new plan is all such
-lines, and an edit is held to its own. Every other rule still reads the whole plan, and naming a
-plan as `PATH` still settles every reference in it.
+The same holds within a plan. A delivered plan is a record whose lines name paths the tree has since
+moved or removed, and a change that edits one must not have to rewrite the rest. In the diff-scoped
+mode a reference is therefore settled only on a line the change wrote (`written_lines`): a new plan
+is all such lines, and an edit is held to its own. Every other rule still reads the whole plan, and
+naming a plan as `PATH` still settles every reference in it.
 
 A repository whose BASE will not resolve is a finding and not an OK. Printing a note and exiting
 0 is how a gate like this one runs green for its whole life without ever having linted anything:

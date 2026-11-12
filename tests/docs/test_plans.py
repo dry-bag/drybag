@@ -490,12 +490,10 @@ def test_without_paths_only_the_plans_the_diff_touches_are_linted(tmp_path: Path
 def test_an_edit_to_a_plan_is_held_to_the_references_on_the_lines_it_writes(
     tmp_path: Path,
 ) -> None:
-    # A delivered plan is a record, and the paths it names go stale as the tree moves on. The
-    # diff-scoped check read every line of every plan a change touched, so a change editing one
-    # line of an old plan (an `Interfaces:` block, which is kept current) failed on every stale
-    # reference in it, and the only way through was to rewrite history. Without `PATH`
-    # arguments a reference is now judged only on a line the change adds or rewrites; naming the
-    # plan still lints all of it.
+    # A delivered plan is a record, and the paths it names go stale as the tree moves on, so a
+    # change editing one line of an old plan must not fail on every stale reference in it.
+    # Without `PATH` arguments a reference is judged only on a line the change adds or rewrites;
+    # naming the plan still lints all of it.
     # Mutation: `mutations/`'s "plan check judges an edited plan's untouched lines".
     root, config = project(tmp_path)
     git(root, "init", "-q", "-b", "main")

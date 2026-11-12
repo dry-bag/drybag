@@ -1,8 +1,7 @@
 """The overlay area's import surface: everything another area may import from it.
 
-The list is chosen from what consumers outside this area actually reach for. An area that needs
-something absent from it grows it deliberately, in a commit that says which area and why — it
-does not import a private module of this area.
+A name is added when a consumer needs it, in a commit that says which; a name nothing imports may
+go. No other area imports a private module of this one.
 
 `setup` builds an overlay and so needs `generate`, `render`, `finish`, `target_root`,
 `require_overlay` and `overlay_fault`; `Created` comes with the first two, because a return type

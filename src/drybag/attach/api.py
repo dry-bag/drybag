@@ -1,10 +1,7 @@
 """The attach area's import surface: everything another area may import from it.
 
-The list is chosen from what consumers outside this area actually reach for, and every name on
-it carries the reason beside it — a surface that survives a trim with no explanation is what
-made the trim necessary. An area that needs something absent from this list grows it
-deliberately, in a commit that says which area and why — it does not import a private module of
-this area.
+A name is added when a consumer needs it, in a commit that says which; a name nothing imports may
+go. No other area imports a private module of this one.
 
 No module under `src/` outside this area imports from here; `doctor`'s `attached` row is this
 area's own (`attach/doctor.py`). What is left is what the suite reads from outside the area:

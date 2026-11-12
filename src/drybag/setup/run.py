@@ -85,8 +85,8 @@ from drybag.setup.machine import SETUP_SANDBOXED, USER_SETTINGS, read_personal, 
 from drybag.trust.api import sandbox_refused
 
 # The release tag scheme (`vX.Y.Z`); `uv tool install` has no `--from`, so the positional git URL
-# form pinned to a release tag is the install form (`git+https://…@<tag>`; principle 9: the CLI
-# installs from a git tag). `{{version}}` survives into the template for the caller to fill.
+# form pinned to a release tag is the install form `setup` suggests (`git+https://…@<tag>`;
+# principle 9). `{{version}}` survives into the template for the caller to fill.
 INSTALL_COMMAND = f"uv tool install git+{REPOSITORY_URL}@v{{version}}"
 # One verb pair per harness, fixed here rather than in the preset: which CLI verb installs a
 # plugin is a property of the harness, never of any one plugin, and the two differ (the module
