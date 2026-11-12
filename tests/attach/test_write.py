@@ -1303,12 +1303,12 @@ def test_attach_carries_on_over_a_ledger_that_does_not_parse_and_writes_it_whole
     tmp_path: Path,
 ) -> None:
     # A file at the ledger's path that is no ledger records nothing: the attach unions from nothing
-    # and leaves a ledger that reads.
+    # and leaves a ledger that reads, and a copy no record names is left as the owner's.
     root, store, machine = _attachable(tmp_path, codex="# a standing rule\n")
     attach(root, store=store, machine=machine, runner=Recorder())
     ledger_file(root).write_text("{", encoding="utf-8")
-    attach(root, store=store, machine=machine, runner=Recorder())
-    assert list(ledger(root).rules) == [".codex/rules/common.rules"]
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    assert (ledger(root).rules, again.rules_left) == ({}, (".codex/rules/common.rules",))
 
 
 # `NESTED`, which no reader caught, in a file a clone can commit.
@@ -2584,7 +2584,7 @@ def test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it(
     # The team commits `.codex/rules/common.rules` after `attach` placed it, then the overlay drops
     # the rule: the next routine `attach` must not delete a file the checkout tracks. It leaves the
     # copy standing, names it, and forgets it: the file is the team's now.
-    # Mutation: `mutations/`'s "re-attach removes a Codex copy the overlay dropped".
+    # Mutation: `mutations/`'s "re-attach takes back every copy the overlay dropped".
     root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
     _committed(root)
     attach(root, store=store, machine=machine, runner=Recorder())
@@ -2599,16 +2599,16 @@ def test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it(
 
 
 @pytest.mark.parametrize(
-    ("state", "kept"),
+    ("state", "taken"),
     [("as-written", True), ("edited", False), ("tracked", False), ("deleted", False)],
 )
-def test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written(
-    tmp_path: Path, state: str, kept: bool
+def test_a_reattach_takes_back_a_dropped_copy_it_wrote(
+    tmp_path: Path, state: str, taken: bool
 ) -> None:
-    # `detach` must still take a stale copy Codex reads as a standing instruction, and must never
-    # take what is no longer attach's. So the name stays recorded only while the file is untracked
-    # and holds the bytes attach wrote. Mutation: `mutations/`'s "re-attach keeps every name the
-    # overlay dropped".
+    # A copy the overlay dropped went on applying as a standing instruction while the dropped allow
+    # rule was withdrawn. It is taken back as `detach` takes it, untracked and as attach wrote it;
+    # any other is no longer attach's, left and forgotten. Mutations: `mutations/`'s "re-attach
+    # takes back every copy the overlay dropped" and "re-attach takes back no copy it wrote".
     root, store, machine = _attachable(tmp_path, codex="# standing rule\n")
     _committed(root)
     attach(root, store=store, machine=machine, runner=Recorder())
@@ -2621,8 +2621,63 @@ def test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_writ
     elif state == "deleted":
         (root / copy).unlink()
     (store.parents[2] / COMMON_CODEX / "common.rules").unlink()
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    assert again.rules_taken_back == ((copy,) if taken else ())
+    assert (root / copy).is_file() is (state in ("edited", "tracked"))
+    assert copy not in ledger(root).rules
+
+
+def _hand_made(root: Path, text: str) -> str:
+    """A `.codex/rules/common.rules` the owner wrote, untracked, before any attach."""
+    copy = ".codex/rules/common.rules"
+    (root / copy).parent.mkdir(parents=True)
+    (root / copy).write_text(text, encoding="utf-8")
+    return copy
+
+
+@pytest.mark.parametrize("text", ["MY OWN CODEX RULES\n", "# the overlay's rule\n"])
+def test_attach_leaves_a_hand_made_rule_file(tmp_path: Path, text: str) -> None:
+    # A data-loss guard: `attach` wrote over the owner's own file at the name it wanted, and the
+    # ledger's digest then matched, so `detach` deleted it. Only the ledger tells attach's copy from
+    # a foreign one, so a file holding the overlay's very bytes is not taken either. Mutation:
+    # `mutations/`'s "attach writes over a file it did not write at a rule target".
+    from drybag.attach.write import detach
+
+    root, store, machine = _attachable(tmp_path, codex="# the overlay's rule\n")
+    copy = _hand_made(root, text)
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    assert (root / copy).read_text(encoding="utf-8") == text
+    assert (attached.rules_written, attached.rules_left) == ((), (copy,))
+    assert copy not in ledger(root).rules
+    assert copy not in (root / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    assert again.rules_left == (copy,) and copy not in ledger(root).rules
+    detach(root, runner=Recorder())
+    assert (root / copy).read_text(encoding="utf-8") == text
+
+
+def test_a_reattach_overwrites_its_own_unchanged_copy(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, codex="# first\n")
     attach(root, store=store, machine=machine, runner=Recorder())
-    assert (copy in ledger(root).rules) is kept
+    (store.parents[2] / COMMON_CODEX / "common.rules").write_text("# second\n", encoding="utf-8")
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    copy = ".codex/rules/common.rules"
+    assert (root / copy).read_text(encoding="utf-8") == "# second\n"
+    assert (again.rules_written, again.rules_left) == ((copy,), ())
+
+
+def test_check_says_would_leave_and_would_take_back(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, codex="# standing rule\n")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    codex = store.parents[2] / COMMON_CODEX
+    (codex / "common.rules").rename(codex / "other.rules")
+    (root / ".codex" / "rules" / "other.rules").write_text("# mine\n", encoding="utf-8")
+    result = check(root, store=store, machine=machine)
+    left, taken = ".codex/rules/other.rules", ".codex/rules/common.rules"
+    assert f"Codex rule file would be left: {quoted(left)}" in result.summary
+    assert f"Codex rule copy would be taken back: {quoted(taken)}" in result.summary
+    assert (result.data["rules_left"], result.data["rules_taken_back"]) == ([left], [taken])
+    assert (root / taken).is_file()
 
 
 # What a hand can leave in the ledger that parses as an object and is no ledger `attach` wrote.
@@ -2656,9 +2711,7 @@ def test_attach_writes_a_file_that_is_no_ledger_whole(
     attach(root, store=store, machine=machine, runner=Recorder())
     rewritten(root, fields)
     attach(root, store=store, machine=machine, runner=Recorder())
-    assert (
-        isinstance(ledger(root).rules, dict) and ".codex/rules/common.rules" in ledger(root).rules
-    )
+    assert isinstance(ledger(root).rules, dict)
 
 
 def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:

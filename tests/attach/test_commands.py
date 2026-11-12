@@ -178,36 +178,28 @@ def test_a_re_attach_names_each_allow_rule_it_takes_back(
     assert f"allow rule withdrawn: {quoted(RULE)}" in capsys.readouterr().out
 
 
-def test_a_re_attach_names_each_codex_rule_copy_the_overlay_no_longer_holds(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
-    machine = _machine(tmp_path, overlay=store.parents[2])
-    _overlay_grants(store, codex="# standing rule\n")
-    assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
-    capsys.readouterr()
-    assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    out = capsys.readouterr().out
-    assert f"Codex rule copy no longer in the overlay: {quoted('.codex/rules/common.rules')}" in out
-    assert (root / ".codex" / "rules" / "common.rules").is_file()
-    assert invoke(["attach", "--json", *_flags(root, store, machine)]) == 0
-    assert json.loads(capsys.readouterr().out)["rules_left"] == [".codex/rules/common.rules"]
-
-
-def test_the_line_about_a_dropped_copy_says_when_detach_removes_it(
+def test_a_re_attach_names_each_codex_rule_copy_it_takes_back_and_each_file_it_leaves(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # The line was "remove it, or run `drybag detach`", and that command then took an uncommitted
-    # edit with it.
+    # edit with it; an edited copy is no longer attach's, and the line says nothing will take it.
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     machine = _machine(tmp_path, overlay=store.parents[2])
     _overlay_grants(store, codex="# standing rule\n")
+    codex = store.parents[2] / "common" / "codex"
+    (codex / "other.rules").write_text("# other\n", encoding="utf-8")
     assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
+    (root / ".codex" / "rules" / "other.rules").write_text("# edited\n", encoding="utf-8")
+    (codex / "common.rules").unlink()
+    (codex / "other.rules").unlink()
     capsys.readouterr()
-    assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    assert "only while it is untracked and holds the bytes attach wrote" in capsys.readouterr().out
+    assert invoke(["attach", "--json", *_flags(root, store, machine)]) == 0
+    data = json.loads(capsys.readouterr().out)
+    taken, left = ".codex/rules/common.rules", ".codex/rules/other.rules"
+    assert (data["rules_taken_back"], data["rules_left"]) == ([taken], [left])
+    assert f"Codex rule copy taken back: {quoted(taken)}" in data["summary"]
+    assert f"Codex rule file left: {quoted(left)} (not attach's to write" in data["summary"]
+    assert "neither a re-attach nor `drybag detach` touches it" in data["summary"]
 
 
 def test_detach_names_a_copy_it_left(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

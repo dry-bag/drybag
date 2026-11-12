@@ -219,9 +219,8 @@ class Attached:
     `binding_recorded` says whether this run bound a checkout this machine did not bind before.
     `added` and `removed` are the executable diff against the render the last run left, and
     `allow_added` the allow rules this run merged and `allow_withdrawn` those it took back; all
-    four are the overlay's. `rules_left` is each `.codex/rules/` copy an earlier attach placed that
-    the overlay no longer holds and that is still there: a re-attach removes no Codex copy, and
-    `detach` removes one only while the ledger records it (`_write_ledger`).
+    four are the overlay's. `rules_left` is each `.codex/rules/` file this run left as it is, no
+    longer or never attach's (`plan_writes`), and `rules_taken_back` each copy it removed.
     """
 
     settings_written: bool
@@ -236,6 +235,7 @@ class Attached:
     allow_added: tuple[str, ...] = ()
     allow_withdrawn: tuple[str, ...] = ()
     rules_left: tuple[str, ...] = ()
+    rules_taken_back: tuple[str, ...] = ()
     # The overlay's MCP servers this run delivered, took back and replaced a local entry of, each
     # failed one with Claude Code's message (`attach.mcp.Reconciled`); all are names, never a
     # definition.
@@ -547,6 +547,16 @@ def _as_written(path: Path, digest: str) -> bool:
         return False
 
 
+def _foreign(path: Path, digest: str | None) -> bool:
+    """Whether something attach did not write is at `path`: anything there but the bytes `digest`,
+    the ledger's, records. A path that cannot be asked answers no; the write's walk refuses it."""
+    try:
+        there = fsops.exists(path) or fsops.is_symlink(path)
+    except OSError:
+        return False
+    return there and (digest is None or not _as_written(path, digest))
+
+
 def _reached_directory(path: Path) -> bool:
     """`fsops.is_dir`, and `True` for a path no write of this run can reach; see above."""
     try:
@@ -588,9 +598,9 @@ def _write_ledger(
     just wrote. `_plan` reads it once, above every write.
     """
     previous, binding = planned.previous, planned.binding
-    # What this run wrote, and the copies `plan_writes` kept: a file deleted from the overlay is
-    # not written this time, while its copy is still where Codex reads it as a standing instruction.
-    rules = {**planned.kept, **{t: _digest(text.encode("utf-8")) for t, text in planned.rules}}
+    # What this run wrote and nothing else: a copy the overlay dropped is taken back or left as no
+    # longer attach's (`plan_writes`).
+    rules = {t: _digest(text.encode("utf-8")) for t, text in planned.rules}
     # Only the rules the overlay grants now: one it no longer grants leaves the ledger whether or
     # not the settings file still held it, or a copy the owner types by hand later would be taken.
     granted = planned.diff.granted
@@ -754,10 +764,11 @@ class AttachPlan:
     # them, or `None` when the owner's own excludes hide them all.
     placed: tuple[str, ...]
     hidden: exclude.ExcludeWrite | None
-    # Each `.codex/rules/` target and the text to copy there.
+    # Each `.codex/rules/` target this run writes and the text to copy there, each file it leaves
+    # as it is, and each copy the overlay dropped that it takes back.
     rules: tuple[tuple[str, str], ...]
-    # Each copy the overlay no longer holds that the ledger goes on recording, with its digest.
-    kept: dict[str, str]
+    left: tuple[str, ...]
+    taken: tuple[str, ...]
     # What the rendered plugin carries, read from the overlay (`render.read_parts`).
     parts: dict[str, Part]
     # The overlay's MCP servers: the ones to deliver, `None` where an unusable `mcp.json` or MCP
@@ -930,21 +941,30 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     merged = _merged_settings(document, diff, deny)
     written = merged != document
     targets = tuple(target for target, _ in codex_rules(binding))
-    placed = placed_paths(targets)
     recorded = previous.rules if previous is not None else {}
     dropped = {rule: sha for rule, sha in recorded.items() if rule not in targets}
-    tracked = exclude.tracked(root, (*placed, *dropped))
+    tracked = exclude.tracked(root, (*placed_paths(targets), *dropped))
     # One rule for every placed path: none tracked, asked here above every write, and each ignored,
     # asked once the block stands (`_carry_out`).
-    if found := tuple(path for path in placed if path in tracked):
+    if found := tuple(path for path in placed_paths(targets) if path in tracked):
         raise Refusal(exclude.TRACKED.format(paths=named_placed(found)))
-    # A re-attach removes no copy. It goes on recording one the overlay dropped only while the file
-    # is untracked and as attach wrote it, so `detach` can take it; any other is no longer attach's.
-    kept = {
-        rule: sha
+    # A data-loss guard, anchored on the ledger's digest in the git common directory, which only
+    # `attach` writes: a target is written only where nothing is, or where the file holds the bytes
+    # the ledger records. Anything else there is the owner's, left, unrecorded and given no
+    # exclude line, though it hold the overlay's very bytes.
+    foreign = tuple(target for target in targets if _foreign(root / target, recorded.get(target)))
+    # A copy the overlay dropped is taken back while it is untracked and as attach wrote it, as
+    # `detach` takes it; any other is no longer attach's, and is left.
+    taken = tuple(
+        rule
         for rule, sha in dropped.items()
         if rule not in tracked and _as_written(root / rule, sha)
-    }
+    )
+    left = (
+        *foreign,
+        *(rule for rule in dropped if rule not in taken and fsops.is_file(root / rule)),
+    )
+    placed = placed_paths(tuple(target for target in targets if target not in foreign))
     # What git already hides decides the `info/exclude` block: a line for each path `attach` places
     # that the owner's own excludes do not hide (`exclude.unhidden_by_owner`). It can refuse — git
     # cannot answer, a path leaves the project, the exclude file is a symlink — and each refusal is
@@ -953,7 +973,7 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     # The reads the writes below would otherwise make for themselves, each of which can refuse
     # after the first write: the overlay's rule sources (a file that is not UTF-8) and what the
     # rendered plugin carries (a hook file of a shape it cannot read, a skill that cannot be read).
-    rules = _codex_rule_texts(binding)
+    rules = tuple((t, text) for t, text in _codex_rule_texts(binding) if t not in foreign)
     parts = read_parts(binding.plates)
     return AttachPlan(
         config=config,
@@ -970,7 +990,8 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         placed=placed,
         hidden=hidden,
         rules=rules,
-        kept=kept,
+        left=left,
+        taken=taken,
         parts=parts,
         served=fold.served if usable else None,
         deny=deny,
@@ -998,6 +1019,8 @@ def _carry_out(
     # The rule's second half: a `.gitignore` re-including a placed path (`!`) outranks the block.
     if shown := exclude.unignored(root, planned.placed):
         raise Refusal(exclude.NOT_IGNORED.format(paths=named_placed(shown)))
+    for rule in planned.taken:
+        fsops.remove_within(root, rule)
     for target, text in planned.rules:
         fsops.write_within(root, target, text)
     rules = tuple(target for target, _ in planned.rules)
@@ -1100,11 +1123,8 @@ def _carry_out(
         removed=before.without(after),
         allow_added=planned.diff.added_allow,
         allow_withdrawn=planned.diff.withdrawn_allow,
-        rules_left=tuple(
-            rule
-            for rule in (previous.rules if previous is not None else ())
-            if rule not in rules and fsops.is_file(root / rule)
-        ),
+        rules_left=planned.left,
+        rules_taken_back=planned.taken,
         mcp_delivered=tuple(
             name for name, sha in mcp.owned.items() if sha is not None and sha != owned.get(name)
         ),

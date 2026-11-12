@@ -66,6 +66,7 @@ def run_attach(args: argparse.Namespace) -> Result:
         "allow_added": list(attached.allow_added),
         "allow_withdrawn": list(attached.allow_withdrawn),
         "rules_left": list(attached.rules_left),
+        "rules_taken_back": list(attached.rules_taken_back),
         # The overlay's MCP servers by name, the owner's own; never a definition or a message.
         "mcp_delivered": list(attached.mcp_delivered),
         "mcp_taken_back": list(attached.mcp_taken_back),
@@ -109,10 +110,11 @@ def _screen(attached: Attached) -> list[str]:
     lines += [f"allow rule added: {clipped(rule)}" for rule in attached.allow_added]
     lines += [f"allow rule withdrawn: {clipped(rule)}" for rule in attached.allow_withdrawn]
     lines += [
-        f"Codex rule copy no longer in the overlay: {quoted(rule)} (keep or delete it; `drybag "
-        "detach` removes it only while it is untracked and holds the bytes attach wrote)"
+        f"Codex rule file left: {quoted(rule)} (not attach's to write or take back: it is yours, "
+        "and neither a re-attach nor `drybag detach` touches it)"
         for rule in attached.rules_left
     ]
+    lines += [f"Codex rule copy taken back: {quoted(rule)}" for rule in attached.rules_taken_back]
     lines += [f"MCP server delivered: {quoted(name)}" for name in attached.mcp_delivered]
     lines += [f"MCP server taken back: {quoted(name)}" for name in attached.mcp_taken_back]
     lines += [

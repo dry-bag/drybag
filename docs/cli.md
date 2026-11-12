@@ -1036,13 +1036,14 @@ escaped as every name the repository chose is; `--json` carries them as `project
 `origin` note the run would print (below), the permission diff
 (which allow rules would be added, how many of the overlay's rules this
 repository already has, and, when there are any, how many the ledger names that the overlay no
-longer grants and the run would take back), and the Codex standing-rule files it would place under `.codex/rules/`.
+longer grants and the run would take back), the Codex standing-rule files it would place under `.codex/rules/`, and, one
+line each, the files there it would leave and the copies it would take back (below).
 Read it before the real run: everything under **Writes** below that carries content from the
 overlay is named here first. It asks what the real run asks before its first write, through the
 run's own code, so where the run fails or refuses there, in any case the two lists below give before
 the first write, `--check` ends with the same code and the same line; otherwise it exits `0`.
 
-`rules_to_write` in the `--json` output lists those standing-rule files. It also names, one line
+`rules_to_write`, `rules_left` and `rules_taken_back` in the `--json` output list those files. It also names, one line
 each, the overlay's MCP servers the run would add, re-add (a changed definition, or one an earlier
 run left unsettled) and take back, and the server names it would deny or stop denying, as `mcp_add`, `mcp_readd`,
 `mcp_take_back`, `mcp_deny` and `mcp_undeny` in `--json`. It launches no `claude` for them.
@@ -1058,7 +1059,7 @@ agent (by its file) the render adds or removes against the render the last run l
 rule this run merges or takes back. A hook's command and an allow rule that do not fit a plain name are printed
 escaped, and cut to their first 120 characters and their length. `--json` carries the same lists
 as `hooks_added`, `hooks_removed`, `skills_added`, `skills_removed`, `agents_added`,
-`agents_removed`, `allow_added`, `allow_withdrawn` and `rules_left`, and no remote and no project of their own. Then come the
+`agents_removed`, `allow_added`, `allow_withdrawn`, `rules_left` and `rules_taken_back`, and no remote and no project of their own. Then come the
 overlay's MCP servers this run delivered, took back, replaced a local entry of (one made by hand,
 or left by an interrupted run) and could not deliver or take back, each by name with Claude Code's
 own message for a failure and never its definition, and the server names whose `deniedMcpServers`
@@ -1169,13 +1170,15 @@ no longer grants**, where the ledger names it and the settings file still holds 
 from `common/`, from `projects/<name>/` or from a tag you took off the project leaves with the
 next run, each said as `allow rule withdrawn`, and a rule you added by hand, which the ledger does not name, stays.
 The ledger sits in the git common directory beside the binding id, where a branch cannot write it, so
-nothing a branch commits names what a re-attach or `detach` takes back. **A re-attach removes no `.codex/rules/` copy**: a
-file dropped from a plate, or a tag taken off the project, may since have been committed or edited
-by the team, so the run leaves it and says `Codex rule copy no longer in the overlay: <path>`
-(`rules_left` in `--json`). The ledger records the sha256 of the bytes `attach` wrote to each copy,
-and goes on recording a dropped one only while its file is untracked and holds those bytes, so
-`detach` can still take a file Codex reads as a standing instruction; any other is forgotten, and
-the file is yours. **`.gitignore` is never written**: it is tracked, so
+nothing a branch commits names what a re-attach or `detach` takes back. **A `.codex/rules/` file
+is written only where nothing is, or where the ledger records `attach`'s own copy**: the ledger
+records the sha256 of the bytes `attach` wrote to each copy, and a file at a rule's name that does
+not hold them — one you wrote, even with the overlay's very bytes, or attach's copy you edited — is
+left as it is, unrecorded and given no exclude line, and the run says `Codex rule file left:
+<path>` (`rules_left` in `--json`). **A re-attach takes back a copy the overlay dropped** (a file
+dropped from a plate, or a tag taken off the project) while it is untracked and holds those bytes,
+as `detach` does, saying `Codex rule copy taken back: <path>` (`rules_taken_back`); one the team
+committed or edited is left, forgotten, and yours. **`.gitignore` is never written**: it is tracked, so
 any line there would be a change every collaborator gets. A `drybag:ignore` region an earlier
 release wrote there stays until you remove it.
 

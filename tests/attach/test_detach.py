@@ -602,24 +602,6 @@ def test_detach_leaves_the_binding_record_in_place(tmp_path: Path) -> None:
     assert (store.parents[2] / "common" / "memory" / "shared.md").is_file()
 
 
-def test_detach_removes_a_rule_file_the_overlay_has_since_deleted(tmp_path: Path) -> None:
-    # `attach` stays reversible by `detach`, and the ledger is the only record of what was placed.
-    # A re-attach removes no Codex copy, so one the overlay dropped between two attaches is still in
-    # `.codex/rules/`, where Codex reads it as a standing instruction, and it stays on the ledger
-    # while it is as attach wrote it.
-    # Mutation: `mutations/`'s "the ledger forgets a Codex copy the overlay dropped".
-    root, store, machine = _bound(tmp_path)
-    _grant(store.parents[2])
-    _attach(root, store, machine)
-    landed = root / ".codex" / "rules" / "common.rules"
-    assert landed.is_file()
-    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
-    _attach(root, store, machine)
-    assert landed.is_file()
-    _detach(root)
-    assert not landed.exists()
-
-
 def test_a_ledger_naming_a_path_outside_the_rule_copies_removes_none_of_them(
     tmp_path: Path,
 ) -> None:

@@ -359,7 +359,7 @@ reddens = [
 [[mutation]]
 name = "attach writes over a tracked placed path"
 file = "src/drybag/attach/write.py"
-before = "    if found := tuple(path for path in placed if path in tracked):"
+before = "    if found := tuple(path for path in placed_paths(targets) if path in tracked):"
 after = "    if found := ():"
 reddens = [
   "tests/attach/test_write.py::test_a_tracked_codex_rule_copy_is_refused_before_anything_is_written",
@@ -798,9 +798,9 @@ reddens = [
 [[mutation]]
 name = "attach reads the overlay's rule sources after its first write"
 file = "src/drybag/attach/write.py"
-before = "    rules = _codex_rule_texts(binding)"
+before = "    rules = tuple((t, text) for t, text in _codex_rule_texts(binding) if t not in foreign)"
 after = """    fsops.write_within(root, ".drybag-probe", "")
-    rules = _codex_rule_texts(binding)"""
+    rules = tuple((t, text) for t, text in _codex_rule_texts(binding) if t not in foreign)"""
 reddens = [
   "tests/attach/test_write.py::test_an_overlay_rule_that_is_not_utf8_stops_attach_before_it_writes",
 ]
@@ -1374,8 +1374,14 @@ reddens = [
 [[mutation]]
 name = "check skips the reads the run makes before its first write"
 file = "src/drybag/attach/check.py"
-before = "    planned = plan_writes(root, config, binding, diff)\n    return _report(binding, planned.diff, source, _mcp_heads(planned), planned.mcp_notes)\n"
-after = "    return _report(binding, diff, source)\n"
+before = "    planned = plan_writes(root, config, binding, diff)\n"
+after = """    from drybag.errors import Failure, Refusal
+
+    try:
+        planned = plan_writes(root, config, binding, diff)
+    except (Failure, Refusal):
+        return Result("", {})
+"""
 reddens = [
   "tests/attach/test_commands.py::test_check_ends_on_an_overlay_rule_that_is_not_utf8_with_the_runs_code_and_line",
   "tests/attach/test_commands.py::test_check_ends_on_each_refusal_past_the_runs_gates_with_the_runs_code_and_line[exclude-block-doubled]",
@@ -1720,40 +1726,37 @@ reddens = [
   "tests/attach/test_write.py::test_a_recorded_rule_removed_by_hand_is_not_an_error",
 ]
 
-# A Codex copy the overlay stopped holding may since have been committed or edited by the team, so
-# a re-attach removes none: it names each, and `detach` removes the ones the ledger still records.
+# A data-loss guard: a rule target is written only where nothing is, or where the file holds the
+# bytes the ledger records; anything else there is the owner's, whatever bytes it holds.
 [[mutation]]
-name = "re-attach removes a Codex copy the overlay dropped"
+name = "attach writes over a file it did not write at a rule target"
 file = "src/drybag/attach/write.py"
-before = "    rules = tuple(target for target, _ in planned.rules)\n    written"
-after = "    rules = tuple(target for target, _ in planned.rules)\n    for rule in previous.rules if previous else ():\n        if rule not in rules and fsops.is_file(root / rule):\n            fsops.remove_within(root, rule)\n    written"
+before = "    return there and (digest is None or not _as_written(path, digest))"
+after = "    return False"
 reddens = [
-  "tests/attach/test_write.py::test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it",
+  "tests/attach/test_write.py::test_attach_leaves_a_hand_made_rule_file",
 ]
 
-# The ledger keeps a Codex copy the overlay has since dropped while it is untracked and as written,
-# or the copy is left in `.codex/rules/` with nothing to name it to `detach`.
+# A copy the overlay dropped is taken back while it is untracked and as attach wrote it, as `detach`
+# takes it, or it goes on applying as a standing instruction; any other is the team's or the owner's.
 [[mutation]]
-name = "the ledger forgets a Codex copy the overlay dropped"
+name = "re-attach takes back no copy it wrote"
 file = "src/drybag/attach/write.py"
-before = "    rules = {**planned.kept, **{t:"
-after = "    rules = {**{t:"
+before = "    for rule in planned.taken:\n"
+after = "    for rule in ():\n"
 reddens = [
-  "tests/attach/test_detach.py::test_detach_removes_a_rule_file_the_overlay_has_since_deleted",
+  "tests/attach/test_write.py::test_a_reattach_takes_back_a_dropped_copy_it_wrote[as-written-True]",
 ]
 
-# Any other dropped name is no longer attach's: kept, doctor reads a file the team committed as one
-# attach placed, and `detach` reaches a file attach never wrote.
 [[mutation]]
-name = "re-attach keeps every name the overlay dropped"
+name = "re-attach takes back every copy the overlay dropped"
 file = "src/drybag/attach/write.py"
 before = "        if rule not in tracked and _as_written(root / rule, sha)\n"
 after = "        if True\n"
 reddens = [
-  "tests/attach/test_write.py::test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written[edited-False]",
-  "tests/attach/test_write.py::test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written[tracked-False]",
-  "tests/attach/test_write.py::test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written[deleted-False]",
-  "tests/attach/test_doctor.py::test_a_copy_the_team_committed_is_no_finding_once_the_overlay_dropped_it",
+  "tests/attach/test_write.py::test_a_reattach_takes_back_a_dropped_copy_it_wrote[edited-False]",
+  "tests/attach/test_write.py::test_a_reattach_takes_back_a_dropped_copy_it_wrote[tracked-False]",
+  "tests/attach/test_write.py::test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it",
 ]
 
 # The digest is the removal's anchor: what is at a recorded name is a branch's or the owner's, and
@@ -1935,8 +1938,8 @@ reddens = [
 [[mutation]]
 name = "attach --check says no note of the plates"
 file = "src/drybag/attach/check.py"
-before = "    for note in (*binding.plate_notes, *mcp_notes):"
-after = "    for note in mcp_notes:"
+before = "    for note in (*binding.plate_notes, *planned.mcp_notes):"
+after = "    for note in planned.mcp_notes:"
 reddens = [
   "tests/attach/test_commands.py::test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name[command1]",
 ]
