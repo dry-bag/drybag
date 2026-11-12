@@ -20,6 +20,7 @@ from drybag.config.schema import (
 )
 from drybag.config.session import session_config
 from drybag.findings import LISTED_LIMIT
+from tests.crafted import CRAFTED, assert_never_raw
 from tests.gitfixture import needs_git, run_git
 
 HEAD = '[drybag]\nversion = "0.1.0"\npreset = "recommended"\n'
@@ -31,8 +32,12 @@ def write(root: Path, text: str) -> None:
 
 
 def test_missing_file_names_the_next_command(tmp_path: Path) -> None:
-    with pytest.raises(ConfigError, match="does not exist; write one"):
-        load(tmp_path, machine=tmp_path / "no-machine.toml")
+    # The root is a directory a clone can be given any name, so the refusal quotes it.
+    root = tmp_path / CRAFTED
+    root.mkdir()
+    with pytest.raises(ConfigError, match="does not exist; write one") as caught:
+        load(root, machine=tmp_path / "no-machine.toml")
+    assert_never_raw(str(caught.value))
 
 
 def test_preset_defaults_fill_every_section(tmp_path: Path) -> None:

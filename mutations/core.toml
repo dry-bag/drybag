@@ -1498,12 +1498,12 @@ file = "src/drybag/config/loader.py"
 before = """
     text = read_document(root)
     if text is None:
-        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
+        raise ConfigError(NOT_THERE.format(path=quoted(str(root / CONFIG_FILE))))
 """
 after = """
     text = (root / CONFIG_FILE).read_text(encoding="utf-8")
     if text is None:
-        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
+        raise ConfigError(NOT_THERE.format(path=quoted(str(root / CONFIG_FILE))))
 """
 reddens = [
   "tests/config/test_symlinked_document.py::test_load_refuses_a_symlinked_drybag_toml",

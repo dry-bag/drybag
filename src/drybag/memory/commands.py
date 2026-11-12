@@ -94,7 +94,7 @@ def _store(args: argparse.Namespace) -> tuple[Store, Config]:
     config = bound_config(root, machine=machine, owner=owner)
     if config is None:
         # A checkout with no file that this machine does not bind: `load`'s refusal.
-        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
+        raise ConfigError(NOT_THERE.format(path=quoted(str(root / CONFIG_FILE))))
     # `resolved` and not `resolve` + `refusal_reason`: the pair walked the whole resolution
     # twice, four `git` queries with a five-second timeout apiece each time, so a hanging `git`
     # cost a refused command up to forty seconds.

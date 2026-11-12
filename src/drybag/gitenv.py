@@ -44,6 +44,7 @@ from pathlib import Path
 
 from drybag import fsops
 from drybag.errors import Failure, Refusal
+from drybag.printed import quoted
 from drybag.processes import Ran, run_bounded
 
 # Everything else is dropped, an inherited `GIT_DIR` and `GIT_WORK_TREE` above all. The ssh agent
@@ -364,13 +365,15 @@ def git_path(root: Path, name: str, what: str) -> Path:
     # Neither refusal carries a byte this module did not compute, for the reason
     # `guards.commit.commits_in` states beside its own: `rev-parse`'s stderr is
     # repository-authored — it quotes the offending CONFIG VALUE, `core.hooksPath` included — and
-    # is never read. `root` is the caller's own path and is the actionable part; it is all that is
-    # printed.
+    # is never read. `root` is the actionable part and all that is printed, through `quoted`,
+    # since a clone's directory can be given any name.
     if code == -1:
-        raise Refusal(f"git could not name the {what} of {root} ({NO_ANSWER})")
+        raise Refusal(f"git could not name the {what} of {quoted(str(root))} ({NO_ANSWER})")
     answer = out.removesuffix("\n")
     if code != 0 or not answer:
-        raise Refusal(f"git could not name the {what} of {root}; run it yourself to see why")
+        raise Refusal(
+            f"git could not name the {what} of {quoted(str(root))}; run it yourself to see why"
+        )
     path = Path(answer)
     return path if path.is_absolute() else root / path
 

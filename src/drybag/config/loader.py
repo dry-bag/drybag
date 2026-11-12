@@ -313,7 +313,7 @@ def load(root: Path, *, machine: Path | None = None, owner: Owner | None = None)
     """
     text = read_document(root)
     if text is None:
-        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
+        raise ConfigError(NOT_THERE.format(path=quoted(str(root / CONFIG_FILE))))
     return loads(text, root, machine=machine, owner=owner)
 
 
