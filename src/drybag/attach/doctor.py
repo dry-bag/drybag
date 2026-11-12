@@ -479,7 +479,8 @@ def _uncorroborated(reason: str) -> Row:
             WARN,
             f"{LEDGER_NAME} is here and cannot be read as a ledger, so nothing in it can be "
             f"corroborated and this checkout's attach state is unknown",
-            f"remove {LEDGER_NAME}, then run `{ATTACH_COMMAND} --check`",
+            f"take back by hand what {LEDGER_NAME} records, move it aside, then run "
+            f"`{ATTACH_COMMAND} --check`",
         )
     if reason == MACHINE_UNREAD:
         # No remedy of its own: the `preferences` row is red on the same file, and names it and

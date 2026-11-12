@@ -1300,18 +1300,6 @@ def test_an_overlay_hooks_file_with_an_unreadable_shape_is_refused(tmp_path: Pat
         )
 
 
-def test_attach_carries_on_over_a_ledger_that_does_not_parse_and_writes_it_whole(
-    tmp_path: Path,
-) -> None:
-    # A file at the ledger's path that is no ledger records nothing: the attach unions from nothing
-    # and leaves a ledger that reads, and a copy no record names is left as the owner's.
-    root, store, machine = _attachable(tmp_path, codex="# a standing rule\n")
-    attach(root, store=store, machine=machine, runner=Recorder())
-    ledger_file(root).write_text("{", encoding="utf-8")
-    again = attach(root, store=store, machine=machine, runner=Recorder())
-    assert (ledger(root).rules, again.rules_left) == ({}, (".codex/rules/common.rules",))
-
-
 # `NESTED`, which no reader caught, in a file a clone can commit.
 
 
@@ -2698,6 +2686,7 @@ NOT_LEDGERS = [
     {"settings_keys": "autoMemoryDirectory"},
     {"directories": {}},
     {"render": "x"},
+    {"format": 2},
 ]
 
 
@@ -2708,18 +2697,29 @@ def rewritten(root: Path, fields: Mapping[str, object]) -> None:
     ledger_file(root).write_text(json.dumps({**document, **fields}), encoding="utf-8")
 
 
-@pytest.mark.parametrize("fields", NOT_LEDGERS, ids=str)
-def test_attach_writes_a_file_that_is_no_ledger_whole(
-    tmp_path: Path, fields: Mapping[str, object]
+@pytest.mark.parametrize("fields", [*NOT_LEDGERS, None], ids=str)
+def test_attach_refuses_a_ledger_it_cannot_read(
+    tmp_path: Path, fields: Mapping[str, object] | None
 ) -> None:
-    # One answer from the reader, and `attach`'s is to write the ledger whole: a run that took
-    # such a field would fail in the middle, or carry it into the file it writes.
-    # Mutation: `mutations/`'s "the ledger reader takes any field".
+    # Written over whole, the allow rules and copies the ledger witnessed stayed in place with
+    # nothing to name them to `detach`, which refuses the same file. A ledger of another `format`
+    # is one this drybag cannot read either. Mutations: `mutations/`'s "the ledger reader takes any
+    # field", "the ledger reader takes another format" and "attach writes over a ledger it cannot
+    # read".
     root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
     attach(root, store=store, machine=machine, runner=Recorder())
-    rewritten(root, fields)
-    attach(root, store=store, machine=machine, runner=Recorder())
-    assert isinstance(ledger(root).rules, dict)
+    if fields is None:
+        ledger_file(root).write_text("{", encoding="utf-8")
+    else:
+        rewritten(root, fields)
+    before = snapshot(root)
+    held = ledger_file(root).read_bytes()
+    for run in (check, lambda *args, **flags: attach(*args, **flags, runner=Recorder())):
+        with pytest.raises(Failure, match="move it aside") as refused:
+            run(root, store=store, machine=machine)
+        assert str(ledger_file(root)) in str(refused.value)
+    assert ledger_file(root).read_bytes() == held
+    assert_snapshot_unchanged(root, before)
 
 
 def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:

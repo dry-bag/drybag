@@ -378,7 +378,8 @@ UNREADABLE_LEDGER_ATTACHED = Check(
     "warn",
     f"{LEDGER_NAME} is here and cannot be read as a ledger, so nothing in it can be corroborated "
     f"and this checkout's attach state is unknown",
-    f"remove {LEDGER_NAME}, then run `drybag attach --check`",
+    f"take back by hand what {LEDGER_NAME} records, move it aside, then run "
+    "`drybag attach --check`",
 )
 
 

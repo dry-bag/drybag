@@ -1266,8 +1266,9 @@ answer, in the order the run meets them:
   read or is not UTF-8; or a file under the overlay's `skills/` or `agents/` cannot be read, is
   not a regular file, is not UTF-8 or is longer than 64 MiB, or a directory there cannot be
   listed.
-- An existing ledger (`drybag/attach.json` in the git common directory) cannot be read. One that
-  is not valid JSON or not a JSON object records nothing: `attach` carries on and writes a new one.
+- An existing ledger (`drybag/attach.json` in the git common directory) cannot be read, is not
+  valid JSON, or is not one of this drybag's shape and `format`, as `detach` refuses it: the failure
+  names the file, and says to take back by hand what it records and move it aside first.
 - A Codex rule file in the overlay cannot be read or is not UTF-8, or the overlay's `common/codex/`
   or `projects/<name>/codex/` directory holding it cannot be listed.
 - `git worktree list`, which names the main checkout, fails.

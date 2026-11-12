@@ -280,9 +280,9 @@ class AttachLedger:
 
 
 class NotALedger(Failure):
-    """A file at the ledger's path that is not one `attach` wrote: it cannot be read, does not
-    parse, or holds a field of another shape. It records nothing: `attach` writes the ledger whole,
-    `detach` removes nothing and says so, and `doctor` warns."""
+    """A file at the ledger's path that is not one this `attach` wrote: it cannot be read, does
+    not parse, holds a field of another shape or another `format`. Nothing it records can be told:
+    `attach` and `detach` change nothing and say so, and `doctor` warns."""
 
 
 def ledger(root: Path) -> AttachLedger:
@@ -305,7 +305,8 @@ def _well_shaped(raw: dict[str, Any]) -> bool:
     """Whether every field of `raw` has the shape `_write_ledger` gives it."""
     render = raw.get("render")
     return (
-        isinstance(raw.get("store"), str)
+        raw.get("format") == LEDGER_FORMAT
+        and isinstance(raw.get("store"), str)
         and all(_strings(raw.get(key)) for key in ("allow", "settings_keys", "directories"))
         and isinstance(raw.get("rules"), dict)
         and _strings(list(raw["rules"].values()))
@@ -345,19 +346,27 @@ def read_ledger(path: Path) -> AttachLedger | None:
 
 def shown_placed(root: Path) -> int:
     """How many paths the last `attach` placed git would no longer ignore in the main checkout,
-    where it places them from any worktree; `0` where no ledger records any."""
+    where it places them from any worktree; `0` where there is no ledger, `NotALedger` for one."""
     main = main_checkout_or_none(root) or root
     recorded = existing_ledger(main)
     return 0 if recorded is None else len(exclude.unignored(main, placed_paths(recorded.rules)))
 
 
+# Said where `attach` meets a ledger it cannot read: written over, what it witnessed would stay
+# in place with nothing left to name it to `detach`.
+LEDGER_KEPT = (
+    "{fault}, so what it records cannot be told and nothing was written; take back by hand what it "
+    "records, move it aside, then run `drybag attach` again"
+)
+
+
 def existing_ledger(root: Path) -> AttachLedger | None:
-    """The ledger, or `None` when there is none or the file is `NotALedger`, which `attach` then
-    writes whole. `attach` and `attach --check` both read it here."""
+    """The ledger, `None` when there is none, or `NotALedger` (`LEDGER_KEPT`), as `detach` refuses
+    one. `attach` and `attach --check` both read it here."""
     try:
         return read_ledger(common_directory(root) / LEDGER_FILE)
-    except NotALedger:
-        return None
+    except NotALedger as exc:
+        raise NotALedger(LEDGER_KEPT.format(fault=exc)) from exc
 
 
 def _allow_list(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:

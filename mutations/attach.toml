@@ -138,8 +138,8 @@ reddens = [
 [[mutation]]
 name = "the ledger is read from the working tree"
 file = "src/drybag/attach/write.py"
-before = "        return read_ledger(common_directory(root) / LEDGER_FILE)\n    except NotALedger:"
-after = "        return read_ledger(root / \".drybag/local/attach.json\")\n    except NotALedger:"
+before = "        return read_ledger(common_directory(root) / LEDGER_FILE)\n    except NotALedger as exc:"
+after = "        return read_ledger(root / \".drybag/local/attach.json\")\n    except NotALedger as exc:"
 reddens = [
   "tests/attach/test_detach.py::test_a_ledger_a_branch_commits_names_nothing_a_re_attach_or_detach_removes",
 ]
@@ -1800,8 +1800,29 @@ file = "src/drybag/attach/write.py"
 before = "    if not _well_shaped(raw):\n"
 after = "    if False:\n"
 reddens = [
-  "tests/attach/test_write.py::test_attach_writes_a_file_that_is_no_ledger_whole",
+  "tests/attach/test_write.py::test_attach_refuses_a_ledger_it_cannot_read",
   "tests/attach/test_detach.py::test_a_ledger_of_the_wrong_shape_removes_nothing_and_says_so",
+]
+
+# A ledger of another `format` is one this drybag cannot read, whatever its fields look like.
+[[mutation]]
+name = "the ledger reader takes another format"
+file = "src/drybag/attach/write.py"
+before = "        raw.get(\"format\") == LEDGER_FORMAT\n        and "
+after = "        "
+reddens = [
+  "tests/attach/test_write.py::test_attach_refuses_a_ledger_it_cannot_read",
+]
+
+# Written over, a ledger `attach` cannot read leaves what it witnessed with nothing to name it to
+# `detach`, which refuses the same file.
+[[mutation]]
+name = "attach writes over a ledger it cannot read"
+file = "src/drybag/attach/write.py"
+before = "        raise NotALedger(LEDGER_KEPT.format(fault=exc)) from exc"
+after = "        return None"
+reddens = [
+  "tests/attach/test_write.py::test_attach_refuses_a_ledger_it_cannot_read",
 ]
 
 # An allow rule taken back is said on the screen the way a granted one is.
