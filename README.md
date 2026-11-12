@@ -471,7 +471,7 @@ that test until the command ships; none is today.
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/dry-bag/drybag/blob/main/CONTRIBUTING.md) — it states the three rules a change here has to satisfy,
+See [CONTRIBUTING.md](https://github.com/dry-bag/drybag/blob/main/CONTRIBUTING.md) — it states the five rules a change here has to satisfy,
 which are not obvious from the code. Security reports go through
 [SECURITY.md](https://github.com/dry-bag/drybag/blob/main/SECURITY.md), never a public issue.
 

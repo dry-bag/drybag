@@ -1,9 +1,5 @@
 # Contributing to drybag
 
-drybag's real conventions used to live only inside `docs/plans/`, which meant a first-time
-contributor's pull request could be rejected on rules they had no way to read. This file is
-those rules.
-
 ## The short version
 
 ```bash
@@ -29,7 +25,7 @@ ours to diagnose, not yours.
 
 drybag treats **a repository as untrusted input**. A clone can commit a `drybag.toml`, a
 `MEMORY.md`, a manifest, an `env` block and a tree of symlinks, and all of it reaches the code
-before a human has read any of it. Three rules follow, and a change that breaks one will be
+before a human has read any of it. Five rules follow, and a change that breaks one will be
 sent back however good it looks otherwise.
 
 **The runtime imports only the standard library.** Hooks run under whatever `python3` the
@@ -265,19 +261,20 @@ too, since Python runs each package's `__init__.py` first.
   `<area> (2)`, when the report already has that name), and the rest of the report stands.
   `register()` is called once per report, so anything it creates for its checks — an area that
   reads the note store creates a value that resolves it at most once — is fresh for every report.
-  What the core owns and several areas read is on the `Context` instead: `Context.overlay_root`,
-  the machine file's `[overlay] root`, is read at most once per report for every area that asks
-  the `Context` for it. That is the one answer it caches: code an area reaches through its own
-  modules, such as the binding and the note store, resolves the root again.
+  What the core owns and several areas read is on the `Context` instead, and it caches two
+  answers, each read at most once per report for every area that asks: `Context.machine_record`,
+  the machine file's `[overlay] root` and `[machine] name`, which `overlay_root` and `machine_name`
+  read, and `Context.attach_config`, the configuration `attach` acts on in a checkout with no
+  `drybag.toml`. Code an area reaches through its own modules, such as the binding and the note
+  store, resolves the root again.
   `Contribution`, `Context` and `Row` come from `drybag.doctor.api`, and, as in a `hooks.py`,
   every import sits inside a function body; `tests/boundaries/test_discovery.py` holds that one.
 - `api.py` is the area's import surface. Other areas import from it and from nothing else, and its
   `__all__` must equal exactly what it imports — a test parses the file and checks, and
   `tests/boundaries/test_api_surface.py` walks every module under `src/drybag/` and `scripts/`
   and fails on an import that reaches past one. The rule holds every package that publishes an
-  `api.py`, an area or not (`release` is held to its surface like any area). The list is what consumers
-  actually reach for, not what the area finds tidy: a consumer that needs something absent from it
-  grows it deliberately, in a commit that says which consumer and why.
+  `api.py`, an area or not (`release` is held to its surface like any area). Add a name when a
+  consumer needs it, in a commit that says which; a name nothing imports may go.
 - **`drybag.hooks.api` is the one exception, and it is structural rather than drift.** That
   module *defines* the vocabulary two areas share — `EVENTS`, `HookEvent`,
   `HookResult`, `Handler`, `HandlerFn`, `Sink`, `NullSink` and the sink's on-disk layout —
@@ -418,9 +415,8 @@ what it dropped.
 CI runs the whole set in a job of its own, called `oracle`, on one configuration —
 `ubuntu-latest` with Python 3.13 — while the tests go on running on all six. The oracle proves
 that a mutation reddens a test, which is a property of the code and of the tests rather than of
-the platform, and at 657 to 751 s a run it was 76% of the `checks` job and had pushed it past
-its fifteen-minute bound. Its own job has its own budget, and `ci.yml` says what that budget
-buys in further entries; `test_the_mutation_oracle_has_a_job_of_its_own_with_a_budget_that_fits`
+the platform. Its job is bounded at thirty minutes, and `ci.yml` says what that bound buys in
+further entries; `test_the_mutation_oracle_has_a_job_of_its_own_with_a_budget_that_fits`
 reddens when the set outgrows it, so you find that out here rather than from a cancelled job.
 
 Say plainly what narrowed: your local run is still the full check, and CI's guarantee is now
@@ -530,9 +526,8 @@ design. That design document is not public yet — it lives in a private reposit
 references to it cannot be followed from here. You do not need a plan for a bug fix or a
 documentation change; open an issue or a pull request and say what you found.
 
-The delivered plans in `docs/plans/` are a record, not a work list. Their `**Interfaces:**`
-blocks are kept current and are what later work builds against; their code blocks are
-as-planned and may differ from what shipped.
+The delivered plans in `docs/plans/` are a record, not a work list: their `**Interfaces:**` and
+code blocks are as-planned and may differ from what shipped.
 
 ## Security
 
