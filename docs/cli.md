@@ -611,8 +611,8 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    secret scan of the range and only when every commit in it is memory.
 
 **What moves.** Three globs only: `common/memory/**`, `tags/*/memory/**` and
-`projects/*/memory/**`, less each project's own `MEMORY.md` (`projects/*/memory/MEMORY.md`), which
-never moves: it is a rendering of the notes beside it and of what this machine's sessions appended,
+`projects/*/memory/**`, less each project's own `MEMORY.md` (`projects/*/memory/MEMORY.md`, in any
+case, since a case-insensitive volume reads `memory.md` as that file), which never moves: it is a rendering of the notes beside it and of what this machine's sessions appended,
 so each machine renders its own ([`memory index`](#drybag-memory-index), on `SessionStart` and
 `SessionEnd`) and the notes travel instead. A path moves as a regular, non-executable `.md` file with no dot component
 from the scope's name down, and only as text; a link, an executable, a dot-file, a file that is not

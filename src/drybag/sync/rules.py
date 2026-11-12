@@ -32,8 +32,9 @@ from drybag.gitenv import QUERY_TIMEOUT_SECONDS
 from drybag.memory.api import COMMON, INDEX_NAME, PROJECTS, STORE_DIR
 from drybag.sync.git import GitError, checked, git, left
 
-# A project's rendered index, which each machine renders for itself: left out under `projects`.
-NOT_AN_INDEX = f":(top,exclude,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"
+# A project's rendered index, which each machine renders for itself: left out under `projects`, in
+# any case, since on a case-insensitive volume `memory.md` is that very file.
+NOT_AN_INDEX = f":(top,exclude,glob,icase){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"
 # The pathspecs of the notes, their exclusion and the parse below all derive from the layout.
 MEMORY_PATHSPEC: tuple[str, ...] = (
     f":(top,glob){COMMON.as_posix()}/**",
@@ -42,6 +43,7 @@ MEMORY_PATHSPEC: tuple[str, ...] = (
     NOT_AN_INDEX,
 )
 _NAMED_TOPS = {"tag": TAGS, "project": PROJECTS}
+_INDEX = INDEX_NAME.casefold()
 
 
 @dataclass(frozen=True)
@@ -81,11 +83,10 @@ def memory_path(path: str) -> MemoryPath | None:
     """`path` parsed by the layout, or `None` when the pathspecs do not match it.
 
     The same match as `MEMORY_PATHSPEC` with `glob` magic: `*` is one non-empty directory name, a
-    final `**` is anything inside, and a project's own `MEMORY.md` is left out. A test holds it
-    equal to git's own. A match is not enough to
-    move a path: being a note (`MemoryPath.is_note`) and what git records it as (`entry_offends`)
-    are judged on top. The path is as git lists it, `-z`, so quoted or Cyrillic names arrive as
-    written.
+    final `**` is anything inside, and a project's own `MEMORY.md`, in any case, is left out. A test
+    holds it equal to git's own. A match is not enough to move a path: being a note
+    (`MemoryPath.is_note`) and what git records it as (`entry_offends`) are judged on top. The
+    path is as git lists it, `-z`, so quoted or Cyrillic names arrive as written.
     """
     parts = path.split("/")
     common = list(COMMON.parts)
@@ -99,7 +100,7 @@ def memory_path(path: str) -> MemoryPath | None:
             and parts[2] == STORE_DIR
             and all(parts[3:])
         ):
-            if scope == "project" and parts[3:] == [INDEX_NAME]:
+            if scope == "project" and [part.casefold() for part in parts[3:]] == [_INDEX]:
                 return None
             return MemoryPath(scope, parts[1], tuple(parts[3:]))
     return None

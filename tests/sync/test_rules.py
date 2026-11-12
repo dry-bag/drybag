@@ -45,6 +45,9 @@ _PATHS = {
     "projects/x/memory/deep/er/a.md": True,
     "projects/.dot/memory/a.md": True,
     "projects/x/memory/MEMORY.md": False,
+    "projects/y/memory/memory.md": False,
+    "projects/z/memory/Memory.md": False,
+    "projects/z/memory/memories.md": True,
     "projects/x/memory/d/MEMORY.md": True,
     "tags/g/checkout/memory/a.md": False,
     "tags/g/y/memory/a.md": False,
@@ -119,12 +122,22 @@ def test_a_projects_index_is_not_memory(tmp_path: Path) -> None:
     assert R.entry_offends(R.RawEntry("000000", "D", index, BLOB)) is True
 
 
+def test_a_case_variant_of_a_projects_index_is_not_memory() -> None:
+    # On a case-insensitive volume `memory.md` is the index itself: carried as a note, upstream's
+    # bytes would replace this machine's rendering and travel back. Mutation (oracle):
+    # `mutations/`'s "a case variant of an index parses as a note".
+    for name in ("memory.md", "Memory.md", "MEMORY.MD"):
+        assert R.memory_path(f"projects/p/memory/{name}") is None, name
+    for name in ("memories.md", "MEMORY-notes.md"):
+        assert R.memory_path(f"projects/p/memory/{name}") is not None, name
+
+
 def test_the_pathspecs_are_derived_from_the_layout_in_three_scopes() -> None:
     assert R.MEMORY_PATHSPEC == (
         ":(top,glob)common/memory/**",
         ":(top,glob)tags/*/memory/**",
         ":(top,glob)projects/*/memory/**",
-        ":(top,exclude,glob)projects/*/memory/MEMORY.md",
+        ":(top,exclude,glob,icase)projects/*/memory/MEMORY.md",
     )
 
 

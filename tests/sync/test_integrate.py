@@ -837,6 +837,20 @@ def test_an_upstream_index_change_is_held_like_a_path_outside_memory(overlays: O
     assert git(overlays.bare, "rev-parse", "main").strip() == remote
 
 
+def test_an_incoming_case_variant_of_the_index_is_held(overlays: Overlays) -> None:
+    # Another machine's `Memory.md` is this machine's index on a case-insensitive volume: held
+    # like the index itself, never written over the rendering here.
+    b = overlays.b
+    crafted = crafted_commit(b, head(b), "projects/alpha/memory/Memory.md")
+    git(b, "push", "-q", "origin", f"{crafted}:refs/heads/main")
+    before = head(overlays.a)
+    ctx = context(overlays, overlays.a)
+
+    assert J.integrate(ctx, fetched(overlays, overlays.a)) is None
+
+    assert _held(overlays, ctx, before) == {"projects/alpha/memory/Memory.md"}
+
+
 def _review_and_take(remarks: list[str]) -> tuple[list[str], list[str]]:
     """The commands the hold remark gives: the review, and the take."""
     text = "\n".join(remarks)
