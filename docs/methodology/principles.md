@@ -1,30 +1,30 @@
 # Principles
 
-Ten principles, numbered so the README can point at one. Each has a statement, what drybag
+Nine principles, numbered so the README can point at one. Each has a statement, what drybag
 does about it today, its sources, and a **Backing** line whose vocabulary
 [README.md](README.md) defines. Citations resolve to [sources.md](sources.md).
 
-## 1. A bug is a file, and its index is a rendering
+## 1. Sources age in months, and durable artifacts share one language
 
-**Statement.** A defect is recorded as one file with a stable identifier, a status from a
-closed vocabulary, and — for the severe ones — a line saying what the evidence does *not*
-establish. The index over those files is generated, refuses to overwrite content it did not
-write, and is never the place a fact is entered.
+**Statement.** When researching tooling or the state of a fast-moving field, a source older
+than two months is background, cited as such and confirmed by a fresh one before anything
+is built on it. And everything durable — documents, comments, commits, pull requests — is
+written in one language, whatever language the conversation is in, because artifacts are
+read by tools, by later contributors and by a possible public extraction.
 
-**What drybag does.** Nothing any more: the bug ledger left this package.
-`plan check` still holds a plan that claims `Fixes BR-nnn` to a premise.
+**What drybag does.** The freshness rule is the row grammar of [sources.md](sources.md)
+and a test over it. The language half is a person's own standing rule, a note with
+`metadata.startup`, and drybag enforces nothing about it. The four "harness" sources in the [README](README.md) are the freshness rule's
+own worked example: the term moved from a company blog [S27] to a discipline [S28] to an
+open-sourced platform [S30] and a research framing [S29] in nine months, with the pattern
+essay it all descends from [S31] published eleven months before the earliest of the four
+and still the clearest statement of why simple composable pieces beat a framework.
 
-**Why a file.** An issue tracker records a conversation; a file records a claim a later
-session can falsify. The "what this evidence does not establish" line is the part that
-makes an entry a hypothesis rather than a diagnosis — the reporter says where their
-knowledge ends, so the next reader starts there instead of inheriting the frame.
-
-**Backing:** thin. The falsifiability framing is this project's own; no independent source
-claims that a ledger of files beats a tracker for agent-driven work, and a comparison over
-projects that used both would change this label. What is sourced is the platform side: a
-generated index resolved by regeneration is the same move a hashed manifest makes for
-scaffolded files [S11], and the skills that teach an agent to read an entry are ordinary
-skills in the format every harness reads [S4] [S14].
+**Backing:** thin. Both are working rules stated by the person whose harness this is, kept
+because each was adopted after a concrete cost — a citation to a tool that had changed its
+storage engine; a history with two languages in it — and neither has evidence beyond that.
+A count of citations that turned out stale at two, four and six months would change the
+first; the second is a preference and will stay one.
 
 ## 2. An assertion nobody has watched fail advertises coverage it may not have
 
@@ -143,7 +143,7 @@ commit-message hook git runs locally never fails a commit itself, though a hook 
 — its gate is `drybag commit check` in CI. Every entry in `hooks/hooks.json` runs
 `hooks/run-hook.sh`, which takes the `python3` on `PATH` if it is 3.11 or newer. On every fault
 it can see — no such interpreter, a launcher it cannot read, a project root it cannot enter, and
-afterwards an exit other than `0` or `2` — it prints its reason and exits `0`, so no hook blocks
+afterwards any exit other than `0` — it prints its reason and exits `0`, so no hook blocks
 a call on drybag's own fault.
 
 **Why.** The exit-code semantics differ per event and are documented per event [S3]; Codex
@@ -179,21 +179,24 @@ it two hundred times, which is where every existing project starts.
 its own rules. Nothing external states it, and no repository has yet
 had its advisory period's findings counted. The label changes when one has.
 
-## 8. A personal overlay is a versioned plugin, not a dotfiles sync
+## 8. A personal overlay is a versioned repository delivered as a plugin, not a dotfiles sync
 
 **Statement.** The rules and memory that belong to a person rather than a project should
-travel as a plugin that declares a dependency on the public one and carries its own upgrade
-manifest — installable on a fresh machine by the same command that installs everything
-else, private by construction, and never a prerequisite for the public tool to be useful.
+travel as a versioned repository that declares the public tool it needs and carries its own
+upgrade manifest, delivered into each project's sessions as a plugin — restorable on a fresh
+machine by one command, private by construction, and never a prerequisite for the public tool to
+be useful.
 
 **What drybag does today.** The public plugin needs no overlay: with `[memory] mode` set to
 `local-only` or `in-repo` it runs whole. The overlay is its delivery layer, and the core runs
 without it. `drybag setup --overlay` makes a private overlay repository from the template
 repository, or renders one locally, and records it on a machine; `overlay upgrade` refreshes the
-files nobody edited, and `drybag attach` binds a repository to it in `overlay` mode; `detach` takes back what `attach`
+files nobody edited, and `drybag attach` binds a repository to it and installs a plugin it renders
+from the overlay for that binding; `drybag setup --restore` sets up a new machine from it; `detach` takes back what `attach`
 wrote and keeps the overlay's record of the binding. The memory store honours an overlay link
-only when its target lies inside this project's share of the recorded overlay root and the
-overlay's record binds this repository's `origin`.
+only when its target lies inside this project's share of the recorded overlay root and this
+machine binds the checkout to the project, by a binding id in its git common directory that no
+clone carries; the remote is no part of it.
 
 **Why.** A plugin with a declared dependency and a manifest is now a specified, portable
 unit [S15]; one plugin root serves both harnesses, because each reads its own manifest from
@@ -220,31 +223,10 @@ floating alias is a documented opt-in.
 cross-checks the version across `pyproject.toml`, the lockfile, the package, both plugin
 manifests and `CHANGELOG.md`; the marketplace entries carry no version because the plugin's
 own overrides it silently [S6]. Changelog entries are fragments assembled at release [S12].
-The CLI installs from a git tag with no resolver at hook time [S13].
+The CLI installs from PyPI, or from a release's git tag as `setup` suggests where none is on
+`PATH`, and a stdlib-only package needs no resolver at hook time [S13].
 
 **Why.** `plugin.json`'s `version` is what update delivery reads [S2]; a full-length SHA is
 the only immutable reference to a reusable workflow [S25].
 
 **Backing:** sourced.
-
-## 10. Sources age in months, and durable artifacts share one language
-
-**Statement.** When researching tooling or the state of a fast-moving field, a source older
-than two months is background, cited as such and confirmed by a fresh one before anything
-is built on it. And everything durable — documents, comments, commits, pull requests — is
-written in one language, whatever language the conversation is in, because artifacts are
-read by tools, by later contributors and by a possible public extraction.
-
-**What drybag does.** The freshness rule is the row grammar of [sources.md](sources.md)
-and a test over it. The language half is a person's own standing rule, a note with
-`metadata.startup`, and drybag enforces nothing about it. The four "harness" sources in the [README](README.md) are the freshness rule's
-own worked example: the term moved from a company blog [S27] to a discipline [S28] to an
-open-sourced platform [S30] and a research framing [S29] in nine months, with the pattern
-essay it all descends from [S31] published eleven months before the earliest of the four
-and still the clearest statement of why simple composable pieces beat a framework.
-
-**Backing:** thin. Both are working rules stated by the person whose harness this is, kept
-because each was adopted after a concrete cost — a citation to a tool that had changed its
-storage engine; a history with two languages in it — and neither has evidence beyond that.
-A count of citations that turned out stale at two, four and six months would change the
-first; the second is a preference and will stay one.

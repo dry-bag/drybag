@@ -255,6 +255,85 @@ def test_the_hook_reports_a_failed_strip_and_still_lets_the_commit_through(
     assert git(tmp_path, root, "log", "-1", "--format=%B").strip() == TRAILER
 
 
+def test_the_hook_never_imports_a_drybag_the_repository_tracks(tmp_path: Path) -> None:
+    # git runs the hook in the work tree, which `python3 -c` and `-m` put first on `sys.path`, so
+    # a module fallback ran the repository's own `drybag.py` as the owner. With no `drybag` on
+    # `PATH` (a plugin-only install), the hook says so and the commit goes ahead.
+    # Mutation (declared): the module fallback restored -> this reddens.
+    root = repo(tmp_path)
+    marker = tmp_path / "ran"
+    (root / "drybag.py").write_text(f"open({str(marker)!r}, 'a').close()\n", encoding="utf-8")
+    install(root)
+    python = tmp_path / "python"  # a `python3` the old fallback would have found
+    python.mkdir()
+    (python / "python3").write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+    (python / "python3").chmod(0o755)
+    tools = [str(Path(shutil.which(name) or name).parent) for name in ("git", "bash")]
+    path = os.pathsep.join([*dict.fromkeys(tools), str(python)])
+    if shutil.which("drybag", path=path) is not None:
+        pytest.skip("a drybag executable sits beside git or bash")
+    git(tmp_path, root, "add", "drybag.py")
+    done = gitfixture.run_git(
+        root, "commit", "-q", "-m", "chore: track it", home=tmp_path, PATH=path, **floor_env()
+    )
+    assert done.returncode == 0
+    assert not marker.exists()
+    assert "drybag: not installed for this shell" in done.stderr
+
+
+def test_the_hook_never_runs_a_drybag_the_work_tree_holds(tmp_path: Path) -> None:
+    # git runs the hook in the work tree, where an empty `PATH` entry names the repository's
+    # `./drybag`. Mutation (declared): resolved in the work tree -> the trailer stays.
+    root = repo(tmp_path)
+    marker = tmp_path / "ran"
+    (root / "drybag").write_text(f"#!/bin/sh\n: > {str(marker)!r}\n", encoding="utf-8")
+    (root / "drybag").chmod(0o755)
+    git(tmp_path, root, "add", "drybag")
+    install(root)
+    env = launching(tmp_path)
+    done = gitfixture.run_git(
+        root, "commit", "-q", "-m", TRAILER, home=tmp_path, **{**env, "PATH": f":{env['PATH']}"}
+    )
+    assert done.returncode == 0 and not marker.exists(), done.stderr
+    assert git(tmp_path, root, "log", "-1", "--format=%B").strip() == CLEAN
+
+
+SIGNED = "fix: thing\n\nSigned-off-by: Jane Doe <jane@anthropic.com>"
+REPLAYS = {
+    "cherry-pick": ("main", "cherry-pick", "side"),
+    "rebase": ("side", "rebase", "main"),
+    "rebase-exec-amend": ("side", "rebase", "--exec", "git commit --amend --no-edit", "main"),
+    "commit-m": ("main", "commit", "--allow-empty", "-m", SIGNED),
+}
+
+
+@pytest.mark.parametrize(
+    ("how", "kept"),
+    [("cherry-pick", True), ("rebase", True), ("rebase-exec-amend", False), ("commit-m", False)],
+)
+def test_a_commit_git_replays_keeps_its_message(tmp_path: Path, how: str, kept: bool) -> None:
+    """git hands the hook `message` for `commit -m` and for a commit it replays alike, measured on
+    git 2.56 and 2.54: `cherry-pick` (with `CHERRY_PICK_HEAD` in the git directory) and a
+    rebase's pick (with `rebase-merge/` too). `merge` gives `merge`, `--squash` `squash`, and
+    `--amend`, `-c` and `-C` give `commit`; the apply backend runs no hook. So the hook leaves a
+    message alone only for `message` with one of those two present: a replayed commit is someone's
+    own, while `commit -m` and the amend in `commit check`'s rebase remedy are still stripped.
+    Mutation (declared): the replay test dropped -> the two `kept` cases redden."""
+    root = repo(tmp_path)
+    git(tmp_path, root, "checkout", "-q", "-b", "side")
+    commit(tmp_path, root, SIGNED)  # before the hook exists, as on another machine
+    git(tmp_path, root, "checkout", "-q", "main")
+    (root / "b.txt").write_text("b\n", encoding="utf-8")
+    git(tmp_path, root, "add", "-A")
+    git(tmp_path, root, "commit", "-q", "-m", "chore: advance main")
+    install(root)
+    branch, *operation = REPLAYS[how]
+    git(tmp_path, root, "checkout", "-q", branch)
+    git(tmp_path, root, *operation)
+    message = git(tmp_path, root, "log", "-1", "--format=%B").strip()
+    assert message == (SIGNED if kept else "fix: thing")
+
+
 def test_a_directory_at_the_hook_name_is_refused(tmp_path: Path) -> None:
     root = repo(tmp_path)
     (hooks_dir(root) / HOOK_NAME).mkdir(parents=True)
@@ -284,6 +363,7 @@ def test_a_hook_an_earlier_release_wrote_is_still_ours(tmp_path: Path) -> None:
 
     old_text = RELEASED_0_2_0.read_text(encoding="utf-8")
     assert old_text != HOOK_TEXT
+    assert "python3 -m drybag" in old_text  # a hook with the module fallback is replaced too
     root = repo(tmp_path)
     hook = hooks_dir(root) / HOOK_NAME
     hook.parent.mkdir(parents=True, exist_ok=True)

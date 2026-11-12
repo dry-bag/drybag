@@ -1,9 +1,5 @@
 # Contributing to drybag
 
-drybag's real conventions used to live only inside `docs/plans/`, which meant a first-time
-contributor's pull request could be rejected on rules they had no way to read. This file is
-those rules.
-
 ## The short version
 
 ```bash
@@ -29,7 +25,7 @@ ours to diagnose, not yours.
 
 drybag treats **a repository as untrusted input**. A clone can commit a `drybag.toml`, a
 `MEMORY.md`, a manifest, an `env` block and a tree of symlinks, and all of it reaches the code
-before a human has read any of it. Three rules follow, and a change that breaks one will be
+before a human has read any of it. Five rules follow, and a change that breaks one will be
 sent back however good it looks otherwise.
 
 **The runtime imports only the standard library.** Hooks run under whatever `python3` the
@@ -84,10 +80,10 @@ the name is defined.
 ### Named caps
 
 A bound comes from one of three places. A limit a project may tune — a document's line or word
-count, a note's time to live — is a key under `[budgets]`, which the base branch and the machine
-owner may raise above its preset or lower below it, and a pull request may only lower when a
-gate reads it. A limit the harness sets — how much of an index it loads, how many
-characters of a hook's output it keeps — is a key under `[native_caps]`. Code reads both
+count, a note's time to live — is a key under `[budgets]`, which a repository's `drybag.toml` and
+the machine owner may raise above its preset or lower below it; a pull request can change it as it
+can change any file, so review it there. A limit the harness sets — how much of an index it
+loads, how many characters of a hook's output it keeps — is a key under `[native_caps]`. Code reads both
 through `Config` (`src/drybag/config/schema.py`). Every other bound — a subprocess's
 wall-clock timeout, how many bytes of a repository-authored file are read, how deep a parser
 descends — is a *named cap*: a constant in the code, almost always a module-level one with a
@@ -113,9 +109,10 @@ writes), and the handlers that write outside it.
 Removal is held tighter. Every file or directory drybag removes is one it names before it looks —
 a fixed name in the code, a path its ledger or manifest recorded, one its configuration computes, or
 a directory above a file the same run removed — and none is found by listing a directory and
-removing what the listing returned, with three exceptions, each inside a directory only drybag
+removing what the listing returned, with four exceptions, each inside a directory only drybag
 writes, or, for the last, writes links into. The hook sink's sessions are unbounded in number, so it lists its `markers/` directory and
-prunes all but the newest `MARKER_SESSIONS_KEPT` sessions. And `drybag detach`
+prunes all but the newest `MARKER_SESSIONS_KEPT` sessions; the rule hook prunes its `sessions/`
+the same way, to the newest `RULE_SESSIONS_KEPT` (`fsops.keep_newest`, for both). And `drybag detach`
 removes the render directory `$HOME/.local/share/drybag/delivery/<id>/` whole, as `attach` does
 the one its new render replaces, a directory named by the binding id and never by the ledger, which
 only `attach` writes into; and `attach` and `detach` take the links they list in the composed store
@@ -128,17 +125,16 @@ it finishes is outside the rule: nothing but that command ever wrote into it.
 
 Every key a configuration layer can hold — the preset, a repository's `drybag.toml`, the
 overlay's files, the machine file — has one class in `src/drybag/config/classes.py`, and the
-class names the layers that may set it: the machine owner's alone (`personal.*`, `guards.*`), a
-preference, a session's parameter, a gate's parameter, the repository's alone, or
-the plugin's. `classes.resolve` applies the classes over a stack of layers — a layer a key's class
+class names the layers that may set it: the machine owner's alone (`personal.*`, `sync.*`), a
+preference (`guards.*` among them), a session's parameter, the repository's alone, or the
+plugin's. `classes.resolve` applies the classes over a stack of layers — a layer a key's class
 does not admit contributes nothing to it — and so decides who may set a key and gives `doctor` the
 layer each value came from; it builds the owner's layer from the preset and the machine file, but
 the project's `Config` is still built by `config.loader`, which merges `drybag.toml` over the
 preset and folds the owner's layer in. So a field added to a section of
 `src/drybag/config/schema.py` needs its row in `CLASSES` in the same change:
 `tests/config/test_classes.py` derives every key from the schema's dataclasses and reddens on one
-with no class. Choose the narrowest class that is true of the key: a gate's input is never a
-preference, or a pull request would choose what it is judged by.
+with no class. Choose the narrowest class that is true of the key.
 
 ## Areas
 
@@ -265,19 +261,20 @@ too, since Python runs each package's `__init__.py` first.
   `<area> (2)`, when the report already has that name), and the rest of the report stands.
   `register()` is called once per report, so anything it creates for its checks — an area that
   reads the note store creates a value that resolves it at most once — is fresh for every report.
-  What the core owns and several areas read is on the `Context` instead: `Context.overlay_root`,
-  the machine file's `[overlay] root`, is read at most once per report for every area that asks
-  the `Context` for it. That is the one answer it caches: code an area reaches through its own
-  modules, such as the binding and the note store, resolves the root again.
+  What the core owns and several areas read is on the `Context` instead, and it caches two
+  answers, each read at most once per report for every area that asks: `Context.machine_record`,
+  the machine file's `[overlay] root` and `[machine] name`, which `overlay_root` and `machine_name`
+  read, and `Context.attach_config`, the configuration `attach` acts on in a checkout with no
+  `drybag.toml`. Code an area reaches through its own modules, such as the binding and the note
+  store, resolves the root again.
   `Contribution`, `Context` and `Row` come from `drybag.doctor.api`, and, as in a `hooks.py`,
   every import sits inside a function body; `tests/boundaries/test_discovery.py` holds that one.
 - `api.py` is the area's import surface. Other areas import from it and from nothing else, and its
   `__all__` must equal exactly what it imports — a test parses the file and checks, and
   `tests/boundaries/test_api_surface.py` walks every module under `src/drybag/` and `scripts/`
   and fails on an import that reaches past one. The rule holds every package that publishes an
-  `api.py`, an area or not (`release` is held to its surface like any area). The list is what consumers
-  actually reach for, not what the area finds tidy: a consumer that needs something absent from it
-  grows it deliberately, in a commit that says which consumer and why.
+  `api.py`, an area or not (`release` is held to its surface like any area). Add a name when a
+  consumer needs it, in a commit that says which; a name nothing imports may go.
 - **`drybag.hooks.api` is the one exception, and it is structural rather than drift.** That
   module *defines* the vocabulary two areas share — `EVENTS`, `HookEvent`,
   `HookResult`, `Handler`, `HandlerFn`, `Sink`, `NullSink` and the sink's on-disk layout —
@@ -418,9 +415,8 @@ what it dropped.
 CI runs the whole set in a job of its own, called `oracle`, on one configuration —
 `ubuntu-latest` with Python 3.13 — while the tests go on running on all six. The oracle proves
 that a mutation reddens a test, which is a property of the code and of the tests rather than of
-the platform, and at 657 to 751 s a run it was 76% of the `checks` job and had pushed it past
-its fifteen-minute bound. Its own job has its own budget, and `ci.yml` says what that budget
-buys in further entries; `test_the_mutation_oracle_has_a_job_of_its_own_with_a_budget_that_fits`
+the platform. Its job is bounded at thirty minutes, and `ci.yml` says what that bound buys in
+further entries; `test_the_mutation_oracle_has_a_job_of_its_own_with_a_budget_that_fits`
 reddens when the set outgrows it, so you find that out here rather than from a cancelled job.
 
 Say plainly what narrowed: your local run is still the full check, and CI's guarantee is now
@@ -430,12 +426,13 @@ pull request.
 
 A pull request that changes only documents, or Python comments, narrows further: the suite runs on
 that one configuration alone, and the oracle, the plugin validator and the install smoke skip. A
-document is a path under `docs/` or `changelog.d/`, or a Markdown file at the root; Markdown under
-`skills/` is code, since the plugin validator reads it, and so is a docstring. Tests
+document is a path under `docs/` or `changelog.d/` other than a `.py`, or a Markdown file at the
+root; Markdown under `skills/` is code, since the plugin validator reads it, and so is a docstring. Tests
 read documents and comments, and ruff, mypy and coverage read the comments that steer them, so the
 suite still runs once. `scripts/ci_scope.py`, run by the `changes` job in `ci.yml` and `smoke.yml`,
-decides it, and decides it closed: a renamed file counts under the name it left, a Python file
-that does not tokenize counts as code, and any answer but an explicit `false` runs everything
+decides it, and decides it closed: a renamed file counts under the name it left, a path that is
+or was anything but a plain file (an executable, a symlink, a gitlink) and a Python file that does
+not tokenize count as code, and any answer but an explicit `false` runs everything
 (`tests/test_ci_scope.py`). Every other leg still starts and reports, because branch protection
 requires each by name. A mutation entry whose text such a change edits fails on the next pull
 request that runs the oracle.
@@ -459,8 +456,10 @@ whose `before` line appears more than once in the file, because then the entry d
 line; and one whose named tests do not pass on a clean tree before the mutation is applied,
 because a test that is red, skipped or misspelled cannot prove anything about a guard. A fifth is
 not a finding about your entry but about the mutation you chose: one that stops the named tests
-from *running* — an `after` that breaks the import, say — is reported as proving nothing, because
-pytest's non-zero exit there says only that something went wrong. This is not a coverage
+from *running* — an `after` that breaks the import, say — or reddens every one of them only with a
+`NameError`, `UnboundLocalError`, `ImportError`, `ModuleNotFoundError` or `SyntaxError`, is
+reported as proving nothing, because pytest's non-zero exit there says only that something went
+wrong; an `AttributeError` or a `TypeError` still counts as caught. This is not a coverage
 substitute; `--cov` is the breadth measure. It is the set of guards whose load-bearingness has
 to be proven rather than merely executed, which is exactly the distinction that let
 `fsops.open_within` be covered by twelve tests and contain nothing.
@@ -530,9 +529,8 @@ design. That design document is not public yet — it lives in a private reposit
 references to it cannot be followed from here. You do not need a plan for a bug fix or a
 documentation change; open an issue or a pull request and say what you found.
 
-The delivered plans in `docs/plans/` are a record, not a work list. Their `**Interfaces:**`
-blocks are kept current and are what later work builds against; their code blocks are
-as-planned and may differ from what shipped.
+The delivered plans in `docs/plans/` are a record, not a work list: their `**Interfaces:**` and
+code blocks are as-planned and may differ from what shipped.
 
 ## Security
 

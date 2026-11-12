@@ -77,14 +77,17 @@ def _program(word: str) -> str:
     return "python3" if _VERSIONED_PYTHON.match(name) else name
 
 
-def names_a_test_run(words: Sequence[str]) -> bool:
+def names_a_test_run(words: Sequence[str], start: int = 0) -> bool:
     """Whether `words`, one simple command already unwrapped by `bashscan.command_words`, begins
-    with a row of `RUNNERS`. `command_words` asks it too, so that `uv run <runner>` unwraps to the
-    runner."""
-    if not words:
+    with a row of `RUNNERS` at `start`. `command_words` asks it too, at each word after `uv run`
+    in turn and without copying the rest, so that `uv run <runner>` unwraps to the runner."""
+    if start >= len(words):
         return False
-    program = _program(words[0])
-    return any(row[0] == program and tuple(words[1 : len(row)]) == row[1:] for row in RUNNERS)
+    program = _program(words[start])
+    return any(
+        row[0] == program and tuple(words[start + 1 : start + len(row)]) == row[1:]
+        for row in RUNNERS
+    )
 
 
 # Where `uv run` stops and the command it launches starts, for `bashscan.command_words`, here so

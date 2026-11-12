@@ -79,9 +79,7 @@ def links_in(path: Path) -> list[str]:
 
 
 def public_documents() -> list[Path]:
-    # `docs/plans/` is outside the sdist, so its README is read where the tree is there.
-    plans = [ROOT / "docs" / "plans" / "README.md"] if (ROOT / "docs" / "plans").is_dir() else []
-    return [README, *plans, *sorted(METHODOLOGY.glob("*.md"))]
+    return [README, ROOT / "docs" / "plans" / "README.md", *sorted(METHODOLOGY.glob("*.md"))]
 
 
 def sources() -> dict[str, tuple[str, str, str, str, str, str]]:
@@ -108,7 +106,7 @@ def _months(stamp: str) -> int:
     return int(year) * 12 + int(month)
 
 
-# Vacuity floors, not coverage: the table has 32 rows and the principles 10 sections today,
+# Vacuity floors, not coverage: the table has 31 rows and the principles 9 sections today,
 # and these numbers say only "not empty enough to be a mistake". Pinning the exact counts
 # would make every added source a test edit; the cited/citing tests below hold the content.
 SOURCES_FLOOR = 20
@@ -721,6 +719,7 @@ def test_the_shared_flag_tables_are_the_constants_and_not_a_second_spelling() ->
     # Mutation: change the `--machine` row's cell in `docs/cli.md` → reddens naming the row.
     from drybag.command import (
         ATTACH_CHECK_HELP,
+        ATTACH_STORE_HELP,
         CHECK_HELP,
         DRY_RUN_HELP,
         HOME_HELP,
@@ -743,6 +742,7 @@ def test_the_shared_flag_tables_are_the_constants_and_not_a_second_spelling() ->
         "`drybag setup --root`": SETUP_ROOT_HELP,
         "`drybag setup --machine`": SETUP_MACHINE_HELP,
         "`drybag attach --check`": ATTACH_CHECK_HELP,
+        "`drybag attach --store`": ATTACH_STORE_HELP,
     }
     section = _SHARED_FLAGS_SECTION.search(CLI_REFERENCE.read_text(encoding="utf-8"))
     assert section is not None, "docs/cli.md has no `## Shared flags` section"
@@ -788,7 +788,8 @@ def test_shared_flags_names_every_command_that_takes_neither_root_nor_machine() 
     assert len(options) >= 15, sorted(options)
     neither = {name for name, flags in options.items() if not flags & _PROJECT_FLAGS}
     assert named == neither, (sorted(named), sorted(neither))
-    overlay = {name for name in options if name.startswith("overlay ")} - neither
+    # `detach` reads no configuration: every path it withdraws is its ledger's.
+    overlay = {name for name in options if name.startswith("overlay ")} - neither | {"detach"}
     assert overlay, "no `overlay` command takes `--root`"
     assert {name for name in overlay if options[name] & _PROJECT_FLAGS != {"--root"}} == set()
     rest = set(options) - neither - overlay

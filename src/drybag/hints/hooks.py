@@ -26,9 +26,8 @@ from drybag.hooks.api import Handler, HookEvent, HookResult
 if TYPE_CHECKING:
     from drybag.config.session import SessionConfig
 
-# The matcher both handlers share. Codex reports every shell-routed action as `Bash` too, as the
-# spike record measured in its *Codex plugin
-# hooks* trial, so this one name serves both harnesses.
+# The matcher both handlers share. Codex reports every shell-routed action as `Bash` too, so this
+# one name serves both harnesses.
 BASH = "Bash"
 
 # The dispatcher owns the once-per-context bookkeeping, so the handler declares the key

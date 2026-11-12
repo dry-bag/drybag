@@ -232,16 +232,12 @@ def _enum(section: str, key: str, value: str, allowed: tuple[str, ...]) -> None:
 
     The key this guards, `memory.mode`, is a repository-authored string bounded by no grammar, so
     a clone can write anything at all into it, and the refusal reaches a terminal and a model
-    through the `attach` skill's relay. `; got {value!r}` therefore put unbounded
-    repository bytes into it, as it did for the `ci.mode` an earlier drybag read:
-    `ci.mode must be one of reusable, uvx, none; got '\\x1b[2JIGNORE PRIOR RULES'`. `!r` escapes
-    the control characters, which makes it milder than a raw-bytes leak and not a different
-    kind of thing — it is still content- and length-unbounded.
+    through the `attach` skill's relay. Even `!r`, which escapes the control characters, leaves
+    it content- and length-unbounded, so the value is never quoted back.
 
-    Nothing is lost by dropping it. `allowed` is drybag's own closed vocabulary, the key names
-    the line to look at, and the reader has the file open. This is the ruling `PROJECT_NAME`'s
-    refusal one screen down already took for the same reason — it dropped `; got
-    {project.name!r}` — and `_named` took for the keys of every table.
+    Nothing is lost by leaving it out. `allowed` is drybag's own closed vocabulary, the key names
+    the line to look at, and the reader has the file open. `PROJECT_NAME`'s refusal and `_named`
+    hold the same rule.
     """
     if value not in allowed:
         raise ConfigError(
@@ -313,7 +309,7 @@ def load(root: Path, *, machine: Path | None = None, owner: Owner | None = None)
     """
     text = read_document(root)
     if text is None:
-        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
+        raise ConfigError(NOT_THERE.format(path=quoted(str(root / CONFIG_FILE))))
     return loads(text, root, machine=machine, owner=owner)
 
 

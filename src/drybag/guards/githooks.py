@@ -53,29 +53,27 @@ HOOK_TEXT = f"""#!/usr/bin/env bash
 # Strip AI/tool attribution trailers before the commit message is presented.
 #
 # prepare-commit-msg rather than commit-msg on purpose: `git commit --no-verify` bypasses
-# pre-commit and commit-msg, but not this hook. It is still only the local convenience layer;
-# the authoritative gate is `drybag commit check` in CI, which sees commits this machine
-# never produced. Written by `drybag setup --git-hooks`, and removed again, with the hook it
-# chains to put back, by `drybag setup --git-hooks --uninstall`.
+# pre-commit and commit-msg, but not this hook. It is still only the local convenience layer:
+# CI's `drybag commit check` sees every commit; a pull request's own `drybag.toml` can switch it
+# off (`commit_messages.attribution_check`). Written by `drybag setup --git-hooks`, and removed
+# again, with the hook it chains to put back, by `drybag setup --git-hooks --uninstall`.
 #
 # Chains to whatever hook was here before, kept beside this one as `<hook>.local`, so
 # installing this never silently disables husky, pre-commit, or what the repository had.
 set -euo pipefail
 
 msg_file="$1"
-gate="CI's commit check is the gate"
+gate="CI's commit check sees every commit"
 failed="drybag: commit strip failed; $gate"
 absent="drybag: not installed for this shell; trailers are not stripped locally; $gate"
 quiet='^nothing to strip'
 
-# Expanded unquoted where it is used, so the two-word form splits into words. It is only ever
-# one of the two literals assigned just below, and never anything a repository chose.
-runner=""
-if command -v drybag >/dev/null 2>&1; then
-    runner="drybag"
-elif python3 -c 'import drybag' >/dev/null 2>&1; then
-    runner="python3 -m drybag"
-fi
+# Only ever the absolute path of the `drybag` on `PATH`, or empty. Git runs this hook in the work
+# tree, so `python3 -m drybag` would import the repository's module, and an empty or relative
+# `PATH` entry would name its file: it is resolved in `/`, as `hooks/run-hook.sh` resolves its
+# interpreter. The adversary is the repository's bytes; the anchor, the owner's absolute `PATH`.
+runner=$(cd / && command -v drybag 2>/dev/null) || runner=""
+case $runner in /*) ;; *) runner="" ;; esac
 
 # `commit strip` prints one line on stdout: "stripped N ...", "nothing to strip", or, where the
 # owner's own harness settings say what a commit carries, "kept N ..." with that reason. A
@@ -83,9 +81,22 @@ fi
 # out and everything else is said. The branch is on the command's own status and never on
 # `grep`'s: `grep -v` exits 1 when it selects no lines, which is exactly the quiet case, so a `||`
 # hung off the pipe announces a failure on every clean commit. No outcome here may fail the commit.
-if [ -z "$runner" ]; then
+#
+# A commit git replays (a cherry-pick, a rebase's pick) comes with `message`, as `commit -m` does,
+# so what tells it apart is git's own state: `CHERRY_PICK_HEAD` or `rebase-merge/` in the git
+# directory git names. That message is left as it is, a `commit -m` made while a rebase is stopped
+# at `edit` included; a cherry-pick continued after a conflict comes with `merge` and is stripped.
+replay=""
+if [ "$#" -ge 2 ] && [ "$2" = message ] && git_dir=$(git rev-parse --git-dir 2>/dev/null); then
+    if [ -e "$git_dir/CHERRY_PICK_HEAD" ] || [ -d "$git_dir/rebase-merge" ]; then
+        replay="yes"
+    fi
+fi
+if [ -n "$replay" ]; then
+    :
+elif [ -z "$runner" ]; then
     printf '%s\\n' "$absent" >&2
-elif out=$($runner commit strip "$msg_file"); then
+elif out=$("$runner" commit strip "$msg_file"); then
     printf '%s\\n' "$out" | grep -v "$quiet" >&2 || true
 else
     printf '%s\\n' "$failed" >&2
@@ -165,10 +176,9 @@ def _ours(path: Path, outcome: str) -> Hook:
     that are not UTF-8 are not drybag's.
 
     Read as a regular file only, to the read cap (`fsops.read_regular_bytes`): a FIFO there is
-    never waited on, as `read_text` waited on it. A hook that cannot be read is neither ours nor
-    foreign, and is refused, ending in `outcome`, what the caller did not do: read as foreign, it
-    was "not drybag's" to `uninstall` and renamed and chained by `install` when it was
-    drybag's own at mode 000. A regular file past the cap is the exception, and is foreign:
+    never waited on. A hook that cannot be read is neither ours nor foreign, and is refused,
+    ending in `outcome`, what the caller did not do: drybag's own hook at mode 000 must not be
+    renamed and chained as foreign. A regular file past the cap is the exception, and is foreign:
     drybag's own hook is a couple of kilobytes, so one that long is certainly not it.
     """
     try:

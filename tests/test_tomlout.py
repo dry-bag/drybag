@@ -45,6 +45,16 @@ def test_a_key_that_is_not_a_bare_key_refuses_rather_than_being_quoted() -> None
         dumps({"pro ject": {"remote": "u"}})
 
 
+def test_a_key_ending_in_a_line_break_is_refused_rather_than_written_bare() -> None:
+    # `$` matches before a final line break, so `note\n` passed as bare and was written as
+    # `note\n = 1`, a machine file `tomllib` then refuses to load. Mutation (oracle): `mutations/`'s
+    # "a key ending in a line break passes as bare" -> this reddens.
+    with pytest.raises(Refusal):
+        dumps({"t": {"note\n": 1}})
+    with pytest.raises(Refusal):
+        dumps({"t\n": {"note": 1}})
+
+
 def test_every_value_a_toml_document_can_hold_round_trips() -> None:
     # The contract widened when a third input arrived: `setup` rewrites the machine
     # configuration, a file `README.md` documents the owner as writing by hand, so what reaches

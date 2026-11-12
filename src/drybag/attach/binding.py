@@ -183,9 +183,8 @@ def refuse_unless_share_can_exist(binding: Binding, config: Config) -> None:
         raise Refusal(OVERLAY_DAMAGED.format(path=damaged))
     # A name, or a group, longer than a file name may be is asked of the nearest directory that is
     # there and not of the path it will have: an overlay with no `projects/` yet answers every path
-    # under it with "no such file", the over-long name included, so a 300-character name read as a
-    # first attach and the run failed at the record's write, after the ignore region and the
-    # ledger, printing the name.
+    # under it with "no such file", the over-long name included, so a 300-character name would
+    # read as a first attach and fail only at the record's write.
     there = _nearest_directory(binding.overlay / PROJECTS)
     if _name_too_long(there, binding.project):
         raise Refusal(SHARE_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
@@ -402,6 +401,18 @@ REBIND = (
     "this machine binds the checkout to project {bound} and its drybag.toml names {named}; to "
     "rebind it, and every worktree of it, run `drybag attach --project {named}`"
 )
+
+
+class RebindRefused(Refusal):
+    """`REBIND`, a refusal of its own so `doctor` can tell it from a store that is not this
+    project's."""
+
+
+def refuse_a_rebind(root: Path, named: str) -> None:
+    """`RebindRefused` where this machine binds the checkout to another project than `named`."""
+    found = bound_project(root)
+    if found is not None and found.project != named:
+        raise RebindRefused(REBIND.format(bound=quoted(found.project), named=quoted(named)))
 
 
 # Where a project's name came from, in `attach --check`'s words: one phrase for each of the four

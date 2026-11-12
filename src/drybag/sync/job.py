@@ -19,6 +19,7 @@ import contextlib
 import io
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -33,6 +34,7 @@ from drybag.config.machine import machine_config_path
 from drybag.config.overlay import overlay_root
 from drybag.config.owner import resolve_owner
 from drybag.gitenv import Called, answer_bytes, pipe_encoding
+from drybag.printed import quoted
 from drybag.sync import scan
 from drybag.sync.git import (
     JOB_SETTINGS,
@@ -48,6 +50,7 @@ from drybag.sync.git import (
     with_config,
 )
 from drybag.sync.rules import (
+    DELETED_MODE,
     RawEntry,
     commit_entries,
     diff_entries,
@@ -539,6 +542,58 @@ def _lost(
     return [sha for sha in local if sha in had], [sha for sha in incoming if sha in gone]
 
 
+def _in_the_way(
+    ctx: JobContext, head: str, entries: list[RawEntry]
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """What `read-tree -m -u` would write over or refuse on, at each path `entries` brings and
+    each directory above it: the notes this volume takes for a tracked one upstream keeps, as
+    (incoming, here), and anything else here: an untracked or ignored file holding bytes other
+    than the incoming ones (or that git cannot hash), and a non-directory where one is needed.
+
+    Adversary: another machine's push, naming a note this volume takes for one already here or
+    for an ignored file of the owner's. Anchors: the volume's own answer, the entry `lstat` finds
+    for each name (`fsops.stored_name`), never a model of case or normalisation; git's blob ids."""
+    tracked = set(_nul(_ok(ctx, "ls-tree", "-r", "-z", "--name-only", "--end-of-options", head)))
+    gone = {entry.path for entry in entries if entry.new_mode == DELETED_MODE}
+    known, kept = (  # each path, and each directory above one
+        {path.rsplit("/", up)[0] for path in paths for up in range(path.count("/") + 1)}
+        for paths in (tracked, tracked - gone)
+    )
+    listings: dict[Path, dict[str, int]] = {}
+    owners: dict[tuple[int, int], set[str]] = {}  # each entry here, and the tracked paths it is
+    for path in known:
+        if (at := fsops.stored_name(ctx.overlay / path, listings)) is not None:
+            owners.setdefault((at[1].st_dev, at[1].st_ino), set()).add(path)
+    collide: list[tuple[str, str]] = []
+    wait: list[str] = []
+    hashed: dict[str, str] = {}
+    for entry in (each for each in entries if each.new_mode != DELETED_MODE):
+        parts = entry.path.split("/")
+        for depth, part in enumerate(parts, 1):
+            here = "/".join(parts[:depth])
+            found = fsops.stored_name(ctx.overlay / here, listings)
+            if found is None:
+                break
+            name, mode, its = found[0], found[1].st_mode, (found[1].st_dev, found[1].st_ino)
+            if here in owners.get(its, ()):  # the tracked path itself, however it is spelled here
+                continue
+            if its in owners:  # another tracked path, which the volume takes for this one
+                collide.extend((entry.path, there) for there in sorted(owners[its] & kept))
+                break
+            if depth == len(parts) and stat.S_ISREG(mode) and name == part:
+                hashed[here] = entry.blob
+            elif depth == len(parts) or not stat.S_ISDIR(mode):
+                wait.append("/".join([*parts[: depth - 1], name]))
+                break
+    asked = b"".join(answer_bytes(str(ctx.overlay.absolute() / path)) + b"\n" for path in hashed)
+    blobs = _git(ctx, "hash-object", "--no-filters", "--stdin-paths", stdin=asked)
+    have = blobs.out.split() if timed(blobs, "git hash-object").code == 0 else []
+    if not len(have) == asked.count(b"\n") == len(hashed):  # a line break in a path: in the way
+        have = [""] * len(hashed)
+    wait.extend(path for (path, blob), got in zip(hashed.items(), have, strict=True) if got != blob)
+    return collide, list(dict.fromkeys(wait))
+
+
 def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Outcome | None:
     """Bring the checked sha `upstream` in, if `HEAD..upstream` is memory-only and so is every
     local commit; the outcome that stops the job, or `None`. `recorded` is the sha the last job
@@ -600,9 +655,8 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
             f"moved. To {by_hand}"
         )
         return _outcome(ctx, "conflict", detail)
-    incoming = _nul(
-        _ok(ctx, "diff", "--no-renames", "--name-only", "-z", "--end-of-options", head, tip)
-    )
+    entries = diff_entries(ctx.overlay, head, tip, timeout=ctx.limit(ctx.limits.local))
+    incoming = [entry.path for entry in entries]
     # A tree git will not put in an index is not an index to write: it is held, `main` unmoved,
     # since only upstream can repair it.
     with _scratch(ctx) as scratch:
@@ -619,6 +673,22 @@ def integrate(ctx: JobContext, upstream: str, recorded: str | None = None) -> Ou
     unmerged = _unmerged_now(ctx)
     if unmerged is not None:
         return unmerged
+    collide, in_the_way = _in_the_way(ctx, head, entries)
+    if collide:
+        pairs = ", ".join(f"{quoted(new)} on {quoted(old)}" for new, old in collide)
+        remark = (
+            f"upstream brings notes this volume takes for tracked ones ({pairs}); nothing is "
+            "integrated or pushed until upstream renames one or the owner settles it by hand: "
+            + UNREADABLE_REVIEW.format(sha=upstream)
+        )
+        _hold_upstream(ctx, UNREADABLE, [path for pair in collide for path in pair], remark)
+        return None
+    if in_the_way:
+        detail = (
+            "something here is in the way of an incoming note, and git would write over it or "
+            f"refuse: {', '.join(map(quoted, in_the_way))}; move it aside for the next job"
+        )
+        return _outcome(ctx, "waiting_clean_tree", detail)
     # git writes the incoming notes and the index first, refusing before it writes anything a
     # note changed here, an untracked file or a link in the way; only then does `main` move. A
     # kill between the two leaves the notes staged on the old `main`, which the next job commits

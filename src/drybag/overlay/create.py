@@ -33,7 +33,7 @@ from drybag.overlay.identity import overlay_fault, segment
 from drybag.overlay.layout import IDENTITY_RECORD
 from drybag.overlay.template import templates
 from drybag.printed import answered, quoted
-from drybag.runner import NOT_FOUND, TIMED_OUT, Completed, Runner
+from drybag.runner import NOT_FOUND, NOT_STARTED, TIMED_OUT, Completed, Runner
 from drybag.scaffold import apply, plan
 
 TEMPLATE_REPOSITORY = "drybag-overlay-template"
@@ -46,15 +46,12 @@ TEMPLATE_PUBLISHER = "dry-bag"
 # `OWNER/REPO` on `GH_HOST`, which the runner keeps, so on a GitHub Enterprise host the fallback
 # would be whoever owns `dry-bag` there, and the owner's private overlay, whose hooks run in
 # every session, would be generated from it. `gh repo create --template` and `gh repo view` look a
-# `HOST/OWNER/REPO` name up on that host whatever `GH_HOST` says (measured against gh 2.101.0).
+# `HOST/OWNER/REPO` name up on that host whatever `GH_HOST` says.
 # The owner's own `<owner>/…` probe stays host-relative: that repository is on the owner's host.
 TEMPLATE_PUBLISHER_HOST = "github.com"
 PUBLISHED_TEMPLATE = f"{TEMPLATE_PUBLISHER_HOST}/{TEMPLATE_PUBLISHER}/{TEMPLATE_REPOSITORY}"
 # How long to wait before the one retry, when `gh` says the repository exists and the clone brought
-# nothing down. The spike record's *template creation race and renaming* trial did not reproduce
-# that race in its one attempt, so this is carried on the strength of reasoning rather than of a
-# measurement: generation is asynchronous on GitHub's side and one clean run cannot rule out a slow
-# one.
+# nothing down: generation is asynchronous on GitHub's side, so a clone can arrive before it ends.
 RETRY_WAIT_SECONDS = 10
 # What `docs/cli.md` says about the template, and what a failure has to say too. `create:`
 # generates from the owner's own copy when they have published one, and from the publisher's public
@@ -67,12 +64,11 @@ TEMPLATE_PRECONDITION = (
     f"same tree at a path with no network call"
 )
 # What `gh repo view` prints on stderr, whatever the name, when the repository does not exist or
-# this token cannot see it (measured against gh 2.101.0, `drybag/definitely-missing-xyz`):
-# `GraphQL: Could not resolve to a Repository with the name '<slug>'. (repository)`, exit 1. It is
-# the only thing that tells "not found" from an expired token (`HTTP 401: Bad credentials`, also
-# exit 1) and from a network failure, so it is matched as the whole phrase and never as the
-# shorter "Could not resolve", which `Could not resolve host` shares. A named string, not a cap:
-# it bounds nothing and no shipped file changes with it.
+# this token cannot see it: `GraphQL: Could not resolve to a Repository with the name '<slug>'.
+# (repository)`, exit 1. It is the only thing that tells "not found" from an expired token (`HTTP
+# 401: Bad credentials`, also exit 1) and from a network failure, so it is matched as the whole
+# phrase and never as the shorter "Could not resolve", which `Could not resolve host` shares. A
+# named string, not a cap: it bounds nothing and no shipped file changes with it.
 NOT_FOUND_ANSWER = "Could not resolve to a Repository"
 # What every refusal after `gh repo create` ends with (`{path}` through `printed.quoted`): the
 # repository may exist whatever `gh` answered, and a second `create:` fails on its name.
@@ -97,15 +93,11 @@ def target_root(root: Path, owner: str, name: str) -> tuple[Path, str]:
 
     Nothing is created and nothing is asked of the network, which is the point: `setup
     --overlay create:<owner>/<name>` has to be able to refuse the *destination* — a file there,
-    say — before it runs `gh repo create` on somebody's account. The
-    destination is knowable from the arguments alone, and it used to be computed only by the
-    call that had already created the repository.
+    say — before it runs `gh repo create` on somebody's account.
 
-    Folded before it is validated, because `SEGMENT` has a lowercase leading class and a
-    mixed-case GitHub login is ordinary: validating the raw value refused `OctoCat` while another
-    command folded it and accepted it, and the refusal said "is not one path segment" about a value
-    that plainly is one. Folding is safe: GitHub logins are case-insensitive, and the folded value
-    is what reaches the slug and the remote alike.
+    Folded before it is validated, because `SEGMENT` has a lowercase leading class and a mixed-case
+    GitHub login such as `OctoCat` is ordinary. Folding is safe: GitHub logins are case-insensitive,
+    and the folded value is what reaches the slug and the remote alike.
     """
     account = segment("owner", owner.strip().lower())
     segment("name", name)
@@ -183,7 +175,7 @@ def _ended(done: Completed) -> str:
     """How a subprocess that did not succeed ended, in words true of each way: one that could
     not be launched did not run, one that hung did not finish, and one that ran has an exit
     code."""
-    if done.code == NOT_FOUND:
+    if done.code in (NOT_FOUND, NOT_STARTED):
         return "could not be run"
     if done.code == TIMED_OUT:
         return "did not finish"
@@ -217,7 +209,7 @@ def _template_for(owner: str, *, root: Path, runner: Runner) -> str:
         return theirs
     # `gh` could not be launched, hung, was declined, or answered something this cannot read.
     # `gh repo create` is the irreversible act, and it has not run.
-    launched = probe.code not in (NOT_FOUND, TIMED_OUT)
+    launched = probe.code not in (NOT_FOUND, NOT_STARTED, TIMED_OUT)
     if not launched:
         what = "could not be run"
     elif probe.code == 0:

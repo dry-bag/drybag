@@ -124,14 +124,9 @@ class Store:
     groups: dict[str, Path] = field(default_factory=dict)
     # The machine file this store was resolved against, carried rather than re-passed.
     #
-    # Not an optional keyword on every function that reads the store: a `None` there is not
-    # inert — it re-reads the machine file under the owner's home rather than the
-    # one `resolve` was given, silently changing `permitted_roots` and the index destination —
-    # so a caller that forgot one argument would get a different overlay and a different write
-    # target, with nothing to say so.
-    #
-    # `Store` is frozen and `resolve` builds it exactly once, from the `machine` it was given.
-    # Putting the value here makes the mismatch unrepresentable instead of documented.
+    # Not an optional keyword on every function that reads the store: a `None` there would
+    # re-read the machine file under the owner's home rather than the one `resolve` was given.
+    # `Store` is frozen and `resolve` builds it exactly once, so the mismatch is unrepresentable.
     machine: Path | None = None
     # This machine's name, from the same read of the machine file that gave the store its overlay
     # root (`config.overlay.machine_record`): the walk needs it to place a sub-plate's groups.
@@ -616,7 +611,8 @@ def _resolve_at(
     if mode == OVERLAY_MODE:
         if overlay is None:
             return None, Unresolved(
-                "no overlay root is recorded in the machine configuration; run `drybag setup`"
+                "no overlay root is recorded in the machine configuration; "
+                "run `drybag setup --overlay PATH`"
             )
         if not fsops.is_dir(overlay):
             return None, Unresolved(OVERLAY_GONE.format(root=quoted(str(overlay))))

@@ -543,6 +543,27 @@ reddens = [
   "tests/memory/test_notes.py::test_a_note_named_in_bytes_that_are_not_utf_8_is_quarantined",
 ]
 
+# A prune keeps the newest `kept` directories, not one: the hook sink's markers and the rule hook's
+# records of every recent session but the newest were lost to it.
+[[mutation]]
+name = "keep_newest keeps only the newest directory"
+file = "src/drybag/fsops.py"
+before = "    for stale in found[kept:]:"
+after = "    for stale in found[1:]:"
+reddens = [
+  "tests/test_fsops.py::test_keep_newest_keeps_the_newest_and_removes_the_rest",
+  "tests/hooks/test_sink.py::test_the_sink_keeps_fifty_sessions_of_markers",
+  "tests/attach/test_rules.py::test_the_rule_hook_keeps_fifty_sessions",
+]
+
+# The sink keeps fifty sessions' markers, the number `docs/cli.md` gives.
+[[mutation]]
+name = "the sink keeps one session's markers"
+file = "src/drybag/hooks/sink.py"
+before = "            fsops.keep_newest(self.root, MARKERS, MARKER_SESSIONS_KEPT)"
+after = "            fsops.keep_newest(self.root, MARKERS, 1)"
+reddens = ["tests/hooks/test_sink.py::test_the_sink_keeps_fifty_sessions_of_markers"]
+
 # The marker key and the session id are both payload-controlled. Used verbatim, `../../escape` is a
 # write -- and a `remove_within` loop -- outside the one directory the enumerated-writes rule
 # permits.
@@ -669,6 +690,15 @@ reddens = [
   "tests/test_runner.py::test_a_command_that_hangs_is_not_reported_as_one_that_is_missing",
 ]
 
+# Only a binary the launch did not find is NOT_FOUND, which a caller reads as "not installed"; an
+# argv past the system's limit made the MCP reconcile stop asking a `claude` that was there.
+[[mutation]]
+name = "a launch that could not start is reported as a missing program"
+file = "src/drybag/runner.py"
+before = "        except FileNotFoundError as exc:"
+after = "        except OSError as exc:"
+reddens = ["tests/test_runner.py::test_a_launch_that_fails_for_another_reason_is_not_not_found"]
+
 # --- follow-up to the second pull request: the review's important findings, each a guard
 # something reads ---
 
@@ -690,6 +720,17 @@ file = "src/drybag/tomlout.py"
 before = '    for name, table in sorted(tables.items(), key=lambda item: item[0] != ""):'
 after = "    for name, table in tables.items():"
 reddens = ["tests/test_tomlout.py::test_the_root_table_is_hoisted_when_it_is_not_given_first"]
+
+# `$` matches before a final line break, so a key ending in one passed as bare and was written
+# raw, leaving a machine file `tomllib` refuses to load.
+[[mutation]]
+name = "a key ending in a line break passes as bare"
+file = "src/drybag/tomlout.py"
+before = "    if not isinstance(name, str) or not BARE_KEY.fullmatch(name):"
+after = '    if not isinstance(name, str) or not re.match(BARE_KEY.pattern + "$", name):'
+reddens = [
+  "tests/test_tomlout.py::test_a_key_ending_in_a_line_break_is_refused_rather_than_written_bare",
+]
 
 # The delivery is banked BELOW the two validations that can discard the result. Marking it above
 # them spent a once-per-context handler's single delivery on a result that then raised into the
@@ -1477,12 +1518,12 @@ file = "src/drybag/config/loader.py"
 before = """
     text = read_document(root)
     if text is None:
-        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
+        raise ConfigError(NOT_THERE.format(path=quoted(str(root / CONFIG_FILE))))
 """
 after = """
     text = (root / CONFIG_FILE).read_text(encoding="utf-8")
     if text is None:
-        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
+        raise ConfigError(NOT_THERE.format(path=quoted(str(root / CONFIG_FILE))))
 """
 reddens = [
   "tests/config/test_symlinked_document.py::test_load_refuses_a_symlinked_drybag_toml",
@@ -1567,19 +1608,10 @@ reddens = [
 [[mutation]]
 name = "a finding's label prints its path unbounded"
 file = "src/drybag/findings.py"
-before = "        where = printable(self.path, withheld) if self.path else \"-\""
+before = "        where = printable(self.path) if self.path else \"-\""
 after = "        where = self.path or \"-\""
 reddens = [
   "tests/test_findings.py::test_a_path_outside_the_grammar_never_reaches_a_label_raw",
-]
-
-[[mutation]]
-name = "a finding's label ignores the caller's stand-in"
-file = "src/drybag/findings.py"
-before = "        where = printable(self.path, withheld) if self.path else \"-\""
-after = "        where = printable(self.path) if self.path else \"-\""
-reddens = [
-  "tests/test_findings.py::test_a_caller_without_json_names_its_own_stand_in",
 ]
 
 # In the block led by `mutations/`'s "the stale-key refusal says a re-run names the rest at exactly
@@ -2122,8 +2154,8 @@ reddens = [
 [[mutation]]
 name = "a release reads as older than its own pre-release"
 file = "src/drybag/semver.py"
-before = "    if not suffix and _PRE_RELEASE.match(other):\n        return True"
-after = "    if not suffix and _PRE_RELEASE.match(other):\n        return False"
+before = "    if not suffix and pre_release(than):\n        return True"
+after = "    if not suffix and pre_release(than):\n        return False"
 reddens = [
   "tests/test_semver.py::test_equal_triples_order_a_release_after_its_pre_release_and_nothing_else",
 ]
@@ -2844,7 +2876,7 @@ name = "an exact row contradicts its section's wildcard"
 file = "src/drybag/config/classes.py"
 before = '        "paths.*": KeyClass.REPOSITORY_ONLY,'
 after = '''        "paths.*": KeyClass.REPOSITORY_ONLY,
-        "paths.bugs": KeyClass.GATE_PARAMETER,'''
+        "paths.bugs": KeyClass.PREFERENCE,'''
 reddens = ["tests/config/test_classes.py::test_no_exact_key_contradicts_its_wildcard"]
 
 # Every budget is a gate's or a session's, never both: the owner sets only a session's.
@@ -2857,6 +2889,16 @@ after = '''        "agents_md_lines",
         "memory_index_words",
         "agents_md_words",'''
 reddens = ["tests/config/test_classes.py::test_the_budget_split_is_total_and_disjoint"]
+
+[[mutation]]
+name = "a gate's budget is a preference"
+file = "src/drybag/config/classes.py"
+before = '        **{f"budgets.{name}": KeyClass.REPOSITORY_ONLY for name in sorted(GATE_BUDGETS)},'
+after = '        **{f"budgets.{name}": KeyClass.PREFERENCE for name in sorted(GATE_BUDGETS)},'
+reddens = [
+  "tests/config/test_classes.py::test_the_budget_split_is_total_and_disjoint",
+  "tests/memory/test_owner_budgets.py::test_a_command_reads_past_a_machine_file_key_it_cannot_use_and_says_so[gate-budget]",
+]
 
 # `ORDER` alone decides which layer wins.
 [[mutation]]
@@ -2956,15 +2998,6 @@ reddens = [
   "tests/config/test_owner.py::test_the_owners_layer_stands_on_another_preset_without_reading_the_file_again",
   "tests/config/test_owner.py::test_a_load_stands_the_layer_it_is_handed_on_the_documents_preset",
 ]
-
-# A gate's budget is the repository's: the owner's layer leaves it out before `resolve`, whose
-# own refusal would otherwise be the only thing between the machine file and a gate's bound.
-[[mutation]]
-name = "the owner's layer admits a gate budget"
-file = "src/drybag/config/owner.py"
-before = '            elif table == "budgets" and key in GATE_BUDGETS:'
-after = "            elif False:"
-reddens = ["tests/config/test_owner.py::test_a_gate_budget_in_the_machine_file_is_a_note"]
 
 # In a machine file that loads, what the owner wrote and this drybag cannot use costs its key
 # with a note under either mode: refused, a later release's key would stop every older command.
@@ -3491,7 +3524,7 @@ before = "            _log_fallback(event_name, sink)"
 after = "            pass"
 reddens = ["tests/hooks/test_floor.py::test_pre_tool_use_prints_no_warning_and_logs_it_once"]
 
-# A budget is what the layer that may set it says: the base branch raises a gate's above the
+# A budget is what the layer that may set it says: a repository's file raises a gate's above the
 # preset, and the owner a session's.
 [[mutation]]
 name = "a budget is still only ever lowered"
@@ -3499,7 +3532,7 @@ file = "src/drybag/config/schema.py"
 before = "        if name in self.configured:\n            return self.configured[name]"
 after = "        if name in self.configured:\n            return min(self.preset[name], self.configured[name])"
 reddens = [
-  "tests/config/test_budgets_raise.py::test_the_base_branch_raises_a_gate_budget",
+  "tests/config/test_budgets_raise.py::test_a_repositorys_file_raises_a_gate_budget",
   "tests/config/test_budgets_raise.py::test_the_owner_raises_a_session_budget",
 ]
 
@@ -5010,7 +5043,8 @@ reddens = [
 name = "the trigger reads origin/main on every turn"
 file = "src/drybag/sync/trigger.py"
 before = "    if tree is None or tree.head is None or not backed_off(state, tree.head, now):"
-after = "    if tree is None or tree.head is None or not _upstream(overlay) or not backed_off(state, tree.head, now):"
+after = """    rev_or_none(overlay, "refs/remotes/origin/main^{commit}", timeout=STATUS_TIMEOUT)
+    if tree is None or tree.head is None or not backed_off(state, tree.head, now):"""
 reddens = ["tests/sync/test_hooks.py::test_the_trigger_check_is_one_git_status"]
 
 [[mutation]]
@@ -5130,12 +5164,20 @@ reddens = [
 [[mutation]]
 name = "a relative PATH entry reaches git"
 file = "src/drybag/gitenv.py"
-before = '            entry for entry in env["PATH"].split(os.pathsep) if os.path.isabs(entry)'
-after = '            entry for entry in env["PATH"].split(os.pathsep)'
+before = '            os.pathsep.join(entry for entry in entries if os.path.isabs(entry)) or os.defpath'
+after = '            os.pathsep.join(entries) or os.defpath'
 reddens = [
   "tests/test_git_run.py::test_a_relative_path_entry_never_reaches_git[]",
   "tests/test_git_run.py::test_a_relative_path_entry_never_reaches_git[.]",
 ]
+
+# `PATH=""` is one empty entry, the current directory, so dropping every entry is no drop at all.
+[[mutation]]
+name = "a PATH with no absolute entry reaches git empty"
+file = "src/drybag/gitenv.py"
+before = '            os.pathsep.join(entry for entry in entries if os.path.isabs(entry)) or os.defpath'
+after = '            os.pathsep.join(entry for entry in entries if os.path.isabs(entry))'
+reddens = ["tests/test_git_run.py::test_a_path_with_no_absolute_entry_falls_back_to_the_default"]
 
 [[mutation]]
 name = "a session's global git configuration reaches git"
@@ -5172,8 +5214,8 @@ reddens = ["tests/test_git_run.py::test_git_call_honours_the_floor"]
 [[mutation]]
 name = "an index is memory again"
 file = "src/drybag/sync/rules.py"
-before = 'NOT_AN_INDEX = f":(top,exclude,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
-after = 'NOT_AN_INDEX = f":(top,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
+before = 'NOT_AN_INDEX = f":(top,exclude,glob,icase){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
+after = 'NOT_AN_INDEX = f":(top,glob,icase){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
 reddens = [
   "tests/sync/test_rules.py::test_a_projects_index_is_not_memory",
   "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
@@ -5183,12 +5225,31 @@ reddens = [
 [[mutation]]
 name = "an index name parses as a note"
 file = "src/drybag/sync/rules.py"
-before = "            if scope == \"project\" and parts[3:] == [INDEX_NAME]:"
+before = "            if scope == \"project\" and [part.casefold() for part in parts[3:]] == [_INDEX]:"
 after = "            if False:"
 reddens = [
   "tests/sync/test_rules.py::test_a_projects_index_is_not_memory",
   "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
   "tests/sync/test_integrate.py::test_an_upstream_index_change_is_held_like_a_path_outside_memory",
+]
+
+# On a case-insensitive volume `memory.md` is the index: in any case it is no note, by the
+# pathspec and by the parse.
+[[mutation]]
+name = "the index is left out in its own case only"
+file = "src/drybag/sync/rules.py"
+before = 'NOT_AN_INDEX = f":(top,exclude,glob,icase){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
+after = 'NOT_AN_INDEX = f":(top,exclude,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
+reddens = ["tests/sync/test_rules.py::test_the_layout_agrees_with_git"]
+
+[[mutation]]
+name = "a case variant of an index parses as a note"
+file = "src/drybag/sync/rules.py"
+before = "            if scope == \"project\" and [part.casefold() for part in parts[3:]] == [_INDEX]:"
+after = "            if scope == \"project\" and parts[3:] == [INDEX_NAME]:"
+reddens = [
+  "tests/sync/test_rules.py::test_a_case_variant_of_a_projects_index_is_not_memory",
+  "tests/sync/test_integrate.py::test_an_incoming_case_variant_of_the_index_is_held",
 ]
 
 [[mutation]]
@@ -5299,10 +5360,49 @@ name = "a refused read-tree is ignored"
 file = "src/drybag/sync/job.py"
 before = '    if timed(written, "git read-tree").code != 0:'
 after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_a_dirty_incoming_note_waits_and_nothing_is_written"]
+
+# git writes over an ignored file without a word, so the job asks the volume before
+# `read-tree -m -u`: at the incoming note's path, at each directory above it, by its own name.
+[[mutation]]
+name = "something in the way of an incoming note is written over"
+file = "src/drybag/sync/job.py"
+before = "    if in_the_way:"
+after = "    if False:"
 reddens = [
-  "tests/sync/test_integrate.py::test_a_dirty_incoming_note_waits_and_nothing_is_written",
-  "tests/sync/test_integrate.py::test_an_untracked_file_where_a_note_lands_waits",
+  "tests/sync/test_integrate.py::test_an_ignored_file_in_the_way_of_an_incoming_note_waits[same-name]",
+  "tests/sync/test_integrate.py::test_an_ignored_file_in_the_way_of_an_incoming_note_waits[parent]",
+]
+
+[[mutation]]
+name = "a file above an incoming note is replaced"
+file = "src/drybag/sync/job.py"
+before = "            elif depth == len(parts) or not stat.S_ISDIR(mode):"
+after = "            elif depth == len(parts):"
+reddens = [
+  "tests/sync/test_integrate.py::test_an_ignored_file_in_the_way_of_an_incoming_note_waits[parent]",
   "tests/sync/test_integrate.py::test_a_link_above_an_incoming_note_waits_and_the_link_stays",
+]
+
+# A tracked note is itself wherever the volume finds it, whatever spelling its directory lists.
+[[mutation]]
+name = "a tracked note spelled otherwise here is in the way"
+file = "src/drybag/sync/job.py"
+before = "            if here in owners.get(its, ()):  # the tracked path itself, however it is spelled here"
+after = "            if False:"
+reddens = [
+  "tests/sync/test_integrate.py::test_a_tracked_note_spelled_otherwise_here_takes_its_upstream_change",
+  "tests/sync/test_integrate.py::test_a_note_rewritten_unchanged_does_not_block_its_incoming_version",
+]
+
+[[mutation]]
+name = "an ignored file is judged by the wrong bytes"
+file = "src/drybag/sync/job.py"
+before = "    wait.extend(path for (path, blob), got in zip(hashed.items(), have, strict=True) if got != blob)"
+after = "    wait.extend(path for (path, blob), got in zip(hashed.items(), have, strict=True) if got == blob)"
+reddens = [
+  "tests/sync/test_integrate.py::test_an_ignored_file_in_the_way_of_an_incoming_note_waits[same-name]",
+  "tests/sync/test_integrate.py::test_an_ignored_note_with_the_incoming_bytes_does_not_wait",
 ]
 
 [[mutation]]
@@ -5506,6 +5606,15 @@ after = "    if path is None:"
 reddens = [
   "tests/config/test_machine_name.py::test_no_file_or_no_table_is_no_name",
 ]
+
+# A relative `[overlay] root` names a directory under wherever a command runs, a clone's checkout
+# on the hook path, so it is a fault of the machine file and never a root.
+[[mutation]]
+name = "a relative overlay root is read from the working directory"
+file = "src/drybag/config/overlay.py"
+before = "    if root is not None and not root.is_absolute():"
+after = "    if False:"
+reddens = ["tests/config/test_overlay_root.py::test_a_relative_overlay_root_is_a_machine_file_fault"]
 
 # Only this machine's `machines/<name>/` is a sub-plate: another machine's is not, and a machine
 # with no name has none.

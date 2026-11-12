@@ -116,7 +116,6 @@ def test_render_writes_the_marketplace_and_the_plugin_under_names_carrying_the_w
     assert (delivery / "plugin" / "agents" / "helper.md").read_text() == "helper\n"
     # A copied file keeps its mode: a skill's script stays executable.
     assert (delivery / "plugin" / "skills" / "review" / "check.sh").stat().st_mode & 0o777 == 0o750
-    assert record.id == ID
     assert len([p for p in delivery.rglob("*") if p.is_file()]) == 6
     assert record.digest == _digest(delivery)
 

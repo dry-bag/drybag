@@ -22,7 +22,7 @@ The text is searched, not parsed, for the words that keep the status
 comment or in `set +o pipefail` silences the hint. Silent is the cheap error.
 
 DEGRADES TOWARD SILENCE at every seam: a command `bashscan.tokenize` cannot read and one longer
-than `bgcleanup.MAX_COMMAND_CHARS` get no hint, and neither does a run launched by a program this
+than `bashscan.MAX_COMMAND_CHARS` get no hint, and neither does a run launched by a program this
 module does not unwrap (`timeout 60 pytest`), nor `pytest |& tail` (`bashscan.pipelines`).
 """
 
@@ -31,7 +31,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from drybag.hints import bashscan
-from drybag.hints.bgcleanup import MAX_COMMAND_CHARS
 from drybag.hints.runners import names_a_test_run
 
 # The commands that read a run's output and answer with their own status.
@@ -58,7 +57,7 @@ def _is_reader(words: list[str]) -> bool:
 def notice_for(command: str) -> str | None:
     """`NOTICE` when `command` pipes a test run into a reader without keeping the status;
     otherwise `None`, a command that cannot be read included."""
-    if len(command) > MAX_COMMAND_CHARS:
+    if len(command) > bashscan.MAX_COMMAND_CHARS:
         return None
     lowered = command.lower()
     if any(name in lowered for name in _KEEPS_THE_STATUS):

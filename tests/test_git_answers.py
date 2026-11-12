@@ -22,11 +22,13 @@ from pathlib import Path
 import pytest
 
 from drybag.attach.write import attach, main_checkout_of
-from drybag.gitenv import GitUnavailable, Unasked, _git_toplevel, hooks_dir, origin_remote
+from drybag.errors import Refusal
+from drybag.gitenv import GitUnavailable, Unasked, _git_toplevel, git_path, hooks_dir, origin_remote
 from drybag.guards.commit import commits_in
 from drybag.hints.hygiene import dirty_count
 from drybag.overlay.sync import overlay_sync
 from tests.attach.test_write import RULE, _attachable
+from tests.crafted import CRAFTED, assert_never_raw
 from tests.gitfixture import git, needs_git, plant_path, stand_in_git
 from tests.hints.test_hygiene import repo
 from tests.runners import Recorder
@@ -113,6 +115,17 @@ def test_a_hooks_path_that_is_not_utf_8_is_the_directory_git_names(tmp_path: Pat
     git(root, "init", "-q")
     _append(root / ".git" / "config", b"[core]\n\thooksPath = hooks-caf\xe9\n")
     assert hooks_dir(root) == root / os.fsdecode(b"hooks-caf\xe9")
+
+
+@pytest.mark.parametrize("code", [-1, 128])
+def test_a_git_path_refusal_quotes_the_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, code: int
+) -> None:
+    # Both refusals print the root, a directory a clone can be given any name, so it is quoted.
+    monkeypatch.setattr("drybag.gitenv.git_run", lambda *args, **kwargs: (code, ""))
+    with pytest.raises(Refusal) as caught:
+        git_path(tmp_path / CRAFTED, "hooks", "hooks directory")
+    assert_never_raw(str(caught.value))
 
 
 @needs_git

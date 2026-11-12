@@ -5,6 +5,8 @@ git common directory, `<common>/drybag/binding`, and a record of what that id is
 its own data directory, `<data>/bindings/<id>.toml`. Repository bytes cannot write the common
 directory, because `.git/` is in no tree, and a clone never carries it, so a clone that commits
 the `[project] name` of one of the owner's projects has no id and nothing on this machine binds
+it. The bound on that: below a committed bare-repository skeleton, git's default
+`safe.bareRepository` may take a tracked directory as the git directory, and drybag does not set
 it. The id never leaves the machine: it is not written into the overlay, which is pushed and
 shared, nor into any tracked file, and it is printed only as `short`, its first eight characters.
 The rendered delivery's names carry it, so a clone cannot name what it never saw. The agent in a
@@ -35,7 +37,14 @@ from drybag import fsops, tomlout
 from drybag.config.paths import data_directory
 from drybag.config.reading import UNPARSEABLE
 from drybag.errors import Failure
-from drybag.gitenv import GitUnavailable, answer_lines, git_answer, git_run, without_userinfo
+from drybag.gitenv import (
+    GitUnavailable,
+    answer_lines,
+    git_answer,
+    git_run,
+    in_work_tree,
+    without_userinfo,
+)
 from drybag.printed import quoted
 
 # Where the id lives under the git common directory, and where each record and each render lives
@@ -70,6 +79,7 @@ CANNOT_TELL = (
     "cannot tell which git repository {root} belongs to, so there is no binding id to read or "
     "write there"
 )
+NOT_A_REPOSITORY = "{0} is not inside a git repository; run the command from a checkout"
 
 
 @dataclass(frozen=True)
@@ -81,7 +91,6 @@ class Bound:
 
     project: str
     origin: str | None
-    checkout: Path
     id: str
 
 
@@ -106,6 +115,10 @@ def main_checkout_or_none(root: Path) -> Path | None:
     into it. Asked above every write, since a `git` that cannot answer is knowable at the start.
     """
     code, out = git_run(root, "worktree", "list", "--porcelain")
+    # Git answered, and no `.git` is there: the directory, not this machine's `git`. A bare
+    # repository's own directory holds none either, and git answers there.
+    if code > 0 and not in_work_tree(root):
+        raise Failure(NOT_A_REPOSITORY.format(quoted(str(root))))
     if code != 0:
         raise Failure(
             "`git` could not list this repository's worktrees, so its main checkout cannot be "
@@ -184,7 +197,7 @@ def bound_project(root: Path, *, common: Path | None = None) -> Bound | None:
     project, origin, checkout = raw.get("project"), raw.get("origin"), raw.get("checkout")
     if not (isinstance(project, str) and project and isinstance(checkout, str) and checkout):
         return None
-    return Bound(project, origin if isinstance(origin, str) else None, Path(checkout), id)
+    return Bound(project, origin if isinstance(origin, str) else None, id)
 
 
 def record(root: Path, project: str, origin: str | None) -> Bound:
@@ -205,7 +218,7 @@ def record(root: Path, project: str, origin: str | None) -> Bound:
         fsops.write_atomically(_record_path(id), tomlout.dumps({"": fields}))
     except OSError as exc:
         raise unwritten(data_directory() / BINDINGS, id, exc) from None
-    return Bound(project, kept, root, id)
+    return Bound(project, kept, id)
 
 
 def unwritten(directory: Path, id: str, error: OSError) -> Failure:

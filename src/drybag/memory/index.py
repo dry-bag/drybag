@@ -25,7 +25,6 @@ from drybag.config.schema import OVERLAY_MODE, Config
 from drybag.errors import Failure, Refusal
 from drybag.fsops import TooLarge, read_regular_text, write_atomically
 from drybag.memory.notes import (
-    UNRANKED,
     Note,
     Provenance,
     is_one_line,
@@ -275,10 +274,9 @@ def reconcile(store: Store, config: Config, *, write: bool) -> Reconciliation:
     only a harvested line into its note: the native writer's text has no other place to live once
     the index is rendered again, and an edit to a note makes it unreviewed (`memory.reviewed`).
 
-    `config` rather than a bare group list: the groups came from it at every call site anyway,
-    and the index's target rule needs `project.name` and the recorded overlay, which a
-    `Sequence[str]` cannot carry. The overlay comes from `store.machine`, so there is no longer
-    a second argument a caller can forget to keep in step with the one that built the store.
+    `config` rather than a bare group list: the index's target rule needs `project.name` and the
+    recorded overlay, which a `Sequence[str]` cannot carry. The overlay comes from
+    `store.machine`, so it always matches the one that built the store.
     """
     source = index_source(store, config)
     outside = _outside(source)
@@ -323,13 +321,10 @@ def reconcile(store: Store, config: Config, *, write: bool) -> Reconciliation:
     )
 
 
-def _order(note: Note) -> tuple[int, int, str]:
-    rank = note.startup
-    return (
-        UNRANKED if rank is None else rank,
-        UNRANKED if note.group_order is None else note.group_order,
-        note.name,
-    )
+def _order(note: Note) -> tuple[bool, int, bool, int, str]:
+    """A note with no `startup` rank, or no `group_order`, sorts after every one that has one."""
+    rank, order = note.startup, note.group_order
+    return (rank is None, rank or 0, order is None, order or 0, note.name)
 
 
 def _entry(note: Note, unreviewed: set[Path]) -> str:
@@ -445,22 +440,17 @@ class IndexCheck:
     over_budget: bool
     over_caps: list[str]
     provisional: list[str]
-    unreadable: list[str]  # store-relative
+    unreadable: list[tuple[str, str]]  # (store-relative path, why the reader refused it)
 
 
 def _destination(store: Store, config: Config) -> Path:
     """The one file the writer writes and the check compares against: what the readers source.
 
-    `index_source` is the rule every *reader* applies — `_appended`. The writer
-    did not apply it and neither did the check, and each half of that was its own defect.
-    `write_atomically` ends in `os.replace`, which replaces the **link** rather than its target:
-    one run stranded the overlay's shared copy on every other machine, turned the index into a
-    real file inside the repository, and so flipped `in_repository` to True and closed the trust
-    gate on the index for good. `check_index` meanwhile read `store.path / INDEX_NAME` through
-    `is_file()`, which follows the link, so `--check` answered about a file no reader sources:
-    exit 0 and "index is current" while every reader refused the link it had followed.
-
-    Both are the same question, so both ask it here, once.
+    `index_source` is the rule every *reader* applies — `_appended` — and the writer and the
+    check apply it too, here, once. `write_atomically` ends in `os.replace`, which replaces the
+    **link** rather than its target, so writing `store.path / INDEX_NAME` would turn the
+    overlay's shared copy into a real file inside the repository; and `is_file()` follows the
+    link, so a check through it would answer about a file no reader sources.
 
     `None` from `index_source` has **three** causes, not two, and only one of them is a
     `Refusal`. An index that is simply absent (no file, no symlink) is the ordinary first run:
@@ -527,18 +517,20 @@ def check_index(store: Store, config: Config, reconciled: Reconciliation) -> Ind
         over_budget=len(text.split()) > config.budgets.effective("memory_index_words"),
         over_caps=caps,
         provisional=list(reconciled.provisional),
-        # Store-relative, as the summary line names it: one file has one name
-        # in one answer, and the absolute prefix is this machine's, not the store's.
-        unreadable=[path.relative_to(store.path).as_posix() for path, _ in reconciled.unreadable],
+        # Store-relative, as the summary line names it: one file has one name in one answer, and
+        # the absolute prefix is this machine's, not the store's, so the reason drops it too.
+        unreadable=[
+            (path.relative_to(store.path).as_posix(), why.removeprefix(str(path)).lstrip(": "))
+            for path, why in reconciled.unreadable
+        ],
     )
 
 
 def write_index(store: Store, config: Config, text: str) -> Path:
     """Write the index to the file the readers source, and return that file.
 
-    Takes `config` — a change to a signature `memory/api.py` published at the time — because
-    `_destination` cannot answer without it, and answering without it was the defect; the
-    overlay half comes from `store.machine`. The returned path is the file actually written,
+    Takes `config` because `_destination` cannot answer without it; the overlay half comes from
+    `store.machine`. The returned path is the file actually written,
     which in overlay mode is the shared copy in the overlay rather than the link inside the
     checkout.
     """

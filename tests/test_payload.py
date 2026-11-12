@@ -516,7 +516,6 @@ def test_a_gitattributes_line_carrying_no_refused_attribute_is_not_a_finding(lin
 
 
 @needs_git
-@pytest.mark.skipif(not (ROOT / ".git").exists(), reason="no git checkout to ask")
 def test_the_payload_is_the_generated_plugin_tree() -> None:
     # The marketplace fetches the plugin from its own repository, whose root is the generated
     # tree, so the walk reads that tree and nothing beside it. Mutation (declared): the walk reads
@@ -559,11 +558,7 @@ def test_the_walk_reads_the_committed_tree_and_not_the_disk(tmp_path: Path) -> N
     assert blobs == {path: content for path, (content, _) in PLUGIN_FILES.items()}
 
 
-# Both marks: `needs_git` for a machine with no `git`, and the second for an unpacked sdist, which
-# has `git` but is not a checkout, so there is no tree to list. Neither is what the directory
-# scans, so the skip costs nothing there.
 @needs_git
-@pytest.mark.skipif(not (ROOT / ".git").exists(), reason="no git checkout to ask")
 def test_the_tree_is_inside_the_directory_limits() -> None:
     # Every rule, the file count included. No mutation of the code: the subject is the tree. The
     # count's half cannot fail today, with the plugin tree some two hundred files under

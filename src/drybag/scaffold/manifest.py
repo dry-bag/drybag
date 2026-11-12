@@ -14,11 +14,6 @@ whatever the link points at, and `read` takes its idea of what drybag owns from 
 `contained()` catches a *committed* symlink and not the race the engine exists to survive — a
 component that becomes a link after the check passed. So the write goes through
 `fsops.write_within`, the same `O_NOFOLLOW` walk every scaffolded artifact is written through.
-It did not, and that was the gap worth naming: every file a user can shrug at was written
-through a descriptor, while the one file whose corruption stops every later plan was written by
-re-resolved string path — `mkdir(parents=True)` following symlinks
-and `mkstemp` plus `os.replace` on the name. The strongest protection was applied to the least
-valuable targets.
 """
 
 from __future__ import annotations

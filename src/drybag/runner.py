@@ -8,10 +8,11 @@ have run* against a stub instead of shelling out to `gh`, `git` or `pre-commit`.
 a way a user notices: a missing `--private` publishes somebody's private overlay.
 
 A missing binary is a finding, never a traceback: drybag installs none of `gh`, `git` and
-`pre-commit`, and has to report on a machine that lacks any of them. So an `OSError` from the launch
-becomes `Completed(NOT_FOUND, ...)` and the caller turns it into a note. A binary that ran and never
-returned gets its own code, `TIMED_OUT`, because "not installed" and "hung for five minutes" are
-different findings.
+`pre-commit`, and has to report on a machine that lacks any of them. So a binary the launch did not
+find becomes `Completed(NOT_FOUND, ...)` and the caller turns it into a note. One that is there and
+could not start (an argv past the system's limit, no permission to run it) gets its own code,
+`NOT_STARTED`, and so does a binary that ran and never returned, `TIMED_OUT`, because "not
+installed", "could not start this once" and "hung for five minutes" are different findings.
 """
 
 from __future__ import annotations
@@ -24,13 +25,13 @@ from typing import Protocol
 
 from drybag.gitenv import scrubbed_env
 
-# The shell's own code for "command not found", used here for a binary that could not be
-# launched at all, so a caller has one number to read rather than an exception to catch.
+# The shell's own code for "command not found", used here for a binary the launch did not find,
+# so a caller has one number to read rather than an exception to catch.
 NOT_FOUND = 127
-# `timeout(1)`'s own code, and a separate one on purpose. `TimeoutExpired` is a
-# `SubprocessError`, so a `gh` that hung for the full `NETWORK_TIMEOUT_SECONDS` used to arrive
-# as `NOT_FOUND` -- which every caller reads as "gh is not installed". A wrong finding is worse
-# than a slow one, and the two states have different remedies.
+# The shell's own code for "found but cannot run", used here for any other failure to launch.
+NOT_STARTED = 126
+# `timeout(1)`'s own code, and a separate one on purpose: every caller reads `NOT_FOUND` as "gh is
+# not installed", and a hung `gh` has a different remedy.
 TIMED_OUT = 124
 # Wall-clock bound on one call: a named cap (CONTRIBUTING.md#named-caps), and no shipped file
 # changes with it. Deliberately far wider than `gitenv.GIT_TIMEOUT_SECONDS`, which bounds a local,
@@ -47,16 +48,15 @@ NETWORK_TIMEOUT_SECONDS = 300
 # different index or object store, than the directory it was given -- which is exactly what a
 # program that runs git for us (`gh repo create --clone`, `pre-commit`) must not inherit.
 #
-# **This list is a trade-off and is not exhaustive, and the comment that said it was the two
-# that redirect git was wrong.** `GH_HOST` and `GH_CONFIG_DIR` redirect `gh` the same way and
-# are kept deliberately: they are how a GitHub Enterprise owner reaches their own host, and
-# dropping them would break that installation outright to close a gap the inherited token does
-# not have. A caller that needs them gone should say which call and why.
+# **This list is a trade-off and is not exhaustive.** `GH_HOST` and `GH_CONFIG_DIR` redirect `gh`
+# the same way and are kept deliberately: they are how a GitHub Enterprise owner reaches their own
+# host, and dropping them would break that installation outright to close a gap the inherited token
+# does not have. A caller that needs them gone should say which call and why.
 #
 # `GH_FORCE_TTY` and `CLICOLOR_FORCE` are dropped for the reason `_ENV_FORCE` below exists: every
 # call here captures its output, so terminal behaviour is never wanted, and either one makes `gh`
-# colour its JSON (measured with gh 2.101.0: `gh api` and `gh repo view --json` start with an
-# escape sequence), which every caller that parses it then reads as no answer. `NO_COLOR` and
+# colour its JSON (`gh api` and `gh repo view --json` start with an escape sequence), which
+# every caller that parses it then reads as no answer. `NO_COLOR` and
 # `CLICOLOR=0` do not undo either, so the variables go rather than a third one being added.
 _ENV_DROP = (
     "GIT_DIR",
@@ -91,6 +91,8 @@ class Completed:
     code: int
     stdout: str
     stderr: str
+    # False only where the launch found no program: one that ran and exited `NOT_FOUND` was found.
+    found: bool = True
 
 
 class Runner(Protocol):
@@ -130,8 +132,10 @@ class _SubprocessRunner:
             )
         except subprocess.TimeoutExpired:
             return Completed(TIMED_OUT, "", f"{argv[0]} did not finish within {bound}s")
+        except FileNotFoundError as exc:
+            return Completed(NOT_FOUND, "", f"{argv[0]} could not be run: {exc}", found=False)
         except (OSError, subprocess.SubprocessError) as exc:
-            return Completed(NOT_FOUND, "", f"{argv[0]} could not be run: {exc}")
+            return Completed(NOT_STARTED, "", f"{argv[0]} could not be run: {exc}")
         return Completed(done.returncode, done.stdout, done.stderr)
 
 

@@ -25,13 +25,10 @@ covered only the three tables it owns and replaced the rest of the file would lo
 table or a key at the top level after one `setup`. So every table it does not own is carried
 through in the file's own order, and the three it owns are merged in place.
 
-**Two things a rewrite still costs, both stated rather than discovered.** Comments do not
-survive — `tomllib` discards them on the way in, and there is no round-tripping parser in the
-standard library to keep them — and a key that is not a bare TOML key cannot be re-emitted.
-Neither may wedge the command: `tomlout` emits every *value* type a TOML document can hold, so
-a float or a nested table round-trips rather than making every future run exit 2, and the one
-refusal left names this file, the key, and what to do about it instead of naming a serialiser
-the owner has never heard of.
+**Two things a rewrite costs.** Comments do not survive — `tomllib` discards them on the way
+in — and a key that is not a bare TOML key cannot be re-emitted. `tomlout` emits every *value*
+type a TOML document can hold, and the one refusal left names this file, the key, and what to do
+about it.
 
 **`fsops.write_atomically` on a bare `Path`, not `fsops.write_within`.** Every other writer `setup`
 uses owns a root — a project checkout, the overlay — and walks into it with `O_NOFOLLOW`. This file
@@ -74,8 +71,8 @@ SETUP_SANDBOXED = SANDBOX_REFUSED.format(
 
 # The one machine-scope settings file `setup` writes, relative to `home`: Claude Code's settings
 # file, which it reads under the home directory as it does under a project, so it is the
-# registry's one spelling of that file. Whether Codex has an equivalent has never been measured,
-# so nothing is written there and the report says so rather than guessing a path.
+# registry's one spelling of that file. No Codex equivalent is known, so nothing is written there
+# and the report says so rather than guessing a path.
 (USER_SETTINGS,) = CLAUDE.settings
 
 
@@ -175,9 +172,7 @@ def write_machine(
         text = tomlout.dumps(tables)
     except Refusal as exc:
         # The one shape left that cannot be re-emitted: a key this serialiser cannot write bare.
-        # It reached the owner as `Refusal: personal.scale holds a …` — no path, no remedy, and
-        # the name of a module they have never heard of — on *every* future run, because the
-        # file is read back at the top of every one of them.
+        # Named with the path and a remedy, because the file is read back on every future run.
         raise Refusal(
             f"{path} cannot be rewritten: {exc}. `drybag setup` rewrites this file, so it has "
             f"to be able to write back everything in it; remove or rename that key and run the "

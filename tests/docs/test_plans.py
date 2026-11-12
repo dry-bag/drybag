@@ -240,6 +240,35 @@ def test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs(tmp_pa
         assert spec(f"**Spec:** {gone}\n") == [("spec-missing", 3, _SPEC_UNRESOLVED)]
 
 
+def _keeps_a_spec(tmp_path: Path) -> tuple[Path, Config]:
+    root, config = project(tmp_path)
+    (root / "docs" / "specs").mkdir()
+    (root / "docs" / "specs" / "a.md").write_text("# a\n", encoding="utf-8")
+    return root, config
+
+
+def test_a_numbered_indented_or_quoted_spec_line_is_read(tmp_path: Path) -> None:
+    root, config = _keeps_a_spec(tmp_path)
+    for line in (
+        "1. **Spec:** none — x",
+        "2) **Spec:** none — x",
+        "  - **Spec:** `docs/specs/a.md`",
+        "> **Spec:** none — x",
+        "+ **Spec:** none — x",
+    ):
+        assert rules(root, config, plan(root, SCOPE + line + "\n")) == [], line
+
+
+def test_none_with_a_hyphen_is_a_finding_that_names_the_spelling(tmp_path: Path) -> None:
+    # Only the em dash says none: `none - x` is a slip that would teach the next plan a second
+    # spelling. Mutation (declared): `mutations/`'s "a Spec line's none takes a hyphen".
+    root, config = _keeps_a_spec(tmp_path)
+    for line in ("**Spec:** none - x\n", "**Spec:** none -- x\n"):
+        found = lint(root, config, plans=[plan(root, SCOPE + line)]).findings
+        assert [(f.rule, f.detail) for f in found] == [("spec-missing", _SPEC_NO_PATH)], line
+    assert "`none — <reason>`" in _SPEC_NO_PATH
+
+
 def test_a_spec_line_is_held_to_the_reference_rule_like_any_other(tmp_path: Path) -> None:
     # Keeping specs never weakens the reference rule: a second dead path on the Spec line, one in
     # a `none` reason and one on a later Spec line are each reported once. Mutation (declared):
@@ -461,12 +490,10 @@ def test_without_paths_only_the_plans_the_diff_touches_are_linted(tmp_path: Path
 def test_an_edit_to_a_plan_is_held_to_the_references_on_the_lines_it_writes(
     tmp_path: Path,
 ) -> None:
-    # A delivered plan is a record, and the paths it names go stale as the tree moves on. The
-    # diff-scoped check read every line of every plan a change touched, so a change editing one
-    # line of an old plan (an `Interfaces:` block, which is kept current) failed on every stale
-    # reference in it, and the only way through was to rewrite history. Without `PATH`
-    # arguments a reference is now judged only on a line the change adds or rewrites; naming the
-    # plan still lints all of it.
+    # A delivered plan is a record, and the paths it names go stale as the tree moves on, so a
+    # change editing one line of an old plan must not fail on every stale reference in it.
+    # Without `PATH` arguments a reference is judged only on a line the change adds or rewrites;
+    # naming the plan still lints all of it.
     # Mutation: `mutations/`'s "plan check judges an edited plan's untouched lines".
     root, config = project(tmp_path)
     git(root, "init", "-q", "-b", "main")

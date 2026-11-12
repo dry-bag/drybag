@@ -1,8 +1,8 @@
 """Name what could have falsified a red test run, before the diff is blamed.
 
 Uncommitted work in the tree produces a red run that no baseline A/B can attribute, because both
-halves of the A/B run inside it: the measurement describes a tree nobody is merging. It has cost
-real time, twice in one branch's retro. It belongs to no stack.
+halves of the A/B run inside it: the run describes a tree nobody is merging. It belongs to no
+stack.
 
 Warn-only by construction: the tool has already run, and the verdict this guards is the
 human's next sentence, not the command. Once per context, which the dispatcher's `once_key`
@@ -14,7 +14,7 @@ is split into simple commands with the shared scanner's tokens and segments, eac
 `bashscan.command_words` describes, and the runner table (`runners.names_a_test_run`) is asked
 whether one of them is a test run. When none is, nothing is said: the one delivery per context
 belongs to the first failed test run, not to a failed `grep`. A command the scanner cannot read is
-no test run (`simple_commands`).
+no test run (`simple_commands`), and neither is one longer than `bashscan.MAX_COMMAND_CHARS`.
 
 Which harness field says a run was red is read from the documentation, not guessed: the Claude
 Code hooks reference gives the Bash `tool_response` as `stdout`, `stderr`, `interrupted` and
@@ -37,7 +37,7 @@ from drybag.hints import bashscan
 from drybag.hints.runners import names_a_test_run
 
 # Anchored TWICE, redundantly: the `\A` here and the `.match` at the call site each pin the read
-# to index 0, so removing either one alone is a no-op -- measured, in both directions -- and only
+# to index 0, so removing either one alone is a no-op and only
 # removing BOTH unanchors it. Do not read one of them as dead weight: unanchored, a number is
 # read out of arbitrary captured stderr, and a line of test output that merely quotes an exit
 # code is then taken for the run's own. The documented shape puts `Exit code N` at the very
@@ -111,6 +111,8 @@ def notice(dirty: int | None) -> str | None:
 def context_for(command: str, root: Path) -> str | None:
     """The notice after `command` failed: `None` unless one of its simple commands is a test run
     the runner table names, and then the dirty-tree line."""
+    if len(command) > bashscan.MAX_COMMAND_CHARS:
+        return None
     if not any(names_a_test_run(words) for words in simple_commands(command)):
         return None
     return notice(dirty_count(root))

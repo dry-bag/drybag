@@ -369,17 +369,6 @@ reddens = [
   "tests/test_public_anchors.py::test_the_scan_reports_what_it_read_by_path_and_line",
 ]
 
-# The sdist fallback walk leaves bytecode out at any depth: one pytest run leaves a `__pycache__`
-# beside every module, and the public-anchor gate reads every file it is given.
-[[mutation]]
-name = "the fallback walk reads bytecode below the root"
-file = "tests/test_neutral.py"
-before = '        and "__pycache__" not in parts'
-after = '        and True'
-reddens = [
-  "tests/test_neutral.py::test_the_fallback_walk_skips_bytecode_at_any_depth",
-]
-
 # Every spawner that strips the developer's `DRYBAG_*` variables goes through one predicate,
 # and the floor is the name it keeps; strip it too and a spawned `drybag` runs under the bare
 # bounds again.
@@ -938,14 +927,14 @@ reddens = [
 [[mutation]]
 name = "the whole-tree gate loses three top-level trees and stays green"
 file = "tests/test_neutral.py"
-before = "        return sorted(ROOT / n for n in names if (ROOT / n).is_file())"
+before = "    return sorted(ROOT / n for n in names if (ROOT / n).is_file())"
 after = """
-        dropped = {".github", "skills", "changelog.d"}
-        return sorted(
-            ROOT / n
-            for n in names
-            if (ROOT / n).is_file() and n.split("/")[0] not in dropped
-        )"""
+    dropped = {".github", "skills", "changelog.d"}
+    return sorted(
+        ROOT / n
+        for n in names
+        if (ROOT / n).is_file() and n.split("/")[0] not in dropped
+    )"""
 reddens = ["tests/test_neutral.py::test_the_gate_reads_the_whole_tree"]
 
 # The snapshot helper's two unheld claims. Its own guard file built an empty working tree in
@@ -1082,17 +1071,6 @@ before = ".coverage.*\n"
 after = ""
 reddens = [
   "tests/test_neutral.py::test_a_coverage_worker_file_is_not_a_file_the_gate_walks",
-]
-
-# The same files in an unpacked sdist, where no `.gitignore` applies and the fallback walk reads
-# the root directly: each is its own first component, so only a name test keeps it out.
-[[mutation]]
-name = "the fallback walk counts coverage's data files again"
-file = "tests/test_neutral.py"
-before = '        and not (len(parts) == 1 and (p.name == ".coverage" or p.name.startswith(".coverage.")))'
-after = "        and True"
-reddens = [
-  "tests/test_neutral.py::test_the_fallback_walk_skips_coverage_data_in_the_root",
 ]
 
 # CI writes the old interpreter's path from a step output, so a failed lookup arrives as an

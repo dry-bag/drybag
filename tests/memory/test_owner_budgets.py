@@ -16,8 +16,9 @@ from pathlib import Path
 
 import pytest
 
+from drybag.config.classes import REFUSED_LAYER_NOTE
 from drybag.config.loader import load
-from drybag.config.owner import GATE_BUDGET, IGNORED_NOTE, MACHINE_RESET_NOTE
+from drybag.config.owner import MACHINE_RESET_NOTE
 from drybag.config.reading import NOT_A_SWITCH, MachineConfigError
 from drybag.config.session import session_config
 from drybag.doctor.api import OK, RED
@@ -111,9 +112,7 @@ def test_doctor_judges_the_bundles_by_the_owners_budget(
         ),
         (
             "[budgets]\nagents_md_lines = 9\n",
-            IGNORED_NOTE.format(
-                path="{machine}", problem=GATE_BUDGET.format(name="agents_md_lines")
-            ),
+            REFUSED_LAYER_NOTE.format(key="budgets.agents_md_lines", layer="machine file"),
         ),
     ],
     ids=["guard-not-a-switch", "gate-budget"],

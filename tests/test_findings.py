@@ -37,7 +37,7 @@ def test_labels_renders_findings_through_the_same_cap() -> None:
 def test_a_path_outside_the_grammar_never_reaches_a_label_raw() -> None:
     # The label is printed on stdout by `docs check` and `plan check`, and in CI a line that starts
     # `::error::` is an instruction to the runner.
-    # Mutation: print `self.path` in `labelled` — this reddens.
+    # Mutation: print `self.path` in `label` — this reddens.
     label = Finding("dead-link", f"docs/{CRAFTED}.md", 3, "d").label
     assert_never_raw(label)
     assert label == f"{UNPRINTABLE}:3 [dead-link]"
@@ -50,10 +50,3 @@ def test_an_ordinary_name_outside_the_ascii_grammar_is_withheld_too(path: str) -
     # name that holds spaces can carry readable prose into it. So these print as the stand-in,
     # and `--json` names them. Pinned, because it is a choice and not an accident.
     assert Finding("dead-link", path, None, "d").label == f"{UNPRINTABLE} [dead-link]"
-
-
-def test_a_caller_without_json_names_its_own_stand_in() -> None:
-    # `assess` writes labels into its own `--json` and its inventory file, where "see --json"
-    # would point at the very text the reader holds. Mutation: ignore `withheld` in `labelled`
-    # — this reddens.
-    assert Finding("r", "a b.md", 2, "d").labelled("<elsewhere>") == "<elsewhere>:2 [r]"

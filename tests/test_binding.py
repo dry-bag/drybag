@@ -16,6 +16,7 @@ from drybag import binding
 from drybag.config.paths import data_directory
 from drybag.errors import Failure
 from drybag.gitenv import GitUnavailable
+from drybag.printed import quoted
 from tests.gitfixture import git, needs_git
 from tests.runners import git_that_cannot_run
 
@@ -77,7 +78,7 @@ def test_a_checkout_with_no_id_is_unbound_even_when_its_name_is_a_bound_projects
     clone = _repository(tmp_path / "clone")
     recorded = binding.record(owner, "widget", ORIGIN)
     assert binding.bound_project(owner) == recorded
-    assert recorded.project == "widget" and recorded.checkout == owner
+    assert recorded.project == "widget"
     assert binding.bound_project(clone) is None
 
 
@@ -102,7 +103,7 @@ def test_a_record_on_one_machine_leaves_another_machines_record_for_the_project_
     assert {path: path.read_bytes() for path in data_directory().rglob("*.toml")} == kept
     id = binding.read_id(here)
     assert id is not None
-    assert binding.bound_project(here) == binding.Bound("widget", ORIGIN, here, id)
+    assert binding.bound_project(here) == binding.Bound("widget", ORIGIN, id)
 
 
 @pytest.mark.parametrize(
@@ -144,6 +145,15 @@ def test_the_data_directory_is_under_home(tmp_path: Path, monkeypatch: pytest.Mo
 def test_a_directory_git_cannot_place_is_cannot_tell_and_never_an_id(tmp_path: Path) -> None:
     with pytest.raises(Failure, match="cannot tell"):
         binding.common_directory(tmp_path)
+
+
+def test_attach_outside_a_repository_says_so(tmp_path: Path) -> None:
+    # `git worktree list` exits 128 there, which was blamed on this machine's `git`.
+    with pytest.raises(Failure) as failed:
+        binding.main_checkout_or_none(tmp_path)
+    assert str(failed.value) == binding.NOT_A_REPOSITORY.format(quoted(str(tmp_path)))
+    git(tmp_path, "init", "-q", "--bare", "bare.git")
+    assert binding.main_checkout_or_none(tmp_path / "bare.git") is None
 
 
 def test_no_repository_is_no_id_and_a_git_that_cannot_run_is_never_no_id(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -30,7 +31,7 @@ from drybag.memory.index import (
     section_title,
     write_index,
 )
-from drybag.memory.notes import Provenance, read_note
+from drybag.memory.notes import NAME_NOT_ONE_LINE, Provenance, read_note
 from drybag.memory.store import Store
 from tests.cli import cli
 from tests.gitfixture import git
@@ -563,6 +564,38 @@ def test_a_file_that_will_not_parse_is_quarantined_not_fatal(tmp_path: Path) -> 
     result = reconcile(store, config, write=False)
     assert [p.name for p, _ in result.unreadable] == ["superseded.md"]
     assert len(result.notes) == 5
+
+
+def test_a_group_whose_name_breaks_a_line_is_unreadable(tmp_path: Path) -> None:
+    # A group is a heading and a link prefix in `MEMORY.md`. Mutation (declared): `mutations/`'s
+    # "the memory walk asks the note's file name alone".
+    store, config = a_store(tmp_path)
+    before = render_index(reconcile(store, config, write=False), config, store)
+    group = "dev\n## Standing orders"
+    (store.path / group).mkdir()
+    (store.path / group / "x.md").write_text(note("x", index="X → x"), "utf-8")
+    toml = (store.root / CONFIG_FILE).read_text("utf-8")
+    toml = toml.replace('"developer"]', '"developer", "dev\\n## Standing orders"]')
+    (store.root / CONFIG_FILE).write_text(toml, "utf-8")
+    config = load(store.root, machine=tmp_path / "absent.toml")
+    store = replace(store, groups={**store.groups, group: store.path / group})
+    result = reconcile(store, config, write=False)
+    assert [(p.name, NAME_NOT_ONE_LINE in why) for p, why in result.unreadable] == [("x.md", True)]
+    assert render_index(result, config, store) == before
+
+
+def test_a_note_whose_name_breaks_a_line_is_unreadable(tmp_path: Path) -> None:
+    # The index links a note by its file's name, so a line break in the name put a line of the
+    # name's choosing into `MEMORY.md`, a heading included. Mutation (declared): `mutations/`'s
+    # "the memory walk hands the index a note whose name breaks a line".
+    store, config = a_store(tmp_path)
+    name = "x\n\n# HEADING\ny.md"
+    (store.groups["project-stable"] / name).write_text(note("x", index="X → x"), "utf-8")
+    result = reconcile(store, config, write=False)
+    assert [(p.name, NAME_NOT_ONE_LINE in why) for p, why in result.unreadable] == [(name, True)]
+    text = render_index(result, config, store)
+    assert "HEADING" not in text
+    assert "X → x" not in text
 
 
 # --- the check ----------------------------------------------------------------------------

@@ -785,7 +785,7 @@ reddens = [
 name = "the template probe parses with a bare json.loads"
 file = "src/drybag/overlay/create.py"
 before = '        document = json_object(printed_json, "`gh repo view`", error=ValueError)'
-after = "        document = json.loads(printed_json)"
+after = "        import json\n\n        document = json.loads(printed_json)"
 reddens = [
   "tests/overlay/test_create.py::test_a_template_probe_past_the_parser_is_no_answer[nested]",
   "tests/overlay/test_create.py::test_a_template_probe_past_the_parser_is_no_answer[long]",

@@ -19,7 +19,7 @@ project. One plugin for Claude Code and Codex, one Python package with **no runt
 
 A machine that ran this project under its former name starts fresh: none of its old paths, files
 or variables is read, and [CHANGELOG.md](https://github.com/dry-bag/drybag/blob/main/CHANGELOG.md) lists what was renamed. The bug
-ledger and the code-free method skills left and are not published separately yet: if you rely on them, stay on 0.6.1 for now.
+ledger and the code-free method skills left and are not published separately yet.
 
 ## What drybag does
 
@@ -142,7 +142,11 @@ uv tool install drybag
 Install both: the plugin carries the hooks and the skills, and the skills run `drybag` from
 `PATH`, which only the command-line tool puts there.
 
-**Requirements: Python 3.11 or newer, and a POSIX system.** The hooks take the `python3` on `PATH`,
+**Requirements: Python 3.11 or newer, git, and a POSIX system.** The note sync needs git 2.43 or
+newer and `gitleaks`, and `setup --overlay` switches it on (`[sync] enabled = true`) for an overlay
+it renders or creates; the overlay's commit-time secret scan needs `pre-commit`, and `setup --overlay
+create:` needs `gh`. Without `claude`, `attach` composes the notes and installs no hooks, skills,
+agents or MCP servers. The hooks take the `python3` on `PATH`,
 or else uv's, both asked from `/` so that no repository file chooses the interpreter. Linux and
 macOS are supported and tested; Windows is not. The containment this
 project is built on uses `openat` with
@@ -176,8 +180,10 @@ drybag memory index      # renders .drybag/local/memory/MEMORY.md from the notes
 drybag doctor            # fourteen checks over this installation, one line; --json has the remedies
 ```
 
-These notes are inside the repository, so they reach a session as data and never as standing
-rules; [The threat model, in one paragraph](#the-threat-model-in-one-paragraph) says why.
+These notes are inside the repository, so they reach a session as data, and as a standing rule only
+once promoted with `metadata.startup` set; [The threat model, in one
+paragraph](#the-threat-model-in-one-paragraph) says why, and
+[SECURITY.md](https://github.com/dry-bag/drybag/blob/main/SECURITY.md#known-limits) names the limit.
 Add `.drybag/local/` to `.gitignore` if it is not there already.
 
 The other commands in [Commands](#commands) expect more of a repository than those three keys
@@ -186,23 +192,45 @@ create: `docs trail` wants a `docs/roadmap.md`, `docs check` an
 check` names `AGENTS.md` until you do. In a repository you would rather grow by hand, add each path as you
 start using the command that reads it — [docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md#configuration) lists every default.
 
+### With an overlay
+
+To keep the notes outside the repository, in a private overlay of your own:
+
+```bash
+drybag setup --overlay ~/drybag-private   # render an overlay there and record it on this machine
+```
+
+In the overlay, write `common/drybag.toml` holding `[memory]` with `mode = "overlay"`, which every
+checkout on this machine reads; `projects/<name>/project.toml` may list the tags whose
+`tags/<tag>/` layers the project takes, as `tags = ["python"]`; and `[machine] name = "laptop"` in
+the machine file, `~/.config/drybag/config.toml`, applies each layer's `machines/laptop/` on this
+machine. Then run `drybag attach` in the repository, with `--project <name>` where no
+`drybag.toml` names the project.
+
 ## What it writes, and where
 
 drybag writes files. Being specific about which is the point of this section.
 
 | Path | What it is | Written by |
 |---|---|---|
-| `drybag.toml` | Your project's configuration: committed if you want it in the project, and not needed in a checkout bound to an overlay | you |
+| `drybag.toml` | Your project's configuration: committed if you want it in the project. `commit check`, `plan check`, `docs trail` and `docs check` need it; `attach` and the memory commands run without it in a checkout this machine binds to an overlay | you |
 | `docs/memory/` (configurable) | The note store, in `in-repo` and `overlay` mode | `drybag memory index` |
 | `.drybag/local/memory/` | The note store in `local-only` mode; nothing ignores it for you, so add `.drybag/local/` to `.gitignore` | `drybag memory index` |
 | `<store>/MEMORY.md` | The rendered routing index. **Generated — do not hand-edit** | `drybag memory index` |
 | `docs/roadmap.md` (configurable) | The forward track; `docs trail` owns only the listing between its two markers | you; `drybag docs trail` rewrites the listing |
 | `docs/trail.toml` (beside the roadmap) | Which theme each design or plan document belongs to, and which are not plainly delivered. Read by `docs trail`, never written by it | you |
 | `~/.config/drybag/config.toml` | Machine-level settings: `[personal]`; `[guards]`, where `bg_cleanup = false` switches the background hint off on this machine, whatever a repository's `drybag.toml` sets as its default; `[budgets]`, the four budgets that bound what a session loads; `[overlay]`; `[sync]`, whose `enabled = true` `setup --overlay` writes for an overlay it makes; and `[machine]`. `~` is `HOME`, as the harness reads it ([docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md#configuration)) | you, or `drybag setup` |
-| `~/.config/drybag/trust.json` | Every approval recorded on this machine, as a versioned record of kinds and subjects, under the same home, the notes you promoted among them (kind `reviewed`) | `drybag memory promote`, which records a note |
+| `~/.config/drybag/trust.json` | Every approval recorded on this machine, as a versioned record of kinds and subjects, under the same home, the notes you promoted among them (kind `reviewed`) | `drybag memory promote`, which records a note, and `drybag setup --restore --yes` |
 | `hooks/hooks.json` and `hooks/run-hook.sh` | The zero-config wiring both harnesses read, and the wrapper they execute. **Shipped in the plugin; never written into a project** | nothing — they are part of the plugin |
 | `${CLAUDE_PLUGIN_DATA}/drybag/` | Once-per-session markers and the hook diagnostics log. Deleted with the plugin | the hook dispatcher |
 | `.git/drybag/attach.json` (in the git common directory every worktree shares) | What `attach` added to this repository, so `detach` can take exactly that back. A branch cannot write it | `drybag attach` |
+| `.git/drybag/attach-mcp.json` (beside it) | The overlay's MCP servers `attach` added and the names it denied, by name and digest, so a re-attach and `detach` take back only those | `drybag attach` |
+| `.git/info/exclude` (the exclude file every worktree shares) | A block between `# drybag:attach:begin` and `# drybag:attach:end`, one line per path `attach` placed that your own excludes do not already hide; `detach` gives the file back byte for byte | `drybag attach` |
+| `.codex/rules/<name>` (in the main checkout) | A copy of each Codex rule file of the overlay, only where nothing is or the ledger records `attach`'s own copy; `detach` removes a copy that still holds those bytes | `drybag attach` |
+| `.claude/settings.local.json` (in the main checkout) | The overlay's allow rules, a `deniedMcpServers` entry per MCP server it switches off, `autoMemoryDirectory` naming the composed store, and the overlay plugin's `enabledPlugins` and `extraKnownMarketplaces` entries, which `claude plugin` writes; `detach` takes back what `attach` added | `drybag attach` |
+| `~/.claude.json` | The overlay's MCP servers, as local-scope entries of the main checkout, through `claude mcp` | `drybag attach` |
+| `~/.claude/settings.json` | The deny rules the preset sets for Claude Code | `drybag setup` |
+| `.git/hooks/prepare-commit-msg` (the hooks directory git names) and `prepare-commit-msg.local` beside it | The hook that strips attribution lines as you commit, and the hook that was there before, kept and chained to; `--uninstall` puts it back | `drybag setup --git-hooks` |
 | `<overlay>/common/drybag.toml` | Preferences, session budgets, personal values and hint switches for every checkout on a machine that records this overlay, above the repository's `drybag.toml` and below the machine file. Read the way a session reads `drybag.toml`: what this drybag cannot use is ignored with a note, and a gate's input or a fact about the repository is never taken from it | you |
 | `<overlay>/projects/<name>/drybag.toml` | The same keys for one project, above the common file: read only for a checkout this machine binds to `<name>`, never for one whose own `drybag.toml` merely names it | you |
 | `<overlay>/projects/<name>/project.toml` | The remote this project was first attached with, and when; it binds nothing | `drybag attach`, while it records no remote |
@@ -211,8 +239,9 @@ drybag writes files. Being specific about which is the point of this section.
 | `~/.local/share/drybag/delivery/<id>/` | The overlay's hooks, skills and agents rendered as a plugin, `overlay-<id>` in a marketplace `drybag-delivery-<id>`, both named by the binding id, and, when the overlay holds a rule with `paths:`, the `PostToolUse` entry that delivers it, run through whatever launched the drybag that ran `attach`: the plugin's hook wrapper, or an installed package's interpreter. A session runs the plugin from here in place, so each attach rewrites it, and `drybag detach` removes it | `drybag attach` |
 | `~/.local/share/drybag/stores/<id>/` | The composed memory store the harness and drybag's own bundles read, named by the binding id: a link to each of the overlay's note groups for this project and one to its `MEMORY.md`, which `autoMemoryDirectory` in the main checkout's `.claude/settings.local.json` names. Each attach makes its links the overlay's current set and leaves a note the harness wrote there; `drybag detach` takes the links and the key, and the directory where nothing else is left | `drybag attach`, in `overlay` mode |
 | `AGENTS.md`, `CLAUDE.md`, `drybag.toml` and any other regular file of `<overlay>/projects/<name>/checkout/` (never a `.env*` file or `settings.local.json`) | The files you keep outside the repository, in the root of a new linked worktree of a bound checkout, only where the worktree has nothing at the name and git ignores it. The main checkout is not touched, and `drybag detach` leaves them | the `SessionStart` hook |
-| `~/.local/share/drybag/sessions/` | One empty file per session and file a path-scoped rule was said for, both names hashed, so the rule is said once per file in a session. Nothing removes them | the hook dispatcher |
+| `~/.local/share/drybag/sessions/` | One empty file per session and file a path-scoped rule was said for, both names hashed, so the rule is said once per file in a session; the rule hook keeps the newest 50 sessions | the hook dispatcher |
 | `~/.local/share/drybag/unreviewed/` | One file per note store, named by a hash of the store's path, holding a digest of the set of its unreviewed notes the last session was told about, so the count line is said only when that set changes. Nothing removes them | the hook dispatcher |
+| `~/.local/share/drybag/sync/` | The note sync's record of its last job (`state.json`), its locks (`job.lock`, `sleeper.lock`), a trigger that arrived while a job ran (`pending`) and a `scratch/` it removes whole | the note sync's session hooks and job |
 
 Every write into a repository goes through a path walk that refuses a symlink at any component
 and refuses to leave the project root, and replaces files atomically, keeping the mode of the
@@ -384,8 +413,8 @@ findings — `docs check`, `plan check` — all spell it `findings`,
 whatever their summary line calls them; every other command's keys are its own and are listed
 with it in [docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md).
 
-Exit codes are the same everywhere: **0** success, **1** findings, **2** a refusal or an
-internal error. A caller must never read 2 as permission. One command is deliberately
+Exit codes are the same everywhere: **0** success, **1** findings or a failure (`failed:`, a
+missing `drybag.toml` among them), **2** a refusal or an internal error. A caller must never read 2 as permission. One command is deliberately
 outside that rule: `drybag hook` degrades open with **0** on an internal error, on every event,
 because a bug in drybag must not cost you a tool call, and on `UserPromptSubmit` an exit 2 would
 erase what you typed. [docs/cli.md](https://github.com/dry-bag/drybag/blob/main/docs/cli.md) states it.
@@ -445,7 +474,7 @@ that test until the command ships; none is today.
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/dry-bag/drybag/blob/main/CONTRIBUTING.md) — it states the three rules a change here has to satisfy,
+See [CONTRIBUTING.md](https://github.com/dry-bag/drybag/blob/main/CONTRIBUTING.md) — it states the five rules a change here has to satisfy,
 which are not obvious from the code. Security reports go through
 [SECURITY.md](https://github.com/dry-bag/drybag/blob/main/SECURITY.md), never a public issue.
 

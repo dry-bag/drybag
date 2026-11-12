@@ -10,10 +10,8 @@
 [[mutation]]
 name = "group_order outranks the startup rank in the index order"
 file = "src/drybag/memory/index.py"
-before = '''        UNRANKED if rank is None else rank,
-        UNRANKED if note.group_order is None else note.group_order,'''
-after = '''        UNRANKED if note.group_order is None else note.group_order,
-        UNRANKED if rank is None else rank,'''
+before = "    return (rank is None, rank or 0, order is None, order or 0, note.name)"
+after = "    return (order is None, order or 0, rank is None, rank or 0, note.name)"
 reddens = [
   "tests/memory/test_index.py::test_the_startup_rank_outranks_group_order_everywhere_it_is_read",
 ]
@@ -409,6 +407,34 @@ reddens = [
   "tests/memory/test_notes.py::test_a_note_named_in_bytes_that_are_not_utf_8_is_quarantined",
 ]
 
+# The index links a note by its group and file name on one line, so a name that breaks a line would
+# write lines of its own choosing into `MEMORY.md`.
+[[mutation]]
+name = "the memory walk hands the index a note whose name breaks a line"
+file = "src/drybag/memory/notes.py"
+before = """            if not is_one_line(f"{group}/{path.name}"):
+                unreadable.append((path, f"{path}: {NAME_NOT_ONE_LINE}"))
+                continue
+"""
+after = ""
+reddens = ["tests/memory/test_index.py::test_a_note_whose_name_breaks_a_line_is_unreadable"]
+
+# The group, which `drybag.toml` names, is the other half of that name.
+[[mutation]]
+name = "the memory walk asks the note's file name alone"
+file = "src/drybag/memory/notes.py"
+before = '            if not is_one_line(f"{group}/{path.name}"):'
+after = "            if not is_one_line(path.name):"
+reddens = ["tests/memory/test_index.py::test_a_group_whose_name_breaks_a_line_is_unreadable"]
+
+# A `startup` rank makes a note a standing rule, so a value that is not an integer is no rank.
+[[mutation]]
+name = "a startup that is not an integer still ranks a note"
+file = "src/drybag/memory/notes.py"
+before = "        return _parse_int(raw)"
+after = "        return 10_000 if _parse_int(raw) is None else _parse_int(raw)"
+reddens = ["tests/memory/test_notes.py::test_a_startup_that_is_not_an_integer_is_no_rank"]
+
 # A checkout this machine binds to one project is not bound to another its `drybag.toml` names
 # later: the name is the repository's, and a share it picks that the binding never named would
 # read another project's notes.
@@ -637,8 +663,8 @@ reddens = [
 [[mutation]]
 name = "memory index names an unreadable note by its absolute path"
 file = "src/drybag/memory/index.py"
-before = "unreadable=[path.relative_to(store.path).as_posix() for path, _ in reconciled.unreadable],"
-after = "unreadable=[str(path) for path, _ in reconciled.unreadable],"
+before = "            (path.relative_to(store.path).as_posix(), why.removeprefix(str(path)).lstrip(\": \"))"
+after = "            (str(path), why.removeprefix(str(path)).lstrip(\": \"))"
 reddens = [
   "tests/memory/test_commands.py::test_an_unparseable_note_with_a_crafted_name_is_counted_and_never_printed_raw",
   "tests/memory/test_commands.py::test_an_unreadable_note_is_named_store_relative_on_the_line_and_in_json_alike",
@@ -1226,7 +1252,7 @@ reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_takes_three_digits_or_m
 [[mutation]]
 name = "doctor stops warning that the overlay's notes reach no session"
 file = "src/drybag/memory/doctor.py"
-before = '    if "memory.mode" not in resolution.provenance and _undelivered(context):'
+before = '    if not warnings and "memory.mode" not in resolution.provenance and _undelivered(context):'
 after = "    if False:"
 reddens = [
   "tests/memory/test_doctor.py::test_notes_in_the_overlay_with_no_mode_set_warn",
@@ -1349,9 +1375,17 @@ reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_wh
 [[mutation]]
 name = "a Spec line's none needs no reason"
 file = "src/drybag/docs/plans.py"
-before = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*[—-]+[^\S\n]*\S")'
+before = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*—[^\S\n]*\S")'
 after = '_SPEC_NONE = re.compile(r"[^\S\n]*none")'
 reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# Only the em dash says none: a second spelling passing would be taught to the next plan.
+[[mutation]]
+name = "a Spec line's none takes a hyphen"
+file = "src/drybag/docs/plans.py"
+before = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*—[^\S\n]*\S")'
+after = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*[—-]+[^\S\n]*\S")'
+reddens = ["tests/docs/test_plans.py::test_none_with_a_hyphen_is_a_finding_that_names_the_spelling"]
 
 # Any backticked text passing would teach a placeholder; the spec must be there.
 [[mutation]]
@@ -1413,8 +1447,8 @@ reddens = ["tests/docs/test_plans.py::test_a_root_below_the_git_top_lints_the_pl
 [[mutation]]
 name = "plan check claims a Spec rule that did not run"
 file = "src/drybag/docs/commands.py"
-before = '    summary = _PLAN_OK.format(n=len(linted)) + (_PLAN_SPEC_OK if result.specs else "")'
-after = "    summary = _PLAN_OK.format(n=len(linted)) + _PLAN_SPEC_OK"
+before = '    summary = _PLAN_OK.format(n=len(linted)) + (spec_ok if result.specs else "")'
+after = "    summary = _PLAN_OK.format(n=len(linted)) + spec_ok"
 reddens = [
   "tests/docs/test_commands.py::test_plan_check_lints_the_named_plans_and_counts_them",
 ]

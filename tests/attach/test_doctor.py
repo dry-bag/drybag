@@ -378,7 +378,8 @@ UNREADABLE_LEDGER_ATTACHED = Check(
     "warn",
     f"{LEDGER_NAME} is here and cannot be read as a ledger, so nothing in it can be corroborated "
     f"and this checkout's attach state is unknown",
-    f"remove {LEDGER_NAME}, then run `drybag attach --check`",
+    f"take back by hand what {LEDGER_NAME} records, move it aside, then run "
+    "`drybag attach --check`",
 )
 
 
@@ -524,6 +525,21 @@ def test_a_copy_the_team_committed_is_no_finding_once_the_overlay_dropped_it(
     attach(root, store=store, machine=machine, runner=run)
     row = _by_name(_checks(tmp_path, root, machine=machine), "attached")
     assert row.status != RED and "tracks" not in row.detail
+
+
+def test_the_attached_row_names_a_refused_rebind(tmp_path: Path) -> None:
+    # A pulled commit renames `[project] name`, so the ledger's store is another project's: the row
+    # said only that the store is not this project's directory. It says the rebind as `attach`
+    # refuses it, with `--project` as the way out. A message, so no mutation entry.
+    from drybag.attach.binding import REBIND
+
+    root, store, machine = _attachable(tmp_path)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    named = (root / CONFIG_FILE).read_text(encoding="utf-8").replace('name = "p"', 'name = "q"')
+    (root / CONFIG_FILE).write_text(named, encoding="utf-8")
+    row = _by_name(_checks(tmp_path, root, machine=machine), "attached")
+    assert (row.status, row.remedy) == (WARN, "run `drybag attach --project q`")
+    assert REBIND.format(bound="p", named="q") in row.detail
 
 
 @pytest.mark.parametrize(

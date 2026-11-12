@@ -107,8 +107,8 @@ WRAPPER = "hooks/run-hook.sh"
 WRAPPER_TIMEOUT_SECONDS = 30
 # The remedy of the plugin-root skip. A quiet `skip` row is what a machine with no findable
 # plugin root looks like from here, and a `skip` with an empty remedy is what
-# `skills/doctor/SKILL.md` tells the model not to treat as red — so it said nothing about the
-# loudest fault `doctor` can meet. The two halves of it are not interchangeable: only the first
+# `skills/doctor/SKILL.md` tells the model not to treat as red, so this remedy names the
+# fault. The two halves of it are not interchangeable: only the first
 # gives a root `wrapper` will execute, which is why `wrapper`'s skip for a root the environment
 # names carries that first half alone, and takes it from here rather than from a copy.
 RUN_FROM_OWN_ROOT = (
@@ -146,11 +146,8 @@ def _own_root() -> Path | None:
 
 # Every registered harness's name for the plugin root, `CANONICAL`'s first, read off the registry.
 # Both names, because both reach this process: Codex exports `PLUGIN_ROOT` and also
-# `CLAUDE_PLUGIN_ROOT`, as the spike record
-# measured in its *Codex plugin hooks* trial, so a rule written against one of them is
-# `config/machine.py`'s own finding again — "gating one of a pair of equivalent inputs is not a
-# partial defence, it is a redirect with a longer name". Neither is ever executed; see
-# `_wrapper`.
+# `CLAUDE_PLUGIN_ROOT`, so a rule written against one of them alone is a redirect with a longer
+# name. Neither is ever executed; see `_wrapper`.
 NAMED_ROOTS = tuple(dict.fromkeys(harness.plugin_root_env for harness in (CANONICAL, *HARNESSES)))
 
 
@@ -356,7 +353,7 @@ def _wrapper(context: Context) -> Row:
             capture_output=True,
             text=True,
             # Never quoted: the wrapper echoes what it was handed, a project directory in latin-1
-            # bytes included, and strictly that raised and lost the row.
+            # bytes included, which a strict decode would raise on and lose the row.
             errors="replace",
             check=False,
             timeout=WRAPPER_TIMEOUT_SECONDS,
@@ -384,7 +381,7 @@ def _wrapper(context: Context) -> Row:
 def _budgets(context: Context, config: Config) -> Row:
     """Every budget set above the preset and every one set below it.
 
-    The base branch's `drybag.toml` sets a gate's budget and the owner's machine file a
+    A repository's `drybag.toml` sets a gate's budget and the owner's machine file a
     session's, in either direction, and the value set is the value in force (`Budgets.effective`).
     No consumer applies a platform cap to a budget — `native_caps` are checked beside the budget,
     never folded into it — so the row names no clamp. Budget keys are `Budgets.NAMES` and the loader
@@ -483,8 +480,7 @@ def _preferences(context: Context) -> Row:
 def _cli_path(context: Context) -> Row:
     """Whether `drybag` resolves by name on this machine.
 
-    Codex performs no `${CLAUDE_PLUGIN_ROOT}` substitution in skill content, as the spike record's
-    *plugin-root substitution and executable bits* trial measured, so a skill that says
+    Codex performs no `${CLAUDE_PLUGIN_ROOT}` substitution in skill content, so a skill that says
     `drybag …` needs the name to resolve on PATH there.
 
     **Asked of `context.env`, like every other check that reads the environment**, and never of
@@ -517,6 +513,7 @@ def _cli_path(context: Context) -> Row:
             # spelling of a URL is a second thing to move when the repository does, and `doctor`
             # is the command whose whole job is finding the two halves of something that has
             # stopped agreeing.
+            "put the plugin's `scripts/drybag` on PATH, or "
             f"run `uv tool install git+{REPOSITORY_URL}`",
         )
     return Row(OK, "`drybag` resolves on PATH")

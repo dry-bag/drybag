@@ -1,7 +1,7 @@
 # Who reads what: the configuration loader (`drybag.config`) reads [budgets], [native_caps] and
 # [defaults.*] into a project's configuration; `drybag.setup`
-# reads [plugins.<harness>] and [deny] when it installs a machine, and [defaults.personal] and
-# [defaults.drybag] for its own answers.
+# reads [plugins.<harness>] and [deny] when it installs a machine, and [defaults.personal] for
+# the personal values it writes into the machine file.
 #
 # There is deliberately no [rules] table, and nothing reads one: this preset imposes no standing
 # rule on anyone. A standing rule is the user's own note carrying `metadata.startup` in their
@@ -56,23 +56,16 @@ preset = "recommended"
 # marketplaces expose a version selector to pin to.
 
 [plugins.claude]
-# Verified 2026-09-18 against the real `claude` CLI and `gh api repos/anthropics/claude-plugins-official`:
-# both `superpowers` and `context7` ship in Anthropic's own official marketplace, which every
-# Claude Code install already carries (`claude plugin marketplace list` lists it with no prior
-# `marketplace add`) — the add call `setup` still makes is defence in depth, not a first
-# registration, and it is idempotent (`claude plugin marketplace add` on an already-added source
-# answers "already on disk" and exits 0). `claude plugin install <name>@<marketplace>` is the
-# measured bare form — the install output the spike record
-# transcribes reports `(scope: user)` as the
-# *default*, not a flag, and the record passes `-y` only to `uninstall`, never to `install`.
+# Both `superpowers` and `context7` ship in Anthropic's own official marketplace, which every
+# Claude Code install already carries, so the add call `setup` makes is idempotent (an
+# already-added source answers "already on disk" and exits 0). `claude plugin install
+# <name>@<marketplace>` is bare: `(scope: user)` is its default, and `-y` belongs to `uninstall`.
 marketplace = "claude-plugins-official"
 source = "anthropics/claude-plugins-official"
 
 # Deliberately no [plugins.codex] table below: Codex has no verified non-interactive marketplace
 # source for either plugin in `recommended` — the `superpowers` project's own install instructions
-# document only an interactive `/plugins` search inside a Codex session, and the spike record's
-# Codex trials (*Codex plugin hooks*, *plugin-root substitution and executable bits*) only ever
-# registered scratch local directories, never a published marketplace. Nothing is vendored on a
+# document only an interactive `/plugins` search inside a Codex session. Nothing is vendored on a
 # guess. `recommended` therefore names two plugins that `setup --plugin` installs on Claude Code
 # only; `setup` reports the gap as a note (never silence, never a failure) rather than attempting
 # an unverified install, and README.md's "This is not a replacement for superpowers" paragraph
@@ -83,13 +76,12 @@ source = "anthropics/claude-plugins-official"
 # Machine-level deny rules, written into the user-scope settings. Deny only, always: the
 # plugin author may never ship an allow rule, and a preset is a template by another name.
 #
-# The env files by name, never by a mask. A deny rule outranks every allow rule, so the mask this
-# list used to hold, `.env*`, also refused `.env.example`, `.env.dist` and every other template a
-# project commits for an agent to read and edit, and no rule anywhere could let one through. The
-# names are the ones the common toolchains read; an env file under another name stays readable,
-# because keeping secrets from an agent is the sandbox's job and the harness's, and a list that
-# refuses a template is the defect this one replaced. A bare name matches at any depth in Claude
-# Code's rules, so `**/` adds nothing but the spelling an earlier `setup` already wrote.
+# The env files by name, never by a mask. A deny rule outranks every allow rule, so a mask such
+# as `.env*` would also refuse `.env.example`, `.env.dist` and every other template a project
+# commits for an agent to read and edit. The names are the ones the common toolchains read; an
+# env file under another name stays readable, because keeping secrets from an agent is the
+# sandbox's job and the harness's. A bare name matches at any depth in Claude Code's rules, so
+# `**/` adds nothing but the spelling an earlier `setup` already wrote.
 global = [
   "Read(**/.env)",
   "Read(**/.env.local)",

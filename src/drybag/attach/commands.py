@@ -12,7 +12,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from drybag.areas import SubParsers
-from drybag.command import ATTACH_CHECK_HELP, command_owner, common_flags, grammar
+from drybag.command import (
+    ATTACH_CHECK_HELP,
+    ATTACH_STORE_HELP,
+    command_owner,
+    common_flags,
+    grammar,
+)
 from drybag.config.schema import NAME_RULE, PROJECT_NAME
 from drybag.printed import clipped, quoted
 from drybag.result import Result
@@ -66,6 +72,7 @@ def run_attach(args: argparse.Namespace) -> Result:
         "allow_added": list(attached.allow_added),
         "allow_withdrawn": list(attached.allow_withdrawn),
         "rules_left": list(attached.rules_left),
+        "rules_taken_back": list(attached.rules_taken_back),
         # The overlay's MCP servers by name, the owner's own; never a definition or a message.
         "mcp_delivered": list(attached.mcp_delivered),
         "mcp_taken_back": list(attached.mcp_taken_back),
@@ -109,10 +116,11 @@ def _screen(attached: Attached) -> list[str]:
     lines += [f"allow rule added: {clipped(rule)}" for rule in attached.allow_added]
     lines += [f"allow rule withdrawn: {clipped(rule)}" for rule in attached.allow_withdrawn]
     lines += [
-        f"Codex rule copy no longer in the overlay: {quoted(rule)} (keep or delete it; `drybag "
-        "detach` removes it only while it is untracked and holds the bytes attach wrote)"
+        f"Codex rule file left: {quoted(rule)} (not attach's to write or take back: it is yours, "
+        "and neither a re-attach nor `drybag detach` touches it)"
         for rule in attached.rules_left
     ]
+    lines += [f"Codex rule copy taken back: {quoted(rule)}" for rule in attached.rules_taken_back]
     lines += [f"MCP server delivered: {quoted(name)}" for name in attached.mcp_delivered]
     lines += [f"MCP server taken back: {quoted(name)}" for name in attached.mcp_taken_back]
     lines += [
@@ -182,6 +190,7 @@ def register(groups: SubParsers) -> None:
             "attach", help="bind this repository to the overlay and point the harness at its notes"
         ),
         store=True,
+        store_help=ATTACH_STORE_HELP,
     )
     attach.add_argument("--check", action="store_true", help=ATTACH_CHECK_HELP)
     # Held to `[project] name`'s rule before anything runs: the name becomes
@@ -197,9 +206,9 @@ def register(groups: SubParsers) -> None:
     )
     attach.set_defaults(func=run_attach)
 
-    # `--machine` is taken as every project command takes it (docs/cli.md, "Shared flags"), and
-    # read by nothing here: every path `detach` withdraws is the ledger's or derived from the id.
+    # No `--machine`: every path `detach` withdraws is the ledger's or derived from the id.
     detach = common_flags(
-        groups.add_parser("detach", help="remove what attach added, and leave the binding")
+        groups.add_parser("detach", help="remove what attach added, and leave the binding"),
+        machine=False,
     )
     detach.set_defaults(func=run_detach)

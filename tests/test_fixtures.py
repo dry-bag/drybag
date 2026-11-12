@@ -187,23 +187,8 @@ def test_the_hostile_fixture_carries_the_three_properties_the_scenario_depends_o
 # free to drift — and a case that runs it runs it with `bash`.
 
 needs_bash = pytest.mark.skipif(shutil.which("bash") is None, reason="bash is not installed")
-# `.github/` is outside `source-include`: it is this repository's own continuous integration
-# and not source a downstream packager needs, and `scripts/check_artifacts.py` states that the
-# sdist exists so such a packager can run the suite. So the cases below skip where the file
-# they are about is not there, rather than the tree gaining a line to ship CI configuration.
-needs_workflows_dir = pytest.mark.skipif(
-    not (ROOT / ".github" / "workflows").is_dir(), reason="the workflows are not in the sdist"
-)
-
-
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
-needs_ci_workflow = pytest.mark.skipif(
-    not CI_WORKFLOW.is_file(), reason="ci.yml is not in the sdist"
-)
 SMOKE_WORKFLOW = ROOT / ".github" / "workflows" / "smoke.yml"
-needs_smoke_workflow = pytest.mark.skipif(
-    not SMOKE_WORKFLOW.is_file(), reason="smoke.yml is not in the sdist"
-)
 CONTRIBUTING = ROOT / "CONTRIBUTING.md"
 PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 _SHORT_VERSION = re.compile(
@@ -223,7 +208,6 @@ RELEASE_CHECK = "uv run python scripts/release.py check"
 _COVERAGE_FLOOR = re.compile(r"--cov-fail-under=(\d+)")
 
 
-@needs_ci_workflow
 def test_the_block_a_contributor_copies_is_the_one_ci_runs() -> None:
     """The two blocks a contributor runs before pushing, against what CI actually runs.
 
@@ -362,7 +346,6 @@ def _ci_jobs() -> dict[str, list[str]]:
     return jobs
 
 
-@needs_ci_workflow
 def test_the_mutation_oracle_has_a_job_of_its_own_with_a_budget_that_fits() -> None:
     """The oracle runs once, in a job nothing can skip, under a bound that fits the set.
 
@@ -450,7 +433,6 @@ def spliced(text: str) -> list[str]:
     return [script for script in scripts(text) if "${{" in script]
 
 
-@needs_workflows_dir
 def test_no_workflow_splices_an_expression_into_a_shell() -> None:
     # The one class of workflow defect a text scan can catch, and the one worth catching: a
     # `${{ }}` inside a `run:` is interpolated by the platform before the shell sees the script,
@@ -474,7 +456,6 @@ def test_no_workflow_splices_an_expression_into_a_shell() -> None:
 _PINNED_ACTION = re.compile(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}")
 
 
-@needs_workflows_dir
 def test_every_action_a_step_uses_is_pinned_by_a_commit_sha() -> None:
     # Every workflow, every job, every step: one sweep, so a step added to any job is held.
     # Mutation (declared): `mutations/`'s "the demo job takes an action by its tag" -> the
@@ -579,9 +560,6 @@ def test_a_step_s_script_is_never_read_from_the_step_after_it(tmp_path: Path) ->
 RELEASE_WORKFLOW = WORKFLOWS / "release.yml"
 GATE_JOB = "environment-gate"
 GATE_STEP = "The pypi environment is a gate and not a name GitHub invented"
-needs_release_workflow = pytest.mark.skipif(
-    not RELEASE_WORKFLOW.is_file(), reason="release.yml is not in the sdist"
-)
 
 
 def _release_jobs() -> dict[str, dict[str, Any]]:
@@ -611,7 +589,6 @@ def _gate_environment() -> str:
     return match.group(1)
 
 
-@needs_release_workflow
 def test_the_release_workflow_runs_the_release_check_in_the_one_spelling() -> None:
     # The fifth place: the release workflow runs the check against the tag, and it runs no
     # mypy and no oracle, so it is held to this one gate rather than to the contributor's list.
@@ -632,7 +609,6 @@ def test_the_release_workflow_runs_the_release_check_in_the_one_spelling() -> No
         assert "drybag release" not in body, body
 
 
-@needs_release_workflow
 def test_every_job_behind_the_pypi_environment_waits_for_the_environment_gate() -> None:
     """The property, stated over the file rather than over two hand-kept copies of a step.
 
@@ -680,7 +656,6 @@ def _run_gate(tmp_path: Path, gh: str, declared: str = "") -> tuple[int, str]:
 
 
 @needs_bash
-@needs_release_workflow
 @pytest.mark.parametrize(
     ("gh", "declared", "code", "wanted"),
     [

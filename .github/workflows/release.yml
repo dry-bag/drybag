@@ -28,14 +28,14 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
     # Read-only, and nothing here can sign: the suite and every dependency the lock installs run
     # in this job, so the OIDC token an attestation is signed with is `attest`'s, below, which
-    # runs neither.
+    # runs neither. Nor does it build: what it installs never reaches the packages.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         # The release commit and its first parent: `release.py check --tag` reads the plugin
@@ -62,12 +62,34 @@ jobs:
         run: uv run python scripts/release.py check --tag "$GITHUB_REF_NAME"
       - name: Tests
         run: uv run pytest -q
-      - name: Build
-        run: uv build
+
+  # The packages, from the tag's tracked files alone: no cache another workflow wrote, nothing
+  # installed, and uv pinned inside `pyproject.toml`'s `uv_build>=0.11,<0.13`, so `uv build` runs
+  # the backend this uv carries and fetches none. The check below reads the packages it built.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+          version: "0.12.19"
+      - name: Build and check the packages
+        run: |
+          mkdir "$RUNNER_TEMP/tree"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/tree"
+          cd "$RUNNER_TEMP/tree"
+          uv build
+          PYTHONPATH=src python3 scripts/check_artifacts.py dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
-          path: dist/
+          path: ${{ runner.temp }}/tree/dist/
 
   # The one job that signs. The attestations are signed with this job's OIDC token and written
   # with its `attestations: write`, so it runs no suite, installs nothing and keeps no token in
@@ -82,7 +104,7 @@ jobs:
   # digest, so the commit read, the digest attested and the commit the publisher checks are one
   # value.
   attest:
-    needs: build
+    needs: [check, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -97,9 +119,8 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        # Outside the checkout: `build` ran the suite and every dependency the lock installs, so
-        # what it uploaded is not written where the next step runs `scripts/plugin_tree.py` with
-        # the checkout's `src` on its path, in the job that can sign.
+        # Outside the checkout: what `build` uploaded is not written where the next step runs
+        # `scripts/plugin_tree.py` with the checkout's `src` on its path, in the job that can sign.
         with:
           name: dist
           path: ${{ runner.temp }}/dist

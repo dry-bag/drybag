@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: Diagnose a drybag installation — hooks, memory store, budgets, overrides and trust. Use when a hook is silent, memory does not arrive, a check fails unexpectedly, or the user asks whether drybag is set up correctly.
+description: Diagnose a drybag installation — configuration and its layers, the hook wrapper, the overlay and its binding, the note store and its bundles, budgets and the note sync. Use when a hook is silent, memory does not arrive, a check fails unexpectedly, or the user asks whether drybag is set up correctly.
 ---
 
 # Diagnosing an installation

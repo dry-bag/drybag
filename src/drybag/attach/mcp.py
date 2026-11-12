@@ -55,12 +55,12 @@ UNUSABLE = (
 )
 NOT_THE_KEY = "{path}: a top-level key other than mcpServers is ignored"
 BAD_VALUE = (
-    '{path}: an mcpServers entry is not an object, "off" or "on", or holds NaN or Infinity; it is '
-    "skipped (entry {position})"
+    '{path}: the mcpServers entry {name} is not an object, "off" or "on", or holds NaN or '
+    "Infinity; it is skipped"
 )
 UNPASSABLE = (
-    "{path}: an mcpServers name holds a NUL or a lone surrogate, which no command line can carry; "
-    "it is skipped (entry {position})"
+    "{path}: the mcpServers name {name} holds a NUL or a lone surrogate, which no command line can "
+    "carry; it is skipped"
 )
 # A NUL ends an argv word, and a lone surrogate, which `json.loads` makes of a `\ud800`, encodes as
 # no UTF-8; a definition is passed as ASCII JSON, so only a name can hold what no call carries.
@@ -114,11 +114,11 @@ def _entries(plate: Plate, notes: list[str]) -> dict[str, object] | None:
     if any(key != SERVERS_KEY for key in document):
         notes.append(NOT_THE_KEY.format(path=shown))
     kept: dict[str, object] = {}
-    for position, (name, value) in enumerate(servers.items(), 1):
+    for name, value in servers.items():
         if _UNCARRIED.search(name):
-            notes.append(UNPASSABLE.format(path=shown, position=position))
+            notes.append(UNPASSABLE.format(path=shown, name=quoted(name)))
         elif value not in (OFF, ON) and not (isinstance(value, dict) and _finite(value)):
-            notes.append(BAD_VALUE.format(path=shown, position=position))
+            notes.append(BAD_VALUE.format(path=shown, name=quoted(name)))
         else:
             kept[name] = value
     return kept
@@ -223,8 +223,8 @@ def write_mcp_ledger(root: Path, ledger: McpLedger) -> None:
     fsops.write_within(common_directory(root), MCP_LEDGER_FILE, text)
 
 
-# Claude Code's answer to `remove` of a name local scope does not hold, measured on 2.1.319 as exit
-# 1 and `No MCP server named "q" in local scope`. Exit 1 also answers a `remove` that could not
+# Claude Code's answer to `remove` of a name local scope does not hold: exit 1 and
+# `No MCP server named "q" in local scope`. Exit 1 also answers a `remove` that could not
 # write, so only exit 0 or this answer for the name drops it; any other (no `claude`, a spawn
 # error, a signal, a timeout, another wording) leaves the name unsettled, never lost.
 ABSENT = 'No MCP server named "{name}"'

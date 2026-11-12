@@ -104,9 +104,12 @@ LOCAL = frozenset(
         ("git", "grep"),
         # Without `-w` it writes nothing: the empty tree's id, from an empty standard input.
         ("git", "hash-object", "-t", "tree", "--stdin"),
+        # The note sync's ids of files where incoming notes land, unfiltered, unwritten.
+        ("git", "hash-object", "--no-filters", "--stdin-paths"),
         ("git", "init"),
         ("git", "log"),
         ("git", "ls-files"),
+        ("git", "ls-tree"),
         ("git", "merge-base"),
         ("git", "remote", "get-url"),
         ("git", "rev-list"),
