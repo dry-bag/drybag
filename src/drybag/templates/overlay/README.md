@@ -2,7 +2,8 @@
 
 This repository is the private half of drybag. It holds the things that are yours rather
 than any one project's: the standing rules you want every session to start with, the notes
-that span projects, and one record per repository binding that repository to this overlay.
+that span projects, and one record per project (`project.toml`), which binds nothing: which
+checkout belongs to which project is each machine's own record, kept outside this repository.
 
 **Keep it private.** Nothing here is meant to be published. It may name hosts, accounts and
 the paths of environment files; it must never hold a credential, and two scans run to keep it
@@ -28,9 +29,17 @@ below accounts for. These are the ones that are yours to fill in:
 | `common/claude/hooks.json` | **your own** hook entries, which `drybag attach` renders into the plugin it installs for a bound repository on this machine. Ships empty for the same reason. |
 | `common/claude/rules/*.md` | **your own** rules, for every bound repository; `projects/<name>/claude/rules/*.md` holds one project's, and a file there replaces the common file of its name. A rule whose frontmatter has `paths:` (`paths: ["src/**/*.py"]`, globs relative to the checkout's root) reaches a session the first time it reads, edits or writes a file one of them matches, once per file in a session; any other is a standing rule, given to every session at its start. No directory ships: create it when you write your first rule. |
 | `common/codex/common.rules` | the same, for the other harness: one standing-rule file, which `attach` copies into a bound repository's `.codex/rules/`. Ships with a header comment and nothing else. |
-| `projects/<name>/` | one directory per bound repository: its record (`project.toml`), and its notes |
+| `common/drybag.toml` | **your own** preferences for every checkout: a `[personal]` value, a `[guards]` switch, `[memory] mode`, `groups` and `index_extra`, and a session budget. Nothing ships, and no note reaches a session until a layer says `[memory] mode = "overlay"`. |
+| `common/claude/skills/`, `common/claude/agents/` | **your own** skills and agents, which `drybag attach` renders into the plugin it installs. No directory ships. |
+| `tags/<tag>/` | what `common/` holds, for the projects whose `project.toml` lists the tag (`tags = ["<tag>"]`). No directory ships. |
+| `projects/<name>/` | one directory per project: its record (`project.toml`), its notes, and what `common/` holds, for that project alone, `projects/<name>/drybag.toml` among it |
+| `projects/<name>/checkout/` | files placed in each new linked worktree of that project that lacks them, such as an `AGENTS.md` the repository does not track, under names your own excludes hide |
+| `machine/` | `machine/projects.toml`, where each project's main checkout lives (`[projects.<name>] dir = "~/…"`), and `machine/claude/settings.json`, the plugins to enable: what `drybag setup --restore` reads on a new computer |
 | `common/claude/mcp.json` | **your own** MCP servers: `{"mcpServers": {"<name>": <definition>}}`, a definition in the shape of Claude Code's `.mcp.json`, or `"off"` to switch a server of that name off in the bound repository, or `"on"` to switch an earlier file's back on. `drybag attach` adds each server at Claude Code's local scope for the bound repository, and writes each `"off"` name into its `.claude/settings.local.json`. A tag's or a project's `claude/mcp.json` wins over this one, name by name. Nothing ships. |
-| `machines/<name>/` | inside any directory above, the part of it that applies on one machine only: the one whose machine file, `~/.config/drybag/config.toml`, says `[machine] name = "<name>"`. It holds what its parent holds and wins over it, and loses to the next tag and to the project. No directory ships. |
+| `machines/<name>/` | inside `common/`, a tag or a project, the part of it that applies on one machine only: the one whose machine file, `~/.config/drybag/config.toml`, says `[machine] name = "<name>"`. It holds what its parent holds and wins over it, and loses to the next tag and to the project. No directory ships. |
+
+A later directory wins a name over an earlier one: `common/`, then each tag in the order `project.toml`
+lists it, then the project, each followed by its `machines/<name>/`.
 
 And these are the machinery. Leave them alone unless you know why:
 
