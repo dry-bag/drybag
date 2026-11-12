@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from drybag.harnesses import CLAUDE
-from drybag.hints import bgcleanup
+from drybag.hints.bashscan import MAX_COMMAND_CHARS
 from drybag.hints.hooks import register
 from drybag.hints.pipes import NOTICE, notice_for
 from drybag.hooks.api import Handler, HookEvent
@@ -71,7 +71,7 @@ def test_a_reader_ahead_of_the_run_is_not_the_hint() -> None:
 
 
 def test_a_command_past_the_scan_cap_is_not_read() -> None:
-    padding = "echo " + "x" * bgcleanup.MAX_COMMAND_CHARS
+    padding = "echo " + "x" * MAX_COMMAND_CHARS
     assert notice_for(f"{padding}; pytest | tail") is None
 
 

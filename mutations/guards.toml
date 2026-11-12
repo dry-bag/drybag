@@ -45,7 +45,7 @@ reddens = [
 [[mutation]]
 name = "the command `uv run` launches starts at its first word that is no option"
 file = "src/drybag/hints/bashscan.py"
-before = "        if names_a_test_run(segment[at:]):"
+before = "        if names_a_test_run(segment, at):"
 after = '        if not segment[at].startswith("-"):'
 reddens = [
   "tests/hints/test_bashscan.py::test_the_command_uv_runs_starts_at_the_first_word_the_runner_table_names[with]",
@@ -286,6 +286,21 @@ before = 'HOOK_MARKER = "# drybag:prepare-commit-msg"'
 after = 'HOOK_MARKER = "# drybag:prepare-commit-msg:v2"'
 reddens = [
   "tests/guards/test_githooks.py::test_a_hook_an_earlier_release_wrote_is_still_ours",
+]
+
+# The hook runs only the `drybag` on the owner's `PATH`. A `python3 -m drybag` fallback imports
+# from the work tree first, so a repository that commits `drybag.py` runs it on every commit.
+[[mutation]]
+name = "the hook falls back to a drybag module the work tree can shadow"
+file = "src/drybag/guards/githooks.py"
+before = """    runner="drybag"
+fi"""
+after = """    runner="drybag"
+elif python3 -c 'import drybag' >/dev/null 2>&1; then
+    runner="python3 -m drybag"
+fi"""
+reddens = [
+  "tests/guards/test_githooks.py::test_the_hook_never_imports_a_drybag_the_repository_tracks",
 ]
 
 # The two-paragraph attribution block, and the reason the paragraph rule needed a walk rather
@@ -865,6 +880,18 @@ before = '_EXIT_CODE_ERROR = re.compile(r"\AExit code (\d{1,9})(?!\d)")'
 after = '_EXIT_CODE_ERROR = re.compile(r"\AExit code (\d+)")'
 reddens = [
   'tests/hints/test_hygiene.py::test_red_exit_reads_the_error_field[raw4-None]',
+]
+
+# The red-run note scans no command past the cap every hint stops at.
+[[mutation]]
+name = "the red-run note reads a command past the cap"
+file = "src/drybag/hints/hygiene.py"
+before = """    if len(command) > bashscan.MAX_COMMAND_CHARS:
+        return None"""
+after = """    if False:
+        return None"""
+reddens = [
+  "tests/hints/test_hygiene.py::test_the_red_run_note_reads_no_command_past_the_cap",
 ]
 
 # The red-run note is about the project, and silent without its configuration.

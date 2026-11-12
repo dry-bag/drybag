@@ -543,6 +543,27 @@ reddens = [
   "tests/memory/test_notes.py::test_a_note_named_in_bytes_that_are_not_utf_8_is_quarantined",
 ]
 
+# A prune keeps the newest `kept` directories, not one: the hook sink's markers and the rule hook's
+# records of every recent session but the newest were lost to it.
+[[mutation]]
+name = "keep_newest keeps only the newest directory"
+file = "src/drybag/fsops.py"
+before = "    for stale in found[kept:]:"
+after = "    for stale in found[1:]:"
+reddens = [
+  "tests/test_fsops.py::test_keep_newest_keeps_the_newest_and_removes_the_rest",
+  "tests/hooks/test_sink.py::test_the_sink_keeps_fifty_sessions_of_markers",
+  "tests/attach/test_rules.py::test_the_rule_hook_keeps_fifty_sessions",
+]
+
+# The sink keeps fifty sessions' markers, the number `docs/cli.md` gives.
+[[mutation]]
+name = "the sink keeps one session's markers"
+file = "src/drybag/hooks/sink.py"
+before = "            fsops.keep_newest(self.root, MARKERS, MARKER_SESSIONS_KEPT)"
+after = "            fsops.keep_newest(self.root, MARKERS, 1)"
+reddens = ["tests/hooks/test_sink.py::test_the_sink_keeps_fifty_sessions_of_markers"]
+
 # The marker key and the session id are both payload-controlled. Used verbatim, `../../escape` is a
 # write -- and a `remove_within` loop -- outside the one directory the enumerated-writes rule
 # permits.

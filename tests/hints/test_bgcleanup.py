@@ -16,10 +16,10 @@ import time
 import pytest
 
 from drybag.hints import bgcleanup
+from drybag.hints.bashscan import MAX_COMMAND_CHARS
 from drybag.hints.bgcleanup import (
     EXIT_ECHO_HINT,
     LEAK_HINT,
-    MAX_COMMAND_CHARS,
     RESTORE_HINT,
     SLEEP_HINT,
     judge,

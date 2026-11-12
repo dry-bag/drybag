@@ -23,7 +23,7 @@ path segment, `**` across segments and `{a,b}` for alternatives, matched against
 the file's absolute path, each hashed to a fixed width, since both come off a hook's stdin. A
 payload with no session id keeps no record, so its rules are said on every read rather than
 silenced under a name anything could lay down in advance; and a record that cannot be written costs
-the same, never the rule.
+the same, never the rule. All but the newest `RULE_SESSIONS_KEPT` sessions' records are removed.
 
 **What reaches the model.** A rule's body is the owner's, delivered as they wrote it, like an
 overlay note; the one path printed is the file the agent touched, through `printed.printable`.
@@ -50,6 +50,10 @@ from drybag.printed import printable, quoted
 
 # Under the machine's data directory: one directory of once-per-file records per session.
 SESSIONS = "sessions"
+# How many sessions' records survive a prune, as for the hook sink's markers: a record only has
+# to outlive its own session. A named cap (CONTRIBUTING.md#named-caps); no shipped file changes
+# with it.
+RULE_SESSIONS_KEPT = 50
 STANDING_LEAD = "Standing rules from your drybag overlay, for every session in this checkout:"
 SCOPED_LEAD = "A rule from your drybag overlay for {path}, said once per file in a session:"
 # What `SCOPED_LEAD` names in place of a path outside the path grammar.
@@ -239,6 +243,8 @@ def _mark(base: Path, record: str) -> None:
         # own data directory; the record inside it goes through the walk that refuses a symlink.
         base.mkdir(parents=True, exist_ok=True)
         fsops.write_within(base, record, "")
+        # This session's directory was just written, so it is the newest and never dropped.
+        fsops.keep_newest(base.parent, SESSIONS, RULE_SESSIONS_KEPT)
     except (OSError, fsops.UnsafePath):
         return None
 

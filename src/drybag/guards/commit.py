@@ -12,8 +12,9 @@ compete: it runs after the message exists and is not part of any prompt.
 
 Two surfaces share one pattern set, so they cannot drift apart:
 
-* ``commit check --range A..B`` — CI, on every push and every pull request. The authoritative
-  gate.
+* ``commit check --range A..B`` — CI, on every push and every pull request. It sees every
+  commit; a pull request's own ``drybag.toml`` can switch it off
+  (``commit_messages.attribution_check``).
 * ``commit strip FILE`` — what the ``prepare-commit-msg`` hook in ``githooks`` runs. Local and
   early, so the trailer is gone before the commit exists. ``git commit --no-verify``
   skips ``pre-commit`` and ``commit-msg`` but *not* ``prepare-commit-msg``, so this survives

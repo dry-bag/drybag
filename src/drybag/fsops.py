@@ -803,6 +803,28 @@ def rmdir_within(root: Path, target: str) -> None:
         os.rmdir(name, dir_fd=dir_fd)
 
 
+def keep_newest(root: Path, directory: str, kept: int) -> None:
+    """Remove every subdirectory of `root/directory` but the `kept` newest by `st_mtime_ns`: each
+    file in one through `remove_within`, then the directory through `rmdir_within`.
+
+    A removal a listing drives (CONTRIBUTING.md#enumerated-writes), so `directory` is one only
+    drybag writes, under its own data root. A listing that fails removes nothing.
+    """
+    base = root / directory
+    try:
+        found = sorted(
+            (path for path in base.iterdir() if is_dir(path)),
+            key=lambda path: path.stat().st_mtime_ns,
+            reverse=True,
+        )
+    except OSError:
+        return
+    for stale in found[kept:]:
+        for child in stale.iterdir():
+            remove_within(root, f"{directory}/{stale.name}/{child.name}")
+        rmdir_within(root, f"{directory}/{stale.name}")
+
+
 class NotASymlink(OSError):
     """A real file or directory was found where a symlink was asked about; it is left alone."""
 

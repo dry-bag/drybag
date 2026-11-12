@@ -89,7 +89,7 @@ WHAT IS NOT COVERED, recorded rather than implied:
   path this reader would have to construct rather than read.
 - A restore line carrying a redirect (`cp a.bak a 2>/dev/null`), on either side of the round
   trip: this reader counts the redirect pieces as operands.
-- A command longer than `MAX_COMMAND_CHARS`, which is not read at all. See that constant.
+- A command longer than `bashscan.MAX_COMMAND_CHARS`, which is not read at all. See that constant.
 """
 
 from __future__ import annotations
@@ -101,11 +101,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 from drybag.hints import bashscan
-
-# A named cap (CONTRIBUTING.md#named-caps), and no shipped file changes with it. Above it neither
-# this guard nor `pipes` reads the command at all. 64 KiB is far past any command a person or a
-# model types and far below where tokenizing costs seconds.
-MAX_COMMAND_CHARS = 65_536
 
 # The backgrounding operator, as an operator PIECE. `bashscan.tokenize` emits `&&`, `>&`,
 # `&>` and `&>>` as their own compound tokens, so none of them can be mistaken for this --
@@ -245,7 +240,7 @@ _CHAIN_OPERATORS = frozenset({";", "&&", "||", "|", "&"})
 def judge(command: str, *, background: bool) -> str | None:
     """The whole contract, as a pure function of the command text and the background flag: the
     hint for one Bash call, or `None`. It never raises on a string input."""
-    if len(command) > MAX_COMMAND_CHARS:
+    if len(command) > bashscan.MAX_COMMAND_CHARS:
         return None
     if background:
         tokens = bashscan.tokenize(command)

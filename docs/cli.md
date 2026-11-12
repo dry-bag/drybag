@@ -395,7 +395,7 @@ root of the new linked worktree for each name it places, and nothing else there;
 them. `overlay-path-rules`, the path-scoped rules above,
 writes one empty file per session and file it said a rule for, under
 `$HOME/.local/share/drybag/sessions/`, both names hashed to a fixed width; none for a payload
-with no session id, and nothing removes them. And `unreviewed-notes`, which on `SessionStart` says
+with no session id, with all but the newest fifty session directories removed. And `unreviewed-notes`, which on `SessionStart` says
 "N unreviewed note(s)" when the set of the store's unreviewed notes differs from the one last
 said, writes one file per store under `$HOME/.local/share/drybag/unreviewed/`, named by a hash
 of the store's path and holding a digest of that set; nothing removes them. And the note sync's three handlers, on a machine whose machine file switches

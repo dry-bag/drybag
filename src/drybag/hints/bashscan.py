@@ -136,6 +136,10 @@ from typing import NamedTuple
 
 from drybag.hints.runners import is_launcher, names_a_test_run, past_run
 
+# A named cap (CONTRIBUTING.md#named-caps), and no shipped file changes with it. It bounds every
+# hint's read of a command: above it no hint reads the command at all. 64 KiB is far past any
+# command a person or a model types and far below where tokenizing costs seconds.
+MAX_COMMAND_CHARS = 65_536
 _SEPARATORS = frozenset({";", "&&", "||", "|", "&"})
 # `shlex`'s `punctuation_chars` mode emits a RUN of adjacent punctuation as ONE token, so a
 # separator glued to whatever stands beside it -- `);`, `;;`, `&;`, `));`, `;>` -- is not a
@@ -738,7 +742,7 @@ def _launched(segment: Sequence[str], index: int) -> int | None:
     if start is None:
         return None
     for at in range(start, len(segment)):
-        if names_a_test_run(segment[at:]):
+        if names_a_test_run(segment, at):
             return at
     return None
 
