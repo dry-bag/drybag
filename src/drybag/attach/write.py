@@ -1220,14 +1220,13 @@ def _install(id: str, main: Path, runner: Runner) -> tuple[str, int] | None:
     the verb and exit code of the call that failed. Run from the main checkout, whose
     `settings.local.json` Claude Code reads from every worktree and writes the plugin's entry
     into."""
-    plugin = f"{plugin_name(id)}@{marketplace_name(id)}"
-    for verb, argv in (
-        ("marketplace add", filled(PLUGIN_MARKETPLACE_ADD_LOCAL, str(delivery_directory(id)))),
-        ("install", filled(PLUGIN_INSTALL_LOCAL, plugin)),
-    ):
-        if (code := runner.launch(argv, main).code) != 0:
-            return verb, code
-    return None
+    added = runner.launch(filled(PLUGIN_MARKETPLACE_ADD_LOCAL, str(delivery_directory(id))), main)
+    if added.code != 0:
+        return "marketplace add", added.code
+    done = runner.launch(
+        filled(PLUGIN_INSTALL_LOCAL, f"{plugin_name(id)}@{marketplace_name(id)}"), main
+    )
+    return None if done.code == 0 else ("install", done.code)
 
 
 # Said where the main checkout's settings file still names the plugin once `detach` asked Claude

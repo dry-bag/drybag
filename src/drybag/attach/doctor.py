@@ -726,13 +726,17 @@ def _binding_answer(
     if isinstance(recorded, str):
         return recorded
     try:
-        # A renamed `[project] name` makes the ledger's store another project's: said as the
-        # rebind it is, with `attach`'s own cause and remedy.
-        refuse_a_rebind(context.root, config.project.name)
-        # The report's own `Config`, which `read_binding` would otherwise load a second time.
-        return read_binding(
-            context.root, store=Path(recorded.store), machine=context.machine, config=config
-        )
+        try:
+            # The report's own `Config`, which `read_binding` would otherwise load a second time.
+            return read_binding(
+                context.root, store=Path(recorded.store), machine=context.machine, config=config
+            )
+        except Refusal:
+            # A renamed `[project] name` makes the ledger's store another project's: said as the
+            # rebind it is, with `attach`'s own cause and remedy. Asked only here, so a report
+            # launches no `git` more for it.
+            refuse_a_rebind(context.root, config.project.name)
+            raise
     except RebindRefused as exc:
         return exc
     except Refusal:

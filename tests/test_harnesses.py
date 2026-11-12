@@ -288,7 +288,7 @@ LISTED = {
         "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
     ("src/drybag/attach/write.py", "claude"): (
-        5,
+        6,
         (
             "(`attach.items`, `attach.permissions`, `attach.write`)",
             "`detach` names `claude mcp` where",
@@ -319,8 +319,10 @@ LISTED = {
 # The mentions that are no fact the code acts on, each with how many constants make it and why.
 PROSE = {
     # Messages naming the Codex rule files `attach` places, and `--check` would place.
-    ("src/drybag/attach/check.py", "codex"): 1,
-    ("src/drybag/attach/commands.py", "codex"): 4,
+    ("src/drybag/attach/check.py", "codex"): 3,
+    ("src/drybag/attach/commands.py", "codex"): 5,
+    # The `attached` row saying it runs no `claude` to see a delivered MCP server.
+    ("src/drybag/attach/doctor.py", "claude"): 1,
     # The advice `setup --approval-boundary` prints, which names the harness whose settings it is.
     ("src/drybag/setup/commands.py", "claude"): 1,
     # The commit-trailer guard's names of tools that sign commits as authors: the agent as an
