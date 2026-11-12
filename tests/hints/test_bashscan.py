@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from drybag.hints import bashscan
+from drybag.hints import bashscan, runners
 
 
 def test_quoted_heredoc_bodies_are_stripped_but_the_command_remains() -> None:
@@ -417,6 +417,22 @@ def test_the_command_uv_runs_starts_at_the_first_word_the_runner_table_names(
     launches starts at its first word that is no option"."""
     words = command.split()
     assert bashscan.command_words(words, test_runs=True) == words[len(launcher.split()) :]
+
+
+def test_a_uv_run_segment_is_read_in_one_pass(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The runner table is asked once per word after `run`, each time of the segment itself: a
+    copy of the rest per word made a command of many words quadratic under a hook's deadline."""
+    segment = ["uv", "run", *["-q"] * 20_000, "pytest"]
+    asked: list[object] = []
+
+    def counted(words: list[str], start: int = 0) -> bool:
+        asked.append(words)
+        return runners.names_a_test_run(words, start)
+
+    monkeypatch.setattr(bashscan, "names_a_test_run", counted)
+    assert bashscan.command_words(segment, test_runs=True) == ["pytest"]
+    assert len(asked) <= len(segment)
+    assert all(words is segment for words in asked)
 
 
 @pytest.mark.parametrize(

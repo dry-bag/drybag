@@ -11,7 +11,8 @@ from pathlib import Path
 import pytest
 
 from drybag.config.loader import CONFIG_FILE
-from drybag.hints.hygiene import dirty_count, notice, red_exit, simple_commands
+from drybag.hints.bashscan import MAX_COMMAND_CHARS
+from drybag.hints.hygiene import context_for, dirty_count, notice, red_exit, simple_commands
 from tests.gitfixture import git
 
 # Per test: `red_exit`, `notice` and `simple_commands` are pure, and a module-level skip would
@@ -66,6 +67,19 @@ def test_the_notice_carries_counts_and_no_root_names(tmp_path: Path) -> None:
     (root / "src" / "mod.py").write_text("x = 2\n", encoding="utf-8")
     text = notice(dirty_count(root))
     assert text is not None and "1 uncommitted change(s)" in text
+
+
+@needs_git
+def test_the_red_run_note_reads_no_command_past_the_cap(tmp_path: Path) -> None:
+    # Every hint stops at the one cap: past it the note does not scan the command, so a failed run
+    # costs no tokenizing however long its command is.
+    # Mutation (declared): the note's cap check removed -> this reddens.
+    root = repo(tmp_path)
+    (root / "src" / "mod.py").write_text("x = 2\n", encoding="utf-8")
+    command = "uv run pytest" + " -q" * (MAX_COMMAND_CHARS // 3)
+    assert len(command) > MAX_COMMAND_CHARS
+    assert context_for(command[:MAX_COMMAND_CHARS], root) is not None
+    assert context_for(command, root) is None
 
 
 def test_a_git_that_cannot_answer_is_none_not_zero(tmp_path: Path) -> None:
