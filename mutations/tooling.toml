@@ -918,7 +918,7 @@ reddens = [
 [[mutation]]
 name = "the sdist executable claim covers no file"
 file = "scripts/check_artifacts.py"
-before = 'SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/drybag")'
+before = 'SDIST_EXECUTABLE = ("hooks/run-hook.sh",)'
 after = "SDIST_EXECUTABLE = ()"
 reddens = [
   "tests/scripts/test_check_artifacts.py::test_a_wrapper_that_lost_its_executable_bit_in_the_sdist_is_named",

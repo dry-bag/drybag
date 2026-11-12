@@ -340,8 +340,8 @@ def test_a_mutation_nothing_notices_is_reported_as_surviving(tmp_path: Path) -> 
 #
 # The guard exists because this script writes source files and restores them from memory; its
 # own comment says "refuse rather than risk it". It read any non-zero `git` exit as a clean
-# tree — and `git status` exits 128 outside a repository, which is exactly what an unpacked
-# sdist is (`scripts/**` ships in it) and what a broken `git` produces.
+# tree — and `git status` exits 128 outside a repository, which is exactly what a tree that is
+# not a checkout is and what a broken `git` produces.
 
 
 @needs_git

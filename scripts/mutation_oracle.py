@@ -814,10 +814,9 @@ def _uncommitted(files: set[Path]) -> str | None:
     of this guard swept only the sources.
 
     **"Could not ask" is not "clean"**: it
-    read any non-zero `git` exit as a clean tree, which is precisely the state an unpacked
-    sdist is in (`scripts/**` ships in it, and it is not a checkout) and
-    the state a broken `git` installation produces. `git status` exits 128 outside a
-    repository, so the one arrangement with no way to recover a clobbered file was the one
+    read any non-zero `git` exit as a clean tree, which is precisely the state a tree that is not
+    a checkout is in and the state a broken `git` installation produces. `git status` exits 128
+    outside a repository, so the one arrangement with no way to recover a clobbered file was the one
     where the guard stood down.
 
     A `git` that cannot be launched at all raises rather than returning, and is caught here for

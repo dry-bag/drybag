@@ -13,12 +13,9 @@ Three things this looks at, each of which was an inline CI step or nothing at al
   the overlay template or the project footprint's templates would break every `uv tool install`
   while the workflow stayed green. `resources.files` resolves to the checkout under `uv run`,
   which is why no test in `tests/` can see this.
-* **The sdist.** A packager for Homebrew, Debian or nixpkgs cannot run a single test against
-  an sdist that ships only `src/`, which is the artefact they most need to verify for a
-  security-sensitive tool. `skills/` is here because
-  `tests/skills/test_skills.py` reads that tree directly. And `tar` preserves the mode: a
-  wrapper unpacked at 0644 exits 126 for every hook entry, which Claude Code reads as a
-  permission error rather than as a broken install.
+* **The sdist.** It carries the plugin's static files and the documents beside `src/`, and no
+  `tests/`, `scripts/`, `mutations/` or plans: the suite runs from a checkout of the tag. And
+  `tar` preserves the mode: a wrapper unpacked at 0644 exits 126 for every hook entry.
 * **A rendered overlay.** `setup --overlay <path>` at a path that names nothing is the one working
   source for a first overlay with no network call, and what it leaves behind has to be the files
   the package ships plus the scaffold ledger — no more and no less — inside a git repository, which
@@ -39,21 +36,11 @@ WHEEL_MUST = (
     "drybag/presets/recommended.toml",
     *(f"drybag/templates/overlay/{relative}" for relative in OVERLAY_FILES),
 )
-# What a downstream packager needs to verify the sdist, plus the three files the harness runs
-# without an interpreter of ours.
-SDIST_MUST = (
-    "tests/test_fsops.py",
-    "CHANGELOG.md",
-    "skills/README.md",
-    # `pyproject.toml` carries these under `hooks/**` and `scripts/**`, so this is a claim about
-    # the build and not a new packaging rule.
-    "hooks/run-hook.sh",
-    "hooks/hooks.json",
-    "scripts/drybag",
-)
-SDIST_EXECUTABLE = ("hooks/run-hook.sh", "scripts/drybag")
+# What `pyproject.toml`'s `source-include` names, one file of each tree.
+SDIST_MUST = ("CHANGELOG.md", "skills/README.md", "hooks/run-hook.sh", "hooks/hooks.json")
+SDIST_EXECUTABLE = ("hooks/run-hook.sh",)
 # Kept out by `pyproject.toml`, because PyPI keeps its copy of an sdist for good.
-SDIST_MUST_NOT = ("docs/plans/", "mutations/")
+SDIST_MUST_NOT = ("docs/plans/", "mutations/", "tests/", "scripts/")
 
 
 def check_wheel(path: Path) -> list[str]:

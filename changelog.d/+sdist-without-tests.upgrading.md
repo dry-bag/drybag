@@ -1,0 +1,1 @@
+The source distribution no longer carries `tests/` or `scripts/`: the suite needs `uv.lock`, `.github/` and `examples/` too, and failed from it. A packager who ran the tests from the sdist runs them from a checkout of the release's `vX.Y.Z` tag.

@@ -41,19 +41,11 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = "src"
-# The sdist shipped `PKG-INFO`, `LICENSE`, `README.md`, `pyproject.toml` and `src/` — so a
-# downstream packager (Homebrew, Debian, nixpkgs) could not run a single test against the
-# artefact they most need to verify for a security-sensitive tool. CI asserted a property of
-# the wheel and never looked at the sdist at all.
+# The sdist carries `src/`, the plugin's static files and the documents, and neither `tests/` nor
+# `scripts/`: the suite needs `uv.lock`, `.github/` and `examples/` as well, so a packager runs it
+# from a checkout of the tag. `scripts/check_artifacts.py` holds what is in and what is out.
 source-include = [
-  "tests/**",
-  "scripts/**",
-  # `tests/skills/test_skills.py` reads this tree directly, so an sdist without it ships a test
-  # module that cannot pass.
   "skills/**",
-  # The same rule for the plugin root's two static files: `tests/hooks/test_wrapper.py` and
-  # `tests/hooks/test_hooks_json.py` read them directly, and `hooks/run-hook.sh` is the file
-  # both harnesses actually execute — an sdist without it ships a plugin that cannot fire.
   # `hooks/` and not `templates/`: the harness reads this tree from the plugin root and Python
   # never does, so the sdist is the only artifact that has to be told about it. The overlay
   # template is the other way round — `setup --overlay <path>` reads it at runtime, so it lives
@@ -69,8 +61,8 @@ source-include = [
   ".claude-plugin/**",
   ".codex-plugin/**",
 ]
-# Internal working records, which PyPI's copy would keep for good. The mutation entries are kept
-# out by not being included above.
+# Internal working records, which PyPI's copy would keep for good. The mutation entries, the
+# tests and the scripts are kept out by not being included above.
 source-exclude = ["/docs/plans"]
 
 [dependency-groups]
