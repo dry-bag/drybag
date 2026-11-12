@@ -517,6 +517,7 @@ def _cli_path(context: Context) -> Row:
             # spelling of a URL is a second thing to move when the repository does, and `doctor`
             # is the command whose whole job is finding the two halves of something that has
             # stopped agreeing.
+            "put the plugin's `scripts/drybag` on PATH, or "
             f"run `uv tool install git+{REPOSITORY_URL}`",
         )
     return Row(OK, "`drybag` resolves on PATH")

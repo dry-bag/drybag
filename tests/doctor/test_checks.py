@@ -898,6 +898,8 @@ def test_a_cli_that_does_not_resolve_is_a_warning_that_names_the_install_command
     )
     assert check.status == "warn"
     assert "uv tool install" in check.remedy
+    # A plugin-only install already holds a launcher; the remedy offers it before a second copy.
+    assert "the plugin's `scripts/drybag`" in check.remedy
     # The address is `drybag.REPOSITORY_URL` and not a second spelling of it. That constant
     # exists so the URL is spelled once, and `overlay-requires`' remedy a few rows below reads
     # it, while this one still carried the URL written out -- two places to change when
