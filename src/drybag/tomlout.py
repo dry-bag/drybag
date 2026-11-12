@@ -52,7 +52,7 @@ import re
 
 from drybag.errors import Refusal
 
-BARE_KEY = re.compile(r"^[A-Za-z0-9_-]+$")
+BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 _ESCAPES = {
     "\\": "\\\\",
     '"': '\\"',
@@ -65,7 +65,7 @@ _ESCAPES = {
 
 
 def _key(name: object, what: str) -> str:
-    if not isinstance(name, str) or not BARE_KEY.match(name):
+    if not isinstance(name, str) or not BARE_KEY.fullmatch(name):
         raise Refusal(
             f"{what} {name!r} is not a bare TOML key matching {BARE_KEY.pattern}; a caller that "
             f"means to write one writes one, and quoting it here would record a name nobody chose"

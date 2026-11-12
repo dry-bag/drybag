@@ -721,6 +721,17 @@ before = '    for name, table in sorted(tables.items(), key=lambda item: item[0]
 after = "    for name, table in tables.items():"
 reddens = ["tests/test_tomlout.py::test_the_root_table_is_hoisted_when_it_is_not_given_first"]
 
+# `$` matches before a final line break, so a key ending in one passed as bare and was written
+# raw, leaving a machine file `tomllib` refuses to load.
+[[mutation]]
+name = "a key ending in a line break passes as bare"
+file = "src/drybag/tomlout.py"
+before = "    if not isinstance(name, str) or not BARE_KEY.fullmatch(name):"
+after = '    if not isinstance(name, str) or not re.match(BARE_KEY.pattern + "$", name):'
+reddens = [
+  "tests/test_tomlout.py::test_a_key_ending_in_a_line_break_is_refused_rather_than_written_bare",
+]
+
 # The delivery is banked BELOW the two validations that can discard the result. Marking it above
 # them spent a once-per-context handler's single delivery on a result that then raised into the
 # per-handler `except`. The mutation re-adds the early mark rather than moving the late one, so one
@@ -5160,12 +5171,20 @@ reddens = [
 [[mutation]]
 name = "a relative PATH entry reaches git"
 file = "src/drybag/gitenv.py"
-before = '            entry for entry in env["PATH"].split(os.pathsep) if os.path.isabs(entry)'
-after = '            entry for entry in env["PATH"].split(os.pathsep)'
+before = '            os.pathsep.join(entry for entry in entries if os.path.isabs(entry)) or os.defpath'
+after = '            os.pathsep.join(entries) or os.defpath'
 reddens = [
   "tests/test_git_run.py::test_a_relative_path_entry_never_reaches_git[]",
   "tests/test_git_run.py::test_a_relative_path_entry_never_reaches_git[.]",
 ]
+
+# `PATH=""` is one empty entry, the current directory, so dropping every entry is no drop at all.
+[[mutation]]
+name = "a PATH with no absolute entry reaches git empty"
+file = "src/drybag/gitenv.py"
+before = '            os.pathsep.join(entry for entry in entries if os.path.isabs(entry)) or os.defpath'
+after = '            os.pathsep.join(entry for entry in entries if os.path.isabs(entry))'
+reddens = ["tests/test_git_run.py::test_a_path_with_no_absolute_entry_falls_back_to_the_default"]
 
 [[mutation]]
 name = "a session's global git configuration reaches git"
