@@ -288,6 +288,21 @@ reddens = [
   "tests/guards/test_githooks.py::test_a_hook_an_earlier_release_wrote_is_still_ours",
 ]
 
+# The hook runs only the `drybag` on the owner's `PATH`. A `python3 -m drybag` fallback imports
+# from the work tree first, so a repository that commits `drybag.py` runs it on every commit.
+[[mutation]]
+name = "the hook falls back to a drybag module the work tree can shadow"
+file = "src/drybag/guards/githooks.py"
+before = """    runner="drybag"
+fi"""
+after = """    runner="drybag"
+elif python3 -c 'import drybag' >/dev/null 2>&1; then
+    runner="python3 -m drybag"
+fi"""
+reddens = [
+  "tests/guards/test_githooks.py::test_the_hook_never_imports_a_drybag_the_repository_tracks",
+]
+
 # The two-paragraph attribution block, and the reason the paragraph rule needed a walk rather
 # than a wider net. The canonical harness attribution is a `Generated with` footer, a blank
 # line, then a `Co-Authored-By:` trailer; judging the final paragraph alone removed the trailer

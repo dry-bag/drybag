@@ -255,6 +255,32 @@ def test_the_hook_reports_a_failed_strip_and_still_lets_the_commit_through(
     assert git(tmp_path, root, "log", "-1", "--format=%B").strip() == TRAILER
 
 
+def test_the_hook_never_imports_a_drybag_the_repository_tracks(tmp_path: Path) -> None:
+    # git runs the hook in the work tree, which `python3 -c` and `-m` put first on `sys.path`, so
+    # a module fallback ran the repository's own `drybag.py` as the owner. With no `drybag` on
+    # `PATH` (a plugin-only install), the hook says so and the commit goes ahead.
+    # Mutation (declared): the module fallback restored -> this reddens.
+    root = repo(tmp_path)
+    marker = tmp_path / "ran"
+    (root / "drybag.py").write_text(f"open({str(marker)!r}, 'a').close()\n", encoding="utf-8")
+    install(root)
+    python = tmp_path / "python"  # a `python3` the old fallback would have found
+    python.mkdir()
+    (python / "python3").write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+    (python / "python3").chmod(0o755)
+    tools = [str(Path(shutil.which(name) or name).parent) for name in ("git", "bash")]
+    path = os.pathsep.join([*dict.fromkeys(tools), str(python)])
+    if shutil.which("drybag", path=path) is not None:
+        pytest.skip("a drybag executable sits beside git or bash")
+    git(tmp_path, root, "add", "drybag.py")
+    done = gitfixture.run_git(
+        root, "commit", "-q", "-m", "chore: track it", home=tmp_path, PATH=path, **floor_env()
+    )
+    assert done.returncode == 0
+    assert not marker.exists()
+    assert "drybag: not installed for this shell" in done.stderr
+
+
 def test_a_directory_at_the_hook_name_is_refused(tmp_path: Path) -> None:
     root = repo(tmp_path)
     (hooks_dir(root) / HOOK_NAME).mkdir(parents=True)
@@ -284,6 +310,7 @@ def test_a_hook_an_earlier_release_wrote_is_still_ours(tmp_path: Path) -> None:
 
     old_text = RELEASED_0_2_0.read_text(encoding="utf-8")
     assert old_text != HOOK_TEXT
+    assert "python3 -m drybag" in old_text  # a hook with the module fallback is replaced too
     root = repo(tmp_path)
     hook = hooks_dir(root) / HOOK_NAME
     hook.parent.mkdir(parents=True, exist_ok=True)

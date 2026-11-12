@@ -53,28 +53,27 @@ HOOK_TEXT = f"""#!/usr/bin/env bash
 # Strip AI/tool attribution trailers before the commit message is presented.
 #
 # prepare-commit-msg rather than commit-msg on purpose: `git commit --no-verify` bypasses
-# pre-commit and commit-msg, but not this hook. It is still only the local convenience layer;
-# the authoritative gate is `drybag commit check` in CI, which sees commits this machine
-# never produced. Written by `drybag setup --git-hooks`, and removed again, with the hook it
-# chains to put back, by `drybag setup --git-hooks --uninstall`.
+# pre-commit and commit-msg, but not this hook. It is still only the local convenience layer:
+# CI's `drybag commit check` sees every commit; a pull request's own `drybag.toml` can switch it
+# off (`commit_messages.attribution_check`). Written by `drybag setup --git-hooks`, and removed
+# again, with the hook it chains to put back, by `drybag setup --git-hooks --uninstall`.
 #
 # Chains to whatever hook was here before, kept beside this one as `<hook>.local`, so
 # installing this never silently disables husky, pre-commit, or what the repository had.
 set -euo pipefail
 
 msg_file="$1"
-gate="CI's commit check is the gate"
+gate="CI's commit check sees every commit"
 failed="drybag: commit strip failed; $gate"
 absent="drybag: not installed for this shell; trailers are not stripped locally; $gate"
 quiet='^nothing to strip'
 
-# Expanded unquoted where it is used, so the two-word form splits into words. It is only ever
-# one of the two literals assigned just below, and never anything a repository chose.
+# Only ever "drybag", the executable on the owner's `PATH`, or empty. Never `python3 -m drybag`:
+# git runs this hook in the work tree, which `-c` and `-m` put first on `sys.path`, so that would
+# import whatever `drybag` module the repository commits.
 runner=""
 if command -v drybag >/dev/null 2>&1; then
     runner="drybag"
-elif python3 -c 'import drybag' >/dev/null 2>&1; then
-    runner="python3 -m drybag"
 fi
 
 # `commit strip` prints one line on stdout: "stripped N ...", "nothing to strip", or, where the
