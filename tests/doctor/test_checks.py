@@ -819,8 +819,8 @@ def test_an_xdg_config_home_naming_the_database_homes_config_is_not_ignored_with
     assert (check.status, check.detail) == (OK, "no environment variable is being ignored")
 
 
-def test_a_budget_the_base_branch_raised_is_named_as_raised(tmp_path: Path) -> None:
-    # The base branch may raise a budget above the preset, and the value set is the value in
+def test_a_raised_budget_is_named_as_raised(tmp_path: Path) -> None:
+    # A repository's file may raise a budget above the preset, and the value set is the value in
     # force, so the row says which budgets are raised and names no clamp: no consumer applies one.
     # Mutation (`mutations/`'s "the budgets row reads a raised budget as lowered"): the raise is
     # called lowered.
@@ -898,6 +898,8 @@ def test_a_cli_that_does_not_resolve_is_a_warning_that_names_the_install_command
     )
     assert check.status == "warn"
     assert "uv tool install" in check.remedy
+    # A plugin-only install already holds a launcher; the remedy offers it before a second copy.
+    assert "the plugin's `scripts/drybag`" in check.remedy
     # The address is `drybag.REPOSITORY_URL` and not a second spelling of it. That constant
     # exists so the URL is spelled once, and `overlay-requires`' remedy a few rows below reads
     # it, while this one still carried the URL written out -- two places to change when

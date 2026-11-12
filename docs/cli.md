@@ -2109,7 +2109,7 @@ mode = "harness"         # harness | overlay | in-repo | local-only — default:
 groups = ["developer", "project-stable", "project-volatile", "specs"]
 index_extra = []         # extra pointers rendered into MEMORY.md
 
-[budgets]                # the base branch raises or lowers any budget, the machine file a session's
+[budgets]                # this file raises or lowers any budget, the machine file a session's
 agents_md_lines = 300
 agents_md_words = 3000
 status_lines = 50
@@ -2128,7 +2128,7 @@ bg_cleanup = true        # false switches the bg-cleanup session guard off by de
                          # the overlay's files and the machine file override it
 ```
 
-**Eight sections, and the list is closed**: a section this block does not show is refused when
+**Seven sections, and the list is closed**: a section this block does not show is refused when
 the file loads (`unknown section(s)`), so the grammar above is the whole of it.
 `[commit_messages] attribution_check` is read by `commit check`. `[guards]` is the guards' default
 for a session in this repository, which the overlay's files and the machine file override (below);
@@ -2153,9 +2153,8 @@ Every value above is what a key you leave out takes, from the `recommended` pres
 exceptions. `[drybag] version` and `[project] name` have no default at all and are yours to
 write: a file without `version` does not load at all (`[drybag] is missing required key(s):
 version`). Everything else from `[project] base_branch` down is the preset's default exactly as written. `[project]
-base_branch` is a branch name git accepts, from letters, digits, `.`, `_`, `-` and `/` (the
-grammar `--base-branch` follows); anything else does not load, and the refusal names the key and
-never the value.
+base_branch` is a branch name git accepts, from letters, digits, `.`, `_`, `-` and `/`; anything
+else does not load, and the refusal names the key and never the value.
 
 **Which command reads which path.** `agents_md` and `roadmap` are the two documents `docs check`
 budgets, and the roadmap is also what `docs trail` writes into; `specs` and `plans` are the two
@@ -2165,9 +2164,9 @@ trees `docs trail` lists, and `plans` is where `plan check` looks for the plans 
 **`[budgets]`.** The first five are the documentation budgets `docs check` enforces:
 `agents_md_lines`, `agents_md_words` and `status_lines` over the always-loaded document and its
 `## Current status` section, `roadmap_prose_lines` and `roadmap_prose_words` over the roadmap
-above its trail marker. The last four bound the memory store. The base branch and the machine
-owner raise or lower a budget — the base branch's `drybag.toml` any of the nine, the machine
-file a session's four — and the value set is the value in force.
+above its trail marker. The last four bound the memory store. This file raises or lowers any of
+the nine, the machine file a session's four, and the value set is the value in force. A pull
+request can change this file as it can any other, so review a budget there.
 
 `~/.config/drybag/config.toml` is yours, not the project's:
 
@@ -2176,7 +2175,7 @@ file a session's four — and the value set is the value in force.
 preset = "recommended"   # the preset `setup` applies
 
 [overlay]
-root = "~/drybag-overlay"   # only read in overlay mode
+root = "~/drybag-overlay"   # absolute, or under ~/; read in every mode
 
 [guards]
 bg_cleanup = true        # false switches the bg-cleanup session guard off on this machine,

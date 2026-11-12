@@ -1507,12 +1507,12 @@ file = "src/drybag/config/loader.py"
 before = """
     text = read_document(root)
     if text is None:
-        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
+        raise ConfigError(NOT_THERE.format(path=quoted(str(root / CONFIG_FILE))))
 """
 after = """
     text = (root / CONFIG_FILE).read_text(encoding="utf-8")
     if text is None:
-        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
+        raise ConfigError(NOT_THERE.format(path=quoted(str(root / CONFIG_FILE))))
 """
 reddens = [
   "tests/config/test_symlinked_document.py::test_load_refuses_a_symlinked_drybag_toml",
@@ -2874,7 +2874,7 @@ name = "an exact row contradicts its section's wildcard"
 file = "src/drybag/config/classes.py"
 before = '        "paths.*": KeyClass.REPOSITORY_ONLY,'
 after = '''        "paths.*": KeyClass.REPOSITORY_ONLY,
-        "paths.bugs": KeyClass.GATE_PARAMETER,'''
+        "paths.bugs": KeyClass.PREFERENCE,'''
 reddens = ["tests/config/test_classes.py::test_no_exact_key_contradicts_its_wildcard"]
 
 # Every budget is a gate's or a session's, never both: the owner sets only a session's.
@@ -2887,6 +2887,16 @@ after = '''        "agents_md_lines",
         "memory_index_words",
         "agents_md_words",'''
 reddens = ["tests/config/test_classes.py::test_the_budget_split_is_total_and_disjoint"]
+
+[[mutation]]
+name = "a gate's budget is a preference"
+file = "src/drybag/config/classes.py"
+before = '        **{f"budgets.{name}": KeyClass.REPOSITORY_ONLY for name in sorted(GATE_BUDGETS)},'
+after = '        **{f"budgets.{name}": KeyClass.PREFERENCE for name in sorted(GATE_BUDGETS)},'
+reddens = [
+  "tests/config/test_classes.py::test_the_budget_split_is_total_and_disjoint",
+  "tests/memory/test_owner_budgets.py::test_a_command_reads_past_a_machine_file_key_it_cannot_use_and_says_so[gate-budget]",
+]
 
 # `ORDER` alone decides which layer wins.
 [[mutation]]
@@ -2986,15 +2996,6 @@ reddens = [
   "tests/config/test_owner.py::test_the_owners_layer_stands_on_another_preset_without_reading_the_file_again",
   "tests/config/test_owner.py::test_a_load_stands_the_layer_it_is_handed_on_the_documents_preset",
 ]
-
-# A gate's budget is the repository's: the owner's layer leaves it out before `resolve`, whose
-# own refusal would otherwise be the only thing between the machine file and a gate's bound.
-[[mutation]]
-name = "the owner's layer admits a gate budget"
-file = "src/drybag/config/owner.py"
-before = '            elif table == "budgets" and key in GATE_BUDGETS:'
-after = "            elif False:"
-reddens = ["tests/config/test_owner.py::test_a_gate_budget_in_the_machine_file_is_a_note"]
 
 # In a machine file that loads, what the owner wrote and this drybag cannot use costs its key
 # with a note under either mode: refused, a later release's key would stop every older command.
@@ -3521,7 +3522,7 @@ before = "            _log_fallback(event_name, sink)"
 after = "            pass"
 reddens = ["tests/hooks/test_floor.py::test_pre_tool_use_prints_no_warning_and_logs_it_once"]
 
-# A budget is what the layer that may set it says: the base branch raises a gate's above the
+# A budget is what the layer that may set it says: a repository's file raises a gate's above the
 # preset, and the owner a session's.
 [[mutation]]
 name = "a budget is still only ever lowered"
@@ -3529,7 +3530,7 @@ file = "src/drybag/config/schema.py"
 before = "        if name in self.configured:\n            return self.configured[name]"
 after = "        if name in self.configured:\n            return min(self.preset[name], self.configured[name])"
 reddens = [
-  "tests/config/test_budgets_raise.py::test_the_base_branch_raises_a_gate_budget",
+  "tests/config/test_budgets_raise.py::test_a_repositorys_file_raises_a_gate_budget",
   "tests/config/test_budgets_raise.py::test_the_owner_raises_a_session_budget",
 ]
 

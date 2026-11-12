@@ -84,10 +84,10 @@ the name is defined.
 ### Named caps
 
 A bound comes from one of three places. A limit a project may tune — a document's line or word
-count, a note's time to live — is a key under `[budgets]`, which the base branch and the machine
-owner may raise above its preset or lower below it, and a pull request may only lower when a
-gate reads it. A limit the harness sets — how much of an index it loads, how many
-characters of a hook's output it keeps — is a key under `[native_caps]`. Code reads both
+count, a note's time to live — is a key under `[budgets]`, which a repository's `drybag.toml` and
+the machine owner may raise above its preset or lower below it; a pull request can change it as it
+can change any file, so review it there. A limit the harness sets — how much of an index it
+loads, how many characters of a hook's output it keeps — is a key under `[native_caps]`. Code reads both
 through `Config` (`src/drybag/config/schema.py`). Every other bound — a subprocess's
 wall-clock timeout, how many bytes of a repository-authored file are read, how deep a parser
 descends — is a *named cap*: a constant in the code, almost always a module-level one with a
@@ -129,17 +129,16 @@ it finishes is outside the rule: nothing but that command ever wrote into it.
 
 Every key a configuration layer can hold — the preset, a repository's `drybag.toml`, the
 overlay's files, the machine file — has one class in `src/drybag/config/classes.py`, and the
-class names the layers that may set it: the machine owner's alone (`personal.*`, `guards.*`), a
-preference, a session's parameter, a gate's parameter, the repository's alone, or
-the plugin's. `classes.resolve` applies the classes over a stack of layers — a layer a key's class
+class names the layers that may set it: the machine owner's alone (`personal.*`, `sync.*`), a
+preference (`guards.*` among them), a session's parameter, the repository's alone, or the
+plugin's. `classes.resolve` applies the classes over a stack of layers — a layer a key's class
 does not admit contributes nothing to it — and so decides who may set a key and gives `doctor` the
 layer each value came from; it builds the owner's layer from the preset and the machine file, but
 the project's `Config` is still built by `config.loader`, which merges `drybag.toml` over the
 preset and folds the owner's layer in. So a field added to a section of
 `src/drybag/config/schema.py` needs its row in `CLASSES` in the same change:
 `tests/config/test_classes.py` derives every key from the schema's dataclasses and reddens on one
-with no class. Choose the narrowest class that is true of the key: a gate's input is never a
-preference, or a pull request would choose what it is judged by.
+with no class. Choose the narrowest class that is true of the key.
 
 ## Areas
 

@@ -116,8 +116,8 @@ def test_an_unbound_checkout_naming_the_project_gets_no_project_layer(tmp_path: 
     assert session.resolution.provenance.get(BUDGET) is LayerName.OVERLAY_COMMON
 
 
-def test_a_gate_parameter_in_either_overlay_file_never_reaches_the_config(tmp_path: Path) -> None:
-    # What a pull request is judged by is the base branch's file alone: `resolve` refuses both
+def test_a_gate_budget_in_either_overlay_file_never_reaches_the_config(tmp_path: Path) -> None:
+    # What a pull request is judged by is the repository's file alone: `resolve` refuses both
     # overlay layers for a gate's budget, and says so for each.
     root = project(tmp_path)
     gate = f"[budgets]\n{GATE_BUDGET} = 999\n"
@@ -232,9 +232,9 @@ def test_a_tag_the_record_lists_without_a_directory_is_the_plates_note(tmp_path:
     assert len(notes) == 1 and "gone" in notes[0]
 
 
-def test_a_gate_parameter_in_a_tag_file_never_reaches_the_config(tmp_path: Path) -> None:
-    # A tag is the owner's like the common file: what a pull request is judged by is the base
-    # branch's alone, and the note names the tag that tried.
+def test_a_gate_budget_in_a_tag_file_never_reaches_the_config(tmp_path: Path) -> None:
+    # A tag is the owner's like the common file: what a pull request is judged by is the
+    # repository's file alone, and the note names the tag that tried.
     root = project(tmp_path)
     recorded = overlay(tmp_path, common="", sample="")
     tagged(recorded, ["a"], a=f"[budgets]\n{GATE_BUDGET} = 999\n")
