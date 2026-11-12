@@ -1772,11 +1772,19 @@ reddens = [
 [[mutation]]
 name = "attach fails on a claude that is not on PATH"
 file = "src/drybag/attach/write.py"
-before = "    absent = failed is not None and failed[1] == NOT_FOUND\n"
+before = "    absent = failed is not None and not failed[1].found\n"
 after = "    absent = False\n"
 reddens = [
   "tests/attach/test_commands.py::test_attach_without_claude_composes_the_notes_and_exits_zero",
 ]
+
+# A `claude` that is there and exits 127 (an npm shim whose `node` is gone) is a failure.
+[[mutation]]
+name = "attach reads a claude that fails to start as absent"
+file = "src/drybag/attach/write.py"
+before = "    absent = failed is not None and not failed[1].found\n"
+after = "    absent = failed is not None\n"
+reddens = ["tests/attach/test_commands.py::test_a_claude_that_cannot_start_is_a_failure"]
 
 # The digest is the removal's anchor: what is at a recorded name is a branch's or the owner's, and
 # an uncommitted edit cannot be got back.

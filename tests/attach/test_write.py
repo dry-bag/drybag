@@ -2813,7 +2813,7 @@ def test_attach_without_claude_then_with_it_settles_everything(tmp_path: Path) -
     # the next run that finds `claude`, which installs and settles them.
     root, store, machine = _attachable(tmp_path)
     _mcp(store, m1=SERVER)
-    missing = Recorder(code=NOT_FOUND)
+    missing = Recorder(answers={"claude": Completed(NOT_FOUND, "", "", found=False)})
     first = attach(root, store=store, machine=machine, runner=missing)
     assert first.notes.count(CLAUDE_ABSENT) == 1 and first.mcp_failed == ()
     assert [argv[:3] for argv in missing.calls] == [["claude", "plugin", "marketplace"]]
