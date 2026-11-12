@@ -595,8 +595,7 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    tree. One that may not move (below), or that a link or a file stands above, is left out and named;
    one the secret scan finds something in is left out and named with its remedy (`secret_found`)
    while the others commit; and the intent-to-add entry of a note left out is removed again. The
-   message, `memory: <n> notes from <host>` and a line for each `common`, `tags/<tag>` or
-   `projects/<project>` it touched, carries this machine's host name to the remote. git
+   message (`memory: <n> notes from <host>`, then each scope it touched) carries this host's name. git
    moves `main` and updates the real index for those notes alone, so your staged work stays staged
    and your next `git commit` carries no old note back. A signature is made when `commit.gpgsign` is
    set, and never switched off.

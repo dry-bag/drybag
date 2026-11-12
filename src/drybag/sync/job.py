@@ -543,14 +543,9 @@ def _lost(
 def _ignored_in_the_way(ctx: JobContext, tip: str, incoming: list[str]) -> list[str]:
     """The ignored untracked files at the paths `tip` brings whose content is not what it brings,
     which `read-tree -m -u` would write over without a word. Anchor: git's own ignore rules and
-    blob ids; a file git cannot hash is in the way."""
-    ignored = _nul(
-        checked(
-            _git(ctx, "ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--",
-                 *incoming, env=_LITERAL),
-            "git ls-files",
-        ).out
-    )  # fmt: skip
+    blob ids, of the bytes as they are (no filter runs); a file git cannot hash is in the way."""
+    found = _git(ctx, "ls-files", "-oi", "--exclude-standard", "-z", "--", *incoming, env=_LITERAL)
+    ignored = _nul(checked(found, "git ls-files").out)  # `-oi`: untracked, and ignored
     if not ignored:
         return []
     listed = _git(ctx, "ls-tree", "-r", "-z", "--end-of-options", tip, "--", *ignored, env=_LITERAL)
@@ -558,7 +553,7 @@ def _ignored_in_the_way(ctx: JobContext, tip: str, incoming: list[str]) -> list[
     for line in _nul(checked(listed, "git ls-tree").out):
         meta, _, path = line.partition("\t")
         brought[path] = meta.split(" ")[2]
-    hashed = timed(_git(ctx, "hash-object", "--", *ignored), "git hash-object")
+    hashed = timed(_git(ctx, "hash-object", "--no-filters", "--", *ignored), "git hash-object")
     have = hashed.out.split() if hashed.code == 0 else []
     if len(have) != len(ignored):
         return ignored
