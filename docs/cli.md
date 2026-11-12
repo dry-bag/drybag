@@ -1751,8 +1751,10 @@ excludes, links, commit hooks and the merge of the overlay's settings.
 Installs the commit-message hook into this repository's own hooks directory — `git rev-parse
 --git-path hooks`, never `core.hooksPath`, which is global state this command has no business owning
 and which a repository-wide install would compete with husky or `pre-commit` elsewhere on the
-machine. The hook runs `drybag commit strip` on each message, except a commit git replays: a
-`cherry-pick` or a rebase's pick keeps its author's message as it is.
+machine. The hook runs `drybag commit strip` on each message, except one git hands it as `message`
+while a cherry-pick or a rebase is under way: a `cherry-pick` or a rebase's pick keeps its author's
+message, and so does a `commit -m` made while a rebase is stopped at `edit`. A cherry-pick continued
+after a conflict is handed as `merge`, and stripped.
 
 A foreign hook of the same name is kept as `prepare-commit-msg.local` and the installed hook
 `exec`s it last, so nothing that was already running there stops running; `--uninstall` puts it

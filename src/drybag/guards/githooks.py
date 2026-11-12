@@ -84,7 +84,8 @@ case $runner in /*) ;; *) runner="" ;; esac
 #
 # A commit git replays (a cherry-pick, a rebase's pick) comes with `message`, as `commit -m` does,
 # so what tells it apart is git's own state: `CHERRY_PICK_HEAD` or `rebase-merge/` in the git
-# directory git names. Its message is the commit's author's, and is left as it is.
+# directory git names. That message is left as it is, a `commit -m` made while a rebase is stopped
+# at `edit` included; a cherry-pick continued after a conflict comes with `merge` and is stripped.
 replay=""
 if [ "$#" -ge 2 ] && [ "$2" = message ] && git_dir=$(git rev-parse --git-dir 2>/dev/null); then
     if [ -e "$git_dir/CHERRY_PICK_HEAD" ] || [ -d "$git_dir/rebase-merge" ]; then

@@ -200,11 +200,12 @@ To keep the notes outside the repository, in a private overlay of your own:
 drybag setup --overlay ~/drybag-private   # render an overlay there and record it on this machine
 ```
 
-In the overlay, `common/drybag.toml` holds `[memory]` with `mode = "overlay"`, which every checkout
-on this machine reads; `projects/<name>/project.toml` may list the tags whose `tags/<tag>/` layers
-the project takes, as `tags = ["python"]`; and `[machine] name = "laptop"` in the machine file,
-`~/.config/drybag/config.toml`, applies each layer's `machines/laptop/` on this machine. Then run
-`drybag attach` in the repository, with `--project <name>` where no `drybag.toml` names the project.
+In the overlay, write `common/drybag.toml` holding `[memory]` with `mode = "overlay"`, which every
+checkout on this machine reads; `projects/<name>/project.toml` may list the tags whose
+`tags/<tag>/` layers the project takes, as `tags = ["python"]`; and `[machine] name = "laptop"` in
+the machine file, `~/.config/drybag/config.toml`, applies each layer's `machines/laptop/` on this
+machine. Then run `drybag attach` in the repository, with `--project <name>` where no
+`drybag.toml` names the project.
 
 ## What it writes, and where
 
