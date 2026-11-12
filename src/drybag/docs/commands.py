@@ -20,6 +20,7 @@ _PLAN_OK = (
 )
 # Said only where the Spec rule ran: a project with no tracked specs owes no Spec line.
 _PLAN_SPEC_OK = ", each names its spec"
+_PLAN_SPEC_NONE_OK = ", each names its spec or says why none"
 
 
 def run_docs_check(args: argparse.Namespace) -> Result:
@@ -119,7 +120,8 @@ def run_plan_check(args: argparse.Namespace) -> Result:
             data,
             exit_code=1,
         )
-    summary = _PLAN_OK.format(n=len(linted)) + (_PLAN_SPEC_OK if result.specs else "")
+    spec_ok = _PLAN_SPEC_NONE_OK if result.nones else _PLAN_SPEC_OK
+    summary = _PLAN_OK.format(n=len(linted)) + (spec_ok if result.specs else "")
     if unlinted:
         summary += f"; {len(unlinted)} uncommitted plan(s) not linted — name them as PATH arguments"
     return Result(summary, data)
@@ -129,8 +131,9 @@ def register(groups: SubParsers) -> None:
     docs = groups.add_parser("docs", help="documentation budgets, links and the design trail")
     docs_sub = docs.add_subparsers(dest="command", metavar="<command>")
     check = common_flags(docs_sub.add_parser("check", help="budgets and link targets"))
-    check.add_argument("--budgets", action="store_true")
-    check.add_argument("--links", action="store_true")
+    budgets = "only the line and word budgets of the agents file and the roadmap"
+    check.add_argument("--budgets", action="store_true", help=budgets)
+    check.add_argument("--links", action="store_true", help="only the agents file's local links")
     check.set_defaults(func=run_docs_check)
     trail = common_flags(
         docs_sub.add_parser("trail", help="regenerate the design-and-plan trail in the roadmap")

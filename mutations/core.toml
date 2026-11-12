@@ -5202,8 +5202,8 @@ reddens = ["tests/test_git_run.py::test_git_call_honours_the_floor"]
 [[mutation]]
 name = "an index is memory again"
 file = "src/drybag/sync/rules.py"
-before = 'NOT_AN_INDEX = f":(top,exclude,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
-after = 'NOT_AN_INDEX = f":(top,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
+before = 'NOT_AN_INDEX = f":(top,exclude,glob,icase){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
+after = 'NOT_AN_INDEX = f":(top,glob,icase){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
 reddens = [
   "tests/sync/test_rules.py::test_a_projects_index_is_not_memory",
   "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
@@ -5213,12 +5213,31 @@ reddens = [
 [[mutation]]
 name = "an index name parses as a note"
 file = "src/drybag/sync/rules.py"
-before = "            if scope == \"project\" and parts[3:] == [INDEX_NAME]:"
+before = "            if scope == \"project\" and [part.casefold() for part in parts[3:]] == [_INDEX]:"
 after = "            if False:"
 reddens = [
   "tests/sync/test_rules.py::test_a_projects_index_is_not_memory",
   "tests/sync/test_rules.py::test_the_layout_agrees_with_git",
   "tests/sync/test_integrate.py::test_an_upstream_index_change_is_held_like_a_path_outside_memory",
+]
+
+# On a case-insensitive volume `memory.md` is the index: in any case it is no note, by the
+# pathspec and by the parse.
+[[mutation]]
+name = "the index is left out in its own case only"
+file = "src/drybag/sync/rules.py"
+before = 'NOT_AN_INDEX = f":(top,exclude,glob,icase){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
+after = 'NOT_AN_INDEX = f":(top,exclude,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"'
+reddens = ["tests/sync/test_rules.py::test_the_layout_agrees_with_git"]
+
+[[mutation]]
+name = "a case variant of an index parses as a note"
+file = "src/drybag/sync/rules.py"
+before = "            if scope == \"project\" and [part.casefold() for part in parts[3:]] == [_INDEX]:"
+after = "            if scope == \"project\" and parts[3:] == [INDEX_NAME]:"
+reddens = [
+  "tests/sync/test_rules.py::test_a_case_variant_of_a_projects_index_is_not_memory",
+  "tests/sync/test_integrate.py::test_an_incoming_case_variant_of_the_index_is_held",
 ]
 
 [[mutation]]
@@ -5334,6 +5353,14 @@ reddens = [
   "tests/sync/test_integrate.py::test_an_untracked_file_where_a_note_lands_waits",
   "tests/sync/test_integrate.py::test_a_link_above_an_incoming_note_waits_and_the_link_stays",
 ]
+
+# git writes over an ignored file without a word, so the job asks before `read-tree -m -u`.
+[[mutation]]
+name = "an ignored file where a note lands is written over"
+file = "src/drybag/sync/job.py"
+before = "    if in_the_way:"
+after = "    if False:"
+reddens = ["tests/sync/test_integrate.py::test_an_ignored_file_where_a_note_lands_waits"]
 
 [[mutation]]
 name = "the index is not refreshed before the write"
