@@ -7,7 +7,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from drybag.attach.mcp import ON_ALONE, digest, fold_mcp
+import pytest
+
+from drybag.attach import mcp
+from drybag.attach.mcp import BAD_LEDGER, BAD_VALUE, ON_ALONE, UNPASSABLE, digest, fold_mcp
+from drybag.binding import MCP_LEDGER_FILE, MCP_LEDGER_NAME
 from drybag.config.plates import Plate, PlateKind
 from drybag.jsonobject import DEPTH_CAP
 from drybag.printed import quoted
@@ -108,6 +112,27 @@ def test_an_entry_no_claude_mcp_call_can_take_is_a_note(tmp_path: Path) -> None:
     assert (list(fold.served), list(fold.off)) == (["m3"], ["m.4"])
     assert len(fold.notes) == 2
     assert all(lone not in note and nul not in note for note in fold.notes)
+
+
+def test_a_bad_value_note_names_the_server(tmp_path: Path) -> None:
+    # A position counted after `json.loads` folds a duplicate key is not the file's: "b" is the
+    # third entry written and the second read. The name is the owner's own, so the note says it.
+    text = '{"mcpServers": {"a": 1, "a": {"command": "c"}, "b": 2, "m\\u0000": "off"}}'
+    plate = _plate(tmp_path, PlateKind.COMMON, "c1", text)
+    shown = quoted(str(_file(plate)))
+    assert fold_mcp([plate]).notes == (
+        BAD_VALUE.format(path=shown, name="b"),
+        UNPASSABLE.format(path=shown, name=quoted("m\0")),
+    )
+
+
+def test_an_mcp_ledger_whose_deny_is_not_a_list_is_bad(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(mcp, "common_directory", lambda root: tmp_path)
+    (tmp_path / MCP_LEDGER_FILE).parent.mkdir()
+    (tmp_path / MCP_LEDGER_FILE).write_text('{"format": 1, "deny": 3, "mcp": {}}', encoding="utf-8")
+    assert mcp.read_mcp_ledger(tmp_path).fault == BAD_LEDGER.format(name=MCP_LEDGER_NAME)
 
 
 def test_a_sub_plate_definition_wins_its_parents(tmp_path: Path) -> None:
