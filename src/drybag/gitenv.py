@@ -135,14 +135,17 @@ def in_work_tree(root: Path) -> bool:
 
 def scrubbed_env() -> dict[str, str]:
     """The variables `GIT_ENV_KEEP` names, as this process has them, `PATH` with its absolute
-    entries alone, and no terminal prompt: what every git drybag starts is handed.
+    entries alone (`os.defpath` where it has none), and no terminal prompt: what every git
+    drybag starts is handed.
 
     Every git runs in a repository whose contents a clone chose, so an empty or `.` entry of
-    `PATH` (a dotfile slip) would find a `git`, or git an `ssh`, planted at its root."""
+    `PATH` (a dotfile slip) would find a `git`, or git an `ssh`, planted at its root; so would
+    an empty `PATH`, which is one empty entry."""
     env = {key: os.environ[key] for key in GIT_ENV_KEEP if key in os.environ}
     if "PATH" in env:
-        env["PATH"] = os.pathsep.join(
-            entry for entry in env["PATH"].split(os.pathsep) if os.path.isabs(entry)
+        entries = env["PATH"].split(os.pathsep)
+        env["PATH"] = (
+            os.pathsep.join(entry for entry in entries if os.path.isabs(entry)) or os.defpath
         )
     env["GIT_TERMINAL_PROMPT"] = "0"
     return env

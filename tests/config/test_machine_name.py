@@ -27,7 +27,7 @@ def test_name_comes_from_the_machine_table(tmp_path: Path) -> None:
 
 def test_no_file_or_no_table_is_no_name(tmp_path: Path) -> None:
     assert machine_name(tmp_path / "absent.toml") == (None, None)
-    assert machine_name(machine_file(tmp_path, '[overlay]\nroot = "x"\n')) == (None, None)
+    assert machine_name(machine_file(tmp_path, '[overlay]\nroot = "/x"\n')) == (None, None)
     assert machine_name(machine_file(tmp_path, "[machine]\n")) == (None, None)
 
 

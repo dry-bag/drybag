@@ -420,6 +420,18 @@ def test_overlay_mode_refuses_without_a_recorded_overlay_root(tmp_path: Path) ->
     assert resolve(root, a_config(root, "overlay"), machine=a_machine_file(tmp_path, None)) is None
 
 
+def test_no_overlay_remedy_names_the_overlay_flag(tmp_path: Path) -> None:
+    # `drybag setup` alone records no overlay root; only `--overlay PATH` does, so a remedy that
+    # stops at `setup` sends the reader round the same refusal again.
+    root = tmp_path / "project"
+    a_repo(root)
+    machine = a_machine_file(tmp_path, None)
+    store, why = resolved(root, a_config(root, "overlay"), machine=machine)
+    assert store is None
+    assert why is not None
+    assert "run `drybag setup --overlay PATH`" in why.said
+
+
 def test_an_environment_variable_never_selects_a_store(tmp_path: Path) -> None:
     root = tmp_path / "project"
     a_repo(root)

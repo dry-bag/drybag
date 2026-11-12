@@ -20,7 +20,7 @@ from typing import NamedTuple
 
 from drybag.config.machine import in_owner_home, machine_config_path
 from drybag.config.plates import TAG
-from drybag.config.reading import read_machine_toml
+from drybag.config.reading import MachineConfigError, read_machine_toml
 from drybag.printed import clipped
 
 MACHINE_NAME_NOTE = (
@@ -33,13 +33,15 @@ def overlay_root(machine: Path | None) -> Path | None:
     """The overlay root this machine records, or `None` when it records none.
 
     `None` means **not recorded**, and nothing else: the message the note store prints for it is
-    "no overlay root is recorded in the machine configuration; run `drybag setup`", which is
-    wrong advice for a broken file.
+    "no overlay root is recorded in the machine configuration; run `drybag setup --overlay
+    PATH`", which is wrong advice for a broken file.
 
     So a file that cannot be read or parsed raises `config.reading`'s `MachineConfigError`, in its
-    words for the same file (`read_machine_toml`), and the three shapes that genuinely
-    record no overlay answer `None`: an absent file (the ordinary state before `setup` has run),
-    no `[overlay]` table, and a table with no usable `root`.
+    words for the same file (`read_machine_toml`), as does a `root` that is neither absolute nor
+    under `~`, which would name a directory under wherever a command runs, a clone's checkout on
+    the hook path. The three shapes that genuinely record no overlay answer `None`: an absent
+    file (the ordinary state before `setup` has run), no `[overlay]` table, and a table with no
+    usable `root`.
 
     With no file named, the file is the one no variable can move (`machine_config_path`): the
     root anchors where the note store may resolve, and a committed `.claude/settings.json` can
@@ -69,16 +71,21 @@ def machine_record(machine: Path | None) -> MachineRecord:
     if raw is None or path is None:
         return MachineRecord(None, None, None)
     name, note = _name(raw, path)
-    return MachineRecord(_overlay(raw), name, note)
+    return MachineRecord(_overlay(raw, path), name, note)
 
 
-def _overlay(raw: dict[str, object]) -> Path | None:
+def _overlay(raw: dict[str, object], path: Path) -> Path | None:
     section = raw.get("overlay")
     if not isinstance(section, dict):
         return None
     value = section.get("root")
     # A leading `~` is the home this file lives under (`config.machine.owner_home`).
-    return in_owner_home(value) if isinstance(value, str) and value else None
+    root = in_owner_home(value) if isinstance(value, str) and value else None
+    if root is not None and not root.is_absolute():
+        raise MachineConfigError(
+            f"{path}: [overlay] root must be an absolute path or start with ~/"
+        )
+    return root
 
 
 def _name(raw: dict[str, object], path: Path) -> tuple[str | None, str | None]:

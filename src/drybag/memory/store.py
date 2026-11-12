@@ -616,7 +616,8 @@ def _resolve_at(
     if mode == OVERLAY_MODE:
         if overlay is None:
             return None, Unresolved(
-                "no overlay root is recorded in the machine configuration; run `drybag setup`"
+                "no overlay root is recorded in the machine configuration; "
+                "run `drybag setup --overlay PATH`"
             )
         if not fsops.is_dir(overlay):
             return None, Unresolved(OVERLAY_GONE.format(root=quoted(str(overlay))))
