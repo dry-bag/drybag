@@ -104,8 +104,8 @@ LOCAL = frozenset(
         ("git", "grep"),
         # Without `-w` it writes nothing: the empty tree's id, from an empty standard input.
         ("git", "hash-object", "-t", "tree", "--stdin"),
-        # The note sync's ids of ignored files where incoming notes land, unfiltered, unwritten.
-        ("git", "hash-object", "--no-filters", "--"),
+        # The note sync's ids of files where incoming notes land, unfiltered, unwritten.
+        ("git", "hash-object", "--no-filters", "--stdin-paths"),
         ("git", "init"),
         ("git", "log"),
         ("git", "ls-files"),
@@ -355,9 +355,6 @@ OVERRIDES: dict[tuple[str, str, str], str] = {
         "`GIT_LITERAL_PATHSPECS=1` alone, over the job's own: each note's path matched as written"
     ),
     ("src/drybag/sync/job.py", "_commit", "env=_LITERAL"): (
-        "`GIT_LITERAL_PATHSPECS=1` alone, over the job's own: each note's path matched as written"
-    ),
-    ("src/drybag/sync/job.py", "_ignored_in_the_way", "env=_LITERAL"): (
         "`GIT_LITERAL_PATHSPECS=1` alone, over the job's own: each note's path matched as written"
     ),
 }

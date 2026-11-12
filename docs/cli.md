@@ -610,12 +610,14 @@ the switch again when it wakes. It exits `0` whatever happens and records the ou
    is a plain commit of memory alone, the local commits are replayed onto it one by one; a commit
    that conflicts is `conflict`, `main` unmoved. Then git writes the incoming notes and the real
    index (`git read-tree -m -u`), keeping your staged work and your untracked files, and only then
-   does `main` move to the result, by a compare-and-swap. A note changed here and not committed yet,
-   an untracked file where a note lands, or a link where git needs a directory makes git refuse
-   before it writes anything (`waiting_clean_tree`, with git's words). git would write over an
-   ignored file where a note lands, so the job asks first: one that does not already hold the
-   note's content stops it before anything is written (`waiting_clean_tree`, naming the file).
-   Anything else is a hold, and `HEAD` stays as it is.
+   does `main` move to the result, by a compare-and-swap. A note changed here and not committed yet
+   makes git refuse before it writes anything (`waiting_clean_tree`, with git's words). git would
+   write over an ignored file, so the job first asks this volume what is at each path upstream
+   brings and at each directory above it: an untracked or ignored file that does not already hold
+   the note's content, or anything but a directory where one is needed, stops it before anything is
+   written (`waiting_clean_tree`, naming it). A tracked note the volume takes for an incoming one
+   (a case or Unicode-normalisation variant) is a hold naming both, since only upstream or you can
+   settle two notes that collide. Anything else is a hold, and `HEAD` stays as it is.
 5. **Push.** The checked sha, `<sha>:refs/heads/main`, never forced and with no tag, after the
    secret scan of the range and only when every commit in it is memory.
 

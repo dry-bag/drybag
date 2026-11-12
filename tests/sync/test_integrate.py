@@ -15,6 +15,7 @@ import re
 import shlex
 import stat
 import time
+import unicodedata
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -22,10 +23,11 @@ from typing import Any
 import pytest
 
 from drybag.gitenv import FLOOR_VARIABLE, Called
+from drybag.printed import quoted
 from drybag.sync import git as G
 from drybag.sync import job as J
 from drybag.sync.git import GitTimeout
-from drybag.sync.state import LOCAL_REWRITE, OUTSIDE, Holds, SyncState, read_state
+from drybag.sync.state import LOCAL_REWRITE, OUTSIDE, UNREADABLE, Holds, SyncState, read_state
 from tests import gitfixture as fx
 from tests.gitfixture import git_bytes
 from tests.sync.conftest import (
@@ -582,46 +584,116 @@ def test_a_note_rewritten_unchanged_does_not_block_its_incoming_version(
     assert path.read_text() == "upstream's first\n"
 
 
-def test_an_untracked_file_where_a_note_lands_waits(overlays: Overlays) -> None:
+def _brought(overlays: Overlays, incoming: str) -> None:
+    """Upstream adds `common/memory/<incoming>`, crafted, since this volume may fold its name."""
+    b = overlays.b
+    crafted = crafted_commit(b, head(b), f"common/memory/{incoming}", "from b\n")
+    git(b, "push", "-q", "origin", f"{crafted}:refs/heads/main")
+
+
+def _ignored(overlays: Overlays, local: str, text: str = "the owner's own\n") -> Path:
+    (overlays.a / ".git/info/exclude").write_text(f"{local}\n", encoding="utf-8")
+    return write(overlays.a, f"common/memory/{local}", text)
+
+
+# A name and its decomposed spelling, which a normalisation-insensitive volume takes for one file.
+NFC, NFD = unicodedata.normalize("NFC", "café.md"), unicodedata.normalize("NFD", "café.md")
+
+
+@pytest.mark.parametrize(
+    ("local", "incoming"),
+    [("from-b.md", "from-b.md"), ("drafts", "drafts/x.md"), ("case.md", "Case.md"), (NFC, NFD)],
+    ids=["same-name", "parent", "case", "normalisation"],
+)
+def test_an_ignored_file_in_the_way_of_an_incoming_note_waits(
+    overlays: Overlays, local: str, incoming: str
+) -> None:
+    # `read-tree -m -u` writes over an ignored file without a word: at the note's path, at a
+    # parent of it, or under a name this volume takes for it. A volume that keeps the two names
+    # apart checks out both. Mutations (oracle): `mutations/`'s "something in the way of an
+    # incoming note is written over", "a file above an incoming note is replaced".
     a = overlays.a
-    push_note(overlays.b, "common/memory/from-b.md", "from b\n")
+    _brought(overlays, incoming)
+    mine = _ignored(overlays, local)
+    apart = not (a / "common/memory" / incoming.split("/")[0]).exists()
     before = head(a)
-    write(a, "common/memory/from-b.md", "written here first\n")
 
     outcome = J.integrate(context(overlays, a), fetched(overlays, a))
 
+    assert mine.read_text() == "the owner's own\n"
+    if apart:
+        assert outcome is None and head(a) != before
+        return
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert "'common/memory/from-b.md' would be overwritten" in str(outcome.detail)
-    assert head(a) == before
-    assert (a / "common/memory/from-b.md").read_text() == "written here first\n"
+    assert quoted(f"common/memory/{local}") in str(outcome.detail) and head(a) == before
 
 
-def _ignored_where_a_note_lands(overlays: Overlays, text: str) -> Path:
-    """Upstream brings `from-b.md`; here an ignored untracked file holding `text` is at its path."""
-    push_note(overlays.b, "common/memory/from-b.md", "from b\n")
-    (overlays.a / ".git/info/exclude").write_text("from-b.md\n", encoding="utf-8")
-    return write(overlays.a, "common/memory/from-b.md", text)
+@pytest.mark.parametrize(
+    ("local", "incoming"), [("first.md", "First.md"), (NFC, NFD)], ids=["case", "normalisation"]
+)
+def test_an_incoming_note_this_volume_takes_for_a_tracked_one_is_held(
+    overlays: Overlays, local: str, incoming: str
+) -> None:
+    # git would write the incoming bytes over the tracked note, and the next commit push that:
+    # only upstream, or the owner by hand, settles two notes that collide. A volume that keeps
+    # them apart checks out both.
+    a = overlays.a
+    push_note(overlays.b, f"common/memory/{local}", "kept here\n")
+    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
+    _brought(overlays, incoming)
+    apart = not (a / "common/memory" / incoming).exists()
+    before, ctx = head(a), context(overlays, a)
+
+    assert J.integrate(ctx, fetched(overlays, a)) is None
+
+    assert (a / f"common/memory/{local}").read_text() == "kept here\n"
+    if apart:
+        assert head(a) != before and (a / f"common/memory/{incoming}").read_text() == "from b\n"
+        return
+    assert head(a) == before and ctx.holds.upstream_why == UNREADABLE
+    assert set(ctx.holds.upstream_paths) == {f"common/memory/{local}", f"common/memory/{incoming}"}
 
 
-def test_an_ignored_file_where_a_note_lands_waits(overlays: Overlays) -> None:
-    # `read-tree -m -u` writes over an ignored file without a word, so the job asks first.
-    # Mutation (oracle): `mutations/`'s "an ignored file where a note lands is written over".
-    before = head(overlays.a)
-    mine = _ignored_where_a_note_lands(overlays, "written here first\n")
-
-    outcome = J.integrate(context(overlays, overlays.a), fetched(overlays, overlays.a))
-
-    assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert "common/memory/from-b.md" in str(outcome.detail)
-    assert head(overlays.a) == before and mine.read_text() == "written here first\n"
-
-
-def test_an_ignored_note_with_the_incoming_bytes_does_not_wait(overlays: Overlays) -> None:
-    mine = _ignored_where_a_note_lands(overlays, "from b\n")
+def test_a_case_only_rename_upstream_is_integrated(overlays: Overlays) -> None:
+    # The note this volume answers for is the one upstream removes: no collision, on any volume.
+    b = overlays.b
+    git(b, "mv", "common/memory/first.md", "common/memory/First.md")
+    git(b, "commit", "-qm", "memory: rename")
+    git(b, "push", "-q", "origin", "main")
 
     assert J.integrate(context(overlays, overlays.a), fetched(overlays, overlays.a)) is None
 
-    assert head(overlays.a) == head(overlays.b) and mine.read_text() == "from b\n"
+    assert head(overlays.a) == head(b) and git(overlays.a, "status", "--porcelain") == ""
+
+
+def test_an_upstream_that_changes_nothing_here_is_integrated(overlays: Overlays) -> None:
+    # Upstream adds a note and drops it: nothing comes in, so nothing is in the way.
+    a, b = overlays.a, overlays.b
+    push_note(b, "common/memory/tmp.md", "tmp\n")
+    git(b, "rm", "-q", "common/memory/tmp.md")
+    git(b, "commit", "-qm", "memory: drop tmp")
+    git(b, "push", "-q", "origin", "main")
+    mine = _ignored(overlays, ".DS_Store")
+
+    assert J.integrate(context(overlays, a), fetched(overlays, a)) is None
+
+    assert head(a) == head(b) and mine.read_text() == "the owner's own\n"
+
+
+def test_an_ignored_note_with_the_incoming_bytes_does_not_wait(
+    overlays: Overlays, git_log: Path
+) -> None:
+    # Mutation (oracle): `mutations/`'s "an ignored file is judged by the wrong bytes".
+    _brought(overlays, "from-b.md")
+    mine = _ignored(overlays, "from-b.md", "from b\n")
+    upstream = fetched(overlays, overlays.a)
+    git_log.unlink(missing_ok=True)
+
+    assert J.integrate(context(overlays, overlays.a), upstream) is None
+
+    assert head(overlays.a) == upstream and mine.read_text() == "from b\n"
+    # No incoming path travels on argv, so no number of notes reaches the system's limit on it.
+    assert not any("from-b.md" in arg for call in subcommands(git_log) for arg in call)
 
 
 def test_an_index_rendered_here_never_blocks_an_incoming_note(overlays: Overlays) -> None:
@@ -653,7 +725,7 @@ def test_a_link_above_an_incoming_note_waits_and_the_link_stays(
     outcome = J.integrate(context(overlays, a), fetched(overlays, a))
 
     assert outcome is not None and outcome.state == "waiting_clean_tree"
-    assert "'projects/zeta' would be overwritten" in str(outcome.detail)
+    assert "projects/zeta" in str(outcome.detail)
     assert head(a) == before and list(outside.iterdir()) == []
     assert (a / "projects" / "zeta").is_symlink()
 

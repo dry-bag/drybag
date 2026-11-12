@@ -5360,19 +5360,39 @@ name = "a refused read-tree is ignored"
 file = "src/drybag/sync/job.py"
 before = '    if timed(written, "git read-tree").code != 0:'
 after = "    if False:"
-reddens = [
-  "tests/sync/test_integrate.py::test_a_dirty_incoming_note_waits_and_nothing_is_written",
-  "tests/sync/test_integrate.py::test_an_untracked_file_where_a_note_lands_waits",
-  "tests/sync/test_integrate.py::test_a_link_above_an_incoming_note_waits_and_the_link_stays",
-]
+reddens = ["tests/sync/test_integrate.py::test_a_dirty_incoming_note_waits_and_nothing_is_written"]
 
-# git writes over an ignored file without a word, so the job asks before `read-tree -m -u`.
+# git writes over an ignored file without a word, so the job asks the volume before
+# `read-tree -m -u`: at the incoming note's path, at each directory above it, by its own name.
 [[mutation]]
-name = "an ignored file where a note lands is written over"
+name = "something in the way of an incoming note is written over"
 file = "src/drybag/sync/job.py"
 before = "    if in_the_way:"
 after = "    if False:"
-reddens = ["tests/sync/test_integrate.py::test_an_ignored_file_where_a_note_lands_waits"]
+reddens = [
+  "tests/sync/test_integrate.py::test_an_ignored_file_in_the_way_of_an_incoming_note_waits[same-name]",
+  "tests/sync/test_integrate.py::test_an_ignored_file_in_the_way_of_an_incoming_note_waits[parent]",
+]
+
+[[mutation]]
+name = "a file above an incoming note is replaced"
+file = "src/drybag/sync/job.py"
+before = "            elif depth == len(parts) or not stat.S_ISDIR(found[1]):"
+after = "            elif depth == len(parts):"
+reddens = [
+  "tests/sync/test_integrate.py::test_an_ignored_file_in_the_way_of_an_incoming_note_waits[parent]",
+  "tests/sync/test_integrate.py::test_a_link_above_an_incoming_note_waits_and_the_link_stays",
+]
+
+[[mutation]]
+name = "an ignored file is judged by the wrong bytes"
+file = "src/drybag/sync/job.py"
+before = "    wait.extend(path for (path, blob), got in zip(hashed.items(), have, strict=True) if got != blob)"
+after = "    wait.extend(path for (path, blob), got in zip(hashed.items(), have, strict=True) if got == blob)"
+reddens = [
+  "tests/sync/test_integrate.py::test_an_ignored_file_in_the_way_of_an_incoming_note_waits[same-name]",
+  "tests/sync/test_integrate.py::test_an_ignored_note_with_the_incoming_bytes_does_not_wait",
+]
 
 [[mutation]]
 name = "the index is not refreshed before the write"
