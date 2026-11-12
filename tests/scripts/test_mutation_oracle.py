@@ -189,6 +189,32 @@ def test_a_mutation_that_breaks_collection_is_a_finding_and_not_a_catch(tmp_path
     assert subject.read_text(encoding="utf-8") == "GUARD = True\n"
 
 
+@pytest.mark.parametrize(
+    ("after", "crash"),
+    [("    return NOT_IMPORTED", "NameError"), ("    return None.real", None)],
+    ids=["name-error", "attribute-error"],
+)
+def test_a_mutation_that_raises_name_error_is_a_finding(
+    tmp_path: Path, after: str, crash: str | None
+) -> None:
+    # Function-level imports turn an `after` that breaks a name into a test that ran and went
+    # red, so `executed == 0` above cannot see it, and it read as caught: the test never reached
+    # its assertion about the guard. An `AttributeError` stays a catch, which is the bound.
+    # Mutation (declared): the crash check skipped -> the name-error case reads as caught.
+    module = oracle(root=tmp_path)
+    subject = tmp_path / "subject.py"
+    subject.write_text("def guard() -> bool:\n    return True\n", encoding="utf-8")
+    (tmp_path / "test_subject.py").write_text(
+        "import subject\n\n\ndef test_the_guard_holds() -> None:\n    assert subject.guard()\n",
+        encoding="utf-8",
+    )
+    entry = module.Mutation(
+        "probe", subject, "    return True", after, ("test_subject.py::test_the_guard_holds",)
+    )
+    finding = module._check(entry, tmp_path)
+    assert finding is None if crash is None else f"crashed with {crash}" in str(finding), finding
+
+
 def test_the_loader_aims_every_deletion_this_module_drives_at_its_own_scratch(
     tmp_path: Path,
 ) -> None:
@@ -1066,6 +1092,41 @@ def test_an_entry_name_declared_twice_is_a_finding(tmp_path: Path) -> None:
     assert module.static_findings([first, second]) == [
         "probe: another entry is declared under this name"
     ]
+
+
+def test_an_entry_with_no_reddens_is_refused(tmp_path: Path) -> None:
+    # pytest handed no ids runs the whole suite, and any red test anywhere then read as a catch.
+    # Mutation (declared): the empty check removed -> `declared()` returns the entry.
+    (tmp_path / "mutations").mkdir()
+    (tmp_path / "mutations" / "core.toml").write_text(
+        '[[mutation]]\nname = "proves nothing"\nfile = "a.py"\nbefore = "a"\nafter = "b"\n'
+        "reddens = []\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="proves nothing"):
+        oracle(root=tmp_path).declared()
+
+
+def test_a_hung_entry_is_a_finding_not_a_hang(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A mutation that removes a bound hung its pytest until CI cancelled the job. A machine too
+    # loaded to start pytest in 2 s times out too, which is the outcome asserted.
+    # Mutation (declared): the timeout dropped from `communicate` -> both runs wait out the sleep.
+    module = oracle(root=tmp_path)
+    monkeypatch.setattr(module, "ENTRY_TIMEOUT_SECONDS", 2)
+    subject = tmp_path / "subject.py"
+    subject.write_text("GUARD = True\n", encoding="utf-8")
+    (tmp_path / "test_subject.py").write_text(
+        "import time\n\nimport subject\n\n\ndef test_the_guard_holds() -> None:\n"
+        "    time.sleep(5)\n    assert subject.GUARD\n",
+        encoding="utf-8",
+    )
+    finding = module._check(
+        a_mutation(module, subject, ("test_subject.py::test_the_guard_holds",)), tmp_path
+    )
+    assert finding is not None and "timed out after 2 s" in finding, finding
+    assert not module._live
 
 
 # --- citations: a comment names an entry, and the name must reach one ----------------------------

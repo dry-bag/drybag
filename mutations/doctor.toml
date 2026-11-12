@@ -268,7 +268,7 @@ reddens = [
 name = "doctor skips every row without a drybag.toml"
 file = "src/drybag/doctor/checks.py"
 before = "    return [_guarded(name, check, context) for name, check in _report_checks(contributed)]"
-after = "    return [Check(name, \"skip\", NO_CONFIG_SKIP) if context.config is None and name != \"not-initialised\" else _guarded(name, check, context) for name, check in _report_checks(contributed)]"
+after = "    return [Check(name, SKIP, \"no configuration\") if context.config is None and name != \"not-initialised\" else _guarded(name, check, context) for name, check in _report_checks(contributed)]"
 reddens = [
   "tests/doctor/test_registry.py::test_a_contributed_check_is_asked_when_there_is_nothing_configured",
   "tests/doctor/test_checks.py::test_a_repository_without_a_configuration_skips_only_the_rows_that_read_one",

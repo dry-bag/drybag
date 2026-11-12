@@ -774,11 +774,7 @@ def create_within(root: Path, target: str, data: bytes, *, mode: int) -> bool:
 
 
 def remove_within(root: Path, target: str) -> None:
-    """Unlink `root/target` through the same walk; an absent file is not an error.
-
-    `contextlib.suppress` is entered after `open_within` has yielded, so it covers the unlink
-    and not the walk — a refused walk must still raise.
-    """
+    """Unlink `root/target` through the same walk; an absent file is not an error."""
     with open_within(root, target) as (dir_fd, name), contextlib.suppress(FileNotFoundError):
         os.unlink(name, dir_fd=dir_fd)
 
