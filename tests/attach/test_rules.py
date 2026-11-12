@@ -11,7 +11,15 @@ import os
 from pathlib import Path
 
 from drybag import binding
-from drybag.attach.rules import SCOPED_LEAD, STANDING_LEAD, scoped_exist, scoped_for, standing
+from drybag.attach.rules import (
+    SCOPED_LEAD,
+    SESSIONS,
+    STANDING_LEAD,
+    scoped_exist,
+    scoped_for,
+    standing,
+)
+from drybag.config.paths import data_directory
 from drybag.config.plates import plates
 from tests.gitfixture import git, needs_git
 from tests.tagged import with_tags
@@ -78,6 +86,24 @@ def test_a_scoped_rule_is_said_once_per_file_per_session(tmp_path: Path) -> None
     # A file no rule matches, and one outside the checkout, hear nothing.
     assert scoped_for(root, str(root / "other.txt"), "s1") == ""
     assert scoped_for(root, str(tmp_path / "scoped" / "a.txt"), "s3") == ""
+
+
+@needs_git
+def test_the_rule_hook_keeps_fifty_sessions(tmp_path: Path) -> None:
+    # One directory of records per session, which nothing else ever removes: fifty older sessions
+    # and a new one leave fifty, the oldest gone.
+    # Mutation (declared): the prune after a record is written removed -> this reddens.
+    _overlay(tmp_path)
+    root = _checkout(tmp_path)
+    sessions = data_directory() / SESSIONS
+    for age in range(50):
+        planted = sessions / f"old{age}"
+        planted.mkdir(parents=True)
+        (planted / "record").touch()
+        os.utime(planted, ns=((age + 1) * 10**9,) * 2)
+    assert scoped_for(root, str(root / "scoped" / "a.txt"), "s1") == _scoped(root)
+    assert len(list(sessions.iterdir())) == 50
+    assert not (sessions / "old0").exists()
 
 
 @needs_git

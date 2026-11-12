@@ -1570,6 +1570,14 @@ reddens = [
   "tests/hooks/test_overlay_rules.py::test_a_read_of_a_scoped_file_carries_its_rule_once_per_session",
 ]
 
+# The rule hook's records are one directory per session, unbounded in number unless pruned.
+[[mutation]]
+name = "the rule hook keeps every session's records"
+file = "src/drybag/attach/rules.py"
+before = "        fsops.keep_newest(base.parent, SESSIONS, RULE_SESSIONS_KEPT)"
+after = "        pass"
+reddens = ["tests/attach/test_rules.py::test_the_rule_hook_keeps_fifty_sessions"]
+
 # Claude Code runs the rendered plugin from its directory in place, and with the directory gone it
 # loads nothing and says nothing, so the `attached` row is the one place that says so: red.
 [[mutation]]

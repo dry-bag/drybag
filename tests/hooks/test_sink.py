@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -174,16 +175,22 @@ def test_the_log_is_rotated_rather_than_grown(tmp_path: Path) -> None:
     assert (tmp_path / "drybag" / ROTATED).exists()
 
 
-def test_old_sessions_are_pruned_and_the_newest_survives(tmp_path: Path) -> None:
+def test_the_sink_keeps_fifty_sessions_of_markers(tmp_path: Path) -> None:
     # Sessions are unbounded in number and a marker is worthless once its session ends, so
-    # without a prune the directory grows for the life of the machine. The assertion is that
-    # the prune keeps the RIGHT ones: a prune that dropped the newest would still bound growth.
+    # without a prune the directory grows for the life of the machine. Fifty older sessions and a
+    # new one: the oldest goes, and the new one, the newest, stays.
+    # Mutation (declared): `MARKER_SESSIONS_KEPT` passed as `1` -> this reddens.
+    markers = tmp_path / "drybag" / MARKERS
+    for age in range(50):
+        planted = markers / _segment(f"s{age}")
+        planted.mkdir(parents=True)
+        (planted / _segment("k")).touch()
+        os.utime(planted, ns=((age + 1) * 10**9,) * 2)
     data = {"CLAUDE_PLUGIN_DATA": str(tmp_path)}
-    for index in range(60):
-        sink_for(f"s{index}", data).mark("k")
-    kept = list((tmp_path / "drybag" / MARKERS).iterdir())
-    assert len(kept) <= 50
-    assert sink_for("s59", data).seen("k") is True
+    sink_for("new", data).mark("k")
+    assert len(list(markers.iterdir())) == 50
+    assert not (markers / _segment("s0")).exists()
+    assert sink_for("new", data).seen("k") is True
 
 
 def test_an_unwritable_data_directory_degrades_instead_of_raising(tmp_path: Path) -> None:

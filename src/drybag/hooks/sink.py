@@ -3,8 +3,8 @@
 Two of the three path segments below are payload-controlled — the marker key a handler chose, and
 the session id off the hook's stdin — so both are hashed to a fixed-width hex name, and every write
 and removal still goes through `fsops`' `O_NOFOLLOW` walk. Two controls rather than one, because
-what runs here is not only a write but a `remove_within` loop over a directory listing: one of the
-two removals the enumerated-writes rule (CONTRIBUTING.md#enumerated-writes) lets a listing drive,
+what runs here is not only a write but a removal over a directory listing (`fsops.keep_newest`): one
+of the removals the enumerated-writes rule (CONTRIBUTING.md#enumerated-writes) lets a listing drive,
 and only inside this one directory.
 
 Nothing here ever raises at its caller. A hook runs on every tool call, so an unwritable
@@ -27,8 +27,6 @@ from drybag.fsops import (
     UnsafePath,
     append_at,
     open_within,
-    remove_within,
-    rmdir_within,
     write_within,
 )
 from drybag.hooks.api import (
@@ -108,35 +106,11 @@ class DataSink:
     def mark(self, key: str) -> None:
         try:
             write_within(self.root, self._target(key), "")
-            self._prune()
+            # Sessions are unbounded in number and a marker is worthless once its session ends.
+            # This session's directory was just written, so it is the newest and never dropped.
+            fsops.keep_newest(self.root, MARKERS, MARKER_SESSIONS_KEPT)
         except (OSError, UnsafePath):
             return None
-
-    def _prune(self) -> None:
-        """Bound the marker tree, newest first.
-
-        Sessions are unbounded in number and a marker is worthless once its session ends, so
-        without this the directory grows for the life of the machine. This session's own
-        directory was just written, so it is the newest by this ordering and is never the one
-        dropped — which is what makes pruning safe to do on the write path.
-
-        `st_mtime_ns` rather than `st_mtime`: the float carries roughly a quarter-microsecond
-        at present-day epochs, which is finer than two directories can be created, but the
-        integer costs nothing and cannot be argued about.
-        """
-        base = self.root / MARKERS
-        try:
-            sessions = sorted(
-                (path for path in base.iterdir() if fsops.is_dir(path)),
-                key=lambda path: path.stat().st_mtime_ns,
-                reverse=True,
-            )
-        except OSError:
-            return None
-        for stale in sessions[MARKER_SESSIONS_KEPT:]:
-            for child in stale.iterdir():
-                remove_within(self.root, f"{MARKERS}/{stale.name}/{child.name}")
-            rmdir_within(self.root, f"{MARKERS}/{stale.name}")
 
     def diagnostic(self, record: dict[str, object]) -> None:
         # The session is capped with everything else, and not merged in past the cap. It comes off
