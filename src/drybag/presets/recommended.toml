@@ -1,7 +1,7 @@
 # Who reads what: the configuration loader (`drybag.config`) reads [budgets], [native_caps] and
 # [defaults.*] into a project's configuration; `drybag.setup`
-# reads [plugins.<harness>] and [deny] when it installs a machine, and [defaults.personal] and
-# [defaults.drybag] for its own answers.
+# reads [plugins.<harness>] and [deny] when it installs a machine, and [defaults.personal] for
+# the personal values it writes into the machine file.
 #
 # There is deliberately no [rules] table, and nothing reads one: this preset imposes no standing
 # rule on anyone. A standing rule is the user's own note carrying `metadata.startup` in their

@@ -14,7 +14,8 @@ Three things hold everywhere:
   not lists at all, `written` and `stale`. `--json` escapes every non-ASCII character as
   `\uXXXX`, and a name git or the disk gave in bytes that are not UTF-8 appears as one lone
   surrogate escape per byte (`\udcXX`), which a strict JSON reader may refuse.
-- **Exit codes**: `0` success, `1` findings, `2` a refusal or an internal error. A caller that
+- **Exit codes**: `0` success, `1` findings or a `failed:` (a missing `drybag.toml`, an unknown
+  section, an unbound note store, a failed plugin call), `2` a refusal or an internal error. A caller that
   treats `1` as "proceed anyway" must still never treat `2` that way — a refusal is a boundary,
   not a low-confidence result. Every command that reads `drybag.toml` refuses one that is a
   symbolic link, whatever it points at, before reading anything through it: a link to
@@ -23,7 +24,7 @@ Three things hold everywhere:
   configuration and warns once when the session starts (see [its section](#drybag-hook-event)),
   `drybag memory session-context` prints nothing, and `drybag doctor` reports it as a
   `drybag.toml` that does not load, a red row, exit `1`.
-- **Every `memory` command takes the same three options**, described once here rather than seven
+- **Every `memory` command takes the same three options**, described once here rather than four
   times below. `--root` and `--machine` are not memory's alone: [Shared flags](#shared-flags) says
   which commands take them, and in which sense.
 
@@ -49,7 +50,7 @@ Three things hold everywhere:
 - [`drybag overlay upgrade [--root PATH] [--dry-run]`](#drybag-overlay-upgrade---root-path---dry-run)
 - [`drybag attach [--store PATH] [--project NAME] [--check] [--root PATH] [--machine PATH]`](#drybag-attach---store-path---project-name---check---root-path---machine-path)
 - [`drybag detach [--root PATH]`](#drybag-detach---root-path)
-- [`drybag setup [--preset NAME] [--plugin NAME …] [--home PATH] [--machine PATH] [--overlay VALUE]`](#drybag-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
+- [`drybag setup [--preset NAME] [--plugin NAME …] [--home PATH] [--machine PATH] [--overlay VALUE] [--restore [--yes] [--sync]]`](#drybag-setup---preset-name---plugin-name----home-path---machine-path---overlay-value---restore---yes---sync)
 - [`drybag setup --git-hooks [--uninstall] [--root PATH]`](#drybag-setup---git-hooks---uninstall---root-path)
 - [`drybag setup --approval-boundary [--home PATH] [--machine PATH]`](#drybag-setup---approval-boundary---home-path---machine-path)
 - [`drybag doctor [--json] [--root PATH] [--home PATH] [--machine PATH]`](#drybag-doctor---json---root-path---home-path---machine-path)
@@ -171,7 +172,7 @@ run it by hand except to see what a session actually receives.
 | Bundle | What it is |
 |---|---|
 | `standing-rules` | Every note flagged `startup` that you promoted at the bytes it holds now ([`memory promote`](#drybag-memory-promote-note----changed)), in full, ranked; an unreviewed note is never a standing rule, whatever it says about itself. Never truncated — only flagged when the set outgrows its budget, because a standing rule that does not arrive is a standing rule that gets broken. |
-| `volatile-notes` | Dated, perishable notes, and every unreviewed note flagged `startup`, in full; over budget, descriptions only. An unreviewed note arrives labelled `[unreviewed]` inside a delimited region that says it is data, opened and closed with a nonce the note does not hold. |
+| `volatile-notes` | Dated, perishable notes, then, under a lead of their own, every other unreviewed note flagged `startup`, which promoting would make a standing rule; in full, and over budget descriptions only. An unreviewed note arrives labelled `[unreviewed]` inside a delimited region that says it is data, opened and closed with a nonce the note does not hold. |
 
 Each bundle is emitted across numbered parts, because the harness caps each hook entry's output
 independently. `--part N` selects one; a part past the end prints nothing and exits `0`. A part
@@ -240,7 +241,7 @@ can, and against it the record is a label, not a gate (what the record holds aga
 approval holds for its bytes wherever they reappear: an edit takes the note out of review, but the
 same bytes written again anywhere, a revert or a copy, are reviewed again. No command withdraws
 an approval; withdrawing one is a hand edit of `trust.json` that removes its entry.
-[`drybag setup --restore --yes`](#drybag-setup---preset-name---plugin-name----home-path---machine-path---overlay-value)
+[`drybag setup --restore --yes`](#drybag-setup---preset-name---plugin-name----home-path---machine-path---overlay-value---restore---yes---sync)
 records the notes of the overlay's share for each project it attaches.
 
 Prints each note's path in the store and the digest recorded, one per line. `--json` keys:
@@ -541,6 +542,11 @@ executes anything from: it carries no plugin manifest and no
 `hooks/hooks.json`, and hook entries the owner keeps in the `claude/hooks.json` of *common/*, of a tag and of
 `projects/<name>/` reach a session only through the plugin `attach` renders from
 them, named by this machine's binding id.
+
+**`overlay-placed-shown`**, another `SessionStart` handler of the `attach` area with a `once_key`, counts
+the paths the last `attach` placed that a `.gitignore` now re-includes, so `git add -A` would stage
+them, and says that count, never the names, which `drybag doctor`'s `attached` row gives. A hint
+that refuses nothing; it reads the ledger, so the mode decides nothing, and on a `compact` it asks no `git`.
 
 ## Note sync
 
@@ -894,8 +900,9 @@ content; and a mutation's outcome stated as fact in the present tense (`-> the t
 `watch it go red`, `reddens 8 assertions`) is a finding unless its own sentence marks it an
 expectation; and where git tracks a file under `[paths] specs`, a plan's first `**Spec:**` line
 names its spec in backticks, any span there that resolves inside the project once an anchor after
-`#` is dropped, or says `none — <reason>` (the line alone is read, a list item's included; its paths
-are held to the first rule as every line's are). Without `PATH`, the first rule reads only the lines the change wrote — those that
+`#` is dropped, or says `none — <reason>`, with the em dash and no other (the line alone is read,
+indented or not and behind one `-`, `*`, `+`, `1.`, `1)` or `>` marker; its paths are held to the first
+rule as every line's are). Without `PATH`, the first rule reads only the lines the change wrote — those that
 differ from every merge base's copy and from `REF`'s — so a change editing a delivered plan, an
 `Interfaces:` block say, is held to its own lines and never to paths the tree has moved since the
 plan was written; a new plan is all such lines. Naming a plan as `PATH` settles every reference in
@@ -946,8 +953,8 @@ that can grant a capability — a permission rule, a command that runs on an eve
 that matches is not your consent to either. They are listed under `ASK FIRST` beneath the report,
 and under `decisions` in `--json`. Without `--dry-run` that list is printed *after* the refresh,
 not before it: nothing waits for an answer, and the reason it can be a notice rather than a gate
-is that the shipped template grants nothing — its permissions file is deny-only and its hooks
-file is empty, both held by a test. `--dry-run` first is how you read them before anything moves.
+is that the shipped template grants nothing — its permissions file is `{"permissions": {}}` and its
+hooks file is empty, both held by a test. `--dry-run` first is how you read them before anything moves.
 
 `--dry-run` prints the same report and writes nothing; the report you approve is produced by the
 code path that then runs, which is what makes the dry run worth reading.
@@ -1467,7 +1474,7 @@ with part of the attach already undone:
 
 ---
 
-## `drybag setup [--preset NAME] [--plugin NAME …] [--home PATH] [--machine PATH] [--overlay VALUE]`
+## `drybag setup [--preset NAME] [--plugin NAME …] [--home PATH] [--machine PATH] [--overlay VALUE] [--restore [--yes] [--sync]]`
 
 Configures this machine from a preset, `recommended` unless `--preset` names another: the
 machine configuration file's `[personal]` and `[machine]` tables, the deny rules in `<home>/.claude/settings.json`, and each plugin `--plugin` names, one install per plugin
@@ -2035,7 +2042,8 @@ that root's wrapper is still read by `wrapper`, for its executable bit, red with
 otherwise a `skip` saying why. A report that ran a script the inspected repository could commit, and then
 called the result green, would be worse than one that says it could not vouch for it.
 
-**Writes** nothing. Exits `0`, or `1` when any check is red.
+**Writes** nothing. Exits `0`, or `1` when any check is red; a `--root` that names no directory is
+refused (`2`) before any check runs.
 
 ---
 
@@ -2085,6 +2093,8 @@ event.
 `overlay upgrade` takes `--root` alone, in the sense the second table gives it, and reads no
 `drybag.toml`; `detach` takes `--root` alone too, since every path it withdraws is its ledger's; `setup` takes both, in its own senses. `tests/test_documents.py` holds both
 lists to the real parser.
+
+`drybag --version` prints the installed version and exits `0`; only `drybag` itself takes it, before a group.
 
 ---
 
@@ -2242,7 +2252,9 @@ in your overlay's `common/memory/`.
 
 `drybag setup` writes one more table, `[machine]`, into the same file — `version`, the
 drybag that ran, and `installed`, the date it ran. It is `setup`'s record of what it did, not
-a setting: it is written, never hand-edited, and a file that has never had one loads fine.
+a setting: it is written, never hand-edited, but for `name`, which only a hand edit sets and `setup`
+keeps (the tag shape; it picks this machine's `machines/<name>/` sub-plates). A file that has never
+had one loads fine.
 `--overlay` writes `[sync] enabled = true` beside `[overlay] root` when it renders or creates an
 overlay, and nothing under `[sync]` when it records an existing one; the key is yours to change
 by hand, and a repository's `drybag.toml` cannot set it ([Note sync](#note-sync)).
@@ -2255,7 +2267,8 @@ rather than one an environment chose, and honoured by every reader of it.
 
 **`~` here is `HOME`**, as the harness and every other program read it, so a devcontainer, a
 home-manager setup or a scratch `HOME` keeps drybag and the harness under one home; a `~` in
-`[overlay] root` means that home too. An environment that sets `HOME` already runs code as you.
+`[overlay] root` means that home too, and a root neither absolute nor under `~/` is a fault of this
+file that every reader of the root names, never read against the directory it runs in. An environment that sets `HOME` already runs code as you.
 An empty or relative `HOME` names no home, so `setup`, `attach` and `detach` stop there and
 `doctor` says so; `doctor`'s `ignored-env` row says, as information, when `HOME` is not the home
 the password database records.
