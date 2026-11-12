@@ -132,6 +132,9 @@ def declared() -> list[Mutation]:
     found: list[Mutation] = []
     for path in group_files():
         found.extend(_entries(tomllib.loads(path.read_text(encoding="utf-8"))))
+    empty = [m.name for m in found if not m.reddens]
+    if empty:
+        raise ValueError(f"`reddens = []` reads any red test in the suite as a catch: {empty}")
     return found
 
 
@@ -504,6 +507,13 @@ def warm_cache(tree: Path) -> Path:
     return cache
 
 
+# How long one pytest run may take before `_run` kills it and `_check` reports the entry: a
+# mutation that removes a bound used to hang until CI cancelled the job, with no findings list.
+# Measured over the whole set on a loaded machine: the slowest clean run 36 s, the slowest mutated
+# run 300 s (an entry caught by waiting out a bound), so this is twice that, not four clean runs.
+ENTRY_TIMEOUT_SECONDS = 600
+
+
 def _run(targets: tuple[str, ...], cwd: Path, *, cache: Path | None = None) -> Outcome:
     """Run only the named tests, against a bytecode cache that cannot be stale.
 
@@ -566,12 +576,15 @@ def _run(targets: tuple[str, ...], cwd: Path, *, cache: Path | None = None) -> O
             )
             _live.add(child)
         try:
-            child.communicate()
+            child.communicate(timeout=ENTRY_TIMEOUT_SECONDS)
         except BaseException:
             # What `subprocess.run` did on the way out, kept: an interrupted wait kills the
             # child rather than leaving it running against a checkout about to be removed.
             child.kill()
             child.wait()
+            for pipe in (child.stdout, child.stderr):  # `communicate` closes them only if it ends
+                if pipe is not None:
+                    pipe.close()
             raise
         finally:
             with _living:
@@ -806,7 +819,10 @@ def _check(mutation: Mutation, tree: Path, *, cache: Path | None = None) -> str 
     anchor = anchor_finding(original, mutation.before)
     if anchor is not None:
         return anchor
-    clean = _run(mutation.reddens, tree, cache=cache)
+    try:
+        clean = _run(mutation.reddens, tree, cache=cache)
+    except subprocess.TimeoutExpired:
+        return f"timed out after {ENTRY_TIMEOUT_SECONDS} s on a clean tree"
     if not clean.passed:
         return (
             f"{', '.join(mutation.reddens)} did not pass on a clean tree "
@@ -825,6 +841,8 @@ def _check(mutation: Mutation, tree: Path, *, cache: Path | None = None) -> str 
                 "host the oracle's scratch checkout"
             )
         mutated = _run(mutation.reddens, tree, cache=cache)
+    except subprocess.TimeoutExpired:
+        return f"timed out after {ENTRY_TIMEOUT_SECONDS} s with the mutation applied"
     finally:
         subject.write_text(original, encoding="utf-8")
         os.utime(subject, ns=(head.st_atime_ns, head.st_mtime_ns))

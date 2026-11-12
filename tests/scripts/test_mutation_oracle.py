@@ -1094,6 +1094,41 @@ def test_an_entry_name_declared_twice_is_a_finding(tmp_path: Path) -> None:
     ]
 
 
+def test_an_entry_with_no_reddens_is_refused(tmp_path: Path) -> None:
+    # pytest handed no ids runs the whole suite, and any red test anywhere then read as a catch.
+    # Mutation (declared): the empty check removed -> `declared()` returns the entry.
+    (tmp_path / "mutations").mkdir()
+    (tmp_path / "mutations" / "core.toml").write_text(
+        '[[mutation]]\nname = "proves nothing"\nfile = "a.py"\nbefore = "a"\nafter = "b"\n'
+        "reddens = []\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="proves nothing"):
+        oracle(root=tmp_path).declared()
+
+
+def test_a_hung_entry_is_a_finding_not_a_hang(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A mutation that removes a bound hung its pytest until CI cancelled the job. A machine too
+    # loaded to start pytest in 2 s times out too, which is the outcome asserted.
+    # Mutation (declared): the timeout dropped from `communicate` -> both runs wait out the sleep.
+    module = oracle(root=tmp_path)
+    monkeypatch.setattr(module, "ENTRY_TIMEOUT_SECONDS", 2)
+    subject = tmp_path / "subject.py"
+    subject.write_text("GUARD = True\n", encoding="utf-8")
+    (tmp_path / "test_subject.py").write_text(
+        "import time\n\nimport subject\n\n\ndef test_the_guard_holds() -> None:\n"
+        "    time.sleep(5)\n    assert subject.GUARD\n",
+        encoding="utf-8",
+    )
+    finding = module._check(
+        a_mutation(module, subject, ("test_subject.py::test_the_guard_holds",)), tmp_path
+    )
+    assert finding is not None and "timed out after 2 s" in finding, finding
+    assert not module._live
+
+
 # --- citations: a comment names an entry, and the name must reach one ----------------------------
 #
 # CONTRIBUTING makes the entry's quoted name the one way a comment anywhere in the tree cites it,
