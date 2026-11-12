@@ -430,12 +430,13 @@ pull request.
 
 A pull request that changes only documents, or Python comments, narrows further: the suite runs on
 that one configuration alone, and the oracle, the plugin validator and the install smoke skip. A
-document is a path under `docs/` or `changelog.d/`, or a Markdown file at the root; Markdown under
-`skills/` is code, since the plugin validator reads it, and so is a docstring. Tests
+document is a path under `docs/` or `changelog.d/` other than a `.py`, or a Markdown file at the
+root; Markdown under `skills/` is code, since the plugin validator reads it, and so is a docstring. Tests
 read documents and comments, and ruff, mypy and coverage read the comments that steer them, so the
 suite still runs once. `scripts/ci_scope.py`, run by the `changes` job in `ci.yml` and `smoke.yml`,
-decides it, and decides it closed: a renamed file counts under the name it left, a Python file
-that does not tokenize counts as code, and any answer but an explicit `false` runs everything
+decides it, and decides it closed: a renamed file counts under the name it left, a path that is
+or was anything but a plain file (an executable, a symlink, a gitlink) and a Python file that does
+not tokenize count as code, and any answer but an explicit `false` runs everything
 (`tests/test_ci_scope.py`). Every other leg still starts and reports, because branch protection
 requires each by name. A mutation entry whose text such a change edits fails on the next pull
 request that runs the oracle.

@@ -26,11 +26,14 @@ from tests.test_fixtures import (
     RELEASE_WORKFLOW,
     RELEASING,
     ROOT,
+    SCRIPTED,
     SMOKE_WORKFLOW,
+    WORKFLOWS,
     needs_bash,
     needs_ci_workflow,
     needs_release_workflow,
     needs_smoke_workflow,
+    needs_workflows_dir,
     step_script,
 )
 from tests.workflow_yaml import Node, load
@@ -546,32 +549,24 @@ def test_only_the_attest_job_can_attest() -> None:
     assert running == [], running
 
 
-@needs_release_workflow
-def test_no_checkout_in_the_release_keeps_its_token() -> None:
+@needs_workflows_dir
+def test_every_checkout_persists_no_credentials() -> None:
     # `actions/checkout` writes the job's token into `.git/config` unless told not to, where every
-    # later step of the job can read it, and no step of the release needs it there: `check` runs
-    # the suite and pushes nothing, `attest` runs a script, and `github-release` authenticates `gh`
-    # with `GH_TOKEN`. Held for every checkout rather than for the jobs judged able to write, so a
-    # `permissions: write-all`, or a job inheriting a widened top-level block, is held too.
-    # Mutations (oracle): `mutations/`'s "the release check keeps a token in its checkout", "the
-    # attest job keeps a token in its checkout" and "the Release job keeps a token in its
-    # checkout".
-    checkouts = {
-        name: [
-            step for step in _steps_of(RELEASE_WORKFLOW, name) if _uses(step) == "actions/checkout"
-        ]
-        for name in _jobs(RELEASE_WORKFLOW)
-    }
-    # The walk's count, so the loop reads every checkout there is.
-    assert {name: len(found) for name, found in checkouts.items() if found} == {
-        "check": 1,
-        "build": 1,
-        "attest": 1,
-        "github-release": 1,
-    }, checkouts
-    for name, found in checkouts.items():
-        for checkout in found:
-            assert _with(checkout, "persist-credentials") == "false", (name, checkout)
+    # later step, and the pull request's code a step runs, can read it; no job here pushes with it,
+    # and `github-release` authenticates `gh` with `GH_TOKEN`. Held for every checkout rather than
+    # for the jobs judged able to write. Mutations (oracle): `mutations/`'s "the release check
+    # keeps a token in its checkout", "the attest job keeps a token in its checkout" and "the
+    # Release job keeps a token in its checkout".
+    checkouts = [
+        (workflow.name, name, step.get("with") or {})
+        for workflow in sorted(WORKFLOWS.glob("*.yml"))
+        for name in _jobs(workflow)
+        for step in _steps_of(workflow, name)
+        if _uses(step) == "actions/checkout"
+    ]
+    assert {found[0] for found in checkouts} == SCRIPTED, checkouts
+    kept = [found for found in checkouts if "'persist-credentials': 'false'" not in str(found[2])]
+    assert kept == [], kept
 
 
 @needs_release_workflow

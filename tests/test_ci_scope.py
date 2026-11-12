@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -50,7 +51,12 @@ def _jobs(workflow: Path) -> dict[str, dict[str, Node]]:
     return {name: job for name, job in jobs.items() if isinstance(job, dict)}
 
 
-def _merge(tmp_path: Path, change: dict[str, str | None], renames: dict[str, str]) -> Path:
+def _merge(
+    tmp_path: Path,
+    change: dict[str, str | None],
+    renames: dict[str, str],
+    then: Callable[[Path], object] = Path,
+) -> Path:
     """A repository whose `HEAD` is a merge commit, as the platform checks a pull request out: the
     first parent is the base, the second a branch that writes `change` (`None` deletes) and moves
     each `renames` key to its value. The base moves on beside it, so the merge is a real one."""
@@ -75,6 +81,8 @@ def _merge(tmp_path: Path, change: dict[str, str | None], renames: dict[str, str
     for old, new in renames.items():
         (root / new).parent.mkdir(parents=True, exist_ok=True)
         git(root, "mv", old, new)
+    then(root)
+    git(root, "add", "-A")
     git(root, "commit", "-q", "--allow-empty", "-m", "change")
     git(root, "checkout", "-q", "base")
     (root / "LICENSE").write_text("moved on\n", encoding="utf-8")
@@ -160,6 +168,7 @@ def test_both_workflows_run_one_scope_step() -> None:
             {"src/widget.py": WIDGET.replace("Make", "Build")}, {}, "true", id="a-docstring"
         ),
         pytest.param({"src/new.py": "# nothing yet\n"}, {}, "true", id="a-python-file-added"),
+        pytest.param({"docs/new.py": "# nothing yet\n"}, {}, "true", id="python-under-docs"),
         pytest.param(
             {"src/widget.py": WIDGET + '"""\n'}, {}, "true", id="python-that-does-not-tokenize"
         ),
@@ -179,6 +188,25 @@ def test_the_scope_step_answers_false_only_for_documents_and_comments(
     done, outputs = _scope(_merge(tmp_path, change, renames), "pull_request")
     assert done.returncode == 0, done.stdout + done.stderr
     assert outputs == {"code": code}, outputs
+
+
+@needs_git
+@needs_bash
+@needs_ci_workflow
+@pytest.mark.parametrize(
+    "then",
+    [
+        pytest.param(lambda r: (r / "src/widget.py").chmod(0o755), id="a-mode-change"),
+        pytest.param(lambda r: (r / "docs/guide.md").chmod(0o755), id="an-executable-under-docs"),
+        pytest.param(lambda r: (r / "docs/link.md").symlink_to("guide.md"), id="a-symlink"),
+    ],
+)
+def test_a_mode_or_link_change_is_code(tmp_path: Path, then: Callable[[Path], object]) -> None:
+    # A link, an executable or a mode the plugin tree records is code whatever its text. Mutation
+    # (oracle): `mutations/`'s "the scope step reads no modes".
+    done, outputs = _scope(_merge(tmp_path, {}, {}, then), "pull_request")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert outputs == {"code": "true"}, outputs
 
 
 @needs_git

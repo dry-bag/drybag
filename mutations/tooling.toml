@@ -388,9 +388,7 @@ name = "the release build restores a cache"
 file = ".github/workflows/release.yml"
 before = "          enable-cache: false\n"
 after = "          enable-cache: true\n"
-reddens = [
-  "tests/test_workflows.py::test_the_release_build_is_hermetic",
-]
+reddens = ["tests/test_workflows.py::test_the_release_build_is_hermetic"]
 
 [[mutation]]
 name = "the release check can sign again"
@@ -571,7 +569,7 @@ file = ".github/workflows/release.yml"
 before = "          fetch-depth: 2\n          persist-credentials: false\n      - uses: actions/download-artifact"
 after = "          fetch-depth: 2\n      - uses: actions/download-artifact"
 reddens = [
-  "tests/test_workflows.py::test_no_checkout_in_the_release_keeps_its_token",
+  "tests/test_workflows.py::test_every_checkout_persists_no_credentials",
 ]
 
 [[mutation]]
@@ -2717,7 +2715,7 @@ before = """        with:
       - uses: actions/download-artifact@"""
 after = """      - uses: actions/download-artifact@"""
 reddens = [
-  "tests/test_workflows.py::test_no_checkout_in_the_release_keeps_its_token",
+  "tests/test_workflows.py::test_every_checkout_persists_no_credentials",
 ]
 
 [[mutation]]
@@ -2744,7 +2742,7 @@ file = ".github/workflows/release.yml"
 before = "          fetch-depth: 2\n          persist-credentials: false\n      - uses: astral-sh/setup-uv"
 after = "          fetch-depth: 2\n      - uses: astral-sh/setup-uv"
 reddens = [
-  "tests/test_workflows.py::test_no_checkout_in_the_release_keeps_its_token",
+  "tests/test_workflows.py::test_every_checkout_persists_no_credentials",
 ]
 
 # No script imports another, but the one exemption the rule names: `release.py` taking a sibling
@@ -2794,11 +2792,18 @@ reddens = [
 [[mutation]]
 name = "a rename into docs hides the file it moved"
 file = "scripts/ci_scope.py"
-before = '''_git("diff", "--no-renames", "--name-only", "-z", base, head)'''
-after = '''_git("diff", "--name-only", "-z", base, head)'''
+before = '''_git("diff", "--raw", "--no-renames", "-z", base, head)'''
+after = '''_git("diff", "--raw", "-z", base, head)'''
 reddens = [
   "tests/test_ci_scope.py::test_the_scope_step_answers_false_only_for_documents_and_comments[code-moved-into-docs]",
 ]
+
+[[mutation]]
+name = "the scope step reads no modes"
+file = "scripts/ci_scope.py"
+before = "        plain and (is_document(path)"
+after = "        (is_document(path)"
+reddens = ["tests/test_ci_scope.py::test_a_mode_or_link_change_is_code[a-mode-change]"]
 
 [[mutation]]
 name = "the scope step asks whether any path is a document"
