@@ -82,7 +82,19 @@ fi
 # out and everything else is said. The branch is on the command's own status and never on
 # `grep`'s: `grep -v` exits 1 when it selects no lines, which is exactly the quiet case, so a `||`
 # hung off the pipe announces a failure on every clean commit. No outcome here may fail the commit.
-if [ -z "$runner" ]; then
+#
+# A commit git replays (a cherry-pick, a rebase's pick) comes with `message`, as `commit -m` does,
+# so what tells it apart is git's own state: `CHERRY_PICK_HEAD` or `rebase-merge/` in the git
+# directory git names. Its message is the commit's author's, and is left as it is.
+replay=""
+if [ "$#" -ge 2 ] && [ "$2" = message ] && git_dir=$(git rev-parse --git-dir 2>/dev/null); then
+    if [ -e "$git_dir/CHERRY_PICK_HEAD" ] || [ -d "$git_dir/rebase-merge" ]; then
+        replay="yes"
+    fi
+fi
+if [ -n "$replay" ]; then
+    :
+elif [ -z "$runner" ]; then
     printf '%s\\n' "$absent" >&2
 elif out=$($runner commit strip "$msg_file"); then
     printf '%s\\n' "$out" | grep -v "$quiet" >&2 || true
