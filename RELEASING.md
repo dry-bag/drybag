@@ -6,11 +6,11 @@ This file is that, so the bus factor of the release process is not one.
 
 The sequence, once, before the detail: `scripts/release.py check` → towncrier assembles
 `CHANGELOG.md` from the `changelog.d/` fragments → the release commit, into whose marketplace
-entry `scripts/release.py pin` writes the plugin commit it releases → `claude plugin tag` and the
-`vX.Y.Z` tag, pushed without `main` → the release workflow's `check` job checks the tag, the pin
-included, and tests, its `build` job builds from the tag's tracked files alone, and its `attest`
-job computes the plugin commit again and attests the packages and the plugin tree's manifest →
-`scripts/publish_plugin.py` pushes that
+entry `scripts/release.py pin` writes the plugin commit it releases → `ci.yml` green on that exact
+commit, pushed to `next` → `claude plugin tag` and the `vX.Y.Z` tag, pushed without `main` → the
+release workflow's `check` job checks the tag, the pin included, and tests, its `build` job builds
+from the tag's tracked files alone, and its `attest` job computes the plugin commit again and
+attests the packages and the plugin tree's manifest → `scripts/publish_plugin.py` pushes that
 pinned commit to `dry-bag/drybag-plugin`, the repository the plugin is installed from, from
 your own authenticated checkout → the `pypi` approval, whose two jobs first check that the plugin
 repository's tag names the pinned commit and then release the PyPI upload and the GitHub Release,
@@ -328,6 +328,18 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    because the README is the package's long description and the wheel is built from the tag,
    so what waits is `main`: it moves in step 7, once `publish` has put the name in your hands,
    and not before.
+
+   **Tag only a commit `ci.yml` ran green.** The suite, its six configurations and the oracle
+   have not run on this commit: `release.yml` runs the suite once, on one configuration. A push to
+   `next` runs all of them, and `next` holds nothing but the release commit waiting for its run, so
+   push it there and wait. A red run stops the release here, before anything is spent: fix it on
+   `dev` and start again from step 1.
+
+   ```bash
+   git push --force origin HEAD:next
+   gh run list --workflow ci --commit "$(git rev-parse HEAD)"   # its id, once the run is listed
+   gh run watch <id> --exit-status
+   ```
 
    ```bash
    claude plugin tag .

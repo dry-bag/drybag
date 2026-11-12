@@ -554,6 +554,17 @@ def test_every_checkout_persists_no_credentials() -> None:
     assert kept == [], kept
 
 
+def test_dev_and_the_release_commit_run_ci_on_push() -> None:
+    # A merge into `dev` is tested as it lands, and the release commit before it is tagged:
+    # RELEASING.md pushes it to a branch `ci.yml` runs on and tags it once that run is green.
+    on = _document(CI_WORKFLOW)["on"]
+    assert isinstance(on, dict) and isinstance(on["push"], dict), on
+    branches = on["push"]["branches"]
+    assert isinstance(branches, list) and "dev" in branches, branches
+    pushed = re.findall(r"^ +git push --force origin HEAD:(\S+)$", RELEASING.read_text(), re.M)
+    assert len(pushed) == 1 and pushed[0] in branches, (pushed, branches)
+
+
 def test_the_release_build_is_hermetic() -> None:
     # The packages attested and published come from a job that restores no cache, installs
     # nothing, builds from the tag's tracked files with a uv inside the `uv_build` bound (so the
