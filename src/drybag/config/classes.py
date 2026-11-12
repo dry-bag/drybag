@@ -40,8 +40,6 @@ class KeyClass(StrEnum):
     PREFERENCE = "preference"
     # A bound on what a session loads, which the owner may move as the repository may.
     SESSION_PARAMETER = "session-parameter"
-    # A gate's input: what a pull request is judged by, so only the base branch's file sets it.
-    GATE_PARAMETER = "gate-parameter"
     # A fact about the repository itself, which only its own file states.
     REPOSITORY_ONLY = "repository-only"
     # A limit of the platform the plugin runs on, which only the shipped preset carries.
@@ -81,7 +79,6 @@ ALLOWED: Mapping[KeyClass, frozenset[LayerName]] = MappingProxyType(
         KeyClass.MACHINE_ONLY: frozenset(ORDER) - {LayerName.REPOSITORY},
         KeyClass.PREFERENCE: frozenset(ORDER),
         KeyClass.SESSION_PARAMETER: frozenset(ORDER),
-        KeyClass.GATE_PARAMETER: _REPOSITORY_SIDE,
         KeyClass.REPOSITORY_ONLY: _REPOSITORY_SIDE,
         KeyClass.PLUGIN_OWNED: frozenset({LayerName.PRESET}),
     }
@@ -116,7 +113,7 @@ CLASSES: Mapping[str, KeyClass] = MappingProxyType(
         "memory.groups": KeyClass.PREFERENCE,
         "memory.index_extra": KeyClass.PREFERENCE,
         **{f"budgets.{name}": KeyClass.SESSION_PARAMETER for name in sorted(SESSION_BUDGETS)},
-        **{f"budgets.{name}": KeyClass.GATE_PARAMETER for name in sorted(GATE_BUDGETS)},
+        **{f"budgets.{name}": KeyClass.REPOSITORY_ONLY for name in sorted(GATE_BUDGETS)},
         "drybag.version": KeyClass.REPOSITORY_ONLY,
         "drybag.preset": KeyClass.REPOSITORY_ONLY,
         "project.*": KeyClass.REPOSITORY_ONLY,

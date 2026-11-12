@@ -681,7 +681,7 @@ name = "the budgets row reads a raised budget as lowered"
 file = "src/drybag/doctor/checks.py"
 before = "        name for name, value in budgets.configured.items() if value > budgets.preset[name]"
 after = "        name for name, value in budgets.configured.items() if value < budgets.preset[name]"
-reddens = ["tests/doctor/test_checks.py::test_a_budget_the_base_branch_raised_is_named_as_raised"]
+reddens = ["tests/doctor/test_checks.py::test_a_raised_budget_is_named_as_raised"]
 
 [[mutation]]
 name = "the budgets row names no lowered budget"

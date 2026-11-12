@@ -1,4 +1,4 @@
-"""A budget is what the layer that may set it says (`Budgets.effective`): the base branch's
+"""A budget is what the layer that may set it says (`Budgets.effective`): a repository's
 `drybag.toml` may raise a gate's budget above the preset, and the owner's machine file a
 session's."""
 
@@ -14,7 +14,7 @@ from tests.config.test_loader import MINIMAL
 PRESET = load_preset("recommended")["budgets"]
 
 
-def test_the_base_branch_raises_a_gate_budget(tmp_path: Path) -> None:
+def test_a_repositorys_file_raises_a_gate_budget(tmp_path: Path) -> None:
     # Mutation (`mutations/`'s "a budget is still only ever lowered"): `effective` keeps the
     # smaller of the two, and the raise reads the preset's.
     assert PRESET["agents_md_lines"] < 900

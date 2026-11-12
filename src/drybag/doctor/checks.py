@@ -384,7 +384,7 @@ def _wrapper(context: Context) -> Row:
 def _budgets(context: Context, config: Config) -> Row:
     """Every budget set above the preset and every one set below it.
 
-    The base branch's `drybag.toml` sets a gate's budget and the owner's machine file a
+    A repository's `drybag.toml` sets a gate's budget and the owner's machine file a
     session's, in either direction, and the value set is the value in force (`Budgets.effective`).
     No consumer applies a platform cap to a budget — `native_caps` are checked beside the budget,
     never folded into it — so the row names no clamp. Budget keys are `Budgets.NAMES` and the loader
