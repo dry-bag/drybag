@@ -65,8 +65,10 @@ are in [docs/methodology/README.md](https://github.com/dry-bag/drybag/blob/main/
 
 **This is not a replacement for a process layer such as superpowers.** `drybag setup --plugin
 superpowers --plugin context7` installs [superpowers](https://github.com/obra/superpowers) and
-[context7](https://github.com/upstash/context7) on Claude Code — both ship in Anthropic's own
-official marketplace, so `setup` needs no separate registration step for either. Neither is
+[context7](https://github.com/upstash/context7) on Claude Code — both are listed in Anthropic's
+official marketplace,
+[`anthropics/claude-plugins-official`](https://github.com/anthropics/claude-plugins-official/blob/main/.claude-plugin/marketplace.json)
+(checked 2026-11-27), so `setup` needs no separate registration step for either. Neither is
 installed unless you name it: each runs in every session, and neither is pinned. **Codex has no
 verified non-interactive marketplace source for either plugin** (checked against this project's own
 spike record and each plugin's own published install instructions, 2026-09-18): install `superpowers`
