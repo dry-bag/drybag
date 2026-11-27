@@ -1228,7 +1228,7 @@ switches on, and takes `"off"` or `"on"` alone (a definition under it is said an
 state folds as a name's does, so the last plate's word wins and a later plate's `"*": "on"` lifts
 an earlier `"off"`. Where it is off, **attach writes `allowedMcpServers`** in the main checkout's
 `.claude/settings.local.json`: a `{"serverName": "<name>"}` entry for each name whose state is on,
-served or switched on with no definition (`"figma": "on"` lets a server defined at user scope
+served or switched on with no definition (`"docs": "on"` lets a server defined at user scope
 through), and `[]` where there is none, so that no MCP server loads. A name switched off keeps its
 `deniedMcpServers` entry, which wins over the allowlist. The file is merged, never replaced: every
 other key in it (a run profile's `permissions.deny`, its `sandbox`) stays. The key is written only
