@@ -278,8 +278,10 @@ def restore(
             continue
         recorded = "recorded" if attached.binding_recorded else "already recorded"
         detail = "; ".join((f"binding {attached.binding} {recorded}", *attached.notes))
-        # A server Claude Code did not take is a partly failed attach, which `attach` exits 1 on.
-        state: Literal["attached", "failed"] = "failed" if attached.mcp_failed else "attached"
+        # A server Claude Code did not take, and an allowlist asked for and not written, are a
+        # partly failed attach, which `attach` exits 1 on.
+        unsettled = attached.mcp_failed or attached.mcp_allowlist_unwritten
+        state: Literal["attached", "failed"] = "failed" if unsettled else "attached"
         if attached.mcp_failed:
             servers = (f"{quoted(name)} ({said})" for name, said in attached.mcp_failed)
             detail += f"; MCP servers not settled: {', '.join(servers)}"

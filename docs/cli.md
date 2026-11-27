@@ -1765,7 +1765,9 @@ nonzero exit (`--restore` exits `1` when an attach was refused or failed, below)
    attached under the project its table key names, as `attach --project` would; a checkout `attach`
    refuses (one whose `drybag.toml` names another project than its table key) is `refused`, and one whose attach
    fails (a plain directory, or a failure part-way) is `failed`, each with attach's own message, and the rest go
-   on. One whose overlay MCP server Claude Code did not take is `failed` too, naming the server. The exit code is `1` when a project was refused or failed, and `0` otherwise, `absent`
+   on. One whose overlay MCP server Claude Code did not take is `failed` too, naming the server, and
+so is one whose overlay asks for an MCP allowlist that could not be written, as `attach` exits `1`
+on both. The exit code is `1` when a project was refused or failed, and `0` otherwise, `absent`
    included. A run twice attaches nothing new, and a project removed from the file stays attached
    until `drybag detach` there.
 

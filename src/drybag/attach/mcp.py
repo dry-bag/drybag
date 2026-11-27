@@ -16,9 +16,9 @@ state like a name; any other value is read as `"off"`, with a note. Where its la
 `"off"` the fold has an allowlist (`Fold.allowed`): every name whose state is on, served or
 switched on with no definition, which lets a server defined outside the overlay through. `attach`
 writes it as `allowedMcpServers`. **It fails closed**: where a file is unusable and a plate that
-could be read says `"*": "off"`, the allowlist is `()`, which cuts every server, since the file
-that could not be read may be the one switching a name on, and never the one lifting the cut
-for certain.
+could be read says `"*": "off"`, the allowlist is `()`, which cuts every server whatever the
+unusable file says, the file's note says why, and the next `attach` that reads every file writes
+the allowlist the overlay asks for.
 
 Every fault of the file is a note and never a refusal, and a note names the file's path and never a
 value: a definition holds argv and environment, which may hold a secret. A file that is there and

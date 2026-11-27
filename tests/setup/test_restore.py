@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from drybag import binding, fsops
+from drybag.attach.write import ALLOWLIST_UNWRITTEN
 from drybag.cli import build_parser, discover_registrars, run
 from drybag.errors import Refusal
 from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX
@@ -311,6 +312,18 @@ def test_a_project_whose_mcp_server_failed_is_failed_naming_it(tmp_path: Path) -
     report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha), runner=runner)
     assert _states(report) == {"alpha": "failed"}
     assert "MCP servers not settled: m1 (" in report.projects[0].detail
+
+
+def test_a_project_whose_mcp_allowlist_was_not_written_is_failed(tmp_path: Path) -> None:
+    # As `attach` exits 1 on it: the overlay asks for the cut and nothing cuts the servers.
+    overlay = _overlay(tmp_path)
+    (overlay / COMMON_CLAUDE / "mcp.json").write_text('{"mcpServers": {"*": "off"}}')
+    alpha = _checkout(tmp_path, "alpha")
+    (alpha / ".claude").mkdir()
+    (alpha / ".claude" / "settings.local.json").write_text('{"allowedMcpServers": "x"}')
+    report = _restore(tmp_path, overlay, _listing(overlay, tmp_path, alpha=alpha))
+    assert _states(report) == {"alpha": "failed"}
+    assert ALLOWLIST_UNWRITTEN in report.projects[0].detail
 
 
 def test_a_failed_project_makes_the_command_exit_1(
