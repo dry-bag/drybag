@@ -1,7 +1,8 @@
 # drybag
 
 Private layers for coding agents, delivered into their sessions with nothing tracked in the
-project. One plugin for Claude Code and Codex, one Python package with **no runtime dependencies**.
+project. A plugin for Claude Code and one Python package with **no runtime dependencies**. On Codex,
+drybag's session notices are not verified ([what each agent enforces](#what-each-agent-enforces)).
 
 > **Pre-1.0.** What ships: a private overlay of your own and the commands that deliver it, the
 > notes kept in it and synced between machines, a machine restored from it, the session hints, the

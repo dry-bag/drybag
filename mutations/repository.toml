@@ -891,8 +891,8 @@ reddens = ["tests/test_neutral.py::test_a_token_hit_names_the_offset_of_its_firs
 [[mutation]]
 name = "the PyPI description advertises the unshipped memory MCP server"
 file = "pyproject.toml"
-before = 'description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check, packaged as one plugin for Claude Code and Codex."'
-after = 'description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, a memory MCP server, plan and doc linting, and a commit-attribution check, packaged as one plugin for Claude Code and Codex."'
+before = 'description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check, packaged as a Claude Code plugin and a command-line tool."'
+after = 'description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, a memory MCP server, plan and doc linting, and a commit-attribution check, packaged as a Claude Code plugin and a command-line tool."'
 reddens = [
   "tests/test_manifests.py::test_no_storefront_string_advertises_what_the_readme_says_is_not_yet",
 ]
