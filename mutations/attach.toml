@@ -2395,7 +2395,7 @@ reddens = [
 [[mutation]]
 name = "attach writes a deny entry before recording it"
 file = "src/drybag/attach/write.py"
-before = '''    if (holding := replace(mcp_ledger, deny=(*deny.record, *deny.withdraw))) != planned.mcp_held:
+before = '''    if holding != planned.mcp_held:
         write_mcp_ledger(root, holding)
 '''
 after = ''''''
@@ -2406,8 +2406,8 @@ reddens = [
 [[mutation]]
 name = "the reconcile saves the deny record the run read, not the one it wrote"
 file = "src/drybag/attach/write.py"
-before = '''    deny, mcp_ledger = planned.deny, replace(planned.mcp_held, deny=planned.deny.record)'''
-after = '''    deny, mcp_ledger = planned.deny, planned.mcp_held'''
+before = '''    mcp_ledger = replace(planned.mcp_held, deny=deny.record, allow=allow.record)'''
+after = '''    mcp_ledger = replace(planned.mcp_held, allow=allow.record)'''
 reddens = [
   "tests/attach/test_write.py::test_attach_takes_back_a_server_switched_off_later",
 ]
