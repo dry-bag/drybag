@@ -2252,8 +2252,8 @@ reddens = [
 [[mutation]]
 name = "attach exits 0 when an MCP server was not delivered"
 file = "src/drybag/attach/commands.py"
-before = '''    failed = 1 if attached.mcp_failed else 0'''
-after = '''    failed = 0'''
+before = '''    failed = 1 if attached.mcp_failed or attached.mcp_allowlist_unwritten else 0'''
+after = '''    failed = 1 if attached.mcp_allowlist_unwritten else 0'''
 reddens = [
   "tests/attach/test_commands.py::test_failure_screen_prints_names_never_a_definition",
 ]
@@ -2458,8 +2458,8 @@ reddens = [
 [[mutation]]
 name = "the allowlist take-back drops a key holding the owner's entries"
 file = "src/drybag/attach/write.py"
-before = """drop=present and all(e in gone for e in entries)"""
-after = """drop=present"""
+before = """    drop = present and all(entry in gone for entry in entries)"""
+after = """    drop = present"""
 reddens = [
   "tests/attach/test_write.py::test_rest_on_takes_the_allowlist_back_and_keeps_an_entry_added_by_hand",
 ]
