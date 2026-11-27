@@ -2,6 +2,117 @@
 
 <!-- towncrier release notes start -->
 
+## 0.8.0 (2026-11-27)
+
+### Upgrading
+
+- An `[overlay] root` in `~/.config/drybag/config.toml` must now be an absolute path or start with `~/`. A relative one
+  was read against whatever directory a command or hook ran from; it is now refused as a fault of that file, naming it.
+  Write the root out in full, or run `drybag setup --overlay PATH`, which records it resolved. With no root recorded, the
+  note store now names that command too, where it said only `drybag setup`, which records none.
+- An overlay keeps its tag layers in `tags/<tag>/`, where it kept them in `groups/<tag>/`: in an overlay that has one, run `git mv groups tags` at its root. Nothing reads `groups/` any more, so until it is moved each tag a project lists is skipped, which `drybag doctor`'s `attached` row says by naming the `tags/<tag>` directory it lacks, and the note sync stops carrying the notes under it. The `tags` key in `projects/<name>/project.toml` and the `tag-<tag>` memory group keep their names.
+- The source distribution now holds `src/` and the documents only. It no longer carries `tests/` or `scripts/` (the suite needs `uv.lock`, `.github/` and `examples/` too, and failed from it), nor the plugin's `hooks/`, `skills/`, `.claude-plugin/` and `.codex-plugin/`, whose hook wrapper could not start without `scripts/`. A packager who ran the tests from the sdist runs them from a checkout of the release's `v0.8.0` tag; the plugin is installed from its marketplace.
+- `drybag attach --check --json` names its keys as the run's `--json` does: `allow_added` in place of
+  `added_allow` and `rules_written` in place of `rules_to_write`. `drybag detach` no longer takes
+  `--machine`, which it never read; drop it from any script that passes it.
+- `drybag attach` and `attach --check` now refuse a checkout this machine binds to one project when its `drybag.toml` names another, naming both: a renamed `[project] name` in a pulled commit no longer moves every worktree's binding, with that project's MCP servers, rules and hooks, on the next routine attach. To rebind on purpose, run `drybag attach --project <the name drybag.toml gives>`. `setup --restore` reports such a checkout as `refused`.
+- `drybag memory index --json` now gives each entry of `unreadable` as an object with the store-relative `path` and
+  the `reason` the note could not be read, where it was a list of paths; read `path` where a script read the string.
+- `drybag plan check` holds every plan it lints to a `**Spec:**` line wherever git tracks a file under
+  `[paths] specs` (`docs/specs` by default): the line names the plan's spec by a backticked path that resolves inside
+  the project, or says `none — <reason>`. A project that keeps specs and runs `plan check` in CI goes red on the next
+  change to a plan without one, an older plan included; add the line to each plan the change touches.
+
+### Added
+
+- A plate of the overlay (`common/`, a tag, a project) can hold `machines/<name>/`, a sub-plate with the plate's own
+  layout that applies only on the machine whose `[machine] name` in the machine file is `<name>`. It comes right after its
+  plate, so rules, skills, agents, hook entries, allow rules, `drybag.toml` values and notes there win over the plate's
+  own or add to them on that machine alone. A `machines/` directory or a `[machine] name` outside the tag shape is a note
+  that `attach`, `attach --check` and `doctor`'s `attached` row say.
+- A plate of the overlay (`common/`, a tag, a project, or a `machines/<name>/` sub-plate) can hold `claude/mcp.json`. `drybag attach` delivers the servers it defines at Claude Code's local scope through `claude mcp add-json`, takes back the ones the overlay no longer serves, and writes `deniedMcpServers` for a name a plate switches `"off"`, naming each on its screen; `drybag detach` takes them all back, and `attach --check` lists what would change without running `claude`. A server Claude Code refuses, or whose definition cannot be passed to `claude` (one past the system's argument limit, say), is named as `MCP server failed` with the reason while the rest are delivered, and stays unsettled and makes `attach` exit 1 until a later run delivers it; only a `claude` that is not on `PATH`, or that hangs, stops the others. An `mcp.json` that is there and cannot be read, or an MCP ledger this drybag cannot read, is said, and the run then changes no server and no deny entry. `drybag doctor`'s `attached` row names each server with the plate that defines it, and warns of each one `attach` has yet to deliver or take back, without printing any value.
+- A plate's `claude/mcp.json` can say `"*": "off"`: `drybag attach` then writes `allowedMcpServers` in the main checkout's `.claude/settings.local.json`, listing only the servers the plates switch on (served, or `"on"` with no definition for one defined elsewhere), or `[]`, which on Claude Code 2.1.325 loads no MCP server, the claude.ai connectors and plugins' servers included, unless the repository's own `.claude/settings.json` lists names of its own, which Claude Code adds to it. Every other key in the file stays. A key drybag did not write is left as it is and said, and an entry you add to drybag's key stays yours; only the names drybag added are recorded in `drybag/attach-mcp.json`, and a later `"*": "on"` or `drybag detach` takes them back. It fails closed: a misspelt `"*"` is read as `"off"`, an unreadable `mcp.json` beside a `"*": "off"` writes `[]`, and an allowlist that cannot be written makes `attach` exit 1. `attach --check` lists the allowlist it would write or take back (`mcp_allowlist`, `mcp_allowlist_withdrawn`), and `drybag doctor`'s `attached` row names it with the plate that asks for it and warns while `attach` has yet to write or take it back.
+- A session is told when a `.gitignore` has re-included files `drybag attach` placed, so `git add -A` would stage them. `drybag attach` and `drybag doctor` warn when the overlay holds notes that reach no session because the memory mode is `harness`.
+
+### Fixed
+
+- A `PATH` with no absolute entry no longer reaches `git` empty, which would run a `git` from the directory a command runs
+  in: drybag hands `git` the system default search path instead. `drybag setup` now refuses, naming the key, a machine
+  file key that ends in a line break, where it wrote the key raw and left a file that no longer loaded.
+- A note whose file name, or whose group in `drybag.toml`, holds a line break is now reported as unreadable instead of being linked from `MEMORY.md`,
+  where its name could add lines of its own to the index. A `startup` value that is not an integer (`yes`, `true`, an
+  empty value, `1 # first`) now gives the note no rank, so it is not a standing rule; it used to rank the note last.
+- A refusal that names a project's missing `drybag.toml`, or a checkout git could not name a directory of, prints the
+  path quoted when it holds a line break or a control character, so a directory's name can no longer add lines of its
+  own to the output or a CI log.
+- The `drybag memory` commands and the session's unreviewed count say `1 note(s)` where they said
+  `1 notes`, and `drybag setup --overlay` says a new overlay needs a first commit before its first
+  push, which failed without one.
+- The `volatile-notes` bundle now gives an unreviewed note flagged `startup` a lead of its own, "Notes that would be
+  standing rules once you promote them:", instead of saying it under the lead for dated, perishable facts. It is still
+  labelled `[unreviewed]` and still arrives as data.
+- The commit-message hook `drybag setup --git-hooks` installs runs only the `drybag` executable an absolute `PATH` entry names, never one in the work tree. Without one it
+  no longer falls back to `python3 -m drybag`, which imported a `drybag.py` or `drybag/` the repository commits ahead of the
+  installed package; it says that trailers are not stripped locally and lets the commit through. Run `drybag setup
+  --git-hooks` again to replace a hook an earlier release installed.
+- The commit-message hook leaves alone a message git hands it as `message` while a cherry-pick or a rebase is under way:
+  a `cherry-pick` or a rebase's pick, so a human's `Signed-off-by` at a vendor's mail domain survives it, and a `commit -m`
+  made while a rebase is stopped at `edit`. A cherry-pick continued after a conflict, any other `commit -m`, an editor
+  commit and `git commit --amend` are stripped as before. Run `drybag setup --git-hooks` again to install the new hook.
+- The hook that says a path-scoped rule once per file keeps its records, under `~/.local/share/drybag/sessions/`, for the
+  newest fifty sessions and removes the older ones, as the hook sink does for its markers; they used to pile up for good.
+- The note after a failed test run reads no command longer than 64 KiB, as the other session hints already did, and a
+  `uv run` command with many words before its test runner no longer costs the hook seconds to read.
+- The note sync no longer carries a file named like a project's `MEMORY.md` in another case, such as
+  `projects/<name>/memory/memory.md`: on a case-insensitive volume that file is the index this machine renders, so
+  the sync neither commits one nor integrates one another machine pushed, and holds such an upstream change for review.
+- The note sync no longer writes over a file of yours where a note another machine pushed lands: an ignored file at the
+  note's path, at a directory above it, or under a name this volume takes for the note's (a case or
+  Unicode-normalisation variant). Unless the file already holds that note's content, the job stops with
+  `waiting_clean_tree`, names the file and writes nothing. An incoming note this volume takes for another tracked one holds
+  upstream, naming both, rather than writing one over the other.
+- `drybag attach` and `attach --check` refuse a ledger they cannot read, as `drybag detach` does,
+  naming the file: one that is damaged or another drybag's `format` is no longer written over, which
+  left the allow rules and rule copies it recorded with nothing to take them back.
+- `drybag attach` and `drybag detach` run in a directory that is in no git repository now say so, instead of blaming
+  `git` on this machine.
+- `drybag attach` no longer writes over a `.codex/rules/` file it did not write: a file at a rule's
+  name that does not hold the bytes attach's ledger records, yours even when it holds the overlay's
+  very bytes, is left as it is, unrecorded and out of the exclude block, and named as `Codex rule
+  file left`; `drybag detach` leaves it too. A re-attach now takes back a copy the overlay dropped
+  while it is untracked and as attach wrote it, as `detach` does, instead of leaving it to apply as a
+  standing instruction. `attach --check` names both, one line each.
+- `drybag doctor`'s `attached` row, for a checkout whose `[project] name` was renamed since it was
+  attached, says what `drybag attach` refuses there, naming both projects, and gives `drybag attach
+  --project <name>` as the remedy; it said that the store the ledger names is not this project's.
+- `drybag doctor`'s `cli-path` warning now offers the plugin's own `scripts/drybag` launcher as a way to put `drybag` on
+  `PATH`, beside `uv tool install`, so a plugin-only install is not told to install a second copy.
+- `drybag doctor`'s `memory` row now reads `~/.claude/settings.json` without `--home`, and warns, with
+  `drybag memory index --check` as the remedy, when that check would fail: an out-of-date index of a store that holds
+  notes, a file in the store that cannot be read as a note, or an index over its word budget or the harness's caps.
+  `drybag doctor --root` naming no directory is now refused with exit 2 before any row runs.
+- `drybag doctor`'s `versions` row and a session's note on a newer configuration now read a pre-release as an overlay's
+  `requires` floor reads it, so a recorded `1.0.0rc1+local`, `1.0.0.0rc1` or `1.0.0rc1.post2` orders before `1.0.0` there
+  too, where it was left unordered.
+- `drybag plan check` run from a project root below the top of its git work tree now lints the plans the change
+  touches and lists its uncommitted ones. It used to read the paths git printed as the root's own, find no plan, and
+  report `OK: linted 0 plan(s)`.
+
+### Changed
+
+- The documentation no longer says the base branch's `drybag.toml` sets a documentation budget: every command reads
+  `[budgets]` from the `drybag.toml` in the checkout it runs in, so a pull request can raise a budget and that change is
+  for review to catch.
+  A documentation budget in the machine file is still ignored, and the note now says so in the words used for every key
+  a layer may not set.
+- The plugin no longer declares a `preset` option, which nothing read, so installing it stops saying an option is not set. `drybag setup` no longer writes `pluginConfigs`; an entry an earlier `setup` wrote there does nothing and can be deleted.
+- The plugin no longer runs a hook after every successful `Bash` call: that entry could not speak on Claude Code, which reports a failed command elsewhere, or on Codex, which sends no exit code there.
+- `drybag attach` on a machine with no `claude` on `PATH`, a Codex-only one say, composes the notes
+  and exits `0`, saying once that the overlay's hooks, skills, agents and MCP servers were rendered
+  but not installed; the next `attach` that finds `claude` installs and delivers them. It exited `1`
+  on every run before composing anything. A `claude` that is there and fails, an npm one whose `node` is gone included, still exits `1`.
+
+
 ## 0.7.1 (2026-11-09)
 
 ### Upgrading

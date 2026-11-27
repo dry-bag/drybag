@@ -2187,7 +2187,7 @@ why so few of them are trusted with anything.
 
 ```toml
 [drybag]
-version = "0.7.1"        # required; there is no default
+version = "0.8.0"        # required; there is no default
 preset = "recommended"
 
 [project]

@@ -1,1 +1,0 @@
-The plugin no longer declares a `preset` option, which nothing read, so installing it stops saying an option is not set. `drybag setup` no longer writes `pluginConfigs`; an entry an earlier `setup` wrote there does nothing and can be deleted.
