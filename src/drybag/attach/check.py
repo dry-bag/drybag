@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from drybag.attach.binding import read_binding
-from drybag.attach.mcp import planned_mcp
+from drybag.attach.mcp import allowing, planned_mcp
 from drybag.attach.write import AttachPlan, configured, gates, main_checkout_of, plan_writes
 from drybag.config.owner import Owner
 from drybag.printed import printable, quoted
@@ -116,6 +116,11 @@ def _report(planned: AttachPlan, source: str) -> Result:
     summary += "".join(f"\nCodex rule file would be left: {quoted(rule)}" for rule in planned.left)
     summary += "".join(f"\nCodex rule copy would be taken back: {quoted(r)}" for r in planned.taken)
     heads, lines = _mcp_heads(planned)
+    allowlist = planned.allow.written
+    if allowlist is not None:
+        lines.append(f"MCP allowlist would be written: {allowing(allowlist)}")
+    if planned.allow.withdrawn:
+        lines.append("MCP allowlist would be taken back")
     if lines:
         summary += "\n" + "\n".join(lines)
     data = {
@@ -132,5 +137,7 @@ def _report(planned: AttachPlan, source: str) -> Result:
         "rules_left": list(planned.left),
         "rules_taken_back": list(planned.taken),
         **heads,
+        "mcp_allowlist": None if allowlist is None else list(allowlist),
+        "mcp_allowlist_withdrawn": planned.allow.withdrawn,
     }
     return Result(summary, data)

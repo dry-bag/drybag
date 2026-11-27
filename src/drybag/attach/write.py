@@ -75,6 +75,9 @@ from drybag.attach.mcp import (
     write_mcp_ledger,
 )
 from drybag.attach.permissions import (
+    ALLOWED_KEY,
+    ALLOWED_NOT_A_LIST,
+    ALLOWED_OWNERS,
     CODEX_RULES,
     DENIED_KEY,
     DENIED_NOT_A_LIST,
@@ -247,6 +250,10 @@ class Attached:
     # The server names whose `deniedMcpServers` entry this run added and withdrew.
     mcp_denied: tuple[str, ...] = ()
     mcp_undenied: tuple[str, ...] = ()
+    # The `allowedMcpServers` names as this run wrote them, `None` where it wrote none, and whether
+    # it took drybag's entries of that key back.
+    mcp_allowlist: tuple[str, ...] | None = None
+    mcp_allowlist_withdrawn: bool = False
 
 
 @dataclass(frozen=True)
@@ -426,11 +433,76 @@ def _deny(raw: dict[str, Any], add: Iterable[str], withdraw: Iterable[str]) -> N
         raw.pop(DENIED_KEY)
 
 
-def _merged_settings(document: str, diff: PermissionDiff, deny: DenyChange) -> str:
+@dataclass(frozen=True)
+class AllowChange:
+    """The `allowedMcpServers` entries one run adds and takes back, by server name; whether it
+    writes the key (`make`) or takes it out (`drop`); and the names the MCP ledger records after
+    it, `None` where drybag holds no such key."""
+
+    add: tuple[str, ...] = ()
+    withdraw: tuple[str, ...] = ()
+    make: bool = False
+    drop: bool = False
+    record: tuple[str, ...] | None = None
+    notes: tuple[str, ...] = ()
+
+    @property
+    def changes(self) -> bool:
+        return self.make or self.drop or bool(self.add or self.withdraw)
+
+    @property
+    def written(self) -> tuple[str, ...] | None:
+        """The allowlist as the run writes it, `None` where it writes none or takes it back."""
+        return self.record if self.changes and self.record is not None else None
+
+    @property
+    def withdrawn(self) -> bool:
+        """Whether the run takes drybag's allowlist back."""
+        return self.drop or (self.record is None and bool(self.withdraw))
+
+
+def _allow_change(
+    raw: dict[str, Any], allowed: tuple[str, ...] | None, held: McpLedger
+) -> AllowChange:
+    """What the file needs for the fold's allowlist (`Fold.allowed`; `None` takes drybag's back).
+    The key is written only where none is: one already there that the ledger does not record is the
+    owner's, and is left as it is. In a key drybag wrote, an entry the ledger does not record is the
+    owner's too, and the key goes only when nothing but drybag's entries was in it."""
+    entries = denied_list(raw, ALLOWED_KEY)
+    present = ALLOWED_KEY in raw
+    if entries is None:
+        return AllowChange(record=held.allow, notes=(ALLOWED_NOT_A_LIST,))
+    if present and held.allow is None:
+        return AllowChange(notes=() if allowed is None else (ALLOWED_OWNERS,))
+    wanted = allowed or ()
+    add = tuple(name for name in wanted if _server_entry(name) not in entries)
+    withdraw = tuple(
+        name for name in held.allow or () if name not in wanted and _server_entry(name) in entries
+    )
+    if allowed is not None:
+        return AllowChange(add, withdraw, make=not present, record=allowed)
+    gone = list(map(_server_entry, withdraw))
+    return AllowChange(withdraw=withdraw, drop=present and all(e in gone for e in entries))
+
+
+def _allow(raw: dict[str, Any], change: AllowChange) -> None:
+    """`raw` with `change` made: drybag's entries added and taken back, the key made or dropped."""
+    if change.drop:
+        raw.pop(ALLOWED_KEY)
+    elif change.changes:
+        gone = list(map(_server_entry, change.withdraw))
+        kept = [entry for entry in denied_list(raw, ALLOWED_KEY) or [] if entry not in gone]
+        raw[ALLOWED_KEY] = kept + [_server_entry(name) for name in change.add]
+
+
+def _merged_settings(
+    document: str, diff: PermissionDiff, deny: DenyChange, allowlist: AllowChange
+) -> str:
     """The local settings document with the overlay's allow rules appended in order, the rules
     it no longer grants (`diff.withdrawn_allow`) taken out, and the `deniedMcpServers` entries of
-    `deny` added and taken back."""
-    if not diff.added_allow and not diff.withdrawn_allow and not deny.add and not deny.withdraw:
+    `deny` added and taken back, and the change `allowlist` made."""
+    changed = deny.add or deny.withdraw or allowlist.changes
+    if not (diff.added_allow or diff.withdrawn_allow or changed):
         # Nothing to add or take back, so nothing is touched. A rewrite here would reformat a file
         # the owner owns, on a run that changed nothing, and report itself as a write.
         return document
@@ -443,6 +515,7 @@ def _merged_settings(document: str, diff: PermissionDiff, deny: DenyChange) -> s
             permissions["allow"] = allow
             raw["permissions"] = permissions
     _deny(raw, deny.add, deny.withdraw)
+    _allow(raw, allowlist)
     if diff.withdrawn_allow:
         # As `detach` leaves it: an allow list the take-back emptied is not what the file held.
         raw = _emptied(raw)
@@ -778,6 +851,7 @@ class AttachPlan:
     # the MCP ledger as this run read it; and what reading them noted.
     served: dict[str, Served] | None
     deny: DenyChange
+    allow: AllowChange
     mcp_held: McpLedger
     mcp_notes: tuple[str, ...]
 
@@ -939,7 +1013,13 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     held = read_mcp_ledger(root)
     usable = fold.usable and held.fault is None
     deny = _deny_change(document, fold.off if usable else None, held)
-    merged = _merged_settings(document, diff, deny)
+    # And the allowlist `"*": "off"` asks for, written only where no key is that drybag did not.
+    allow = (
+        _allow_change(settings_document(document), fold.allowed, held)
+        if usable
+        else AllowChange(record=held.allow)
+    )
+    merged = _merged_settings(document, diff, deny, allow)
     written = merged != document
     targets = tuple(target for target, _ in codex_rules(binding))
     recorded = previous.rules if previous is not None else {}
@@ -996,8 +1076,14 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         parts=parts,
         served=fold.served if usable else None,
         deny=deny,
+        allow=allow,
         mcp_held=held,
-        mcp_notes=(*fold.notes, *([] if held.fault is None else [held.fault]), *deny.notes),
+        mcp_notes=(
+            *fold.notes,
+            *([] if held.fault is None else [held.fault]),
+            *deny.notes,
+            *allow.notes,
+        ),
     )
 
 
@@ -1026,16 +1112,23 @@ def _carry_out(
         fsops.write_within(root, target, text)
     rules = tuple(target for target, _ in planned.rules)
     written = planned.settings is not None
-    # A deny entry is recorded before the settings file holds it, and stays recorded until the file
-    # no longer does, so no entry `attach` wrote is ever one no later run takes back.
-    deny, mcp_ledger = planned.deny, replace(planned.mcp_held, deny=planned.deny.record)
+    # A deny or allow entry is recorded before the settings file holds it, and stays recorded until
+    # the file no longer does, so no entry `attach` wrote is ever one no later run takes back.
+    deny, allow = planned.deny, planned.allow
+    mcp_ledger = replace(planned.mcp_held, deny=deny.record, allow=allow.record)
     # Where no MCP change may be made, the reconcile is handed nothing to serve and nothing owned.
     owned = mcp_ledger.mcp if planned.served is not None else {}
-    if (holding := replace(mcp_ledger, deny=(*deny.record, *deny.withdraw))) != planned.mcp_held:
+    allowing = allow.record if planned.mcp_held.allow is None else planned.mcp_held.allow
+    holding = replace(
+        mcp_ledger,
+        deny=(*deny.record, *deny.withdraw),
+        allow=None if allowing is None else (*allowing, *(allow.record or ())),
+    )
+    if holding != planned.mcp_held:
         write_mcp_ledger(root, holding)
     if planned.settings is not None:
         fsops.write_within(root, LOCAL_SETTINGS, planned.settings)
-    if deny.withdraw:
+    if holding != mcp_ledger:
         write_mcp_ledger(root, mcp_ledger)
     # The pointer is recorded before it is written, so a run that stops on the way leaves `detach`
     # a record of it; with no notes composed, what an earlier attach left there stays recorded.
@@ -1140,6 +1233,8 @@ def _carry_out(
         mcp_failed=mcp.failed,
         mcp_denied=deny.add,
         mcp_undenied=deny.withdraw,
+        mcp_allowlist=allow.written,
+        mcp_allowlist_withdrawn=allow.withdrawn,
     )
 
 
@@ -1309,6 +1404,7 @@ class Detached:
     # The overlay's MCP servers taken back, and the server names whose deny entry was withdrawn.
     mcp_taken_back: tuple[str, ...] = ()
     mcp_undenied: tuple[str, ...] = ()
+    mcp_allowlist_withdrawn: bool = False
 
 
 def _emptied(raw: dict[str, Any]) -> dict[str, Any]:
@@ -1341,11 +1437,10 @@ class SettingsWithdrawal:
     text: str | None
     notes: tuple[str, ...] = ()
     undenied: tuple[str, ...] = ()
+    unallowed: bool = False
 
 
-def _planned_settings(
-    root: Path, recorded: AttachLedger, deny: tuple[str, ...] = ()
-) -> SettingsWithdrawal:
+def _planned_settings(root: Path, recorded: AttachLedger, mcp: McpLedger) -> SettingsWithdrawal:
     """Take exactly the recorded rules and the pointer key back out. The allow rules come from the
     ledger and never from a guess at their content: that is the whole reason the ledger exists."""
     document = local_document(root)
@@ -1366,8 +1461,11 @@ def _planned_settings(
             raw.pop(key, None)
         # The `deniedMcpServers` entries the MCP ledger recorded, each only in its exact shape.
         denied = denied_list(raw)
-        undenied = tuple(name for name in deny if _server_entry(name) in (denied or []))
+        undenied = tuple(name for name in mcp.deny if _server_entry(name) in (denied or []))
         _deny(raw, (), undenied)
+        # And the allowlist it wrote, as a re-attach whose overlay no longer asks for one.
+        allowlist = _allow_change(raw, None, mcp)
+        _allow(raw, allowlist)
         # Through `settings_text`, as every write-back of a parsed settings document: on Python
         # 3.12 an indented encode stops near 994 levels, under what the parser read.
         remaining = _emptied(raw)
@@ -1375,12 +1473,13 @@ def _planned_settings(
         unchanged = remaining == held
     except RecursionError:
         raise ParserLimitError(f"{LOCAL_SETTINGS} {NESTED}") from None
-    notes = () if denied is not None else (DENIED_NOT_A_LIST,)
+    notes = (*(() if denied is not None else (DENIED_NOT_A_LIST,)), *allowlist.notes)
     if unchanged:
         return SettingsWithdrawal(removed, None, notes)
     # `{}` is not what the file looked like before `attach`; a file holding nothing is one this
     # command created and is the last thing it takes away.
-    return SettingsWithdrawal(removed, emptied if remaining else "", notes, undenied)
+    text = emptied if remaining else ""
+    return SettingsWithdrawal(removed, text, notes, undenied, allowlist.withdrawn)
 
 
 def _withdraw_settings(root: Path, planned: SettingsWithdrawal) -> tuple[str, ...]:
@@ -1580,9 +1679,9 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     except Failure:
         # No `attach.json`: an older drybag's `detach` removed it and never opened the MCP ledger,
         # whose names and deny entries are taken back here before the missing file is said.
-        if not (held.deny or held.mcp):
+        if not (held.deny or held.mcp or held.allow is not None):
             raise
-        settings = _planned_settings(root, _NOTHING, held.deny)
+        settings = _planned_settings(root, _NOTHING, held)
         _refuse_unwithdrawable(root, _NOTHING, settings)
         _withdraw_settings(root, settings)
         _take_back_mcp(root, held, runner)
@@ -1599,7 +1698,7 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     # The `info/exclude` block is found above the first withdrawal for the same reason: `git`
     # names the file and a region opened twice refuses, and both are knowable now.
     hidden = exclude.withdrawn_block(root)
-    settings = _planned_settings(root, recorded, held.deny)
+    settings = _planned_settings(root, recorded, held)
     # What the main checkout's settings file names, which decides each `claude plugin` call: read
     # here, so a file that cannot be read refuses while nothing is withdrawn.
     plugin = None if main is None else (id, main, _plugin_keys(main))
@@ -1650,4 +1749,5 @@ def detach(root: Path, *, runner: Runner) -> Detached:
         ),
         taken,
         settings.undenied,
+        settings.unallowed,
     )

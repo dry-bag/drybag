@@ -622,7 +622,8 @@ def _plate(overlay: Path, plate: Plate) -> str:
 def _mcp(bound: Binding, recorded: McpLedger) -> list[_Finding]:
     """The overlay's MCP servers, read from its `claude/mcp.json` files and the MCP ledger alone:
     each name it delivers with the plate whose definition wins and the one that switched it on,
-    each name it switches off with its plate, the `env` and `headers` keys a definition writes
+    each name it switches off with its plate, the allowlist `"*": "off"` asks for with its plate,
+    the `env` and `headers` keys a definition writes
     (`_written`), and what reading them noted. A name `attach` would deliver or take back, as
     `attach.mcp.planned_mcp` marks it, is the warning, as a drifted hook is; so is a file under
     which `attach` changes nothing. Nothing where none of them holds a name.
@@ -630,7 +631,7 @@ def _mcp(bound: Binding, recorded: McpLedger) -> list[_Finding]:
     No process is launched and the harness's own record is not read, since its commands that get
     or list a server start it, so the row says once that it cannot see a delivered entry."""
     from drybag.attach import ATTACH_COMMAND
-    from drybag.attach.mcp import fold_mcp, planned_mcp
+    from drybag.attach.mcp import allowing, fold_mcp, planned_mcp
     from drybag.binding import MCP_LEDGER_NAME
     from drybag.doctor.api import OK, WARN
     from drybag.printed import quoted
@@ -652,6 +653,9 @@ def _mcp(bound: Binding, recorded: McpLedger) -> list[_Finding]:
             f"{quoted(name)} ({_plate(bound.overlay, at)})" for name, at in sorted(fold.off.items())
         )
         said.append(f"MCP servers the overlay switches off: {', '.join(off)}")
+    if fold.allowed is not None and fold.rest_off_in is not None:
+        where = _plate(bound.overlay, fold.rest_off_in)
+        said.append(f'MCP allowlist ("*" off in {where}): {allowing(fold.allowed)}')
     usable = fold.usable and recorded.fault is None
     plan = planned_mcp(fold.served, recorded.mcp)
     pending = sorted({*plan.add, *plan.readd, *plan.take_back}) if usable else []

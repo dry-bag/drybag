@@ -1060,7 +1060,9 @@ the first write, `--check` ends with the same code and the same line; otherwise 
 `allow_added` lists those allow rules, and `rules_written`, `rules_left` and `rules_taken_back` those files, the keys the run's `--json` uses. It also names, one line
 each, the overlay's MCP servers the run would add, re-add (a changed definition, or one an earlier
 run left unsettled) and take back, and the server names it would deny or stop denying, as `mcp_add`, `mcp_readd`,
-`mcp_take_back`, `mcp_deny` and `mcp_undeny` in `--json`. It launches no `claude` for them.
+`mcp_take_back`, `mcp_deny` and `mcp_undeny` in `--json`, and the allowlist it would write or
+take back, as `mcp_allowlist` (the names, or `null` where it writes none) and
+`mcp_allowlist_withdrawn`. It launches no `claude` for them.
 
 **What the overlay grants is shown, not gated.** The overlay is yours, written by you and your
 agents, and its hooks run scripts from the overlay checkout in place, so `attach` asks for no
@@ -1078,7 +1080,8 @@ overlay's MCP servers this run delivered, took back, replaced a local entry of (
 or left by an interrupted run) and could not deliver or take back, each by name with Claude Code's
 own message for a failure and never its definition, and the server names whose `deniedMcpServers`
 entry it added and withdrew; `mcp_delivered`, `mcp_taken_back`, `mcp_replaced`, `mcp_failed`,
-`mcp_denied` and `mcp_undenied` carry the names in `--json`. A failure exits `1` once every other step ran, and the next run tries the name again. A re-attach of a
+`mcp_denied` and `mcp_undenied` carry the names in `--json`, then the allowlist it wrote or took
+back (`mcp_allowlist`, `mcp_allowlist_withdrawn`). A failure exits `1` once every other step ran, and the next run tries the name again. A re-attach of a
 checkout this machine binds to another project than its `[project] name` names — a name renamed in
 a pulled commit would move every worktree's binding, with its servers, rules and hooks — is
 refused (`2`) by `attach` and `--check` alike, naming both projects, unless `--project` names the
@@ -1219,6 +1222,47 @@ there and is no JSON object whose `mcpServers` is an object, or a `drybag/attach
 drybag cannot read (damaged, or a newer one's), is said, and no server or deny entry then changes.
 An entry that is no definition, `"off"` or `"on"`, a definition holding `NaN` or `Infinity`, a
 name no command line carries, and an `"on"` no plate defines or switches off are said and skipped.
+
+**An allowlist: `"*": "off"`.** The reserved name `"*"` stands for every MCP server no plate
+switches on, and takes `"off"` or `"on"` alone (a definition under it is said and skipped). Its
+state folds as a name's does, so the last plate's word wins and a later plate's `"*": "on"` lifts
+an earlier `"off"`. Where it is off, **attach writes `allowedMcpServers`** in the main checkout's
+`.claude/settings.local.json`: a `{"serverName": "<name>"}` entry for each name whose state is on,
+served or switched on with no definition (`"figma": "on"` lets a server defined at user scope
+through), and `[]` where there is none, so that no MCP server loads. A name switched off keeps its
+`deniedMcpServers` entry, which wins over the allowlist. The file is merged, never replaced: every
+other key in it (a run profile's `permissions.deny`, its `sandbox`) stays. The key is written only
+where none is: one already there that `drybag/attach-mcp.json` does not record is yours, and is
+left as it is, which the run says, since adding the overlay's names to it would widen a cut you
+made. In the key `attach` wrote, an entry you added stays yours; the names `attach` added are
+recorded in `drybag/attach-mcp.json`, before the file holds them, and a re-attach whose overlay no
+longer says `"*": "off"`, or `detach`, takes them back, and the key with them where nothing else
+is in it. What it does to a session was measured on Claude Code 2.1.325 (2026-11-27, `claude -p
+--output-format stream-json --verbose`, counting the servers of the `init` event) with
+`allowedMcpServers` in a folder's `.claude/settings.local.json`, and in its `.claude/settings.json`
+alike:
+
+| `allowedMcpServers` | MCP servers that load |
+|---|---|
+| absent | every one: 36 on the machine measured, 231 tools, the claude.ai connectors among them |
+| `[]` | none, and no MCP tool; plugins and skills unchanged |
+| `[{"serverName": "<a user-scope server>"}]` | that one |
+| `[{"serverName": "<a local-scope server>"}]` | that one |
+| `[{"serverName": "plugin:<plugin>:<server>"}]`, or `"<server>"` alone | none: a plugin's server does not pass by name |
+| `[{"serverName": "claude.ai <connector>"}]` | none: a claude.ai connector does not pass by name |
+| a name in both `allowedMcpServers` and `deniedMcpServers` | none of that name |
+
+Under an allowlist `claude mcp add-json` refuses a name the list leaves out (`Cannot add MCP
+server "<name>": not allowed by enterprise policy`, exit `1`), while `claude mcp remove` still
+works; `attach` writes the settings file before its first `claude mcp` call, so each served name is
+on the list when it is added. A served name an allowlist of your own leaves out is refused that way
+and stays unsettled, as any refused server does.
+
+**A second clone attaches on its own.** A second clone of the same repository (not a linked
+worktree, which shares the main checkout's) has a git common directory of its own, so `attach`
+gives it its own binding id, its own `drybag/attach.json` and `drybag/attach-mcp.json`, and writes
+its own `.claude/settings.local.json`; a run profile copied into that file first keeps every key,
+and `detach` there leaves the first clone as it is.
 
 **`projects/<name>/checkout/` holds the owner-held files**, which `attach` neither reads nor
 writes: [`owner-files`](#hooks) places them in each new linked worktree.
@@ -1386,7 +1430,8 @@ and the directory where nothing else is left (a file there that is not a link is
 wrote: it stays, and so does the directory, which the line says and `--json` reports as
 `store_kept: true`) — removes the `drybag:attach` block in the repository's exclude file, and deletes
 the ledger, `drybag/attach.json` in the git common directory. Before the render directory goes it
-takes the `deniedMcpServers` entries `attach` recorded out of the settings file and each MCP server
+takes the `deniedMcpServers` entries and the `allowedMcpServers` entries (and the key, where
+nothing else is in it) `attach` recorded out of the settings file and each MCP server
 `drybag/attach-mcp.json` records out of `~/.claude.json`, with `claude mcp remove --scope local --
 <name>` from the main checkout, then deletes that file, naming each server and deny entry it took; a `remove` that neither succeeded nor
 answered `No MCP server named "<name>"` (no `claude` on `PATH`, say) fails (`1`) naming the server and Claude Code's message, with the name
@@ -1948,7 +1993,8 @@ the harness's to decide, and this row does not read that file.
 **How `attached` reads the overlay's MCP servers.** Beside the delivery and the pointer, the row
 names each MCP server the overlay delivers with the plate whose definition wins and, where another
 plate switched it on, that plate too (`tags/t1`, and `tags/t1 on m1` for a machine's sub-plate),
-each name the overlay switches off with the plate that says so, and each `env` and `headers` key a
+each name the overlay switches off with the plate that says so, the allowlist a `"*": "off"` asks
+for with the plate that says so, and each `env` and `headers` key a
 served definition keeps in the overlay's files, by key and never by value; all of that is
 information. A name `attach` would deliver or take back, as `--check` would list it (served and not
 delivered, under another definition or unsettled, or held by `drybag/attach-mcp.json` and no

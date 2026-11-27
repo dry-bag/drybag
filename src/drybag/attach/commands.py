@@ -80,6 +80,8 @@ def run_attach(args: argparse.Namespace) -> Result:
         "mcp_failed": [name for name, _ in attached.mcp_failed],
         "mcp_denied": list(attached.mcp_denied),
         "mcp_undenied": list(attached.mcp_undenied),
+        "mcp_allowlist": None if attached.mcp_allowlist is None else list(attached.mcp_allowlist),
+        "mcp_allowlist_withdrawn": attached.mcp_allowlist_withdrawn,
     }
     summary = "; ".join(
         (
@@ -103,6 +105,8 @@ def _screen(attached: Attached) -> list[str]:
     is delivered here is what the deleted `--trust-remote` and `--yes` were replaced by. Every name
     prints through `printed`: the project and the remote are the repository's, and a hook's command
     or an allow rule holds spaces and may hold anything."""
+    from drybag.attach.mcp import allowing
+
     origin = "no origin remote" if attached.origin is None else f"origin {quoted(attached.origin)}"
     lines = [f"binding {attached.binding}: project {quoted(attached.project)}, {origin}"]
     for side in ("added", "removed"):
@@ -131,6 +135,10 @@ def _screen(attached: Attached) -> list[str]:
     lines += [f"MCP server failed: {quoted(name)}: {said}" for name, said in attached.mcp_failed]
     lines += [f"MCP server denied: {quoted(name)}" for name in attached.mcp_denied]
     lines += [f"MCP server deny entry withdrawn: {quoted(name)}" for name in attached.mcp_undenied]
+    if attached.mcp_allowlist is not None:
+        lines.append(f"MCP allowlist written: {allowing(attached.mcp_allowlist)}")
+    if attached.mcp_allowlist_withdrawn:
+        lines.append("MCP allowlist taken back")
     return lines
 
 
@@ -181,6 +189,7 @@ def run_detach(args: argparse.Namespace) -> Result:
     ]
     left += [f"MCP server taken back: {quoted(name)}" for name in removed.mcp_taken_back]
     left += [f"MCP server deny entry withdrawn: {quoted(name)}" for name in removed.mcp_undenied]
+    left += ["MCP allowlist taken back"] if removed.mcp_allowlist_withdrawn else []
     return Result("\n".join((line, *left)), data)
 
 

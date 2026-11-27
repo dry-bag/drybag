@@ -610,13 +610,13 @@ reddens = [
 name = "detach finds the exclude block after it has withdrawn the settings"
 file = "src/drybag/attach/write.py"
 before = """    hidden = exclude.withdrawn_block(root)
-    settings = _planned_settings(root, recorded, held.deny)
+    settings = _planned_settings(root, recorded, held)
     # What the main checkout's settings file names, which decides each `claude plugin` call: read
     # here, so a file that cannot be read refuses while nothing is withdrawn.
     plugin = None if main is None else (id, main, _plugin_keys(main))
     _refuse_unwithdrawable(root, recorded, settings)
     allow_removed = _withdraw_settings(root, settings)"""
-after = """    settings = _planned_settings(root, recorded, held.deny)
+after = """    settings = _planned_settings(root, recorded, held)
     # What the main checkout's settings file names, which decides each `claude plugin` call: read
     # here, so a file that cannot be read refuses while nothing is withdrawn.
     plugin = None if main is None else (id, main, _plugin_keys(main))
@@ -2063,8 +2063,8 @@ reddens = [
 [[mutation]]
 name = "detach takes no deny entry out of the settings file"
 file = "src/drybag/attach/write.py"
-before = '''settings = _planned_settings(root, recorded, held.deny)'''
-after = '''settings = _planned_settings(root, recorded, ())'''
+before = '''settings = _planned_settings(root, recorded, held)'''
+after = '''settings = _planned_settings(root, recorded, replace(held, deny=()))'''
 reddens = [
   "tests/attach/test_detach.py::test_detach_removes_the_deny_entries_and_the_mcp_ledger",
 ]
@@ -2117,7 +2117,7 @@ reddens = ["tests/attach/test_detach.py::test_detach_keeps_a_damaged_mcp_ledger_
 [[mutation]]
 name = "detach with no attach.json leaves the MCP ledger an older detach left"
 file = "src/drybag/attach/write.py"
-before = "        if not (held.deny or held.mcp):"
+before = "        if not (held.deny or held.mcp or held.allow is not None):"
 after = "        if True:"
 reddens = ["tests/attach/test_detach.py::test_detach_settles_the_mcp_ledger_an_older_detach_left"]
 
@@ -2432,4 +2432,44 @@ before = "    if found is not None and found.project != named:\n        raise Re
 after = "    if False:\n        raise RebindRefused"
 reddens = [
   "tests/attach/test_commands.py::test_a_reattach_under_another_project_name_is_refused_unless_project_names_it",
+]
+
+# The allowlist: a key the owner wrote is never widened with the overlay's names, the names
+# `attach` adds are recorded before the file holds them, and a take-back leaves an entry the owner
+# added to drybag's key, which `detach` takes back like a re-attach that no longer asks for it.
+[[mutation]]
+name = "attach adds the overlay's names to an allowlist the owner wrote"
+file = "src/drybag/attach/write.py"
+before = """    if present and held.allow is None:"""
+after = """    if False:"""
+reddens = [
+  "tests/attach/test_write.py::test_an_allowlist_drybag_did_not_write_is_left_with_a_note[owners]",
+]
+
+[[mutation]]
+name = "attach records the allowlist only once the settings file holds it"
+file = "src/drybag/attach/write.py"
+before = """    allowing = allow.record if planned.mcp_held.allow is None else planned.mcp_held.allow"""
+after = """    allowing = planned.mcp_held.allow"""
+reddens = [
+  "tests/attach/test_write.py::test_an_allowlist_is_recorded_before_the_settings_file_holds_it",
+]
+
+[[mutation]]
+name = "the allowlist take-back drops a key holding the owner's entries"
+file = "src/drybag/attach/write.py"
+before = """drop=present and all(e in gone for e in entries)"""
+after = """drop=present"""
+reddens = [
+  "tests/attach/test_write.py::test_rest_on_takes_the_allowlist_back_and_keeps_an_entry_added_by_hand",
+]
+
+[[mutation]]
+name = "detach leaves drybag's allowlist in the settings file"
+file = "src/drybag/attach/write.py"
+before = """        allowlist = _allow_change(raw, None, mcp)
+        _allow(raw, allowlist)"""
+after = """        allowlist = AllowChange()"""
+reddens = [
+  "tests/attach/test_detach.py::test_detach_takes_back_the_allowlist_and_keeps_every_key_already_there",
 ]

@@ -1412,6 +1412,42 @@ def test_owner_deny_entries_survive_attach_and_detach(tmp_path: Path) -> None:
     assert json.loads(settings.read_text(encoding="utf-8")) == {"deniedMcpServers": owner}
 
 
+def test_detach_takes_back_the_allowlist_and_keeps_every_key_already_there(tmp_path: Path) -> None:
+    # A run profile copied in before `attach` keeps every key, with no allowlist left.
+    root, store, machine = _bound(tmp_path)
+    settings = root / SETTINGS
+    settings.parent.mkdir()
+    profile = {"permissions": {"deny": ["Bash(curl:*)"]}, "sandbox": {"enabled": True}}
+    settings.write_text(json.dumps(profile), encoding="utf-8")
+    _off(store.parents[2], "*")
+    _attach(root, store, machine)
+    assert json.loads(settings.read_text(encoding="utf-8"))["allowedMcpServers"] == []
+    assert _detach(root).mcp_allowlist_withdrawn
+    assert json.loads(settings.read_text(encoding="utf-8")) == profile
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+
+
+def test_attach_and_detach_of_an_allowlist_leave_the_tree_as_it_was(tmp_path: Path) -> None:
+    root, store, machine = _bound(tmp_path)
+    _off(store.parents[2], "*", "srv1")
+    before = snapshot(root)
+    _attach(root, store, machine)
+    assert _detach(root).mcp_allowlist_withdrawn
+    assert_snapshot_unchanged(root, before)
+
+
+def test_detach_with_no_attach_ledger_takes_back_the_allowlist(tmp_path: Path) -> None:
+    # An MCP ledger recording only the allowlist is still one an older `detach` left behind.
+    root, store, machine = _bound(tmp_path)
+    _off(store.parents[2], "*")
+    _attach(root, store, machine)
+    ledger_file(root).unlink()
+    with pytest.raises(Failure, match="is not there, as an older drybag's"):
+        _detach(root)
+    left = (root / SETTINGS).read_text(encoding="utf-8") if (root / SETTINGS).exists() else "{}"
+    assert "allowedMcpServers" not in json.loads(left)
+
+
 def test_detach_past_a_denied_key_that_is_no_list_says_so(tmp_path: Path) -> None:
     root, store, machine = _bound(tmp_path)
     _off(store.parents[2], "srv1")

@@ -1222,7 +1222,7 @@ def test_attach_and_detach_screens_name_each_server_and_deny_entry(
         flags = _flags(root, store, machine) if command == "attach" else ["--root", str(root)]
         assert invoke([command, *flags]) == 0
         lines = capsys.readouterr().out.splitlines()
-        return [line.split(" (")[0] for line in lines if line.startswith("MCP server")]
+        return [line.split(" (")[0] for line in lines if line.startswith("MCP ")]
 
     assert said("attach", {"m1": {"command": "a"}, "m2": {"command": "b"}, "s1": "off"}) == [
         "MCP server delivered: m1",
@@ -1234,9 +1234,13 @@ def test_attach_and_detach_screens_name_each_server_and_deny_entry(
         "MCP server taken back: m1",
         "MCP server deny entry withdrawn: s1",
     ]
-    said("attach", {"m2": {"command": "b"}, "s1": "off"})
+    assert said("attach", {"m2": {"command": "b"}, "s1": "off", "*": "off"}) == [
+        "MCP server denied: s1",
+        "MCP allowlist written: only m2 may load",
+    ]
     assert said("detach", {}) == [
         "MCP server taken back: m2",
         "MCP server deny entry withdrawn: s1",
+        "MCP allowlist taken back",
     ]
     assert runner.local == set()

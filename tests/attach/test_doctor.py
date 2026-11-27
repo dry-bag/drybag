@@ -1005,6 +1005,16 @@ def test_doctor_attributes_each_served_name_to_its_plates(tmp_path: Path) -> Non
     assert attach_doctor.MCP_UNSEEN in row.detail
 
 
+def test_doctor_names_the_allowlist_and_the_plate_that_asks_for_it(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": A, "user1": "on"})
+    _mcp_file(tmp_path / "overlay", "projects/p", {"*": "off"})
+    write_mcp_ledger(root, McpLedger(mcp={"alpha": digest(A)}, allow=("alpha", "user1")))
+    row = _mcp_row(tmp_path, root)
+    assert row.status == OK, row
+    assert 'MCP allowlist ("*" off in projects/p): only alpha, user1 may load' in row.detail
+
+
 def test_doctor_warns_of_each_name_attach_would_deliver_or_take_back(tmp_path: Path) -> None:
     # As a drifted hook is: a served name not delivered, one under another digest or unsettled,
     # and one the ledger owns that the overlay no longer serves.

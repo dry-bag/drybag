@@ -10,7 +10,16 @@ from pathlib import Path
 import pytest
 
 from drybag.attach import mcp
-from drybag.attach.mcp import BAD_LEDGER, BAD_VALUE, ON_ALONE, UNPASSABLE, digest, fold_mcp
+from drybag.attach.mcp import (
+    BAD_LEDGER,
+    BAD_VALUE,
+    ON_ALONE,
+    REST,
+    REST_DEFINED,
+    UNPASSABLE,
+    digest,
+    fold_mcp,
+)
 from drybag.binding import MCP_LEDGER_FILE, MCP_LEDGER_NAME
 from drybag.config.plates import Plate, PlateKind
 from drybag.jsonobject import DEPTH_CAP
@@ -78,6 +87,32 @@ def test_on_with_no_definition_and_no_off_is_a_note(tmp_path: Path) -> None:
     fold = fold_mcp([t1, p])
     assert (fold.served, fold.off) == ({}, {})
     assert fold.notes == (ON_ALONE.format(path=quoted(str(_file(p))), name="srv1"),)
+
+
+def test_rest_off_allows_only_the_names_switched_on(tmp_path: Path) -> None:
+    # `"*": "off"` cuts every server no plate switches on: the served name and a name switched on
+    # with no definition (one defined outside the overlay) are the allowlist, and an "on" alone is
+    # no note under it, since it lets that server through.
+    common = _plate(tmp_path, PlateKind.COMMON, "common", _servers(m1={"command": "a"}, m2="off"))
+    p = _plate(tmp_path, PlateKind.PROJECT, "p", _servers(**{REST: "off"}, user1="on"))
+    fold = fold_mcp([common, p])
+    assert (fold.allowed, fold.rest_off_in) == (("m1", "user1"), p)
+    assert (list(fold.served), list(fold.off), fold.notes) == (["m1"], ["m2"], ())
+
+
+def test_a_later_plates_rest_on_lifts_the_allowlist(tmp_path: Path) -> None:
+    common = _plate(tmp_path, PlateKind.COMMON, "common", _servers(**{REST: "off"}))
+    m1 = _plate(tmp_path, PlateKind.PROJECT, "p", _servers(**{REST: "on"}), machine="m1")
+    assert fold_mcp([common]).allowed == ()
+    assert (fold_mcp([common, m1]).allowed, fold_mcp([common, m1]).off) == (None, {})
+    assert fold_mcp([]).allowed is None
+
+
+def test_a_definition_under_rest_is_a_note_and_skipped(tmp_path: Path) -> None:
+    plate = _plate(tmp_path, PlateKind.COMMON, "c1", _servers(**{REST: {"command": "a"}}))
+    fold = fold_mcp([plate])
+    assert (fold.served, fold.allowed) == ({}, None)
+    assert fold.notes == (REST_DEFINED.format(path=quoted(str(_file(plate)))),)
 
 
 def test_digest_ignores_key_order() -> None:

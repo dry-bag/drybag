@@ -26,8 +26,13 @@ from drybag.attach.api import ledger
 from drybag.attach.binding import OVERLAY_DAMAGED
 from drybag.attach.check import check
 from drybag.attach.exclude import NOT_IGNORED, TRACKED
-from drybag.attach.mcp import BAD_LEDGER, UNUSABLE, McpLedger, digest, read_mcp_ledger
-from drybag.attach.permissions import DENIED_NOT_A_LIST, settings_document
+from drybag.attach.mcp import BAD_LEDGER, REST, UNUSABLE, McpLedger, digest, read_mcp_ledger
+from drybag.attach.permissions import (
+    ALLOWED_NOT_A_LIST,
+    ALLOWED_OWNERS,
+    DENIED_NOT_A_LIST,
+    settings_document,
+)
 from drybag.attach.write import (
     CLAUDE_ABSENT,
     GROUP_ESCAPES,
@@ -37,6 +42,7 @@ from drybag.attach.write import (
     NOT_INSTALLED,
     Attached,
     attach,
+    detach,
 )
 from drybag.binding import LEDGER_FILE, MCP_LEDGER_FILE, MCP_LEDGER_NAME, common_directory
 from drybag.config.loader import CONFIG_FILE, load
@@ -2936,3 +2942,116 @@ def test_a_deny_only_merge_leaves_the_owners_permissions_as_they_are(tmp_path: P
     _mcp(store, srv1="off")
     attach(root, store=store, machine=machine, runner=Recorder())
     assert _settings(root)["permissions"] == {"deny": [RULE]}
+
+
+ALLOWED = "allowedMcpServers"
+
+
+def test_rest_off_writes_an_empty_allowlist_beside_every_key_already_there(tmp_path: Path) -> None:
+    # A run profile copied into the settings file keeps every key, and the cut is written beside
+    # them; measured on Claude Code 2.1.325, `[]` there loads no MCP server at all.
+    root, store, machine = _attachable(tmp_path)
+    profile = {"permissions": {"deny": [RULE]}, "sandbox": {"enabled": True}}
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps(profile), encoding="utf-8")
+    _mcp(store, **{REST: "off"})
+    data = check(root, store=store, machine=machine).data
+    assert (data["mcp_allowlist"], data["mcp_allowlist_withdrawn"]) == ([], False)
+    assert attach(root, store=store, machine=machine, runner=Recorder()).mcp_allowlist == ()
+    settings = _settings(root)
+    assert settings[ALLOWED] == [] and {key: settings[key] for key in profile} == profile
+    assert read_mcp_ledger(root).allow == ()
+    assert attach(root, store=store, machine=machine, runner=Recorder()).mcp_allowlist is None
+
+
+def test_the_allowlist_holds_each_served_name_before_it_is_added(tmp_path: Path) -> None:
+    # Claude Code 2.1.325 refuses `add-json` of a name the allowlist leaves out ("not allowed by
+    # enterprise policy"), so the file names a served server before its `add-json` runs.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"}, m1=SERVER, user1="on")
+    seen: list[object] = []
+
+    def look(argv: list[str], cwd: Path) -> None:
+        if argv[2:3] == ["add-json"]:
+            seen.append(_settings(root)[ALLOWED])
+
+    attached = attach(root, store=store, machine=machine, runner=Recorder(on_call=look))
+    entries = [{"serverName": "m1"}, {"serverName": "user1"}]
+    assert seen == [entries] and _settings(root)[ALLOWED] == entries
+    assert (attached.mcp_allowlist, attached.mcp_delivered) == (("m1", "user1"), ("m1",))
+
+
+def test_rest_on_takes_the_allowlist_back_and_keeps_an_entry_added_by_hand(
+    tmp_path: Path,
+) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"}, user1="on")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    _mcp(store)
+    data = check(root, store=store, machine=machine).data
+    assert (data["mcp_allowlist"], data["mcp_allowlist_withdrawn"]) == (None, True)
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    assert attached.mcp_allowlist_withdrawn and ALLOWED not in _settings(root)
+    assert read_mcp_ledger(root).allow is None
+    # An entry the owner added to drybag's list is theirs: it stays, and so does the key.
+    _mcp(store, **{REST: "off"})
+    attach(root, store=store, machine=machine, runner=Recorder())
+    mine = {"serverName": "mine"}
+    (root / SETTINGS).write_text(json.dumps({**_settings(root), ALLOWED: [mine]}), "utf-8")
+    _mcp(store, **{REST: "off"}, user1="on")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _settings(root)[ALLOWED] == [mine, {"serverName": "user1"}]
+    _mcp(store)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _settings(root)[ALLOWED] == [mine]
+
+
+@pytest.mark.parametrize("held", [[{"serverName": "mine"}], "mine"], ids=["owners", "no-list"])
+def test_an_allowlist_drybag_did_not_write_is_left_with_a_note(
+    tmp_path: Path, held: object
+) -> None:
+    # Adding the overlay's names to the owner's own allowlist would widen a cut the owner made.
+    root, store, machine = _attachable(tmp_path)
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps({ALLOWED: held}), encoding="utf-8")
+    _mcp(store, **{REST: "off"}, m1=SERVER)
+    assert check(root, store=store, machine=machine).data["mcp_allowlist"] is None
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    note = ALLOWED_NOT_A_LIST if isinstance(held, str) else ALLOWED_OWNERS
+    assert note in attached.notes and attached.mcp_allowlist is None
+    assert (_settings(root)[ALLOWED], read_mcp_ledger(root).allow) == (held, None)
+
+
+def test_an_allowlist_is_recorded_before_the_settings_file_holds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"})
+    real = fsops.write_within
+
+    def full(base: Path, relative: str, text: str) -> None:
+        if relative == SETTINGS:
+            raise OSError(28, "No space left on device")
+        real(base, relative, text)
+
+    monkeypatch.setattr(fsops, "write_within", full)
+    with pytest.raises(OSError):
+        attach(root, store=store, machine=machine, runner=Recorder())
+    assert read_mcp_ledger(root).allow == ()
+
+
+def test_a_second_clone_attaches_on_its_own(tmp_path: Path) -> None:
+    # A second clone of the same repository, not a worktree, has a git common directory of its
+    # own: its own binding id, ledgers and settings file, and a detach of one leaves the other.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"})
+    attach(root, store=store, machine=machine, runner=Recorder())
+    second = tmp_path / "second"
+    _git(tmp_path, "clone", "-q", str(root), str(second))
+    _git(second, "remote", "set-url", "origin", "git@example.com:o/p.git")
+    (second / CONFIG_FILE).write_text((root / CONFIG_FILE).read_text(encoding="utf-8"), "utf-8")
+    attached = attach(second, store=store, machine=machine, runner=Recorder())
+    assert attached.mcp_allowlist == () and _settings(second)[ALLOWED] == []
+    assert attached.binding != attach(root, store=store, machine=machine, runner=Recorder()).binding
+    detach(second, runner=Recorder())
+    assert _settings(root)[ALLOWED] == [] and read_mcp_ledger(root).allow == ()

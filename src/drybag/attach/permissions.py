@@ -139,12 +139,23 @@ DENIED_NOT_A_LIST = (
 )
 
 
-def denied_list(raw: dict[str, Any]) -> list[Any] | None:
-    """The `deniedMcpServers` list of a settings document: an absent key is no entries, and one
-    holding anything but a list is `None`, a note (`DENIED_NOT_A_LIST`) under which no entry is
-    written or taken back. Its entries stay as they are: what the owner wrote is never read for
-    what it means."""
-    denied = raw.get(DENIED_KEY, [])
+ALLOWED_KEY = "allowedMcpServers"
+ALLOWED_NOT_A_LIST = (
+    f"{LOCAL_SETTINGS}: {ALLOWED_KEY} is not a list, so drybag writes and takes back no entry there"
+)
+# Adding the overlay's names to an allowlist the owner wrote would widen a cut the owner made.
+ALLOWED_OWNERS = (
+    f"{LOCAL_SETTINGS}: {ALLOWED_KEY} is not one drybag wrote, so the overlay's allowlist is not "
+    "written there and it stays as it is"
+)
+
+
+def denied_list(raw: dict[str, Any], key: str = DENIED_KEY) -> list[Any] | None:
+    """The `deniedMcpServers` list of a settings document, or `key`'s: an absent key is no
+    entries, and one holding anything but a list is `None`, a note (`DENIED_NOT_A_LIST`) under
+    which no entry is written or taken back. Its entries stay as they are: what the owner wrote is
+    never read for what it means."""
+    denied = raw.get(key, [])
     return list(denied) if isinstance(denied, list) else None
 
 

@@ -11,6 +11,11 @@ So `"on"` in a later plate restores the definition an earlier plate gave, and `"
 definition switches the server off without losing it. A name is *served* when its state is on and
 some plate defined it; it is *off* when its state is off, defined or not.
 
+**`"*"` stands for every server no plate switches on**, and takes `"off"` or `"on"` alone, folded
+by state like a name. Where its last word is `"off"` the fold has an allowlist (`Fold.allowed`):
+every name whose state is on, served or switched on with no definition, which lets a server
+defined outside the overlay through. `attach` writes it as `allowedMcpServers`.
+
 Every fault of the file is a note and never a refusal, and a note names the file's path and never a
 value: a definition holds argv and environment, which may hold a secret. A file that is there and
 cannot be read as an object of servers makes the fold unusable (`Fold.usable`), and then no
@@ -48,6 +53,7 @@ MCP_FILE = "mcp.json"
 SERVERS_KEY = "mcpServers"
 OFF = "off"
 ON = "on"
+REST = "*"
 
 UNUSABLE = (
     "{path} cannot be read as a JSON object whose mcpServers is an object, so no MCP server or "
@@ -66,6 +72,10 @@ UNPASSABLE = (
 # no UTF-8; a definition is passed as ASCII JSON, so only a name can hold what no call carries.
 _UNCARRIED = re.compile("[\0\ud800-\udfff]")
 ON_ALONE = '{path}: {name} is "on" and no plate defines it or switches it off, so it does nothing'
+REST_DEFINED = (
+    '{path}: "*" stands for every server no plate switches on and takes "off" or "on"; its '
+    "definition is skipped"
+)
 
 
 @dataclass(frozen=True)
@@ -82,12 +92,15 @@ class Served:
 @dataclass(frozen=True)
 class Fold:
     """`served`: names on with a definition; `off`: names switched off, with the plate that says
-    so; `notes`: what in the files could not be read."""
+    so; `notes`: what in the files could not be read; `allowed`: where `"*"` is off, every name
+    whose state is on, sorted, with `rest_off_in` the plate that switched it off, else `None`."""
 
     served: dict[str, Served]
     off: dict[str, Plate]
     notes: tuple[str, ...]
     usable: bool = True
+    allowed: tuple[str, ...] | None = None
+    rest_off_in: Plate | None = None
 
 
 def digest(definition: Mapping[str, object]) -> str:
@@ -117,6 +130,8 @@ def _entries(plate: Plate, notes: list[str]) -> dict[str, object] | None:
     for name, value in servers.items():
         if _UNCARRIED.search(name):
             notes.append(UNPASSABLE.format(path=shown, name=quoted(name)))
+        elif name == REST and value not in (OFF, ON):
+            notes.append(REST_DEFINED.format(path=shown))
         elif value not in (OFF, ON) and not (isinstance(value, dict) and _finite(value)):
             notes.append(BAD_VALUE.format(path=shown, name=quoted(name)))
         else:
@@ -152,6 +167,7 @@ def fold_mcp(plates: Sequence[Plate]) -> Fold:
                 states[name] = (value == ON, plate)
                 if value == OFF:
                     switched.add(name)
+    rest_on, rest_plate = states.pop(REST, (True, None))
     served: dict[str, Served] = {}
     off: dict[str, Plate] = {}
     for name, (on, state_plate) in states.items():
@@ -160,10 +176,20 @@ def fold_mcp(plates: Sequence[Plate]) -> Fold:
         elif name in definitions:
             definition, defined_plate = definitions[name]
             served[name] = Served(definition, digest(definition), defined_plate, state_plate)
-        elif name not in switched:
+        elif name not in switched and rest_on:
             path = state_plate.directory / PROJECT_CLAUDE / MCP_FILE
             notes.append(ON_ALONE.format(path=quoted(str(path)), name=quoted(name)))
-    return Fold(served, off, tuple(notes), usable)
+    if rest_on:
+        return Fold(served, off, tuple(notes), usable)
+    allowed = tuple(sorted(name for name, (on, _) in states.items() if on))
+    return Fold(served, off, tuple(notes), usable, allowed, rest_plate)
+
+
+def allowing(names: Sequence[str]) -> str:
+    """How a line says an allowlist: the names it lets load, or that it lets none."""
+    if not names:
+        return "no MCP server may load"
+    return f"only {', '.join(quoted(name) for name in names)} may load"
 
 
 MCP_LEDGER_FORMAT = 1
@@ -183,14 +209,16 @@ class McpLedger:
     """What `attach` recorded of the MCP servers, in `attach-mcp.json`.
 
     `deny` is the server names whose `deniedMcpServers` entry `attach` added, and the only entries
-    a later run or `detach` may take out. `mcp` is the digest of each server `attach` delivered,
-    `None` for one it could not; it is empty until a run delivers any. `fault` is `BAD_LEDGER`
-    where the file is there and records nothing this drybag can read.
+    a later run or `detach` may take out. `allow` is the same of `allowedMcpServers`, `None` where
+    `attach` did not write that key, which it writes only where none is. `mcp` is the digest of
+    each server `attach` delivered, `None` for one it could not; it is empty until a run delivers
+    any. `fault` is `BAD_LEDGER` where the file is there and records nothing this drybag can read.
     """
 
     deny: tuple[str, ...] = ()
     mcp: dict[str, str | None] = field(default_factory=dict)
     fault: str | None = field(default=None, compare=False)
+    allow: tuple[str, ...] | None = None
 
 
 def read_mcp_ledger(root: Path) -> McpLedger:
@@ -204,21 +232,25 @@ def read_mcp_ledger(root: Path) -> McpLedger:
         return McpLedger()
     except (OSError, ValueError):
         raw = {}
-    deny, mcp = raw.get("deny"), raw.get("mcp", {})
+    deny, mcp, allow = raw.get("deny"), raw.get("mcp", {}), raw.get("allow")
     if (
         raw.get("format") == MCP_LEDGER_FORMAT
         and isinstance(deny, list)
         and all(isinstance(name, str) for name in deny)
         and isinstance(mcp, dict)
         and all(isinstance(sha, str) or sha is UNSETTLED for sha in mcp.values())
+        and (allow is None or isinstance(allow, list))
+        and all(isinstance(name, str) for name in allow or ())
     ):
-        return McpLedger(tuple(deny), dict(mcp))
+        return McpLedger(tuple(deny), dict(mcp), allow=None if allow is None else tuple(allow))
     return McpLedger(fault=BAD_LEDGER.format(name=MCP_LEDGER_NAME))
 
 
 def write_mcp_ledger(root: Path, ledger: McpLedger) -> None:
     """Write `ledger` whole, through the same contained write as the other ledger."""
     document = {"format": MCP_LEDGER_FORMAT, "deny": list(ledger.deny), "mcp": ledger.mcp}
+    if ledger.allow is not None:
+        document["allow"] = list(ledger.allow)
     text = json.dumps(document, indent=2, sort_keys=True) + "\n"
     fsops.write_within(common_directory(root), MCP_LEDGER_FILE, text)
 

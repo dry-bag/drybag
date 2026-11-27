@@ -35,8 +35,8 @@ package that names a harness is pardoned there, each pardon by one of these item
   withdraws it with `PLUGIN_UNINSTALL_LOCAL` and `PLUGIN_MARKETPLACE_REMOVE` beside them.
 - `attach` delivers the overlay's MCP servers at Claude Code's local scope with
   `MCP_ADD_JSON_LOCAL` and `MCP_REMOVE_LOCAL` beside those, run by `attach.mcp`, switches outside
-  servers off with `deniedMcpServers`, and `detach` names `claude mcp` where it could not take one
-  back.
+  servers off with `deniedMcpServers`, cuts every server it does not list with `allowedMcpServers`,
+  and `detach` names `claude mcp` where it could not take one back.
 - The overlay spells each harness's half by name: `common/claude` and `common/codex`
   (`overlay.layout`, re-exported by `overlay.api`), and the per-project `claude` and `codex`
   directories, `.codex/rules` and the directories it creates in a project, which `attach` reads
