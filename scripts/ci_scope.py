@@ -11,11 +11,12 @@ demo and the plugin checks are skipped. Anything this script cannot read, or a f
 its own, counts as code: the step it runs in fails under `bash -e`, writes no answer, and every job
 reading it runs whole.
 
-A document is a path under `docs/` or `changelog.d/`, or a Markdown file at the repository's root.
-Markdown under `skills/` is not one: the plugin validator reads it. A Python change is
-to comments alone when both sides tokenize to the same tokens once comments and blank lines are
-dropped: a docstring is a string and counts as code, and a file added, deleted or that does not
-tokenize counts as code.
+A document is a path under `docs/` or `changelog.d/` other than a `.py`, or a Markdown file at the
+repository's root. Markdown under `skills/` is not one: the plugin validator reads it. A path that
+is, or was, anything but a plain file (an executable, a symlink, a gitlink) is code. A Python
+change is to comments alone when both sides tokenize to the same tokens once comments and blank
+lines are dropped: a docstring is a string and counts as code, and a file added, deleted or that
+does not tokenize counts as code.
 
 Not a control: the script and the workflow that runs it come from the pull request, which can
 rewrite either. It spares an honest change the full matrix; a reviewer reads the diff.
@@ -30,23 +31,31 @@ import tokenize
 
 DOCUMENT_DIRECTORIES = ("docs/", "changelog.d/")
 DROPPED = frozenset({tokenize.COMMENT, tokenize.NL})
+PLAIN = frozenset({"000000", "100644"})
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(["git", *args], capture_output=True, check=False)  # noqa: S603, S607
 
 
-def _changed(base: str, head: str) -> list[str]:
-    # `--no-renames` lists a file moved into `docs/` under the name it left as well; `-z` keeps a
-    # name git would otherwise quote as it is.
-    done = _git("diff", "--no-renames", "--name-only", "-z", base, head)
+def _changed(base: str, head: str) -> list[tuple[str, bool]]:
+    # Each path, and whether it is absent or a plain file on each side. `--no-renames` lists a file
+    # moved into `docs/` under the name it left as well; `-z` keeps a name git would otherwise quote
+    # as it is, and puts each `:mode mode id id status` before its path.
+    done = _git("diff", "--raw", "--no-renames", "-z", base, head)
     if done.returncode != 0:
         raise SystemExit(done.stderr.decode("utf-8", "replace"))
-    return [name for name in done.stdout.decode("utf-8", "surrogateescape").split("\0") if name]
+    fields = done.stdout.decode("utf-8", "surrogateescape").split("\0")[:-1]
+    return [
+        (path, set(meta[1:].split()[:2]) <= PLAIN)
+        for meta, path in zip(fields[::2], fields[1::2], strict=True)
+    ]
 
 
 def is_document(path: str) -> bool:
-    return path.startswith(DOCUMENT_DIRECTORIES) or ("/" not in path and path.endswith(".md"))
+    return not path.endswith(".py") and (
+        path.startswith(DOCUMENT_DIRECTORIES) or ("/" not in path and path.endswith(".md"))
+    )
 
 
 def _tokens(source: bytes) -> list[tuple[int, str]]:
@@ -69,8 +78,8 @@ def reaches_code(base: str, head: str) -> bool:
     if not changed:
         return True
     return not all(
-        is_document(path) or (path.endswith(".py") and comments_alone(base, head, path))
-        for path in changed
+        plain and (is_document(path) or (path.endswith(".py") and comments_alone(base, head, path)))
+        for path, plain in changed
     )
 
 

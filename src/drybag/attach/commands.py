@@ -12,7 +12,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from drybag.areas import SubParsers
-from drybag.command import ATTACH_CHECK_HELP, command_owner, common_flags, grammar
+from drybag.command import (
+    ATTACH_CHECK_HELP,
+    ATTACH_STORE_HELP,
+    command_owner,
+    common_flags,
+    grammar,
+)
 from drybag.config.schema import NAME_RULE, PROJECT_NAME
 from drybag.printed import clipped, quoted
 from drybag.result import Result
@@ -66,6 +72,16 @@ def run_attach(args: argparse.Namespace) -> Result:
         "allow_added": list(attached.allow_added),
         "allow_withdrawn": list(attached.allow_withdrawn),
         "rules_left": list(attached.rules_left),
+        "rules_taken_back": list(attached.rules_taken_back),
+        # The overlay's MCP servers by name, the owner's own; never a definition or a message.
+        "mcp_delivered": list(attached.mcp_delivered),
+        "mcp_taken_back": list(attached.mcp_taken_back),
+        "mcp_replaced": list(attached.mcp_replaced),
+        "mcp_failed": [name for name, _ in attached.mcp_failed],
+        "mcp_denied": list(attached.mcp_denied),
+        "mcp_undenied": list(attached.mcp_undenied),
+        "mcp_allowlist": None if attached.mcp_allowlist is None else list(attached.mcp_allowlist),
+        "mcp_allowlist_withdrawn": attached.mcp_allowlist_withdrawn,
     }
     summary = "; ".join(
         (
@@ -76,7 +92,10 @@ def run_attach(args: argparse.Namespace) -> Result:
             *attached.notes,
         )
     )
-    return Result("\n".join((summary, *_screen(attached))), data)
+    # A server Claude Code did not take, and an allowlist asked for and not written, are the
+    # failures that wait until every step ran.
+    failed = 1 if attached.mcp_failed or attached.mcp_allowlist_unwritten else 0
+    return Result("\n".join((summary, *_screen(attached))), data, exit_code=failed)
 
 
 def _screen(attached: Attached) -> list[str]:
@@ -87,6 +106,8 @@ def _screen(attached: Attached) -> list[str]:
     is delivered here is what the deleted `--trust-remote` and `--yes` were replaced by. Every name
     prints through `printed`: the project and the remote are the repository's, and a hook's command
     or an allow rule holds spaces and may hold anything."""
+    from drybag.attach.mcp import allowing
+
     origin = "no origin remote" if attached.origin is None else f"origin {quoted(attached.origin)}"
     lines = [f"binding {attached.binding}: project {quoted(attached.project)}, {origin}"]
     for side in ("added", "removed"):
@@ -100,10 +121,25 @@ def _screen(attached: Attached) -> list[str]:
     lines += [f"allow rule added: {clipped(rule)}" for rule in attached.allow_added]
     lines += [f"allow rule withdrawn: {clipped(rule)}" for rule in attached.allow_withdrawn]
     lines += [
-        f"Codex rule copy no longer in the overlay: {quoted(rule)} (keep or delete it; `drybag "
-        "detach` removes it only while it is untracked and holds the bytes attach wrote)"
+        f"Codex rule file left: {quoted(rule)} (not attach's to write or take back: it is yours, "
+        "and neither a re-attach nor `drybag detach` touches it)"
         for rule in attached.rules_left
     ]
+    lines += [f"Codex rule copy taken back: {quoted(rule)}" for rule in attached.rules_taken_back]
+    lines += [f"MCP server delivered: {quoted(name)}" for name in attached.mcp_delivered]
+    lines += [f"MCP server taken back: {quoted(name)}" for name in attached.mcp_taken_back]
+    lines += [
+        f"MCP server replaced: {quoted(name)} (a local entry of that name, made by hand or left by "
+        "an interrupted run, was removed first)"
+        for name in attached.mcp_replaced
+    ]
+    lines += [f"MCP server failed: {quoted(name)}: {said}" for name, said in attached.mcp_failed]
+    lines += [f"MCP server denied: {quoted(name)}" for name in attached.mcp_denied]
+    lines += [f"MCP server deny entry withdrawn: {quoted(name)}" for name in attached.mcp_undenied]
+    if attached.mcp_allowlist is not None:
+        lines.append(f"MCP allowlist written: {allowing(attached.mcp_allowlist)}")
+    if attached.mcp_allowlist_withdrawn:
+        lines.append("MCP allowlist taken back")
     return lines
 
 
@@ -147,10 +183,14 @@ def run_detach(args: argparse.Namespace) -> Result:
         f"{len(removed.directories_removed)} directory(ies){withdrawn}; "
         f"the binding record was left in place"
     )
-    left = (
+    line = "; ".join((line, *removed.notes))
+    left = [
         f"Codex rule copy left: {quoted(rule)} (it does not hold the bytes attach wrote)"
         for rule in removed.rules_left
-    )
+    ]
+    left += [f"MCP server taken back: {quoted(name)}" for name in removed.mcp_taken_back]
+    left += [f"MCP server deny entry withdrawn: {quoted(name)}" for name in removed.mcp_undenied]
+    left += ["MCP allowlist taken back"] if removed.mcp_allowlist_withdrawn else []
     return Result("\n".join((line, *left)), data)
 
 
@@ -160,6 +200,7 @@ def register(groups: SubParsers) -> None:
             "attach", help="bind this repository to the overlay and point the harness at its notes"
         ),
         store=True,
+        store_help=ATTACH_STORE_HELP,
     )
     attach.add_argument("--check", action="store_true", help=ATTACH_CHECK_HELP)
     # Held to `[project] name`'s rule before anything runs: the name becomes
@@ -168,13 +209,16 @@ def register(groups: SubParsers) -> None:
         "--project",
         type=grammar(PROJECT_NAME, f"not {NAME_RULE}"),
         default=None,
-        help="the overlay project to attach a repository with no drybag.toml to",
+        help=(
+            "the overlay project to attach a repository with no drybag.toml to, or the one its "
+            "drybag.toml names, to rebind a checkout this machine binds to another"
+        ),
     )
     attach.set_defaults(func=run_attach)
 
-    # `--machine` is taken as every project command takes it (docs/cli.md, "Shared flags"), and
-    # read by nothing here: every path `detach` withdraws is the ledger's or derived from the id.
+    # No `--machine`: every path `detach` withdraws is the ledger's or derived from the id.
     detach = common_flags(
-        groups.add_parser("detach", help="remove what attach added, and leave the binding")
+        groups.add_parser("detach", help="remove what attach added, and leave the binding"),
+        machine=False,
     )
     detach.set_defaults(func=run_detach)

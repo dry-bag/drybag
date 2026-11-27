@@ -102,6 +102,10 @@ NO_OVERLAY = (
     "run `drybag setup --preset recommended --overlay <path>`"
 )
 NOT_ASKABLE = "drybag: the overlay binding could not be checked on this machine"
+PLACED_SHOWN = (
+    "drybag: a `.gitignore` here re-includes {count} file(s) `drybag attach` placed for this "
+    "machine alone, so `git add -A` would stage them; `drybag doctor` names them"
+)
 NOT_ATTACHED = (
     "drybag: this repository is not attached to the overlay this machine records; "
     f"run `{ATTACH_COMMAND} --check`"
@@ -128,15 +132,11 @@ UNPUSHED = (
     "drybag: the overlay has {ahead} unpushed commit(s) and {dirty} uncommitted change(s); "
     "push it so the other machine sees them"
 )
-# The two lines above are mutually exclusive, and that is the fix rather than a tidying.
-# `Sync.ahead` is `None` when `git rev-list @{upstream}..HEAD` could not be answered, which for a
-# branch with no upstream means *every* commit on it is unpushed -- the count is unknown, not
-# zero. The sink read `if sync.ahead is None` and then, on the next `if`, formatted
-# `ahead=sync.ahead or 0`, so a session with no upstream and a dirty tree heard "nothing backs it
-# up" and "0 unpushed commit(s)" in one breath: the second sentence says the opposite of the
-# first and is the one carrying a number. `NO_UPSTREAM` carries the dirty count itself so the
-# no-upstream case still reports the half that is knowable, and `UNPUSHED` is reached only with
-# a real `ahead` to print.
+# The two lines above are mutually exclusive. `Sync.ahead` is `None` when `git rev-list
+# @{upstream}..HEAD` could not be answered, which for a branch with no upstream means *every*
+# commit on it is unpushed -- the count is unknown, not zero, so no "0 unpushed commit(s)" may
+# follow "nothing backs it up". `NO_UPSTREAM` carries the dirty count itself, and `UNPUSHED` is
+# reached only with a real `ahead` to print.
 
 
 def _asked_before(event: HookEvent) -> bool:
@@ -240,6 +240,25 @@ def _scoped_rules(event: HookEvent, session: SessionConfig) -> HookResult:
         return HookResult()
 
 
+def _placed_shown(event: HookEvent, session: SessionConfig) -> HookResult:
+    """The placed paths a `.gitignore` has re-included since `attach`, counted once per session.
+
+    A hint and no control: a branch that brings such a line is the adversary, and it can arrive
+    after this has run, so nothing here refuses and `drybag doctor` stays the row that goes red.
+    Anchored on the ledger, so the mode decides nothing. A count, because the names are the ones
+    a repository can choose. A `compact` is the same context asking again, and pays no `git`."""
+    if event.project_root is None or _asked_before(event):
+        return HookResult()
+    try:
+        from drybag.attach.write import shown_placed
+
+        count = shown_placed(event.project_root)
+    # An open handler never costs a session, as `_overlay_status` says.
+    except Exception:
+        return HookResult()
+    return HookResult(context=PLACED_SHOWN.format(count=count) if count else None)
+
+
 def _owner_files(event: HookEvent, session: SessionConfig) -> HookResult:
     """The owner-held files a new linked worktree lacks (`attach.checkout`), placed on every
     `SessionStart` and said when something was placed. Anchored on the binding and never on a
@@ -264,6 +283,12 @@ def register() -> list[Handler]:
             event="SessionStart",
             run=_overlay_status,
             once_key="overlay-status",
+        ),
+        Handler(
+            name="overlay-placed-shown",
+            event="SessionStart",
+            run=_placed_shown,
+            once_key="overlay-placed-shown",
         ),
         Handler(name="overlay-rules", event="SessionStart", run=_standing_rules),
         Handler(name="overlay-path-rules", event="PostToolUse", run=_scoped_rules),

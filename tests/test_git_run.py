@@ -366,6 +366,16 @@ def test_a_relative_path_entry_never_reaches_git(
     assert all(os.path.isabs(part) for part in shown.split(os.pathsep)), shown
 
 
+def test_a_path_with_no_absolute_entry_falls_back_to_the_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # With every entry dropped, `PATH=""` is one empty entry, the current directory: the very
+    # `git` planted at a clone's root that dropping the relative entries keeps out. Mutation
+    # (oracle): `mutations/`'s "a PATH with no absolute entry reaches git empty" -> this reddens.
+    monkeypatch.setenv("PATH", f".{os.pathsep}")
+    assert gitenv.scrubbed_env()["PATH"] == os.defpath
+
+
 def test_git_call_honours_the_floor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # The suite's floor lifts `git_call`'s bounds as it lifts `git_run`'s, so the note sync's tests
     # pass no bound of their own. A `git` that answers after half a second, under a bound a fifth

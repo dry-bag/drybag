@@ -10,10 +10,8 @@
 [[mutation]]
 name = "group_order outranks the startup rank in the index order"
 file = "src/drybag/memory/index.py"
-before = '''        UNRANKED if rank is None else rank,
-        UNRANKED if note.group_order is None else note.group_order,'''
-after = '''        UNRANKED if note.group_order is None else note.group_order,
-        UNRANKED if rank is None else rank,'''
+before = "    return (rank is None, rank or 0, order is None, order or 0, note.name)"
+after = "    return (order is None, order or 0, rank is None, rank or 0, note.name)"
 reddens = [
   "tests/memory/test_index.py::test_the_startup_rank_outranks_group_order_everywhere_it_is_read",
 ]
@@ -409,6 +407,34 @@ reddens = [
   "tests/memory/test_notes.py::test_a_note_named_in_bytes_that_are_not_utf_8_is_quarantined",
 ]
 
+# The index links a note by its group and file name on one line, so a name that breaks a line would
+# write lines of its own choosing into `MEMORY.md`.
+[[mutation]]
+name = "the memory walk hands the index a note whose name breaks a line"
+file = "src/drybag/memory/notes.py"
+before = """            if not is_one_line(f"{group}/{path.name}"):
+                unreadable.append((path, f"{path}: {NAME_NOT_ONE_LINE}"))
+                continue
+"""
+after = ""
+reddens = ["tests/memory/test_index.py::test_a_note_whose_name_breaks_a_line_is_unreadable"]
+
+# The group, which `drybag.toml` names, is the other half of that name.
+[[mutation]]
+name = "the memory walk asks the note's file name alone"
+file = "src/drybag/memory/notes.py"
+before = '            if not is_one_line(f"{group}/{path.name}"):'
+after = "            if not is_one_line(path.name):"
+reddens = ["tests/memory/test_index.py::test_a_group_whose_name_breaks_a_line_is_unreadable"]
+
+# A `startup` rank makes a note a standing rule, so a value that is not an integer is no rank.
+[[mutation]]
+name = "a startup that is not an integer still ranks a note"
+file = "src/drybag/memory/notes.py"
+before = "        return _parse_int(raw)"
+after = "        return 10_000 if _parse_int(raw) is None else _parse_int(raw)"
+reddens = ["tests/memory/test_notes.py::test_a_startup_that_is_not_an_integer_is_no_rank"]
+
 # A checkout this machine binds to one project is not bound to another its `drybag.toml` names
 # later: the name is the repository's, and a share it picks that the binding never named would
 # read another project's notes.
@@ -637,8 +663,8 @@ reddens = [
 [[mutation]]
 name = "memory index names an unreadable note by its absolute path"
 file = "src/drybag/memory/index.py"
-before = "unreadable=[path.relative_to(store.path).as_posix() for path, _ in reconciled.unreadable],"
-after = "unreadable=[str(path) for path, _ in reconciled.unreadable],"
+before = "            (path.relative_to(store.path).as_posix(), why.removeprefix(str(path)).lstrip(\": \"))"
+after = "            (str(path), why.removeprefix(str(path)).lstrip(\": \"))"
 reddens = [
   "tests/memory/test_commands.py::test_an_unparseable_note_with_a_crafted_name_is_counted_and_never_printed_raw",
   "tests/memory/test_commands.py::test_an_unreadable_note_is_named_store_relative_on_the_line_and_in_json_alike",
@@ -1142,8 +1168,8 @@ reddens = [
 [[mutation]]
 name = "walked groups leave out the tags"
 file = "src/drybag/memory/store.py"
-before = "    return [*walked[:at], *tagged, *walked[at:]]"
-after = "    return walked"
+before = "    return [*head, *common, *tagged, *rest, *after(PROJECT_LINK)]"
+after = "    return [*head, *rest]"
 reddens = [
   "tests/memory/test_bundles.py::test_a_standing_rule_in_a_tags_notes_is_in_the_standing_rules_bundle",
   "tests/memory/test_index.py::test_the_index_has_a_section_per_tag_after_the_common_notes",
@@ -1221,3 +1247,208 @@ file = "src/drybag/docs/plans.py"
 before = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d{3,}\b")'
 after = 'BUG_FIXES = re.compile(r"\bFixes\s+BR-\d+\b")'
 reddens = ["tests/docs/test_plans.py::test_a_fixes_claim_takes_three_digits_or_more"]
+
+# A store row that is green while the overlay's notes reach no session says nothing was wrong.
+[[mutation]]
+name = "doctor stops warning that the overlay's notes reach no session"
+file = "src/drybag/memory/doctor.py"
+before = '    if not warnings and "memory.mode" not in resolution.provenance and _undelivered(context):'
+after = "    if False:"
+reddens = [
+  "tests/memory/test_doctor.py::test_notes_in_the_overlay_with_no_mode_set_warn",
+]
+
+# A sub-plate's notes are linked under a `machine-<m>-...` link name, which the project's own
+# directories give up as they give up `tag-`.
+[[mutation]]
+name = "the machine namespace is not reserved"
+file = "src/drybag/memory/store.py"
+before = "    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX) or machine_link_shaped(name)"
+after = "    return name == COMMON_GROUP or name.startswith(TAG_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_composed.py::test_a_project_group_shaped_like_a_machine_link_is_reserved",
+]
+
+# `attach`'s doctor row names a share directory in the machine namespace as it names one in the
+# tag namespace.
+[[mutation]]
+name = "the reserved project groups leave out the machine namespace"
+file = "src/drybag/memory/store.py"
+before = "        if name.startswith(TAG_LINK_PREFIX) or machine_link_shaped(name)"
+after = "        if name.startswith(TAG_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_composed.py::test_a_project_group_shaped_like_a_machine_link_is_reserved",
+  "tests/attach/test_doctor.py::test_doctor_names_a_project_memory_directory_in_the_tag_namespace",
+]
+
+# Only the three link shapes are the machine namespace: a group `machine-notes` is the project's
+# own, linked and walked as it was before sub-plates.
+[[mutation]]
+name = "the whole machine- prefix is a link name"
+file = "src/drybag/memory/store.py"
+before = "    return _MACHINE_LINK.fullmatch(name) is not None"
+after = "    return name.startswith(MACHINE_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_index.py::test_a_configured_group_named_machine_dash_that_is_no_link_is_walked",
+  "tests/memory/test_composed.py::test_a_project_group_shaped_like_a_machine_link_is_reserved",
+]
+
+# Every reader walks the store through `walked_groups`: a sub-plate's group it leaves out is
+# composed and never read.
+[[mutation]]
+name = "the walk leaves out the machine groups"
+file = "src/drybag/memory/store.py"
+before = "        return [sub] if sub in store.groups else []"
+after = "        return []"
+reddens = [
+  "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
+  "tests/memory/test_bundles.py::test_session_start_bundle_carries_a_machine_sub_plate_note",
+]
+
+# The resolver follows a sub-plate's link only inside the permitted roots, which hold the
+# sub-plates of this machine.
+[[mutation]]
+name = "the store's group targets ignore this machine's sub-plates"
+file = "src/drybag/memory/store.py"
+before = "        held = plates(overlay, config.project.name, machine=machine)[0]"
+after = "        held = plates(overlay, config.project.name, machine=None)[0]"
+reddens = [
+  "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
+  "tests/memory/test_bundles.py::test_session_start_bundle_carries_a_machine_sub_plate_note",
+]
+
+# The composed store links each sub-plate whose `memory/` is a directory.
+[[mutation]]
+name = "the composed store links no machine sub-plate"
+file = "src/drybag/memory/composed.py"
+before = '''            if fsops.is_dir(target):
+                found[machine_link(plate)] = target'''
+after = '''            if False:
+                found[machine_link(plate)] = target'''
+reddens = [
+  "tests/memory/test_composed.py::test_sub_plate_memory_links_under_machine_prefix",
+  "tests/memory/test_composed.py::test_a_note_written_to_a_machine_link_lands_in_the_sub_plate",
+]
+
+# A sub-plate's group is read where its parent's is, or would be: a tag of `claude/` items only has
+# no `tag-<t>` link, and its sub-plate's notes are read all the same.
+[[mutation]]
+name = "the walk reaches a tag's sub-plate only through the tag's link"
+file = "src/drybag/memory/store.py"
+before = "        if g.startswith(TAG_LINK_PREFIX) or (sub_tag is not None and g.startswith(sub_tag))"
+after = "        if g.startswith(TAG_LINK_PREFIX)"
+reddens = [
+  "tests/memory/test_bundles.py::test_a_sub_plates_note_reaches_the_bundle_where_its_parent_has_no_notes[tag]",
+]
+
+# The same for an overlay with no `common/memory/`: `developer` listed and holding nothing still
+# places the common sub-plate's notes.
+[[mutation]]
+name = "the walk reaches the common sub-plate only through the common notes"
+file = "src/drybag/memory/store.py"
+before = "    common = after(COMMON_GROUP) if at else []"
+after = "    common = after(COMMON_GROUP) if COMMON_GROUP in store.groups else []"
+reddens = [
+  "tests/memory/test_bundles.py::test_a_sub_plates_note_reaches_the_bundle_where_its_parent_has_no_notes[common]",
+]
+
+# The common sub-plate's notes go with the common notes: with no `developer` listed, neither is
+# read.
+[[mutation]]
+name = "the common sub-plate is walked though developer is not listed"
+file = "src/drybag/memory/store.py"
+before = "    common = after(COMMON_GROUP) if at else []"
+after = "    common = after(COMMON_GROUP)"
+reddens = [
+  "tests/memory/test_index.py::test_walked_groups_reads_machine_groups_after_their_parent",
+]
+
+# A project that keeps specs holds every plan to naming the one it implements.
+[[mutation]]
+name = "plan check owes no Spec line"
+file = "src/drybag/docs/plans.py"
+before = "    spec = _spec_finding(prose, where, root) if specs else None"
+after = "    spec = None"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# A bare `none` says nothing; the reason is what a reader of the plan needs.
+[[mutation]]
+name = "a Spec line's none needs no reason"
+file = "src/drybag/docs/plans.py"
+before = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*—[^\S\n]*\S")'
+after = '_SPEC_NONE = re.compile(r"[^\S\n]*none")'
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# Only the em dash says none: a second spelling passing would be taught to the next plan.
+[[mutation]]
+name = "a Spec line's none takes a hyphen"
+file = "src/drybag/docs/plans.py"
+before = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*—[^\S\n]*\S")'
+after = '_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*[—-]+[^\S\n]*\S")'
+reddens = ["tests/docs/test_plans.py::test_none_with_a_hyphen_is_a_finding_that_names_the_spelling"]
+
+# Any backticked text passing would teach a placeholder; the spec must be there.
+[[mutation]]
+name = "a Spec path need not resolve"
+file = "src/drybag/docs/plans.py"
+before = "            if landed is not None and present_within(root, landed) is True:"
+after = "            if True:"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# Keeping specs never weakens the reference rule: a Spec line's paths are judged like any line's.
+[[mutation]]
+name = "the Spec line is exempt from the reference rule"
+file = "src/drybag/docs/plans.py"
+before = "        if not _LINE_MARK.search(line) and (judged is None or number in judged):"
+after = "        if not (_LINE_MARK.search(line) or _SPEC_LINE.match(line)) and (judged is None or number in judged):"
+reddens = ["tests/docs/test_plans.py::test_a_spec_line_is_held_to_the_reference_rule_like_any_other"]
+
+# A spec at the top, a folder of specs, or a section of one is named in backticks all the same.
+[[mutation]]
+name = "a Spec span must be shaped like a path"
+file = "src/drybag/docs/plans.py"
+before = '        targets = [span.split("#", 1)[0] for span in _BACKTICKED.findall(rest)]'
+after = "        targets = list(path_references(rest))"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# A spec's section is named by an anchor; the file is what has to resolve.
+[[mutation]]
+name = "a Spec span keeps its anchor"
+file = "src/drybag/docs/plans.py"
+before = '        targets = [span.split("#", 1)[0] for span in _BACKTICKED.findall(rest)]'
+after = "        targets = _BACKTICKED.findall(rest)"
+reddens = ["tests/docs/test_plans.py::test_a_plan_names_its_spec_or_says_none_where_the_project_keeps_specs"]
+
+# A local specs folder a fresh clone does not hold must not refuse what CI passes.
+[[mutation]]
+name = "the Spec rule reads the specs folder off the disk"
+file = "src/drybag/docs/plans.py"
+before = "    return bool(out)"
+after = "    return fsops.is_dir(specs)"
+reddens = ["tests/docs/test_plans.py::test_the_spec_rule_applies_where_git_tracks_a_spec"]
+
+# git names a changed path from the work tree's top; read as the root's own, no plan matched.
+[[mutation]]
+name = "a root below the git top reads the diff from the top"
+file = "src/drybag/docs/plans.py"
+before = '        out = _diff(root, base, "--name-only", "--relative", "-z", since, "HEAD", "--", relative)'
+after = '        out = _diff(root, base, "--name-only", "-z", since, "HEAD", "--", relative)'
+reddens = ["tests/docs/test_plans.py::test_a_root_below_the_git_top_lints_the_plans_its_change_touches"]
+
+# The porcelain status names a path from the work tree's top whatever directory asks.
+[[mutation]]
+name = "a root below the git top reads the status from the top"
+file = "src/drybag/docs/plans.py"
+before = '            found.append(root / path.removeprefix(prefix.rstrip("\n")))'
+after = "            found.append(root / path)"
+reddens = ["tests/docs/test_plans.py::test_a_root_below_the_git_top_lints_the_plans_its_change_touches"]
+
+# The success line says only what ran: with no specs folder no Spec line was asked for.
+[[mutation]]
+name = "plan check claims a Spec rule that did not run"
+file = "src/drybag/docs/commands.py"
+before = '    summary = _PLAN_OK.format(n=len(linted)) + (spec_ok if result.specs else "")'
+after = "    summary = _PLAN_OK.format(n=len(linted)) + spec_ok"
+reddens = [
+  "tests/docs/test_commands.py::test_plan_check_lints_the_named_plans_and_counts_them",
+]

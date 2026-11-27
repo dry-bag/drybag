@@ -18,11 +18,7 @@ if TYPE_CHECKING:
     from drybag.config.schema import Config
 
 # Printed on every `commit check` failure, which is inside the CI gate's own output, so it may
-# only name commands that exist. The clause naming the installer was dropped while the hook
-# installer shipped as a library alone and `setup` had not yet offered it from the command line;
-# `drybag setup --git-hooks` ships now, so the clause is back, and the rule it was dropped for
-# — a remedy that sends a person to an unknown subcommand costs more than a missing clause does
-# — is what holds it to `setup --git-hooks` and nothing else.
+# only name commands that exist.
 _STRIP_REMEDY = (
     "Rewrite the messages without the trailer (`git rebase -i --exec 'git commit --amend "
     "--no-edit' <base>`, or `git commit --amend` for the last one). `drybag commit strip "
@@ -61,13 +57,10 @@ _SCISSORS_MARKER = ">8"
 def _split_trailing_comment_block(text: str) -> tuple[str, str]:
     """Split a `prepare-commit-msg` file into `(message region, everything git will discard)`.
 
-    Two things are discarded, and the first of them was missed. **`commit.verbose = true` puts
-    the staged diff in this file**, below a scissors line, and a diff's lines start with `diff`,
-    `+`, `-`, `@@` or a space — so the walk back over comment and blank lines stopped at the
-    very first one it saw, the whole file read as "message", the attribution block was no longer
-    trailing and the hook became a silent no-op. Measured: with `commit.verbose` set, the same
-    commit that reports `stripped 2 attribution line(s)` without it stored the trailer intact.
-    One config key disabling the whole local layer is worth the extra rule.
+    Two things are discarded. **`commit.verbose = true` puts the staged diff in this file**,
+    below a scissors line, and a diff's lines start with `diff`, `+`, `-`, `@@` or a space — so a
+    walk back over comment and blank lines alone would stop at the diff, read the whole file as
+    "message", and find no trailing attribution block to strip.
 
     So the scissors line is found first and everything from it down is discarded region; then
     the run of comment and blank lines at the end of what is left is discarded too. The second

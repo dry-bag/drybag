@@ -27,15 +27,15 @@ and `detach` act on the main checkout whichever worktree they run from: its sett
 `.codex/rules/` copies and its ledger. Nothing is placed per worktree. Where git names no main
 checkout, a bare repository's worktree, `attach` refuses with "cannot tell" (`NO_MAIN_CHECKOUT`).
 
-**Nothing goes into `.gitignore`, and every placed path is ignored before the first write after
-the exclude block.** `.gitignore` is tracked, so a line `attach` wrote there was a change every
-collaborator got. Everything `attach` places in the checkout is listed in the `info/exclude` block
+**Nothing goes into `.gitignore`, and every placed path is ignored before the first write after the
+exclude block.** `.gitignore` is tracked, so a line `attach` wrote there would be a change every
+collaborator gets. Everything `attach` places in the checkout is listed in the `info/exclude` block
 (`attach.exclude`), which no clone carries; the block is written first, and git is then asked
-whether each placed path is ignored, so a `.gitignore` that re-includes one (a `!` line outranks
-the exclude file) stops the run before that path is written. The binding id and the ledger, which
-holds the owner's personal allow rules, are placed too, but in the git common directory, which git
-never tracks and a branch cannot write, so they are neither listed nor asked about. A
-`drybag:ignore` region in `.gitignore` is not this module's: it neither writes nor withdraws one.
+whether each placed path is ignored, so a `.gitignore` that re-includes one (a `!` line outranks the
+exclude file) stops the run before that path is written. The binding id and the ledger, which holds
+the owner's personal allow rules, are placed too, but in the git common directory, which git never
+tracks and a branch cannot write, so they are neither listed nor asked about. A `drybag:ignore`
+region in `.gitignore` is not this module's: it neither writes nor withdraws one.
 
 **Every write goes through a primitive that already exists.** `fsops.write_within(root, …)` for
 everything inside the project, `fsops.write_within(overlay, …)` for the overlay's project record,
@@ -62,16 +62,32 @@ from drybag.attach.binding import (
     Chosen,
     choose_project,
     read_binding,
+    refuse_a_rebind,
     refuse_unless_share_can_exist,
 )
+from drybag.attach.mcp import (
+    McpLedger,
+    Reconciled,
+    Served,
+    fold_mcp,
+    read_mcp_ledger,
+    reconcile,
+    write_mcp_ledger,
+)
 from drybag.attach.permissions import (
+    ALLOWED_KEY,
+    ALLOWED_NOT_A_LIST,
+    ALLOWED_OWNERS,
     CODEX_RULES,
+    DENIED_KEY,
+    DENIED_NOT_A_LIST,
     LOCAL_SETTINGS,
     PermissionDiff,
     allow_list,
     codex_rules,
     diff_permissions,
     local_document,
+    server_entries,
     settings_document,
     withdrawing,
 )
@@ -96,6 +112,8 @@ from drybag.attach.render import write as write_render
 from drybag.binding import (
     LEDGER_FILE,
     LEDGER_NAME,
+    MCP_LEDGER_FILE,
+    MCP_LEDGER_NAME,
     bound_project,
     common_directory,
     delivery_directory,
@@ -109,7 +127,7 @@ from drybag.config.owner import Owner
 from drybag.config.paths import PathEscape, PathUnasked, contained
 from drybag.config.plates import read_record, record_fault
 from drybag.config.reading import UNPARSEABLE
-from drybag.config.schema import OVERLAY_MODE, Config
+from drybag.config.schema import HARNESS_MODE, OVERLAY_MODE, Config
 from drybag.config.session import command_config
 from drybag.errors import Failure, Refusal
 from drybag.fsops import UnsafePath
@@ -117,16 +135,19 @@ from drybag.gitenv import without_userinfo
 from drybag.jsonobject import NESTED, json_object
 from drybag.memory.api import (
     BOUND,
+    NOTES_UNDELIVERED,
+    NOTES_UNDELIVERED_REMEDY,
     PROJECTS,
     RECORD,
     STORE_DIR,
     build_composed,
+    holds_notes,
     render_missing_index,
     reserved,
     withdraw_composed,
 )
 from drybag.printed import quoted
-from drybag.runner import Runner
+from drybag.runner import Completed, Runner
 from drybag.scaffold import ParserLimitError, settings_text
 
 LEDGER_FORMAT = 1
@@ -202,9 +223,8 @@ class Attached:
     `binding_recorded` says whether this run bound a checkout this machine did not bind before.
     `added` and `removed` are the executable diff against the render the last run left, and
     `allow_added` the allow rules this run merged and `allow_withdrawn` those it took back; all
-    four are the overlay's. `rules_left` is each `.codex/rules/` copy an earlier attach placed that
-    the overlay no longer holds and that is still there: a re-attach removes no Codex copy, and
-    `detach` removes one only while the ledger records it (`_write_ledger`).
+    four are the overlay's. `rules_left` is each `.codex/rules/` file this run left as it is, no
+    longer or never attach's (`plan_writes`), and `rules_taken_back` each copy it removed.
     """
 
     settings_written: bool
@@ -219,16 +239,31 @@ class Attached:
     allow_added: tuple[str, ...] = ()
     allow_withdrawn: tuple[str, ...] = ()
     rules_left: tuple[str, ...] = ()
+    rules_taken_back: tuple[str, ...] = ()
+    # The overlay's MCP servers this run delivered, took back and replaced a local entry of, each
+    # failed one with Claude Code's message (`attach.mcp.Reconciled`); all are names, never a
+    # definition.
+    mcp_delivered: tuple[str, ...] = ()
+    mcp_taken_back: tuple[str, ...] = ()
+    mcp_replaced: tuple[str, ...] = ()
+    mcp_failed: tuple[tuple[str, str], ...] = ()
+    # The server names whose `deniedMcpServers` entry this run added and withdrew.
+    mcp_denied: tuple[str, ...] = ()
+    mcp_undenied: tuple[str, ...] = ()
+    # The `allowedMcpServers` names as this run wrote them, `None` where it wrote none, and whether
+    # it took drybag's entries of that key back.
+    mcp_allowlist: tuple[str, ...] | None = None
+    mcp_allowlist_withdrawn: bool = False
+    mcp_allowlist_unwritten: bool = False
 
 
 @dataclass(frozen=True)
 class AttachLedger:
     """The only witness an allow rule has, and the record `detach` acts from.
 
-    **The anchor is the git common directory**, which a branch cannot write: the ledger sat in the
-    working tree once, and a branch that committed one made `detach` and every re-attach delete
-    files and withdraw allow rules by strings the branch chose. Nothing is read from that old path
-    now, and `attach` is the file's only writer. `read_ledger` answers this shape or `NotALedger`,
+    **The anchor is the git common directory**, which a branch cannot write: a ledger in the
+    working tree would let a branch that committed one choose what `detach` deletes and
+    withdraws. `attach` is the file's only writer. `read_ledger` answers this shape or `NotALedger`,
     so no consumer guards a field. `detach` still removes a rule copy only from one segment under
     `.codex/rules/`, a settings key only if it is the pointer, and a directory only from
     `CREATED_DIRS` (`_removable`).
@@ -252,9 +287,9 @@ class AttachLedger:
 
 
 class NotALedger(Failure):
-    """A file at the ledger's path that is not one `attach` wrote: it cannot be read, does not
-    parse, or holds a field of another shape. It records nothing: `attach` writes the ledger whole,
-    `detach` removes nothing and says so, and `doctor` warns."""
+    """A file at the ledger's path that is not one this `attach` wrote: it cannot be read, does
+    not parse, holds a field of another shape or another `format`. Nothing it records can be told:
+    `attach` and `detach` change nothing and say so, and `doctor` warns."""
 
 
 def ledger(root: Path) -> AttachLedger:
@@ -277,7 +312,8 @@ def _well_shaped(raw: dict[str, Any]) -> bool:
     """Whether every field of `raw` has the shape `_write_ledger` gives it."""
     render = raw.get("render")
     return (
-        isinstance(raw.get("store"), str)
+        raw.get("format") == LEDGER_FORMAT
+        and isinstance(raw.get("store"), str)
         and all(_strings(raw.get(key)) for key in ("allow", "settings_keys", "directories"))
         and isinstance(raw.get("rules"), dict)
         and _strings(list(raw["rules"].values()))
@@ -315,13 +351,29 @@ def read_ledger(path: Path) -> AttachLedger | None:
     )
 
 
+def shown_placed(root: Path) -> int:
+    """How many paths the last `attach` placed git would no longer ignore in the main checkout,
+    where it places them from any worktree; `0` where there is no ledger, `NotALedger` for one."""
+    main = main_checkout_or_none(root) or root
+    recorded = existing_ledger(main)
+    return 0 if recorded is None else len(exclude.unignored(main, placed_paths(recorded.rules)))
+
+
+# Said where `attach` meets a ledger it cannot read: written over, what it witnessed would stay
+# in place with nothing left to name it to `detach`.
+LEDGER_KEPT = (
+    "{fault}, so what it records cannot be told and nothing was written; take back by hand what it "
+    "records, move it aside, then run `drybag attach` again"
+)
+
+
 def existing_ledger(root: Path) -> AttachLedger | None:
-    """The ledger, or `None` when there is none or the file is `NotALedger`, which `attach` then
-    writes whole. `attach` and `attach --check` both read it here."""
+    """The ledger, `None` when there is none, or `NotALedger` (`LEDGER_KEPT`), as `detach` refuses
+    one. `attach` and `attach --check` both read it here."""
     try:
         return read_ledger(common_directory(root) / LEDGER_FILE)
-    except NotALedger:
-        return None
+    except NotALedger as exc:
+        raise NotALedger(LEDGER_KEPT.format(fault=exc)) from exc
 
 
 def _allow_list(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
@@ -332,20 +384,158 @@ def _allow_list(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     return dict(raw.get("permissions", {})), allow
 
 
-def _merged_settings(document: str, diff: PermissionDiff) -> str:
-    """The local settings document with the overlay's allow rules appended in order and the rules
-    it no longer grants (`diff.withdrawn_allow`) taken out."""
-    if not diff.added_allow and not diff.withdrawn_allow:
+@dataclass(frozen=True)
+class DenyChange:
+    """The `deniedMcpServers` entries one run adds and takes back, by server name, and the names
+    the MCP ledger records after it."""
+
+    add: tuple[str, ...] = ()
+    withdraw: tuple[str, ...] = ()
+    record: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
+
+
+def _server_entry(name: str) -> dict[str, str]:
+    return {"serverName": name}
+
+
+def _deny_change(document: str, off: Iterable[str] | None, ledger: McpLedger) -> DenyChange:
+    """What the file needs for the names the fold switches off: an entry for each the file lacks,
+    and the removal of each the ledger recorded that the fold no longer wants. An entry the ledger
+    does not record, or whose shape is not exactly `{"serverName": <name>}`, is the owner's and
+    is neither counted nor touched. `off` is `None` where no MCP change may be made, and a key
+    that is no list changes nothing either."""
+    entries = server_entries(settings_document(document), DENIED_KEY)
+    notes = () if entries is not None else (DENIED_NOT_A_LIST,)
+    if off is None or entries is None:
+        return DenyChange(record=ledger.deny, notes=notes)
+    wanted = tuple(sorted(off))
+    add = tuple(name for name in wanted if _server_entry(name) not in entries)
+    withdraw = tuple(
+        name for name in ledger.deny if name not in wanted and _server_entry(name) in entries
+    )
+    kept = tuple(name for name in ledger.deny if name in wanted)
+    return DenyChange(add, withdraw, (*kept, *(name for name in add if name not in kept)))
+
+
+def _deny(raw: dict[str, Any], add: Iterable[str], withdraw: Iterable[str]) -> None:
+    """`raw`'s `deniedMcpServers` with an entry added for each of `add` and the entry of each of
+    `withdraw` taken out, each only in its exact shape `{"serverName": <name>}`. A list a take-back
+    emptied goes, as an emptied allow list does; a key that is no list stays as it is."""
+    held = server_entries(raw, DENIED_KEY)
+    if held is None:
+        return
+    gone = [_server_entry(name) for name in withdraw]
+    denied = [entry for entry in held if entry not in gone]
+    denied += [entry for entry in map(_server_entry, add) if entry not in denied]
+    if denied:
+        raw[DENIED_KEY] = denied
+    elif denied != held:
+        raw.pop(DENIED_KEY)
+
+
+# Said where the overlay no longer asks for the allowlist and the key holds the owner's entries.
+ALLOWED_LEFT = (
+    f"{LOCAL_SETTINGS}: {ALLOWED_KEY} holds entries drybag did not write, so it stays, and it "
+    "still cuts every MCP server it does not name; it is yours now"
+)
+ALLOWLIST_UNWRITTEN = (
+    f'the overlay asks for an MCP allowlist ("*": "off") and no {ALLOWED_KEY} entry could be '
+    "written, so nothing cuts the MCP servers it leaves out; attach exits 1 until one is"
+)
+
+
+@dataclass(frozen=True)
+class AllowChange:
+    """The `allowedMcpServers` entries one run adds and takes back, by server name; whether it
+    writes the key (`make`) or takes it out (`drop`); and the names the MCP ledger records after
+    it, `None` where drybag holds no such key."""
+
+    add: tuple[str, ...] = ()
+    withdraw: tuple[str, ...] = ()
+    make: bool = False
+    drop: bool = False
+    record: tuple[str, ...] | None = None
+    notes: tuple[str, ...] = ()
+    # The overlay asks for an allowlist and none could be put in place, which fails the run.
+    unwritten: bool = False
+
+    @property
+    def changes(self) -> bool:
+        return self.make or self.drop or bool(self.add or self.withdraw)
+
+    @property
+    def written(self) -> tuple[str, ...] | None:
+        """The allowlist as the run writes it, `None` where it writes none or takes it back."""
+        return self.record if self.changes and self.record is not None else None
+
+    @property
+    def withdrawn(self) -> bool:
+        """Whether the run takes the allowlist back, the key with it."""
+        return self.drop
+
+
+def _allow_change(
+    raw: dict[str, Any], allowed: tuple[str, ...] | None, held: McpLedger
+) -> AllowChange:
+    """What the file needs for the fold's allowlist (`Fold.allowed`; `None` takes drybag's back).
+    The key is written only where none is: one already there that the ledger does not record is the
+    owner's, and is left as it is. In a key drybag wrote, an entry the ledger does not record is the
+    owner's too, and the key goes only when nothing but drybag's entries was in it."""
+    entries = server_entries(raw, ALLOWED_KEY)
+    present = ALLOWED_KEY in raw
+    if entries is None:
+        notes = (ALLOWED_NOT_A_LIST, *(() if allowed is None else (ALLOWLIST_UNWRITTEN,)))
+        return AllowChange(record=held.allow, notes=notes, unwritten=allowed is not None)
+    if present and held.allow is None:
+        return AllowChange(notes=() if allowed is None else (ALLOWED_OWNERS,))
+    wanted = allowed or ()
+    add = tuple(name for name in wanted if _server_entry(name) not in entries)
+    withdraw = tuple(
+        name for name in held.allow or () if name not in wanted and _server_entry(name) in entries
+    )
+    if allowed is not None:
+        # As the deny entries are: an entry the file already held is the owner's, never recorded.
+        kept = tuple(name for name in held.allow or () if name in wanted)
+        record = (*kept, *(name for name in add if name not in kept))
+        return AllowChange(add, withdraw, make=not present, record=record)
+    gone = list(map(_server_entry, withdraw))
+    drop = present and all(entry in gone for entry in entries)
+    left = (ALLOWED_LEFT,) if present and not drop and held.allow is not None else ()
+    return AllowChange(withdraw=withdraw, drop=drop, notes=left)
+
+
+def _allow(raw: dict[str, Any], change: AllowChange) -> None:
+    """`raw` with `change` made: drybag's entries added and taken back, the key made or dropped."""
+    if change.drop:
+        raw.pop(ALLOWED_KEY)
+    elif change.changes:
+        gone = list(map(_server_entry, change.withdraw))
+        kept = [entry for entry in server_entries(raw, ALLOWED_KEY) or [] if entry not in gone]
+        raw[ALLOWED_KEY] = kept + [_server_entry(name) for name in change.add]
+
+
+def _merged_settings(
+    document: str, diff: PermissionDiff, deny: DenyChange, allowlist: AllowChange
+) -> str:
+    """The local settings document with the overlay's allow rules appended in order, the rules
+    it no longer grants (`diff.withdrawn_allow`) taken out, and the `deniedMcpServers` entries of
+    `deny` added and taken back, and the change `allowlist` made."""
+    changed = deny.add or deny.withdraw or allowlist.changes
+    if not (diff.added_allow or diff.withdrawn_allow or changed):
         # Nothing to add or take back, so nothing is touched. A rewrite here would reformat a file
         # the owner owns, on a run that changed nothing, and report itself as a write.
         return document
     raw = settings_document(document)
-    permissions, allow = _allow_list(raw)
-    allow = [rule for rule in allow if rule not in diff.withdrawn_allow]
-    allow += [rule for rule in diff.added_allow if rule not in allow]
-    if allow or permissions:
-        permissions["allow"] = allow
-        raw["permissions"] = permissions
+    if diff.added_allow or diff.withdrawn_allow:
+        permissions, allow = _allow_list(raw)
+        allow = [rule for rule in allow if rule not in diff.withdrawn_allow]
+        allow += [rule for rule in diff.added_allow if rule not in allow]
+        if allow or permissions:
+            permissions["allow"] = allow
+            raw["permissions"] = permissions
+    _deny(raw, deny.add, deny.withdraw)
+    _allow(raw, allowlist)
     if diff.withdrawn_allow:
         # As `detach` leaves it: an allow list the take-back emptied is not what the file held.
         raw = _emptied(raw)
@@ -459,6 +649,16 @@ def _as_written(path: Path, digest: str) -> bool:
         return False
 
 
+def _foreign(path: Path, digest: str | None) -> bool:
+    """Whether something attach did not write is at `path`: anything there but the bytes `digest`,
+    the ledger's, records. A path that cannot be asked answers no; the write's walk refuses it."""
+    try:
+        there = fsops.exists(path) or fsops.is_symlink(path)
+    except OSError:
+        return False
+    return there and (digest is None or not _as_written(path, digest))
+
+
 def _reached_directory(path: Path) -> bool:
     """`fsops.is_dir`, and `True` for a path no write of this run can reach; see above."""
     try:
@@ -500,19 +700,19 @@ def _write_ledger(
     just wrote. `_plan` reads it once, above every write.
     """
     previous, binding = planned.previous, planned.binding
-    # What this run wrote, and the copies `plan_writes` kept: a file deleted from the overlay is
-    # not written this time, while its copy is still where Codex reads it as a standing instruction.
-    rules = {**planned.kept, **{t: _digest(text.encode("utf-8")) for t, text in planned.rules}}
+    # What this run wrote and nothing else: a copy the overlay dropped is taken back or left as no
+    # longer attach's (`plan_writes`).
+    rules = {t: _digest(text.encode("utf-8")) for t, text in planned.rules}
     # Only the rules the overlay grants now: one it no longer grants leaves the ledger whether or
     # not the settings file still held it, or a copy the owner types by hand later would be taken.
     granted = planned.diff.granted
     allow = [rule for rule in previous.allow if rule in granted] if previous else []
     allow += [rule for rule in planned.diff.added_allow if rule not in allow]
-    # The same union as `allow` and `rules`, for the same reason sharpened once more: the second
-    # attach in a repository finds every one of these directories already there and would record
-    # none, so a ledger built from this run alone would leave `detach` unable to remove what the
-    # first attach created. Ordered by `CREATED_DIRS` rather than by either input, so the written
-    # list is deepest-first whatever order it was unioned in.
+    # The same union as `allow` and `rules`: the second attach in a repository finds every one of
+    # these directories already there and would record none, so a ledger built from this run alone
+    # would leave `detach` unable to remove what the first attach created. Ordered by `CREATED_DIRS`
+    # rather than by either input, so the written list is deepest-first whatever order it was
+    # unioned in.
     made = set(previous.directories if previous is not None else ()) | set(planned.absent)
     document = {
         "format": LEDGER_FORMAT,
@@ -548,20 +748,14 @@ def _check_groups(binding: Binding, config: Config) -> None:
     """Refuse a `memory.groups` entry that leaves this project's share of the overlay — first.
 
     `memory.groups` is repository-authored (principle 5) and reaches no guard of its own —
-    `config/paths.py` says so in as many words, and leaves the containment to the module that
-    consumes the field. This module was calling it, and calling it too late: the refusal came
-    out of `_prepare_store`, which runs after the ignore region, the `.codex/rules/` copies, the
-    settings merge, the ledger **and** the overlay's binding record. So a clone committing
-    `groups = ["../../escape"]` got `attach` to write five artifacts and exit 2, with
-    `doctor._attached` — which keys on the ledger existing — then reporting the repository
-    attached and the binding *bound*, because the record had been written too.
+    `config/paths.py` leaves the containment to the module that consumes the field. Asked above
+    every write, so a clone committing `groups = ["../../escape"]` gets no artifact written and no
+    binding recorded.
 
-    Hoisting it here is not only a reordering: it is this project's own two-stage rule, which
-    `attach` was skipping for this one path. `config.paths.contained` "decides whether a
-    configured path *may* be written — it gives a user-facing refusal and catches a committed
-    symlink", and `fsops.mkdirs_within` then does the write through an `O_NOFOLLOW` walk so a
-    component that becomes a symlink *after* the check cannot redirect it. `attach` had only the
-    second half, which is why its user-facing refusal arrived at write time.
+    This is the project's two-stage rule: `config.paths.contained` decides whether a configured
+    path *may* be written, with a user-facing refusal, and `fsops.mkdirs_within` then does the
+    write through an `O_NOFOLLOW` walk so a component that becomes a symlink *after* the check
+    cannot redirect it.
 
     `resolved_root` is passed because this validates many paths against one root, which is the
     parameter's documented reason for existing.
@@ -584,12 +778,11 @@ def _prepare_store(binding: Binding, config: Config) -> None:
     target does not exist as an empty one, so the native writer's notes would have no group.
 
     **The `UnsafePath` arm is the floor under `_check_groups` and is not dead.** A spelling that
-    escapes was already refused above every write, so that half reaching here means the hoist
-    drifted. The other half cannot be hoisted and should not be: `contained` asks the filesystem
-    a question and this walk asks it again at the moment of writing, so a component of the
-    overlay that became a symlink in between refuses here and nowhere earlier. That is the
-    interval the `O_NOFOLLOW` walk exists for, and it is the one remaining way this refusal can
-    arrive after a write.
+    escapes is refused above every write, so that half reaching here means the check drifted. The
+    other half cannot be hoisted and should not be: `contained` asks the filesystem a question and
+    this walk asks it again at the moment of writing, so a component of the overlay that became a
+    symlink in between refuses here and nowhere earlier. That is the interval the `O_NOFOLLOW` walk
+    exists for, and it is the one remaining way this refusal can arrive after a write.
     """
     for relative in _group_directories(binding, config):
         try:
@@ -666,12 +859,21 @@ class AttachPlan:
     # them, or `None` when the owner's own excludes hide them all.
     placed: tuple[str, ...]
     hidden: exclude.ExcludeWrite | None
-    # Each `.codex/rules/` target and the text to copy there.
+    # Each `.codex/rules/` target this run writes and the text to copy there, each file it leaves
+    # as it is, and each copy the overlay dropped that it takes back.
     rules: tuple[tuple[str, str], ...]
-    # Each copy the overlay no longer holds that the ledger goes on recording, with its digest.
-    kept: dict[str, str]
+    left: tuple[str, ...]
+    taken: tuple[str, ...]
     # What the rendered plugin carries, read from the overlay (`render.read_parts`).
     parts: dict[str, Part]
+    # The overlay's MCP servers: the ones to deliver, `None` where an unusable `mcp.json` or MCP
+    # ledger stops every MCP change; the `deniedMcpServers` entries this run adds and takes back;
+    # the MCP ledger as this run read it; and what reading them noted.
+    served: dict[str, Served] | None
+    deny: DenyChange
+    allow: AllowChange
+    mcp_held: McpLedger
+    mcp_notes: tuple[str, ...]
 
 
 def attach(
@@ -757,8 +959,8 @@ def configured(
 ) -> tuple[Config, str]:
     """The run's one `Config`, its project chosen where the repository has no `drybag.toml`
     (`binding.choose_project`, asked only then), and where the project's name came from
-    (`binding.BY_FILE` or the phrase of the way it was chosen). `project` is `--project`, refused
-    beside the file, which names the project already."""
+    (`binding.BY_FILE` or the phrase of the way it was chosen). `project` is `--project`, which
+    beside the file only confirms a rebind to the project the file names (`RebindRefused`)."""
     chosen: list[Chosen] = []
 
     def unnamed() -> str:
@@ -766,9 +968,14 @@ def configured(
         return chosen[0].name
 
     config = command_config(root, machine=machine, owner=owner, unnamed=unnamed)
-    if project is not None and not chosen:
+    if chosen:
+        return config, chosen[0].source
+    named = config.project.name
+    if project is not None and project != named:
         raise Refusal(NAMED_BY_FILE)
-    return config, chosen[0].source if chosen else BY_FILE
+    if project is None:
+        refuse_a_rebind(root, named)
+    return config, BY_FILE
 
 
 def _plan(
@@ -808,8 +1015,8 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     overlay's rule sources and the parts the rendered plugin carries, in that order.
 
     `attach --check` calls it too and drops the plan, which is how the preview meets every one of
-    these refusals with the run's code and line: each read here was once left out of the preview,
-    and `--check` answered clean over a checkout the run then stopped on.
+    these refusals with the run's code and line, and never answers clean over a checkout the run
+    would stop on.
     """
     previous = existing_ledger(root)
     memory = config.memory.mode == OVERLAY_MODE
@@ -821,24 +1028,49 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     document = local_document(root)
     if previous is not None:
         diff = withdrawing(diff, previous.allow, _allow_list(settings_document(document))[1])
-    merged = _merged_settings(document, diff)
+    # The names the overlay switches off, written as `deniedMcpServers` entries in the same merge.
+    fold = fold_mcp(binding.plates)
+    held = read_mcp_ledger(root)
+    usable = fold.usable and held.fault is None
+    deny = _deny_change(document, fold.off if usable else None, held)
+    # And the allowlist `"*": "off"` asks for, written only where no key is that drybag did not.
+    # It fails closed: an unusable fold that asks for the cut writes `[]` (`fold_mcp`), and a
+    # ledger that cannot be read, which no entry may be recorded in, fails the run.
+    if held.fault is not None:
+        unwritten = fold.allowed is not None
+        notes = (ALLOWLIST_UNWRITTEN,) if unwritten else ()
+        allow = AllowChange(notes=notes, unwritten=unwritten)
+    elif fold.usable or fold.allowed is not None:
+        allow = _allow_change(settings_document(document), fold.allowed, held)
+    else:
+        allow = AllowChange(record=held.allow)
+    merged = _merged_settings(document, diff, deny, allow)
     written = merged != document
     targets = tuple(target for target, _ in codex_rules(binding))
-    placed = placed_paths(targets)
     recorded = previous.rules if previous is not None else {}
     dropped = {rule: sha for rule, sha in recorded.items() if rule not in targets}
-    tracked = exclude.tracked(root, (*placed, *dropped))
+    tracked = exclude.tracked(root, (*placed_paths(targets), *dropped))
     # One rule for every placed path: none tracked, asked here above every write, and each ignored,
     # asked once the block stands (`_carry_out`).
-    if found := tuple(path for path in placed if path in tracked):
+    if found := tuple(path for path in placed_paths(targets) if path in tracked):
         raise Refusal(exclude.TRACKED.format(paths=named_placed(found)))
-    # A re-attach removes no copy. It goes on recording one the overlay dropped only while the file
-    # is untracked and as attach wrote it, so `detach` can take it; any other is no longer attach's.
-    kept = {
-        rule: sha
+    # A data-loss guard, anchored on the ledger's digest in the git common directory, which only
+    # `attach` writes: a target is written only where nothing is, or where the file holds the bytes
+    # the ledger records. Anything else there is the owner's, left, unrecorded and given no
+    # exclude line, though it hold the overlay's very bytes.
+    foreign = tuple(target for target in targets if _foreign(root / target, recorded.get(target)))
+    # A copy the overlay dropped is taken back while it is untracked and as attach wrote it, as
+    # `detach` takes it; any other is no longer attach's, and is left.
+    taken = tuple(
+        rule
         for rule, sha in dropped.items()
         if rule not in tracked and _as_written(root / rule, sha)
-    }
+    )
+    left = (
+        *foreign,
+        *(rule for rule in dropped if rule not in taken and fsops.is_file(root / rule)),
+    )
+    placed = placed_paths(tuple(target for target in targets if target not in foreign))
     # What git already hides decides the `info/exclude` block: a line for each path `attach` places
     # that the owner's own excludes do not hide (`exclude.unhidden_by_owner`). It can refuse — git
     # cannot answer, a path leaves the project, the exclude file is a symlink — and each refusal is
@@ -847,7 +1079,7 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     # The reads the writes below would otherwise make for themselves, each of which can refuse
     # after the first write: the overlay's rule sources (a file that is not UTF-8) and what the
     # rendered plugin carries (a hook file of a shape it cannot read, a skill that cannot be read).
-    rules = _codex_rule_texts(binding)
+    rules = tuple((t, text) for t, text in _codex_rule_texts(binding) if t not in foreign)
     parts = read_parts(binding.plates)
     return AttachPlan(
         config=config,
@@ -864,8 +1096,19 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
         placed=placed,
         hidden=hidden,
         rules=rules,
-        kept=kept,
+        left=left,
+        taken=taken,
         parts=parts,
+        served=fold.served if usable else None,
+        deny=deny,
+        allow=allow,
+        mcp_held=held,
+        mcp_notes=(
+            *fold.notes,
+            *([] if held.fault is None else [held.fault]),
+            *deny.notes,
+            *allow.notes,
+        ),
     )
 
 
@@ -888,12 +1131,32 @@ def _carry_out(
     # The rule's second half: a `.gitignore` re-including a placed path (`!`) outranks the block.
     if shown := exclude.unignored(root, planned.placed):
         raise Refusal(exclude.NOT_IGNORED.format(paths=named_placed(shown)))
+    for rule in planned.taken:
+        fsops.remove_within(root, rule)
     for target, text in planned.rules:
         fsops.write_within(root, target, text)
     rules = tuple(target for target, _ in planned.rules)
     written = planned.settings is not None
+    # A deny or allow entry is recorded before the settings file holds it, and stays recorded until
+    # the file no longer does, so no entry `attach` wrote is ever one no later run takes back.
+    deny, allow = planned.deny, planned.allow
+    mcp_ledger = replace(planned.mcp_held, deny=deny.record, allow=allow.record)
+    # Where no MCP change may be made, the reconcile is handed nothing to serve and nothing owned.
+    owned = mcp_ledger.mcp if planned.served is not None else {}
+    held_allow = planned.mcp_held.allow
+    holding = replace(
+        mcp_ledger,
+        deny=(*deny.record, *deny.withdraw),
+        allow=held_allow
+        if allow.record is None
+        else tuple(dict.fromkeys((*(held_allow or ()), *allow.record))),
+    )
+    if holding != planned.mcp_held:
+        write_mcp_ledger(root, holding)
     if planned.settings is not None:
         fsops.write_within(root, LOCAL_SETTINGS, planned.settings)
+    if holding != mcp_ledger:
+        write_mcp_ledger(root, mcp_ledger)
     # The pointer is recorded before it is written, so a run that stops on the way leaves `detach`
     # a record of it; with no notes composed, what an earlier attach left there stays recorded.
     carried = (POINTER_KEY,) if planned.memory else planned.carried
@@ -920,10 +1183,12 @@ def _carry_out(
     # Installed on every run, since both calls are idempotent: what Claude Code knows is its own
     # state, which a copy's detach or a lost id can take away whatever this ledger says. A call
     # that fails exits 1 with no render recorded and the exclude block standing, so a re-run
-    # completes.
-    if (failed := _install(id, root, runner)) is not None:
+    # completes; a `claude` not on `PATH` fails nothing, and the run says what it did not install.
+    failed = _install(id, root, runner)
+    absent = failed is not None and not failed[1].found
+    if failed is not None and not absent:
         _write_ledger(root, planned, carried, None)
-        raise Failure(failed)
+        raise Failure(NOT_INSTALLED.format(verb=failed[0], code=failed[1].code))
     if not memory:
         # Out of overlay mode, the pointer an earlier attach recorded and the composed store it
         # named are taken back, as `detach` takes them: left, the harness would go on reading the
@@ -931,7 +1196,21 @@ def _carry_out(
         if previous is not None and POINTER_KEY in previous.settings_keys and _unpoint(root):
             written, carried = True, ()
         withdraw_composed(id)
-    _write_ledger(root, planned, carried, rendered.rendered)
+    _write_ledger(root, planned, carried, None if absent else rendered.rendered)
+    # The overlay's MCP servers at local scope, from the main checkout as the plugin calls are. A
+    # call that fails leaves its name unsettled for the next run and the command exits 1 once
+    # every other step ran (`commands.run_attach`); with no `claude`, none is asked.
+    mcp = (
+        Reconciled(dict(owned))
+        if absent
+        else reconcile(
+            root,
+            planned.served or {},
+            owned,
+            runner,
+            lambda left: write_mcp_ledger(root, replace(mcp_ledger, mcp=left)),
+        )
+    )
     if memory:
         _prepare_store(binding, config)
         # The composed store, rebuilt, and the one key that points the harness at it, in the main
@@ -939,9 +1218,12 @@ def _carry_out(
         # the key (`carried`). The project is the one this machine's binding record names, read
         # back after `record` above wrote it, never `[project] name` on its own.
         project = (bound_project(root) or bound).project
-        written = _point(root, build_composed(binding.overlay, project, id)) or written
+        written = (
+            _point(root, build_composed(binding.overlay, project, id, machine=binding.machine_name))
+            or written
+        )
         render_missing_index(root, config, machine=machine)
-    notes: list[str] = []
+    notes = [CLAUDE_ABSENT] if absent else []
     if binding.fault is not None:
         notes.append(binding.fault)
     if binding.bound is not None and binding.bound != binding.project:
@@ -950,6 +1232,12 @@ def _carry_out(
         notes.append(NO_ORIGIN_NOTE)
     elif binding.note is not None:
         notes.append(binding.note)
+    # What the plates gave: a tag, record or `machines/` directory that is no plate, and a bad
+    # `[machine] name`.
+    notes.extend(binding.plate_notes)
+    notes.extend(planned.mcp_notes)
+    if config.memory.mode == HARNESS_MODE and holds_notes(binding.plates):
+        notes.append(f"{NOTES_UNDELIVERED}: {NOTES_UNDELIVERED_REMEDY}")
     return Attached(
         written,
         rules,
@@ -962,11 +1250,19 @@ def _carry_out(
         removed=before.without(after),
         allow_added=planned.diff.added_allow,
         allow_withdrawn=planned.diff.withdrawn_allow,
-        rules_left=tuple(
-            rule
-            for rule in (previous.rules if previous is not None else ())
-            if rule not in rules and fsops.is_file(root / rule)
+        rules_left=planned.left,
+        rules_taken_back=planned.taken,
+        mcp_delivered=tuple(
+            name for name, sha in mcp.owned.items() if sha is not None and sha != owned.get(name)
         ),
+        mcp_taken_back=tuple(name for name in owned if name not in mcp.owned),
+        mcp_replaced=mcp.replaced,
+        mcp_failed=mcp.failed,
+        mcp_denied=deny.add,
+        mcp_undenied=deny.withdraw,
+        mcp_allowlist=allow.written,
+        mcp_allowlist_withdrawn=allow.withdrawn,
+        mcp_allowlist_unwritten=allow.unwritten,
     )
 
 
@@ -1026,21 +1322,26 @@ NOT_INSTALLED = (
     "`claude plugin {verb}` did not succeed (exit {code}), so the overlay's hooks, skills and "
     "agents are rendered but not installed; run `drybag attach` again"
 )
+# Said instead where `claude` is not on `PATH`, a Codex-only machine's ordinary state: the notes
+# are composed all the same.
+CLAUDE_ABSENT = (
+    "`claude` is not on PATH, so the overlay's hooks, skills, agents and MCP servers are rendered "
+    "but not installed; they are installed by the next `drybag attach` that finds it"
+)
 
 
-def _install(id: str, main: Path, runner: Runner) -> str | None:
+def _install(id: str, main: Path, runner: Runner) -> tuple[str, Completed] | None:
     """Register the render as a marketplace of the main checkout and install its plugin there, or
-    say which call failed. Run from the main checkout, whose `settings.local.json` Claude Code reads
-    from every worktree and writes the plugin's entry into."""
+    the verb and answer of the call that failed. Run from the main checkout, whose
+    `settings.local.json` Claude Code reads from every worktree and writes the plugin's entry
+    into."""
     added = runner.launch(filled(PLUGIN_MARKETPLACE_ADD_LOCAL, str(delivery_directory(id))), main)
     if added.code != 0:
-        return NOT_INSTALLED.format(verb="marketplace add", code=added.code)
+        return "marketplace add", added
     done = runner.launch(
         filled(PLUGIN_INSTALL_LOCAL, f"{plugin_name(id)}@{marketplace_name(id)}"), main
     )
-    if done.code != 0:
-        return NOT_INSTALLED.format(verb="install", code=done.code)
-    return None
+    return None if done.code == 0 else ("install", done)
 
 
 # Said where the main checkout's settings file still names the plugin once `detach` asked Claude
@@ -1126,6 +1427,12 @@ class Detached:
     # The composed store was kept, its links taken, because it holds a file that is not a link: a
     # note the harness wrote there, which nothing of drybag's placed.
     store_kept: bool = False
+    # What reading the settings file and the MCP ledger said, a note and never a refusal.
+    notes: tuple[str, ...] = ()
+    # The overlay's MCP servers taken back, and the server names whose deny entry was withdrawn.
+    mcp_taken_back: tuple[str, ...] = ()
+    mcp_undenied: tuple[str, ...] = ()
+    mcp_allowlist_withdrawn: bool = False
 
 
 def _emptied(raw: dict[str, Any]) -> dict[str, Any]:
@@ -1156,9 +1463,12 @@ class SettingsWithdrawal:
 
     removed: tuple[str, ...]
     text: str | None
+    notes: tuple[str, ...] = ()
+    undenied: tuple[str, ...] = ()
+    unallowed: bool = False
 
 
-def _planned_settings(root: Path, recorded: AttachLedger) -> SettingsWithdrawal:
+def _planned_settings(root: Path, recorded: AttachLedger, mcp: McpLedger) -> SettingsWithdrawal:
     """Take exactly the recorded rules and the pointer key back out. The allow rules come from the
     ledger and never from a guess at their content: that is the whole reason the ledger exists."""
     document = local_document(root)
@@ -1177,6 +1487,13 @@ def _planned_settings(root: Path, recorded: AttachLedger) -> SettingsWithdrawal:
             raw["permissions"] = permissions
         for key in recorded.settings_keys:
             raw.pop(key, None)
+        # The `deniedMcpServers` entries the MCP ledger recorded, each only in its exact shape.
+        denied = server_entries(raw, DENIED_KEY)
+        undenied = tuple(name for name in mcp.deny if _server_entry(name) in (denied or []))
+        _deny(raw, (), undenied)
+        # And the allowlist it wrote, as a re-attach whose overlay no longer asks for one.
+        allowlist = _allow_change(raw, None, mcp)
+        _allow(raw, allowlist)
         # Through `settings_text`, as every write-back of a parsed settings document: on Python
         # 3.12 an indented encode stops near 994 levels, under what the parser read.
         remaining = _emptied(raw)
@@ -1184,11 +1501,13 @@ def _planned_settings(root: Path, recorded: AttachLedger) -> SettingsWithdrawal:
         unchanged = remaining == held
     except RecursionError:
         raise ParserLimitError(f"{LOCAL_SETTINGS} {NESTED}") from None
+    notes = (*(() if denied is not None else (DENIED_NOT_A_LIST,)), *allowlist.notes)
     if unchanged:
-        return SettingsWithdrawal(removed, None)
+        return SettingsWithdrawal(removed, None, notes)
     # `{}` is not what the file looked like before `attach`; a file holding nothing is one this
     # command created and is the last thing it takes away.
-    return SettingsWithdrawal(removed, emptied if remaining else "")
+    text = emptied if remaining else ""
+    return SettingsWithdrawal(removed, text, notes, undenied, allowlist.withdrawn)
 
 
 def _withdraw_settings(root: Path, planned: SettingsWithdrawal) -> tuple[str, ...]:
@@ -1301,6 +1620,52 @@ def _removable(recorded: AttachLedger) -> AttachLedger:
     )
 
 
+# Said where `detach` could not take an MCP server back: each name with what Claude Code said.
+NOT_TAKEN_BACK = (
+    "the overlay's MCP servers {servers} were not taken back from Claude Code's local scope, so "
+    "they stay recorded and the exclude block, the ledgers and the render were kept; run `drybag "
+    "detach` again once `claude mcp` runs here"
+)
+
+
+def _failed_servers(failed: Iterable[tuple[str, str]]) -> str:
+    """Each failed server's name, quoted, and the message `printed.answered` gave."""
+    return ", ".join(f"{quoted(name)} ({said})" for name, said in failed)
+
+
+# Said of an MCP ledger `detach` could not read: deleted, the entries it named would have no record.
+MCP_LEDGER_KEPT = (
+    "{note}; it was left in place, and no MCP server, deny entry or allowlist it may name was "
+    "taken back"
+)
+# What `detach` reads of a ledger it has no `attach.json` beside: nothing but the MCP ledger's.
+_NOTHING = AttachLedger(store="", allow=(), rules={}, settings_keys=())
+
+
+def _take_back_mcp(root: Path, held: McpLedger, runner: Runner) -> tuple[str, ...]:
+    """Take back every MCP server `held` records, as a reconcile that serves nothing, then delete
+    the MCP ledger, and return the names. A name Claude Code did not answer for stays recorded and
+    fails the run (`NOT_TAKEN_BACK`); a ledger that could not be read records nothing and is kept,
+    which `detach` says (`MCP_LEDGER_KEPT`)."""
+    if held.fault is not None:
+        return ()
+    mcp = reconcile(
+        root, {}, held.mcp, runner, lambda owned: write_mcp_ledger(root, replace(held, mcp=owned))
+    )
+    if mcp.failed:
+        raise Failure(NOT_TAKEN_BACK.format(servers=_failed_servers(mcp.failed)))
+    fsops.remove_within(common_directory(root), MCP_LEDGER_FILE)
+    return tuple(held.mcp)
+
+
+# Said where `detach` finds no `attach.json`, as an older drybag's `detach` leaves it, beside an MCP
+# ledger whose servers and deny entries it then took back.
+OLDER_DETACH = (
+    f"{LEDGER_NAME} is not there, as an older drybag's `detach` leaves it; what {MCP_LEDGER_NAME} "
+    "recorded was taken back"
+)
+
+
 def detach(root: Path, *, runner: Runner) -> Detached:
     """Remove exactly what `attach` added, reading the ledger for what that was, and withdraw the
     rendered plugin and the composed store, whose directories are derived from the binding id and
@@ -1335,10 +1700,23 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     """
     main = main_checkout_or_none(root)
     root = main if main is not None else root
+    # `attach` refuses where git names no main checkout, so an MCP ledger there is none it wrote,
+    # and no `claude mcp` runs on its names.
+    held = read_mcp_ledger(root) if main is not None else McpLedger()
     try:
         recorded = _removable(ledger(root))
     except NotALedger as exc:
         raise NotALedger(f"{exc}; it records nothing, so nothing was removed") from exc
+    except Failure:
+        # No `attach.json`: an older drybag's `detach` removed it and never opened the MCP ledger,
+        # whose names and deny entries are taken back here before the missing file is said.
+        if not (held.deny or held.mcp or held.allow is not None):
+            raise
+        settings = _planned_settings(root, _NOTHING, held)
+        _refuse_unwithdrawable(root, _NOTHING, settings)
+        _withdraw_settings(root, settings)
+        _take_back_mcp(root, held, runner)
+        raise Failure(OLDER_DETACH) from None
     # The rendered plugin, named by the id and installed in the main checkout. Its render directory
     # is derived from the id and never read from the ledger, whose `store` and `render` a clone can
     # commit; asked here, before the first withdrawal, since the id is read through `git`.
@@ -1351,7 +1729,7 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     # The `info/exclude` block is found above the first withdrawal for the same reason: `git`
     # names the file and a region opened twice refuses, and both are knowable now.
     hidden = exclude.withdrawn_block(root)
-    settings = _planned_settings(root, recorded)
+    settings = _planned_settings(root, recorded, held)
     # What the main checkout's settings file names, which decides each `claude plugin` call: read
     # here, so a file that cannot be read refuses while nothing is withdrawn.
     plugin = None if main is None else (id, main, _plugin_keys(main))
@@ -1371,6 +1749,9 @@ def detach(root: Path, *, runner: Runner) -> Detached:
     # run here, with the exclude block, the ledger and the render kept.
     if plugin is not None:
         _withdraw_plugin(*plugin, runner)
+    # The overlay's MCP servers. A name Claude Code did not answer for stays recorded, and
+    # everything still to withdraw is kept, as above.
+    taken = _take_back_mcp(root, held, runner)
     removed = False
     if delivery is not None and (fsops.is_dir(delivery) or fsops.is_symlink(delivery)):
         _remove_render(delivery)
@@ -1393,4 +1774,11 @@ def detach(root: Path, *, runner: Runner) -> Detached:
         tuple(rules_left),
         removed,
         store_kept,
+        (
+            *settings.notes,
+            *([] if held.fault is None else [MCP_LEDGER_KEPT.format(note=held.fault)]),
+        ),
+        taken,
+        settings.undenied,
+        settings.unallowed,
     )

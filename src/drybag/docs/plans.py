@@ -1,12 +1,9 @@
-"""Lint implementation plans: references, verification steps, `Scope:`, and `Premise:`.
+"""Lint implementation plans: references, verification steps, `Scope:`, `Premise:` and `Spec:`.
 
-The first two rules come from one branch's retro. A plan contradicted itself about a test
-location and the stale pointer survived into three later tasks — so every reference must
-resolve unless the line says `(create)`. And a step phrased "confirm nothing bounds X" embeds
-its own expected answer: the author already doubted it enough to write the check and hid that
-doubt from whoever executes it. That one shipped an open defect. The verb is not special to
-"confirm" — "verify" and "check" hide the same doubt the same way — so all three are covered,
-guarded against the compound-word false positive a bare `no` produces (`no-op` is not the
+Every reference must resolve unless the line says `(create)`, so a stale pointer cannot survive into
+later tasks. A step phrased "confirm nothing bounds X" embeds its own expected answer and hides the
+author's doubt from whoever executes it; "verify" and "check" hide it the same way, so all three are
+covered, guarded against the compound-word false positive a bare `no` produces (`no-op` is not the
 negation `no`).
 
 A path the plan removes is the first rule's claim run backwards: it resolves until its task lands
@@ -14,20 +11,18 @@ and never after, and a finished plan is history that a later change may still ed
 `Delete:` line declares its paths as `Create:` does, and `(delete)` marks its line as `(create)`
 does.
 
-The `Scope:` and `Premise:` rules come from the same retro: an unrelated change rode a bugfix
-plan because nothing on the plan named what belonged to it, and a fix's own discriminator
-outran the entry evidence it was supposedly fixing because nothing forced that evidence onto
-the page.
+`Scope:` names what belongs to a plan, so an unrelated change cannot ride it, and `Premise:`
+puts a fix's entry evidence on the page.
 
-The mutation-outcome rule comes from the next branch's, where one plan wrote three
-discrimination proofs as settled results and all three were wrong. The first reddened every
-test in its module instead of the one named, at import, because the removal it described broke
-a key-parity invariant. The second could not have gone red at all: the function it mutated
-swallows everything in its own `try`/`catch`. And the third predicted a fail-closed test would
-stay green under a mutation that test's own call-count assertion cannot survive. Written as
-predictions they would have been checked; written as facts they were read as evidence the
-assertions discriminated, and the branch shipped believing three oracles nobody had watched
-fail.
+A project that keeps specs holds every plan to naming the one it implements, on a `**Spec:**`
+line: a path in backticks that resolves inside the project, or `none — <reason>`, so a plan with no
+design says so instead of naming any file that happens to exist. Whether the project keeps specs is
+git's answer, as the trail's listing is: a `[paths] specs` folder that holds nothing tracked is not
+one, so a local folder cannot refuse here what a fresh clone passes.
+
+The mutation-outcome rule: a discrimination proof written as a settled result is read as
+evidence the assertion discriminates, though nobody has watched it fail; written as a
+prediction, it is checked.
 
 Prediction and report are told apart by TENSE, not by a keyword either has to carry. A plan is
 written before the work and a report after it, so "the test reddens" is a forecast while "the
@@ -36,16 +31,13 @@ rule's vocabulary is present tense and nothing else: a plan reporting a mutation
 is not exempted, it is never matched. `Expected:` is the one marker the rule does read, because
 it is how an author says a present-tense sentence is a forecast on purpose. The vocabulary is
 the colour idiom, present tense, and deliberately not `fails`/`passes`, which every plan uses
-for the TDD red step; measured on the corpus this lint was written against, admitting them
-multiplied the findings by thirty and almost all of the rise was correct prose. Bounding the
+for the TDD red step, where admitting them would flag mostly correct prose. Bounding the
 outcome to within `_OUTCOME_SPAN` characters of the instruction that governs it is the other
 half of that narrowing — it separates a consequence from an unrelated later clause of a long
 paragraph.
 
-The claim is a SENTENCE, so the rule reads paragraphs and not lines. Scanning line by line made
-catching a false discrimination proof depend on where the text happened to wrap: an arrow
-ending one line with `redden` opening the next went unflagged while the identical claim two
-lines below, short enough to fit, was flagged. Blocks are joined and each character keeps its
+The claim is a SENTENCE, so the rule reads paragraphs and not lines, and where the text wraps
+decides nothing. Blocks are joined and each character keeps its
 source line, so a report still names the line the claim starts on. The `Expected:` marker is
 read over the claim's own SENTENCE, which is the unit that marker marks: a marker in a
 neighbouring sentence of the same paragraph exempts nothing, and one written after the claim is
@@ -64,12 +56,11 @@ at the file on disk, not at a commit that does not exist yet; the plans the work
 beyond the diff are reported as `unlinted` rather than linted silently, so the remedy is to name
 the file.
 
-The same holds within a plan. A delivered plan's `Interfaces:` blocks are kept current, so a later
-change edits plans whose other lines name paths the tree has since moved or removed, and holding
-it to those made the only way through a rewrite of history. In the diff-scoped mode a reference
-is therefore settled only on a line the change wrote (`written_lines`): a new plan is all such
-lines, and an edit is held to its own. Every other rule still reads the whole plan, and naming a
-plan as `PATH` still settles every reference in it.
+The same holds within a plan. A delivered plan is a record whose lines name paths the tree has since
+moved or removed, and a change that edits one must not have to rewrite the rest. In the diff-scoped
+mode a reference is therefore settled only on a line the change wrote (`written_lines`): a new plan
+is all such lines, and an edit is held to its own. Every other rule still reads the whole plan, and
+naming a plan as `PATH` still settles every reference in it.
 
 A repository whose BASE will not resolve is a finding and not an OK. Printing a note and exiting
 0 is how a gate like this one runs green for its whole life without ever having linted anything:
@@ -118,6 +109,16 @@ _LEADING = re.compile(
 # anywhere later in the document — exactly the unfilled-marker case these rules exist to catch.
 # Anchoring to non-newline whitespace forces the content onto the marker's own line.
 _SCOPE_LINE = re.compile(r"^\*\*Scope:\*\*[^\S\n]*\S", re.MULTILINE)
+# A `**Spec:**` line, indented or not and behind one list or quote marker (`-`, `*`, `+`, `1.`,
+# `1)`, `>`), and what follows the marker on it: the line alone is read, as the Scope and Premise
+# markers are. `none` takes the em dash only, the one spelling the findings teach.
+_SPEC_LINE = re.compile(
+    r"^[^\S\n]*(?:(?:[-*+]|[0-9]{1,9}[.)])[^\S\n]+|>[^\S\n]*)?\*\*Spec:\*\*(.*)$", re.MULTILINE
+)
+_SPEC_NONE = re.compile(r"[^\S\n]*none[^\S\n]*—[^\S\n]*\S")
+# Any backticked span on the Spec line may name the spec: a top-level file or a folder is a spec as
+# well as `docs/specs/x.md`, which `prose.path_references` alone would not read as paths.
+_BACKTICKED = re.compile(r"`([^`\n]+)`")
 #
 # A premise marker, read to the first colon after it, past line ends; the group holds when the
 # marker closes there and has content on its line. Every marker before that colon reaches the same
@@ -165,6 +166,9 @@ _SCOPE_MISSING = (
     'no `**Scope:**` admission criterion — one line saying "a change belongs to this branch '
     'iff …", so a mid-plan arrival is screened'
 )
+_SPEC_MISSING = "no `**Spec:**` line: name the spec in backticks, or write `none — <reason>`"
+_SPEC_NO_PATH = "the `**Spec:**` line has nothing in backticks and is not `none — <reason>`"
+_SPEC_UNRESOLVED = "nothing the `**Spec:**` line names in backticks resolves inside the project"
 _PREMISE_MISSING = (
     "claims `Fixes` with no `**Premise:**` line quoting the entry evidence that establishes "
     "its central predicate"
@@ -195,6 +199,8 @@ class Lint:
     findings: list[Finding]
     linted: list[Path]
     unlinted: list[Path]
+    specs: bool = False  # whether the Spec rule applied
+    nones: bool = False  # whether a plan's Spec line said `none — <reason>`
 
 
 def _is_git_repo(root: Path) -> bool:
@@ -252,7 +258,7 @@ def touched_plans(root: Path, base: str, plans_dir: Path) -> list[Path]:
     relative = plans_dir.relative_to(root).as_posix()
 
     def changed(since: str) -> set[str]:
-        out = _diff(root, base, "--name-only", "-z", since, "HEAD", "--", relative)
+        out = _diff(root, base, "--name-only", "--relative", "-z", since, "HEAD", "--", relative)
         return {name for name in out.split("\0") if name.endswith(".md")}
 
     found: set[str] = set()
@@ -308,7 +314,10 @@ def unlinted_plans(root: Path, plans_dir: Path) -> list[Path] | None:
     code, out = git_run(
         root, "status", "--porcelain", "--untracked-files=all", "-z", "--", relative
     )
-    if code != 0:
+    # The porcelain names a path from the work tree's top whatever directory asks, so a root
+    # below the top strips its own prefix.
+    asked, prefix = git_run(root, "rev-parse", "--show-prefix")
+    if code != 0 or asked != 0:
         return None
     found: list[Path] = []
     entries = iter(out.split("\0"))
@@ -321,7 +330,7 @@ def unlinted_plans(root: Path, plans_dir: Path) -> list[Path] | None:
         if "D" in status:
             continue  # deleted in the working tree: nothing left there to lint
         if path.endswith(".md"):
-            found.append(root / path)
+            found.append(root / path.removeprefix(prefix.rstrip("\n")))
     return found
 
 
@@ -412,13 +421,60 @@ def _has_premise(prose: str) -> bool:
     return any(marker.group(1) for marker in _PREMISE_LINE.finditer(prose))
 
 
+def _spec_finding(prose: str, where: str, root: Path) -> Finding | None:
+    """The Spec rule's finding on the plan's first `**Spec:**` line, or on the plan when it has
+    none; `None` when that line says `none — <reason>` or a backticked span on it, an anchor
+    after `#` dropped, resolves. Its paths are the reference rule's as well, as every line's are:
+    this rule asks only whether the plan names a spec."""
+    for marker in _SPEC_LINE.finditer(prose):
+        number = prose.count("\n", 0, marker.start()) + 1
+        rest = marker.group(1)
+        if _SPEC_NONE.match(rest):
+            return None
+        targets = [span.split("#", 1)[0] for span in _BACKTICKED.findall(rest)]
+        if not targets:
+            return Finding("spec-missing", where, number, _SPEC_NO_PATH)
+        for target in filter(None, targets):
+            landed = resolves_within(root, target)
+            if landed is not None and present_within(root, landed) is True:
+                return None
+        return Finding("spec-missing", where, number, _SPEC_UNRESOLVED)
+    return Finding("spec-missing", where, None, _SPEC_MISSING)
+
+
+def _says_none(prose: str) -> bool:
+    """Whether the plan's first `**Spec:**` line says `none — <reason>`."""
+    marker = _SPEC_LINE.search(prose)
+    return marker is not None and _SPEC_NONE.match(marker.group(1)) is not None
+
+
+def _keeps_specs(root: Path, config: Config) -> bool:
+    """Whether the project keeps specs: git tracks a file under `[paths] specs`, or, outside a
+    work tree, that folder exists. A question git gives no answer to fails."""
+    specs = contained(root, config.paths.specs)
+    if not _is_git_repo(root):
+        return fsops.is_dir(specs)
+    code, out = git_run(root, "ls-files", "-z", "--", specs.relative_to(root).as_posix())
+    if code != 0:
+        cause = NO_ANSWER if code == -1 else f"`git ls-files` exited {code}"
+        raise Failure(f"{cause}, so whether {config.paths.specs} holds specs is not known")
+    return bool(out)
+
+
 def _lint_one(
-    path: Path, where: str, root: Path, *, judged: set[int] | None = None
-) -> list[Finding]:
-    """Every finding one plan carries, with the line numbers of the file as it is on disk.
+    path: Path,
+    where: str,
+    root: Path,
+    *,
+    judged: set[int] | None = None,
+    specs: bool = False,
+) -> tuple[list[Finding], bool]:
+    """Every finding one plan carries, with the line numbers of the file as it is on disk, and
+    whether its Spec line, where one is owed, says `none — <reason>`.
 
     `judged`, when given, is the lines whose references are settled against the tree: the ones
     the change wrote (`written_lines`). Every other rule reads the whole plan either way.
+    `specs` is whether the project keeps specs, which makes a `**Spec:**` line owed.
     """
     # Fenced code is not plan prose: its fixtures name deliberately fake paths.
     prose = blank_fences(read_document(path, where))
@@ -428,6 +484,9 @@ def _lint_one(
         found.append(Finding("scope-missing", where, None, _SCOPE_MISSING))
     if BUG_FIXES.search(prose) and not _has_premise(prose):
         found.append(Finding("premise-missing", where, None, _PREMISE_MISSING))
+    spec = _spec_finding(prose, where, root) if specs else None
+    if spec is not None:
+        found.append(spec)
     declared: set[str] = set()
     for line in _DECLARES.findall(prose):
         declared |= set(path_references(line))
@@ -448,7 +507,7 @@ def _lint_one(
     found.extend(
         Finding("asserted-outcome", where, number, _ASSERTED) for number in asserted_outcomes(prose)
     )
-    return found
+    return found, specs and _says_none(prose)
 
 
 def lint(root: Path, config: Config, *, plans: list[Path], base: str | None = None) -> Lint:
@@ -485,8 +544,12 @@ def lint(root: Path, config: Config, *, plans: list[Path], base: str | None = No
     else:
         selected = sorted(plans_dir.glob("*.md")) if fsops.is_dir(plans_dir) else []
     findings: list[Finding] = []
+    specs = _keeps_specs(root, config)
+    nones = False
     for path in sorted(selected):
         judged = written_lines(root, base, path) if diff_scoped else None
         where = path.relative_to(root).as_posix()
-        findings.extend(_lint_one(path, where, root, judged=judged))
-    return Lint(findings, sorted(selected), sorted(unlinted))
+        found, said_none = _lint_one(path, where, root, judged=judged, specs=specs)
+        findings.extend(found)
+        nones = nones or said_none
+    return Lint(findings, sorted(selected), sorted(unlinted), specs, nones)

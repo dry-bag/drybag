@@ -3,9 +3,8 @@
 **What an overlay is, for the purpose of recording one.** A tree whose identity record,
 `drybag-overlay.toml` at its root (`layout.IDENTITY_RECORD`), parses and names layout 1: the
 file the shipped template writes and the one thing every overlay carries, written last by a render
-(`layout.OVERLAY_FILES`), so a render cut short is not one. It replaced the plugin manifests an
-overlay carried while it was a plugin of its own; an overlay made before the record shipped is
-refused with the record to add named in full, since no code migrates one.
+(`layout.OVERLAY_FILES`), so a render cut short is not one. A tree without the record is refused
+with the record to add named in full, since no code migrates one.
 
 It is a *structural* probe and not a security boundary: a repository that wants to look like an
 overlay can commit the record. What it buys is that a tree holding something else — a project

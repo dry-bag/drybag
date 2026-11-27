@@ -6,7 +6,7 @@ which each machine renders for itself and the sync never stages, writes or moves
 changes one is outside memory), and only while git records it as a
 plain, non-executable file: a link (120000), an embedded repository (160000) or an executable
 (100755) under a memory name is refused, since the name would then point somewhere else or run.
-And only while it is a note: a name ending in `.md` with no component from the group's or
+And only while it is a note: a name ending in `.md` with no component from the tag's or
 project's name down that is empty or starts with "." (no `.claude/skills/...`, no
 `.gitattributes`, no project called `..`), and text to git, since a note `git diff --numstat` calls
 binary is one no diff of it shows.
@@ -27,27 +27,29 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from drybag import fsops
-from drybag.config.plates import GROUPS
+from drybag.config.plates import TAGS
 from drybag.gitenv import QUERY_TIMEOUT_SECONDS
 from drybag.memory.api import COMMON, INDEX_NAME, PROJECTS, STORE_DIR
 from drybag.sync.git import GitError, checked, git, left
 
-# A project's rendered index, which each machine renders for itself: left out under `projects`.
-NOT_AN_INDEX = f":(top,exclude,glob){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"
+# A project's rendered index, which each machine renders for itself: left out under `projects`, in
+# any case, since on a case-insensitive volume `memory.md` is that very file.
+NOT_AN_INDEX = f":(top,exclude,glob,icase){PROJECTS}/*/{STORE_DIR}/{INDEX_NAME}"
 # The pathspecs of the notes, their exclusion and the parse below all derive from the layout.
 MEMORY_PATHSPEC: tuple[str, ...] = (
     f":(top,glob){COMMON.as_posix()}/**",
-    f":(top,glob){GROUPS}/*/{STORE_DIR}/**",
+    f":(top,glob){TAGS}/*/{STORE_DIR}/**",
     f":(top,glob){PROJECTS}/*/{STORE_DIR}/**",
     NOT_AN_INDEX,
 )
-_NAMED_TOPS = {"group": GROUPS, "project": PROJECTS}
+_NAMED_TOPS = {"tag": TAGS, "project": PROJECTS}
+_INDEX = INDEX_NAME.casefold()
 
 
 @dataclass(frozen=True)
 class MemoryPath:
-    """A top-relative path the pathspecs match, taken apart: its `scope` (`common`, `group` or
-    `project`), the group's or project's `name` (`None` for the shared notes) and what lies
+    """A top-relative path the pathspecs match, taken apart: its `scope` (`common`, `tag` or
+    `project`), the tag's or project's `name` (`None` for the shared notes) and what lies
     `below` the memory root."""
 
     scope: str
@@ -56,14 +58,14 @@ class MemoryPath:
 
     @property
     def root(self) -> str:
-        """`common/memory`, `groups/<name>/memory` or `projects/<name>/memory`."""
+        """`common/memory`, `tags/<name>/memory` or `projects/<name>/memory`."""
         if self.name is None:
             return COMMON.as_posix()
         return f"{_NAMED_TOPS[self.scope]}/{self.name}/{STORE_DIR}"
 
     @property
     def is_note(self) -> bool:
-        """Whether a file here may move at all, by its name: every component from the group's or
+        """Whether a file here may move at all, by its name: every component from the tag's or
         project's name down is a plain name -- not empty, not `.` or `..`, not starting with "."
         -- and the last ends in `.md`.
 
@@ -81,11 +83,10 @@ def memory_path(path: str) -> MemoryPath | None:
     """`path` parsed by the layout, or `None` when the pathspecs do not match it.
 
     The same match as `MEMORY_PATHSPEC` with `glob` magic: `*` is one non-empty directory name, a
-    final `**` is anything inside, and a project's own `MEMORY.md` is left out. A test holds it
-    equal to git's own. A match is not enough to
-    move a path: being a note (`MemoryPath.is_note`) and what git records it as (`entry_offends`)
-    are judged on top. The path is as git lists it, `-z`, so quoted or Cyrillic names arrive as
-    written.
+    final `**` is anything inside, and a project's own `MEMORY.md`, in any case, is left out. A test
+    holds it equal to git's own. A match is not enough to move a path: being a note
+    (`MemoryPath.is_note`) and what git records it as (`entry_offends`) are judged on top. The
+    path is as git lists it, `-z`, so quoted or Cyrillic names arrive as written.
     """
     parts = path.split("/")
     common = list(COMMON.parts)
@@ -99,7 +100,7 @@ def memory_path(path: str) -> MemoryPath | None:
             and parts[2] == STORE_DIR
             and all(parts[3:])
         ):
-            if scope == "project" and parts[3:] == [INDEX_NAME]:
+            if scope == "project" and [part.casefold() for part in parts[3:]] == [_INDEX]:
                 return None
             return MemoryPath(scope, parts[1], tuple(parts[3:]))
     return None

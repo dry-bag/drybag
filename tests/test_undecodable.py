@@ -127,7 +127,7 @@ RAISING: list[tuple[str, Callable[[Path], Callable[[], object]], type[Exception]
                     None,
                     None,
                     "",
-                    plates=plates(t / "overlay", "widget")[0],
+                    plates=plates(t / "overlay", "widget", machine=None)[0],
                 )
             ),
         )[1],

@@ -289,7 +289,7 @@ def test_a_rendered_overlay_with_no_remote_warns_until_it_has_one(
     job()
     status, detail, remedy = machine.row()
     assert (status, remedy) == (WARN, SKIPPED_FIX)
-    assert "`git remote add origin <url>`, then `git push -u origin main`" in detail
+    assert "`git remote add origin <url>`, a commit, then `git push -u origin main`" in detail
 
     bare = tmp_path / "remote.git"
     git(tmp_path, "init", "-q", "--bare", "-b", "main", str(bare))

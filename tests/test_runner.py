@@ -6,8 +6,10 @@ subject is the environment, the stdin and the exit-code mapping, not any of thos
 
 from __future__ import annotations
 
+import errno
 import os
 import pty
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -16,6 +18,7 @@ from drybag.runner import (
     _ENV_DROP,
     _ENV_FORCE,
     NOT_FOUND,
+    NOT_STARTED,
     TIMED_OUT,
     Completed,
     _SubprocessRunner,
@@ -110,6 +113,22 @@ def test_a_command_that_hangs_is_not_reported_as_one_that_is_missing(tmp_path: P
     # Non-vacuous: a binary that really is missing still answers NOT_FOUND, which is the mapping
     # an optional binary needs — a missing one is a finding, never a traceback.
     assert _SubprocessRunner().launch(["drybag-no-such-binary"], tmp_path).code == NOT_FOUND
+
+
+def test_a_launch_that_fails_for_another_reason_is_not_not_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An argv past the system's limit is there to run and cannot start; a caller that reads
+    # NOT_FOUND as "not installed" would stop asking a program that answers the next call.
+    def too_long(*args: object, **kwargs: object) -> None:
+        raise OSError(errno.E2BIG, "Argument list too long")
+
+    monkeypatch.setattr(subprocess, "Popen", too_long)
+    done = _SubprocessRunner().launch(["sh", "-c", "true"], tmp_path)
+    assert (done.code, done.stderr) == (
+        NOT_STARTED,
+        "sh could not be run: [Errno 7] Argument list too long",
+    )
 
 
 def test_output_that_is_not_text_is_read_with_replacement_characters_not_raised(

@@ -4,7 +4,7 @@ One command and not a group, the shape `docs/cli.md` documents and the shape the
 invokes.
 
 **A `skip` is not a finding.** A check this build cannot answer at all — the hash Codex keys hook
-trust on, which no spike has measured — skips on every installation, so an exit code that counted
+trust on, which nothing here knows — skips on every installation, so an exit code that counted
 skips would make `doctor` red on every correct one. Every other skip is a state of the machine or
 of the repository, and which of those states is the ordinary one can move with things no code
 here decides, so nothing
@@ -25,11 +25,15 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from drybag import fsops
 from drybag.areas import SubParsers
 from drybag.command import HOME_HELP, common_flags
+from drybag.config.machine import owner_home
 from drybag.doctor.checks import run_checks
 from drybag.doctor.model import RED, SKIP, WARN, Check
+from drybag.errors import Refusal
 from drybag.findings import listed
+from drybag.printed import quoted
 from drybag.result import Result
 
 
@@ -53,11 +57,12 @@ def summarise(checks: list[Check]) -> str:
 
 def run_doctor(args: argparse.Namespace) -> Result:
     root = Path(args.root).resolve()
+    if not fsops.is_dir(root):
+        # Every row would answer about a directory that is not there, each in its own words.
+        raise Refusal(f"--root {quoted(str(root))} is not a directory")
     checks = run_checks(
         root,
-        # `None` means the machine owner's own, said out loud rather than defaulted, for the reason
-        # `attach.write.attach` gives: a resolver without one reads the developer's real `~`.
-        home=Path(args.home).expanduser() if args.home else None,
+        home=Path(args.home).expanduser() if args.home else owner_home(),
         machine=Path(args.machine) if args.machine else None,
     )
     data = {

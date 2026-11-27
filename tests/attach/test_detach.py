@@ -17,8 +17,10 @@ from typing import Any
 import pytest
 
 from drybag import fsops, jsonobject
+from drybag.attach.mcp import BAD_LEDGER, McpLedger, read_mcp_ledger, write_mcp_ledger
+from drybag.attach.permissions import DENIED_NOT_A_LIST
 from drybag.attach.write import Attached, Detached, attach, detach
-from drybag.binding import LEDGER_NAME
+from drybag.binding import LEDGER_NAME, MCP_LEDGER_FILE, MCP_LEDGER_NAME, common_directory
 from drybag.errors import Failure, Refusal
 from drybag.printed import quoted
 from drybag.scaffold.regions import extract
@@ -394,18 +396,18 @@ def test_a_detach_that_cannot_read_the_id_keeps_a_settings_file_naming_a_deliver
 def test_detach_after_an_attach_whose_marketplace_add_failed_runs_no_call_and_finishes(
     tmp_path: Path,
 ) -> None:
-    # A `claude` that is not on `PATH` failed the first call, so Claude Code wrote nothing and the
-    # attach exited 1. The settings file names no plugin, so `detach` asks Claude Code to forget
-    # nothing and withdraws: it used to run `marketplace remove` regardless, fail on it, and promise
-    # that running it again would finish, which it never did.
+    # A `claude` that failed the first call wrote nothing, and the attach exited 1. The settings
+    # file names no plugin, so `detach` asks Claude Code to forget nothing and withdraws: it used
+    # to run `marketplace remove` regardless, fail on it, and promise that running it again would
+    # finish, which it never did.
     from drybag.attach.write import attach
     from drybag.runner import Completed
 
     root, store, machine = _bound(tmp_path)
     _grant(store.parents[2], allow=(RULE,))
-    absent = Recorder(answers={"claude": Completed(127, "", "")})
+    failing = Recorder(answers={"claude": Completed(1, "", "")})
     with pytest.raises(Failure):
-        attach(root, store=store, machine=machine, runner=absent)
+        attach(root, store=store, machine=machine, runner=failing)
     _, delivery = _render_of(root)
     runner = Recorder(answers={"claude": Completed(127, "", "")})
     _detach(root, runner)
@@ -433,6 +435,8 @@ def test_detach_in_a_bare_repositorys_worktree_withdraws_this_checkouts_own_part
     ledger_file(side).write_text(json.dumps(ledgered), encoding="utf-8")
     (side / ".claude").mkdir()
     (side / SETTINGS).write_text(json.dumps({"permissions": {"allow": [RULE]}}), encoding="utf-8")
+    # Nor did it deliver an MCP server there, so no `claude mcp` runs on the names a ledger holds.
+    write_mcp_ledger(side, McpLedger(mcp={"m1": "0" * 64}))
     runner = Recorder()
     removed = _detach(side, runner)
     assert removed.allow_removed == (RULE,)
@@ -596,24 +600,6 @@ def test_detach_leaves_the_binding_record_in_place(tmp_path: Path) -> None:
     _detach(root)
     assert (store.parent / "project.toml").is_file()
     assert (store.parents[2] / "common" / "memory" / "shared.md").is_file()
-
-
-def test_detach_removes_a_rule_file_the_overlay_has_since_deleted(tmp_path: Path) -> None:
-    # `attach` stays reversible by `detach`, and the ledger is the only record of what was placed.
-    # A re-attach removes no Codex copy, so one the overlay dropped between two attaches is still in
-    # `.codex/rules/`, where Codex reads it as a standing instruction, and it stays on the ledger
-    # while it is as attach wrote it.
-    # Mutation: `mutations/`'s "the ledger forgets a Codex copy the overlay dropped".
-    root, store, machine = _bound(tmp_path)
-    _grant(store.parents[2])
-    _attach(root, store, machine)
-    landed = root / ".codex" / "rules" / "common.rules"
-    assert landed.is_file()
-    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
-    _attach(root, store, machine)
-    assert landed.is_file()
-    _detach(root)
-    assert not landed.exists()
 
 
 def test_a_ledger_naming_a_path_outside_the_rule_copies_removes_none_of_them(
@@ -1396,3 +1382,167 @@ def test_a_settings_write_back_past_the_read_cap_is_refused_and_removes_nothing(
     with pytest.raises(Refusal, match=jsonobject.WRITTEN_PAST):
         _detach(root)
     assert_snapshot_unchanged(root, before)
+
+
+def _off(overlay: Path, *names: str) -> None:
+    (overlay / "common" / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": {name: "off" for name in names}}), encoding="utf-8"
+    )
+
+
+def test_owner_deny_entries_survive_attach_and_detach(tmp_path: Path) -> None:
+    root, store, machine = _bound(tmp_path)
+    overlay = store.parents[2]
+    settings = root / SETTINGS
+    settings.parent.mkdir()
+    owner = [{"serverName": "srv9"}, {"other": 1}]
+    settings.write_text(json.dumps({"deniedMcpServers": owner}), encoding="utf-8")
+    # `srv9` is switched off by the overlay too, but the owner already denied it: not recorded.
+    _off(overlay, "srv1", "srv9")
+    _attach(root, store, machine)
+    held = json.loads(settings.read_text(encoding="utf-8"))["deniedMcpServers"]
+    assert held == [*owner, {"serverName": "srv1"}]
+    # Both come back on: only the recorded one goes.
+    _off(overlay)
+    _attach(root, store, machine)
+    assert json.loads(settings.read_text(encoding="utf-8"))["deniedMcpServers"] == owner
+    _off(overlay, "srv1")
+    _attach(root, store, machine)
+    _detach(root)
+    assert json.loads(settings.read_text(encoding="utf-8")) == {"deniedMcpServers": owner}
+
+
+def test_detach_takes_back_the_allowlist_and_keeps_every_key_already_there(tmp_path: Path) -> None:
+    # A run profile copied in before `attach` keeps every key, with no allowlist left.
+    root, store, machine = _bound(tmp_path)
+    settings = root / SETTINGS
+    settings.parent.mkdir()
+    profile = {"permissions": {"deny": ["Bash(curl:*)"]}, "sandbox": {"enabled": True}}
+    settings.write_text(json.dumps(profile), encoding="utf-8")
+    _off(store.parents[2], "*")
+    _attach(root, store, machine)
+    assert json.loads(settings.read_text(encoding="utf-8"))["allowedMcpServers"] == []
+    assert _detach(root).mcp_allowlist_withdrawn
+    assert json.loads(settings.read_text(encoding="utf-8")) == profile
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+
+
+def test_attach_and_detach_of_an_allowlist_leave_the_tree_as_it_was(tmp_path: Path) -> None:
+    root, store, machine = _bound(tmp_path)
+    _off(store.parents[2], "*", "srv1")
+    before = snapshot(root)
+    _attach(root, store, machine)
+    assert _detach(root).mcp_allowlist_withdrawn
+    assert_snapshot_unchanged(root, before)
+
+
+def test_detach_with_no_attach_ledger_takes_back_the_allowlist(tmp_path: Path) -> None:
+    # An MCP ledger recording only the allowlist is still one an older `detach` left behind.
+    root, store, machine = _bound(tmp_path)
+    _off(store.parents[2], "*")
+    _attach(root, store, machine)
+    ledger_file(root).unlink()
+    with pytest.raises(Failure, match="is not there, as an older drybag's"):
+        _detach(root)
+    left = (root / SETTINGS).read_text(encoding="utf-8") if (root / SETTINGS).exists() else "{}"
+    assert "allowedMcpServers" not in json.loads(left)
+
+
+def test_detach_past_a_denied_key_that_is_no_list_says_so(tmp_path: Path) -> None:
+    root, store, machine = _bound(tmp_path)
+    _off(store.parents[2], "srv1")
+    _attach(root, store, machine)
+    (root / SETTINGS).write_text(json.dumps({"deniedMcpServers": "srv1"}), encoding="utf-8")
+    assert DENIED_NOT_A_LIST in _detach(root).notes
+    assert json.loads((root / SETTINGS).read_text(encoding="utf-8")) == {"deniedMcpServers": "srv1"}
+    assert not ledger_file(root).exists()
+
+
+def test_detach_removes_the_deny_entries_and_the_mcp_ledger(tmp_path: Path) -> None:
+    root, store, machine = _bound(tmp_path)
+    _off(store.parents[2], "srv1")
+    before = snapshot(root)
+    _attach(root, store, machine)
+    assert (common_directory(root) / MCP_LEDGER_FILE).exists()
+    assert _detach(root).mcp_undenied == ("srv1",)
+    assert_snapshot_unchanged(root, before)
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+
+
+def test_detach_removes_every_owned_name_and_empties_the_field(tmp_path: Path) -> None:
+    root, store, machine = _bound(tmp_path)
+    servers = {"m1": {"command": "a"}, "m2": {"command": "b"}}
+    (store.parents[2] / "common" / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": servers}), encoding="utf-8"
+    )
+    _attach(root, store, machine)
+    runner = Recorder(local={"m1", "m2"})
+    assert _detach(root, runner).mcp_taken_back == ("m1", "m2")
+    removed = [argv for argv in runner.calls if argv[:3] == ["claude", "mcp", "remove"]]
+    assert sorted(argv[-1] for argv in removed) == ["m1", "m2"]
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+
+
+def _served_and_off(overlay: Path) -> None:
+    (overlay / "common" / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": {"m1": {"command": "a"}, "srv1": "off"}}), encoding="utf-8"
+    )
+
+
+def test_detach_keeps_a_damaged_mcp_ledger_and_says_so(tmp_path: Path) -> None:
+    # A ledger that cannot be read records nothing to take back; deleted, the local entries it
+    # named would be orphaned with no record at all.
+    root, store, machine = _bound(tmp_path)
+    _served_and_off(store.parents[2])
+    _attach(root, store, machine)
+    path = common_directory(root) / MCP_LEDGER_FILE
+    path.write_text("{", encoding="utf-8")
+    notes = _detach(root).notes
+    assert any(note.startswith(BAD_LEDGER.format(name=MCP_LEDGER_NAME)) for note in notes)
+    assert path.read_text(encoding="utf-8") == "{"
+
+
+def test_detach_settles_the_mcp_ledger_an_older_detach_left(tmp_path: Path) -> None:
+    # An older drybag's `detach` removed `attach.json` and never opened `attach-mcp.json`: the
+    # next one takes its names and deny entries back, then says what a missing ledger says.
+    root, store, machine = _bound(tmp_path)
+    _served_and_off(store.parents[2])
+    _attach(root, store, machine)
+    ledger_file(root).unlink()
+    runner = Recorder()
+    with pytest.raises(Failure, match="is not there, as an older drybag's"):
+        _detach(root, runner)
+    assert [argv[2:] for argv in runner.calls] == [["remove", "--scope", "local", "--", "m1"]]
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+    left = (root / SETTINGS).read_text(encoding="utf-8") if (root / SETTINGS).exists() else "{}"
+    assert "deniedMcpServers" not in json.loads(left)
+
+
+def test_detach_keeps_the_mcp_names_when_claude_is_missing(tmp_path: Path) -> None:
+    # With no `claude` on `PATH` every call exits 127, so the plugin's withdrawal stops the run
+    # first: the MCP names stay recorded, and a second `detach` finishes from the ledgers it kept.
+    root, store, machine = _bound(tmp_path)
+    _served_and_off(store.parents[2])
+    attach(root, store=store, machine=machine, runner=Recorder(on_call=claude_code(root)))
+    owned = read_mcp_ledger(root)
+    with pytest.raises(Failure, match="run `drybag detach` again"):
+        _detach(root, Recorder(code=127, stderr="claude: command not found"))
+    assert read_mcp_ledger(root) == owned and owned.mcp
+    _detach(root, Recorder(on_call=claude_code(root)))
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()
+
+
+def test_detach_keeps_a_name_whose_remove_did_not_finish(tmp_path: Path) -> None:
+    # A `remove` that timed out may have left the entry: the name stays recorded, the command says
+    # so, and a second `detach` finishes from the ledgers it kept.
+    from drybag.runner import TIMED_OUT, Completed
+
+    root, store, machine = _bound(tmp_path)
+    _served_and_off(store.parents[2])
+    _attach(root, store, machine)
+    hung = Completed(TIMED_OUT, "", "claude did not finish within 60s")
+    with pytest.raises(Failure, match="m1"):
+        _detach(root, Recorder(answers={"claude mcp remove": hung}))
+    assert read_mcp_ledger(root).mcp == {"m1": None}
+    _detach(root)
+    assert not (common_directory(root) / MCP_LEDGER_FILE).exists()

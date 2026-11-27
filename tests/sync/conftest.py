@@ -366,7 +366,7 @@ def overlays(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _a_home_of_its_own
     write(seed, "common/claude/hooks/launch.sh", "#!/bin/sh\n")
     write(seed, "common/claude/hooks/x.py", "print('x')\n")
     write(seed, "common/memory/first.md", note_text("first", index="First trigger"))
-    write(seed, f"groups/{TAG}/memory/{TAG}-one.md", note_text(f"{TAG}-one", index="Team trigger"))
+    write(seed, f"tags/{TAG}/memory/{TAG}-one.md", note_text(f"{TAG}-one", index="Team trigger"))
     for project in ("alpha", "beta", "gamma"):
         relative = f"projects/{project}/memory/project-stable/{project}-one.md"
         write(seed, relative, note_text(f"{project}-one", index=f"{project} trigger"))

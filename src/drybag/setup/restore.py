@@ -244,7 +244,7 @@ def restore(
     machine (`promote_share`), counted in the outcome's `promoted`; a project whose notes cannot be
     recorded is `failed`, attached all the same. **The notes recorded are every unreviewed note of
     the overlay's share for the table key of the owner's projects file, which no repository
-    writes:** `common/memory`, each listed tag's `groups/<tag>/memory` and the project's own groups,
+    writes:** `common/memory`, each listed tag's `tags/<tag>/memory` and the project's own groups,
     notes written on another machine that nobody reviewed included. Only overlay paths are walked,
     and a group directory that is a link is followed. Without `yes` nothing is recorded as
     reviewed, whatever the overlay holds.
@@ -278,6 +278,13 @@ def restore(
             continue
         recorded = "recorded" if attached.binding_recorded else "already recorded"
         detail = "; ".join((f"binding {attached.binding} {recorded}", *attached.notes))
+        # A server Claude Code did not take, and an allowlist asked for and not written, are a
+        # partly failed attach, which `attach` exits 1 on.
+        unsettled = attached.mcp_failed or attached.mcp_allowlist_unwritten
+        state: Literal["attached", "failed"] = "failed" if unsettled else "attached"
+        if attached.mcp_failed:
+            servers = (f"{quoted(name)} ({said})" for name, said in attached.mcp_failed)
+            detail += f"; MCP servers not settled: {', '.join(servers)}"
         if yes:
             try:
                 promoted = len(promote_share(overlay, item.name, machine=machine))
@@ -285,9 +292,9 @@ def restore(
                 said = f"{detail}; its notes were not recorded as reviewed: {exc}"
                 outcomes.append(Outcome(item.name, item.dir, "failed", said, 0))
                 continue
-            outcomes.append(Outcome(item.name, item.dir, "attached", detail, promoted))
+            outcomes.append(Outcome(item.name, item.dir, state, detail, promoted))
         else:
-            outcomes.append(Outcome(item.name, item.dir, "attached", detail, 0))
+            outcomes.append(Outcome(item.name, item.dir, state, detail, 0))
     notes = (*listing_notes, *install_notes)
     return RestoreReport(missing_tools(), installed, notes, tuple(outcomes))
 

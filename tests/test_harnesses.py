@@ -139,8 +139,8 @@ TEXT = Harness(
 @pytest.mark.parametrize("event", ["SessionStart", "PreToolUse", "PostToolUse"])
 @pytest.mark.parametrize(
     "context",
-    ["", "a note", '{"permissionDecision": "deny", "decision": "block", "continue": false}'],
-    ids=["empty", "plain", "deny-shaped"],
+    ["a note", '{"permissionDecision": "deny", "decision": "block", "continue": false}'],
+    ids=["plain", "deny-shaped"],
 )
 def test_no_harness_renders_a_decision(harness: Harness, event: str, context: str) -> None:
     # A rendering is context in an envelope, and a context or a notice shaped like a decision is
@@ -154,10 +154,24 @@ def test_no_harness_renders_a_decision(harness: Harness, event: str, context: st
 @pytest.mark.parametrize("event", EVENTS)
 def test_a_hook_with_nothing_to_say_answers_an_empty_object(harness: Harness, event: str) -> None:
     # Claude Code 2.1.319 fails validation on the envelope on `SessionEnd` and Codex 0.166.0 reports
-    # `hook: Stop Failed`, while `{}` passes on every event of both.
+    # `hook: Stop Failed`, while `{}` passes on the six events and the five they were measured on;
+    # `UserPromptSubmit` and `UserPromptExpansion`, which no shipped entry uses, were not.
     # Mutation (declared, `mutations/`'s "a hook with nothing to say answers the envelope"): the
     # payload starts as the envelope -> every case reddens.
     assert harness.render(event, "", "") == "{}"
+
+
+@pytest.mark.parametrize("harness", HARNESSES, ids=lambda h: h.name)
+@pytest.mark.parametrize("event", ["Stop", "SessionEnd"])
+def test_a_context_on_stop_or_session_end_goes_out_in_the_envelope(
+    harness: Harness, event: str
+) -> None:
+    # The empty object is the quiet answer's rule and no more. This is the shape the harnesses
+    # refuse on these two events, and no shipped handler gives it: pinned so that a handler that
+    # starts speaking there, or a render that drops its words, is a decision and not an accident.
+    assert json.loads(harness.render(event, "a note", "")) == {
+        "hookSpecificOutput": {"hookEventName": event, "additionalContext": "a note"}
+    }
 
 
 def test_every_harness_renders_through_the_canonical_render() -> None:
@@ -250,8 +264,11 @@ LISTED = {
     ("src/drybag/setup/run.py", "codex"): (4, "`_MARKETPLACE_ADD` and `_PLUGIN_INSTALL`"),
     ("src/drybag/setup/restore.py", "claude"): (5, "`install_listed` in `setup/restore.py`"),
     ("src/drybag/attach/render.py", "claude"): (
-        6,
-        "`PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL`",
+        8,
+        (
+            "`PLUGIN_MARKETPLACE_ADD_LOCAL` and `PLUGIN_INSTALL_LOCAL`",
+            "`MCP_ADD_JSON_LOCAL` and `MCP_REMOVE_LOCAL`",
+        ),
     ),
     ("src/drybag/overlay/layout.py", "claude"): (1, "(`overlay.layout`"),
     ("src/drybag/overlay/layout.py", "codex"): (1, "(`overlay.layout`"),
@@ -271,8 +288,11 @@ LISTED = {
         "(`attach.items`, `attach.permissions`, `attach.write`)",
     ),
     ("src/drybag/attach/write.py", "claude"): (
-        4,
-        "(`attach.items`, `attach.permissions`, `attach.write`)",
+        6,
+        (
+            "(`attach.items`, `attach.permissions`, `attach.write`)",
+            "`detach` names `claude mcp` where",
+        ),
     ),
     ("src/drybag/attach/write.py", "codex"): (
         4,
@@ -299,8 +319,10 @@ LISTED = {
 # The mentions that are no fact the code acts on, each with how many constants make it and why.
 PROSE = {
     # Messages naming the Codex rule files `attach` places, and `--check` would place.
-    ("src/drybag/attach/check.py", "codex"): 1,
-    ("src/drybag/attach/commands.py", "codex"): 4,
+    ("src/drybag/attach/check.py", "codex"): 3,
+    ("src/drybag/attach/commands.py", "codex"): 5,
+    # The `attached` row saying it runs no `claude` to see a delivered MCP server.
+    ("src/drybag/attach/doctor.py", "claude"): 1,
     # The advice `setup --approval-boundary` prints, which names the harness whose settings it is.
     ("src/drybag/setup/commands.py", "claude"): 1,
     # The commit-trailer guard's names of tools that sign commits as authors: the agent as an

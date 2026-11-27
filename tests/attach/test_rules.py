@@ -11,7 +11,15 @@ import os
 from pathlib import Path
 
 from drybag import binding
-from drybag.attach.rules import SCOPED_LEAD, STANDING_LEAD, scoped_exist, scoped_for, standing
+from drybag.attach.rules import (
+    SCOPED_LEAD,
+    SESSIONS,
+    STANDING_LEAD,
+    scoped_exist,
+    scoped_for,
+    standing,
+)
+from drybag.config.paths import data_directory
 from drybag.config.plates import plates
 from tests.gitfixture import git, needs_git
 from tests.tagged import with_tags
@@ -81,6 +89,24 @@ def test_a_scoped_rule_is_said_once_per_file_per_session(tmp_path: Path) -> None
 
 
 @needs_git
+def test_the_rule_hook_keeps_fifty_sessions(tmp_path: Path) -> None:
+    # One directory of records per session, which nothing else ever removes: fifty older sessions
+    # and a new one leave fifty, the oldest gone.
+    # Mutation (declared): the prune after a record is written removed -> this reddens.
+    _overlay(tmp_path)
+    root = _checkout(tmp_path)
+    sessions = data_directory() / SESSIONS
+    for age in range(50):
+        planted = sessions / f"old{age}"
+        planted.mkdir(parents=True)
+        (planted / "record").touch()
+        os.utime(planted, ns=((age + 1) * 10**9,) * 2)
+    assert scoped_for(root, str(root / "scoped" / "a.txt"), "s1") == _scoped(root)
+    assert len(list(sessions.iterdir())) == 50
+    assert not (sessions / "old0").exists()
+
+
+@needs_git
 def test_an_unbound_checkout_gets_no_rule(tmp_path: Path) -> None:
     # Its `drybag.toml` names the overlay's project, and no binding record names the checkout.
     _overlay(tmp_path)
@@ -143,21 +169,21 @@ def test_paths_are_read_in_each_frontmatter_form(tmp_path: Path) -> None:
 
 def test_whether_a_scoped_rule_exists_decides_the_rendered_entry(tmp_path: Path) -> None:
     overlay = tmp_path / "overlay"
-    assert not scoped_exist(plates(overlay, "p")[0])
+    assert not scoped_exist(plates(overlay, "p", machine=None)[0])
     rules = overlay / "common" / "claude" / "rules"
     rules.mkdir(parents=True)
     (rules / "standing.md").write_text("Standing.\n", encoding="utf-8")
-    assert not scoped_exist(plates(overlay, "p")[0])
+    assert not scoped_exist(plates(overlay, "p", machine=None)[0])
     (rules / "scoped.md").write_text('---\npaths: ["a/**"]\n---\nScoped.\n', encoding="utf-8")
-    assert scoped_exist(plates(overlay, "p")[0])
+    assert scoped_exist(plates(overlay, "p", machine=None)[0])
 
 
 def _tagged(overlay: Path, **rules: str) -> None:
-    """Project `p` listing the tags named by the keywords (in order), each `groups/<tag>/` holding
+    """Project `p` listing the tags named by the keywords (in order), each `tags/<tag>/` holding
     the rule file `x.md` with the body given."""
     with_tags(overlay, "p", list(rules), "claude/rules")
     for tag, body in rules.items():
-        (overlay / "groups" / tag / "claude" / "rules" / "x.md").write_text(
+        (overlay / "tags" / tag / "claude" / "rules" / "x.md").write_text(
             f"{body}\n", encoding="utf-8"
         )
 
@@ -173,7 +199,7 @@ def test_a_tag_rule_arrives_and_a_later_plate_wins_its_name(tmp_path: Path) -> N
     (rules / "only-common.md").write_text("Only common.\n", encoding="utf-8")
     (project / "only-project.md").write_text("Only project.\n", encoding="utf-8")
     _tagged(overlay, a="Tag x.")
-    (overlay / "groups" / "a" / "claude" / "rules" / "only-tag.md").write_text(
+    (overlay / "tags" / "a" / "claude" / "rules" / "only-tag.md").write_text(
         "Only tag.\n", encoding="utf-8"
     )
     root = _checkout(tmp_path)

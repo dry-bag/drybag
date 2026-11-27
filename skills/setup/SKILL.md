@@ -13,8 +13,8 @@ description: Configure the machine for drybag — the preset, the personal param
 3. A language preference the user wants followed is a personal standing rule, a note with
    `metadata.startup` in the overlay; do not guess it.
 4. Offer the private overlay — one repository holding the user's own standing rules,
-   cross-project notes and per-project bindings. `setup` is what makes and records it, through
-   `--overlay`, and there are three ways in:
+   cross-project notes and one record per project. `setup` is what makes and records it, through
+   `--overlay`, and there are four ways in:
    - **They already have one**: `drybag setup --preset recommended --overlay /path/to/it`.
      The path is validated against the overlay's identity record, `drybag-overlay.toml`. An
      overlay made before the record shipped is refused with the file and its keys named: relay
@@ -33,6 +33,9 @@ description: Configure the machine for drybag — the preset, the personal param
      `~/<name>`, or a directory there holding something that is not an overlay, is refused before
      GitHub is asked anything; relay the refusal rather than moving what is there yourself. A
      refusal after GitHub was asked says the repository may exist and how to record it: relay it.
+   - **A new computer, overlay already cloned**: `drybag setup --restore --overlay /path/to/it`
+     sets the machine up and attaches each checkout its `machine/projects.toml` lists. Add
+     `--sync` or `--yes` (records every overlay note as reviewed) only when the user asks for it.
 
    Relay whether the secret scan installed.
 5. After a drybag release, `drybag overlay upgrade --root PATH --dry-run` says what would

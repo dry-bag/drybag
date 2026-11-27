@@ -190,7 +190,8 @@ def test_the_guard_refuses_main_not_tracking_origin_main(world: World) -> None:
 
     assert refused is not None and "tracks nothing" in refused
     assert refused.endswith(
-        "give the overlay a remote: `git remote add origin <url>`, then `git push -u origin main`"
+        "give the overlay a remote: `git remote add origin <url>`, a commit, "
+        "then `git push -u origin main`"
     )
 
 

@@ -34,7 +34,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, cast
 
-from drybag.config.classes import GATE_BUDGETS, Layer, LayerName, resolve
+from drybag.config.classes import Layer, LayerName, resolve
 from drybag.config.reading import (
     ConfigError,
     MachineConfigError,
@@ -94,10 +94,6 @@ MACHINE_FILE_NOTE = (
 # What one table or key of a readable machine file got wrong, in the note that says what happened
 # to the value.
 UNKNOWN_KEY = "[{table}] has a key this drybag does not read: {key}"
-GATE_BUDGET = (
-    "budgets.{name} is a gate's budget, which only a repository's drybag.toml sets; the "
-    "machine file sets only a session's"
-)
 NOT_A_TABLE = "[{table}] must be a table"
 IGNORED_NOTE = "{path}: {problem}; it is ignored"
 MACHINE_RESET_NOTE = "{path}: {problem}; the preset's value applies"
@@ -180,7 +176,10 @@ def _over(upper: Mapping[str, object], preset: str, unloaded: str | None) -> Own
         provenance=resolution.provenance,
         notes=resolution.notes,
         preset=preset,
-        layer=MappingProxyType(dict(upper)),
+        # What `resolve` admitted, so a session's resolution does not refuse a key a second time.
+        layer=MappingProxyType(
+            {key: value for key, value in upper.items() if key in resolution.provenance}
+        ),
         unloaded=unloaded,
         sync=Sync(**_section(values, "sync")),
     )
@@ -203,8 +202,8 @@ def _section(values: Mapping[str, object], section: str) -> dict[str, Any]:
 
 
 def _machine_values(raw: dict[str, Any], machine: Path, notes: list[str]) -> dict[str, object]:
-    """The machine file's `[personal]`, `[guards]`, session `[budgets]` and `[sync]` as dotted
-    keys.
+    """The machine file's `[personal]`, `[guards]`, `[budgets]` and `[sync]` as dotted keys; a
+    gate's budget among them is `resolve`'s to refuse.
 
     Every other table is another reader's (`[overlay]`, `[machine]`) or nobody's, and is not this
     function's to judge. A problem is a note, and costs only its own key, or its own table when the
@@ -235,10 +234,6 @@ def _machine_values(raw: dict[str, Any], machine: Path, notes: list[str]) -> dic
         for key, value in values.items():
             if key not in types:
                 problem(UNKNOWN_KEY.format(table=table, key=clipped(key)), ignored=True)
-            elif table == "budgets" and key in GATE_BUDGETS:
-                # Before `resolve`, which would refuse it too, so the note says which budgets the
-                # owner does set rather than only that this layer may not.
-                problem(GATE_BUDGET.format(name=key), ignored=True)
             else:
                 try:
                     found[f"{table}.{key}"] = coerced(f"{table}.{key}", types[key], value)

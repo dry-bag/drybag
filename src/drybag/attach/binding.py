@@ -40,7 +40,7 @@ from pathlib import Path
 from drybag import fsops
 from drybag.binding import bound_project
 from drybag.config.loader import load
-from drybag.config.overlay import overlay_root
+from drybag.config.overlay import machine_record, overlay_root
 from drybag.config.plates import Plate, plates
 from drybag.config.reading import UNPARSEABLE, toml_position
 from drybag.config.schema import NAME_RULE, PROJECT_NAME, Config
@@ -183,9 +183,8 @@ def refuse_unless_share_can_exist(binding: Binding, config: Config) -> None:
         raise Refusal(OVERLAY_DAMAGED.format(path=damaged))
     # A name, or a group, longer than a file name may be is asked of the nearest directory that is
     # there and not of the path it will have: an overlay with no `projects/` yet answers every path
-    # under it with "no such file", the over-long name included, so a 300-character name read as a
-    # first attach and the run failed at the record's write, after the ignore region and the
-    # ledger, printing the name.
+    # under it with "no such file", the over-long name included, so a 300-character name would
+    # read as a first attach and fail only at the record's write.
     there = _nearest_directory(binding.overlay / PROJECTS)
     if _name_too_long(there, binding.project):
         raise Refusal(SHARE_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
@@ -199,7 +198,7 @@ def refuse_unless_share_can_exist(binding: Binding, config: Config) -> None:
         mode = 0
     if mode is not None and not stat.S_ISDIR(mode):
         raise Refusal(SHARE_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
-    made = (share / RECORD, *link_sources(binding.overlay, config))
+    made = (share / RECORD, *link_sources(binding.overlay, config, machine=binding.machine_name))
     for path in (path for path in made if path.is_relative_to(share)):
         if any(_name_too_long(there, part) for part in path.relative_to(share).parts):
             raise Refusal(PATH_CANNOT_EXIST.format(projects=binding.overlay / PROJECTS))
@@ -277,6 +276,9 @@ class Binding:
     # once per binding, so a run that reads the overlay's items reads no other copy.
     plates: tuple[Plate, ...] = ()
     plate_notes: tuple[str, ...] = ()
+    # This machine's name, from the one read of the machine file that gave `overlay`: the composed
+    # store links its sub-plates' notes (`memory.composed.build`).
+    machine_name: str | None = None
 
 
 class UnreadableRecord(Failure):
@@ -338,14 +340,17 @@ def binding_for(root: Path, config: Config, *, machine: Path | None) -> Binding:
     The session-start handler is handed its `Config` by the dispatcher and must not load it a
     second time; `read_binding` is the command-line wrapper that loads and checks `--store`.
     """
-    overlay = overlay_root(machine)
-    if overlay is None:
+    record = machine_record(machine)
+    if record.overlay is None:
         raise Refusal(NO_OVERLAY)
-    return _bound(root, config, overlay)
+    return _bound(root, config, record.overlay, record.name, record.note)
 
 
-def _bound(root: Path, config: Config, overlay: Path) -> Binding:
-    """The binding under an overlay root the caller has already read out of the machine file.
+def _bound(
+    root: Path, config: Config, overlay: Path, machine: str | None, named: str | None
+) -> Binding:
+    """The binding under an overlay root the caller has already read out of the machine file, with
+    the machine name (`machine`) and its note (`named`) from that same read.
 
     One read per binding: `read_binding` checks `--store` against the root it read and binds under
     that same root, rather than handing `binding_for` the machine file to read a second time, which
@@ -363,9 +368,11 @@ def _bound(root: Path, config: Config, overlay: Path) -> Binding:
     against = found.origin if found is not None and state == BOUND else recorded
     note = origin_note(against, origin) if state == BOUND or against is not None else None
     earlier = found.project if found is not None else None
-    held, notes = plates(overlay, project)
+    held, notes = plates(overlay, project, machine=machine)
+    if named is not None:
+        notes = (*notes, named)
     return Binding(
-        project, overlay, store, origin, recorded, state, note, earlier, fault, held, notes
+        project, overlay, store, origin, recorded, state, note, earlier, fault, held, notes, machine
     )
 
 
@@ -384,9 +391,28 @@ NOT_A_NAME = (
     "with `--project`"
 )
 NAMED_BY_FILE = (
-    "--project names the project of a repository with no drybag.toml, and this one's "
-    "[project] name names it already"
+    "--project beside a drybag.toml may only name the project its [project] name names, to rebind "
+    "the checkout to it"
 )
+# A bound checkout whose `[project] name` is not the project this machine's record binds it to: a
+# pulled commit can rename it, and a rebind moves every worktree's servers, rules and hooks, so it
+# is made only on `--project`, from the record no repository byte writes.
+REBIND = (
+    "this machine binds the checkout to project {bound} and its drybag.toml names {named}; to "
+    "rebind it, and every worktree of it, run `drybag attach --project {named}`"
+)
+
+
+class RebindRefused(Refusal):
+    """`REBIND`, a refusal of its own so `doctor` can tell it from a store that is not this
+    project's."""
+
+
+def refuse_a_rebind(root: Path, named: str) -> None:
+    """`RebindRefused` where this machine binds the checkout to another project than `named`."""
+    found = bound_project(root)
+    if found is not None and found.project != named:
+        raise RebindRefused(REBIND.format(bound=quoted(found.project), named=quoted(named)))
 
 
 # Where a project's name came from, in `attach --check`'s words: one phrase for each of the four
@@ -473,12 +499,13 @@ def read_binding(
     project's own directory in that overlay, derived and never read.
     """
     config = load(root, machine=machine) if config is None else config
-    overlay = overlay_root(machine)
+    record = machine_record(machine)
+    overlay = record.overlay
     if overlay is None:
         raise Refusal(NO_OVERLAY)
     expected = project_notes(overlay, config.project.name)
     if store is None:
-        return _bound(root, config, overlay)
+        return _bound(root, config, overlay, record.name, record.note)
     try:
         resolved: Path | None = fsops.resolved(store)
     except OSError:
@@ -494,4 +521,4 @@ def read_binding(
             f"{store} is not it. The overlay root comes from the machine configuration and never "
             f"from an argument"
         )
-    return _bound(root, config, overlay)
+    return _bound(root, config, overlay, record.name, record.note)

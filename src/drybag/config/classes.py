@@ -40,8 +40,6 @@ class KeyClass(StrEnum):
     PREFERENCE = "preference"
     # A bound on what a session loads, which the owner may move as the repository may.
     SESSION_PARAMETER = "session-parameter"
-    # A gate's input: what a pull request is judged by, so only the base branch's file sets it.
-    GATE_PARAMETER = "gate-parameter"
     # A fact about the repository itself, which only its own file states.
     REPOSITORY_ONLY = "repository-only"
     # A limit of the platform the plugin runs on, which only the shipped preset carries.
@@ -81,7 +79,6 @@ ALLOWED: Mapping[KeyClass, frozenset[LayerName]] = MappingProxyType(
         KeyClass.MACHINE_ONLY: frozenset(ORDER) - {LayerName.REPOSITORY},
         KeyClass.PREFERENCE: frozenset(ORDER),
         KeyClass.SESSION_PARAMETER: frozenset(ORDER),
-        KeyClass.GATE_PARAMETER: _REPOSITORY_SIDE,
         KeyClass.REPOSITORY_ONLY: _REPOSITORY_SIDE,
         KeyClass.PLUGIN_OWNED: frozenset({LayerName.PRESET}),
     }
@@ -116,7 +113,7 @@ CLASSES: Mapping[str, KeyClass] = MappingProxyType(
         "memory.groups": KeyClass.PREFERENCE,
         "memory.index_extra": KeyClass.PREFERENCE,
         **{f"budgets.{name}": KeyClass.SESSION_PARAMETER for name in sorted(SESSION_BUDGETS)},
-        **{f"budgets.{name}": KeyClass.GATE_PARAMETER for name in sorted(GATE_BUDGETS)},
+        **{f"budgets.{name}": KeyClass.REPOSITORY_ONLY for name in sorted(GATE_BUDGETS)},
         "drybag.version": KeyClass.REPOSITORY_ONLY,
         "drybag.preset": KeyClass.REPOSITORY_ONLY,
         "project.*": KeyClass.REPOSITORY_ONLY,
@@ -153,15 +150,23 @@ def said(name: LayerName, label: str = "") -> str:
     return f"{name} {label}" if label else str(name)
 
 
+def labelled(label: str, machine: str | None) -> str:
+    """A layer's label as printed: its plate's, then `on <machine>` for a machine's sub-plate,
+    `t1 on m1`, or `on m1` for the common plate's."""
+    return label if machine is None else f"{label} on {machine}".lstrip()
+
+
 @dataclass(frozen=True)
 class Layer:
     """One layer's values, keyed by dotted key. `label` tells apart the layers of one name: the
     tag an `OVERLAY_TAG` layer is for, which the owner wrote and `config.plates` held to `TAG`, so
-    it prints as is."""
+    it prints as is. `machine` is set on a machine's sub-plate (`machines/<machine>/`), which keeps
+    its plate's name and label."""
 
     name: LayerName
     values: Mapping[str, object]
     label: str = ""
+    machine: str | None = None
 
 
 @dataclass(frozen=True)
@@ -199,11 +204,15 @@ def resolve(
     provenance: dict[str, LayerName] = {}
     labels: dict[str, str] = {}
     notes: list[str] = []
+    # `sorted` is stable: layers of one rank keep their order in `stack`, which is how a machine
+    # sub-plate (the same `LayerName` as its parent, placed right after it) wins over its parent
+    # and loses to the next plate. Reversing or re-keying this sort breaks that.
     for layer in sorted(stack, key=lambda layer: _RANK[layer.name]):
+        shown = labelled(layer.label, layer.machine)
         for key, value in layer.values.items():
             if layer.name not in ALLOWED[class_of(key)]:
                 notes.append(
-                    REFUSED_LAYER_NOTE.format(key=clipped(key), layer=said(layer.name, layer.label))
+                    REFUSED_LAYER_NOTE.format(key=clipped(key), layer=said(layer.name, shown))
                 )
                 continue
             if key in folds and key in values:
@@ -211,7 +220,7 @@ def resolve(
             else:
                 values[key] = value
             provenance[key] = layer.name
-            labels[key] = layer.label
+            labels[key] = shown
     return Resolution(
         values=MappingProxyType(values),
         provenance=MappingProxyType(provenance),

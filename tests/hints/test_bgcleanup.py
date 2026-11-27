@@ -1,10 +1,9 @@
 """Contract for the background-cleanup guard, driven through `judge`.
 
-The command this guard exists to name was measured on 2026-09-02: a session backgrounded
-fourteen busy-loop subshells with a bare ``&`` and expressed the cleanup as a LATER LINE of
-the same command. The harness reaped the parent shell before that line ran, the subshells
-re-parented to PID 1, and they burned 7.4 of 10 cores for 39 minutes with no writer left to
-stop them. A trailing ``kill`` line is not cleanup; ``trap ... EXIT`` is.
+A command that backgrounds work with a bare ``&`` and writes its cleanup as a LATER LINE of the
+same command leaks: the harness can reap the parent shell before that line runs, and the jobs
+re-parent to PID 1 with no writer left to stop them. A trailing ``kill`` line is not cleanup;
+``trap ... EXIT`` is.
 """
 
 from __future__ import annotations
@@ -16,16 +15,16 @@ import time
 import pytest
 
 from drybag.hints import bgcleanup
+from drybag.hints.bashscan import MAX_COMMAND_CHARS
 from drybag.hints.bgcleanup import (
     EXIT_ECHO_HINT,
     LEAK_HINT,
-    MAX_COMMAND_CHARS,
     RESTORE_HINT,
     SLEEP_HINT,
     judge,
 )
 
-# The command from the incident, verbatim.
+# Busy-loop subshells in the background, with the cleanup as a later line.
 _INCIDENT = """for i in $(seq 1 14); do (while :; do :; done) & done
 LOADPIDS=$(jobs -p)
 sleep 2
@@ -120,7 +119,7 @@ def test_a_trap_past_a_bare_double_dash_does_not_count() -> None:
 
 def test_a_trap_naming_only_int_and_term_does_not_count() -> None:
     """`INT`/`TERM` are accepted ALONGSIDE `EXIT`, never instead of it: a reap is neither
-    signal, so a trap that does not name `EXIT` would not have run in the incident either."""
+    signal, so a trap that does not name `EXIT` does not run on one."""
     assert flagged("trap 'kill ${=P}' INT TERM; sleep 300 & P=$!; kill $P")
 
 
@@ -209,32 +208,25 @@ def test_a_background_welded_to_a_closing_paren_is_flagged() -> None:
     """`(sleep 300 &)` is THE deliberate-detach idiom, and it is exactly the leak this guard
     exists to name. `shlex`'s `punctuation_chars` mode fuses adjacent punctuation into one
     token, so the `&` arrives welded as `&)` and a membership test on the raw token list never
-    sees it. `bashscan` already paid for this lesson once -- its header records
-    "A SEPARATOR WELDED TO ITS NEIGHBOUR IS STILL A SEPARATOR".
+    sees it.
 
-    What this no longer measures, said here so the docstring is not read as a promise it does
-    not keep: the ported `_begins_with_sleep` skips the leading `(`, so this command meets the
-    `sleep` rule before the `&` scan and would be flagged even with the weld unread.
-    `test_a_non_sleep_background_welded_to_a_closing_paren_is_flagged` below is the test that
-    still proves the weld is seen, and it is the one the mutation entry names."""
+    `_begins_with_sleep` skips the leading `(`, so this command meets the `sleep` rule before the
+    `&` scan and is flagged even with the weld unread;
+    `test_a_non_sleep_background_welded_to_a_closing_paren_is_flagged` proves the weld is seen."""
     assert flagged("(sleep 300 &)")
 
 
 def test_a_non_sleep_background_welded_to_a_closing_paren_is_flagged() -> None:
     """The same weld with a program the `sleep` rule does not already flag.
 
-    Not in the source, and needed only because of what changed in the port: the ported
-    `_begins_with_sleep` skips a leading `(`, so `(sleep 300 &)` now meets the `sleep` rule
-    first and is flagged whether or not the weld is read at all. It can no longer prove the
-    weld is seen; this can, because `LEAK_HINT` is reachable for this command only through
-    the decomposition of `&)` into two pieces."""
+    `LEAK_HINT` is reachable for this command only through the decomposition of `&)` into two
+    pieces."""
     assert judge("(python -m http.server 8000 &)", background=True) == LEAK_HINT
 
 
 def test_the_incident_command_is_flagged_without_the_space_before_the_ampersand() -> None:
-    """The module docstring's own incident command with ONE space deleted. A guard that
-    catches the incident only when its author happened to type a space is not catching the
-    incident."""
+    """The same command with ONE space deleted: a guard that catches it only when its author
+    happened to type a space is not catching it."""
     welded = _INCIDENT.replace("done) & done", "done)& done")
     assert welded != _INCIDENT, "the fixture no longer contains the shape under test"
 
@@ -244,8 +236,7 @@ def test_the_incident_command_is_flagged_without_the_space_before_the_ampersand(
 def test_a_subshell_background_inside_another_subshell_is_flagged() -> None:
     """`((cmd) & wait)` opens with the token `((` -- the same token arithmetic opens with.
     Pinned because the tempting fix for the arithmetic false positive (suppress `&` inside a
-    `((` run) would silence this, which is a real leak and closer to the incident than
-    arithmetic ever is."""
+    `((` run) would silence this, which is a real leak."""
     assert flagged("((sleep 300; sleep 1) & echo started)")
 
 
@@ -430,21 +421,15 @@ def test_the_shell_c_flag_matches_exactly_what_the_backtracking_pattern_did() ->
 
 def test_a_long_option_cluster_does_not_hang_the_hook() -> None:
     """`judge` runs on every `PreToolUse` Bash call, so the time it takes is part of its
-    contract: a hook past its timeout lets the call through unjudged. The old
-    `-[A-Za-z]*c[A-Za-z]*` backtracked quadratically on a cluster of `c`s ending in a
-    non-letter -- measured through `judge`, INSIDE `MAX_COMMAND_CHARS`, at 1.09 s / 4.44 s /
-    10.14 s for 20k / 40k / 60k characters, which is the 4x-per-doubling signature. The same
-    call now takes 0.13 s at 60k.
+    contract: a hook past its timeout lets the call through unjudged. A pattern like
+    `-[A-Za-z]*c[A-Za-z]*` backtracks quadratically on a cluster of `c`s ending in a non-letter,
+    inside `MAX_COMMAND_CHARS`.
 
-    Measured as a RATIO against a benign cluster of the same length, not against a clock. An
-    absolute ceiling of three seconds held on one machine and failed on another: under coverage
-    across four workers on a CI runner the fixed call spent 3.07 s of CPU (Python 3.12,
-    2026-09-26), because coverage traces `judge`'s pure-Python scan line by line and shared cores
-    stretch the same work into more CPU-seconds. Both calls below run through `judge` back to
+    A RATIO against a benign cluster of the same length, not a clock: coverage and shared cores
+    stretch the same work into more CPU-seconds, and both calls below run through `judge` back to
     back, so whatever inflates one inflates the other. A `b` cluster takes the same path to the
-    same verdict but gives the flag pattern nothing to backtrack over. Measured: 1.0 with the
-    fixed pattern and 1.1 under coverage; with the old one, 48 and 19. Five sits between them
-    with room on both sides.
+    same verdict but gives the flag pattern nothing to backtrack over. The ratio is about 1 with
+    a linear pattern and far above five with a quadratic one.
     """
     cluster = "c" * 60_000
     command = f"bash -{cluster}0 'echo hi'"
@@ -460,8 +445,8 @@ def test_a_long_option_cluster_does_not_hang_the_hook() -> None:
 
 
 def test_a_trailing_restore_without_a_trap_is_warned_about() -> None:
-    """Measured 2026-09-05: a foreground mutate-test-restore command outlived the 120 s
-    timeout, was backgrounded by the harness and reaped before its restore line."""
+    """A foreground mutate-test-restore command that outlives the tool's timeout is
+    backgrounded by the harness and can be reaped before its restore line."""
 
     command = (
         "cp ci.yml ci.yml.bak; sed -i '' 's/a/b/' ci.yml; "
@@ -584,7 +569,7 @@ def test_a_restore_command_with_no_operands_is_judged_rather_than_raised() -> No
     assert judge("cp ci.yml ci.yml.bak; pytest; cp --", background=False) is None
 
 
-# A chain measured on 2026-09-16: argparse exited 2, the completion notification said 0.
+# A chain whose own exit code is the echo's: the program exits 2, the chain 0.
 _MASKING_CHAIN = 'python3 gate.py --run > out.log 2>&1; echo "EXIT=$?" >> out.log'
 
 

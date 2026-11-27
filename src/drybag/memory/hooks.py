@@ -2,9 +2,10 @@
 
 `index-render` renders the index of a checkout bound in overlay mode, on `SessionStart` and on
 `SessionEnd`, as `drybag memory index` does: the note sync moves no index, so each machine
-renders its own. At `SessionEnd` it harvests the lines the session appended outside the region
-into their notes before the sync's handler starts the job (areas run in name order), so those
-notes travel in that job; at `SessionStart` it renders what the jobs brought in since. It reads
+renders its own. Either render harvests what stands outside the region. At `SessionEnd` that is
+the lines the session appended, into their notes before the sync's handler starts the job (areas
+run in name order), so those notes travel in that job; at `SessionStart` it also lists what the
+jobs brought in since. It reads
 the session's one configuration (`SessionConfig.acting`), as `unreviewed-notes` does, and says
 nothing; a failure costs this handler alone.
 
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
 # Read by the model as well as the person, so it names the owner as the one who promotes: a line
 # telling a session to run `promote` would have the agent turn unreviewed notes into standing rules.
 UNREVIEWED_COUNT = (
-    "drybag: {count} notes are unreviewed; promoting them is the owner's call "
+    "drybag: {count} unreviewed note(s); promoting them is the owner's call "
     "(`drybag memory promote`)"
 )
 # Under the machine's data directory: the digest of the unreviewed set each store last announced.

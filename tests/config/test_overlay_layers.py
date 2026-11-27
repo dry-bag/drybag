@@ -50,12 +50,12 @@ def overlay(tmp_path: Path, *, common: str = "", sample: str | None = None) -> P
 
 
 def tagged(root: Path, listed: list[str], **files: str) -> None:
-    """The project `sample`'s record listing `listed`, and `groups/<tag>/drybag.toml` for each
+    """The project `sample`'s record listing `listed`, and `tags/<tag>/drybag.toml` for each
     tag in `files`, holding what it is given."""
     list_tags(root, "sample", listed)
     for tag, text in files.items():
-        (root / "groups" / tag).mkdir(parents=True)
-        (root / "groups" / tag / "drybag.toml").write_text(text, encoding="utf-8")
+        (root / "tags" / tag).mkdir(parents=True)
+        (root / "tags" / tag / "drybag.toml").write_text(text, encoding="utf-8")
 
 
 def mode(value: str) -> str:
@@ -116,8 +116,8 @@ def test_an_unbound_checkout_naming_the_project_gets_no_project_layer(tmp_path: 
     assert session.resolution.provenance.get(BUDGET) is LayerName.OVERLAY_COMMON
 
 
-def test_a_gate_parameter_in_either_overlay_file_never_reaches_the_config(tmp_path: Path) -> None:
-    # What a pull request is judged by is the base branch's file alone: `resolve` refuses both
+def test_a_gate_budget_in_either_overlay_file_never_reaches_the_config(tmp_path: Path) -> None:
+    # What a pull request is judged by is the repository's file alone: `resolve` refuses both
     # overlay layers for a gate's budget, and says so for each.
     root = project(tmp_path)
     gate = f"[budgets]\n{GATE_BUDGET} = 999\n"
@@ -216,7 +216,7 @@ def test_a_tag_file_that_is_not_toml_is_a_note_and_no_layer(tmp_path: Path) -> N
     binding.record(root, "sample", None)
     layers, notes, _ = overlay_layers.read(root, machine=machine(tmp_path, recorded))
     assert LayerName.OVERLAY_TAG not in [layer.name for layer in layers]
-    path = quoted(str(recorded / "groups" / "a" / "drybag.toml"))
+    path = quoted(str(recorded / "tags" / "a" / "drybag.toml"))
     assert any(
         path in note and "is not valid TOML" in note and "overlay tag a" in note for note in notes
     )
@@ -232,9 +232,9 @@ def test_a_tag_the_record_lists_without_a_directory_is_the_plates_note(tmp_path:
     assert len(notes) == 1 and "gone" in notes[0]
 
 
-def test_a_gate_parameter_in_a_tag_file_never_reaches_the_config(tmp_path: Path) -> None:
-    # A tag is the owner's like the common file: what a pull request is judged by is the base
-    # branch's alone, and the note names the tag that tried.
+def test_a_gate_budget_in_a_tag_file_never_reaches_the_config(tmp_path: Path) -> None:
+    # A tag is the owner's like the common file: what a pull request is judged by is the
+    # repository's file alone, and the note names the tag that tried.
     root = project(tmp_path)
     recorded = overlay(tmp_path, common="", sample="")
     tagged(recorded, ["a"], a=f"[budgets]\n{GATE_BUDGET} = 999\n")
@@ -246,3 +246,84 @@ def test_a_gate_parameter_in_a_tag_file_never_reaches_the_config(tmp_path: Path)
     assert REFUSED_LAYER_NOTE.format(key=f"budgets.{GATE_BUDGET}", layer="overlay tag a") in (
         session.resolution.notes
     )
+
+
+def sub_plate(root: Path, plate: str, text: str | None) -> None:
+    """`plate`'s (`tags/t1`, `common`) `machines/m1/drybag.toml`, holding `text` where given."""
+    directory = root / plate / "machines" / "m1"
+    directory.mkdir(parents=True)
+    if text is not None:
+        (directory / "drybag.toml").write_text(text, encoding="utf-8")
+
+
+def test_sub_plate_value_beats_its_parent_and_loses_to_the_next_tag(tmp_path: Path) -> None:
+    # Mutation: sorting the reversed stack puts `t2` beneath `t1 on m1`, and the winner and its
+    # label change.
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["t1", "t2"], t1=mode("harness"), t2=mode("harness"))
+    sub_plate(recorded / "tags", "t1", mode("overlay"))
+    binding.record(root, "sample", None)
+    named = machine(tmp_path, recorded, '[machine]\nname = "m1"\n')
+    session = session_config(root, machine=named)
+    assert session.resolution.values["memory.mode"] == "harness"
+    assert session.resolution.said("memory.mode") == "overlay tag t2"
+    tagged(recorded, ["t1"])
+    session = session_config(root, machine=named)
+    assert session.resolution.values["memory.mode"] == "overlay"
+    assert session.resolution.said("memory.mode") == "overlay tag t1 on m1"
+    other = machine(tmp_path, recorded, '[machine]\nname = "m2"\n')
+    assert session_config(root, machine=other).resolution.values["memory.mode"] == "harness"
+
+
+def test_absent_sub_plate_file_says_nothing(tmp_path: Path) -> None:
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["t1"], t1="")
+    sub_plate(recorded / "tags", "t1", None)
+    sub_plate(recorded, "common", None)
+    sub_plate(recorded / "projects", "sample", None)
+    binding.record(root, "sample", None)
+    layers, notes, _ = overlay_layers.read(
+        root, machine=machine(tmp_path, recorded, '[machine]\nname = "m1"\n')
+    )
+    assert [layer.name for layer in layers] == [
+        LayerName.OVERLAY_COMMON,
+        LayerName.OVERLAY_TAG,
+        LayerName.OVERLAY_PROJECT,
+    ]
+    assert notes == ()
+
+
+def test_sub_plate_may_set_only_its_parents_keys(tmp_path: Path) -> None:
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["t1"], t1="")
+    sub_plate(recorded / "tags", "t1", f"[budgets]\n{GATE_BUDGET} = 999\n")
+    binding.record(root, "sample", None)
+    session = session_config(root, machine=machine(tmp_path, recorded, '[machine]\nname = "m1"\n'))
+    preset = load_preset("recommended")["budgets"][GATE_BUDGET]
+    assert session.config is not None
+    assert session.config.budgets.effective(GATE_BUDGET) == preset
+    assert REFUSED_LAYER_NOTE.format(
+        key=f"budgets.{GATE_BUDGET}", layer="overlay tag t1 on m1"
+    ) in (session.resolution.notes)
+
+
+def test_a_tag_named_on_and_its_sub_plate_are_one_tag(tmp_path: Path) -> None:
+    # A sub-plate's layer carries its machine as a field, not inside its label, so a tag named
+    # `on` is told from its sub-plate by no parse of its label. Mutation (oracle): `mutations/`'s
+    # "a tag's sub-plate layer is counted as a tag of its own".
+    from drybag.attach.tags import collisions
+    from drybag.config.plates import plates
+
+    root = project(tmp_path)
+    recorded = overlay(tmp_path, common="", sample="")
+    tagged(recorded, ["on"], on=mode("harness"))
+    sub_plate(recorded / "tags", "on", mode("overlay"))
+    binding.record(root, "sample", None)
+    named = machine(tmp_path, recorded, '[machine]\nname = "m1"\n')
+    layers, _, _ = overlay_layers.read(root, machine=named)
+    assert collisions(plates(recorded, "sample", machine="m1")[0], layers) == ()
+    session = session_config(root, machine=named)
+    assert session.resolution.said("memory.mode") == "overlay tag on on m1"

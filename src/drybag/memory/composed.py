@@ -2,9 +2,10 @@
 
 **One directory, named by the binding id, outside every checkout.** `<data>/stores/<id>/` holds a
 link per group into the overlay — `developer` to `<overlay>/common/memory`, the shared notes,
-`tag-<tag>` to the `memory/` of each tag the project's record lists (where that is a directory) and
-each directory of `<overlay>/projects/<project>/memory/` to itself, but for the names that start
-with `tag-` — and `MEMORY.md`, a link to the index `drybag memory index` renders in that share.
+`tag-<tag>` to the `memory/` of each tag the project's record lists (where that is a directory),
+`machine-<m>-...` to the `memory/` of each of this machine's sub-plates (likewise) and each
+directory of `<overlay>/projects/<project>/memory/` to itself, but for the names `reserved` keeps
+for those links — and `MEMORY.md`, a link to the index `drybag memory index` renders in that share.
 `attach` builds it in `overlay` mode and
 writes its absolute path as `autoMemoryDirectory` into the main checkout's excluded
 `settings.local.json`, which Claude Code reads from every worktree, so the harness reads the
@@ -33,6 +34,7 @@ from pathlib import Path
 
 from drybag import fsops
 from drybag.binding import unwritten
+from drybag.config.overlay import machine_record
 from drybag.config.plates import PlateKind, plates
 from drybag.config.schema import Config
 from drybag.errors import Failure
@@ -43,6 +45,7 @@ from drybag.memory.store import (
     COMMON_GROUP,
     STORE_DIR,
     composed_directory,
+    machine_link,
     overlay_group_target,
     project_notes,
     reserved,
@@ -52,31 +55,35 @@ from drybag.memory.store import (
 )
 
 
-def link_sources(overlay: Path, config: Config) -> tuple[Path, ...]:
+def link_sources(overlay: Path, config: Config, *, machine: str | None) -> tuple[Path, ...]:
     """Every path in the overlay a link of the store points at for the configured groups: the
     index in this project's share, then each group's directory. `attach` asks each, above its
     first write, whether a path that long can exist on this machine
     (`attach.binding.refuse_unless_share_can_exist`): the index is what `render_missing_index`
     writes and every group's but the common one a directory `attach` creates."""
     project = config.project.name
-    held = plates(overlay, project)[0]
+    held = plates(overlay, project, machine=machine)[0]
     return (
         project_notes(overlay, project) / INDEX_NAME,
         *(overlay_group_target(held, g) for g in config.memory.groups),
     )
 
 
-def _sources(overlay: Path, project: str) -> dict[str, Path]:
+def _sources(overlay: Path, project: str, machine: str | None) -> dict[str, Path]:
     """Each name the store holds and the path in the overlay its link points at: the common notes,
     `tag-<t>` for each usable tag whose `memory/` is a directory (a link at none would take a
-    note written through it into nowhere), each directory of the project's share that is not in
-    the reserved names, and the index."""
-    held = plates(overlay, project)[0]
+    note written through it into nowhere), `machine-<m>-...` for each sub-plate on this machine
+    whose `memory/` is one, each directory of the project's share that is not in the reserved
+    names, and the index."""
+    held = plates(overlay, project, machine=machine)[0]
     share = project_notes(overlay, project)
     found = {COMMON_GROUP: overlay_group_target(held, COMMON_GROUP)}
     for plate in held:
         target = plate.directory / STORE_DIR
-        if plate.kind is PlateKind.TAG and fsops.is_dir(target):
+        if plate.machine is not None:
+            if fsops.is_dir(target):
+                found[machine_link(plate)] = target
+        elif plate.kind is PlateKind.TAG and fsops.is_dir(target):
             found[tag_link(plate.name)] = target
     for entry in share_directories(overlay, project):
         if not reserved(entry):
@@ -90,7 +97,10 @@ def promote_share(overlay: Path, project: str, *, machine: Path | None) -> list[
     record does not hold at its bytes, walked in the overlay itself through every group `build`
     links, the common one included: the path of each note recorded, none when all are. A trust
     record that cannot be read refuses (`UnreadableTrust`) rather than being replaced."""
-    groups = [path for name, path in _sources(overlay, project).items() if name != INDEX_NAME]
+    # This machine's name, from the same machine file the trust record is kept for: its
+    # sub-plates' notes are a share of this machine and are recorded with the rest.
+    name = machine_record(machine).name
+    groups = [path for g, path in _sources(overlay, project, name).items() if g != INDEX_NAME]
     chosen = unreviewed(machine, [n for g in groups for n in walk(g.parent, [g.name]).notes])
     return list(promote(machine, chosen)) if chosen else []
 
@@ -100,11 +110,12 @@ def _links(directory: Path) -> list[str]:
     return sorted(name for name in os.listdir(directory) if fsops.is_symlink(directory / name))
 
 
-def build(overlay: Path, project: str, id: str) -> Path:
+def build(overlay: Path, project: str, id: str, *, machine: str | None) -> Path:
     """Make `<data>/stores/<id>/` hold a link to each of the overlay's groups for `project` and to
-    its index, and no other link, and return it. A file that is not a link is left where it is."""
+    its index, and no other link, and return it. A file that is not a link is left where it is.
+    `machine` is this machine's name, whose sub-plates' notes are linked too."""
     directory = composed_directory(id)
-    sources = _sources(overlay, project)
+    sources = _sources(overlay, project, machine)
     try:
         # The plain-path form for the data directory itself, as `binding.record` writes it.
         directory.mkdir(parents=True, exist_ok=True)

@@ -14,12 +14,15 @@ from pathlib import Path
 
 import pytest
 
+import drybag
 import drybag.memory.answers as answers_module
 from drybag import fsops
 from drybag.config.loader import load
 from drybag.doctor.api import OK, RED, SKIP, WARN, Check
 from drybag.errors import Refusal
+from drybag.gitenv import GitUnavailable
 from drybag.memory.doctor import NEARLY_FULL
+from drybag.memory.store import NOTES_UNDELIVERED
 from drybag.overlay.api import COMMON_MEMORY
 from tests.cli import cli
 from tests.doctor.test_checks import (
@@ -220,6 +223,41 @@ def test_a_note_store_holding_something_that_is_not_a_note_is_reported(tmp_path:
     assert "scratch.txt" not in check.detail
 
 
+INDEX_REMEDY = "run `drybag memory index --check`"
+
+
+def test_the_memory_row_warns_on_a_stale_index(tmp_path: Path) -> None:
+    # `memory index --check` failed on an index that no longer said what the store holds while
+    # this row stayed green. Written, the index is current and the row is again.
+    root = _initialised(tmp_path)
+    store = root / ".drybag" / "local" / "memory" / "developer"
+    store.mkdir(parents=True)
+    (store / "kept.md").write_text("---\nname: kept\ndescription: d\n---\n\nbody\n")
+    check = _memory_row(tmp_path, root)
+    assert check.status == WARN, check
+    assert "the index is out of date" in check.detail
+    assert check.remedy == INDEX_REMEDY
+    assert cli(root, tmp_path, "memory", "index", machine=tmp_path / "no-machine.toml")[0] == 0
+    assert _memory_row(tmp_path, root).status == OK
+
+
+def test_the_memory_row_counts_unreadable_notes(tmp_path: Path) -> None:
+    # A note the reader cannot parse reaches no session, and the row said nothing of it. Counted
+    # and not named: the file names are the store's.
+    root = _initialised(tmp_path)
+    store = root / ".drybag" / "local" / "memory" / "developer"
+    store.mkdir(parents=True)
+    (store / "kept.md").write_text("---\nname: kept\ndescription: d\n---\n\nbody\n")
+    assert cli(root, tmp_path, "memory", "index", machine=tmp_path / "no-machine.toml")[0] == 0
+    (store / "broken.md").write_text("no frontmatter\n", encoding="utf-8")
+    check = _memory_row(tmp_path, root)
+    assert check.status == WARN, check
+    assert "1 file(s) in the store cannot be read as a note" in check.detail
+    assert "out of date" not in check.detail
+    assert "broken.md" not in check.detail
+    assert check.remedy == INDEX_REMEDY
+
+
 @pytest.mark.parametrize("entries", [3, 4])
 def test_a_note_store_past_the_walk_cap_is_one_the_row_cannot_tell_about(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entries: int
@@ -234,6 +272,7 @@ def test_a_note_store_past_the_walk_cap_is_one_the_row_cannot_tell_about(
     store.mkdir(parents=True)
     for index in range(entries):
         (store / f"n{index}.md").write_text("---\nname: n\ndescription: d\n---\n\nbody\n")
+    assert cli(root, tmp_path, "memory", "index", machine=tmp_path / "no-machine.toml")[0] == 0
     check = _memory_row(tmp_path, root)
     if entries == 3:
         assert check.status == OK
@@ -255,8 +294,50 @@ def test_the_note_store_rows_read_a_bound_checkouts_configuration(tmp_path: Path
     root = _bound_without_file(tmp_path)
     overlay = tmp_path / "overlay"
     with_tags(overlay, "widget", ["a"], "memory")
-    (overlay / "groups" / "a" / "memory" / "t.md").write_text(BARE_NOTE, encoding="utf-8")
-    (_composed(root) / "tag-a").symlink_to(overlay / "groups" / "a" / "memory")
+    (overlay / "tags" / "a" / "memory" / "t.md").write_text(BARE_NOTE, encoding="utf-8")
+    (_composed(root) / "tag-a").symlink_to(overlay / "tags" / "a" / "memory")
     rows = {row.name: row for row in _checks(tmp_path, root, machine=tmp_path / "machine.toml")}
     assert "2 unreviewed note(s)" in rows["memory"].detail
     assert rows["bundles"].status != SKIP
+
+
+@pytest.mark.parametrize(
+    ("template", "note", "status"),
+    [
+        (HARNESS, True, WARN),
+        (HARNESS, False, OK),
+        (HARNESS + '\n[memory]\nmode = "harness"\n', True, OK),
+    ],
+    ids=["unset-with-notes", "unset-without-notes", "chosen-harness"],
+)
+def test_notes_in_the_overlay_with_no_mode_set_warn(
+    tmp_path: Path, template: str, note: bool, status: str
+) -> None:
+    # Bound, delivered and every row green, with no note reaching a session: a mode someone chose
+    # is theirs and says nothing. Mutation (`mutations/`'s "doctor stops warning that the overlay's
+    # notes reach no session").
+    root = _attached(tmp_path)
+    (root / "drybag.toml").write_text(template.format(version=drybag.__version__), "utf-8")
+    if note:
+        (tmp_path / "overlay" / COMMON_MEMORY / "a.md").write_text(
+            "---\nname: a\n---\nb\n", "utf-8"
+        )
+    rows = {row.name: row for row in _checks(tmp_path, root, machine=_machine(tmp_path))}
+    assert rows["memory"].status == status, rows["memory"]
+    assert (NOTES_UNDELIVERED in rows["memory"].detail) is (status == WARN)
+
+
+def test_a_git_that_does_not_answer_costs_the_warning_and_not_the_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The warning is a convenience, so it never reddens `doctor` or changes its exit code.
+    root = _attached(tmp_path)
+    (root / "drybag.toml").write_text(HARNESS.format(version=drybag.__version__), "utf-8")
+    (tmp_path / "overlay" / COMMON_MEMORY / "a.md").write_text("---\nname: a\n---\nb\n", "utf-8")
+
+    def no_answer(*args: object, **kwargs: object) -> None:
+        raise GitUnavailable("git did not answer")
+
+    monkeypatch.setattr("drybag.binding.read_id", no_answer)
+    rows = {row.name: row for row in _checks(tmp_path, root, machine=_machine(tmp_path))}
+    assert rows["memory"].status == OK, rows["memory"]

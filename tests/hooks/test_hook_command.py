@@ -212,14 +212,14 @@ def _initialised_project(tmp_path: Path) -> Path:
 
 
 def _failing_test_run() -> str:
-    """A PostToolUse payload `test-hygiene` answers: a red pytest run reported by exit code."""
+    """A payload `test-hygiene` answers: a red pytest run, as Claude Code reports one."""
     return json.dumps(
         {
-            "hook_event_name": "PostToolUse",
+            "hook_event_name": "PostToolUseFailure",
             "session_id": "a-session",
             "tool_name": "Bash",
             "tool_input": {"command": "uv run pytest -q"},
-            "tool_response": {"exit_code": 1},
+            "error": "Exit code 1",
         }
     )
 
@@ -236,8 +236,8 @@ def test_a_once_per_context_handler_really_runs_once(tmp_path: Path) -> None:
     data.mkdir()
     project = _initialised_project(tmp_path)
     payload = _failing_test_run()
-    first = hook("PostToolUse", payload, project, data=data)
-    second = hook("PostToolUse", payload, project, data=data)
+    first = hook("PostToolUseFailure", payload, project, data=data)
+    second = hook("PostToolUseFailure", payload, project, data=data)
     assert first.returncode == 0, first.stderr
     assert json.loads(first.stdout)["hookSpecificOutput"]["additionalContext"].startswith(LEAD)
     assert json.loads(second.stdout) == {}

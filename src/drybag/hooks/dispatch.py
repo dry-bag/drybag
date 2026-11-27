@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -17,9 +17,8 @@ if TYPE_CHECKING:
 
 TRUNCATION_MARK = "\n[drybag: context truncated to the platform cap]"
 # The one event whose answer a person sees as well as the model, and so the one a session's notice
-# is rendered on. Measured on Claude Code 2.1.296 (macOS, 2026-10-16): a terminal shows the person a
-# `SessionStart` hook's `systemMessage`, and the model reads its `additionalContext` and never its
-# `systemMessage`; the desktop app's display was not observed.
+# is rendered on: on Claude Code, a terminal shows the person a `SessionStart` hook's
+# `systemMessage`, and the model reads its `additionalContext` and never its `systemMessage`.
 NOTICE_EVENT = "SessionStart"
 
 
@@ -30,34 +29,15 @@ class Outcome:
     stderr: str
 
 
-@dataclass
-class Recorder:
-    """A sink that keeps its records and markers in memory; the tests use it."""
-
-    records: list[dict[str, object]] = field(default_factory=list)
-    marks: set[str] = field(default_factory=set)
-
-    def diagnostic(self, record: dict[str, object]) -> None:
-        self.records.append(record)
-
-    def seen(self, key: str) -> bool:
-        return key in self.marks
-
-    def mark(self, key: str) -> None:
-        self.marks.add(key)
-
-
 def read_event(payload: dict[str, Any], env: Mapping[str, str]) -> HookEvent:
     """The one reading of a hook's stdin, whichever harness sent it, and never told which
     (`harnesses.detect` says why).
 
-    The project root decides which configuration loads, and so what a guard says: it is the
-    first non-empty variable among every registered harness's, asked in
+    The project root decides which configuration loads, and so what a guard says: it is the first
+    non-empty variable among every registered harness's, asked in
     `harnesses.project_root_variables`' order, and without one the checkout `cwd` sits in
-    (`gitenv.checkout_root`). Codex names none (measured in the spike record,
-    `docs/plans/2026-09-05-agent-harness-p0-spikes.md`, in its *Codex plugin hooks* trial), so
-    under Codex an inherited `CLAUDE_PROJECT_DIR` still names the root, as it names the directory
-    `hooks/run-hook.sh` enters.
+    (`gitenv.checkout_root`). Codex names none, so under Codex an inherited `CLAUDE_PROJECT_DIR`
+    still names the root, as it names the directory `hooks/run-hook.sh` enters.
     """
     cwd = Path(str(payload.get("cwd") or "."))
     named = first_set(env, project_root_variables())
@@ -178,18 +158,16 @@ def dispatch(
             )
             view = replace(event, tool_input=tool_input_view, raw=raw_view)
             result = handler.run(view, session)
-            # Consuming the result belongs inside this `try`: reading `.context` off whatever a
-            # handler actually returned used to raise out of `dispatch` entirely, so one later
-            # handler's malformed return destroyed every earlier handler's context.
+            # Consuming the result belongs inside this `try`: outside it, one later handler's
+            # malformed return would raise out of `dispatch` and lose every earlier context.
             if not isinstance(result, HookResult):
                 raise TypeError(f"returned {type(result).__name__}, not HookResult")
             # Validated here and not only at the join below, which runs once after every handler,
             # outside every per-handler `try`, and would take the whole dispatch down.
             if result.context is not None and not isinstance(result.context, str):
                 raise _UnrecognisedContext(result.context)
-            # Banked past every check that can discard this result: marking above them spent a
-            # once-per-context handler's single delivery on a result that then raised, and an
-            # empty result has said nothing, so it spends none.
+            # Banked past every check that can discard this result, so a result that raises
+            # spends no delivery; an empty result has said nothing, so it spends none.
             if handler.once_key is not None and result.context:
                 sink.mark(handler.once_key)
             if result.context:

@@ -7,6 +7,7 @@ import drybag
 from drybag.cli import build_parser, discover_registrars
 from drybag.command import (
     ATTACH_CHECK_HELP,
+    ATTACH_STORE_HELP,
     CHECK_HELP,
     DRY_RUN_HELP,
     HOME_HELP,
@@ -44,6 +45,8 @@ EXCEPTIONS = {
     # and exits differently on purpose: its 1 is a binding mismatch and not a non-empty diff.
     # `command.ATTACH_CHECK_HELP` carries the argument.
     ("attach", None, "--check"): ATTACH_CHECK_HELP,
+    # `attach --store` takes one path, the one attach derives, where `memory`'s takes any.
+    ("attach", None, "--store"): ATTACH_STORE_HELP,
 }
 
 CONFIG = """
@@ -60,6 +63,9 @@ base_branch = "main"
 def test_common_flags_are_root_and_machine_and_store_only_on_request() -> None:
     plain = common_flags(argparse.ArgumentParser())
     assert vars(plain.parse_args([])) == {"root": ".", "machine": None}
+    assert vars(common_flags(argparse.ArgumentParser(), machine=False).parse_args([])) == {
+        "root": "."
+    }
     with_store = common_flags(argparse.ArgumentParser(), store=True)
     assert vars(with_store.parse_args(["--store", "s"])) == {
         "root": ".",

@@ -6,10 +6,11 @@ This file is that, so the bus factor of the release process is not one.
 
 The sequence, once, before the detail: `scripts/release.py check` → towncrier assembles
 `CHANGELOG.md` from the `changelog.d/` fragments → the release commit, into whose marketplace
-entry `scripts/release.py pin` writes the plugin commit it releases → `claude plugin tag` and the
-`vX.Y.Z` tag, pushed without `main` → the release workflow's `build` job checks the tag, the pin
-included, tests and builds, and the same workflow's `attest` job computes the plugin commit again
-and attests the packages and the plugin tree's manifest → `scripts/publish_plugin.py` pushes that
+entry `scripts/release.py pin` writes the plugin commit it releases → `ci.yml` green on that exact
+commit, pushed to `next` → `claude plugin tag` and the `vX.Y.Z` tag, pushed without `main` → the
+release workflow's `check` job checks the tag, the pin included, and tests, its `build` job builds
+from the tag's tracked files alone, and its `attest` job computes the plugin commit again and
+attests the packages and the plugin tree's manifest → `scripts/publish_plugin.py` pushes that
 pinned commit to `dry-bag/drybag-plugin`, the repository the plugin is installed from, from
 your own authenticated checkout → the `pypi` approval, whose two jobs first check that the plugin
 repository's tag names the pinned commit and then release the PyPI upload and the GitHub Release,
@@ -94,17 +95,18 @@ subfolder whose hook runs a non-shell file or a shell script that calls other fi
 is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository never holds it.
 
 1. **Be on `main`, current, and green.** The release workflow builds from the tag, so anything
-   not merged is not in the release. `main` is current once `dev` is merged into it, and a release
-   is always cut on `origin/main`, after a stopped release too (section 5, "Which commit a release
-   is cut on"): the `git log` lists what your `main` holds that `origin/main` does not, which is
-   nothing, or after a stopped release that release's commit alone, decorated with the spent tags
-   that keep it. Anything else it lists is work `git switch -C` would leave behind: stop, and put
-   it on a branch of its own first. `git switch -C` then makes your `main` `origin/main`.
+   not merged is not in the release. A release is cut on `origin/main` with `dev` merged into it,
+   locally: `main` is not pushed until step 7, and every run of this step starts over, after a
+   red check or a stopped release too. The `git log` lists what `git switch -C` would leave behind
+   and `dev` does not hold: nothing, or after a stopped release that release's commit alone,
+   decorated with the spent tags that keep it. Anything else it lists is work: stop, and put it on
+   a branch of its own first.
 
    ```bash
    git fetch origin
-   git log --oneline --decorate origin/main..main   # nothing, or a spent release commit
+   git log --oneline --decorate --no-merges main --not origin/main origin/dev   # nothing, or a spent release commit
    git switch -C main origin/main
+   git merge --no-ff --no-edit origin/dev
    uv run pytest -n auto --cov --cov-report=term-missing --cov-fail-under=92
    uv run ruff check . && uv run ruff format --check . && uv run mypy
    uv run python scripts/mutation_oracle.py
@@ -189,6 +191,14 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    mechanism in this file works with whatever number you pick — the gate compares the tag to
    the sources rather than to a number it knows — except the alias, which is the major and
    exists from `1.0.0` on (step 9).
+
+   **A release prepared in `dev`** is one whose version, changelog and README a pull request
+   into `dev` has already moved, so step 1's `release.py check` prints the new version. Steps 3
+   and 4 and step 5's README edit are done: do not run `notes`, which fails on a version
+   `CHANGELOG.md` already has a section for. A fragment that reached `dev` since goes into that
+   section through another pull request, because `check --tag` refuses a pending one. Step 5's
+   `-am` has nothing to commit, so its first command is
+   `git commit --allow-empty -m "chore(release): X.Y.Z"`.
 
 3. **Set it in the five places you edit by hand**, then let the lockfile follow:
    `pyproject.toml`, `src/drybag/__init__.py`, both plugin manifests, and the `ref` of the
@@ -319,6 +329,18 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    so what waits is `main`: it moves in step 7, once `publish` has put the name in your hands,
    and not before.
 
+   **Tag only a commit `ci.yml` ran green.** The suite, its six configurations and the oracle
+   have not run on this commit: `release.yml` runs the suite once, on one configuration. A push to
+   `next` runs all of them, and `next` holds nothing but the release commit waiting for its run, so
+   push it there and wait. A red run stops the release here, before anything is spent: fix it on
+   `dev` and start again from step 1.
+
+   ```bash
+   git push --force origin HEAD:next
+   gh run list --workflow ci --commit "$(git rev-parse HEAD)"   # its id, once the run is listed
+   gh run watch <id> --exit-status
+   ```
+
    ```bash
    claude plugin tag .
    git tag vX.Y.Z
@@ -326,21 +348,22 @@ is added to `PLUGIN_PATHS` in `scripts/plugin_tree.py`, or the plugin repository
    git push origin vX.Y.Z drybag--vX.Y.Z
    ```
 
-7. **Watch `build` and `attest`, publish the plugin, then approve.** Watch those two jobs, not
+7. **Watch `check`, `build` and `attest`, publish the plugin, then approve.** Watch those jobs, not
    the whole run: the run goes on waiting for the `pypi` approval, and the plugin goes out before
    it.
 
    ```bash
    gh run list --workflow release --limit 1
    gh run view <id> --json jobs \
-     --jq '.jobs[] | select(.name == "build" or .name == "attest") | "\(.name) \(.conclusion)"'
-   # build success, then attest success, once each has finished; no conclusion while it runs
+     --jq '.jobs[] | select(.name == "check" or .name == "build" or .name == "attest") | "\(.name) \(.conclusion)"'
+   # check, build and attest success, once each has finished; no conclusion while it runs
    ```
 
-   `build` runs the gate against the tag, the pin included, tests and builds the packages.
+   `check` runs the gate against the tag, the pin included, and the tests. `build` restores no
+   cache, installs nothing, builds the packages from `git archive` of the tag and checks them.
    `attest`, which runs no suite and installs nothing, computes the plugin commit of the tag's
    commit with `scripts/plugin_tree.py commit --require-pin`, which fails on a marketplace entry
-   pinning another, and attests both the packages and the plugin tree's manifest. Once both are
+   pinning another, and attests both the packages and the plugin tree's manifest. Once all three are
    green the attestations exist, and before you approve anything, push the plugin, from this
    checkout, with `gh` 2.101.0 or later logged in to `github.com`, and an SSH key GitHub knows:
 
@@ -669,15 +692,17 @@ the release that publishes the template.
 
 - **Anything goes wrong after the tags are pushed.** The ruleset refuses to delete or move a
   pushed `vX.Y.Z` or `drybag--vX.Y.Z`, for everyone, so that version is spent whether or not
-  anything was published: a wrong tag, a red `build`, a rejected approval or a failed upload.
+  anything was published: a wrong tag, a red `check` or `build`, a rejected approval or a failed
+  upload.
   A red `attest` that failed for a transient Sigstore or attestation-service error is not one:
   re-run that job (`gh run rerun <id> --failed`), which computes the same plugin commit of the
   same tag and attests the same files.
   `main` was not pushed, so nothing else needs undoing. Cut X.Y.(Z+1) from step 1, on the
   commit "Which commit a release is cut on", below, names: step 1 leaves the spent release commit
-  behind, so steps 3 and 4 set the new version and assemble the changelog again. If a Release was
+  behind, so the new version is set again, by steps 3 and 4 or as step 2 says. If a Release was
   created for the spent version, delete it, as step 7 says for a taken name.
-- **Which commit a release is cut on.** Always `origin/main`, as step 1 leaves it. A release
+- **Which commit a release is cut on.** Always `origin/main` with `dev` merged in, as step 1
+  leaves it. A release
   commit's first parent decides its plugin commit's parent (section 1), and the plugin
   repository's `main` must be that parent, so:
   - **`0.3.0`**, the first release published from a plugin repository, before the rename, was cut
@@ -690,10 +715,11 @@ the release that publishes the template.
     `sha` of the plugin commit pushed last ("How a release returns to `dev`", below).
   - **After a stopped release**, on `origin/main` too, never on the spent release commit, which
     its tags keep and step 1's `git switch -C` leaves behind. A fix merged into `origin/main`
-    since is then in the release, and step 7's `git push origin main` is a fast-forward. The
-    `changelog.d/` fragments the spent commit consumed are pending there again, so step 4's
-    `notes` assembles them under the new version, and `CHANGELOG.md` never carries the spent
-    one's heading. Step 5 runs as written. If `pin` refuses because the plugin repository's
+    since is then in the release, and step 7's `git push origin main` is a fast-forward.
+    Fragments only the spent commit consumed are pending there again, and step 4 assembles them
+    under the new version. A release prepared in `dev` left its heading there: a pull request into
+    `dev` moves the version and that heading before step 1 (step 2). If `pin` refuses because the
+    plugin repository's
     `main` is the spent release's plugin commit, which no commit on `origin/main` pins, the
     spent release's plugin was pushed: make the restore commit ("How a release returns to
     `dev`", below), then run step 5 again from its first command.
@@ -725,10 +751,9 @@ the release that publishes the template.
   ```
 
   The path-limited commit takes the marketplace alone, with the `ref` step 3 set, and leaves the
-  release's other edits staged; step 5 then runs again from its first command. That commit alone
-  is red under plain `check`, its `ref` naming the new version while every other source names the
-  old one, and nothing checks it alone: it is never tagged, and `git push origin main` in step 7
-  runs CI on the release commit above it.
+  release's other edits staged; step 5 then runs again from its first command. Nothing checks that
+  commit alone: it is never tagged, and `git push origin main` in step 7 runs CI on the release
+  commit above it.
 - **The plugin push was refused or failed.** `scripts/publish_plugin.py` pushes `main` and the
   tag together, atomically, and only after the attestation and the read-back held, so a refusal
   or a failed push leaves the plugin repository as it was, and this repository's `main` and the

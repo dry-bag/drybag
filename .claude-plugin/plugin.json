@@ -1,17 +1,9 @@
 {
   "name": "drybag",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check.",
   "author": { "name": "Nezhinskiy" },
   "repository": "https://github.com/dry-bag/drybag",
   "license": "MIT",
-  "keywords": ["overlay", "memory", "sync", "hooks", "codex"],
-  "userConfig": {
-    "preset": {
-      "type": "string",
-      "title": "Preset",
-      "description": "Preset applied by setup.",
-      "default": "recommended"
-    }
-  }
+  "keywords": ["overlay", "memory", "sync", "hooks", "codex"]
 }

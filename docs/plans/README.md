@@ -10,8 +10,9 @@ one delivery spanning a lane — names all of them on that line and says why the
 The two P0 documents here were copied from that repository, which keeps its own copies as
 history.
 
-Plans dated before 2026-09-28 predate the rename and keep the former name as the record, and
-so does the plan that performs it; read `drybag` for it in every path, command and variable.
+Plans dated before 2026-09-28 predate the first rename and keep the first former name as the
+record, and so does the plan that performs it; the plans dated from then to 2026-11-08 keep a
+second former name. Read `drybag` for either in every path, command and variable.
 
 Two plans continue in a `-part-2.md` beside them. They were split while the plugin was this
 repository's root, when every file here counted against the plugin directory's 256 KiB file

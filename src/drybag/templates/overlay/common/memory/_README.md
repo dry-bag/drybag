@@ -9,7 +9,8 @@ rendered from both; it is generated, so write the notes and let the index follow
 
 A note that carries `metadata.startup` is a standing rule: it is injected in full at the
 start of every session, ranked by that number. Your personal rules are notes of this kind, kept
-here.
+here. None of this happens until a layer sets `[memory] mode = "overlay"`, `common/drybag.toml`
+for every project, and a note is a standing rule only once `drybag memory promote` has recorded it.
 
 A note about one project goes under `projects/<name>/memory/` instead. Keeping the two apart
 is what stops one client's work reaching another client's session.

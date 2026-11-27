@@ -371,6 +371,17 @@ def test_rmdir_within_refuses_an_escaping_target(tmp_path: Path) -> None:
     assert (outside / "victim").is_dir()
 
 
+def test_keep_newest_keeps_the_newest_and_removes_the_rest(tmp_path: Path) -> None:
+    # Mutation (declared): the slice `[kept:]` becomes `[1:]` -> this reddens.
+    for age in range(5):
+        session = tmp_path / "markers" / f"s{age}"
+        session.mkdir(parents=True)
+        (session / "marker").touch()
+        os.utime(session, ns=((age + 1) * 10**9,) * 2)  # `s4` is the newest
+    fsops.keep_newest(tmp_path, "markers", 2)
+    assert sorted(path.name for path in (tmp_path / "markers").iterdir()) == ["s3", "s4"]
+
+
 # --- durability -------------------------------------------------------------------------------
 
 

@@ -369,17 +369,6 @@ reddens = [
   "tests/test_public_anchors.py::test_the_scan_reports_what_it_read_by_path_and_line",
 ]
 
-# The sdist fallback walk leaves bytecode out at any depth: one pytest run leaves a `__pycache__`
-# beside every module, and the public-anchor gate reads every file it is given.
-[[mutation]]
-name = "the fallback walk reads bytecode below the root"
-file = "tests/test_neutral.py"
-before = '        and "__pycache__" not in parts'
-after = '        and True'
-reddens = [
-  "tests/test_neutral.py::test_the_fallback_walk_skips_bytecode_at_any_depth",
-]
-
 # Every spawner that strips the developer's `DRYBAG_*` variables goes through one predicate,
 # and the floor is the name it keeps; strip it too and a spawned `drybag` runs under the bare
 # bounds again.
@@ -652,7 +641,7 @@ reddens = [
 [[mutation]]
 name = "a hook group is filed under an event the harness never emits"
 file = "hooks/hooks.json"
-before = '''    "PostToolUse": ['''
+before = '''    "PostToolUseFailure": ['''
 after = '''    "UserPromptSubmit": ['''
 reddens = [
   "tests/hooks/test_hooks_json.py::test_every_entry_is_filed_under_the_event_its_command_dispatches",
@@ -902,8 +891,8 @@ reddens = ["tests/test_neutral.py::test_a_token_hit_names_the_offset_of_its_firs
 [[mutation]]
 name = "the PyPI description advertises the unshipped memory MCP server"
 file = "pyproject.toml"
-before = 'description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check, packaged as one plugin for Claude Code and Codex."'
-after = 'description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, a memory MCP server, plan and doc linting, and a commit-attribution check, packaged as one plugin for Claude Code and Codex."'
+before = 'description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, plan and doc linting, and a commit-attribution check, packaged as a Claude Code plugin and a command-line tool."'
+after = 'description = "Private layers for coding agents, delivered into their sessions with nothing tracked in the project: memory and note sync, machine restore, session hints, a memory MCP server, plan and doc linting, and a commit-attribution check, packaged as a Claude Code plugin and a command-line tool."'
 reddens = [
   "tests/test_manifests.py::test_no_storefront_string_advertises_what_the_readme_says_is_not_yet",
 ]
@@ -938,14 +927,14 @@ reddens = [
 [[mutation]]
 name = "the whole-tree gate loses three top-level trees and stays green"
 file = "tests/test_neutral.py"
-before = "        return sorted(ROOT / n for n in names if (ROOT / n).is_file())"
+before = "    return sorted(ROOT / n for n in names if (ROOT / n).is_file())"
 after = """
-        dropped = {".github", "skills", "changelog.d"}
-        return sorted(
-            ROOT / n
-            for n in names
-            if (ROOT / n).is_file() and n.split("/")[0] not in dropped
-        )"""
+    dropped = {".github", "skills", "changelog.d"}
+    return sorted(
+        ROOT / n
+        for n in names
+        if (ROOT / n).is_file() and n.split("/")[0] not in dropped
+    )"""
 reddens = ["tests/test_neutral.py::test_the_gate_reads_the_whole_tree"]
 
 # The snapshot helper's two unheld claims. Its own guard file built an empty working tree in
@@ -1043,8 +1032,8 @@ reddens = [
 [[mutation]]
 name = "docs/cli.md counts `plan check`'s rules wrong again"
 file = "docs/cli.md"
-before = "Five rules, each from a"
-after = "Four rules, each from a"
+before = "Six rules, each from a"
+after = "Five rules, each from a"
 reddens = [
   "tests/test_documents.py::test_the_plan_rule_count_is_the_number_of_rules_plan_check_emits",
 ]
@@ -1082,17 +1071,6 @@ before = ".coverage.*\n"
 after = ""
 reddens = [
   "tests/test_neutral.py::test_a_coverage_worker_file_is_not_a_file_the_gate_walks",
-]
-
-# The same files in an unpacked sdist, where no `.gitignore` applies and the fallback walk reads
-# the root directly: each is its own first component, so only a name test keeps it out.
-[[mutation]]
-name = "the fallback walk counts coverage's data files again"
-file = "tests/test_neutral.py"
-before = '        and not (len(parts) == 1 and (p.name == ".coverage" or p.name.startswith(".coverage.")))'
-after = "        and True"
-reddens = [
-  "tests/test_neutral.py::test_the_fallback_walk_skips_coverage_data_in_the_root",
 ]
 
 # CI writes the old interpreter's path from a step output, so a failed lookup arrives as an
@@ -2673,7 +2651,7 @@ reddens = [
 name = "the release pulls main again"
 file = "RELEASING.md"
 before = """   git fetch origin
-   git log --oneline --decorate origin/main..main   # nothing, or a spent release commit
+   git log --oneline --decorate --no-merges main --not origin/main origin/dev   # nothing, or a spent release commit
    git switch -C main origin/main
 """
 after = """   git switch main && git pull

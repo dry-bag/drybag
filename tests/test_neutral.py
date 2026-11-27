@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.declarations import declared, needs_declarations, relative
+from tests.declarations import declared, relative
 from tests.gitfixture import needs_git, run_git
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,19 +38,6 @@ FULL_TABLE_TREES = ("src", "tests", "scripts")
 # A file that changes it is a deliberate edit here and not a case that quietly stopped being
 # checked.
 UNDECODABLE = 1
-# Only for the fallback walk in an unpacked sdist, where `git ls-files` cannot answer.
-FALLBACK_EXCLUDED = {
-    ".git",
-    ".venv",
-    "dist",
-    "__pycache__",
-    ".pytest_cache",
-    ".mypy_cache",
-    ".ruff_cache",
-    "htmlcov",
-    ".claude",
-    ".superpowers",
-}
 
 
 def _digest(window: bytes) -> str:
@@ -261,65 +248,20 @@ TRACKED_TREES = (
 
 
 def tracked_files() -> list[Path]:
-    """Every file git tracks, or every file under the tree minus the fixed exclusions."""
+    """Every file git tracks, and every untracked one it does not ignore."""
     # `--others --exclude-standard` as well as `--cached`: a fixture being added is untracked
     # until its commit, and a gate that could not see it until the commit after would let the
     # commit that adds it land unwalked.
     done = subprocess.run(
         ["git", "-C", str(ROOT), "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         capture_output=True,
-        check=False,
+        check=True,
     )
-    if done.returncode == 0 and done.stdout:
-        names = [n for n in done.stdout.decode("utf-8").split("\0") if n]
-        return sorted(ROOT / n for n in names if (ROOT / n).is_file())
-    return walked(ROOT)
-
-
-def walked(root: Path) -> list[Path]:
-    """The fallback: every file under `root` minus the fixed exclusions."""
-    # Anchored on the FIRST component: `tests/fixtures/hostile-project/.claude/settings.json`
-    # is a fixture to walk, not a configuration directory to skip. Coverage's data files are
-    # named rather than listed: each sits in the root and is its own first component. Bytecode
-    # is the one exclusion at any depth: one pytest run leaves `tests/__pycache__/*.pyc` beside
-    # every module, and no fixture is named `__pycache__`.
-    return sorted(
-        p
-        for p in root.rglob("*")
-        if p.is_file()
-        and (parts := p.relative_to(root).parts)[0] not in FALLBACK_EXCLUDED
-        and "__pycache__" not in parts
-        and not (len(parts) == 1 and (p.name == ".coverage" or p.name.startswith(".coverage.")))
-    )
-
-
-def test_the_fallback_walk_skips_coverage_data_in_the_root(tmp_path: Path) -> None:
-    # The sdist half of the test below. An unpacked sdist has no `.git`, so no `.gitignore`
-    # applies, and the contributor's `pytest -n auto --cov` leaves `.coverage` and one
-    # `.coverage.<host>.pid<pid>.X<random>x` per worker in the root: SQLite, undecodable, and
-    # counted against `UNDECODABLE` by whichever run a worker finished first. A root-level file
-    # is its own first component, so `FALLBACK_EXCLUDED` cannot name one; this is by file name.
-    #
-    # Mutation (declared): the coverage clause dropped from `walked` -> both files are walked.
-    for name in (".coverage", ".coverage.runner_host.pid4242.XaBcDeFx", "README.md"):
-        (tmp_path / name).write_text("x", encoding="utf-8")
-    assert [p.name for p in walked(tmp_path)] == ["README.md"]
-
-
-def test_the_fallback_walk_skips_bytecode_at_any_depth(tmp_path: Path) -> None:
-    # An unpacked sdist after one pytest run: `__pycache__` sits beside every module, not only in
-    # the root, and its `.pyc` files are undecodable — the public-anchor gate reads every file it
-    # is given and would raise on the first one.
-    #
-    # Mutation (declared): the any-depth clause dropped from `walked` -> the `.pyc` is walked.
-    (tmp_path / "tests" / "__pycache__").mkdir(parents=True)
-    (tmp_path / "tests" / "__pycache__" / "test_x.cpython-313.pyc").write_bytes(b"\xa7\r\r\n")
-    (tmp_path / "tests" / "test_x.py").write_text("x = 1\n", encoding="utf-8")
-    assert [p.relative_to(tmp_path).as_posix() for p in walked(tmp_path)] == ["tests/test_x.py"]
+    names = [n for n in done.stdout.decode("utf-8").split("\0") if n]
+    return sorted(ROOT / n for n in names if (ROOT / n).is_file())
 
 
 @needs_git
-@pytest.mark.skipif(not (ROOT / ".git").exists(), reason="no git checkout to ask")
 def test_a_coverage_worker_file_is_not_a_file_the_gate_walks(tmp_path: Path) -> None:
     """The suite runs across workers, and under `--cov` each one leaves its own data file in
     the root while the others still run — `.coverage.<host>.pid<pid>.X<random>x`, SQLite and
@@ -370,9 +312,6 @@ def test_the_gate_reads_the_whole_tree() -> None:
     # into the wrong comment: two comments in one function, disagreeing, about the same quantity.
     files = tracked_files()
     names = {str(p.relative_to(ROOT)) for p in files}
-    # No `.github/` name here: that tree is outside `source-include`, and this floor has to
-    # hold in the unpacked sdist the fallback walk exists for. `skills/` is
-    # inside it, so it is named like the rest.
     for wanted in (
         "README.md",
         "src/drybag/cli.py",
@@ -385,10 +324,7 @@ def test_the_gate_reads_the_whole_tree() -> None:
         assert wanted in names, wanted
     # The mutation declarations by their directory and not by a group file's name, which is
     # `GROUP_OF`'s to choose and to change.
-    # Where the tree is there: the sdist does not carry it.
-    assert not (ROOT / "mutations").is_dir() or any(
-        name.startswith("mutations/") for name in names
-    ), "no declaration file is walked"
+    assert any(name.startswith("mutations/") for name in names), "no declaration file is walked"
     # **One assertion per tracked top-level tree, because the two floors below cannot hold
     # this.** Measured 2026-09-19: `tracked_files()` made to drop every path whose first
     # component is `.github`, `skills`, `agents` or `changelog.d` — 58 of 347 files, every
@@ -398,11 +334,8 @@ def test_the_gate_reads_the_whole_tree() -> None:
     # floors because `docs/` alone is 1.81 M characters. A higher floor does not close that;
     # naming the trees does.
     #
-    # Guarded on the tree being there rather than listed with exemptions: `.github/` is outside
-    # `source-include` and is absent from the unpacked sdist the fallback walk exists for, and
-    # `changelog.d/` is empty for as long as it takes towncrier to consume it at a release. The
-    # claim is "a tree that exists on disk is a tree this walk reads", which is true in both
-    # places and needs no list of which is which.
+    # Guarded on the tree being there: `changelog.d/` is empty for as long as it takes towncrier
+    # to consume it at a release.
     trees = {p.relative_to(ROOT).parts[0] for p in files if len(p.relative_to(ROOT).parts) > 1}
     for tree in TRACKED_TREES:
         if any((ROOT / tree).rglob("*")):
@@ -544,7 +477,6 @@ def test_a_token_hit_names_the_offset_of_its_first_window() -> None:
     assert offending("fixed in 1b279648") == ["bare commit id"]
 
 
-@needs_declarations
 def test_the_mutation_declarations_carry_no_source_repository_string() -> None:
     # Every file in `mutations/` is walked whole under the public table by the parametrised test
     # below, like every other tracked document. This is the stricter half the two area-scoped gates

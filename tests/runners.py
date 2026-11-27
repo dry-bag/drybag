@@ -39,6 +39,10 @@ class Recorder:
     `on_call` runs before the answer is chosen, for a fixture that must exist by the time the code
     under test reads it — a template's files where `gh repo create --clone` would have put them.
 
+    `local` is the names Claude Code's local scope holds: unless a key matches or `code` is set,
+    `claude mcp remove` and `add-json` answer as Claude Code 2.1.319 was measured to, `remove` of
+    a name it does not hold and `add-json` of one it does each with exit 1, and change it.
+
     `calls` and `cwds` are what the double observed, in call order, and are not parameters.
     """
 
@@ -46,6 +50,7 @@ class Recorder:
     stdout: str = ""
     stderr: str = ""
     answers: dict[str, Completed] = field(default_factory=dict)
+    local: set[str] = field(default_factory=set)
     on_call: Callable[[list[str], Path], None] | None = None
     calls: list[list[str]] = field(default_factory=list, init=False)
     cwds: list[Path] = field(default_factory=list, init=False)
@@ -62,7 +67,17 @@ class Recorder:
                 chosen = (len(words), answer)
         if chosen is not None:
             return chosen[1]
+        if argv[:2] == ["claude", "mcp"] and self.code == 0:
+            return self._local(argv[2], argv[-1] if argv[2] == "remove" else argv[-2])
         return Completed(self.code, self.stdout, self.stderr)
+
+    def _local(self, verb: str, name: str) -> Completed:
+        if verb == "remove" and name not in self.local:
+            return Completed(1, "", f'No MCP server named "{name}" in local scope')
+        if verb == "add-json" and name in self.local:
+            return Completed(1, "", f"MCP server {name} already exists in local config")
+        (self.local.discard if verb == "remove" else self.local.add)(name)
+        return Completed(0, "", "")
 
 
 def git_that_cannot_run(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -92,7 +107,7 @@ def claude_code(main: Path, *, ignoring: tuple[str, ...] = ()) -> Callable[[list
 
     def on_call(argv: list[str], cwd: Path) -> None:
         verb = " ".join(argv[2:4]) if argv[2] == "marketplace" else argv[2]
-        if argv[0] != "claude" or verb in ignoring:
+        if argv[:2] != ["claude", "plugin"] or verb in ignoring:
             return
         document = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
         plugins = document.setdefault("enabledPlugins", {})

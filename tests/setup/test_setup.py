@@ -252,30 +252,6 @@ def test_setup_with_no_plugin_named_runs_no_plugin_command(tmp_path: Path) -> No
     assert not [note for note in report.notes if "plugin" in note or "marketplace" in note]
 
 
-def test_a_plugin_config_value_the_user_set_survives_setup(tmp_path: Path) -> None:
-    # `pluginConfigs` is where Claude Code keeps the answers a person gives in its plugin-config
-    # screen. `setup` used to write the machine file's personal values over it on every run, so
-    # an answer given there lasted until the next `setup`. A value already there is the user's.
-    # Mutation (oracle): `mutations/`'s "setup overwrites a plugin option the user set".
-    home = tmp_path / "home"
-    settings = home / USER_SETTINGS
-    settings.parent.mkdir(parents=True)
-    plugin = "drybag@drybag"
-    settings.write_text(
-        json.dumps({"pluginConfigs": {plugin: {"options": {"preset": "mine"}}}}), encoding="utf-8"
-    )
-    for _ in range(2):
-        setup(
-            "recommended",
-            home=home,
-            machine=tmp_path / "config.toml",
-            runner=Recorder(),
-            overlay=None,
-        )
-    options = json.loads(settings.read_text(encoding="utf-8"))["pluginConfigs"][plugin]["options"]
-    assert options["preset"] == "mine"
-
-
 def test_every_plugin_install_is_one_recorded_argv(tmp_path: Path) -> None:
     # The Runner seam again. Two things could be wrong here that only an argv assertion can see: the
     # marketplace must be registered *before* anything is installed from it (a fresh machine cannot
@@ -475,6 +451,19 @@ def test_pointing_at_an_existing_overlay_records_its_root_and_creates_nothing(
     )
     assert report.overlay == existing
     assert not any(argv[:2] == ["gh", "repo"] for argv in runner.calls)
+    assert overlay_root(machine) == existing
+
+
+def test_recording_an_overlay_replaces_a_relative_root(tmp_path: Path) -> None:
+    # A relative root is a fault every reader refuses, naming the file; `setup --overlay` is the
+    # remedy, so it must get past the one it replaces rather than refuse with the rest.
+    existing = tmp_path / "overlay"
+    existing.mkdir()
+    _seed_overlay(existing)
+    machine = tmp_path / "config.toml"
+    machine.write_text('[overlay]\nroot = "relative/o"\n', encoding="utf-8")
+    home = tmp_path / "home"
+    setup("recommended", home=home, machine=machine, runner=Recorder(), overlay=str(existing))
     assert overlay_root(machine) == existing
 
 
@@ -700,9 +689,9 @@ def test_a_missing_drybag_on_path_is_a_note(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # `uv tool install` has no `--from`, so the positional git URL form pinned to a release tag
-    # (principle 9: the CLI installs from a git tag) is what the note must name; asserted here
-    # rather than left to eyeballing, since it is the one line a typo in the URL or the tag would
-    # hide from every other test in this module.
+    # (principle 9: what `setup` suggests where none is on `PATH`) is what the note must name;
+    # asserted here rather than left to eyeballing, since it is the one line a typo in the URL or
+    # the tag would hide from every other test in this module.
     monkeypatch.setattr("shutil.which", lambda name: None)
     report = setup(
         "recommended",

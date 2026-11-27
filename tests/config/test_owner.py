@@ -13,7 +13,6 @@ import pytest
 from drybag.config import owner
 from drybag.config.classes import LayerName
 from drybag.config.owner import (
-    GATE_BUDGET,
     IGNORED_NOTE,
     MACHINE_FILE_NOTE,
     MACHINE_RESET_NOTE,
@@ -89,20 +88,6 @@ def test_a_session_budget_is_the_owners(tmp_path: Path) -> None:
     assert got.session_budgets == {"startup_rules_words": 9000}
     assert got.provenance["budgets.startup_rules_words"] is LayerName.MACHINE_FILE
     assert got.notes == ()
-
-
-def test_a_gate_budget_in_the_machine_file_is_a_note(tmp_path: Path) -> None:
-    # A gate's budget is what a pull request is judged by, and the base branch's to set: the
-    # owner's machine file setting it would judge one contributor's change by another bound.
-    # Mutation (`mutations/`'s "the owner's layer admits a gate budget"): the filter lets it
-    # through, `resolve` refuses it in its own words, and the note this asserts is not written.
-    path = machine_file(tmp_path, "[budgets]\nagents_md_lines = 900\n")
-    got = resolve_owner(path)
-    assert got.session_budgets == {}
-    assert "budgets.agents_md_lines" not in got.provenance
-    assert got.notes == (
-        IGNORED_NOTE.format(path=path, problem=GATE_BUDGET.format(name="agents_md_lines")),
-    )
 
 
 def test_an_unknown_key_is_a_note_and_never_printed_raw(tmp_path: Path) -> None:

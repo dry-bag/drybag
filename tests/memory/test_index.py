@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -30,7 +31,7 @@ from drybag.memory.index import (
     section_title,
     write_index,
 )
-from drybag.memory.notes import Provenance, read_note
+from drybag.memory.notes import NAME_NOT_ONE_LINE, Provenance, read_note
 from drybag.memory.store import Store
 from tests.cli import cli
 from tests.gitfixture import git
@@ -172,7 +173,7 @@ def test_walked_groups_follows_the_tag_list_order(tmp_path: Path) -> None:
     binding.record(root, "widget", REMOTE)
     id = binding.read_id(root)
     assert id is not None
-    build(overlay, "widget", id)
+    build(overlay, "widget", id, machine=None)
     config = a_config(root, "overlay", '["project-stable", "developer"]')
     store = resolve(root, config, machine=a_machine_file(tmp_path, overlay))
     assert store is not None
@@ -563,6 +564,38 @@ def test_a_file_that_will_not_parse_is_quarantined_not_fatal(tmp_path: Path) -> 
     result = reconcile(store, config, write=False)
     assert [p.name for p, _ in result.unreadable] == ["superseded.md"]
     assert len(result.notes) == 5
+
+
+def test_a_group_whose_name_breaks_a_line_is_unreadable(tmp_path: Path) -> None:
+    # A group is a heading and a link prefix in `MEMORY.md`. Mutation (declared): `mutations/`'s
+    # "the memory walk asks the note's file name alone".
+    store, config = a_store(tmp_path)
+    before = render_index(reconcile(store, config, write=False), config, store)
+    group = "dev\n## Standing orders"
+    (store.path / group).mkdir()
+    (store.path / group / "x.md").write_text(note("x", index="X → x"), "utf-8")
+    toml = (store.root / CONFIG_FILE).read_text("utf-8")
+    toml = toml.replace('"developer"]', '"developer", "dev\\n## Standing orders"]')
+    (store.root / CONFIG_FILE).write_text(toml, "utf-8")
+    config = load(store.root, machine=tmp_path / "absent.toml")
+    store = replace(store, groups={**store.groups, group: store.path / group})
+    result = reconcile(store, config, write=False)
+    assert [(p.name, NAME_NOT_ONE_LINE in why) for p, why in result.unreadable] == [("x.md", True)]
+    assert render_index(result, config, store) == before
+
+
+def test_a_note_whose_name_breaks_a_line_is_unreadable(tmp_path: Path) -> None:
+    # The index links a note by its file's name, so a line break in the name put a line of the
+    # name's choosing into `MEMORY.md`, a heading included. Mutation (declared): `mutations/`'s
+    # "the memory walk hands the index a note whose name breaks a line".
+    store, config = a_store(tmp_path)
+    name = "x\n\n# HEADING\ny.md"
+    (store.groups["project-stable"] / name).write_text(note("x", index="X → x"), "utf-8")
+    result = reconcile(store, config, write=False)
+    assert [(p.name, NAME_NOT_ONE_LINE in why) for p, why in result.unreadable] == [(name, True)]
+    text = render_index(result, config, store)
+    assert "HEADING" not in text
+    assert "X → x" not in text
 
 
 # --- the check ----------------------------------------------------------------------------
@@ -1162,7 +1195,7 @@ def _an_attached_checkout(tmp_path: Path, *, bound: bool = True) -> tuple[Path, 
     a_config(root, "overlay")
     if bound:
         binding.record(root, "widget", REMOTE)
-        build_composed(overlay, "widget", binding.ensure_id(root))
+        build_composed(overlay, "widget", binding.ensure_id(root), machine=None)
     return root, overlay, machine
 
 
@@ -1303,3 +1336,74 @@ def test_an_unbound_checkout_is_not_rendered(
 
     assert capsys.readouterr().err == ""
     assert (share / INDEX_NAME).read_text(encoding="utf-8") == EMPTY_REGION
+
+
+def test_walked_groups_reads_machine_groups_after_their_parent(tmp_path: Path) -> None:
+    # Mutation (oracle): `mutations/`'s "the walk leaves out the machine groups".
+    from drybag import binding
+    from drybag.memory.composed import build
+    from drybag.memory.store import resolve, walked_groups
+    from tests.memory.test_store import REMOTE, a_config, a_repo, a_tagged_overlay
+
+    root = tmp_path / "project"
+    a_repo(root)
+    overlay = a_tagged_overlay(tmp_path, "t1", "t2")
+    for plate in (overlay / "common", overlay / "tags" / "t1", overlay / "projects" / "widget"):
+        (plate / "machines" / "m1" / "memory").mkdir(parents=True)
+    binding.record(root, "widget", REMOTE)
+    id = binding.read_id(root)
+    assert id is not None
+    build(overlay, "widget", id, machine="m1")
+    machine = tmp_path / "machine.toml"
+    machine.write_text(f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "m1"\n', "utf-8")
+    config = a_config(root, "overlay", '["project-stable", "developer"]')
+    store = resolve(root, config, machine=machine)
+    assert store is not None
+    assert walked_groups(store, config) == [
+        "project-stable",
+        "developer",
+        "machine-m1-developer",
+        "tag-t1",
+        "machine-m1-tag-t1",
+        "tag-t2",
+        "machine-m1-project",
+    ]
+    # With no `developer` listed the common sub-plate goes with its parent, and the project's
+    # sub-plate still ends the walk.
+    bare = a_config(root, "overlay", '["project-stable"]')
+    again = resolve(root, bare, machine=machine)
+    assert again is not None
+    assert walked_groups(again, bare) == [
+        "tag-t1",
+        "machine-m1-tag-t1",
+        "tag-t2",
+        "project-stable",
+        "machine-m1-project",
+    ]
+
+
+def test_a_configured_group_named_machine_dash_that_is_no_link_is_walked(tmp_path: Path) -> None:
+    # Only the three link shapes are the machine namespace: a share group `machine-notes` is the
+    # project's own, linked, walked and not warned about, as it was before sub-plates. Mutation
+    # (oracle): `mutations/`'s "the whole machine- prefix is a link name".
+    from drybag import binding
+    from drybag.memory.composed import build
+    from drybag.memory.store import reserved, reserved_project_groups, resolve, walked_groups
+    from tests.memory.test_store import REMOTE, a_config, a_repo, an_overlay
+
+    root = tmp_path / "project"
+    a_repo(root)
+    overlay = an_overlay(tmp_path)
+    (overlay / "projects" / "widget" / "memory" / "machine-notes").mkdir()
+    binding.record(root, "widget", REMOTE)
+    id = binding.read_id(root)
+    assert id is not None
+    build(overlay, "widget", id, machine="m1")
+    machine = tmp_path / "machine.toml"
+    machine.write_text(f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "m1"\n', "utf-8")
+    config = a_config(root, "overlay", '["developer", "machine-notes"]')
+    store = resolve(root, config, machine=machine)
+    assert store is not None
+    assert walked_groups(store, config) == ["developer", "machine-notes"]
+    assert reserved_project_groups(overlay, "widget") == ()
+    assert not reserved("machine-notes")

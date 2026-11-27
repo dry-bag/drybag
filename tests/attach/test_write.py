@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -19,13 +20,23 @@ from typing import Any
 
 import pytest
 
+import drybag
 from drybag import fsops, jsonobject
 from drybag.attach.api import ledger
 from drybag.attach.binding import OVERLAY_DAMAGED
 from drybag.attach.check import check
 from drybag.attach.exclude import NOT_IGNORED, TRACKED
-from drybag.attach.permissions import settings_document
+from drybag.attach.mcp import BAD_LEDGER, REST, UNUSABLE, McpLedger, digest, read_mcp_ledger
+from drybag.attach.permissions import (
+    ALLOWED_NOT_A_LIST,
+    ALLOWED_OWNERS,
+    DENIED_NOT_A_LIST,
+    settings_document,
+)
 from drybag.attach.write import (
+    ALLOWED_LEFT,
+    ALLOWLIST_UNWRITTEN,
+    CLAUDE_ABSENT,
     GROUP_ESCAPES,
     GROUP_UNASKED,
     NO_MAIN_CHECKOUT,
@@ -33,14 +44,16 @@ from drybag.attach.write import (
     NOT_INSTALLED,
     Attached,
     attach,
+    detach,
 )
-from drybag.binding import LEDGER_FILE, common_directory
+from drybag.binding import LEDGER_FILE, MCP_LEDGER_FILE, MCP_LEDGER_NAME, common_directory
 from drybag.config.loader import CONFIG_FILE, load
 from drybag.errors import Failure, Refusal
 from drybag.memory.api import RECORD, link_sources
+from drybag.memory.store import NOTES_UNDELIVERED, NOTES_UNDELIVERED_REMEDY
 from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from drybag.printed import quoted
-from drybag.runner import Completed
+from drybag.runner import NOT_FOUND, Completed
 from drybag.scaffold import EntriesError, drop, extract
 from tests.attach.test_binding import CONFIG, DEFAULT_MEMORY, _machine, _project_and_store
 from tests.cli import cli
@@ -504,8 +517,8 @@ def test_the_composed_store_is_the_recorded_projects_and_moves_only_when_attach_
 ) -> None:
     # The project a composed store is built for is the one this machine's binding record names,
     # never the repository's `[project] name` read on its own: a checkout bound to `p` whose
-    # `drybag.toml` now names `q` keeps `p`'s store until `attach` records the new binding, and
-    # then gets `q`'s.
+    # `drybag.toml` now names `q` keeps `p`'s store until `attach --project q` records the new
+    # binding, and then gets `q`'s.
     from drybag import binding
     from drybag.memory.store import composed_directory as store_directory
 
@@ -519,7 +532,7 @@ def test_the_composed_store_is_the_recorded_projects_and_moves_only_when_attach_
     root, other = _project_and_store(tmp_path, recorded=None, origin="git@x:o/p.git", name="q")
     (other / "project-stable").mkdir(exist_ok=True)
     assert (composed / "MEMORY.md").readlink() == overlay / "projects/p/memory/MEMORY.md"
-    attach(root, store=other, machine=machine, runner=Recorder())
+    attach(root, store=other, machine=machine, runner=Recorder(), project="q")
     found = binding.bound_project(root)
     assert found is not None and found.project == "q"
     assert (composed / "MEMORY.md").readlink() == overlay / "projects/q/memory/MEMORY.md"
@@ -1293,18 +1306,6 @@ def test_an_overlay_hooks_file_with_an_unreadable_shape_is_refused(tmp_path: Pat
             machine=machine,
             runner=Recorder(),
         )
-
-
-def test_attach_carries_on_over_a_ledger_that_does_not_parse_and_writes_it_whole(
-    tmp_path: Path,
-) -> None:
-    # A file at the ledger's path that is no ledger records nothing: the attach unions from nothing
-    # and leaves a ledger that reads.
-    root, store, machine = _attachable(tmp_path, codex="# a standing rule\n")
-    attach(root, store=store, machine=machine, runner=Recorder())
-    ledger_file(root).write_text("{", encoding="utf-8")
-    attach(root, store=store, machine=machine, runner=Recorder())
-    assert list(ledger(root).rules) == [".codex/rules/common.rules"]
 
 
 # `NESTED`, which no reader caught, in a file a clone can commit.
@@ -2131,7 +2132,7 @@ def test_a_source_past_the_longest_path_under_a_project_with_no_directory_is_no_
     # How far past the project's directory the longest path `attach` links there reaches, off the
     # paths the link tree is built from for the fixture's own name.
     share = store.parent
-    linked = link_sources(store.parents[2], load(root, machine=machine))
+    linked = link_sources(store.parents[2], load(root, machine=machine), machine=None)
     reach = max(len(str(path)) for path in linked if share in path.parents) - len(str(share))
     # The project's directory one character shorter than that path needs, its name a file name
     # that may be, its binding record and every linked path under the longest path and its
@@ -2146,7 +2147,7 @@ def test_a_source_past_the_longest_path_under_a_project_with_no_directory_is_no_
         shutil.rmtree(projects_dir)
     result = check(root, store=projects_dir / name / "memory", machine=machine)
     assert result.exit_code == 0, result.summary
-    assert result.data["added_allow"] == [RULE]
+    assert result.data["allow_added"] == [RULE]
 
 
 # The two shapes of an overlay that is damaged rather than one a project's name rules out: its
@@ -2418,13 +2419,13 @@ def test_attach_from_a_linked_worktree_writes_the_main_checkout_only(tmp_path: P
 
 
 def _tagged(store: Path, *tags: str) -> Path:
-    """The overlay of `_attachable`, its project listing `tags`, each with a `groups/<tag>/`
+    """The overlay of `_attachable`, its project listing `tags`, each with a `tags/<tag>/`
     directory; the overlay's root."""
     return with_tags(store.parents[2], store.parent.name, list(tags), "claude", "codex")
 
 
 def _tag_grants(overlay: Path, tag: str, *allow: str) -> None:
-    (overlay / "groups" / tag / "claude" / "permissions.json").write_text(
+    (overlay / "tags" / tag / "claude" / "permissions.json").write_text(
         json.dumps({"permissions": {"allow": list(allow)}}), encoding="utf-8"
     )
 
@@ -2435,12 +2436,10 @@ def test_a_tag_codex_rule_is_placed_and_a_later_plate_wins_its_name(tmp_path: Pa
     (store.parent / "codex").mkdir()
     (store.parent / "codex" / "project.rules").write_text("# project\n", encoding="utf-8")
     for tag in ("a", "b"):
-        (overlay / "groups" / tag / "codex" / "common.rules").write_text(
+        (overlay / "tags" / tag / "codex" / "common.rules").write_text(
             f"# from {tag}\n", encoding="utf-8"
         )
-        (overlay / "groups" / tag / "codex" / f"{tag}.rules").write_text(
-            "# tag\n", encoding="utf-8"
-        )
+        (overlay / "tags" / tag / "codex" / f"{tag}.rules").write_text("# tag\n", encoding="utf-8")
     attached = attach(root, store=store, machine=machine, runner=Recorder())
     rules = root / ".codex" / "rules"
     assert (rules / "common.rules").read_text(encoding="utf-8") == "# from b\n"
@@ -2471,7 +2470,7 @@ def test_an_unreadable_tag_file_stops_attach_with_nothing_written(
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
     root, store, machine = _attachable(tmp_path, allow=(RULE,))
-    hooks = _tagged(store, "a") / "groups" / "a" / "claude" / "hooks.json"
+    hooks = _tagged(store, "a") / "tags" / "a" / "claude" / "hooks.json"
     hooks.write_text("{}", encoding="utf-8")
     hooks.chmod(0o000)
     flags = ("--store", str(store))
@@ -2487,7 +2486,7 @@ def test_an_unreadable_tag_file_stops_attach_with_nothing_written(
 
 
 def _untag(store: Path) -> None:
-    """The project's record listing no tag any more; the `groups/` directories stay."""
+    """The project's record listing no tag any more; the `tags/` directories stay."""
     (store.parent / RECORD).write_text("tags = []\n", encoding="utf-8")
 
 
@@ -2582,7 +2581,7 @@ def test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it(
     # The team commits `.codex/rules/common.rules` after `attach` placed it, then the overlay drops
     # the rule: the next routine `attach` must not delete a file the checkout tracks. It leaves the
     # copy standing, names it, and forgets it: the file is the team's now.
-    # Mutation: `mutations/`'s "re-attach removes a Codex copy the overlay dropped".
+    # Mutation: `mutations/`'s "re-attach takes back every copy the overlay dropped".
     root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
     _committed(root)
     attach(root, store=store, machine=machine, runner=Recorder())
@@ -2597,16 +2596,16 @@ def test_a_re_attach_leaves_a_codex_rule_copy_the_overlay_dropped_and_names_it(
 
 
 @pytest.mark.parametrize(
-    ("state", "kept"),
+    ("state", "taken"),
     [("as-written", True), ("edited", False), ("tracked", False), ("deleted", False)],
 )
-def test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_written(
-    tmp_path: Path, state: str, kept: bool
+def test_a_reattach_takes_back_a_dropped_copy_it_wrote(
+    tmp_path: Path, state: str, taken: bool
 ) -> None:
-    # `detach` must still take a stale copy Codex reads as a standing instruction, and must never
-    # take what is no longer attach's. So the name stays recorded only while the file is untracked
-    # and holds the bytes attach wrote. Mutation: `mutations/`'s "re-attach keeps every name the
-    # overlay dropped".
+    # A copy the overlay dropped went on applying as a standing instruction while the dropped allow
+    # rule was withdrawn. It is taken back as `detach` takes it, untracked and as attach wrote it;
+    # any other is no longer attach's, left and forgotten. Mutations: `mutations/`'s "re-attach
+    # takes back every copy the overlay dropped" and "re-attach takes back no copy it wrote".
     root, store, machine = _attachable(tmp_path, codex="# standing rule\n")
     _committed(root)
     attach(root, store=store, machine=machine, runner=Recorder())
@@ -2619,8 +2618,70 @@ def test_a_re_attach_keeps_a_dropped_copy_only_while_it_is_untracked_and_as_writ
     elif state == "deleted":
         (root / copy).unlink()
     (store.parents[2] / COMMON_CODEX / "common.rules").unlink()
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    assert again.rules_taken_back == ((copy,) if taken else ())
+    assert (root / copy).is_file() is (state in ("edited", "tracked"))
+    assert copy not in ledger(root).rules
+
+
+def _hand_made(root: Path, text: str) -> str:
+    """A `.codex/rules/common.rules` the owner wrote, untracked, before any attach."""
+    copy = ".codex/rules/common.rules"
+    (root / copy).parent.mkdir(parents=True)
+    (root / copy).write_text(text, encoding="utf-8")
+    return copy
+
+
+@pytest.mark.parametrize("text", ["MY OWN CODEX RULES\n", "# the overlay's rule\n"])
+def test_attach_leaves_a_hand_made_rule_file(tmp_path: Path, text: str) -> None:
+    # A data-loss guard: `attach` wrote over the owner's own file at the name it wanted, and the
+    # ledger's digest then matched, so `detach` deleted it. Only the ledger tells attach's copy from
+    # a foreign one, so a file holding the overlay's very bytes is not taken either. Mutation:
+    # `mutations/`'s "attach writes over a file it did not write at a rule target".
+    from drybag.attach.write import detach
+
+    root, store, machine = _attachable(tmp_path, codex="# the overlay's rule\n")
+    copy = _hand_made(root, text)
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    assert (root / copy).read_text(encoding="utf-8") == text
+    assert (attached.rules_written, attached.rules_left) == ((), (copy,))
+    assert copy not in ledger(root).rules
+    assert copy not in (root / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    assert again.rules_left == (copy,) and copy not in ledger(root).rules
+    detach(root, runner=Recorder())
+    assert (root / copy).read_text(encoding="utf-8") == text
+
+
+def test_the_attach_ledger_has_exactly_its_keys(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
     attach(root, store=store, machine=machine, runner=Recorder())
-    assert (copy in ledger(root).rules) is kept
+    keys = ("format", "store", "allow", "rules", "settings_keys", "directories", "render")
+    assert sorted(json.loads(ledger_file(root).read_text(encoding="utf-8"))) == sorted(keys)
+
+
+def test_a_reattach_overwrites_its_own_unchanged_copy(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, codex="# first\n")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    (store.parents[2] / COMMON_CODEX / "common.rules").write_text("# second\n", encoding="utf-8")
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    copy = ".codex/rules/common.rules"
+    assert (root / copy).read_text(encoding="utf-8") == "# second\n"
+    assert (again.rules_written, again.rules_left) == ((copy,), ())
+
+
+def test_check_says_would_leave_and_would_take_back(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, codex="# standing rule\n")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    codex = store.parents[2] / COMMON_CODEX
+    (codex / "common.rules").rename(codex / "other.rules")
+    (root / ".codex" / "rules" / "other.rules").write_text("# mine\n", encoding="utf-8")
+    result = check(root, store=store, machine=machine)
+    left, taken = ".codex/rules/other.rules", ".codex/rules/common.rules"
+    assert f"Codex rule file would be left: {quoted(left)}" in result.summary
+    assert f"Codex rule copy would be taken back: {quoted(taken)}" in result.summary
+    assert (result.data["rules_left"], result.data["rules_taken_back"]) == ([left], [taken])
+    assert (root / taken).is_file()
 
 
 # What a hand can leave in the ledger that parses as an object and is no ledger `attach` wrote.
@@ -2633,6 +2694,7 @@ NOT_LEDGERS = [
     {"settings_keys": "autoMemoryDirectory"},
     {"directories": {}},
     {"render": "x"},
+    {"format": 2},
 ]
 
 
@@ -2643,20 +2705,29 @@ def rewritten(root: Path, fields: Mapping[str, object]) -> None:
     ledger_file(root).write_text(json.dumps({**document, **fields}), encoding="utf-8")
 
 
-@pytest.mark.parametrize("fields", NOT_LEDGERS, ids=str)
-def test_attach_writes_a_file_that_is_no_ledger_whole(
-    tmp_path: Path, fields: Mapping[str, object]
+@pytest.mark.parametrize("fields", [*NOT_LEDGERS, None], ids=str)
+def test_attach_refuses_a_ledger_it_cannot_read(
+    tmp_path: Path, fields: Mapping[str, object] | None
 ) -> None:
-    # One answer from the reader, and `attach`'s is to write the ledger whole: a run that took
-    # such a field would fail in the middle, or carry it into the file it writes.
-    # Mutation: `mutations/`'s "the ledger reader takes any field".
+    # Written over whole, the allow rules and copies the ledger witnessed stayed in place with
+    # nothing to name them to `detach`, which refuses the same file. A ledger of another `format`
+    # is one this drybag cannot read either. Mutations: `mutations/`'s "the ledger reader takes any
+    # field", "the ledger reader takes another format" and "attach writes over a ledger it cannot
+    # read".
     root, store, machine = _attachable(tmp_path, allow=(RULE,), codex="# standing rule\n")
     attach(root, store=store, machine=machine, runner=Recorder())
-    rewritten(root, fields)
-    attach(root, store=store, machine=machine, runner=Recorder())
-    assert (
-        isinstance(ledger(root).rules, dict) and ".codex/rules/common.rules" in ledger(root).rules
-    )
+    if fields is None:
+        ledger_file(root).write_text("{", encoding="utf-8")
+    else:
+        rewritten(root, fields)
+    before = snapshot(root)
+    held = ledger_file(root).read_bytes()
+    for run in (check, lambda *args, **flags: attach(*args, **flags, runner=Recorder())):
+        with pytest.raises(Failure, match="move it aside") as refused:
+            run(root, store=store, machine=machine)
+        assert str(ledger_file(root)) in str(refused.value)
+    assert ledger_file(root).read_bytes() == held
+    assert_snapshot_unchanged(root, before)
 
 
 def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:
@@ -2670,3 +2741,384 @@ def test_check_counts_the_rules_it_would_take_back(tmp_path: Path) -> None:
     assert "2 allow rule(s) would be taken back" in summary
     # A preview writes nothing.
     assert (root / SETTINGS).read_bytes() == before
+
+
+def test_attach_says_when_the_overlays_notes_reach_no_session(tmp_path: Path) -> None:
+    # Attaching a checkout whose mode stays `harness` delivers rules and no note, and exits 0: the
+    # one place the owner is looking when that happens. Mutation (`mutations/`'s "attach stops
+    # saying the overlay's notes reach no session").
+    root, store, machine = _attachable(tmp_path)
+    (root / CONFIG_FILE).write_text(
+        f'[drybag]\nversion = "{drybag.__version__}"\n\n[project]\nname = "{store.parent.name}"\n',
+        encoding="utf-8",
+    )
+    said = f"{NOTES_UNDELIVERED}: {NOTES_UNDELIVERED_REMEDY}"
+    assert said not in _attach_it(root, store, machine).notes
+    (store / "a.md").write_text("---\nname: a\ndescription: d\n---\nb\n", encoding="utf-8")
+    assert said in _attach_it(root, store, machine).notes
+    # The printed step, read out of the words that print it, and run.
+    step = re.search(
+        r"`(.+?)` under `\[(.+?)\]` in the overlay\'s `(.+?)`", NOTES_UNDELIVERED_REMEDY
+    )
+    assert step is not None
+    layer = store.parents[2] / step[3].replace("<name>", store.parent.name)
+    layer.write_text(f"[{step[2]}]\n{step[1]}\n", encoding="utf-8")
+    assert said not in _attach_it(root, store, machine).notes
+
+
+DENIED = "deniedMcpServers"
+
+
+def _mcp(store: Path, **servers: object) -> None:
+    """The overlay's `common/claude/mcp.json`, holding `servers`."""
+    (store.parents[2] / COMMON_CLAUDE / "mcp.json").write_text(
+        json.dumps({"mcpServers": servers}), encoding="utf-8"
+    )
+
+
+def _settings(root: Path) -> dict[str, Any]:
+    result: dict[str, Any] = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+    return result
+
+
+def test_on_withdraws_the_deny_entry(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _mcp(store, srv1="off")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    _mcp(store, srv1="on")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    # The key goes with its last entry, as the allow list does, and the ledger forgets the name.
+    assert DENIED not in _settings(root)
+    assert read_mcp_ledger(root).deny == ()
+
+
+SERVER = {"command": "srv", "args": ["--stdio"]}
+
+
+def _mcp_calls(runner: Recorder) -> list[list[str]]:
+    return [argv for argv in runner.calls if argv[:2] == ["claude", "mcp"]]
+
+
+def test_attach_delivers_and_records_digests(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, m1=SERVER)
+    runner = Recorder()
+    attached = attach(root, store=store, machine=machine, runner=runner)
+    assert [argv[2] for argv in _mcp_calls(runner)] == ["remove", "add-json"]
+    launched = zip(runner.calls, runner.cwds, strict=True)
+    assert {cwd for argv, cwd in launched if argv[1] == "mcp"} == {root}
+    assert read_mcp_ledger(root).mcp == {"m1": digest(SERVER)}
+    assert (attached.mcp_delivered, attached.mcp_replaced) == (("m1",), ())
+    # A second run with the same definition launches nothing for it.
+    again = Recorder()
+    attach(root, store=store, machine=machine, runner=again)
+    assert _mcp_calls(again) == []
+
+
+def test_attach_without_claude_then_with_it_settles_everything(tmp_path: Path) -> None:
+    # A Codex-only machine has no `claude`, and `attach` exited 1 there on every run before it
+    # composed the notes. The first run composes them and leaves the plugin and every MCP name for
+    # the next run that finds `claude`, which installs and settles them.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, m1=SERVER)
+    missing = Recorder(answers={"claude": Completed(NOT_FOUND, "", "", found=False)})
+    first = attach(root, store=store, machine=machine, runner=missing)
+    assert first.notes.count(CLAUDE_ABSENT) == 1 and first.mcp_failed == ()
+    assert [argv[:3] for argv in missing.calls] == [["claude", "plugin", "marketplace"]]
+    assert ledger(root).render is None and read_mcp_ledger(root).mcp == {}
+    assert Path(_settings(root)[POINTER]).is_dir()
+    again = attach(root, store=store, machine=machine, runner=Recorder())
+    assert CLAUDE_ABSENT not in again.notes and again.mcp_delivered == ("m1",)
+    assert ledger(root).render is not None and read_mcp_ledger(root).mcp == {"m1": digest(SERVER)}
+
+
+def test_attach_takes_back_a_server_switched_off_later(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, m1=SERVER)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    # The project's plate, after `common`, switches the name off: nothing is delivered, the deny
+    # entry is written, and the local entry `attach` owns is taken back.
+    (store.parent / "claude").mkdir()
+    (store.parent / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": {"m1": "off"}}), encoding="utf-8"
+    )
+    runner = Recorder()
+    attached = attach(root, store=store, machine=machine, runner=runner)
+    assert _mcp_calls(runner) == [["claude", "mcp", "remove", "--scope", "local", "--", "m1"]]
+    assert attached.mcp_taken_back == ("m1",)
+    assert read_mcp_ledger(root) == McpLedger(deny=("m1",))
+    assert _settings(root)[DENIED] == [{"serverName": "m1"}]
+
+
+def test_a_denied_key_that_is_no_list_is_a_note_and_every_other_step_runs(tmp_path: Path) -> None:
+    # Every fault is a note: under a `deniedMcpServers` that is no list drybag writes and takes
+    # back no entry, and the allow rules, the server and the ledger are delivered all the same.
+    root, store, machine = _attachable(tmp_path, allow=(RULE,))
+    _mcp(store, srv1="off", m1=SERVER)
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps({DENIED: {"x": 1}}), encoding="utf-8")
+    assert check(root, store=store, machine=machine).data["mcp_deny"] == []
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    assert DENIED_NOT_A_LIST in attached.notes
+    assert _settings(root)[DENIED] == {"x": 1}
+    assert _settings(root)["permissions"]["allow"] == [RULE]
+    assert read_mcp_ledger(root) == McpLedger(mcp={"m1": digest(SERVER)})
+
+
+def test_check_says_the_mcp_notes_the_run_says(tmp_path: Path) -> None:
+    # An "off" under a `deniedMcpServers` that is no list takes no effect, and a skipped entry
+    # delivers nothing: `--check` says both where the run says them, after its other notes.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, srv1="off", bad=3)
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps({DENIED: {"x": 1}}), encoding="utf-8")
+    checked = check(root, store=store, machine=machine)
+    notes = attach(root, store=store, machine=machine, runner=Recorder()).notes
+    said = [note for note in notes if "mcpServers" in note or note == DENIED_NOT_A_LIST]
+    assert len(said) == 2 and said[-1] == DENIED_NOT_A_LIST
+    assert checked.summary.split("\n")[0].endswith("; " + "; ".join(said))
+
+
+def test_an_unusable_mcp_json_changes_no_server_and_no_deny_entry(tmp_path: Path) -> None:
+    # A conflict marker is a fault of the file, not "the overlay serves nothing": nothing changes.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, m1=SERVER, srv1="off")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    held, settings = read_mcp_ledger(root), _settings(root)
+    path = store.parents[2] / COMMON_CLAUDE / "mcp.json"
+    path.write_text("<<<<<<< HEAD\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
+    data = check(root, store=store, machine=machine).data
+    assert [data[head] for head in ("mcp_add", "mcp_take_back", "mcp_undeny")] == [[], [], []]
+    runner = Recorder()
+    attached = attach(root, store=store, machine=machine, runner=runner)
+    assert _mcp_calls(runner) == []
+    assert (read_mcp_ledger(root), _settings(root)) == (held, settings)
+    assert UNUSABLE.format(path=quoted(str(path))) in attached.notes
+
+
+@pytest.mark.parametrize(
+    "recorded",
+    [{"format": 2, "deny": [], "mcp": {}}, {"format": 1, "deny": [], "mcp": {"m1": 3}}],
+    ids=["newer-format", "misshaped"],
+)
+def test_an_mcp_ledger_this_drybag_cannot_read_is_kept_and_nothing_mcp_changes(
+    tmp_path: Path, recorded: dict[str, object]
+) -> None:
+    # A newer drybag's ledger, or a damaged one, is the only record of its entries: written over,
+    # they would be orphaned, so it is kept and named and no server or deny entry changes.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, m1=SERVER, srv1="off")
+    path = common_directory(root) / MCP_LEDGER_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(recorded), encoding="utf-8")
+    runner = Recorder()
+    attached = attach(root, store=store, machine=machine, runner=runner)
+    assert _mcp_calls(runner) == []
+    assert path.read_text(encoding="utf-8") == json.dumps(recorded)
+    assert not (root / SETTINGS).exists() or DENIED not in _settings(root)
+    assert BAD_LEDGER.format(name=MCP_LEDGER_NAME) in attached.notes
+
+
+def test_a_deny_entry_is_recorded_before_the_settings_file_holds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, srv1="off")
+    real = fsops.write_within
+
+    def full(base: Path, relative: str, text: str) -> None:
+        if relative == SETTINGS:
+            raise OSError(28, "No space left on device")
+        real(base, relative, text)
+
+    monkeypatch.setattr(fsops, "write_within", full)
+    with pytest.raises(OSError):
+        attach(root, store=store, machine=machine, runner=Recorder())
+    assert read_mcp_ledger(root).deny == ("srv1",)
+
+
+def test_a_deny_only_merge_leaves_the_owners_permissions_as_they_are(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps({"permissions": {"deny": [RULE]}}), encoding="utf-8")
+    _mcp(store, srv1="off")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _settings(root)["permissions"] == {"deny": [RULE]}
+
+
+ALLOWED = "allowedMcpServers"
+
+
+def test_rest_off_writes_an_empty_allowlist_beside_every_key_already_there(tmp_path: Path) -> None:
+    # A run profile copied into the settings file keeps every key, and the cut is written beside
+    # them; measured on Claude Code 2.1.325, `[]` there loads no MCP server at all.
+    root, store, machine = _attachable(tmp_path)
+    profile = {"permissions": {"deny": [RULE]}, "sandbox": {"enabled": True}}
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps(profile), encoding="utf-8")
+    _mcp(store, **{REST: "off"})
+    data = check(root, store=store, machine=machine).data
+    assert (data["mcp_allowlist"], data["mcp_allowlist_withdrawn"]) == ([], False)
+    assert attach(root, store=store, machine=machine, runner=Recorder()).mcp_allowlist == ()
+    settings = _settings(root)
+    assert settings[ALLOWED] == [] and {key: settings[key] for key in profile} == profile
+    assert read_mcp_ledger(root).allow == ()
+    assert attach(root, store=store, machine=machine, runner=Recorder()).mcp_allowlist is None
+
+
+def test_the_allowlist_holds_each_served_name_before_it_is_added(tmp_path: Path) -> None:
+    # Claude Code 2.1.325 refuses `add-json` of a name the allowlist leaves out ("not allowed by
+    # enterprise policy"), so the file names a served server before its `add-json` runs.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"}, m1=SERVER, user1="on")
+    seen: list[object] = []
+
+    def look(argv: list[str], cwd: Path) -> None:
+        if argv[2:3] == ["add-json"]:
+            seen.append(_settings(root)[ALLOWED])
+
+    attached = attach(root, store=store, machine=machine, runner=Recorder(on_call=look))
+    entries = [{"serverName": "m1"}, {"serverName": "user1"}]
+    assert seen == [entries] and _settings(root)[ALLOWED] == entries
+    assert (attached.mcp_allowlist, attached.mcp_delivered) == (("m1", "user1"), ("m1",))
+
+
+def test_rest_on_takes_the_allowlist_back_and_keeps_an_entry_added_by_hand(
+    tmp_path: Path,
+) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"}, user1="on")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    _mcp(store)
+    data = check(root, store=store, machine=machine).data
+    assert (data["mcp_allowlist"], data["mcp_allowlist_withdrawn"]) == (None, True)
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    assert attached.mcp_allowlist_withdrawn and ALLOWED not in _settings(root)
+    assert read_mcp_ledger(root).allow is None
+    # An entry the owner added to drybag's list is theirs: it stays, and so does the key.
+    _mcp(store, **{REST: "off"})
+    attach(root, store=store, machine=machine, runner=Recorder())
+    mine = {"serverName": "mine"}
+    (root / SETTINGS).write_text(json.dumps({**_settings(root), ALLOWED: [mine]}), "utf-8")
+    _mcp(store, **{REST: "off"}, user1="on")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _settings(root)[ALLOWED] == [mine, {"serverName": "user1"}]
+    _mcp(store)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _settings(root)[ALLOWED] == [mine]
+
+
+@pytest.mark.parametrize("held", [[{"serverName": "mine"}], "mine"], ids=["owners", "no-list"])
+def test_an_allowlist_drybag_did_not_write_is_left_with_a_note(
+    tmp_path: Path, held: object
+) -> None:
+    # Adding the overlay's names to the owner's own allowlist would widen a cut the owner made.
+    root, store, machine = _attachable(tmp_path)
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps({ALLOWED: held}), encoding="utf-8")
+    _mcp(store, **{REST: "off"}, m1=SERVER)
+    assert check(root, store=store, machine=machine).data["mcp_allowlist"] is None
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    note = ALLOWED_NOT_A_LIST if isinstance(held, str) else ALLOWED_OWNERS
+    assert note in attached.notes and attached.mcp_allowlist is None
+    assert (_settings(root)[ALLOWED], read_mcp_ledger(root).allow) == (held, None)
+
+
+def test_an_allowlist_is_recorded_before_the_settings_file_holds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"})
+    real = fsops.write_within
+
+    def full(base: Path, relative: str, text: str) -> None:
+        if relative == SETTINGS:
+            raise OSError(28, "No space left on device")
+        real(base, relative, text)
+
+    monkeypatch.setattr(fsops, "write_within", full)
+    with pytest.raises(OSError):
+        attach(root, store=store, machine=machine, runner=Recorder())
+    assert read_mcp_ledger(root).allow == ()
+
+
+def test_a_second_clone_attaches_on_its_own(tmp_path: Path) -> None:
+    # A second clone of the same repository, not a worktree, has a git common directory of its
+    # own: its own binding id, ledgers and settings file, and a detach of one leaves the other.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"})
+    attach(root, store=store, machine=machine, runner=Recorder())
+    second = tmp_path / "second"
+    _git(tmp_path, "clone", "-q", str(root), str(second))
+    _git(second, "remote", "set-url", "origin", "git@example.com:o/p.git")
+    (second / CONFIG_FILE).write_text((root / CONFIG_FILE).read_text(encoding="utf-8"), "utf-8")
+    attached = attach(second, store=store, machine=machine, runner=Recorder())
+    assert attached.mcp_allowlist == () and _settings(second)[ALLOWED] == []
+    assert attached.binding != attach(root, store=store, machine=machine, runner=Recorder()).binding
+    detach(second, runner=Recorder())
+    assert _settings(root)[ALLOWED] == [] and read_mcp_ledger(root).allow == ()
+
+
+def test_an_entry_the_owner_wrote_into_drybags_allowlist_is_never_recorded(tmp_path: Path) -> None:
+    # As a deny entry the owner already wrote: switched on later by the overlay too, it is still
+    # the owner's, and the overlay dropping it again leaves it.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"})
+    attach(root, store=store, machine=machine, runner=Recorder())
+    mine = {"serverName": "user1"}
+    (root / SETTINGS).write_text(json.dumps({**_settings(root), ALLOWED: [mine]}), "utf-8")
+    _mcp(store, **{REST: "off"}, user1="on")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert read_mcp_ledger(root).allow == ()
+    _mcp(store, **{REST: "off"})
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _settings(root)[ALLOWED] == [mine]
+    # And the take-back that leaves the owner's entries says so.
+    _mcp(store)
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    assert ALLOWED_LEFT in attached.notes and not attached.mcp_allowlist_withdrawn
+    assert _settings(root)[ALLOWED] == [mine]
+
+
+def test_an_unreadable_plate_beside_rest_off_writes_the_cut(tmp_path: Path) -> None:
+    # The file that cannot be read may be the one switching a name on, never one lifting the cut
+    # for certain: the allowlist is `[]`, and no server changes.
+    root, store, machine = _attachable(tmp_path)
+    (store.parents[2] / COMMON_CLAUDE / "mcp.json").write_text("{,", encoding="utf-8")
+    (store.parent / "claude").mkdir()
+    (store.parent / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": {REST: "off", "m1": SERVER}}), encoding="utf-8"
+    )
+    runner = Recorder()
+    attached = attach(root, store=store, machine=machine, runner=runner)
+    assert _settings(root)[ALLOWED] == [] and read_mcp_ledger(root).allow == ()
+    assert (_mcp_calls(runner), attached.mcp_allowlist_unwritten) == ([], False)
+
+
+def test_an_unreadable_plate_with_no_rest_off_keeps_the_allowlist_as_it_is(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"}, user1="on")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    held, settings = read_mcp_ledger(root), _settings(root)
+    (store.parents[2] / COMMON_CLAUDE / "mcp.json").write_text("{,", encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (read_mcp_ledger(root), _settings(root)) == (held, settings)
+    assert held.allow == ("user1",)
+
+
+def test_an_allowlist_that_cannot_be_written_fails_the_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A damaged MCP ledger records nothing, so no entry may be written: the run exits 1, saying so.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"})
+    path = common_directory(root) / MCP_LEDGER_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{", encoding="utf-8")
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    assert attached.mcp_allowlist_unwritten and ALLOWLIST_UNWRITTEN in attached.notes
+    assert not (root / SETTINGS).exists() or ALLOWED not in _settings(root)
+    path.unlink()
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps({ALLOWED: "x"}), encoding="utf-8")
+    assert attach(root, store=store, machine=machine, runner=Recorder()).mcp_allowlist_unwritten

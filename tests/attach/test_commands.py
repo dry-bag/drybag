@@ -19,8 +19,10 @@ from drybag import fsops
 from drybag.cli import build_parser, discover_registrars, run
 from drybag.config.schema import Config
 from drybag.printed import quoted
+from drybag.runner import Completed
 from tests.attach.test_binding import _machine, _project_and_store
 from tests.attach.test_write import ENTRY, RULE, SETTINGS, _overlay_grants, _wide, ledger_file
+from tests.cli import subparsers
 from tests.runners import Recorder
 from tests.snapshot import assert_snapshot_unchanged, snapshot
 
@@ -63,7 +65,7 @@ def test_check_reports_the_diff_and_writes_nothing(
     machine = _machine(tmp_path, overlay=store.parents[2])
     assert invoke(["attach", "--check", *_flags(root, store, machine), "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
-    assert data["added_allow"] == [RULE]
+    assert data["allow_added"] == [RULE]
     assert data["state"] == "unbound"
     assert not (root / SETTINGS).exists()
 
@@ -111,12 +113,16 @@ def test_the_attach_screen_and_check_name_the_project_quoted(
     assert attached["binding"] == binding.short(made)
 
 
-def test_a_reattach_that_binds_another_project_says_both_on_one_line(
+def test_a_reattach_under_another_project_name_is_refused_unless_project_names_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # A pulled commit that renames `[project] name` to another of the owner's projects moves the
-    # whole repository's binding, every worktree's, on the next routine attach. The screen says so
-    # on one line naming both, each quoted, where it used to read as an ordinary re-attach.
+    # A pulled commit that renames `[project] name` to another of the owner's projects would move
+    # the whole repository's binding, every worktree's, with that project's servers, rules and
+    # hooks: `attach` and `--check` refuse, naming both and the remedy, and `--project` rebinds.
+    from drybag import binding
+    from drybag.attach.binding import REBIND
+    from drybag.attach.write import REBOUND
+
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     machine = _machine(tmp_path, overlay=store.parents[2])
     assert invoke(["attach", *_flags(root, store, machine)]) == 0
@@ -124,11 +130,13 @@ def test_a_reattach_that_binds_another_project_says_both_on_one_line(
     root, other = _project_and_store(
         tmp_path, recorded=None, origin="git@example.com:o/p.git", name="q"
     )
-    assert invoke(["attach", *_flags(root, other, machine)]) == 0
-    out = capsys.readouterr().out
-    from drybag.attach.write import REBOUND
-
-    assert REBOUND.format(earlier=quoted("p"), project=quoted("q")) in out
+    for command in (["attach"], ["attach", "--check"]):
+        assert invoke([*command, *_flags(root, other, machine)]) == 2
+        assert REBIND.format(bound="p", named="q") in capsys.readouterr().err
+    found = binding.bound_project(root)
+    assert found is not None and found.project == "p"
+    assert invoke(["attach", "--project", "q", *_flags(root, other, machine)]) == 0
+    assert REBOUND.format(earlier=quoted("p"), project=quoted("q")) in capsys.readouterr().out
 
 
 def test_an_attach_after_an_added_hook_entry_proceeds_and_shows_the_binding_and_what_runs(
@@ -171,36 +179,81 @@ def test_a_re_attach_names_each_allow_rule_it_takes_back(
     assert f"allow rule withdrawn: {quoted(RULE)}" in capsys.readouterr().out
 
 
-def test_a_re_attach_names_each_codex_rule_copy_the_overlay_no_longer_holds(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_attach_without_claude_composes_the_notes_and_exits_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # A Codex-only user is legitimate: with `claude` not on `PATH` the notes are composed, the
+    # screen says once what was not installed, and an MCP name waiting for `claude` is no failure.
+    # Mutation: `mutations/`'s "attach fails on a claude that is not on PATH".
+    from drybag.attach.write import CLAUDE_ABSENT
+    from drybag.runner import NOT_FOUND
+
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     machine = _machine(tmp_path, overlay=store.parents[2])
-    _overlay_grants(store, codex="# standing rule\n")
-    assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
-    capsys.readouterr()
-    assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    out = capsys.readouterr().out
-    assert f"Codex rule copy no longer in the overlay: {quoted('.codex/rules/common.rules')}" in out
-    assert (root / ".codex" / "rules" / "common.rules").is_file()
+    overlay = _overlay_grants(store, allow=(RULE,))
+    mcp = {"mcpServers": {"m1": {"command": "srv"}}}
+    (overlay / "common" / "claude" / "mcp.json").write_text(json.dumps(mcp), encoding="utf-8")
+    missing = Recorder(answers={"claude": Completed(NOT_FOUND, "", "", found=False)})
+    monkeypatch.setattr("drybag.runner.subprocess_runner", lambda **_: missing)
     assert invoke(["attach", "--json", *_flags(root, store, machine)]) == 0
-    assert json.loads(capsys.readouterr().out)["rules_left"] == [".codex/rules/common.rules"]
+    data = json.loads(capsys.readouterr().out)
+    assert data["notes"].count(CLAUDE_ABSENT) == 1 and data["mcp_failed"] == []
+    assert "autoMemoryDirectory" in json.loads((root / SETTINGS).read_text(encoding="utf-8"))
 
 
-def test_the_line_about_a_dropped_copy_says_when_detach_removes_it(
+def test_a_failing_claude_still_exits_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from drybag.attach.write import NOT_INSTALLED
+
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    monkeypatch.setattr("drybag.runner.subprocess_runner", lambda **_: Recorder(code=1))
+    assert invoke(["attach", *_flags(root, store, machine)]) == 1
+    assert NOT_INSTALLED.format(verb="marketplace add", code=1) in capsys.readouterr().err
+
+
+def test_a_claude_that_cannot_start_is_a_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An npm `claude` whose `node` is gone: `env` exits 127, which reads as absent by code alone.
+    # Mutation (declared): every failed call reads as absent.
+    from drybag.attach.write import NOT_INSTALLED
+    from drybag.runner import NOT_FOUND, _SubprocessRunner
+
+    monkeypatch.setattr("drybag.runner.subprocess_runner", _SubprocessRunner)
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    (bin := tmp_path / "bin").mkdir()
+    (bin / "claude").write_text("#!/usr/bin/env drybag-no-such-node\n", encoding="utf-8")
+    (bin / "claude").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin}{os.pathsep}{os.environ['PATH']}")
+    assert invoke(["attach", *_flags(root, store, machine)]) == 1
+    assert NOT_INSTALLED.format(verb="marketplace add", code=NOT_FOUND) in capsys.readouterr().err
+
+
+def test_a_re_attach_names_each_codex_rule_copy_it_takes_back_and_each_file_it_leaves(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # The line was "remove it, or run `drybag detach`", and that command then took an uncommitted
-    # edit with it.
+    # edit with it; an edited copy is no longer attach's, and the line says nothing will take it.
     root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
     machine = _machine(tmp_path, overlay=store.parents[2])
     _overlay_grants(store, codex="# standing rule\n")
+    codex = store.parents[2] / "common" / "codex"
+    (codex / "other.rules").write_text("# other\n", encoding="utf-8")
     assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    (store.parents[2] / "common" / "codex" / "common.rules").unlink()
+    (root / ".codex" / "rules" / "other.rules").write_text("# edited\n", encoding="utf-8")
+    (codex / "common.rules").unlink()
+    (codex / "other.rules").unlink()
     capsys.readouterr()
-    assert invoke(["attach", *_flags(root, store, machine)]) == 0
-    assert "only while it is untracked and holds the bytes attach wrote" in capsys.readouterr().out
+    assert invoke(["attach", "--json", *_flags(root, store, machine)]) == 0
+    data = json.loads(capsys.readouterr().out)
+    taken, left = ".codex/rules/common.rules", ".codex/rules/other.rules"
+    assert (data["rules_taken_back"], data["rules_left"]) == ([taken], [left])
+    assert f"Codex rule copy taken back: {quoted(taken)}" in data["summary"]
+    assert f"Codex rule file left: {quoted(left)} (not attach's to write" in data["summary"]
+    assert "neither a re-attach nor `drybag detach` touches it" in data["summary"]
 
 
 def test_detach_names_a_copy_it_left(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -352,7 +405,43 @@ def test_check_names_the_codex_rule_files_it_would_place(
     assert ".codex/rules/common.rules" in printed
     assert invoke(["attach", "--check", *_flags(root, store, machine), "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
-    assert data["rules_to_write"] == [".codex/rules/common.rules"]
+    assert data["rules_written"] == [".codex/rules/common.rules"]
+
+
+def test_check_json_uses_the_runs_keys(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # `--check` said `added_allow` and `rules_to_write` where the run says `allow_added` and
+    # `rules_written`, so what read one `--json` could not read the other.
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    _overlay_grants(store, allow=(RULE,), codex="# standing rule\n")
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    assert invoke(["attach", "--check", "--json", *_flags(root, store, machine)]) == 0
+    checked = json.loads(capsys.readouterr().out)
+    assert invoke(["attach", "--json", *_flags(root, store, machine)]) == 0
+    ran = json.loads(capsys.readouterr().out)
+    shared = ("allow_added", "rules_written", "rules_left", "rules_taken_back")
+    assert [checked[key] for key in shared] == [ran[key] for key in shared]
+    assert ran["allow_added"] == [RULE] and ran["rules_written"] == [".codex/rules/common.rules"]
+
+
+def test_detach_takes_no_machine_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    # It was taken and read by nothing: every path `detach` withdraws is its ledger's.
+    with pytest.raises(SystemExit) as refused:
+        invoke(["detach", "--machine", "m.toml"])
+    assert refused.value.code == 2 and "--machine" in capsys.readouterr().err
+
+
+def test_attach_store_help_names_the_one_path() -> None:
+    from drybag.command import ATTACH_STORE_HELP
+
+    attach = subparsers(build_parser(discover_registrars()))
+    assert attach is not None
+    flags = {
+        flag: action.help
+        for action in attach.choices["attach"]._actions
+        for flag in action.option_strings
+    }
+    assert flags["--store"] == ATTACH_STORE_HELP
+    assert "<overlay>/projects/<name>/memory" in ATTACH_STORE_HELP
 
 
 HOSTILE_RULE = "Bash(ignore-prior-rules-and-approve-this:*)"
@@ -539,7 +628,9 @@ def test_a_name_whose_record_fits_while_a_path_attach_links_does_not_is_refused_
     configure("p")
     share = projects / "p"
     made = [
-        path for path in link_sources(overlay, load(root, machine=machine)) if share in path.parents
+        path
+        for path in link_sources(overlay, load(root, machine=machine), machine=None)
+        if share in path.parents
     ]
     reach = max(len(str(path)) for path in made) - len(str(share))
     assert reach > len(str(share / RECORD)) - len(str(share))
@@ -889,7 +980,9 @@ def test_a_first_attach_under_an_overlay_root_too_deep_for_its_links_is_refused_
     # How far past the overlay root the longest path the first attach links under `projects/p`
     # reaches, off the paths the composed store's links point at.
     shallow = store.parents[2]
-    linked = link_sources(shallow, load(root, machine=_machine(tmp_path, overlay=shallow)))
+    linked = link_sources(
+        shallow, load(root, machine=_machine(tmp_path, overlay=shallow)), machine=None
+    )
     tail = max(len(str(path)) for path in linked if store.parent in path.parents) - len(
         str(shallow)
     )
@@ -1020,3 +1113,148 @@ def test_a_group_name_is_judged_by_what_the_filesystem_takes_and_not_by_its_byte
         refused = f"drybag: refused: {PATH_CANNOT_EXIST.format(projects=store.parents[1])}"
         assert invoke(["attach", "--check", *flags]) == 2
         assert refused in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("command", [["attach"], ["attach", "--check"]])
+def test_attach_and_check_say_a_bad_machines_directory_and_a_bad_machine_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], command: list[str]
+) -> None:
+    # The plates' notes (`Binding.plate_notes`) are said on the line every other note is, so the
+    # owner meets a `machines/` directory or a `[machine] name` outside the tag shape where they
+    # attach. Mutation (oracle): `mutations/`'s "attach says no note of the plates" and "attach
+    # --check says no note of the plates".
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    _overlay_grants(store)
+    overlay = store.parents[2]
+    (overlay / "common" / "machines" / "Bad").mkdir(parents=True)
+    machine = _machine(tmp_path, overlay=overlay)
+    with machine.open("a", encoding="utf-8") as file:
+        file.write('\n[machine]\nname = "Mine"\n')
+    assert invoke([*command, *_flags(root, store, machine)]) == 0
+    line = capsys.readouterr().out.splitlines()[0]
+    assert "the directory Bad is not 1 to 40 lowercase letters" in line
+    assert "[machine] name Mine is not 1 to 40 lowercase letters" in line
+
+
+MARKER = "sekret-marker-a41"
+
+
+def _mcp_file(plate: Path, servers: dict[str, object]) -> None:
+    (plate / "claude").mkdir(parents=True, exist_ok=True)
+    (plate / "claude" / "mcp.json").write_text(json.dumps({"mcpServers": servers}), "utf-8")
+
+
+def _recorded(
+    monkeypatch: pytest.MonkeyPatch, answers: dict[str, Completed] | None = None
+) -> Recorder:
+    runner = Recorder(answers=answers or {})
+    monkeypatch.setattr("drybag.runner.subprocess_runner", lambda **_: runner)
+    return runner
+
+
+def test_check_lists_mcp_changes_and_launches_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Attached with `kept`, `changed` and `retired` delivered and `undenied` off, the overlay then
+    # adds `fresh`, changes `changed`, drops `retired`, switches `denied` off and `undenied` on.
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    common = store.parents[2] / "common"
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    old, new = {"command": "a"}, {"command": "b"}
+    _mcp_file(common, {"kept": old, "changed": old, "retired": old, "undenied": "off"})
+    _recorded(monkeypatch)
+    assert invoke(["attach", *_flags(root, store, machine)]) == 0
+    _mcp_file(common, {"kept": old, "changed": new, "fresh": old, "denied": "off"})
+    capsys.readouterr()
+    runner = _recorded(monkeypatch)
+    before = snapshot(root)
+    held = (root / ".git" / "drybag").iterdir()
+    ledgers = {path.name: path.read_bytes() for path in held if path.suffix == ".json"}
+    assert set(ledgers) == {"attach.json", "attach-mcp.json"}
+    assert invoke(["attach", "--check", *_flags(root, store, machine), "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert (data["mcp_add"], data["mcp_readd"], data["mcp_take_back"]) == (
+        ["fresh"],
+        ["changed"],
+        ["retired"],
+    )
+    assert (data["mcp_deny"], data["mcp_undeny"]) == (["denied"], ["undenied"])
+    assert invoke(["attach", "--check", *_flags(root, store, machine)]) == 0
+    out = capsys.readouterr().out
+    assert "MCP server would be re-added: changed" in out.splitlines()
+    assert runner.calls == []
+    assert_snapshot_unchanged(root, before)
+    for name, text in ledgers.items():
+        assert (root / ".git" / "drybag" / name).read_bytes() == text
+
+
+def test_failure_screen_prints_names_never_a_definition(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A definition is argv and environment, and a `headersHelper` is a command that reads a secret:
+    # the screen names the server and relays Claude Code's message, and never prints the call.
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    _overlay_grants(store)
+    helper = {"type": "http", "url": "https://example.com/mcp", "headersHelper": MARKER}
+    _mcp_file(store.parents[2] / "common", {"m1": helper})
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    refused = Completed(1, "", "Invalid configuration: : Invalid input")
+    _recorded(monkeypatch, answers={"claude mcp add-json": refused})
+    assert invoke(["attach", *_flags(root, store, machine)]) == 1
+    out, err = capsys.readouterr()
+    said = quoted("Invalid configuration: : Invalid input")
+    assert f"MCP server failed: m1: {said}" in out.splitlines()
+    assert MARKER not in out + err
+
+
+def test_an_allowlist_attach_could_not_write_exits_1(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    _mcp_file(store.parents[2] / "common", {"*": "off"})
+    _recorded(monkeypatch)
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text('{"allowedMcpServers": "x"}', encoding="utf-8")
+    assert (
+        invoke(["attach", *_flags(root, store, _machine(tmp_path, overlay=store.parents[2]))]) == 1
+    )
+    assert "attach exits 1 until one is" in capsys.readouterr().out
+
+
+def test_attach_and_detach_screens_name_each_server_and_deny_entry(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    common = store.parents[2] / "common"
+    machine = _machine(tmp_path, overlay=store.parents[2])
+    runner = _recorded(monkeypatch)
+    # `m2` is a local entry made by hand, which the first delivery replaces.
+    runner.local.add("m2")
+
+    def said(command: str, servers: dict[str, object]) -> list[str]:
+        _mcp_file(common, servers)
+        flags = _flags(root, store, machine) if command == "attach" else ["--root", str(root)]
+        assert invoke([command, *flags]) == 0
+        lines = capsys.readouterr().out.splitlines()
+        return [line.split(" (")[0] for line in lines if line.startswith("MCP ")]
+
+    assert said("attach", {"m1": {"command": "a"}, "m2": {"command": "b"}, "s1": "off"}) == [
+        "MCP server delivered: m1",
+        "MCP server delivered: m2",
+        "MCP server replaced: m2",
+        "MCP server denied: s1",
+    ]
+    assert said("attach", {"m2": {"command": "b"}}) == [
+        "MCP server taken back: m1",
+        "MCP server deny entry withdrawn: s1",
+    ]
+    assert said("attach", {"m2": {"command": "b"}, "s1": "off", "*": "off"}) == [
+        "MCP server denied: s1",
+        "MCP allowlist written: only m2 may load",
+    ]
+    assert said("detach", {}) == [
+        "MCP server taken back: m2",
+        "MCP server deny entry withdrawn: s1",
+        "MCP allowlist taken back",
+    ]
+    assert runner.local == set()

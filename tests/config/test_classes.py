@@ -83,11 +83,11 @@ TABLE_ROWS = [
     ("budgets.startup_rules_words", KeyClass.SESSION_PARAMETER),
     ("budgets.volatile_notes_words", KeyClass.SESSION_PARAMETER),
     ("budgets.volatile_ttl_days", KeyClass.SESSION_PARAMETER),
-    ("budgets.agents_md_lines", KeyClass.GATE_PARAMETER),
-    ("budgets.agents_md_words", KeyClass.GATE_PARAMETER),
-    ("budgets.status_lines", KeyClass.GATE_PARAMETER),
-    ("budgets.roadmap_prose_lines", KeyClass.GATE_PARAMETER),
-    ("budgets.roadmap_prose_words", KeyClass.GATE_PARAMETER),
+    ("budgets.agents_md_lines", KeyClass.REPOSITORY_ONLY),
+    ("budgets.agents_md_words", KeyClass.REPOSITORY_ONLY),
+    ("budgets.status_lines", KeyClass.REPOSITORY_ONLY),
+    ("budgets.roadmap_prose_lines", KeyClass.REPOSITORY_ONLY),
+    ("budgets.roadmap_prose_words", KeyClass.REPOSITORY_ONLY),
     ("drybag.version", KeyClass.REPOSITORY_ONLY),
     ("drybag.preset", KeyClass.REPOSITORY_ONLY),
     ("project.name", KeyClass.REPOSITORY_ONLY),
@@ -115,21 +115,21 @@ def test_no_exact_key_contradicts_its_wildcard() -> None:
     # `class_of` asks the exact key first, so an exact row under a wildcard of another class
     # would make one field of a section settable where the rest are not, with nothing saying so.
     # Mutation (`mutations/`'s "an exact row contradicts its section's wildcard"): a
-    # `paths.roadmap` row of the gate class under `paths.*` reddens this.
+    # `paths.bugs` row of the preference class under `paths.*` reddens this.
     for key in exact_keys(CLASSES):
         wildcard = key.split(".")[0] + ".*"
         assert wildcard not in CLASSES or CLASSES[wildcard] is CLASSES[key]
 
 
 def test_the_budget_split_is_total_and_disjoint() -> None:
-    # Every budget is either a gate's, which the repository sets, or the session's, which the
-    # owner may set too; one in neither would have no class, one in both two.
+    # Every budget is either a gate's, which the repository alone sets, or the session's, which
+    # the owner may set too; one in neither would have no class, one in both two.
     # Mutation (`mutations/`'s "a budget is both a gate's and a session's"): `memory_index_words`
     # joins the gate budgets and the split is no longer disjoint.
     assert frozenset(Budgets.NAMES) == GATE_BUDGETS | SESSION_BUDGETS
     assert not GATE_BUDGETS & SESSION_BUDGETS
     for name in GATE_BUDGETS:
-        assert class_of(f"budgets.{name}") is KeyClass.GATE_PARAMETER
+        assert class_of(f"budgets.{name}") is KeyClass.REPOSITORY_ONLY
     for name in SESSION_BUDGETS:
         assert class_of(f"budgets.{name}") is KeyClass.SESSION_PARAMETER
 
@@ -164,14 +164,13 @@ def test_the_layers_run_lowest_first() -> None:
 
 def test_which_layers_may_set_each_class() -> None:
     # `ALLOWED`, spelled out: the repository never sets a machine-only key, only the preset and
-    # the repository set a gate's or a repository's key, and only the preset sets a key the
+    # the repository set a repository's key, and only the preset sets a key the
     # plugin owns. Mutation (`mutations/`'s "the repository may set a key the plugin owns"): the
     # plugin's class admits the repository too.
     assert dict(ALLOWED) == {
         KeyClass.MACHINE_ONLY: _every_layer_but(REPOSITORY),
         KeyClass.PREFERENCE: frozenset(ORDER),
         KeyClass.SESSION_PARAMETER: frozenset(ORDER),
-        KeyClass.GATE_PARAMETER: frozenset({PRESET, REPOSITORY}),
         KeyClass.REPOSITORY_ONLY: frozenset({PRESET, REPOSITORY}),
         KeyClass.PLUGIN_OWNED: frozenset({PRESET}),
     }

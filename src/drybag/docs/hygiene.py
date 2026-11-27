@@ -27,11 +27,9 @@ STATUS_HEADING = "## Current status"
 # rebuilding from there would swallow every line between that subheading and the end marker.
 # One definition, so the two readers cannot disagree about where the listing starts.
 TRAIL_MARKER_LINE = re.compile(rf"^{re.escape(TRAIL_MARKER)}$", re.MULTILINE)
-# Neither half may cross the bracket or parenthesis that opens another link. With `[^\]]+` and
-# `[^)]+` a text of repeated `[a](` made every opening bracket scan to the end of the text:
-# 20,000 characters took 0.55 s, and each doubling four times as long, over any document a
-# change can commit. The one link the old pattern read and this one does not is a target holding
-# a parenthesis, which it cut at the first `)` and so never named a real file.
+# Neither half may cross the bracket or parenthesis that opens another link: with `[^\]]+` and
+# `[^)]+`, a text of repeated `[a](` makes every opening bracket scan to the end of the text, a
+# quadratic read of any document a change can commit. A target holding a parenthesis is not read.
 _MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\[\]]+\]\(([^()]+)\)")
 _IGNORED_LINK_PREFIXES = ("#", "/", "http://", "https://", "mailto:")
 

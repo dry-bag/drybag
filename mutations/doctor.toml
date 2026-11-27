@@ -198,13 +198,14 @@ reddens = [
 ]
 
 # The overlay root is the machine file's, the core's, and more than one area reads it: the report's
-# `Context` resolves it on first read and keeps the answer, so one report asks the machine file once
-# however many rows read it. A plain property would ask it again for every reader.
+# `Context` resolves it on first read and keeps the answer (as `machine_record`, which
+# `overlay_root` and `machine_name` read), so one report asks the machine file once however many
+# rows read it. A plain property would ask it again for every reader.
 [[mutation]]
 name = "the report resolves the overlay root for every reader"
 file = "src/drybag/doctor/model.py"
-before = "    @cached_property\n    def overlay_root(self) -> Path | MachineUnread | None:"
-after = "    @property\n    def overlay_root(self) -> Path | MachineUnread | None:"
+before = "    @cached_property\n    def machine_record(self) -> MachineRecord | MachineUnread | None:"
+after = "    @property\n    def machine_record(self) -> MachineRecord | MachineUnread | None:"
 reddens = [
   "tests/attach/test_doctor.py::test_one_report_resolves_the_overlay_root_once_for_every_area",
 ]
@@ -267,7 +268,7 @@ reddens = [
 name = "doctor skips every row without a drybag.toml"
 file = "src/drybag/doctor/checks.py"
 before = "    return [_guarded(name, check, context) for name, check in _report_checks(contributed)]"
-after = "    return [Check(name, \"skip\", NO_CONFIG_SKIP) if context.config is None and name != \"not-initialised\" else _guarded(name, check, context) for name, check in _report_checks(contributed)]"
+after = "    return [Check(name, SKIP, \"no configuration\") if context.config is None and name != \"not-initialised\" else _guarded(name, check, context) for name, check in _report_checks(contributed)]"
 reddens = [
   "tests/doctor/test_registry.py::test_a_contributed_check_is_asked_when_there_is_nothing_configured",
   "tests/doctor/test_checks.py::test_a_repository_without_a_configuration_skips_only_the_rows_that_read_one",
@@ -680,7 +681,7 @@ name = "the budgets row reads a raised budget as lowered"
 file = "src/drybag/doctor/checks.py"
 before = "        name for name, value in budgets.configured.items() if value > budgets.preset[name]"
 after = "        name for name, value in budgets.configured.items() if value < budgets.preset[name]"
-reddens = ["tests/doctor/test_checks.py::test_a_budget_the_base_branch_raised_is_named_as_raised"]
+reddens = ["tests/doctor/test_checks.py::test_a_raised_budget_is_named_as_raised"]
 
 [[mutation]]
 name = "the budgets row names no lowered budget"

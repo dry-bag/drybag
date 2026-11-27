@@ -33,6 +33,10 @@ def test_the_memory_surface_carries_what_every_consumer_reaches_for() -> None:
         "COMMON",
         # the index's name, which `sync`'s pathspecs leave out under each project
         "INDEX_NAME",
+        # what `attach` says of an overlay whose notes reach no session, in `doctor`'s words
+        "NOTES_UNDELIVERED",
+        "NOTES_UNDELIVERED_REMEDY",
+        "holds_notes",
         # the one reader of the overlay's project record, which attach reads with a policy of its
         # own
         "read_binding_record",

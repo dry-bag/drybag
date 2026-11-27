@@ -1,9 +1,9 @@
 # The drybag demo
 
-`demo.py` builds a small repository in a scratch directory and runs `drybag` against it, act by
-act. Each act passes only on what `drybag` itself answered: its exit code and the fields of the
-one JSON object its `--json` prints. Nothing the script prints is read back, so an act cannot pass
-on the script's own word. The recording of the demo is made from this script's run.
+`demo.py` builds a small repository in a scratch directory and runs `drybag` against it in the
+acts [below](#the-acts). Each act passes only on what `drybag` itself answered: its exit code and
+the fields of the one JSON object its `--json` prints. Nothing the script prints is read back, so
+an act cannot pass on the script's own word.
 
 ## What it needs
 

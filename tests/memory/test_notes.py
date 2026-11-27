@@ -9,7 +9,6 @@ import pytest
 from drybag.memory import notes
 from drybag.memory.notes import (
     NAME_NOT_UTF_8,
-    UNRANKED,
     NoteError,
     NoteType,
     Provenance,
@@ -166,9 +165,13 @@ def test_startup_reads_a_rank_or_a_refusal(
     assert read_note(write(tmp_path, text)).startup == expected
 
 
-def test_an_unparsable_rank_sorts_last_rather_than_vanishing(tmp_path: Path) -> None:
-    text = MINIMAL.replace("---\n\nBody.", "metadata:\n  startup: soon\n---\n\nBody.")
-    assert read_note(write(tmp_path, text)).startup == UNRANKED
+@pytest.mark.parametrize("value", ["yes", "true", "", "1 # first", "soon"])
+def test_a_startup_that_is_not_an_integer_is_no_rank(tmp_path: Path, value: str) -> None:
+    # A rank makes a note a standing rule, so a value this reader cannot read as one fails toward
+    # no rank: `startup: yes` used to rank last and so stood as a rule. Mutation (declared):
+    # `mutations/`'s "a startup that is not an integer still ranks a note".
+    text = MINIMAL.replace("---\n\nBody.", f"metadata:\n  startup: {value}\n---\n\nBody.")
+    assert read_note(write(tmp_path, text)).startup is None
 
 
 def test_as_of_is_a_date_or_none(tmp_path: Path) -> None:

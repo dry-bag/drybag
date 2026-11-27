@@ -7,9 +7,8 @@ real configuration.
 
 It is threaded exactly twice, into `command_config` (`session_config` for `session-context`,
 which reads the file the way a session does) and into `resolve`, and never again: `resolve` puts
-it on the `Store` it builds, so every later call takes it from there. It used to be an optional
-keyword on about twenty functions, and the only thing keeping a command's overlay and its index
-destination in agreement was that each of those call sites remembered to pass it.
+it on the `Store` it builds, so every later call takes it from there and a command's overlay and
+its index destination cannot disagree.
 """
 
 from __future__ import annotations
@@ -94,7 +93,7 @@ def _store(args: argparse.Namespace) -> tuple[Store, Config]:
     config = bound_config(root, machine=machine, owner=owner)
     if config is None:
         # A checkout with no file that this machine does not bind: `load`'s refusal.
-        raise ConfigError(NOT_THERE.format(path=root / CONFIG_FILE))
+        raise ConfigError(NOT_THERE.format(path=quoted(str(root / CONFIG_FILE))))
     # `resolved` and not `resolve` + `refusal_reason`: the pair walked the whole resolution
     # twice, four `git` queries with a five-second timeout apiece each time, so a hanging `git`
     # cost a refused command up to forty seconds.
@@ -169,10 +168,14 @@ def _findings(report: IndexCheck, config: Config) -> list[str]:
         found.append(
             _UNREADABLE_NOTES.format(
                 count=len(report.unreadable),
-                paths=_printed(report.unreadable),
+                paths=_printed([path for path, _ in report.unreadable]),
             )
         )
     return found
+
+
+def _unreadable(report: IndexCheck) -> list[dict[str, str]]:
+    return [{"path": path, "reason": reason} for path, reason in report.unreadable]
 
 
 def run_index(args: argparse.Namespace) -> Result:
@@ -200,9 +203,9 @@ def run_index(args: argparse.Namespace) -> Result:
                 "over_caps": report.over_caps,
                 "provisional": report.provisional,
                 "refused_extra": reconciled.refused_extra,
-                "unreadable": report.unreadable,
+                "unreadable": _unreadable(report),
             },
-            # The same list the summary is built from, so the two can no longer disagree.
+            # The same list the summary is built from, so the two cannot disagree.
             exit_code=1 if findings else 0,
         )
     text = render_index(reconciled, config, store)
@@ -210,7 +213,7 @@ def run_index(args: argparse.Namespace) -> Result:
     # Exit 0: the write succeeded, and `--check` is the mode that fails a build. The findings
     # are still said, because a person running this by hand is who can act on them.
     wrote = "; ".join(
-        [f"wrote {shown(path)} ({report.words} words, {len(reconciled.notes)} notes)", *findings]
+        [f"wrote {shown(path)} ({report.words} words, {len(reconciled.notes)} note(s))", *findings]
     )
     wrote = _with(wrote, _publish(reconciled, store))
     return Result(
@@ -222,7 +225,7 @@ def run_index(args: argparse.Namespace) -> Result:
             "harvested": reconciled.harvested,
             "provisional": reconciled.provisional,
             "refused_extra": reconciled.refused_extra,
-            "unreadable": report.unreadable,
+            "unreadable": _unreadable(report),
             "over_budget": report.over_budget,
             "over_caps": report.over_caps,
         },
@@ -280,7 +283,7 @@ def run_inventory(args: argparse.Namespace) -> Result:
     # reads what the store holds.
     skipped = len(reconciled.skipped)
     return Result(
-        f"{counts['notes']} notes, {counts['words']} words, "
+        f"{counts['notes']} note(s), {counts['words']} words, "
         f"{counts['provisional']} provisional, {counts['stale']} stale"
         + (f", {skipped} linked note(s) skipped" if skipped else ""),
         {"entries": [entry.as_dict() for entry in entries], **counts, "skipped": skipped},

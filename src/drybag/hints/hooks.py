@@ -26,9 +26,8 @@ from drybag.hooks.api import Handler, HookEvent, HookResult
 if TYPE_CHECKING:
     from drybag.config.session import SessionConfig
 
-# The matcher both handlers share. Codex reports every shell-routed action as `Bash` too, as the
-# spike record (`docs/plans/2026-09-05-agent-harness-p0-spikes.md`) measured in its *Codex plugin
-# hooks* trial, so this one name serves both harnesses.
+# The matcher both handlers share. Codex reports every shell-routed action as `Bash` too, so this
+# one name serves both harnesses.
 BASH = "Bash"
 
 # The dispatcher owns the once-per-context bookkeeping, so the handler declares the key
@@ -95,21 +94,11 @@ def register() -> list[Handler]:
         Handler(name="bg-cleanup", event="PreToolUse", run=_bg_cleanup),
         # Once per context: the next piped run repeats a sentence the agent has read.
         Handler(name="pipe-status", event="PreToolUse", run=_pipe_status, once_key="pipe-status"),
-        # The red-run note, on both events a failed command can arrive on. Claude Code delivers a
-        # Bash command that exited non-zero to `PostToolUseFailure`, with `error` beginning
-        # `Exit code N`, and never to `PostToolUse`. No measured harness delivers an exit code on
-        # `PostToolUse`: Codex delivers a failed command there with none, so the note does not
-        # speak (`red_exit` answers `None`). The registration is a placeholder for parity with
-        # Codex. One `once_key`, which the dispatcher files per session: at most one
-        # note per context, whichever event carries it.
+        # The red-run note. Claude Code delivers a Bash command that exited non-zero to
+        # `PostToolUseFailure`, with `error` beginning `Exit code N`. The `once_key` is filed per
+        # session by the dispatcher: at most one note per context.
         # Kept ABOVE the rows it annotates, not below them: a later change appending a handler to
         # the tail of this list would otherwise detach the comment from its subject.
-        Handler(
-            name="test-hygiene",
-            event="PostToolUse",
-            run=_test_hygiene,
-            once_key=ONCE_TEST_HYGIENE,
-        ),
         Handler(
             name="test-hygiene",
             event="PostToolUseFailure",

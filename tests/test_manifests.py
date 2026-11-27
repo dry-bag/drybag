@@ -15,21 +15,10 @@ from tests.scriptload import release
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_claude_manifest_names_the_plugin_its_version_and_titled_user_config() -> None:
+def test_claude_manifest_names_the_plugin_and_its_version() -> None:
     manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
     assert manifest["name"] == "drybag"
     assert manifest["version"] == __version__
-    # The keys, before anything is asserted about their entries. `"x"` satisfies both
-    # assertions in the loop and `{}` satisfies the loop itself: measured, the three entries
-    # moved to an unread key and `userConfig` left empty, this module was 9 passed — a test
-    # named "…and titled user config" green on a plugin that offers none.
-    #
-    # Mutation: none of its own. The manifest is data and the oracle mutates source; the
-    # measurement above is by hand, like the fixture mutations in `tests/test_fixtures.py`.
-    assert set(manifest["userConfig"]) == {"preset"}
-    for key, entry in manifest["userConfig"].items():
-        assert entry["title"], key
-        assert entry["description"], key
 
 
 def test_marketplace_has_a_description_and_an_unversioned_entry() -> None:

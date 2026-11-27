@@ -568,15 +568,6 @@ reddens = [
   "tests/config/test_owner.py::test_write_machine_keeps_the_owners_guards_and_budgets",
 ]
 
-# `pluginConfigs` is where Claude Code keeps the answers a person gives in its plugin-config
-# screen, and `setup` wrote the machine file's personal values over them on every run.
-[[mutation]]
-name = "setup overwrites a plugin option the user set"
-file = "src/drybag/setup/run.py"
-before = "        options.setdefault(key, value)"
-after = "        options[key] = value"
-reddens = ["tests/setup/test_setup.py::test_a_plugin_config_value_the_user_set_survives_setup"]
-
 # --- install path: the setup and overlay guards ------------------------------------------
 #
 # The count `doctor/__init__.py` states and `docs/cli.md` repeats. It was "exactly two" and the
@@ -794,7 +785,7 @@ reddens = [
 name = "the template probe parses with a bare json.loads"
 file = "src/drybag/overlay/create.py"
 before = '        document = json_object(printed_json, "`gh repo view`", error=ValueError)'
-after = "        document = json.loads(printed_json)"
+after = "        import json\n\n        document = json.loads(printed_json)"
 reddens = [
   "tests/overlay/test_create.py::test_a_template_probe_past_the_parser_is_no_answer[nested]",
   "tests/overlay/test_create.py::test_a_template_probe_past_the_parser_is_no_answer[long]",
@@ -1281,3 +1272,18 @@ reddens = [
   "tests/setup/test_restore.py::test_a_marketplace_source_restore_does_not_carry_is_a_note_and_not_added[git-ref]",
   "tests/setup/test_restore.py::test_a_marketplace_source_restore_does_not_carry_is_a_note_and_not_added[github-path]",
 ]
+
+# A server Claude Code did not take is a partly failed attach, reported `failed`.
+[[mutation]]
+name = "setup --restore reports an attach whose MCP server failed as attached"
+file = "src/drybag/setup/restore.py"
+before = """        state: Literal["attached", "failed"] = "failed" if unsettled else "attached""""
+after = """        state: Literal["attached", "failed"] = "attached""""
+reddens = ["tests/setup/test_restore.py::test_a_project_whose_mcp_server_failed_is_failed_naming_it"]
+
+[[mutation]]
+name = "setup --restore reports an attach whose MCP allowlist was not written as attached"
+file = "src/drybag/setup/restore.py"
+before = """        unsettled = attached.mcp_failed or attached.mcp_allowlist_unwritten"""
+after = """        unsettled = attached.mcp_failed"""
+reddens = ["tests/setup/test_restore.py::test_a_project_whose_mcp_allowlist_was_not_written_is_failed"]

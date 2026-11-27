@@ -8,13 +8,14 @@ from pathlib import Path
 import pytest
 
 from drybag.harnesses import CLAUDE
-from drybag.hints import bgcleanup
+from drybag.hints.bashscan import MAX_COMMAND_CHARS
 from drybag.hints.hooks import register
 from drybag.hints.pipes import NOTICE, notice_for
 from drybag.hooks.api import Handler, HookEvent
-from drybag.hooks.dispatch import Recorder, dispatch
+from drybag.hooks.dispatch import dispatch
 from tests.hints.test_hooks import bash_event
 from tests.sessions import NO_CONFIG
+from tests.sinks import Recorder
 
 
 @pytest.mark.parametrize(
@@ -70,7 +71,7 @@ def test_a_reader_ahead_of_the_run_is_not_the_hint() -> None:
 
 
 def test_a_command_past_the_scan_cap_is_not_read() -> None:
-    padding = "echo " + "x" * bgcleanup.MAX_COMMAND_CHARS
+    padding = "echo " + "x" * MAX_COMMAND_CHARS
     assert notice_for(f"{padding}; pytest | tail") is None
 
 
@@ -109,6 +110,6 @@ def test_the_hint_is_given_once_per_context(tmp_path: Path) -> None:
             sink=recorder,
         )
         assert outcome.exit_code == 0, outcome.stderr
-        output = json.loads(outcome.stdout).get("hookSpecificOutput", {})
-        notes.append(output.get("additionalContext"))
-    assert notes == [NOTICE, None]
+        notes.append(json.loads(outcome.stdout))
+    assert notes[0]["hookSpecificOutput"]["additionalContext"] == NOTICE
+    assert notes[1] == {}

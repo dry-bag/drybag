@@ -46,8 +46,8 @@ CI gate belongs in neither, and the note is deleted.
 
 ## In a worktree
 
-The store is linked, not copied, so a note written from either side is the same note and
-nothing is lost when the worktree goes. Linking is automatic, and it is not the job of
-`drybag memory index`: a `SessionStart` handler makes one link per group at the start of a
-session and says how many it made. When a group is missing from the worktree, read that line
-first — the handler reports a path it refused rather than failing the session.
+Nothing links or copies the store into a worktree. Where the worktree holds no store of its own,
+`drybag memory index` and the other memory commands use the main checkout's, and in overlay mode
+the harness reads the composed store from every worktree through the main checkout's
+`autoMemoryDirectory`, which `drybag attach` writes. When notes do not arrive in a worktree, run
+`drybag doctor` and read its `attached` and `memory` rows.

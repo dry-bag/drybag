@@ -83,7 +83,7 @@ def test_never_commits_outside_pathspec(overlays: Overlays) -> None:
     for left in (
         "projects/alpha/checkout/memory/x.md",
         "projects/alpha/x/memory/y.md",
-        "groups/memory/z.md",
+        "tags/memory/z.md",
         "common/memory.md",
     ):
         write(a, left, "not a note\n")
@@ -100,7 +100,7 @@ def test_never_commits_outside_pathspec(overlays: Overlays) -> None:
     assert all(path.startswith(("common/memory/", "projects/alpha/memory/")) for path in paths)
     status = git(a, "status", "--porcelain", "--untracked-files=all")
     assert "?? projects/alpha/checkout/memory/x.md" in status and "?? common/memory.md" in status
-    assert "?? groups/memory/z.md" in status
+    assert "?? tags/memory/z.md" in status
     assert " M common/claude/hooks/x.py" in status
 
 
@@ -612,10 +612,10 @@ def test_the_message_counts_notes_and_names_each_scope(overlays: Overlays) -> No
     a = overlays.a
     write(a, "common/memory/one.md", note_text("one"))
     write(a, "projects/alpha/memory/project-stable/two.md", note_text("two"))
-    write(a, f"groups/{TAG}/memory/three.md", note_text("three"))
+    write(a, f"tags/{TAG}/memory/three.md", note_text("three"))
 
     assert J.commit_memory(context(overlays, a)) is None
 
     subject, _, body = git(a, "log", "-1", "--format=%B").partition("\n")
     assert subject == f"memory: 3 notes from {HOST}"
-    assert body.split() == ["common", f"groups/{TAG}", "projects/alpha"]
+    assert body.split() == ["common", "projects/alpha", f"tags/{TAG}"]

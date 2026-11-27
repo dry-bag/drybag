@@ -1,14 +1,11 @@
 """What each `SessionStart` entry injects, and how much of it fits.
 
-One entry per bundle, each rendered by `memory session-context --bundle <name> --part <n>`,
-and **no dispatcher handler**. That is not a style choice. Foundation's `hook <event>` takes
-an event name and runs every handler registered for it, joining their contexts and clamping
-the join to one platform cap — so the six numbered slots registered as handlers would concatenate
-back into a single 10,000-character budget and be truncated, which is precisely the defect
-a cap per `SessionStart` slot exists to remove. Invoked as separate `hooks.json` entries, each
-slot gets its own cap, and the text is emitted raw rather than through a JSON envelope, so the
-margin below is genuinely additive instead of fighting `ensure_ascii`'s six characters per
-non-ASCII point.
+One entry per bundle, each rendered by `memory session-context --bundle <name> --part <n>`, and **no
+dispatcher handler**: `hook <event>` joins every handler's context and clamps the join to one
+platform cap, so the numbered slots as handlers would share one budget. Invoked as separate
+`hooks.json` entries, each slot gets its own cap, and the text is emitted raw rather than through a
+JSON envelope, so the margin below is genuinely additive instead of fighting `ensure_ascii`'s six
+characters per non-ASCII point.
 
 Standing rules are never truncated, only flagged: a standing rule that does not arrive is a
 standing rule that gets broken, and the set is hand-curated by a flag, so its size is
@@ -45,8 +42,7 @@ SLOTS: dict[Bundle, int] = {
 }
 
 # How much of `native_caps.hook_output_chars` this area keeps back. `_cap` subtracts it, so a
-# part packed to `_cap` and emitted raw is the bundle plus one trailing newline: measured at
-# `hook_output_chars = 10000`, 9,985 characters emitted with 15 to spare.
+# part packed to `_cap` and emitted raw is the bundle plus one trailing newline, under the cap.
 #
 # **A named cap (CONTRIBUTING.md#named-caps), and no shipped file changes with it.** There is no
 # such file for this one and there should not be: it is the headroom between a cap this area does
@@ -58,11 +54,9 @@ SLOTS: dict[Bundle, int] = {
 # **For `hooks/hooks.json`, whose slot count `doctor` checks `SLOTS` against: its entries must
 # not pass `--json`.** The margin is additive only because `memory session-context` prints
 # the text raw. Through `cli._emit`'s `json.dumps({"summary": ...}, indent=2)` the envelope and
-# the escaping both count against the same platform cap, and a cap-length standing bundle no
-# longer fits — measured at 10,009 characters for the single-block bundle
-# `test_the_margin_is_additive_because_the_text_is_emitted_raw` builds, and 10,146 for a
-# realistic multi-note one, whose extra newlines each escape to two characters. Widening
-# `CAP_MARGIN` is not the fix; not wrapping the output is.
+# the escaping both count against the same platform cap, and a cap-length standing bundle would
+# overrun it (`test_the_margin_is_additive_because_the_text_is_emitted_raw`). Widening `CAP_MARGIN`
+# is not the fix; not wrapping the output is.
 CAP_MARGIN = 16
 
 STANDING_LEAD = (
@@ -77,6 +71,7 @@ VOLATILE_LEAD = (
     "were true when written: verify any path, flag or date before acting on one, and delete a "
     "note once it is resolved."
 )
+PENDING_LEAD = "Notes that would be standing rules once you promote them:"
 
 
 @dataclass(frozen=True)
@@ -129,9 +124,13 @@ def _standing(notes: list[Note], config: Config) -> list[str]:
     return blocks
 
 
+def _led(lead: str, blocks: list[str]) -> list[str]:
+    return [lead, *blocks] if blocks else []
+
+
 def _volatile(notes: list[Note], reviewed: set[Path], config: Config) -> list[str]:
-    """The volatile notes, and every unreviewed note a standing rank would otherwise have made a
-    standing rule; each unreviewed one labelled and inside the data region."""
+    """The volatile notes, and, under `PENDING_LEAD`, every unreviewed note a standing rank would
+    otherwise have made a standing rule; each unreviewed one labelled and inside the data region."""
     notes = [
         note
         for note in notes
@@ -170,22 +169,27 @@ def _volatile(notes: list[Note], reviewed: set[Path], config: Config) -> list[st
     if sum(len(block.split()) for block in full) <= config.budgets.effective(
         "volatile_notes_words"
     ):
+        pairs = list(zip(notes, full, strict=True))
         return [
-            VOLATILE_LEAD,
-            *(data(note, block) for note, block in zip(notes, full, strict=True)),
+            *_led(VOLATILE_LEAD, [data(n, b) for n, b in pairs if is_volatile(n.group_name)]),
+            *_led(PENDING_LEAD, [data(n, b) for n, b in pairs if not is_volatile(n.group_name)]),
         ]
     lines = [
         (note, f"- {note.name}{_flag(note, today, ttl)}{label(note)} — {note.description}")
         for note in notes
     ]
     owned = "\n".join(line for note, line in lines if note.path in reviewed)
-    others = "\n".join(line for note, line in lines if note.path not in reviewed)
+    others = "\n".join(
+        line for note, line in lines if note.path not in reviewed and is_volatile(note.group_name)
+    )
+    pending = "\n".join(line for note, line in lines if not is_volatile(note.group_name))
     return [
         VOLATILE_LEAD,
         "Volatile memory has outgrown its budget; listing descriptions only — open any note "
         "that matters:",
         *([owned] if owned else []),
         *([trust.wrap(others)] if others else []),
+        *_led(PENDING_LEAD, [trust.wrap(pending)] if pending else []),
     ]
 
 
@@ -246,20 +250,13 @@ def render(bundle: Bundle, store: Store, config: Config, *, part: int = 1) -> st
     """One numbered slot's text, or `None` when there is no such part.
 
     **An oversized part is a notice, not the part.** `split` never breaks a block, so a single
-    block larger than the cap becomes a part larger than the cap — `fit` reports that as
-    `Fit.oversized`, and `render` used to hand it out anyway and exit 0. Nothing on the hook
-    path runs `fit`, so the only reader was `doctor`, and what actually happened was that the
-    platform truncated it. Measured, at `hook_output_chars = 10000`: a standing bundle with one
-    20,288-character part arrived with **one** of its two region markers — the model got an
-    opening delimiter, the lead sentence "It ends at the matching end marker and nowhere else",
-    and no end marker, which is the one thing `trust.wrap`'s nonce region exists to make
-    impossible. Handing out a region known to arrive unterminated is worse than handing out
-    nothing, and saying so is better than either.
+    block larger than the cap becomes a part larger than the cap (`Fit.oversized`). The platform
+    truncates such a part, so the model would get a region's opening marker and no end marker,
+    which `trust.wrap`'s nonce region exists to make impossible.
 
     The notice carries no repository content — the bundle name and the slot number are
-    drybag's own — for the obvious reason that the channel has just been established not to
-    be able to carry any safely. It is emitted whatever the configured cap, because a truncated
-    notice still reads as a notice while a truncated region does not.
+    drybag's own. It is emitted whatever the configured cap, because a truncated notice still
+    reads as a notice while a truncated region does not.
     """
     cap = _cap(config)
     parts = split(blocks(bundle, store, config), cap)

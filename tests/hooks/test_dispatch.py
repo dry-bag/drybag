@@ -18,9 +18,10 @@ from drybag.gitenv import _git_toplevel
 from drybag.harnesses import CLAUDE, HARNESSES, Harness
 from drybag.hooks.api import Handler, HookEvent, HookResult, NullSink
 from drybag.hooks.commands import run_hook
-from drybag.hooks.dispatch import TRUNCATION_MARK, Recorder, dispatch, read_event
+from drybag.hooks.dispatch import TRUNCATION_MARK, dispatch, read_event
 from tests.gitfixture import git
 from tests.sessions import NO_CONFIG
+from tests.sinks import Recorder
 
 CLAUDE_ENV = {"CLAUDE_PROJECT_DIR": "/p", "CLAUDE_PLUGIN_ROOT": "/r"}
 
@@ -157,14 +158,24 @@ def test_a_once_key_handler_runs_every_time_under_the_null_sink() -> None:
     assert runs == [1, 1]
 
 
-def test_a_cap_below_the_envelope_is_recorded_and_emits_nothing() -> None:
-    # Not even `{}` fits in 1 character, so the honest output is none at all: anything longer
-    # than the cap is replaced by the platform with a preview and a file path.
+@pytest.mark.parametrize(
+    ("cap", "answer"),
+    [(1, ""), (20, "{}"), (29, '{"systemMessage": "a notice"}')],
+    ids=["not-even-the-empty-object", "the-empty-object", "the-notice-alone"],
+)
+def test_a_cap_too_small_for_the_context_is_recorded_and_answers_what_fits(
+    cap: int, answer: str
+) -> None:
+    # Anything longer than the cap is replaced by the platform with a preview and a file path, so
+    # the answer falls back to what fits, and to none at all when not even `{}` does.
     recorder = Recorder()
-    handlers = [handler("a", HookResult(context="x" * 50))]
-    outcome = dispatch(event(), handlers, NO_CONFIG, harness=CLAUDE, sink=recorder, cap=1)
-    assert outcome.stdout == ""
-    assert recorder.records[0]["error"] == "context-truncated"
+    handlers = [handler("a", HookResult(context="x" * 50), event_name="SessionStart")]
+    session = dataclasses.replace(NO_CONFIG, project_warnings=("a notice",))
+    outcome = dispatch(
+        event("SessionStart"), handlers, session, harness=CLAUDE, sink=recorder, cap=cap
+    )
+    assert outcome.stdout == answer
+    assert "context-truncated" in [record.get("error") for record in recorder.records]
 
 
 def test_the_notice_counts_inside_the_cap_and_is_never_cut() -> None:

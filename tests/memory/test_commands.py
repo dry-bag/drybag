@@ -371,7 +371,7 @@ def test_an_unparseable_note_with_a_crafted_name_is_counted_and_never_printed_ra
     )
     assert_never_raw(captured.out, captured.err)
     assert invoke(["memory", "index", "--check", "--json", *common(project)]) == 1
-    assert json.loads(capsys.readouterr().out)["unreadable"][0].endswith(crafted)
+    assert json.loads(capsys.readouterr().out)["unreadable"][0]["path"].endswith(crafted)
     # A name inside the grammar is still named, so the ordinary case keeps its pointer.
     (notes / crafted).rename(notes / "broken.md")
     assert invoke(["memory", "index", "--check", *common(project)]) == 1
@@ -392,8 +392,25 @@ def test_an_unreadable_note_is_named_store_relative_on_the_line_and_in_json_alik
     argv = ["memory", "index", *(["--check"] if check else []), "--json", *common(project)]
     assert invoke(argv) == (1 if check else 0)
     data = json.loads(capsys.readouterr().out)
-    assert data["unreadable"] == ["developer/broken.md"]
+    assert [entry["path"] for entry in data["unreadable"]] == ["developer/broken.md"]
     assert "developer/broken.md" in data["summary"]
+
+
+def test_index_check_json_gives_each_unreadable_reason(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # `--json` named the files that cannot be read as notes and dropped why, so a person had to
+    # open each one to learn what the reader refused. Each reason is store-relative, as the path
+    # is: the machine's own directory layout is in neither.
+    notes = project / ".drybag" / "local" / "memory" / "developer"
+    (notes / "bare.md").write_text("no frontmatter at all\n", encoding="utf-8")
+    (notes / "open.md").write_text("---\nname: open\n", encoding="utf-8")
+    assert invoke(["memory", "index", "--check", "--json", *common(project)]) == 1
+    data = json.loads(capsys.readouterr().out)
+    assert data["unreadable"] == [
+        {"path": "developer/bare.md", "reason": "no frontmatter; a note opens with '---'"},
+        {"path": "developer/open.md", "reason": "frontmatter is never closed"},
+    ]
 
 
 def test_many_unreadable_notes_are_counted_and_named_at_most_to_the_listed_limit(
@@ -415,7 +432,7 @@ def test_many_unreadable_notes_are_counted_and_named_at_most_to_the_listed_limit
     assert f"{len(broken)} file(s) in the store cannot be read as a note" in line
     assert [name for name in broken if name in line] == broken[:LISTED_LIMIT]
     assert f"{broken[LISTED_LIMIT - 1]}, and 3 more" in line
-    assert data["unreadable"] == broken
+    assert [entry["path"] for entry in data["unreadable"]] == broken
 
 
 def test_the_check_summary_never_says_current_while_the_exit_code_says_otherwise(

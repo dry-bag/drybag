@@ -11,7 +11,7 @@ from tests.tagged import with_tags
 
 
 def _overlay(tmp_path: Path, *tags: str) -> Path:
-    """An overlay whose project `p` lists `tags`, each with a `groups/<tag>/` directory."""
+    """An overlay whose project `p` lists `tags`, each with a `tags/<tag>/` directory."""
     return with_tags(tmp_path / "overlay", "p", list(tags))
 
 
@@ -26,16 +26,16 @@ def test_each_kind_of_item_is_named_with_its_tags_in_list_order_and_the_winner(
 ) -> None:
     overlay = _overlay(tmp_path, "b", "a")
     for tag in ("a", "b"):
-        _hold(overlay, f"groups/{tag}", "claude/rules/r.md")
-        _hold(overlay, f"groups/{tag}", "claude/skills/review/SKILL.md")
-        _hold(overlay, f"groups/{tag}", "claude/agents/helper.md")
-        _hold(overlay, f"groups/{tag}", "codex/c.rules")
+        _hold(overlay, f"tags/{tag}", "claude/rules/r.md")
+        _hold(overlay, f"tags/{tag}", "claude/skills/review/SKILL.md")
+        _hold(overlay, f"tags/{tag}", "claude/agents/helper.md")
+        _hold(overlay, f"tags/{tag}", "codex/c.rules")
     # A dot-named file, a rule that is not Markdown and a name held once collide with nothing.
     for tag in ("a", "b"):
-        _hold(overlay, f"groups/{tag}", "claude/rules/.hidden.md")
-        _hold(overlay, f"groups/{tag}", "claude/rules/notes.txt")
-    _hold(overlay, "groups/a", "claude/rules/only-a.md")
-    found = collisions(plates(overlay, "p")[0], ())
+        _hold(overlay, f"tags/{tag}", "claude/rules/.hidden.md")
+        _hold(overlay, f"tags/{tag}", "claude/rules/notes.txt")
+    _hold(overlay, "tags/a", "claude/rules/only-a.md")
+    found = collisions(plates(overlay, "p", machine=None)[0], ())
     assert sorted(found) == sorted(
         f"the {kind} {name} is held by the tags b, a: the later, a, wins"
         for kind, name in (
@@ -61,7 +61,7 @@ def test_a_setting_two_tag_layers_hold_is_named_and_a_common_one_is_not(tmp_path
         Layer(LayerName.OVERLAY_PROJECT, {"memory.mode": "overlay", "personal.x": 2}),
     )
     overlay = _overlay(tmp_path, "a", "b")
-    assert collisions(plates(overlay, "p")[0], layers) == (
+    assert collisions(plates(overlay, "p", machine=None)[0], layers) == (
         "the setting memory.mode is held by the tags a, b: the later, b, wins",
     )
 
@@ -70,8 +70,8 @@ def test_a_name_off_the_overlays_disk_prints_quoted(tmp_path: Path) -> None:
     # The file name is the owner's, but a name with a line break must not start a line of output.
     overlay = _overlay(tmp_path, "a", "b")
     for tag in ("a", "b"):
-        _hold(overlay, f"groups/{tag}", "claude/rules/x\n::error::y.md")
-    (sentence,) = collisions(plates(overlay, "p")[0], ())
+        _hold(overlay, f"tags/{tag}", "claude/rules/x\n::error::y.md")
+    (sentence,) = collisions(plates(overlay, "p", machine=None)[0], ())
     assert "\n" not in sentence and "\\n::error::y.md" in sentence
 
 
@@ -79,7 +79,49 @@ def test_a_name_held_by_a_tag_and_the_project_alone_is_precedence_and_not_named(
     tmp_path: Path,
 ) -> None:
     overlay = _overlay(tmp_path, "a")
-    _hold(overlay, "groups/a", "claude/rules/r.md")
+    _hold(overlay, "tags/a", "claude/rules/r.md")
     _hold(overlay, "projects/p", "claude/rules/r.md")
     _hold(overlay, "common", "claude/rules/r.md")
-    assert collisions(plates(overlay, "p")[0], ()) == ()
+    assert collisions(plates(overlay, "p", machine=None)[0], ()) == ()
+
+
+def _sub_plate(overlay: Path, plate: str, relative: str, machine: str = "m1") -> None:
+    _hold(overlay, f"{plate}/machines/{machine}", relative)
+
+
+def test_a_tag_and_its_sub_plate_do_not_collide(tmp_path: Path) -> None:
+    # A sub-plate refines its own tag, which is precedence and is not named. Mutation (oracle):
+    # `mutations/`'s "a tag's sub-plate is counted as a tag of its own".
+    overlay = _overlay(tmp_path, "t1")
+    _hold(overlay, "tags/t1", "claude/skills/review/SKILL.md")
+    _sub_plate(overlay, "tags/t1", "claude/skills/review/SKILL.md")
+    assert collisions(plates(overlay, "p", machine="m1")[0], ()) == ()
+
+
+def test_a_tag_and_its_sub_plate_setting_one_key_do_not_collide(tmp_path: Path) -> None:
+    # The value path keys a layer by its label, which a sub-plate's layer shares with its tag.
+    # Mutation (oracle): `mutations/`'s "a tag's sub-plate layer is counted as a tag of its own".
+    layers = (
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "harness"}, "t1"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t1", "m1"),
+        Layer(LayerName.OVERLAY_COMMON, {"memory.mode": "overlay"}, "", "m1"),
+    )
+    overlay = _overlay(tmp_path, "t1")
+    assert collisions(plates(overlay, "p", machine="m1")[0], layers) == ()
+
+
+def test_two_tags_sub_plates_still_collide(tmp_path: Path) -> None:
+    overlay = _overlay(tmp_path, "t1", "t2")
+    for tag in ("t1", "t2"):
+        _hold(overlay, f"tags/{tag}", "claude/skills/review/SKILL.md")
+        _sub_plate(overlay, f"tags/{tag}", "claude/skills/review/SKILL.md")
+    layers = (
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "harness"}, "t1"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t1", "m1"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "harness"}, "t2"),
+        Layer(LayerName.OVERLAY_TAG, {"memory.mode": "overlay"}, "t2", "m1"),
+    )
+    assert collisions(plates(overlay, "p", machine="m1")[0], layers) == (
+        "the skill review is held by the tags t1, t2: the later, t2, wins",
+        "the setting memory.mode is held by the tags t1, t2: the later, t2, wins",
+    )

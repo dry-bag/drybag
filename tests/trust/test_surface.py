@@ -1,7 +1,6 @@
 """The trust package's `api.py` is held to the same contract every other area's is.
 
-CONTRIBUTING states it once for all of them: the list "is what consumers actually reach for, not
-what the area finds tidy"."""
+CONTRIBUTING states that contract once for all of them."""
 
 from __future__ import annotations
 

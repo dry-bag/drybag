@@ -49,8 +49,11 @@ def _attached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, bound: bool) -
 
 
 def _context(stdout: str) -> str | None:
-    context = json.loads(stdout).get("hookSpecificOutput", {}).get("additionalContext")
-    assert context is None or isinstance(context, str)
+    answer = json.loads(stdout)
+    if answer == {}:
+        return None
+    context = answer["hookSpecificOutput"]["additionalContext"]
+    assert isinstance(context, str)
     return context
 
 
@@ -97,5 +100,5 @@ def test_a_read_of_a_scoped_file_carries_its_rule_once_per_session(
     assert read("Read", "s1") == said
     assert read("Edit", "s1") is None
     assert read("Write", "s2") == said
-    # The core plugin's own `PostToolUse` entry matches `Bash`, whose input names no file.
+    # A `Bash` call's input names no file.
     assert read("Bash", "s3") is None

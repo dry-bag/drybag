@@ -26,7 +26,7 @@ from tests.tagged import with_tags
 
 
 def render(overlay: Path, project: str, id: str) -> RenderRecord:
-    return write(id, read_parts(plates(overlay, project)[0]))
+    return write(id, read_parts(plates(overlay, project, machine=None)[0]))
 
 
 ID = "0123456789abcdef0123456789abcdef"
@@ -116,7 +116,6 @@ def test_render_writes_the_marketplace_and_the_plugin_under_names_carrying_the_w
     assert (delivery / "plugin" / "agents" / "helper.md").read_text() == "helper\n"
     # A copied file keeps its mode: a skill's script stays executable.
     assert (delivery / "plugin" / "skills" / "review" / "check.sh").stat().st_mode & 0o777 == 0o750
-    assert record.id == ID
     assert len([p for p in delivery.rglob("*") if p.is_file()]) == 6
     assert record.digest == _digest(delivery)
 
@@ -254,7 +253,7 @@ def test_a_tag_hook_group_is_rendered_between_common_and_the_project(tmp_path: P
     overlay = _overlay(tmp_path)
     with_tags(overlay, "p", ["a"], "claude")
     tagged = {"type": "command", "command": "tag.sh"}
-    (overlay / "groups" / "a" / "claude" / "hooks.json").write_text(
+    (overlay / "tags" / "a" / "claude" / "hooks.json").write_text(
         json.dumps({"hooks": {"SessionStart": [{"hooks": [tagged]}]}}), encoding="utf-8"
     )
     render(overlay, "p", ID)
@@ -275,11 +274,11 @@ def test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole(tmp_path: Path)
     overlay = _overlay(tmp_path)
     with_tags(overlay, "p", ["a", "b"], "claude")
     for tag in ("a", "b"):
-        skills = overlay / "groups" / tag / "claude" / "skills"
+        skills = overlay / "tags" / tag / "claude" / "skills"
         (skills / "review").mkdir(parents=True)
         (skills / "review" / "SKILL.md").write_text(f"review from {tag}\n", encoding="utf-8")
         (skills / f"only-{tag}.md").write_text(f"{tag}\n", encoding="utf-8")
-    (overlay / "groups" / "a" / "claude" / "skills" / "review" / "helper.sh").write_text(
+    (overlay / "tags" / "a" / "claude" / "skills" / "review" / "helper.sh").write_text(
         "from a only\n", encoding="utf-8"
     )
     render(overlay, "p", ID)
@@ -287,7 +286,7 @@ def test_a_tag_skill_is_rendered_and_a_later_plate_wins_it_whole(tmp_path: Path)
     assert sorted(path.name for path in (skills / "review").iterdir()) == ["SKILL.md"]
     assert (skills / "review" / "SKILL.md").read_text() == "review from b\n"
     assert (skills / "only-a.md").read_text() == "a\n" and (skills / "only-b.md").is_file()
-    assert collisions(plates(overlay, "p")[0], ()) == (
+    assert collisions(plates(overlay, "p", machine=None)[0], ()) == (
         "the skill review is held by the tags a, b: the later, b, wins",
     )
 
@@ -297,16 +296,16 @@ def test_a_rule_a_codex_file_and_a_skill_take_one_winner_and_one_order(tmp_path:
     # so the common-only `y` comes before the tag's `x`, and common's `x/extra.md` is not copied.
     overlay = _overlay(tmp_path)
     with_tags(overlay, "p", ["a"], "claude")
-    for plate, name in (("common", "x"), ("common", "y"), ("groups/a", "x")):
+    for plate, name in (("common", "x"), ("common", "y"), ("tags/a", "x")):
         for relative in ("claude/rules/{}.md", "codex/{}.rules", "claude/skills/{}/SKILL.md"):
             (overlay / plate / relative.format(name)).parent.mkdir(parents=True, exist_ok=True)
             (overlay / plate / relative.format(name)).write_text(f"{plate}\n", encoding="utf-8")
     (overlay / "common" / "claude" / "skills" / "x" / "extra.md").write_text("", encoding="utf-8")
-    held = plates(overlay, "p")[0]
+    held = plates(overlay, "p", machine=None)[0]
     binding = Binding("p", overlay, tmp_path, None, None, "", plates=held)
     rules = [(rule.name, rule.body) for rule in rules_read(held)]
     codex = [(target, source.read_text()) for target, source in codex_rules(binding)]
     skills = [(name, part.text) for name, part in read_parts(held).items() if "skills/" in name]
-    assert rules == [("y.md", "common"), ("x.md", "groups/a")]
-    assert codex == [(".codex/rules/y.rules", "common\n"), (".codex/rules/x.rules", "groups/a\n")]
-    assert skills[2:] == [("skills/y/SKILL.md", "common\n"), ("skills/x/SKILL.md", "groups/a\n")]
+    assert rules == [("y.md", "common"), ("x.md", "tags/a")]
+    assert codex == [(".codex/rules/y.rules", "common\n"), (".codex/rules/x.rules", "tags/a\n")]
+    assert skills[2:] == [("skills/y/SKILL.md", "common\n"), ("skills/x/SKILL.md", "tags/a\n")]

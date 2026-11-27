@@ -398,6 +398,11 @@ def test_a_repository_that_is_not_a_template_is_not_generated_from(tmp_path: Pat
             "gh could not be run",
             id="gh-absent",
         ),
+        pytest.param(
+            Completed(126, "", "gh could not be run: [Errno 13] gh"),
+            "…` could not be run",
+            id="gh-not-started",
+        ),
         pytest.param(Completed(124, "", "gh did not answer in 300s"), "300s", id="gh-hung"),
         pytest.param(Completed(0, "not json at all\n", ""), "not json at all", id="not-json"),
         pytest.param(Completed(0, '{"isTemplate": "yes"}\n', ""), "yes", id="not-a-boolean"),

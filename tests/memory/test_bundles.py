@@ -12,6 +12,7 @@ from drybag.config.loader import CONFIG_FILE, load
 from drybag.config.schema import Config
 from drybag.memory.bundles import (
     CAP_MARGIN,
+    PENDING_LEAD,
     SLOTS,
     STANDING_LEAD,
     VOLATILE_LEAD,
@@ -179,12 +180,28 @@ def test_an_in_repo_store_reaches_volatile_notes_as_data_and_never_the_standing_
     store, config = a_store(tmp_path, mode="in-repo", reviewed=False)
     volatile = blocks(Bundle.VOLATILE_NOTES, store, config)
     assert volatile[0] == VOLATILE_LEAD
-    assert volatile[1:] != []
-    assert all(block.startswith(DELIMITER) for block in volatile[1:])
+    notes = [block for block in volatile if block not in (VOLATILE_LEAD, PENDING_LEAD)]
+    assert notes != []
+    assert all(block.startswith(DELIMITER) for block in notes)
     assert "fresh" in "\n".join(volatile)
     assert "### first [unreviewed]" in "\n".join(volatile)
     assert blocks(Bundle.STANDING_RULES, store, config) == []
     assert not (tmp_path / "trust.json").exists()
+
+
+@pytest.mark.parametrize("budget", [2500, 1], ids=["in-full", "over-budget"])
+def test_an_unreviewed_standing_note_has_its_own_lead(tmp_path: Path, budget: int) -> None:
+    # A note ranked for the session and not yet promoted was said under the volatile lead, as a
+    # dated, perishable fact to verify and delete, which it is not. It has a lead of its own after
+    # the volatile notes, and stays labelled and inside the data region.
+    store, config = a_store(tmp_path, mode="in-repo", reviewed=False, volatile_words=budget)
+    volatile = blocks(Bundle.VOLATILE_NOTES, store, config)
+    assert volatile[0] == VOLATILE_LEAD
+    lead = volatile.index(PENDING_LEAD)
+    before, after = "\n".join(volatile[:lead]), "\n".join(volatile[lead + 1 :])
+    assert "fresh" in before and "first" not in before
+    assert "first [unreviewed]" in after and "fresh" not in after
+    assert all(block.startswith(DELIMITER) for block in volatile[lead + 1 :])
 
 
 def test_an_overlay_store_is_not_wrapped_as_repository_data(tmp_path: Path) -> None:
@@ -513,3 +530,68 @@ def test_the_standing_rules_bundle_carries_a_reviewed_note_with_no_file(
     code, out, err = cli(root, tmp_path, *argv, machine=machine)
     assert (code, err) == (0, "")
     assert "keep" in out
+
+
+@needs_git
+def test_session_start_bundle_carries_a_machine_sub_plate_note(tmp_path: Path) -> None:
+    # The oracle that the feature is alive, through the real reader: a note in
+    # `common/machines/m1/memory/` reaches the bundle a session start reads, on m1 and not on m2.
+    # Mutation (oracle): `mutations/`'s "the walk leaves out the machine groups".
+    from drybag.memory.composed import build
+
+    _store, _config, machine, overlay = a_resolved_overlay_store(tmp_path)
+    root = tmp_path / "project"
+    sub = overlay / "common" / "machines" / "m1" / "memory"
+    sub.mkdir(parents=True)
+    (sub / "on-m1.md").write_text(note("on-m1", startup="3"), encoding="utf-8")
+    id = binding.read_id(root)
+    assert id is not None
+    argv = ("memory", "session-context", "--bundle", "standing-rules", "--part", "1")
+    for name, expected in (("m1", True), ("m2", False)):
+        machine.write_text(
+            f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "{name}"\n', encoding="utf-8"
+        )
+        build(overlay, "widget", id, machine=name)
+        store = resolve(root, load(root, machine=machine), machine=machine)
+        assert store is not None
+        review(store)
+        code, out, err = cli(root, tmp_path, *argv, machine=machine)
+        assert (code, err) == (0, "")
+        assert ("on-m1" in out) is expected
+
+
+@needs_git
+@pytest.mark.parametrize("parent", ["tag", "common"])
+def test_a_sub_plates_note_reaches_the_bundle_where_its_parent_has_no_notes(
+    tmp_path: Path, parent: str
+) -> None:
+    # A tag of `claude/` items only, or an overlay with no `common/memory/`: the sub-plate's group
+    # is walked where its parent's would be. Mutation (oracle): `mutations/`'s "the walk reaches a
+    # tag's sub-plate only through the tag's link" and "the walk reaches the common sub-plate only
+    # through the common notes".
+    from drybag.memory.composed import build
+
+    _store, _config, machine, overlay = a_resolved_overlay_store(tmp_path)
+    root = tmp_path / "project"
+    if parent == "common":
+        shutil.rmtree(overlay / "common" / "memory")
+        plate = overlay / "common"
+    else:
+        record = overlay / "projects" / "widget" / "project.toml"
+        record.write_text('tags = ["t1"]\n' + record.read_text(encoding="utf-8"), encoding="utf-8")
+        plate = overlay / "tags" / "t1"
+        (plate / "claude").mkdir(parents=True)
+    sub = plate / "machines" / "m1" / "memory"
+    sub.mkdir(parents=True)
+    (sub / "n.md").write_text(note("on-m1", startup="3"), encoding="utf-8")
+    machine.write_text(f'[overlay]\nroot = "{overlay}"\n\n[machine]\nname = "m1"\n', "utf-8")
+    id = binding.read_id(root)
+    assert id is not None
+    build(overlay, "widget", id, machine="m1")
+    store = resolve(root, load(root, machine=machine), machine=machine)
+    assert store is not None
+    review(store)
+    argv = ("memory", "session-context", "--bundle", "standing-rules", "--part", "1")
+    code, out, err = cli(root, tmp_path, *argv, machine=machine)
+    assert (code, err) == (0, "")
+    assert "on-m1" in out

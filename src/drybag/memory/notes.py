@@ -31,17 +31,16 @@ from drybag import fsops
 from drybag.errors import Failure
 from drybag.fsops import read_regular_text, said, utf_8_name, write_atomically
 
-# Sort sentinel for a note whose `startup` metadata could not be parsed as an int. Not a named cap
-# (CONTRIBUTING.md#named-caps): it bounds nothing, and only needs to sort after every real startup
-# rank the corpus can hold.
-UNRANKED = 10_000
 FENCE = "---"
 _KEY = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_]*):(?P<rest>.*)$")
 _NOT_A_RULE = frozenset({"false", "no", "off"})
 DECLARED = ("name", "description", "index", "index_provenance", "group", "group_order")
 # Why `walk` quarantines a note by its file's name alone: the index links to every note by that
-# name, verbatim, and `MEMORY.md` is UTF-8.
+# name, verbatim, one line each, and `MEMORY.md` is UTF-8.
 NAME_NOT_UTF_8 = "the file's name is not UTF-8, so the index cannot name it; rename the file"
+NAME_NOT_ONE_LINE = (
+    "the file's name or its group's holds a line break, so the index cannot name it; rename it"
+)
 
 
 class NoteError(Failure):
@@ -97,10 +96,8 @@ def is_one_line(value: str) -> bool:
     `str.splitlines()` is the oracle, not a scan for `"\\n"`, because `_split` below finds the
     frontmatter fence with `splitlines()` — so the characters that decide where a note's
     frontmatter ends are exactly the ones it breaks on: `\\n`, `\\r`, `\\x0b`, `\\x0c`, `\\x1c`,
-    `\\x1d`, `\\x1e`, `\\x85`, U+2028 and U+2029. A guard that named its own two (`"\\n"` and
-    `"\\r"`, the two `read_text`'s universal newlines and `_ENTRY` had already made
-    unreachable) both over- and under-shot; asking the same function the parser asks is what
-    keeps them from drifting apart again. `index._extra` asks this too, for the same value
+    `\\x1d`, `\\x1e`, `\\x85`, U+2028 and U+2029. Asking the same function the parser asks keeps
+    the two from drifting apart. `index._extra` asks this too, for the same value
     rendered into the same one-line frontmatter by another route.
 
     `value.splitlines() == [value]` rather than `len(value.splitlines()) > 1`: a value that
@@ -191,10 +188,8 @@ class Note:
         raw = self.metadata.get("startup")
         if raw is None or raw.strip().lower() in _NOT_A_RULE:
             return None
-        try:
-            return int(raw)
-        except ValueError:
-            return UNRANKED
+        # A rank makes the note a standing rule, so a value that is not one is no rank.
+        return _parse_int(raw)
 
     @property
     def as_of(self) -> date | None:
@@ -215,12 +210,9 @@ class Note:
         """The store group a note belongs to, as `memory.groups` spells it. `group` is a
         sub-heading *inside* that section.
 
-        `path.parent.name` was the whole answer, and it is only the right one while every
-        configured group is a single path segment — which nothing checks. `contained()` admits
-        `"team/project-stable"` and `walk` finds the notes under it, but the folder's name is
-        then `"project-stable"` while `render_index` looks each group up by its configured
-        string: the section matched nothing and vanished from `MEMORY.md` entirely, with
-        `memory index --check` reporting "index is current" and exiting 0.
+        `path.parent.name` is the right answer only while every configured group is a single
+        path segment, which nothing checks: for `"team/project-stable"` the folder's name is
+        `"project-stable"`, while `render_index` looks each group up by its configured string.
         """
         return self.store_group or self.path.parent.name
 
@@ -238,12 +230,10 @@ def _split(text: str, path: Path) -> tuple[list[str], str, str]:
     reader are written against. `verbatim` is the bytes after the closing fence, untouched, and
     is what `render_note` writes back when nothing changed it.
 
-    Without the second, `Note.raw`'s own claim that "an unchanged note round-trips byte for
-    byte" was true of the frontmatter and false of the body: a CRLF note, a note with two blank
-    lines before its first paragraph, or one with no trailing newline came back renormalised.
-    The first `memory index` over a store somebody else's tool wrote therefore produced exactly
-    the unreviewable diff this module exists to prevent — for *some* notes, which is harder to
-    notice than for all of them.
+    The second is what makes `Note.raw`'s "an unchanged note round-trips byte for byte" true of
+    the body: a CRLF note, a note with two blank lines before its first paragraph, or one with no
+    trailing newline comes back as it was, so `memory index` over a store somebody else's tool
+    wrote produces no unreviewable diff.
     """
     kept = text.splitlines(keepends=True)
     lines = [line.rstrip("\r\n") for line in kept]
@@ -351,7 +341,7 @@ def _still_the_read_time_default(key: str, value: str | None, note: Note) -> boo
     """True when a declared key absent from the file carries only the harmless default
     `read_note` fills in for convenience (`""` for `description`, the file stem for `name`)
     rather than a value this run actually decided to write. Writing it in would invent a
-    line the file never had — the exact defect a real note without `description:` exposed.
+    line the file never had.
     """
     if key in note.original:
         return False
@@ -451,10 +441,14 @@ def walk(store: Path, groups: Sequence[str]) -> Walk:
             if fsops.is_symlink(path):
                 skipped.append(path)
                 continue
-            # The index names a note by its file's name, and `MEMORY.md` is UTF-8: a name the
-            # disk holds in other bytes cannot be written into it, so the note is unreadable.
+            # The index names a note by its group and file name, on one line, and `MEMORY.md` is
+            # UTF-8: a name the disk holds in other bytes, or one that breaks a line, cannot be
+            # written into it, so the note is unreadable.
             if not utf_8_name(path.name):
                 unreadable.append((path, f"{path}: {NAME_NOT_UTF_8}"))
+                continue
+            if not is_one_line(f"{group}/{path.name}"):
+                unreadable.append((path, f"{path}: {NAME_NOT_ONE_LINE}"))
                 continue
             try:
                 found.append(replace(read_note(path), store_group=group))

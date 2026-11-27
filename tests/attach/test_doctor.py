@@ -9,24 +9,38 @@ fixtures are the doctor area's own (`tests/doctor/test_checks.py`), shared rathe
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import subprocess
+from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from drybag import binding
 from drybag.attach import doctor as attach_doctor
+from drybag.attach import hooks as attach_hooks
 from drybag.attach.api import LOCAL_SETTINGS
 from drybag.attach.check import check as attach_check
+from drybag.attach.mcp import BAD_LEDGER, UNUSABLE, McpLedger, digest, write_mcp_ledger
 from drybag.attach.render import MARKETPLACE_FILE, read_parts
 from drybag.attach.render import write as render_write
 from drybag.attach.write import attach
-from drybag.binding import LEDGER_NAME, delivery_directory
+from drybag.binding import (
+    LEDGER_NAME,
+    MCP_LEDGER_FILE,
+    MCP_LEDGER_NAME,
+    common_directory,
+    delivery_directory,
+)
 from drybag.config.loader import CONFIG_FILE, load
 from drybag.config.plates import plates
 from drybag.doctor import checks as doctor_checks
 from drybag.doctor.api import OK, RED, SKIP, WARN, Check
 from drybag.errors import Refusal
+from drybag.hooks.api import HookEvent
 from drybag.memory.api import PROJECTS, RECORD
 from drybag.overlay.api import COMMON_CLAUDE, COMMON_CODEX
 from drybag.printed import quoted
@@ -52,6 +66,7 @@ from tests.doctor.test_checks import (
 from tests.gitfixture import git as _git
 from tests.parserlimits import LONG_NUMBER
 from tests.runners import Recorder
+from tests.sessions import NO_CONFIG
 from tests.tagged import with_tags
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
@@ -363,7 +378,8 @@ UNREADABLE_LEDGER_ATTACHED = Check(
     "warn",
     f"{LEDGER_NAME} is here and cannot be read as a ledger, so nothing in it can be corroborated "
     f"and this checkout's attach state is unknown",
-    f"remove {LEDGER_NAME}, then run `drybag attach --check`",
+    f"take back by hand what {LEDGER_NAME} records, move it aside, then run "
+    "`drybag attach --check`",
 )
 
 
@@ -413,16 +429,16 @@ def test_one_report_resolves_the_overlay_root_once_for_every_area(
     # nothing caches the `git` answers they ask, so this counts only the reads through the
     # `Context`. Mutation (oracle): `mutations/`'s "the report resolves the overlay root for every
     # reader" -> five reads, three of `attach`'s and two of `overlay`'s.
-    from drybag.config.overlay import overlay_root
+    from drybag.config.overlay import MachineRecord, machine_record
 
     asked: list[Path | None] = []
 
-    def counted(machine: Path | None) -> Path | None:
+    def counted(machine: Path | None) -> MachineRecord:
         asked.append(machine)
-        return overlay_root(machine)
+        return machine_record(machine)
 
     # The name the report's `Context` calls the machine file's reader by, in `doctor.model`.
-    monkeypatch.setattr("drybag.doctor.model.recorded_overlay_root", counted)
+    monkeypatch.setattr("drybag.doctor.model.recorded_machine_record", counted)
     root = _attached(tmp_path)
     rows = _checks(tmp_path, root, machine=_machine(tmp_path))
     # Non-vacuous: both areas read the root, and found the overlay there.
@@ -509,6 +525,21 @@ def test_a_copy_the_team_committed_is_no_finding_once_the_overlay_dropped_it(
     attach(root, store=store, machine=machine, runner=run)
     row = _by_name(_checks(tmp_path, root, machine=machine), "attached")
     assert row.status != RED and "tracks" not in row.detail
+
+
+def test_the_attached_row_names_a_refused_rebind(tmp_path: Path) -> None:
+    # A pulled commit renames `[project] name`, so the ledger's store is another project's: the row
+    # said only that the store is not this project's directory. It says the rebind as `attach`
+    # refuses it, with `--project` as the way out. A message, so no mutation entry.
+    from drybag.attach.binding import REBIND
+
+    root, store, machine = _attachable(tmp_path)
+    attach(root, store=store, machine=machine, runner=Recorder())
+    named = (root / CONFIG_FILE).read_text(encoding="utf-8").replace('name = "p"', 'name = "q"')
+    (root / CONFIG_FILE).write_text(named, encoding="utf-8")
+    row = _by_name(_checks(tmp_path, root, machine=machine), "attached")
+    assert (row.status, row.remedy) == (WARN, "run `drybag attach --project q`")
+    assert REBIND.format(bound="p", named="q") in row.detail
 
 
 @pytest.mark.parametrize(
@@ -678,6 +709,20 @@ def test_a_placed_path_a_gitignore_re_includes_is_red(tmp_path: Path) -> None:
     assert (row.status, row.detail) == (RED, _attached_detail(clause))
 
 
+def test_a_session_start_counts_the_placed_paths_a_gitignore_re_includes(tmp_path: Path) -> None:
+    # The same state, said where someone is about to stage it: a hint, once per context, and a
+    # `compact` is the context asking again. Mutation (`mutations/`'s "the session start stops
+    # counting what a `.gitignore` re-included"): the count is 0 -> the second assertion reddens.
+    root = _attached(tmp_path)
+    handler = next(h for h in attach_hooks.register() if h.name == "overlay-placed-shown")
+    assert handler.once_key == "overlay-placed-shown"
+    event = HookEvent("SessionStart", "s", None, None, {}, root, root, {})
+    assert handler.run(event, NO_CONFIG).context is None
+    (root / ".gitignore").write_text(f"!{LOCAL_SETTINGS}\n", encoding="utf-8")
+    assert handler.run(event, NO_CONFIG).context == attach_hooks.PLACED_SHOWN.format(count=1)
+    assert handler.run(replace(event, raw={"source": "compact"}), NO_CONFIG).context is None
+
+
 def test_a_tracked_file_naming_the_delivery_is_red_and_never_prints_the_id(tmp_path: Path) -> None:
     # The delivery's name carries the binding id, the one name a clone would need to run this
     # machine's delivery; a tracked file holding it is a leak on its way out. Asked for the whole
@@ -762,7 +807,9 @@ def test_a_launcher_the_path_scoped_rules_run_through_that_is_gone_warns(tmp_pat
     (rules / "scoped.md").write_text("---\npaths: src/**\n---\nA rule.\n", encoding="utf-8")
     gone = tmp_path / "gone" / "run-hook.sh"
     command = f'"{gone}" hook PostToolUse'
-    rendered = render_write(_id(root), read_parts(plates(overlay, "p")[0], command=command))
+    rendered = render_write(
+        _id(root), read_parts(plates(overlay, "p", machine=None)[0], command=command)
+    )
     _ledger_field(root, render={"digest": rendered.digest})
     assert _delivered_row(tmp_path, root) == Check(
         "attached",
@@ -845,7 +892,7 @@ def test_the_attached_row_reads_the_main_checkouts_pointer_from_every_checkout(
 
 
 def _tag_file(overlay: Path, tag: str, relative: str, text: str = "x\n") -> None:
-    path = overlay / "groups" / tag / relative
+    path = overlay / "tags" / tag / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
 
@@ -877,23 +924,27 @@ def test_two_tags_setting_one_key_is_a_warning(tmp_path: Path) -> None:
 def test_a_listed_tag_with_no_directory_is_a_warning(tmp_path: Path) -> None:
     root = _attached(tmp_path)
     with_tags(tmp_path / "overlay", "p", ["a"])
-    shutil.rmtree(tmp_path / "overlay" / "groups" / "a")
+    shutil.rmtree(tmp_path / "overlay" / "tags" / "a")
     row = _delivered_row(tmp_path, root)
     assert row.status == WARN and row.remedy == attach_doctor.TAGS_REMEDY
-    assert "the tag a has no directory groups/a; it is skipped" in row.detail
+    assert "the tag a has no directory tags/a; it is skipped" in row.detail
 
 
 def test_doctor_names_a_project_memory_directory_in_the_tag_namespace(tmp_path: Path) -> None:
     # `tag-` is a tag's link name in the composed store, so the project's own directory of that
-    # name is not linked: the warning names it, in the tags finding.
+    # name is not linked: the warning names it, in the tags finding. So is a machine sub-plate's
+    # link shape, and no other `machine-...` name.
     root = _attached(tmp_path)
     memory = tmp_path / "overlay" / PROJECTS / "p" / "memory"
     (memory / "tag-a").mkdir(parents=True)
     (memory / "tag-file").write_text("not a directory\n", encoding="utf-8")
+    (memory / "machine-m1-project").mkdir()
+    (memory / "machine-notes").mkdir()
     row = _delivered_row(tmp_path, root)
     assert row.status == WARN and row.remedy == attach_doctor.TAGS_REMEDY
     assert attach_doctor.RESERVED_GROUP.format(name="tag-a") in row.detail
-    assert "tag-file" not in row.detail
+    assert attach_doctor.RESERVED_GROUP.format(name="machine-m1-project") in row.detail
+    assert "tag-file" not in row.detail and "machine-notes" not in row.detail
 
 
 def test_a_tag_warning_never_hides_a_red_finding(tmp_path: Path) -> None:
@@ -906,3 +957,172 @@ def test_a_tag_warning_never_hides_a_red_finding(tmp_path: Path) -> None:
     assert row.status == RED
     assert attach_doctor.TAGS_REMEDY not in row.remedy
     assert "render directory" in row.detail
+
+
+# --- the overlay's MCP servers, read from the overlay and the ledger alone ---------------------
+
+A, D = {"command": "a"}, {"command": "d"}
+
+
+def _mcp_file(overlay: Path, plate: str, servers: Mapping[str, object]) -> None:
+    path = overlay / plate / "claude" / "mcp.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"mcpServers": servers}), encoding="utf-8")
+
+
+def _named_machine(tmp_path: Path, name: str) -> Path:
+    """`_machine`, with `[machine] name` set, so the plates' `machines/<name>/` sub-plates apply."""
+    path = _machine(tmp_path)
+    with path.open("a", encoding="utf-8") as file:
+        file.write(f'[machine]\nname = "{name}"\n')
+    return path
+
+
+def _mcp_row(tmp_path: Path, root: Path, machine: Path | None = None) -> Check:
+    return _by_name(_checks(tmp_path, root, machine=machine or _machine(tmp_path)), "attached")
+
+
+def test_doctor_attributes_each_served_name_to_its_plates(tmp_path: Path) -> None:
+    # Each name the overlay delivers with the plate whose definition wins and, where another one
+    # set its state, that plate too; each name switched off with the plate that said so. A
+    # sub-plate is its parent's path and the machine, as the values' provenance says it.
+    root = _attached(tmp_path)
+    overlay = with_tags(tmp_path / "overlay", "p", ["t1"])
+    _mcp_file(overlay, "common", {"alpha": A, "gamma": {"command": "g"}})
+    _mcp_file(overlay, "tags/t1/machines/m1", {"alpha": "on", "beta": "off"})
+    _mcp_file(overlay, "projects/p", {"delta": D, "gamma": "off"})
+    write_mcp_ledger(root, McpLedger(mcp={"alpha": digest(A), "delta": digest(D)}))
+    row = _mcp_row(tmp_path, root, _named_machine(tmp_path, "m1"))
+    assert row.status == OK, row
+    assert (
+        "MCP servers the overlay delivers: alpha (defined in common, switched on in tags/t1 on "
+        "m1), delta (projects/p)" in row.detail
+    )
+    assert (
+        "MCP servers the overlay switches off: beta (tags/t1 on m1), gamma (projects/p)"
+        in row.detail
+    )
+    assert attach_doctor.MCP_UNSEEN in row.detail
+
+
+def test_doctor_names_the_allowlist_and_the_plate_that_asks_for_it(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": A, "user1": "on"})
+    _mcp_file(tmp_path / "overlay", "projects/p", {"*": "off"})
+    write_mcp_ledger(root, McpLedger(mcp={"alpha": digest(A)}, allow=("alpha", "user1")))
+    row = _mcp_row(tmp_path, root)
+    assert row.status == OK, row
+    assert 'MCP allowlist ("*" off in projects/p): only alpha, user1 may load' in row.detail
+
+
+@pytest.mark.parametrize("asked", [True, False], ids=["unwritten", "not-taken-back"])
+def test_doctor_warns_of_an_allowlist_attach_has_yet_to_write_or_take_back(
+    tmp_path: Path, asked: bool
+) -> None:
+    root = _attached(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"*": "off"} if asked else {})
+    write_mcp_ledger(root, McpLedger(allow=None if asked else ()))
+    row = _mcp_row(tmp_path, root)
+    assert (row.status, row.remedy) == (WARN, RERUN), row
+    assert attach_doctor.MCP_ALLOWLIST_PENDING.format(ledger=MCP_LEDGER_NAME) in row.detail
+
+
+def test_doctor_warns_of_each_name_attach_would_deliver_or_take_back(tmp_path: Path) -> None:
+    # As a drifted hook is: a served name not delivered, one under another digest or unsettled,
+    # and one the ledger owns that the overlay no longer serves.
+    root = _attached(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": A, "beta": A, "delta": D, "eps": A})
+    owned = {"alpha": None, "beta": digest(D), "eps": digest(A), "gone": digest(A)}
+    write_mcp_ledger(root, McpLedger(mcp=owned))
+    row = _mcp_row(tmp_path, root)
+    assert (row.status, row.remedy) == (WARN, RERUN), row
+    names = "alpha, beta, delta, gone"
+    pending = attach_doctor.MCP_PENDING.format(ledger=MCP_LEDGER_NAME, names=names)
+    assert pending in row.detail
+
+
+def test_doctor_says_why_attach_would_change_nothing_mcp(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    path = tmp_path / "overlay" / "common" / "claude" / "mcp.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<<<<<<< HEAD", encoding="utf-8")
+    (common_directory(root) / MCP_LEDGER_FILE).write_text('{"format": 2}', encoding="utf-8")
+    row = _mcp_row(tmp_path, root)
+    assert row.status == WARN and row.remedy.startswith("make each MCP file named readable"), row
+    assert UNUSABLE.format(path=quoted(str(path))) in row.detail
+    assert BAD_LEDGER.format(name=MCP_LEDGER_NAME) in row.detail
+
+
+def test_a_lone_surrogate_in_an_mcp_definition_leaves_the_row_unred(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"m1": {"command": "a", "args": ["\ud800"]}})
+    assert _mcp_row(tmp_path, root).status != RED
+
+
+def _names_claude(argv: list[str]) -> bool:
+    """Whether any word of `argv` is a `claude` executable, by name or by path."""
+    return any(Path(word).name == "claude" for item in argv for word in item.split())
+
+
+def _launches(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Every process this process starts from here on, by argv, at each layer a launch reaches:
+    `subprocess.Popen`, under `subprocess.run` and every runner, and the `os` calls beneath and
+    beside it. A `claude` launch is recorded, then refused before it can start."""
+    launched: list[list[str]] = []
+
+    def watched(original: Any, at: int, keyword: str = "args") -> Any:
+        def launch(*args: Any, **kwargs: Any) -> Any:
+            raw = kwargs[keyword] if keyword in kwargs else args[at]
+            items = [raw] if isinstance(raw, (str, bytes, os.PathLike)) else list(raw)
+            argv = [os.fsdecode(item) for item in items]
+            launched.append(argv)
+            if _names_claude(argv):
+                raise AssertionError(f"a claude launch: {argv}")
+            return original(*args, **kwargs)
+
+        return launch
+
+    monkeypatch.setattr(subprocess.Popen, "__init__", watched(subprocess.Popen.__init__, 1))
+    monkeypatch.setattr(os, "system", watched(os.system, 0, "command"))
+    for name in ("posix_spawn", "posix_spawnp", "execv", "execve", "execvp", "execvpe"):
+        if hasattr(os, name):
+            monkeypatch.setattr(os, name, watched(getattr(os, name), 1, "argv"))
+    return launched
+
+
+def test_doctor_runs_no_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # `claude mcp get` and `list` health-check what they name: they spawn a stdio server and run a
+    # `headersHelper`. So the finding reads the overlay and the ledger and launches nothing: the
+    # report of a checkout whose ledger owns names starts exactly the processes the same report
+    # with the finding taken out starts, and no `claude` among them.
+    root = _attached(tmp_path)
+    machine = _machine(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": A, "beta": "off"})
+    write_mcp_ledger(root, McpLedger(mcp={"alpha": None, "gamma": "0" * 64}))
+    launched = _launches(monkeypatch)
+    with monkeypatch.context() as without_mcp:
+        without_mcp.setattr(attach_doctor, "_mcp", lambda _bound, _recorded: [])
+        _checks(tmp_path, root, machine=machine)
+    without = list(launched)
+    assert without, "the patched layers saw no launch at all, so they watch nothing"
+    launched.clear()
+    row = _by_name(_checks(tmp_path, root, machine=machine), "attached")
+    assert not [argv for argv in launched if _names_claude(argv)], launched
+    assert launched == without
+    assert "alpha" in row.detail, row
+
+
+# A value only a secret would hold, absent from every row of the report whatever it says.
+MARKER = "sk-marker-not-for-output"
+
+
+def test_an_env_or_headers_value_is_named_by_its_key_never_printed(tmp_path: Path) -> None:
+    root = _attached(tmp_path)
+    alpha = {"command": "a", "env": {"TOKEN": MARKER}, "headers": {"X": "${X}"}, "args": [MARKER]}
+    _mcp_file(tmp_path / "overlay", "common", {"alpha": alpha})
+    write_mcp_ledger(root, McpLedger(mcp={"alpha": digest(alpha)}))
+    row = _mcp_row(tmp_path, root)
+    assert row.status == OK, row
+    written = attach_doctor.MCP_WRITTEN.format(name="alpha", keys="env.TOKEN, headers.X")
+    assert written in row.detail
+    assert MARKER not in repr(_checks(tmp_path, root, machine=_machine(tmp_path)))
