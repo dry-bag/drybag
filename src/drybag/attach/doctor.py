@@ -582,6 +582,10 @@ MCP_PENDING: Final = (
     "MCP servers `attach` has yet to deliver or take back, as the overlay and {ledger} differ or a "
     "call did not finish: {names}"
 )
+MCP_ALLOWLIST_PENDING: Final = (
+    "the overlay's MCP allowlist and {ledger} differ: `attach` has yet to write it or take it "
+    "back, or a key `attach` did not write stands where it goes"
+)
 MCP_UNSEEN: Final = (
     "`drybag doctor` runs no `claude`, so it cannot see whether a delivered server is still in "
     "place"
@@ -662,13 +666,16 @@ def _mcp(bound: Binding, recorded: McpLedger) -> list[_Finding]:
     if pending:
         names = ", ".join(quoted(name) for name in pending)
         said.append(MCP_PENDING.format(ledger=MCP_LEDGER_NAME, names=names))
+    drifted = usable and (fold.allowed is None) != (recorded.allow is None)
+    if drifted:
+        said.append(MCP_ALLOWLIST_PENDING.format(ledger=MCP_LEDGER_NAME))
     for name, served in sorted(fold.served.items()):
         said += _written(name, served.definition)
     if fold.served:
         said.append(MCP_UNSEEN)
     if not said:
         return []
-    remedy = f"run `{ATTACH_COMMAND}`" if pending else ""
+    remedy = f"run `{ATTACH_COMMAND}`" if pending or drifted else ""
     if not usable:
         remedy = MCP_REPAIR.format(command=ATTACH_COMMAND)
     return [_Finding(WARN if remedy else OK, "; ".join(said), remedy)]

@@ -92,8 +92,9 @@ def run_attach(args: argparse.Namespace) -> Result:
             *attached.notes,
         )
     )
-    # A server Claude Code did not take is the one failure that waits until every step ran.
-    failed = 1 if attached.mcp_failed else 0
+    # A server Claude Code did not take, and an allowlist asked for and not written, are the
+    # failures that wait until every step ran.
+    failed = 1 if attached.mcp_failed or attached.mcp_allowlist_unwritten else 0
     return Result("\n".join((summary, *_screen(attached))), data, exit_code=failed)
 
 

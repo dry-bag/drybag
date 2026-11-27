@@ -1015,6 +1015,18 @@ def test_doctor_names_the_allowlist_and_the_plate_that_asks_for_it(tmp_path: Pat
     assert 'MCP allowlist ("*" off in projects/p): only alpha, user1 may load' in row.detail
 
 
+@pytest.mark.parametrize("asked", [True, False], ids=["unwritten", "not-taken-back"])
+def test_doctor_warns_of_an_allowlist_attach_has_yet_to_write_or_take_back(
+    tmp_path: Path, asked: bool
+) -> None:
+    root = _attached(tmp_path)
+    _mcp_file(tmp_path / "overlay", "common", {"*": "off"} if asked else {})
+    write_mcp_ledger(root, McpLedger(allow=None if asked else ()))
+    row = _mcp_row(tmp_path, root)
+    assert (row.status, row.remedy) == (WARN, RERUN), row
+    assert attach_doctor.MCP_ALLOWLIST_PENDING.format(ledger=MCP_LEDGER_NAME) in row.detail
+
+
 def test_doctor_warns_of_each_name_attach_would_deliver_or_take_back(tmp_path: Path) -> None:
     # As a drifted hook is: a served name not delivered, one under another digest or unsettled,
     # and one the ledger owns that the overlay no longer serves.

@@ -2084,10 +2084,10 @@ reddens = [
 [[mutation]]
 name = "a deniedMcpServers that is no list refuses again"
 file = "src/drybag/attach/permissions.py"
-before = '''    return list(denied) if isinstance(denied, list) else None'''
-after = '''    if not isinstance(denied, list):
+before = '''    return list(entries) if isinstance(entries, list) else None'''
+after = '''    if not isinstance(entries, list):
         raise EntriesError(DENIED_NOT_A_LIST)
-    return list(denied)'''
+    return list(entries)'''
 reddens = [
   "tests/attach/test_write.py::test_a_denied_key_that_is_no_list_is_a_note_and_every_other_step_runs",
   "tests/attach/test_detach.py::test_detach_past_a_denied_key_that_is_no_list_says_so",
@@ -2449,8 +2449,8 @@ reddens = [
 [[mutation]]
 name = "attach records the allowlist only once the settings file holds it"
 file = "src/drybag/attach/write.py"
-before = """    allowing = allow.record if planned.mcp_held.allow is None else planned.mcp_held.allow"""
-after = """    allowing = planned.mcp_held.allow"""
+before = """        else tuple(dict.fromkeys((*(held_allow or ()), *allow.record))),"""
+after = """        else held_allow,"""
 reddens = [
   "tests/attach/test_write.py::test_an_allowlist_is_recorded_before_the_settings_file_holds_it",
 ]
@@ -2472,4 +2472,69 @@ before = """        allowlist = _allow_change(raw, None, mcp)
 after = """        allowlist = AllowChange()"""
 reddens = [
   "tests/attach/test_detach.py::test_detach_takes_back_the_allowlist_and_keeps_every_key_already_there",
+]
+
+# An entry already in the file is the owner's, never recorded, as a deny entry is.
+[[mutation]]
+name = "attach records an allowlist entry the owner already wrote as its own"
+file = "src/drybag/attach/write.py"
+before = """        record = (*kept, *(name for name in add if name not in kept))"""
+after = """        record = allowed"""
+reddens = [
+  "tests/attach/test_write.py::test_an_entry_the_owner_wrote_into_drybags_allowlist_is_never_recorded",
+]
+
+# The allowlist fails closed: a misspelt "*", an unreadable plate beside a "*": "off", and an
+# allowlist that cannot be written, each of which left every server free to load.
+[[mutation]]
+name = "a misspelt rest value is skipped instead of read as off"
+file = "src/drybag/attach/mcp.py"
+before = """            kept[name] = OFF
+"""
+after = ""
+reddens = [
+  "tests/attach/test_mcp.py::test_a_rest_value_other_than_off_or_on_is_read_as_off",
+]
+
+[[mutation]]
+name = "an unusable fold asking for the cut writes no allowlist"
+file = "src/drybag/attach/mcp.py"
+before = """    if not usable and asked is not None:"""
+after = """    if False:"""
+reddens = [
+  "tests/attach/test_write.py::test_an_unreadable_plate_beside_rest_off_writes_the_cut",
+]
+
+[[mutation]]
+name = "an allowlist the run could not write passes as written"
+file = "src/drybag/attach/write.py"
+before = """        unwritten = fold.allowed is not None"""
+after = """        unwritten = False"""
+reddens = [
+  "tests/attach/test_write.py::test_an_allowlist_that_cannot_be_written_fails_the_run",
+]
+
+[[mutation]]
+name = "an allowlist the run could not write exits 0"
+file = "src/drybag/attach/commands.py"
+before = """    failed = 1 if attached.mcp_failed or attached.mcp_allowlist_unwritten else 0"""
+after = """    failed = 1 if attached.mcp_failed else 0"""
+reddens = ["tests/attach/test_commands.py::test_an_allowlist_attach_could_not_write_exits_1"]
+
+[[mutation]]
+name = "an unusable fold with no rest off forgets the allowlist it wrote"
+file = "src/drybag/attach/write.py"
+before = """        allow = AllowChange(record=held.allow)"""
+after = """        allow = AllowChange()"""
+reddens = [
+  "tests/attach/test_write.py::test_an_unreadable_plate_with_no_rest_off_keeps_the_allowlist_as_it_is",
+]
+
+[[mutation]]
+name = "doctor says nothing of an allowlist attach has yet to write"
+file = "src/drybag/attach/doctor.py"
+before = """    drifted = usable and (fold.allowed is None) != (recorded.allow is None)"""
+after = """    drifted = False"""
+reddens = [
+  "tests/attach/test_doctor.py::test_doctor_warns_of_an_allowlist_attach_has_yet_to_write_or_take_back[unwritten]",
 ]

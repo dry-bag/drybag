@@ -11,10 +11,14 @@ So `"on"` in a later plate restores the definition an earlier plate gave, and `"
 definition switches the server off without losing it. A name is *served* when its state is on and
 some plate defined it; it is *off* when its state is off, defined or not.
 
-**`"*"` stands for every server no plate switches on**, and takes `"off"` or `"on"` alone, folded
-by state like a name. Where its last word is `"off"` the fold has an allowlist (`Fold.allowed`):
-every name whose state is on, served or switched on with no definition, which lets a server
-defined outside the overlay through. `attach` writes it as `allowedMcpServers`.
+**`"*"` stands for every server no plate switches on**, and takes `"off"` or `"on"`, folded by
+state like a name; any other value is read as `"off"`, with a note. Where its last word is
+`"off"` the fold has an allowlist (`Fold.allowed`): every name whose state is on, served or
+switched on with no definition, which lets a server defined outside the overlay through. `attach`
+writes it as `allowedMcpServers`. **It fails closed**: where a file is unusable and a plate that
+could be read says `"*": "off"`, the allowlist is `()`, which cuts every server, since the file
+that could not be read may be the one switching a name on, and never the one lifting the cut
+for certain.
 
 Every fault of the file is a note and never a refusal, and a note names the file's path and never a
 value: a definition holds argv and environment, which may hold a secret. A file that is there and
@@ -72,9 +76,10 @@ UNPASSABLE = (
 # no UTF-8; a definition is passed as ASCII JSON, so only a name can hold what no call carries.
 _UNCARRIED = re.compile("[\0\ud800-\udfff]")
 ON_ALONE = '{path}: {name} is "on" and no plate defines it or switches it off, so it does nothing'
-REST_DEFINED = (
-    '{path}: "*" stands for every server no plate switches on and takes "off" or "on"; its '
-    "definition is skipped"
+# Read as "off", since a misspelt cut that reads as no cut would let every server load.
+REST_MISREAD = (
+    '{path}: "*" takes only "off" or "on", so it is read as "off", which cuts every MCP server no '
+    "plate switches on"
 )
 
 
@@ -131,7 +136,8 @@ def _entries(plate: Plate, notes: list[str]) -> dict[str, object] | None:
         if _UNCARRIED.search(name):
             notes.append(UNPASSABLE.format(path=shown, name=quoted(name)))
         elif name == REST and value not in (OFF, ON):
-            notes.append(REST_DEFINED.format(path=shown))
+            notes.append(REST_MISREAD.format(path=shown))
+            kept[name] = OFF
         elif value not in (OFF, ON) and not (isinstance(value, dict) and _finite(value)):
             notes.append(BAD_VALUE.format(path=shown, name=quoted(name)))
         else:
@@ -156,6 +162,8 @@ def fold_mcp(plates: Sequence[Plate]) -> Fold:
     states: dict[str, tuple[bool, Plate]] = {}
     switched: set[str] = set()
     usable = True
+    # The last plate that could be read and said `"*": "off"`, for an unusable fold to fail closed.
+    asked: Plate | None = None
     for plate in plates:
         entries = _entries(plate, notes)
         usable = usable and entries is not None
@@ -167,6 +175,7 @@ def fold_mcp(plates: Sequence[Plate]) -> Fold:
                 states[name] = (value == ON, plate)
                 if value == OFF:
                     switched.add(name)
+                    asked = plate if name == REST else asked
     rest_on, rest_plate = states.pop(REST, (True, None))
     served: dict[str, Served] = {}
     off: dict[str, Plate] = {}
@@ -179,6 +188,8 @@ def fold_mcp(plates: Sequence[Plate]) -> Fold:
         elif name not in switched and rest_on:
             path = state_plate.directory / PROJECT_CLAUDE / MCP_FILE
             notes.append(ON_ALONE.format(path=quoted(str(path)), name=quoted(name)))
+    if not usable and asked is not None:
+        return Fold(served, off, tuple(notes), usable, (), asked)
     if rest_on:
         return Fold(served, off, tuple(notes), usable)
     allowed = tuple(sorted(name for name, (on, _) in states.items() if on))
@@ -198,9 +209,9 @@ UNSETTLED = None
 # An MCP ledger that is there and unreadable here, damaged or a newer drybag's, is the only record
 # of the entries it names in `~/.claude.json`: it is never written over, and no MCP change is made.
 BAD_LEDGER = (
-    "{name} is not a ledger this drybag can read (damaged, or a newer drybag's), so no MCP server "
-    "or deny entry changes: repair it, or remove it once you have taken back by hand every server "
-    "it names"
+    "{name} is not a ledger this drybag can read (damaged, or a newer drybag's), so no MCP server, "
+    "deny entry or allowlist entry changes: repair it, or remove it once you have taken back by "
+    "hand every server and entry it names"
 )
 
 

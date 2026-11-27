@@ -34,6 +34,8 @@ from drybag.attach.permissions import (
     settings_document,
 )
 from drybag.attach.write import (
+    ALLOWED_LEFT,
+    ALLOWLIST_UNWRITTEN,
     CLAUDE_ABSENT,
     GROUP_ESCAPES,
     GROUP_UNASKED,
@@ -3055,3 +3057,68 @@ def test_a_second_clone_attaches_on_its_own(tmp_path: Path) -> None:
     assert attached.binding != attach(root, store=store, machine=machine, runner=Recorder()).binding
     detach(second, runner=Recorder())
     assert _settings(root)[ALLOWED] == [] and read_mcp_ledger(root).allow == ()
+
+
+def test_an_entry_the_owner_wrote_into_drybags_allowlist_is_never_recorded(tmp_path: Path) -> None:
+    # As a deny entry the owner already wrote: switched on later by the overlay too, it is still
+    # the owner's, and the overlay dropping it again leaves it.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"})
+    attach(root, store=store, machine=machine, runner=Recorder())
+    mine = {"serverName": "user1"}
+    (root / SETTINGS).write_text(json.dumps({**_settings(root), ALLOWED: [mine]}), "utf-8")
+    _mcp(store, **{REST: "off"}, user1="on")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert read_mcp_ledger(root).allow == ()
+    _mcp(store, **{REST: "off"})
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert _settings(root)[ALLOWED] == [mine]
+    # And the take-back that leaves the owner's entries says so.
+    _mcp(store)
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    assert ALLOWED_LEFT in attached.notes and not attached.mcp_allowlist_withdrawn
+    assert _settings(root)[ALLOWED] == [mine]
+
+
+def test_an_unreadable_plate_beside_rest_off_writes_the_cut(tmp_path: Path) -> None:
+    # The file that cannot be read may be the one switching a name on, never one lifting the cut
+    # for certain: the allowlist is `[]`, and no server changes.
+    root, store, machine = _attachable(tmp_path)
+    (store.parents[2] / COMMON_CLAUDE / "mcp.json").write_text("{,", encoding="utf-8")
+    (store.parent / "claude").mkdir()
+    (store.parent / "claude" / "mcp.json").write_text(
+        json.dumps({"mcpServers": {REST: "off", "m1": SERVER}}), encoding="utf-8"
+    )
+    runner = Recorder()
+    attached = attach(root, store=store, machine=machine, runner=runner)
+    assert _settings(root)[ALLOWED] == [] and read_mcp_ledger(root).allow == ()
+    assert (_mcp_calls(runner), attached.mcp_allowlist_unwritten) == ([], False)
+
+
+def test_an_unreadable_plate_with_no_rest_off_keeps_the_allowlist_as_it_is(tmp_path: Path) -> None:
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"}, user1="on")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    held, settings = read_mcp_ledger(root), _settings(root)
+    (store.parents[2] / COMMON_CLAUDE / "mcp.json").write_text("{,", encoding="utf-8")
+    attach(root, store=store, machine=machine, runner=Recorder())
+    assert (read_mcp_ledger(root), _settings(root)) == (held, settings)
+    assert held.allow == ("user1",)
+
+
+def test_an_allowlist_that_cannot_be_written_fails_the_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A damaged MCP ledger records nothing, so no entry may be written: the run exits 1, saying so.
+    root, store, machine = _attachable(tmp_path)
+    _mcp(store, **{REST: "off"})
+    path = common_directory(root) / MCP_LEDGER_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{", encoding="utf-8")
+    attached = attach(root, store=store, machine=machine, runner=Recorder())
+    assert attached.mcp_allowlist_unwritten and ALLOWLIST_UNWRITTEN in attached.notes
+    assert not (root / SETTINGS).exists() or ALLOWED not in _settings(root)
+    path.unlink()
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text(json.dumps({ALLOWED: "x"}), encoding="utf-8")
+    assert attach(root, store=store, machine=machine, runner=Recorder()).mcp_allowlist_unwritten

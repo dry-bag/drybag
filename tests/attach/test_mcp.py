@@ -15,7 +15,7 @@ from drybag.attach.mcp import (
     BAD_VALUE,
     ON_ALONE,
     REST,
-    REST_DEFINED,
+    REST_MISREAD,
     UNPASSABLE,
     digest,
     fold_mcp,
@@ -108,11 +108,25 @@ def test_a_later_plates_rest_on_lifts_the_allowlist(tmp_path: Path) -> None:
     assert fold_mcp([]).allowed is None
 
 
-def test_a_definition_under_rest_is_a_note_and_skipped(tmp_path: Path) -> None:
-    plate = _plate(tmp_path, PlateKind.COMMON, "c1", _servers(**{REST: {"command": "a"}}))
+@pytest.mark.parametrize("value", ["Off", "OFF", False, {"command": "a"}], ids=repr)
+def test_a_rest_value_other_than_off_or_on_is_read_as_off(tmp_path: Path, value: object) -> None:
+    # A misspelt cut that read as no cut would let every server load.
+    plate = _plate(tmp_path, PlateKind.COMMON, "c1", _servers(**{REST: value}))
     fold = fold_mcp([plate])
-    assert (fold.served, fold.allowed) == ({}, None)
-    assert fold.notes == (REST_DEFINED.format(path=quoted(str(_file(plate)))),)
+    assert (fold.served, fold.allowed) == ({}, ())
+    assert fold.notes == (REST_MISREAD.format(path=quoted(str(_file(plate)))),)
+
+
+def test_an_unusable_fold_with_rest_off_in_a_plate_it_read_cuts_everything(tmp_path: Path) -> None:
+    broken = _plate(tmp_path, PlateKind.COMMON, "common", "{,")
+    p = _plate(tmp_path, PlateKind.PROJECT, "p", _servers(**{REST: "off"}, user1="on"))
+    fold = fold_mcp([broken, p])
+    assert (fold.usable, fold.allowed, fold.rest_off_in) == (False, (), p)
+    # With no plate it read asking for the cut, an unusable fold asks for nothing.
+    assert (
+        fold_mcp([broken, _plate(tmp_path, PlateKind.TAG, "t1", _servers(m1="off"))]).allowed
+        is None
+    )
 
 
 def test_digest_ignores_key_order() -> None:

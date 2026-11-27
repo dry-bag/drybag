@@ -85,9 +85,9 @@ from drybag.attach.permissions import (
     PermissionDiff,
     allow_list,
     codex_rules,
-    denied_list,
     diff_permissions,
     local_document,
+    server_entries,
     settings_document,
     withdrawing,
 )
@@ -254,6 +254,7 @@ class Attached:
     # it took drybag's entries of that key back.
     mcp_allowlist: tuple[str, ...] | None = None
     mcp_allowlist_withdrawn: bool = False
+    mcp_allowlist_unwritten: bool = False
 
 
 @dataclass(frozen=True)
@@ -404,7 +405,7 @@ def _deny_change(document: str, off: Iterable[str] | None, ledger: McpLedger) ->
     does not record, or whose shape is not exactly `{"serverName": <name>}`, is the owner's and
     is neither counted nor touched. `off` is `None` where no MCP change may be made, and a key
     that is no list changes nothing either."""
-    entries = denied_list(settings_document(document))
+    entries = server_entries(settings_document(document), DENIED_KEY)
     notes = () if entries is not None else (DENIED_NOT_A_LIST,)
     if off is None or entries is None:
         return DenyChange(record=ledger.deny, notes=notes)
@@ -421,7 +422,7 @@ def _deny(raw: dict[str, Any], add: Iterable[str], withdraw: Iterable[str]) -> N
     """`raw`'s `deniedMcpServers` with an entry added for each of `add` and the entry of each of
     `withdraw` taken out, each only in its exact shape `{"serverName": <name>}`. A list a take-back
     emptied goes, as an emptied allow list does; a key that is no list stays as it is."""
-    held = denied_list(raw)
+    held = server_entries(raw, DENIED_KEY)
     if held is None:
         return
     gone = [_server_entry(name) for name in withdraw]
@@ -431,6 +432,17 @@ def _deny(raw: dict[str, Any], add: Iterable[str], withdraw: Iterable[str]) -> N
         raw[DENIED_KEY] = denied
     elif denied != held:
         raw.pop(DENIED_KEY)
+
+
+# Said where the overlay no longer asks for the allowlist and the key holds the owner's entries.
+ALLOWED_LEFT = (
+    f"{LOCAL_SETTINGS}: {ALLOWED_KEY} holds entries drybag did not write, so it stays, and it "
+    "still cuts every MCP server it does not name; it is yours now"
+)
+ALLOWLIST_UNWRITTEN = (
+    f'the overlay asks for an MCP allowlist ("*": "off") and no {ALLOWED_KEY} entry could be '
+    "written, so nothing cuts the MCP servers it leaves out; attach exits 1 until one is"
+)
 
 
 @dataclass(frozen=True)
@@ -445,6 +457,8 @@ class AllowChange:
     drop: bool = False
     record: tuple[str, ...] | None = None
     notes: tuple[str, ...] = ()
+    # The overlay asks for an allowlist and none could be put in place, which fails the run.
+    unwritten: bool = False
 
     @property
     def changes(self) -> bool:
@@ -457,8 +471,8 @@ class AllowChange:
 
     @property
     def withdrawn(self) -> bool:
-        """Whether the run takes drybag's allowlist back."""
-        return self.drop or (self.record is None and bool(self.withdraw))
+        """Whether the run takes the allowlist back, the key with it."""
+        return self.drop
 
 
 def _allow_change(
@@ -468,10 +482,11 @@ def _allow_change(
     The key is written only where none is: one already there that the ledger does not record is the
     owner's, and is left as it is. In a key drybag wrote, an entry the ledger does not record is the
     owner's too, and the key goes only when nothing but drybag's entries was in it."""
-    entries = denied_list(raw, ALLOWED_KEY)
+    entries = server_entries(raw, ALLOWED_KEY)
     present = ALLOWED_KEY in raw
     if entries is None:
-        return AllowChange(record=held.allow, notes=(ALLOWED_NOT_A_LIST,))
+        notes = (ALLOWED_NOT_A_LIST, *(() if allowed is None else (ALLOWLIST_UNWRITTEN,)))
+        return AllowChange(record=held.allow, notes=notes, unwritten=allowed is not None)
     if present and held.allow is None:
         return AllowChange(notes=() if allowed is None else (ALLOWED_OWNERS,))
     wanted = allowed or ()
@@ -480,9 +495,14 @@ def _allow_change(
         name for name in held.allow or () if name not in wanted and _server_entry(name) in entries
     )
     if allowed is not None:
-        return AllowChange(add, withdraw, make=not present, record=allowed)
+        # As the deny entries are: an entry the file already held is the owner's, never recorded.
+        kept = tuple(name for name in held.allow or () if name in wanted)
+        record = (*kept, *(name for name in add if name not in kept))
+        return AllowChange(add, withdraw, make=not present, record=record)
     gone = list(map(_server_entry, withdraw))
-    return AllowChange(withdraw=withdraw, drop=present and all(e in gone for e in entries))
+    drop = present and all(entry in gone for entry in entries)
+    left = (ALLOWED_LEFT,) if present and not drop and held.allow is not None else ()
+    return AllowChange(withdraw=withdraw, drop=drop, notes=left)
 
 
 def _allow(raw: dict[str, Any], change: AllowChange) -> None:
@@ -491,7 +511,7 @@ def _allow(raw: dict[str, Any], change: AllowChange) -> None:
         raw.pop(ALLOWED_KEY)
     elif change.changes:
         gone = list(map(_server_entry, change.withdraw))
-        kept = [entry for entry in denied_list(raw, ALLOWED_KEY) or [] if entry not in gone]
+        kept = [entry for entry in server_entries(raw, ALLOWED_KEY) or [] if entry not in gone]
         raw[ALLOWED_KEY] = kept + [_server_entry(name) for name in change.add]
 
 
@@ -1014,11 +1034,16 @@ def plan_writes(root: Path, config: Config, binding: Binding, diff: PermissionDi
     usable = fold.usable and held.fault is None
     deny = _deny_change(document, fold.off if usable else None, held)
     # And the allowlist `"*": "off"` asks for, written only where no key is that drybag did not.
-    allow = (
-        _allow_change(settings_document(document), fold.allowed, held)
-        if usable
-        else AllowChange(record=held.allow)
-    )
+    # It fails closed: an unusable fold that asks for the cut writes `[]` (`fold_mcp`), and a
+    # ledger that cannot be read, which no entry may be recorded in, fails the run.
+    if held.fault is not None:
+        unwritten = fold.allowed is not None
+        notes = (ALLOWLIST_UNWRITTEN,) if unwritten else ()
+        allow = AllowChange(notes=notes, unwritten=unwritten)
+    elif fold.usable or fold.allowed is not None:
+        allow = _allow_change(settings_document(document), fold.allowed, held)
+    else:
+        allow = AllowChange(record=held.allow)
     merged = _merged_settings(document, diff, deny, allow)
     written = merged != document
     targets = tuple(target for target, _ in codex_rules(binding))
@@ -1118,11 +1143,13 @@ def _carry_out(
     mcp_ledger = replace(planned.mcp_held, deny=deny.record, allow=allow.record)
     # Where no MCP change may be made, the reconcile is handed nothing to serve and nothing owned.
     owned = mcp_ledger.mcp if planned.served is not None else {}
-    allowing = allow.record if planned.mcp_held.allow is None else planned.mcp_held.allow
+    held_allow = planned.mcp_held.allow
     holding = replace(
         mcp_ledger,
         deny=(*deny.record, *deny.withdraw),
-        allow=None if allowing is None else (*allowing, *(allow.record or ())),
+        allow=held_allow
+        if allow.record is None
+        else tuple(dict.fromkeys((*(held_allow or ()), *allow.record))),
     )
     if holding != planned.mcp_held:
         write_mcp_ledger(root, holding)
@@ -1235,6 +1262,7 @@ def _carry_out(
         mcp_undenied=deny.withdraw,
         mcp_allowlist=allow.written,
         mcp_allowlist_withdrawn=allow.withdrawn,
+        mcp_allowlist_unwritten=allow.unwritten,
     )
 
 
@@ -1460,7 +1488,7 @@ def _planned_settings(root: Path, recorded: AttachLedger, mcp: McpLedger) -> Set
         for key in recorded.settings_keys:
             raw.pop(key, None)
         # The `deniedMcpServers` entries the MCP ledger recorded, each only in its exact shape.
-        denied = denied_list(raw)
+        denied = server_entries(raw, DENIED_KEY)
         undenied = tuple(name for name in mcp.deny if _server_entry(name) in (denied or []))
         _deny(raw, (), undenied)
         # And the allowlist it wrote, as a re-attach whose overlay no longer asks for one.
@@ -1606,7 +1634,10 @@ def _failed_servers(failed: Iterable[tuple[str, str]]) -> str:
 
 
 # Said of an MCP ledger `detach` could not read: deleted, the entries it named would have no record.
-MCP_LEDGER_KEPT = "{note}; it was left in place, and no MCP server it may name was taken back"
+MCP_LEDGER_KEPT = (
+    "{note}; it was left in place, and no MCP server, deny entry or allowlist it may name was "
+    "taken back"
+)
 # What `detach` reads of a ledger it has no `attach.json` beside: nothing but the MCP ledger's.
 _NOTHING = AttachLedger(store="", allow=(), rules={}, settings_keys=())
 

@@ -1224,8 +1224,9 @@ An entry that is no definition, `"off"` or `"on"`, a definition holding `NaN` or
 name no command line carries, and an `"on"` no plate defines or switches off are said and skipped.
 
 **An allowlist: `"*": "off"`.** The reserved name `"*"` stands for every MCP server no plate
-switches on, and takes `"off"` or `"on"` alone (a definition under it is said and skipped). Its
-state folds as a name's does, so the last plate's word wins and a later plate's `"*": "on"` lifts
+switches on, and takes `"off"` or `"on"`; any other value under it (`"Off"`, `false`, a
+definition) is said and read as `"off"`, since a misspelt cut that read as none would let every
+server load. Its state folds as a name's does, so the last plate's word wins and a later plate's `"*": "on"` lifts
 an earlier `"off"`. Where it is off, **attach writes `allowedMcpServers`** in the main checkout's
 `.claude/settings.local.json`: a `{"serverName": "<name>"}` entry for each name whose state is on,
 served or switched on with no definition (`"docs": "on"` lets a server defined at user scope
@@ -1234,10 +1235,18 @@ through), and `[]` where there is none, so that no MCP server loads. A name swit
 other key in it (a run profile's `permissions.deny`, its `sandbox`) stays. The key is written only
 where none is: one already there that `drybag/attach-mcp.json` does not record is yours, and is
 left as it is, which the run says, since adding the overlay's names to it would widen a cut you
-made. In the key `attach` wrote, an entry you added stays yours; the names `attach` added are
-recorded in `drybag/attach-mcp.json`, before the file holds them, and a re-attach whose overlay no
-longer says `"*": "off"`, or `detach`, takes them back, and the key with them where nothing else
-is in it. What it does to a session was measured on Claude Code 2.1.325 (2026-11-27, `claude -p
+made. In the key `attach` wrote, an entry you added stays yours, even once the overlay switches the
+same name on; the names `attach` itself added are recorded in `drybag/attach-mcp.json`, before the
+file holds them, and a re-attach whose overlay no longer says `"*": "off"`, or `detach`, takes them
+back, and the key with them where nothing else is in it (where your entries keep it, the run says
+the key stays, and it goes on cutting every server it does not name). **It fails closed.** Where a
+plate's `claude/mcp.json` cannot be read and a plate that could be read says `"*": "off"`, the
+allowlist is `[]` and no server changes, since the file that could not be read may be the one
+switching a name on; with no such plate, the allowlist stays as the last run left it. Where the
+overlay asks for an allowlist and none can be written (a `drybag/attach-mcp.json` this drybag
+cannot read, which no entry may be recorded in, or an `allowedMcpServers` that is no list), the
+run says so and exits `1` once every other step ran, as for a server Claude Code refused. What it
+does to a session was measured on Claude Code 2.1.325 (2026-11-27, `claude -p
 --output-format stream-json --verbose`, counting the servers of the `init` event) with
 `allowedMcpServers` in a folder's `.claude/settings.local.json`, and in its `.claude/settings.json`
 alike:
@@ -1257,6 +1266,17 @@ server "<name>": not allowed by enterprise policy`, exit `1`), while `claude mcp
 works; `attach` writes the settings file before its first `claude mcp` call, so each served name is
 on the list when it is added. A served name an allowlist of your own leaves out is refused that way
 and stays unsettled, as any refused server does.
+
+**What it stops, and what it does not.** The allowlist keeps the servers you did not ask for out
+of a session that the repository and you start the ordinary way; its anchor is the main checkout's
+settings file, which git does not track, and the ledger in the git common directory. A session
+steered by a prompt injection and holding a shell can rewrite both, so against it the allowlist is
+a convenience, and the anchor is how the session is started: on 2.1.325, `claude
+--strict-mcp-config` with no `--mcp-config` loaded no MCP server in a folder whose project files
+asked for two. A repository can also widen it with files it commits, both measured the same way in
+an untrusted folder: an `allowedMcpServers` in its `.claude/settings.json` is added to the local one
+(`[]` locally and one user-scope name there loaded that server), and a server its `.mcp.json`
+defines under a name the allowlist holds loads, since the allowlist matches by name alone.
 
 **A second clone attaches on its own.** A second clone of the same repository (not a linked
 worktree, which shares the main checkout's) has a git common directory of its own, so `attach`
@@ -1998,7 +2018,9 @@ for with the plate that says so, and each `env` and `headers` key a
 served definition keeps in the overlay's files, by key and never by value; all of that is
 information. A name `attach` would deliver or take back, as `--check` would list it (served and not
 delivered, under another definition or unsettled, or held by `drybag/attach-mcp.json` and no
-longer served), is a warning whose remedy is `attach`, as a drifted hook is. The notes reading the
+longer served), is a warning whose remedy is `attach`, as a drifted hook is, and so is an
+allowlist the overlay asks for that the ledger records none of, or one it records that the overlay
+no longer asks for (a key you wrote, which `attach` leaves, keeps that warning). The notes reading the
 files gave are said, and a file under which `attach` changes nothing is a warning whose remedy is
 to make it readable. The row runs no `claude`, so it says it cannot see whether a delivered entry
 is still in place.

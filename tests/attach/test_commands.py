@@ -1207,6 +1207,20 @@ def test_failure_screen_prints_names_never_a_definition(
     assert MARKER not in out + err
 
 
+def test_an_allowlist_attach_could_not_write_exits_1(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, store = _project_and_store(tmp_path, recorded=None, origin="git@example.com:o/p.git")
+    _mcp_file(store.parents[2] / "common", {"*": "off"})
+    _recorded(monkeypatch)
+    (root / SETTINGS).parent.mkdir(exist_ok=True)
+    (root / SETTINGS).write_text('{"allowedMcpServers": "x"}', encoding="utf-8")
+    assert (
+        invoke(["attach", *_flags(root, store, _machine(tmp_path, overlay=store.parents[2]))]) == 1
+    )
+    assert "attach exits 1 until one is" in capsys.readouterr().out
+
+
 def test_attach_and_detach_screens_name_each_server_and_deny_entry(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

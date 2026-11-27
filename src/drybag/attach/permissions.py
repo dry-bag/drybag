@@ -150,13 +150,13 @@ ALLOWED_OWNERS = (
 )
 
 
-def denied_list(raw: dict[str, Any], key: str = DENIED_KEY) -> list[Any] | None:
-    """The `deniedMcpServers` list of a settings document, or `key`'s: an absent key is no
-    entries, and one holding anything but a list is `None`, a note (`DENIED_NOT_A_LIST`) under
-    which no entry is written or taken back. Its entries stay as they are: what the owner wrote is
-    never read for what it means."""
-    denied = raw.get(key, [])
-    return list(denied) if isinstance(denied, list) else None
+def server_entries(raw: dict[str, Any], key: str) -> list[Any] | None:
+    """The `deniedMcpServers` or `allowedMcpServers` list of a settings document, as `key` names:
+    an absent key is no entries, and one holding anything but a list is `None`, a note
+    (`DENIED_NOT_A_LIST`, `ALLOWED_NOT_A_LIST`) under which no entry is written or taken back.
+    Its entries stay as they are: what the owner wrote is never read for what it means."""
+    entries = raw.get(key, [])
+    return list(entries) if isinstance(entries, list) else None
 
 
 def _allow_rules(document: str, path: Path) -> tuple[str, ...]:
